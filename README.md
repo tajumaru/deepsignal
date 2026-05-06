@@ -1,11 +1,12 @@
 # DeepSignal - Walrus Feedback Lab
 
-DeepSignal is a Walrus-native feedback and forms MVP built with Vite, React, and TypeScript. It supports custom public forms, an encrypted Signal Inbox review console, sensitive-field encryption, file uploads, JSON/CSV export, and a dual storage strategy that prefers Walrus while falling back to `localStorage` when needed.
+DeepSignal is a Walrus-native feedback and forms MVP built with Vite, React, and TypeScript. It supports custom public forms, an encrypted Signal Inbox review console, public roadmap publishing, feedback triage workflows, contributor tracking, sensitive-field encryption, file uploads, JSON/CSV export, and a dual storage strategy that prefers Walrus while falling back to `localStorage` when needed.
 
 ## How to run
 
 ```bash
 npm install
+npm run typecheck
 npm run dev
 ```
 
@@ -14,6 +15,24 @@ For a production bundle:
 ```bash
 npm run build
 ```
+
+`npm run build` always runs `npm run typecheck` first, so the production build fails fast if the TypeScript project does not pass a full type check.
+
+## Quality checks
+
+Use the standalone type check when you want a quick submission-safe verification without starting Vite:
+
+```bash
+npm run typecheck
+```
+
+This is intentionally separated from Vite dev mode because Vite does not guarantee a full TypeScript type check during normal development.
+
+## Future CI notes
+
+- `npm run typecheck` is isolated so it can be dropped directly into GitHub Actions or other CI jobs as an explicit quality gate.
+- `npm run build` depends on `npm run typecheck`, which keeps local builds and CI builds aligned.
+- TODO: add ESLint with a dedicated `lint` script, then wire both `npm run typecheck` and `npm run lint` into CI.
 
 ## .env example
 
@@ -40,6 +59,7 @@ If `VITE_SEAL_MODE` is not `seal`, or the Seal env vars are incomplete, the app 
 - Landing page at `/`
 - Form builder at `/admin/forms/new`
 - Public form route at `/f/:formId`
+- Public roadmap route at `/roadmap/:formId`
 - Manifest restore route at `/m/:manifestBlobId`
 - Admin Signal Inbox at `/admin`
 - Dashboard alias at `/dashboard`
@@ -50,6 +70,11 @@ If `VITE_SEAL_MODE` is not `seal`, or the Seal env vars are incomplete, the app 
 - URL sharing and QR code generation
 - Sui Wallet connect for form creators via Mysten dApp Kit
 - JSON and CSV export
+- Signal triage workflow: `new`, `investigating`, `planned`, `in_progress`, `fixed`, `closed`
+- Admin-side priority, tags, internal notes, signal value, and GitHub URL editing
+- Summary cards for total signals, new signals, planned, fixed, high-value, and average signal value
+- Contributor identity capture using wallet address or anonymous fallback id
+- Public roadmap publishing for `planned`, `in_progress`, and `fixed` signals
 - Sensitive-field encryption through a swappable crypto adapter
 - Walrus blob ids surfaced in the UI
 - Desktop-first creator review console with mobile-friendly public forms
@@ -71,6 +96,8 @@ Current behavior:
 - every newly created form stores `ownerAddress` from the connected wallet
 - the `Create on Sui` toggle remains as a `Sui registry integration placeholder`
 - public respondents do not need a wallet to submit
+- when a public respondent has a connected wallet, its address is stored as `contributorId`
+- when no wallet is available, submissions get an `anonymous-xxxxxx` contributor id
 
 Because this project uses Vite rather than Next.js, the wallet env vars use the `VITE_` prefix.
 
@@ -81,16 +108,46 @@ Because this project uses Vite rather than Next.js, the wallet env vars use the 
 3. Open public link
 4. Submit feedback with screenshot
 5. Open Admin Dashboard
-6. Review signals in the Signal Inbox
-7. Inspect Walrus / Seal / Wallet metadata in the right-side detail panel
+6. Triage signals in the Signal Inbox
+7. Add priority, tags, internal notes, signal value, and optional GitHub links
+8. Open the public roadmap for planned / in-progress / fixed signals
+9. Inspect Walrus / Seal / Wallet metadata in the right-side detail panel
 
 ## Inbox UI
 
 - The admin console is designed as an `Encrypted Signal Inbox`, not a form CRUD panel.
 - Admin and dashboard routes use a desktop-first 3-column layout: `Signal Streams`, `Signal Inbox`, and `Signal Detail / Metadata`.
+- The detail pane acts as a lightweight `Feedback Operations Platform` control surface.
+- Admins can update `triageStatus`, `priority`, `tags`, `notes`, `signalValue`, and draft GitHub links from the detail pane.
+- A save-state indicator shows whether signal operations are ready, saving, saved, or failed.
+- Header actions include `Open Public Roadmap` for the currently selected form.
 - Public forms remain mobile-friendly for responders.
 - Admin review console is desktop-first, and below `768px` it falls back to a single-column review stack with a notice.
 - Walrus / Seal metadata is integrated directly into the normal review UI through badges, metadata rows, and the Seal Status card.
+
+## Feedback operations model
+
+Each submission now supports an operations layer in addition to form answers:
+
+- `triageStatus`: `new`, `investigating`, `planned`, `in_progress`, `fixed`, `closed`
+- `priority`: `low`, `medium`, `high`
+- `tags`: string array for grouping and filtering
+- `notes`: internal notes for operators
+- `contributorId`: wallet address when available, otherwise anonymous fallback id
+- `signalValue`: optional score from `1` to `5`
+- `githubIssueUrl`: optional prep field for future GitHub integration
+- `githubPrUrl`: optional prep field for future GitHub integration
+
+Backward compatibility is handled in `normalizeSubmission`, so older submissions without these fields still load safely.
+
+## Public roadmap
+
+DeepSignal can expose a public roadmap per form at `/roadmap/:formId`.
+
+- Only submissions with `triageStatus` of `planned`, `in_progress`, or `fixed` are shown
+- Signals are grouped into `Planned Signals`, `In Progress`, and `Fixed Signals`
+- Cards can show subject/title preview, category, priority, createdAt, tags, contributor label, signal value, and GitHub links
+- If a submission is encrypted, the roadmap never shows the answer body and only exposes metadata such as `subjectPreview`
 
 ## Admin protection
 
@@ -141,6 +198,10 @@ It intentionally does not store:
 - attachments or attachment metadata
 - notes
 - tags
+- triage status indexes
+- contributor ids
+- signal value
+- GitHub links
 - ownerAddress
 - encryptedBlobId
 - file names
@@ -165,6 +226,22 @@ Local cache is used for:
 - legacy local blob index compatibility
 
 Older forms that do not have a manifest pointer are treated as legacy local-index forms so existing `/f/:formId`, `/dashboard`, and `/admin/forms/:formId` flows keep working.
+
+## CSV export behavior
+
+CSV export remains compatible and now includes operational metadata columns before form-answer columns:
+
+- `submissionId`
+- `createdAt`
+- `status`
+- `triageStatus`
+- `priority`
+- `signalValue`
+- `contributorId`
+- `tags`
+- `notes`
+- `githubIssueUrl`
+- `githubPrUrl`
 
 ## Local fallback behavior
 
