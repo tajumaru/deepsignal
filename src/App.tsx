@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import { AppShell } from "./components/AppShell";
 import { AdminDashboardPage } from "./pages/AdminDashboardPage";
 import { FormBuilderPage } from "./pages/FormBuilderPage";
+import { ManifestRestorePage } from "./pages/ManifestRestorePage";
 import { FormSubmissionsPage } from "./pages/FormSubmissionsPage";
 import { LandingPage } from "./pages/LandingPage";
 import { PublicFormPage } from "./pages/PublicFormPage";
@@ -27,6 +28,7 @@ export default function App() {
         />
         <Route path="/admin/submissions/:submissionId" element={<SubmissionDetailPage />} />
         <Route path="/f/:formId" element={<PublicFormPage />} />
+        <Route path="/m/:manifestBlobId" element={<ManifestRestorePage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </AppShell>

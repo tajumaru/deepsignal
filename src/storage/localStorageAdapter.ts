@@ -38,7 +38,7 @@ export const localStorageAdapter: StorageAdapter = {
     const blobId = form.blobId ?? `local-form-${form.id}`;
     nextForms.unshift({ ...form, blobId });
     writeJson(FORMS_KEY, nextForms);
-    return { id: form.id, blobId };
+    return { id: form.id, blobId, manifestBlobId: form.manifestBlobId };
   },
 
   async getForm(id) {

@@ -27,6 +27,20 @@ export interface FormSchema {
   isOnchain?: boolean;
   encryptSubmissions?: boolean;
   blobId?: string;
+  manifestBlobId?: string;
+}
+
+export interface SignalManifest {
+  version: number;
+  formId: string;
+  createdAt: string;
+  updatedAt: string;
+  formBlobId: string;
+  submissions: Array<{
+    submissionId: string;
+    blobId: string;
+    createdAt: string;
+  }>;
 }
 
 export interface SubmissionAttachment {
@@ -55,7 +69,7 @@ export interface Submission {
 }
 
 export interface StorageAdapter {
-  saveForm(form: FormSchema): Promise<{ id: string; blobId?: string }>;
+  saveForm(form: FormSchema): Promise<{ id: string; blobId?: string; manifestBlobId?: string }>;
   getForm(id: string): Promise<FormSchema | null>;
   listForms(): Promise<FormSchema[]>;
   deleteForm(id: string): Promise<void>;

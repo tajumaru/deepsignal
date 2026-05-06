@@ -40,6 +40,7 @@ If `VITE_SEAL_MODE` is not `seal`, or the Seal env vars are incomplete, the app 
 - Landing page at `/`
 - Form builder at `/admin/forms/new`
 - Public form route at `/f/:formId`
+- Manifest restore route at `/m/:manifestBlobId`
 - Admin Signal Inbox at `/admin`
 - Dashboard alias at `/dashboard`
 - Submission list at `/admin/forms/:formId`
@@ -114,26 +115,56 @@ Walrus storage lives in:
 - Form definitions are serialized with `JSON.stringify(...)` and uploaded to `PUT {publisher}/v1/blobs`.
 - Submissions are serialized and uploaded the same way.
 - Attachments are uploaded as raw files.
+- Each form also gets a separate manifest blob that acts as a recoverable index.
 - Walrus response parsing supports these blob id shapes:
   - `result.newlyCreated.blobObject.blobId`
   - `result.alreadyCertified.blobId`
   - `blobId`
   - `id`
 
-### Local index
+### Manifest Blob architecture
 
-Walrus is blob storage, so the app keeps a local index in `localStorage` for lookup and listing.
+The manifest blob is a public recovery index, not an access-control layer.
 
-The index stores only:
+Each manifest stores only:
 
 - `formId`
-- `form blobId`
 - `submissionId`
+- `formBlobId`
 - `submission blobId`
-- `formId` linkage
 - `createdAt`
+- `updatedAt`
 
-The actual form and submission payloads stay in Walrus blobs.
+It intentionally does not store:
+
+- answers
+- attachments or attachment metadata
+- notes
+- tags
+- ownerAddress
+- encryptedBlobId
+- file names
+
+The actual form and submission payloads stay in Walrus blobs, and sensitive payloads should use Seal encryption.
+
+### Recovery flow
+
+- On form creation, the app stores the form blob, writes an initial manifest blob, and caches the latest `manifestBlobId` locally.
+- On each submission save or submission update, the app writes a new immutable manifest blob and updates the local latest-manifest pointer.
+- Opening `/m/:manifestBlobId` reads the manifest from Walrus, reloads the form blob plus referenced submission blobs, rebuilds the browser cache, and redirects to `/dashboard/forms/:formId`.
+
+### localStorage is cache only
+
+Walrus is blob storage, so the browser keeps a small local cache for UX and a latest-manifest pointer for each known form.
+
+Local cache is used for:
+
+- cached form payloads
+- cached submission payloads
+- latest `manifestBlobId` lookup
+- legacy local blob index compatibility
+
+Older forms that do not have a manifest pointer are treated as legacy local-index forms so existing `/f/:formId`, `/dashboard`, and `/admin/forms/:formId` flows keep working.
 
 ## Local fallback behavior
 
@@ -211,7 +242,9 @@ In real Seal mode, payloads are saved as JSON envelopes that include the base64-
 
 ## Known limitations
 
-- Walrus listing depends on the local blob index, so clearing browser storage removes the lookup metadata even if the blobs still exist remotely.
+- `manifestBlobId` holders can inspect the manifest index structure.
+- Attachment blob ids are intentionally not stored in manifests, so restore is limited to the submission blobs themselves.
+- Latest `manifestBlobId` tracking still depends on localStorage for the current browser.
 - Local fallback data is browser-local and not shared across devices.
 - Walrus delete is currently index cleanup only; uploaded blobs are not garbage-collected by this MVP.
 - frontend wallet-gating is MVP protection

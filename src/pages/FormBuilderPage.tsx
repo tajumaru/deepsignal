@@ -156,8 +156,8 @@ export function FormBuilderPage() {
       encryptSubmissions,
     };
     try {
-      const { blobId } = await storageAdapter.saveForm(form);
-      setSavedForm({ ...form, blobId });
+      const { blobId, manifestBlobId } = await storageAdapter.saveForm(form);
+      setSavedForm({ ...form, blobId, manifestBlobId });
       setLastSavedSnapshot(draftSnapshot);
     } finally {
       setSaving(false);
@@ -357,6 +357,20 @@ export function FormBuilderPage() {
               {t("walrusBlobId")}: {savedForm.blobId}
             </p>
             <BlobLink blobId={savedForm.blobId} />
+            <p>
+              Manifest Blob ID: {savedForm.manifestBlobId ?? "Not available"}
+            </p>
+            <BlobLink blobId={savedForm.manifestBlobId} label="Verify manifest on Walrus" />
+            <p>
+              Restore URL:{" "}
+              {savedForm.manifestBlobId ? (
+                <Link to={`/m/${savedForm.manifestBlobId}`}>/m/{savedForm.manifestBlobId}</Link>
+              ) : (
+                "Not available"
+              )}
+            </p>
+            <p className="warning-text">Manifest links are recovery links, not access control.</p>
+            <p className="warning-text">Do not publicly share private inbox manifest links.</p>
             <ShareCard formId={savedForm.id} />
           </div>
         ) : (
