@@ -195,6 +195,9 @@ const messages = {
     encryptedPreview: "Encrypted payload ready for decryption.",
     decrypt: "Decrypt",
     decrypting: "Decrypting...",
+    decryptFailed: "Decryption failed.",
+    sealDecryptWalletPrompt: "Connect wallet to start a Seal decrypt session.",
+    sealDecryptApprovalPrompt: "Wallet connected. Approve the decrypt session when prompted.",
     messageContent: "Message content",
     encryptedBodyHidden: "Encrypted body hidden. Decrypt to reveal the payload.",
     workflowControls: "Workflow controls",
@@ -401,6 +404,11 @@ const messages = {
     encryptedPreview: "\u6697\u53f7\u5316\u6e08\u307f payload\u3002Decrypt \u3067\u8868\u793a\u3067\u304d\u307e\u3059\u3002",
     decrypt: "Decrypt",
     decrypting: "\u5fa9\u53f7\u4e2d...",
+    decryptFailed: "\u5fa9\u53f7\u306b\u5931\u6557\u3057\u307e\u3057\u305f\u3002",
+    sealDecryptWalletPrompt:
+      "Seal \u3067\u5fa9\u53f7\u3059\u308b\u306b\u306f\u3001\u307e\u305a Wallet \u3092\u63a5\u7d9a\u3057\u3066\u304f\u3060\u3055\u3044\u3002",
+    sealDecryptApprovalPrompt:
+      "Wallet \u63a5\u7d9a\u6e08\u307f\u3067\u3059\u3002\u8868\u793a\u3055\u308c\u305f\u3068\u304d\u306b decrypt session \u3092 approve \u3057\u3066\u304f\u3060\u3055\u3044\u3002",
     messageContent: "\u672c\u6587",
     encryptedBodyHidden:
       "\u672c\u6587\u306f\u6697\u53f7\u5316\u3055\u308c\u3066\u3044\u307e\u3059\u3002Decrypt \u3067\u5185\u5bb9\u3092\u8868\u793a\u3057\u307e\u3059\u3002",

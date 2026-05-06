@@ -23,11 +23,17 @@ Copy `.env.example` and fill in the Walrus endpoints if you want live blob stora
 VITE_STORAGE_MODE=walrus
 VITE_WALRUS_PUBLISHER_URL=https://publisher.walrus-testnet.walrus.space
 VITE_WALRUS_AGGREGATOR_URL=https://aggregator.walrus-testnet.walrus.space
+VITE_SEAL_MODE=mock
+VITE_SEAL_PACKAGE_ID=
+VITE_SEAL_KEY_SERVER_OBJECT_ID=
+VITE_SEAL_AGGREGATOR_URL=
 VITE_SUI_NETWORK=testnet
 VITE_WALFORM_PACKAGE_ID=
 ```
 
 If `VITE_STORAGE_MODE` is not `walrus`, or the Walrus URLs are missing, the app runs entirely on `localStorage`.
+
+If `VITE_SEAL_MODE` is not `seal`, or the Seal env vars are incomplete, the app keeps using the local mock adapter.
 
 ## Current MVP features
 
@@ -128,11 +134,14 @@ The encryption layer is intentionally adapter-based:
 
 - [src/crypto/sealAdapter.ts](D:/game/deepsignal/src/crypto/sealAdapter.ts)
 - [src/crypto/localSealMock.ts](D:/game/deepsignal/src/crypto/localSealMock.ts)
+- [src/crypto/sealClientAdapter.ts](D:/game/deepsignal/src/crypto/sealClientAdapter.ts)
 - [src/crypto/cryptoFactory.ts](D:/game/deepsignal/src/crypto/cryptoFactory.ts)
 
-Current MVP behavior:
+Current behavior:
 
 - fields marked `sensitive: true` are encrypted before submission save
+- `VITE_SEAL_MODE=mock` uses the legacy local adapter that base64-wraps values for development and fallback flows
+- `VITE_SEAL_MODE=seal` uses `@mysten/seal` for new encryptions when `VITE_SEAL_PACKAGE_ID`, `VITE_SEAL_KEY_SERVER_OBJECT_ID`, and `VITE_SEAL_AGGREGATOR_URL` are all configured
 - encrypted answers are stored as:
 
 ```json
@@ -144,7 +153,19 @@ Current MVP behavior:
 
 - decryption happens only in the admin detail view
 
-This makes it straightforward to replace the mock crypto adapter with a real Seal implementation later.
+In real Seal mode, payloads are saved as JSON envelopes that include the base64-encoded Seal ciphertext plus the metadata needed for a later wallet-backed decrypt flow.
+
+### Mock vs real Seal
+
+- Mock Seal is reversible locally and exists to keep dev, demos, and fallback mode working without any wallet or onchain policy.
+- Real Seal encrypts with `@mysten/seal` and depends on a real Sui package namespace plus one or more key server objects.
+- Real Seal decryption is policy-gated: you need a Sui wallet, a session key, and an approval transaction that calls a `seal_approve*` Move function for the target access policy.
+
+### Current limitations of real Seal mode
+
+- Encryption is wired up now, but the in-app decrypt path is intentionally staged. The admin UI currently stops with a clear `Seal decryption requires wallet approval.` error until wallet/session approval plumbing is added.
+- Because decrypt approval is not finished yet, real Seal mode is currently best for testing write-path compatibility and persisted payload format, not full end-to-end review.
+- If you switch back to mock mode, older mock-encrypted payloads remain readable, but real Seal payloads will correctly report that seal mode plus wallet approval is required.
 
 ## Known limitations
 

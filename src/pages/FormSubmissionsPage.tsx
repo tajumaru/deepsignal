@@ -1,7 +1,9 @@
+import { useCurrentAccount } from "@mysten/dapp-kit";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { BlobLink } from "../components/BlobLink";
 import { EmptyState } from "../components/EmptyState";
+import { getSealRuntimeStatus } from "../crypto/cryptoFactory";
 import { useI18n } from "../i18n";
 import {
   normalizeSubmission,
@@ -29,7 +31,9 @@ function previewFromSubmission(submission: Submission) {
 
 export function FormSubmissionsPage() {
   const { t } = useI18n();
+  const account = useCurrentAccount();
   const { formId = "", submissionId = "" } = useParams();
+  const sealRuntime = getSealRuntimeStatus();
   const [form, setForm] = useState<FormSchema | null>(null);
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [selectedId, setSelectedId] = useState(submissionId);
@@ -39,6 +43,7 @@ export function FormSubmissionsPage() {
   const [detailAnswers, setDetailAnswers] = useState<Record<string, unknown> | null>(null);
   const [detailAttachments, setDetailAttachments] = useState<Submission["attachments"]>([]);
   const [decrypting, setDecrypting] = useState(false);
+  const [decryptError, setDecryptError] = useState("");
   const [saving, setSaving] = useState(false);
   const [draftTag, setDraftTag] = useState("");
   const [notesDraft, setNotesDraft] = useState("");
@@ -122,6 +127,7 @@ export function FormSubmissionsPage() {
     setNotesDraft(selectedSubmission.notes);
     setDetailAnswers(selectedSubmission.isEncrypted ? null : selectedSubmission.answers);
     setDetailAttachments(selectedSubmission.attachments);
+    setDecryptError("");
   }, [selectedSubmission]);
 
   useEffect(() => {
@@ -152,12 +158,18 @@ export function FormSubmissionsPage() {
       return;
     }
     setDecrypting(true);
-    const resolved = await resolveSubmissionAnswers(form, selectedSubmission);
-    if (resolved) {
-      setDetailAnswers(resolved.answers);
-      setDetailAttachments(resolved.attachments);
+    setDecryptError("");
+    try {
+      const resolved = await resolveSubmissionAnswers(form, selectedSubmission);
+      if (resolved) {
+        setDetailAnswers(resolved.answers);
+        setDetailAttachments(resolved.attachments);
+      }
+    } catch (error) {
+      setDecryptError(error instanceof Error ? error.message : t("decryptFailed"));
+    } finally {
+      setDecrypting(false);
     }
-    setDecrypting(false);
   }
 
   if (loading) {
@@ -351,6 +363,30 @@ export function FormSubmissionsPage() {
                   blobId={selectedSubmission.encryptedBlobId ?? selectedSubmission.blobId}
                 />
               </div>
+
+              {selectedSubmission.isEncrypted &&
+              sealRuntime.activeMode === "seal" &&
+              !detailAnswers &&
+              !account?.address ? (
+                <p className="warning-text">{t("sealDecryptWalletPrompt")}</p>
+              ) : null}
+
+              {selectedSubmission.isEncrypted &&
+              sealRuntime.activeMode === "seal" &&
+              !detailAnswers &&
+              account?.address ? (
+                <p className="muted">{t("sealDecryptApprovalPrompt")}</p>
+              ) : null}
+
+              {decryptError ? (
+                <p
+                  className={
+                    decryptError.includes("wallet approval") ? "warning-text" : "error-text"
+                  }
+                >
+                  {decryptError}
+                </p>
+              ) : null}
 
               <div className="grid detail-shell">
                 <div className="stack">

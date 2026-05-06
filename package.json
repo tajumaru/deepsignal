@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@mysten/dapp-kit": "^1.0.4",
+    "@mysten/seal": "^1.1.1",
     "@mysten/sui": "^2.16.0",
     "@tanstack/react-query": "^5.100.9",
     "qrcode": "^1.5.4",
