@@ -5,6 +5,7 @@ import { AdminAccessGate } from "../components/AdminAccessGate";
 import { BlobLink } from "../components/BlobLink";
 import { EmptyState } from "../components/EmptyState";
 import { SealStatusCard } from "../components/SealStatusCard";
+import { shortenContributorId } from "../lib/contributors";
 import { getSealRuntimeStatus } from "../crypto/cryptoFactory";
 import { useI18n } from "../i18n";
 import { getFormAccessState } from "../lib/adminAccess";
@@ -17,6 +18,7 @@ import {
   inferSignalCategory,
   isLocalFallbackBlob,
 } from "../lib/signalInbox";
+import { getTriageStatusLabel, TRIAGE_STATUS_OPTIONS } from "../lib/signalOps";
 import {
   normalizeForm,
   normalizeSubmission,
@@ -33,6 +35,9 @@ type StreamId =
   | "unread"
   | "encrypted"
   | "high"
+  | "planned"
+  | "in_progress"
+  | "fixed"
   | "bug"
   | "feature"
   | "survey"
@@ -47,6 +52,12 @@ function matchesStream(submission: Submission, streamId: StreamId) {
       return submission.isEncrypted;
     case "high":
       return submission.priority === "high";
+    case "planned":
+      return submission.triageStatus === "planned";
+    case "in_progress":
+      return submission.triageStatus === "in_progress";
+    case "fixed":
+      return submission.triageStatus === "fixed";
     case "bug":
       return category === "Bug";
     case "feature":
@@ -75,9 +86,12 @@ export function FormSubmissionsPage() {
   const [detailAttachments, setDetailAttachments] = useState<Submission["attachments"]>([]);
   const [decrypting, setDecrypting] = useState(false);
   const [decryptError, setDecryptError] = useState("");
-  const [saving, setSaving] = useState(false);
+  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [saveError, setSaveError] = useState("");
   const [notesDraft, setNotesDraft] = useState("");
   const [draftTag, setDraftTag] = useState("");
+  const [githubIssueDraft, setGithubIssueDraft] = useState("");
+  const [githubPrDraft, setGithubPrDraft] = useState("");
   const [loading, setLoading] = useState(true);
   const [showMetadata, setShowMetadata] = useState(false);
   const [showEncryptedSignal, setShowEncryptedSignal] = useState(false);
@@ -113,6 +127,8 @@ export function FormSubmissionsPage() {
         flattenAnswer(submission.answers),
         submission.tags.join(" "),
         inferSignalCategory(submission),
+        submission.contributorId ?? "",
+        getTriageStatusLabel(submission.triageStatus),
       ]
         .join(" ")
         .toLowerCase();
@@ -131,13 +147,20 @@ export function FormSubmissionsPage() {
       setDetailAnswers(null);
       setDetailAttachments([]);
       setNotesDraft("");
+      setGithubIssueDraft("");
+      setGithubPrDraft("");
       setDecryptError("");
+      setSaveError("");
+      setSaveState("idle");
       return;
     }
     setNotesDraft(selectedSubmission.notes);
+    setGithubIssueDraft(selectedSubmission.githubIssueUrl ?? "");
+    setGithubPrDraft(selectedSubmission.githubPrUrl ?? "");
     setDetailAnswers(selectedSubmission.isEncrypted ? null : selectedSubmission.answers);
     setDetailAttachments(selectedSubmission.attachments ?? []);
     setDecryptError("");
+    setSaveError("");
   }, [selectedSubmission]);
 
   function applySubmissionUpdate(nextSubmission: Submission) {
@@ -149,14 +172,18 @@ export function FormSubmissionsPage() {
   }
 
   async function updateSubmission(nextSubmission: Submission) {
-    applySubmissionUpdate(nextSubmission);
-    setSelectedSignalId(nextSubmission.id);
+    const normalized = normalizeSubmission(nextSubmission);
+    applySubmissionUpdate(normalized);
+    setSelectedSignalId(normalized.id);
+    setSaveState("saving");
+    setSaveError("");
     const runSave = async () => {
-      setSaving(true);
       try {
-        await storageAdapter.updateSubmission(nextSubmission);
-      } finally {
-        setSaving(false);
+        await storageAdapter.updateSubmission(normalized);
+        setSaveState("saved");
+      } catch (error) {
+        setSaveState("error");
+        setSaveError(error instanceof Error ? error.message : "Failed to save signal operations.");
       }
     };
     saveQueueRef.current = saveQueueRef.current.then(runSave, runSave);
@@ -207,6 +234,21 @@ export function FormSubmissionsPage() {
       count: submissions.filter((submission) => submission.priority === "high").length,
     },
     {
+      id: "planned",
+      label: "Planned Signals",
+      count: submissions.filter((submission) => submission.triageStatus === "planned").length,
+    },
+    {
+      id: "in_progress",
+      label: "In Progress",
+      count: submissions.filter((submission) => submission.triageStatus === "in_progress").length,
+    },
+    {
+      id: "fixed",
+      label: "Fixed Signals",
+      count: submissions.filter((submission) => submission.triageStatus === "fixed").length,
+    },
+    {
       id: "bug",
       label: t("bugReports"),
       count: submissions.filter((submission) => inferSignalCategory(submission) === "Bug").length,
@@ -227,6 +269,36 @@ export function FormSubmissionsPage() {
       count: submissions.filter((submission) => submission.status === "archived").length,
     },
   ] satisfies Array<{ id: StreamId; label: string; count: number }>;
+
+  const summaryCards = [
+    { label: "Total signals", value: submissions.length },
+    {
+      label: "New signals",
+      value: submissions.filter((submission) => submission.triageStatus === "new").length,
+    },
+    {
+      label: "Planned",
+      value: submissions.filter((submission) => submission.triageStatus === "planned").length,
+    },
+    {
+      label: "Fixed",
+      value: submissions.filter((submission) => submission.triageStatus === "fixed").length,
+    },
+    {
+      label: "High value signals",
+      value: submissions.filter((submission) => (submission.signalValue ?? 0) >= 4).length,
+    },
+    {
+      label: "Average signal value",
+      value:
+        submissions.filter((submission) => typeof submission.signalValue === "number").length === 0
+          ? "N/A"
+          : (
+              submissions.reduce((sum, submission) => sum + (submission.signalValue ?? 0), 0) /
+              submissions.filter((submission) => typeof submission.signalValue === "number").length
+            ).toFixed(1),
+    },
+  ];
 
   if (loading) {
     return <div className="panel">{t("loadingSubmissions")}</div>;
@@ -255,7 +327,7 @@ export function FormSubmissionsPage() {
       <section className="stack">
         <div className="panel glow-panel inbox-shell-header">
           <div>
-            <p className="eyebrow">{t("creatorOnlyInbox")}</p>
+            <p className="eyebrow">Signal Triage</p>
             <h1>{form.title}</h1>
             <p className="lede">{form.description || t("encryptedSignalReviewForForm")}</p>
           </div>
@@ -263,10 +335,22 @@ export function FormSubmissionsPage() {
             <Link className="ghost-button" to="/admin">
               {t("allInboxes")}
             </Link>
+            <Link className="ghost-button" to={`/roadmap/${form.id}`}>
+              Open Public Roadmap
+            </Link>
             <Link className="primary-button" to={`/f/${form.id}`}>
               {t("openPublicForm")}
             </Link>
           </div>
+        </div>
+
+        <div className="summary-grid">
+          {summaryCards.map((card) => (
+            <article key={card.label} className="signal-metric">
+              <span>{card.label}</span>
+              <strong>{card.value}</strong>
+            </article>
+          ))}
         </div>
 
         <div className="mobile-console-banner">{t("adminDesktopNotice")}</div>
@@ -328,7 +412,7 @@ export function FormSubmissionsPage() {
           <section className="panel signal-inbox-column">
             <div className="signal-column-header">
               <div>
-                <p className="eyebrow">{t("signalInboxTitle")}</p>
+                <p className="eyebrow">Deep Signals Worth Tracking</p>
                 <h2>{streamItems.find((stream) => stream.id === selectedStreamId)?.label}</h2>
                 <p className="muted">
                   {t("unreadCountSummary", {
@@ -369,22 +453,21 @@ export function FormSubmissionsPage() {
                       <p className="signal-card-preview">{getSignalPreview(submission)}</p>
                       <div className="signal-badge-row">
                         <span className="signal-chip">{category}</span>
+                        <span className="signal-chip">{getTriageStatusLabel(submission.triageStatus)}</span>
+                        <span className="signal-chip">Contributor {shortenContributorId(submission.contributorId)}</span>
+                        {typeof submission.signalValue === "number" ? (
+                          <span className="signal-chip">Signal Value {submission.signalValue}/5</span>
+                        ) : null}
                         {typeof submission.ratingValue === "number" ? (
                           <span className="signal-chip">
                             {t("ratingLabel", { value: submission.ratingValue })}
                           </span>
                         ) : null}
-                        <span className="signal-chip">
-                          {t("attachmentCountLabel", { count: submission.attachments.length })}
-                        </span>
                         {submission.isEncrypted ? (
                           <span className="signal-chip signal-chip-accent">
                             {t("encryptedSignalLabel")}
                           </span>
                         ) : null}
-                        {getStorageDetailLabels(submission.encryptedBlobId ?? submission.blobId).map((label) => (
-                          <span key={label} className="signal-chip">{label}</span>
-                        ))}
                         {submission.status === "unread" ? (
                           <span className="signal-chip signal-chip-accent">
                             {t("newSignalLabel")}
@@ -413,7 +496,7 @@ export function FormSubmissionsPage() {
               <>
                 <div className="signal-detail-heading">
                   <div>
-                    <p className="eyebrow">{t("signalDetailTitle")}</p>
+                    <p className="eyebrow">Contributor Signal</p>
                     <h2>{getSignalSubject(selectedSubmission)}</h2>
                     <p className="muted">{formatDate(selectedSubmission.createdAt)}</p>
                   </div>
@@ -435,12 +518,9 @@ export function FormSubmissionsPage() {
                   <span className={`pill priority-${selectedSubmission.priority}`}>
                     {selectedSubmission.priority}
                   </span>
-                    <span className="pill">{inferSignalCategory(selectedSubmission)}</span>
-                  <span className="pill">
-                    {t("ratingLabel", {
-                      value: selectedSubmission.ratingValue ?? t("notAvailable"),
-                    })}
-                  </span>
+                  <span className="pill">{getTriageStatusLabel(selectedSubmission.triageStatus)}</span>
+                  <span className="pill">{inferSignalCategory(selectedSubmission)}</span>
+                  <span className="pill">Signal Value {selectedSubmission.signalValue ?? "N/A"}</span>
                 </div>
 
                 {selectedSubmission.isEncrypted ? (
@@ -488,26 +568,6 @@ export function FormSubmissionsPage() {
                           <span>{t("averageRating")}</span>
                           <strong>{surveySummary.averageRating ?? t("notAvailable")}</strong>
                         </div>
-                        {Object.entries(surveySummary.choiceCounts).map(([label, counts]) => (
-                          <div key={label} className="metadata-row">
-                            <span>{label}</span>
-                            <div className="stack">
-                              {Object.entries(counts).map(([option, count]) => (
-                                <strong key={option}>{option}: {count}</strong>
-                              ))}
-                            </div>
-                          </div>
-                        ))}
-                        {Object.entries(surveySummary.yesNoDistributions).map(([label, counts]) => (
-                          <div key={label} className="metadata-row">
-                            <span>{label}</span>
-                            <div className="stack">
-                              {Object.entries(counts).map(([option, count]) => (
-                                <strong key={option}>{option}: {count}</strong>
-                              ))}
-                            </div>
-                          </div>
-                        ))}
                       </div>
                       {surveySummary.encryptedPendingCount > 0 ? (
                         <p className="warning-text">{t("surveySummaryEncryptedNotice")}</p>
@@ -548,10 +608,7 @@ export function FormSubmissionsPage() {
                             <div className="stack">
                               <strong className="blob-prominent">{attachment.blobId}</strong>
                               {!isLocalFallbackBlob(attachment.blobId) ? (
-                                <BlobLink
-                                  blobId={attachment.blobId}
-                                  label={t("verifyOnWalrus")}
-                                />
+                                <BlobLink blobId={attachment.blobId} label={t("verifyOnWalrus")} />
                               ) : null}
                             </div>
                           </div>
@@ -561,7 +618,19 @@ export function FormSubmissionsPage() {
                   </section>
 
                   <section className="answer-card">
-                    <h3>{t("reviewControlsTitle")}</h3>
+                    <div className="section-row">
+                      <h3>Signal Operations</h3>
+                      <span className={`save-state-pill is-${saveState}`}>
+                        {saveState === "saving"
+                          ? "Saving signal ops..."
+                          : saveState === "saved"
+                            ? "Saved"
+                            : saveState === "error"
+                              ? "Save failed"
+                              : "Ready"}
+                      </span>
+                    </div>
+                    {saveError ? <p className="warning-text">{saveError}</p> : null}
                     <label>
                       <span>{t("status")}</span>
                       <select
@@ -579,6 +648,24 @@ export function FormSubmissionsPage() {
                       </select>
                     </label>
                     <label>
+                      <span>Signal Triage</span>
+                      <select
+                        value={selectedSubmission.triageStatus}
+                        onChange={(event) =>
+                          void updateSubmission({
+                            ...selectedSubmission,
+                            triageStatus: event.target.value as Submission["triageStatus"],
+                          })
+                        }
+                      >
+                        {TRIAGE_STATUS_OPTIONS.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
                       <span>{t("priority")}</span>
                       <select
                         value={selectedSubmission.priority}
@@ -592,6 +679,25 @@ export function FormSubmissionsPage() {
                         <option value="low">{t("priorityLow")}</option>
                         <option value="medium">{t("priorityMedium")}</option>
                         <option value="high">{t("priorityHigh")}</option>
+                      </select>
+                    </label>
+                    <label>
+                      <span>Signal Value</span>
+                      <select
+                        value={selectedSubmission.signalValue?.toString() ?? ""}
+                        onChange={(event) =>
+                          void updateSubmission({
+                            ...selectedSubmission,
+                            signalValue: event.target.value ? Number(event.target.value) : undefined,
+                          })
+                        }
+                      >
+                        <option value="">Not scored</option>
+                        {[1, 2, 3, 4, 5].map((value) => (
+                          <option key={value} value={value}>
+                            {value}
+                          </option>
+                        ))}
                       </select>
                     </label>
                   </section>
@@ -627,7 +733,7 @@ export function FormSubmissionsPage() {
                       <button
                         type="button"
                         className="ghost-button"
-                        disabled={!draftTag.trim() || saving}
+                        disabled={!draftTag.trim() || saveState === "saving"}
                         onClick={() => {
                           const nextTag = draftTag.trim();
                           if (selectedSubmission.tags.includes(nextTag)) {
@@ -647,7 +753,7 @@ export function FormSubmissionsPage() {
                   </section>
 
                   <section className="answer-card">
-                    <h3>{t("notesTitle")}</h3>
+                    <h3>{t("internalNotes")}</h3>
                     <textarea
                       rows={6}
                       value={notesDraft}
@@ -657,7 +763,7 @@ export function FormSubmissionsPage() {
                     <button
                       type="button"
                       className="primary-button"
-                      disabled={saving}
+                      disabled={saveState === "saving"}
                       onClick={() =>
                         void updateSubmission({
                           ...selectedSubmission,
@@ -667,6 +773,56 @@ export function FormSubmissionsPage() {
                     >
                       {t("saveNote")}
                     </button>
+                  </section>
+
+                  <section className="answer-card">
+                    <h3>GitHub Prep</h3>
+                    <label>
+                      <span>GitHub Issue URL</span>
+                      <input
+                        value={githubIssueDraft}
+                        onChange={(event) => setGithubIssueDraft(event.target.value)}
+                        placeholder="https://github.com/org/repo/issues/123"
+                      />
+                    </label>
+                    <label>
+                      <span>GitHub PR URL</span>
+                      <input
+                        value={githubPrDraft}
+                        onChange={(event) => setGithubPrDraft(event.target.value)}
+                        placeholder="https://github.com/org/repo/pull/456"
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      className="primary-button"
+                      disabled={saveState === "saving"}
+                      onClick={() =>
+                        void updateSubmission({
+                          ...selectedSubmission,
+                          githubIssueUrl: githubIssueDraft,
+                          githubPrUrl: githubPrDraft,
+                        })
+                      }
+                    >
+                      Save GitHub Links
+                    </button>
+                  </section>
+
+                  <section className="answer-card">
+                    <h3>Contributor Signal</h3>
+                    <div className="metadata-list">
+                      <div className="metadata-row">
+                        <span>Contributor</span>
+                        <strong>{shortenContributorId(selectedSubmission.contributorId)}</strong>
+                      </div>
+                      <div className="metadata-row">
+                        <span>Contributor ID</span>
+                        <strong className="blob-prominent">
+                          {selectedSubmission.contributorId ?? "Not available"}
+                        </strong>
+                      </div>
+                    </div>
                   </section>
 
                   <section className="answer-card">
@@ -698,10 +854,7 @@ export function FormSubmissionsPage() {
                               {selectedSubmission.blobId ?? t("notAvailable")}
                             </strong>
                             {!isLocalFallbackBlob(selectedSubmission.blobId) ? (
-                              <BlobLink
-                                blobId={selectedSubmission.blobId}
-                                label={t("verifyOnWalrus")}
-                              />
+                              <BlobLink blobId={selectedSubmission.blobId} label={t("verifyOnWalrus")} />
                             ) : null}
                           </div>
                         </div>
@@ -729,10 +882,7 @@ export function FormSubmissionsPage() {
                                 <div key={attachment.blobId}>
                                   <strong className="blob-prominent">{attachment.blobId}</strong>
                                   {!isLocalFallbackBlob(attachment.blobId) ? (
-                                    <BlobLink
-                                      blobId={attachment.blobId}
-                                      label={t("verifyOnWalrus")}
-                                    />
+                                    <BlobLink blobId={attachment.blobId} label={t("verifyOnWalrus")} />
                                   ) : null}
                                 </div>
                               ))
@@ -751,10 +901,6 @@ export function FormSubmissionsPage() {
                         <div className="metadata-row">
                           <span>{t("sealModeLabel")}</span>
                           <strong>{sealRuntime.isFallback ? "fallback" : sealRuntime.activeMode}</strong>
-                        </div>
-                        <div className="metadata-row">
-                          <span>{t("walletAccessStatus")}</span>
-                          <strong>{getWalletAccessLabel(form, account?.address)}</strong>
                         </div>
                       </div>
                     ) : null}

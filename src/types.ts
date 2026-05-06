@@ -10,6 +10,14 @@ export type FieldType =
 
 export type FormPurpose = "bug" | "feature" | "survey" | "custom";
 export type SubmissionCategory = "bug" | "feature" | "survey" | "general";
+export type SubmissionPriority = "low" | "medium" | "high";
+export type SubmissionTriageStatus =
+  | "new"
+  | "investigating"
+  | "planned"
+  | "in_progress"
+  | "fixed"
+  | "closed";
 
 export interface FormField {
   id: string;
@@ -62,9 +70,14 @@ export interface Submission {
   attachments: SubmissionAttachment[];
   category?: SubmissionCategory;
   status: "unread" | "read" | "archived";
-  priority: "low" | "medium" | "high";
+  priority: SubmissionPriority;
+  triageStatus: SubmissionTriageStatus;
   tags: string[];
   notes: string;
+  contributorId?: string;
+  signalValue?: number;
+  githubIssueUrl?: string;
+  githubPrUrl?: string;
   isEncrypted: boolean;
   encryptedBlobId?: string;
   subjectPreview?: string;

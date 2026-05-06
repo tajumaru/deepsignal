@@ -242,9 +242,16 @@ button {
 
 .grid,
 .card-grid,
-.stack {
+.stack,
+.summary-grid,
+.roadmap-group-grid,
+.roadmap-card-list {
   display: grid;
   gap: 1rem;
+}
+
+.summary-grid {
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
 }
 
 .builder-form-stack {
@@ -1000,6 +1007,27 @@ textarea {
   background: rgba(248, 113, 113, 0.18);
 }
 
+.save-state-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.35rem 0.7rem;
+  border-radius: 999px;
+  font-size: 0.82rem;
+  background: rgba(148, 163, 184, 0.18);
+}
+
+.save-state-pill.is-saving {
+  background: rgba(14, 165, 198, 0.2);
+}
+
+.save-state-pill.is-saved {
+  background: rgba(52, 211, 153, 0.18);
+}
+
+.save-state-pill.is-error {
+  background: rgba(248, 113, 113, 0.18);
+}
+
 .signal-detail-column {
   display: grid;
   gap: 1rem;
@@ -1092,6 +1120,34 @@ textarea {
   color: #d6f7ff;
 }
 
+.static-tag-pill {
+  cursor: default;
+}
+
+.roadmap-hero {
+  background:
+    radial-gradient(circle at top right, rgba(120, 231, 255, 0.14), transparent 28%),
+    linear-gradient(180deg, rgba(4, 18, 31, 0.95), rgba(3, 13, 24, 0.95));
+}
+
+.roadmap-group-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.roadmap-column {
+  align-content: start;
+}
+
+.roadmap-card {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.roadmap-preview {
+  margin-bottom: 0;
+  color: #d5eef8;
+}
+
 @media (max-width: 900px) {
   .hero-layout,
   .builder-layout,
@@ -1100,7 +1156,8 @@ textarea {
   .two-col,
   .inbox-layout,
   .detail-shell,
-  .inbox-topline {
+  .inbox-topline,
+  .roadmap-group-grid {
     grid-template-columns: 1fr;
   }
 

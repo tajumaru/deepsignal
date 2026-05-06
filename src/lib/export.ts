@@ -14,7 +14,14 @@ export function exportSubmissionsCsv(form: FormSchema, submissions: Submission[]
     "submissionId",
     "createdAt",
     "status",
+    "triageStatus",
     "priority",
+    "signalValue",
+    "contributorId",
+    "tags",
+    "notes",
+    "githubIssueUrl",
+    "githubPrUrl",
     ...form.fields.map((field) => field.label),
   ];
 
@@ -23,7 +30,14 @@ export function exportSubmissionsCsv(form: FormSchema, submissions: Submission[]
       submission.id,
       submission.createdAt,
       submission.status,
+      submission.triageStatus,
       submission.priority,
+      submission.signalValue ?? "",
+      submission.contributorId ?? "",
+      submission.tags.join("|"),
+      submission.notes,
+      submission.githubIssueUrl ?? "",
+      submission.githubPrUrl ?? "",
     ];
     const answers = form.fields.map((field) => flattenAnswer(submission.answers[field.id]));
     return [...base, ...answers];

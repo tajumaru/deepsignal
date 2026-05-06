@@ -1,8 +1,10 @@
+import { useCurrentAccount } from "@mysten/dapp-kit";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useParams } from "react-router-dom";
 import { BlobLink } from "../components/BlobLink";
 import { DynamicField } from "../components/DynamicField";
 import { EmptyState } from "../components/EmptyState";
+import { makeAnonymousContributorId } from "../lib/contributors";
 import { useI18n } from "../i18n";
 import { getSubmissionCategoryFromPurpose } from "../lib/formTemplates";
 import { getStorageDetailLabels, isLocalFallbackBlob } from "../lib/signalInbox";
@@ -15,6 +17,7 @@ type ValidationErrors = Record<string, string>;
 
 export function PublicFormPage() {
   const { t } = useI18n();
+  const account = useCurrentAccount();
   const { formId = "" } = useParams();
   const [form, setForm] = useState<FormSchema | null>(null);
   const [answers, setAnswers] = useState<PublicAnswers>({});
@@ -115,8 +118,10 @@ export function PublicFormPage() {
         category: getSubmissionCategoryFromPurpose(form.purpose),
         status: "unread",
         priority: "medium",
+        triageStatus: "new",
         tags: [],
         notes: "",
+        contributorId: account?.address ?? makeAnonymousContributorId(),
         isEncrypted: Boolean(form.encryptSubmissions),
         createdAt: new Date().toISOString(),
       };

@@ -100,6 +100,33 @@ function coercePriority(priority: unknown): Submission["priority"] {
   return "medium";
 }
 
+function coerceTriageStatus(triageStatus: unknown): Submission["triageStatus"] {
+  if (
+    triageStatus === "new" ||
+    triageStatus === "investigating" ||
+    triageStatus === "planned" ||
+    triageStatus === "in_progress" ||
+    triageStatus === "fixed" ||
+    triageStatus === "closed"
+  ) {
+    return triageStatus;
+  }
+  return "new";
+}
+
+function coerceSignalValue(signalValue: unknown): Submission["signalValue"] {
+  const value =
+    typeof signalValue === "number"
+      ? signalValue
+      : typeof signalValue === "string"
+        ? Number(signalValue)
+        : undefined;
+  if (!value || !Number.isFinite(value) || value < 1 || value > 5) {
+    return undefined;
+  }
+  return Math.round(value);
+}
+
 export function normalizeSubmission(raw: Submission | (Record<string, unknown> & { id: string; formId: string; createdAt: string })) {
   const legacyNotes = Array.isArray(raw.notes)
     ? raw.notes
@@ -129,8 +156,13 @@ export function normalizeSubmission(raw: Submission | (Record<string, unknown> &
         : "general",
     status: coerceStatus(raw.status),
     priority: coercePriority(raw.priority),
+    triageStatus: coerceTriageStatus(raw.triageStatus),
     tags: Array.isArray(raw.tags) ? raw.tags.map(String) : [],
     notes: legacyNotes,
+    contributorId: typeof raw.contributorId === "string" ? raw.contributorId : undefined,
+    signalValue: coerceSignalValue(raw.signalValue),
+    githubIssueUrl: typeof raw.githubIssueUrl === "string" ? raw.githubIssueUrl : undefined,
+    githubPrUrl: typeof raw.githubPrUrl === "string" ? raw.githubPrUrl : undefined,
     isEncrypted: Boolean(raw.isEncrypted),
     encryptedBlobId: typeof raw.encryptedBlobId === "string" ? raw.encryptedBlobId : undefined,
     subjectPreview: typeof raw.subjectPreview === "string" ? raw.subjectPreview : undefined,
@@ -221,8 +253,13 @@ export async function saveSubmissionWithEncryption(
       submission.priority === "low" || submission.priority === "medium" || submission.priority === "high"
         ? submission.priority
         : inferPriorityFromTemplateAnswers(normalizeFormPurpose(form.purpose), form.fields, submission.answers),
+    triageStatus: coerceTriageStatus(submission.triageStatus),
     tags: submission.tags ?? [],
     notes: submission.notes ?? "",
+    contributorId: submission.contributorId,
+    signalValue: coerceSignalValue(submission.signalValue),
+    githubIssueUrl: typeof submission.githubIssueUrl === "string" ? submission.githubIssueUrl.trim() || undefined : undefined,
+    githubPrUrl: typeof submission.githubPrUrl === "string" ? submission.githubPrUrl.trim() || undefined : undefined,
     subjectPreview: getSubjectPreview(form, submission.answers),
     ratingValue: getRatingValue(form, submission.answers),
   };

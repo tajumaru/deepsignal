@@ -6,6 +6,7 @@ import { ManifestRestorePage } from "./pages/ManifestRestorePage";
 import { FormSubmissionsPage } from "./pages/FormSubmissionsPage";
 import { LandingPage } from "./pages/LandingPage";
 import { PublicFormPage } from "./pages/PublicFormPage";
+import { PublicRoadmapPage } from "./pages/PublicRoadmapPage";
 import { SubmissionDetailPage } from "./pages/SubmissionDetailPage";
 
 export default function App() {
@@ -28,6 +29,7 @@ export default function App() {
         />
         <Route path="/admin/submissions/:submissionId" element={<SubmissionDetailPage />} />
         <Route path="/f/:formId" element={<PublicFormPage />} />
+        <Route path="/roadmap/:formId" element={<PublicRoadmapPage />} />
         <Route path="/m/:manifestBlobId" element={<ManifestRestorePage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
