@@ -1,4 +1,9 @@
 import { cryptoAdapter } from "../crypto/cryptoFactory";
+import {
+  getSubmissionCategoryFromPurpose,
+  inferPriorityFromTemplateAnswers,
+  normalizeFormPurpose,
+} from "./formTemplates";
 import { storage } from "../storage/storageFactory";
 import type { FormField, FormSchema, SealAdapter, StorageAdapter, Submission } from "../types";
 
@@ -118,6 +123,10 @@ export function normalizeSubmission(raw: Submission | (Record<string, unknown> &
     formId: raw.formId,
     answers: typeof raw.answers === "object" && raw.answers ? (raw.answers as Record<string, unknown>) : {},
     attachments: Array.isArray(raw.attachments) ? raw.attachments : [],
+    category:
+      raw.category === "bug" || raw.category === "feature" || raw.category === "survey" || raw.category === "general"
+        ? raw.category
+        : "general",
     status: coerceStatus(raw.status),
     priority: coercePriority(raw.priority),
     tags: Array.isArray(raw.tags) ? raw.tags.map(String) : [],
@@ -134,6 +143,17 @@ export function normalizeSubmission(raw: Submission | (Record<string, unknown> &
     createdAt: raw.createdAt,
     blobId: typeof raw.blobId === "string" ? raw.blobId : undefined,
   } satisfies Submission;
+}
+
+export function normalizeForm(raw: FormSchema | (Record<string, unknown> & { id: string })) {
+  return {
+    ...raw,
+    title: typeof raw.title === "string" ? raw.title : "",
+    description: typeof raw.description === "string" ? raw.description : "",
+    fields: Array.isArray(raw.fields) ? (raw.fields as FormField[]) : [],
+    purpose: normalizeFormPurpose(raw.purpose),
+    createdAt: typeof raw.createdAt === "string" ? raw.createdAt : new Date(0).toISOString(),
+  } satisfies FormSchema;
 }
 
 function getSubjectPreview(form: FormSchema, answers: Record<string, unknown>) {
@@ -195,8 +215,12 @@ export async function saveSubmissionWithEncryption(
 ) {
   const baseSubmission: Submission = {
     ...submission,
+    category: submission.category ?? getSubmissionCategoryFromPurpose(normalizeFormPurpose(form.purpose)),
     status: coerceStatus(submission.status),
-    priority: coercePriority(submission.priority),
+    priority:
+      submission.priority === "low" || submission.priority === "medium" || submission.priority === "high"
+        ? submission.priority
+        : inferPriorityFromTemplateAnswers(normalizeFormPurpose(form.purpose), form.fields, submission.answers),
     tags: submission.tags ?? [],
     notes: submission.notes ?? "",
     subjectPreview: getSubjectPreview(form, submission.answers),

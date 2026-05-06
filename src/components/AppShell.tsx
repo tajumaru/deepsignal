@@ -51,11 +51,18 @@ export function AppShell({ children }: PropsWithChildren) {
       </header>
       <main className="page-wrap">{children}</main>
       <footer className="app-footer panel">
-        <p>
-          {t("storageLabel")}:{" "}
-          {storageStatus.mode === "walrus" ? t("storageWalrus") : t("storageLocalFallback")}
-        </p>
-        {storageStatus.notice ? <p className="warning-text">{t("walrusFallbackNotice")}</p> : null}
+        {storageStatus.mode === "walrus" ? (
+          <p>
+            {t("storageLabel")}: {t("storageWalrus")}
+          </p>
+        ) : (
+          <div>
+            <p>{t("storedLocallyOnly")}</p>
+            <p>{t("walrusFailedOrNotConfigured")}</p>
+            <p>{t("demoLocalFallbackData")}</p>
+          </div>
+        )}
+        {storageStatus.notice ? <p className="warning-text">{storageStatus.notice}</p> : null}
       </footer>
     </div>
   );

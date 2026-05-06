@@ -6,15 +6,20 @@ type RuntimeMode = "walrus" | "local-fallback";
 type RuntimeStatus = { mode: RuntimeMode; notice: string | null };
 
 const listeners = new Set<() => void>();
+const requireWalrus = String(import.meta.env.VITE_REQUIRE_WALRUS).toLowerCase() === "true";
+const walrusRequested = requireWalrus || import.meta.env.VITE_STORAGE_MODE === "walrus";
 
 const walrusConfigured =
-  import.meta.env.VITE_STORAGE_MODE === "walrus" &&
+  walrusRequested &&
   Boolean(import.meta.env.VITE_WALRUS_PUBLISHER_URL) &&
   Boolean(import.meta.env.VITE_WALRUS_AGGREGATOR_URL);
 
 let runtimeStatus: RuntimeStatus = {
-  mode: walrusConfigured ? "walrus" : "local-fallback",
-  notice: null,
+  mode: walrusRequested ? "walrus" : "local-fallback",
+  notice:
+    requireWalrus && !walrusConfigured
+      ? "Walrus is required, but the publisher or aggregator URL is not configured."
+      : null,
 };
 
 function emitStatus(next: Partial<RuntimeStatus>) {
@@ -44,6 +49,13 @@ async function withWriteFallback<T>(walrusTask: () => Promise<T>, localTask: () 
     return result;
   } catch (error) {
     console.error(error);
+    if (requireWalrus) {
+      emitStatus({
+        mode: "walrus",
+        notice: error instanceof Error ? error.message : "Walrus is required for this build.",
+      });
+      throw error;
+    }
     emitStatus({
       mode: "local-fallback",
       notice: "Walrus upload failed. Saved locally instead.",
@@ -121,7 +133,7 @@ const hybridWalrusStorage: StorageAdapter = {
   },
 };
 
-export const storage: StorageAdapter = walrusConfigured ? hybridWalrusStorage : localStorageAdapter;
+export const storage: StorageAdapter = walrusRequested ? hybridWalrusStorage : localStorageAdapter;
 
 export function getStorageRuntimeStatus() {
   return runtimeStatus;

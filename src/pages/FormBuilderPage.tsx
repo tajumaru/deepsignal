@@ -6,11 +6,17 @@ import { BlobLink } from "../components/BlobLink";
 import { FormFieldEditor } from "../components/FormFieldEditor";
 import { ShareCard } from "../components/ShareCard";
 import { useI18n } from "../i18n";
+import {
+  createTemplateFields,
+  formTemplates,
+  getTemplateDefinition,
+  normalizeFormPurpose,
+} from "../lib/formTemplates";
 import { fieldTypeOptions } from "../lib/constants";
 import { shortAddress } from "../lib/sui";
 import { storageAdapter } from "../lib/storage";
 import { makeId } from "../lib/utils";
-import type { FormField, FormSchema } from "../types";
+import type { FormField, FormPurpose, FormSchema } from "../types";
 
 function createField(type = fieldTypeOptions[0]): FormField {
   return {
@@ -27,12 +33,14 @@ function serializeDraft(
   title: string,
   description: string,
   fields: FormField[],
+  purpose: FormPurpose,
   createOnSui: boolean,
   encryptSubmissions: boolean,
 ) {
   return JSON.stringify({
     title,
     description,
+    purpose,
     createOnSui,
     encryptSubmissions,
     fields: fields.map((field) => ({
@@ -45,7 +53,7 @@ function serializeDraft(
   });
 }
 
-const INITIAL_DRAFT_SNAPSHOT = serializeDraft("", "", [createField()], false, true);
+const INITIAL_DRAFT_SNAPSHOT = serializeDraft("", "", [createField()], "custom", false, true);
 
 export function FormBuilderPage() {
   const { t } = useI18n();
@@ -54,6 +62,7 @@ export function FormBuilderPage() {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [fields, setFields] = useState<FormField[]>([createField()]);
+  const [purpose, setPurpose] = useState<FormPurpose>("custom");
   const [createOnSui, setCreateOnSui] = useState(false);
   const [encryptSubmissions, setEncryptSubmissions] = useState(true);
   const [savedForm, setSavedForm] = useState<FormSchema | null>(null);
@@ -70,8 +79,8 @@ export function FormBuilderPage() {
   }, []);
 
   const draftSnapshot = useMemo(
-    () => serializeDraft(title, description, fields, createOnSui, encryptSubmissions),
-    [createOnSui, description, encryptSubmissions, fields, title],
+    () => serializeDraft(title, description, fields, purpose, createOnSui, encryptSubmissions),
+    [createOnSui, description, encryptSubmissions, fields, purpose, title],
   );
 
   const isDirty = draftSnapshot !== lastSavedSnapshot;
@@ -104,6 +113,21 @@ export function FormBuilderPage() {
 
   function updateField(index: number, nextField: FormField) {
     setFields((current) => current.map((field, idx) => (idx === index ? nextField : field)));
+  }
+
+  function applyTemplate(nextPurpose: FormPurpose) {
+    const template = getTemplateDefinition(nextPurpose);
+    setPurpose(normalizeFormPurpose(nextPurpose));
+    if (nextPurpose === "custom") {
+      setTitle("");
+      setDescription("");
+      setFields([createField()]);
+      return;
+    }
+    setTitle(template.title);
+    setDescription(template.description);
+    setFields(createTemplateFields(template));
+    setError("");
   }
 
   async function handleSubmit(event: FormEvent) {
@@ -150,6 +174,7 @@ export function FormBuilderPage() {
             ? (field.options ?? []).filter(Boolean)
             : undefined,
       })),
+      purpose,
       createdAt: new Date().toISOString(),
       ownerAddress: account.address,
       isOnchain: false,
@@ -159,6 +184,9 @@ export function FormBuilderPage() {
       const { blobId, manifestBlobId } = await storageAdapter.saveForm(form);
       setSavedForm({ ...form, blobId, manifestBlobId });
       setLastSavedSnapshot(draftSnapshot);
+      setError("");
+    } catch (submitError) {
+      setError(submitError instanceof Error ? submitError.message : t("saveFailed"));
     } finally {
       setSaving(false);
     }
@@ -236,6 +264,35 @@ export function FormBuilderPage() {
               placeholder={t("builderDescriptionPlaceholder")}
             />
           </label>
+
+          <section className="panel field-editor">
+            <div className="section-row">
+              <div>
+                <p className="eyebrow">{t("templateEyebrow")}</p>
+                <h2>{t("templateTitle")}</h2>
+              </div>
+            </div>
+            <div className="card-grid template-grid">
+              {formTemplates.map((template) => {
+                const active = purpose === template.id;
+                return (
+                  <button
+                    key={template.id}
+                    type="button"
+                    className={`template-card ${active ? "is-active" : ""}`}
+                    onClick={() => applyTemplate(template.id)}
+                  >
+                    <strong>{template.label}</strong>
+                    <span className="muted">
+                      {template.id === "custom"
+                        ? t("templateCustomBody")
+                        : t("templateFieldCount", { count: template.fields.length })}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </section>
 
           <section className="panel field-editor sui-toggle-card">
             <div className="section-row">
@@ -374,9 +431,9 @@ export function FormBuilderPage() {
             <ShareCard formId={savedForm.id} />
           </div>
         ) : (
-          <p className="muted">{t("saveFormHint")}</p>
-        )}
-      </aside>
+            <p className="muted">{t("saveFormHint")}</p>
+          )}
+        </aside>
       </section>
     </AdminAccessGate>
   );

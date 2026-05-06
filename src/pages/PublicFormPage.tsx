@@ -3,10 +3,10 @@ import { useParams } from "react-router-dom";
 import { BlobLink } from "../components/BlobLink";
 import { DynamicField } from "../components/DynamicField";
 import { EmptyState } from "../components/EmptyState";
-import { Link } from "react-router-dom";
-import { getSealRuntimeStatus } from "../crypto/cryptoFactory";
 import { useI18n } from "../i18n";
-import { createEmptyAnswer, saveSubmissionWithEncryption, storageAdapter } from "../lib/storage";
+import { getSubmissionCategoryFromPurpose } from "../lib/formTemplates";
+import { getStorageDetailLabels, isLocalFallbackBlob } from "../lib/signalInbox";
+import { createEmptyAnswer, normalizeForm, saveSubmissionWithEncryption, storageAdapter } from "../lib/storage";
 import { makeId } from "../lib/utils";
 import type { FormSchema, Submission, SubmissionAttachment } from "../types";
 
@@ -16,18 +16,18 @@ type ValidationErrors = Record<string, string>;
 export function PublicFormPage() {
   const { t } = useI18n();
   const { formId = "" } = useParams();
-  const sealRuntime = getSealRuntimeStatus();
   const [form, setForm] = useState<FormSchema | null>(null);
   const [answers, setAnswers] = useState<PublicAnswers>({});
   const [errors, setErrors] = useState<ValidationErrors>({});
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState<Submission | null>(null);
+  const [submitError, setSubmitError] = useState("");
 
   useEffect(() => {
     async function load() {
       const nextForm = await storageAdapter.getForm(formId);
-      setForm(nextForm);
+      setForm(nextForm ? normalizeForm(nextForm) : null);
       if (nextForm) {
         setAnswers(
           Object.fromEntries(nextForm.fields.map((field) => [field.id, createEmptyAnswer(field)])),
@@ -80,6 +80,7 @@ export function PublicFormPage() {
     }
 
     setSubmitting(true);
+    setSubmitError("");
     try {
       const attachments: SubmissionAttachment[] = [];
       const plainAnswers: PublicAnswers = {};
@@ -111,6 +112,7 @@ export function PublicFormPage() {
         formId: form.id,
         answers: plainAnswers,
         attachments,
+        category: getSubmissionCategoryFromPurpose(form.purpose),
         status: "unread",
         priority: "medium",
         tags: [],
@@ -125,6 +127,8 @@ export function PublicFormPage() {
         blobId: result.blobId,
         encryptedBlobId: "encryptedBlobId" in result ? result.encryptedBlobId : undefined,
       });
+    } catch (error) {
+      setSubmitError(error instanceof Error ? error.message : t("submitFailed"));
     } finally {
       setSubmitting(false);
     }
@@ -144,18 +148,19 @@ export function PublicFormPage() {
   }
 
   if (submitted) {
+    const storageLabels = getStorageDetailLabels(submitted.encryptedBlobId ?? submitted.blobId);
     return (
       <section className="panel glow-panel success-screen">
         <p className="eyebrow">{t("signalReceived")}</p>
         <h1>Signal Captured</h1>
-        <p>Stored on Walrus</p>
+        <p>{isLocalFallbackBlob(submitted.encryptedBlobId ?? submitted.blobId) ? "Stored locally only" : "Stored on Walrus"}</p>
         <p>{t("thanksForFeedback")}</p>
         <div className="success-copy">
-          <p>{form.encryptSubmissions ? "Encrypted by Seal" : "Stored without full-payload encryption"}</p>
-          <p>Delivered to creator inbox</p>
+          {storageLabels.map((label) => (
+            <p key={label}>{label}</p>
+          ))}
         </div>
         <section className="answer-card">
-          <h3>Signal Metadata</h3>
           <div className="metadata-list">
             <div className="metadata-row">
               <span>Submission Blob ID</span>
@@ -190,20 +195,8 @@ export function PublicFormPage() {
                 )}
               </div>
             </div>
-            <div className="metadata-row">
-              <span>Seal mode</span>
-              <strong>{sealRuntime.isFallback ? "fallback" : sealRuntime.activeMode}</strong>
-            </div>
           </div>
         </section>
-        <div className="inline-actions demo-actions">
-          <Link className="ghost-button" to={`/dashboard/forms/${form.id}/submissions/${submitted.id}`}>
-            {t("openInboxDemo")}
-          </Link>
-          <Link className="primary-button" to={`/dashboard/forms/${form.id}/submissions/${submitted.id}`}>
-            {t("reviewAndDecrypt")}
-          </Link>
-        </div>
       </section>
     );
   }
@@ -228,6 +221,7 @@ export function PublicFormPage() {
           />
         ))}
       </div>
+      {submitError ? <p className="error-text">{submitError}</p> : null}
       <button type="submit" className="primary-button" disabled={submitting}>
         {submitting ? t("submitting") : t("submitFeedback")}
       </button>

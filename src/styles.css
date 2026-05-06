@@ -478,9 +478,27 @@ textarea {
 .empty-state,
 .share-card,
 .upload-card,
-.sui-toggle-card {
+.sui-toggle-card,
+.template-card {
   background: rgba(4, 18, 31, 0.58);
   border: 1px solid rgba(116, 226, 255, 0.14);
+}
+
+.template-grid {
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.template-card {
+  width: 100%;
+  text-align: left;
+  border-radius: 20px;
+  padding: 1rem;
+  color: inherit;
+}
+
+.template-card.is-active {
+  border-color: rgba(135, 244, 255, 0.42);
+  box-shadow: 0 0 0 1px rgba(149, 242, 255, 0.1), 0 0 28px rgba(102, 227, 255, 0.08);
 }
 
 .sui-toggle-card {

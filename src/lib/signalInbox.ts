@@ -2,7 +2,7 @@ import { getBlobViewerUrl } from "../storage/storageFactory";
 import { flattenAnswer } from "./utils";
 import type { FormSchema, Submission } from "../types";
 
-export type SignalCategory = "Bug" | "Feature" | "Praise" | "General" | "Unknown";
+export type SignalCategory = "Bug" | "Feature" | "Survey" | "Praise" | "General" | "Unknown";
 
 export function getSignalSubject(submission: Submission) {
   return submission.subjectPreview?.trim() || `Signal ${submission.id.slice(0, 8)}`;
@@ -23,6 +23,19 @@ export function getSignalPreview(submission: Submission) {
 }
 
 export function inferSignalCategory(submission: Submission): SignalCategory {
+  if (submission.category === "bug") {
+    return "Bug";
+  }
+  if (submission.category === "feature") {
+    return "Feature";
+  }
+  if (submission.category === "survey") {
+    return "Survey";
+  }
+  if (submission.category === "general") {
+    return "General";
+  }
+
   try {
     const haystack = [
       submission.subjectPreview,
@@ -61,7 +74,21 @@ export function getStorageBadgeLabel(blobId?: string | null) {
   if (!blobId) {
     return "Not available";
   }
-  return isLocalFallbackBlob(blobId) ? "Local fallback" : "Stored on Walrus";
+  return isLocalFallbackBlob(blobId) ? "Stored locally only" : "Stored on Walrus";
+}
+
+export function getStorageDetailLabels(blobId?: string | null) {
+  if (!blobId) {
+    return [];
+  }
+  if (!isLocalFallbackBlob(blobId)) {
+    return ["Stored on Walrus"];
+  }
+  return [
+    "Stored locally only",
+    "Walrus upload failed or not configured",
+    "This is demo/local fallback data",
+  ];
 }
 
 export function getWalletAccessLabel(form: FormSchema, currentAddress?: string | null) {

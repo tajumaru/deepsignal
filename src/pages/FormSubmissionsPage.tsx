@@ -8,19 +8,22 @@ import { SealStatusCard } from "../components/SealStatusCard";
 import { getSealRuntimeStatus } from "../crypto/cryptoFactory";
 import { useI18n } from "../i18n";
 import { getFormAccessState } from "../lib/adminAccess";
-import { exportSubmissionJson, exportSubmissionsCsv } from "../lib/export";
+import { exportSubmissionJson, exportSubmissionsCsv, exportSummaryJson } from "../lib/export";
 import {
   getSignalPreview,
   getSignalSubject,
+  getStorageDetailLabels,
   getWalletAccessLabel,
   inferSignalCategory,
   isLocalFallbackBlob,
 } from "../lib/signalInbox";
 import {
+  normalizeForm,
   normalizeSubmission,
   resolveSubmissionAnswers,
   storageAdapter,
 } from "../lib/storage";
+import { buildSurveySummary } from "../lib/surveySummary";
 import { formatDate, flattenAnswer } from "../lib/utils";
 import { getStorageRuntimeStatus } from "../storage/storageFactory";
 import type { FormSchema, Submission } from "../types";
@@ -32,6 +35,7 @@ type StreamId =
   | "high"
   | "bug"
   | "feature"
+  | "survey"
   | "archived";
 
 function matchesStream(submission: Submission, streamId: StreamId) {
@@ -47,6 +51,8 @@ function matchesStream(submission: Submission, streamId: StreamId) {
       return category === "Bug";
     case "feature":
       return category === "Feature";
+    case "survey":
+      return category === "Survey";
     case "archived":
       return submission.status === "archived";
     default:
@@ -86,7 +92,7 @@ export function FormSubmissionsPage() {
       storageAdapter.getForm(formId),
       storageAdapter.listSubmissions(formId),
     ]);
-    setForm(nextForm);
+    setForm(nextForm ? normalizeForm(nextForm) : null);
     setSubmissions(rawSubmissions.map((submission) => normalizeSubmission(submission)));
     setSelectedSignalId((current) => preferredSignalId ?? submissionId ?? current);
     setLoading(false);
@@ -211,6 +217,11 @@ export function FormSubmissionsPage() {
       count: submissions.filter((submission) => inferSignalCategory(submission) === "Feature").length,
     },
     {
+      id: "survey",
+      label: t("surveys"),
+      count: submissions.filter((submission) => inferSignalCategory(submission) === "Survey").length,
+    },
+    {
       id: "archived",
       label: t("archivedSignals"),
       count: submissions.filter((submission) => submission.status === "archived").length,
@@ -230,6 +241,10 @@ export function FormSubmissionsPage() {
   }
 
   const access = getFormAccessState(form, account?.address);
+  const surveySummary = buildSurveySummary(form, submissions);
+  const showSurveySummary =
+    form.purpose === "survey" ||
+    submissions.some((submission) => inferSignalCategory(submission) === "Survey");
 
   return (
     <AdminAccessGate
@@ -298,6 +313,15 @@ export function FormSubmissionsPage() {
               >
                 {t("exportCsv")}
               </button>
+              {showSurveySummary ? (
+                <button
+                  type="button"
+                  className="ghost-button"
+                  onClick={() => exportSummaryJson(form, surveySummary)}
+                >
+                  {t("exportSummaryJson")}
+                </button>
+              ) : null}
             </div>
           </aside>
 
@@ -358,11 +382,9 @@ export function FormSubmissionsPage() {
                             {t("encryptedSignalLabel")}
                           </span>
                         ) : null}
-                        <span className="signal-chip">
-                          {isLocalFallbackBlob(submission.encryptedBlobId ?? submission.blobId)
-                            ? t("localFallbackLabel")
-                            : t("storedOnWalrus")}
-                        </span>
+                        {getStorageDetailLabels(submission.encryptedBlobId ?? submission.blobId).map((label) => (
+                          <span key={label} className="signal-chip">{label}</span>
+                        ))}
                         {submission.status === "unread" ? (
                           <span className="signal-chip signal-chip-accent">
                             {t("newSignalLabel")}
@@ -413,7 +435,7 @@ export function FormSubmissionsPage() {
                   <span className={`pill priority-${selectedSubmission.priority}`}>
                     {selectedSubmission.priority}
                   </span>
-                  <span className="pill">{inferSignalCategory(selectedSubmission)}</span>
+                    <span className="pill">{inferSignalCategory(selectedSubmission)}</span>
                   <span className="pill">
                     {t("ratingLabel", {
                       value: selectedSubmission.ratingValue ?? t("notAvailable"),
@@ -451,6 +473,48 @@ export function FormSubmissionsPage() {
                 {decryptError ? <p className="warning-text">{decryptError}</p> : null}
 
                 <div className="signal-detail-sections">
+                  {showSurveySummary ? (
+                    <section className="answer-card">
+                      <div className="section-row">
+                        <h3>{t("surveySummaryTitle")}</h3>
+                        <span className="muted">{t("submissionCountLabel", { count: surveySummary.submissionCount })}</span>
+                      </div>
+                      <div className="metadata-list">
+                        <div className="metadata-row">
+                          <span>{t("submissionCount")}</span>
+                          <strong>{surveySummary.submissionCount}</strong>
+                        </div>
+                        <div className="metadata-row">
+                          <span>{t("averageRating")}</span>
+                          <strong>{surveySummary.averageRating ?? t("notAvailable")}</strong>
+                        </div>
+                        {Object.entries(surveySummary.choiceCounts).map(([label, counts]) => (
+                          <div key={label} className="metadata-row">
+                            <span>{label}</span>
+                            <div className="stack">
+                              {Object.entries(counts).map(([option, count]) => (
+                                <strong key={option}>{option}: {count}</strong>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                        {Object.entries(surveySummary.yesNoDistributions).map(([label, counts]) => (
+                          <div key={label} className="metadata-row">
+                            <span>{label}</span>
+                            <div className="stack">
+                              {Object.entries(counts).map(([option, count]) => (
+                                <strong key={option}>{option}: {count}</strong>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      {surveySummary.encryptedPendingCount > 0 ? (
+                        <p className="warning-text">{t("surveySummaryEncryptedNotice")}</p>
+                      ) : null}
+                    </section>
+                  ) : null}
+
                   <section className="answer-card">
                     <h3>{t("answersTitle")}</h3>
                     {detailAnswers ? (
@@ -677,11 +741,12 @@ export function FormSubmissionsPage() {
                         </div>
                         <div className="metadata-row">
                           <span>{t("storageMode")}</span>
-                          <strong>
-                            {storageRuntime.mode === "walrus"
-                              ? t("storageWalrus")
-                              : t("localFallbackLabel")}
-                          </strong>
+                          <div className="stack">
+                            {getStorageDetailLabels(selectedSubmission.encryptedBlobId ?? selectedSubmission.blobId).map((label) => (
+                              <strong key={label}>{label}</strong>
+                            ))}
+                            {storageRuntime.mode === "walrus" ? <strong>{t("storageWalrus")}</strong> : null}
+                          </div>
                         </div>
                         <div className="metadata-row">
                           <span>{t("sealModeLabel")}</span>

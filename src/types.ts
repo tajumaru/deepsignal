@@ -8,6 +8,9 @@ export type FieldType =
   | "screenshot"
   | "video";
 
+export type FormPurpose = "bug" | "feature" | "survey" | "custom";
+export type SubmissionCategory = "bug" | "feature" | "survey" | "general";
+
 export interface FormField {
   id: string;
   type: FieldType;
@@ -22,6 +25,7 @@ export interface FormSchema {
   title: string;
   description: string;
   fields: FormField[];
+  purpose?: FormPurpose;
   createdAt: string;
   ownerAddress?: string;
   isOnchain?: boolean;
@@ -56,6 +60,7 @@ export interface Submission {
   formId: string;
   answers: Record<string, unknown>;
   attachments: SubmissionAttachment[];
+  category?: SubmissionCategory;
   status: "unread" | "read" | "archived";
   priority: "low" | "medium" | "high";
   tags: string[];

@@ -39,3 +39,11 @@ export function exportSubmissionsCsv(form: FormSchema, submissions: Submission[]
 
   downloadTextFile(`deepsignal-${form.id}-submissions.csv`, csv, "text/csv;charset=utf-8");
 }
+
+export function exportSummaryJson(form: FormSchema, summary: unknown) {
+  downloadTextFile(
+    `deepsignal-${form.id}-survey-summary.json`,
+    JSON.stringify(summary, null, 2),
+    "application/json",
+  );
+}
