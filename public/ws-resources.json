@@ -1,0 +1,10 @@
+{
+  "routes": {
+    "/*": "/index.html"
+  },
+  "metadata": {
+    "site_name": "DeepSignal — Walrus Feedback Lab",
+    "description": "Walrus-native feedback forms with Seal-ready sensitive field encryption.",
+    "link": "https://wal.app"
+  }
+}

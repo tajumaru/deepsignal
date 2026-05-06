@@ -1,0 +1,21 @@
+import { useI18n } from "../i18n";
+import { getBlobViewerUrl } from "../storage/storageFactory";
+
+interface BlobLinkProps {
+  blobId?: string;
+}
+
+export function BlobLink({ blobId }: BlobLinkProps) {
+  const { t } = useI18n();
+  const url = getBlobViewerUrl(blobId);
+
+  if (!url) {
+    return null;
+  }
+
+  return (
+    <a href={url} target="_blank" rel="noreferrer">
+      {t("openBlob")}
+    </a>
+  );
+}
