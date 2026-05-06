@@ -1,1 +1,4 @@
 /.env
+/dist/assets
+/dist
+/node_modules

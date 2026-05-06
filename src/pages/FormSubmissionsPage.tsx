@@ -1,5 +1,5 @@
 import { useCurrentAccount } from "@mysten/dapp-kit";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { AdminAccessGate } from "../components/AdminAccessGate";
 import { BlobLink } from "../components/BlobLink";
@@ -73,6 +73,9 @@ export function FormSubmissionsPage() {
   const [notesDraft, setNotesDraft] = useState("");
   const [draftTag, setDraftTag] = useState("");
   const [loading, setLoading] = useState(true);
+  const [showMetadata, setShowMetadata] = useState(false);
+  const [showEncryptedSignal, setShowEncryptedSignal] = useState(false);
+  const saveQueueRef = useRef(Promise.resolve());
 
   useEffect(() => {
     void loadInbox();
@@ -131,11 +134,27 @@ export function FormSubmissionsPage() {
     setDecryptError("");
   }, [selectedSubmission]);
 
+  function applySubmissionUpdate(nextSubmission: Submission) {
+    setSubmissions((current) =>
+      current.map((submission) =>
+        submission.id === nextSubmission.id ? nextSubmission : submission,
+      ),
+    );
+  }
+
   async function updateSubmission(nextSubmission: Submission) {
-    setSaving(true);
-    await storageAdapter.updateSubmission(nextSubmission);
-    await loadInbox(nextSubmission.id);
-    setSaving(false);
+    applySubmissionUpdate(nextSubmission);
+    setSelectedSignalId(nextSubmission.id);
+    const runSave = async () => {
+      setSaving(true);
+      try {
+        await storageAdapter.updateSubmission(nextSubmission);
+      } finally {
+        setSaving(false);
+      }
+    };
+    saveQueueRef.current = saveQueueRef.current.then(runSave, runSave);
+    await saveQueueRef.current;
   }
 
   async function handleSelect(submission: Submission) {
@@ -158,42 +177,42 @@ export function FormSubmissionsPage() {
         setDetailAttachments(resolved.attachments);
       }
     } catch (error) {
-      setDecryptError(error instanceof Error ? error.message : "Decrypt failed.");
+      setDecryptError(error instanceof Error ? error.message : t("decryptFailed"));
     } finally {
       setDecrypting(false);
     }
   }
 
   const streamItems = [
-    { id: "all", label: "All Signals", count: submissions.length },
+    { id: "all", label: t("allSignals"), count: submissions.length },
     {
       id: "unread",
-      label: "Unread",
+      label: t("unreadSignals"),
       count: submissions.filter((submission) => submission.status === "unread").length,
     },
     {
       id: "encrypted",
-      label: "Encrypted",
+      label: t("encryptedSignals"),
       count: submissions.filter((submission) => submission.isEncrypted).length,
     },
     {
       id: "high",
-      label: "High Priority",
+      label: t("highPrioritySignals"),
       count: submissions.filter((submission) => submission.priority === "high").length,
     },
     {
       id: "bug",
-      label: "Bug Reports",
+      label: t("bugReports"),
       count: submissions.filter((submission) => inferSignalCategory(submission) === "Bug").length,
     },
     {
       id: "feature",
-      label: "Feature Requests",
+      label: t("featureRequests"),
       count: submissions.filter((submission) => inferSignalCategory(submission) === "Feature").length,
     },
     {
       id: "archived",
-      label: "Archived",
+      label: t("archivedSignals"),
       count: submissions.filter((submission) => submission.status === "archived").length,
     },
   ] satisfies Array<{ id: StreamId; label: string; count: number }>;
@@ -216,33 +235,31 @@ export function FormSubmissionsPage() {
     <AdminAccessGate
       hasWallet={Boolean(account?.address)}
       access={access}
-      legacyMessage="Legacy demo form. ownerAddress is missing, so development review access remains enabled."
+      legacyMessage={t("legacyDemoFormBody")}
     >
       <section className="stack">
         <div className="panel glow-panel inbox-shell-header">
           <div>
-            <p className="eyebrow">Creator-only Inbox</p>
+            <p className="eyebrow">{t("creatorOnlyInbox")}</p>
             <h1>{form.title}</h1>
-            <p className="lede">{form.description || "Encrypted signal review for this form."}</p>
+            <p className="lede">{form.description || t("encryptedSignalReviewForForm")}</p>
           </div>
           <div className="inbox-header-actions">
             <Link className="ghost-button" to="/admin">
-              All inboxes
+              {t("allInboxes")}
             </Link>
             <Link className="primary-button" to={`/f/${form.id}`}>
-              Open public form
+              {t("openPublicForm")}
             </Link>
           </div>
         </div>
 
-        <div className="mobile-console-banner">
-          DeepSignal review console is optimized for desktop.
-        </div>
+        <div className="mobile-console-banner">{t("adminDesktopNotice")}</div>
 
         <div className="signal-console-layout">
           <aside className="panel signal-sidebar">
             <div className="signal-sidebar-section">
-              <p className="eyebrow">Signal Streams</p>
+              <p className="eyebrow">{t("signalStreamsTitle")}</p>
               <div className="stream-list">
                 {streamItems.map((stream) => (
                   <button
@@ -260,18 +277,16 @@ export function FormSubmissionsPage() {
 
             <div className="signal-sidebar-section stack">
               <div className="wallet-status-card">
-                <p className="eyebrow">Wallet status</p>
+                <p className="eyebrow">{t("walletStatus")}</p>
                 <strong>{getWalletAccessLabel(form, account?.address)}</strong>
-                <p className="muted">
-                  {form.ownerAddress ?? "Legacy demo form"}
-                </p>
+                <p className="muted">{form.ownerAddress ?? t("legacyDemoForm")}</p>
               </div>
 
               <div className="wallet-status-card">
-                <p className="eyebrow">Form Blob ID</p>
-                <strong className="blob-prominent">{form.blobId ?? "Not available"}</strong>
+                <p className="eyebrow">{t("formBlobId")}</p>
+                <strong className="blob-prominent">{form.blobId ?? t("notAvailable")}</strong>
                 {!isLocalFallbackBlob(form.blobId) ? (
-                  <BlobLink blobId={form.blobId} label="Verify on Walrus" />
+                  <BlobLink blobId={form.blobId} label={t("verifyOnWalrus")} />
                 ) : null}
               </div>
 
@@ -281,7 +296,7 @@ export function FormSubmissionsPage() {
                 onClick={() => exportSubmissionsCsv(form, submissions)}
                 disabled={submissions.length === 0}
               >
-                Export CSV
+                {t("exportCsv")}
               </button>
             </div>
           </aside>
@@ -289,24 +304,26 @@ export function FormSubmissionsPage() {
           <section className="panel signal-inbox-column">
             <div className="signal-column-header">
               <div>
-                <p className="eyebrow">Signal Inbox</p>
+                <p className="eyebrow">{t("signalInboxTitle")}</p>
                 <h2>{streamItems.find((stream) => stream.id === selectedStreamId)?.label}</h2>
                 <p className="muted">
-                  {visibleSignals.filter((submission) => submission.status === "unread").length} unread
-                  · {submissions.length} total
+                  {t("unreadCountSummary", {
+                    count: visibleSignals.filter((submission) => submission.status === "unread").length,
+                    scope: t("totalCountLabel", { count: submissions.length }),
+                  })}
                 </p>
               </div>
               <input
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
-                placeholder="Search signals, answers, or tags"
+                placeholder={t("searchSignalsPlaceholder")}
               />
             </div>
 
             {visibleSignals.length === 0 ? (
               <EmptyState>
-                <h2>No signals in this stream</h2>
-                <p>New encrypted feedback will appear here.</p>
+                <h2>{t("noSignalsInStream")}</h2>
+                <p>{t("newEncryptedFeedbackHere")}</p>
               </EmptyState>
             ) : (
               <div className="signal-list">
@@ -329,25 +346,32 @@ export function FormSubmissionsPage() {
                       <div className="signal-badge-row">
                         <span className="signal-chip">{category}</span>
                         {typeof submission.ratingValue === "number" ? (
-                          <span className="signal-chip">Rating {submission.ratingValue}</span>
+                          <span className="signal-chip">
+                            {t("ratingLabel", { value: submission.ratingValue })}
+                          </span>
                         ) : null}
                         <span className="signal-chip">
-                          {submission.attachments.length}{" "}
-                          {submission.attachments.length === 1 ? "attachment" : "attachments"}
+                          {t("attachmentCountLabel", { count: submission.attachments.length })}
                         </span>
                         {submission.isEncrypted ? (
-                          <span className="signal-chip signal-chip-accent">Encrypted Signal</span>
+                          <span className="signal-chip signal-chip-accent">
+                            {t("encryptedSignalLabel")}
+                          </span>
                         ) : null}
                         <span className="signal-chip">
                           {isLocalFallbackBlob(submission.encryptedBlobId ?? submission.blobId)
-                            ? "Local fallback"
-                            : "Stored on Walrus"}
+                            ? t("localFallbackLabel")
+                            : t("storedOnWalrus")}
                         </span>
                         {submission.status === "unread" ? (
-                          <span className="signal-chip signal-chip-accent">New Signal</span>
+                          <span className="signal-chip signal-chip-accent">
+                            {t("newSignalLabel")}
+                          </span>
                         ) : null}
                         {submission.priority === "high" ? (
-                          <span className="signal-chip signal-chip-warn">High Priority</span>
+                          <span className="signal-chip signal-chip-warn">
+                            {t("highPrioritySignals")}
+                          </span>
                         ) : null}
                       </div>
                     </button>
@@ -360,14 +384,14 @@ export function FormSubmissionsPage() {
           <article className="panel signal-detail-column">
             {!selectedSubmission ? (
               <EmptyState>
-                <h2>Select a signal to review</h2>
-                <p>Incoming encrypted feedback will appear here.</p>
+                <h2>{t("selectSignalToReview")}</h2>
+                <p>{t("incomingEncryptedFeedback")}</p>
               </EmptyState>
             ) : (
               <>
                 <div className="signal-detail-heading">
                   <div>
-                    <p className="eyebrow">Signal Detail</p>
+                    <p className="eyebrow">{t("signalDetailTitle")}</p>
                     <h2>{getSignalSubject(selectedSubmission)}</h2>
                     <p className="muted">{formatDate(selectedSubmission.createdAt)}</p>
                   </div>
@@ -377,7 +401,7 @@ export function FormSubmissionsPage() {
                       className="ghost-button"
                       onClick={() => exportSubmissionJson(form, selectedSubmission)}
                     >
-                      Export JSON
+                      {t("exportJson")}
                     </button>
                   </div>
                 </div>
@@ -391,7 +415,9 @@ export function FormSubmissionsPage() {
                   </span>
                   <span className="pill">{inferSignalCategory(selectedSubmission)}</span>
                   <span className="pill">
-                    Rating {selectedSubmission.ratingValue ?? "Not available"}
+                    {t("ratingLabel", {
+                      value: selectedSubmission.ratingValue ?? t("notAvailable"),
+                    })}
                   </span>
                 </div>
 
@@ -403,12 +429,12 @@ export function FormSubmissionsPage() {
                       onClick={() => void handleDecrypt()}
                       disabled={decrypting}
                     >
-                      {decrypting ? "Decrypting..." : "Decrypt Signal"}
+                      {decrypting ? t("decryptingSignal") : t("decryptSignal")}
                     </button>
                     {!isLocalFallbackBlob(selectedSubmission.encryptedBlobId) ? (
                       <BlobLink
                         blobId={selectedSubmission.encryptedBlobId}
-                        label="Verify on Walrus"
+                        label={t("verifyOnWalrus")}
                       />
                     ) : null}
                   </div>
@@ -417,8 +443,8 @@ export function FormSubmissionsPage() {
                 {selectedSubmission.isEncrypted && !detailAnswers ? (
                   <p className="muted">
                     {sealRuntime.activeMode === "mock"
-                      ? "Demo decrypt available."
-                      : "Policy-gated Decryption. Wallet approval required."}
+                      ? t("demoDecryptAvailable")
+                      : t("policyGatedDecryption")}
                   </p>
                 ) : null}
 
@@ -426,25 +452,25 @@ export function FormSubmissionsPage() {
 
                 <div className="signal-detail-sections">
                   <section className="answer-card">
-                    <h3>Answers</h3>
+                    <h3>{t("answersTitle")}</h3>
                     {detailAnswers ? (
                       <div className="stack">
                         {form.fields.map((field) => (
                           <div key={field.id} className="answer-line">
                             <strong>{field.label}</strong>
-                            <p>{flattenAnswer(detailAnswers[field.id]) || "No answer"}</p>
+                            <p>{flattenAnswer(detailAnswers[field.id]) || t("noAnswerLabel")}</p>
                           </div>
                         ))}
                       </div>
                     ) : (
-                      <p className="muted">Encrypted feedback body is hidden until decryption succeeds.</p>
+                      <p className="muted">{t("encryptedFeedbackHidden")}</p>
                     )}
                   </section>
 
                   <section className="answer-card">
-                    <h3>Attachments</h3>
+                    <h3>{t("attachments")}</h3>
                     {detailAttachments.length === 0 ? (
-                      <p className="muted">No attachments</p>
+                      <p className="muted">{t("noAttachments")}</p>
                     ) : (
                       <div className="stack">
                         {detailAttachments.map((attachment) => (
@@ -458,7 +484,10 @@ export function FormSubmissionsPage() {
                             <div className="stack">
                               <strong className="blob-prominent">{attachment.blobId}</strong>
                               {!isLocalFallbackBlob(attachment.blobId) ? (
-                                <BlobLink blobId={attachment.blobId} label="Verify on Walrus" />
+                                <BlobLink
+                                  blobId={attachment.blobId}
+                                  label={t("verifyOnWalrus")}
+                                />
                               ) : null}
                             </div>
                           </div>
@@ -468,9 +497,9 @@ export function FormSubmissionsPage() {
                   </section>
 
                   <section className="answer-card">
-                    <h3>Review Controls</h3>
+                    <h3>{t("reviewControlsTitle")}</h3>
                     <label>
-                      <span>Status</span>
+                      <span>{t("status")}</span>
                       <select
                         value={selectedSubmission.status}
                         onChange={(event) =>
@@ -479,15 +508,14 @@ export function FormSubmissionsPage() {
                             status: event.target.value as Submission["status"],
                           })
                         }
-                        disabled={saving}
                       >
-                        <option value="unread">Unread</option>
-                        <option value="read">Read</option>
-                        <option value="archived">Archived</option>
+                        <option value="unread">{t("statusUnread")}</option>
+                        <option value="read">{t("statusRead")}</option>
+                        <option value="archived">{t("statusArchived")}</option>
                       </select>
                     </label>
                     <label>
-                      <span>Priority</span>
+                      <span>{t("priority")}</span>
                       <select
                         value={selectedSubmission.priority}
                         onChange={(event) =>
@@ -496,18 +524,17 @@ export function FormSubmissionsPage() {
                             priority: event.target.value as Submission["priority"],
                           })
                         }
-                        disabled={saving}
                       >
-                        <option value="low">Low</option>
-                        <option value="medium">Medium</option>
-                        <option value="high">High</option>
+                        <option value="low">{t("priorityLow")}</option>
+                        <option value="medium">{t("priorityMedium")}</option>
+                        <option value="high">{t("priorityHigh")}</option>
                       </select>
                     </label>
                   </section>
 
                   <section className="answer-card">
                     <div className="section-row">
-                      <h3>Tags</h3>
+                      <h3>{t("tags")}</h3>
                       <span className="muted">{selectedSubmission.tags.length}</span>
                     </div>
                     <div className="pill-row">
@@ -531,7 +558,7 @@ export function FormSubmissionsPage() {
                       <input
                         value={draftTag}
                         onChange={(event) => setDraftTag(event.target.value)}
-                        placeholder="Add tag"
+                        placeholder={t("addTagPlaceholder")}
                       />
                       <button
                         type="button"
@@ -550,18 +577,18 @@ export function FormSubmissionsPage() {
                           });
                         }}
                       >
-                        Add tag
+                        {t("addTag")}
                       </button>
                     </div>
                   </section>
 
                   <section className="answer-card">
-                    <h3>Notes</h3>
+                    <h3>{t("notesTitle")}</h3>
                     <textarea
                       rows={6}
                       value={notesDraft}
                       onChange={(event) => setNotesDraft(event.target.value)}
-                      placeholder="Capture review notes"
+                      placeholder={t("captureReviewNotes")}
                     />
                     <button
                       type="button"
@@ -574,87 +601,120 @@ export function FormSubmissionsPage() {
                         })
                       }
                     >
-                      Save note
+                      {t("saveNote")}
                     </button>
                   </section>
 
                   <section className="answer-card">
-                    <h3>Signal Metadata</h3>
-                    <div className="metadata-list">
-                      <div className="metadata-row">
-                        <span>Form Blob ID</span>
-                        <div>
-                          <strong className="blob-prominent">{form.blobId ?? "Not available"}</strong>
-                          {!isLocalFallbackBlob(form.blobId) ? (
-                            <BlobLink blobId={form.blobId} label="Verify on Walrus" />
-                          ) : null}
-                        </div>
-                      </div>
-                      <div className="metadata-row">
-                        <span>Submission Blob ID</span>
-                        <div>
-                          <strong className="blob-prominent">
-                            {selectedSubmission.blobId ?? "Not available"}
-                          </strong>
-                          {!isLocalFallbackBlob(selectedSubmission.blobId) ? (
-                            <BlobLink blobId={selectedSubmission.blobId} label="Verify on Walrus" />
-                          ) : null}
-                        </div>
-                      </div>
-                      <div className="metadata-row">
-                        <span>Encrypted Payload Blob ID</span>
-                        <div>
-                          <strong className="blob-prominent">
-                            {selectedSubmission.encryptedBlobId ?? "Not available"}
-                          </strong>
-                          {!isLocalFallbackBlob(selectedSubmission.encryptedBlobId) ? (
-                            <BlobLink
-                              blobId={selectedSubmission.encryptedBlobId}
-                              label="Verify on Walrus"
-                            />
-                          ) : null}
-                        </div>
-                      </div>
-                      <div className="metadata-row">
-                        <span>Attachment Blob IDs</span>
-                        <div className="stack">
-                          {selectedSubmission.attachments.length === 0 ? (
-                            <strong>Not available</strong>
-                          ) : (
-                            selectedSubmission.attachments.map((attachment) => (
-                              <div key={attachment.blobId}>
-                                <strong className="blob-prominent">{attachment.blobId}</strong>
-                                {!isLocalFallbackBlob(attachment.blobId) ? (
-                                  <BlobLink blobId={attachment.blobId} label="Verify on Walrus" />
-                                ) : null}
-                              </div>
-                            ))
-                          )}
-                        </div>
-                      </div>
-                      <div className="metadata-row">
-                        <span>Storage mode</span>
-                        <strong>
-                          {storageRuntime.mode === "walrus" ? "Walrus" : "Local fallback"}
-                        </strong>
-                      </div>
-                      <div className="metadata-row">
-                        <span>Seal mode</span>
-                        <strong>{sealRuntime.isFallback ? "fallback" : sealRuntime.activeMode}</strong>
-                      </div>
-                      <div className="metadata-row">
-                        <span>Wallet Access Status</span>
-                        <strong>{getWalletAccessLabel(form, account?.address)}</strong>
-                      </div>
+                    <div className="section-row">
+                      <h3>{t("signalMetadataTitle")}</h3>
+                      <button
+                        type="button"
+                        className="ghost-button"
+                        onClick={() => setShowMetadata((current) => !current)}
+                      >
+                        {showMetadata ? t("hideSignalMetadata") : t("showSignalMetadata")}
+                      </button>
                     </div>
+                    {showMetadata ? (
+                      <div className="metadata-list">
+                        <div className="metadata-row">
+                          <span>{t("formBlobId")}</span>
+                          <div>
+                            <strong className="blob-prominent">{form.blobId ?? t("notAvailable")}</strong>
+                            {!isLocalFallbackBlob(form.blobId) ? (
+                              <BlobLink blobId={form.blobId} label={t("verifyOnWalrus")} />
+                            ) : null}
+                          </div>
+                        </div>
+                        <div className="metadata-row">
+                          <span>{t("submissionBlobIdLabel")}</span>
+                          <div>
+                            <strong className="blob-prominent">
+                              {selectedSubmission.blobId ?? t("notAvailable")}
+                            </strong>
+                            {!isLocalFallbackBlob(selectedSubmission.blobId) ? (
+                              <BlobLink
+                                blobId={selectedSubmission.blobId}
+                                label={t("verifyOnWalrus")}
+                              />
+                            ) : null}
+                          </div>
+                        </div>
+                        <div className="metadata-row">
+                          <span>{t("encryptedPayloadBlobId")}</span>
+                          <div>
+                            <strong className="blob-prominent">
+                              {selectedSubmission.encryptedBlobId ?? t("notAvailable")}
+                            </strong>
+                            {!isLocalFallbackBlob(selectedSubmission.encryptedBlobId) ? (
+                              <BlobLink
+                                blobId={selectedSubmission.encryptedBlobId}
+                                label={t("verifyOnWalrus")}
+                              />
+                            ) : null}
+                          </div>
+                        </div>
+                        <div className="metadata-row">
+                          <span>{t("attachmentBlobIds")}</span>
+                          <div className="stack">
+                            {selectedSubmission.attachments.length === 0 ? (
+                              <strong>{t("notAvailable")}</strong>
+                            ) : (
+                              selectedSubmission.attachments.map((attachment) => (
+                                <div key={attachment.blobId}>
+                                  <strong className="blob-prominent">{attachment.blobId}</strong>
+                                  {!isLocalFallbackBlob(attachment.blobId) ? (
+                                    <BlobLink
+                                      blobId={attachment.blobId}
+                                      label={t("verifyOnWalrus")}
+                                    />
+                                  ) : null}
+                                </div>
+                              ))
+                            )}
+                          </div>
+                        </div>
+                        <div className="metadata-row">
+                          <span>{t("storageMode")}</span>
+                          <strong>
+                            {storageRuntime.mode === "walrus"
+                              ? t("storageWalrus")
+                              : t("localFallbackLabel")}
+                          </strong>
+                        </div>
+                        <div className="metadata-row">
+                          <span>{t("sealModeLabel")}</span>
+                          <strong>{sealRuntime.isFallback ? "fallback" : sealRuntime.activeMode}</strong>
+                        </div>
+                        <div className="metadata-row">
+                          <span>{t("walletAccessStatus")}</span>
+                          <strong>{getWalletAccessLabel(form, account?.address)}</strong>
+                        </div>
+                      </div>
+                    ) : null}
                   </section>
 
-                  <SealStatusCard
-                    encryptSubmissions={form.encryptSubmissions}
-                    encryptedBlobId={selectedSubmission.encryptedBlobId}
-                    canDecrypt={Boolean(account?.address)}
-                    walletAccessStatus={getWalletAccessLabel(form, account?.address)}
-                  />
+                  <section className="answer-card">
+                    <div className="section-row">
+                      <h3>{t("encryptedSignalLabel")}</h3>
+                      <button
+                        type="button"
+                        className="ghost-button"
+                        onClick={() => setShowEncryptedSignal((current) => !current)}
+                      >
+                        {showEncryptedSignal ? t("hideEncryptedSignal") : t("showEncryptedSignal")}
+                      </button>
+                    </div>
+                    {showEncryptedSignal ? (
+                      <SealStatusCard
+                        encryptSubmissions={form.encryptSubmissions}
+                        encryptedBlobId={selectedSubmission.encryptedBlobId}
+                        canDecrypt={Boolean(account?.address)}
+                        walletAccessStatus={getWalletAccessLabel(form, account?.address)}
+                      />
+                    ) : null}
+                  </section>
                 </div>
               </>
             )}

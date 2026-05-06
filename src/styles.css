@@ -99,7 +99,7 @@ button {
 
 .page-wrap {
   padding: 96px 1rem 2rem;
-  max-width: 1240px;
+  max-width: 1480px;
   margin: 0 auto;
 }
 
@@ -804,6 +804,9 @@ textarea {
   border-radius: 18px;
   background: rgba(6, 26, 42, 0.72);
   border: 1px solid rgba(116, 226, 255, 0.18);
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .mobile-console-banner {
@@ -817,7 +820,7 @@ textarea {
 
 .signal-console-layout {
   display: grid;
-  grid-template-columns: 280px minmax(320px, 0.95fr) minmax(380px, 1.15fr);
+  grid-template-columns: minmax(0, 320px) minmax(0, 1fr) minmax(0, 1.35fr);
   gap: 1rem;
   align-items: start;
 }
@@ -826,6 +829,7 @@ textarea {
 .signal-inbox-column,
 .signal-detail-column {
   min-height: 70vh;
+  min-width: 0;
 }
 
 .signal-sidebar {
@@ -839,6 +843,7 @@ textarea {
 .signal-sidebar-section {
   display: grid;
   gap: 0.75rem;
+  min-width: 0;
 }
 
 .stream-list,
@@ -1099,6 +1104,20 @@ textarea {
     grid-template-columns: minmax(0, 1fr) auto auto;
   }
 
+  .signal-console-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .signal-sidebar {
+    position: static;
+  }
+
+  .signal-list {
+    max-height: none;
+  }
+}
+
+@media (max-width: 1600px) {
   .signal-console-layout {
     grid-template-columns: 1fr;
   }
