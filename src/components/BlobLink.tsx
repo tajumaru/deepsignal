@@ -3,9 +3,10 @@ import { getBlobViewerUrl } from "../storage/storageFactory";
 
 interface BlobLinkProps {
   blobId?: string;
+  label?: string;
 }
 
-export function BlobLink({ blobId }: BlobLinkProps) {
+export function BlobLink({ blobId, label }: BlobLinkProps) {
   const { t } = useI18n();
   const url = getBlobViewerUrl(blobId);
 
@@ -15,7 +16,7 @@ export function BlobLink({ blobId }: BlobLinkProps) {
 
   return (
     <a href={url} target="_blank" rel="noreferrer">
-      {t("openBlob")}
+      {label ?? t("openBlob")}
     </a>
   );
 }

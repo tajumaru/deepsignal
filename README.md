@@ -1,6 +1,6 @@
 # DeepSignal - Walrus Feedback Lab
 
-DeepSignal is a Walrus-native feedback and forms MVP built with Vite, React, and TypeScript. It supports custom public forms, admin review flows, sensitive-field encryption, file uploads, JSON/CSV export, and a dual storage strategy that prefers Walrus while falling back to `localStorage` when needed.
+DeepSignal is a Walrus-native feedback and forms MVP built with Vite, React, and TypeScript. It supports custom public forms, an encrypted Signal Inbox review console, sensitive-field encryption, file uploads, JSON/CSV export, and a dual storage strategy that prefers Walrus while falling back to `localStorage` when needed.
 
 ## How to run
 
@@ -40,7 +40,8 @@ If `VITE_SEAL_MODE` is not `seal`, or the Seal env vars are incomplete, the app 
 - Landing page at `/`
 - Form builder at `/admin/forms/new`
 - Public form route at `/f/:formId`
-- Admin dashboard at `/admin`
+- Admin Signal Inbox at `/admin`
+- Dashboard alias at `/dashboard`
 - Submission list at `/admin/forms/:formId`
 - Submission detail at `/admin/forms/:formId/submissions/:submissionId`
 - Alias detail route at `/admin/submissions/:submissionId`
@@ -50,6 +51,7 @@ If `VITE_SEAL_MODE` is not `seal`, or the Seal env vars are incomplete, the app 
 - JSON and CSV export
 - Sensitive-field encryption through a swappable crypto adapter
 - Walrus blob ids surfaced in the UI
+- Desktop-first creator review console with mobile-friendly public forms
 
 ## Sui Wallet integration
 
@@ -64,10 +66,40 @@ Current behavior:
 - creators can connect a Wallet Standard compatible Sui wallet
 - the connected address is shown in the header and dashboard
 - the form builder includes a `Create on Sui` toggle
-- when that toggle is enabled, the form stores `ownerAddress` and `isOnchain`
+- new form creation now requires a connected wallet
+- every newly created form stores `ownerAddress` from the connected wallet
+- the `Create on Sui` toggle remains as a `Sui registry integration placeholder`
 - public respondents do not need a wallet to submit
 
 Because this project uses Vite rather than Next.js, the wallet env vars use the `VITE_` prefix.
+
+## Demo flow
+
+1. Connect wallet
+2. Create form
+3. Open public link
+4. Submit feedback with screenshot
+5. Open Admin Dashboard
+6. Review signals in the Signal Inbox
+7. Inspect Walrus / Seal / Wallet metadata in the right-side detail panel
+
+## Inbox UI
+
+- The admin console is designed as an `Encrypted Signal Inbox`, not a form CRUD panel.
+- Admin and dashboard routes use a desktop-first 3-column layout: `Signal Streams`, `Signal Inbox`, and `Signal Detail / Metadata`.
+- Public forms remain mobile-friendly for responders.
+- Admin review console is desktop-first, and below `768px` it falls back to a single-column review stack with a notice.
+- Walrus / Seal metadata is integrated directly into the normal review UI through badges, metadata rows, and the Seal Status card.
+
+## Admin protection
+
+- `/admin` and `/dashboard` views require a connected wallet
+- creator inbox pages are wallet-gated on `form.ownerAddress`
+- when `form.ownerAddress` matches the connected wallet, the inbox is visible
+- when it does not match, the UI shows `Access denied. This signal belongs to another creator.`
+- older forms without `ownerAddress` are treated as legacy demo forms and remain visible with a warning
+- `/f/:formId` stays public and does not require a wallet
+- new form creation requires a connected wallet and always stores `ownerAddress`
 
 ## Walrus integration
 
@@ -120,9 +152,9 @@ This means the MVP still works even without Walrus configuration or during trans
 
 ## Blob ids and blob viewer URLs
 
-Blob ids are shown in the admin and submission flows.
+Blob ids are shown in the Signal Inbox list and detail flows.
 
-When the blob is a real Walrus blob and an aggregator URL is configured, the UI also shows an `Open blob` link that points to:
+When the blob is a real Walrus blob and an aggregator URL is configured, the UI also shows a `Verify on Walrus` link that points to:
 
 ```text
 {VITE_WALRUS_AGGREGATOR_URL}/v1/blobs/{blobId}
@@ -161,6 +193,16 @@ In real Seal mode, payloads are saved as JSON envelopes that include the base64-
 - Real Seal encrypts with `@mysten/seal` and depends on a real Sui package namespace plus one or more key server objects.
 - Real Seal decryption is policy-gated: you need a Sui wallet, a session key, and an approval transaction that calls a `seal_approve*` Move function for the target access policy.
 
+## Seal mode in the UI
+
+- the admin dashboard and submission detail surfaces a Seal Status Card
+- the card shows `requestedMode`, `activeMode`, `isFallback`, and `warning`
+- the card also shows encryption state, `encryptedBlobId`, and wallet access context
+- encrypted forms highlight `Encrypted payload stored` plus the `encryptedBlobId`
+- mock mode shows `Demo decrypt available`
+- real seal mode shows `Policy-gated Decryption` and `Wallet/session approval required`
+- decrypt failures should explain the missing wallet or approval condition instead of ending with a generic error
+
 ### Current limitations of real Seal mode
 
 - Encryption is wired up now, but the in-app decrypt path is intentionally staged. The admin UI currently stops with a clear `Seal decryption requires wallet approval.` error until wallet/session approval plumbing is added.
@@ -172,4 +214,6 @@ In real Seal mode, payloads are saved as JSON envelopes that include the base64-
 - Walrus listing depends on the local blob index, so clearing browser storage removes the lookup metadata even if the blobs still exist remotely.
 - Local fallback data is browser-local and not shared across devices.
 - Walrus delete is currently index cleanup only; uploaded blobs are not garbage-collected by this MVP.
-- There is still no authentication layer for admin routes.
+- frontend wallet-gating is MVP protection
+- production should verify ownership with a Sui Move Form Registry
+- real Seal decrypt requires wallet/session approval

@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useParams } from "react-router-dom";
+import { BlobLink } from "../components/BlobLink";
 import { DynamicField } from "../components/DynamicField";
 import { EmptyState } from "../components/EmptyState";
-import { BlobLink } from "../components/BlobLink";
 import { Link } from "react-router-dom";
+import { getSealRuntimeStatus } from "../crypto/cryptoFactory";
 import { useI18n } from "../i18n";
 import { createEmptyAnswer, saveSubmissionWithEncryption, storageAdapter } from "../lib/storage";
 import { makeId } from "../lib/utils";
@@ -15,6 +16,7 @@ type ValidationErrors = Record<string, string>;
 export function PublicFormPage() {
   const { t } = useI18n();
   const { formId = "" } = useParams();
+  const sealRuntime = getSealRuntimeStatus();
   const [form, setForm] = useState<FormSchema | null>(null);
   const [answers, setAnswers] = useState<PublicAnswers>({});
   const [errors, setErrors] = useState<ValidationErrors>({});
@@ -145,17 +147,55 @@ export function PublicFormPage() {
     return (
       <section className="panel glow-panel success-screen">
         <p className="eyebrow">{t("signalReceived")}</p>
-        <h1>{t("submissionCaptured")}</h1>
-        <p>{t("submissionStored")}</p>
+        <h1>Signal Captured</h1>
+        <p>Stored on Walrus</p>
         <p>{t("thanksForFeedback")}</p>
-        <p>{form.encryptSubmissions ? t("submissionEncryptedNotice") : t("submissionPlainNotice")}</p>
-        <p>
-          {t("submissionId")}: {submitted.id}
-        </p>
-        <p>
-          {t("blobId")}: {submitted.blobId}
-        </p>
-        <BlobLink blobId={submitted.blobId} />
+        <div className="success-copy">
+          <p>{form.encryptSubmissions ? "Encrypted by Seal" : "Stored without full-payload encryption"}</p>
+          <p>Delivered to creator inbox</p>
+        </div>
+        <section className="answer-card">
+          <h3>Signal Metadata</h3>
+          <div className="metadata-list">
+            <div className="metadata-row">
+              <span>Submission Blob ID</span>
+              <div>
+                <strong className="blob-prominent">{submitted.blobId ?? "Not available"}</strong>
+                <BlobLink blobId={submitted.blobId} label="Verify on Walrus" />
+              </div>
+            </div>
+            <div className="metadata-row">
+              <span>Encrypted Payload Blob ID</span>
+              <div>
+                <strong className="blob-prominent">
+                  {submitted.encryptedBlobId ?? "Not available"}
+                </strong>
+                <BlobLink blobId={submitted.encryptedBlobId} label="Verify on Walrus" />
+              </div>
+            </div>
+            <div className="metadata-row">
+              <span>Attachment Blob IDs</span>
+              <div className="stack">
+                {submitted.attachments.length === 0 ? (
+                  <strong>Not available</strong>
+                ) : (
+                  submitted.attachments.map((attachment, index) => (
+                    <div key={attachment.blobId}>
+                      <strong className="blob-prominent">
+                        Attachment {index + 1}: {attachment.blobId}
+                      </strong>
+                      <BlobLink blobId={attachment.blobId} label="Verify on Walrus" />
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+            <div className="metadata-row">
+              <span>Seal mode</span>
+              <strong>{sealRuntime.isFallback ? "fallback" : sealRuntime.activeMode}</strong>
+            </div>
+          </div>
+        </section>
         <div className="inline-actions demo-actions">
           <Link className="ghost-button" to={`/dashboard/forms/${form.id}/submissions/${submitted.id}`}>
             {t("openInboxDemo")}

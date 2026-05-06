@@ -1,12 +1,16 @@
+import { useCurrentAccount } from "@mysten/dapp-kit";
 import { useEffect, useState } from "react";
 import { Navigate, useParams } from "react-router-dom";
+import { AdminAccessGate } from "../components/AdminAccessGate";
 import { EmptyState } from "../components/EmptyState";
+import { getFormAccessState } from "../lib/adminAccess";
 import { useI18n } from "../i18n";
 import { normalizeSubmission, storageAdapter } from "../lib/storage";
 import type { FormSchema } from "../types";
 
 export function SubmissionDetailPage() {
   const { t } = useI18n();
+  const account = useCurrentAccount();
   const { formId = "", submissionId = "" } = useParams();
   const [resolvedForm, setResolvedForm] = useState<FormSchema | null>(null);
   const [loading, setLoading] = useState(!formId && Boolean(submissionId));
@@ -46,8 +50,13 @@ export function SubmissionDetailPage() {
   }
 
   return (
-    <EmptyState>
-      <h1>{t("emptySubmissionNotFound")}</h1>
-    </EmptyState>
+    <AdminAccessGate
+      hasWallet={Boolean(account?.address)}
+      access={getFormAccessState(resolvedForm, account?.address)}
+    >
+      <EmptyState>
+        <h1>{t("emptySubmissionNotFound")}</h1>
+      </EmptyState>
+    </AdminAccessGate>
   );
 }

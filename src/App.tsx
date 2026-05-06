@@ -13,6 +13,7 @@ export default function App() {
       <Routes>
         <Route path="/" element={<LandingPage />} />
         <Route path="/admin" element={<AdminDashboardPage />} />
+        <Route path="/dashboard" element={<AdminDashboardPage />} />
         <Route path="/admin/forms/new" element={<FormBuilderPage />} />
         <Route path="/admin/forms/:formId" element={<FormSubmissionsPage />} />
         <Route path="/dashboard/forms/:formId" element={<FormSubmissionsPage />} />

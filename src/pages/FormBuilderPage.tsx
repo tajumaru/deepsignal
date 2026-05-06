@@ -1,6 +1,7 @@
 import { useCurrentAccount } from "@mysten/dapp-kit";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { AdminAccessGate } from "../components/AdminAccessGate";
 import { BlobLink } from "../components/BlobLink";
 import { FormFieldEditor } from "../components/FormFieldEditor";
 import { ShareCard } from "../components/ShareCard";
@@ -131,7 +132,7 @@ export function FormBuilderPage() {
       setError(t("errorFieldNeedsOption"));
       return;
     }
-    if (createOnSui && !account?.address) {
+    if (!account?.address) {
       setError(t("connectWalletFirst"));
       return;
     }
@@ -150,7 +151,7 @@ export function FormBuilderPage() {
             : undefined,
       })),
       createdAt: new Date().toISOString(),
-      ownerAddress: createOnSui ? account?.address : undefined,
+      ownerAddress: account.address,
       isOnchain: false,
       encryptSubmissions,
     };
@@ -164,7 +165,8 @@ export function FormBuilderPage() {
   }
 
   return (
-    <section className="grid builder-layout">
+    <AdminAccessGate hasWallet={Boolean(account?.address)} access="allowed">
+      <section className="grid builder-layout">
       <div className={`form-sticky-bar ${isScrolled ? "is-scrolled" : ""}`}>
         <div className="form-sticky-inner">
           <div className="form-sticky-brand">
@@ -250,18 +252,10 @@ export function FormBuilderPage() {
                 <span>{createOnSui ? t("enabled") : t("disabled")}</span>
               </label>
             </div>
-            <p className="muted">{t("createOnSuiHelp")}</p>
-            {createOnSui ? (
-              account?.address ? (
-                <p className="wallet-inline-note">
-                  {t("formOwnerLabel")}: {shortAddress(account.address)}
-                </p>
-              ) : (
-                <p className="warning-text">{t("connectWalletFirst")}</p>
-              )
-            ) : (
-              <p className="muted">{t("walletOptionalHint")}</p>
-            )}
+            <p className="muted">Sui registry integration placeholder.</p>
+            <p className="wallet-inline-note">
+              {t("formOwnerLabel")}: {account?.address ? shortAddress(account.address) : "Not connected"}
+            </p>
           </section>
 
           <section className="panel field-editor sui-toggle-card">
@@ -369,6 +363,7 @@ export function FormBuilderPage() {
           <p className="muted">{t("saveFormHint")}</p>
         )}
       </aside>
-    </section>
+      </section>
+    </AdminAccessGate>
   );
 }
