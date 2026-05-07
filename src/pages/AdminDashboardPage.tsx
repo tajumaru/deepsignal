@@ -5,6 +5,7 @@ import { AdminAccessGate } from "../components/AdminAccessGate";
 import { BlobLink } from "../components/BlobLink";
 import { EmptyState } from "../components/EmptyState";
 import { SealStatusCard } from "../components/SealStatusCard";
+import { ShareCard } from "../components/ShareCard";
 import { getSealRuntimeStatus } from "../crypto/cryptoFactory";
 import { useI18n } from "../i18n";
 import { addressesMatch } from "../lib/adminAccess";
@@ -88,6 +89,9 @@ export function AdminDashboardPage() {
   const [deletingFormId, setDeletingFormId] = useState<string | null>(null);
   const [showMetadata, setShowMetadata] = useState(false);
   const [showEncryptedSignal, setShowEncryptedSignal] = useState(false);
+  const [nodeDirectoryOpen, setNodeDirectoryOpen] = useState(false);
+  const [beaconFormId, setBeaconFormId] = useState<string | null>(null);
+  const [nodeSearch, setNodeSearch] = useState("");
   const saveQueueRef = useRef(Promise.resolve());
 
   useEffect(() => {
@@ -128,6 +132,23 @@ export function AdminDashboardPage() {
     setDeletingFormId(null);
   }
 
+  useEffect(() => {
+    if (!nodeDirectoryOpen && !beaconFormId) {
+      return;
+    }
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        if (beaconFormId) {
+          setBeaconFormId(null);
+          return;
+        }
+        setNodeDirectoryOpen(false);
+      }
+    };
+    window.addEventListener("keydown", handleEscape);
+    return () => window.removeEventListener("keydown", handleEscape);
+  }, [beaconFormId, nodeDirectoryOpen]);
+
   const accessibleForms = useMemo(
     () =>
       forms.filter(
@@ -135,6 +156,15 @@ export function AdminDashboardPage() {
       ),
     [account?.address, forms],
   );
+
+  useEffect(() => {
+    if (selectedFormId === "all") {
+      return;
+    }
+    if (!accessibleForms.some((form) => form.id === selectedFormId)) {
+      setSelectedFormId("all");
+    }
+  }, [accessibleForms, selectedFormId]);
 
   const allSignals = useMemo<SignalRecord[]>(
     () =>
@@ -283,6 +313,51 @@ export function AdminDashboardPage() {
     },
   ] satisfies Array<{ id: StreamId; label: string; count: number }>;
 
+  const unreadCountByFormId = useMemo(
+    () =>
+      Object.fromEntries(
+        accessibleForms.map((form) => [
+          form.id,
+          (submissionsByFormId[form.id] ?? []).filter((submission) => submission.status === "unread")
+            .length,
+        ]),
+      ) as Record<string, number>,
+    [accessibleForms, submissionsByFormId],
+  );
+
+  const selectedForm = accessibleForms.find((form) => form.id === selectedFormId) ?? null;
+  const selectedBeaconForm =
+    accessibleForms.find((form) => form.id === beaconFormId) ?? null;
+
+  const nodeDirectoryItems = useMemo(() => {
+    const normalizedSearch = nodeSearch.trim().toLowerCase();
+    const allFormsItem = {
+      id: "all",
+      title: t("allSignalNodes"),
+      submissionCount: allSignals.length,
+      unreadCount: allSignals.filter((record) => record.submission.status === "unread").length,
+      isLegacyDemo: false,
+    };
+    const formItems = accessibleForms
+      .filter((form) => {
+        if (!normalizedSearch) {
+          return true;
+        }
+        return (
+          form.title.toLowerCase().includes(normalizedSearch) ||
+          form.description.toLowerCase().includes(normalizedSearch)
+        );
+      })
+      .map((form) => ({
+        id: form.id,
+        title: form.title,
+        submissionCount: form.submissionCount,
+        unreadCount: unreadCountByFormId[form.id] ?? 0,
+        isLegacyDemo: !form.ownerAddress,
+      }));
+    return [allFormsItem, ...formItems];
+  }, [accessibleForms, allSignals, nodeSearch, t, unreadCountByFormId]);
+
   if (loading) {
     return <div className="panel">{t("loadingResearchLab")}</div>;
   }
@@ -295,14 +370,6 @@ export function AdminDashboardPage() {
             <p className="eyebrow">{t("creatorOnlyInbox")}</p>
             <h1>{t("signalInboxTitle")}</h1>
             <p className="lede">{t("signalInboxDescription")}</p>
-          </div>
-          <div className="inbox-header-actions">
-            <div className="inbox-status-chip">
-              {account?.address ? `${getWalletAccessLabel({ ownerAddress: account.address } as FormSchema, account.address)}: ${shortAddress(account.address)}` : t("notConnected")}
-            </div>
-            <Link className="primary-button" to="/admin/forms/new">
-              {t("createSignalForm")}
-            </Link>
           </div>
         </div>
 
@@ -338,72 +405,28 @@ export function AdminDashboardPage() {
 
               <div className="signal-sidebar-section">
                 <div className="section-row">
-                  <p className="eyebrow">{t("formsTitle")}</p>
+                  <p className="eyebrow">{t("signalNodesTitle")}</p>
                   <span className="muted">{accessibleForms.length}</span>
                 </div>
-                <div className="form-stream-list">
+                <div className="signal-node-summary">
+                  <div className="signal-node-summary-copy">
+                    <strong>
+                      {selectedFormId === "all"
+                        ? t("allSignalNodes")
+                        : selectedForm?.title ?? t("selectedNode")}
+                    </strong>
+                    <p className="muted">{t("activeNodeSummary", { count: accessibleForms.length })}</p>
+                  </div>
                   <button
                     type="button"
-                    className={`form-stream-item ${selectedFormId === "all" ? "is-active" : ""}`}
-                    onClick={() => setSelectedFormId("all")}
+                    className="primary-button signal-node-directory-trigger"
+                    onClick={() => setNodeDirectoryOpen(true)}
                   >
-                    <div>
-                      <strong>{t("allForms")}</strong>
-                      <p className="muted">{t("crossFormSignalInbox")}</p>
-                    </div>
+                    {t("openNodeDirectory")}
                   </button>
-                  {accessibleForms.map((form) => (
-                    <div
-                      key={form.id}
-                      className={`form-stream-item ${selectedFormId === form.id ? "is-active" : ""}`}
-                    >
-                      <button
-                        type="button"
-                        className="form-stream-select"
-                        onClick={() => setSelectedFormId(form.id)}
-                      >
-                        <div>
-                          <strong>{form.title}</strong>
-                          <p className="muted">
-                            {t("signalsCount", { count: form.submissionCount })}
-                            {form.ownerAddress ? "" : ` · ${t("legacyDemoForm")}`}
-                          </p>
-                        </div>
-                      </button>
-                      <div className="form-stream-actions">
-                        <Link className="ghost-button" to={`/f/${form.id}`}>
-                          {t("openLabel")}
-                        </Link>
-                        <button
-                          type="button"
-                          className="danger-button"
-                          onClick={() => void handleDelete(form.id)}
-                          disabled={deletingFormId === form.id}
-                        >
-                          {deletingFormId === form.id ? t("deletingLabel") : t("deleteLabel")}
-                        </button>
-                      </div>
-                    </div>
-                  ))}
                 </div>
               </div>
 
-              <div className="signal-sidebar-section stack">
-                <Link className="primary-button" to="/admin/forms/new">
-                  {t("createSignalForm")}
-                </Link>
-                <div className="wallet-status-card">
-                  <p className="eyebrow">{t("walletStatus")}</p>
-                  <strong>
-                    {account?.address
-                      ? getWalletAccessLabel({ ownerAddress: account.address } as FormSchema, account.address)
-                      : t("notConnected")}
-                  </strong>
-                  <p className="muted">
-                    {account?.address ? shortAddress(account.address) : t("connectWalletToReview")}
-                  </p>
-                </div>
-              </div>
             </aside>
 
             <section className="panel signal-inbox-column">
@@ -416,9 +439,9 @@ export function AdminDashboardPage() {
                       count: visibleSignals.filter((record) => record.submission.status === "unread").length,
                       scope:
                         selectedFormId === "all"
-                          ? t("allForms")
+                          ? t("allSignalNodes")
                           : accessibleForms.find((form) => form.id === selectedFormId)?.title ??
-                            t("selectedForm"),
+                            t("selectedNode"),
                     })}
                   </p>
                 </div>
@@ -844,18 +867,15 @@ export function AdminDashboardPage() {
                     <section className="answer-card">
                       <div className="section-row">
                         <div>
-                          <p className="eyebrow">{t("formActions")}</p>
+                          <p className="eyebrow">{t("nodeActions")}</p>
                           <h3>{selectedRecord.form.title}</h3>
                         </div>
                         <button
                           type="button"
-                          className="danger-button"
-                          onClick={() => void handleDelete(selectedRecord.form.id)}
-                          disabled={deletingFormId === selectedRecord.form.id}
+                          className="ghost-button"
+                          onClick={() => setNodeDirectoryOpen(true)}
                         >
-                          {deletingFormId === selectedRecord.form.id
-                            ? t("deletingLabel")
-                            : t("deleteForm")}
+                          {t("openNodeDirectory")}
                         </button>
                       </div>
                       <div className="inline-actions">
@@ -874,6 +894,130 @@ export function AdminDashboardPage() {
           </div>
         )}
       </section>
+      {nodeDirectoryOpen ? (
+        <div className="node-directory-overlay" role="dialog" aria-modal="true">
+          <div className="node-directory-backdrop" onClick={() => setNodeDirectoryOpen(false)} />
+          <section className="panel glow-panel node-directory-panel">
+            <div className="signal-detail-heading">
+              <div>
+                <p className="eyebrow">{t("signalNodesTitle")}</p>
+                <h2>{t("nodeDirectoryTitle")}</h2>
+                <p className="muted">{t("nodeDirectoryDescription")}</p>
+              </div>
+              <button
+                type="button"
+                className="ghost-button"
+                onClick={() => setNodeDirectoryOpen(false)}
+              >
+                {t("closeLabel")}
+              </button>
+            </div>
+
+            <div className="node-directory-toolbar">
+              <input
+                value={nodeSearch}
+                onChange={(event) => setNodeSearch(event.target.value)}
+                placeholder={t("searchNodesPlaceholder")}
+              />
+              <div className="node-directory-stats">
+                <span className="signal-chip">
+                  {t("activeNodeSummary", { count: accessibleForms.length })}
+                </span>
+                <span className="signal-chip">
+                  {t("signalsCount", { count: allSignals.length })}
+                </span>
+              </div>
+            </div>
+
+            <div className="node-directory-list">
+              {nodeDirectoryItems.map((item) => {
+                const isSelected = selectedFormId === item.id;
+                return (
+                  <div key={item.id} className={`node-directory-row ${isSelected ? "is-active" : ""}`}>
+                    <button
+                      type="button"
+                      className={`node-directory-item ${isSelected ? "is-active" : ""}`}
+                      onClick={() => {
+                        setSelectedFormId(item.id);
+                        setNodeDirectoryOpen(false);
+                      }}
+                    >
+                      <div className="node-directory-item-main">
+                        <div className="node-directory-item-heading">
+                          <strong>{item.title}</strong>
+                          {item.unreadCount > 0 ? (
+                            <span className="node-unread-badge">
+                              {t("unreadBadge", { count: item.unreadCount })}
+                            </span>
+                          ) : null}
+                        </div>
+                        <p className="muted">
+                          {t("signalsCount", { count: item.submissionCount })}
+                          {item.isLegacyDemo ? ` · ${t("legacyDemoForm")}` : ""}
+                        </p>
+                      </div>
+                    </button>
+                    {item.id !== "all" ? (
+                      <div className="node-directory-actions">
+                        <button
+                          type="button"
+                          className="ghost-button"
+                          onClick={() => {
+                            setBeaconFormId(item.id);
+                            setNodeDirectoryOpen(false);
+                          }}
+                        >
+                          {t("openSignalBeacon")}
+                        </button>
+                        <button
+                          type="button"
+                          className="ghost-button node-directory-delete"
+                          onClick={() => void handleDelete(item.id)}
+                          disabled={deletingFormId === item.id}
+                        >
+                          {deletingFormId === item.id ? t("deletingLabel") : t("deleteNode")}
+                        </button>
+                      </div>
+                    ) : null}
+                  </div>
+                );
+              })}
+              {nodeDirectoryItems.length === 1 && nodeSearch.trim() ? (
+                <EmptyState>
+                  <h2>{t("noNodesFoundTitle")}</h2>
+                  <p>{t("noNodesFoundBody")}</p>
+                </EmptyState>
+              ) : null}
+            </div>
+          </section>
+        </div>
+      ) : null}
+      {selectedBeaconForm ? (
+        <div className="node-directory-overlay" role="dialog" aria-modal="true">
+          <div className="node-directory-backdrop" onClick={() => setBeaconFormId(null)} />
+          <section className="panel glow-panel node-directory-panel beacon-overlay-panel">
+            <div className="signal-detail-heading">
+              <div>
+                <p className="eyebrow">{t("signalBeaconLabel")}</p>
+                <h2>{selectedBeaconForm.title}</h2>
+                <p className="muted">{t("signalBeaconFromNodeDescription")}</p>
+              </div>
+              <button
+                type="button"
+                className="ghost-button"
+                onClick={() => setBeaconFormId(null)}
+              >
+                {t("closeLabel")}
+              </button>
+            </div>
+            <ShareCard
+              formId={selectedBeaconForm.id}
+              blobId={selectedBeaconForm.blobId}
+              createdAt={selectedBeaconForm.createdAt}
+            />
+          </section>
+        </div>
+      ) : null}
     </AdminAccessGate>
   );
 }

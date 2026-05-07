@@ -51,6 +51,19 @@ export function PublicFormPage() {
     [form],
   );
 
+  const groupedFields = useMemo(() => {
+    if (!form) {
+      return { sections: [], unsectionedFields: [] };
+    }
+    return {
+      sections: (form.sections ?? []).map((section) => ({
+        ...section,
+        fields: form.fields.filter((field) => field.sectionId === section.id),
+      })),
+      unsectionedFields: form.fields.filter((field) => !field.sectionId),
+    };
+  }, [form]);
+
   function updateAnswer(fieldId: string, value: unknown) {
     setAnswers((current) => ({ ...current, [fieldId]: value }));
     setErrors((current) => ({ ...current, [fieldId]: "" }));
@@ -216,7 +229,28 @@ export function PublicFormPage() {
         <span>{form.encryptSubmissions ? t("enabled") : t("disabled")}</span>
       </div>
       <div className="stack">
-        {form.fields.map((field) => (
+        {groupedFields.sections.map((section) =>
+          section.fields.length ? (
+            <section key={section.id} className="composer-preview-section">
+              <div className="composer-preview-section-copy">
+                <h3>{section.title}</h3>
+                {section.description ? <p className="muted">{section.description}</p> : null}
+              </div>
+              <div className="stack">
+                {section.fields.map((field) => (
+                  <DynamicField
+                    key={field.id}
+                    field={field}
+                    value={answers[field.id]}
+                    error={errors[field.id]}
+                    onChange={(value) => updateAnswer(field.id, value)}
+                  />
+                ))}
+              </div>
+            </section>
+          ) : null,
+        )}
+        {groupedFields.unsectionedFields.map((field) => (
           <DynamicField
             key={field.id}
             field={field}

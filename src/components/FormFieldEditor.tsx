@@ -2,11 +2,14 @@ import type { ChangeEvent, DragEvent, KeyboardEvent } from "react";
 import { fieldTypeOptions } from "../lib/constants";
 import { useI18n } from "../i18n";
 import type { FieldType, FormField } from "../types";
+import { AdvancedSettings } from "./formBuilder/AdvancedSettings";
 
 interface FormFieldEditorProps {
   field: FormField;
   index: number;
   isDragging: boolean;
+  sections?: Array<{ id: string; title: string }>;
+  rootRef?: (node: HTMLElement | null) => void;
   labelRef: (node: HTMLInputElement | null) => void;
   onChange: (field: FormField) => void;
   onRemove: () => void;
@@ -35,6 +38,8 @@ export function FormFieldEditor({
   field,
   index,
   isDragging,
+  sections = [],
+  rootRef,
   labelRef,
   onChange,
   onRemove,
@@ -68,6 +73,7 @@ export function FormFieldEditor({
 
   return (
     <section
+      ref={rootRef}
       className={`panel question-card ${isDragging ? "is-dragging" : ""}`}
       onFocusCapture={onFocus}
       onDragOver={onDragOver}
@@ -138,6 +144,23 @@ export function FormFieldEditor({
         </button>
       </div>
 
+      {sections.length > 0 ? (
+        <label>
+          <span>{t("sectionTitle")}</span>
+          <select
+            value={field.sectionId ?? ""}
+            onChange={(event) => update("sectionId", event.target.value || undefined)}
+          >
+            <option value="">{t("noSection")}</option>
+            {sections.map((section) => (
+              <option key={section.id} value={section.id}>
+                {section.title || t("untitledSection")}
+              </option>
+            ))}
+          </select>
+        </label>
+      ) : null}
+
       {(field.type === "dropdown" || field.type === "checkbox") && (
         <label>
           <span>{t("optionsOnePerLine")}</span>
@@ -150,27 +173,7 @@ export function FormFieldEditor({
         </label>
       )}
 
-      <details className="question-advanced">
-        <summary>{t("advanced")}</summary>
-        <div className="toggle-row">
-          <label className="toggle">
-            <input
-              type="checkbox"
-              checked={field.required}
-              onChange={(event) => update("required", event.target.checked)}
-            />
-            <span>{t("required")}</span>
-          </label>
-          <label className="toggle">
-            <input
-              type="checkbox"
-              checked={field.sensitive}
-              onChange={(event) => update("sensitive", event.target.checked)}
-            />
-            <span>{t("sensitive")}</span>
-          </label>
-        </div>
-      </details>
+      <AdvancedSettings field={field} onChange={onChange} />
     </section>
   );
 }

@@ -5,7 +5,7 @@ import {
   normalizeFormPurpose,
 } from "./formTemplates";
 import { storage } from "../storage/storageFactory";
-import type { FormField, FormSchema, SealAdapter, StorageAdapter, Submission } from "../types";
+import type { FormField, FormSchema, FormSection, SealAdapter, StorageAdapter, Submission } from "../types";
 
 export const storageAdapter: StorageAdapter = storage;
 export const activeSealAdapter: SealAdapter = cryptoAdapter;
@@ -183,6 +183,7 @@ export function normalizeForm(raw: FormSchema | (Record<string, unknown> & { id:
     title: typeof raw.title === "string" ? raw.title : "",
     description: typeof raw.description === "string" ? raw.description : "",
     fields: Array.isArray(raw.fields) ? (raw.fields as FormField[]) : [],
+    sections: Array.isArray(raw.sections) ? (raw.sections as FormSection[]) : [],
     purpose: normalizeFormPurpose(raw.purpose),
     createdAt: typeof raw.createdAt === "string" ? raw.createdAt : new Date(0).toISOString(),
   } satisfies FormSchema;

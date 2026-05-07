@@ -25,7 +25,17 @@ export interface FormField {
   label: string;
   required: boolean;
   sensitive: boolean;
+  sectionId?: string;
+  validationHint?: string;
+  visibility?: "public" | "admin";
+  adminOnly?: boolean;
   options?: string[];
+}
+
+export interface FormSection {
+  id: string;
+  title: string;
+  description?: string;
 }
 
 export interface FormSchema {
@@ -33,6 +43,7 @@ export interface FormSchema {
   title: string;
   description: string;
   fields: FormField[];
+  sections?: FormSection[];
   purpose?: FormPurpose;
   createdAt: string;
   ownerAddress?: string;

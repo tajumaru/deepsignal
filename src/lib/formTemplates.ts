@@ -137,6 +137,15 @@ export const formTemplates: FormTemplateDefinition[] = [
     description: "Start with a sample question so the page never feels empty.",
     fields: [{ type: "longText", label: "What should we improve?", required: true }],
   },
+  {
+    key: "blank",
+    purpose: "custom",
+    emoji: "\u25A1",
+    label: "Blank",
+    title: "Untitled signal",
+    description: "Start from a blank composer and shape every section yourself.",
+    fields: [],
+  },
 ];
 
 export function createTemplateFields(template: FormTemplateDefinition): FormField[] {

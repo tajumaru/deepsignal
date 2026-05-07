@@ -1236,7 +1236,7 @@ body.composer-mode .bg-orb {
   top: 92px;
   z-index: 9;
   display: grid;
-  grid-template-columns: minmax(260px, 1fr) auto auto;
+  grid-template-columns: minmax(220px, 0.9fr) minmax(0, 1.2fr) auto;
   gap: 1rem;
   padding: 1.15rem 1.25rem;
   background: rgba(8, 20, 31, 0.94);
@@ -1260,26 +1260,32 @@ body.composer-mode .bg-orb {
   margin: 0.35rem 0 0;
 }
 
-.composer-stepper {
-  display: flex;
-  align-items: center;
+.composer-flow-steps {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 0.75rem;
-  flex-wrap: wrap;
-  justify-content: center;
 }
 
-.composer-step {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.55rem;
-  padding: 0.7rem 0.9rem;
-  border-radius: 999px;
+.composer-flow-step {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.75rem;
+  align-items: start;
+  padding: 0.9rem;
+  text-align: left;
+  border-radius: 22px;
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid rgba(116, 226, 255, 0.1);
   color: var(--text-soft);
+  transition: border-color 160ms ease, background 160ms ease, transform 160ms ease;
 }
 
-.composer-step span {
+.composer-flow-step:hover {
+  transform: translateY(-1px);
+  border-color: rgba(116, 226, 255, 0.24);
+}
+
+.composer-flow-step-index {
   display: inline-grid;
   place-items: center;
   width: 1.55rem;
@@ -1291,7 +1297,26 @@ body.composer-mode .bg-orb {
   font-weight: 700;
 }
 
-.composer-step.is-done {
+.composer-flow-step-copy {
+  display: grid;
+  gap: 0.22rem;
+}
+
+.composer-flow-step-copy strong,
+.composer-flow-step-copy small {
+  display: block;
+}
+
+.composer-flow-step-copy strong {
+  color: #effcff;
+}
+
+.composer-flow-step-copy small {
+  color: var(--text-soft);
+}
+
+.composer-flow-step.is-current,
+.composer-flow-step.is-complete {
   color: #effcff;
   border-color: rgba(116, 226, 255, 0.24);
   background: rgba(102, 227, 255, 0.08);
@@ -1308,9 +1333,18 @@ body.composer-mode .bg-orb {
 .composer-stage {
   display: grid;
   gap: 1rem;
-  max-width: 920px;
+  max-width: 1180px;
   width: 100%;
   margin: 0 auto;
+}
+
+.composer-step-stage {
+  align-items: start;
+}
+
+.composer-step-card {
+  display: grid;
+  gap: 1rem;
 }
 
 .composer-hero-card,
@@ -1359,6 +1393,10 @@ body.composer-mode .bg-orb {
   font-size: 1.35rem;
 }
 
+.composer-template-meta {
+  color: #9dc8d3;
+}
+
 .composer-question-header {
   align-items: flex-start;
   justify-content: space-between;
@@ -1399,6 +1437,37 @@ body.composer-mode .bg-orb {
 
 .composer-question-stack {
   gap: 0.85rem;
+}
+
+.composer-builder-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 0.9fr);
+  gap: 1rem;
+}
+
+.composer-builder-grid-preview {
+  align-items: start;
+}
+
+.composer-builder-column {
+  min-width: 0;
+}
+
+.composer-mobile-tabs {
+  display: none;
+}
+
+.composer-mobile-tab {
+  min-height: 2.8rem;
+}
+
+.composer-info-grid {
+  display: grid;
+  gap: 1rem;
+}
+
+.composer-info-intro {
+  min-height: 0;
 }
 
 .question-card {
@@ -1492,6 +1561,12 @@ body.composer-mode .bg-orb {
   color: var(--accent-strong);
 }
 
+.composer-advanced-stack {
+  display: grid;
+  gap: 0.9rem;
+  margin-top: 0.9rem;
+}
+
 .composer-advanced-grid {
   margin-top: 0.9rem;
 }
@@ -1542,6 +1617,122 @@ body.composer-mode .bg-orb {
 .composer-link-grid {
   display: grid;
   gap: 0.65rem;
+}
+
+.composer-step-actions {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.composer-field-type-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.85rem;
+}
+
+.composer-field-type-card,
+.composer-section-item {
+  display: grid;
+  gap: 0.5rem;
+  padding: 1rem;
+  text-align: left;
+  border-radius: 20px;
+  background: rgba(5, 18, 29, 0.82);
+  border: 1px solid rgba(116, 226, 255, 0.12);
+}
+
+.composer-field-type-card:hover {
+  border-color: rgba(135, 244, 255, 0.3);
+}
+
+.composer-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+}
+
+.composer-modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(2, 11, 18, 0.72);
+  border: 0;
+}
+
+.composer-modal-panel {
+  position: relative;
+  z-index: 1;
+  width: min(100%, 880px);
+  padding: 1.2rem;
+  background: rgba(7, 21, 34, 0.96);
+}
+
+.composer-floating-add {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  z-index: 20;
+  box-shadow: 0 18px 36px rgba(0, 0, 0, 0.28);
+}
+
+.composer-section-editor {
+  display: grid;
+  gap: 0.9rem;
+  padding: 1rem;
+  background: rgba(4, 18, 31, 0.5);
+}
+
+.composer-section-editor-header {
+  align-items: start;
+}
+
+.composer-section-preset-row {
+  display: flex;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+}
+
+.composer-live-preview {
+  position: sticky;
+  top: 188px;
+  display: grid;
+  gap: 1rem;
+}
+
+.composer-live-preview-header {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.composer-preview-banner {
+  margin: 0;
+}
+
+.composer-preview-section {
+  display: grid;
+  gap: 0.8rem;
+  padding: 1rem;
+  border-radius: 22px;
+  border: 1px solid rgba(116, 226, 255, 0.1);
+  background: rgba(4, 17, 28, 0.48);
+}
+
+.composer-preview-section-copy h3,
+.composer-section-editor h3 {
+  margin: 0;
+}
+
+.composer-capability-list {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.composer-capability-list p {
+  margin: 0;
 }
 
 .empty-state {
@@ -1811,6 +2002,26 @@ body.composer-mode .bg-orb {
   gap: 0.75rem;
 }
 
+.signal-node-summary {
+  display: grid;
+  gap: 0.9rem;
+  padding: 1rem;
+  border: 1px solid rgba(116, 226, 255, 0.14);
+  border-radius: 20px;
+  background:
+    radial-gradient(circle at top right, rgba(63, 197, 255, 0.14), transparent 38%),
+    linear-gradient(180deg, rgba(3, 16, 30, 0.9), rgba(2, 11, 21, 0.92));
+}
+
+.signal-node-summary-copy {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.signal-node-directory-trigger {
+  min-height: 3rem;
+}
+
 .stream-item,
 .form-stream-item,
 .signal-card {
@@ -1860,6 +2071,7 @@ body.composer-mode .bg-orb {
 
 .stream-item.is-active,
 .form-stream-item.is-active,
+.node-directory-item.is-active,
 .signal-card.is-active {
   border-color: rgba(135, 244, 255, 0.42);
   box-shadow: 0 0 0 1px rgba(149, 242, 255, 0.1), 0 0 28px rgba(102, 227, 255, 0.08);
@@ -1997,6 +2209,125 @@ body.composer-mode .bg-orb {
   display: grid;
   gap: 1rem;
   align-content: start;
+}
+
+.node-directory-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: grid;
+  place-items: center;
+  padding: 1.5rem;
+}
+
+.node-directory-backdrop {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at 50% 18%, rgba(66, 153, 225, 0.14), transparent 24%),
+    linear-gradient(180deg, rgba(1, 7, 12, 0.5), rgba(1, 7, 12, 0.9));
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.node-directory-panel {
+  position: relative;
+  z-index: 1;
+  width: min(100%, 920px);
+  max-height: min(86vh, 960px);
+  display: grid;
+  gap: 1rem;
+  overflow: hidden;
+}
+
+.node-directory-toolbar,
+.node-directory-stats,
+.node-directory-item-heading {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.node-directory-toolbar {
+  flex-wrap: wrap;
+}
+
+.node-directory-stats {
+  flex-wrap: wrap;
+  justify-content: flex-start;
+}
+
+.node-directory-list {
+  display: grid;
+  gap: 0.75rem;
+  overflow: auto;
+  padding-right: 0.2rem;
+}
+
+.node-directory-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.75rem;
+  align-items: stretch;
+}
+
+.node-directory-actions {
+  display: grid;
+  gap: 0.65rem;
+  align-content: center;
+}
+
+.node-directory-item {
+  width: 100%;
+  text-align: left;
+  display: grid;
+  gap: 0.4rem;
+  padding: 0.95rem 1rem;
+  border-radius: 18px;
+  border: 1px solid rgba(116, 226, 255, 0.14);
+  background:
+    linear-gradient(180deg, rgba(4, 20, 35, 0.9), rgba(3, 14, 26, 0.92)),
+    radial-gradient(circle at left top, rgba(52, 211, 153, 0.07), transparent 36%);
+  color: inherit;
+}
+
+.node-directory-delete {
+  min-width: 128px;
+  border-color: rgba(248, 113, 113, 0.22);
+  color: #ffd2d2;
+}
+
+.node-directory-delete:hover,
+.node-directory-delete:focus-visible {
+  border-color: rgba(248, 113, 113, 0.42);
+  background: rgba(120, 20, 20, 0.22);
+}
+
+.node-directory-item-main {
+  min-width: 0;
+}
+
+.node-directory-item-heading strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.beacon-overlay-panel {
+  width: min(100%, 860px);
+}
+
+.node-unread-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.28rem 0.62rem;
+  border-radius: 999px;
+  background: rgba(14, 165, 198, 0.2);
+  border: 1px solid rgba(135, 244, 255, 0.22);
+  color: #effcff;
+  font-size: 0.78rem;
+  flex-shrink: 0;
 }
 
 .metadata-list {
@@ -2651,6 +2982,11 @@ body.composer-mode .bg-orb {
     max-height: none;
   }
 
+  .node-directory-panel {
+    width: min(100%, 980px);
+    max-height: none;
+  }
+
   .signal-visual {
     min-height: 360px;
   }
@@ -2671,6 +3007,10 @@ body.composer-mode .bg-orb {
 
   .signal-list {
     max-height: none;
+  }
+
+  .node-directory-panel {
+    width: min(100%, 980px);
   }
 }
 
@@ -2703,6 +3043,25 @@ body.composer-mode .bg-orb {
   .wallet-connect {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .node-directory-overlay {
+    padding: 0.75rem;
+  }
+
+  .node-directory-panel {
+    width: 100%;
+    max-height: 100%;
+  }
+
+  .node-directory-toolbar,
+  .node-directory-item-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .node-directory-row {
+    grid-template-columns: 1fr;
   }
 
   .form-sticky-bar {
@@ -2748,6 +3107,29 @@ body.composer-mode .bg-orb {
     border-radius: 24px;
   }
 
+  .composer-toolbar {
+    position: static;
+    grid-template-columns: 1fr;
+  }
+
+  .composer-flow-steps {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .composer-builder-grid,
+  .composer-field-type-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .composer-live-preview {
+    position: static;
+  }
+
+  .composer-floating-add {
+    right: 16px;
+    bottom: 16px;
+  }
+
   .publish-signal-shell {
     min-height: 190px;
   }
@@ -2773,6 +3155,47 @@ body.composer-mode .bg-orb {
 @media (max-width: 768px) {
   .mobile-console-banner {
     display: block;
+  }
+
+  .composer-mobile-tabs {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.65rem;
+    margin-bottom: 0.25rem;
+  }
+
+  .composer-mobile-tab {
+    border-radius: 999px;
+    border: 1px solid rgba(116, 226, 255, 0.12);
+    background: rgba(5, 18, 29, 0.78);
+    color: var(--text-soft);
+  }
+
+  .composer-mobile-tab.is-active {
+    color: #effcff;
+    border-color: rgba(116, 226, 255, 0.24);
+    background: rgba(102, 227, 255, 0.08);
+  }
+
+  .is-hidden-mobile {
+    display: none;
+  }
+
+  .composer-flow-steps {
+    grid-template-columns: 1fr;
+  }
+
+  .composer-template-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .question-card-actions {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .composer-step-actions {
+    padding-bottom: 4rem;
   }
 
   .inbox-shell-header,

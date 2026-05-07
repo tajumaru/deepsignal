@@ -13,6 +13,11 @@ import { AdminAccessGate } from "../components/AdminAccessGate";
 import { BlobLink } from "../components/BlobLink";
 import { FormFieldEditor } from "../components/FormFieldEditor";
 import { ShareCard } from "../components/ShareCard";
+import { FieldTypePicker } from "../components/formBuilder/FieldTypePicker";
+import { FormBuilderSteps } from "../components/formBuilder/FormBuilderSteps";
+import { LivePreview } from "../components/formBuilder/LivePreview";
+import { SectionEditor } from "../components/formBuilder/SectionEditor";
+import { TemplatePicker } from "../components/formBuilder/TemplatePicker";
 import { useI18n } from "../i18n";
 import {
   createTemplateFields,
@@ -25,9 +30,11 @@ import { isLocalFallbackBlob } from "../lib/proof";
 import { storageAdapter } from "../lib/storage";
 import { shortAddress } from "../lib/sui";
 import { makeId } from "../lib/utils";
-import type { FieldType, FormField, FormPurpose, FormSchema } from "../types";
+import type { FieldType, FormField, FormPurpose, FormSchema, FormSection } from "../types";
 
 type PublishStageKey = "encoding" | "encrypting" | "sending" | "stored" | "active";
+type BuilderStepKey = "template" | "info" | "fields" | "publish";
+type MobileBuilderPane = "editor" | "preview";
 
 type PublishPhase = {
   key: PublishStageKey;
@@ -36,44 +43,27 @@ type PublishPhase = {
 };
 
 const publishPhases: PublishPhase[] = [
-  {
-    key: "encoding",
-    label: "[ Encoding signal ]",
-    detail: "Normalizing structure for deep transit.",
-  },
-  {
-    key: "encrypting",
-    label: "[ Encrypting payload ]",
-    detail: "Reducing surface noise before release.",
-  },
-  {
-    key: "sending",
-    label: "[ Sending to Walrus ]",
-    detail: "Handing the signal to the abyssal network.",
-  },
-  {
-    key: "stored",
-    label: "[ Blob stored ]",
-    detail: "Immutable blob registered for observation.",
-  },
-  {
-    key: "active",
-    label: "[ Signal active ]",
-    detail: "Passive monitoring has started.",
-  },
+  { key: "encoding", label: "[ Encoding signal ]", detail: "Normalizing structure for deep transit." },
+  { key: "encrypting", label: "[ Encrypting payload ]", detail: "Reducing surface noise before release." },
+  { key: "sending", label: "[ Sending to Walrus ]", detail: "Handing the signal to the abyssal network." },
+  { key: "stored", label: "[ Blob stored ]", detail: "Immutable blob registered for observation." },
+  { key: "active", label: "[ Signal active ]", detail: "Passive monitoring has started." },
 ];
 
 function wait(ms: number) {
   return new Promise((resolve) => window.setTimeout(resolve, ms));
 }
 
-function createField(type: FieldType = "shortText"): FormField {
+function createField(type: FieldType = "shortText", sectionId?: string): FormField {
   return {
     id: makeId("field"),
     type,
     label: "",
     required: false,
     sensitive: false,
+    visibility: "public",
+    adminOnly: false,
+    sectionId,
     options: type === "dropdown" || type === "checkbox" ? ["Option 1", "Option 2"] : undefined,
   };
 }
@@ -83,6 +73,14 @@ function cloneField(field: FormField): FormField {
     ...field,
     id: makeId("field"),
     options: field.options ? [...field.options] : undefined,
+  };
+}
+
+function createSection(title = ""): FormSection {
+  return {
+    id: makeId("section"),
+    title,
+    description: "",
   };
 }
 
@@ -96,6 +94,7 @@ function serializeDraft(
   purpose: FormPurpose,
   createOnSui: boolean,
   encryptSubmissions: boolean,
+  sections: FormSection[],
 ) {
   return JSON.stringify({
     title,
@@ -103,11 +102,19 @@ function serializeDraft(
     purpose,
     createOnSui,
     encryptSubmissions,
+    sections: sections.map((section) => ({
+      title: section.title,
+      description: section.description ?? "",
+    })),
     fields: fields.map((field) => ({
       type: field.type,
       label: field.label,
       required: field.required,
       sensitive: field.sensitive,
+      sectionId: field.sectionId ?? "",
+      adminOnly: Boolean(field.adminOnly),
+      visibility: field.visibility ?? "public",
+      validationHint: field.validationHint ?? "",
       options: field.options ?? [],
     })),
   });
@@ -120,19 +127,22 @@ const INITIAL_DRAFT_SNAPSHOT = serializeDraft(
   initialTemplate.purpose,
   false,
   true,
+  [],
 );
 
 export function FormBuilderPage() {
-  const { fieldTypeLabel, t } = useI18n();
+  const { t } = useI18n();
   const account = useCurrentAccount();
   const navigate = useNavigate();
   const labelRefs = useRef<Record<string, HTMLInputElement | null>>({});
+  const fieldCardRefs = useRef<Record<string, HTMLElement | null>>({});
   const publishRunRef = useRef(0);
   const blobTypingTimerRef = useRef<number | null>(null);
   const [selectedTemplateKey, setSelectedTemplateKey] = useState(defaultComposerTemplateKey);
   const [title, setTitle] = useState(initialTemplate.title);
   const [description, setDescription] = useState(initialTemplate.description);
   const [fields, setFields] = useState<FormField[]>(initialFields);
+  const [sections, setSections] = useState<FormSection[]>([]);
   const [purpose, setPurpose] = useState<FormPurpose>(initialTemplate.purpose);
   const [createOnSui, setCreateOnSui] = useState(false);
   const [encryptSubmissions, setEncryptSubmissions] = useState(true);
@@ -141,7 +151,6 @@ export function FormBuilderPage() {
   const [saving, setSaving] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
   const [lastSavedSnapshot, setLastSavedSnapshot] = useState(INITIAL_DRAFT_SNAPSHOT);
-  const [addMenuOpen, setAddMenuOpen] = useState(false);
   const [activeFieldId, setActiveFieldId] = useState(initialFields[0]?.id ?? "");
   const [draggedFieldId, setDraggedFieldId] = useState<string | null>(null);
   const [pendingFocusFieldId, setPendingFocusFieldId] = useState(initialFields[0]?.id ?? "");
@@ -152,16 +161,33 @@ export function FormBuilderPage() {
   const [linkCopied, setLinkCopied] = useState(false);
   const [blobCopied, setBlobCopied] = useState(false);
   const [publishStorageMode, setPublishStorageMode] = useState<"walrus" | "local">("walrus");
+  const [currentStep, setCurrentStep] = useState<BuilderStepKey>("template");
+  const [mobilePane, setMobilePane] = useState<MobileBuilderPane>("editor");
+  const [fieldTypePickerOpen, setFieldTypePickerOpen] = useState(false);
 
   const draftSnapshot = useMemo(
-    () => serializeDraft(title, description, fields, purpose, createOnSui, encryptSubmissions),
-    [createOnSui, description, encryptSubmissions, fields, purpose, title],
+    () => serializeDraft(title, description, fields, purpose, createOnSui, encryptSubmissions, sections),
+    [createOnSui, description, encryptSubmissions, fields, purpose, sections, title],
   );
 
   const isDirty = draftSnapshot !== lastSavedSnapshot;
   const hasValidTitle = Boolean(title.trim());
   const hasQuestions = fields.length > 0;
   const isReadyToPublish = hasValidTitle && hasQuestions;
+
+  const steps = [
+    { key: "template", title: "Step 1", description: "Pick a starting point" },
+    { key: "info", title: "Step 2", description: "Basic info" },
+    { key: "fields", title: "Step 3", description: "Fields" },
+    { key: "publish", title: "Step 4", description: "Preview / Publish" },
+  ] satisfies Array<{ key: BuilderStepKey; title: string; description: string }>;
+
+  const completedSteps = [
+    selectedTemplateKey ? "template" : "",
+    hasValidTitle ? "info" : "",
+    hasQuestions ? "fields" : "",
+    savedForm ? "publish" : "",
+  ].filter(Boolean);
 
   useEffect(() => {
     document.body.classList.add("composer-mode");
@@ -186,6 +212,10 @@ export function FormBuilderPage() {
       return;
     }
     const node = labelRefs.current[pendingFocusFieldId];
+    const cardNode = fieldCardRefs.current[pendingFocusFieldId];
+    if (cardNode) {
+      cardNode.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
     if (!node) {
       return;
     }
@@ -266,6 +296,21 @@ export function FormBuilderPage() {
     navigate("/");
   }
 
+  function goToStep(step: BuilderStepKey) {
+    setCurrentStep(step);
+    if (step === "publish") {
+      setMobilePane("preview");
+    }
+  }
+
+  function moveStep(direction: -1 | 1) {
+    const index = steps.findIndex((step) => step.key === currentStep);
+    const next = steps[index + direction];
+    if (next) {
+      goToStep(next.key);
+    }
+  }
+
   function replaceFields(nextFields: FormField[]) {
     setFields(nextFields);
     setActiveFieldId(nextFields[0]?.id ?? "");
@@ -280,9 +325,10 @@ export function FormBuilderPage() {
       setPurpose(normalizeFormPurpose(template.purpose));
       setTitle(template.title);
       setDescription(template.description);
+      setSections([]);
       replaceFields(nextFields);
-      setAddMenuOpen(false);
       setError("");
+      goToStep("info");
     });
   }
 
@@ -291,7 +337,8 @@ export function FormBuilderPage() {
   }
 
   function insertField(type: FieldType, afterIndex?: number) {
-    const nextField = createField(type);
+    const activeField = fields.find((field) => field.id === activeFieldId);
+    const nextField = createField(type, activeField?.sectionId);
     setFields((current) => {
       if (afterIndex === undefined || afterIndex < 0 || afterIndex >= current.length) {
         return [...current, nextField];
@@ -302,7 +349,7 @@ export function FormBuilderPage() {
     });
     setPendingFocusFieldId(nextField.id);
     setActiveFieldId(nextField.id);
-    setAddMenuOpen(false);
+    setMobilePane("editor");
   }
 
   function duplicateFieldAt(fieldId: string) {
@@ -353,34 +400,79 @@ export function FormBuilderPage() {
     });
   }
 
+  function addSection(preset?: string) {
+    const nextSection = createSection(preset ?? "");
+    setSections((current) => [...current, nextSection]);
+  }
+
+  function updateSection(sectionId: string, patch: Partial<FormSection>) {
+    setSections((current) => current.map((section) => (section.id === sectionId ? { ...section, ...patch } : section)));
+  }
+
+  function removeSection(sectionId: string) {
+    setSections((current) => current.filter((section) => section.id !== sectionId));
+    setFields((current) =>
+      current.map((field) => (field.sectionId === sectionId ? { ...field, sectionId: undefined } : field)),
+    );
+  }
+
+  function focusFieldError(fieldId: string) {
+    setMobilePane("editor");
+    setActiveFieldId(fieldId);
+    setPendingFocusFieldId(fieldId);
+  }
+
+  function validateFieldsStep() {
+    if (fields.length === 0) {
+      setError(t("errorNeedField"));
+      return false;
+    }
+
+    const emptyLabelField = fields.find((field) => !field.label.trim());
+    if (emptyLabelField) {
+      setError(t("errorEveryFieldNeedsLabel"));
+      focusFieldError(emptyLabelField.id);
+      return false;
+    }
+
+    const emptyOptionsField = fields.find(
+      (field) =>
+        (field.type === "dropdown" || field.type === "checkbox") &&
+        !(field.options ?? []).map((option) => option.trim()).filter(Boolean).length,
+    );
+    if (emptyOptionsField) {
+      setError(t("errorFieldNeedsOption"));
+      focusFieldError(emptyOptionsField.id);
+      return false;
+    }
+
+    return true;
+  }
+
+  function handleFieldsContinue() {
+    setError("");
+    if (!validateFieldsStep()) {
+      return;
+    }
+    moveStep(1);
+  }
+
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
     setError("");
 
     if (!title.trim()) {
       setError(t("errorFormTitleRequired"));
+      goToStep("info");
       return;
     }
-    if (fields.length === 0) {
-      setError(t("errorNeedField"));
-      return;
-    }
-    if (fields.some((field) => !field.label.trim())) {
-      setError(t("errorEveryFieldNeedsLabel"));
-      return;
-    }
-    if (
-      fields.some(
-        (field) =>
-          (field.type === "dropdown" || field.type === "checkbox") &&
-          !(field.options ?? []).map((option) => option.trim()).filter(Boolean).length,
-      )
-    ) {
-      setError(t("errorFieldNeedsOption"));
+    if (!validateFieldsStep()) {
+      goToStep("fields");
       return;
     }
     if (!account?.address) {
       setError(t("connectWalletFirst"));
+      goToStep("publish");
       return;
     }
 
@@ -401,11 +493,19 @@ export function FormBuilderPage() {
       fields: fields.map((field) => ({
         ...field,
         label: field.label.trim(),
+        validationHint: field.validationHint?.trim() || undefined,
         options:
           field.type === "dropdown" || field.type === "checkbox"
             ? (field.options ?? []).map((option) => option.trim()).filter(Boolean)
             : undefined,
       })),
+      sections: sections
+        .map((section) => ({
+          ...section,
+          title: section.title.trim(),
+          description: section.description?.trim() || undefined,
+        }))
+        .filter((section) => section.title),
       purpose,
       createdAt: new Date().toISOString(),
       ownerAddress: account.address,
@@ -448,23 +548,6 @@ export function FormBuilderPage() {
       setSaving(false);
     }
   }
-
-  const questionTypes: FieldType[] = [
-    "shortText",
-    "longText",
-    "dropdown",
-    "checkbox",
-    "rating",
-    "screenshot",
-    "video",
-    "url",
-  ];
-
-  const steps = [
-    { key: "title", label: t("composerStepTitle"), done: hasValidTitle },
-    { key: "questions", label: t("composerStepQuestions"), done: hasQuestions },
-    { key: "publish", label: t("composerStepPublish"), done: Boolean(savedForm) },
-  ];
 
   const publishChecks = savedForm
     ? [
@@ -612,6 +695,12 @@ export function FormBuilderPage() {
           </div>
         ) : null}
 
+        <FieldTypePicker
+          open={fieldTypePickerOpen}
+          onClose={() => setFieldTypePickerOpen(false)}
+          onPick={(type) => insertField(type)}
+        />
+
         <div className={`composer-toolbar panel ${isScrolled ? "is-scrolled" : ""}`}>
           <div className="composer-toolbar-copy">
             <p className="eyebrow">{t("builderEyebrow")}</p>
@@ -619,14 +708,12 @@ export function FormBuilderPage() {
             <p className="muted composer-intro">{t("composerIntro")}</p>
           </div>
 
-          <div className="composer-stepper" aria-label="Composer steps">
-            {steps.map((step, index) => (
-              <div key={step.key} className={`composer-step ${step.done ? "is-done" : ""}`}>
-                <span>{index + 1}</span>
-                <strong>{step.label}</strong>
-              </div>
-            ))}
-          </div>
+          <FormBuilderSteps
+            steps={steps}
+            currentStep={currentStep}
+            completedSteps={completedSteps}
+            onSelect={(stepKey) => goToStep(stepKey as BuilderStepKey)}
+          />
 
           <div className="composer-toolbar-actions">
             <button type="button" className="ghost-button" onClick={handleNavigateHome}>
@@ -637,244 +724,343 @@ export function FormBuilderPage() {
                 {t("openLiveForm")}
               </Link>
             ) : null}
-            <button type="submit" form="create-form" className="primary-button" disabled={saving}>
-              {saving ? t("builderSaving") : t("builderSave")}
-            </button>
           </div>
         </div>
 
-        <form id="create-form" className="composer-stage" onSubmit={handleSubmit}>
-          <section className="panel glow-panel composer-hero-card">
-            <div className="composer-hero-copy">
-              <p className="eyebrow">{t("templateEyebrow")}</p>
-              <h2>{t("templateTitle")}</h2>
-              <p className="muted">{t("templateCustomBody")}</p>
-            </div>
-            <div className="composer-template-grid">
-              {formTemplates.map((template) => {
-                const active = selectedTemplateKey === template.key;
-                return (
-                  <button
-                    key={template.key}
-                    type="button"
-                    className={`composer-template-card ${active ? "is-active" : ""}`}
-                    onClick={() => applyTemplate(template.key)}
-                  >
-                    <span className="composer-template-emoji" aria-hidden="true">
-                      {template.emoji}
-                    </span>
-                    <strong>{template.label}</strong>
-                    <span className="muted">{template.description}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </section>
-
-          <section className="panel composer-section-card">
-            <div className="section-row">
-              <div>
-                <p className="eyebrow">{t("composerStepTitle")}</p>
-                <h2>{title.trim() || t("untitledForm")}</h2>
+        <form id="create-form" className="composer-stage composer-step-stage" onSubmit={handleSubmit}>
+          {currentStep === "template" ? (
+            <section className="panel glow-panel composer-hero-card">
+              <div className="composer-hero-copy">
+                <p className="eyebrow">{t("templateEyebrow")}</p>
+                <h2>{t("templateTitle")}</h2>
+                <p className="muted">{t("templateCustomBody")}</p>
               </div>
-            </div>
-
-            <label>
-              <span>{t("formTitle")}</span>
-              <input value={title} onChange={(event) => setTitle(event.target.value)} />
-            </label>
-
-            <label>
-              <span>{t("description")}</span>
-              <textarea
-                rows={3}
-                value={description}
-                onChange={(event) => setDescription(event.target.value)}
-                placeholder={t("builderDescriptionPlaceholder")}
+              <TemplatePicker
+                templates={formTemplates}
+                selectedTemplateKey={selectedTemplateKey}
+                onSelect={applyTemplate}
               />
-            </label>
-          </section>
+              <div className="composer-step-actions">
+                <button type="button" className="ghost-button" onClick={handleNavigateHome}>
+                  {t("backToHome")}
+                </button>
+              </div>
+            </section>
+          ) : null}
 
-          <section className="panel composer-section-card">
-            <div className="section-row composer-question-header">
-              <div>
-                <p className="eyebrow">{t("composerStepQuestions")}</p>
-                <h2>{t("fields")}</h2>
-                <p className="muted">{t("questionCount", { count: fields.length })}</p>
+          {currentStep === "info" ? (
+            <section className="panel composer-section-card composer-step-card">
+              <div className="section-row">
+                <div>
+                  <p className="eyebrow">Step 2</p>
+                  <h2>{t("basicInfoTitle")}</h2>
+                  <p className="muted">{t("basicInfoBody")}</p>
+                </div>
               </div>
 
-              <div className="add-question-wrap">
+              <div className="composer-info-grid">
+                <label>
+                  <span>{t("formTitle")}</span>
+                  <input value={title} onChange={(event) => setTitle(event.target.value)} />
+                </label>
+
+                <label className="composer-info-intro">
+                  <span>{t("description")}</span>
+                  <textarea
+                    rows={5}
+                    value={description}
+                    onChange={(event) => setDescription(event.target.value)}
+                    placeholder={t("builderDescriptionPlaceholder")}
+                  />
+                </label>
+              </div>
+
+              <div className="composer-step-actions">
+                <button type="button" className="ghost-button" onClick={() => moveStep(-1)}>
+                  {t("back")}
+                </button>
+                <button type="button" className="primary-button" onClick={() => moveStep(1)}>
+                  {t("continue")}
+                </button>
+              </div>
+            </section>
+          ) : null}
+
+          {currentStep === "fields" ? (
+            <section className="composer-builder-grid">
+              <div className="composer-mobile-tabs" role="tablist" aria-label="Builder view">
                 <button
                   type="button"
-                  className="ghost-button add-question-trigger"
-                  onClick={() => setAddMenuOpen((current) => !current)}
+                  className={`composer-mobile-tab ${mobilePane === "editor" ? "is-active" : ""}`}
+                  onClick={() => setMobilePane("editor")}
                 >
-                  {t("addQuestion")}
+                  {t("editorTab")}
                 </button>
-                {addMenuOpen ? (
-                  <div className="add-question-menu panel">
-                    {questionTypes.map((type) => (
-                      <button
-                        key={type}
-                        type="button"
-                        className="add-question-option"
-                        onClick={() => insertField(type)}
-                      >
-                        {fieldTypeLabel(type)}
-                      </button>
+                <button
+                  type="button"
+                  className={`composer-mobile-tab ${mobilePane === "preview" ? "is-active" : ""}`}
+                  onClick={() => setMobilePane("preview")}
+                >
+                  {t("previewTab")}
+                </button>
+              </div>
+
+              <div className={`composer-builder-column composer-editor-column ${mobilePane === "preview" ? "is-hidden-mobile" : ""}`}>
+                <section className="panel composer-section-card composer-step-card">
+                  <div className="section-row composer-question-header">
+                    <div>
+                      <p className="eyebrow">Step 3</p>
+                      <h2>{t("fields")}</h2>
+                      <p className="muted">{t("questionCount", { count: fields.length })}</p>
+                    </div>
+                    <button type="button" className="ghost-button" onClick={() => addSection()}>
+                      + {t("addSection")}
+                    </button>
+                  </div>
+
+                  <SectionEditor
+                    sections={sections}
+                    onAddSection={addSection}
+                    onUpdateSection={updateSection}
+                    onRemoveSection={removeSection}
+                  />
+
+                  <div className="stack composer-question-stack">
+                    {fields.map((field, index) => (
+                      <FormFieldEditor
+                        key={field.id}
+                        field={field}
+                        index={index}
+                        sections={sections}
+                        rootRef={(node) => {
+                          fieldCardRefs.current[field.id] = node;
+                        }}
+                        isDragging={draggedFieldId === field.id}
+                        labelRef={(node) => {
+                          labelRefs.current[field.id] = node;
+                        }}
+                        onChange={(nextField) => updateField(index, nextField)}
+                        onRemove={() => removeField(field.id)}
+                        onDuplicate={() => duplicateFieldAt(field.id)}
+                        onAddBelow={() => insertField(field.type, index)}
+                        onFocus={() => setActiveFieldId(field.id)}
+                        onDragStart={(event: DragEvent<HTMLElement>) => {
+                          event.dataTransfer.effectAllowed = "move";
+                          setDraggedFieldId(field.id);
+                        }}
+                        onDragOver={(event: DragEvent<HTMLElement>) => {
+                          event.preventDefault();
+                          event.dataTransfer.dropEffect = "move";
+                        }}
+                        onDrop={(event: DragEvent<HTMLElement>) => {
+                          event.preventDefault();
+                          if (draggedFieldId) {
+                            reorderFields(draggedFieldId, field.id);
+                          }
+                          setDraggedFieldId(null);
+                        }}
+                      />
                     ))}
                   </div>
-                ) : null}
-              </div>
-            </div>
 
-            <div className="stack composer-question-stack">
-              {fields.map((field, index) => (
-                <FormFieldEditor
-                  key={field.id}
-                  field={field}
-                  index={index}
-                  isDragging={draggedFieldId === field.id}
-                  labelRef={(node) => {
-                    labelRefs.current[field.id] = node;
-                  }}
-                  onChange={(nextField) => updateField(index, nextField)}
-                  onRemove={() => removeField(field.id)}
-                  onDuplicate={() => duplicateFieldAt(field.id)}
-                  onAddBelow={() => insertField(field.type, index)}
-                  onFocus={() => setActiveFieldId(field.id)}
-                  onDragStart={(event: DragEvent<HTMLElement>) => {
-                    event.dataTransfer.effectAllowed = "move";
-                    setDraggedFieldId(field.id);
-                  }}
-                  onDragOver={(event: DragEvent<HTMLElement>) => {
-                    event.preventDefault();
-                    event.dataTransfer.dropEffect = "move";
-                  }}
-                  onDrop={(event: DragEvent<HTMLElement>) => {
-                    event.preventDefault();
-                    if (draggedFieldId) {
-                      reorderFields(draggedFieldId, field.id);
-                    }
-                    setDraggedFieldId(null);
-                  }}
+                  {fields.length === 0 ? <p className="muted">{t("fieldEmptyState")}</p> : null}
+
+                  <div className="composer-step-actions">
+                    <button type="button" className="ghost-button" onClick={() => moveStep(-1)}>
+                      {t("back")}
+                    </button>
+                    <button type="button" className="primary-button" onClick={handleFieldsContinue}>
+                      {t("continue")}
+                    </button>
+                  </div>
+                </section>
+              </div>
+
+              <div className={`composer-builder-column composer-preview-column ${mobilePane === "editor" ? "is-hidden-mobile" : ""}`}>
+                <LivePreview
+                  title={title}
+                  description={description}
+                  fields={fields}
+                  sections={sections}
+                  encryptSubmissions={encryptSubmissions}
                 />
-              ))}
-            </div>
-
-          </section>
-
-          <section className="panel composer-section-card composer-publish-panel">
-            <div className="section-row">
-              <div>
-                <p className="eyebrow">{t("composerStepPublish")}</p>
-                <h2>{savedForm ? t("formPublished") : t("publishReadyTitle")}</h2>
-                <p className="muted">
-                  {savedForm ? t("signalStoredOnWalrus") : t("publishReadyBody")}
-                </p>
               </div>
-              <button type="submit" className="primary-button" disabled={saving || !isReadyToPublish}>
-                {saving ? t("builderSaving") : t("builderSave")}
-              </button>
-            </div>
+            </section>
+          ) : null}
 
-            <p className="wallet-inline-note">
-              {t("formOwnerLabel")}: {account?.address ? shortAddress(account.address) : t("walletPublishHint")}
-            </p>
+          {currentStep === "publish" ? (
+            <section className="composer-builder-grid composer-builder-grid-preview">
+              <div className="composer-mobile-tabs" role="tablist" aria-label="Builder view">
+                <button
+                  type="button"
+                  className={`composer-mobile-tab ${mobilePane === "editor" ? "is-active" : ""}`}
+                  onClick={() => setMobilePane("editor")}
+                >
+                  {t("editorTab")}
+                </button>
+                <button
+                  type="button"
+                  className={`composer-mobile-tab ${mobilePane === "preview" ? "is-active" : ""}`}
+                  onClick={() => setMobilePane("preview")}
+                >
+                  {t("previewTab")}
+                </button>
+              </div>
 
-            <details className="composer-advanced-settings">
-              <summary>{t("advanced")}</summary>
-              <div className="stack composer-advanced-grid">
-                <section className="panel composer-settings-card">
+              <div className={`composer-builder-column composer-editor-column ${mobilePane === "preview" ? "is-hidden-mobile" : ""}`}>
+                <section className="panel composer-section-card composer-publish-panel composer-step-card">
                   <div className="section-row">
                     <div>
-                      <p className="eyebrow">{t("sealEyebrow")}</p>
-                      <h3>{t("encryptSubmissions")}</h3>
+                      <p className="eyebrow">Step 4</p>
+                      <h2>{savedForm ? t("formPublished") : t("publishReadyTitle")}</h2>
+                      <p className="muted">
+                        {savedForm ? t("signalStoredOnWalrus") : t("publishReadyBody")}
+                      </p>
                     </div>
-                    <label className="toggle">
-                      <input
-                        type="checkbox"
-                        checked={encryptSubmissions}
-                        onChange={(event) => setEncryptSubmissions(event.target.checked)}
-                      />
-                      <span>{encryptSubmissions ? t("enabled") : t("disabled")}</span>
-                    </label>
+                    <button type="submit" className="primary-button" disabled={saving || !isReadyToPublish}>
+                      {saving ? t("builderSaving") : t("builderSave")}
+                    </button>
                   </div>
-                  <p className="muted">{t("encryptSubmissionsHelp")}</p>
-                </section>
 
-                <section className="panel composer-settings-card">
-                  <div className="section-row">
-                    <div>
-                      <p className="eyebrow">{t("suiCreateEyebrow")}</p>
-                      <h3>{t("createOnSui")}</h3>
+                  <p className="wallet-inline-note">
+                    {t("formOwnerLabel")}: {account?.address ? shortAddress(account.address) : t("walletPublishHint")}
+                  </p>
+
+                  <details className="composer-advanced-settings" open>
+                    <summary>{t("advanced")}</summary>
+                    <div className="stack composer-advanced-grid">
+                      <section className="panel composer-settings-card">
+                        <div className="section-row">
+                          <div>
+                            <p className="eyebrow">{t("sealEyebrow")}</p>
+                            <h3>{t("encryptSubmissions")}</h3>
+                          </div>
+                          <label className="toggle">
+                            <input
+                              type="checkbox"
+                              checked={encryptSubmissions}
+                              onChange={(event) => setEncryptSubmissions(event.target.checked)}
+                            />
+                            <span>{encryptSubmissions ? t("enabled") : t("disabled")}</span>
+                          </label>
+                        </div>
+                        <p className="muted">{t("encryptSubmissionsHelp")}</p>
+                      </section>
+
+                      <section className="panel composer-settings-card">
+                        <div className="section-row">
+                          <div>
+                            <p className="eyebrow">{t("suiCreateEyebrow")}</p>
+                            <h3>{t("createOnSui")}</h3>
+                          </div>
+                          <label className="toggle">
+                            <input
+                              type="checkbox"
+                              checked={createOnSui}
+                              onChange={(event) => setCreateOnSui(event.target.checked)}
+                            />
+                            <span>{createOnSui ? t("enabled") : t("disabled")}</span>
+                          </label>
+                        </div>
+                        <p className="muted">{t("createOnSuiHelp")}</p>
+                      </section>
+
+                      <section className="panel composer-settings-card">
+                        <div className="section-row">
+                          <div>
+                            <p className="eyebrow">Proof-backed routing</p>
+                            <h3>{t("storageAndSignatureTitle")}</h3>
+                          </div>
+                        </div>
+                        <div className="composer-capability-list muted">
+                          <p>{t("walrusStorageLine")}</p>
+                          <p>{t("suiSignatureLine")}</p>
+                        </div>
+                      </section>
                     </div>
-                    <label className="toggle">
-                      <input
-                        type="checkbox"
-                        checked={createOnSui}
-                        onChange={(event) => setCreateOnSui(event.target.checked)}
-                      />
-                      <span>{createOnSui ? t("enabled") : t("disabled")}</span>
-                    </label>
+                  </details>
+
+                  {error ? <p className="error-text">{error}</p> : null}
+
+                  {savedForm ? (
+                    <div className="success-card composer-success-card">
+                      <div className="composer-success-header">
+                        <div>
+                          <p className="eyebrow">Observation Relay</p>
+                          <h3>SIGNAL ACTIVE</h3>
+                          <p className="muted">
+                            {isLocalFallbackBlob(savedForm.blobId) ? t("signalStoredLocally") : t("signalStoredOnWalrus")}
+                          </p>
+                        </div>
+                        <span className="composer-live-pill">Observing</span>
+                      </div>
+
+                      <div className="composer-publish-checks">
+                        {publishChecks.map((check) => (
+                          <p key={check}>{check}</p>
+                        ))}
+                      </div>
+
+                      <div className="composer-link-grid">
+                        <p>
+                          {t("publicShareLink")}: <Link to={`/f/${savedForm.id}`}>/f/{savedForm.id}</Link>
+                        </p>
+                        <p>
+                          {t("adminPage")}: <Link to={`/dashboard/forms/${savedForm.id}`}>{t("adminPageCta")}</Link>
+                        </p>
+                        <p>
+                          {t("walrusBlobId")}: {savedForm.blobId}
+                        </p>
+                        <BlobLink blobId={savedForm.blobId} />
+                        {savedForm.manifestBlobId ? (
+                          <>
+                            <p>
+                              Manifest Blob ID: {savedForm.manifestBlobId}
+                            </p>
+                            <BlobLink blobId={savedForm.manifestBlobId} label="Verify manifest on Walrus" />
+                            <p>
+                              {t("restoreLink")}: <Link to={`/m/${savedForm.manifestBlobId}`}>/m/{savedForm.manifestBlobId}</Link>
+                            </p>
+                          </>
+                        ) : null}
+                      </div>
+
+                      <ShareCard formId={savedForm.id} blobId={savedForm.blobId} createdAt={savedForm.createdAt} />
+                    </div>
+                  ) : (
+                    <p className="muted">{t("saveFormHint")}</p>
+                  )}
+
+                  <div className="composer-step-actions">
+                    <button type="button" className="ghost-button" onClick={() => moveStep(-1)}>
+                      {t("back")}
+                    </button>
                   </div>
-                  <p className="muted">{t("createOnSuiHelp")}</p>
                 </section>
               </div>
-            </details>
 
-            {error ? <p className="error-text">{error}</p> : null}
-
-            {savedForm ? (
-              <div className="success-card composer-success-card">
-                <div className="composer-success-header">
-                  <div>
-                    <p className="eyebrow">Observation Relay</p>
-                    <h3>SIGNAL ACTIVE</h3>
-                    <p className="muted">
-                      {isLocalFallbackBlob(savedForm.blobId) ? t("signalStoredLocally") : t("signalStoredOnWalrus")}
-                    </p>
-                  </div>
-                  <span className="composer-live-pill">Observing</span>
-                </div>
-
-                <div className="composer-publish-checks">
-                  {publishChecks.map((check) => (
-                    <p key={check}>{check}</p>
-                  ))}
-                </div>
-
-                <div className="composer-link-grid">
-                  <p>
-                    {t("publicShareLink")}: <Link to={`/f/${savedForm.id}`}>/f/{savedForm.id}</Link>
-                  </p>
-                  <p>
-                    {t("adminPage")}: <Link to={`/dashboard/forms/${savedForm.id}`}>{t("adminPageCta")}</Link>
-                  </p>
-                  <p>
-                    {t("walrusBlobId")}: {savedForm.blobId}
-                  </p>
-                  <BlobLink blobId={savedForm.blobId} />
-                  {savedForm.manifestBlobId ? (
-                    <>
-                      <p>
-                        Manifest Blob ID: {savedForm.manifestBlobId}
-                      </p>
-                      <BlobLink blobId={savedForm.manifestBlobId} label="Verify manifest on Walrus" />
-                      <p>
-                        {t("restoreLink")}: <Link to={`/m/${savedForm.manifestBlobId}`}>/m/{savedForm.manifestBlobId}</Link>
-                      </p>
-                    </>
-                  ) : null}
-                </div>
-
-                <ShareCard formId={savedForm.id} blobId={savedForm.blobId} createdAt={savedForm.createdAt} />
+              <div className={`composer-builder-column composer-preview-column ${mobilePane === "editor" ? "is-hidden-mobile" : ""}`}>
+                <LivePreview
+                  title={title}
+                  description={description}
+                  fields={fields}
+                  sections={sections}
+                  encryptSubmissions={encryptSubmissions}
+                />
               </div>
-            ) : (
-              <p className="muted">{t("saveFormHint")}</p>
-            )}
-          </section>
+            </section>
+          ) : null}
         </form>
+
+        {currentStep === "fields" ? (
+          <button
+            type="button"
+            className="primary-button composer-floating-add"
+            onClick={() => setFieldTypePickerOpen(true)}
+          >
+            + {t("addFieldFloating")}
+          </button>
+        ) : null}
       </section>
     </AdminAccessGate>
   );
