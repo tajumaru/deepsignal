@@ -1,15 +1,23 @@
 import { useEffect, useMemo, useState } from "react";
 import QRCode from "qrcode";
 import { useI18n } from "../i18n";
+import { formatDate } from "../lib/utils";
 
 interface ShareCardProps {
   formId: string;
+  blobId?: string;
+  createdAt?: string;
 }
 
-export function ShareCard({ formId }: ShareCardProps) {
+function hashSeed(value: string) {
+  return value.split("").reduce((accumulator, char) => accumulator + char.charCodeAt(0), 0);
+}
+
+export function ShareCard({ formId, blobId, createdAt }: ShareCardProps) {
   const { t } = useI18n();
   const [copied, setCopied] = useState(false);
-  const [qrDataUrl, setQrDataUrl] = useState("");
+  const [qrMarkup, setQrMarkup] = useState("");
+  const [beaconLocked, setBeaconLocked] = useState(false);
 
   const publicPath = `/f/${formId}`;
   const absoluteUrl = useMemo(() => {
@@ -21,22 +29,32 @@ export function ShareCard({ formId }: ShareCardProps) {
 
   useEffect(() => {
     let cancelled = false;
-    void QRCode.toDataURL(absoluteUrl, {
+    void QRCode.toString(absoluteUrl, {
+      type: "svg",
       margin: 1,
-      width: 220,
+      width: 256,
       color: {
-        dark: "#dffbff",
-        light: "#00000000",
+        dark: "#04131e",
+        light: "#ffffff",
       },
-    }).then((url: string) => {
+    }).then((svg: string) => {
       if (!cancelled) {
-        setQrDataUrl(url);
+        setQrMarkup(svg);
       }
     });
     return () => {
       cancelled = true;
     };
   }, [absoluteUrl]);
+
+  useEffect(() => {
+    if (!qrMarkup) {
+      return;
+    }
+    setBeaconLocked(false);
+    const timeoutId = window.setTimeout(() => setBeaconLocked(true), 240);
+    return () => window.clearTimeout(timeoutId);
+  }, [qrMarkup]);
 
   async function handleCopy() {
     try {
@@ -48,27 +66,85 @@ export function ShareCard({ formId }: ShareCardProps) {
     }
   }
 
+  const seed = hashSeed(`${formId}:${blobId ?? ""}`);
+  const depthMeters = 3200 + (seed % 5400);
+  const signalId = `SIG-${formId.slice(0, 8).toUpperCase()}`;
+  const blobLabel = blobId ?? "pending-lock";
+  const timestampLabel = createdAt ? formatDate(createdAt) : "Awaiting sync";
+
   return (
-    <div className="share-card">
-      <div className="share-copy">
-        <h4>{t("shareTitle")}</h4>
-        <p className="muted">{t("shareBody")}</p>
-        <div className="share-link-box">
+    <section className={`share-card beacon-card ${beaconLocked ? "is-locked" : "is-forming"}`}>
+      <div className="beacon-bg-noise" aria-hidden="true" />
+      <div className="beacon-bg-scanlines" aria-hidden="true" />
+      <div className="beacon-particles" aria-hidden="true">
+        {Array.from({ length: 8 }).map((_, index) => (
+          <span key={index} className={`beacon-particle beacon-particle-${(index % 4) + 1}`} />
+        ))}
+      </div>
+
+      <div className="share-copy beacon-copy">
+        <p className="eyebrow">{t("signalBeaconLabel")}</p>
+        <h4>{t("signalBeaconTitle")}</h4>
+        <p className="muted">{t("signalBeaconBody")}</p>
+      </div>
+
+      <div className="beacon-core" aria-label={t("signalBeaconTitle")}>
+        <div className="beacon-rings" aria-hidden="true">
+          <span />
+          <span />
+          <span />
+        </div>
+        <div className="beacon-grid" aria-hidden="true">
+          <span />
+          <span />
+        </div>
+        <div className="beacon-frame">
+          <div className="beacon-scan" aria-hidden="true" />
+          <div className="beacon-qr-shell">
+            {qrMarkup ? (
+              <div
+                className="beacon-qr-markup"
+                dangerouslySetInnerHTML={{ __html: qrMarkup }}
+              />
+            ) : (
+              <div className="beacon-qr-placeholder" aria-hidden="true" />
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div className="beacon-meta">
+        <div className="beacon-meta-row">
+          <span>{t("transmissionLinkLabel")}</span>
           <code>{publicPath}</code>
         </div>
-        <div className="cta-row">
+        <div className="beacon-meta-grid">
+          <div>
+            <span>{t("blobIdLabel")}</span>
+            <strong>{blobLabel}</strong>
+          </div>
+          <div>
+            <span>{t("signalIdLabel")}</span>
+            <strong>{signalId}</strong>
+          </div>
+          <div>
+            <span>{t("createdTimestampLabel")}</span>
+            <strong>{timestampLabel}</strong>
+          </div>
+          <div>
+            <span>{t("depthLabel")}</span>
+            <strong>{`DEPTH: ${depthMeters}m`}</strong>
+          </div>
+        </div>
+        <div className="cta-row beacon-actions">
           <button type="button" className="primary-button" onClick={() => void handleCopy()}>
-            {copied ? t("copied") : t("copyShareUrl")}
+            {copied ? t("copied") : t("copyTransmissionLink")}
           </button>
           <a className="ghost-button" href={absoluteUrl} target="_blank" rel="noreferrer">
-            {t("openShareLink")}
+            {t("openTransmissionLink")}
           </a>
         </div>
       </div>
-      <div className="qr-panel">
-        <p className="eyebrow">{t("qrCode")}</p>
-        {qrDataUrl ? <img className="qr-image" src={qrDataUrl} alt={t("qrCode")} /> : null}
-      </div>
-    </div>
+    </section>
   );
 }

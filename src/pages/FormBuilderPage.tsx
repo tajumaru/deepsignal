@@ -1,5 +1,13 @@
 import { useCurrentAccount } from "@mysten/dapp-kit";
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import {
+  startTransition,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type DragEvent,
+  type FormEvent,
+} from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { AdminAccessGate } from "../components/AdminAccessGate";
 import { BlobLink } from "../components/BlobLink";
@@ -8,26 +16,78 @@ import { ShareCard } from "../components/ShareCard";
 import { useI18n } from "../i18n";
 import {
   createTemplateFields,
+  defaultComposerTemplateKey,
   formTemplates,
   getTemplateDefinition,
   normalizeFormPurpose,
 } from "../lib/formTemplates";
-import { fieldTypeOptions } from "../lib/constants";
-import { shortAddress } from "../lib/sui";
+import { isLocalFallbackBlob } from "../lib/proof";
 import { storageAdapter } from "../lib/storage";
+import { shortAddress } from "../lib/sui";
 import { makeId } from "../lib/utils";
-import type { FormField, FormPurpose, FormSchema } from "../types";
+import type { FieldType, FormField, FormPurpose, FormSchema } from "../types";
 
-function createField(type = fieldTypeOptions[0]): FormField {
+type PublishStageKey = "encoding" | "encrypting" | "sending" | "stored" | "active";
+
+type PublishPhase = {
+  key: PublishStageKey;
+  label: string;
+  detail: string;
+};
+
+const publishPhases: PublishPhase[] = [
+  {
+    key: "encoding",
+    label: "[ Encoding signal ]",
+    detail: "Normalizing structure for deep transit.",
+  },
+  {
+    key: "encrypting",
+    label: "[ Encrypting payload ]",
+    detail: "Reducing surface noise before release.",
+  },
+  {
+    key: "sending",
+    label: "[ Sending to Walrus ]",
+    detail: "Handing the signal to the abyssal network.",
+  },
+  {
+    key: "stored",
+    label: "[ Blob stored ]",
+    detail: "Immutable blob registered for observation.",
+  },
+  {
+    key: "active",
+    label: "[ Signal active ]",
+    detail: "Passive monitoring has started.",
+  },
+];
+
+function wait(ms: number) {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
+function createField(type: FieldType = "shortText"): FormField {
   return {
     id: makeId("field"),
     type,
     label: "",
     required: false,
     sensitive: false,
-    options: type === "dropdown" || type === "checkbox" ? [""] : undefined,
+    options: type === "dropdown" || type === "checkbox" ? ["Option 1", "Option 2"] : undefined,
   };
 }
+
+function cloneField(field: FormField): FormField {
+  return {
+    ...field,
+    id: makeId("field"),
+    options: field.options ? [...field.options] : undefined,
+  };
+}
+
+const initialTemplate = getTemplateDefinition(defaultComposerTemplateKey);
+const initialFields = createTemplateFields(initialTemplate);
 
 function serializeDraft(
   title: string,
@@ -53,16 +113,27 @@ function serializeDraft(
   });
 }
 
-const INITIAL_DRAFT_SNAPSHOT = serializeDraft("", "", [createField()], "custom", false, true);
+const INITIAL_DRAFT_SNAPSHOT = serializeDraft(
+  initialTemplate.title,
+  initialTemplate.description,
+  initialFields,
+  initialTemplate.purpose,
+  false,
+  true,
+);
 
 export function FormBuilderPage() {
-  const { t } = useI18n();
+  const { fieldTypeLabel, t } = useI18n();
   const account = useCurrentAccount();
   const navigate = useNavigate();
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [fields, setFields] = useState<FormField[]>([createField()]);
-  const [purpose, setPurpose] = useState<FormPurpose>("custom");
+  const labelRefs = useRef<Record<string, HTMLInputElement | null>>({});
+  const publishRunRef = useRef(0);
+  const blobTypingTimerRef = useRef<number | null>(null);
+  const [selectedTemplateKey, setSelectedTemplateKey] = useState(defaultComposerTemplateKey);
+  const [title, setTitle] = useState(initialTemplate.title);
+  const [description, setDescription] = useState(initialTemplate.description);
+  const [fields, setFields] = useState<FormField[]>(initialFields);
+  const [purpose, setPurpose] = useState<FormPurpose>(initialTemplate.purpose);
   const [createOnSui, setCreateOnSui] = useState(false);
   const [encryptSubmissions, setEncryptSubmissions] = useState(true);
   const [savedForm, setSavedForm] = useState<FormSchema | null>(null);
@@ -70,13 +141,17 @@ export function FormBuilderPage() {
   const [saving, setSaving] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
   const [lastSavedSnapshot, setLastSavedSnapshot] = useState(INITIAL_DRAFT_SNAPSHOT);
-
-  useEffect(() => {
-    const onScroll = () => setIsScrolled(window.scrollY > 12);
-    onScroll();
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
-  }, []);
+  const [addMenuOpen, setAddMenuOpen] = useState(false);
+  const [activeFieldId, setActiveFieldId] = useState(initialFields[0]?.id ?? "");
+  const [draggedFieldId, setDraggedFieldId] = useState<string | null>(null);
+  const [pendingFocusFieldId, setPendingFocusFieldId] = useState(initialFields[0]?.id ?? "");
+  const [publishOverlayOpen, setPublishOverlayOpen] = useState(false);
+  const [publishStageIndex, setPublishStageIndex] = useState(0);
+  const [publishBlobId, setPublishBlobId] = useState("");
+  const [typedBlobId, setTypedBlobId] = useState("");
+  const [linkCopied, setLinkCopied] = useState(false);
+  const [blobCopied, setBlobCopied] = useState(false);
+  const [publishStorageMode, setPublishStorageMode] = useState<"walrus" | "local">("walrus");
 
   const draftSnapshot = useMemo(
     () => serializeDraft(title, description, fields, purpose, createOnSui, encryptSubmissions),
@@ -84,6 +159,41 @@ export function FormBuilderPage() {
   );
 
   const isDirty = draftSnapshot !== lastSavedSnapshot;
+  const hasValidTitle = Boolean(title.trim());
+  const hasQuestions = fields.length > 0;
+  const isReadyToPublish = hasValidTitle && hasQuestions;
+
+  useEffect(() => {
+    document.body.classList.add("composer-mode");
+    return () => document.body.classList.remove("composer-mode");
+  }, []);
+
+  useEffect(() => {
+    const onScroll = () => setIsScrolled(window.scrollY > 16);
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
+  useEffect(() => {
+    if (savedForm && draftSnapshot !== lastSavedSnapshot) {
+      setSavedForm(null);
+    }
+  }, [draftSnapshot, lastSavedSnapshot, savedForm]);
+
+  useEffect(() => {
+    if (!pendingFocusFieldId) {
+      return;
+    }
+    const node = labelRefs.current[pendingFocusFieldId];
+    if (!node) {
+      return;
+    }
+    node.focus();
+    node.select();
+    setActiveFieldId(pendingFocusFieldId);
+    setPendingFocusFieldId("");
+  }, [fields, pendingFocusFieldId]);
 
   useEffect(() => {
     const handleBeforeUnload = (event: BeforeUnloadEvent) => {
@@ -96,6 +206,51 @@ export function FormBuilderPage() {
     window.addEventListener("beforeunload", handleBeforeUnload);
     return () => window.removeEventListener("beforeunload", handleBeforeUnload);
   }, [isDirty]);
+
+  useEffect(() => {
+    const handleDuplicateShortcut = (event: KeyboardEvent) => {
+      if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== "d") {
+        return;
+      }
+      event.preventDefault();
+      duplicateFieldAt(activeFieldId);
+    };
+    window.addEventListener("keydown", handleDuplicateShortcut);
+    return () => window.removeEventListener("keydown", handleDuplicateShortcut);
+  }, [activeFieldId]);
+
+  useEffect(() => {
+    return () => {
+      if (blobTypingTimerRef.current) {
+        window.clearTimeout(blobTypingTimerRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (blobTypingTimerRef.current) {
+      window.clearTimeout(blobTypingTimerRef.current);
+      blobTypingTimerRef.current = null;
+    }
+    setTypedBlobId("");
+    if (!publishBlobId) {
+      return;
+    }
+    let cursor = 0;
+    const frame = () => {
+      cursor += 1;
+      setTypedBlobId(`BLOB://${publishBlobId.slice(0, cursor)}`);
+      if (cursor < publishBlobId.length) {
+        blobTypingTimerRef.current = window.setTimeout(frame, 28);
+      }
+    };
+    blobTypingTimerRef.current = window.setTimeout(frame, 140);
+    return () => {
+      if (blobTypingTimerRef.current) {
+        window.clearTimeout(blobTypingTimerRef.current);
+      }
+    };
+  }, [publishBlobId]);
 
   function confirmDiscardChanges() {
     if (!isDirty) {
@@ -111,23 +266,91 @@ export function FormBuilderPage() {
     navigate("/");
   }
 
-  function updateField(index: number, nextField: FormField) {
-    setFields((current) => current.map((field, idx) => (idx === index ? nextField : field)));
+  function replaceFields(nextFields: FormField[]) {
+    setFields(nextFields);
+    setActiveFieldId(nextFields[0]?.id ?? "");
+    setPendingFocusFieldId(nextFields[0]?.id ?? "");
   }
 
-  function applyTemplate(nextPurpose: FormPurpose) {
-    const template = getTemplateDefinition(nextPurpose);
-    setPurpose(normalizeFormPurpose(nextPurpose));
-    if (nextPurpose === "custom") {
-      setTitle("");
-      setDescription("");
-      setFields([createField()]);
+  function applyTemplate(templateKey: string) {
+    const template = getTemplateDefinition(templateKey);
+    const nextFields = createTemplateFields(template);
+    startTransition(() => {
+      setSelectedTemplateKey(template.key);
+      setPurpose(normalizeFormPurpose(template.purpose));
+      setTitle(template.title);
+      setDescription(template.description);
+      replaceFields(nextFields);
+      setAddMenuOpen(false);
+      setError("");
+    });
+  }
+
+  function updateField(index: number, nextField: FormField) {
+    setFields((current) => current.map((field, currentIndex) => (currentIndex === index ? nextField : field)));
+  }
+
+  function insertField(type: FieldType, afterIndex?: number) {
+    const nextField = createField(type);
+    setFields((current) => {
+      if (afterIndex === undefined || afterIndex < 0 || afterIndex >= current.length) {
+        return [...current, nextField];
+      }
+      const next = [...current];
+      next.splice(afterIndex + 1, 0, nextField);
+      return next;
+    });
+    setPendingFocusFieldId(nextField.id);
+    setActiveFieldId(nextField.id);
+    setAddMenuOpen(false);
+  }
+
+  function duplicateFieldAt(fieldId: string) {
+    if (!fieldId) {
       return;
     }
-    setTitle(template.title);
-    setDescription(template.description);
-    setFields(createTemplateFields(template));
-    setError("");
+    setFields((current) => {
+      const sourceIndex = current.findIndex((field) => field.id === fieldId);
+      if (sourceIndex === -1) {
+        return current;
+      }
+      const nextField = cloneField(current[sourceIndex]);
+      const next = [...current];
+      next.splice(sourceIndex + 1, 0, nextField);
+      setPendingFocusFieldId(nextField.id);
+      setActiveFieldId(nextField.id);
+      return next;
+    });
+  }
+
+  function removeField(fieldId: string) {
+    setFields((current) => {
+      if (current.length === 1) {
+        return current;
+      }
+      const next = current.filter((field) => field.id !== fieldId);
+      if (activeFieldId === fieldId) {
+        setActiveFieldId(next[0]?.id ?? "");
+      }
+      return next;
+    });
+  }
+
+  function reorderFields(sourceId: string, targetId: string) {
+    if (!sourceId || !targetId || sourceId === targetId) {
+      return;
+    }
+    setFields((current) => {
+      const sourceIndex = current.findIndex((field) => field.id === sourceId);
+      const targetIndex = current.findIndex((field) => field.id === targetId);
+      if (sourceIndex === -1 || targetIndex === -1) {
+        return current;
+      }
+      const next = [...current];
+      const [moved] = next.splice(sourceIndex, 1);
+      next.splice(targetIndex, 0, moved);
+      return next;
+    });
   }
 
   async function handleSubmit(event: FormEvent) {
@@ -150,7 +373,7 @@ export function FormBuilderPage() {
       fields.some(
         (field) =>
           (field.type === "dropdown" || field.type === "checkbox") &&
-          !(field.options ?? []).filter(Boolean).length,
+          !(field.options ?? []).map((option) => option.trim()).filter(Boolean).length,
       )
     ) {
       setError(t("errorFieldNeedsOption"));
@@ -161,7 +384,16 @@ export function FormBuilderPage() {
       return;
     }
 
+    const runId = publishRunRef.current + 1;
+    publishRunRef.current = runId;
     setSaving(true);
+    setPublishOverlayOpen(true);
+    setPublishStageIndex(0);
+    setPublishBlobId("");
+    setTypedBlobId("");
+    setLinkCopied(false);
+    setBlobCopied(false);
+    setPublishStorageMode("walrus");
     const form: FormSchema = {
       id: makeId("form"),
       title: title.trim(),
@@ -171,7 +403,7 @@ export function FormBuilderPage() {
         label: field.label.trim(),
         options:
           field.type === "dropdown" || field.type === "checkbox"
-            ? (field.options ?? []).filter(Boolean)
+            ? (field.options ?? []).map((option) => option.trim()).filter(Boolean)
             : undefined,
       })),
       purpose,
@@ -180,260 +412,475 @@ export function FormBuilderPage() {
       isOnchain: false,
       encryptSubmissions,
     };
+
     try {
+      setPublishStageIndex(0);
+      await wait(320);
+      if (publishRunRef.current !== runId) {
+        return;
+      }
+      setPublishStageIndex(1);
+      await wait(560);
+      if (publishRunRef.current !== runId) {
+        return;
+      }
+      setPublishStageIndex(2);
       const { blobId, manifestBlobId } = await storageAdapter.saveForm(form);
+      if (publishRunRef.current !== runId) {
+        return;
+      }
+      await wait(620);
+      setPublishStageIndex(3);
+      setPublishBlobId(blobId ?? "unresolved");
+      setPublishStorageMode(isLocalFallbackBlob(blobId) ? "local" : "walrus");
+      await wait(780);
+      if (publishRunRef.current !== runId) {
+        return;
+      }
+      setPublishStageIndex(4);
       setSavedForm({ ...form, blobId, manifestBlobId });
       setLastSavedSnapshot(draftSnapshot);
       setError("");
     } catch (submitError) {
+      setPublishOverlayOpen(false);
       setError(submitError instanceof Error ? submitError.message : t("saveFailed"));
     } finally {
       setSaving(false);
     }
   }
 
+  const questionTypes: FieldType[] = [
+    "shortText",
+    "longText",
+    "dropdown",
+    "checkbox",
+    "rating",
+    "screenshot",
+    "video",
+    "url",
+  ];
+
+  const steps = [
+    { key: "title", label: t("composerStepTitle"), done: hasValidTitle },
+    { key: "questions", label: t("composerStepQuestions"), done: hasQuestions },
+    { key: "publish", label: t("composerStepPublish"), done: Boolean(savedForm) },
+  ];
+
+  const publishChecks = savedForm
+    ? [
+        isLocalFallbackBlob(savedForm.blobId) ? t("signalStoredLocally") : t("signalStoredOnWalrus"),
+        t("publishChecklistBlob"),
+        t("publishChecklistInbox"),
+        ...(savedForm.manifestBlobId ? [t("publishChecklistManifest")] : []),
+      ]
+    : [];
+
+  const publicPath = savedForm ? `/f/${savedForm.id}` : "";
+  const publicUrl = savedForm && typeof window !== "undefined" ? `${window.location.origin}${publicPath}` : publicPath;
+
+  async function handleCopyLink() {
+    if (!publicUrl) {
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(publicUrl);
+      setLinkCopied(true);
+      window.setTimeout(() => setLinkCopied(false), 1800);
+    } catch (copyError) {
+      console.error(copyError);
+    }
+  }
+
+  async function handleCopyBlobId() {
+    if (!publishBlobId) {
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(publishBlobId);
+      setBlobCopied(true);
+      window.setTimeout(() => setBlobCopied(false), 1800);
+    } catch (copyError) {
+      console.error(copyError);
+    }
+  }
+
   return (
     <AdminAccessGate hasWallet={Boolean(account?.address)} access="allowed">
-      <section className="grid builder-layout">
-      <div className={`form-sticky-bar ${isScrolled ? "is-scrolled" : ""}`}>
-        <div className="form-sticky-inner">
-          <div className="form-sticky-brand">
+      <section className="composer-shell">
+        {publishOverlayOpen ? (
+          <div className="publish-overlay" role="dialog" aria-modal="true" aria-labelledby="publish-overlay-title">
+            <div className="publish-overlay-backdrop" onClick={() => (saving ? undefined : setPublishOverlayOpen(false))} />
+            <div className="publish-overlay-panel">
+              <div className="publish-overlay-noise" aria-hidden="true" />
+              <div className="publish-overlay-scanlines" aria-hidden="true" />
+              <div className="publish-overlay-particles" aria-hidden="true">
+                {Array.from({ length: 16 }).map((_, index) => (
+                  <span key={index} className={`publish-particle publish-particle-${(index % 4) + 1}`} />
+                ))}
+              </div>
+              <div className="publish-overlay-rings" aria-hidden="true">
+                <span />
+                <span />
+                <span />
+              </div>
+
+              <div className={`publish-signal-shell stage-${publishPhases[publishStageIndex]?.key ?? "encoding"}`}>
+                <div className="publish-signal-card">
+                  <span className="publish-signal-label">SIGNAL PAYLOAD</span>
+                  <strong>{title.trim() || t("untitledForm")}</strong>
+                  <p>{description.trim() || "No intro recorded."}</p>
+                  <div className="publish-signal-metrics">
+                    <span>{fields.length} nodes</span>
+                    <span>{encryptSubmissions ? "sealed" : "plain"}</span>
+                    <span>{purpose}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="publish-overlay-copy">
+                <p className="eyebrow">Deep Transit</p>
+                <h2 id="publish-overlay-title">Signal processing</h2>
+                <p className="muted publish-overlay-intro">
+                  The payload is being reduced, submerged, and fixed into the Walrus observation layer.
+                </p>
+              </div>
+
+              <div className="publish-terminal panel">
+                <div className="publish-terminal-header">
+                  <span>OBSERVATION // WALRUS UPLINK</span>
+                  <strong>{publishStageIndex >= 4 ? "PASSIVE WATCH" : "TRANSIT"}</strong>
+                </div>
+                <div className="publish-terminal-log" aria-live="polite">
+                  {publishPhases.map((phase, index) => {
+                    const state =
+                      index < publishStageIndex ? "done" : index === publishStageIndex ? "active" : "queued";
+                    return (
+                      <div key={phase.key} className={`publish-terminal-row is-${state}`}>
+                        <span>{phase.label}</span>
+                        <small>{state === "done" ? "complete" : state === "active" ? "in progress" : "queued"}</small>
+                      </div>
+                    );
+                  })}
+                </div>
+                <p className="publish-terminal-detail">{publishPhases[publishStageIndex]?.detail}</p>
+              </div>
+
+              <div className={`publish-blob-panel ${publishStageIndex >= 3 ? "is-visible" : ""}`}>
+                <p className="eyebrow">Blob Address</p>
+                <code className="publish-blob-id">{typedBlobId || "BLOB://........"}</code>
+                <div className="publish-blob-actions">
+                  <button
+                    type="button"
+                    className="ghost-button"
+                    onClick={() => void handleCopyBlobId()}
+                    disabled={publishStageIndex < 3 || !publishBlobId}
+                  >
+                    {blobCopied ? "Copied" : "Copy Blob ID"}
+                  </button>
+                  <span className="publish-storage-note">
+                    {publishStorageMode === "walrus" ? "Immutable Walrus blob confirmed." : "Stored locally. Walrus relay unavailable."}
+                  </span>
+                </div>
+              </div>
+
+              <div className={`publish-active-panel ${publishStageIndex >= 4 ? "is-visible" : ""}`}>
+                <div>
+                  <p className="eyebrow">Observation State</p>
+                  <h3>SIGNAL ACTIVE</h3>
+                  <p className="muted">The signal is now available for monitoring, routing, and review.</p>
+                </div>
+                <div className="publish-active-actions">
+                  <button type="button" className="primary-button" onClick={() => void handleCopyLink()}>
+                    {linkCopied ? "Copied Link" : "Copy Link"}
+                  </button>
+                  {savedForm ? (
+                    <>
+                      <Link className="ghost-button" to={`/dashboard/forms/${savedForm.id}`}>
+                        Open Dashboard
+                      </Link>
+                      <Link className="ghost-button" to={`/f/${savedForm.id}`}>
+                        View Signals
+                      </Link>
+                    </>
+                  ) : null}
+                  <button type="button" className="ghost-button" onClick={() => setPublishOverlayOpen(false)}>
+                    Close Monitor
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        <div className={`composer-toolbar panel ${isScrolled ? "is-scrolled" : ""}`}>
+          <div className="composer-toolbar-copy">
             <p className="eyebrow">{t("builderEyebrow")}</p>
-            <strong>DeepSignal</strong>
-            <span>{t("builderTitle")}</span>
+            <h1>{t("builderTitle")}</h1>
+            <p className="muted composer-intro">{t("composerIntro")}</p>
           </div>
 
-          <div className="sticky-form-title-preview">
-            <span className="muted">{t("formTitle")}</span>
-            <strong>{title.trim() || t("untitledForm")}</strong>
+          <div className="composer-stepper" aria-label="Composer steps">
+            {steps.map((step, index) => (
+              <div key={step.key} className={`composer-step ${step.done ? "is-done" : ""}`}>
+                <span>{index + 1}</span>
+                <strong>{step.label}</strong>
+              </div>
+            ))}
           </div>
 
-          <div className="form-sticky-actions">
-            <button
-              type="button"
-              className="ghost-button sticky-home-button"
-              onClick={handleNavigateHome}
-            >
+          <div className="composer-toolbar-actions">
+            <button type="button" className="ghost-button" onClick={handleNavigateHome}>
               {t("backToHome")}
             </button>
             {savedForm ? (
-              <Link className="ghost-button sticky-preview-button" to={`/f/${savedForm.id}`}>
-                {t("preview")}
+              <Link className="ghost-button" to={`/f/${savedForm.id}`}>
+                {t("openLiveForm")}
               </Link>
-            ) : (
-              <button type="button" className="ghost-button sticky-preview-button" disabled>
-                {t("preview")}
-              </button>
-            )}
-
-            <button
-              type="submit"
-              form="create-form"
-              className="primary-button sticky-create-button"
-              disabled={saving}
-            >
+            ) : null}
+            <button type="submit" form="create-form" className="primary-button" disabled={saving}>
               {saving ? t("builderSaving") : t("builderSave")}
             </button>
           </div>
         </div>
-      </div>
 
-      <div className="builder-form-stack">
-        <form id="create-form" className="panel glow-panel" onSubmit={handleSubmit}>
-          <div className="section-row">
-            <div>
-              <p className="eyebrow">{t("builderEyebrow")}</p>
-              <h1>{t("builderTitle")}</h1>
+        <form id="create-form" className="composer-stage" onSubmit={handleSubmit}>
+          <section className="panel glow-panel composer-hero-card">
+            <div className="composer-hero-copy">
+              <p className="eyebrow">{t("templateEyebrow")}</p>
+              <h2>{t("templateTitle")}</h2>
+              <p className="muted">{t("templateCustomBody")}</p>
             </div>
-            <button type="submit" className="primary-button" disabled={saving}>
-              {saving ? t("builderSaving") : t("builderSave")}
-            </button>
-          </div>
-
-          <label>
-            <span>{t("formTitle")}</span>
-            <input value={title} onChange={(event) => setTitle(event.target.value)} />
-          </label>
-
-          <label>
-            <span>{t("description")}</span>
-            <textarea
-              rows={4}
-              value={description}
-              onChange={(event) => setDescription(event.target.value)}
-              placeholder={t("builderDescriptionPlaceholder")}
-            />
-          </label>
-
-          <section className="panel field-editor">
-            <div className="section-row">
-              <div>
-                <p className="eyebrow">{t("templateEyebrow")}</p>
-                <h2>{t("templateTitle")}</h2>
-              </div>
-            </div>
-            <div className="card-grid template-grid">
+            <div className="composer-template-grid">
               {formTemplates.map((template) => {
-                const active = purpose === template.id;
+                const active = selectedTemplateKey === template.key;
                 return (
                   <button
-                    key={template.id}
+                    key={template.key}
                     type="button"
-                    className={`template-card ${active ? "is-active" : ""}`}
-                    onClick={() => applyTemplate(template.id)}
+                    className={`composer-template-card ${active ? "is-active" : ""}`}
+                    onClick={() => applyTemplate(template.key)}
                   >
-                    <strong>{template.label}</strong>
-                    <span className="muted">
-                      {template.id === "custom"
-                        ? t("templateCustomBody")
-                        : t("templateFieldCount", { count: template.fields.length })}
+                    <span className="composer-template-emoji" aria-hidden="true">
+                      {template.emoji}
                     </span>
+                    <strong>{template.label}</strong>
+                    <span className="muted">{template.description}</span>
                   </button>
                 );
               })}
             </div>
           </section>
 
-          <section className="panel field-editor sui-toggle-card">
+          <section className="panel composer-section-card">
             <div className="section-row">
               <div>
-                <p className="eyebrow">{t("suiCreateEyebrow")}</p>
-                <h2>{t("createOnSui")}</h2>
+                <p className="eyebrow">{t("composerStepTitle")}</p>
+                <h2>{title.trim() || t("untitledForm")}</h2>
               </div>
-              <label className="toggle">
-                <input
-                  type="checkbox"
-                  checked={createOnSui}
-                  onChange={(event) => setCreateOnSui(event.target.checked)}
-                />
-                <span>{createOnSui ? t("enabled") : t("disabled")}</span>
-              </label>
             </div>
-            <p className="muted">Sui registry integration placeholder.</p>
-            <p className="wallet-inline-note">
-              {t("formOwnerLabel")}: {account?.address ? shortAddress(account.address) : "Not connected"}
-            </p>
-          </section>
 
-          <section className="panel field-editor sui-toggle-card">
-            <div className="section-row">
-              <div>
-                <p className="eyebrow">{t("sealEyebrow")}</p>
-                <h2>{t("encryptSubmissions")}</h2>
-              </div>
-              <label className="toggle">
-                <input
-                  type="checkbox"
-                  checked={encryptSubmissions}
-                  onChange={(event) => setEncryptSubmissions(event.target.checked)}
-                />
-                <span>{encryptSubmissions ? t("enabled") : t("disabled")}</span>
-              </label>
-            </div>
-            <p className="muted">{t("encryptSubmissionsHelp")}</p>
-          </section>
+            <label>
+              <span>{t("formTitle")}</span>
+              <input value={title} onChange={(event) => setTitle(event.target.value)} />
+            </label>
 
-          <div className="section-row">
-            <h2>{t("fields")}</h2>
-            <button
-              type="button"
-              className="ghost-button"
-              onClick={() => setFields((current) => [...current, createField()])}
-            >
-              {t("addField")}
-            </button>
-          </div>
-
-          <div className="stack">
-            {fields.map((field, index) => (
-              <FormFieldEditor
-                key={field.id}
-                field={field}
-                index={index}
-                canMoveUp={index > 0}
-                canMoveDown={index < fields.length - 1}
-                onChange={(nextField) => updateField(index, nextField)}
-                onRemove={() =>
-                  setFields((current) =>
-                    current.length === 1
-                      ? current
-                      : current.filter((item) => item.id !== field.id),
-                  )
-                }
-                onMoveUp={() =>
-                  setFields((current) => {
-                    const next = [...current];
-                    [next[index - 1], next[index]] = [next[index], next[index - 1]];
-                    return next;
-                  })
-                }
-                onMoveDown={() =>
-                  setFields((current) => {
-                    const next = [...current];
-                    [next[index + 1], next[index]] = [next[index], next[index + 1]];
-                    return next;
-                  })
-                }
+            <label>
+              <span>{t("description")}</span>
+              <textarea
+                rows={3}
+                value={description}
+                onChange={(event) => setDescription(event.target.value)}
+                placeholder={t("builderDescriptionPlaceholder")}
               />
-            ))}
-          </div>
+            </label>
+          </section>
 
-          {error ? <p className="error-text">{error}</p> : null}
-          <div className="builder-bottom-actions">
-            <button
-              type="submit"
-              className="primary-button builder-bottom-submit"
-              disabled={saving}
-            >
-              {saving ? t("builderSaving") : t("builderSave")}
-            </button>
-          </div>
+          <section className="panel composer-section-card">
+            <div className="section-row composer-question-header">
+              <div>
+                <p className="eyebrow">{t("composerStepQuestions")}</p>
+                <h2>{t("fields")}</h2>
+                <p className="muted">{t("questionCount", { count: fields.length })}</p>
+              </div>
+
+              <div className="add-question-wrap">
+                <button
+                  type="button"
+                  className="ghost-button add-question-trigger"
+                  onClick={() => setAddMenuOpen((current) => !current)}
+                >
+                  {t("addQuestion")}
+                </button>
+                {addMenuOpen ? (
+                  <div className="add-question-menu panel">
+                    {questionTypes.map((type) => (
+                      <button
+                        key={type}
+                        type="button"
+                        className="add-question-option"
+                        onClick={() => insertField(type)}
+                      >
+                        {fieldTypeLabel(type)}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            </div>
+
+            <div className="stack composer-question-stack">
+              {fields.map((field, index) => (
+                <FormFieldEditor
+                  key={field.id}
+                  field={field}
+                  index={index}
+                  isDragging={draggedFieldId === field.id}
+                  labelRef={(node) => {
+                    labelRefs.current[field.id] = node;
+                  }}
+                  onChange={(nextField) => updateField(index, nextField)}
+                  onRemove={() => removeField(field.id)}
+                  onDuplicate={() => duplicateFieldAt(field.id)}
+                  onAddBelow={() => insertField(field.type, index)}
+                  onFocus={() => setActiveFieldId(field.id)}
+                  onDragStart={(event: DragEvent<HTMLElement>) => {
+                    event.dataTransfer.effectAllowed = "move";
+                    setDraggedFieldId(field.id);
+                  }}
+                  onDragOver={(event: DragEvent<HTMLElement>) => {
+                    event.preventDefault();
+                    event.dataTransfer.dropEffect = "move";
+                  }}
+                  onDrop={(event: DragEvent<HTMLElement>) => {
+                    event.preventDefault();
+                    if (draggedFieldId) {
+                      reorderFields(draggedFieldId, field.id);
+                    }
+                    setDraggedFieldId(null);
+                  }}
+                />
+              ))}
+            </div>
+
+            <div className="composer-question-footer">
+              <button type="button" className="ghost-button" onClick={() => setAddMenuOpen(true)}>
+                {t("addQuestion")}
+              </button>
+              <p className="muted composer-shortcut-note">{t("shortcutHint")}</p>
+            </div>
+          </section>
+
+          <section className="panel composer-section-card composer-publish-panel">
+            <div className="section-row">
+              <div>
+                <p className="eyebrow">{t("composerStepPublish")}</p>
+                <h2>{savedForm ? t("formPublished") : t("publishReadyTitle")}</h2>
+                <p className="muted">
+                  {savedForm ? t("signalStoredOnWalrus") : t("publishReadyBody")}
+                </p>
+              </div>
+              <button type="submit" className="primary-button" disabled={saving || !isReadyToPublish}>
+                {saving ? t("builderSaving") : t("builderSave")}
+              </button>
+            </div>
+
+            <p className="wallet-inline-note">
+              {t("formOwnerLabel")}: {account?.address ? shortAddress(account.address) : t("walletPublishHint")}
+            </p>
+
+            <details className="composer-advanced-settings">
+              <summary>{t("advanced")}</summary>
+              <div className="stack composer-advanced-grid">
+                <section className="panel composer-settings-card">
+                  <div className="section-row">
+                    <div>
+                      <p className="eyebrow">{t("sealEyebrow")}</p>
+                      <h3>{t("encryptSubmissions")}</h3>
+                    </div>
+                    <label className="toggle">
+                      <input
+                        type="checkbox"
+                        checked={encryptSubmissions}
+                        onChange={(event) => setEncryptSubmissions(event.target.checked)}
+                      />
+                      <span>{encryptSubmissions ? t("enabled") : t("disabled")}</span>
+                    </label>
+                  </div>
+                  <p className="muted">{t("encryptSubmissionsHelp")}</p>
+                </section>
+
+                <section className="panel composer-settings-card">
+                  <div className="section-row">
+                    <div>
+                      <p className="eyebrow">{t("suiCreateEyebrow")}</p>
+                      <h3>{t("createOnSui")}</h3>
+                    </div>
+                    <label className="toggle">
+                      <input
+                        type="checkbox"
+                        checked={createOnSui}
+                        onChange={(event) => setCreateOnSui(event.target.checked)}
+                      />
+                      <span>{createOnSui ? t("enabled") : t("disabled")}</span>
+                    </label>
+                  </div>
+                  <p className="muted">{t("createOnSuiHelp")}</p>
+                </section>
+              </div>
+            </details>
+
+            {error ? <p className="error-text">{error}</p> : null}
+
+            {savedForm ? (
+              <div className="success-card composer-success-card">
+                <div className="composer-success-header">
+                  <div>
+                    <p className="eyebrow">Observation Relay</p>
+                    <h3>SIGNAL ACTIVE</h3>
+                    <p className="muted">
+                      {isLocalFallbackBlob(savedForm.blobId) ? t("signalStoredLocally") : t("signalStoredOnWalrus")}
+                    </p>
+                  </div>
+                  <span className="composer-live-pill">Observing</span>
+                </div>
+
+                <div className="composer-publish-checks">
+                  {publishChecks.map((check) => (
+                    <p key={check}>{check}</p>
+                  ))}
+                </div>
+
+                <div className="composer-link-grid">
+                  <p>
+                    {t("publicShareLink")}: <Link to={`/f/${savedForm.id}`}>/f/{savedForm.id}</Link>
+                  </p>
+                  <p>
+                    {t("adminPage")}: <Link to={`/dashboard/forms/${savedForm.id}`}>{t("adminPageCta")}</Link>
+                  </p>
+                  <p>
+                    {t("walrusBlobId")}: {savedForm.blobId}
+                  </p>
+                  <BlobLink blobId={savedForm.blobId} />
+                  {savedForm.manifestBlobId ? (
+                    <>
+                      <p>
+                        Manifest Blob ID: {savedForm.manifestBlobId}
+                      </p>
+                      <BlobLink blobId={savedForm.manifestBlobId} label="Verify manifest on Walrus" />
+                      <p>
+                        {t("restoreLink")}: <Link to={`/m/${savedForm.manifestBlobId}`}>/m/{savedForm.manifestBlobId}</Link>
+                      </p>
+                    </>
+                  ) : null}
+                </div>
+
+                <ShareCard formId={savedForm.id} blobId={savedForm.blobId} createdAt={savedForm.createdAt} />
+              </div>
+            ) : (
+              <p className="muted">{t("saveFormHint")}</p>
+            )}
+          </section>
         </form>
-      </div>
-
-      <aside className="panel">
-        <p className="eyebrow">{t("walrusPreview")}</p>
-        <h2>{t("deploymentNotes")}</h2>
-        <ul className="feature-list">
-          <li>{t("deploymentNote1")}</li>
-          <li>{t("deploymentNote2")}</li>
-          <li>{t("deploymentNote3")}</li>
-        </ul>
-
-        {savedForm ? (
-          <div className="success-card">
-            <h3>{t("formPublished")}</h3>
-            <p>
-              {t("publicShareLink")}: <Link to={`/f/${savedForm.id}`}>/f/{savedForm.id}</Link>
-            </p>
-            <p>
-              {t("adminPage")}:{" "}
-              <Link to={`/dashboard/forms/${savedForm.id}`}>{t("adminPageCta")}</Link>
-            </p>
-            <p>
-              {t("walrusBlobId")}: {savedForm.blobId}
-            </p>
-            <BlobLink blobId={savedForm.blobId} />
-            <p>
-              Manifest Blob ID: {savedForm.manifestBlobId ?? "Not available"}
-            </p>
-            <BlobLink blobId={savedForm.manifestBlobId} label="Verify manifest on Walrus" />
-            <p>
-              Restore URL:{" "}
-              {savedForm.manifestBlobId ? (
-                <Link to={`/m/${savedForm.manifestBlobId}`}>/m/{savedForm.manifestBlobId}</Link>
-              ) : (
-                "Not available"
-              )}
-            </p>
-            <p className="warning-text">Manifest links are recovery links, not access control.</p>
-            <p className="warning-text">Do not publicly share private inbox manifest links.</p>
-            <ShareCard formId={savedForm.id} />
-          </div>
-        ) : (
-            <p className="muted">{t("saveFormHint")}</p>
-          )}
-        </aside>
       </section>
     </AdminAccessGate>
   );
