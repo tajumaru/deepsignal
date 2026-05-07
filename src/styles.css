@@ -103,14 +103,6 @@ button {
   margin: 0 auto;
 }
 
-.app-footer {
-  margin: 0 1rem 1rem;
-  display: flex;
-  justify-content: space-between;
-  gap: 1rem;
-  flex-wrap: wrap;
-}
-
 .panel {
   background: var(--panel);
   border: 1px solid var(--line);
@@ -1498,18 +1490,6 @@ body.composer-mode .bg-orb {
 .composer-advanced-settings summary {
   cursor: pointer;
   color: var(--accent-strong);
-}
-
-.composer-question-footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  flex-wrap: wrap;
-}
-
-.composer-shortcut-note {
-  margin: 0;
 }
 
 .composer-advanced-grid {

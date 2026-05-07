@@ -762,12 +762,6 @@ export function FormBuilderPage() {
               ))}
             </div>
 
-            <div className="composer-question-footer">
-              <button type="button" className="ghost-button" onClick={() => setAddMenuOpen(true)}>
-                {t("addQuestion")}
-              </button>
-              <p className="muted composer-shortcut-note">{t("shortcutHint")}</p>
-            </div>
           </section>
 
           <section className="panel composer-section-card composer-publish-panel">

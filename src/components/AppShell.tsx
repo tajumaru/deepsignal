@@ -1,22 +1,10 @@
 import { Link, NavLink } from "react-router-dom";
-import { useEffect, useState, type PropsWithChildren } from "react";
+import { type PropsWithChildren } from "react";
 import { WalletConnect } from "./WalletConnect";
 import { useI18n } from "../i18n";
-import {
-  getStorageRuntimeStatus,
-  subscribeStorageRuntime,
-} from "../storage/storageFactory";
 
 export function AppShell({ children }: PropsWithChildren) {
   const { language, setLanguage, t } = useI18n();
-  const [storageStatus, setStorageStatus] = useState(getStorageRuntimeStatus());
-
-  useEffect(() => {
-    const unsubscribe = subscribeStorageRuntime(() => setStorageStatus(getStorageRuntimeStatus()));
-    return () => {
-      unsubscribe();
-    };
-  }, []);
 
   return (
     <div className="app-shell">
@@ -50,20 +38,6 @@ export function AppShell({ children }: PropsWithChildren) {
         </div>
       </header>
       <main className="page-wrap">{children}</main>
-      <footer className="app-footer panel">
-        {storageStatus.mode === "walrus" ? (
-          <p>
-            {t("storageLabel")}: {t("storageWalrus")}
-          </p>
-        ) : (
-          <div>
-            <p>{t("storedLocallyOnly")}</p>
-            <p>{t("walrusFailedOrNotConfigured")}</p>
-            <p>{t("demoLocalFallbackData")}</p>
-          </div>
-        )}
-        {storageStatus.notice ? <p className="warning-text">{storageStatus.notice}</p> : null}
-      </footer>
     </div>
   );
 }
