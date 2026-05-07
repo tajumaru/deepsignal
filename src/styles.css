@@ -234,6 +234,229 @@ button {
   padding-top: 2rem;
 }
 
+.landing-shell {
+  display: grid;
+  gap: 1.25rem;
+}
+
+.landing-hero {
+  align-items: stretch;
+}
+
+.landing-copy {
+  position: relative;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at top left, rgba(103, 232, 249, 0.18), transparent 30%),
+    linear-gradient(180deg, rgba(7, 24, 40, 0.92), rgba(5, 18, 32, 0.88));
+}
+
+.landing-copy::after,
+.signal-visual-panel::after {
+  content: "";
+  position: absolute;
+  inset: 1px;
+  border-radius: inherit;
+  pointer-events: none;
+  border: 1px solid rgba(180, 248, 255, 0.08);
+}
+
+.landing-tagline {
+  margin-bottom: 0.75rem;
+  font-size: clamp(1.1rem, 2vw, 1.4rem);
+  color: #b8f7ff;
+}
+
+.signal-stat-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.85rem;
+  margin-top: 1.5rem;
+}
+
+.signal-stat-card {
+  padding: 0.95rem 1rem;
+  border-radius: 20px;
+  background: rgba(7, 28, 47, 0.58);
+  border: 1px solid rgba(116, 226, 255, 0.14);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.signal-stat-card span,
+.signal-readout span,
+.feature-card p {
+  color: var(--text-soft);
+}
+
+.signal-stat-card span {
+  display: block;
+  margin-bottom: 0.25rem;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+}
+
+.signal-stat-card strong {
+  font-size: 1.15rem;
+  color: #f0fdff;
+}
+
+.signal-visual-panel {
+  position: relative;
+  overflow: hidden;
+  min-height: 100%;
+  background:
+    radial-gradient(circle at top, rgba(102, 227, 255, 0.18), transparent 28%),
+    linear-gradient(180deg, rgba(4, 20, 35, 0.92), rgba(3, 14, 26, 0.92));
+}
+
+.signal-visual {
+  position: relative;
+  min-height: 420px;
+  border-radius: 24px;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at center, rgba(8, 45, 68, 0.9), rgba(3, 14, 26, 0.65) 55%, rgba(3, 14, 26, 0.98)),
+    linear-gradient(180deg, rgba(1, 12, 22, 0.4), rgba(1, 12, 22, 0.1));
+}
+
+.signal-grid,
+.signal-sweep,
+.signal-ring,
+.signal-core,
+.signal-waveform,
+.signal-dot,
+.signal-readout {
+  position: absolute;
+}
+
+.signal-grid {
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(111, 243, 255, 0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(111, 243, 255, 0.08) 1px, transparent 1px);
+  background-size: 46px 46px;
+  mask-image: radial-gradient(circle at center, black 42%, transparent 88%);
+}
+
+.signal-ring {
+  top: 50%;
+  left: 50%;
+  border-radius: 50%;
+  border: 1px solid rgba(107, 239, 255, 0.22);
+  transform: translate(-50%, -50%);
+  box-shadow: 0 0 28px rgba(102, 227, 255, 0.06);
+}
+
+.signal-ring-a {
+  width: 180px;
+  height: 180px;
+}
+
+.signal-ring-b {
+  width: 280px;
+  height: 280px;
+}
+
+.signal-ring-c {
+  width: 380px;
+  height: 380px;
+}
+
+.signal-sweep {
+  top: 50%;
+  left: 50%;
+  width: 190px;
+  height: 190px;
+  transform: translate(-50%, -50%);
+  transform-origin: center;
+  border-radius: 50%;
+  background: conic-gradient(from 0deg, rgba(117, 255, 220, 0.32), rgba(102, 227, 255, 0.02) 22%, transparent 32%);
+  filter: blur(0.5px);
+  animation: signalSweep 6s linear infinite;
+}
+
+.signal-core {
+  top: 50%;
+  left: 50%;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  background: #7df9ff;
+  box-shadow: 0 0 22px rgba(125, 249, 255, 0.9);
+}
+
+.signal-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: rgba(160, 249, 255, 0.95);
+  box-shadow: 0 0 14px rgba(125, 249, 255, 0.7);
+  animation: signalPulse 2.8s ease-in-out infinite;
+}
+
+.signal-dot-a {
+  top: 28%;
+  left: 26%;
+}
+
+.signal-dot-b {
+  top: 22%;
+  right: 26%;
+  animation-delay: 0.9s;
+}
+
+.signal-dot-c {
+  bottom: 24%;
+  left: 32%;
+  animation-delay: 1.6s;
+}
+
+.signal-dot-d {
+  bottom: 20%;
+  right: 22%;
+  animation-delay: 0.45s;
+}
+
+.signal-waveform {
+  right: -2%;
+  bottom: 7%;
+  width: 78%;
+  height: auto;
+  opacity: 0.95;
+}
+
+.signal-waveform path {
+  fill: none;
+  stroke: rgba(140, 250, 255, 0.95);
+  stroke-width: 3.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  filter: drop-shadow(0 0 12px rgba(102, 227, 255, 0.28));
+  stroke-dasharray: 100;
+  stroke-dashoffset: 0;
+  animation: signalWave 4.8s ease-in-out infinite;
+}
+
+.signal-readout {
+  left: 1.25rem;
+  right: 1.25rem;
+  bottom: 1.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.95rem 1rem;
+  border-radius: 18px;
+  background: rgba(6, 26, 42, 0.66);
+  border: 1px solid rgba(116, 226, 255, 0.16);
+}
+
+.signal-readout strong {
+  color: #effcff;
+}
+
 .builder-layout,
 .detail-layout,
 .public-layout {
@@ -357,6 +580,78 @@ h2 {
 
 .feature-panel {
   align-self: stretch;
+}
+
+.landing-feature-grid {
+  align-items: stretch;
+}
+
+.feature-card {
+  position: relative;
+  overflow: hidden;
+  min-height: 220px;
+  background:
+    radial-gradient(circle at top right, rgba(103, 232, 249, 0.12), transparent 28%),
+    rgba(7, 24, 40, 0.78);
+  transition:
+    transform 180ms ease,
+    border-color 180ms ease,
+    box-shadow 180ms ease;
+}
+
+.feature-card:hover {
+  transform: translateY(-4px);
+  border-color: rgba(135, 244, 255, 0.32);
+  box-shadow:
+    0 0 0 1px rgba(149, 242, 255, 0.08),
+    0 12px 30px rgba(0, 0, 0, 0.22);
+}
+
+.feature-icon {
+  width: 3.2rem;
+  height: 3.2rem;
+  margin-bottom: 1rem;
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at 35% 35%, rgba(184, 247, 255, 0.9), transparent 24%),
+    linear-gradient(135deg, rgba(14, 165, 198, 0.32), rgba(59, 130, 246, 0.18));
+  border: 1px solid rgba(149, 242, 255, 0.2);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
+}
+
+.landing-lower-grid {
+  display: grid;
+  grid-template-columns: minmax(280px, 0.9fr) minmax(0, 1.1fr);
+  gap: 1rem;
+}
+
+.landing-empty-state,
+.landing-info-card {
+  position: relative;
+  overflow: hidden;
+}
+
+.landing-empty-state {
+  background:
+    radial-gradient(circle at top, rgba(103, 232, 249, 0.14), transparent 32%),
+    linear-gradient(180deg, rgba(7, 24, 40, 0.92), rgba(5, 18, 32, 0.88));
+}
+
+.landing-empty-state p:last-of-type {
+  margin-bottom: 1.4rem;
+}
+
+.landing-info-card {
+  background:
+    radial-gradient(circle at top right, rgba(74, 222, 255, 0.1), transparent 28%),
+    rgba(7, 24, 40, 0.78);
+}
+
+.info-pills {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-top: 1rem;
 }
 
 .form-sticky-inner {
@@ -1007,6 +1302,39 @@ textarea {
   background: rgba(248, 113, 113, 0.18);
 }
 
+@keyframes signalSweep {
+  from {
+    transform: translate(-50%, -50%) rotate(0deg);
+  }
+  to {
+    transform: translate(-50%, -50%) rotate(360deg);
+  }
+}
+
+@keyframes signalPulse {
+  0%,
+  100% {
+    opacity: 0.5;
+    transform: scale(0.9);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.2);
+  }
+}
+
+@keyframes signalWave {
+  0%,
+  100% {
+    stroke-dashoffset: 100;
+    opacity: 0.55;
+  }
+  50% {
+    stroke-dashoffset: 0;
+    opacity: 1;
+  }
+}
+
 .save-state-pill {
   display: inline-flex;
   align-items: center;
@@ -1157,7 +1485,9 @@ textarea {
   .inbox-layout,
   .detail-shell,
   .inbox-topline,
-  .roadmap-group-grid {
+  .roadmap-group-grid,
+  .landing-lower-grid,
+  .signal-stat-row {
     grid-template-columns: 1fr;
   }
 
@@ -1189,6 +1519,10 @@ textarea {
 
   .signal-list {
     max-height: none;
+  }
+
+  .signal-visual {
+    min-height: 360px;
   }
 }
 
@@ -1260,6 +1594,16 @@ textarea {
   .builder-bottom-submit {
     min-height: 3.5rem;
   }
+
+  .signal-readout {
+    display: grid;
+    justify-content: stretch;
+  }
+
+  .signal-waveform {
+    width: 92%;
+    right: -12%;
+  }
 }
 
 @media (max-width: 768px) {
@@ -1277,5 +1621,19 @@ textarea {
 
   .signal-console-layout {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .feature-card,
+  .signal-sweep,
+  .signal-dot,
+  .signal-waveform path {
+    animation: none;
+    transition: none;
+  }
+
+  .feature-card:hover {
+    transform: none;
   }
 }
