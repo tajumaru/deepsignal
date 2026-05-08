@@ -11,6 +11,7 @@ export type FieldType =
 export type FormPurpose = "bug" | "feature" | "survey" | "custom";
 export type SubmissionCategory = "bug" | "feature" | "survey" | "general";
 export type SubmissionPriority = "low" | "medium" | "high";
+export type SignalSeverity = "low" | "medium" | "high";
 export type SubmissionTriageStatus =
   | "new"
   | "investigating"
@@ -79,7 +80,14 @@ export interface Submission {
   formId: string;
   answers: Record<string, unknown>;
   attachments: SubmissionAttachment[];
+  metadata?: Record<string, unknown>;
   category?: SubmissionCategory;
+  aiSummary?: string;
+  severity?: SignalSeverity;
+  emotion?: string;
+  keywords?: string[];
+  embedding?: number[];
+  clusterId?: string;
   status: "unread" | "read" | "archived";
   priority: SubmissionPriority;
   triageStatus: SubmissionTriageStatus;
@@ -97,6 +105,7 @@ export interface Submission {
   subjectPreview?: string;
   ratingValue?: number;
   createdAt: string;
+  updatedAt: string;
   blobId?: string;
 }
 

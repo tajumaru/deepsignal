@@ -7,6 +7,7 @@ import { BlobLink } from "../components/BlobLink";
 import { EmptyState } from "../components/EmptyState";
 import { SealStatusCard } from "../components/SealStatusCard";
 import { ShareCard } from "../components/ShareCard";
+import { SignalClusterPanel } from "../components/SignalClusterPanel";
 import { SignalMetaChip, SignalMetaRow } from "../components/SignalMetaChip";
 import { getSealRuntimeStatus } from "../crypto/cryptoFactory";
 import { useAccessControl } from "../hooks/useAccessControl";
@@ -270,12 +271,16 @@ export function AdminDashboardPage() {
   }
 
   async function updateSubmission(nextSubmission: Submission) {
-    applySubmissionUpdate(nextSubmission);
-    setSelectedSignalId(nextSubmission.id);
+    const normalized = normalizeSubmission({
+      ...nextSubmission,
+      updatedAt: new Date().toISOString(),
+    });
+    applySubmissionUpdate(normalized);
+    setSelectedSignalId(normalized.id);
     const runSave = async () => {
       setSaving(true);
       try {
-        await storageAdapter.updateSubmission(nextSubmission);
+        await storageAdapter.updateSubmission(normalized);
       } finally {
         setSaving(false);
       }
@@ -359,6 +364,22 @@ export function AdminDashboardPage() {
   const selectedForm = accessibleForms.find((form) => form.id === selectedFormId) ?? null;
   const selectedBeaconForm =
     accessibleForms.find((form) => form.id === beaconFormId) ?? null;
+  const formById = useMemo(
+    () =>
+      Object.fromEntries(accessibleForms.map((form) => [form.id, form])) as Record<
+        string,
+        FormSchema | undefined
+      >,
+    [accessibleForms],
+  );
+  const formTitleById = useMemo(
+    () =>
+      Object.fromEntries(accessibleForms.map((form) => [form.id, form.title])) as Record<
+        string,
+        string | undefined
+      >,
+    [accessibleForms],
+  );
 
   const nodeDirectoryItems = useMemo(() => {
     const normalizedSearch = nodeSearch.trim().toLowerCase();
@@ -545,6 +566,9 @@ export function AdminDashboardPage() {
                         <p className="signal-card-preview">{getSignalPreview(submission)}</p>
                         <div className="signal-badge-row">
                           <span className="signal-chip">{category}</span>
+                          {submission.severity ? (
+                            <span className="signal-chip">Severity {submission.severity}</span>
+                          ) : null}
                           {submission.contributorId ? (
                             <SignalMetaChip type="contributor" value={submission.contributorId} />
                           ) : null}
@@ -560,6 +584,9 @@ export function AdminDashboardPage() {
                             <span className="signal-chip signal-chip-accent">
                               {t("encryptedSignalLabel")}
                             </span>
+                          ) : null}
+                          {submission.clusterId ? (
+                            <span className="signal-chip signal-chip-accent">Clustered</span>
                           ) : null}
                           <span className="signal-chip">{storageLabel}</span>
                           {submission.status === "unread" ? (
@@ -624,6 +651,9 @@ export function AdminDashboardPage() {
                       {selectedRecord.submission.priority}
                     </span>
                     <span className="pill">{selectedRecord.category}</span>
+                    <span className="pill">
+                      Severity {selectedRecord.submission.severity ?? "medium"}
+                    </span>
                     <span className="pill">
                       {t("ratingLabel", {
                         value: selectedRecord.submission.ratingValue ?? t("notAvailable"),
@@ -705,6 +735,16 @@ export function AdminDashboardPage() {
                         </div>
                       )}
                     </section>
+
+                    <SignalClusterPanel
+                      selectedSubmission={selectedRecord.submission}
+                      submissions={allSignals.map((record) => record.submission)}
+                      formById={formById}
+                      formTitleById={formTitleById}
+                      busy={saving}
+                      onSelectSignal={(submissionId) => setSelectedSignalId(submissionId)}
+                      onSaveSubmission={updateSubmission}
+                    />
 
                     <section className="answer-card">
                       <h3>{t("reviewControlsTitle")}</h3>

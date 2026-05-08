@@ -4,6 +4,7 @@ import {
   inferPriorityFromTemplateAnswers,
   normalizeFormPurpose,
 } from "./formTemplates";
+import { enrichSubmissionWithTriage } from "./signalTriage";
 import { storage } from "../storage/storageFactory";
 import type { FormField, FormSchema, FormSection, SealAdapter, StorageAdapter, Submission } from "../types";
 
@@ -127,6 +128,13 @@ function coerceSignalValue(signalValue: unknown): Submission["signalValue"] {
   return Math.round(value);
 }
 
+function coerceSeverity(severity: unknown): Submission["severity"] {
+  if (severity === "low" || severity === "medium" || severity === "high") {
+    return severity;
+  }
+  return undefined;
+}
+
 export function normalizeSubmission(raw: Submission | (Record<string, unknown> & { id: string; formId: string; createdAt: string })) {
   const legacyNotes = Array.isArray(raw.notes)
     ? raw.notes
@@ -150,10 +158,20 @@ export function normalizeSubmission(raw: Submission | (Record<string, unknown> &
     formId: raw.formId,
     answers: typeof raw.answers === "object" && raw.answers ? (raw.answers as Record<string, unknown>) : {},
     attachments: Array.isArray(raw.attachments) ? raw.attachments : [],
+    metadata: typeof raw.metadata === "object" && raw.metadata ? (raw.metadata as Record<string, unknown>) : undefined,
     category:
       raw.category === "bug" || raw.category === "feature" || raw.category === "survey" || raw.category === "general"
         ? raw.category
         : "general",
+    aiSummary: typeof raw.aiSummary === "string" ? raw.aiSummary : undefined,
+    severity: coerceSeverity(raw.severity),
+    emotion: typeof raw.emotion === "string" ? raw.emotion : undefined,
+    keywords: Array.isArray(raw.keywords) ? raw.keywords.map(String).filter(Boolean) : undefined,
+    embedding:
+      Array.isArray(raw.embedding) && raw.embedding.every((value) => typeof value === "number")
+        ? raw.embedding
+        : undefined,
+    clusterId: typeof raw.clusterId === "string" ? raw.clusterId : undefined,
     status: coerceStatus(raw.status),
     priority: coercePriority(raw.priority),
     triageStatus: coerceTriageStatus(raw.triageStatus),
@@ -176,6 +194,7 @@ export function normalizeSubmission(raw: Submission | (Record<string, unknown> &
           ? Number(raw.ratingValue)
           : undefined,
     createdAt: raw.createdAt,
+    updatedAt: typeof raw.updatedAt === "string" ? raw.updatedAt : raw.createdAt,
     blobId: typeof raw.blobId === "string" ? raw.blobId : undefined,
   } satisfies Submission;
 }
@@ -279,7 +298,9 @@ export async function saveSubmissionWithEncryption(
     githubPrUrl: typeof submission.githubPrUrl === "string" ? submission.githubPrUrl.trim() || undefined : undefined,
     subjectPreview: getSubjectPreview(form, submission.answers),
     ratingValue: getRatingValue(form, submission.answers),
+    updatedAt: submission.updatedAt ?? submission.createdAt,
   };
+  const triagedSubmission = enrichSubmissionWithTriage(form, baseSubmission);
 
   if (form.encryptSubmissions) {
     const payload = JSON.stringify({
@@ -289,7 +310,7 @@ export async function saveSubmissionWithEncryption(
     const encryptedPayload = await seal.encrypt(payload);
     const { blobId: encryptedBlobId } = await targetStorage.saveEncryptedPayload(encryptedPayload);
     const metadataSubmission: Submission = {
-      ...baseSubmission,
+      ...triagedSubmission,
       answers: {},
       isEncrypted: true,
       encryptedBlobId,
@@ -300,7 +321,7 @@ export async function saveSubmissionWithEncryption(
 
   const answers = await encryptSensitiveAnswers(form, submission.answers, seal);
   const standardSubmission: Submission = {
-    ...baseSubmission,
+    ...triagedSubmission,
     answers,
     isEncrypted: false,
     encryptedBlobId: undefined,

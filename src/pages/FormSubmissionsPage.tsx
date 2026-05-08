@@ -5,6 +5,7 @@ import { AdminAccessGate } from "../components/AdminAccessGate";
 import { BlobLink } from "../components/BlobLink";
 import { EmptyState } from "../components/EmptyState";
 import { SealStatusCard } from "../components/SealStatusCard";
+import { SignalClusterPanel } from "../components/SignalClusterPanel";
 import { SignalMetaChip, SignalMetaRow } from "../components/SignalMetaChip";
 import { useAccessControl } from "../hooks/useAccessControl";
 import { getSealRuntimeStatus } from "../crypto/cryptoFactory";
@@ -174,7 +175,10 @@ export function FormSubmissionsPage() {
   }
 
   async function updateSubmission(nextSubmission: Submission) {
-    const normalized = normalizeSubmission(nextSubmission);
+    const normalized = normalizeSubmission({
+      ...nextSubmission,
+      updatedAt: new Date().toISOString(),
+    });
     applySubmissionUpdate(normalized);
     setSelectedSignalId(normalized.id);
     setSaveState("saving");
@@ -282,6 +286,10 @@ export function FormSubmissionsPage() {
     {
       label: "Fixed",
       value: submissions.filter((submission) => submission.triageStatus === "fixed").length,
+    },
+    {
+      label: "Clustered",
+      value: submissions.filter((submission) => Boolean(submission.clusterId)).length,
     },
     {
       label: "High value signals",
@@ -476,6 +484,14 @@ export function FormSubmissionsPage() {
                       <div className="signal-badge-row">
                         <span className="signal-chip">{category}</span>
                         <span className="signal-chip">{getTriageStatusLabel(submission.triageStatus)}</span>
+                        {submission.severity ? (
+                          <span className="signal-chip">Severity {submission.severity}</span>
+                        ) : null}
+                        {submission.clusterId ? (
+                          <span className="signal-chip signal-chip-accent">
+                            Clustered
+                          </span>
+                        ) : null}
                         {submission.contributorId ? <SignalMetaChip type="contributor" value={submission.contributorId} /> : <span className="signal-chip">Contributor Anonymous</span>}
                         {typeof submission.signalValue === "number" ? (
                           <span className="signal-chip">Signal Value {submission.signalValue}/5</span>
@@ -543,6 +559,7 @@ export function FormSubmissionsPage() {
                   </span>
                   <span className="pill">{getTriageStatusLabel(selectedSubmission.triageStatus)}</span>
                   <span className="pill">{inferSignalCategory(selectedSubmission)}</span>
+                  <span className="pill">Severity {selectedSubmission.severity ?? "medium"}</span>
                   <span className="pill">Signal Value {selectedSubmission.signalValue ?? "N/A"}</span>
                 </div>
 
@@ -639,6 +656,16 @@ export function FormSubmissionsPage() {
                       </div>
                     )}
                   </section>
+
+                  <SignalClusterPanel
+                    selectedSubmission={selectedSubmission}
+                    submissions={submissions}
+                    formById={{ [form.id]: form }}
+                    formTitleById={{ [form.id]: form.title }}
+                    busy={saveState === "saving"}
+                    onSelectSignal={(nextSignalId) => setSelectedSignalId(nextSignalId)}
+                    onSaveSubmission={updateSubmission}
+                  />
 
                   <section className="answer-card">
                     <div className="section-row">

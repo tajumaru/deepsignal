@@ -204,6 +204,7 @@ export function PublicFormPage() {
         responderSignedAt: signedAt,
         isEncrypted: Boolean(form.encryptSubmissions),
         createdAt: signedAt,
+        updatedAt: signedAt,
       };
 
       const result = await saveSubmissionWithEncryption(form, submission, undefined, localStorageAdapter);
