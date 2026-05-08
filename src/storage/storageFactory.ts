@@ -1,6 +1,7 @@
 import { localStorageAdapter } from "./localStorageAdapter";
 import { walrusAdapter } from "./walrusAdapter";
 import type { FormSchema, StorageAdapter, Submission } from "../types";
+import { WALRUS_AGGREGATOR_URL, WALRUS_UPLOAD_RELAY_URL } from "../lib/sui";
 
 type RuntimeMode = "walrus" | "local-fallback";
 type RuntimeStatus = { mode: RuntimeMode; notice: string | null };
@@ -8,17 +9,22 @@ type RuntimeStatus = { mode: RuntimeMode; notice: string | null };
 const listeners = new Set<() => void>();
 const requireWalrus = String(import.meta.env.VITE_REQUIRE_WALRUS).toLowerCase() === "true";
 const walrusRequested = requireWalrus || import.meta.env.VITE_STORAGE_MODE === "walrus";
+const walrusWriteMode = String(import.meta.env.VITE_WALRUS_STORAGE_MODE || "uploadRelay").toLowerCase();
 
 const walrusConfigured =
   walrusRequested &&
-  Boolean(import.meta.env.VITE_WALRUS_PUBLISHER_URL) &&
-  Boolean(import.meta.env.VITE_WALRUS_AGGREGATOR_URL);
+  Boolean(WALRUS_AGGREGATOR_URL) &&
+  (walrusWriteMode === "publisher"
+    ? Boolean(import.meta.env.VITE_WALRUS_PUBLISHER_URL)
+    : Boolean(WALRUS_UPLOAD_RELAY_URL));
 
 let runtimeStatus: RuntimeStatus = {
   mode: walrusRequested ? "walrus" : "local-fallback",
   notice:
     requireWalrus && !walrusConfigured
-      ? "Walrus is required, but the publisher or aggregator URL is not configured."
+      ? walrusWriteMode === "publisher"
+        ? "Walrus is required, but the publisher or aggregator URL is not configured."
+        : "Walrus is required, but the upload relay or aggregator URL is not configured."
       : null,
 };
 

@@ -1,4 +1,4 @@
-import { useCurrentAccount } from "@mysten/dapp-kit";
+import { useCurrentAccount, useCurrentWallet } from "@mysten/dapp-kit";
 import {
   startTransition,
   useEffect,
@@ -32,8 +32,9 @@ import {
 import { getPublicFormPath } from "../lib/publicLinks";
 import { isLocalFallbackBlob } from "../lib/proof";
 import { storageAdapter } from "../lib/storage";
-import { shortAddress } from "../lib/sui";
+import { shortAddress, SUI_NETWORK, WALRUS_UPLOAD_RELAY_URL } from "../lib/sui";
 import { makeId } from "../lib/utils";
+import { getStorageRuntimeStatus, subscribeStorageRuntime } from "../storage/storageFactory";
 import type { FieldType, FormField, FormPurpose, FormSchema, FormSection } from "../types";
 
 type PublishStageKey = "encoding" | "encrypting" | "sending" | "stored" | "active";
@@ -53,6 +54,8 @@ const publishPhases: PublishPhase[] = [
   { key: "stored", label: "[ Blob stored ]", detail: "Immutable blob registered for observation." },
   { key: "active", label: "[ Signal active ]", detail: "Passive monitoring has started." },
 ];
+
+const showWalrusDiagnostics = String(import.meta.env.VITE_REQUIRE_WALRUS || "").toLowerCase() === "true";
 
 function wait(ms: number) {
   return new Promise((resolve) => window.setTimeout(resolve, ms));
@@ -137,6 +140,7 @@ const INITIAL_DRAFT_SNAPSHOT = serializeDraft(
 export function FormBuilderPage() {
   const { t } = useI18n();
   const account = useCurrentAccount();
+  const { currentWallet, isConnected } = useCurrentWallet();
   const { capabilityProfile, isLoadingAccess } = useAccessControl(account?.address);
   const navigate = useNavigate();
   const labelRefs = useRef<Record<string, HTMLInputElement | null>>({});
@@ -169,6 +173,7 @@ export function FormBuilderPage() {
   const [currentStep, setCurrentStep] = useState<BuilderStepKey>("template");
   const [mobilePane, setMobilePane] = useState<MobileBuilderPane>("editor");
   const [fieldTypePickerOpen, setFieldTypePickerOpen] = useState(false);
+  const [storageRuntime, setStorageRuntime] = useState(() => getStorageRuntimeStatus());
 
   const draftSnapshot = useMemo(
     () => serializeDraft(title, description, fields, purpose, createOnSui, encryptSubmissions, sections),
@@ -185,6 +190,13 @@ export function FormBuilderPage() {
     account?.address,
     capabilityProfile,
   );
+
+  useEffect(() => {
+    const unsubscribe = subscribeStorageRuntime(() => setStorageRuntime(getStorageRuntimeStatus()));
+    return () => {
+      unsubscribe();
+    };
+  }, []);
 
   const steps = [
     { key: "template", title: "Step 1", description: "Pick a starting point" },
@@ -526,17 +538,19 @@ export function FormBuilderPage() {
 
     try {
       setPublishStageIndex(0);
-      await wait(320);
+      // Start Walrus write immediately so wallet approval stays tied to the user's click.
+      const saveFormPromise = storageAdapter.saveForm(form);
+      await wait(120);
       if (publishRunRef.current !== runId) {
         return;
       }
       setPublishStageIndex(1);
-      await wait(560);
+      await wait(180);
       if (publishRunRef.current !== runId) {
         return;
       }
       setPublishStageIndex(2);
-      const { blobId, manifestBlobId } = await storageAdapter.saveForm(form);
+      const { blobId, manifestBlobId } = await saveFormPromise;
       if (publishRunRef.current !== runId) {
         return;
       }
@@ -962,6 +976,49 @@ export function FormBuilderPage() {
                   <p className="wallet-inline-note">
                     {t("formOwnerLabel")}: {account?.address ? shortAddress(account.address) : t("walletPublishHint")}
                   </p>
+
+                  {showWalrusDiagnostics ? (
+                    <section className="answer-card">
+                      <div className="section-row">
+                        <div>
+                          <p className="eyebrow">Walrus Runtime</p>
+                          <h3>Publish diagnostics</h3>
+                        </div>
+                      </div>
+                      <div className="metadata-list">
+                        <div className="metadata-row">
+                          <span>Wallet</span>
+                          <strong>{isConnected ? currentWallet?.name ?? "Connected" : "Not connected"}</strong>
+                        </div>
+                        <div className="metadata-row">
+                          <span>Address</span>
+                          <strong>{account?.address ? shortAddress(account.address) : "Not connected"}</strong>
+                        </div>
+                        <div className="metadata-row">
+                          <span>Network</span>
+                          <strong>{SUI_NETWORK}</strong>
+                        </div>
+                        <div className="metadata-row">
+                          <span>Storage mode</span>
+                          <strong>{import.meta.env.VITE_WALRUS_STORAGE_MODE || "uploadRelay"}</strong>
+                        </div>
+                        <div className="metadata-row">
+                          <span>Upload relay</span>
+                          <strong>{WALRUS_UPLOAD_RELAY_URL || "Not configured"}</strong>
+                        </div>
+                        <div className="metadata-row">
+                          <span>Runtime state</span>
+                          <strong>{storageRuntime.mode}</strong>
+                        </div>
+                        {storageRuntime.notice ? (
+                          <div className="metadata-row">
+                            <span>Walrus notice</span>
+                            <strong>{storageRuntime.notice}</strong>
+                          </div>
+                        ) : null}
+                      </div>
+                    </section>
+                  ) : null}
 
                   <details className="composer-advanced-settings" open>
                     <summary>{t("advanced")}</summary>

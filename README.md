@@ -40,20 +40,25 @@ Copy `.env.example` and fill in the Walrus endpoints if you want live blob stora
 
 ```bash
 VITE_STORAGE_MODE=walrus
-VITE_WALRUS_PUBLISHER_URL=https://publisher.walrus-testnet.walrus.space
+VITE_WALRUS_STORAGE_MODE=uploadRelay
+VITE_WALRUS_NETWORK=testnet
+VITE_WALRUS_UPLOAD_RELAY_URL=https://upload-relay.testnet.walrus.space
 VITE_WALRUS_AGGREGATOR_URL=https://aggregator.walrus-testnet.walrus.space
+VITE_WALRUS_UPLOAD_RELAY_TIP_MAX=1000000
+VITE_WALRUS_STORAGE_EPOCHS=5
 VITE_SEAL_MODE=mock
 VITE_SEAL_PACKAGE_ID=
 VITE_SEAL_KEY_SERVER_OBJECT_ID=
 VITE_SEAL_AGGREGATOR_URL=
-VITE_SUI_NETWORK=testnet
-VITE_RPC_URL=
+VITE_SUI_FULLNODE_URL=https://fullnode.testnet.sui.io:443
 VITE_WALFORM_PACKAGE_ID=
 VITE_PACKAGE_ID=
 VITE_REGISTRY_ID=
 ```
 
-If `VITE_STORAGE_MODE` is not `walrus`, or the Walrus URLs are missing, the app runs entirely on `localStorage`.
+If `VITE_STORAGE_MODE` is not `walrus`, or the required Walrus URLs are missing, the app runs entirely on `localStorage`.
+
+`VITE_WALRUS_NETWORK` accepts `testnet` or `mainnet`. Switch `VITE_WALRUS_UPLOAD_RELAY_URL`, `VITE_WALRUS_AGGREGATOR_URL`, and `VITE_SUI_FULLNODE_URL` to the matching network when you promote from testnet to mainnet.
 
 If `VITE_SEAL_MODE` is not `seal`, or the Seal env vars are incomplete, the app keeps using the local mock adapter.
 
@@ -245,15 +250,20 @@ Walrus storage lives in:
 
 ### How it works
 
-- Form definitions are serialized with `JSON.stringify(...)` and uploaded to `PUT {publisher}/v1/blobs`.
-- Submissions are serialized and uploaded the same way.
-- Attachments are uploaded as raw files.
+- Form definitions are serialized with `JSON.stringify(...)` and stored through the Walrus TypeScript SDK.
+- In the default `uploadRelay` mode, the browser uses the connected wallet to register and certify storage transactions while the upload relay forwards blob data to storage nodes.
+- Submissions are serialized and stored the same way.
+- Attachments are uploaded as raw files through the same SDK flow.
 - Each form also gets a separate manifest blob that acts as a recoverable index.
-- Walrus response parsing supports these blob id shapes:
-  - `result.newlyCreated.blobObject.blobId`
-  - `result.alreadyCertified.blobId`
-  - `blobId`
-  - `id`
+- `blobId` values from successful SDK writes are stored back into the existing form, submission, encrypted-payload, and attachment models.
+- If you need the old publisher HTTP flow for compatibility, set `VITE_WALRUS_STORAGE_MODE=publisher` and keep `VITE_WALRUS_PUBLISHER_URL` configured.
+
+### Upload relay notes
+
+- `VITE_WALRUS_UPLOAD_RELAY_URL` is not a publisher endpoint replacement. The app no longer writes to `PUT /v1/blobs` when `uploadRelay` mode is active.
+- The relay only forwards encoded data to Walrus storage nodes. Onchain blob registration and certification still happen through the SDK and the end-user wallet.
+- Mainnet uploads require the connected wallet to hold enough balance for Walrus storage cost, relay tip, and Sui gas.
+- Public responder routes remain wallet-optional because failed Walrus writes still fall back to the local adapter when Walrus is not strictly required.
 
 ### Manifest Blob architecture
 
