@@ -86,6 +86,9 @@ export interface Submission {
   tags: string[];
   notes: string;
   contributorId?: string;
+  responderSignature?: string;
+  responderSignedBytes?: string;
+  responderSignedAt?: string;
   signalValue?: number;
   githubIssueUrl?: string;
   githubPrUrl?: string;

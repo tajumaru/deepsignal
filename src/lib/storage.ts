@@ -160,6 +160,9 @@ export function normalizeSubmission(raw: Submission | (Record<string, unknown> &
     tags: Array.isArray(raw.tags) ? raw.tags.map(String) : [],
     notes: legacyNotes,
     contributorId: typeof raw.contributorId === "string" ? raw.contributorId : undefined,
+    responderSignature: typeof raw.responderSignature === "string" ? raw.responderSignature : undefined,
+    responderSignedBytes: typeof raw.responderSignedBytes === "string" ? raw.responderSignedBytes : undefined,
+    responderSignedAt: typeof raw.responderSignedAt === "string" ? raw.responderSignedAt : undefined,
     signalValue: coerceSignalValue(raw.signalValue),
     githubIssueUrl: typeof raw.githubIssueUrl === "string" ? raw.githubIssueUrl : undefined,
     githubPrUrl: typeof raw.githubPrUrl === "string" ? raw.githubPrUrl : undefined,
@@ -245,6 +248,7 @@ export async function saveSubmissionWithEncryption(
   form: FormSchema,
   submission: Submission,
   seal: SealAdapter = activeSealAdapter,
+  targetStorage: StorageAdapter = storageAdapter,
 ) {
   const baseSubmission: Submission = {
     ...submission,
@@ -258,6 +262,18 @@ export async function saveSubmissionWithEncryption(
     tags: submission.tags ?? [],
     notes: submission.notes ?? "",
     contributorId: submission.contributorId,
+    responderSignature:
+      typeof submission.responderSignature === "string"
+        ? submission.responderSignature
+        : undefined,
+    responderSignedBytes:
+      typeof submission.responderSignedBytes === "string"
+        ? submission.responderSignedBytes
+        : undefined,
+    responderSignedAt:
+      typeof submission.responderSignedAt === "string"
+        ? submission.responderSignedAt
+        : undefined,
     signalValue: coerceSignalValue(submission.signalValue),
     githubIssueUrl: typeof submission.githubIssueUrl === "string" ? submission.githubIssueUrl.trim() || undefined : undefined,
     githubPrUrl: typeof submission.githubPrUrl === "string" ? submission.githubPrUrl.trim() || undefined : undefined,
@@ -271,14 +287,14 @@ export async function saveSubmissionWithEncryption(
       attachments: submission.attachments,
     });
     const encryptedPayload = await seal.encrypt(payload);
-    const { blobId: encryptedBlobId } = await storageAdapter.saveEncryptedPayload(encryptedPayload);
+    const { blobId: encryptedBlobId } = await targetStorage.saveEncryptedPayload(encryptedPayload);
     const metadataSubmission: Submission = {
       ...baseSubmission,
       answers: {},
       isEncrypted: true,
       encryptedBlobId,
     };
-    const saved = await storageAdapter.saveSubmission(metadataSubmission);
+    const saved = await targetStorage.saveSubmission(metadataSubmission);
     return { ...saved, encryptedBlobId };
   }
 
@@ -289,5 +305,5 @@ export async function saveSubmissionWithEncryption(
     isEncrypted: false,
     encryptedBlobId: undefined,
   };
-  return storageAdapter.saveSubmission(standardSubmission);
+  return targetStorage.saveSubmission(standardSubmission);
 }

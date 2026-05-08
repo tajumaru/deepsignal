@@ -75,6 +75,8 @@ const messages = {
     deleting: "Deleting...",
     deleteFormConfirm:
       "Delete this form and all submissions collected for it? This cannot be undone.",
+    deleteNodeSuccess: "Node deleted from Walrus and removed from the inbox.",
+    deleteNodeFailed: "Node deletion failed.",
     adminBlob: (params) => `Walrus blob: ${params?.blobId ?? ""}`,
     pending: "pending",
     noDescription: "No description provided.",
@@ -367,6 +369,14 @@ const messages = {
     noSignalsInStream: "No signals in this stream",
     adjustSignalFilters: "Adjust the selected stream or search for another signal.",
     newEncryptedFeedbackHere: "New encrypted feedback will appear here.",
+    abyssNoSignalsTitle: "No signals detected in the abyss...",
+    abyssNoSignalsBody:
+      "This stream is live and listening. The next encrypted pulse will surface here the moment it breaks the waterline.",
+    abyssNoSignalsHint:
+      "Keep the beacon online, widen the scan, or wait for the next transmission.",
+    abyssAwaitingSignalTitle: "Awaiting a signal lock",
+    abyssAwaitingSignalBody:
+      "Select a signal from the stream to project its metadata, answers, and attachments into this chamber.",
     selectedForm: "Selected form",
     unreadCountSummary: (params) =>
       `${params?.count ?? 0} unread · ${params?.scope ?? ""}`,
@@ -492,6 +502,8 @@ const messages = {
     deleting: "\u524a\u9664\u4e2d...",
     deleteFormConfirm:
       "\u3053\u306e\u30d5\u30a9\u30fc\u30e0\u3068\u7d10\u3065\u304f\u3059\u3079\u3066\u306e\u6295\u7a3f\u3092\u524a\u9664\u3057\u307e\u3059\u304b\uff1f\u3053\u306e\u64cd\u4f5c\u306f\u5143\u306b\u623b\u305b\u307e\u305b\u3093\u3002",
+    deleteNodeSuccess: "Node \u3092 Walrus \u304a\u3088\u3073 inbox \u304b\u3089\u524a\u9664\u3057\u307e\u3057\u305f\u3002",
+    deleteNodeFailed: "Node \u306e\u524a\u9664\u306b\u5931\u6557\u3057\u307e\u3057\u305f\u3002",
     adminBlob: (params) => `Walrus blob: ${params?.blobId ?? ""}`,
     pending: "\u672a\u8a2d\u5b9a",
     noDescription: "\u8aac\u660e\u306f\u307e\u3060\u3042\u308a\u307e\u305b\u3093\u3002",
@@ -806,6 +818,16 @@ const messages = {
       "\u9078\u629e\u4e2d\u306e stream \u3092\u5909\u3048\u308b\u304b\u3001\u5225\u306e signal \u3092\u691c\u7d22\u3057\u3066\u304f\u3060\u3055\u3044\u3002",
     newEncryptedFeedbackHere:
       "\u65b0\u3057\u3044\u6697\u53f7\u5316 feedback \u306f\u3053\u3053\u306b\u8868\u793a\u3055\u308c\u307e\u3059\u3002",
+    abyssNoSignalsTitle:
+      "\u6df1\u6d77\u306b\u307e\u3060 signal \u306f\u691c\u51fa\u3055\u308c\u3066\u3044\u307e\u305b\u3093...",
+    abyssNoSignalsBody:
+      "\u3053\u306e stream \u306f\u751f\u304d\u3066\u3044\u3066\u3001\u3059\u3067\u306b\u53d7\u4fe1\u3092\u7d9a\u3051\u3066\u3044\u307e\u3059\u3002\u6b21\u306e\u6697\u53f7\u5316 pulse \u304c\u6c34\u9762\u3092\u7834\u308c\u3070\u3001\u3059\u3050\u3053\u3053\u306b\u6d6e\u4e0a\u3057\u307e\u3059\u3002",
+    abyssNoSignalsHint:
+      "\u30d3\u30fc\u30b3\u30f3\u3092\u751f\u304b\u3057\u305f\u307e\u307e\u3001scan \u3092\u5e83\u3052\u308b\u304b\u3001\u6b21\u306e transmission \u3092\u5f85\u3063\u3066\u304f\u3060\u3055\u3044\u3002",
+    abyssAwaitingSignalTitle:
+      "signal lock \u3092\u5f85\u6a5f\u4e2d",
+    abyssAwaitingSignalBody:
+      "stream \u304b\u3089 signal \u3092\u9078\u629e\u3059\u308b\u3068\u3001metadata\u3001answers\u3001attachments \u304c\u3053\u306e chamber \u306b\u6295\u5f71\u3055\u308c\u307e\u3059\u3002",
     selectedForm: "\u9078\u629e\u4e2d\u306e\u30d5\u30a9\u30fc\u30e0",
     unreadCountSummary: (params) =>
       `${params?.count ?? 0} \u4ef6\u306e\u672a\u8aad \u00b7 ${params?.scope ?? ""}`,

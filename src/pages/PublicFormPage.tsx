@@ -1,11 +1,13 @@
-import { useCurrentAccount } from "@mysten/dapp-kit";
+import {
+  useCurrentAccount,
+  useSignPersonalMessage,
+} from "@mysten/dapp-kit";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import { BlobLink } from "../components/BlobLink";
 import { DynamicField } from "../components/DynamicField";
 import { EmptyState } from "../components/EmptyState";
 import { SignalMetaChip, SignalMetaRow } from "../components/SignalMetaChip";
-import { makeAnonymousContributorId } from "../lib/contributors";
 import { useI18n } from "../i18n";
 import { getSubmissionCategoryFromPurpose } from "../lib/formTemplates";
 import { getStorageDetailLabels, isLocalFallbackBlob } from "../lib/signalInbox";
@@ -24,6 +26,7 @@ const MAX_VIDEO_BYTES = 25 * 1024 * 1024;
 export function PublicFormPage() {
   const { t } = useI18n();
   const account = useCurrentAccount();
+  const signPersonalMessage = useSignPersonalMessage();
   const { formId = "" } = useParams();
   const [searchParams] = useSearchParams();
   const [form, setForm] = useState<FormSchema | null>(null);
@@ -142,6 +145,10 @@ export function PublicFormPage() {
     setSubmitting(true);
     setSubmitError("");
     try {
+      if (!account) {
+        throw new Error("Connect a Sui wallet to sign and submit this signal.");
+      }
+
       const attachments: SubmissionAttachment[] = [];
       const plainAnswers: PublicAnswers = {};
 
@@ -150,7 +157,7 @@ export function PublicFormPage() {
         if (attachmentFields.has(field.id)) {
           const file = value instanceof File ? value : null;
           if (file) {
-            const upload = await storageAdapter.uploadFile(file);
+            const upload = await localStorageAdapter.uploadFile(file);
             attachments.push({
               fieldId: field.id,
               type: field.type === "video" ? "video" : "image",
@@ -167,6 +174,19 @@ export function PublicFormPage() {
         }
       }
 
+      const signedAt = new Date().toISOString();
+      const signPayload = {
+        app: "DeepSignal",
+        action: "submit_signal",
+        formId: form.id,
+        submittedAt: signedAt,
+        fieldCount: form.fields.length,
+      };
+      const signedMessage = new TextEncoder().encode(JSON.stringify(signPayload));
+      const signatureResult = await signPersonalMessage.mutateAsync({
+        message: signedMessage,
+      });
+
       const submission: Submission = {
         id: makeId("submission"),
         formId: form.id,
@@ -178,12 +198,15 @@ export function PublicFormPage() {
         triageStatus: "new",
         tags: [],
         notes: "",
-        contributorId: account?.address ?? makeAnonymousContributorId(),
+        contributorId: account.address,
+        responderSignature: signatureResult.signature,
+        responderSignedBytes: signatureResult.bytes,
+        responderSignedAt: signedAt,
         isEncrypted: Boolean(form.encryptSubmissions),
-        createdAt: new Date().toISOString(),
+        createdAt: signedAt,
       };
 
-      const result = await saveSubmissionWithEncryption(form, submission);
+      const result = await saveSubmissionWithEncryption(form, submission, undefined, localStorageAdapter);
       setSubmitted({
         ...submission,
         blobId: result.blobId,
@@ -259,6 +282,10 @@ export function PublicFormPage() {
       <p className="eyebrow">{t("publicEyebrow")}</p>
       <h1>{form.title}</h1>
       <p className="lede">{form.description || t("publicDefaultBody")}</p>
+      <div className="info-banner">
+        <strong>Responder wallet</strong>
+        <span>{account ? "Connected and ready to sign" : "Connect wallet before submitting"}</span>
+      </div>
       <div className="info-banner">
         <strong>{t("encryptSubmissions")}</strong>
         <span>{form.encryptSubmissions ? t("enabled") : t("disabled")}</span>

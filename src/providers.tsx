@@ -101,7 +101,7 @@ export function Providers({ children }: PropsWithChildren) {
   return (
     <QueryClientProvider client={queryClient}>
       <SuiClientProvider networks={networkConfig} defaultNetwork={SUI_NETWORK}>
-        <WalletProvider autoConnect>
+        <WalletProvider>
           {REQUIRE_GLOBAL_WALRUS_RUNTIME ? <WalrusRuntimeBridge /> : null}
           {children}
         </WalletProvider>

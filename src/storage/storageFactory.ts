@@ -92,10 +92,22 @@ const hybridWalrusStorage: StorageAdapter = {
     return mergeById(walrusForms, localForms);
   },
   async deleteForm(id) {
-    await Promise.all([
-      swallow(() => walrusAdapter.deleteForm(id), undefined),
-      localStorageAdapter.deleteForm(id),
-    ]);
+    if (!walrusRequested) {
+      await localStorageAdapter.deleteForm(id);
+      return;
+    }
+    try {
+      await walrusAdapter.deleteForm(id);
+      await localStorageAdapter.deleteForm(id);
+      emitStatus({ mode: "walrus", notice: null });
+    } catch (error) {
+      console.error(error);
+      emitStatus({
+        mode: "walrus",
+        notice: error instanceof Error ? error.message : "Walrus delete failed.",
+      });
+      throw error;
+    }
   },
   async saveSubmission(submission) {
     return withWriteFallback(

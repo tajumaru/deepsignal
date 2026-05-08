@@ -28,6 +28,10 @@ type FormBundle = {
   form: FormSchema;
   manifest: SignalManifest;
 };
+type UploadResult = {
+  blobId: string;
+  blobObjectId?: string;
+};
 type WalrusRuntimeContext = {
   account: WalletAccount | null;
   wallet: WalletWithRequiredFeatures | null;
@@ -75,19 +79,23 @@ function assertUploadRelayEnv() {
   }
 }
 
-function getWalrusClient() {
-  assertUploadRelayEnv();
+function getRuntimeWalrusClient() {
   if (!runtimeContext.client) {
     throw new Error("Walrus client is not ready yet. Refresh the page and reconnect your wallet.");
   }
   return runtimeContext.client;
 }
 
+function getWalrusClient() {
+  assertUploadRelayEnv();
+  return getRuntimeWalrusClient();
+}
+
 function createWalletSigner(): Signer {
   const { account, wallet, supportedIntents, client } = runtimeContext;
   if (!account || !wallet || !client) {
     throw new Error(
-      "Walrus upload relay requires a connected wallet. Connect a wallet or continue in local fallback mode.",
+      "Walrus mutations require a connected wallet. Connect a wallet or continue in local fallback mode.",
     );
   }
 
@@ -165,6 +173,34 @@ export function extractBlobId(payload: unknown): string {
   return blobId;
 }
 
+function extractBlobObjectId(payload: unknown): string | undefined {
+  if (!payload || typeof payload !== "object") {
+    return undefined;
+  }
+  const response = payload as {
+    blobObjectId?: string;
+    objectId?: string;
+    newlyCreated?: { blobObject?: { id?: string } };
+    alreadyCertified?: { blobObject?: { id?: string } };
+    result?: {
+      blobObjectId?: string;
+      objectId?: string;
+      newlyCreated?: { blobObject?: { id?: string } };
+      alreadyCertified?: { blobObject?: { id?: string } };
+    };
+  };
+  return (
+    response.result?.newlyCreated?.blobObject?.id ??
+    response.result?.alreadyCertified?.blobObject?.id ??
+    response.result?.blobObjectId ??
+    response.result?.objectId ??
+    response.newlyCreated?.blobObject?.id ??
+    response.alreadyCertified?.blobObject?.id ??
+    response.blobObjectId ??
+    response.objectId
+  );
+}
+
 function normalizeWalrusWriteError(error: unknown) {
   if (error instanceof Error) {
     const message = error.message;
@@ -207,7 +243,7 @@ function normalizeWalrusWriteError(error: unknown) {
   return error instanceof Error ? error : new Error("Walrus upload failed.");
 }
 
-async function uploadBodyWithPublisher(body: Blob | File) {
+async function uploadBodyWithPublisher(body: Blob | File): Promise<UploadResult> {
   assertPublisherEnv();
   const response = await fetch(`${publisherUrl}/v1/blobs`, {
     method: "PUT",
@@ -217,10 +253,13 @@ async function uploadBodyWithPublisher(body: Blob | File) {
   if (!response.ok) {
     throw new Error(`Walrus upload failed: ${response.status} ${JSON.stringify(payload)}`);
   }
-  return extractBlobId(payload);
+  return {
+    blobId: extractBlobId(payload),
+    blobObjectId: extractBlobObjectId(payload),
+  };
 }
 
-async function uploadBodyWithSdk(body: Blob | File) {
+async function uploadBodyWithSdk(body: Blob | File): Promise<UploadResult> {
   try {
     const client = getWalrusClient();
     const signer = createWalletSigner();
@@ -234,17 +273,59 @@ async function uploadBodyWithSdk(body: Blob | File) {
       deletable: true,
       attributes: body.type ? { "content-type": body.type } : undefined,
     });
-    return result.blobId;
+    return {
+      blobId: result.blobId,
+      blobObjectId: result.blobObject.id,
+    };
   } catch (error) {
     throw normalizeWalrusWriteError(error);
   }
 }
 
-async function uploadBody(body: Blob | File) {
+async function uploadBody(body: Blob | File): Promise<UploadResult> {
   if (walrusStorageMode === "publisher") {
     return uploadBodyWithPublisher(body);
   }
   return uploadBodyWithSdk(body);
+}
+
+async function deleteBlobObjectFromWalrus(blobObjectId?: string) {
+  if (!blobObjectId) {
+    return;
+  }
+  const client = getRuntimeWalrusClient();
+  const signer = createWalletSigner();
+  await client.walrus.executeDeleteBlobTransaction({ blobObjectId, signer });
+}
+
+async function deleteBlobObjectsFromWalrus(blobObjectIds: Array<string | undefined>) {
+  const uniqueBlobObjectIds = [...new Set(blobObjectIds.filter((value): value is string => Boolean(value)))];
+  for (const blobObjectId of uniqueBlobObjectIds) {
+    await deleteBlobObjectFromWalrus(blobObjectId);
+  }
+}
+
+function assertDeleteTargetsTracked(
+  formEntry: ReturnType<typeof getFormBlobIndex>,
+  submissionEntries: ReturnType<typeof listSubmissionBlobIndex>,
+) {
+  const missingTrackedObjects: string[] = [];
+  if (formEntry?.formBlobId && !formEntry.formBlobObjectId) {
+    missingTrackedObjects.push("form");
+  }
+  if (formEntry?.manifestBlobId && !formEntry.manifestBlobObjectId) {
+    missingTrackedObjects.push("manifest");
+  }
+  if (submissionEntries.some((entry) => entry.blobId && !entry.blobObjectId)) {
+    missingTrackedObjects.push("submission");
+  }
+  if (missingTrackedObjects.length > 0) {
+    throw new Error(
+      `Walrus deletion could not be verified for this node because ${missingTrackedObjects.join(
+        ", ",
+      )} blob object ids are missing. This data was likely saved before delete tracking was enabled.`,
+    );
+  }
 }
 
 export async function fetchJsonBlob<T>(blobId: string): Promise<T | null> {
@@ -321,12 +402,11 @@ async function readFormBundle(blobId: string): Promise<FormBundle | null> {
 }
 
 async function writeFormBundle(form: FormSchema, manifest: SignalManifest) {
-  const blobId = await uploadBody(
+  return uploadBody(
     new Blob([JSON.stringify(createFormBundle(form, manifest))], {
       type: "application/json",
     }),
   );
-  return { blobId };
 }
 
 async function loadManifestOrThrow(formId: string) {
@@ -357,10 +437,13 @@ async function writeManifestAndPointers(
   formId: string,
   manifest: SignalManifest,
   formBlobId: string,
+  submissionBlobObjectIds: Record<string, string | undefined>,
   form?: FormSchema | null,
 ) {
   let manifestBlobId: string;
+  let manifestBlobObjectId: string | undefined;
   let nextFormBlobId = formBlobId;
+  let nextFormBlobObjectId: string | undefined;
   if (form) {
     const bundle = await writeFormBundle(
       {
@@ -371,15 +454,20 @@ async function writeManifestAndPointers(
       manifest,
     );
     manifestBlobId = bundle.blobId;
+    manifestBlobObjectId = bundle.blobObjectId;
     nextFormBlobId = bundle.blobId;
+    nextFormBlobObjectId = bundle.blobObjectId;
   } else {
     const savedManifest = await saveManifest(manifest);
     manifestBlobId = savedManifest.blobId;
+    manifestBlobObjectId = savedManifest.blobObjectId;
   }
   upsertFormBlobIndex({
     formId,
     formBlobId: nextFormBlobId,
+    formBlobObjectId: nextFormBlobObjectId,
     manifestBlobId,
+    manifestBlobObjectId,
     createdAt: manifest.createdAt,
   });
   replaceSubmissionBlobIndex(
@@ -388,10 +476,11 @@ async function writeManifestAndPointers(
       submissionId: submission.submissionId,
       formId,
       blobId: submission.blobId,
+      blobObjectId: submissionBlobObjectIds[submission.submissionId],
       createdAt: submission.createdAt,
     })),
   );
-  return manifestBlobId;
+  return { manifestBlobId, manifestBlobObjectId, formBlobId: nextFormBlobId, formBlobObjectId: nextFormBlobObjectId };
 }
 
 export function getWalrusBlobUrl(blobId: string) {
@@ -401,11 +490,10 @@ export function getWalrusBlobUrl(blobId: string) {
   return `${aggregatorUrl}/v1/blobs/${blobId}`;
 }
 
-export async function saveManifest(manifest: SignalManifest): Promise<{ blobId: string }> {
-  const blobId = await uploadBody(
+export async function saveManifest(manifest: SignalManifest): Promise<UploadResult> {
+  return uploadBody(
     new Blob([JSON.stringify(manifest)], { type: "application/json" }),
   );
-  return { blobId };
 }
 
 export async function readManifest(blobId: string): Promise<SignalManifest | null> {
@@ -415,11 +503,13 @@ export async function readManifest(blobId: string): Promise<SignalManifest | nul
 export const walrusAdapter: StorageAdapter = {
   async saveForm(form: FormSchema) {
     const manifest = createManifest(form, bundledFormPointer, [], form.createdAt);
-    const { blobId } = await writeFormBundle(form, manifest);
+    const { blobId, blobObjectId } = await writeFormBundle(form, manifest);
     upsertFormBlobIndex({
       formId: form.id,
       formBlobId: blobId,
+      formBlobObjectId: blobObjectId,
       manifestBlobId: blobId,
+      manifestBlobObjectId: blobObjectId,
       createdAt: form.createdAt,
     });
     await localStorageAdapter.saveForm({ ...form, blobId, manifestBlobId: blobId });
@@ -475,11 +565,19 @@ export const walrusAdapter: StorageAdapter = {
   },
 
   async deleteForm(id) {
+    const formEntry = getFormBlobIndex(id);
+    const submissionEntries = listSubmissionBlobIndex(id);
+    assertDeleteTargetsTracked(formEntry, submissionEntries);
+    await deleteBlobObjectsFromWalrus([
+      formEntry?.formBlobObjectId,
+      formEntry?.manifestBlobObjectId,
+      ...submissionEntries.map((entry) => entry.blobObjectId),
+    ]);
     deleteFormBlobIndex(id);
   },
 
   async saveSubmission(submission: Submission) {
-    const blobId = await uploadBody(
+    const { blobId, blobObjectId } = await uploadBody(
       new Blob([JSON.stringify(submission)], { type: "application/json" }),
     );
     await localStorageAdapter.saveSubmission({ ...submission, blobId });
@@ -490,11 +588,15 @@ export const walrusAdapter: StorageAdapter = {
         submissionId: submission.id,
         formId: submission.formId,
         blobId,
+        blobObjectId,
         createdAt: submission.createdAt,
       });
       return { id: submission.id, blobId };
     }
 
+    const existingSubmissionObjectIds = Object.fromEntries(
+      listSubmissionBlobIndex(submission.formId).map((item) => [item.submissionId, item.blobObjectId]),
+    );
     const nextManifest = createManifest(
       { id: manifest.formId, createdAt: manifest.createdAt },
       form ? bundledFormPointer : manifest.formBlobId,
@@ -504,7 +606,19 @@ export const walrusAdapter: StorageAdapter = {
       ],
       new Date().toISOString(),
     );
-    await writeManifestAndPointers(submission.formId, nextManifest, manifest.formBlobId, form);
+    const replacedFormObjectId =
+      entry.formBlobId === entry.manifestBlobId ? entry.formBlobObjectId : undefined;
+    await writeManifestAndPointers(
+      submission.formId,
+      nextManifest,
+      manifest.formBlobId,
+      {
+        ...existingSubmissionObjectIds,
+        [submission.id]: blobObjectId,
+      },
+      form,
+    );
+    await deleteBlobObjectsFromWalrus([entry.manifestBlobObjectId, replacedFormObjectId]);
     return { id: submission.id, blobId };
   },
 
@@ -545,7 +659,7 @@ export const walrusAdapter: StorageAdapter = {
   },
 
   async updateSubmission(submission) {
-    const blobId = await uploadBody(
+    const { blobId, blobObjectId } = await uploadBody(
       new Blob([JSON.stringify(submission)], { type: "application/json" }),
     );
     await localStorageAdapter.updateSubmission({ ...submission, blobId });
@@ -556,11 +670,19 @@ export const walrusAdapter: StorageAdapter = {
         submissionId: submission.id,
         formId: submission.formId,
         blobId,
+        blobObjectId,
         createdAt: submission.createdAt,
       });
       return;
     }
 
+    const existingSubmissionEntries = listSubmissionBlobIndex(submission.formId);
+    const existingSubmissionObjectIds = Object.fromEntries(
+      existingSubmissionEntries.map((item) => [item.submissionId, item.blobObjectId]),
+    );
+    const replacedSubmissionObjectId = existingSubmissionEntries.find(
+      (item) => item.submissionId === submission.id,
+    )?.blobObjectId;
     const existingCreatedAt =
       manifest.submissions.find((item) => item.submissionId === submission.id)?.createdAt ??
       submission.createdAt;
@@ -573,11 +695,27 @@ export const walrusAdapter: StorageAdapter = {
       ],
       new Date().toISOString(),
     );
-    await writeManifestAndPointers(submission.formId, nextManifest, manifest.formBlobId, form);
+    const replacedFormObjectId =
+      entry.formBlobId === entry.manifestBlobId ? entry.formBlobObjectId : undefined;
+    await writeManifestAndPointers(
+      submission.formId,
+      nextManifest,
+      manifest.formBlobId,
+      {
+        ...existingSubmissionObjectIds,
+        [submission.id]: blobObjectId,
+      },
+      form,
+    );
+    await deleteBlobObjectsFromWalrus([
+      replacedSubmissionObjectId,
+      entry.manifestBlobObjectId,
+      replacedFormObjectId,
+    ]);
   },
 
   async saveEncryptedPayload(payload) {
-    const blobId = await uploadBody(new Blob([payload], { type: "text/plain" }));
+    const { blobId } = await uploadBody(new Blob([payload], { type: "text/plain" }));
     return { blobId };
   },
 
@@ -586,7 +724,7 @@ export const walrusAdapter: StorageAdapter = {
   },
 
   async uploadFile(file) {
-    const blobId = await uploadBody(file);
+    const { blobId } = await uploadBody(file);
     return {
       blobId,
       url: getWalrusBlobUrl(blobId) ?? undefined,

@@ -1212,7 +1212,7 @@ textarea {
 
 .beacon-core {
   position: relative;
-  min-height: 420px;
+  min-height: clamp(300px, 42vh, 420px);
   display: grid;
   place-items: center;
   isolation: isolate;
@@ -1298,7 +1298,7 @@ textarea {
 
 .beacon-qr-shell {
   position: relative;
-  width: clamp(220px, 33vw, 340px);
+  width: clamp(200px, min(30vw, 34vh), 320px);
   aspect-ratio: 1;
   display: grid;
   place-items: center;
@@ -2158,6 +2158,167 @@ body.composer-mode .bg-orb {
   padding: 2rem;
 }
 
+.empty-state-copy {
+  display: grid;
+  gap: 0.7rem;
+  justify-items: center;
+}
+
+.empty-state-copy > * {
+  margin: 0;
+}
+
+.empty-state-abyss {
+  position: relative;
+  overflow: hidden;
+  min-height: 340px;
+  display: grid;
+  place-items: center;
+  padding: 2.4rem 1.5rem;
+  background:
+    radial-gradient(circle at 50% 18%, rgba(88, 227, 255, 0.18), transparent 24%),
+    radial-gradient(circle at 50% 88%, rgba(9, 71, 106, 0.24), transparent 42%),
+    linear-gradient(180deg, rgba(3, 17, 30, 0.94), rgba(1, 9, 18, 0.97));
+  border-color: rgba(120, 231, 255, 0.16);
+  box-shadow:
+    inset 0 1px 0 rgba(197, 247, 255, 0.05),
+    0 26px 60px rgba(0, 0, 0, 0.28);
+}
+
+.empty-state-abyss::before,
+.empty-state-abyss::after {
+  content: "";
+  position: absolute;
+  inset: auto;
+  border-radius: 999px;
+  pointer-events: none;
+}
+
+.empty-state-abyss::before {
+  width: 420px;
+  height: 420px;
+  background: radial-gradient(circle, rgba(70, 214, 255, 0.08), transparent 68%);
+  top: -180px;
+  right: -120px;
+}
+
+.empty-state-abyss::after {
+  width: 280px;
+  height: 280px;
+  background: radial-gradient(circle, rgba(63, 197, 255, 0.07), transparent 70%);
+  bottom: -140px;
+  left: -80px;
+}
+
+.abyss-empty-visual {
+  position: relative;
+  width: min(100%, 320px);
+  aspect-ratio: 1;
+  margin-bottom: 1.2rem;
+  border-radius: 50%;
+  overflow: hidden;
+  background:
+    radial-gradient(circle, rgba(8, 53, 77, 0.28), rgba(3, 18, 30, 0.04) 62%, transparent 72%);
+  box-shadow:
+    inset 0 0 42px rgba(77, 219, 255, 0.08),
+    0 0 36px rgba(77, 219, 255, 0.08);
+}
+
+.abyss-empty-grid,
+.abyss-empty-ring,
+.abyss-empty-sweep,
+.abyss-empty-core,
+.abyss-empty-blip {
+  position: absolute;
+  inset: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.abyss-empty-grid {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background:
+    linear-gradient(rgba(116, 226, 255, 0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(116, 226, 255, 0.08) 1px, transparent 1px);
+  background-size: 24px 24px;
+  mask-image: radial-gradient(circle, black 58%, transparent 78%);
+}
+
+.abyss-empty-ring {
+  border: 1px solid rgba(121, 238, 255, 0.14);
+  border-radius: 50%;
+  box-shadow: inset 0 0 18px rgba(121, 238, 255, 0.04);
+}
+
+.abyss-empty-ring-a {
+  width: 38%;
+  height: 38%;
+}
+
+.abyss-empty-ring-b {
+  width: 62%;
+  height: 62%;
+}
+
+.abyss-empty-ring-c {
+  width: 86%;
+  height: 86%;
+}
+
+.abyss-empty-sweep {
+  width: 96%;
+  height: 96%;
+  border-radius: 50%;
+  background: conic-gradient(from 10deg, transparent 0deg, rgba(103, 232, 249, 0.28) 58deg, transparent 86deg);
+  filter: blur(1px);
+  opacity: 0.9;
+  animation: signalSweep 7.5s linear infinite;
+}
+
+.abyss-empty-core {
+  width: 12%;
+  height: 12%;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(204, 249, 255, 0.95), rgba(103, 232, 249, 0.18) 72%, transparent 74%);
+  box-shadow: 0 0 24px rgba(103, 232, 249, 0.35);
+}
+
+.abyss-empty-blip {
+  width: 0.78rem;
+  height: 0.78rem;
+  border-radius: 50%;
+  background: #aef6ff;
+  box-shadow: 0 0 16px rgba(103, 232, 249, 0.65);
+  animation: signalPulse 3.4s ease-in-out infinite;
+}
+
+.abyss-empty-blip.is-static {
+  animation: none;
+  opacity: 0.78;
+}
+
+.empty-state-abyss.is-static .abyss-empty-visual {
+  box-shadow:
+    inset 0 0 32px rgba(77, 219, 255, 0.06),
+    0 0 22px rgba(77, 219, 255, 0.05);
+}
+
+.empty-state-abyss.is-static .abyss-empty-core {
+  box-shadow: 0 0 18px rgba(103, 232, 249, 0.24);
+}
+
+.abyss-empty-blip-a {
+  margin-left: 68px;
+  margin-top: -42px;
+}
+
+.abyss-empty-blip-b {
+  margin-left: -88px;
+  margin-top: 76px;
+  animation-delay: 1.4s;
+}
+
 .pill {
   border-radius: 999px;
   padding: 0.35rem 0.7rem;
@@ -2807,6 +2968,13 @@ body.composer-mode .bg-orb {
 
 .beacon-overlay-panel {
   width: min(100%, 860px);
+  max-height: min(92vh, 960px);
+  overflow: auto;
+  padding-right: clamp(1rem, 2vw, 1.4rem);
+}
+
+.beacon-overlay-panel .share-card {
+  margin-top: 0;
 }
 
 .node-unread-badge {

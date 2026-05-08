@@ -1,7 +1,9 @@
 interface FormBlobIndexEntry {
   formId: string;
   formBlobId: string;
+  formBlobObjectId?: string;
   manifestBlobId?: string;
+  manifestBlobObjectId?: string;
   createdAt: string;
 }
 
@@ -9,6 +11,7 @@ interface SubmissionBlobIndexEntry {
   submissionId: string;
   formId: string;
   blobId: string;
+  blobObjectId?: string;
   createdAt: string;
 }
 
@@ -24,13 +27,16 @@ type LegacyBlobIndexStore = {
     formId?: string;
     blobId?: string;
     formBlobId?: string;
+    formBlobObjectId?: string;
     manifestBlobId?: string;
+    manifestBlobObjectId?: string;
     createdAt?: string;
   }>;
   submissions?: Array<{
     submissionId?: string;
     formId?: string;
     blobId?: string;
+    blobObjectId?: string;
     createdAt?: string;
   }>;
 };
@@ -52,7 +58,9 @@ function readIndex(): BlobIndexStore {
               {
                 formId: entry.formId,
                 formBlobId: entry.formBlobId ?? entry.blobId ?? "",
+                formBlobObjectId: entry.formBlobObjectId,
                 manifestBlobId: entry.manifestBlobId,
+                manifestBlobObjectId: entry.manifestBlobObjectId,
                 createdAt: entry.createdAt,
               },
             ];
@@ -68,6 +76,7 @@ function readIndex(): BlobIndexStore {
                 submissionId: entry.submissionId,
                 formId: entry.formId,
                 blobId: entry.blobId,
+                blobObjectId: entry.blobObjectId,
                 createdAt: entry.createdAt,
               },
             ];

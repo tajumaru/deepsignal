@@ -194,9 +194,6 @@ export function FormSubmissionsPage() {
 
   async function handleSelect(submission: Submission) {
     setSelectedSignalId(submission.id);
-    if (submission.status === "unread") {
-      await updateSubmission({ ...submission, status: "read" });
-    }
   }
 
   async function handleDecrypt() {
@@ -452,9 +449,11 @@ export function FormSubmissionsPage() {
             </div>
 
             {visibleSignals.length === 0 ? (
-              <EmptyState>
-                <h2>{t("noSignalsInStream")}</h2>
-                <p>{t("newEncryptedFeedbackHere")}</p>
+              <EmptyState variant="abyss">
+                <p className="eyebrow">Abyssal Scan</p>
+                <h2>{t("abyssNoSignalsTitle")}</h2>
+                <p>{t("abyssNoSignalsBody")}</p>
+                <p className="muted">{t("abyssNoSignalsHint")}</p>
               </EmptyState>
             ) : (
               <div className="signal-list">
@@ -511,9 +510,10 @@ export function FormSubmissionsPage() {
 
           <article className="panel signal-detail-column">
             {!selectedSubmission ? (
-              <EmptyState>
-                <h2>{t("selectSignalToReview")}</h2>
-                <p>{t("incomingEncryptedFeedback")}</p>
+              <EmptyState variant="abyss" animated={false} showVisual={false}>
+                <p className="eyebrow">Signal Chamber</p>
+                <h2>{t("abyssAwaitingSignalTitle")}</h2>
+                <p>{t("abyssAwaitingSignalBody")}</p>
               </EmptyState>
             ) : (
               <>

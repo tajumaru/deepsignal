@@ -154,9 +154,18 @@ export function AdminDashboardPage() {
       return;
     }
     setDeletingFormId(formId);
-    await storageAdapter.deleteForm(formId);
-    await loadConsole();
-    setDeletingFormId(null);
+    try {
+      await storageAdapter.deleteForm(formId);
+      await loadConsole();
+      setToast({ tone: "success", message: t("deleteNodeSuccess") });
+    } catch (error) {
+      setToast({
+        tone: "error",
+        message: error instanceof Error ? error.message : t("deleteNodeFailed"),
+      });
+    } finally {
+      setDeletingFormId(null);
+    }
   }
 
   useEffect(() => {
@@ -277,9 +286,6 @@ export function AdminDashboardPage() {
 
   async function handleSelect(record: SignalRecord) {
     setSelectedSignalId(record.submission.id);
-    if (record.submission.status === "unread") {
-      await updateSubmission({ ...record.submission, status: "read" });
-    }
   }
 
   async function handleDecrypt() {
@@ -510,9 +516,11 @@ export function AdminDashboardPage() {
               </div>
 
               {visibleSignals.length === 0 ? (
-                <EmptyState>
-                  <h2>{t("noSignalsInStream")}</h2>
-                  <p>{t("adjustSignalFilters")}</p>
+                <EmptyState variant="abyss">
+                  <p className="eyebrow">Abyssal Scan</p>
+                  <h2>{t("abyssNoSignalsTitle")}</h2>
+                  <p>{t("abyssNoSignalsBody")}</p>
+                  <p className="muted">{t("abyssNoSignalsHint")}</p>
                 </EmptyState>
               ) : (
                 <div className="signal-list">
@@ -574,9 +582,10 @@ export function AdminDashboardPage() {
 
             <article className="panel signal-detail-column">
               {!selectedRecord ? (
-                <EmptyState>
-                  <h2>{t("selectSignalToReview")}</h2>
-                  <p>{t("incomingEncryptedFeedback")}</p>
+                <EmptyState variant="abyss" animated={false} showVisual={false}>
+                  <p className="eyebrow">Signal Chamber</p>
+                  <h2>{t("abyssAwaitingSignalTitle")}</h2>
+                  <p>{t("abyssAwaitingSignalBody")}</p>
                 </EmptyState>
               ) : (
                 <>
