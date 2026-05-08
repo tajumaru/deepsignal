@@ -13,6 +13,7 @@ import { AdminAccessGate } from "../components/AdminAccessGate";
 import { BlobLink } from "../components/BlobLink";
 import { FormFieldEditor } from "../components/FormFieldEditor";
 import { ShareCard } from "../components/ShareCard";
+import { SignalMetaRow } from "../components/SignalMetaChip";
 import { FieldTypePicker } from "../components/formBuilder/FieldTypePicker";
 import { FormBuilderSteps } from "../components/formBuilder/FormBuilderSteps";
 import { LivePreview } from "../components/formBuilder/LivePreview";
@@ -570,6 +571,7 @@ export function FormBuilderPage() {
 
   const publicPath = savedForm ? getPublicFormPath(savedForm.id, savedForm.manifestBlobId) : "";
   const publicUrl = savedForm && typeof window !== "undefined" ? `${window.location.origin}${publicPath}` : publicPath;
+  const isCrossDeviceShareReady = Boolean(savedForm?.manifestBlobId);
 
   async function handleCopyLink() {
     if (!publicUrl) {
@@ -695,7 +697,12 @@ export function FormBuilderPage() {
                   <p className="muted">The signal is now available for monitoring, routing, and review.</p>
                 </div>
                 <div className="publish-active-actions">
-                  <button type="button" className="primary-button" onClick={() => void handleCopyLink()}>
+                  <button
+                    type="button"
+                    className="primary-button"
+                    onClick={() => void handleCopyLink()}
+                    disabled={!isCrossDeviceShareReady}
+                  >
                     {linkCopied ? "Copied Link" : "Copy Link"}
                   </button>
                   {savedForm ? (
@@ -703,7 +710,7 @@ export function FormBuilderPage() {
                       <Link className="ghost-button" to={`/dashboard/forms/${savedForm.id}`}>
                         Open Dashboard
                       </Link>
-                      <Link className="ghost-button" to={`/f/${savedForm.id}`}>
+                      <Link className="ghost-button" to={publicPath}>
                         View Signals
                       </Link>
                     </>
@@ -1033,34 +1040,41 @@ export function FormBuilderPage() {
 
                       <div className="composer-link-grid">
                         <p>
-                          {t("publicShareLink")}: <Link to={`/f/${savedForm.id}`}>/f/{savedForm.id}</Link>
+                          {t("publicShareLink")}: <Link to={publicPath}>{publicPath}</Link>
                         </p>
                         <p>
                           {t("adminPage")}: <Link to={`/dashboard/forms/${savedForm.id}`}>{t("adminPageCta")}</Link>
                         </p>
-                        <p>
-                          {t("walrusBlobId")}: {savedForm.blobId}
-                        </p>
-                        <BlobLink blobId={savedForm.blobId} />
-                        {savedForm.manifestBlobId ? (
-                          <>
-                            <p>
-                              Manifest Blob ID: {savedForm.manifestBlobId}
-                            </p>
-                            <BlobLink blobId={savedForm.manifestBlobId} label="Verify manifest on Walrus" />
-                            <p>
-                              {t("restoreLink")}: <Link to={`/m/${savedForm.manifestBlobId}`}>/m/{savedForm.manifestBlobId}</Link>
-                            </p>
-                          </>
-                        ) : null}
+                        <div className="metadata-list">
+                          <SignalMetaRow label={t("walrusBlobId")} type="blob" value={savedForm.blobId}>
+                            <BlobLink blobId={savedForm.blobId} />
+                          </SignalMetaRow>
+                          {savedForm.manifestBlobId ? (
+                            <SignalMetaRow label="Manifest Blob ID" type="manifest" value={savedForm.manifestBlobId}>
+                              <BlobLink blobId={savedForm.manifestBlobId} label="Verify manifest on Walrus" />
+                              <Link to={`/m/${savedForm.manifestBlobId}`}>{t("restoreLink")}</Link>
+                            </SignalMetaRow>
+                          ) : null}
+                        </div>
                       </div>
 
-                      <ShareCard
-                        formId={savedForm.id}
-                        blobId={savedForm.blobId}
-                        createdAt={savedForm.createdAt}
-                        manifestBlobId={savedForm.manifestBlobId}
-                      />
+                      {savedForm.manifestBlobId ? (
+                        <ShareCard
+                          formId={savedForm.id}
+                          blobId={savedForm.blobId}
+                          createdAt={savedForm.createdAt}
+                          manifestBlobId={savedForm.manifestBlobId}
+                        />
+                      ) : (
+                        <section className="answer-card">
+                          <p className="eyebrow">Share Ready</p>
+                          <h4>QR sharing is unavailable</h4>
+                          <p className="muted">
+                            This form is currently stored in local fallback mode, so phones and other browsers cannot
+                            restore it from a QR code yet.
+                          </p>
+                        </section>
+                      )}
                     </div>
                   ) : (
                     <p className="muted">{t("saveFormHint")}</p>

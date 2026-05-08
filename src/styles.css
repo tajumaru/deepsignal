@@ -212,6 +212,131 @@ button {
   color: var(--accent-strong);
 }
 
+.signal-meta-chip-shell {
+  position: relative;
+  display: inline-flex;
+  max-width: 100%;
+}
+
+.signal-meta-chip {
+  --meta-bg: rgba(120, 140, 160, 0.14);
+  --meta-border: rgba(140, 160, 180, 0.2);
+  --meta-text: #dbeaf3;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-width: 0;
+  max-width: 100%;
+  padding: 0.42rem 0.68rem;
+  border-radius: 999px;
+  border: 1px solid var(--meta-border);
+  background: var(--meta-bg);
+  color: var(--meta-text);
+  font-family: "Consolas", "SFMono-Regular", "Roboto Mono", monospace;
+  font-size: 0.82rem;
+  letter-spacing: 0.01em;
+  line-height: 1;
+}
+
+.signal-meta-chip:hover,
+.signal-meta-chip:focus-visible {
+  border-color: color-mix(in srgb, var(--meta-border) 72%, white);
+  transform: translateY(-1px);
+}
+
+.signal-meta-chip-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.signal-meta-chip-copy {
+  flex-shrink: 0;
+  font-size: 0.88rem;
+  opacity: 0.85;
+}
+
+.signal-meta-chip-contributor {
+  --meta-bg: rgba(120, 160, 176, 0.15);
+  --meta-border: rgba(120, 160, 176, 0.24);
+  --meta-text: #d7edf5;
+}
+
+.signal-meta-chip-blob {
+  --meta-bg: rgba(112, 146, 166, 0.14);
+  --meta-border: rgba(112, 146, 166, 0.24);
+  --meta-text: #d6eaf4;
+}
+
+.signal-meta-chip-manifest {
+  --meta-bg: rgba(128, 150, 130, 0.14);
+  --meta-border: rgba(128, 150, 130, 0.24);
+  --meta-text: #dcebdc;
+}
+
+.signal-meta-chip-seal {
+  --meta-bg: rgba(143, 134, 164, 0.14);
+  --meta-border: rgba(143, 134, 164, 0.24);
+  --meta-text: #e2ddf2;
+}
+
+.signal-meta-chip-package {
+  --meta-bg: rgba(154, 132, 122, 0.14);
+  --meta-border: rgba(154, 132, 122, 0.24);
+  --meta-text: #ede0d8;
+}
+
+.signal-meta-chip-registry {
+  --meta-bg: rgba(129, 152, 145, 0.14);
+  --meta-border: rgba(129, 152, 145, 0.24);
+  --meta-text: #d9eae4;
+}
+
+.signal-meta-tooltip {
+  position: absolute;
+  left: 0;
+  top: calc(100% + 0.45rem);
+  z-index: 20;
+  display: grid;
+  gap: 0.35rem;
+  min-width: min(320px, calc(100vw - 2rem));
+  max-width: min(420px, calc(100vw - 2rem));
+  padding: 0.7rem 0.8rem;
+  border-radius: 14px;
+  border: 1px solid rgba(150, 220, 255, 0.16);
+  background: rgba(3, 12, 21, 0.96);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.34);
+  color: #effcff;
+}
+
+.signal-meta-tooltip-value,
+.signal-meta-row-value,
+.signal-meta-inline,
+.access-role-meta {
+  font-family: "Consolas", "SFMono-Regular", "Roboto Mono", monospace;
+}
+
+.signal-meta-tooltip-value {
+  overflow-wrap: anywhere;
+  font-size: 0.82rem;
+}
+
+.signal-meta-tooltip-copy {
+  color: #9fe8f7;
+  font-size: 0.75rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.signal-meta-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
 .hero-layout,
 .builder-layout,
 .detail-layout,
@@ -1982,6 +2107,7 @@ body.composer-mode .bg-orb {
   justify-items: end;
   gap: 0.35rem;
   text-align: right;
+  min-width: 0;
 }
 
 .proof-callout {
@@ -2117,6 +2243,12 @@ body.composer-mode .bg-orb {
   min-width: 0;
   overflow-wrap: anywhere;
   word-break: break-word;
+}
+
+.access-role-meta {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
 }
 
 .mobile-console-banner {
@@ -2504,6 +2636,19 @@ body.composer-mode .bg-orb {
   border: 1px solid rgba(116, 226, 255, 0.14);
 }
 
+.signal-meta-row {
+  align-items: center;
+}
+
+.signal-meta-row-value {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 0.55rem;
+  min-width: 0;
+}
+
 .inbox-list-panel,
 .inbox-detail-panel {
   min-height: 65vh;
@@ -2599,6 +2744,16 @@ body.composer-mode .bg-orb {
 .roadmap-card {
   display: grid;
   gap: 0.9rem;
+}
+
+.roadmap-metadata-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.8rem;
+}
+
+.roadmap-metadata-grid .metadata-row {
+  min-width: 0;
 }
 
 .roadmap-preview {
@@ -3228,6 +3383,22 @@ body.composer-mode .bg-orb {
 
   .access-management-actions,
   .access-role-row {
+    grid-template-columns: 1fr;
+  }
+
+  .signal-meta-row,
+  .proof-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .signal-meta-row-value,
+  .proof-row-value {
+    justify-items: start;
+    text-align: left;
+  }
+
+  .roadmap-metadata-grid {
     grid-template-columns: 1fr;
   }
 

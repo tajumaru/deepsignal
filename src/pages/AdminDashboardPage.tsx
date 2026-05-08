@@ -7,6 +7,7 @@ import { BlobLink } from "../components/BlobLink";
 import { EmptyState } from "../components/EmptyState";
 import { SealStatusCard } from "../components/SealStatusCard";
 import { ShareCard } from "../components/ShareCard";
+import { SignalMetaChip, SignalMetaRow } from "../components/SignalMetaChip";
 import { getSealRuntimeStatus } from "../crypto/cryptoFactory";
 import { useAccessControl } from "../hooks/useAccessControl";
 import { useI18n } from "../i18n";
@@ -31,9 +32,6 @@ import {
   resolveSubmissionAnswers,
   storageAdapter,
 } from "../lib/storage";
-import {
-  shortAddress,
-} from "../lib/sui";
 import { formatDate, flattenAnswer } from "../lib/utils";
 import { getStorageRuntimeStatus } from "../storage/storageFactory";
 import type { FormSchema, Submission } from "../types";
@@ -539,6 +537,9 @@ export function AdminDashboardPage() {
                         <p className="signal-card-preview">{getSignalPreview(submission)}</p>
                         <div className="signal-badge-row">
                           <span className="signal-chip">{category}</span>
+                          {submission.contributorId ? (
+                            <SignalMetaChip type="contributor" value={submission.contributorId} />
+                          ) : null}
                           {typeof submission.ratingValue === "number" ? (
                             <span className="signal-chip">
                               {t("ratingLabel", { value: submission.ratingValue })}
@@ -681,8 +682,8 @@ export function AdminDashboardPage() {
                                   {attachment.type} · {Math.round(attachment.size / 1024)} KB
                                 </p>
                               </div>
-                              <div className="stack">
-                                <span className="blob-prominent">{attachment.blobId}</span>
+                              <div className="stack signal-meta-row-value">
+                                <SignalMetaChip type="blob" value={attachment.blobId} />
                                 {!isLocalFallbackBlob(attachment.blobId) ? (
                                   <BlobLink
                                     blobId={attachment.blobId}
@@ -818,57 +819,39 @@ export function AdminDashboardPage() {
                       </div>
                       {showMetadata ? (
                         <div className="metadata-list">
-                          <div className="metadata-row">
-                            <span>{t("formBlobId")}</span>
-                            <div>
-                              <strong className="blob-prominent">
-                                {selectedRecord.form.blobId ?? t("notAvailable")}
-                              </strong>
-                              {!isLocalFallbackBlob(selectedRecord.form.blobId) ? (
-                                <BlobLink
-                                  blobId={selectedRecord.form.blobId}
-                                  label={t("verifyOnWalrus")}
-                                />
-                              ) : null}
-                            </div>
-                          </div>
-                          <div className="metadata-row">
-                            <span>{t("submissionBlobIdLabel")}</span>
-                            <div>
-                              <strong className="blob-prominent">
-                                {selectedRecord.submission.blobId ?? t("notAvailable")}
-                              </strong>
-                              {!isLocalFallbackBlob(selectedRecord.submission.blobId) ? (
-                                <BlobLink
-                                  blobId={selectedRecord.submission.blobId}
-                                  label={t("verifyOnWalrus")}
-                                />
-                              ) : null}
-                            </div>
-                          </div>
-                          <div className="metadata-row">
-                            <span>{t("encryptedPayloadBlobId")}</span>
-                            <div>
-                              <strong className="blob-prominent">
-                                {selectedRecord.submission.encryptedBlobId ?? t("notAvailable")}
-                              </strong>
-                              {!isLocalFallbackBlob(selectedRecord.submission.encryptedBlobId) ? (
-                                <BlobLink
-                                  blobId={selectedRecord.submission.encryptedBlobId}
-                                  label={t("verifyOnWalrus")}
-                                />
-                              ) : null}
-                            </div>
-                          </div>
-                          <div className="metadata-row">
+                          <SignalMetaRow label={t("formBlobId")} type="blob" value={selectedRecord.form.blobId} emptyLabel={t("notAvailable")}>
+                            {!isLocalFallbackBlob(selectedRecord.form.blobId) ? (
+                              <BlobLink
+                                blobId={selectedRecord.form.blobId}
+                                label={t("verifyOnWalrus")}
+                              />
+                            ) : null}
+                          </SignalMetaRow>
+                          <SignalMetaRow label={t("submissionBlobIdLabel")} type="blob" value={selectedRecord.submission.blobId} emptyLabel={t("notAvailable")}>
+                            {!isLocalFallbackBlob(selectedRecord.submission.blobId) ? (
+                              <BlobLink
+                                blobId={selectedRecord.submission.blobId}
+                                label={t("verifyOnWalrus")}
+                              />
+                            ) : null}
+                          </SignalMetaRow>
+                          <SignalMetaRow label={t("encryptedPayloadBlobId")} type="seal" value={selectedRecord.submission.encryptedBlobId} emptyLabel={t("notAvailable")}>
+                            {!isLocalFallbackBlob(selectedRecord.submission.encryptedBlobId) ? (
+                              <BlobLink
+                                blobId={selectedRecord.submission.encryptedBlobId}
+                                label={t("verifyOnWalrus")}
+                              />
+                            ) : null}
+                          </SignalMetaRow>
+                          <div className="metadata-row signal-meta-row">
                             <span>{t("attachmentBlobIds")}</span>
-                            <div className="stack">
+                            <div className="stack signal-meta-row-value">
                               {selectedRecord.submission.attachments.length === 0 ? (
                                 <strong>{t("notAvailable")}</strong>
                               ) : (
                                 selectedRecord.submission.attachments.map((attachment) => (
-                                  <div key={attachment.blobId}>
-                                    <strong className="blob-prominent">{attachment.blobId}</strong>
+                                  <div key={attachment.blobId} className="signal-meta-row-value">
+                                    <SignalMetaChip type="blob" value={attachment.blobId} />
                                     {!isLocalFallbackBlob(attachment.blobId) ? (
                                       <BlobLink
                                         blobId={attachment.blobId}
@@ -880,6 +863,7 @@ export function AdminDashboardPage() {
                               )}
                             </div>
                           </div>
+                          <SignalMetaRow label="Contributor" type="contributor" value={selectedRecord.submission.contributorId} emptyLabel={t("notAvailable")} />
                           <div className="metadata-row">
                             <span>{t("storageMode")}</span>
                             <strong>

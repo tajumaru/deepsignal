@@ -1,6 +1,6 @@
 import { ConnectButton, useCurrentAccount } from "@mysten/dapp-kit";
 import { useI18n } from "../i18n";
-import { shortAddress } from "../lib/sui";
+import { SignalMetaChip } from "./SignalMetaChip";
 
 export function WalletConnect() {
   const account = useCurrentAccount();
@@ -12,7 +12,7 @@ export function WalletConnect() {
       {account?.address ? (
         <div className="wallet-address-chip">
           <span>{t("connectedLabel")}</span>
-          <strong>{shortAddress(account.address)}</strong>
+          <SignalMetaChip type="contributor" value={account.address} />
         </div>
       ) : null}
     </div>

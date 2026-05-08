@@ -5,8 +5,8 @@ import { AdminAccessGate } from "../components/AdminAccessGate";
 import { BlobLink } from "../components/BlobLink";
 import { EmptyState } from "../components/EmptyState";
 import { SealStatusCard } from "../components/SealStatusCard";
+import { SignalMetaChip, SignalMetaRow } from "../components/SignalMetaChip";
 import { useAccessControl } from "../hooks/useAccessControl";
-import { shortenContributorId } from "../lib/contributors";
 import { getSealRuntimeStatus } from "../crypto/cryptoFactory";
 import { useI18n } from "../i18n";
 import { getReviewAccessState, getRoleLabel } from "../lib/adminAccess";
@@ -389,7 +389,7 @@ export function FormSubmissionsPage() {
               <div className="wallet-status-card">
                 <p className="eyebrow">{t("walletStatus")}</p>
                 <strong>{getWalletAccessLabel(form, account?.address)}</strong>
-                <p className="muted">{form.ownerAddress ?? t("legacyDemoForm")}</p>
+                {form.ownerAddress ? <SignalMetaChip type="contributor" value={form.ownerAddress} /> : <p className="muted">{t("legacyDemoForm")}</p>}
               </div>
 
               {capabilityProfile.isConfigured ? (
@@ -406,7 +406,7 @@ export function FormSubmissionsPage() {
 
               <div className="wallet-status-card">
                 <p className="eyebrow">{t("formBlobId")}</p>
-                <strong className="blob-prominent">{form.blobId ?? t("notAvailable")}</strong>
+                {form.blobId ? <SignalMetaChip type="blob" value={form.blobId} /> : <strong>{t("notAvailable")}</strong>}
                 {!isLocalFallbackBlob(form.blobId) ? (
                   <BlobLink blobId={form.blobId} label={t("verifyOnWalrus")} />
                 ) : null}
@@ -477,7 +477,7 @@ export function FormSubmissionsPage() {
                       <div className="signal-badge-row">
                         <span className="signal-chip">{category}</span>
                         <span className="signal-chip">{getTriageStatusLabel(submission.triageStatus)}</span>
-                        <span className="signal-chip">Contributor {shortenContributorId(submission.contributorId)}</span>
+                        {submission.contributorId ? <SignalMetaChip type="contributor" value={submission.contributorId} /> : <span className="signal-chip">Contributor Anonymous</span>}
                         {typeof submission.signalValue === "number" ? (
                           <span className="signal-chip">Signal Value {submission.signalValue}/5</span>
                         ) : null}
@@ -628,8 +628,8 @@ export function FormSubmissionsPage() {
                                 {attachment.type} · {Math.round(attachment.size / 1024)} KB
                               </p>
                             </div>
-                            <div className="stack">
-                              <strong className="blob-prominent">{attachment.blobId}</strong>
+                            <div className="stack signal-meta-row-value">
+                              <SignalMetaChip type="blob" value={attachment.blobId} />
                               {!isLocalFallbackBlob(attachment.blobId) ? (
                                 <BlobLink blobId={attachment.blobId} label={t("verifyOnWalrus")} />
                               ) : null}
@@ -835,16 +835,7 @@ export function FormSubmissionsPage() {
                   <section className="answer-card">
                     <h3>Contributor Signal</h3>
                     <div className="metadata-list">
-                      <div className="metadata-row">
-                        <span>Contributor</span>
-                        <strong>{shortenContributorId(selectedSubmission.contributorId)}</strong>
-                      </div>
-                      <div className="metadata-row">
-                        <span>Contributor ID</span>
-                        <strong className="blob-prominent">
-                          {selectedSubmission.contributorId ?? "Not available"}
-                        </strong>
-                      </div>
+                      <SignalMetaRow label="Contributor" type="contributor" value={selectedSubmission.contributorId} />
                     </div>
                   </section>
 
@@ -861,49 +852,33 @@ export function FormSubmissionsPage() {
                     </div>
                     {showMetadata ? (
                       <div className="metadata-list">
-                        <div className="metadata-row">
-                          <span>{t("formBlobId")}</span>
-                          <div>
-                            <strong className="blob-prominent">{form.blobId ?? t("notAvailable")}</strong>
-                            {!isLocalFallbackBlob(form.blobId) ? (
-                              <BlobLink blobId={form.blobId} label={t("verifyOnWalrus")} />
-                            ) : null}
-                          </div>
-                        </div>
-                        <div className="metadata-row">
-                          <span>{t("submissionBlobIdLabel")}</span>
-                          <div>
-                            <strong className="blob-prominent">
-                              {selectedSubmission.blobId ?? t("notAvailable")}
-                            </strong>
-                            {!isLocalFallbackBlob(selectedSubmission.blobId) ? (
-                              <BlobLink blobId={selectedSubmission.blobId} label={t("verifyOnWalrus")} />
-                            ) : null}
-                          </div>
-                        </div>
-                        <div className="metadata-row">
-                          <span>{t("encryptedPayloadBlobId")}</span>
-                          <div>
-                            <strong className="blob-prominent">
-                              {selectedSubmission.encryptedBlobId ?? t("notAvailable")}
-                            </strong>
-                            {!isLocalFallbackBlob(selectedSubmission.encryptedBlobId) ? (
-                              <BlobLink
-                                blobId={selectedSubmission.encryptedBlobId}
-                                label={t("verifyOnWalrus")}
-                              />
-                            ) : null}
-                          </div>
-                        </div>
-                        <div className="metadata-row">
+                        <SignalMetaRow label={t("formBlobId")} type="blob" value={form.blobId} emptyLabel={t("notAvailable")}>
+                          {!isLocalFallbackBlob(form.blobId) ? (
+                            <BlobLink blobId={form.blobId} label={t("verifyOnWalrus")} />
+                          ) : null}
+                        </SignalMetaRow>
+                        <SignalMetaRow label={t("submissionBlobIdLabel")} type="blob" value={selectedSubmission.blobId} emptyLabel={t("notAvailable")}>
+                          {!isLocalFallbackBlob(selectedSubmission.blobId) ? (
+                            <BlobLink blobId={selectedSubmission.blobId} label={t("verifyOnWalrus")} />
+                          ) : null}
+                        </SignalMetaRow>
+                        <SignalMetaRow label={t("encryptedPayloadBlobId")} type="seal" value={selectedSubmission.encryptedBlobId} emptyLabel={t("notAvailable")}>
+                          {!isLocalFallbackBlob(selectedSubmission.encryptedBlobId) ? (
+                            <BlobLink
+                              blobId={selectedSubmission.encryptedBlobId}
+                              label={t("verifyOnWalrus")}
+                            />
+                          ) : null}
+                        </SignalMetaRow>
+                        <div className="metadata-row signal-meta-row">
                           <span>{t("attachmentBlobIds")}</span>
-                          <div className="stack">
+                          <div className="stack signal-meta-row-value">
                             {selectedSubmission.attachments.length === 0 ? (
                               <strong>{t("notAvailable")}</strong>
                             ) : (
                               selectedSubmission.attachments.map((attachment) => (
-                                <div key={attachment.blobId}>
-                                  <strong className="blob-prominent">{attachment.blobId}</strong>
+                                <div key={attachment.blobId} className="signal-meta-row-value">
+                                  <SignalMetaChip type="blob" value={attachment.blobId} />
                                   {!isLocalFallbackBlob(attachment.blobId) ? (
                                     <BlobLink blobId={attachment.blobId} label={t("verifyOnWalrus")} />
                                   ) : null}

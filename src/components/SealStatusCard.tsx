@@ -1,5 +1,6 @@
 import { getSealRuntimeStatus } from "../crypto/cryptoFactory";
 import { useI18n } from "../i18n";
+import { SignalMetaChip, SignalMetaRow } from "./SignalMetaChip";
 
 interface SealStatusCardProps {
   encryptSubmissions?: boolean;
@@ -47,10 +48,12 @@ export function SealStatusCard({
           <span>{t("encryptionLabel")}</span>
           <strong>{encryptSubmissions ? t("enabled") : t("disabled")}</strong>
         </div>
-        <div className="proof-row">
-          <span>{t("encryptedBlobIdLabel")}</span>
-          <strong className="blob-prominent">{encryptedBlobId ?? t("notAvailable")}</strong>
-        </div>
+        <SignalMetaRow
+          label={t("encryptedBlobIdLabel")}
+          type="seal"
+          value={encryptedBlobId}
+          emptyLabel={t("notAvailable")}
+        />
         <div className="proof-row">
           <span>{t("walletAccessStatus")}</span>
           <strong>{walletAccessStatus}</strong>
@@ -60,12 +63,7 @@ export function SealStatusCard({
       {encryptSubmissions ? (
         <p className="proof-callout">
           <strong>{t("encryptedPayloadStored")}</strong>
-          {encryptedBlobId ? (
-            <>
-              {" "}
-              <span className="blob-prominent">{encryptedBlobId}</span>
-            </>
-          ) : null}
+          {encryptedBlobId ? <span className="signal-meta-inline"><SignalMetaChip type="seal" value={encryptedBlobId} /></span> : null}
         </p>
       ) : (
         <p className="muted">{t("encryptionDisabledForForm")}</p>

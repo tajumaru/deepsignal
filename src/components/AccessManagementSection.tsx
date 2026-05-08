@@ -11,6 +11,7 @@ import {
   ACCESS_CONTROL_PACKAGE_ID,
   ACCESS_CONTROL_REGISTRY_ID,
 } from "../lib/sui";
+import { SignalMetaChip } from "./SignalMetaChip";
 
 interface AccessManagementSectionProps {
   capabilityProfile: CapabilityProfile;
@@ -358,13 +359,17 @@ export function AccessManagementSection({
           return (
             <div key={entry.key} className="access-role-row" role="row">
               <span className="access-role-value" role="cell">
-                {entry.address}
+                <span className="access-role-meta">
+                  <SignalMetaChip type="contributor" value={entry.address} />
+                </span>
               </span>
               <span className="access-role-value" role="cell">
                 {roleTitle(entry.role)}
               </span>
               <span className="access-role-value" role="cell">
-                {entry.capId}
+                <span className="access-role-meta">
+                  <SignalMetaChip type="registry" value={entry.capId} />
+                </span>
               </span>
               <span className="access-role-value" role="cell">
                 <span className="signal-chip signal-chip-accent">{entry.status}</span>
@@ -401,4 +406,3 @@ export function AccessManagementSection({
     </section>
   );
 }
-

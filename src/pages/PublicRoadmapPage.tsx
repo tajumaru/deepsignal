@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { EmptyState } from "../components/EmptyState";
-import { shortenContributorId } from "../lib/contributors";
+import { SignalMetaChip, SignalMetaRow } from "../components/SignalMetaChip";
 import { PUBLIC_ROADMAP_TRIAGE_STATUSES, getTriageStatusLabel } from "../lib/signalOps";
 import { getSignalPreview, inferSignalCategory } from "../lib/signalInbox";
 import { normalizeForm, normalizeSubmission, storageAdapter } from "../lib/storage";
@@ -72,6 +72,11 @@ export function PublicRoadmapPage() {
             Open Public Form
           </Link>
         </div>
+        <div className="roadmap-metadata-grid">
+          <SignalMetaRow label="Form blob" type="blob" value={form.blobId} />
+          <SignalMetaRow label="Manifest" type="manifest" value={form.manifestBlobId} />
+          <SignalMetaRow label="Contributor owner" type="contributor" value={form.ownerAddress} emptyLabel="Legacy demo form" />
+        </div>
       </div>
 
       <div className="roadmap-group-grid">
@@ -98,9 +103,7 @@ export function PublicRoadmapPage() {
                     <div className="pill-row">
                       <span className="signal-chip">{inferSignalCategory(submission)}</span>
                       <span className="signal-chip">{formatDate(submission.createdAt)}</span>
-                      <span className="signal-chip">
-                        Contributor {shortenContributorId(submission.contributorId)}
-                      </span>
+                      {submission.contributorId ? <SignalMetaChip type="contributor" value={submission.contributorId} /> : <span className="signal-chip">Contributor Anonymous</span>}
                       {typeof submission.signalValue === "number" ? (
                         <span className="signal-chip">Signal Value {submission.signalValue}/5</span>
                       ) : null}

@@ -4,6 +4,7 @@ import { useParams, useSearchParams } from "react-router-dom";
 import { BlobLink } from "../components/BlobLink";
 import { DynamicField } from "../components/DynamicField";
 import { EmptyState } from "../components/EmptyState";
+import { SignalMetaChip, SignalMetaRow } from "../components/SignalMetaChip";
 import { makeAnonymousContributorId } from "../lib/contributors";
 import { useI18n } from "../i18n";
 import { getSubmissionCategoryFromPurpose } from "../lib/formTemplates";
@@ -205,34 +206,25 @@ export function PublicFormPage() {
         </div>
         <section className="answer-card">
           <div className="metadata-list">
-            <div className="metadata-row">
-              <span>Submission Blob ID</span>
-              <div>
-                <strong className="blob-prominent">{submitted.blobId ?? "Not available"}</strong>
-                <BlobLink blobId={submitted.blobId} label="Verify on Walrus" />
-              </div>
-            </div>
-            <div className="metadata-row">
-              <span>Encrypted Payload Blob ID</span>
-              <div>
-                <strong className="blob-prominent">
-                  {submitted.encryptedBlobId ?? "Not available"}
-                </strong>
-                <BlobLink blobId={submitted.encryptedBlobId} label="Verify on Walrus" />
-              </div>
-            </div>
-            <div className="metadata-row">
+            <SignalMetaRow label="Submission Blob ID" type="blob" value={submitted.blobId}>
+              <BlobLink blobId={submitted.blobId} label="Verify on Walrus" />
+            </SignalMetaRow>
+            <SignalMetaRow label="Encrypted Payload Blob ID" type="seal" value={submitted.encryptedBlobId}>
+              <BlobLink blobId={submitted.encryptedBlobId} label="Verify on Walrus" />
+            </SignalMetaRow>
+            <div className="metadata-row signal-meta-row">
               <span>Attachment Blob IDs</span>
-              <div className="stack">
+              <div className="stack signal-meta-row-value">
                 {submitted.attachments.length === 0 ? (
                   <strong>Not available</strong>
                 ) : (
                   submitted.attachments.map((attachment, index) => (
-                    <div key={attachment.blobId}>
-                      <strong className="blob-prominent">
-                        Attachment {index + 1}: {attachment.blobId}
-                      </strong>
-                      <BlobLink blobId={attachment.blobId} label="Verify on Walrus" />
+                    <div key={attachment.blobId} className="signal-meta-row-value">
+                      <span>Attachment {index + 1}</span>
+                      <SignalMetaChip type="blob" value={attachment.blobId} />
+                      <div className="signal-meta-row-value">
+                        <BlobLink blobId={attachment.blobId} label="Verify on Walrus" />
+                      </div>
                     </div>
                   ))
                 )}

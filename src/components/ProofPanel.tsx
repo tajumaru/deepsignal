@@ -1,4 +1,5 @@
 import { getProofBlobUrl, getProofStorageMode, isLocalFallbackBlob } from "../lib/proof";
+import { SignalMetaChip } from "./SignalMetaChip";
 
 interface ProofItem {
   label: string;
@@ -20,7 +21,7 @@ function ProofBlobRow({ label, blobId }: ProofItem) {
     <div className="proof-row">
       <span>{label}</span>
       <div className="proof-row-value">
-        <strong className="blob-prominent">{blobId ?? "Not stored"}</strong>
+        {blobId ? <SignalMetaChip type="blob" value={blobId} /> : <strong>Not stored</strong>}
         {blobId ? (
           isLocalFallbackBlob(blobId) ? (
             <span className="pill">Local fallback</span>
@@ -68,11 +69,11 @@ export function ProofPanel({
         </div>
         <div className="proof-row">
           <span>Current wallet address</span>
-          <strong className="blob-prominent">{walletAddress ?? "Not connected"}</strong>
+          {walletAddress ? <SignalMetaChip type="contributor" value={walletAddress} /> : <strong>Not connected</strong>}
         </div>
         <div className="proof-row">
           <span>Form ownerAddress</span>
-          <strong className="blob-prominent">{ownerAddress ?? "Legacy demo form"}</strong>
+          {ownerAddress ? <SignalMetaChip type="contributor" value={ownerAddress} /> : <strong>Legacy demo form</strong>}
         </div>
       </div>
     </section>
