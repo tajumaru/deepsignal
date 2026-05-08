@@ -47,7 +47,10 @@ VITE_SEAL_PACKAGE_ID=
 VITE_SEAL_KEY_SERVER_OBJECT_ID=
 VITE_SEAL_AGGREGATOR_URL=
 VITE_SUI_NETWORK=testnet
+VITE_RPC_URL=
 VITE_WALFORM_PACKAGE_ID=
+VITE_PACKAGE_ID=
+VITE_REGISTRY_ID=
 ```
 
 If `VITE_STORAGE_MODE` is not `walrus`, or the Walrus URLs are missing, the app runs entirely on `localStorage`.
@@ -98,6 +101,69 @@ Current behavior:
 - public respondents do not need a wallet to submit
 - when a public respondent has a connected wallet, its address is stored as `contributorId`
 - when no wallet is available, submissions get an `anonymous-xxxxxx` contributor id
+
+## Sui Move access control
+
+DeepSignal now includes a Move package for capability-based wallet access control on Sui.
+
+- Move package lives in [move/deepsignal_access](D:/game/deepsignal/move/deepsignal_access)
+- module name is `deepsignal::access_control`
+- package publish creates and shares one `Registry` object
+- package publish also mints the initial `OwnerCap` to the publishing wallet during `init`
+- only `OwnerCap` holders can call `issue_admin_cap`
+- only `AdminCap` holders can call `issue_reviewer_cap`
+- `OwnerCap` and `AdminCap` holders can use admin surfaces
+- `ReviewerCap` holders can use review surfaces, but cannot use admin-only creation or destructive controls
+
+### Frontend env
+
+Set these client env vars after publish:
+
+```bash
+VITE_SUI_NETWORK=testnet
+VITE_RPC_URL=https://fullnode.testnet.sui.io:443
+VITE_PACKAGE_ID=0x...
+VITE_REGISTRY_ID=0x...
+```
+
+When `VITE_PACKAGE_ID` is configured, the frontend checks the connected wallet's owned objects for:
+
+- `OwnerCap`
+- `AdminCap`
+- `ReviewerCap`
+
+Behavior is:
+
+- `OwnerCap`: admin UI and review UI enabled, and can mint `AdminCap`
+- `AdminCap`: admin UI and review UI enabled, and can mint `ReviewerCap`
+- `ReviewerCap` only: review UI enabled, admin-only actions disabled
+- no cap: `Access Denied`
+
+If `VITE_PACKAGE_ID` is not configured, the app falls back to the older wallet/owner-address behavior so local and demo flows keep working.
+
+### Publish and setup on Sui testnet
+
+1. Install a Sui CLI version aligned with testnet and fund the deployer wallet.
+2. From [move/deepsignal_access](D:/game/deepsignal/move/deepsignal_access), publish the package:
+
+```bash
+cd move/deepsignal_access
+sui client publish --gas-budget 50000000
+```
+
+3. Save the published package ID as `VITE_PACKAGE_ID`.
+4. In the publish output, find the newly shared `Registry` object ID and save it as `VITE_REGISTRY_ID`.
+5. Set `VITE_SUI_NETWORK` and, if needed, `VITE_RPC_URL` for the target fullnode.
+6. Restart the Vite app so the new env values are loaded.
+7. Connect the publisher wallet. It should immediately have the initial `OwnerCap`.
+8. Open `/admin` and use the `Issue AdminCap` panel to mint admin access for another Sui wallet.
+9. Connect an admin wallet and use the `Issue ReviewerCap` panel to mint reviewer access for another Sui wallet.
+
+Notes:
+
+- `Move.toml` currently pins the `Sui` framework to `testnet`; if you publish against a different network or CLI snapshot, align the dependency revision first.
+- public responder routes such as `/f/:formId`, roadmap pages, and manifest restore remain wallet-optional.
+- storage and Seal behavior are unchanged; access control only gates creator/reviewer surfaces.
 
 Because this project uses Vite rather than Next.js, the wallet env vars use the `VITE_` prefix.
 
@@ -152,10 +218,15 @@ DeepSignal can expose a public roadmap per form at `/roadmap/:formId`.
 ## Admin protection
 
 - `/admin` and `/dashboard` views require a connected wallet
-- creator inbox pages are wallet-gated on `form.ownerAddress`
-- when `form.ownerAddress` matches the connected wallet, the inbox is visible
-- when it does not match, the UI shows `Access denied. This signal belongs to another creator.`
-- older forms without `ownerAddress` are treated as legacy demo forms and remain visible with a warning
+- when `VITE_PACKAGE_ID` is configured, creator/reviewer access is gated by owned `OwnerCap` / `AdminCap` / `ReviewerCap` objects from the configured Move package
+- `OwnerCap` holders can access admin creation flows and review flows
+- `OwnerCap` holders can mint `AdminCap`
+- `AdminCap` holders can mint `ReviewerCap`
+- `AdminCap` holders can access admin creation flows and review flows
+- `ReviewerCap` holders can access review flows only
+- when no matching cap is found, the UI shows `Access denied`
+- if Move access control env is not configured, creator inbox pages fall back to the older `form.ownerAddress` match behavior
+- older forms without `ownerAddress` are still treated as legacy demo forms in fallback mode and remain visible with a warning
 - `/f/:formId` stays public and does not require a wallet
 - new form creation requires a connected wallet and always stores `ownerAddress`
 

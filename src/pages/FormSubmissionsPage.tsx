@@ -5,10 +5,11 @@ import { AdminAccessGate } from "../components/AdminAccessGate";
 import { BlobLink } from "../components/BlobLink";
 import { EmptyState } from "../components/EmptyState";
 import { SealStatusCard } from "../components/SealStatusCard";
+import { useAccessControl } from "../hooks/useAccessControl";
 import { shortenContributorId } from "../lib/contributors";
 import { getSealRuntimeStatus } from "../crypto/cryptoFactory";
 import { useI18n } from "../i18n";
-import { getFormAccessState } from "../lib/adminAccess";
+import { getReviewAccessState, getRoleLabel } from "../lib/adminAccess";
 import { exportSubmissionJson, exportSubmissionsCsv, exportSummaryJson } from "../lib/export";
 import {
   getSignalPreview,
@@ -74,6 +75,7 @@ function matchesStream(submission: Submission, streamId: StreamId) {
 export function FormSubmissionsPage() {
   const { t } = useI18n();
   const account = useCurrentAccount();
+  const { capabilityProfile } = useAccessControl(account?.address);
   const { formId = "", submissionId = "" } = useParams();
   const sealRuntime = getSealRuntimeStatus();
   const storageRuntime = getStorageRuntimeStatus();
@@ -312,7 +314,7 @@ export function FormSubmissionsPage() {
     );
   }
 
-  const access = getFormAccessState(form, account?.address);
+  const access = getReviewAccessState(form, account?.address, capabilityProfile);
   const surveySummary = buildSurveySummary(form, submissions);
   const showSurveySummary =
     form.purpose === "survey" ||
@@ -323,6 +325,11 @@ export function FormSubmissionsPage() {
       hasWallet={Boolean(account?.address)}
       access={access}
       legacyMessage={t("legacyDemoFormBody")}
+      deniedBody={
+        capabilityProfile.isConfigured
+          ? "OwnerCap / AdminCap / ReviewerCap を持つウォレットだけが review 操作を実行できます。"
+          : undefined
+      }
     >
       <section className="stack">
         <div className="panel glow-panel inbox-shell-header">
@@ -380,6 +387,18 @@ export function FormSubmissionsPage() {
                 <strong>{getWalletAccessLabel(form, account?.address)}</strong>
                 <p className="muted">{form.ownerAddress ?? t("legacyDemoForm")}</p>
               </div>
+
+              {capabilityProfile.isConfigured ? (
+                <div className="wallet-status-card">
+                  <p className="eyebrow">Access role</p>
+                  <strong>{getRoleLabel(capabilityProfile)}</strong>
+                  <p className="muted">
+                    OwnerCap {capabilityProfile.ownerCapIds.length} / AdminCap{" "}
+                    {capabilityProfile.adminCapIds.length} / ReviewerCap{" "}
+                    {capabilityProfile.reviewerCapIds.length}
+                  </p>
+                </div>
+              ) : null}
 
               <div className="wallet-status-card">
                 <p className="eyebrow">{t("formBlobId")}</p>

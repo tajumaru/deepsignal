@@ -7,13 +7,17 @@ import {
 import { getJsonRpcFullnodeUrl } from "@mysten/sui/jsonRpc";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useState, type PropsWithChildren } from "react";
-import { SUI_NETWORK } from "./lib/sui";
-
-const requestedNetwork = SUI_NETWORK === "mainnet" ? "mainnet" : "testnet";
+import { SUI_NETWORK, SUI_RPC_URL } from "./lib/sui";
 
 const { networkConfig } = createNetworkConfig({
-  testnet: { url: getJsonRpcFullnodeUrl("testnet"), network: "testnet" },
-  mainnet: { url: getJsonRpcFullnodeUrl("mainnet"), network: "mainnet" },
+  testnet: {
+    url: SUI_NETWORK === "testnet" && SUI_RPC_URL ? SUI_RPC_URL : getJsonRpcFullnodeUrl("testnet"),
+    network: "testnet",
+  },
+  mainnet: {
+    url: SUI_NETWORK === "mainnet" && SUI_RPC_URL ? SUI_RPC_URL : getJsonRpcFullnodeUrl("mainnet"),
+    network: "mainnet",
+  },
 });
 
 export function Providers({ children }: PropsWithChildren) {
@@ -21,7 +25,7 @@ export function Providers({ children }: PropsWithChildren) {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <SuiClientProvider networks={networkConfig} defaultNetwork={requestedNetwork}>
+      <SuiClientProvider networks={networkConfig} defaultNetwork={SUI_NETWORK}>
         <WalletProvider autoConnect>{children}</WalletProvider>
       </SuiClientProvider>
     </QueryClientProvider>

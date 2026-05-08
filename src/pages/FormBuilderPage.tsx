@@ -18,7 +18,9 @@ import { FormBuilderSteps } from "../components/formBuilder/FormBuilderSteps";
 import { LivePreview } from "../components/formBuilder/LivePreview";
 import { SectionEditor } from "../components/formBuilder/SectionEditor";
 import { TemplatePicker } from "../components/formBuilder/TemplatePicker";
+import { useAccessControl } from "../hooks/useAccessControl";
 import { useI18n } from "../i18n";
+import { canAdmin, getAdminSurfaceAccessState, getRoleLabel } from "../lib/adminAccess";
 import {
   createTemplateFields,
   defaultComposerTemplateKey,
@@ -133,6 +135,7 @@ const INITIAL_DRAFT_SNAPSHOT = serializeDraft(
 export function FormBuilderPage() {
   const { t } = useI18n();
   const account = useCurrentAccount();
+  const { capabilityProfile } = useAccessControl(account?.address);
   const navigate = useNavigate();
   const labelRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const fieldCardRefs = useRef<Record<string, HTMLElement | null>>({});
@@ -174,6 +177,12 @@ export function FormBuilderPage() {
   const hasValidTitle = Boolean(title.trim());
   const hasQuestions = fields.length > 0;
   const isReadyToPublish = hasValidTitle && hasQuestions;
+  const hasAdminAccess = canAdmin(capabilityProfile);
+  const accessState = getAdminSurfaceAccessState(
+    "admin",
+    account?.address,
+    capabilityProfile,
+  );
 
   const steps = [
     { key: "template", title: "Step 1", description: "Pick a starting point" },
@@ -588,7 +597,15 @@ export function FormBuilderPage() {
   }
 
   return (
-    <AdminAccessGate hasWallet={Boolean(account?.address)} access="allowed">
+    <AdminAccessGate
+      hasWallet={Boolean(account?.address)}
+      access={accessState}
+      deniedBody={
+        capabilityProfile.isConfigured
+          ? "OwnerCap または AdminCap を持つウォレットだけがフォーム作成と管理操作を実行できます。"
+          : undefined
+      }
+    >
       <section className="composer-shell">
         {publishOverlayOpen ? (
           <div className="publish-overlay" role="dialog" aria-modal="true" aria-labelledby="publish-overlay-title">
@@ -706,6 +723,14 @@ export function FormBuilderPage() {
             <p className="eyebrow">{t("builderEyebrow")}</p>
             <h1>{t("builderTitle")}</h1>
             <p className="muted composer-intro">{t("composerIntro")}</p>
+            {capabilityProfile.isConfigured ? (
+              <p className="muted">
+                Access Role: {getRoleLabel(capabilityProfile)}
+                {hasAdminAccess && capabilityProfile.adminCapIds[0]
+                  ? ` (${shortAddress(capabilityProfile.adminCapIds[0])})`
+                  : ""}
+              </p>
+            ) : null}
           </div>
 
           <FormBuilderSteps

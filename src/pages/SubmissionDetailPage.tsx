@@ -3,7 +3,8 @@ import { useEffect, useState } from "react";
 import { Navigate, useParams } from "react-router-dom";
 import { AdminAccessGate } from "../components/AdminAccessGate";
 import { EmptyState } from "../components/EmptyState";
-import { getFormAccessState } from "../lib/adminAccess";
+import { useAccessControl } from "../hooks/useAccessControl";
+import { getReviewAccessState } from "../lib/adminAccess";
 import { useI18n } from "../i18n";
 import { normalizeSubmission, storageAdapter } from "../lib/storage";
 import type { FormSchema } from "../types";
@@ -11,6 +12,7 @@ import type { FormSchema } from "../types";
 export function SubmissionDetailPage() {
   const { t } = useI18n();
   const account = useCurrentAccount();
+  const { capabilityProfile } = useAccessControl(account?.address);
   const { formId = "", submissionId = "" } = useParams();
   const [resolvedForm, setResolvedForm] = useState<FormSchema | null>(null);
   const [loading, setLoading] = useState(!formId && Boolean(submissionId));
@@ -52,7 +54,12 @@ export function SubmissionDetailPage() {
   return (
     <AdminAccessGate
       hasWallet={Boolean(account?.address)}
-      access={getFormAccessState(resolvedForm, account?.address)}
+      access={getReviewAccessState(resolvedForm, account?.address, capabilityProfile)}
+      deniedBody={
+        capabilityProfile.isConfigured
+          ? "OwnerCap / AdminCap / ReviewerCap を持つウォレットだけが review 画面を開けます。"
+          : undefined
+      }
     >
       <EmptyState>
         <h1>{t("emptySubmissionNotFound")}</h1>

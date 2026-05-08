@@ -1,4 +1,6 @@
-import { useCurrentAccount } from "@mysten/dapp-kit";
+import { useCurrentAccount, useSignAndExecuteTransaction } from "@mysten/dapp-kit";
+import { Transaction } from "@mysten/sui/transactions";
+import { isValidSuiAddress, normalizeSuiAddress } from "@mysten/sui/utils";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { AdminAccessGate } from "../components/AdminAccessGate";
@@ -7,8 +9,17 @@ import { EmptyState } from "../components/EmptyState";
 import { SealStatusCard } from "../components/SealStatusCard";
 import { ShareCard } from "../components/ShareCard";
 import { getSealRuntimeStatus } from "../crypto/cryptoFactory";
+import { useAccessControl } from "../hooks/useAccessControl";
 import { useI18n } from "../i18n";
-import { addressesMatch } from "../lib/adminAccess";
+import {
+  canAdmin,
+  canIssueAdmin,
+  canIssueReviewer,
+  canReview,
+  canReviewForm,
+  getAdminSurfaceAccessState,
+  getRoleLabel,
+} from "../lib/adminAccess";
 import { exportSubmissionJson } from "../lib/export";
 import {
   getSignalPreview,
@@ -24,7 +35,12 @@ import {
   resolveSubmissionAnswers,
   storageAdapter,
 } from "../lib/storage";
-import { shortAddress } from "../lib/sui";
+import {
+  ACCESS_CONTROL_MODULE,
+  ACCESS_CONTROL_PACKAGE_ID,
+  ACCESS_CONTROL_REGISTRY_ID,
+  shortAddress,
+} from "../lib/sui";
 import { formatDate, flattenAnswer } from "../lib/utils";
 import { getStorageRuntimeStatus } from "../storage/storageFactory";
 import type { FormSchema, Submission } from "../types";
@@ -70,6 +86,8 @@ function matchesStream(record: SignalRecord, streamId: StreamId) {
 export function AdminDashboardPage() {
   const { t } = useI18n();
   const account = useCurrentAccount();
+  const { capabilityProfile, refetch: refetchCapabilities, isPending: isLoadingCapabilities } =
+    useAccessControl(account?.address);
   const sealRuntime = getSealRuntimeStatus();
   const storageRuntime = getStorageRuntimeStatus();
   const [forms, setForms] = useState<FormWithCount[]>([]);
@@ -92,7 +110,22 @@ export function AdminDashboardPage() {
   const [nodeDirectoryOpen, setNodeDirectoryOpen] = useState(false);
   const [beaconFormId, setBeaconFormId] = useState<string | null>(null);
   const [nodeSearch, setNodeSearch] = useState("");
+  const [adminAddress, setAdminAddress] = useState("");
+  const [adminIssueState, setAdminIssueState] = useState("");
+  const [reviewerAddress, setReviewerAddress] = useState("");
+  const [reviewerIssueState, setReviewerIssueState] = useState("");
   const saveQueueRef = useRef(Promise.resolve());
+  const issueAdminCap = useSignAndExecuteTransaction();
+  const issueReviewerCap = useSignAndExecuteTransaction();
+  const hasAdminAccess = canAdmin(capabilityProfile);
+  const canMintAdminCap = canIssueAdmin(capabilityProfile);
+  const canMintReviewerCap = canIssueReviewer(capabilityProfile);
+  const hasReviewAccess = canReview(capabilityProfile);
+  const accessState = getAdminSurfaceAccessState(
+    "reviewer",
+    account?.address,
+    capabilityProfile,
+  );
 
   useEffect(() => {
     void loadConsole();
@@ -151,10 +184,8 @@ export function AdminDashboardPage() {
 
   const accessibleForms = useMemo(
     () =>
-      forms.filter(
-        (form) => !form.ownerAddress || addressesMatch(form.ownerAddress, account?.address),
-      ),
-    [account?.address, forms],
+      forms.filter((form) => canReviewForm(form, account?.address, capabilityProfile)),
+    [account?.address, capabilityProfile, forms],
   );
 
   useEffect(() => {
@@ -362,16 +393,202 @@ export function AdminDashboardPage() {
     return <div className="panel">{t("loadingResearchLab")}</div>;
   }
 
+  async function handleIssueAdminCap() {
+    if (!canMintAdminCap) {
+      setAdminIssueState("OwnerCap is required to mint AdminCap.");
+      return;
+    }
+    if (!ACCESS_CONTROL_PACKAGE_ID || !ACCESS_CONTROL_REGISTRY_ID) {
+      setAdminIssueState("VITE_PACKAGE_ID and VITE_REGISTRY_ID must be configured first.");
+      return;
+    }
+    if (!capabilityProfile.ownerCapIds[0]) {
+      setAdminIssueState("No OwnerCap object was found in the connected wallet.");
+      return;
+    }
+    if (!isValidSuiAddress(adminAddress)) {
+      setAdminIssueState("Enter a valid Sui wallet address.");
+      return;
+    }
+
+    const tx = new Transaction();
+    tx.moveCall({
+      target: `${ACCESS_CONTROL_PACKAGE_ID}::${ACCESS_CONTROL_MODULE}::issue_admin_cap`,
+      arguments: [
+        tx.object(capabilityProfile.ownerCapIds[0]),
+        tx.object(ACCESS_CONTROL_REGISTRY_ID),
+        tx.pure.address(normalizeSuiAddress(adminAddress)),
+      ],
+    });
+
+    try {
+      setAdminIssueState("Awaiting wallet approval...");
+      await issueAdminCap.mutateAsync({ transaction: tx });
+      setAdminAddress("");
+      setAdminIssueState("AdminCap issued.");
+      await refetchCapabilities();
+    } catch (error) {
+      setAdminIssueState(error instanceof Error ? error.message : "Failed to issue AdminCap.");
+    }
+  }
+
+  async function handleIssueReviewerCap() {
+    if (!canMintReviewerCap) {
+      setReviewerIssueState("AdminCap or OwnerCap is required to mint ReviewerCap.");
+      return;
+    }
+    if (!ACCESS_CONTROL_PACKAGE_ID || !ACCESS_CONTROL_REGISTRY_ID) {
+      setReviewerIssueState("VITE_PACKAGE_ID and VITE_REGISTRY_ID must be configured first.");
+      return;
+    }
+    if (!capabilityProfile.adminCapIds[0]) {
+      setReviewerIssueState("No AdminCap object was found in the connected wallet.");
+      return;
+    }
+    if (!isValidSuiAddress(reviewerAddress)) {
+      setReviewerIssueState("Enter a valid Sui wallet address.");
+      return;
+    }
+
+    const tx = new Transaction();
+    tx.moveCall({
+      target: `${ACCESS_CONTROL_PACKAGE_ID}::${ACCESS_CONTROL_MODULE}::issue_reviewer_cap`,
+      arguments: [
+        tx.object(capabilityProfile.adminCapIds[0]),
+        tx.object(ACCESS_CONTROL_REGISTRY_ID),
+        tx.pure.address(normalizeSuiAddress(reviewerAddress)),
+      ],
+    });
+
+    try {
+      setReviewerIssueState("Awaiting wallet approval...");
+      await issueReviewerCap.mutateAsync({ transaction: tx });
+      setReviewerAddress("");
+      setReviewerIssueState("ReviewerCap issued.");
+      await refetchCapabilities();
+    } catch (error) {
+      setReviewerIssueState(error instanceof Error ? error.message : "Failed to issue ReviewerCap.");
+    }
+  }
+
   return (
-    <AdminAccessGate hasWallet={Boolean(account?.address)} access="allowed">
+    <AdminAccessGate
+      hasWallet={Boolean(account?.address)}
+      access={accessState}
+      deniedBody={
+        capabilityProfile.isConfigured
+          ? "OwnerCap / AdminCap / ReviewerCap を持つウォレットだけが review console を開けます。"
+          : undefined
+      }
+    >
       <section className="stack">
         <div className="panel glow-panel inbox-shell-header">
           <div>
             <p className="eyebrow">{t("creatorOnlyInbox")}</p>
             <h1>{t("signalInboxTitle")}</h1>
             <p className="lede">{t("signalInboxDescription")}</p>
+            {capabilityProfile.isConfigured ? (
+              <p className="muted">
+                Access Role: {getRoleLabel(capabilityProfile)}
+                {isLoadingCapabilities ? " / checking wallet objects..." : ""}
+              </p>
+            ) : null}
           </div>
         </div>
+
+        {capabilityProfile.isConfigured ? (
+          <section className="panel">
+            <div className="section-row">
+              <div>
+                <p className="eyebrow">Sui Move Access</p>
+                <h2>Wallet capability state</h2>
+              </div>
+              <button
+                type="button"
+                className="ghost-button"
+                onClick={() => void refetchCapabilities()}
+              >
+                Refresh caps
+              </button>
+            </div>
+            <div className="metadata-list">
+              <div className="metadata-row">
+                <span>Package ID</span>
+                <strong className="blob-prominent">{ACCESS_CONTROL_PACKAGE_ID}</strong>
+              </div>
+              <div className="metadata-row">
+                <span>Registry ID</span>
+                <strong className="blob-prominent">
+                  {ACCESS_CONTROL_REGISTRY_ID || "Not configured"}
+                </strong>
+              </div>
+              <div className="metadata-row">
+                <span>Connected role</span>
+                <strong>{getRoleLabel(capabilityProfile)}</strong>
+              </div>
+              <div className="metadata-row">
+                <span>OwnerCap objects</span>
+                <strong>{capabilityProfile.ownerCapIds.length}</strong>
+              </div>
+              <div className="metadata-row">
+                <span>AdminCap objects</span>
+                <strong>{capabilityProfile.adminCapIds.length}</strong>
+              </div>
+              <div className="metadata-row">
+                <span>ReviewerCap objects</span>
+                <strong>{capabilityProfile.reviewerCapIds.length}</strong>
+              </div>
+            </div>
+            {canMintAdminCap ? (
+              <div className="stack">
+                <label>
+                  <span>Issue AdminCap to wallet</span>
+                  <input
+                    value={adminAddress}
+                    onChange={(event) => setAdminAddress(event.target.value)}
+                    placeholder="0x..."
+                  />
+                </label>
+                <div className="inline-actions">
+                  <button
+                    type="button"
+                    className="primary-button"
+                    onClick={() => void handleIssueAdminCap()}
+                    disabled={issueAdminCap.isPending}
+                  >
+                    {issueAdminCap.isPending ? "Issuing..." : "Issue AdminCap"}
+                  </button>
+                </div>
+                {adminIssueState ? <p className="muted">{adminIssueState}</p> : null}
+              </div>
+            ) : null}
+            {canMintReviewerCap ? (
+              <div className="stack">
+                <label>
+                  <span>Issue ReviewerCap to wallet</span>
+                  <input
+                    value={reviewerAddress}
+                    onChange={(event) => setReviewerAddress(event.target.value)}
+                    placeholder="0x..."
+                  />
+                </label>
+                <div className="inline-actions">
+                  <button
+                    type="button"
+                    className="primary-button"
+                    onClick={() => void handleIssueReviewerCap()}
+                    disabled={issueReviewerCap.isPending}
+                  >
+                    {issueReviewerCap.isPending ? "Issuing..." : "Issue ReviewerCap"}
+                  </button>
+                </div>
+                {reviewerIssueState ? <p className="muted">{reviewerIssueState}</p> : null}
+              </div>
+            ) : hasReviewAccess ? (
+              <p className="muted">ReviewerCap detected. Review surfaces remain enabled.</p>
+            ) : null}
+          </section>
+        ) : null}
 
         <div className="mobile-console-banner">{t("adminDesktopNotice")}</div>
 
@@ -379,9 +596,11 @@ export function AdminDashboardPage() {
           <EmptyState>
             <h2>{t("noCreatorInboxesTitle")}</h2>
             <p>{t("noCreatorInboxesBody")}</p>
-            <Link className="primary-button" to="/admin/forms/new">
-              {t("createSignalForm")}
-            </Link>
+            {hasAdminAccess || !capabilityProfile.isConfigured ? (
+              <Link className="primary-button" to="/admin/forms/new">
+                {t("createSignalForm")}
+              </Link>
+            ) : null}
           </EmptyState>
         ) : (
           <div className="signal-console-layout">
@@ -969,14 +1188,16 @@ export function AdminDashboardPage() {
                         >
                           {t("openSignalBeacon")}
                         </button>
-                        <button
-                          type="button"
-                          className="ghost-button node-directory-delete"
-                          onClick={() => void handleDelete(item.id)}
-                          disabled={deletingFormId === item.id}
-                        >
-                          {deletingFormId === item.id ? t("deletingLabel") : t("deleteNode")}
-                        </button>
+                        {hasAdminAccess || !capabilityProfile.isConfigured ? (
+                          <button
+                            type="button"
+                            className="ghost-button node-directory-delete"
+                            onClick={() => void handleDelete(item.id)}
+                            disabled={deletingFormId === item.id}
+                          >
+                            {deletingFormId === item.id ? t("deletingLabel") : t("deleteNode")}
+                          </button>
+                        ) : null}
                       </div>
                     ) : null}
                   </div>

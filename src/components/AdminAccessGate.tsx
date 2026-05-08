@@ -6,12 +6,16 @@ interface AdminAccessGateProps extends PropsWithChildren {
   hasWallet: boolean;
   access: "allowed" | "legacy" | "denied";
   legacyMessage?: string;
+  deniedTitle?: string;
+  deniedBody?: string;
 }
 
 export function AdminAccessGate({
   hasWallet,
   access,
   legacyMessage,
+  deniedTitle,
+  deniedBody,
   children,
 }: AdminAccessGateProps) {
   const { t } = useI18n();
@@ -32,8 +36,8 @@ export function AdminAccessGate({
     return (
       <section className="panel glow-panel access-panel">
         <p className="eyebrow">{t("creatorOnlyInbox")}</p>
-        <h1>{t("accessDeniedTitle")}</h1>
-        <p>{t("accessDeniedBody")}</p>
+        <h1>{deniedTitle ?? t("accessDeniedTitle")}</h1>
+        <p>{deniedBody ?? t("accessDeniedBody")}</p>
       </section>
     );
   }
