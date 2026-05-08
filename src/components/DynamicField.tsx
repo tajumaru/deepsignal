@@ -6,10 +6,11 @@ interface DynamicFieldProps {
   field: FormField;
   value: unknown;
   error?: string;
+  hint?: string;
   onChange: (value: unknown) => void;
 }
 
-export function DynamicField({ field, value, error, onChange }: DynamicFieldProps) {
+export function DynamicField({ field, value, error, hint, onChange }: DynamicFieldProps) {
   const { t } = useI18n();
   const selectedFile = value instanceof File ? value : null;
 
@@ -113,7 +114,7 @@ export function DynamicField({ field, value, error, onChange }: DynamicFieldProp
             onChange={onFileChange}
           />
           <small className="muted">
-            {field.type === "screenshot" ? t("screenshotHint") : t("videoHint")}
+            {hint ?? (field.type === "screenshot" ? t("screenshotHint") : t("videoHint"))}
           </small>
           {selectedFile ? (
             <div className="file-pill">

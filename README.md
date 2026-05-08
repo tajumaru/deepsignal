@@ -26,13 +26,26 @@ Use the standalone type check when you want a quick submission-safe verification
 npm run typecheck
 ```
 
-This is intentionally separated from Vite dev mode because Vite does not guarantee a full TypeScript type check during normal development.
+Run lint only:
+
+```bash
+npm run lint
+```
+
+Run both quality gates together:
+
+```bash
+npm run check
+```
+
+This is intentionally separated from Vite dev mode because Vite does not guarantee a full TypeScript type check during normal development, and `npm run check` is the safest pre-submission pass.
 
 ## Future CI notes
 
 - `npm run typecheck` is isolated so it can be dropped directly into GitHub Actions or other CI jobs as an explicit quality gate.
+- `npm run lint` uses the flat ESLint config for TypeScript, React hooks, and React refresh safety.
+- `npm run check` combines the submission-safe static checks in one command.
 - `npm run build` depends on `npm run typecheck`, which keeps local builds and CI builds aligned.
-- TODO: add ESLint with a dedicated `lint` script, then wire both `npm run typecheck` and `npm run lint` into CI.
 
 ## .env example
 
@@ -91,9 +104,9 @@ If `VITE_SEAL_MODE` is not `seal`, or the Seal env vars are incomplete, the app 
 
 This Vite app exposes wallet connect through Mysten's React dApp Kit.
 
-- Provider setup lives in [src/providers.tsx](D:/game/deepsignal/src/providers.tsx)
-- Header wallet UI lives in [src/components/WalletConnect.tsx](D:/game/deepsignal/src/components/WalletConnect.tsx)
-- Shared Sui helpers live in [src/lib/sui.ts](D:/game/deepsignal/src/lib/sui.ts)
+- Provider setup lives in [src/providers.tsx](./src/providers.tsx)
+- Header wallet UI lives in [src/components/WalletConnect.tsx](./src/components/WalletConnect.tsx)
+- Shared Sui helpers live in [src/lib/sui.ts](./src/lib/sui.ts)
 
 Current behavior:
 
@@ -111,7 +124,7 @@ Current behavior:
 
 DeepSignal now includes a Move package for capability-based wallet access control on Sui.
 
-- Move package lives in [move/deepsignal_access](D:/game/deepsignal/move/deepsignal_access)
+- Move package lives in [move/deepsignal_access](./move/deepsignal_access)
 - module name is `deepsignal::access_control`
 - package publish creates and shares one `Registry` object
 - package publish also mints the initial `OwnerCap` to the publishing wallet during `init`
@@ -152,7 +165,7 @@ If `VITE_PACKAGE_ID` is not configured, the app falls back to the older wallet/o
 ### Publish and setup on Sui testnet
 
 1. Install a Sui CLI version aligned with testnet and fund the deployer wallet.
-2. From [move/deepsignal_access](D:/game/deepsignal/move/deepsignal_access), publish the package:
+2. From [move/deepsignal_access](./move/deepsignal_access), publish the package:
 
 ```bash
 cd move/deepsignal_access
@@ -244,9 +257,9 @@ DeepSignal can expose a public roadmap per form at `/roadmap/:formId`.
 
 Walrus storage lives in:
 
-- [src/storage/walrusAdapter.ts](D:/game/deepsignal/src/storage/walrusAdapter.ts)
-- [src/storage/storageFactory.ts](D:/game/deepsignal/src/storage/storageFactory.ts)
-- [src/storage/blobIndex.ts](D:/game/deepsignal/src/storage/blobIndex.ts)
+- [src/storage/walrusAdapter.ts](./src/storage/walrusAdapter.ts)
+- [src/storage/storageFactory.ts](./src/storage/storageFactory.ts)
+- [src/storage/blobIndex.ts](./src/storage/blobIndex.ts)
 
 ### How it works
 
@@ -358,10 +371,10 @@ When the blob is a real Walrus blob and an aggregator URL is configured, the UI 
 
 The encryption layer is intentionally adapter-based:
 
-- [src/crypto/sealAdapter.ts](D:/game/deepsignal/src/crypto/sealAdapter.ts)
-- [src/crypto/localSealMock.ts](D:/game/deepsignal/src/crypto/localSealMock.ts)
-- [src/crypto/sealClientAdapter.ts](D:/game/deepsignal/src/crypto/sealClientAdapter.ts)
-- [src/crypto/cryptoFactory.ts](D:/game/deepsignal/src/crypto/cryptoFactory.ts)
+- [src/crypto/sealAdapter.ts](./src/crypto/sealAdapter.ts)
+- [src/crypto/localSealMock.ts](./src/crypto/localSealMock.ts)
+- [src/crypto/sealClientAdapter.ts](./src/crypto/sealClientAdapter.ts)
+- [src/crypto/cryptoFactory.ts](./src/crypto/cryptoFactory.ts)
 
 Current behavior:
 

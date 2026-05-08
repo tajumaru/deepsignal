@@ -205,7 +205,13 @@ const messages = {
     chooseRating: "Choose rating",
     ratingValue: (params) => `${params?.score ?? 0} / 5`,
     screenshotHint: "Upload a screenshot or capture one from your device.",
+    screenshotHintWithLimit:
+      "Upload a screenshot or capture one from your device. Max 5MB per signal.",
     videoHint: "Upload a short video clip that shows the issue or feedback context.",
+    videoHintWithLimit:
+      "Upload a short video clip that shows the issue or feedback context. Max 25MB per signal.",
+    uploadTooLarge: (params) =>
+      `${params?.fieldLabel ?? "Attachment"} exceeds the secure intake limit of ${params?.maxSize ?? ""}. Compress it and try again.`,
     signalReceived: "Signal received",
     submissionCaptured: "Submission captured",
     submissionStored:
@@ -622,8 +628,14 @@ const messages = {
     ratingValue: (params) => `${params?.score ?? 0} / 5`,
     screenshotHint:
       "\u30b9\u30af\u30ea\u30fc\u30f3\u30b7\u30e7\u30c3\u30c8\u3092\u30a2\u30c3\u30d7\u30ed\u30fc\u30c9\u3059\u308b\u304b\u3001\u7aef\u672b\u3067\u64ae\u5f71\u3057\u3066\u304f\u3060\u3055\u3044\u3002",
+    screenshotHintWithLimit:
+      "\u30b9\u30af\u30ea\u30fc\u30f3\u30b7\u30e7\u30c3\u30c8\u3092\u30a2\u30c3\u30d7\u30ed\u30fc\u30c9\u3059\u308b\u304b\u3001\u7aef\u672b\u3067\u64ae\u5f71\u3057\u3066\u304f\u3060\u3055\u3044\u30021\u4ef6\u3042\u305f\u308a 5MB \u307e\u3067\u3067\u3059\u3002",
     videoHint:
       "\u554f\u984c\u3084\u30d5\u30a3\u30fc\u30c9\u30d0\u30c3\u30af\u306e\u69d8\u5b50\u304c\u5206\u304b\u308b\u77ed\u3044\u52d5\u753b\u3092\u30a2\u30c3\u30d7\u30ed\u30fc\u30c9\u3057\u3066\u304f\u3060\u3055\u3044\u3002",
+    videoHintWithLimit:
+      "\u554f\u984c\u3084\u30d5\u30a3\u30fc\u30c9\u30d0\u30c3\u30af\u306e\u69d8\u5b50\u304c\u5206\u304b\u308b\u77ed\u3044\u52d5\u753b\u3092\u30a2\u30c3\u30d7\u30ed\u30fc\u30c9\u3057\u3066\u304f\u3060\u3055\u3044\u30021\u4ef6\u3042\u305f\u308a 25MB \u307e\u3067\u3067\u3059\u3002",
+    uploadTooLarge: (params) =>
+      `${params?.fieldLabel ?? "\u6dfb\u4ed8\u30d5\u30a1\u30a4\u30eb"}\u306f intake \u4e0a\u9650\u306e ${params?.maxSize ?? ""} \u3092\u8d85\u3048\u3066\u3044\u307e\u3059\u3002\u5727\u7e2e\u3057\u3066\u518d\u5ea6\u9001\u4fe1\u3057\u3066\u304f\u3060\u3055\u3044\u3002`,
     signalReceived: "\u30b7\u30b0\u30ca\u30eb\u3092\u53d7\u4fe1\u3057\u307e\u3057\u305f",
     submissionCaptured: "\u6295\u7a3f\u3092\u4fdd\u5b58\u3057\u307e\u3057\u305f",
     submissionStored:

@@ -100,19 +100,19 @@ export function FormSubmissionsPage() {
   const saveQueueRef = useRef(Promise.resolve());
 
   useEffect(() => {
-    void loadInbox();
-  }, [formId]);
+    async function loadInbox() {
+      const [nextForm, rawSubmissions] = await Promise.all([
+        storageAdapter.getForm(formId),
+        storageAdapter.listSubmissions(formId),
+      ]);
+      setForm(nextForm ? normalizeForm(nextForm) : null);
+      setSubmissions(rawSubmissions.map((submission) => normalizeSubmission(submission)));
+      setSelectedSignalId((current) => submissionId ?? current);
+      setLoading(false);
+    }
 
-  async function loadInbox(preferredSignalId?: string) {
-    const [nextForm, rawSubmissions] = await Promise.all([
-      storageAdapter.getForm(formId),
-      storageAdapter.listSubmissions(formId),
-    ]);
-    setForm(nextForm ? normalizeForm(nextForm) : null);
-    setSubmissions(rawSubmissions.map((submission) => normalizeSubmission(submission)));
-    setSelectedSignalId((current) => preferredSignalId ?? submissionId ?? current);
-    setLoading(false);
-  }
+    void loadInbox();
+  }, [formId, submissionId]);
 
   const visibleSignals = useMemo(() => {
     const normalizedSearch = search.trim().toLowerCase();

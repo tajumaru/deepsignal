@@ -26,7 +26,6 @@ export function WalletConnect() {
     currentWallet,
     isConnected,
     isConnecting,
-    isDisconnected,
   } = useCurrentWallet();
   const connectWallet = useConnectWallet();
   const disconnectWallet = useDisconnectWallet();

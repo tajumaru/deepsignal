@@ -153,7 +153,7 @@ export function FormBuilderPage() {
   const [fields, setFields] = useState<FormField[]>(initialFields);
   const [sections, setSections] = useState<FormSection[]>([]);
   const [purpose, setPurpose] = useState<FormPurpose>(initialTemplate.purpose);
-  const [createOnSui, setCreateOnSui] = useState(false);
+  const [createOnSui] = useState(false);
   const [encryptSubmissions, setEncryptSubmissions] = useState(true);
   const [savedForm, setSavedForm] = useState<FormSchema | null>(null);
   const [error, setError] = useState("");

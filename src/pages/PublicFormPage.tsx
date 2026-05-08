@@ -18,6 +18,8 @@ import type { FormSchema, Submission, SubmissionAttachment } from "../types";
 
 type PublicAnswers = Record<string, unknown>;
 type ValidationErrors = Record<string, string>;
+const MAX_SCREENSHOT_BYTES = 5 * 1024 * 1024;
+const MAX_VIDEO_BYTES = 25 * 1024 * 1024;
 
 export function PublicFormPage() {
   const { t } = useI18n();
@@ -91,8 +93,24 @@ export function PublicFormPage() {
   }, [form]);
 
   function updateAnswer(fieldId: string, value: unknown) {
-    setAnswers((current) => ({ ...current, [fieldId]: value }));
-    setErrors((current) => ({ ...current, [fieldId]: "" }));
+    const field = form?.fields.find((candidate) => candidate.id === fieldId);
+    let nextValue = value;
+    let nextError = "";
+
+    if (field && (field.type === "screenshot" || field.type === "video")) {
+      const file = value instanceof File ? value : null;
+      const maxBytes = field.type === "screenshot" ? MAX_SCREENSHOT_BYTES : MAX_VIDEO_BYTES;
+      if (file && file.size > maxBytes) {
+        nextValue = null;
+        nextError = t("uploadTooLarge", {
+          fieldLabel: field.label,
+          maxSize: field.type === "screenshot" ? "5MB" : "25MB",
+        });
+      }
+    }
+
+    setAnswers((current) => ({ ...current, [fieldId]: nextValue }));
+    setErrors((current) => ({ ...current, [fieldId]: nextError }));
   }
 
   function validate(currentForm: FormSchema) {
@@ -260,6 +278,13 @@ export function PublicFormPage() {
                     field={field}
                     value={answers[field.id]}
                     error={errors[field.id]}
+                    hint={
+                      field.type === "screenshot"
+                        ? t("screenshotHintWithLimit")
+                        : field.type === "video"
+                          ? t("videoHintWithLimit")
+                          : undefined
+                    }
                     onChange={(value) => updateAnswer(field.id, value)}
                   />
                 ))}
@@ -273,6 +298,13 @@ export function PublicFormPage() {
             field={field}
             value={answers[field.id]}
             error={errors[field.id]}
+            hint={
+              field.type === "screenshot"
+                ? t("screenshotHintWithLimit")
+                : field.type === "video"
+                  ? t("videoHintWithLimit")
+                  : undefined
+            }
             onChange={(value) => updateAnswer(field.id, value)}
           />
         ))}
