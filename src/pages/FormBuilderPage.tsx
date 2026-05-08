@@ -135,7 +135,7 @@ const INITIAL_DRAFT_SNAPSHOT = serializeDraft(
 export function FormBuilderPage() {
   const { t } = useI18n();
   const account = useCurrentAccount();
-  const { capabilityProfile } = useAccessControl(account?.address);
+  const { capabilityProfile, isLoadingAccess } = useAccessControl(account?.address);
   const navigate = useNavigate();
   const labelRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const fieldCardRefs = useRef<Record<string, HTMLElement | null>>({});
@@ -594,6 +594,10 @@ export function FormBuilderPage() {
     } catch (copyError) {
       console.error(copyError);
     }
+  }
+
+  if (isLoadingAccess) {
+    return <div className="panel">Checking wallet capabilities...</div>;
   }
 
   return (

@@ -66,6 +66,28 @@ module deepsignal::access_control {
         );
     }
 
+    public fun add_admin(
+        owner_cap: &OwnerCap,
+        registry: &mut Registry,
+        recipient: address,
+        ctx: &mut sui::tx_context::TxContext,
+    ) {
+        assert!(
+            owner_cap.registry_id == sui::object::id(registry),
+            E_OWNER_CAP_REGISTRY_MISMATCH
+        );
+
+        registry.admin_count = registry.admin_count + 1;
+
+        sui::transfer::public_transfer(
+            AdminCap {
+                id: sui::object::new(ctx),
+                registry_id: sui::object::id(registry),
+            },
+            recipient,
+        );
+    }
+
     public fun issue_admin_cap_to_sender(
         owner_cap: &OwnerCap,
         registry: &mut Registry,

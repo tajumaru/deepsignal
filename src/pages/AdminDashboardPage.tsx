@@ -86,8 +86,12 @@ function matchesStream(record: SignalRecord, streamId: StreamId) {
 export function AdminDashboardPage() {
   const { t } = useI18n();
   const account = useCurrentAccount();
-  const { capabilityProfile, refetch: refetchCapabilities, isPending: isLoadingCapabilities } =
-    useAccessControl(account?.address);
+  const {
+    capabilityProfile,
+    refetch: refetchCapabilities,
+    isPending: isLoadingCapabilities,
+    isLoadingAccess,
+  } = useAccessControl(account?.address);
   const sealRuntime = getSealRuntimeStatus();
   const storageRuntime = getStorageRuntimeStatus();
   const [forms, setForms] = useState<FormWithCount[]>([]);
@@ -114,6 +118,7 @@ export function AdminDashboardPage() {
   const [adminIssueState, setAdminIssueState] = useState("");
   const [reviewerAddress, setReviewerAddress] = useState("");
   const [reviewerIssueState, setReviewerIssueState] = useState("");
+  const [toast, setToast] = useState<{ tone: "success" | "error"; message: string } | null>(null);
   const saveQueueRef = useRef(Promise.resolve());
   const issueAdminCap = useSignAndExecuteTransaction();
   const issueReviewerCap = useSignAndExecuteTransaction();
@@ -130,6 +135,14 @@ export function AdminDashboardPage() {
   useEffect(() => {
     void loadConsole();
   }, []);
+
+  useEffect(() => {
+    if (!toast) {
+      return;
+    }
+    const timer = window.setTimeout(() => setToast(null), 3200);
+    return () => window.clearTimeout(timer);
+  }, [toast]);
 
   async function loadConsole(preferredSignalId?: string) {
     const allForms = await storageAdapter.listForms();
@@ -393,27 +406,35 @@ export function AdminDashboardPage() {
     return <div className="panel">{t("loadingResearchLab")}</div>;
   }
 
+  if (isLoadingAccess) {
+    return <div className="panel">Checking wallet capabilities...</div>;
+  }
+
   async function handleIssueAdminCap() {
     if (!canMintAdminCap) {
       setAdminIssueState("OwnerCap is required to mint AdminCap.");
+      setToast({ tone: "error", message: "OwnerCap is required to add an admin." });
       return;
     }
-    if (!ACCESS_CONTROL_PACKAGE_ID || !ACCESS_CONTROL_REGISTRY_ID) {
-      setAdminIssueState("VITE_PACKAGE_ID and VITE_REGISTRY_ID must be configured first.");
+    if (!ACCESS_CONTROL_PACKAGE_ID) {
+      setAdminIssueState("VITE_PACKAGE_ID must be configured first.");
+      setToast({ tone: "error", message: "PACKAGE_ID is missing." });
       return;
     }
     if (!capabilityProfile.ownerCapIds[0]) {
       setAdminIssueState("No OwnerCap object was found in the connected wallet.");
+      setToast({ tone: "error", message: "No OwnerCap object was found." });
       return;
     }
     if (!isValidSuiAddress(adminAddress)) {
       setAdminIssueState("Enter a valid Sui wallet address.");
+      setToast({ tone: "error", message: "Enter a valid Sui wallet address." });
       return;
     }
 
     const tx = new Transaction();
     tx.moveCall({
-      target: `${ACCESS_CONTROL_PACKAGE_ID}::${ACCESS_CONTROL_MODULE}::issue_admin_cap`,
+      target: `${ACCESS_CONTROL_PACKAGE_ID}::${ACCESS_CONTROL_MODULE}::add_admin`,
       arguments: [
         tx.object(capabilityProfile.ownerCapIds[0]),
         tx.object(ACCESS_CONTROL_REGISTRY_ID),
@@ -426,27 +447,34 @@ export function AdminDashboardPage() {
       await issueAdminCap.mutateAsync({ transaction: tx });
       setAdminAddress("");
       setAdminIssueState("AdminCap issued.");
+      setToast({ tone: "success", message: "AdminCap issued successfully." });
       await refetchCapabilities();
     } catch (error) {
-      setAdminIssueState(error instanceof Error ? error.message : "Failed to issue AdminCap.");
+      const message = error instanceof Error ? error.message : "Failed to issue AdminCap.";
+      setAdminIssueState(message);
+      setToast({ tone: "error", message });
     }
   }
 
   async function handleIssueReviewerCap() {
     if (!canMintReviewerCap) {
-      setReviewerIssueState("AdminCap or OwnerCap is required to mint ReviewerCap.");
+      setReviewerIssueState("AdminCap is required to mint ReviewerCap.");
+      setToast({ tone: "error", message: "AdminCap is required to add a reviewer." });
       return;
     }
     if (!ACCESS_CONTROL_PACKAGE_ID || !ACCESS_CONTROL_REGISTRY_ID) {
       setReviewerIssueState("VITE_PACKAGE_ID and VITE_REGISTRY_ID must be configured first.");
+      setToast({ tone: "error", message: "PACKAGE_ID or REGISTRY_ID is missing." });
       return;
     }
     if (!capabilityProfile.adminCapIds[0]) {
       setReviewerIssueState("No AdminCap object was found in the connected wallet.");
+      setToast({ tone: "error", message: "No AdminCap object was found." });
       return;
     }
     if (!isValidSuiAddress(reviewerAddress)) {
       setReviewerIssueState("Enter a valid Sui wallet address.");
+      setToast({ tone: "error", message: "Enter a valid Sui wallet address." });
       return;
     }
 
@@ -465,9 +493,12 @@ export function AdminDashboardPage() {
       await issueReviewerCap.mutateAsync({ transaction: tx });
       setReviewerAddress("");
       setReviewerIssueState("ReviewerCap issued.");
+      setToast({ tone: "success", message: "ReviewerCap issued successfully." });
       await refetchCapabilities();
     } catch (error) {
-      setReviewerIssueState(error instanceof Error ? error.message : "Failed to issue ReviewerCap.");
+      const message = error instanceof Error ? error.message : "Failed to issue ReviewerCap.";
+      setReviewerIssueState(message);
+      setToast({ tone: "error", message });
     }
   }
 
@@ -482,6 +513,11 @@ export function AdminDashboardPage() {
       }
     >
       <section className="stack">
+        {toast ? (
+          <div className={`signal-toast is-${toast.tone}`} role="status" aria-live="polite">
+            {toast.message}
+          </div>
+        ) : null}
         <div className="panel glow-panel inbox-shell-header">
           <div>
             <p className="eyebrow">{t("creatorOnlyInbox")}</p>
@@ -500,8 +536,8 @@ export function AdminDashboardPage() {
           <section className="panel">
             <div className="section-row">
               <div>
-                <p className="eyebrow">Sui Move Access</p>
-                <h2>Wallet capability state</h2>
+                <p className="eyebrow">Access Management</p>
+                <h2>Capability actions</h2>
               </div>
               <button
                 type="button"
@@ -511,38 +547,11 @@ export function AdminDashboardPage() {
                 Refresh caps
               </button>
             </div>
-            <div className="metadata-list">
-              <div className="metadata-row">
-                <span>Package ID</span>
-                <strong className="blob-prominent">{ACCESS_CONTROL_PACKAGE_ID}</strong>
-              </div>
-              <div className="metadata-row">
-                <span>Registry ID</span>
-                <strong className="blob-prominent">
-                  {ACCESS_CONTROL_REGISTRY_ID || "Not configured"}
-                </strong>
-              </div>
-              <div className="metadata-row">
-                <span>Connected role</span>
-                <strong>{getRoleLabel(capabilityProfile)}</strong>
-              </div>
-              <div className="metadata-row">
-                <span>OwnerCap objects</span>
-                <strong>{capabilityProfile.ownerCapIds.length}</strong>
-              </div>
-              <div className="metadata-row">
-                <span>AdminCap objects</span>
-                <strong>{capabilityProfile.adminCapIds.length}</strong>
-              </div>
-              <div className="metadata-row">
-                <span>ReviewerCap objects</span>
-                <strong>{capabilityProfile.reviewerCapIds.length}</strong>
-              </div>
-            </div>
+            <p className="muted">Connected role: {getRoleLabel(capabilityProfile)}</p>
             {canMintAdminCap ? (
               <div className="stack">
                 <label>
-                  <span>Issue AdminCap to wallet</span>
+                  <span>Add Admin</span>
                   <input
                     value={adminAddress}
                     onChange={(event) => setAdminAddress(event.target.value)}
@@ -556,7 +565,7 @@ export function AdminDashboardPage() {
                     onClick={() => void handleIssueAdminCap()}
                     disabled={issueAdminCap.isPending}
                   >
-                    {issueAdminCap.isPending ? "Issuing..." : "Issue AdminCap"}
+                    {issueAdminCap.isPending ? "Adding..." : "Add Admin"}
                   </button>
                 </div>
                 {adminIssueState ? <p className="muted">{adminIssueState}</p> : null}

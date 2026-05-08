@@ -75,7 +75,7 @@ function matchesStream(submission: Submission, streamId: StreamId) {
 export function FormSubmissionsPage() {
   const { t } = useI18n();
   const account = useCurrentAccount();
-  const { capabilityProfile } = useAccessControl(account?.address);
+  const { capabilityProfile, isLoadingAccess } = useAccessControl(account?.address);
   const { formId = "", submissionId = "" } = useParams();
   const sealRuntime = getSealRuntimeStatus();
   const storageRuntime = getStorageRuntimeStatus();
@@ -312,6 +312,10 @@ export function FormSubmissionsPage() {
         <h1>{t("emptyFormNotFound")}</h1>
       </EmptyState>
     );
+  }
+
+  if (isLoadingAccess) {
+    return <div className="panel">Checking wallet capabilities...</div>;
   }
 
   const access = getReviewAccessState(form, account?.address, capabilityProfile);

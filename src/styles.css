@@ -1213,6 +1213,29 @@ textarea {
   color: #ffd3a3;
 }
 
+.signal-toast {
+  position: sticky;
+  top: 86px;
+  z-index: 20;
+  margin: 0 auto;
+  padding: 0.9rem 1rem;
+  max-width: 520px;
+  border-radius: 18px;
+  border: 1px solid rgba(116, 226, 255, 0.22);
+  background: rgba(7, 24, 40, 0.94);
+  box-shadow: var(--shadow);
+}
+
+.signal-toast.is-success {
+  border-color: rgba(110, 231, 183, 0.42);
+  color: #d1fae5;
+}
+
+.signal-toast.is-error {
+  border-color: rgba(255, 126, 143, 0.42);
+  color: #ffd7dd;
+}
+
 body.composer-mode {
   background:
     radial-gradient(circle at top, rgba(49, 130, 206, 0.12), transparent 24%),

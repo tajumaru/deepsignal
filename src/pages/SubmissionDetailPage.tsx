@@ -12,7 +12,7 @@ import type { FormSchema } from "../types";
 export function SubmissionDetailPage() {
   const { t } = useI18n();
   const account = useCurrentAccount();
-  const { capabilityProfile } = useAccessControl(account?.address);
+  const { capabilityProfile, isLoadingAccess } = useAccessControl(account?.address);
   const { formId = "", submissionId = "" } = useParams();
   const [resolvedForm, setResolvedForm] = useState<FormSchema | null>(null);
   const [loading, setLoading] = useState(!formId && Boolean(submissionId));
@@ -49,6 +49,10 @@ export function SubmissionDetailPage() {
 
   if (loading) {
     return <div className="panel">{t("loadingSubmissionDetail")}</div>;
+  }
+
+  if (isLoadingAccess) {
+    return <div className="panel">Checking wallet capabilities...</div>;
   }
 
   return (

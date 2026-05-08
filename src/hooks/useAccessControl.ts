@@ -1,4 +1,5 @@
-import { useSuiClientQuery } from "@mysten/dapp-kit";
+import { useSuiClient } from "@mysten/dapp-kit";
+import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import {
   ACCESS_CONTROL_ADMIN_CAP_TYPE,
@@ -33,6 +34,14 @@ type OwnedObjectEntry = {
 
 type OwnedObjectsResponse = {
   data?: OwnedObjectEntry[];
+  hasNextPage?: boolean;
+  nextCursor?: string | null;
+};
+
+export type DebugOwnedObject = {
+  objectId: string;
+  type: string;
+  registryId: string;
 };
 
 function normalizeObjectId(value?: string | null) {
@@ -44,6 +53,10 @@ function normalizeObjectId(value?: string | null) {
     return "";
   }
   return trimmed.startsWith("0x") ? trimmed : `0x${trimmed}`;
+}
+
+function normalizeType(value?: string | null) {
+  return value?.trim().toLowerCase() ?? "";
 }
 
 function extractRegistryId(entry: OwnedObjectEntry) {
@@ -76,8 +89,9 @@ function extractCapIds(
   expectedType: string,
   registryId: string,
 ) {
+  const normalizedExpectedType = normalizeType(expectedType);
   return entries
-    .filter((entry) => entry.data?.type === expectedType)
+    .filter((entry) => normalizeType(entry.data?.type) === normalizedExpectedType)
     .filter((entry) => {
       if (!registryId) {
         return true;
@@ -90,44 +104,77 @@ function extractCapIds(
 }
 
 export function useAccessControl(address?: string | null) {
-  const packageId = ACCESS_CONTROL_PACKAGE_ID;
+  const suiClient = useSuiClient();
+  const packageId = normalizeObjectId(ACCESS_CONTROL_PACKAGE_ID);
   const registryId = normalizeObjectId(ACCESS_CONTROL_REGISTRY_ID);
   const enabled = Boolean(address && packageId);
-
-  const ownedObjectsQuery = useSuiClientQuery(
-    "getOwnedObjects",
-    {
-      owner: address ?? "",
-      filter: { Package: packageId },
-      options: {
-        showType: true,
-        showContent: true,
-      },
-      limit: 100,
-    },
-    {
-      enabled,
-      refetchOnWindowFocus: false,
-      retry: 1,
-    },
+  const targetTypes = useMemo(
+    () =>
+      new Set(
+        [
+          ACCESS_CONTROL_OWNER_CAP_TYPE,
+          ACCESS_CONTROL_ADMIN_CAP_TYPE,
+          ACCESS_CONTROL_REVIEWER_CAP_TYPE,
+        ]
+          .map((value) => normalizeType(value))
+          .filter(Boolean),
+      ),
+    [],
   );
 
-  const capabilityProfile = useMemo<CapabilityProfile>(() => {
-    const entries = ((ownedObjectsQuery.data as OwnedObjectsResponse | undefined)?.data ??
-      []) as OwnedObjectEntry[];
+  const ownedObjectsQuery = useQuery({
+    queryKey: ["access-control-owned-objects", address ?? "", packageId, registryId],
+    enabled,
+    retry: 1,
+    refetchOnWindowFocus: false,
+    queryFn: async () => {
+      const matches: OwnedObjectEntry[] = [];
+      let cursor: string | null | undefined = null;
+      let pageCount = 0;
 
+      do {
+        const page = (await suiClient.getOwnedObjects({
+          owner: address ?? "",
+          cursor: cursor ?? undefined,
+          options: {
+            showType: true,
+            showContent: true,
+          },
+          limit: 50,
+        })) as OwnedObjectsResponse;
+
+        for (const entry of page.data ?? []) {
+          const normalizedType = normalizeType(entry.data?.type);
+          if (!normalizedType) {
+            continue;
+          }
+
+          if (targetTypes.has(normalizedType)) {
+            matches.push(entry);
+          }
+        }
+
+        cursor = page.hasNextPage ? page.nextCursor : null;
+        pageCount += 1;
+      } while (cursor && pageCount < 20);
+
+      return matches;
+    },
+  });
+
+  const capabilityProfile = useMemo<CapabilityProfile>(() => {
     const ownerCapIds = extractCapIds(
-      entries,
+      ownedObjectsQuery.data ?? [],
       ACCESS_CONTROL_OWNER_CAP_TYPE,
       registryId,
     );
     const adminCapIds = extractCapIds(
-      entries,
+      ownedObjectsQuery.data ?? [],
       ACCESS_CONTROL_ADMIN_CAP_TYPE,
       registryId,
     );
     const reviewerCapIds = extractCapIds(
-      entries,
+      ownedObjectsQuery.data ?? [],
       ACCESS_CONTROL_REVIEWER_CAP_TYPE,
       registryId,
     );
@@ -145,8 +192,22 @@ export function useAccessControl(address?: string | null) {
     };
   }, [ownedObjectsQuery.data, packageId, registryId]);
 
+  const ownedObjects = useMemo<DebugOwnedObject[]>(() => {
+    return (ownedObjectsQuery.data ?? []).map((entry) => ({
+      objectId: entry.data?.objectId ?? "",
+      type: entry.data?.type ?? "",
+      registryId: extractRegistryId(entry),
+    }));
+  }, [ownedObjectsQuery.data]);
+
   return {
     ...ownedObjectsQuery,
+    data: ownedObjectsQuery.data ?? [],
+    error: ownedObjectsQuery.error ?? null,
+    isError: ownedObjectsQuery.isError,
+    isPending: ownedObjectsQuery.isPending,
+    isLoadingAccess: enabled && ownedObjectsQuery.isPending,
+    ownedObjects,
     capabilityProfile,
   };
 }
