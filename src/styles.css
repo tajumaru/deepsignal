@@ -1267,6 +1267,7 @@ body.composer-mode .bg-orb {
 }
 
 .composer-flow-step {
+  position: relative;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   gap: 0.75rem;
@@ -1280,9 +1281,36 @@ body.composer-mode .bg-orb {
   transition: border-color 160ms ease, background 160ms ease, transform 160ms ease;
 }
 
+.composer-flow-step::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto auto 0;
+  width: 100%;
+  height: 3px;
+  border-radius: 999px;
+  background: transparent;
+}
+
 .composer-flow-step:hover {
   transform: translateY(-1px);
   border-color: rgba(116, 226, 255, 0.24);
+}
+
+.composer-flow-step-state {
+  grid-column: 1 / -1;
+  display: inline-flex;
+  justify-self: start;
+  align-items: center;
+  min-height: 1.35rem;
+  padding: 0.08rem 0.5rem;
+  border-radius: 999px;
+  border: 1px solid rgba(116, 226, 255, 0.1);
+  background: rgba(255, 255, 255, 0.03);
+  color: #7ea0ab;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .composer-flow-step-index {
@@ -1320,6 +1348,51 @@ body.composer-mode .bg-orb {
   color: #effcff;
   border-color: rgba(116, 226, 255, 0.24);
   background: rgba(102, 227, 255, 0.08);
+}
+
+.composer-flow-step.is-complete .composer-flow-step-state {
+  color: #9de7d6;
+  border-color: rgba(52, 211, 153, 0.18);
+  background: rgba(52, 211, 153, 0.08);
+}
+
+.composer-flow-step.is-complete .composer-flow-step-index {
+  background: rgba(52, 211, 153, 0.14);
+  color: #cffff1;
+}
+
+.composer-flow-step.is-current {
+  border-color: rgba(135, 244, 255, 0.44);
+  background:
+    radial-gradient(circle at top left, rgba(98, 227, 255, 0.18), transparent 45%),
+    rgba(102, 227, 255, 0.1);
+  box-shadow:
+    0 0 0 1px rgba(124, 235, 255, 0.12),
+    0 18px 34px rgba(0, 0, 0, 0.2);
+}
+
+.composer-flow-step.is-current::before {
+  background: linear-gradient(90deg, rgba(102, 227, 255, 0.95), rgba(152, 244, 255, 0.35));
+}
+
+.composer-flow-step.is-current .composer-flow-step-state {
+  color: #e9fdff;
+  border-color: rgba(135, 244, 255, 0.32);
+  background: rgba(102, 227, 255, 0.14);
+}
+
+.composer-flow-step.is-current .composer-flow-step-index {
+  background: linear-gradient(135deg, rgba(102, 227, 255, 0.3), rgba(75, 192, 255, 0.22));
+  color: #f3feff;
+  box-shadow: 0 0 0 1px rgba(135, 244, 255, 0.18);
+}
+
+.composer-flow-step.is-current .composer-flow-step-copy strong {
+  color: #ffffff;
+}
+
+.composer-flow-step.is-current .composer-flow-step-copy small {
+  color: #c8edf4;
 }
 
 .composer-toolbar-actions {

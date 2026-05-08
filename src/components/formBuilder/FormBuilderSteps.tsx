@@ -30,6 +30,9 @@ export function FormBuilderSteps({
             onClick={() => onSelect?.(step.key)}
             aria-current={isCurrent ? "step" : undefined}
           >
+            <span className="composer-flow-step-state">
+              {isCurrent ? "Current" : isComplete ? "Done" : "Upcoming"}
+            </span>
             <span className="composer-flow-step-index">{index + 1}</span>
             <span className="composer-flow-step-copy">
               <strong>{step.title}</strong>
