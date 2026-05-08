@@ -19,6 +19,9 @@ import {
 } from "./lib/sui";
 import { setWalrusRuntimeContext } from "./storage/walrusAdapter";
 
+export const REQUIRE_GLOBAL_WALRUS_RUNTIME =
+  String(import.meta.env.VITE_REQUIRE_WALRUS || "").toLowerCase() === "true";
+
 const { networkConfig } = createNetworkConfig({
   testnet: {
     url:
@@ -83,6 +86,15 @@ function WalrusRuntimeBridge() {
   return null;
 }
 
+export function WalrusRuntimeProvider({ children }: PropsWithChildren) {
+  return (
+    <>
+      <WalrusRuntimeBridge />
+      {children}
+    </>
+  );
+}
+
 export function Providers({ children }: PropsWithChildren) {
   const [queryClient] = useState(() => new QueryClient());
 
@@ -90,7 +102,7 @@ export function Providers({ children }: PropsWithChildren) {
     <QueryClientProvider client={queryClient}>
       <SuiClientProvider networks={networkConfig} defaultNetwork={SUI_NETWORK}>
         <WalletProvider autoConnect>
-          <WalrusRuntimeBridge />
+          {REQUIRE_GLOBAL_WALRUS_RUNTIME ? <WalrusRuntimeBridge /> : null}
           {children}
         </WalletProvider>
       </SuiClientProvider>

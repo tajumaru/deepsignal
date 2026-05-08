@@ -1041,36 +1041,20 @@ export function FormBuilderPage() {
                         <p className="muted">{t("encryptSubmissionsHelp")}</p>
                       </section>
 
-                      <section className="panel composer-settings-card">
-                        <div className="section-row">
-                          <div>
-                            <p className="eyebrow">{t("suiCreateEyebrow")}</p>
-                            <h3>{t("createOnSui")}</h3>
+                      {showWalrusDiagnostics ? (
+                        <section className="panel composer-settings-card">
+                          <div className="section-row">
+                            <div>
+                              <p className="eyebrow">Proof-backed routing</p>
+                              <h3>{t("storageAndSignatureTitle")}</h3>
+                            </div>
                           </div>
-                          <label className="toggle">
-                            <input
-                              type="checkbox"
-                              checked={createOnSui}
-                              onChange={(event) => setCreateOnSui(event.target.checked)}
-                            />
-                            <span>{createOnSui ? t("enabled") : t("disabled")}</span>
-                          </label>
-                        </div>
-                        <p className="muted">{t("createOnSuiHelp")}</p>
-                      </section>
-
-                      <section className="panel composer-settings-card">
-                        <div className="section-row">
-                          <div>
-                            <p className="eyebrow">Proof-backed routing</p>
-                            <h3>{t("storageAndSignatureTitle")}</h3>
+                          <div className="composer-capability-list muted">
+                            <p>{t("walrusStorageLine")}</p>
+                            <p>{t("suiSignatureLine")}</p>
                           </div>
-                        </div>
-                        <div className="composer-capability-list muted">
-                          <p>{t("walrusStorageLine")}</p>
-                          <p>{t("suiSignatureLine")}</p>
-                        </div>
-                      </section>
+                        </section>
+                      ) : null}
                     </div>
                   </details>
 
