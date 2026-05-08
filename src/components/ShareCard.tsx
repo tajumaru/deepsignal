@@ -1,25 +1,27 @@
 import { useEffect, useMemo, useState } from "react";
 import QRCode from "qrcode";
 import { useI18n } from "../i18n";
+import { getPublicFormPath } from "../lib/publicLinks";
 import { formatDate } from "../lib/utils";
 
 interface ShareCardProps {
   formId: string;
   blobId?: string;
   createdAt?: string;
+  manifestBlobId?: string;
 }
 
 function hashSeed(value: string) {
   return value.split("").reduce((accumulator, char) => accumulator + char.charCodeAt(0), 0);
 }
 
-export function ShareCard({ formId, blobId, createdAt }: ShareCardProps) {
+export function ShareCard({ formId, blobId, createdAt, manifestBlobId }: ShareCardProps) {
   const { t } = useI18n();
   const [copied, setCopied] = useState(false);
   const [qrMarkup, setQrMarkup] = useState("");
   const [beaconLocked, setBeaconLocked] = useState(false);
 
-  const publicPath = `/f/${formId}`;
+  const publicPath = getPublicFormPath(formId, manifestBlobId);
   const absoluteUrl = useMemo(() => {
     if (typeof window === "undefined") {
       return publicPath;

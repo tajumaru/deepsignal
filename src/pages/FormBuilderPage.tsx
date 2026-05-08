@@ -28,6 +28,7 @@ import {
   getTemplateDefinition,
   normalizeFormPurpose,
 } from "../lib/formTemplates";
+import { getPublicFormPath } from "../lib/publicLinks";
 import { isLocalFallbackBlob } from "../lib/proof";
 import { storageAdapter } from "../lib/storage";
 import { shortAddress } from "../lib/sui";
@@ -567,7 +568,7 @@ export function FormBuilderPage() {
       ]
     : [];
 
-  const publicPath = savedForm ? `/f/${savedForm.id}` : "";
+  const publicPath = savedForm ? getPublicFormPath(savedForm.id, savedForm.manifestBlobId) : "";
   const publicUrl = savedForm && typeof window !== "undefined" ? `${window.location.origin}${publicPath}` : publicPath;
 
   async function handleCopyLink() {
@@ -1054,7 +1055,12 @@ export function FormBuilderPage() {
                         ) : null}
                       </div>
 
-                      <ShareCard formId={savedForm.id} blobId={savedForm.blobId} createdAt={savedForm.createdAt} />
+                      <ShareCard
+                        formId={savedForm.id}
+                        blobId={savedForm.blobId}
+                        createdAt={savedForm.createdAt}
+                        manifestBlobId={savedForm.manifestBlobId}
+                      />
                     </div>
                   ) : (
                     <p className="muted">{t("saveFormHint")}</p>

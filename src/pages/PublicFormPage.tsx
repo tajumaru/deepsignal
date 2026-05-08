@@ -1,6 +1,6 @@
 import { useCurrentAccount } from "@mysten/dapp-kit";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useSearchParams } from "react-router-dom";
 import { BlobLink } from "../components/BlobLink";
 import { DynamicField } from "../components/DynamicField";
 import { EmptyState } from "../components/EmptyState";
@@ -10,6 +10,9 @@ import { getSubmissionCategoryFromPurpose } from "../lib/formTemplates";
 import { getStorageDetailLabels, isLocalFallbackBlob } from "../lib/signalInbox";
 import { createEmptyAnswer, normalizeForm, saveSubmissionWithEncryption, storageAdapter } from "../lib/storage";
 import { makeId } from "../lib/utils";
+import { upsertFormBlobIndex } from "../storage/blobIndex";
+import { localStorageAdapter } from "../storage/localStorageAdapter";
+import { fetchJsonBlob, readManifest } from "../storage/walrusAdapter";
 import type { FormSchema, Submission, SubmissionAttachment } from "../types";
 
 type PublicAnswers = Record<string, unknown>;
@@ -19,6 +22,7 @@ export function PublicFormPage() {
   const { t } = useI18n();
   const account = useCurrentAccount();
   const { formId = "" } = useParams();
+  const [searchParams] = useSearchParams();
   const [form, setForm] = useState<FormSchema | null>(null);
   const [answers, setAnswers] = useState<PublicAnswers>({});
   const [errors, setErrors] = useState<ValidationErrors>({});
@@ -26,10 +30,31 @@ export function PublicFormPage() {
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState<Submission | null>(null);
   const [submitError, setSubmitError] = useState("");
+  const manifestBlobId = searchParams.get("manifest") ?? "";
 
   useEffect(() => {
     async function load() {
-      const nextForm = await storageAdapter.getForm(formId);
+      let nextForm = await storageAdapter.getForm(formId);
+      if (!nextForm && manifestBlobId) {
+        const manifest = await readManifest(manifestBlobId);
+        if (manifest?.formBlobId) {
+          const restoredForm = await fetchJsonBlob<FormSchema>(manifest.formBlobId);
+          if (restoredForm && restoredForm.id === formId) {
+            nextForm = {
+              ...restoredForm,
+              blobId: manifest.formBlobId,
+              manifestBlobId,
+            };
+            await localStorageAdapter.saveForm(nextForm);
+            upsertFormBlobIndex({
+              formId: nextForm.id,
+              formBlobId: manifest.formBlobId,
+              manifestBlobId,
+              createdAt: manifest.createdAt,
+            });
+          }
+        }
+      }
       setForm(nextForm ? normalizeForm(nextForm) : null);
       if (nextForm) {
         setAnswers(
@@ -39,7 +64,7 @@ export function PublicFormPage() {
       setLoading(false);
     }
     void load();
-  }, [formId]);
+  }, [formId, manifestBlobId]);
 
   const attachmentFields = useMemo(
     () =>
