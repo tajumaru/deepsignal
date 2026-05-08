@@ -38,7 +38,7 @@ export function canIssueAdmin(profile?: CapabilityProfile | null) {
 }
 
 export function canIssueReviewer(profile?: CapabilityProfile | null) {
-  return Boolean(profile?.hasAdminCap);
+  return Boolean(profile?.hasOwnerCap || profile?.hasAdminCap);
 }
 
 export function getRoleLabel(profile?: CapabilityProfile | null) {

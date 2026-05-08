@@ -21,6 +21,7 @@ export function AppShell({ children }: PropsWithChildren) {
         <nav className="topnav">
           <NavLink to="/">{t("navHome")}</NavLink>
           <NavLink to="/admin">{t("navLab")}</NavLink>
+          <NavLink to="/admin/access">{t("navAccess")}</NavLink>
           <NavLink to="/admin/forms/new">{t("navCreateForm")}</NavLink>
         </nav>
         <div className="topbar-actions">

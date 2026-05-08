@@ -22,6 +22,7 @@ const messages = {
     discardChangesConfirm:
       "You have unsaved changes. Do you want to discard them and leave this page?",
     navLab: "Research Lab",
+    navAccess: "Access",
     navCreateForm: "Compose Signal",
     languageLabel: "Language",
     languageEnglish: "English",
@@ -59,6 +60,7 @@ const messages = {
     landingFeature3: "Built for feedback, bug reports, surveys, grant forms, and applications.",
     landingFeature4: "Supports screenshots, video uploads, ratings, checklists, and structured notes.",
     loadingResearchLab: "Loading research lab...",
+    loadingAccessManagement: "Loading access management...",
     loadingPublicForm: "Loading public form...",
     loadingSubmissions: "Loading submission stream...",
     loadingSubmissionDetail: "Loading submission detail...",
@@ -287,6 +289,22 @@ const messages = {
     fieldTypeScreenshot: "Image Upload",
     fieldTypeVideo: "Video Upload",
     creatorOnlyInbox: "Creator-only Inbox",
+    accessManagementEyebrow: "Access Management",
+    accessManagementTitle: "Member Access",
+    accessManagementDescription:
+      "Manage owner, admin, and reviewer permissions for the Encrypted Signal Inbox.",
+    accessOverviewTitle: "Encrypted Signal Inbox permissions",
+    accessOverviewBody:
+      "Keep Research Lab focused on review, then jump into the member registry only when you need to update access.",
+    accessManagementNotConfigured:
+      "Access control package and registry IDs are not configured in this environment.",
+    refreshingLabel: "Refreshing...",
+    refreshRegistry: "Refresh registry",
+    manageMembers: "Manage members",
+    connectedRoleLabel: "Connected role",
+    ownersCount: (params) => `Owners ${params?.count ?? 0}`,
+    adminsCount: (params) => `Admins ${params?.count ?? 0}`,
+    reviewersCount: (params) => `Reviewers ${params?.count ?? 0}`,
     connectWalletTitle: "Connect Wallet",
     walletVerifiedAccessRequired:
       "Wallet Verified access is required for admin and dashboard views.",
@@ -411,6 +429,7 @@ const messages = {
     discardChangesConfirm:
       "\u672a\u4fdd\u5b58\u306e\u5909\u66f4\u304c\u3042\u308a\u307e\u3059\u3002\u7834\u68c4\u3057\u3066\u3053\u306e\u30da\u30fc\u30b8\u3092\u96e2\u308c\u307e\u3059\u304b\uff1f",
     navLab: "\u7814\u7a76\u30e9\u30dc",
+    navAccess: "\u30a2\u30af\u30bb\u30b9\u7ba1\u7406",
     navCreateForm: "Compose Signal",
     languageLabel: "\u8a00\u8a9e",
     languageEnglish: "English",
@@ -452,6 +471,7 @@ const messages = {
     landingFeature3: "\u30d5\u30a3\u30fc\u30c9\u30d0\u30c3\u30af\u3001\u30d0\u30b0\u5831\u544a\u3001\u30a2\u30f3\u30b1\u30fc\u30c8\u3001\u5fdc\u52df\u30d5\u30a9\u30fc\u30e0\u306b\u5bfe\u5fdc\u3057\u307e\u3059\u3002",
     landingFeature4: "\u30b9\u30af\u30ea\u30fc\u30f3\u30b7\u30e7\u30c3\u30c8\u3001\u52d5\u753b\u3001\u8a55\u4fa1\u3001\u30c1\u30a7\u30c3\u30af\u9805\u76ee\u3001\u30e1\u30e2\u4ed8\u304d\u56de\u7b54\u306b\u5bfe\u5fdc\u3057\u307e\u3059\u3002",
     loadingResearchLab: "\u7814\u7a76\u30e9\u30dc\u3092\u8aad\u307f\u8fbc\u307f\u4e2d...",
+    loadingAccessManagement: "\u30a2\u30af\u30bb\u30b9\u7ba1\u7406\u3092\u8aad\u307f\u8fbc\u307f\u4e2d...",
     loadingPublicForm: "\u516c\u958b\u30d5\u30a9\u30fc\u30e0\u3092\u8aad\u307f\u8fbc\u307f\u4e2d...",
     loadingSubmissions: "\u6295\u7a3f\u4e00\u89a7\u3092\u8aad\u307f\u8fbc\u307f\u4e2d...",
     loadingSubmissionDetail: "\u6295\u7a3f\u8a73\u7d30\u3092\u8aad\u307f\u8fbc\u307f\u4e2d...",
@@ -692,6 +712,22 @@ const messages = {
     fieldTypeScreenshot: "Image Upload",
     fieldTypeVideo: "Video Upload",
     creatorOnlyInbox: "Creator-only Inbox",
+    accessManagementEyebrow: "Access Management",
+    accessManagementTitle: "\u30e1\u30f3\u30d0\u30fc\u30a2\u30af\u30bb\u30b9",
+    accessManagementDescription:
+      "Encrypted Signal Inbox \u306e owner / admin / reviewer \u6a29\u9650\u3092\u3053\u3053\u3067\u7ba1\u7406\u3057\u307e\u3059\u3002",
+    accessOverviewTitle: "Encrypted Signal Inbox permissions",
+    accessOverviewBody:
+      "Research Lab \u306f\u30ec\u30d3\u30e5\u30fc\u4e2d\u5fc3\u306b\u4fdd\u3061\u3001\u30e1\u30f3\u30d0\u30fc\u6a29\u9650\u306e\u78ba\u8a8d\u3084\u66f4\u65b0\u306f\u5fc5\u8981\u306a\u3068\u304d\u3060\u3051\u3053\u306e\u5c0e\u7dda\u304b\u3089\u958b\u3051\u308b\u3088\u3046\u306b\u3057\u307e\u3059\u3002",
+    accessManagementNotConfigured:
+      "\u3053\u306e\u74b0\u5883\u3067\u306f access control package / registry ID \u304c\u672a\u8a2d\u5b9a\u3067\u3059\u3002",
+    refreshingLabel: "\u66f4\u65b0\u4e2d...",
+    refreshRegistry: "\u30ec\u30b8\u30b9\u30c8\u30ea\u3092\u66f4\u65b0",
+    manageMembers: "\u30e1\u30f3\u30d0\u30fc\u7ba1\u7406",
+    connectedRoleLabel: "\u63a5\u7d9a\u4e2d\u306e\u30ed\u30fc\u30eb",
+    ownersCount: (params) => `Owners ${params?.count ?? 0}`,
+    adminsCount: (params) => `Admins ${params?.count ?? 0}`,
+    reviewersCount: (params) => `Reviewers ${params?.count ?? 0}`,
     connectWalletTitle: "\u30a6\u30a9\u30ec\u30c3\u30c8\u3092\u63a5\u7d9a",
     walletVerifiedAccessRequired:
       "\u7ba1\u7406\u753b\u9762\u3068\u30c0\u30c3\u30b7\u30e5\u30dc\u30fc\u30c9\u306b\u306f Wallet Verified \u30a2\u30af\u30bb\u30b9\u304c\u5fc5\u8981\u3067\u3059\u3002",

@@ -1,6 +1,7 @@
 import { useSuiClient } from "@mysten/dapp-kit";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
+import { findRoleEntriesForAddress } from "../lib/accessRegistry";
 import {
   ACCESS_CONTROL_ADMIN_CAP_TYPE,
   ACCESS_CONTROL_OWNER_CAP_TYPE,
@@ -8,6 +9,7 @@ import {
   ACCESS_CONTROL_REGISTRY_ID,
   ACCESS_CONTROL_REVIEWER_CAP_TYPE,
 } from "../lib/sui";
+import { useAccessRegistry } from "./useAccessRegistry";
 
 export type CapabilityProfile = {
   isConfigured: boolean;
@@ -105,6 +107,7 @@ function extractCapIds(
 
 export function useAccessControl(address?: string | null) {
   const suiClient = useSuiClient();
+  const { registry, isLoadingRegistry, error: registryError } = useAccessRegistry();
   const packageId = normalizeObjectId(ACCESS_CONTROL_PACKAGE_ID);
   const registryId = normalizeObjectId(ACCESS_CONTROL_REGISTRY_ID);
   const enabled = Boolean(address && packageId);
@@ -163,21 +166,46 @@ export function useAccessControl(address?: string | null) {
   });
 
   const capabilityProfile = useMemo<CapabilityProfile>(() => {
-    const ownerCapIds = extractCapIds(
+    const ownedOwnerCapIds = extractCapIds(
       ownedObjectsQuery.data ?? [],
       ACCESS_CONTROL_OWNER_CAP_TYPE,
       registryId,
     );
-    const adminCapIds = extractCapIds(
+    const ownedAdminCapIds = extractCapIds(
       ownedObjectsQuery.data ?? [],
       ACCESS_CONTROL_ADMIN_CAP_TYPE,
       registryId,
     );
-    const reviewerCapIds = extractCapIds(
+    const ownedReviewerCapIds = extractCapIds(
       ownedObjectsQuery.data ?? [],
       ACCESS_CONTROL_REVIEWER_CAP_TYPE,
       registryId,
     );
+
+    const ownerCapIds =
+      registryId && address
+        ? ownedOwnerCapIds.filter(
+            (capId) =>
+              registry.owner?.capId === capId &&
+              registry.owner?.address === normalizeObjectId(address),
+          )
+        : ownedOwnerCapIds;
+    const adminCapIds =
+      registryId && address
+        ? ownedAdminCapIds.filter((capId) =>
+            findRoleEntriesForAddress(registry, "admin", address).some(
+              (entry) => entry.capId === capId,
+            ),
+          )
+        : ownedAdminCapIds;
+    const reviewerCapIds =
+      registryId && address
+        ? ownedReviewerCapIds.filter((capId) =>
+            findRoleEntriesForAddress(registry, "reviewer", address).some(
+              (entry) => entry.capId === capId,
+            ),
+          )
+        : ownedReviewerCapIds;
 
     return {
       isConfigured: Boolean(packageId),
@@ -190,7 +218,7 @@ export function useAccessControl(address?: string | null) {
       adminCapIds,
       reviewerCapIds,
     };
-  }, [ownedObjectsQuery.data, packageId, registryId]);
+  }, [address, ownedObjectsQuery.data, packageId, registry, registryId]);
 
   const ownedObjects = useMemo<DebugOwnedObject[]>(() => {
     return (ownedObjectsQuery.data ?? []).map((entry) => ({
@@ -206,8 +234,10 @@ export function useAccessControl(address?: string | null) {
     error: ownedObjectsQuery.error ?? null,
     isError: ownedObjectsQuery.isError,
     isPending: ownedObjectsQuery.isPending,
-    isLoadingAccess: enabled && ownedObjectsQuery.isPending,
+    isLoadingAccess: (enabled && ownedObjectsQuery.isPending) || isLoadingRegistry,
     ownedObjects,
     capabilityProfile,
+    registry,
+    registryError: registryError ?? null,
   };
 }

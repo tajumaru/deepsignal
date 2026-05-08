@@ -2053,6 +2053,72 @@ body.composer-mode .bg-orb {
   word-break: break-word;
 }
 
+.access-management-panel,
+.access-management-actions,
+.access-role-grid {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.access-management-summary {
+  display: flex;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.access-overview-card {
+  display: grid;
+  gap: 1rem;
+}
+
+.access-overview-actions {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.access-management-actions {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+}
+
+.access-role-grid {
+  padding: 1rem;
+  border-radius: 22px;
+  border: 1px solid rgba(116, 226, 255, 0.14);
+  background:
+    linear-gradient(180deg, rgba(4, 20, 35, 0.92), rgba(3, 14, 26, 0.92)),
+    radial-gradient(circle at top left, rgba(52, 211, 153, 0.08), transparent 35%);
+}
+
+.access-role-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) 120px minmax(0, 1.4fr) 100px minmax(0, 180px);
+  gap: 0.75rem;
+  align-items: center;
+  padding: 0.9rem 0;
+  border-top: 1px solid rgba(116, 226, 255, 0.1);
+}
+
+.access-role-row:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.access-role-row-header {
+  color: var(--text-soft);
+  font-size: 0.8rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.access-role-value {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
 .mobile-console-banner {
   display: none;
   padding: 0.9rem 1rem;
@@ -3157,6 +3223,11 @@ body.composer-mode .bg-orb {
   }
 
   .node-directory-row {
+    grid-template-columns: 1fr;
+  }
+
+  .access-management-actions,
+  .access-role-row {
     grid-template-columns: 1fr;
   }
 

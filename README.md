@@ -110,8 +110,11 @@ DeepSignal now includes a Move package for capability-based wallet access contro
 - module name is `deepsignal::access_control`
 - package publish creates and shares one `Registry` object
 - package publish also mints the initial `OwnerCap` to the publishing wallet during `init`
-- only `OwnerCap` holders can call `issue_admin_cap`
-- only `AdminCap` holders can call `issue_reviewer_cap`
+- `Registry` stores the active owner, admin list, and reviewer list, including wallet address plus cap object id
+- `OwnerCap` holders can add and remove `AdminCap`
+- `OwnerCap` holders can add and remove `ReviewerCap`
+- `AdminCap` holders can add and remove `ReviewerCap`
+- revocation is enforced against the `Registry`, so an old cap object left in a wallet is no longer active after removal
 - `OwnerCap` and `AdminCap` holders can use admin surfaces
 - `ReviewerCap` holders can use review surfaces, but cannot use admin-only creation or destructive controls
 
@@ -126,7 +129,7 @@ VITE_PACKAGE_ID=0x...
 VITE_REGISTRY_ID=0x...
 ```
 
-When `VITE_PACKAGE_ID` is configured, the frontend checks the connected wallet's owned objects for:
+When `VITE_PACKAGE_ID` is configured, the frontend checks the connected wallet's owned objects and matches them against the shared `Registry` for:
 
 - `OwnerCap`
 - `AdminCap`
@@ -134,8 +137,8 @@ When `VITE_PACKAGE_ID` is configured, the frontend checks the connected wallet's
 
 Behavior is:
 
-- `OwnerCap`: admin UI and review UI enabled, and can mint `AdminCap`
-- `AdminCap`: admin UI and review UI enabled, and can mint `ReviewerCap`
+- `OwnerCap`: admin UI and review UI enabled, can add/remove `AdminCap`, and can add/remove `ReviewerCap`
+- `AdminCap`: admin UI and review UI enabled, and can add/remove `ReviewerCap`
 - `ReviewerCap` only: review UI enabled, admin-only actions disabled
 - no cap: `Access Denied`
 
@@ -156,8 +159,9 @@ sui client publish --gas-budget 50000000
 5. Set `VITE_SUI_NETWORK` and, if needed, `VITE_RPC_URL` for the target fullnode.
 6. Restart the Vite app so the new env values are loaded.
 7. Connect the publisher wallet. It should immediately have the initial `OwnerCap`.
-8. Open `/admin` and use the `Issue AdminCap` panel to mint admin access for another Sui wallet.
-9. Connect an admin wallet and use the `Issue ReviewerCap` panel to mint reviewer access for another Sui wallet.
+8. Open `/admin` and use the `Access Management` panel to review active Owner/Admin/Reviewer entries.
+9. From the same panel, an owner wallet can add/remove admins and add/remove reviewers.
+10. Connect an admin wallet to verify that it can add/remove reviewers, but cannot remove admins.
 
 Notes:
 
@@ -218,10 +222,11 @@ DeepSignal can expose a public roadmap per form at `/roadmap/:formId`.
 ## Admin protection
 
 - `/admin` and `/dashboard` views require a connected wallet
-- when `VITE_PACKAGE_ID` is configured, creator/reviewer access is gated by owned `OwnerCap` / `AdminCap` / `ReviewerCap` objects from the configured Move package
+- when `VITE_PACKAGE_ID` is configured, creator/reviewer access is gated by owned `OwnerCap` / `AdminCap` / `ReviewerCap` objects that are still active in the configured Move `Registry`
 - `OwnerCap` holders can access admin creation flows and review flows
-- `OwnerCap` holders can mint `AdminCap`
-- `AdminCap` holders can mint `ReviewerCap`
+- `OwnerCap` holders can add/remove `AdminCap`
+- `OwnerCap` holders can add/remove `ReviewerCap`
+- `AdminCap` holders can add/remove `ReviewerCap`
 - `AdminCap` holders can access admin creation flows and review flows
 - `ReviewerCap` holders can access review flows only
 - when no matching cap is found, the UI shows `Access denied`
