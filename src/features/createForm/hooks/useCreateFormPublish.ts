@@ -4,6 +4,7 @@ import { createFormOnChain } from "../../../lib/projectRegistry";
 import { isLocalFallbackBlob } from "../../../lib/proof";
 import { publishForm } from "../services";
 import { localStorageAdapter } from "../../../storage/localStorageAdapter";
+import { saveFormMetadataOverlay } from "../../../storage/formMetadataOverlay";
 import type {
   CreateFormTransaction,
   FormField,
@@ -252,6 +253,7 @@ export function useCreateFormPublish({
         registrationMode: "sui",
       } satisfies PreparedPublishForm;
       await localStorageAdapter.saveForm(registeredForm);
+      saveFormMetadataOverlay(registeredForm);
       setSavedForm(registeredForm);
       onSaved(registeredForm);
     } catch (registerError) {

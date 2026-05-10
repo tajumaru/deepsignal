@@ -1,7 +1,13 @@
 import { useSuiClient } from "@mysten/dapp-kit";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
-import { loadRecentProjects, parseProjectOwnerCap, parseProjectSummary, type ProjectSummary } from "../lib/projectRegistry";
+import {
+  loadRecentProjects,
+  parseProjectOwnerCap,
+  parseProjectSummary,
+  subscribeProjectRegistryStorageChange,
+  type ProjectSummary,
+} from "../lib/projectRegistry";
 import { PROJECT_OWNER_CAP_TYPE } from "../lib/sui";
 
 type OwnedObjectEntry = {
@@ -95,6 +101,12 @@ export function useProjectRegistry(address?: string | null) {
   useEffect(() => {
     setRecentProjects(loadRecentProjects());
   }, [address, projectQuery.dataUpdatedAt]);
+
+  useEffect(() => {
+    return subscribeProjectRegistryStorageChange(() => {
+      setRecentProjects(loadRecentProjects());
+    });
+  }, []);
 
   const projects = useMemo<ProjectSummary[]>(
     () =>

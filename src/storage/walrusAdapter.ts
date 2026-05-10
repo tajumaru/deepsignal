@@ -1,8 +1,11 @@
-import { fromBase64 } from "@mysten/bcs";
 import type { ClientWithCoreApi } from "@mysten/sui/client";
 import type { Signer } from "@mysten/sui/cryptography";
 import { Transaction } from "@mysten/sui/transactions";
-import { signTransaction, type WalletAccount, type WalletWithRequiredFeatures } from "@mysten/wallet-standard";
+import {
+  signAndExecuteTransaction,
+  type WalletAccount,
+  type WalletWithRequiredFeatures,
+} from "@mysten/wallet-standard";
 import { StorageNodeAPIError, WalrusClientError, type WalrusClient } from "@mysten/walrus";
 import {
   deleteFormBlobIndex,
@@ -111,10 +114,16 @@ function createWalletSigner(): Signer {
     toSuiAddress() {
       return account.address;
     },
-    async signAndExecuteTransaction({ transaction, client: txClient }) {
+    async signAndExecuteTransaction({
+      transaction,
+      client: txClient,
+    }: {
+      transaction: Transaction;
+      client?: ClientWithCoreApi;
+    }) {
       const activeClient = (txClient as WalrusEnabledClient | undefined) ?? client;
       transaction.setSenderIfNotSet(account.address);
-      const { bytes, signature } = await signTransaction(wallet, {
+      const execution = await signAndExecuteTransaction(wallet, {
         transaction: {
           toJSON: async () =>
             transaction.toJSON({
@@ -126,16 +135,16 @@ function createWalletSigner(): Signer {
         chain: `sui:${SUI_NETWORK}`,
       });
 
-      return activeClient.core.executeTransaction({
-        transaction: fromBase64(bytes),
-        signatures: [signature],
+      return activeClient.core.waitForTransaction({
+        digest: execution.digest,
         include: {
           transaction: true,
           effects: true,
+          objectTypes: true,
         },
       });
     },
-  } as Signer;
+  } as unknown as Signer;
 }
 
 async function parseResponseBody(response: Response) {
@@ -251,6 +260,18 @@ function normalizeWalrusWriteError(error: unknown) {
   return error instanceof Error ? error : new Error("Walrus upload failed.");
 }
 
+function isObjectVersionRetryableError(error: unknown) {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+  const message = error.message.toLowerCase();
+  return (
+    message.includes("needs to be rebuilt because object") ||
+    message.includes("is unavailable for consumption") ||
+    message.includes("current version:")
+  );
+}
+
 async function uploadBodyWithPublisher(body: Blob | File): Promise<UploadResult> {
   assertPublisherEnv();
   const response = await fetch(`${publisherUrl}/v1/blobs`, {
@@ -268,26 +289,36 @@ async function uploadBodyWithPublisher(body: Blob | File): Promise<UploadResult>
 }
 
 async function uploadBodyWithSdk(body: Blob | File): Promise<UploadResult> {
-  try {
-    const client = getWalrusClient();
-    const signer = createWalletSigner();
-    const blob = new Uint8Array(await body.arrayBuffer());
-    const owner = runtimeContext.account?.address;
-    const result = await client.walrus.writeBlob({
-      blob,
-      signer,
-      owner,
-      epochs: storageEpochs,
-      deletable: true,
-      attributes: body.type ? { "content-type": body.type } : undefined,
-    });
-    return {
-      blobId: result.blobId,
-      blobObjectId: result.blobObject.id,
-    };
-  } catch (error) {
-    throw normalizeWalrusWriteError(error);
+  const blob = new Uint8Array(await body.arrayBuffer());
+  const maxAttempts = 3;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      const client = getWalrusClient();
+      const signer = createWalletSigner();
+      const owner = runtimeContext.account?.address;
+      const result = await client.walrus.writeBlob({
+        blob,
+        signer,
+        owner,
+        epochs: storageEpochs,
+        deletable: true,
+        attributes: body.type ? { "content-type": body.type } : undefined,
+      });
+      return {
+        blobId: result.blobId,
+        blobObjectId: result.blobObject.id,
+      };
+    } catch (error) {
+      if (attempt < maxAttempts && isObjectVersionRetryableError(error)) {
+        await new Promise((resolve) => window.setTimeout(resolve, 400 * attempt));
+        continue;
+      }
+      throw normalizeWalrusWriteError(error);
+    }
   }
+
+  throw new Error("Walrus upload failed.");
 }
 
 async function uploadBody(body: Blob | File): Promise<UploadResult> {
@@ -350,11 +381,13 @@ async function fetchBlobTextFromWalrus(
   blobId: string,
   logLabel: "Walrus blob read failed" | "Walrus text blob read failed",
 ): Promise<string | null> {
+  if (!blobId.trim()) {
+    return null;
+  }
   assertReadEnv();
   try {
     const response = await fetch(`${aggregatorUrl}/v1/blobs/${blobId}`);
     if (response.status === 404) {
-      console.warn(`${logLabel}: blob ${blobId} no longer exists on Walrus.`);
       return null;
     }
     if (!response.ok) {
@@ -368,6 +401,9 @@ async function fetchBlobTextFromWalrus(
 }
 
 export async function fetchJsonBlob<T>(blobId: string): Promise<T | null> {
+  if (!blobId.trim()) {
+    return null;
+  }
   const text = await fetchBlobTextFromWalrus(blobId, "Walrus blob read failed");
   if (!text) {
     return null;
@@ -381,6 +417,9 @@ export async function fetchJsonBlob<T>(blobId: string): Promise<T | null> {
 }
 
 async function fetchTextBlob(blobId: string): Promise<string | null> {
+  if (!blobId.trim()) {
+    return null;
+  }
   return fetchBlobTextFromWalrus(blobId, "Walrus text blob read failed");
 }
 

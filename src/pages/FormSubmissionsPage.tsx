@@ -9,11 +9,15 @@ import { Link, useParams } from "react-router-dom";
 import { AdminAccessGate } from "../components/AdminAccessGate";
 import { BlobLink } from "../components/BlobLink";
 import { EmptyState } from "../components/EmptyState";
-import { SignalMetaChip } from "../components/SignalMetaChip";
+import { SealStatusCard } from "../components/SealStatusCard";
+import { SignalClusterPanel } from "../components/SignalClusterPanel";
+import { SignalMetaChip, SignalMetaRow } from "../components/SignalMetaChip";
 import { useAccessControl } from "../hooks/useAccessControl";
 import { getSealRuntimeStatus } from "../crypto/cryptoFactory";
+import { REAL_SEAL_SESSION_TTL_MIN } from "../crypto/sealPayload";
 import { useI18n } from "../i18n";
 import { getReviewAccessState, getRoleLabel } from "../lib/adminAccess";
+import { getEncryptedPayloadAvailabilityLabel, hasDedicatedEncryptedPayloadBlob } from "../lib/encryptionDisplay";
 import { exportSubmissionJson, exportSubmissionsCsv, exportSummaryJson } from "../lib/export";
 import { getRespondentDisplayLabel, getSubmissionRespondentMeta } from "../lib/respondentMeta";
 import {
@@ -23,6 +27,7 @@ import {
 import {
   getSignalPreview,
   getSignalSubject,
+  getStorageDetailLabels,
   getWalletAccessLabel,
   inferSignalCategory,
   isLocalFallbackBlob,
@@ -99,11 +104,22 @@ export function FormSubmissionsPage() {
   const [selectedStreamId, setSelectedStreamId] = useState<StreamId>("all");
   const [search, setSearch] = useState("");
   const [detailAnswers, setDetailAnswers] = useState<Record<string, unknown> | null>(null);
+  const [detailAttachments, setDetailAttachments] = useState<Submission["attachments"]>([]);
   const [decrypting, setDecrypting] = useState(false);
   const [decryptError, setDecryptError] = useState("");
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [saveError, setSaveError] = useState("");
+  const [statusDraft, setStatusDraft] = useState<Submission["status"]>("unread");
+  const [triageStatusDraft, setTriageStatusDraft] = useState<Submission["triageStatus"]>("new");
+  const [priorityDraft, setPriorityDraft] = useState<Submission["priority"]>("medium");
+  const [signalValueDraft, setSignalValueDraft] = useState("");
+  const [notesDraft, setNotesDraft] = useState("");
+  const [draftTag, setDraftTag] = useState("");
+  const [githubIssueDraft, setGithubIssueDraft] = useState("");
+  const [githubPrDraft, setGithubPrDraft] = useState("");
   const [loading, setLoading] = useState(true);
+  const [showMetadata, setShowMetadata] = useState(false);
+  const [showEncryptedSignal, setShowEncryptedSignal] = useState(false);
   const saveQueueRef = useRef(Promise.resolve());
 
   useEffect(() => {
@@ -154,12 +170,28 @@ export function FormSubmissionsPage() {
   useEffect(() => {
     if (!selectedSubmission) {
       setDetailAnswers(null);
+      setDetailAttachments([]);
+      setNotesDraft("");
+      setGithubIssueDraft("");
+      setGithubPrDraft("");
       setDecryptError("");
       setSaveError("");
       setSaveState("idle");
       return;
     }
+    setNotesDraft(selectedSubmission.notes);
+    setStatusDraft(selectedSubmission.status);
+    setTriageStatusDraft(selectedSubmission.triageStatus);
+    setPriorityDraft(selectedSubmission.priority);
+    setSignalValueDraft(
+      typeof selectedSubmission.signalValue === "number"
+        ? selectedSubmission.signalValue.toString()
+        : "",
+    );
+    setGithubIssueDraft(selectedSubmission.githubIssueUrl ?? "");
+    setGithubPrDraft(selectedSubmission.githubPrUrl ?? "");
     setDetailAnswers(selectedSubmission.isEncrypted ? null : selectedSubmission.answers);
+    setDetailAttachments(selectedSubmission.attachments ?? []);
     setDecryptError("");
     setSaveError("");
   }, [selectedSubmission]);
@@ -251,12 +283,27 @@ export function FormSubmissionsPage() {
       });
       if (resolved) {
         setDetailAnswers(resolved.answers);
+        setDetailAttachments(resolved.attachments);
       }
     } catch (error) {
       setDecryptError(error instanceof Error ? error.message : t("decryptFailed"));
     } finally {
       setDecrypting(false);
     }
+  }
+
+  async function handleSaveReviewControls() {
+    if (!selectedSubmission) {
+      return;
+    }
+    await updateSubmission({
+      ...selectedSubmission,
+      status: statusDraft,
+      triageStatus: triageStatusDraft,
+      priority: priorityDraft,
+      signalValue: signalValueDraft ? Number(signalValueDraft) : undefined,
+      notes: notesDraft,
+    });
   }
 
   const streamItems = [
@@ -368,6 +415,9 @@ export function FormSubmissionsPage() {
   const showSurveySummary =
     form.purpose === "survey" ||
     submissions.some((submission) => inferSignalCategory(submission) === "Survey");
+  const activeForm = form as FormSchema;
+  const resolvedDetailAnswers = detailAnswers ?? {};
+  const isDetailOnly = Boolean(submissionId);
 
   return (
     <AdminAccessGate
@@ -380,7 +430,193 @@ export function FormSubmissionsPage() {
           : undefined
       }
     >
-      <section className="stack">
+      <section className={isDetailOnly ? "signal-detail-only-shell" : "stack"}>
+        {isDetailOnly ? (
+          <article className="panel signal-detail-column">
+            {!selectedSubmission ? (
+              <EmptyState variant="abyss" animated={false} showVisual={false}>
+                <p className="eyebrow">Signal Chamber</p>
+                <h2>{t("abyssAwaitingSignalTitle")}</h2>
+                <p>{t("abyssAwaitingSignalBody")}</p>
+              </EmptyState>
+            ) : (
+              <>
+                <div className="signal-detail-heading">
+                  <div>
+                    <p className="eyebrow">Contributor Signal</p>
+                    <h2>{getSignalSubject(selectedSubmission)}</h2>
+                    <p className="muted">{formatDate(selectedSubmission.createdAt)}</p>
+                  </div>
+                  <div className="inline-actions">
+                    <button
+                      type="button"
+                      className="ghost-button"
+                      onClick={() => exportSubmissionJson(form, selectedSubmission)}
+                    >
+                      {t("exportJson")}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="signal-detail-meta-row">
+                  <span className={`pill status-${selectedSubmission.status}`}>
+                    {selectedSubmission.status}
+                  </span>
+                  <span className={`pill priority-${selectedSubmission.priority}`}>
+                    {selectedSubmission.priority}
+                  </span>
+                  <span className="pill">{getTriageStatusLabel(selectedSubmission.triageStatus)}</span>
+                  <span className="pill">{inferSignalCategory(selectedSubmission)}</span>
+                  <span className="pill">Severity {selectedSubmission.severity ?? "medium"}</span>
+                  <span className="pill">Signal Value {selectedSubmission.signalValue ?? "N/A"}</span>
+                </div>
+
+                {selectedSubmission.isEncrypted ? (
+                  <div className="inline-actions">
+                    <button
+                      type="button"
+                      className="primary-button"
+                      onClick={() => void handleDecrypt()}
+                      disabled={decrypting}
+                    >
+                      {decrypting
+                        ? t("decryptingSignal")
+                        : sealRuntime.activeMode === "mock"
+                          ? t("decryptSignal")
+                          : "Decrypt private signal"}
+                    </button>
+                    {!isLocalFallbackBlob(selectedSubmission.encryptedBlobId) ? (
+                      <BlobLink
+                        blobId={selectedSubmission.encryptedBlobId}
+                        label={t("verifyOnWalrus")}
+                      />
+                    ) : null}
+                  </div>
+                ) : null}
+
+                {selectedSubmission.isEncrypted && !detailAnswers ? (
+                  <div className="stack">
+                    <p className="muted">Seal Runtime: {sealRuntimeLabel}</p>
+                    <p className="muted">
+                      {sealRuntime.activeMode === "mock"
+                        ? `${t("demoDecryptAvailable")} Mock mode only.`
+                        : t("walletApprovalReuseNotice", { minutes: REAL_SEAL_SESSION_TTL_MIN })}
+                    </p>
+                  </div>
+                ) : null}
+
+                {decryptError ? <p className="warning-text">{decryptError}</p> : null}
+
+                <div className="signal-detail-sections">
+                  <section className="answer-card">
+                    <h3>Signal Detail</h3>
+                    {detailAnswers ? (
+                      <div className="stack">
+                        {form.fields.map((field) => (
+                          <div key={field.id} className="answer-line">
+                            <strong>{field.label}</strong>
+                            <p>{flattenAnswer(detailAnswers[field.id]) || t("noAnswerLabel")}</p>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="muted">{t("encryptedFeedbackHidden")}</p>
+                    )}
+                  </section>
+
+                  <section className="answer-card">
+                    <div className="section-row">
+                      <h3>Review Controls</h3>
+                      <span className={`save-state-pill is-${saveState}`}>
+                        {saveState === "saving"
+                          ? "Saving signal ops..."
+                          : saveState === "saved"
+                            ? "Saved"
+                            : saveState === "error"
+                              ? "Save failed"
+                              : "Ready"}
+                      </span>
+                    </div>
+                    {saveError ? <p className="warning-text">{saveError}</p> : null}
+                    <label>
+                      <span>{t("status")}</span>
+                      <select
+                        value={statusDraft}
+                        onChange={(event) =>
+                          setStatusDraft(event.target.value as Submission["status"])
+                        }
+                      >
+                        <option value="unread">{t("statusUnread")}</option>
+                        <option value="read">{t("statusRead")}</option>
+                        <option value="archived">{t("statusArchived")}</option>
+                      </select>
+                    </label>
+                    <label>
+                      <span>Signal Triage</span>
+                      <select
+                        value={triageStatusDraft}
+                        onChange={(event) =>
+                          setTriageStatusDraft(event.target.value as Submission["triageStatus"])
+                        }
+                      >
+                        {TRIAGE_STATUS_OPTIONS.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      <span>{t("priority")}</span>
+                      <select
+                        value={priorityDraft}
+                        onChange={(event) =>
+                          setPriorityDraft(event.target.value as Submission["priority"])
+                        }
+                      >
+                        <option value="low">{t("priorityLow")}</option>
+                        <option value="medium">{t("priorityMedium")}</option>
+                        <option value="high">{t("priorityHigh")}</option>
+                      </select>
+                    </label>
+                    <label>
+                      <span>Signal Value</span>
+                      <select
+                        value={signalValueDraft}
+                        onChange={(event) => setSignalValueDraft(event.target.value)}
+                      >
+                        <option value="">Not scored</option>
+                        {[1, 2, 3, 4, 5].map((value) => (
+                          <option key={value} value={value}>
+                            {value}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      <span>Note</span>
+                      <textarea
+                        rows={5}
+                        value={notesDraft}
+                        onChange={(event) => setNotesDraft(event.target.value)}
+                        placeholder={t("captureReviewNotes")}
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      className="primary-button"
+                      disabled={saveState === "saving"}
+                      onClick={() => void handleSaveReviewControls()}
+                    >
+                      Save Review Controls
+                    </button>
+                  </section>
+                </div>
+              </>
+            )}
+          </article>
+        ) : (
+          <>
         <div className="panel glow-panel inbox-shell-header">
           <div>
             <p className="eyebrow">Signal Triage</p>
@@ -644,6 +880,110 @@ export function FormSubmissionsPage() {
                 {decryptError ? <p className="warning-text">{decryptError}</p> : null}
 
                 <div className="signal-detail-sections">
+                  <section className="answer-card">
+                    <h3>Signal Detail</h3>
+                    {detailAnswers ? (
+                      <div className="stack">
+                        {activeForm.fields.map((field) => (
+                          <div key={field.id} className="answer-line">
+                            <strong>{field.label}</strong>
+                            <p>{flattenAnswer(resolvedDetailAnswers[field.id]) || t("noAnswerLabel")}</p>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="muted">{t("encryptedFeedbackHidden")}</p>
+                    )}
+                  </section>
+
+                  <section className="answer-card">
+                    <div className="section-row">
+                      <h3>Review Controls</h3>
+                      <span className={`save-state-pill is-${saveState}`}>
+                        {saveState === "saving"
+                          ? "Saving signal ops..."
+                          : saveState === "saved"
+                            ? "Saved"
+                            : saveState === "error"
+                              ? "Save failed"
+                              : "Ready"}
+                      </span>
+                    </div>
+                    {saveError ? <p className="warning-text">{saveError}</p> : null}
+                    <label>
+                      <span>{t("status")}</span>
+                      <select
+                        value={selectedSubmission.status}
+                        onChange={(event) =>
+                          void updateSubmission({
+                            ...selectedSubmission,
+                            status: event.target.value as Submission["status"],
+                          })
+                        }
+                      >
+                        <option value="unread">{t("statusUnread")}</option>
+                        <option value="read">{t("statusRead")}</option>
+                        <option value="archived">{t("statusArchived")}</option>
+                      </select>
+                    </label>
+                    <label>
+                      <span>Signal Triage</span>
+                      <select
+                        value={selectedSubmission.triageStatus}
+                        onChange={(event) =>
+                          void updateSubmission({
+                            ...selectedSubmission,
+                            triageStatus: event.target.value as Submission["triageStatus"],
+                          })
+                        }
+                      >
+                        {TRIAGE_STATUS_OPTIONS.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      <span>{t("priority")}</span>
+                      <select
+                        value={selectedSubmission.priority}
+                        onChange={(event) =>
+                          void updateSubmission({
+                            ...selectedSubmission,
+                            priority: event.target.value as Submission["priority"],
+                          })
+                        }
+                      >
+                        <option value="low">{t("priorityLow")}</option>
+                        <option value="medium">{t("priorityMedium")}</option>
+                        <option value="high">{t("priorityHigh")}</option>
+                      </select>
+                    </label>
+                    <label>
+                      <span>Signal Value</span>
+                      <select
+                        value={selectedSubmission.signalValue?.toString() ?? ""}
+                        onChange={(event) =>
+                          void updateSubmission({
+                            ...selectedSubmission,
+                            signalValue: event.target.value ? Number(event.target.value) : undefined,
+                          })
+                        }
+                      >
+                        <option value="">Not scored</option>
+                        {[1, 2, 3, 4, 5].map((value) => (
+                          <option key={value} value={value}>
+                            {value}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  </section>
+                </div>
+
+                {false ? (
+                <div className="signal-detail-sections">
                   {showSurveySummary ? (
                     <section className="answer-card">
                       <div className="section-row">
@@ -670,10 +1010,10 @@ export function FormSubmissionsPage() {
                     <h3>{t("answersTitle")}</h3>
                     {detailAnswers ? (
                       <div className="stack">
-                        {form.fields.map((field) => (
+                        {activeForm.fields.map((field) => (
                           <div key={field.id} className="answer-line">
                             <strong>{field.label}</strong>
-                            <p>{flattenAnswer(detailAnswers[field.id]) || t("noAnswerLabel")}</p>
+                            <p>{flattenAnswer(detailAnswers?.[field.id]) || t("noAnswerLabel")}</p>
                           </div>
                         ))}
                       </div>
@@ -711,8 +1051,8 @@ export function FormSubmissionsPage() {
                   <SignalClusterPanel
                     selectedSubmission={selectedSubmission}
                     submissions={submissions}
-                    formById={{ [form.id]: form }}
-                    formTitleById={{ [form.id]: form.title }}
+                    formById={{ [activeForm.id]: activeForm }}
+                    formTitleById={{ [activeForm.id]: activeForm.title }}
                     busy={saveState === "saving"}
                     onSelectSignal={(nextSignalId) => setSelectedSignalId(nextSignalId)}
                     onSaveSubmission={updateSubmission}
@@ -949,11 +1289,11 @@ export function FormSubmissionsPage() {
                     </div>
                     {showMetadata ? (
                       <div className="metadata-list">
-                        <SignalMetaRow label="Project" type="registry" value={form.projectId} emptyLabel={t("notAvailable")} />
-                        {typeof form.onchainFormId === "number" ? (
+                        <SignalMetaRow label="Project" type="registry" value={activeForm.projectId} emptyLabel={t("notAvailable")} />
+                        {typeof activeForm.onchainFormId === "number" ? (
                           <div className="metadata-row">
                             <span>Registry Form ID</span>
-                            <strong>{form.onchainFormId}</strong>
+                            <strong>{activeForm.onchainFormId}</strong>
                           </div>
                         ) : null}
                         {typeof selectedSubmission.onchainSignalId === "number" ? (
@@ -962,9 +1302,9 @@ export function FormSubmissionsPage() {
                             <strong>{selectedSubmission.onchainSignalId}</strong>
                           </div>
                         ) : null}
-                        <SignalMetaRow label={t("formBlobId")} type="blob" value={form.blobId} emptyLabel={t("notAvailable")}>
-                          {!isLocalFallbackBlob(form.blobId) ? (
-                            <BlobLink blobId={form.blobId} label={t("verifyOnWalrus")} />
+                        <SignalMetaRow label={t("formBlobId")} type="blob" value={activeForm.blobId} emptyLabel={t("notAvailable")}>
+                          {!isLocalFallbackBlob(activeForm.blobId) ? (
+                            <BlobLink blobId={activeForm.blobId} label={t("verifyOnWalrus")} />
                           ) : null}
                         </SignalMetaRow>
                         <SignalMetaRow label={t("submissionBlobIdLabel")} type="blob" value={selectedSubmission.blobId} emptyLabel={t("notAvailable")}>
@@ -992,12 +1332,14 @@ export function FormSubmissionsPage() {
                           </div>
                         ) : null}
                         <SignalMetaRow label="Seal Identity" type="seal" value={selectedSubmission.sealIdentity} emptyLabel={t("notAvailable")} />
-                        <SignalMetaRow
-                          label="Receipt Metadata Digest"
-                          type="registry"
-                          value={selectedSubmission.signalReceiptMetadataDigest}
-                          emptyLabel={t("notAvailable")}
-                        />
+                        {selectedSubmission.signalReceiptMetadataDigest ? (
+                          <SignalMetaRow
+                            label="Receipt Metadata Digest"
+                            type="registry"
+                            value={selectedSubmission.signalReceiptMetadataDigest}
+                            emptyLabel={t("notAvailable")}
+                          />
+                        ) : null}
                         <div className="metadata-row signal-meta-row">
                           <span>{t("attachmentBlobIds")}</span>
                           <div className="stack signal-meta-row-value">
@@ -1054,19 +1396,22 @@ export function FormSubmissionsPage() {
                     </div>
                     {showEncryptedSignal ? (
                       <SealStatusCard
-                        encryptSubmissions={form.encryptSubmissions}
+                        encryptSubmissions={activeForm.encryptSubmissions}
                         encryptedBlobId={selectedSubmission.encryptedBlobId}
                         encryptedPayloadEmbedded={Boolean(selectedSubmission.encryptedPayload) && !selectedSubmission.encryptedBlobId}
                         canDecrypt={Boolean(account?.address)}
-                        walletAccessStatus={getWalletAccessLabel(form, account?.address)}
+                        walletAccessStatus={getWalletAccessLabel(activeForm, account?.address)}
                       />
                     ) : null}
                   </section>
                 </div>
+                ) : null}
               </>
             )}
           </article>
         </div>
+          </>
+        )}
       </section>
     </AdminAccessGate>
   );

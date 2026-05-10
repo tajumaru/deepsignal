@@ -123,6 +123,30 @@ function emitProjectRegistryStorageChange() {
   window.dispatchEvent(new Event(PROJECT_REGISTRY_STORAGE_EVENT));
 }
 
+export function subscribeProjectRegistryStorageChange(listener: () => void) {
+  if (typeof window === "undefined") {
+    return () => undefined;
+  }
+
+  const handleStorage = (event: StorageEvent) => {
+    if (
+      event.key !== null &&
+      event.key !== RECENT_PROJECTS_KEY &&
+      event.key !== SELECTED_PROJECT_ID_KEY
+    ) {
+      return;
+    }
+    listener();
+  };
+
+  window.addEventListener(PROJECT_REGISTRY_STORAGE_EVENT, listener);
+  window.addEventListener("storage", handleStorage);
+  return () => {
+    window.removeEventListener(PROJECT_REGISTRY_STORAGE_EVENT, listener);
+    window.removeEventListener("storage", handleStorage);
+  };
+}
+
 function normalizeObjectId(value?: string | null) {
   if (!value) {
     return "";
@@ -360,9 +384,16 @@ export function setSelectedProjectId(projectId: string) {
     return;
   }
   const normalized = normalizeObjectId(projectId);
+  const current = getSelectedProjectId();
   if (!normalized) {
+    if (!current) {
+      return;
+    }
     window.localStorage.removeItem(SELECTED_PROJECT_ID_KEY);
     emitProjectRegistryStorageChange();
+    return;
+  }
+  if (current === normalized) {
     return;
   }
   window.localStorage.setItem(SELECTED_PROJECT_ID_KEY, normalized);

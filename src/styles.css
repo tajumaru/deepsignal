@@ -3929,6 +3929,11 @@ body.composer-mode .bg-orb {
   align-items: start;
 }
 
+.signal-detail-only-shell {
+  width: min(100%, 820px);
+  margin: 0 auto;
+}
+
 .answer-line {
   padding: 0.9rem 1rem;
   background: rgba(2, 11, 21, 0.45);

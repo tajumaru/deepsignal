@@ -19,6 +19,7 @@ import { useAccessControl } from "../hooks/useAccessControl";
 import { useProjectRegistry } from "../hooks/useProjectRegistry";
 import { useI18n } from "../i18n";
 import {
+  createMetadataDigest,
   createProject,
   deleteProject,
   getSelectedProjectId,
@@ -27,6 +28,7 @@ import {
   parseProjectIdFromOwnerCapFields,
   parseSuiObjectData,
   parseProjectSummary,
+  registerSignalReceipt,
   removeRecentProject,
   saveRecentProject,
   setSelectedProjectId,
@@ -68,6 +70,7 @@ type StreamId =
   | "unread"
   | "encrypted"
   | "high"
+  | "pending_sui"
   | "bug"
   | "feature"
   | "archived";
@@ -94,6 +97,8 @@ function matchesStream(record: SignalRecord, streamId: StreamId) {
       return record.submission.isEncrypted;
     case "high":
       return record.submission.priority === "high";
+    case "pending_sui":
+      return Boolean(record.submission.pendingOnchainRegistration);
     case "bug":
       return record.category === "Bug";
     case "feature":
@@ -118,6 +123,7 @@ export function AdminDashboardPage() {
   const { projects, refetch: refetchProjects } = useProjectRegistry(account?.address);
   const createProjectTx = useSignAndExecuteTransaction();
   const deleteProjectTx = useSignAndExecuteTransaction();
+  const registerSignalReceiptTx = useSignAndExecuteTransaction();
   const sealRuntime = getSealRuntimeStatus();
   const storageRuntime = getStorageRuntimeStatus();
   const [forms, setForms] = useState<FormWithCount[]>([]);
@@ -147,6 +153,8 @@ export function AdminDashboardPage() {
   const [projectCreateName, setProjectCreateName] = useState("");
   const [projectState, setProjectState] = useState("");
   const [deletingProject, setDeletingProject] = useState(false);
+  const [selectedPendingSignalIds, setSelectedPendingSignalIds] = useState<string[]>([]);
+  const [registeringSignalIds, setRegisteringSignalIds] = useState<string[]>([]);
   const saveQueueRef = useRef(Promise.resolve());
   const hasAdminAccess = canAdmin(capabilityProfile);
   const selectedProject = projects.find((project) => project.objectId === selectedProjectId) ?? null;
@@ -433,6 +441,20 @@ export function AdminDashboardPage() {
       ),
     [accessibleForms, submissionsByFormId],
   );
+  const pendingSignals = useMemo(
+    () => allSignals.filter((record) => record.submission.pendingOnchainRegistration),
+    [allSignals],
+  );
+  useEffect(() => {
+    setSelectedPendingSignalIds((current) =>
+      current.filter((signalId) =>
+        allSignals.some(
+          (record) =>
+            record.submission.id === signalId && record.submission.pendingOnchainRegistration,
+        ),
+      ),
+    );
+  }, [allSignals]);
 
   const visibleSignals = useMemo(() => {
     const normalizedSearch = search.trim().toLowerCase();
@@ -516,6 +538,134 @@ export function AdminDashboardPage() {
     await saveQueueRef.current;
   }
 
+  function isRegisteringSignal(signalId: string) {
+    return registeringSignalIds.includes(signalId);
+  }
+
+  function togglePendingSelection(signalId: string) {
+    setSelectedPendingSignalIds((current) =>
+      current.includes(signalId)
+        ? current.filter((entry) => entry !== signalId)
+        : [...current, signalId],
+    );
+  }
+
+  async function registerSubmissionRecordOnSui(record: SignalRecord) {
+    const { form, submission } = record;
+    if (
+      !form.projectId ||
+      typeof form.onchainFormId !== "number" ||
+      !submission.receiptBlobId ||
+      isLocalFallbackBlob(submission.receiptBlobId)
+    ) {
+      throw new Error("This signal is not eligible for Sui registration yet.");
+    }
+
+    const signalReceiptMetadataDigest = await createMetadataDigest({
+      submissionId: submission.id,
+      formId: submission.formId,
+      createdAt: submission.createdAt,
+      receiptBlobId: submission.receiptBlobId,
+      attachmentBlobIds: submission.attachments.map((attachment) => attachment.blobId),
+      encrypted: submission.isEncrypted,
+      sealIdentity: submission.sealIdentity ?? null,
+      respondentWalletAddress: submission.respondentMeta?.walletAddress ?? null,
+      respondentSessionId: submission.respondentMeta?.sessionId ?? null,
+      isAnonymous: submission.respondentMeta?.isAnonymous ?? true,
+    });
+    const tx = registerSignalReceipt({
+      projectId: form.projectId,
+      formId: form.onchainFormId,
+      walrusBlobId: submission.receiptBlobId,
+      metadataDigest: signalReceiptMetadataDigest,
+      encrypted: submission.isEncrypted,
+      sealIdentity: submission.sealIdentity ?? null,
+    });
+    const result = await registerSignalReceiptTx.mutateAsync({ transaction: tx });
+    const confirmed = await suiClient.waitForTransaction({
+      digest: result.digest,
+      options: { showEvents: true },
+    });
+    const signalRegisteredEvent = (confirmed.events ?? []).find((chainEvent) =>
+      String(chainEvent.type ?? "").endsWith("::SignalRegistered"),
+    );
+    const rawSignalId = (signalRegisteredEvent?.parsedJson as { signal_id?: string | number } | undefined)?.signal_id;
+    const parsedSignalId = typeof rawSignalId === "number" ? rawSignalId : Number(rawSignalId ?? Number.NaN);
+    const registeredSubmission = normalizeSubmission({
+      ...submission,
+      pendingOnchainRegistration: false,
+      onchainSignalId: Number.isFinite(parsedSignalId) ? parsedSignalId : undefined,
+      signalReceiptMetadataDigest,
+      onchainStatus: "new",
+      updatedAt: new Date().toISOString(),
+    });
+    await storageAdapter.updateSubmission(registeredSubmission);
+    applySubmissionUpdate(registeredSubmission);
+    return registeredSubmission;
+  }
+
+  async function handleRegisterPendingSignals(targetSignalIds?: string[]) {
+    const nextTargetIds = (targetSignalIds ?? selectedPendingSignalIds).filter(Boolean);
+    if (nextTargetIds.length === 0) {
+      setToast({ tone: "error", message: "Select at least one pending signal first." });
+      return;
+    }
+
+    const targetRecords = nextTargetIds
+      .map((signalId) =>
+        allSignals.find(
+          (record) =>
+            record.submission.id === signalId && record.submission.pendingOnchainRegistration,
+        ) ?? null,
+      )
+      .filter((record): record is SignalRecord => Boolean(record));
+    if (targetRecords.length === 0) {
+      setToast({ tone: "error", message: "No pending Sui registrations were found for the selected signals." });
+      return;
+    }
+
+    setRegisteringSignalIds((current) => [...new Set([...current, ...targetRecords.map((record) => record.submission.id)])]);
+    const successes: string[] = [];
+    const failures: string[] = [];
+
+    for (const record of targetRecords) {
+      try {
+        await registerSubmissionRecordOnSui(record);
+        successes.push(record.submission.id);
+      } catch (error) {
+        console.warn("register_signal failed from admin dashboard", error);
+        failures.push(
+          error instanceof Error
+            ? `${getSignalSubject(record.submission)}: ${error.message}`
+            : `${getSignalSubject(record.submission)}: Failed to register on Sui.`,
+        );
+      }
+    }
+
+    setRegisteringSignalIds((current) =>
+      current.filter((signalId) => !targetRecords.some((record) => record.submission.id === signalId)),
+    );
+    if (successes.length > 0) {
+      setSelectedPendingSignalIds((current) =>
+        current.filter((signalId) => !successes.includes(signalId)),
+      );
+    }
+    if (failures.length > 0) {
+      setToast({
+        tone: successes.length > 0 ? "success" : "error",
+        message:
+          successes.length > 0
+            ? `Registered ${successes.length} signal${successes.length === 1 ? "" : "s"} on Sui. ${failures[0]}`
+            : failures[0],
+      });
+      return;
+    }
+    setToast({
+      tone: "success",
+      message: `Registered ${successes.length} pending signal${successes.length === 1 ? "" : "s"} on Sui.`,
+    });
+  }
+
   async function handleSelect(record: SignalRecord) {
     setSelectedSignalId(record.submission.id);
   }
@@ -568,6 +718,11 @@ export function AdminDashboardPage() {
       id: "high",
       label: "Flagged",
       count: allSignals.filter((record) => record.submission.priority === "high").length,
+    },
+    {
+      id: "pending_sui",
+      label: "Pending Sui",
+      count: pendingSignals.length,
     },
     {
       id: "archived",
@@ -640,6 +795,9 @@ export function AdminDashboardPage() {
   const visibleUnreadCount = visibleSignals.filter(
     (record) => record.submission.status === "unread",
   ).length;
+  const selectedPendingVisibleCount = visibleSignals.filter((record) =>
+    selectedPendingSignalIds.includes(record.submission.id),
+  ).length;
   const overviewCards = [
     {
       label: "Current scope",
@@ -655,6 +813,11 @@ export function AdminDashboardPage() {
       label: "Protected signals",
       value: String(visibleSignals.filter((record) => record.submission.isEncrypted).length),
       meta: privateReviewLabel,
+    },
+    {
+      label: "Pending Sui",
+      value: String(pendingSignals.length),
+      meta: "Optional proof queue",
     },
     {
       label: "Active forms",
@@ -1034,6 +1197,7 @@ export function AdminDashboardPage() {
                 </div>
                 <div className="signal-column-tools">
                   <span className="signal-chip signal-chip-soft">{visibleSignals.length} results</span>
+                  <span className="signal-chip signal-chip-soft">{pendingSignals.length} pending Sui</span>
                   <input
                     value={search}
                     onChange={(event) => setSearch(event.target.value)}
@@ -1041,6 +1205,25 @@ export function AdminDashboardPage() {
                   />
                 </div>
               </div>
+              <section className="answer-card">
+                <div className="section-row">
+                  <div>
+                    <p className="eyebrow">Pending Sui Registration</p>
+                    <h3>Optional proof queue</h3>
+                  </div>
+                  <button
+                    type="button"
+                    className="ghost-button"
+                    disabled={selectedPendingSignalIds.length === 0 || registeringSignalIds.length > 0}
+                    onClick={() => void handleRegisterPendingSignals()}
+                  >
+                    {registeringSignalIds.length > 0
+                      ? "Registering on Sui..."
+                      : `Register selected on Sui${selectedPendingVisibleCount > 0 ? ` (${selectedPendingVisibleCount})` : ""}`}
+                  </button>
+                </div>
+                <p className="muted">Sui registration is optional proof, not required for review.</p>
+              </section>
 
               {visibleSignals.length === 0 ? (
                 <EmptyState variant="abyss">
@@ -1079,6 +1262,9 @@ export function AdminDashboardPage() {
                           <span className={`pill status-${submission.status}`}>{submission.status}</span>
                           <span className={`pill priority-${submission.priority}`}>{submission.priority}</span>
                           <span className="signal-chip">{category}</span>
+                          {submission.pendingOnchainRegistration ? (
+                            <span className="signal-chip signal-chip-accent">Pending Sui</span>
+                          ) : null}
                           {submission.isEncrypted ? (
                             <span className="signal-chip signal-chip-soft">Protected</span>
                           ) : null}
@@ -1102,6 +1288,33 @@ export function AdminDashboardPage() {
                           ) : null}
                           <span className="signal-chip">{storageLabel}</span>
                         </div>
+                        {submission.pendingOnchainRegistration ? (
+                          <div className="inline-actions">
+                            <button
+                              type="button"
+                              className="ghost-button"
+                              onClick={(event) => {
+                                event.preventDefault();
+                                event.stopPropagation();
+                                togglePendingSelection(submission.id);
+                              }}
+                            >
+                              {selectedPendingSignalIds.includes(submission.id) ? "Selected" : "Select for Sui"}
+                            </button>
+                            <button
+                              type="button"
+                              className="ghost-button"
+                              disabled={isRegisteringSignal(submission.id)}
+                              onClick={(event) => {
+                                event.preventDefault();
+                                event.stopPropagation();
+                                void handleRegisterPendingSignals([submission.id]);
+                              }}
+                            >
+                              {isRegisteringSignal(submission.id) ? "Registering..." : "Register on Sui"}
+                            </button>
+                          </div>
+                        ) : null}
                       </Link>
                     );
                   })}
@@ -1124,7 +1337,7 @@ export function AdminDashboardPage() {
                       <p className="eyebrow">{t("signalDetailTitle")}</p>
                       <h2>{getSignalSubject(selectedRecord.submission)}</h2>
                       <p className="muted">
-                        {selectedRecord.form.title} ﾂｷ {formatDate(selectedRecord.submission.createdAt)}
+                        {selectedRecord.form.title} / {formatDate(selectedRecord.submission.createdAt)}
                       </p>
                     </div>
                     <div className="inline-actions signal-detail-utility-actions">
@@ -1143,6 +1356,18 @@ export function AdminDashboardPage() {
                       >
                         {t("exportJson")}
                       </button>
+                      {selectedRecord.submission.pendingOnchainRegistration ? (
+                        <button
+                          type="button"
+                          className="ghost-button"
+                          disabled={isRegisteringSignal(selectedRecord.submission.id)}
+                          onClick={() => void handleRegisterPendingSignals([selectedRecord.submission.id])}
+                        >
+                          {isRegisteringSignal(selectedRecord.submission.id)
+                            ? "Registering..."
+                            : "Register on Sui"}
+                        </button>
+                      ) : null}
                     </div>
                     </div>
 
@@ -1178,6 +1403,15 @@ export function AdminDashboardPage() {
                         {sealRuntime.activeMode === "mock"
                           ? `${t("demoDecryptAvailable")} Mock mode only.`
                           : t("walletApprovalReuseNotice", { minutes: REAL_SEAL_SESSION_TTL_MIN })}
+                      </p>
+                    </div>
+                  ) : null}
+
+                  {selectedRecord.submission.pendingOnchainRegistration ? (
+                    <div className="stack private-access-copy">
+                      <p className="muted">Pending Sui Registration</p>
+                      <p className="muted">
+                        Sui registration is optional proof, not required for review.
                       </p>
                     </div>
                   ) : null}
@@ -1611,12 +1845,14 @@ export function AdminDashboardPage() {
                             </div>
                           ) : null}
                           <SignalMetaRow label="Seal Identity" type="seal" value={selectedRecord.submission.sealIdentity} emptyLabel={t("notAvailable")} />
-                          <SignalMetaRow
-                            label="Receipt Metadata Digest"
-                            type="registry"
-                            value={selectedRecord.submission.signalReceiptMetadataDigest}
-                            emptyLabel={t("notAvailable")}
-                          />
+                          {selectedRecord.submission.signalReceiptMetadataDigest ? (
+                            <SignalMetaRow
+                              label="Receipt Metadata Digest"
+                              type="registry"
+                              value={selectedRecord.submission.signalReceiptMetadataDigest}
+                              emptyLabel={t("notAvailable")}
+                            />
+                          ) : null}
                           <div className="metadata-row signal-meta-row">
                             <span>{t("attachmentBlobIds")}</span>
                             <div className="stack signal-meta-row-value">
@@ -1802,7 +2038,7 @@ export function AdminDashboardPage() {
                         </div>
                         <p className="muted">
                           {t("signalsCount", { count: item.submissionCount })}
-                          {item.isLegacyDemo ? ` ﾂｷ ${t("legacyDemoForm")}` : ""}
+                          {item.isLegacyDemo ? ` / ${t("legacyDemoForm")}` : ""}
                         </p>
                       </div>
                     </button>

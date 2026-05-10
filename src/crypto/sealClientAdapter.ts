@@ -78,7 +78,7 @@ export const sealClientAdapter: SealAdapter = {
         serverObjectIds: [serverConfig.objectId],
         encryptedObject: toBase64(encryptedObject),
         projectId,
-        approvalPolicy: projectId ? "project_signal_v1" : undefined,
+        approvalPolicy: projectId ? "project_admin_v0" : undefined,
       }),
     );
   },
@@ -113,23 +113,51 @@ export const sealClientAdapter: SealAdapter = {
         signPersonalMessage: context.signPersonalMessage,
       });
 
-      const txBytes = await buildSealApproveTransactionBytes({
-        objectId: envelope.objectId,
-        projectId,
-        approvalPolicy:
-          envelope.approvalPolicy ??
-          (doesSealIdMatchProject(envelope.objectId, projectId)
-            ? "project_signal_v1"
-            : "project_admin_v0"),
-        suiClient: context.suiClient as SealCompatibleClient,
-        packageId: envelope.packageId,
-      });
+      const primaryApprovalPolicy =
+        envelope.approvalPolicy ??
+        (doesSealIdMatchProject(envelope.objectId, projectId)
+          ? "project_signal_v1"
+          : "project_admin_v0");
 
-      const plaintext = await sealClient.decrypt({
-        data: fromBase64(envelope.encryptedObject),
-        sessionKey,
-        txBytes,
-      });
+      let plaintext: Uint8Array;
+      try {
+        const txBytes = await buildSealApproveTransactionBytes({
+          objectId: envelope.objectId,
+          projectId,
+          approvalPolicy: primaryApprovalPolicy,
+          suiClient: context.suiClient as SealCompatibleClient,
+          packageId: envelope.packageId,
+        });
+
+        plaintext = await sealClient.decrypt({
+          data: fromBase64(envelope.encryptedObject),
+          sessionKey,
+          txBytes,
+        });
+      } catch (error) {
+        const canRetryWithAdminPolicy =
+          error instanceof NoAccessError &&
+          projectId &&
+          primaryApprovalPolicy === "project_signal_v1";
+
+        if (!canRetryWithAdminPolicy) {
+          throw error;
+        }
+
+        const fallbackTxBytes = await buildSealApproveTransactionBytes({
+          objectId: envelope.objectId,
+          projectId,
+          approvalPolicy: "project_admin_v0",
+          suiClient: context.suiClient as SealCompatibleClient,
+          packageId: envelope.packageId,
+        });
+
+        plaintext = await sealClient.decrypt({
+          data: fromBase64(envelope.encryptedObject),
+          sessionKey,
+          txBytes: fallbackTxBytes,
+        });
+      }
 
       return new TextDecoder().decode(plaintext);
     } catch (error) {

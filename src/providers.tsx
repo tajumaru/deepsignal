@@ -21,6 +21,12 @@ import { setWalrusRuntimeContext } from "./storage/walrusAdapter";
 
 export const REQUIRE_GLOBAL_WALRUS_RUNTIME =
   String(import.meta.env.VITE_REQUIRE_WALRUS || "").toLowerCase() === "true";
+const WALRUS_TX_WAIT_TIMEOUT_MS = 3 * 60 * 1000;
+const WALRUS_UPLOAD_RELAY_TIP_MAX_RAW = import.meta.env.VITE_WALRUS_UPLOAD_RELAY_TIP_MAX;
+const WALRUS_UPLOAD_RELAY_TIP_MAX =
+  WALRUS_UPLOAD_RELAY_TIP_MAX_RAW && WALRUS_UPLOAD_RELAY_TIP_MAX_RAW.trim()
+    ? Number(WALRUS_UPLOAD_RELAY_TIP_MAX_RAW)
+    : null;
 
 const { networkConfig } = createNetworkConfig({
   testnet: {
@@ -44,24 +50,45 @@ function WalrusRuntimeBridge() {
   const { currentWallet, supportedIntents } = useCurrentWallet();
   const { client } = useSuiClientContext();
   const walrusClient = useMemo(
-    () =>
-      client.$extend(
-        walrus(
-          {
-            wasmUrl: walrusWasmUrl,
-            ...(WALRUS_UPLOAD_RELAY_URL
-              ? {
-                uploadRelay: {
-                  host: WALRUS_UPLOAD_RELAY_URL,
-                  sendTip: {
-                    max: Number(import.meta.env.VITE_WALRUS_UPLOAD_RELAY_TIP_MAX || "1000000"),
-                  },
-                },
-              }
-              : {}),
-          },
-        ),
-      ),
+    () => {
+      const walrusEnabledClient = client.$extend(
+        walrus({
+          wasmUrl: walrusWasmUrl,
+          ...(WALRUS_UPLOAD_RELAY_URL
+            ? {
+              uploadRelay: {
+                host: WALRUS_UPLOAD_RELAY_URL,
+                ...(WALRUS_UPLOAD_RELAY_TIP_MAX != null
+                  ? {
+                    sendTip: {
+                      max: WALRUS_UPLOAD_RELAY_TIP_MAX,
+                    },
+                  }
+                  : {}),
+              },
+            }
+            : {}),
+        }),
+      );
+      const originalWaitForTransaction = walrusEnabledClient.core.waitForTransaction.bind(
+        walrusEnabledClient.core,
+      );
+      (walrusEnabledClient.core as typeof walrusEnabledClient.core & {
+        waitForTransaction: typeof walrusEnabledClient.core.waitForTransaction;
+      }).waitForTransaction = (input) =>
+        originalWaitForTransaction({
+          ...input,
+          timeout: input?.timeout ?? WALRUS_TX_WAIT_TIMEOUT_MS,
+          include:
+            input?.include?.effects
+              ? ({
+                  ...(input.include ?? {}),
+                  objectTypes: true,
+                } as typeof input.include)
+              : input?.include,
+        });
+      return walrusEnabledClient;
+    },
     [client],
   );
 

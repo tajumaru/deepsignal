@@ -91,8 +91,8 @@ const messages = {
     templateTitle: "Pick a starting point",
     templateCustomBody: "Start with a sample instead of a blank canvas.",
     templateFieldCount: (params) => `${params?.count ?? 0} preset fields`,
-    builderSave: "Publish",
-    builderSaving: "Publishing...",
+    builderSave: "Publish Form",
+    builderSaving: "Publishing Form...",
     close: "Close",
     back: "Back",
     continue: "Continue",
@@ -398,7 +398,7 @@ const messages = {
       "Select a signal from the stream to project its metadata, answers, and attachments into this chamber.",
     selectedForm: "Selected form",
     unreadCountSummary: (params) =>
-      `${params?.count ?? 0} unread ﾂｷ ${params?.scope ?? ""}`,
+      `${params?.count ?? 0} unread / ${params?.scope ?? ""}`,
     signalDetailTitle: "Signal Detail",
     openFormInbox: "Open form inbox",
     decryptSignal: "Decrypt Signal",
@@ -467,6 +467,13 @@ const messages = {
     registerOnSuiBody:
       "Walrus/local storage is already live. Run Sui registration only when you want an onchain form record.",
     registerOnSuiHint: "This optional step may prompt one wallet signature.",
+    publishSavedModeBody: "Published in Local / Walrus mode. Sui registration stays optional.",
+    formStorageModeLabel: "Mode",
+    suiRegistrationStateLabel: "Sui registration",
+    suiRegistrationStateRegistered: "Registered on Sui",
+    suiRegistrationStateOptional: "Optional",
+    suiRegistrationHintLabel: "Next step",
+    suiRegistrationHintBody: "You can register this form later.",
   },
   ja: {
     navHome: "\u30db\u30fc\u30e0",
@@ -547,8 +554,8 @@ const messages = {
     templateTitle: "\u6700\u521d\u306e\u578b\u3092\u9078\u629e",
     templateCustomBody: "\u767d\u7d19\u3067\u306f\u306a\u304f\u3001\u30b5\u30f3\u30d7\u30eb\u304b\u3089\u59cb\u3081\u307e\u3059\u3002",
     templateFieldCount: (params) => `${params?.count ?? 0} \u500b\u306e\u30d7\u30ea\u30bb\u30c3\u30c8\u9805\u76ee`,
-    builderSave: "Publish",
-    builderSaving: "Publishing...",
+    builderSave: "Publish Form",
+    builderSaving: "Publishing Form...",
     close: "\u9589\u3058\u308b",
     back: "\u623b\u308b",
     continue: "\u6b21\u3078",
@@ -955,6 +962,14 @@ const messages = {
       "Walrus/local \u4fdd\u5b58\u3067\u306f\u65e2\u306b\u516c\u958b\u6e08\u307f\u3067\u3059\u3002onchain \u306e form record \u304c\u5fc5\u8981\u306a\u3068\u304d\u3060\u3051 Sui \u767b\u9332\u3092\u5b9f\u884c\u3057\u307e\u3059\u3002",
     registerOnSuiHint:
       "\u3053\u306e\u4efb\u610f\u30b9\u30c6\u30c3\u30d7\u3067\u306e\u307f\u3001wallet \u7f72\u540d\u304c1\u56de\u6c42\u3081\u3089\u308c\u308b\u5834\u5408\u304c\u3042\u308a\u307e\u3059\u3002",
+    publishSavedModeBody:
+      "Local / Walrus mode \u3067\u516c\u958b\u6e08\u307f\u3067\u3059\u3002Sui \u767b\u9332\u306f\u4efb\u610f\u306e\u307e\u307e\u3067\u3059\u3002",
+    formStorageModeLabel: "\u30e2\u30fc\u30c9",
+    suiRegistrationStateLabel: "Sui \u767b\u9332",
+    suiRegistrationStateRegistered: "Sui \u306b\u767b\u9332\u6e08\u307f",
+    suiRegistrationStateOptional: "\u4efb\u610f",
+    suiRegistrationHintLabel: "\u6b21\u306e\u30b9\u30c6\u30c3\u30d7",
+    suiRegistrationHintBody: "\u3053\u306e\u30d5\u30a9\u30fc\u30e0\u306f\u3042\u3068\u304b\u3089\u767b\u9332\u3067\u304d\u307e\u3059\u3002",
   },
 } satisfies Record<Language, Record<string, TranslationValue>>;
 

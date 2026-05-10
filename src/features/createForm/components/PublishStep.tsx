@@ -74,6 +74,13 @@ export function PublishStep({
   onRegisterOnSui,
   onBack,
 }: PublishStepProps) {
+  const isRegisteredOnSui = Boolean(savedForm?.isOnchain && typeof savedForm.onchainFormId === "number");
+  const storageModeLabel = savedForm
+    ? isLocalFallbackBlob(savedForm.blobId)
+      ? "Local mode"
+      : "Walrus mode"
+    : "Local / Walrus mode";
+
   return (
     <section className="composer-builder-grid composer-builder-grid-preview">
       <div className="composer-mobile-tabs" role="tablist" aria-label="Builder view">
@@ -91,7 +98,7 @@ export function PublishStep({
             <div>
               <p className="eyebrow">Step 4</p>
               <h2>{savedForm ? t("formPublished") : t("publishReadyTitle")}</h2>
-          <p className="muted">{savedForm ? t("signalStoredOnWalrus") : t("publishReadyBody")}</p>
+              <p className="muted">{savedForm ? t("publishSavedModeBody") : t("publishReadyBody")}</p>
             </div>
             <button type="submit" className="primary-button" disabled={saving || !isReadyToPublish}>
               {saving ? t("builderSaving") : t("builderSave")}
@@ -145,6 +152,15 @@ export function PublishStep({
             </section>
           ) : null}
 
+          {!showWalrusDiagnostics && storageRuntimeNotice ? (
+            <section className="answer-card">
+              <div className="metadata-row">
+                <span>Walrus notice</span>
+                <strong>{storageRuntimeNotice}</strong>
+              </div>
+            </section>
+          ) : null}
+
           <details className="composer-advanced-settings" open>
             <summary>{t("advanced")}</summary>
             <div className="stack composer-advanced-grid">
@@ -161,7 +177,7 @@ export function PublishStep({
                     <option value="">Walrus / local only</option>
                     {projects.map((project) => (
                       <option key={project.objectId} value={project.objectId}>
-                        {project.name} ({project.formsCount} forms)
+                        {project.name}
                       </option>
                     ))}
                   </select>
@@ -218,9 +234,7 @@ export function PublishStep({
                 <div>
                   <p className="eyebrow">Observation Relay</p>
                   <h3>SIGNAL ACTIVE</h3>
-                  <p className="muted">
-                    {isLocalFallbackBlob(savedForm.blobId) ? t("signalStoredLocally") : t("signalStoredOnWalrus")}
-                  </p>
+                  <p className="muted">{storageModeLabel}</p>
                 </div>
                 <span className="composer-live-pill">Observing</span>
               </div>
@@ -239,8 +253,24 @@ export function PublishStep({
                   {t("adminPage")}: <Link to={`/dashboard/forms/${savedForm.id}`}>{t("adminPageCta")}</Link>
                 </p>
                 <div className="metadata-list">
-                  {savedForm.projectId ? <SignalMetaRow label="Project" type="registry" value={savedForm.projectId} /> : null}
-                  {typeof savedForm.onchainFormId === "number" ? (
+                  <div className="metadata-row">
+                    <span>{t("formStorageModeLabel")}</span>
+                    <strong>{storageModeLabel}</strong>
+                  </div>
+                  <div className="metadata-row">
+                    <span>{t("suiRegistrationStateLabel")}</span>
+                    <strong>{isRegisteredOnSui ? t("suiRegistrationStateRegistered") : t("suiRegistrationStateOptional")}</strong>
+                  </div>
+                  {!isRegisteredOnSui ? (
+                    <div className="metadata-row">
+                      <span>{t("suiRegistrationHintLabel")}</span>
+                      <strong>{t("suiRegistrationHintBody")}</strong>
+                    </div>
+                  ) : null}
+                  {savedForm.projectId && isRegisteredOnSui ? (
+                    <SignalMetaRow label="Project" type="registry" value={savedForm.projectId} />
+                  ) : null}
+                  {isRegisteredOnSui ? (
                     <div className="metadata-row">
                       <span>Registry Form ID</span>
                       <strong>{savedForm.onchainFormId}</strong>
@@ -258,7 +288,7 @@ export function PublishStep({
                 </div>
               </div>
 
-              {savedForm.projectId && typeof savedForm.onchainFormId !== "number" ? (
+              {savedForm.projectId && !isRegisteredOnSui ? (
                 <section className="answer-card">
                   <p className="eyebrow">Optional Sui step</p>
                   <h4>{t("registerOnSuiTitle")}</h4>
@@ -266,7 +296,7 @@ export function PublishStep({
                   <div className="inline-actions">
                     <button
                       type="button"
-                      className="primary-button"
+                      className="ghost-button"
                       onClick={onRegisterOnSui}
                       disabled={registeringOnSui}
                     >

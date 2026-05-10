@@ -39,6 +39,11 @@ function emitStatus(next: Partial<RuntimeStatus>) {
   listeners.forEach((listener) => listener());
 }
 
+function formatWalrusFallbackNotice(error: unknown) {
+  const detail = error instanceof Error && error.message.trim() ? error.message.trim() : "Walrus upload failed.";
+  return `${detail} Saved locally instead.`;
+}
+
 async function swallow<T>(task: () => Promise<T>, fallback: T): Promise<T> {
   try {
     return await Promise.race([
@@ -77,7 +82,7 @@ async function withWriteFallback<T>(walrusTask: () => Promise<T>, localTask: () 
     }
     emitStatus({
       mode: "local-fallback",
-      notice: "Walrus upload failed. Saved locally instead.",
+      notice: formatWalrusFallbackNotice(error),
     });
     return localTask();
   }

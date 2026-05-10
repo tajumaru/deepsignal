@@ -7,6 +7,7 @@ type FormMetadataOverlay = Pick<
   | "id"
   | "isOnchain"
   | "onchainFormId"
+  | "registrationMode"
   | "formMetadataDigest"
   | "projectId"
   | "projectName"
@@ -41,6 +42,7 @@ export function saveFormMetadataOverlay(form: FormSchema) {
     id: form.id,
     isOnchain: form.isOnchain,
     onchainFormId: form.onchainFormId,
+    registrationMode: form.registrationMode,
     formMetadataDigest: form.formMetadataDigest,
     projectId: form.projectId,
     projectName: form.projectName,

@@ -42,12 +42,8 @@ export function useCreateFormBuilder({ t, projects }: UseCreateFormBuilderArgs) 
   const selectedProject = projects.find((project) => project.objectId === selectedProjectId) ?? null;
 
   useEffect(() => {
-    if (selectedProjectId) {
-      setSelectedProjectId(selectedProjectId);
-    } else {
-      setSelectedProjectId("");
-    }
-  }, [projects, selectedProjectId]);
+    setSelectedProjectId(selectedProjectId);
+  }, [selectedProjectId]);
 
   useEffect(() => {
     if (!pendingFocusFieldId) {
