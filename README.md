@@ -423,7 +423,9 @@ Current behavior:
 
 - fields marked `sensitive: true` are encrypted before submission save
 - `VITE_SEAL_MODE=mock` uses the legacy local adapter that base64-wraps values for development and fallback flows
-- `VITE_SEAL_MODE=seal` uses `@mysten/seal` for new encryptions when `VITE_SEAL_PACKAGE_ID`, `VITE_SEAL_KEY_SERVER_OBJECT_ID`, and `VITE_SEAL_AGGREGATOR_URL` are all configured
+- `VITE_SEAL_MODE=seal` uses `@mysten/seal` for new encryptions when `VITE_SEAL_PACKAGE_ID` and `VITE_SEAL_KEY_SERVER_OBJECT_ID` are configured
+- `VITE_SEAL_AGGREGATOR_URL` is only needed when the configured Seal key server is a committee server
+- real Seal encryptions created from project-backed forms now scope the Seal identity to the `projectId` prefix and store the policy metadata needed for later admin decrypt
 - encrypted answers are stored as:
 
 ```json
@@ -435,29 +437,75 @@ Current behavior:
 
 - decryption happens only in the admin detail view
 
-In real Seal mode, payloads are saved as JSON envelopes that include the base64-encoded Seal ciphertext plus the metadata needed for a later wallet-backed decrypt flow.
+In real Seal mode, payloads are saved as JSON envelopes that include the base64-encoded Seal ciphertext plus the metadata needed for a later wallet-backed decrypt flow. For project-backed forms, the envelope also records the `projectId` and approval policy used by the admin decrypt path.
 
 ### Mock vs real Seal
 
 - Mock Seal is reversible locally and exists to keep dev, demos, and fallback mode working without any wallet or onchain policy.
 - Real Seal encrypts with `@mysten/seal` and depends on a real Sui package namespace plus one or more key server objects.
 - Real Seal decryption is policy-gated: you need a Sui wallet, a session key, and an approval transaction that calls a `seal_approve*` Move function for the target access policy.
+- DeepSignal now ships `deepsignal::project_registry::seal_approve_project_signal` and `seal_approve_project_admin` so project owners/admins can decrypt private signals from the review UI.
 
 ## Seal mode in the UI
 
 - the admin dashboard and submission detail surfaces a Seal Status Card
 - the card shows `requestedMode`, `activeMode`, `isFallback`, and `warning`
 - the card also shows encryption state, `encryptedBlobId`, and wallet access context
+- the detail panel also shows `Seal Runtime: REAL|MOCK|FALLBACK`
 - encrypted forms highlight `Encrypted payload stored` plus the `encryptedBlobId`
 - mock mode shows `Demo decrypt available`
-- real seal mode shows `Policy-gated Decryption` and `Wallet/session approval required`
+- real seal mode shows `Private Signal / Team only` plus a wallet-backed `Decrypt private signal` action
 - decrypt failures should explain the missing wallet or approval condition instead of ending with a generic error
 
 ### Current limitations of real Seal mode
 
-- Encryption is wired up now, but the in-app decrypt path is intentionally staged. The admin UI currently stops with a clear `Seal decryption requires wallet approval.` error until wallet/session approval plumbing is added.
-- Because decrypt approval is not finished yet, real Seal mode is currently best for testing write-path compatibility and persisted payload format, not full end-to-end review.
+- Real decrypt now works only for signals tied to a DeepSignal `Project` object and reviewed by a wallet that is the project owner or a project admin.
+- New project-backed encryptions use a stricter `projectId + nonce` identity prefix and are approved by `seal_approve_project_signal`.
+- Older real Seal envelopes that predate project scoping can still be attempted through the looser `seal_approve_project_admin` path when the submission belongs to a project, but they are not bound to a per-signal namespace. This is a compatibility fallback for previously stored envelopes.
 - If you switch back to mock mode, older mock-encrypted payloads remain readable, but real Seal payloads will correctly report that seal mode plus wallet approval is required.
+
+## Seal demo checklist
+
+Set these env vars for a real Seal demo:
+
+```bash
+VITE_SEAL_MODE=seal
+VITE_SEAL_PACKAGE_ID=0x...
+VITE_SEAL_KEY_SERVER_OBJECT_ID=0x...
+VITE_SEAL_SERVER_TYPE=independent
+```
+
+If your Seal key server is a committee server instead of an independent/V1 server, also set:
+
+```bash
+VITE_SEAL_SERVER_TYPE=committee
+VITE_SEAL_AGGREGATOR_URL=https://...
+```
+
+Recommended demo flow for contest review:
+
+1. Configure Walrus plus the Seal env vars above.
+2. Connect an admin wallet that can manage a DeepSignal project.
+3. Create or select a project-backed form with `Encrypt submissions` enabled.
+4. Open the public form and submit a private signal.
+5. Return to the admin inbox or form submission detail.
+6. Confirm the detail panel shows `Seal Runtime: REAL`.
+7. Click `Decrypt private signal`.
+8. Approve the wallet personal-message prompt for the Seal session.
+9. Confirm the answers and attachments appear only after approval.
+
+Mock mode comparison:
+
+- `VITE_SEAL_MODE=mock` keeps the legacy reversible adapter and does not require wallet approval.
+- `VITE_SEAL_MODE=seal` stores a real Seal envelope and requires admin wallet approval before the private signal body is revealed.
+- If the Seal env vars are incomplete, DeepSignal reports `FALLBACK` and keeps the existing local demo behavior.
+
+Contest demo verification points:
+
+- public responders can still submit without connecting a wallet
+- Walrus save and project receipt registration still happen through the existing flow
+- private signal content stays hidden until an authorized admin wallet approves the decrypt session
+- unauthorized or missing-wallet review attempts show a natural error instead of exposing the payload
 
 ## Known limitations
 

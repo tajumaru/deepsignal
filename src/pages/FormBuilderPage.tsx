@@ -34,14 +34,7 @@ import { getPublicFormPath } from "../lib/publicLinks";
 import {
   createFormOnChain,
   createMetadataDigest,
-  createProject,
   getSelectedProjectId,
-  isProjectObjectType,
-  isProjectOwnerCapType,
-  parseProjectIdFromOwnerCapFields,
-  parseSuiObjectData,
-  parseProjectSummary,
-  saveRecentProject,
   setSelectedProjectId,
 } from "../lib/projectRegistry";
 import { isLocalFallbackBlob } from "../lib/proof";
@@ -51,7 +44,7 @@ import { makeId } from "../lib/utils";
 import { getStorageRuntimeStatus, subscribeStorageRuntime } from "../storage/storageFactory";
 import type { FieldType, FormField, FormPurpose, FormSchema, FormSection } from "../types";
 
-type PublishStageKey = "encoding" | "encrypting" | "sending" | "stored" | "active";
+type PublishStageKey = "encoding" | "encrypting" | "sending" | "stored" | "registering" | "active";
 type BuilderStepKey = "template" | "info" | "fields" | "publish";
 type MobileBuilderPane = "editor" | "preview";
 
@@ -66,6 +59,11 @@ const publishPhases: PublishPhase[] = [
   { key: "encrypting", label: "[ Encrypting payload ]", detail: "Reducing surface noise before release." },
   { key: "sending", label: "[ Sending to Walrus ]", detail: "Handing the signal to the abyssal network." },
   { key: "stored", label: "[ Blob stored ]", detail: "Immutable blob registered for observation." },
+  {
+    key: "registering",
+    label: "[ Registering on Signal ]",
+    detail: "Waiting for the final wallet approval and onchain confirmation.",
+  },
   { key: "active", label: "[ Signal active ]", detail: "Passive monitoring has started." },
 ];
 
@@ -157,8 +155,7 @@ export function FormBuilderPage() {
   const { currentWallet, isConnected } = useCurrentWallet();
   const suiClient = useSuiClient();
   const { capabilityProfile, isLoadingAccess } = useAccessControl(account?.address);
-  const { projects, refetch: refetchProjects } = useProjectRegistry(account?.address);
-  const createProjectTx = useSignAndExecuteTransaction();
+  const { projects } = useProjectRegistry(account?.address);
   const createFormTx = useSignAndExecuteTransaction();
   const navigate = useNavigate();
   const labelRefs = useRef<Record<string, HTMLInputElement | null>>({});
@@ -187,13 +184,12 @@ export function FormBuilderPage() {
   const [linkCopied, setLinkCopied] = useState(false);
   const [blobCopied, setBlobCopied] = useState(false);
   const [publishStorageMode, setPublishStorageMode] = useState<"walrus" | "local">("walrus");
+  const [publishResultNote, setPublishResultNote] = useState("");
   const [currentStep, setCurrentStep] = useState<BuilderStepKey>("template");
   const [mobilePane, setMobilePane] = useState<MobileBuilderPane>("editor");
   const [fieldTypePickerOpen, setFieldTypePickerOpen] = useState(false);
   const [storageRuntime, setStorageRuntime] = useState(() => getStorageRuntimeStatus());
   const [selectedProjectId, setSelectedProjectIdState] = useState(() => getSelectedProjectId());
-  const [manualProjectId, setManualProjectId] = useState("");
-  const [projectCreateName, setProjectCreateName] = useState("");
   const [projectState, setProjectState] = useState("");
 
   const createOnSui = Boolean(selectedProjectId);
@@ -515,107 +511,6 @@ export function FormBuilderPage() {
     moveStep(1);
   }
 
-  async function hydrateProject(projectId: string) {
-    const response = await suiClient.getObject({
-      id: projectId,
-      options: {
-        showType: true,
-        showContent: true,
-      },
-    });
-    const parsed = parseSuiObjectData(response);
-    if (!parsed) {
-      throw new Error("Project object was not found on Sui.");
-    }
-
-    if (isProjectOwnerCapType(parsed.type)) {
-      const linkedProjectId = parseProjectIdFromOwnerCapFields(parsed.fields);
-      if (!linkedProjectId) {
-        throw new Error("Project owner cap is missing its linked project id.");
-      }
-      return hydrateProject(linkedProjectId);
-    }
-
-    if (!isProjectObjectType(parsed.type)) {
-      throw new Error("That object is not a DeepSignal project or project owner cap.");
-    }
-
-    const summary = parseProjectSummary(parsed.objectId, parsed.fields);
-    if (!summary) {
-      throw new Error("Project exists on Sui, but its fields could not be parsed.");
-    }
-    saveRecentProject(summary);
-    return summary;
-  }
-
-  async function connectManualProject() {
-    const nextProjectId = manualProjectId.trim();
-    if (!nextProjectId) {
-      setProjectState("Enter a project object id.");
-      return;
-    }
-    try {
-      setProjectState("Loading project...");
-      const project = await hydrateProject(nextProjectId);
-      setSelectedProjectIdState(project.objectId);
-      setSelectedProjectId(project.objectId);
-      setManualProjectId("");
-      setProjectState(`Connected to ${project.name}.`);
-    } catch (projectError) {
-      setProjectState(projectError instanceof Error ? projectError.message : "Failed to load project.");
-    }
-  }
-
-  async function handleCreateProject() {
-    if (!hasAdminAccess) {
-      setProjectState("OwnerCap or AdminCap is required to create a project.");
-      return;
-    }
-
-    const role = capabilityProfile.ownerCapIds[0] ? "owner" : "admin";
-    const capId = capabilityProfile.ownerCapIds[0] ?? capabilityProfile.adminCapIds[0] ?? "";
-    if (!capId) {
-      setProjectState("No active OwnerCap or AdminCap object was found in the connected wallet.");
-      return;
-    }
-    if (!projectCreateName.trim()) {
-      setProjectState("Enter a project name.");
-      return;
-    }
-
-    try {
-      setProjectState("Awaiting wallet approval...");
-      const tx = createProject({
-        name: projectCreateName.trim(),
-        capId,
-        role,
-        recipientAddress: account?.address ?? "",
-      });
-      const result = await createProjectTx.mutateAsync({ transaction: tx });
-      const confirmed = await suiClient.waitForTransaction({
-        digest: result.digest,
-        options: {
-          showEvents: true,
-        },
-      });
-      const projectCreatedEvent = (confirmed.events ?? []).find((event) =>
-        String(event.type ?? "").endsWith("::ProjectCreated"),
-      );
-      const projectId = String((projectCreatedEvent?.parsedJson as { project_id?: string } | undefined)?.project_id ?? "");
-      if (!projectId) {
-        throw new Error("Project was created, but the new project id could not be resolved.");
-      }
-      const project = await hydrateProject(projectId);
-      await refetchProjects();
-      setSelectedProjectIdState(project.objectId);
-      setSelectedProjectId(project.objectId);
-      setProjectCreateName("");
-      setProjectState(`Project ${project.name} is ready.`);
-    } catch (projectError) {
-      setProjectState(projectError instanceof Error ? projectError.message : "Failed to create project.");
-    }
-  }
-
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
     setError("");
@@ -645,6 +540,7 @@ export function FormBuilderPage() {
     setLinkCopied(false);
     setBlobCopied(false);
     setPublishStorageMode("walrus");
+    setPublishResultNote("");
     const form: FormSchema = {
       id: makeId("form"),
       title: title.trim(),
@@ -710,15 +606,15 @@ export function FormBuilderPage() {
       setPublishStageIndex(3);
       setPublishBlobId(blobId ?? "unresolved");
       setPublishStorageMode(isLocalFallbackBlob(blobId) ? "local" : "walrus");
-      await wait(780);
-      if (publishRunRef.current !== runId) {
-        return;
-      }
-      setPublishStageIndex(4);
       let onchainFormId: number | undefined;
       let isOnchain = false;
 
       if (selectedProject?.objectId) {
+        await wait(780);
+        if (publishRunRef.current !== runId) {
+          return;
+        }
+        setPublishStageIndex(4);
         try {
           const tx = createFormOnChain({
             projectId: selectedProject.objectId,
@@ -740,6 +636,7 @@ export function FormBuilderPage() {
           if (Number.isFinite(parsedFormId)) {
             onchainFormId = parsedFormId;
             isOnchain = true;
+            setPublishResultNote("Signal registration confirmed. Share links and inbox routing are now live.");
           }
         } catch (chainError) {
           console.warn("create_form failed, keeping local/Walrus form only", chainError);
@@ -748,7 +645,14 @@ export function FormBuilderPage() {
               ? `Project link skipped: ${chainError.message}`
               : "Project link skipped. The form is still available through local/Walrus storage.",
           );
+          setPublishResultNote("Walrus publish completed. Signal registry link was skipped after the final wallet step.");
         }
+      } else {
+        await wait(780);
+        if (publishRunRef.current !== runId) {
+          return;
+        }
+        setPublishResultNote("Walrus publish completed. The signal is live in local/Walrus mode.");
       }
 
       const finalForm = {
@@ -760,9 +664,13 @@ export function FormBuilderPage() {
         isOnchain,
       } satisfies FormSchema;
       await storageAdapter.saveForm(finalForm);
+      if (publishRunRef.current !== runId) {
+        return;
+      }
       setSavedForm(finalForm);
       setLastSavedSnapshot(draftSnapshot);
       setError("");
+      setPublishStageIndex(5);
     } catch (submitError) {
       setPublishOverlayOpen(false);
       setError(submitError instanceof Error ? submitError.message : t("saveFailed"));
@@ -866,7 +774,7 @@ export function FormBuilderPage() {
               <div className="publish-terminal panel">
                 <div className="publish-terminal-header">
                   <span>OBSERVATION // WALRUS UPLINK</span>
-                  <strong>{publishStageIndex >= 4 ? "PASSIVE WATCH" : "TRANSIT"}</strong>
+                  <strong>{publishStageIndex >= publishPhases.length - 1 ? "PASSIVE WATCH" : "TRANSIT"}</strong>
                 </div>
                 <div className="publish-terminal-log" aria-live="polite">
                   {publishPhases.map((phase, index) => {
@@ -880,7 +788,11 @@ export function FormBuilderPage() {
                     );
                   })}
                 </div>
-                <p className="publish-terminal-detail">{publishPhases[publishStageIndex]?.detail}</p>
+                <p className="publish-terminal-detail">
+                  {publishStageIndex >= publishPhases.length - 1 && publishResultNote
+                    ? publishResultNote
+                    : publishPhases[publishStageIndex]?.detail}
+                </p>
               </div>
 
               <div className={`publish-blob-panel ${publishStageIndex >= 3 ? "is-visible" : ""}`}>
@@ -901,11 +813,13 @@ export function FormBuilderPage() {
                 </div>
               </div>
 
-              <div className={`publish-active-panel ${publishStageIndex >= 4 ? "is-visible" : ""}`}>
+              <div className={`publish-active-panel ${publishStageIndex >= publishPhases.length - 1 ? "is-visible" : ""}`}>
                 <div>
                   <p className="eyebrow">Observation State</p>
                   <h3>SIGNAL ACTIVE</h3>
-                  <p className="muted">The signal is now available for monitoring, routing, and review.</p>
+                  <p className="muted">
+                    {publishResultNote || "The signal is now available for monitoring, routing, and review."}
+                  </p>
                 </div>
                 <div className="publish-active-actions">
                   <button
@@ -1244,33 +1158,6 @@ export function FormBuilderPage() {
                             ))}
                           </select>
                         </label>
-                        <div className="inline-actions">
-                          <input
-                            value={manualProjectId}
-                            onChange={(event) => setManualProjectId(event.target.value)}
-                            placeholder="Project or ProjectOwnerCap object id"
-                          />
-                          <button type="button" className="ghost-button" onClick={() => void connectManualProject()}>
-                            Connect
-                          </button>
-                        </div>
-                        {hasAdminAccess ? (
-                          <div className="inline-actions">
-                            <input
-                              value={projectCreateName}
-                              onChange={(event) => setProjectCreateName(event.target.value)}
-                              placeholder="New project name"
-                            />
-                            <button
-                              type="button"
-                              className="ghost-button"
-                              onClick={() => void handleCreateProject()}
-                              disabled={createProjectTx.isPending}
-                            >
-                              {createProjectTx.isPending ? "Creating..." : "Create Project"}
-                            </button>
-                          </div>
-                        ) : null}
                         <p className="muted">
                           {selectedProject
                             ? `Forms from this screen will try to register under ${selectedProject.name}.`

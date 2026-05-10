@@ -17,7 +17,7 @@ export function SealStatusCard({
 }: SealStatusCardProps) {
   const { t } = useI18n();
   const status = getSealRuntimeStatus();
-  const sealMode = status.isFallback ? "fallback" : status.activeMode;
+  const sealMode = status.isFallback ? "FALLBACK" : status.activeMode.toUpperCase();
 
   return (
     <section className="panel seal-status-card">
@@ -26,11 +26,11 @@ export function SealStatusCard({
       <div className="proof-grid">
         <div className="proof-row">
           <span>{t("requestedModeLabel")}</span>
-          <strong>{status.requestedMode}</strong>
+          <strong>{status.requestedMode.toUpperCase()}</strong>
         </div>
         <div className="proof-row">
           <span>{t("activeModeLabel")}</span>
-          <strong>{status.activeMode}</strong>
+          <strong>{status.activeMode.toUpperCase()}</strong>
         </div>
         <div className="proof-row">
           <span>{t("sealModeLabel")}</span>
@@ -70,10 +70,11 @@ export function SealStatusCard({
       )}
 
       {status.activeMode === "mock" ? (
-        <p className="muted">{t("demoDecryptAvailable")}</p>
+        <p className="muted">{t("demoDecryptAvailable")} Mock mode only.</p>
       ) : (
         <>
-          <p className="muted">{t("policyGatedDecryption")}</p>
+          <p className="muted">Seal Runtime: {sealMode}</p>
+          <p className="muted">Private Signal / Team only.</p>
           <p className="muted">{t("walletApprovalRequired")}</p>
         </>
       )}

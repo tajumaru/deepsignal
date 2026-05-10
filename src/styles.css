@@ -2537,6 +2537,145 @@ body.composer-mode .bg-orb {
   word-break: break-word;
 }
 
+.workspace-hero {
+  display: grid;
+  gap: 0.9rem;
+  padding: 1rem 1rem 0.95rem;
+  background:
+    radial-gradient(circle at top right, rgba(103, 232, 249, 0.16), transparent 28%),
+    linear-gradient(180deg, rgba(4, 18, 31, 0.95), rgba(3, 13, 24, 0.97));
+}
+
+.workspace-hero-main,
+.workspace-hero-controls,
+.workspace-primary-action,
+.workspace-primary-actions {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.workspace-hero-main,
+.workspace-primary-action {
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.workspace-hero-copy {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.workspace-hero-copy .lede,
+.workspace-hero-copy h1 {
+  margin-bottom: 0;
+}
+
+.workspace-hero-controls {
+  min-width: 0;
+  width: min(100%, 340px);
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.55rem;
+}
+
+.workspace-hero-controls .ghost-button {
+  align-self: flex-end;
+  width: auto;
+  min-width: 0;
+  padding-inline: 1rem;
+}
+
+.project-selector-inline {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+}
+
+.workspace-hero-controls select {
+  min-height: 44px;
+  padding: 0.55rem 0.8rem;
+}
+
+.workspace-hero-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem 0.9rem;
+}
+
+.workspace-meta-item {
+  color: #a9c6d4;
+  font-size: 0.84rem;
+  letter-spacing: 0.01em;
+}
+
+.workspace-meta-item::before {
+  content: "•";
+  margin-right: 0.45rem;
+  color: rgba(103, 232, 249, 0.55);
+}
+
+.workspace-primary-action {
+  border: 1px solid rgba(116, 226, 255, 0.12);
+  padding: 1rem 1.1rem;
+  background:
+    radial-gradient(circle at top right, rgba(102, 227, 255, 0.1), transparent 34%),
+    linear-gradient(180deg, rgba(5, 21, 36, 0.84), rgba(3, 14, 26, 0.88));
+}
+
+.workspace-primary-action h2,
+.workspace-primary-action p {
+  margin-bottom: 0;
+}
+
+.workspace-primary-actions {
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.advanced-project-settings {
+  display: grid;
+  gap: 0.9rem;
+  border: 1px solid rgba(116, 226, 255, 0.1);
+  background: rgba(4, 18, 31, 0.55);
+}
+
+.advanced-project-settings summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  cursor: pointer;
+  list-style: none;
+}
+
+.advanced-project-settings summary::-webkit-details-marker {
+  display: none;
+}
+
+.advanced-project-settings summary > span {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.advanced-project-settings summary::after {
+  content: "+";
+  color: #9fe8f7;
+  font-size: 1.3rem;
+  line-height: 1;
+}
+
+.advanced-project-settings[open] summary::after {
+  content: "−";
+}
+
+.advanced-project-settings-body {
+  display: grid;
+  gap: 1rem;
+  padding-top: 0.25rem;
+}
+
 .access-management-panel,
 .access-management-actions,
 .access-role-grid {
@@ -2638,6 +2777,7 @@ body.composer-mode .bg-orb {
   align-content: start;
   position: sticky;
   top: 110px;
+  background: rgba(4, 18, 31, 0.46);
 }
 
 .signal-sidebar-section {
@@ -2679,9 +2819,9 @@ body.composer-mode .bg-orb {
 .signal-card {
   width: 100%;
   text-align: left;
-  border: 1px solid rgba(116, 226, 255, 0.14);
-  border-radius: 18px;
-  background: rgba(4, 18, 31, 0.62);
+  border: 1px solid rgba(116, 226, 255, 0.08);
+  border-radius: 16px;
+  background: rgba(4, 18, 31, 0.32);
   color: inherit;
 }
 
@@ -2719,6 +2859,10 @@ body.composer-mode .bg-orb {
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
+  transition:
+    border-color 160ms ease,
+    background 160ms ease,
+    transform 160ms ease;
 }
 
 .stream-item.is-active,
@@ -2742,15 +2886,20 @@ body.composer-mode .bg-orb {
   max-height: calc(100vh - 240px);
   overflow: auto;
   padding-right: 0.15rem;
+  gap: 0.35rem;
 }
 
 .signal-card {
-  padding: 1rem;
+  padding: 0.9rem 0.95rem;
   display: grid;
-  gap: 0.6rem;
-  background:
-    linear-gradient(180deg, rgba(4, 20, 35, 0.92), rgba(3, 14, 26, 0.92)),
-    radial-gradient(circle at left top, rgba(52, 211, 153, 0.08), transparent 35%);
+  gap: 0.42rem;
+  border-radius: 14px;
+  background: rgba(5, 19, 32, 0.48);
+  transition:
+    border-color 160ms ease,
+    background 160ms ease,
+    transform 160ms ease,
+    box-shadow 160ms ease;
 }
 
 .signal-card.is-unread strong,
@@ -2759,7 +2908,7 @@ body.composer-mode .bg-orb {
 }
 
 .signal-card.is-read {
-  opacity: 0.82;
+  opacity: 0.9;
 }
 
 .signal-card-topline,
@@ -2774,14 +2923,44 @@ body.composer-mode .bg-orb {
 }
 
 .signal-card-form {
-  margin-bottom: 0;
-  color: #9fe8f7;
-  font-size: 0.92rem;
+  color: #93bdd0;
+  font-size: 0.82rem;
 }
 
 .signal-card-preview {
   margin-bottom: 0;
   color: #d5eef8;
+  font-size: 0.92rem;
+  line-height: 1.45;
+}
+
+.signal-card-formline {
+  display: flex;
+  gap: 0.6rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.signal-card-time {
+  color: var(--text-soft);
+  font-size: 0.82rem;
+}
+
+.signal-badge-row-compact {
+  justify-content: flex-start;
+  gap: 0.45rem;
+}
+
+.signal-badge-row-compact .signal-chip,
+.signal-badge-row-compact .pill {
+  font-size: 0.75rem;
+}
+
+.signal-card:hover,
+.stream-item:hover {
+  transform: translateY(-1px);
+  border-color: rgba(135, 244, 255, 0.18);
+  background: rgba(6, 21, 35, 0.62);
 }
 
 .cluster-list {
@@ -2833,6 +3012,11 @@ body.composer-mode .bg-orb {
 
 .signal-chip-warn {
   background: rgba(248, 113, 113, 0.18);
+}
+
+.signal-chip-soft {
+  background: rgba(52, 211, 153, 0.09);
+  border-color: rgba(52, 211, 153, 0.16);
 }
 
 .project-registry-panel {
@@ -2922,8 +3106,9 @@ body.composer-mode .bg-orb {
 }
 
 .project-selector-field {
-  width: min(100%, 320px);
-  flex: 0 0 320px;
+  width: 100%;
+  flex: 0 0 auto;
+  margin: 0;
 }
 
 .project-active-stats,
@@ -3033,8 +3218,8 @@ body.composer-mode .bg-orb {
 .signal-detail-column.panel {
   padding: 1rem;
   background:
-    radial-gradient(circle at top right, rgba(63, 197, 255, 0.1), transparent 26%),
-    linear-gradient(180deg, rgba(5, 20, 34, 0.96), rgba(4, 16, 28, 0.94));
+    radial-gradient(circle at top right, rgba(63, 197, 255, 0.08), transparent 26%),
+    linear-gradient(180deg, rgba(5, 20, 34, 0.86), rgba(4, 16, 28, 0.84));
 }
 
 .signal-detail-column .answer-card {
@@ -3881,6 +4066,13 @@ body.composer-mode .bg-orb {
   .project-registry-grid {
     grid-template-columns: 1fr;
   }
+
+  .workspace-hero-main,
+  .workspace-primary-action {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
 }
 
 @media (max-width: 1600px) {
@@ -3985,9 +4177,27 @@ body.composer-mode .bg-orb {
   .project-registry-status,
   .project-active-heading,
   .project-panel-head,
-  .project-primary-panel {
+  .project-primary-panel,
+  .workspace-primary-actions,
+  .workspace-hero-meta,
+  .workspace-hero-main,
+  .workspace-primary-action {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .workspace-hero-controls {
+    width: 100%;
+    align-items: stretch;
+  }
+
+  .workspace-hero-controls .ghost-button {
+    align-self: stretch;
+  }
+
+  .project-selector-inline {
+    grid-template-columns: 1fr;
+    gap: 0.35rem;
   }
 
   .project-selector-field {

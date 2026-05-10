@@ -1,4 +1,9 @@
-import { useCurrentAccount, useSignAndExecuteTransaction } from "@mysten/dapp-kit";
+import {
+  useCurrentAccount,
+  useSignAndExecuteTransaction,
+  useSignPersonalMessage,
+  useSuiClient,
+} from "@mysten/dapp-kit";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { AdminAccessGate } from "../components/AdminAccessGate";
@@ -80,11 +85,16 @@ function matchesStream(submission: Submission, streamId: StreamId) {
 export function FormSubmissionsPage() {
   const { t } = useI18n();
   const account = useCurrentAccount();
+  const suiClient = useSuiClient();
+  const signPersonalMessage = useSignPersonalMessage();
   const updateSignalStatusTx = useSignAndExecuteTransaction();
   const { capabilityProfile, isLoadingAccess } = useAccessControl(account?.address);
   const { formId = "", submissionId = "" } = useParams();
   const sealRuntime = getSealRuntimeStatus();
   const storageRuntime = getStorageRuntimeStatus();
+  const sealRuntimeLabel = sealRuntime.isFallback
+    ? "FALLBACK"
+    : sealRuntime.activeMode.toUpperCase();
   const [form, setForm] = useState<FormSchema | null>(null);
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [selectedSignalId, setSelectedSignalId] = useState(submissionId);
@@ -246,7 +256,15 @@ export function FormSubmissionsPage() {
     setDecrypting(true);
     setDecryptError("");
     try {
-      const resolved = await resolveSubmissionAnswers(form, selectedSubmission);
+      const resolved = await resolveSubmissionAnswers(form, selectedSubmission, undefined, {
+        walletAddress: account?.address,
+        projectId: form.projectId,
+        suiClient,
+        signPersonalMessage: async (message) => {
+          const result = await signPersonalMessage.mutateAsync({ message });
+          return result.signature;
+        },
+      });
       if (resolved) {
         setDetailAnswers(resolved.answers);
         setDetailAttachments(resolved.attachments);
@@ -610,7 +628,11 @@ export function FormSubmissionsPage() {
                       onClick={() => void handleDecrypt()}
                       disabled={decrypting}
                     >
-                      {decrypting ? t("decryptingSignal") : t("decryptSignal")}
+                      {decrypting
+                        ? t("decryptingSignal")
+                        : sealRuntime.activeMode === "mock"
+                          ? t("decryptSignal")
+                          : "Decrypt private signal"}
                     </button>
                     {!isLocalFallbackBlob(selectedSubmission.encryptedBlobId) ? (
                       <BlobLink
@@ -622,11 +644,14 @@ export function FormSubmissionsPage() {
                 ) : null}
 
                 {selectedSubmission.isEncrypted && !detailAnswers ? (
-                  <p className="muted">
-                    {sealRuntime.activeMode === "mock"
-                      ? t("demoDecryptAvailable")
-                      : t("policyGatedDecryption")}
-                  </p>
+                  <div className="stack">
+                    <p className="muted">Seal Runtime: {sealRuntimeLabel}</p>
+                    <p className="muted">
+                      {sealRuntime.activeMode === "mock"
+                        ? `${t("demoDecryptAvailable")} Mock mode only.`
+                        : "Private Signal / Team only. Wallet approval is required before the body is revealed."}
+                    </p>
+                  </div>
                 ) : null}
 
                 {decryptError ? <p className="warning-text">{decryptError}</p> : null}
@@ -984,7 +1009,7 @@ export function FormSubmissionsPage() {
                         </div>
                         <div className="metadata-row">
                           <span>{t("sealModeLabel")}</span>
-                          <strong>{sealRuntime.isFallback ? "fallback" : sealRuntime.activeMode}</strong>
+                          <strong>{sealRuntimeLabel}</strong>
                         </div>
                         <div className="metadata-row">
                           <span>Project status sync</span>

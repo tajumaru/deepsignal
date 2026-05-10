@@ -198,6 +198,28 @@ module deepsignal::project_registry {
         false
     }
 
+    fun namespace(project: &Project): vector<u8> {
+        project.project_id.to_bytes()
+    }
+
+    fun has_prefix(prefix: &vector<u8>, value: &vector<u8>): bool {
+        let prefix_len = vector::length(prefix);
+        let value_len = vector::length(value);
+        if (prefix_len > value_len) {
+            return false
+        };
+
+        let mut index = 0;
+        while (index < prefix_len) {
+            if (*vector::borrow(prefix, index) != *vector::borrow(value, index)) {
+                return false
+            };
+            index = index + 1;
+        };
+
+        true
+    }
+
     fun find_form_index(forms: &vector<Form>, form_id: u64): u64 {
         let mut index = 0;
         let total = vector::length(forms);
@@ -446,6 +468,24 @@ module deepsignal::project_registry {
             status,
             actor: sender,
         });
+    }
+
+    entry fun seal_approve_project_signal(
+        id: vector<u8>,
+        project: &Project,
+        ctx: &sui::tx_context::TxContext,
+    ) {
+        let sender = sui::tx_context::sender(ctx);
+        assert_project_admin(project, sender);
+        assert!(has_prefix(&namespace(project), &id), E_PROJECT_ADMIN_REQUIRED);
+    }
+
+    entry fun seal_approve_project_admin(
+        _id: vector<u8>,
+        project: &Project,
+        ctx: &sui::tx_context::TxContext,
+    ) {
+        assert_project_admin(project, sui::tx_context::sender(ctx));
     }
 
     public fun project_id(cap: &ProjectOwnerCap): sui::object::ID {
@@ -771,6 +811,53 @@ module deepsignal::project_registry {
 
         let outsider_ctx = &mut sui::tx_context::new_from_hint(outsider, 17, 7, 1702, 0);
         update_signal_status(&mut project, 0, SIGNAL_STATUS_ARCHIVED, outsider_ctx);
+
+        destroy_project_owner_cap(project_owner_cap);
+        destroy_project(project);
+        access_control::destroy_test_owner_cap(owner_cap);
+        access_control::destroy_test_registry(registry);
+    }
+
+    #[test]
+    fun project_admin_can_approve_seal_identity() {
+        let owner = @0xA;
+        let owner_ctx = &mut sui::tx_context::new_from_hint(owner, 18, 7, 1800, 0);
+        let (registry, owner_cap) = access_control::new_test_registry(owner, owner_ctx);
+        let (project, project_owner_cap) = create_project_internal(
+            std::string::utf8(b"alpha"),
+            owner,
+            1800,
+            owner_ctx,
+        );
+
+        let namespace = namespace(&project);
+        let mut scoped_id = namespace;
+        vector::push_back(&mut scoped_id, 9);
+        vector::push_back(&mut scoped_id, 7);
+
+        seal_approve_project_signal(scoped_id, &project, owner_ctx);
+        seal_approve_project_admin(vector[], &project, owner_ctx);
+
+        destroy_project_owner_cap(project_owner_cap);
+        destroy_project(project);
+        access_control::destroy_test_owner_cap(owner_cap);
+        access_control::destroy_test_registry(registry);
+    }
+
+    #[test]
+    #[expected_failure(abort_code = E_PROJECT_ADMIN_REQUIRED)]
+    fun project_signal_approval_rejects_wrong_namespace() {
+        let owner = @0xA;
+        let owner_ctx = &mut sui::tx_context::new_from_hint(owner, 19, 7, 1900, 0);
+        let (registry, owner_cap) = access_control::new_test_registry(owner, owner_ctx);
+        let (project, project_owner_cap) = create_project_internal(
+            std::string::utf8(b"alpha"),
+            owner,
+            1900,
+            owner_ctx,
+        );
+
+        seal_approve_project_signal(vector[1, 2, 3], &project, owner_ctx);
 
         destroy_project_owner_cap(project_owner_cap);
         destroy_project(project);

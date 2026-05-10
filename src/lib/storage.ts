@@ -6,7 +6,16 @@ import {
 } from "./formTemplates";
 import { enrichSubmissionWithTriage } from "./signalTriage";
 import { storage } from "../storage/storageFactory";
-import type { FormField, FormSchema, FormSection, SealAdapter, StorageAdapter, Submission } from "../types";
+import type {
+  FormField,
+  FormSchema,
+  FormSection,
+  SealAdapter,
+  SealDecryptContext,
+  SealEncryptContext,
+  StorageAdapter,
+  Submission,
+} from "../types";
 
 export const storageAdapter: StorageAdapter = storage;
 export const activeSealAdapter: SealAdapter = cryptoAdapter;
@@ -37,6 +46,7 @@ export async function encryptSensitiveAnswers(
   form: FormSchema,
   answers: Record<string, unknown>,
   seal: SealAdapter = activeSealAdapter,
+  context: SealEncryptContext = {},
 ) {
   const encryptedEntries = await Promise.all(
     Object.entries(answers).map(async ([fieldId, value]) => {
@@ -44,7 +54,7 @@ export async function encryptSensitiveAnswers(
       if (!field?.sensitive || value === null || value === undefined || value === "") {
         return [fieldId, value] as const;
       }
-      const encrypted = await seal.encrypt(stringifySensitiveValue(value));
+      const encrypted = await seal.encrypt(stringifySensitiveValue(value), context);
       return [fieldId, { value: encrypted, encrypted: true }] as const;
     }),
   );
@@ -56,6 +66,7 @@ export async function decryptSensitiveAnswers(
   form: FormSchema,
   answers: Record<string, unknown>,
   seal: SealAdapter = activeSealAdapter,
+  context: SealDecryptContext = {},
 ) {
   const decryptedEntries = await Promise.all(
     Object.entries(answers).map(async ([fieldId, value]) => {
@@ -67,7 +78,7 @@ export async function decryptSensitiveAnswers(
       if (!encryptedValue.encrypted || !encryptedValue.value) {
         return [fieldId, value] as const;
       }
-      const decrypted = await seal.decrypt(encryptedValue.value);
+      const decrypted = await seal.decrypt(encryptedValue.value, context);
       return [fieldId, parseSensitiveValue(form, fieldId, decrypted)] as const;
     }),
   );
@@ -186,6 +197,7 @@ export function normalizeSubmission(raw: Submission | (Record<string, unknown> &
     githubPrUrl: typeof raw.githubPrUrl === "string" ? raw.githubPrUrl : undefined,
     isEncrypted: Boolean(raw.isEncrypted),
     encryptedBlobId: typeof raw.encryptedBlobId === "string" ? raw.encryptedBlobId : undefined,
+    encryptedPayload: typeof raw.encryptedPayload === "string" ? raw.encryptedPayload : undefined,
     receiptBlobId: typeof raw.receiptBlobId === "string" ? raw.receiptBlobId : undefined,
     sealIdentity: typeof raw.sealIdentity === "string" ? raw.sealIdentity : undefined,
     onchainSignalId:
@@ -262,13 +274,18 @@ export async function resolveSubmissionAnswers(
   form: FormSchema,
   submission: Submission,
   seal: SealAdapter = activeSealAdapter,
+  context: SealDecryptContext = {},
 ) {
-  if (submission.isEncrypted && submission.encryptedBlobId) {
-    const payload = await storageAdapter.readEncryptedPayload(submission.encryptedBlobId);
+  if (submission.isEncrypted && (submission.encryptedPayload || submission.encryptedBlobId)) {
+    const payload =
+      submission.encryptedPayload ??
+      (submission.encryptedBlobId
+        ? await storageAdapter.readEncryptedPayload(submission.encryptedBlobId)
+        : null);
     if (!payload) {
       return null;
     }
-    const decrypted = await seal.decrypt(payload);
+    const decrypted = await seal.decrypt(payload, context);
     const parsed = JSON.parse(decrypted) as {
       answers?: Record<string, unknown>;
       attachments?: Submission["attachments"];
@@ -279,7 +296,7 @@ export async function resolveSubmissionAnswers(
     };
   }
 
-  const decryptedAnswers = await decryptSensitiveAnswers(form, submission.answers, seal);
+  const decryptedAnswers = await decryptSensitiveAnswers(form, submission.answers, seal, context);
   return {
     answers: decryptedAnswers,
     attachments: submission.attachments,
@@ -326,23 +343,31 @@ export async function saveSubmissionWithEncryption(
   const triagedSubmission = enrichSubmissionWithTriage(form, baseSubmission);
 
   if (form.encryptSubmissions) {
-    const payload = JSON.stringify({
-      answers: submission.answers,
-      attachments: submission.attachments,
-    });
-    const encryptedPayload = await seal.encrypt(payload);
-    const { blobId: encryptedBlobId } = await targetStorage.saveEncryptedPayload(encryptedPayload);
+    let encryptedBlobId = submission.encryptedBlobId;
+    let encryptedPayload = submission.encryptedPayload;
+    if (!encryptedBlobId) {
+      if (!encryptedPayload) {
+        const payload = JSON.stringify({
+          answers: submission.answers,
+          attachments: submission.attachments,
+        });
+        encryptedPayload = await seal.encrypt(payload, { projectId: form.projectId });
+      }
+    }
     const metadataSubmission: Submission = {
       ...triagedSubmission,
       answers: {},
       isEncrypted: true,
       encryptedBlobId,
+      encryptedPayload,
     };
     const saved = await targetStorage.saveSubmission(metadataSubmission);
     return { ...saved, encryptedBlobId };
   }
 
-  const answers = await encryptSensitiveAnswers(form, submission.answers, seal);
+  const answers = await encryptSensitiveAnswers(form, submission.answers, seal, {
+    projectId: form.projectId,
+  });
   const standardSubmission: Submission = {
     ...triagedSubmission,
     answers,

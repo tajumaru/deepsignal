@@ -18,7 +18,13 @@ import {
   registerSignalReceipt,
 } from "../lib/projectRegistry";
 import { getStorageDetailLabels, isLocalFallbackBlob } from "../lib/signalInbox";
-import { createEmptyAnswer, normalizeForm, saveSubmissionWithEncryption, storageAdapter } from "../lib/storage";
+import {
+  activeSealAdapter,
+  createEmptyAnswer,
+  normalizeForm,
+  saveSubmissionWithEncryption,
+  storageAdapter,
+} from "../lib/storage";
 import { makeId } from "../lib/utils";
 import { upsertFormBlobIndex } from "../storage/blobIndex";
 import { localStorageAdapter } from "../storage/localStorageAdapter";
@@ -228,82 +234,154 @@ export function PublicFormPage() {
         updatedAt: signedAt,
       };
 
-      const result = await saveSubmissionWithEncryption(form, submission, undefined, storageAdapter);
-      const encryptedBlobId = "encryptedBlobId" in result ? result.encryptedBlobId : undefined;
-      const receiptBlobId = encryptedBlobId ?? result.blobId;
-      const signalReceiptMetadataDigest = await createMetadataDigest({
-        localSubmissionId: submission.id,
-        formId: form.id,
-        walrusBlobId: receiptBlobId ?? null,
-        encrypted: Boolean(encryptedBlobId),
-        attachmentBlobIds: attachments.map((attachment) => attachment.blobId),
-        contributorId: submission.contributorId,
-        createdAt: signedAt,
-      });
-      let onchainSignalId: number | undefined;
-      let sealIdentity: string | undefined;
-      let onchainStatus: Submission["onchainStatus"];
+      if (form.encryptSubmissions) {
+        const encryptedPayload = await activeSealAdapter.encrypt(
+          JSON.stringify({
+            answers: submission.answers,
+            attachments: submission.attachments,
+          }),
+          { projectId: form.projectId },
+        );
+        const parsedEnvelope = parseRealSealEnvelope(encryptedPayload);
+        const sealIdentity = parsedEnvelope
+          ? `seal:${parsedEnvelope.packageId}:${parsedEnvelope.objectId}`
+          : undefined;
+        let onchainSignalId: number | undefined;
+        let onchainStatus: Submission["onchainStatus"];
 
-      if (encryptedBlobId) {
-        const encryptedPayload = await storageAdapter.readEncryptedPayload(encryptedBlobId);
-        const parsedEnvelope = encryptedPayload ? parseRealSealEnvelope(encryptedPayload) : null;
-        if (parsedEnvelope) {
-          sealIdentity = `seal:${parsedEnvelope.packageId}:${parsedEnvelope.objectId}`;
-        }
-      }
+        const savedSubmissionDraft = {
+          ...submission,
+          encryptedPayload,
+          sealIdentity,
+        } satisfies Submission;
 
-      if (
-        account &&
-        form.projectId &&
-        typeof form.onchainFormId === "number" &&
-        receiptBlobId &&
-        !isLocalFallbackBlob(receiptBlobId)
-      ) {
-        try {
-          const tx = registerSignalReceipt({
-            projectId: form.projectId,
-            formId: form.onchainFormId,
-            walrusBlobId: receiptBlobId,
-            metadataDigest: signalReceiptMetadataDigest,
-            encrypted: Boolean(encryptedBlobId),
-            sealIdentity,
-          });
-          const txResult = await registerSignalTx.mutateAsync({ transaction: tx });
-          const confirmed = await suiClient.waitForTransaction({
-            digest: txResult.digest,
-            options: {
-              showEvents: true,
-            },
-          });
-          const signalRegisteredEvent = (confirmed.events ?? []).find((event) =>
-            String(event.type ?? "").endsWith("::SignalRegistered"),
-          );
-          const rawSignalId = (signalRegisteredEvent?.parsedJson as { signal_id?: string | number } | undefined)
-            ?.signal_id;
-          const parsedSignalId = typeof rawSignalId === "number" ? rawSignalId : Number(rawSignalId ?? NaN);
-          if (Number.isFinite(parsedSignalId)) {
-            onchainSignalId = parsedSignalId;
-            onchainStatus = "new";
-            setSubmitNotice("Signal saved and linked to the project registry.");
+        const result = await saveSubmissionWithEncryption(form, savedSubmissionDraft, undefined, storageAdapter);
+        const receiptBlobId = result.blobId;
+        const signalReceiptMetadataDigest = await createMetadataDigest({
+          localSubmissionId: submission.id,
+          formId: form.id,
+          walrusBlobId: receiptBlobId ?? null,
+          encrypted: true,
+          attachmentBlobIds: attachments.map((attachment) => attachment.blobId),
+          contributorId: submission.contributorId,
+          createdAt: signedAt,
+        });
+
+        if (
+          account &&
+          form.projectId &&
+          typeof form.onchainFormId === "number" &&
+          receiptBlobId &&
+          !isLocalFallbackBlob(receiptBlobId)
+        ) {
+          try {
+            const tx = registerSignalReceipt({
+              projectId: form.projectId,
+              formId: form.onchainFormId,
+              walrusBlobId: receiptBlobId,
+              metadataDigest: signalReceiptMetadataDigest,
+              encrypted: true,
+              sealIdentity,
+            });
+            const txResult = await registerSignalTx.mutateAsync({ transaction: tx });
+            const confirmed = await suiClient.waitForTransaction({
+              digest: txResult.digest,
+              options: {
+                showEvents: true,
+              },
+            });
+            const signalRegisteredEvent = (confirmed.events ?? []).find((event) =>
+              String(event.type ?? "").endsWith("::SignalRegistered"),
+            );
+            const rawSignalId = (signalRegisteredEvent?.parsedJson as { signal_id?: string | number } | undefined)
+              ?.signal_id;
+            const parsedSignalId = typeof rawSignalId === "number" ? rawSignalId : Number(rawSignalId ?? NaN);
+            if (Number.isFinite(parsedSignalId)) {
+              onchainSignalId = parsedSignalId;
+              onchainStatus = "new";
+              setSubmitNotice("Signal saved and linked to the project registry.");
+            }
+          } catch (chainError) {
+            console.warn("register_signal failed, keeping Walrus/local submission only", chainError);
+            setSubmitNotice("Signal saved, but project receipt registration was skipped.");
           }
-        } catch (chainError) {
-          console.warn("register_signal failed, keeping Walrus/local submission only", chainError);
-          setSubmitNotice("Signal saved, but project receipt registration was skipped.");
         }
-      }
 
-      const savedSubmission = {
-        ...submission,
-        blobId: result.blobId,
-        encryptedBlobId,
-        receiptBlobId,
-        sealIdentity,
-        onchainSignalId,
-        signalReceiptMetadataDigest,
-        onchainStatus,
-      } satisfies Submission;
-      await storageAdapter.updateSubmission(savedSubmission);
-      setSubmitted(savedSubmission);
+        const savedSubmission = {
+          ...savedSubmissionDraft,
+          blobId: result.blobId,
+          encryptedBlobId: result.encryptedBlobId,
+          receiptBlobId,
+          onchainSignalId,
+          signalReceiptMetadataDigest,
+          onchainStatus,
+        } satisfies Submission;
+        setSubmitted(savedSubmission);
+      } else {
+        const result = await saveSubmissionWithEncryption(form, submission, undefined, storageAdapter);
+        const receiptBlobId = result.blobId;
+        const signalReceiptMetadataDigest = await createMetadataDigest({
+          localSubmissionId: submission.id,
+          formId: form.id,
+          walrusBlobId: receiptBlobId ?? null,
+          encrypted: false,
+          attachmentBlobIds: attachments.map((attachment) => attachment.blobId),
+          contributorId: submission.contributorId,
+          createdAt: signedAt,
+        });
+        let onchainSignalId: number | undefined;
+        let onchainStatus: Submission["onchainStatus"];
+
+        if (
+          account &&
+          form.projectId &&
+          typeof form.onchainFormId === "number" &&
+          receiptBlobId &&
+          !isLocalFallbackBlob(receiptBlobId)
+        ) {
+          try {
+            const tx = registerSignalReceipt({
+              projectId: form.projectId,
+              formId: form.onchainFormId,
+              walrusBlobId: receiptBlobId,
+              metadataDigest: signalReceiptMetadataDigest,
+              encrypted: false,
+            });
+            const txResult = await registerSignalTx.mutateAsync({ transaction: tx });
+            const confirmed = await suiClient.waitForTransaction({
+              digest: txResult.digest,
+              options: {
+                showEvents: true,
+              },
+            });
+            const signalRegisteredEvent = (confirmed.events ?? []).find((event) =>
+              String(event.type ?? "").endsWith("::SignalRegistered"),
+            );
+            const rawSignalId = (signalRegisteredEvent?.parsedJson as { signal_id?: string | number } | undefined)
+              ?.signal_id;
+            const parsedSignalId = typeof rawSignalId === "number" ? rawSignalId : Number(rawSignalId ?? NaN);
+            if (Number.isFinite(parsedSignalId)) {
+              onchainSignalId = parsedSignalId;
+              onchainStatus = "new";
+              setSubmitNotice("Signal saved and linked to the project registry.");
+            }
+          } catch (chainError) {
+            console.warn("register_signal failed, keeping Walrus/local submission only", chainError);
+            setSubmitNotice("Signal saved, but project receipt registration was skipped.");
+          }
+        }
+
+        const savedSubmission = {
+          ...submission,
+          blobId: result.blobId,
+          receiptBlobId,
+          onchainSignalId,
+          signalReceiptMetadataDigest,
+          onchainStatus,
+        } satisfies Submission;
+        await storageAdapter.updateSubmission(savedSubmission);
+        setSubmitted(savedSubmission);
+      }
     } catch (error) {
       setSubmitError(error instanceof Error ? error.message : t("submitFailed"));
     } finally {

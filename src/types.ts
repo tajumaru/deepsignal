@@ -106,6 +106,7 @@ export interface Submission {
   githubPrUrl?: string;
   isEncrypted: boolean;
   encryptedBlobId?: string;
+  encryptedPayload?: string;
   receiptBlobId?: string;
   sealIdentity?: string;
   onchainSignalId?: number;
@@ -131,7 +132,18 @@ export interface StorageAdapter {
   uploadFile(file: File): Promise<{ blobId: string; url?: string }>;
 }
 
+export interface SealEncryptContext {
+  projectId?: string;
+}
+
+export interface SealDecryptContext {
+  walletAddress?: string;
+  signPersonalMessage?: (message: Uint8Array) => Promise<string>;
+  projectId?: string;
+  suiClient?: unknown;
+}
+
 export interface SealAdapter {
-  encrypt(value: string): Promise<string>;
-  decrypt(value: string): Promise<string>;
+  encrypt(value: string, context?: SealEncryptContext): Promise<string>;
+  decrypt(value: string, context?: SealDecryptContext): Promise<string>;
 }

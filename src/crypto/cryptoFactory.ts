@@ -16,12 +16,11 @@ const requestedMode: SealRuntimeMode =
 
 const hasSealEnv =
   Boolean(import.meta.env.VITE_SEAL_PACKAGE_ID) &&
-  Boolean(import.meta.env.VITE_SEAL_KEY_SERVER_OBJECT_ID) &&
-  Boolean(import.meta.env.VITE_SEAL_AGGREGATOR_URL);
+  Boolean(import.meta.env.VITE_SEAL_KEY_SERVER_OBJECT_ID);
 
 const warning =
   requestedMode === "seal" && !hasSealEnv
-    ? "VITE_SEAL_MODE=seal was requested, but the Seal package, key server, or aggregator env is missing. Falling back to mock mode."
+    ? "VITE_SEAL_MODE=seal was requested, but the Seal package or key server env is missing. Falling back to mock mode."
     : null;
 
 if (warning) {
