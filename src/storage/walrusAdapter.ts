@@ -305,7 +305,7 @@ async function deleteBlobObjectsFromWalrus(blobObjectIds: Array<string | undefin
   }
 }
 
-function assertDeleteTargetsTracked(
+function getMissingDeleteTargets(
   formEntry: ReturnType<typeof getFormBlobIndex>,
   submissionEntries: ReturnType<typeof listSubmissionBlobIndex>,
 ) {
@@ -319,42 +319,56 @@ function assertDeleteTargetsTracked(
   if (submissionEntries.some((entry) => entry.blobId && !entry.blobObjectId)) {
     missingTrackedObjects.push("submission");
   }
-  if (missingTrackedObjects.length > 0) {
-    throw new Error(
-      `Walrus deletion could not be verified for this node because ${missingTrackedObjects.join(
-        ", ",
-      )} blob object ids are missing. This data was likely saved before delete tracking was enabled.`,
-    );
-  }
+  return missingTrackedObjects;
 }
 
-export async function fetchJsonBlob<T>(blobId: string): Promise<T | null> {
+function warnAboutPartialDelete(formId: string, missingTrackedObjects: string[]) {
+  if (missingTrackedObjects.length === 0) {
+    return;
+  }
+  console.warn(
+    `Walrus deletion for form ${formId} is partial because ${missingTrackedObjects.join(
+      ", ",
+    )} blob object ids are missing. This data was likely saved before delete tracking was enabled.`,
+  );
+}
+
+async function fetchBlobTextFromWalrus(
+  blobId: string,
+  logLabel: "Walrus blob read failed" | "Walrus text blob read failed",
+): Promise<string | null> {
   assertReadEnv();
   try {
     const response = await fetch(`${aggregatorUrl}/v1/blobs/${blobId}`);
-    if (!response.ok) {
-      throw new Error(`Walrus fetch failed: ${response.status}`);
+    if (response.status === 404) {
+      console.warn(`${logLabel}: blob ${blobId} no longer exists on Walrus.`);
+      return null;
     }
-    const text = await response.text();
-    return JSON.parse(text) as T;
-  } catch (error) {
-    console.error("Walrus blob read failed", blobId, error);
-    return null;
-  }
-}
-
-async function fetchTextBlob(blobId: string): Promise<string | null> {
-  assertReadEnv();
-  try {
-    const response = await fetch(`${aggregatorUrl}/v1/blobs/${blobId}`);
     if (!response.ok) {
       throw new Error(`Walrus fetch failed: ${response.status}`);
     }
     return await response.text();
   } catch (error) {
-    console.error("Walrus text blob read failed", blobId, error);
+    console.error(logLabel, blobId, error);
     return null;
   }
+}
+
+export async function fetchJsonBlob<T>(blobId: string): Promise<T | null> {
+  const text = await fetchBlobTextFromWalrus(blobId, "Walrus blob read failed");
+  if (!text) {
+    return null;
+  }
+  try {
+    return JSON.parse(text) as T;
+  } catch (error) {
+    console.error("Walrus blob parse failed", blobId, error);
+    return null;
+  }
+}
+
+async function fetchTextBlob(blobId: string): Promise<string | null> {
+  return fetchBlobTextFromWalrus(blobId, "Walrus text blob read failed");
 }
 
 function createManifest(
@@ -567,12 +581,16 @@ export const walrusAdapter: StorageAdapter = {
   async deleteForm(id) {
     const formEntry = getFormBlobIndex(id);
     const submissionEntries = listSubmissionBlobIndex(id);
-    assertDeleteTargetsTracked(formEntry, submissionEntries);
-    await deleteBlobObjectsFromWalrus([
+    const missingTrackedObjects = getMissingDeleteTargets(formEntry, submissionEntries);
+    const trackedBlobObjectIds = [
       formEntry?.formBlobObjectId,
       formEntry?.manifestBlobObjectId,
       ...submissionEntries.map((entry) => entry.blobObjectId),
-    ]);
+    ];
+    if (trackedBlobObjectIds.some(Boolean)) {
+      await deleteBlobObjectsFromWalrus(trackedBlobObjectIds);
+    }
+    warnAboutPartialDelete(id, missingTrackedObjects);
     deleteFormBlobIndex(id);
   },
 
