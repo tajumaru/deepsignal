@@ -54,6 +54,7 @@ export interface FormSchema {
   projectName?: string;
   onchainFormId?: number;
   formMetadataDigest?: string;
+  registrationMode?: "walrus" | "sui";
   blobId?: string;
   manifestBlobId?: string;
 }
@@ -127,6 +128,7 @@ export interface Submission {
   onchainSignalId?: number;
   signalReceiptMetadataDigest?: string;
   onchainStatus?: "new" | "triaged" | "archived";
+  pendingOnchainRegistration?: boolean;
   subjectPreview?: string;
   ratingValue?: number;
   createdAt: string;

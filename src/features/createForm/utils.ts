@@ -106,5 +106,6 @@ export function buildFormSchema(args: {
     projectId: args.projectId,
     projectName: args.projectName,
     encryptSubmissions: args.encryptSubmissions,
+    registrationMode: "walrus",
   };
 }

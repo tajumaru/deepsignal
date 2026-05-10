@@ -1,4 +1,5 @@
 import { getSealRuntimeStatus } from "../crypto/cryptoFactory";
+import { REAL_SEAL_SESSION_TTL_MIN } from "../crypto/sealPayload";
 import { useI18n } from "../i18n";
 import { SignalMetaChip, SignalMetaRow } from "./SignalMetaChip";
 
@@ -20,6 +21,11 @@ export function SealStatusCard({
   const { t } = useI18n();
   const status = getSealRuntimeStatus();
   const sealMode = status.isFallback ? "FALLBACK" : status.activeMode.toUpperCase();
+  const encryptedPayloadStatus = encryptedBlobId
+    ? "Available as dedicated blob"
+    : encryptedPayloadEmbedded
+      ? "Encrypted payload stored in submission bundle"
+      : t("notAvailable");
 
   return (
     <section className="panel seal-status-card">
@@ -50,12 +56,13 @@ export function SealStatusCard({
           <span>{t("encryptionLabel")}</span>
           <strong>{encryptSubmissions ? t("enabled") : t("disabled")}</strong>
         </div>
-        <SignalMetaRow
-          label={t("encryptedBlobIdLabel")}
-          type="seal"
-          value={encryptedBlobId}
-          emptyLabel={encryptedPayloadEmbedded ? "Embedded in submission payload" : t("notAvailable")}
-        />
+        {encryptedBlobId ? (
+          <SignalMetaRow
+            label={t("encryptedBlobIdLabel")}
+            type="seal"
+            value={encryptedBlobId}
+          />
+        ) : null}
         <div className="proof-row">
           <span>{t("walletAccessStatus")}</span>
           <strong>{walletAccessStatus}</strong>
@@ -64,7 +71,7 @@ export function SealStatusCard({
 
       {encryptSubmissions ? (
         <p className="proof-callout">
-          <strong>{t("encryptedPayloadStored")}</strong>
+          <strong>{encryptedPayloadStatus}</strong>
           {encryptedBlobId ? <span className="signal-meta-inline"><SignalMetaChip type="seal" value={encryptedBlobId} /></span> : null}
         </p>
       ) : (
@@ -77,7 +84,7 @@ export function SealStatusCard({
         <>
           <p className="muted">Seal Runtime: {sealMode}</p>
           <p className="muted">Private Signal / Team only.</p>
-          <p className="muted">{t("walletApprovalRequired")}</p>
+          <p className="muted">{t("walletApprovalReuseNotice", { minutes: REAL_SEAL_SESSION_TTL_MIN })}</p>
         </>
       )}
 

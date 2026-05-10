@@ -50,11 +50,9 @@ export function getStoredRespondentSession(address?: string | null, anonymous = 
 export async function ensureRespondentSession({
   walletAddress,
   isAnonymous,
-  signPersonalMessage,
 }: {
   walletAddress?: string | null;
   isAnonymous: boolean;
-  signPersonalMessage?: (message: Uint8Array) => Promise<string>;
 }) {
   const existing = getStoredRespondentSession(walletAddress, isAnonymous);
   if (existing) {
@@ -72,23 +70,6 @@ export async function ensureRespondentSession({
     expiresAt: expiresAt.toISOString(),
     isAnonymous,
   };
-
-  if (!isAnonymous) {
-    if (!walletAddress || !signPersonalMessage) {
-      throw new Error("Connect a wallet to create a posting session.");
-    }
-    const payload = new TextEncoder().encode(
-      JSON.stringify({
-        app: "DeepSignal",
-        action: "create_submit_session",
-        chain: "sui",
-        walletAddress,
-        sessionId,
-        expiresAt: nextSession.expiresAt,
-      }),
-    );
-    nextSession.signature = await signPersonalMessage(payload);
-  }
 
   const sessions = readSessions();
   sessions[getSessionKey(walletAddress, isAnonymous)] = nextSession;

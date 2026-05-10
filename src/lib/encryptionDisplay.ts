@@ -5,7 +5,11 @@ export function getEncryptedPayloadAvailabilityLabel(submission: Submission) {
     return "Available as dedicated blob";
   }
   if (submission.encryptedPayload) {
-    return "Embedded in submission payload";
+    return "Encrypted payload stored in submission bundle";
   }
   return "Not available";
+}
+
+export function hasDedicatedEncryptedPayloadBlob(submission: Submission) {
+  return Boolean(submission.encryptedBlobId);
 }

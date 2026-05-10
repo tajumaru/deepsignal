@@ -11,8 +11,8 @@ export const publishPhases: PublishPhase[] = [
   { key: "stored", label: "[ Blob stored ]", detail: "Immutable blob registered for observation." },
   {
     key: "registering",
-    label: "[ Registering on Signal ]",
-    detail: "Waiting for the final wallet approval and onchain confirmation.",
+    label: "[ Queueing Sui registration ]",
+    detail: "Sui registration is deferred so you can publish first and register later only when needed.",
   },
   { key: "active", label: "[ Signal active ]", detail: "Passive monitoring has started." },
 ];

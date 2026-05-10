@@ -118,7 +118,8 @@ Current behavior:
 - every newly created form stores `ownerAddress` from the connected wallet
 - public respondents do not need a wallet to submit
 - public forms can be opened without connecting a wallet, and wallet connect stays optional on the responder flow
-- when a public respondent sends with wallet context, the app creates a responder session signature once and reuses it until expiry
+- anonymous send is now the default responder path, even when a wallet is connected
+- when a public respondent chooses wallet-backed submit, DeepSignal attaches wallet context without requesting a personal-message signature on submit
 - public form submit no longer registers a `SignalReceipt` onchain during responder submission
 - responder identity is stored separately as `respondentMeta`, with optional wallet address, chain, session id, and anonymous flag
 - when a respondent chooses anonymous mode, operator views hide the wallet address and show `Anonymous respondent`
@@ -163,8 +164,8 @@ The Move package now also includes `deepsignal::project_registry` so DeepSignal 
 
 - `/admin` now includes a project selector plus project creation UI for owner/admin wallets
 - `/admin` also exposes a guarded delete action for the selected project when the connected wallet owns that project and it has no linked forms or signals
-- `/admin/forms/new` reuses the selected project and attempts `create_form` after the form definition is saved
-- DeepSignal still saves the form and submission payloads through the storage adapter first, then performs best-effort onchain registration
+- `/admin/forms/new` can target a selected project, but now publishes through Walrus / local first and defers `create_form` to an explicit `Register on Sui` action
+- DeepSignal saves the form and submission payloads through the storage adapter first, then leaves Sui registration as an optional admin-side step
 - if `create_project`, `create_form`, `register_signal`, or `update_signal_status` fails, the existing Walrus / local fallback flow remains the source of truth for app continuity
 
 ### Project registry events
@@ -496,7 +497,7 @@ Recommended demo flow for contest review:
 6. Confirm the detail panel shows `Seal Runtime: REAL`.
 7. Click `Decrypt private signal`.
 8. Approve the wallet personal-message prompt for the Seal session.
-9. Confirm the answers and attachments appear only after approval.
+9. Confirm the answers and attachments appear only after approval, and that subsequent decrypts reuse the session for the configured TTL window.
 
 Mock mode comparison:
 
@@ -507,7 +508,7 @@ Mock mode comparison:
 Contest demo verification points:
 
 - public responders can still submit without connecting a wallet
-- Walrus save and project receipt registration still happen through the existing flow
+- Walrus / local save remains the default responder flow, with Sui registration deferred for later admin handling
 - private signal content stays hidden until an authorized admin wallet approves the decrypt session
 - unauthorized or missing-wallet review attempts show a natural error instead of exposing the payload
 

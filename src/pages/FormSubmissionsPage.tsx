@@ -9,14 +9,11 @@ import { Link, useParams } from "react-router-dom";
 import { AdminAccessGate } from "../components/AdminAccessGate";
 import { BlobLink } from "../components/BlobLink";
 import { EmptyState } from "../components/EmptyState";
-import { SealStatusCard } from "../components/SealStatusCard";
-import { SignalClusterPanel } from "../components/SignalClusterPanel";
-import { SignalMetaChip, SignalMetaRow } from "../components/SignalMetaChip";
+import { SignalMetaChip } from "../components/SignalMetaChip";
 import { useAccessControl } from "../hooks/useAccessControl";
 import { getSealRuntimeStatus } from "../crypto/cryptoFactory";
 import { useI18n } from "../i18n";
 import { getReviewAccessState, getRoleLabel } from "../lib/adminAccess";
-import { getEncryptedPayloadAvailabilityLabel } from "../lib/encryptionDisplay";
 import { exportSubmissionJson, exportSubmissionsCsv, exportSummaryJson } from "../lib/export";
 import { getRespondentDisplayLabel, getSubmissionRespondentMeta } from "../lib/respondentMeta";
 import {
@@ -26,7 +23,6 @@ import {
 import {
   getSignalPreview,
   getSignalSubject,
-  getStorageDetailLabels,
   getWalletAccessLabel,
   inferSignalCategory,
   isLocalFallbackBlob,
@@ -103,18 +99,11 @@ export function FormSubmissionsPage() {
   const [selectedStreamId, setSelectedStreamId] = useState<StreamId>("all");
   const [search, setSearch] = useState("");
   const [detailAnswers, setDetailAnswers] = useState<Record<string, unknown> | null>(null);
-  const [detailAttachments, setDetailAttachments] = useState<Submission["attachments"]>([]);
   const [decrypting, setDecrypting] = useState(false);
   const [decryptError, setDecryptError] = useState("");
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [saveError, setSaveError] = useState("");
-  const [notesDraft, setNotesDraft] = useState("");
-  const [draftTag, setDraftTag] = useState("");
-  const [githubIssueDraft, setGithubIssueDraft] = useState("");
-  const [githubPrDraft, setGithubPrDraft] = useState("");
   const [loading, setLoading] = useState(true);
-  const [showMetadata, setShowMetadata] = useState(false);
-  const [showEncryptedSignal, setShowEncryptedSignal] = useState(false);
   const saveQueueRef = useRef(Promise.resolve());
 
   useEffect(() => {
@@ -165,20 +154,12 @@ export function FormSubmissionsPage() {
   useEffect(() => {
     if (!selectedSubmission) {
       setDetailAnswers(null);
-      setDetailAttachments([]);
-      setNotesDraft("");
-      setGithubIssueDraft("");
-      setGithubPrDraft("");
       setDecryptError("");
       setSaveError("");
       setSaveState("idle");
       return;
     }
-    setNotesDraft(selectedSubmission.notes);
-    setGithubIssueDraft(selectedSubmission.githubIssueUrl ?? "");
-    setGithubPrDraft(selectedSubmission.githubPrUrl ?? "");
     setDetailAnswers(selectedSubmission.isEncrypted ? null : selectedSubmission.answers);
-    setDetailAttachments(selectedSubmission.attachments ?? []);
     setDecryptError("");
     setSaveError("");
   }, [selectedSubmission]);
@@ -270,7 +251,6 @@ export function FormSubmissionsPage() {
       });
       if (resolved) {
         setDetailAnswers(resolved.answers);
-        setDetailAttachments(resolved.attachments);
       }
     } catch (error) {
       setDecryptError(error instanceof Error ? error.message : t("decryptFailed"));
@@ -656,7 +636,7 @@ export function FormSubmissionsPage() {
                     <p className="muted">
                       {sealRuntime.activeMode === "mock"
                         ? `${t("demoDecryptAvailable")} Mock mode only.`
-                        : "Private Signal / Team only. Wallet approval is required before the body is revealed."}
+                        : t("walletApprovalReuseNotice", { minutes: REAL_SEAL_SESSION_TTL_MIN })}
                     </p>
                   </div>
                 ) : null}
@@ -992,19 +972,25 @@ export function FormSubmissionsPage() {
                             <BlobLink blobId={selectedSubmission.blobId} label={t("verifyOnWalrus")} />
                           ) : null}
                         </SignalMetaRow>
-                        <SignalMetaRow
-                          label={t("encryptedPayloadBlobId")}
-                          type="seal"
-                          value={selectedSubmission.encryptedBlobId}
-                          emptyLabel={getEncryptedPayloadAvailabilityLabel(selectedSubmission)}
-                        >
-                          {!isLocalFallbackBlob(selectedSubmission.encryptedBlobId) ? (
-                            <BlobLink
-                              blobId={selectedSubmission.encryptedBlobId}
-                              label={t("verifyOnWalrus")}
-                            />
-                          ) : null}
-                        </SignalMetaRow>
+                        {hasDedicatedEncryptedPayloadBlob(selectedSubmission) ? (
+                          <SignalMetaRow
+                            label={t("encryptedPayloadBlobId")}
+                            type="seal"
+                            value={selectedSubmission.encryptedBlobId}
+                          >
+                            {!isLocalFallbackBlob(selectedSubmission.encryptedBlobId) ? (
+                              <BlobLink
+                                blobId={selectedSubmission.encryptedBlobId}
+                                label={t("verifyOnWalrus")}
+                              />
+                            ) : null}
+                          </SignalMetaRow>
+                        ) : selectedSubmission.isEncrypted ? (
+                          <div className="metadata-row">
+                            <span>Encrypted Payload</span>
+                            <strong>{getEncryptedPayloadAvailabilityLabel(selectedSubmission)}</strong>
+                          </div>
+                        ) : null}
                         <SignalMetaRow label="Seal Identity" type="seal" value={selectedSubmission.sealIdentity} emptyLabel={t("notAvailable")} />
                         <SignalMetaRow
                           label="Receipt Metadata Digest"
@@ -1044,7 +1030,12 @@ export function FormSubmissionsPage() {
                         </div>
                         <div className="metadata-row">
                           <span>Project status sync</span>
-                          <strong>{selectedSubmission.onchainStatus ?? "offchain only"}</strong>
+                          <strong>
+                            {selectedSubmission.onchainStatus ??
+                              (selectedSubmission.pendingOnchainRegistration
+                                ? t("pendingSuiRegistration")
+                                : "offchain only")}
+                          </strong>
                         </div>
                       </div>
                     ) : null}

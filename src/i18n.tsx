@@ -200,6 +200,25 @@ const messages = {
     signalStoredLocally: "Saved locally for now",
     publicEyebrow: "Public intake route",
     publicDefaultBody: "Share your signal with the research lab.",
+    publicIdentityEyebrow: "Responder identity",
+    publicIdentityTitle: "Choose how to send",
+    publicIdentityBody:
+      "Viewing the form never requires a wallet. You can submit anonymously or attach wallet context without showing it publicly.",
+    publicSendMode: "Send mode",
+    publicAnonymousSend: "Send anonymously",
+    publicAnonymousSendHelp:
+      "Do not show your wallet address on the public page or in the admin inbox.",
+    publicWalletAttach: "Attach connected wallet (optional)",
+    publicWalletAttachHelp: "Only attach wallet information when it helps your report. No extra signature is required.",
+    publicWalletConnectOptional: "You can send now without connecting a wallet.",
+    publicCurrentMode: "Current mode",
+    publicModeAnonymous: "Anonymous submit",
+    publicModeWallet: "Wallet-backed submit",
+    publicAnonymousModeHelp: "You can submit immediately without any wallet signature.",
+    publicWalletModeHelpNoSignature:
+      "Wallet information is attached only because you opted in. DeepSignal does not ask for a personal-message signature on submit.",
+    publicWalletModeHelp: (params) =>
+      `A posting session is reused for ${params?.hours ?? 24} hours, so you should not need to sign every submission.`,
     requiredFieldError: "This field is required.",
     submitting: "Uploading signal...",
     submitFeedback: "Submit feedback",
@@ -438,6 +457,16 @@ const messages = {
     walletApprovalRequired: "Wallet approval required",
     connectCreatorWalletForDecrypt:
       "Connect the creator wallet to review this encrypted signal. If Seal is active, session approval is also required.",
+    walletApprovalReuseNotice: (params) =>
+      `Private Signal decrypt approval is reused for about ${params?.minutes ?? 10} minutes after the first approval.`,
+    pendingSuiRegistration: "Ready for later Sui registration",
+    suiRegistrationDeferredNotice: "Sui registration can be run later in a separate admin step.",
+    registerOnSui: "Register on Sui",
+    registeringOnSui: "Registering on Sui...",
+    registerOnSuiTitle: "Register this form on Sui only when needed",
+    registerOnSuiBody:
+      "Walrus/local storage is already live. Run Sui registration only when you want an onchain form record.",
+    registerOnSuiHint: "This optional step may prompt one wallet signature.",
   },
   ja: {
     navHome: "\u30db\u30fc\u30e0",
@@ -632,6 +661,28 @@ const messages = {
     signalStoredLocally: "\u307e\u305a\u306f\u30ed\u30fc\u30ab\u30eb\u306b\u4fdd\u5b58\u3057\u307e\u3057\u305f",
     publicEyebrow: "\u516c\u958b\u53d7\u4ed8\u30eb\u30fc\u30c8",
     publicDefaultBody: "\u7814\u7a76\u30e9\u30dc\u306b\u3042\u306a\u305f\u306e\u30b7\u30b0\u30ca\u30eb\u3092\u9001\u3063\u3066\u304f\u3060\u3055\u3044\u3002",
+    publicIdentityEyebrow: "\u56de\u7b54\u8005\u60c5\u5831",
+    publicIdentityTitle: "\u9001\u4fe1\u65b9\u6cd5\u3092\u9078\u629e",
+    publicIdentityBody:
+      "\u30d5\u30a9\u30fc\u30e0\u306e\u95b2\u89a7\u306b\u30a6\u30a9\u30ec\u30c3\u30c8\u306f\u5fc5\u8981\u3042\u308a\u307e\u305b\u3093\u3002\u533f\u540d\u3067\u9001\u4fe1\u3059\u308b\u304b\u3001\u516c\u958b\u306b\u8868\u793a\u305b\u305a\u306b\u30a6\u30a9\u30ec\u30c3\u30c8\u60c5\u5831\u3092\u4ed8\u3051\u3066\u9001\u4fe1\u3067\u304d\u307e\u3059\u3002",
+    publicSendMode: "\u9001\u4fe1\u30e2\u30fc\u30c9",
+    publicAnonymousSend: "\u533f\u540d\u3067\u9001\u4fe1",
+    publicAnonymousSendHelp:
+      "\u516c\u958b\u753b\u9762\u3084\u7ba1\u7406\u753b\u9762\u306b\u30a6\u30a9\u30ec\u30c3\u30c8\u30a2\u30c9\u30ec\u30b9\u3092\u8868\u793a\u3057\u307e\u305b\u3093\u3002",
+    publicWalletAttach: "\u30a6\u30a9\u30ec\u30c3\u30c8\u60c5\u5831\u3092\u4ed8\u3051\u308b\uff08\u4efb\u610f\uff09",
+    publicWalletAttachHelp:
+      "\u5fc5\u8981\u306a\u3068\u304d\u3060\u3051\u30a6\u30a9\u30ec\u30c3\u30c8\u60c5\u5831\u3092\u4ed8\u3051\u307e\u3059\u3002\u8ffd\u52a0\u306e personal message \u7f72\u540d\u306f\u6c42\u3081\u307e\u305b\u3093\u3002",
+    publicWalletConnectOptional:
+      "\u30a6\u30a9\u30ec\u30c3\u30c8\u63a5\u7d9a\u306a\u3057\u3067\u305d\u306e\u307e\u307e\u9001\u4fe1\u3067\u304d\u307e\u3059\u3002",
+    publicCurrentMode: "\u73fe\u5728\u306e\u30e2\u30fc\u30c9",
+    publicModeAnonymous: "\u533f\u540d\u9001\u4fe1",
+    publicModeWallet: "\u30a6\u30a9\u30ec\u30c3\u30c8\u9023\u643a\u3067\u9001\u4fe1",
+    publicAnonymousModeHelp:
+      "\u30a6\u30a9\u30ec\u30c3\u30c8\u7f72\u540d\u306a\u3057\u3067\u3059\u3050\u306b\u9001\u4fe1\u3067\u304d\u307e\u3059\u3002",
+    publicWalletModeHelpNoSignature:
+      "\u81ea\u5206\u3067\u9078\u3093\u3060\u5834\u5408\u3060\u3051\u30a6\u30a9\u30ec\u30c3\u30c8\u60c5\u5831\u3092\u4ed8\u3051\u307e\u3059\u3002\u9001\u4fe1\u6642\u306b personal message \u7f72\u540d\u306f\u6c42\u3081\u307e\u305b\u3093\u3002",
+    publicWalletModeHelp: (params) =>
+      `\u6295\u7a3f\u30bb\u30c3\u30b7\u30e7\u30f3\u306f ${params?.hours ?? 24} \u6642\u9593\u518d\u5229\u7528\u3055\u308c\u308b\u306e\u3067\u3001\u6bce\u56de\u7f72\u540d\u3059\u308b\u5fc5\u8981\u306f\u307b\u307c\u3042\u308a\u307e\u305b\u3093\u3002`,
     requiredFieldError: "\u3053\u306e\u9805\u76ee\u306f\u5fc5\u9808\u3067\u3059\u3002",
     submitting: "\u30b7\u30b0\u30ca\u30eb\u3092\u9001\u4fe1\u4e2d...",
     submitFeedback: "\u9001\u4fe1\u3059\u308b",
@@ -892,6 +943,18 @@ const messages = {
     walletApprovalRequired: "Wallet approval required",
     connectCreatorWalletForDecrypt:
       "\u3053\u306e encrypted signal \u3092 review \u3059\u308b\u306b\u306f creator wallet \u3092\u63a5\u7d9a\u3057\u3066\u304f\u3060\u3055\u3044\u3002Seal \u304c\u6709\u52b9\u306a\u5834\u5408\u306f session approval \u3082\u5fc5\u8981\u3067\u3059\u3002",
+    walletApprovalReuseNotice: (params) =>
+      `Private Signal \u306e\u5fa9\u53f7\u627f\u8a8d\u306f\u3001\u6700\u521d\u306e1\u56de\u5f8c\u304b\u3089\u7d04 ${params?.minutes ?? 10} \u5206\u9593\u518d\u5229\u7528\u3055\u308c\u307e\u3059\u3002`,
+    pendingSuiRegistration: "\u5f8c\u304b\u3089 Sui \u767b\u9332\u3067\u304d\u307e\u3059",
+    suiRegistrationDeferredNotice:
+      "Sui \u767b\u9332\u306f\u3042\u3068\u304b\u3089\u7ba1\u7406\u5074\u3067\u307e\u3068\u3081\u3066\u5b9f\u884c\u3067\u304d\u307e\u3059\u3002",
+    registerOnSui: "Register on Sui",
+    registeringOnSui: "Sui \u306b\u767b\u9332\u4e2d...",
+    registerOnSuiTitle: "\u5fc5\u8981\u306a\u3068\u304d\u3060\u3051 Sui \u306b\u767b\u9332",
+    registerOnSuiBody:
+      "Walrus/local \u4fdd\u5b58\u3067\u306f\u65e2\u306b\u516c\u958b\u6e08\u307f\u3067\u3059\u3002onchain \u306e form record \u304c\u5fc5\u8981\u306a\u3068\u304d\u3060\u3051 Sui \u767b\u9332\u3092\u5b9f\u884c\u3057\u307e\u3059\u3002",
+    registerOnSuiHint:
+      "\u3053\u306e\u4efb\u610f\u30b9\u30c6\u30c3\u30d7\u3067\u306e\u307f\u3001wallet \u7f72\u540d\u304c1\u56de\u6c42\u3081\u3089\u308c\u308b\u5834\u5408\u304c\u3042\u308a\u307e\u3059\u3002",
   },
 } satisfies Record<Language, Record<string, TranslationValue>>;
 

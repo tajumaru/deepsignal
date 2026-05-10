@@ -7,10 +7,18 @@ interface DynamicFieldProps {
   value: unknown;
   error?: string;
   hint?: string;
+  questionNumber?: number;
   onChange: (value: unknown) => void;
 }
 
-export function DynamicField({ field, value, error, hint, onChange }: DynamicFieldProps) {
+export function DynamicField({
+  field,
+  value,
+  error,
+  hint,
+  questionNumber,
+  onChange,
+}: DynamicFieldProps) {
   const { t } = useI18n();
   const selectedFile = value instanceof File ? value : null;
 
@@ -28,10 +36,13 @@ export function DynamicField({ field, value, error, hint, onChange }: DynamicFie
   }
 
   return (
-    <label className="field-block">
-      <span>
-        {field.label}
-        {field.required ? " *" : ""}
+    <label className={`field-block ${questionNumber ? "numbered-field" : ""}`}>
+      <span className="field-label-row">
+        {questionNumber ? <span className="field-question-index">Q{questionNumber}</span> : null}
+        <span className="field-label-text">
+          {field.label}
+          {field.required ? " *" : ""}
+        </span>
       </span>
 
       {field.type === "shortText" && (

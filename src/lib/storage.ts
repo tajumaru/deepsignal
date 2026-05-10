@@ -220,6 +220,7 @@ export function normalizeSubmission(raw: Submission | (Record<string, unknown> &
       raw.onchainStatus === "new" || raw.onchainStatus === "triaged" || raw.onchainStatus === "archived"
         ? raw.onchainStatus
         : undefined,
+    pendingOnchainRegistration: Boolean(raw.pendingOnchainRegistration),
     subjectPreview: typeof raw.subjectPreview === "string" ? raw.subjectPreview : undefined,
     ratingValue:
       typeof raw.ratingValue === "number"
@@ -251,6 +252,7 @@ export function normalizeForm(raw: FormSchema | (Record<string, unknown> & { id:
           ? Number(raw.onchainFormId)
           : undefined,
     formMetadataDigest: typeof raw.formMetadataDigest === "string" ? raw.formMetadataDigest : undefined,
+    registrationMode: raw.registrationMode === "sui" ? "sui" : "walrus",
   } satisfies FormSchema;
 }
 

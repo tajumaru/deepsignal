@@ -10,6 +10,7 @@ import type { FormField, FormSection, MobileBuilderPane, PreparedPublishForm, Pr
 interface PublishStepProps {
   t: Translate;
   saving: boolean;
+  registeringOnSui: boolean;
   error: string;
   savedForm: PreparedPublishForm | null;
   title: string;
@@ -36,12 +37,14 @@ interface PublishStepProps {
   onSetMobilePane: (pane: MobileBuilderPane) => void;
   onSelectProject: (projectId: string) => void;
   onToggleEncryptSubmissions: (value: boolean) => void;
+  onRegisterOnSui: () => void;
   onBack: () => void;
 }
 
 export function PublishStep({
   t,
   saving,
+  registeringOnSui,
   error,
   savedForm,
   title,
@@ -68,6 +71,7 @@ export function PublishStep({
   onSetMobilePane,
   onSelectProject,
   onToggleEncryptSubmissions,
+  onRegisterOnSui,
   onBack,
 }: PublishStepProps) {
   return (
@@ -164,10 +168,11 @@ export function PublishStep({
                 </label>
                 <p className="muted">
                   {selectedProject
-                    ? `Forms from this screen will try to register under ${selectedProject.name}.`
+                    ? `Save to Walrus/local first. ${selectedProject.name} can be registered on Sui later from an explicit action.`
                     : "Leave this empty to keep the existing Walrus / local form flow only."}
                 </p>
                 {projectState ? <p className="muted">{projectState}</p> : null}
+                <p className="muted">{t("suiRegistrationDeferredNotice")}</p>
               </section>
 
               <section className="panel composer-settings-card">
@@ -252,6 +257,25 @@ export function PublishStep({
                   ) : null}
                 </div>
               </div>
+
+              {savedForm.projectId && typeof savedForm.onchainFormId !== "number" ? (
+                <section className="answer-card">
+                  <p className="eyebrow">Optional Sui step</p>
+                  <h4>{t("registerOnSuiTitle")}</h4>
+                  <p className="muted">{t("registerOnSuiBody")}</p>
+                  <div className="inline-actions">
+                    <button
+                      type="button"
+                      className="primary-button"
+                      onClick={onRegisterOnSui}
+                      disabled={registeringOnSui}
+                    >
+                      {registeringOnSui ? t("registeringOnSui") : t("registerOnSui")}
+                    </button>
+                    <span className="muted">{t("registerOnSuiHint")}</span>
+                  </div>
+                </section>
+              ) : null}
 
               {savedForm.manifestBlobId ? (
                 <ShareCard

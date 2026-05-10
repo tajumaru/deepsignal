@@ -1,8 +1,8 @@
-import { createFormOnChain, createMetadataDigest } from "../../lib/projectRegistry";
+import { createMetadataDigest } from "../../lib/projectRegistry";
 import { isLocalFallbackBlob } from "../../lib/proof";
 import { storageAdapter } from "../../lib/storage";
 import { saveFormMetadataOverlay } from "../../storage/formMetadataOverlay";
-import type { CreateFormTransaction, PreparedPublishForm, ProjectOption, TransactionConfirmation } from "./types";
+import type { PreparedPublishForm, ProjectOption } from "./types";
 import { wait } from "./utils";
 
 interface PublishFormArgs {
@@ -13,8 +13,6 @@ interface PublishFormArgs {
   setPublishStorageMode: (mode: "walrus" | "local") => void;
   setPublishResultNote: (note: string) => void;
   setProjectState: (value: string) => void;
-  signAndExecuteTransaction: (transaction: CreateFormTransaction) => Promise<{ digest: string }>;
-  waitForTransaction: (digest: string) => Promise<TransactionConfirmation>;
   shouldContinue: () => boolean;
 }
 
@@ -26,8 +24,6 @@ export async function publishForm({
   setPublishStorageMode,
   setPublishResultNote,
   setProjectState,
-  signAndExecuteTransaction,
-  waitForTransaction,
   shouldContinue,
 }: PublishFormArgs): Promise<PreparedPublishForm | null> {
   const formMetadataDigest = await createMetadataDigest({
@@ -70,42 +66,14 @@ export async function publishForm({
   setPublishBlobId(blobId ?? "unresolved");
   setPublishStorageMode(isLocalFallbackBlob(blobId) ? "local" : "walrus");
 
-  let onchainFormId: number | undefined;
-  let isOnchain = false;
-
   if (selectedProject?.objectId) {
     await wait(780);
     if (!shouldContinue()) {
       return null;
     }
     setPublishStageIndex(4);
-    try {
-      const tx = createFormOnChain({
-        projectId: selectedProject.objectId,
-        title: form.title,
-        metadataDigest: formMetadataDigest,
-      });
-      const result = await signAndExecuteTransaction(tx);
-      const confirmed = await waitForTransaction(result.digest);
-      const formCreatedEvent = (confirmed.events ?? []).find((chainEvent) =>
-        String(chainEvent.type ?? "").endsWith("::FormCreated"),
-      );
-      const rawFormId = (formCreatedEvent?.parsedJson as { form_id?: string | number } | undefined)?.form_id;
-      const parsedFormId = typeof rawFormId === "number" ? rawFormId : Number(rawFormId ?? Number.NaN);
-      if (Number.isFinite(parsedFormId)) {
-        onchainFormId = parsedFormId;
-        isOnchain = true;
-        setPublishResultNote("Signal registration confirmed. Share links and inbox routing are now live.");
-      }
-    } catch (chainError) {
-      console.warn("create_form failed, keeping local/Walrus form only", chainError);
-      setProjectState(
-        chainError instanceof Error
-          ? `Project link skipped: ${chainError.message}`
-          : "Project link skipped. The form is still available through local/Walrus storage.",
-      );
-      setPublishResultNote("Walrus publish completed. Signal registry link was skipped after the final wallet step.");
-    }
+    setProjectState("Saved to Walrus/local. Register on Sui later when you want an onchain form record.");
+    setPublishResultNote("Walrus publish completed. Sui registration is deferred until you explicitly run it.");
   } else {
     await wait(780);
     if (!shouldContinue()) {
@@ -119,15 +87,20 @@ export async function publishForm({
     blobId,
     manifestBlobId,
     formMetadataDigest,
-    onchainFormId,
-    isOnchain,
+    isOnchain: false,
+    registrationMode: "walrus",
   } satisfies PreparedPublishForm;
 
-  saveFormMetadataOverlay(finalForm);
+  const finalPersistedForm = {
+    ...finalForm,
+  } satisfies PreparedPublishForm;
+
+  setPublishBlobId(finalPersistedForm.blobId ?? "unresolved");
+  saveFormMetadataOverlay(finalPersistedForm);
   if (!shouldContinue()) {
     return null;
   }
 
   setPublishStageIndex(5);
-  return finalForm;
+  return finalPersistedForm;
 }

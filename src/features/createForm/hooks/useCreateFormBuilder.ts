@@ -44,11 +44,8 @@ export function useCreateFormBuilder({ t, projects }: UseCreateFormBuilderArgs) 
   useEffect(() => {
     if (selectedProjectId) {
       setSelectedProjectId(selectedProjectId);
-      return;
-    }
-    if (projects[0]?.objectId) {
-      setSelectedProjectIdState(projects[0].objectId);
-      setSelectedProjectId(projects[0].objectId);
+    } else {
+      setSelectedProjectId("");
     }
   }, [projects, selectedProjectId]);
 

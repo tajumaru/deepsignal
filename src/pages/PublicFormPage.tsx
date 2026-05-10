@@ -1,6 +1,5 @@
 import {
   useCurrentAccount,
-  useSignPersonalMessage,
 } from "@mysten/dapp-kit";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
@@ -11,13 +10,10 @@ import { SignalMetaChip, SignalMetaRow } from "../components/SignalMetaChip";
 import { WalletConnect } from "../components/WalletConnect";
 import { parseRealSealEnvelope } from "../crypto/sealPayload";
 import { useI18n } from "../i18n";
-import { getEncryptedPayloadAvailabilityLabel } from "../lib/encryptionDisplay";
+import { getEncryptedPayloadAvailabilityLabel, hasDedicatedEncryptedPayloadBlob } from "../lib/encryptionDisplay";
 import { getSubmissionCategoryFromPurpose } from "../lib/formTemplates";
 import { getSubmissionRespondentMeta } from "../lib/respondentMeta";
-import {
-  ensureRespondentSession,
-  getRespondentSessionTtlHours,
-} from "../lib/respondentSession";
+import { ensureRespondentSession } from "../lib/respondentSession";
 import { getStorageDetailLabels, isLocalFallbackBlob } from "../lib/signalInbox";
 import {
   activeSealAdapter,
@@ -40,7 +36,6 @@ const MAX_VIDEO_BYTES = 25 * 1024 * 1024;
 export function PublicFormPage() {
   const { t } = useI18n();
   const account = useCurrentAccount();
-  const signPersonalMessage = useSignPersonalMessage();
   const { formId = "" } = useParams();
   const [searchParams] = useSearchParams();
   const [form, setForm] = useState<FormSchema | null>(null);
@@ -51,7 +46,7 @@ export function PublicFormPage() {
   const [submitted, setSubmitted] = useState<Submission | null>(null);
   const [submitError, setSubmitError] = useState("");
   const [submitNotice, setSubmitNotice] = useState("");
-  const [sendAnonymously, setSendAnonymously] = useState(false);
+  const [attachWallet, setAttachWallet] = useState(false);
   const manifestBlobId = searchParams.get("manifest") ?? "";
 
   useEffect(() => {
@@ -88,6 +83,12 @@ export function PublicFormPage() {
     void load();
   }, [formId, manifestBlobId]);
 
+  useEffect(() => {
+    if (!account?.address && attachWallet) {
+      setAttachWallet(false);
+    }
+  }, [account?.address, attachWallet]);
+
   const attachmentFields = useMemo(
     () =>
       new Set(
@@ -110,6 +111,11 @@ export function PublicFormPage() {
       unsectionedFields: form.fields.filter((field) => !field.sectionId),
     };
   }, [form]);
+
+  const questionNumbers = useMemo(
+    () => new Map(form?.fields.map((field, index) => [field.id, index + 1]) ?? []),
+    [form],
+  );
 
   function updateAnswer(fieldId: string, value: unknown) {
     const field = form?.fields.find((candidate) => candidate.id === fieldId);
@@ -163,16 +169,10 @@ export function PublicFormPage() {
     setSubmitNotice("");
     try {
       const signedAt = new Date().toISOString();
-      const isAnonymous = sendAnonymously || !account?.address;
+      const isAnonymous = !attachWallet || !account?.address;
       const session = await ensureRespondentSession({
         walletAddress: account?.address,
         isAnonymous,
-        signPersonalMessage: isAnonymous
-          ? undefined
-          : async (message) => {
-              const result = await signPersonalMessage.mutateAsync({ message });
-              return result.signature;
-            },
       });
       const respondentMeta = {
         walletAddress: isAnonymous ? undefined : account?.address,
@@ -231,6 +231,7 @@ export function PublicFormPage() {
         notes: "",
         contributorId: respondentMeta.walletAddress ?? respondentMeta.sessionId,
         isEncrypted: Boolean(form.encryptSubmissions),
+        pendingOnchainRegistration: Boolean(form.projectId),
         createdAt: signedAt,
         updatedAt: signedAt,
       };
@@ -276,6 +277,7 @@ export function PublicFormPage() {
         } satisfies Submission;
         setSubmitted(savedSubmission);
       }
+      setSubmitNotice(form.projectId ? t("suiRegistrationDeferredNotice") : "");
     } catch (error) {
       setSubmitError(error instanceof Error ? error.message : t("submitFailed"));
     } finally {
@@ -326,21 +328,34 @@ export function PublicFormPage() {
             <SignalMetaRow label="Submission Blob ID" type="blob" value={submitted.blobId}>
               <BlobLink blobId={submitted.blobId} label="Verify on Walrus" />
             </SignalMetaRow>
-            <SignalMetaRow
-              label="Encrypted Payload Blob ID"
-              type="seal"
-              value={submitted.encryptedBlobId}
-              emptyLabel={getEncryptedPayloadAvailabilityLabel(submitted)}
-            >
-              <BlobLink blobId={submitted.encryptedBlobId} label="Verify on Walrus" />
-            </SignalMetaRow>
+            {hasDedicatedEncryptedPayloadBlob(submitted) ? (
+              <SignalMetaRow
+                label="Encrypted Payload Blob ID"
+                type="seal"
+                value={submitted.encryptedBlobId}
+              >
+                <BlobLink blobId={submitted.encryptedBlobId} label="Verify on Walrus" />
+              </SignalMetaRow>
+            ) : null}
             <SignalMetaRow label="Seal Identity" type="seal" value={submitted.sealIdentity} />
+            {submitted.isEncrypted && !hasDedicatedEncryptedPayloadBlob(submitted) ? (
+              <div className="metadata-row">
+                <span>Encrypted Payload</span>
+                <strong>{getEncryptedPayloadAvailabilityLabel(submitted)}</strong>
+              </div>
+            ) : null}
             <div className="metadata-row">
               <span>Respondent</span>
               <strong>
                 {submittedRespondentMeta.isAnonymous ? "Anonymous respondent" : "Wallet connected"}
               </strong>
             </div>
+            {submitted.pendingOnchainRegistration ? (
+              <div className="metadata-row">
+                <span>Sui registration</span>
+                <strong>{t("pendingSuiRegistration")}</strong>
+              </div>
+            ) : null}
             <div className="metadata-row signal-meta-row">
               <span>Attachment Blob IDs</span>
               <div className="stack signal-meta-row-value">
@@ -374,12 +389,9 @@ export function PublicFormPage() {
       <section className="answer-card public-identity-card">
         <div className="public-identity-topline">
           <div className="public-identity-copy">
-            <p className="eyebrow">Responder identity</p>
-            <h3>Choose how to send</h3>
-            <p className="muted">
-              Viewing the form never requires a wallet. You can submit anonymously or attach wallet
-              context without showing it publicly.
-            </p>
+            <p className="eyebrow">{t("publicIdentityEyebrow")}</p>
+            <h3>{t("publicIdentityTitle")}</h3>
+            <p className="muted">{t("publicIdentityBody")}</p>
           </div>
           <div className="public-identity-wallet">
             <WalletConnect />
@@ -388,38 +400,38 @@ export function PublicFormPage() {
 
         <div className="public-identity-grid">
           <div className="public-identity-mode">
-            <span className="public-identity-label">Send mode</span>
+            <span className="public-identity-label">{t("publicSendMode")}</span>
             <label className="public-identity-toggle">
               <input
                 type="checkbox"
-                checked={sendAnonymously}
-                onChange={(event) => setSendAnonymously(event.target.checked)}
+                checked={attachWallet}
+                disabled={!account?.address}
+                onChange={(event) => setAttachWallet(event.target.checked)}
               />
               <span>
-                <strong>匿名で送信</strong>
-                <small>公開画面や管理画面にウォレットアドレスを表示しません。</small>
+                <strong>{t("publicWalletAttach")}</strong>
+                <small>
+                  {account?.address ? t("publicWalletAttachHelp") : t("publicWalletConnectOptional")}
+                </small>
               </span>
             </label>
           </div>
 
           <div className="public-identity-note">
-            <span className="public-identity-label">Current mode</span>
-            <strong>{sendAnonymously || !account ? "Anonymous submit" : "Wallet-backed submit"}</strong>
+            <span className="public-identity-label">{t("publicCurrentMode")}</span>
+            <strong>
+              {attachWallet && account?.address ? t("publicModeWallet") : t("publicModeAnonymous")}
+            </strong>
             <p className="muted">
-              {sendAnonymously || !account
-                ? "You can submit immediately without any wallet signature."
-                : `A posting session is reused for ${getRespondentSessionTtlHours()} hours, so you should not need to sign every submission.`}
+              {attachWallet && account?.address
+                ? t("publicWalletModeHelpNoSignature")
+                : t("publicAnonymousModeHelp")}
             </p>
           </div>
         </div>
       </section>
 
-      <div className="info-banner">
-        <strong>{t("encryptSubmissions")}</strong>
-        <span>{form.encryptSubmissions ? t("enabled") : t("disabled")}</span>
-      </div>
-
-      <div className="stack">
+      <div className="stack public-form-fields">
         {groupedFields.sections.map((section) =>
           section.fields.length ? (
             <section key={section.id} className="composer-preview-section">
@@ -427,13 +439,14 @@ export function PublicFormPage() {
                 <h3>{section.title}</h3>
                 {section.description ? <p className="muted">{section.description}</p> : null}
               </div>
-              <div className="stack">
+              <div className="stack public-form-fields">
                 {section.fields.map((field) => (
                   <DynamicField
                     key={field.id}
                     field={field}
                     value={answers[field.id]}
                     error={errors[field.id]}
+                    questionNumber={questionNumbers.get(field.id)}
                     hint={
                       field.type === "screenshot"
                         ? t("screenshotHintWithLimit")
@@ -454,6 +467,7 @@ export function PublicFormPage() {
             field={field}
             value={answers[field.id]}
             error={errors[field.id]}
+            questionNumber={questionNumbers.get(field.id)}
             hint={
               field.type === "screenshot"
                 ? t("screenshotHintWithLimit")
@@ -466,9 +480,11 @@ export function PublicFormPage() {
         ))}
       </div>
       {submitError ? <p className="error-text">{submitError}</p> : null}
-      <button type="submit" className="primary-button" disabled={submitting}>
-        {submitting ? t("submitting") : t("submitFeedback")}
-      </button>
+      <div className="public-form-actions">
+        <button type="submit" className="primary-button" disabled={submitting}>
+          {submitting ? t("submitting") : t("submitFeedback")}
+        </button>
+      </div>
     </form>
   );
 }

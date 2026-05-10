@@ -14,6 +14,7 @@ import { ShareCard } from "../components/ShareCard";
 import { SignalClusterPanel } from "../components/SignalClusterPanel";
 import { SignalMetaChip, SignalMetaRow } from "../components/SignalMetaChip";
 import { getSealRuntimeStatus } from "../crypto/cryptoFactory";
+import { REAL_SEAL_SESSION_TTL_MIN } from "../crypto/sealPayload";
 import { useAccessControl } from "../hooks/useAccessControl";
 import { useProjectRegistry } from "../hooks/useProjectRegistry";
 import { useI18n } from "../i18n";
@@ -38,7 +39,7 @@ import {
 } from "../lib/adminAccess";
 import { getTriageStatusLabel, TRIAGE_STATUS_OPTIONS } from "../lib/signalOps";
 import { exportSubmissionJson } from "../lib/export";
-import { getEncryptedPayloadAvailabilityLabel } from "../lib/encryptionDisplay";
+import { getEncryptedPayloadAvailabilityLabel, hasDedicatedEncryptedPayloadBlob } from "../lib/encryptionDisplay";
 import { getRespondentDisplayLabel, getSubmissionRespondentMeta } from "../lib/respondentMeta";
 import {
   getSignalPreview,
@@ -931,7 +932,7 @@ export function AdminDashboardPage() {
             ) : null}
           </EmptyState>
         ) : (
-          <div className="signal-console-layout">
+          <div className="signal-console-layout admin-console-layout">
             <aside className="panel signal-sidebar">
               <div className="signal-sidebar-section">
                 <div>
@@ -1052,16 +1053,14 @@ export function AdminDashboardPage() {
                 <div className="signal-list">
                   {visibleSignals.map((record) => {
                     const { form, submission, category } = record;
-                    const isSelected = selectedRecord?.submission.id === submission.id;
                     const storageLabel = getStorageBadgeLabel(
                       submission.encryptedBlobId ?? submission.blobId,
                     );
                     return (
-                      <button
+                      <Link
                         key={submission.id}
-                        type="button"
-                        className={`signal-card ${isSelected ? "is-active" : ""} ${submission.status === "unread" ? "is-unread" : "is-read"}`}
-                        onClick={() => void handleSelect(record)}
+                        className={`signal-card ${submission.status === "unread" ? "is-unread" : "is-read"}`}
+                        to={`/admin/forms/${form.id}/submissions/${submission.id}`}
                       >
                         <div className="signal-card-topline">
                           <strong>{getSignalSubject(submission)}</strong>
@@ -1103,7 +1102,7 @@ export function AdminDashboardPage() {
                           ) : null}
                           <span className="signal-chip">{storageLabel}</span>
                         </div>
-                      </button>
+                      </Link>
                     );
                   })}
                 </div>
@@ -1178,7 +1177,7 @@ export function AdminDashboardPage() {
                       <p className="muted">
                         {sealRuntime.activeMode === "mock"
                           ? `${t("demoDecryptAvailable")} Mock mode only.`
-                          : "Private signal. Wallet approval is required before the full content is shown."}
+                          : t("walletApprovalReuseNotice", { minutes: REAL_SEAL_SESSION_TTL_MIN })}
                       </p>
                     </div>
                   ) : null}
@@ -1592,19 +1591,25 @@ export function AdminDashboardPage() {
                               />
                             ) : null}
                           </SignalMetaRow>
-                          <SignalMetaRow
-                            label={t("encryptedPayloadBlobId")}
-                            type="seal"
-                            value={selectedRecord.submission.encryptedBlobId}
-                            emptyLabel={getEncryptedPayloadAvailabilityLabel(selectedRecord.submission)}
-                          >
-                            {!isLocalFallbackBlob(selectedRecord.submission.encryptedBlobId) ? (
-                              <BlobLink
-                                blobId={selectedRecord.submission.encryptedBlobId}
-                                label={t("verifyOnWalrus")}
-                              />
-                            ) : null}
-                          </SignalMetaRow>
+                          {hasDedicatedEncryptedPayloadBlob(selectedRecord.submission) ? (
+                            <SignalMetaRow
+                              label={t("encryptedPayloadBlobId")}
+                              type="seal"
+                              value={selectedRecord.submission.encryptedBlobId}
+                            >
+                              {!isLocalFallbackBlob(selectedRecord.submission.encryptedBlobId) ? (
+                                <BlobLink
+                                  blobId={selectedRecord.submission.encryptedBlobId}
+                                  label={t("verifyOnWalrus")}
+                                />
+                              ) : null}
+                            </SignalMetaRow>
+                          ) : selectedRecord.submission.isEncrypted ? (
+                            <div className="metadata-row">
+                              <span>Encrypted Payload</span>
+                              <strong>{getEncryptedPayloadAvailabilityLabel(selectedRecord.submission)}</strong>
+                            </div>
+                          ) : null}
                           <SignalMetaRow label="Seal Identity" type="seal" value={selectedRecord.submission.sealIdentity} emptyLabel={t("notAvailable")} />
                           <SignalMetaRow
                             label="Receipt Metadata Digest"
@@ -1672,8 +1677,13 @@ export function AdminDashboardPage() {
                           </div>
                           <div className="metadata-row">
                             <span>Project status sync</span>
-                              <strong>{selectedRecord.submission.onchainStatus ?? "offchain only"}</strong>
-                            </div>
+                            <strong>
+                              {selectedRecord.submission.onchainStatus ??
+                                (selectedRecord.submission.pendingOnchainRegistration
+                                  ? t("pendingSuiRegistration")
+                                  : "offchain only")}
+                            </strong>
+                          </div>
                           </div>
                       </details>
 

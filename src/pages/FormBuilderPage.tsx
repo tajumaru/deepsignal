@@ -121,7 +121,7 @@ export function FormBuilderPage() {
       access={accessState}
       deniedBody={
         capabilityProfile.isConfigured
-          ? `OwnerCap 邵ｺ・ｾ邵ｺ貅倥・ AdminCap 郢ｧ蜻域亜邵ｺ・､郢ｧ・ｦ郢ｧ・ｩ郢晢ｽｬ郢昴・繝ｨ邵ｺ・ｰ邵ｺ莉｣窶ｲ郢晁ｼ斐°郢晢ｽｼ郢晢｣ｰ闖ｴ諛医・邵ｺ・ｨ驍ゑｽ｡騾・・譯・抄諛奇ｽ定楜貅ｯ・｡蠕後堤ｸｺ髦ｪ竏ｪ邵ｺ蜷ｶﾂ繝ｻ`
+          ? "Only wallets with OwnerCap or AdminCap can open the form composer and publish new signals."
           : undefined
       }
     >
@@ -215,6 +215,7 @@ export function FormBuilderPage() {
             <PublishStep
               t={t}
               saving={publish.saving}
+              registeringOnSui={publish.registeringOnSui}
               error={publish.error}
               savedForm={publish.savedForm}
               title={builder.values.title}
@@ -241,6 +242,7 @@ export function FormBuilderPage() {
               onSetMobilePane={builder.setMobilePane}
               onSelectProject={handleSelectProject}
               onToggleEncryptSubmissions={builder.setEncryptSubmissions}
+              onRegisterOnSui={() => void publish.handleRegisterOnSui()}
               onBack={() => builder.moveStep(-1)}
             />
           ) : null}

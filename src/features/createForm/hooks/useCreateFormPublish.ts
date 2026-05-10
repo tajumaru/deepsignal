@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { getPublicFormPath } from "../../../lib/publicLinks";
+import { createFormOnChain } from "../../../lib/projectRegistry";
 import { isLocalFallbackBlob } from "../../../lib/proof";
 import { publishForm } from "../services";
+import { localStorageAdapter } from "../../../storage/localStorageAdapter";
 import type {
   CreateFormTransaction,
   FormField,
@@ -68,6 +70,7 @@ export function useCreateFormPublish({
   const [savedForm, setSavedForm] = useState<PreparedPublishForm | null>(null);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  const [registeringOnSui, setRegisteringOnSui] = useState(false);
   const [overlay, setOverlay] = useState<PublishOverlayState>(initialOverlayState);
 
   useEffect(() => {
@@ -201,8 +204,6 @@ export function useCreateFormPublish({
         setPublishStorageMode: (storageMode) => updateOverlay({ storageMode }),
         setPublishResultNote: (resultNote) => updateOverlay({ resultNote }),
         setProjectState,
-        signAndExecuteTransaction,
-        waitForTransaction,
         shouldContinue: () => publishRunRef.current === runId,
       });
 
@@ -221,10 +222,50 @@ export function useCreateFormPublish({
     }
   }
 
+  async function handleRegisterOnSui() {
+    if (!savedForm?.projectId || !savedForm.formMetadataDigest) {
+      return;
+    }
+
+    setRegisteringOnSui(true);
+    setError("");
+    try {
+      const tx = createFormOnChain({
+        projectId: savedForm.projectId,
+        title: savedForm.title,
+        metadataDigest: savedForm.formMetadataDigest,
+      });
+      const result = await signAndExecuteTransaction(tx);
+      const confirmed = await waitForTransaction(result.digest);
+      const formCreatedEvent = (confirmed.events ?? []).find((chainEvent) =>
+        String(chainEvent.type ?? "").endsWith("::FormCreated"),
+      );
+      const rawFormId = (formCreatedEvent?.parsedJson as { form_id?: string | number } | undefined)?.form_id;
+      const parsedFormId = typeof rawFormId === "number" ? rawFormId : Number(rawFormId ?? Number.NaN);
+      if (!Number.isFinite(parsedFormId)) {
+        throw new Error("Sui registration completed, but the new form id was not returned.");
+      }
+      const registeredForm = {
+        ...savedForm,
+        onchainFormId: parsedFormId,
+        isOnchain: true,
+        registrationMode: "sui",
+      } satisfies PreparedPublishForm;
+      await localStorageAdapter.saveForm(registeredForm);
+      setSavedForm(registeredForm);
+      onSaved(registeredForm);
+    } catch (registerError) {
+      setError(registerError instanceof Error ? registerError.message : t("saveFailed"));
+    } finally {
+      setRegisteringOnSui(false);
+    }
+  }
+
   return {
     savedForm,
     error,
     saving,
+    registeringOnSui,
     overlay,
     publishChecks,
     publicPath,
@@ -233,6 +274,7 @@ export function useCreateFormPublish({
     setError,
     setOverlay,
     handleSubmit,
+    handleRegisterOnSui,
     handleCopyLink,
     handleCopyBlobId,
   };

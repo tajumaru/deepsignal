@@ -1050,6 +1050,33 @@ label,
   gap: 0.45rem;
 }
 
+.field-label-row {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+}
+
+.field-label-text {
+  font-weight: 600;
+}
+
+.field-question-index {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2.7rem;
+  padding: 0.28rem 0.65rem;
+  border-radius: 999px;
+  border: 1px solid rgba(116, 226, 255, 0.2);
+  background: rgba(102, 227, 255, 0.08);
+  color: #9fe9ff;
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
 input,
 textarea,
 select {
@@ -2378,24 +2405,34 @@ body.composer-mode .bg-orb {
 
 .public-identity-card {
   display: grid;
-  gap: 1.1rem;
-  padding: 1.15rem 1.2rem;
+  gap: 0.85rem;
+  padding: 1rem 1.1rem;
 }
 
 .public-identity-topline {
   display: grid;
   grid-template-columns: minmax(0, 1.35fr) minmax(280px, 0.85fr);
-  gap: 1rem;
-  align-items: start;
+  gap: 0.9rem;
+  align-items: center;
 }
 
 .public-identity-copy {
   display: grid;
-  gap: 0.35rem;
+  gap: 0.25rem;
+}
+
+.public-identity-copy .eyebrow {
+  display: none;
 }
 
 .public-identity-copy h3 {
   margin: 0;
+  font-size: 1.1rem;
+}
+
+.public-identity-copy .muted {
+  max-width: 56ch;
+  font-size: 0.95rem;
 }
 
 .public-identity-wallet {
@@ -2413,8 +2450,8 @@ body.composer-mode .bg-orb {
 
 .public-identity-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1.2fr) minmax(260px, 0.8fr);
-  gap: 0.9rem;
+  grid-template-columns: 1fr;
+  gap: 0;
 }
 
 .public-identity-mode,
@@ -2425,6 +2462,10 @@ body.composer-mode .bg-orb {
   border-radius: 16px;
   border: 1px solid rgba(116, 226, 255, 0.12);
   background: rgba(4, 18, 31, 0.56);
+}
+
+.public-identity-note {
+  display: none;
 }
 
 .public-identity-label {
@@ -2454,11 +2495,42 @@ body.composer-mode .bg-orb {
 .public-identity-toggle small {
   display: block;
   color: var(--text-soft);
-  line-height: 1.6;
+  line-height: 1.5;
 }
 
 .public-identity-note p {
   margin: 0;
+}
+
+.public-form-fields {
+  gap: 1.25rem;
+}
+
+.public-form .composer-preview-section {
+  gap: 1rem;
+  padding: 1.2rem;
+}
+
+.public-form .field-block {
+  gap: 0.7rem;
+  padding: 0.25rem 0;
+}
+
+.public-form .field-block textarea,
+.public-form .field-block input,
+.public-form .field-block select {
+  margin-top: 0.1rem;
+}
+
+.public-form .rating-picker {
+  gap: 0.55rem;
+  padding-top: 0.2rem;
+}
+
+.public-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 0.35rem;
 }
 
 @media (max-width: 860px) {
@@ -2899,6 +2971,14 @@ body.composer-mode .bg-orb {
   align-items: start;
 }
 
+.admin-console-layout {
+  grid-template-columns: minmax(0, 320px) minmax(0, 1fr);
+}
+
+.admin-console-layout .signal-detail-column {
+  display: none;
+}
+
 .signal-sidebar,
 .signal-inbox-column,
 .signal-detail-column {
@@ -3051,6 +3131,7 @@ body.composer-mode .bg-orb {
   gap: 0.42rem;
   border-radius: 14px;
   background: rgba(5, 19, 32, 0.48);
+  text-decoration: none;
   transition:
     border-color 160ms ease,
     background 160ms ease,
