@@ -19,6 +19,12 @@ interface ImportMetaEnv {
   readonly VITE_WALFORM_PACKAGE_ID?: string;
   readonly VITE_PACKAGE_ID?: string;
   readonly VITE_REGISTRY_ID?: string;
+  readonly VITE_ADMIN_CAP_ID?: string;
+  readonly VITE_OWNER_CAP_ID?: string;
+  readonly VITE_DEEPSIGNAL_PACKAGE_ID?: string;
+  readonly VITE_DEEPSIGNAL_REGISTRY_ID?: string;
+  readonly VITE_DEEPSIGNAL_ADMIN_CAP_ID?: string;
+  readonly VITE_DEEPSIGNAL_OWNER_CAP_ID?: string;
 }
 
 interface ImportMeta {

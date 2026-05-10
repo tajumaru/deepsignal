@@ -323,4 +323,89 @@ module deepsignal::access_control {
     ): bool {
         contains_entry(&registry.reviewers, wallet, cap_id)
     }
+
+    #[test_only]
+    public fun new_test_registry(
+        owner: address,
+        ctx: &mut sui::tx_context::TxContext,
+    ): (Registry, OwnerCap) {
+        let registry_uid = sui::object::new(ctx);
+        let registry_id = sui::object::uid_to_inner(&registry_uid);
+        let owner_cap_uid = sui::object::new(ctx);
+        let owner_cap_id = sui::object::uid_to_inner(&owner_cap_uid);
+
+        (
+            Registry {
+                id: registry_uid,
+                owner_address: owner,
+                owner_cap_id,
+                admins: vector[],
+                reviewers: vector[],
+            },
+            OwnerCap {
+                id: owner_cap_uid,
+                registry_id,
+            },
+        )
+    }
+
+    #[test_only]
+    public fun new_test_admin_cap(
+        owner_cap: &OwnerCap,
+        registry: &mut Registry,
+        recipient: address,
+        ctx: &mut sui::tx_context::TxContext,
+    ): AdminCap {
+        assert!(
+            owner_cap.registry_id == sui::object::id(registry),
+            E_OWNER_CAP_REGISTRY_MISMATCH
+        );
+        assert!(!contains_address(&registry.admins, recipient), E_ADMIN_ALREADY_EXISTS);
+
+        let admin_cap_uid = sui::object::new(ctx);
+        let admin_cap_id = sui::object::uid_to_inner(&admin_cap_uid);
+
+        vector::push_back(
+            &mut registry.admins,
+            AccessEntry {
+                address: recipient,
+                cap_id: admin_cap_id,
+            },
+        );
+
+        AdminCap {
+            id: admin_cap_uid,
+            registry_id: sui::object::id(registry),
+        }
+    }
+
+    #[test_only]
+    public fun destroy_test_registry(registry: Registry) {
+        let Registry {
+            id,
+            owner_address: _,
+            owner_cap_id: _,
+            admins: _,
+            reviewers: _,
+        } = registry;
+        sui::object::delete(id);
+    }
+
+    #[test_only]
+    public fun destroy_test_owner_cap(cap: OwnerCap) {
+        let OwnerCap {
+            id,
+            registry_id: _,
+        } = cap;
+        sui::object::delete(id);
+    }
+
+    #[test_only]
+    public fun destroy_test_admin_cap(cap: AdminCap) {
+        let AdminCap {
+            id,
+            registry_id: _,
+        } = cap;
+        sui::object::delete(id);
+    }
 }

@@ -32,7 +32,16 @@ export const ACCESS_CONTROL_REGISTRY_ID =
   import.meta.env.VITE_REGISTRY_ID ||
   import.meta.env.VITE_DEEPSIGNAL_REGISTRY_ID ||
   "";
+export const ACCESS_CONTROL_ADMIN_CAP_ID =
+  import.meta.env.VITE_ADMIN_CAP_ID ||
+  import.meta.env.VITE_DEEPSIGNAL_ADMIN_CAP_ID ||
+  "";
+export const ACCESS_CONTROL_OWNER_CAP_ID =
+  import.meta.env.VITE_OWNER_CAP_ID ||
+  import.meta.env.VITE_DEEPSIGNAL_OWNER_CAP_ID ||
+  "";
 export const ACCESS_CONTROL_MODULE = "access_control";
+export const PROJECT_REGISTRY_MODULE = "project_registry";
 export const ACCESS_CONTROL_OWNER_CAP_TYPE = ACCESS_CONTROL_PACKAGE_ID
   ? `${ACCESS_CONTROL_PACKAGE_ID}::${ACCESS_CONTROL_MODULE}::OwnerCap`
   : "";
@@ -41,4 +50,7 @@ export const ACCESS_CONTROL_ADMIN_CAP_TYPE = ACCESS_CONTROL_PACKAGE_ID
   : "";
 export const ACCESS_CONTROL_REVIEWER_CAP_TYPE = ACCESS_CONTROL_PACKAGE_ID
   ? `${ACCESS_CONTROL_PACKAGE_ID}::${ACCESS_CONTROL_MODULE}::ReviewerCap`
+  : "";
+export const PROJECT_OWNER_CAP_TYPE = ACCESS_CONTROL_PACKAGE_ID
+  ? `${ACCESS_CONTROL_PACKAGE_ID}::${PROJECT_REGISTRY_MODULE}::ProjectOwnerCap`
   : "";

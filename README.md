@@ -67,6 +67,8 @@ VITE_SUI_FULLNODE_URL=https://fullnode.testnet.sui.io:443
 VITE_WALFORM_PACKAGE_ID=
 VITE_PACKAGE_ID=
 VITE_REGISTRY_ID=
+VITE_ADMIN_CAP_ID=
+VITE_OWNER_CAP_ID=
 ```
 
 If `VITE_STORAGE_MODE` is not `walrus`, or the required Walrus URLs are missing, the app runs entirely on `localStorage`.
@@ -136,6 +138,35 @@ DeepSignal now includes a Move package for capability-based wallet access contro
 - `OwnerCap` and `AdminCap` holders can use admin surfaces
 - `ReviewerCap` holders can use review surfaces, but cannot use admin-only creation or destructive controls
 
+## Sui Project Registry extension
+
+The Move package now also includes `deepsignal::project_registry` so DeepSignal can manage Signals per project without placing sensitive payloads onchain.
+
+- `Project` is a shared object with `project_id`, `name`, `owner`, `admins`, `forms_count`, `signals_count`, and `created_at`
+- `ProjectOwnerCap` is minted per project creator and gates project-level admin management
+- `Form` lives under a project and stores only lightweight metadata such as `title`, `metadata_digest`, `created_at`, and `active`
+- `SignalReceipt` stores `project_id`, `form_id`, `walrus_blob_id`, `metadata_digest`, `encrypted`, optional `seal_identity`, `created_at`, optional submitter identity, and compact status
+- form config, submission body, screenshots, and attachments remain off-chain in Walrus / local fallback storage
+- the onchain receipt exists for authorization, existence proofs, and future Seal policy expansion
+
+### Project registry permissions
+
+- project creation is not public: it requires an active global `OwnerCap` or `AdminCap` from `deepsignal::access_control`
+- project owners can add and remove project admins through `ProjectOwnerCap`
+- project owners and project admins can create forms and update signal status
+- signal registration is public, but only succeeds while the target form is active
+- this keeps `/f/:formId`, roadmap views, and restore flows wallet-optional at the product layer while preserving an onchain policy anchor when a submitter does use Sui
+
+### Project registry events
+
+- `ProjectCreated`
+- `AdminAdded`
+- `AdminRemoved`
+- `FormCreated`
+- `FormStatusChanged`
+- `SignalRegistered`
+- `SignalStatusUpdated`
+
 ### Frontend env
 
 Set these client env vars after publish:
@@ -145,7 +176,11 @@ VITE_SUI_NETWORK=testnet
 VITE_RPC_URL=https://fullnode.testnet.sui.io:443
 VITE_PACKAGE_ID=0x...
 VITE_REGISTRY_ID=0x...
+VITE_ADMIN_CAP_ID=
+VITE_OWNER_CAP_ID=
 ```
+
+`VITE_ADMIN_CAP_ID` and `VITE_OWNER_CAP_ID` are optional helper envs for operator tooling and manual transaction flows. The normal app path still discovers active cap objects from the connected wallet.
 
 When `VITE_PACKAGE_ID` is configured, the frontend checks the connected wallet's owned objects and matches them against the shared `Registry` for:
 
@@ -184,6 +219,7 @@ sui client publish --gas-budget 50000000
 Notes:
 
 - `Move.toml` currently pins the `Sui` framework to `testnet`; if you publish against a different network or CLI snapshot, align the dependency revision first.
+- `deepsignal::project_registry` builds on the same package and global access registry, so the older access-control-only deployment flow stays compatible.
 - public responder routes such as `/f/:formId`, roadmap pages, and manifest restore remain wallet-optional.
 - storage and Seal behavior are unchanged; access control only gates creator/reviewer surfaces.
 
@@ -424,5 +460,5 @@ In real Seal mode, payloads are saved as JSON envelopes that include the base64-
 - Local fallback data is browser-local and not shared across devices.
 - Walrus delete is currently index cleanup only; uploaded blobs are not garbage-collected by this MVP.
 - frontend wallet-gating is MVP protection
-- production should verify ownership with a Sui Move Form Registry
+- production should keep evolving around the Move Project / Form / SignalReceipt registry model
 - real Seal decrypt requires wallet/session approval
