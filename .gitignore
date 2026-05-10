@@ -3,3 +3,4 @@
 /dist
 /node_modules
 /move/deepsignal_access/build
+/build-move.ps1
