@@ -114,11 +114,11 @@ Current behavior:
 
 - creators can connect a Wallet Standard compatible Sui wallet
 - the connected address is shown in the header and dashboard
-- the form builder includes a `Create on Sui` toggle
 - new form creation now requires a connected wallet
 - every newly created form stores `ownerAddress` from the connected wallet
-- the `Create on Sui` toggle remains as a `Sui registry integration placeholder`
 - public respondents do not need a wallet to submit
+- when a public respondent has a connected wallet, the app attempts wallet signature plus `SignalReceipt` registration after the Walrus save
+- when a public respondent declines signature or has no wallet, the submission still saves through the normal Walrus / local fallback path
 - when a public respondent has a connected wallet, its address is stored as `contributorId`
 - when no wallet is available, submissions get an `anonymous-xxxxxx` contributor id
 
@@ -156,6 +156,13 @@ The Move package now also includes `deepsignal::project_registry` so DeepSignal 
 - project owners and project admins can create forms and update signal status
 - signal registration is public, but only succeeds while the target form is active
 - this keeps `/f/:formId`, roadmap views, and restore flows wallet-optional at the product layer while preserving an onchain policy anchor when a submitter does use Sui
+
+### Frontend registry flow
+
+- `/admin` now includes a project selector plus project creation UI for owner/admin wallets
+- `/admin/forms/new` reuses the selected project and attempts `create_form` after the form definition is saved
+- DeepSignal still saves the form and submission payloads through the storage adapter first, then performs best-effort onchain registration
+- if `create_project`, `create_form`, `register_signal`, or `update_signal_status` fails, the existing Walrus / local fallback flow remains the source of truth for app continuity
 
 ### Project registry events
 

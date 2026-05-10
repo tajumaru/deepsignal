@@ -186,6 +186,20 @@ export function normalizeSubmission(raw: Submission | (Record<string, unknown> &
     githubPrUrl: typeof raw.githubPrUrl === "string" ? raw.githubPrUrl : undefined,
     isEncrypted: Boolean(raw.isEncrypted),
     encryptedBlobId: typeof raw.encryptedBlobId === "string" ? raw.encryptedBlobId : undefined,
+    receiptBlobId: typeof raw.receiptBlobId === "string" ? raw.receiptBlobId : undefined,
+    sealIdentity: typeof raw.sealIdentity === "string" ? raw.sealIdentity : undefined,
+    onchainSignalId:
+      typeof raw.onchainSignalId === "number"
+        ? raw.onchainSignalId
+        : typeof raw.onchainSignalId === "string"
+          ? Number(raw.onchainSignalId)
+          : undefined,
+    signalReceiptMetadataDigest:
+      typeof raw.signalReceiptMetadataDigest === "string" ? raw.signalReceiptMetadataDigest : undefined,
+    onchainStatus:
+      raw.onchainStatus === "new" || raw.onchainStatus === "triaged" || raw.onchainStatus === "archived"
+        ? raw.onchainStatus
+        : undefined,
     subjectPreview: typeof raw.subjectPreview === "string" ? raw.subjectPreview : undefined,
     ratingValue:
       typeof raw.ratingValue === "number"
@@ -208,6 +222,15 @@ export function normalizeForm(raw: FormSchema | (Record<string, unknown> & { id:
     sections: Array.isArray(raw.sections) ? (raw.sections as FormSection[]) : [],
     purpose: normalizeFormPurpose(raw.purpose),
     createdAt: typeof raw.createdAt === "string" ? raw.createdAt : new Date(0).toISOString(),
+    projectId: typeof raw.projectId === "string" ? raw.projectId : undefined,
+    projectName: typeof raw.projectName === "string" ? raw.projectName : undefined,
+    onchainFormId:
+      typeof raw.onchainFormId === "number"
+        ? raw.onchainFormId
+        : typeof raw.onchainFormId === "string"
+          ? Number(raw.onchainFormId)
+          : undefined,
+    formMetadataDigest: typeof raw.formMetadataDigest === "string" ? raw.formMetadataDigest : undefined,
   } satisfies FormSchema;
 }
 

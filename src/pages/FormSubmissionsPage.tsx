@@ -1,4 +1,4 @@
-import { useCurrentAccount } from "@mysten/dapp-kit";
+import { useCurrentAccount, useSignAndExecuteTransaction } from "@mysten/dapp-kit";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { AdminAccessGate } from "../components/AdminAccessGate";
@@ -12,6 +12,10 @@ import { getSealRuntimeStatus } from "../crypto/cryptoFactory";
 import { useI18n } from "../i18n";
 import { getReviewAccessState, getRoleLabel } from "../lib/adminAccess";
 import { exportSubmissionJson, exportSubmissionsCsv, exportSummaryJson } from "../lib/export";
+import {
+  triageStatusToOnchainStatus,
+  updateSignalStatusOnChain,
+} from "../lib/projectRegistry";
 import {
   getSignalPreview,
   getSignalSubject,
@@ -76,6 +80,7 @@ function matchesStream(submission: Submission, streamId: StreamId) {
 export function FormSubmissionsPage() {
   const { t } = useI18n();
   const account = useCurrentAccount();
+  const updateSignalStatusTx = useSignAndExecuteTransaction();
   const { capabilityProfile, isLoadingAccess } = useAccessControl(account?.address);
   const { formId = "", submissionId = "" } = useParams();
   const sealRuntime = getSealRuntimeStatus();
@@ -179,6 +184,7 @@ export function FormSubmissionsPage() {
       ...nextSubmission,
       updatedAt: new Date().toISOString(),
     });
+    const previousSubmission = submissions.find((submission) => submission.id === normalized.id) ?? null;
     applySubmissionUpdate(normalized);
     setSelectedSignalId(normalized.id);
     setSaveState("saving");
@@ -186,6 +192,39 @@ export function FormSubmissionsPage() {
     const runSave = async () => {
       try {
         await storageAdapter.updateSubmission(normalized);
+        const shouldSyncOnchain =
+          form?.projectId &&
+          typeof normalized.onchainSignalId === "number" &&
+          (
+            previousSubmission?.triageStatus !== normalized.triageStatus ||
+            previousSubmission?.status !== normalized.status
+          );
+
+        if (shouldSyncOnchain) {
+          try {
+            const projectId = form?.projectId;
+            const signalId = normalized.onchainSignalId;
+            if (!projectId || typeof signalId !== "number") {
+              throw new Error("Project registry ids are missing for this signal.");
+            }
+            const tx = updateSignalStatusOnChain({
+              projectId,
+              signalId,
+              status: triageStatusToOnchainStatus(normalized.triageStatus, normalized.status),
+            });
+            await updateSignalStatusTx.mutateAsync({ transaction: tx });
+            normalized.onchainStatus = triageStatusToOnchainStatus(normalized.triageStatus, normalized.status);
+            applySubmissionUpdate(normalized);
+            await storageAdapter.updateSubmission(normalized);
+          } catch (chainError) {
+            console.warn("update_signal_status failed, keeping local triage state", chainError);
+            setSaveError(
+              chainError instanceof Error
+                ? `Saved locally. Project status sync skipped: ${chainError.message}`
+                : "Saved locally. Project status sync skipped.",
+            );
+          }
+        }
         setSaveState("saved");
       } catch (error) {
         setSaveState("error");
@@ -879,6 +918,19 @@ export function FormSubmissionsPage() {
                     </div>
                     {showMetadata ? (
                       <div className="metadata-list">
+                        <SignalMetaRow label="Project" type="registry" value={form.projectId} emptyLabel={t("notAvailable")} />
+                        {typeof form.onchainFormId === "number" ? (
+                          <div className="metadata-row">
+                            <span>Registry Form ID</span>
+                            <strong>{form.onchainFormId}</strong>
+                          </div>
+                        ) : null}
+                        {typeof selectedSubmission.onchainSignalId === "number" ? (
+                          <div className="metadata-row">
+                            <span>Signal Receipt</span>
+                            <strong>{selectedSubmission.onchainSignalId}</strong>
+                          </div>
+                        ) : null}
                         <SignalMetaRow label={t("formBlobId")} type="blob" value={form.blobId} emptyLabel={t("notAvailable")}>
                           {!isLocalFallbackBlob(form.blobId) ? (
                             <BlobLink blobId={form.blobId} label={t("verifyOnWalrus")} />
@@ -897,6 +949,13 @@ export function FormSubmissionsPage() {
                             />
                           ) : null}
                         </SignalMetaRow>
+                        <SignalMetaRow label="Seal Identity" type="seal" value={selectedSubmission.sealIdentity} emptyLabel={t("notAvailable")} />
+                        <SignalMetaRow
+                          label="Receipt Metadata Digest"
+                          type="registry"
+                          value={selectedSubmission.signalReceiptMetadataDigest}
+                          emptyLabel={t("notAvailable")}
+                        />
                         <div className="metadata-row signal-meta-row">
                           <span>{t("attachmentBlobIds")}</span>
                           <div className="stack signal-meta-row-value">
@@ -926,6 +985,10 @@ export function FormSubmissionsPage() {
                         <div className="metadata-row">
                           <span>{t("sealModeLabel")}</span>
                           <strong>{sealRuntime.isFallback ? "fallback" : sealRuntime.activeMode}</strong>
+                        </div>
+                        <div className="metadata-row">
+                          <span>Project status sync</span>
+                          <strong>{selectedSubmission.onchainStatus ?? "offchain only"}</strong>
                         </div>
                       </div>
                     ) : null}

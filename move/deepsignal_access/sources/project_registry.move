@@ -226,13 +226,12 @@ module deepsignal::project_registry {
         0
     }
 
-    #[allow(lint(self_transfer))]
     public fun create_project(
         admin_cap: &access_control::AdminCap,
         registry: &access_control::Registry,
         name: String,
         ctx: &mut sui::tx_context::TxContext,
-    ) {
+    ): ProjectOwnerCap {
         let sender = sui::tx_context::sender(ctx);
         assert_global_admin(registry, admin_cap, sender);
 
@@ -249,16 +248,15 @@ module deepsignal::project_registry {
         });
 
         sui::transfer::share_object(project);
-        sui::transfer::public_transfer(owner_cap, sender);
+        owner_cap
     }
 
-    #[allow(lint(self_transfer))]
     public fun create_project_by_owner(
         owner_cap: &access_control::OwnerCap,
         registry: &access_control::Registry,
         name: String,
         ctx: &mut sui::tx_context::TxContext,
-    ) {
+    ): ProjectOwnerCap {
         let sender = sui::tx_context::sender(ctx);
         assert_global_owner(registry, owner_cap, sender);
 
@@ -275,7 +273,7 @@ module deepsignal::project_registry {
         });
 
         sui::transfer::share_object(project);
-        sui::transfer::public_transfer(project_owner_cap, sender);
+        project_owner_cap
     }
 
     public fun add_admin(

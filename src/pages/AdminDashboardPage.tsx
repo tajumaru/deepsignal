@@ -1,4 +1,4 @@
-import { useCurrentAccount } from "@mysten/dapp-kit";
+import { useCurrentAccount, useSignAndExecuteTransaction, useSuiClient } from "@mysten/dapp-kit";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { AdminAccessGate } from "../components/AdminAccessGate";
@@ -11,7 +11,19 @@ import { SignalClusterPanel } from "../components/SignalClusterPanel";
 import { SignalMetaChip, SignalMetaRow } from "../components/SignalMetaChip";
 import { getSealRuntimeStatus } from "../crypto/cryptoFactory";
 import { useAccessControl } from "../hooks/useAccessControl";
+import { useProjectRegistry } from "../hooks/useProjectRegistry";
 import { useI18n } from "../i18n";
+import {
+  createProject,
+  getSelectedProjectId,
+  isProjectObjectType,
+  isProjectOwnerCapType,
+  parseProjectIdFromOwnerCapFields,
+  parseSuiObjectData,
+  parseProjectSummary,
+  saveRecentProject,
+  setSelectedProjectId,
+} from "../lib/projectRegistry";
 import {
   canAdmin,
   canReviewForm,
@@ -78,11 +90,14 @@ function matchesStream(record: SignalRecord, streamId: StreamId) {
 export function AdminDashboardPage() {
   const { t } = useI18n();
   const account = useCurrentAccount();
+  const suiClient = useSuiClient();
   const {
     capabilityProfile,
     isPending: isLoadingCapabilities,
     isLoadingAccess,
   } = useAccessControl(account?.address);
+  const { projects, refetch: refetchProjects } = useProjectRegistry(account?.address);
+  const createProjectTx = useSignAndExecuteTransaction();
   const sealRuntime = getSealRuntimeStatus();
   const storageRuntime = getStorageRuntimeStatus();
   const [forms, setForms] = useState<FormWithCount[]>([]);
@@ -106,8 +121,13 @@ export function AdminDashboardPage() {
   const [beaconFormId, setBeaconFormId] = useState<string | null>(null);
   const [nodeSearch, setNodeSearch] = useState("");
   const [toast, setToast] = useState<{ tone: "success" | "error"; message: string } | null>(null);
+  const [selectedProjectId, setSelectedProjectIdState] = useState(() => getSelectedProjectId());
+  const [manualProjectId, setManualProjectId] = useState("");
+  const [projectCreateName, setProjectCreateName] = useState("");
+  const [projectState, setProjectState] = useState("");
   const saveQueueRef = useRef(Promise.resolve());
   const hasAdminAccess = canAdmin(capabilityProfile);
+  const selectedProject = projects.find((project) => project.objectId === selectedProjectId) ?? null;
   const accessState = getAdminSurfaceAccessState(
     "reviewer",
     account?.address,
@@ -125,6 +145,118 @@ export function AdminDashboardPage() {
     const timer = window.setTimeout(() => setToast(null), 3200);
     return () => window.clearTimeout(timer);
   }, [toast]);
+
+  useEffect(() => {
+    if (selectedProjectId) {
+      setSelectedProjectId(selectedProjectId);
+      return;
+    }
+    if (projects[0]?.objectId) {
+      setSelectedProjectIdState(projects[0].objectId);
+      setSelectedProjectId(projects[0].objectId);
+    }
+  }, [projects, selectedProjectId]);
+
+  async function hydrateProject(projectId: string) {
+    const response = await suiClient.getObject({
+      id: projectId,
+      options: {
+        showType: true,
+        showContent: true,
+      },
+    });
+    const parsed = parseSuiObjectData(response);
+    if (!parsed) {
+      throw new Error("Project object was not found on Sui.");
+    }
+
+    if (isProjectOwnerCapType(parsed.type)) {
+      const linkedProjectId = parseProjectIdFromOwnerCapFields(parsed.fields);
+      if (!linkedProjectId) {
+        throw new Error("Project owner cap is missing its linked project id.");
+      }
+      return hydrateProject(linkedProjectId);
+    }
+
+    if (!isProjectObjectType(parsed.type)) {
+      throw new Error("That object is not a DeepSignal project or project owner cap.");
+    }
+
+    const summary = parseProjectSummary(parsed.objectId, parsed.fields);
+    if (!summary) {
+      throw new Error("Project exists on Sui, but its fields could not be parsed.");
+    }
+    saveRecentProject(summary);
+    return summary;
+  }
+
+  async function connectManualProject() {
+    const nextProjectId = manualProjectId.trim();
+    if (!nextProjectId) {
+      setProjectState("Enter a project object id.");
+      return;
+    }
+    try {
+      setProjectState("Loading project...");
+      const project = await hydrateProject(nextProjectId);
+      setSelectedProjectIdState(project.objectId);
+      setSelectedProjectId(project.objectId);
+      setManualProjectId("");
+      setProjectState(`Connected to ${project.name}.`);
+    } catch (projectError) {
+      setProjectState(projectError instanceof Error ? projectError.message : "Failed to load project.");
+    }
+  }
+
+  async function handleCreateProject() {
+    if (!hasAdminAccess) {
+      setProjectState("OwnerCap or AdminCap is required to create a project.");
+      return;
+    }
+
+    const role = capabilityProfile.ownerCapIds[0] ? "owner" : "admin";
+    const capId = capabilityProfile.ownerCapIds[0] ?? capabilityProfile.adminCapIds[0] ?? "";
+    if (!capId) {
+      setProjectState("No active OwnerCap or AdminCap object was found in the connected wallet.");
+      return;
+    }
+    if (!projectCreateName.trim()) {
+      setProjectState("Enter a project name.");
+      return;
+    }
+
+    try {
+      setProjectState("Awaiting wallet approval...");
+      const tx = createProject({
+        name: projectCreateName.trim(),
+        capId,
+        role,
+        recipientAddress: account?.address ?? "",
+      });
+      const result = await createProjectTx.mutateAsync({ transaction: tx });
+      const confirmed = await suiClient.waitForTransaction({
+        digest: result.digest,
+        options: {
+          showEvents: true,
+        },
+      });
+      const projectCreatedEvent = (confirmed.events ?? []).find((event) =>
+        String(event.type ?? "").endsWith("::ProjectCreated"),
+      );
+      const projectId = String((projectCreatedEvent?.parsedJson as { project_id?: string } | undefined)?.project_id ?? "");
+      if (!projectId) {
+        throw new Error("Project was created, but the new project id could not be resolved.");
+      }
+      const project = await hydrateProject(projectId);
+      await refetchProjects();
+      setSelectedProjectIdState(project.objectId);
+      setSelectedProjectId(project.objectId);
+      setProjectCreateName("");
+      setProjectState(`Project ${project.name} is ready.`);
+    } catch (projectError) {
+      setProjectState(projectError instanceof Error ? projectError.message : "Failed to create project.");
+    }
+  }
 
   async function loadConsole(preferredSignalId?: string) {
     const allForms = await storageAdapter.listForms();
@@ -454,6 +586,144 @@ export function AdminDashboardPage() {
             manageHref="/admin/access"
           />
         ) : null}
+
+        <section className="panel glow-panel project-registry-panel">
+          <div className="section-row">
+            <div>
+              <p className="eyebrow">Project registry</p>
+              <h2>Signal routing</h2>
+            </div>
+            <div className="project-registry-status">
+              <span className="signal-chip signal-chip-accent">Encrypted Signal Inbox</span>
+              <span className="signal-chip">{selectedProject ? "Project selected" : "Local mode"}</span>
+            </div>
+          </div>
+
+          <div className="project-registry-stack">
+            <article className="project-active-card">
+              <div className="project-active-heading">
+                <div className="project-active-copy">
+                  <p className="eyebrow">Active project</p>
+                  <h3>{selectedProject ? selectedProject.name : "Walrus / local only"}</h3>
+                  <p className="muted">
+                    {selectedProject
+                      ? "New Signal Forms will be routed to the selected project."
+                      : "Leave routing unset when you want the existing Walrus / local flow without a project receipt."}
+                  </p>
+                </div>
+
+                <label className="field-block project-selector-field">
+                  <span className="eyebrow">Project selector</span>
+                  <select
+                    value={selectedProjectId}
+                    onChange={(event) => {
+                      setSelectedProjectIdState(event.target.value);
+                      setSelectedProjectId(event.target.value);
+                    }}
+                  >
+                    <option value="">Walrus / local only</option>
+                    {projects.map((project) => (
+                      <option key={project.objectId} value={project.objectId}>
+                        {project.name} ({project.formsCount} forms / {project.signalsCount} signals)
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+
+              <div className="project-active-stats">
+                <div className="project-registry-stat">
+                  <span>Project</span>
+                  <strong>{selectedProject ? selectedProject.name : "Local mode"}</strong>
+                </div>
+                <div className="project-registry-stat">
+                  <span>Forms</span>
+                  <strong>{selectedProject ? selectedProject.formsCount : "N/A"}</strong>
+                </div>
+                <div className="project-registry-stat">
+                  <span>Signals</span>
+                  <strong>{selectedProject ? selectedProject.signalsCount : "N/A"}</strong>
+                </div>
+                <div className="project-registry-stat">
+                  <span>Status</span>
+                  <strong>{selectedProject ? "Active / Selected" : "Walrus / Local"}</strong>
+                </div>
+              </div>
+            </article>
+
+            <article className="project-primary-panel">
+              <div>
+                <p className="eyebrow">Primary action</p>
+                <h3>Create Signal Form</h3>
+                <p className="muted">
+                  {selectedProject
+                    ? `Create the next Signal Form for ${selectedProject.name}.`
+                    : "Create a new Signal Form and keep routing in the current Walrus / local path."}
+                </p>
+              </div>
+              <Link className="primary-button" to="/admin/forms/new">
+                {selectedProject ? "Create form for this project" : t("createSignalForm")}
+              </Link>
+            </article>
+
+            <div className="project-registry-grid">
+              <article className="project-registry-subpanel">
+                <div className="project-panel-head">
+                  <div>
+                    <p className="eyebrow">Existing Project</p>
+                    <h3>Connect existing project</h3>
+                  </div>
+                  <span className="signal-chip">Project / OwnerCap</span>
+                </div>
+                <p className="muted">
+                  Attach the builder to an existing DeepSignal project by pasting a Project or ProjectOwnerCap object id.
+                </p>
+                <div className="inline-actions">
+                  <input
+                    value={manualProjectId}
+                    onChange={(event) => setManualProjectId(event.target.value)}
+                    placeholder="Project or ProjectOwnerCap object id"
+                  />
+                  <button type="button" className="ghost-button" onClick={() => void connectManualProject()}>
+                    Connect
+                  </button>
+                </div>
+              </article>
+
+              {hasAdminAccess ? (
+                <article className="project-registry-subpanel">
+                  <div className="project-panel-head">
+                    <div>
+                      <p className="eyebrow">Create New Project</p>
+                      <h3>Create project</h3>
+                    </div>
+                    <span className="signal-chip signal-chip-accent">Owner / Admin</span>
+                  </div>
+                  <p className="muted">
+                    Start a fresh project container for forms and signal routing, then make it the active destination.
+                  </p>
+                  <div className="inline-actions">
+                    <input
+                      value={projectCreateName}
+                      onChange={(event) => setProjectCreateName(event.target.value)}
+                      placeholder="New project name"
+                    />
+                    <button
+                      type="button"
+                      className="primary-button"
+                      onClick={() => void handleCreateProject()}
+                      disabled={createProjectTx.isPending}
+                    >
+                      {createProjectTx.isPending ? "Creating..." : "Create Project"}
+                    </button>
+                  </div>
+                </article>
+              ) : null}
+            </div>
+          </div>
+
+          {projectState ? <p className="muted">{projectState}</p> : null}
+        </section>
 
         <div className="mobile-console-banner">{t("adminDesktopNotice")}</div>
 
@@ -868,6 +1138,19 @@ export function AdminDashboardPage() {
                       </div>
                       {showMetadata ? (
                         <div className="metadata-list">
+                          <SignalMetaRow label="Project" type="registry" value={selectedRecord.form.projectId} emptyLabel={t("notAvailable")} />
+                          {typeof selectedRecord.form.onchainFormId === "number" ? (
+                            <div className="metadata-row">
+                              <span>Registry Form ID</span>
+                              <strong>{selectedRecord.form.onchainFormId}</strong>
+                            </div>
+                          ) : null}
+                          {typeof selectedRecord.submission.onchainSignalId === "number" ? (
+                            <div className="metadata-row">
+                              <span>Signal Receipt</span>
+                              <strong>{selectedRecord.submission.onchainSignalId}</strong>
+                            </div>
+                          ) : null}
                           <SignalMetaRow label={t("formBlobId")} type="blob" value={selectedRecord.form.blobId} emptyLabel={t("notAvailable")}>
                             {!isLocalFallbackBlob(selectedRecord.form.blobId) ? (
                               <BlobLink
@@ -892,6 +1175,13 @@ export function AdminDashboardPage() {
                               />
                             ) : null}
                           </SignalMetaRow>
+                          <SignalMetaRow label="Seal Identity" type="seal" value={selectedRecord.submission.sealIdentity} emptyLabel={t("notAvailable")} />
+                          <SignalMetaRow
+                            label="Receipt Metadata Digest"
+                            type="registry"
+                            value={selectedRecord.submission.signalReceiptMetadataDigest}
+                            emptyLabel={t("notAvailable")}
+                          />
                           <div className="metadata-row signal-meta-row">
                             <span>{t("attachmentBlobIds")}</span>
                             <div className="stack signal-meta-row-value">
@@ -930,6 +1220,10 @@ export function AdminDashboardPage() {
                             <strong>
                               {getWalletAccessLabel(selectedRecord.form, account?.address)}
                             </strong>
+                          </div>
+                          <div className="metadata-row">
+                            <span>Project status sync</span>
+                            <strong>{selectedRecord.submission.onchainStatus ?? "offchain only"}</strong>
                           </div>
                         </div>
                       ) : null}

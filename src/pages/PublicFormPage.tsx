@@ -1,6 +1,8 @@
 import {
   useCurrentAccount,
+  useSignAndExecuteTransaction,
   useSignPersonalMessage,
+  useSuiClient,
 } from "@mysten/dapp-kit";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
@@ -8,8 +10,13 @@ import { BlobLink } from "../components/BlobLink";
 import { DynamicField } from "../components/DynamicField";
 import { EmptyState } from "../components/EmptyState";
 import { SignalMetaChip, SignalMetaRow } from "../components/SignalMetaChip";
+import { parseRealSealEnvelope } from "../crypto/sealPayload";
 import { useI18n } from "../i18n";
 import { getSubmissionCategoryFromPurpose } from "../lib/formTemplates";
+import {
+  createMetadataDigest,
+  registerSignalReceipt,
+} from "../lib/projectRegistry";
 import { getStorageDetailLabels, isLocalFallbackBlob } from "../lib/signalInbox";
 import { createEmptyAnswer, normalizeForm, saveSubmissionWithEncryption, storageAdapter } from "../lib/storage";
 import { makeId } from "../lib/utils";
@@ -26,7 +33,9 @@ const MAX_VIDEO_BYTES = 25 * 1024 * 1024;
 export function PublicFormPage() {
   const { t } = useI18n();
   const account = useCurrentAccount();
+  const suiClient = useSuiClient();
   const signPersonalMessage = useSignPersonalMessage();
+  const registerSignalTx = useSignAndExecuteTransaction();
   const { formId = "" } = useParams();
   const [searchParams] = useSearchParams();
   const [form, setForm] = useState<FormSchema | null>(null);
@@ -36,6 +45,7 @@ export function PublicFormPage() {
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState<Submission | null>(null);
   const [submitError, setSubmitError] = useState("");
+  const [submitNotice, setSubmitNotice] = useState("");
   const manifestBlobId = searchParams.get("manifest") ?? "";
 
   useEffect(() => {
@@ -144,11 +154,8 @@ export function PublicFormPage() {
 
     setSubmitting(true);
     setSubmitError("");
+    setSubmitNotice("");
     try {
-      if (!account) {
-        throw new Error("Connect a Sui wallet to sign and submit this signal.");
-      }
-
       const attachments: SubmissionAttachment[] = [];
       const plainAnswers: PublicAnswers = {};
 
@@ -157,7 +164,7 @@ export function PublicFormPage() {
         if (attachmentFields.has(field.id)) {
           const file = value instanceof File ? value : null;
           if (file) {
-            const upload = await localStorageAdapter.uploadFile(file);
+            const upload = await storageAdapter.uploadFile(file);
             attachments.push({
               fieldId: field.id,
               type: field.type === "video" ? "video" : "image",
@@ -175,17 +182,31 @@ export function PublicFormPage() {
       }
 
       const signedAt = new Date().toISOString();
-      const signPayload = {
-        app: "DeepSignal",
-        action: "submit_signal",
-        formId: form.id,
-        submittedAt: signedAt,
-        fieldCount: form.fields.length,
-      };
-      const signedMessage = new TextEncoder().encode(JSON.stringify(signPayload));
-      const signatureResult = await signPersonalMessage.mutateAsync({
-        message: signedMessage,
-      });
+      let signatureResult:
+        | {
+            signature: string;
+            bytes: string;
+          }
+        | undefined;
+
+      if (account) {
+        try {
+          const signPayload = {
+            app: "DeepSignal",
+            action: "submit_signal",
+            formId: form.id,
+            submittedAt: signedAt,
+            fieldCount: form.fields.length,
+          };
+          const signedMessage = new TextEncoder().encode(JSON.stringify(signPayload));
+          signatureResult = await signPersonalMessage.mutateAsync({
+            message: signedMessage,
+          });
+        } catch (signatureError) {
+          console.warn("Submission signature skipped", signatureError);
+          setSubmitNotice("Signal saved without a wallet signature.");
+        }
+      }
 
       const submission: Submission = {
         id: makeId("submission"),
@@ -198,21 +219,91 @@ export function PublicFormPage() {
         triageStatus: "new",
         tags: [],
         notes: "",
-        contributorId: account.address,
-        responderSignature: signatureResult.signature,
-        responderSignedBytes: signatureResult.bytes,
-        responderSignedAt: signedAt,
+        contributorId: account?.address ?? `anonymous-${makeId("responder").slice(-6)}`,
+        responderSignature: signatureResult?.signature,
+        responderSignedBytes: signatureResult?.bytes,
+        responderSignedAt: signatureResult ? signedAt : undefined,
         isEncrypted: Boolean(form.encryptSubmissions),
         createdAt: signedAt,
         updatedAt: signedAt,
       };
 
-      const result = await saveSubmissionWithEncryption(form, submission, undefined, localStorageAdapter);
-      setSubmitted({
+      const result = await saveSubmissionWithEncryption(form, submission, undefined, storageAdapter);
+      const encryptedBlobId = "encryptedBlobId" in result ? result.encryptedBlobId : undefined;
+      const receiptBlobId = encryptedBlobId ?? result.blobId;
+      const signalReceiptMetadataDigest = await createMetadataDigest({
+        localSubmissionId: submission.id,
+        formId: form.id,
+        walrusBlobId: receiptBlobId ?? null,
+        encrypted: Boolean(encryptedBlobId),
+        attachmentBlobIds: attachments.map((attachment) => attachment.blobId),
+        contributorId: submission.contributorId,
+        createdAt: signedAt,
+      });
+      let onchainSignalId: number | undefined;
+      let sealIdentity: string | undefined;
+      let onchainStatus: Submission["onchainStatus"];
+
+      if (encryptedBlobId) {
+        const encryptedPayload = await storageAdapter.readEncryptedPayload(encryptedBlobId);
+        const parsedEnvelope = encryptedPayload ? parseRealSealEnvelope(encryptedPayload) : null;
+        if (parsedEnvelope) {
+          sealIdentity = `seal:${parsedEnvelope.packageId}:${parsedEnvelope.objectId}`;
+        }
+      }
+
+      if (
+        account &&
+        form.projectId &&
+        typeof form.onchainFormId === "number" &&
+        receiptBlobId &&
+        !isLocalFallbackBlob(receiptBlobId)
+      ) {
+        try {
+          const tx = registerSignalReceipt({
+            projectId: form.projectId,
+            formId: form.onchainFormId,
+            walrusBlobId: receiptBlobId,
+            metadataDigest: signalReceiptMetadataDigest,
+            encrypted: Boolean(encryptedBlobId),
+            sealIdentity,
+          });
+          const txResult = await registerSignalTx.mutateAsync({ transaction: tx });
+          const confirmed = await suiClient.waitForTransaction({
+            digest: txResult.digest,
+            options: {
+              showEvents: true,
+            },
+          });
+          const signalRegisteredEvent = (confirmed.events ?? []).find((event) =>
+            String(event.type ?? "").endsWith("::SignalRegistered"),
+          );
+          const rawSignalId = (signalRegisteredEvent?.parsedJson as { signal_id?: string | number } | undefined)
+            ?.signal_id;
+          const parsedSignalId = typeof rawSignalId === "number" ? rawSignalId : Number(rawSignalId ?? NaN);
+          if (Number.isFinite(parsedSignalId)) {
+            onchainSignalId = parsedSignalId;
+            onchainStatus = "new";
+            setSubmitNotice("Signal saved and linked to the project registry.");
+          }
+        } catch (chainError) {
+          console.warn("register_signal failed, keeping Walrus/local submission only", chainError);
+          setSubmitNotice("Signal saved, but project receipt registration was skipped.");
+        }
+      }
+
+      const savedSubmission = {
         ...submission,
         blobId: result.blobId,
-        encryptedBlobId: "encryptedBlobId" in result ? result.encryptedBlobId : undefined,
-      });
+        encryptedBlobId,
+        receiptBlobId,
+        sealIdentity,
+        onchainSignalId,
+        signalReceiptMetadataDigest,
+        onchainStatus,
+      } satisfies Submission;
+      await storageAdapter.updateSubmission(savedSubmission);
+      setSubmitted(savedSubmission);
     } catch (error) {
       setSubmitError(error instanceof Error ? error.message : t("submitFailed"));
     } finally {
@@ -241,6 +332,7 @@ export function PublicFormPage() {
         <h1>Signal Captured</h1>
         <p>{isLocalFallbackBlob(submitted.encryptedBlobId ?? submitted.blobId) ? "Stored locally only" : "Stored on Walrus"}</p>
         <p>{t("thanksForFeedback")}</p>
+        {submitNotice ? <p className="muted">{submitNotice}</p> : null}
         <div className="success-copy">
           {storageLabels.map((label) => (
             <p key={label}>{label}</p>
@@ -248,12 +340,19 @@ export function PublicFormPage() {
         </div>
         <section className="answer-card">
           <div className="metadata-list">
+            {submitted.onchainSignalId !== undefined ? (
+              <div className="metadata-row">
+                <span>Signal Receipt</span>
+                <strong>{submitted.onchainSignalId}</strong>
+              </div>
+            ) : null}
             <SignalMetaRow label="Submission Blob ID" type="blob" value={submitted.blobId}>
               <BlobLink blobId={submitted.blobId} label="Verify on Walrus" />
             </SignalMetaRow>
             <SignalMetaRow label="Encrypted Payload Blob ID" type="seal" value={submitted.encryptedBlobId}>
               <BlobLink blobId={submitted.encryptedBlobId} label="Verify on Walrus" />
             </SignalMetaRow>
+            <SignalMetaRow label="Seal Identity" type="seal" value={submitted.sealIdentity} />
             <div className="metadata-row signal-meta-row">
               <span>Attachment Blob IDs</span>
               <div className="stack signal-meta-row-value">
@@ -285,7 +384,7 @@ export function PublicFormPage() {
       <p className="lede">{form.description || t("publicDefaultBody")}</p>
       <div className="info-banner">
         <strong>Responder wallet</strong>
-        <span>{account ? "Connected and ready to sign" : "Connect wallet before submitting"}</span>
+        <span>{account ? "Connected and ready to sign" : "Optional. Submit anonymously or connect to attach a receipt."}</span>
       </div>
       <div className="info-banner">
         <strong>{t("encryptSubmissions")}</strong>

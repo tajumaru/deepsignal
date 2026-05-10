@@ -1,4 +1,4 @@
-import { useCurrentAccount, useCurrentWallet } from "@mysten/dapp-kit";
+import { useCurrentAccount, useCurrentWallet, useSignAndExecuteTransaction, useSuiClient } from "@mysten/dapp-kit";
 import {
   startTransition,
   useEffect,
@@ -20,6 +20,7 @@ import { LivePreview } from "../components/formBuilder/LivePreview";
 import { SectionEditor } from "../components/formBuilder/SectionEditor";
 import { TemplatePicker } from "../components/formBuilder/TemplatePicker";
 import { useAccessControl } from "../hooks/useAccessControl";
+import { useProjectRegistry } from "../hooks/useProjectRegistry";
 import { useI18n } from "../i18n";
 import { canAdmin, getAdminSurfaceAccessState, getRoleLabel } from "../lib/adminAccess";
 import {
@@ -30,6 +31,19 @@ import {
   normalizeFormPurpose,
 } from "../lib/formTemplates";
 import { getPublicFormPath } from "../lib/publicLinks";
+import {
+  createFormOnChain,
+  createMetadataDigest,
+  createProject,
+  getSelectedProjectId,
+  isProjectObjectType,
+  isProjectOwnerCapType,
+  parseProjectIdFromOwnerCapFields,
+  parseSuiObjectData,
+  parseProjectSummary,
+  saveRecentProject,
+  setSelectedProjectId,
+} from "../lib/projectRegistry";
 import { isLocalFallbackBlob } from "../lib/proof";
 import { storageAdapter } from "../lib/storage";
 import { shortAddress, SUI_NETWORK, WALRUS_UPLOAD_RELAY_URL } from "../lib/sui";
@@ -141,7 +155,11 @@ export function FormBuilderPage() {
   const { t } = useI18n();
   const account = useCurrentAccount();
   const { currentWallet, isConnected } = useCurrentWallet();
+  const suiClient = useSuiClient();
   const { capabilityProfile, isLoadingAccess } = useAccessControl(account?.address);
+  const { projects, refetch: refetchProjects } = useProjectRegistry(account?.address);
+  const createProjectTx = useSignAndExecuteTransaction();
+  const createFormTx = useSignAndExecuteTransaction();
   const navigate = useNavigate();
   const labelRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const fieldCardRefs = useRef<Record<string, HTMLElement | null>>({});
@@ -153,7 +171,6 @@ export function FormBuilderPage() {
   const [fields, setFields] = useState<FormField[]>(initialFields);
   const [sections, setSections] = useState<FormSection[]>([]);
   const [purpose, setPurpose] = useState<FormPurpose>(initialTemplate.purpose);
-  const [createOnSui] = useState(false);
   const [encryptSubmissions, setEncryptSubmissions] = useState(true);
   const [savedForm, setSavedForm] = useState<FormSchema | null>(null);
   const [error, setError] = useState("");
@@ -174,6 +191,12 @@ export function FormBuilderPage() {
   const [mobilePane, setMobilePane] = useState<MobileBuilderPane>("editor");
   const [fieldTypePickerOpen, setFieldTypePickerOpen] = useState(false);
   const [storageRuntime, setStorageRuntime] = useState(() => getStorageRuntimeStatus());
+  const [selectedProjectId, setSelectedProjectIdState] = useState(() => getSelectedProjectId());
+  const [manualProjectId, setManualProjectId] = useState("");
+  const [projectCreateName, setProjectCreateName] = useState("");
+  const [projectState, setProjectState] = useState("");
+
+  const createOnSui = Boolean(selectedProjectId);
 
   const draftSnapshot = useMemo(
     () => serializeDraft(title, description, fields, purpose, createOnSui, encryptSubmissions, sections),
@@ -185,6 +208,7 @@ export function FormBuilderPage() {
   const hasQuestions = fields.length > 0;
   const isReadyToPublish = hasValidTitle && hasQuestions;
   const hasAdminAccess = canAdmin(capabilityProfile);
+  const selectedProject = projects.find((project) => project.objectId === selectedProjectId) ?? null;
   const accessState = getAdminSurfaceAccessState(
     "admin",
     account?.address,
@@ -197,6 +221,17 @@ export function FormBuilderPage() {
       unsubscribe();
     };
   }, []);
+
+  useEffect(() => {
+    if (selectedProjectId) {
+      setSelectedProjectId(selectedProjectId);
+      return;
+    }
+    if (projects[0]?.objectId) {
+      setSelectedProjectIdState(projects[0].objectId);
+      setSelectedProjectId(projects[0].objectId);
+    }
+  }, [projects, selectedProjectId]);
 
   const steps = [
     { key: "template", title: "Step 1", description: "Pick a starting point" },
@@ -480,6 +515,107 @@ export function FormBuilderPage() {
     moveStep(1);
   }
 
+  async function hydrateProject(projectId: string) {
+    const response = await suiClient.getObject({
+      id: projectId,
+      options: {
+        showType: true,
+        showContent: true,
+      },
+    });
+    const parsed = parseSuiObjectData(response);
+    if (!parsed) {
+      throw new Error("Project object was not found on Sui.");
+    }
+
+    if (isProjectOwnerCapType(parsed.type)) {
+      const linkedProjectId = parseProjectIdFromOwnerCapFields(parsed.fields);
+      if (!linkedProjectId) {
+        throw new Error("Project owner cap is missing its linked project id.");
+      }
+      return hydrateProject(linkedProjectId);
+    }
+
+    if (!isProjectObjectType(parsed.type)) {
+      throw new Error("That object is not a DeepSignal project or project owner cap.");
+    }
+
+    const summary = parseProjectSummary(parsed.objectId, parsed.fields);
+    if (!summary) {
+      throw new Error("Project exists on Sui, but its fields could not be parsed.");
+    }
+    saveRecentProject(summary);
+    return summary;
+  }
+
+  async function connectManualProject() {
+    const nextProjectId = manualProjectId.trim();
+    if (!nextProjectId) {
+      setProjectState("Enter a project object id.");
+      return;
+    }
+    try {
+      setProjectState("Loading project...");
+      const project = await hydrateProject(nextProjectId);
+      setSelectedProjectIdState(project.objectId);
+      setSelectedProjectId(project.objectId);
+      setManualProjectId("");
+      setProjectState(`Connected to ${project.name}.`);
+    } catch (projectError) {
+      setProjectState(projectError instanceof Error ? projectError.message : "Failed to load project.");
+    }
+  }
+
+  async function handleCreateProject() {
+    if (!hasAdminAccess) {
+      setProjectState("OwnerCap or AdminCap is required to create a project.");
+      return;
+    }
+
+    const role = capabilityProfile.ownerCapIds[0] ? "owner" : "admin";
+    const capId = capabilityProfile.ownerCapIds[0] ?? capabilityProfile.adminCapIds[0] ?? "";
+    if (!capId) {
+      setProjectState("No active OwnerCap or AdminCap object was found in the connected wallet.");
+      return;
+    }
+    if (!projectCreateName.trim()) {
+      setProjectState("Enter a project name.");
+      return;
+    }
+
+    try {
+      setProjectState("Awaiting wallet approval...");
+      const tx = createProject({
+        name: projectCreateName.trim(),
+        capId,
+        role,
+        recipientAddress: account?.address ?? "",
+      });
+      const result = await createProjectTx.mutateAsync({ transaction: tx });
+      const confirmed = await suiClient.waitForTransaction({
+        digest: result.digest,
+        options: {
+          showEvents: true,
+        },
+      });
+      const projectCreatedEvent = (confirmed.events ?? []).find((event) =>
+        String(event.type ?? "").endsWith("::ProjectCreated"),
+      );
+      const projectId = String((projectCreatedEvent?.parsedJson as { project_id?: string } | undefined)?.project_id ?? "");
+      if (!projectId) {
+        throw new Error("Project was created, but the new project id could not be resolved.");
+      }
+      const project = await hydrateProject(projectId);
+      await refetchProjects();
+      setSelectedProjectIdState(project.objectId);
+      setSelectedProjectId(project.objectId);
+      setProjectCreateName("");
+      setProjectState(`Project ${project.name} is ready.`);
+    } catch (projectError) {
+      setProjectState(projectError instanceof Error ? projectError.message : "Failed to create project.");
+    }
+  }
+
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
     setError("");
@@ -533,13 +669,29 @@ export function FormBuilderPage() {
       createdAt: new Date().toISOString(),
       ownerAddress: account.address,
       isOnchain: false,
+      projectId: selectedProject?.objectId,
+      projectName: selectedProject?.name,
       encryptSubmissions,
     };
 
     try {
+      const formMetadataDigest = await createMetadataDigest({
+        localFormId: form.id,
+        title: form.title,
+        description: form.description,
+        purpose: form.purpose,
+        fieldCount: form.fields.length,
+        sectionCount: form.sections?.length ?? 0,
+        encryptSubmissions: form.encryptSubmissions,
+        ownerAddress: form.ownerAddress,
+        projectId: form.projectId ?? null,
+      });
       setPublishStageIndex(0);
       // Start Walrus write immediately so wallet approval stays tied to the user's click.
-      const saveFormPromise = storageAdapter.saveForm(form);
+      const saveFormPromise = storageAdapter.saveForm({
+        ...form,
+        formMetadataDigest,
+      });
       await wait(120);
       if (publishRunRef.current !== runId) {
         return;
@@ -563,7 +715,52 @@ export function FormBuilderPage() {
         return;
       }
       setPublishStageIndex(4);
-      setSavedForm({ ...form, blobId, manifestBlobId });
+      let onchainFormId: number | undefined;
+      let isOnchain = false;
+
+      if (selectedProject?.objectId) {
+        try {
+          const tx = createFormOnChain({
+            projectId: selectedProject.objectId,
+            title: form.title,
+            metadataDigest: formMetadataDigest,
+          });
+          const result = await createFormTx.mutateAsync({ transaction: tx });
+          const confirmed = await suiClient.waitForTransaction({
+            digest: result.digest,
+            options: {
+              showEvents: true,
+            },
+          });
+          const formCreatedEvent = (confirmed.events ?? []).find((chainEvent) =>
+            String(chainEvent.type ?? "").endsWith("::FormCreated"),
+          );
+          const rawFormId = (formCreatedEvent?.parsedJson as { form_id?: string | number } | undefined)?.form_id;
+          const parsedFormId = typeof rawFormId === "number" ? rawFormId : Number(rawFormId ?? NaN);
+          if (Number.isFinite(parsedFormId)) {
+            onchainFormId = parsedFormId;
+            isOnchain = true;
+          }
+        } catch (chainError) {
+          console.warn("create_form failed, keeping local/Walrus form only", chainError);
+          setProjectState(
+            chainError instanceof Error
+              ? `Project link skipped: ${chainError.message}`
+              : "Project link skipped. The form is still available through local/Walrus storage.",
+          );
+        }
+      }
+
+      const finalForm = {
+        ...form,
+        blobId,
+        manifestBlobId,
+        formMetadataDigest,
+        onchainFormId,
+        isOnchain,
+      } satisfies FormSchema;
+      await storageAdapter.saveForm(finalForm);
+      setSavedForm(finalForm);
       setLastSavedSnapshot(draftSnapshot);
       setError("");
     } catch (submitError) {
@@ -1026,6 +1223,65 @@ export function FormBuilderPage() {
                       <section className="panel composer-settings-card">
                         <div className="section-row">
                           <div>
+                            <p className="eyebrow">Project routing</p>
+                            <h3>Signal registry</h3>
+                          </div>
+                        </div>
+                        <label>
+                          <span>Selected project</span>
+                          <select
+                            value={selectedProjectId}
+                            onChange={(event) => {
+                              setSelectedProjectIdState(event.target.value);
+                              setSelectedProjectId(event.target.value);
+                            }}
+                          >
+                            <option value="">Walrus / local only</option>
+                            {projects.map((project) => (
+                              <option key={project.objectId} value={project.objectId}>
+                                {project.name} ({project.formsCount} forms)
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <div className="inline-actions">
+                          <input
+                            value={manualProjectId}
+                            onChange={(event) => setManualProjectId(event.target.value)}
+                            placeholder="Project or ProjectOwnerCap object id"
+                          />
+                          <button type="button" className="ghost-button" onClick={() => void connectManualProject()}>
+                            Connect
+                          </button>
+                        </div>
+                        {hasAdminAccess ? (
+                          <div className="inline-actions">
+                            <input
+                              value={projectCreateName}
+                              onChange={(event) => setProjectCreateName(event.target.value)}
+                              placeholder="New project name"
+                            />
+                            <button
+                              type="button"
+                              className="ghost-button"
+                              onClick={() => void handleCreateProject()}
+                              disabled={createProjectTx.isPending}
+                            >
+                              {createProjectTx.isPending ? "Creating..." : "Create Project"}
+                            </button>
+                          </div>
+                        ) : null}
+                        <p className="muted">
+                          {selectedProject
+                            ? `Forms from this screen will try to register under ${selectedProject.name}.`
+                            : "Leave this empty to keep the existing Walrus / local form flow only."}
+                        </p>
+                        {projectState ? <p className="muted">{projectState}</p> : null}
+                      </section>
+
+                      <section className="panel composer-settings-card">
+                        <div className="section-row">
+                          <div>
                             <p className="eyebrow">{t("sealEyebrow")}</p>
                             <h3>{t("encryptSubmissions")}</h3>
                           </div>
@@ -1087,6 +1343,15 @@ export function FormBuilderPage() {
                           {t("adminPage")}: <Link to={`/dashboard/forms/${savedForm.id}`}>{t("adminPageCta")}</Link>
                         </p>
                         <div className="metadata-list">
+                          {savedForm.projectId ? (
+                            <SignalMetaRow label="Project" type="registry" value={savedForm.projectId} />
+                          ) : null}
+                          {typeof savedForm.onchainFormId === "number" ? (
+                            <div className="metadata-row">
+                              <span>Registry Form ID</span>
+                              <strong>{savedForm.onchainFormId}</strong>
+                            </div>
+                          ) : null}
                           <SignalMetaRow label={t("walrusBlobId")} type="blob" value={savedForm.blobId}>
                             <BlobLink blobId={savedForm.blobId} />
                           </SignalMetaRow>

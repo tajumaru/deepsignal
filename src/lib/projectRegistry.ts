@@ -11,10 +11,36 @@ import {
 export type GlobalProjectCreatorRole = "owner" | "admin";
 export type OnchainSignalStatus = "new" | "triaged" | "archived";
 
+const RECENT_PROJECTS_KEY = "deepsignal.projectRegistry.recentProjects";
+const SELECTED_PROJECT_ID_KEY = "deepsignal.projectRegistry.selectedProjectId";
+
+export interface ProjectSummary {
+  objectId: string;
+  name: string;
+  owner: string;
+  admins: string[];
+  formsCount: number;
+  signalsCount: number;
+  createdAt?: string;
+  ownedOwnerCapId?: string;
+}
+
+export interface ProjectOwnerCapSummary {
+  objectId: string;
+  projectId: string;
+}
+
+export interface ParsedSuiObjectData {
+  objectId: string;
+  type: string;
+  fields: Record<string, unknown> | null;
+}
+
 export interface CreateProjectArgs {
   name: string;
   capId: string;
   role: GlobalProjectCreatorRole;
+  recipientAddress: string;
   registryId?: string;
   packageId?: string;
   tx?: Transaction;
@@ -82,6 +108,239 @@ function createOrReuseTransaction(tx?: Transaction) {
   return tx ?? new Transaction();
 }
 
+function normalizeObjectId(value?: string | null) {
+  if (!value) {
+    return "";
+  }
+  const trimmed = value.trim().toLowerCase();
+  if (!trimmed) {
+    return "";
+  }
+  return trimmed.startsWith("0x") ? trimmed : `0x${trimmed}`;
+}
+
+function readNestedValue(source: unknown): unknown {
+  if (!source || typeof source !== "object") {
+    return source;
+  }
+
+  if (Array.isArray(source)) {
+    return source;
+  }
+
+  const record = source as Record<string, unknown>;
+  if (typeof record.id === "string") {
+    return record.id;
+  }
+  if (typeof record.bytes === "string") {
+    return record.bytes;
+  }
+  if ("fields" in record) {
+    return readNestedValue(record.fields);
+  }
+  if ("value" in record) {
+    return readNestedValue(record.value);
+  }
+
+  return source;
+}
+
+function readObjectId(source: unknown) {
+  const value = readNestedValue(source);
+  return typeof value === "string" ? normalizeObjectId(value) : "";
+}
+
+function readString(source: unknown) {
+  const value = readNestedValue(source);
+  return typeof value === "string" ? value : "";
+}
+
+function readAddressVector(source: unknown) {
+  if (Array.isArray(source)) {
+    return source.map((item) => (typeof item === "string" ? normalizeObjectId(item) : "")).filter(Boolean);
+  }
+  if (!source || typeof source !== "object") {
+    return [];
+  }
+
+  const record = source as Record<string, unknown>;
+  if (Array.isArray(record.contents)) {
+    return readAddressVector(record.contents);
+  }
+  if (record.fields && typeof record.fields === "object") {
+    return readAddressVector(record.fields);
+  }
+  return [];
+}
+
+function readU64(source: unknown) {
+  if (typeof source === "number" && Number.isFinite(source)) {
+    return source;
+  }
+  if (typeof source === "string" && source.trim()) {
+    const parsed = Number(source);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+  if (source && typeof source === "object") {
+    const nested = readNestedValue(source);
+    return readU64(nested);
+  }
+  return 0;
+}
+
+function stableSerialize(value: unknown): string {
+  if (Array.isArray(value)) {
+    return `[${value.map((item) => stableSerialize(item)).join(",")}]`;
+  }
+  if (value && typeof value === "object") {
+    const entries = Object.entries(value as Record<string, unknown>)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, nested]) => `${JSON.stringify(key)}:${stableSerialize(nested)}`);
+    return `{${entries.join(",")}}`;
+  }
+  return JSON.stringify(value);
+}
+
+export async function createMetadataDigest(value: unknown) {
+  const payload = new TextEncoder().encode(stableSerialize(value));
+  const digest = await crypto.subtle.digest("SHA-256", payload);
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+export function parseProjectOwnerCap(entry: { data?: { objectId?: string; content?: { fields?: Record<string, unknown> } | null } | null }) {
+  const objectId = normalizeObjectId(entry.data?.objectId);
+  const projectId = readObjectId(entry.data?.content?.fields?.project_id);
+  if (!objectId || !projectId) {
+    return null;
+  }
+
+  return {
+    objectId,
+    projectId,
+  } satisfies ProjectOwnerCapSummary;
+}
+
+export function parseProjectSummary(
+  objectId: string,
+  fields?: Record<string, unknown> | null,
+  ownedOwnerCapId?: string,
+) {
+  if (!fields) {
+    return null;
+  }
+
+  const name = readString(fields.name);
+  const owner = normalizeObjectId(typeof fields.owner === "string" ? fields.owner : readObjectId(fields.owner));
+  if (!objectId || !name || !owner) {
+    return null;
+  }
+
+  const createdAtMs = readU64(fields.created_at);
+  return {
+    objectId: normalizeObjectId(objectId),
+    name,
+    owner,
+    admins: readAddressVector(fields.admins),
+    formsCount: readU64(fields.forms_count),
+    signalsCount: readU64(fields.signals_count),
+    createdAt: createdAtMs ? new Date(createdAtMs).toISOString() : undefined,
+    ownedOwnerCapId: normalizeObjectId(ownedOwnerCapId),
+  } satisfies ProjectSummary;
+}
+
+export function parseSuiObjectData(response: unknown) {
+  const data =
+    response && typeof response === "object" && "data" in (response as Record<string, unknown>)
+      ? ((response as { data?: unknown }).data as Record<string, unknown> | null | undefined)
+      : null;
+  const content =
+    data && typeof data.content === "object"
+      ? (data.content as Record<string, unknown>)
+      : null;
+  const fields =
+    content && content.fields && typeof content.fields === "object" && !Array.isArray(content.fields)
+      ? (content.fields as Record<string, unknown>)
+      : null;
+  const objectId = normalizeObjectId(typeof data?.objectId === "string" ? data.objectId : "");
+  const type = typeof data?.type === "string" ? data.type : "";
+  if (!objectId) {
+    return null;
+  }
+  return {
+    objectId,
+    type,
+    fields,
+  } satisfies ParsedSuiObjectData;
+}
+
+export function isProjectObjectType(type?: string | null) {
+  return String(type ?? "").endsWith("::Project");
+}
+
+export function isProjectOwnerCapType(type?: string | null) {
+  return String(type ?? "").endsWith("::ProjectOwnerCap");
+}
+
+export function parseProjectIdFromOwnerCapFields(fields?: Record<string, unknown> | null) {
+  return readObjectId(fields?.project_id);
+}
+
+export function loadRecentProjects() {
+  if (typeof window === "undefined") {
+    return [] as ProjectSummary[];
+  }
+  try {
+    const raw = window.localStorage.getItem(RECENT_PROJECTS_KEY);
+    if (!raw) {
+      return [];
+    }
+    const parsed = JSON.parse(raw) as ProjectSummary[];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+export function saveRecentProject(project: ProjectSummary) {
+  if (typeof window === "undefined") {
+    return;
+  }
+  const next = [
+    project,
+    ...loadRecentProjects().filter((entry) => entry.objectId !== project.objectId),
+  ].slice(0, 12);
+  window.localStorage.setItem(RECENT_PROJECTS_KEY, JSON.stringify(next));
+}
+
+export function getSelectedProjectId() {
+  if (typeof window === "undefined") {
+    return "";
+  }
+  return normalizeObjectId(window.localStorage.getItem(SELECTED_PROJECT_ID_KEY));
+}
+
+export function setSelectedProjectId(projectId: string) {
+  if (typeof window === "undefined") {
+    return;
+  }
+  const normalized = normalizeObjectId(projectId);
+  if (!normalized) {
+    window.localStorage.removeItem(SELECTED_PROJECT_ID_KEY);
+    return;
+  }
+  window.localStorage.setItem(SELECTED_PROJECT_ID_KEY, normalized);
+}
+
+export function triageStatusToOnchainStatus(
+  triageStatus: string,
+  inboxStatus?: string,
+): OnchainSignalStatus {
+  if (inboxStatus === "archived") {
+    return "archived";
+  }
+  return triageStatus === "new" ? "new" : "triaged";
+}
+
 export function onchainSignalStatusToCode(status: OnchainSignalStatus | number) {
   if (typeof status === "number") {
     return status;
@@ -108,7 +367,7 @@ export function createProject(args: CreateProjectArgs) {
       ? `${packageId}::${PROJECT_REGISTRY_MODULE}::create_project_by_owner`
       : `${packageId}::${PROJECT_REGISTRY_MODULE}::create_project`;
 
-  tx.moveCall({
+  const ownerCap = tx.moveCall({
     target,
     arguments: [
       tx.object(requireValue(args.capId, args.role === "owner" ? "OWNER_CAP_ID" : "ADMIN_CAP_ID")),
@@ -116,6 +375,7 @@ export function createProject(args: CreateProjectArgs) {
       tx.pure.string(requireValue(args.name, "Project name")),
     ],
   });
+  tx.transferObjects([ownerCap], tx.pure.address(normalizeSuiAddress(requireValue(args.recipientAddress, "Recipient address"))));
 
   return tx;
 }

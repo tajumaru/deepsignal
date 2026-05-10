@@ -50,6 +50,10 @@ export interface FormSchema {
   ownerAddress?: string;
   isOnchain?: boolean;
   encryptSubmissions?: boolean;
+  projectId?: string;
+  projectName?: string;
+  onchainFormId?: number;
+  formMetadataDigest?: string;
   blobId?: string;
   manifestBlobId?: string;
 }
@@ -102,6 +106,11 @@ export interface Submission {
   githubPrUrl?: string;
   isEncrypted: boolean;
   encryptedBlobId?: string;
+  receiptBlobId?: string;
+  sealIdentity?: string;
+  onchainSignalId?: number;
+  signalReceiptMetadataDigest?: string;
+  onchainStatus?: "new" | "triaged" | "archived";
   subjectPreview?: string;
   ratingValue?: number;
   createdAt: string;
