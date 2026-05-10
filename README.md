@@ -117,10 +117,11 @@ Current behavior:
 - new form creation now requires a connected wallet
 - every newly created form stores `ownerAddress` from the connected wallet
 - public respondents do not need a wallet to submit
-- when a public respondent has a connected wallet, the app attempts wallet signature plus `SignalReceipt` registration after the Walrus save
-- when a public respondent declines signature or has no wallet, the submission still saves through the normal Walrus / local fallback path
-- when a public respondent has a connected wallet, its address is stored as `contributorId`
-- when no wallet is available, submissions get an `anonymous-xxxxxx` contributor id
+- public forms can be opened without connecting a wallet, and wallet connect stays optional on the responder flow
+- when a public respondent sends with wallet context, the app creates a responder session signature once and reuses it until expiry
+- public form submit no longer registers a `SignalReceipt` onchain during responder submission
+- responder identity is stored separately as `respondentMeta`, with optional wallet address, chain, session id, and anonymous flag
+- when a respondent chooses anonymous mode, operator views hide the wallet address and show `Anonymous respondent`
 
 ## Sui Move access control
 
@@ -153,6 +154,7 @@ The Move package now also includes `deepsignal::project_registry` so DeepSignal 
 
 - project creation is not public: it requires an active global `OwnerCap` or `AdminCap` from `deepsignal::access_control`
 - project owners can add and remove project admins through `ProjectOwnerCap`
+- project owners can delete a project through `ProjectOwnerCap`, but this UI currently only exposes deletion for empty projects so stored forms and fallback data are not orphaned
 - project owners and project admins can create forms and update signal status
 - signal registration is public, but only succeeds while the target form is active
 - this keeps `/f/:formId`, roadmap views, and restore flows wallet-optional at the product layer while preserving an onchain policy anchor when a submitter does use Sui
@@ -160,6 +162,7 @@ The Move package now also includes `deepsignal::project_registry` so DeepSignal 
 ### Frontend registry flow
 
 - `/admin` now includes a project selector plus project creation UI for owner/admin wallets
+- `/admin` also exposes a guarded delete action for the selected project when the connected wallet owns that project and it has no linked forms or signals
 - `/admin/forms/new` reuses the selected project and attempts `create_form` after the form definition is saved
 - DeepSignal still saves the form and submission payloads through the storage adapter first, then performs best-effort onchain registration
 - if `create_project`, `create_form`, `register_signal`, or `update_signal_status` fails, the existing Walrus / local fallback flow remains the source of truth for app continuity
@@ -167,6 +170,7 @@ The Move package now also includes `deepsignal::project_registry` so DeepSignal 
 ### Project registry events
 
 - `ProjectCreated`
+- `ProjectDeleted`
 - `AdminAdded`
 - `AdminRemoved`
 - `FormCreated`
@@ -353,8 +357,8 @@ The actual form and submission payloads stay in Walrus blobs, and sensitive payl
 ### Recovery flow
 
 - On form creation, the app stores the form blob, writes an initial manifest blob, and caches the latest `manifestBlobId` locally.
-- On each submission save or submission update, the app writes a new immutable manifest blob and updates the local latest-manifest pointer.
-- Opening `/m/:manifestBlobId` reads the manifest from Walrus, reloads the form blob plus referenced submission blobs, rebuilds the browser cache, and redirects to `/dashboard/forms/:formId`.
+- On each submission save or submission update, the app writes a new immutable submission bundle blob that carries the latest manifest plus the changed submission, then updates the local latest-manifest pointer.
+- Opening `/m/:manifestBlobId` reads the manifest from Walrus, reloads the form blob plus referenced submission blobs or submission bundles, rebuilds the browser cache, and redirects to `/dashboard/forms/:formId`.
 
 ### localStorage is cache only
 

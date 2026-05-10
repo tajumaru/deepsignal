@@ -2376,6 +2376,106 @@ body.composer-mode .bg-orb {
   border-radius: 18px;
 }
 
+.public-identity-card {
+  display: grid;
+  gap: 1.1rem;
+  padding: 1.15rem 1.2rem;
+}
+
+.public-identity-topline {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(280px, 0.85fr);
+  gap: 1rem;
+  align-items: start;
+}
+
+.public-identity-copy {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.public-identity-copy h3 {
+  margin: 0;
+}
+
+.public-identity-wallet {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.public-identity-wallet .wallet-connect-shell {
+  width: min(100%, 320px);
+}
+
+.public-identity-wallet .wallet-sync-button {
+  width: 100%;
+}
+
+.public-identity-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(260px, 0.8fr);
+  gap: 0.9rem;
+}
+
+.public-identity-mode,
+.public-identity-note {
+  display: grid;
+  gap: 0.65rem;
+  padding: 0.95rem 1rem;
+  border-radius: 16px;
+  border: 1px solid rgba(116, 226, 255, 0.12);
+  background: rgba(4, 18, 31, 0.56);
+}
+
+.public-identity-label {
+  color: var(--text-soft);
+  font-size: 0.74rem;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+}
+
+.public-identity-toggle {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.8rem;
+}
+
+.public-identity-toggle input {
+  width: auto;
+  margin-top: 0.25rem;
+}
+
+.public-identity-toggle strong,
+.public-identity-note strong {
+  display: block;
+  margin-bottom: 0.2rem;
+}
+
+.public-identity-toggle small {
+  display: block;
+  color: var(--text-soft);
+  line-height: 1.6;
+}
+
+.public-identity-note p {
+  margin: 0;
+}
+
+@media (max-width: 860px) {
+  .public-identity-topline,
+  .public-identity-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .public-identity-wallet {
+    justify-content: stretch;
+  }
+
+  .public-identity-wallet .wallet-connect-shell {
+    width: 100%;
+  }
+}
+
 .demo-actions {
   justify-content: center;
   margin-top: 1rem;
@@ -2757,6 +2857,41 @@ body.composer-mode .bg-orb {
   color: #ffe3bf;
 }
 
+.inbox-overview-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.9rem;
+}
+
+.inbox-overview-card {
+  display: grid;
+  gap: 0.35rem;
+  min-width: 0;
+  padding: 1rem 1.05rem;
+  background:
+    radial-gradient(circle at top right, rgba(102, 227, 255, 0.12), transparent 34%),
+    linear-gradient(180deg, rgba(5, 21, 36, 0.82), rgba(4, 16, 28, 0.78));
+}
+
+.inbox-overview-card span {
+  color: #8eb0c2;
+  font-size: 0.74rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.inbox-overview-card strong {
+  min-width: 0;
+  color: #f2fdff;
+  font-size: 1.1rem;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.inbox-overview-card p {
+  margin: 0;
+}
+
 .signal-console-layout {
   display: grid;
   grid-template-columns: minmax(0, 320px) minmax(0, 1fr) minmax(0, 1.35fr);
@@ -2833,6 +2968,11 @@ body.composer-mode .bg-orb {
 .form-stream-item {
   display: grid;
   gap: 0.75rem;
+  transition:
+    border-color 160ms ease,
+    background 160ms ease,
+    transform 160ms ease,
+    box-shadow 160ms ease;
 }
 
 .form-stream-select {
@@ -2847,6 +2987,7 @@ body.composer-mode .bg-orb {
 .form-stream-actions {
   display: flex;
   gap: 0.5rem;
+  flex-wrap: wrap;
 }
 
 .form-stream-actions .ghost-button,
@@ -2882,6 +3023,21 @@ body.composer-mode .bg-orb {
   margin-bottom: 1rem;
 }
 
+.signal-column-copy,
+.signal-column-tools {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.signal-column-tools {
+  justify-items: end;
+  min-width: min(100%, 320px);
+}
+
+.signal-column-tools input {
+  width: min(100%, 320px);
+}
+
 .signal-list {
   max-height: calc(100vh - 240px);
   overflow: auto;
@@ -2909,6 +3065,12 @@ body.composer-mode .bg-orb {
 
 .signal-card.is-read {
   opacity: 0.9;
+}
+
+.signal-card.is-active {
+  border-color: rgba(135, 244, 255, 0.3);
+  background: rgba(7, 24, 39, 0.82);
+  box-shadow: 0 0 0 1px rgba(149, 242, 255, 0.08), 0 0 24px rgba(102, 227, 255, 0.06);
 }
 
 .signal-card-topline,
@@ -2954,6 +3116,15 @@ body.composer-mode .bg-orb {
 .signal-badge-row-compact .signal-chip,
 .signal-badge-row-compact .pill {
   font-size: 0.75rem;
+}
+
+.signal-summary-card-meta,
+.private-access-actions,
+.signal-detail-utility-actions {
+  display: flex;
+  gap: 0.6rem;
+  align-items: center;
+  flex-wrap: wrap;
 }
 
 .signal-card:hover,
@@ -3211,7 +3382,7 @@ body.composer-mode .bg-orb {
 
 .signal-detail-column {
   display: grid;
-  gap: 1rem;
+  gap: 0.75rem;
   align-content: start;
 }
 
@@ -3225,7 +3396,7 @@ body.composer-mode .bg-orb {
 .signal-detail-column .answer-card {
   border: 0;
   border-radius: 18px;
-  padding: 1rem;
+  padding: 0.9rem 1rem;
   background:
     linear-gradient(180deg, rgba(6, 22, 36, 0.78), rgba(4, 18, 31, 0.56));
   box-shadow:
@@ -3234,7 +3405,237 @@ body.composer-mode .bg-orb {
 }
 
 .signal-detail-column .answer-card + .answer-card {
-  margin-top: 0.1rem;
+  margin-top: 0;
+}
+
+.signal-detail-group-header {
+  display: grid;
+  gap: 0.2rem;
+  margin: 0.2rem 0 0.1rem;
+}
+
+.signal-detail-group {
+  display: contents;
+}
+
+.review-controls-section {
+  position: sticky;
+  top: 6.75rem;
+  z-index: 3;
+  display: grid;
+  gap: 0.7rem;
+  padding: 0.9rem 0.95rem;
+  background:
+    linear-gradient(180deg, rgba(7, 24, 39, 0.94), rgba(6, 20, 33, 0.92));
+  box-shadow:
+    inset 0 1px 0 rgba(199, 248, 255, 0.08),
+    inset 0 0 0 1px rgba(116, 226, 255, 0.1);
+}
+
+.signal-detail-hero h2,
+.private-access-card h3,
+.triage-compact-card h3,
+.collapsible-detail-card h3,
+.signal-detail-column .answer-card h3,
+.signal-detail-column .answer-card h4 {
+  margin-bottom: 0;
+}
+
+.signal-detail-hero .signal-detail-heading {
+  margin-bottom: 0.75rem;
+}
+
+.signal-detail-utility-actions .ghost-button,
+.private-access-actions .ghost-button {
+  min-height: 2.5rem;
+  padding: 0.55rem 0.9rem;
+}
+
+.private-access-card {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.private-access-inline {
+  margin-bottom: 0.5rem;
+}
+
+.private-access-copy {
+  gap: 0.25rem;
+}
+
+.triage-compact-card {
+  gap: 0.55rem;
+  background:
+    linear-gradient(180deg, rgba(5, 20, 32, 0.58), rgba(4, 16, 28, 0.42));
+}
+
+.ai-card {
+  position: relative;
+}
+
+.ai-summary-section {
+  display: grid;
+  gap: 0.75rem;
+  background:
+    linear-gradient(180deg, rgba(7, 26, 41, 0.7), rgba(4, 18, 31, 0.5));
+}
+
+.collapsible-detail-card {
+  display: grid;
+  gap: 0.75rem;
+  background:
+    linear-gradient(180deg, rgba(5, 19, 31, 0.54), rgba(4, 14, 25, 0.38));
+}
+
+.collapsible-detail-card summary {
+  cursor: pointer;
+  list-style: none;
+}
+
+.collapsible-detail-card summary::-webkit-details-marker {
+  display: none;
+}
+
+.collapsible-detail-card summary > span {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.collapsible-detail-card summary::after {
+  content: "+";
+  float: right;
+  color: #9fe8f7;
+}
+
+.collapsible-detail-card[open] summary::after {
+  content: "-";
+}
+
+.review-controls-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.8rem;
+}
+
+.review-action-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.7rem;
+  align-items: center;
+}
+
+.review-field-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.7rem;
+  align-items: end;
+}
+
+.review-select {
+  display: grid;
+  gap: 0.35rem;
+  min-width: 8.5rem;
+  flex: 0 1 10rem;
+}
+
+.review-select span {
+  font-size: 0.8rem;
+  color: var(--text-soft);
+}
+
+.review-select select {
+  min-width: 0;
+}
+
+.review-primary-button {
+  min-height: 2.5rem;
+  padding-inline: 1rem;
+}
+
+.review-secondary-button {
+  min-height: 2.5rem;
+  border-color: rgba(116, 226, 255, 0.12);
+  color: #cfe9f1;
+}
+
+.review-secondary-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.85rem;
+  align-items: center;
+  min-height: 1.5rem;
+}
+
+.review-inline-link {
+  color: var(--text-soft);
+  font-size: 0.92rem;
+  transition: color 140ms ease;
+}
+
+.review-inline-link:hover,
+.review-inline-link:focus-visible {
+  color: var(--accent-strong);
+}
+
+.review-helper-copy {
+  margin: 0;
+  font-size: 0.88rem;
+}
+
+.review-support-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.review-support-card {
+  display: grid;
+  gap: 0.75rem;
+  padding: 0.85rem 0.9rem;
+  border-radius: 16px;
+  background: rgba(4, 18, 30, 0.54);
+  box-shadow:
+    inset 0 1px 0 rgba(149, 242, 255, 0.06),
+    inset 0 0 0 1px rgba(116, 226, 255, 0.05);
+}
+
+.review-support-card textarea {
+  min-height: 7rem;
+}
+
+.review-tag-list {
+  gap: 0.55rem;
+}
+
+.original-signal-section {
+  display: grid;
+  gap: 0.9rem;
+  padding-top: 1rem;
+  background:
+    linear-gradient(180deg, rgba(7, 24, 38, 0.86), rgba(4, 17, 29, 0.68));
+}
+
+.original-signal-block {
+  display: grid;
+  gap: 0.75rem;
+  padding-top: 0.2rem;
+}
+
+.details-group-section {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.signal-detail-group-header-details {
+  margin-top: 0.4rem;
+}
+
+.tertiary-detail-section {
+  box-shadow:
+    inset 0 1px 0 rgba(149, 242, 255, 0.06),
+    inset 0 0 0 1px rgba(116, 226, 255, 0.06);
 }
 
 .node-directory-overlay {
@@ -3244,6 +3645,10 @@ body.composer-mode .bg-orb {
   display: grid;
   place-items: center;
   padding: 1.5rem;
+}
+
+.collapsible-detail-card[open] summary::after {
+  content: "-";
 }
 
 .node-directory-backdrop {
@@ -4063,6 +4468,10 @@ body.composer-mode .bg-orb {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .inbox-overview-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .project-registry-grid {
     grid-template-columns: 1fr;
   }
@@ -4071,6 +4480,10 @@ body.composer-mode .bg-orb {
   .workspace-primary-action {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .review-support-grid {
+    grid-template-columns: 1fr;
   }
 
 }
@@ -4178,6 +4591,7 @@ body.composer-mode .bg-orb {
   .project-active-heading,
   .project-panel-head,
   .project-primary-panel,
+  .signal-column-tools,
   .workspace-primary-actions,
   .workspace-hero-meta,
   .workspace-hero-main,
@@ -4206,6 +4620,10 @@ body.composer-mode .bg-orb {
   }
 
   .project-active-stats {
+    grid-template-columns: 1fr;
+  }
+
+  .inbox-overview-grid {
     grid-template-columns: 1fr;
   }
 
@@ -4350,6 +4768,7 @@ body.composer-mode .bg-orb {
   .inbox-shell-header,
   .inbox-header-actions,
   .signal-column-header,
+  .signal-column-tools,
   .signal-detail-heading,
   .metadata-row {
     display: grid;

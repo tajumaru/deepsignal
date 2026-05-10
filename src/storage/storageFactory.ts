@@ -1,4 +1,9 @@
 import { localStorageAdapter } from "./localStorageAdapter";
+import {
+  applyFormMetadataOverlay,
+  applyFormMetadataOverlays,
+  clearFormMetadataOverlay,
+} from "./formMetadataOverlay";
 import { walrusAdapter } from "./walrusAdapter";
 import type { FormSchema, StorageAdapter, Submission } from "../types";
 import { WALRUS_AGGREGATOR_URL, WALRUS_UPLOAD_RELAY_URL } from "../lib/sui";
@@ -7,6 +12,7 @@ type RuntimeMode = "walrus" | "local-fallback";
 type RuntimeStatus = { mode: RuntimeMode; notice: string | null };
 
 const listeners = new Set<() => void>();
+const WALRUS_READ_TIMEOUT_MS = 4000;
 const requireWalrus = String(import.meta.env.VITE_REQUIRE_WALRUS).toLowerCase() === "true";
 const walrusRequested = requireWalrus || import.meta.env.VITE_STORAGE_MODE === "walrus";
 const walrusWriteMode = String(import.meta.env.VITE_WALRUS_STORAGE_MODE || "uploadRelay").toLowerCase();
@@ -35,7 +41,14 @@ function emitStatus(next: Partial<RuntimeStatus>) {
 
 async function swallow<T>(task: () => Promise<T>, fallback: T): Promise<T> {
   try {
-    return await task();
+    return await Promise.race([
+      task(),
+      new Promise<T>((_, reject) => {
+        window.setTimeout(() => {
+          reject(new Error("Walrus read timed out."));
+        }, WALRUS_READ_TIMEOUT_MS);
+      }),
+    ]);
   } catch (error) {
     console.error(error);
     return fallback;
@@ -80,25 +93,27 @@ const hybridWalrusStorage: StorageAdapter = {
   async getForm(id) {
     const walrus = await swallow(() => walrusAdapter.getForm(id), null);
     if (walrus) {
-      return walrus;
+      return applyFormMetadataOverlay(walrus);
     }
-    return localStorageAdapter.getForm(id);
+    return applyFormMetadataOverlay(await localStorageAdapter.getForm(id));
   },
   async listForms() {
     const [walrusForms, localForms] = await Promise.all([
       swallow(() => walrusAdapter.listForms(), [] as FormSchema[]),
       localStorageAdapter.listForms(),
     ]);
-    return mergeById(walrusForms, localForms);
+    return applyFormMetadataOverlays(mergeById(walrusForms, localForms));
   },
   async deleteForm(id) {
     if (!walrusRequested) {
       await localStorageAdapter.deleteForm(id);
+      clearFormMetadataOverlay(id);
       return;
     }
     try {
       await walrusAdapter.deleteForm(id);
       await localStorageAdapter.deleteForm(id);
+      clearFormMetadataOverlay(id);
       emitStatus({ mode: "walrus", notice: null });
     } catch (error) {
       console.error(error);

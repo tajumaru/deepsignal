@@ -42,6 +42,7 @@ import { storageAdapter } from "../lib/storage";
 import { shortAddress, SUI_NETWORK, WALRUS_UPLOAD_RELAY_URL } from "../lib/sui";
 import { makeId } from "../lib/utils";
 import { getStorageRuntimeStatus, subscribeStorageRuntime } from "../storage/storageFactory";
+import { saveFormMetadataOverlay } from "../storage/formMetadataOverlay";
 import type { FieldType, FormField, FormPurpose, FormSchema, FormSection } from "../types";
 
 type PublishStageKey = "encoding" | "encrypting" | "sending" | "stored" | "registering" | "active";
@@ -663,7 +664,7 @@ export function FormBuilderPage() {
         onchainFormId,
         isOnchain,
       } satisfies FormSchema;
-      await storageAdapter.saveForm(finalForm);
+      saveFormMetadataOverlay(finalForm);
       if (publishRunRef.current !== runId) {
         return;
       }

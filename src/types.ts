@@ -79,11 +79,26 @@ export interface SubmissionAttachment {
   size: number;
 }
 
+export interface SubmissionPublicPayload {
+  answers?: Record<string, unknown>;
+  attachments?: SubmissionAttachment[];
+}
+
+export interface RespondentMeta {
+  walletAddress?: string;
+  chain: "sui";
+  sessionId?: string;
+  submittedAt: string;
+  isAnonymous: boolean;
+}
+
 export interface Submission {
   id: string;
   formId: string;
   answers: Record<string, unknown>;
   attachments: SubmissionAttachment[];
+  publicPayload?: SubmissionPublicPayload;
+  respondentMeta?: RespondentMeta;
   metadata?: Record<string, unknown>;
   category?: SubmissionCategory;
   aiSummary?: string;

@@ -108,6 +108,13 @@ module deepsignal::project_registry {
         actor: address,
     }
 
+    public struct ProjectDeleted has copy, drop {
+        project_id: sui::object::ID,
+        actor: address,
+        forms_count: u64,
+        signals_count: u64,
+    }
+
     fun create_project_internal(
         name: String,
         owner: address,
@@ -347,6 +354,25 @@ module deepsignal::project_registry {
         assert!(false, E_PROJECT_ADMIN_NOT_FOUND);
     }
 
+    public fun delete_project(
+        project: Project,
+        owner_cap: ProjectOwnerCap,
+        ctx: &mut sui::tx_context::TxContext,
+    ) {
+        let sender = sui::tx_context::sender(ctx);
+        assert_project_owner(&project, &owner_cap, sender);
+
+        sui::event::emit(ProjectDeleted {
+            project_id: project.project_id,
+            actor: sender,
+            forms_count: project.forms_count,
+            signals_count: project.signals_count,
+        });
+
+        destroy_project_owner_cap(owner_cap);
+        destroy_project(project);
+    }
+
     public fun create_form(
         project: &mut Project,
         title: String,
@@ -521,7 +547,6 @@ module deepsignal::project_registry {
         vector::borrow(&project.forms, index).active
     }
 
-    #[test_only]
     fun destroy_project(project: Project) {
         let Project {
             id,
@@ -538,7 +563,6 @@ module deepsignal::project_registry {
         sui::object::delete(id);
     }
 
-    #[test_only]
     fun destroy_project_owner_cap(cap: ProjectOwnerCap) {
         let ProjectOwnerCap {
             id,
@@ -814,6 +838,24 @@ module deepsignal::project_registry {
 
         destroy_project_owner_cap(project_owner_cap);
         destroy_project(project);
+        access_control::destroy_test_owner_cap(owner_cap);
+        access_control::destroy_test_registry(registry);
+    }
+
+    #[test]
+    fun owner_can_delete_project() {
+        let owner = @0xA;
+        let owner_ctx = &mut sui::tx_context::new_from_hint(owner, 3, 7, 1150, 0);
+        let (registry, owner_cap) = access_control::new_test_registry(owner, owner_ctx);
+        let (project, project_owner_cap) = create_project_internal(
+            std::string::utf8(b"alpha"),
+            owner,
+            1150,
+            owner_ctx,
+        );
+
+        delete_project(project, project_owner_cap, owner_ctx);
+
         access_control::destroy_test_owner_cap(owner_cap);
         access_control::destroy_test_registry(registry);
     }

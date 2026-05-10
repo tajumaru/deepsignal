@@ -1,4 +1,5 @@
 import type { FormSchema, Submission } from "../types";
+import { getSubmissionRespondentMeta } from "./respondentMeta";
 import { downloadTextFile, flattenAnswer } from "./utils";
 
 export function exportSubmissionJson(form: FormSchema, submission: Submission) {
@@ -18,6 +19,9 @@ export function exportSubmissionsCsv(form: FormSchema, submissions: Submission[]
     "priority",
     "signalValue",
     "contributorId",
+    "walletAddress",
+    "isAnonymous",
+    "chain",
     "tags",
     "notes",
     "githubIssueUrl",
@@ -26,6 +30,7 @@ export function exportSubmissionsCsv(form: FormSchema, submissions: Submission[]
   ];
 
   const rows = submissions.map((submission) => {
+    const respondentMeta = getSubmissionRespondentMeta(submission);
     const base = [
       submission.id,
       submission.createdAt,
@@ -34,6 +39,9 @@ export function exportSubmissionsCsv(form: FormSchema, submissions: Submission[]
       submission.priority,
       submission.signalValue ?? "",
       submission.contributorId ?? "",
+      respondentMeta.walletAddress ?? "",
+      respondentMeta.isAnonymous ? "yes" : "no",
+      respondentMeta.chain,
       submission.tags.join("|"),
       submission.notes,
       submission.githubIssueUrl ?? "",

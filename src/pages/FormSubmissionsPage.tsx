@@ -16,7 +16,9 @@ import { useAccessControl } from "../hooks/useAccessControl";
 import { getSealRuntimeStatus } from "../crypto/cryptoFactory";
 import { useI18n } from "../i18n";
 import { getReviewAccessState, getRoleLabel } from "../lib/adminAccess";
+import { getEncryptedPayloadAvailabilityLabel } from "../lib/encryptionDisplay";
 import { exportSubmissionJson, exportSubmissionsCsv, exportSummaryJson } from "../lib/export";
+import { getRespondentDisplayLabel, getSubmissionRespondentMeta } from "../lib/respondentMeta";
 import {
   triageStatusToOnchainStatus,
   updateSignalStatusOnChain,
@@ -202,13 +204,14 @@ export function FormSubmissionsPage() {
     const runSave = async () => {
       try {
         await storageAdapter.updateSubmission(normalized);
+        const nextOnchainStatus = triageStatusToOnchainStatus(normalized.triageStatus, normalized.status);
+        const previousOnchainStatus = previousSubmission
+          ? triageStatusToOnchainStatus(previousSubmission.triageStatus, previousSubmission.status)
+          : undefined;
         const shouldSyncOnchain =
           form?.projectId &&
           typeof normalized.onchainSignalId === "number" &&
-          (
-            previousSubmission?.triageStatus !== normalized.triageStatus ||
-            previousSubmission?.status !== normalized.status
-          );
+          previousOnchainStatus !== nextOnchainStatus;
 
         if (shouldSyncOnchain) {
           try {
@@ -220,10 +223,10 @@ export function FormSubmissionsPage() {
             const tx = updateSignalStatusOnChain({
               projectId,
               signalId,
-              status: triageStatusToOnchainStatus(normalized.triageStatus, normalized.status),
+              status: nextOnchainStatus,
             });
             await updateSignalStatusTx.mutateAsync({ transaction: tx });
-            normalized.onchainStatus = triageStatusToOnchainStatus(normalized.triageStatus, normalized.status);
+            normalized.onchainStatus = nextOnchainStatus;
             applySubmissionUpdate(normalized);
             await storageAdapter.updateSubmission(normalized);
           } catch (chainError) {
@@ -549,7 +552,11 @@ export function FormSubmissionsPage() {
                             Clustered
                           </span>
                         ) : null}
-                        {submission.contributorId ? <SignalMetaChip type="contributor" value={submission.contributorId} /> : <span className="signal-chip">Contributor Anonymous</span>}
+                        {getSubmissionRespondentMeta(submission).isAnonymous ? (
+                          <span className="signal-chip">Anonymous respondent</span>
+                        ) : (
+                          <SignalMetaChip type="contributor" value={getRespondentDisplayLabel(submission)} />
+                        )}
                         {typeof submission.signalValue === "number" ? (
                           <span className="signal-chip">Signal Value {submission.signalValue}/5</span>
                         ) : null}
@@ -924,9 +931,28 @@ export function FormSubmissionsPage() {
                   </section>
 
                   <section className="answer-card">
-                    <h3>Contributor Signal</h3>
+                    <h3>Respondent Meta</h3>
                     <div className="metadata-list">
-                      <SignalMetaRow label="Contributor" type="contributor" value={selectedSubmission.contributorId} />
+                      <div className="metadata-row">
+                        <span>Wallet</span>
+                        <strong>
+                          {getSubmissionRespondentMeta(selectedSubmission).isAnonymous
+                            ? "Anonymous respondent"
+                            : getSubmissionRespondentMeta(selectedSubmission).walletAddress ?? t("notAvailable")}
+                        </strong>
+                      </div>
+                      <div className="metadata-row">
+                        <span>Anonymous</span>
+                        <strong>{getSubmissionRespondentMeta(selectedSubmission).isAnonymous ? "Yes" : "No"}</strong>
+                      </div>
+                      <div className="metadata-row">
+                        <span>Submitted</span>
+                        <strong>{formatDate(getSubmissionRespondentMeta(selectedSubmission).submittedAt)}</strong>
+                      </div>
+                      <div className="metadata-row">
+                        <span>Chain</span>
+                        <strong>{getSubmissionRespondentMeta(selectedSubmission).chain}</strong>
+                      </div>
                     </div>
                   </section>
 
@@ -966,7 +992,12 @@ export function FormSubmissionsPage() {
                             <BlobLink blobId={selectedSubmission.blobId} label={t("verifyOnWalrus")} />
                           ) : null}
                         </SignalMetaRow>
-                        <SignalMetaRow label={t("encryptedPayloadBlobId")} type="seal" value={selectedSubmission.encryptedBlobId} emptyLabel={t("notAvailable")}>
+                        <SignalMetaRow
+                          label={t("encryptedPayloadBlobId")}
+                          type="seal"
+                          value={selectedSubmission.encryptedBlobId}
+                          emptyLabel={getEncryptedPayloadAvailabilityLabel(selectedSubmission)}
+                        >
                           {!isLocalFallbackBlob(selectedSubmission.encryptedBlobId) ? (
                             <BlobLink
                               blobId={selectedSubmission.encryptedBlobId}
@@ -1034,6 +1065,7 @@ export function FormSubmissionsPage() {
                       <SealStatusCard
                         encryptSubmissions={form.encryptSubmissions}
                         encryptedBlobId={selectedSubmission.encryptedBlobId}
+                        encryptedPayloadEmbedded={Boolean(selectedSubmission.encryptedPayload) && !selectedSubmission.encryptedBlobId}
                         canDecrypt={Boolean(account?.address)}
                         walletAccessStatus={getWalletAccessLabel(form, account?.address)}
                       />

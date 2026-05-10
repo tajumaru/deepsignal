@@ -5,6 +5,7 @@ import { SignalMetaChip, SignalMetaRow } from "./SignalMetaChip";
 interface SealStatusCardProps {
   encryptSubmissions?: boolean;
   encryptedBlobId?: string | null;
+  encryptedPayloadEmbedded?: boolean;
   canDecrypt?: boolean;
   walletAccessStatus?: string;
 }
@@ -12,6 +13,7 @@ interface SealStatusCardProps {
 export function SealStatusCard({
   encryptSubmissions,
   encryptedBlobId,
+  encryptedPayloadEmbedded = false,
   canDecrypt = false,
   walletAccessStatus = "Wallet Verified",
 }: SealStatusCardProps) {
@@ -52,7 +54,7 @@ export function SealStatusCard({
           label={t("encryptedBlobIdLabel")}
           type="seal"
           value={encryptedBlobId}
-          emptyLabel={t("notAvailable")}
+          emptyLabel={encryptedPayloadEmbedded ? "Embedded in submission payload" : t("notAvailable")}
         />
         <div className="proof-row">
           <span>{t("walletAccessStatus")}</span>

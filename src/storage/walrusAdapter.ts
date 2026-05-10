@@ -1,6 +1,7 @@
 import { fromBase64 } from "@mysten/bcs";
 import type { ClientWithCoreApi } from "@mysten/sui/client";
 import type { Signer } from "@mysten/sui/cryptography";
+import { Transaction } from "@mysten/sui/transactions";
 import { signTransaction, type WalletAccount, type WalletWithRequiredFeatures } from "@mysten/wallet-standard";
 import { StorageNodeAPIError, WalrusClientError, type WalrusClient } from "@mysten/walrus";
 import {
@@ -27,6 +28,13 @@ type FormBundle = {
   kind: "formBundle";
   form: FormSchema;
   manifest: SignalManifest;
+};
+type SubmissionBundle = {
+  version: 1;
+  kind: "submissionBundle";
+  submission: Submission;
+  manifest: SignalManifest;
+  form?: FormSchema;
 };
 type UploadResult = {
   blobId: string;
@@ -289,20 +297,25 @@ async function uploadBody(body: Blob | File): Promise<UploadResult> {
   return uploadBodyWithSdk(body);
 }
 
-async function deleteBlobObjectFromWalrus(blobObjectId?: string) {
-  if (!blobObjectId) {
+async function deleteBlobObjectsFromWalrus(blobObjectIds: Array<string | undefined>) {
+  const uniqueBlobObjectIds = [...new Set(blobObjectIds.filter((value): value is string => Boolean(value)))];
+  if (uniqueBlobObjectIds.length === 0) {
     return;
   }
   const client = getRuntimeWalrusClient();
   const signer = createWalletSigner();
-  await client.walrus.executeDeleteBlobTransaction({ blobObjectId, signer });
-}
-
-async function deleteBlobObjectsFromWalrus(blobObjectIds: Array<string | undefined>) {
-  const uniqueBlobObjectIds = [...new Set(blobObjectIds.filter((value): value is string => Boolean(value)))];
+  let transaction = new Transaction();
   for (const blobObjectId of uniqueBlobObjectIds) {
-    await deleteBlobObjectFromWalrus(blobObjectId);
+    transaction = client.walrus.deleteBlobTransaction({
+      blobObjectId,
+      owner: signer.toSuiAddress(),
+      transaction,
+    });
   }
+  await signer.signAndExecuteTransaction({
+    transaction,
+    client,
+  });
 }
 
 function getMissingDeleteTargets(
@@ -401,6 +414,20 @@ function isFormBundle(payload: unknown): payload is FormBundle {
   );
 }
 
+function isSubmissionBundle(payload: unknown): payload is SubmissionBundle {
+  if (!payload || typeof payload !== "object") {
+    return false;
+  }
+
+  const candidate = payload as Partial<SubmissionBundle>;
+  return (
+    candidate.kind === "submissionBundle" &&
+    candidate.version === 1 &&
+    Boolean(candidate.submission) &&
+    Boolean(candidate.manifest)
+  );
+}
+
 function createFormBundle(form: FormSchema, manifest: SignalManifest): FormBundle {
   return {
     version: 1,
@@ -415,6 +442,53 @@ async function readFormBundle(blobId: string): Promise<FormBundle | null> {
   return isFormBundle(payload) ? payload : null;
 }
 
+async function readSubmissionBundle(blobId: string): Promise<SubmissionBundle | null> {
+  const payload = await fetchJsonBlob<unknown>(blobId);
+  return isSubmissionBundle(payload) ? payload : null;
+}
+
+async function readManifestCarrier(blobId: string) {
+  const formBundle = await readFormBundle(blobId);
+  if (formBundle) {
+    return {
+      manifest: formBundle.manifest,
+      form: formBundle.form,
+    };
+  }
+
+  const submissionBundle = await readSubmissionBundle(blobId);
+  if (submissionBundle) {
+    return {
+      manifest: submissionBundle.manifest,
+      form: submissionBundle.form ?? null,
+    };
+  }
+
+  const manifest = await fetchJsonBlob<SignalManifest>(blobId);
+  if (!manifest) {
+    return null;
+  }
+
+  return {
+    manifest,
+    form: null as FormSchema | null,
+  };
+}
+
+function createSubmissionBundle(
+  submission: Submission,
+  manifest: SignalManifest,
+  form?: FormSchema | null,
+): SubmissionBundle {
+  return {
+    version: 1,
+    kind: "submissionBundle",
+    submission,
+    manifest,
+    ...(form ? { form } : {}),
+  };
+}
+
 async function writeFormBundle(form: FormSchema, manifest: SignalManifest) {
   return uploadBody(
     new Blob([JSON.stringify(createFormBundle(form, manifest))], {
@@ -423,78 +497,59 @@ async function writeFormBundle(form: FormSchema, manifest: SignalManifest) {
   );
 }
 
+async function writeSubmissionBundle(
+  submission: Submission,
+  manifest: SignalManifest,
+  form?: FormSchema | null,
+) {
+  return uploadBody(
+    new Blob([JSON.stringify(createSubmissionBundle(submission, manifest, form))], {
+      type: "application/json",
+    }),
+  );
+}
+
+async function readSubmissionRecord(blobId: string): Promise<Submission | null> {
+  const payload = await fetchJsonBlob<unknown>(blobId);
+  if (!payload) {
+    return null;
+  }
+  if (isSubmissionBundle(payload)) {
+    return payload.submission;
+  }
+  if (isFormBundle(payload)) {
+    return null;
+  }
+  return payload as Submission;
+}
+
 async function loadManifestOrThrow(formId: string) {
   const entry = getFormBlobIndex(formId);
   if (!entry?.manifestBlobId) {
     return { entry, manifest: null as SignalManifest | null };
   }
   if (entry.formBlobId === entry.manifestBlobId) {
-    const bundle = await readFormBundle(entry.manifestBlobId);
-    if (!bundle) {
+    const carrier = await readManifestCarrier(entry.manifestBlobId);
+    if (!carrier?.form) {
       throw new Error(`Unable to read bundled form blob for form ${formId}.`);
     }
     return {
       entry,
-      manifest: bundle.manifest,
-      form: bundle.form,
+      manifest: carrier.manifest,
+      form: carrier.form,
       bundledBlobId: entry.manifestBlobId,
     };
   }
-  const manifest = await readManifest(entry.manifestBlobId);
-  if (!manifest) {
+  const carrier = await readManifestCarrier(entry.manifestBlobId);
+  if (!carrier?.manifest) {
     throw new Error(`Unable to read manifest blob for form ${formId}.`);
   }
-  return { entry, manifest, form: null as FormSchema | null, bundledBlobId: null as string | null };
-}
-
-async function writeManifestAndPointers(
-  formId: string,
-  manifest: SignalManifest,
-  formBlobId: string,
-  submissionBlobObjectIds: Record<string, string | undefined>,
-  form?: FormSchema | null,
-) {
-  let manifestBlobId: string;
-  let manifestBlobObjectId: string | undefined;
-  let nextFormBlobId = formBlobId;
-  let nextFormBlobObjectId: string | undefined;
-  if (form) {
-    const bundle = await writeFormBundle(
-      {
-        ...form,
-        blobId: undefined,
-        manifestBlobId: undefined,
-      },
-      manifest,
-    );
-    manifestBlobId = bundle.blobId;
-    manifestBlobObjectId = bundle.blobObjectId;
-    nextFormBlobId = bundle.blobId;
-    nextFormBlobObjectId = bundle.blobObjectId;
-  } else {
-    const savedManifest = await saveManifest(manifest);
-    manifestBlobId = savedManifest.blobId;
-    manifestBlobObjectId = savedManifest.blobObjectId;
-  }
-  upsertFormBlobIndex({
-    formId,
-    formBlobId: nextFormBlobId,
-    formBlobObjectId: nextFormBlobObjectId,
-    manifestBlobId,
-    manifestBlobObjectId,
-    createdAt: manifest.createdAt,
-  });
-  replaceSubmissionBlobIndex(
-    formId,
-    manifest.submissions.map((submission) => ({
-      submissionId: submission.submissionId,
-      formId,
-      blobId: submission.blobId,
-      blobObjectId: submissionBlobObjectIds[submission.submissionId],
-      createdAt: submission.createdAt,
-    })),
-  );
-  return { manifestBlobId, manifestBlobObjectId, formBlobId: nextFormBlobId, formBlobObjectId: nextFormBlobObjectId };
+  return {
+    entry,
+    manifest: carrier.manifest,
+    form: carrier.form,
+    bundledBlobId: null as string | null,
+  };
 }
 
 export function getWalrusBlobUrl(blobId: string) {
@@ -511,7 +566,8 @@ export async function saveManifest(manifest: SignalManifest): Promise<UploadResu
 }
 
 export async function readManifest(blobId: string): Promise<SignalManifest | null> {
-  return fetchJsonBlob<SignalManifest>(blobId);
+  const carrier = await readManifestCarrier(blobId);
+  return carrier?.manifest ?? null;
 }
 
 export const walrusAdapter: StorageAdapter = {
@@ -536,10 +592,10 @@ export const walrusAdapter: StorageAdapter = {
       return null;
     }
     if (index.formBlobId === index.manifestBlobId) {
-      const bundle = await readFormBundle(index.formBlobId);
-      return bundle
+      const carrier = await readManifestCarrier(index.formBlobId);
+      return carrier?.form
         ? {
-            ...bundle.form,
+            ...carrier.form,
             blobId: index.formBlobId,
             manifestBlobId: index.manifestBlobId,
           }
@@ -560,8 +616,8 @@ export const walrusAdapter: StorageAdapter = {
     const forms = await Promise.all(
       entries.map(async (entry) => {
         if (entry.formBlobId === entry.manifestBlobId) {
-          const bundle = await readFormBundle(entry.formBlobId);
-          return bundle?.form ?? null;
+          const carrier = await readManifestCarrier(entry.formBlobId);
+          return carrier?.form ?? null;
         }
         return fetchJsonBlob<FormSchema>(entry.formBlobId);
       }),
@@ -595,13 +651,12 @@ export const walrusAdapter: StorageAdapter = {
   },
 
   async saveSubmission(submission: Submission) {
-    const { blobId, blobObjectId } = await uploadBody(
-      new Blob([JSON.stringify(submission)], { type: "application/json" }),
-    );
-    await localStorageAdapter.saveSubmission({ ...submission, blobId });
-
     const { entry, manifest, form } = await loadManifestOrThrow(submission.formId);
     if (!entry?.manifestBlobId || !manifest) {
+      const { blobId, blobObjectId } = await uploadBody(
+        new Blob([JSON.stringify(submission)], { type: "application/json" }),
+      );
+      await localStorageAdapter.saveSubmission({ ...submission, blobId });
       upsertSubmissionBlobIndex({
         submissionId: submission.id,
         formId: submission.formId,
@@ -615,42 +670,55 @@ export const walrusAdapter: StorageAdapter = {
     const existingSubmissionObjectIds = Object.fromEntries(
       listSubmissionBlobIndex(submission.formId).map((item) => [item.submissionId, item.blobObjectId]),
     );
+    const nextManifestEntries = [
+      { submissionId: submission.id, blobId: "", createdAt: submission.createdAt },
+      ...manifest.submissions.filter((item) => item.submissionId !== submission.id),
+    ];
     const nextManifest = createManifest(
       { id: manifest.formId, createdAt: manifest.createdAt },
       form ? bundledFormPointer : manifest.formBlobId,
-      [
-        { submissionId: submission.id, blobId, createdAt: submission.createdAt },
-        ...manifest.submissions.filter((item) => item.submissionId !== submission.id),
-      ],
+      nextManifestEntries,
       new Date().toISOString(),
     );
-    const replacedFormObjectId =
-      entry.formBlobId === entry.manifestBlobId ? entry.formBlobObjectId : undefined;
-    await writeManifestAndPointers(
+    const bundle = await writeSubmissionBundle(submission, nextManifest, form);
+    nextManifest.submissions[0].blobId = bundle.blobId;
+
+    upsertFormBlobIndex({
+      formId: submission.formId,
+      formBlobId: form ? bundle.blobId : manifest.formBlobId,
+      formBlobObjectId: form ? bundle.blobObjectId : entry.formBlobObjectId,
+      manifestBlobId: bundle.blobId,
+      manifestBlobObjectId: bundle.blobObjectId,
+      createdAt: manifest.createdAt,
+    });
+    replaceSubmissionBlobIndex(
       submission.formId,
-      nextManifest,
-      manifest.formBlobId,
-      {
-        ...existingSubmissionObjectIds,
-        [submission.id]: blobObjectId,
-      },
-      form,
+      nextManifest.submissions.map((manifestEntry) => ({
+        submissionId: manifestEntry.submissionId,
+        formId: submission.formId,
+        blobId: manifestEntry.blobId,
+        blobObjectId:
+          manifestEntry.submissionId === submission.id
+            ? bundle.blobObjectId
+            : existingSubmissionObjectIds[manifestEntry.submissionId],
+        createdAt: manifestEntry.createdAt,
+      })),
     );
-    await deleteBlobObjectsFromWalrus([entry.manifestBlobObjectId, replacedFormObjectId]);
-    return { id: submission.id, blobId };
+    await localStorageAdapter.saveSubmission({ ...submission, blobId: bundle.blobId });
+    await deleteBlobObjectsFromWalrus([
+      entry.manifestBlobObjectId,
+      form ? entry.formBlobObjectId : undefined,
+    ]);
+    return { id: submission.id, blobId: bundle.blobId };
   },
 
   async listSubmissions(formId) {
     const manifestBlobId = getFormBlobIndex(formId)?.manifestBlobId;
     if (manifestBlobId) {
-      const formEntry = getFormBlobIndex(formId);
-      const manifest =
-        formEntry?.formBlobId === manifestBlobId
-          ? (await readFormBundle(manifestBlobId))?.manifest ?? null
-          : await readManifest(manifestBlobId);
+      const manifest = (await readManifestCarrier(manifestBlobId))?.manifest ?? null;
       if (manifest) {
         const submissions = await Promise.all(
-          manifest.submissions.map((entry) => fetchJsonBlob<Submission>(entry.blobId)),
+          manifest.submissions.map((entry) => readSubmissionRecord(entry.blobId)),
         );
         return submissions.reduce<Submission[]>((accumulator, submission, index) => {
           if (submission) {
@@ -666,7 +734,7 @@ export const walrusAdapter: StorageAdapter = {
 
     const entries = listSubmissionBlobIndex(formId);
     const submissions = await Promise.all(
-      entries.map((entry) => fetchJsonBlob<Submission>(entry.blobId)),
+      entries.map((entry) => readSubmissionRecord(entry.blobId)),
     );
     return submissions.reduce<Submission[]>((accumulator, submission, index) => {
       if (submission) {
@@ -677,13 +745,12 @@ export const walrusAdapter: StorageAdapter = {
   },
 
   async updateSubmission(submission) {
-    const { blobId, blobObjectId } = await uploadBody(
-      new Blob([JSON.stringify(submission)], { type: "application/json" }),
-    );
-    await localStorageAdapter.updateSubmission({ ...submission, blobId });
-
     const { entry, manifest, form } = await loadManifestOrThrow(submission.formId);
     if (!entry?.manifestBlobId || !manifest) {
+      const { blobId, blobObjectId } = await uploadBody(
+        new Blob([JSON.stringify(submission)], { type: "application/json" }),
+      );
+      await localStorageAdapter.updateSubmission({ ...submission, blobId });
       upsertSubmissionBlobIndex({
         submissionId: submission.id,
         formId: submission.formId,
@@ -698,37 +765,47 @@ export const walrusAdapter: StorageAdapter = {
     const existingSubmissionObjectIds = Object.fromEntries(
       existingSubmissionEntries.map((item) => [item.submissionId, item.blobObjectId]),
     );
-    const replacedSubmissionObjectId = existingSubmissionEntries.find(
-      (item) => item.submissionId === submission.id,
-    )?.blobObjectId;
     const existingCreatedAt =
       manifest.submissions.find((item) => item.submissionId === submission.id)?.createdAt ??
       submission.createdAt;
+    const nextManifestEntries = [
+      { submissionId: submission.id, blobId: "", createdAt: existingCreatedAt },
+      ...manifest.submissions.filter((item) => item.submissionId !== submission.id),
+    ];
     const nextManifest = createManifest(
       { id: manifest.formId, createdAt: manifest.createdAt },
       form ? bundledFormPointer : manifest.formBlobId,
-      [
-        { submissionId: submission.id, blobId, createdAt: existingCreatedAt },
-        ...manifest.submissions.filter((item) => item.submissionId !== submission.id),
-      ],
+      nextManifestEntries,
       new Date().toISOString(),
     );
-    const replacedFormObjectId =
-      entry.formBlobId === entry.manifestBlobId ? entry.formBlobObjectId : undefined;
-    await writeManifestAndPointers(
+    const bundle = await writeSubmissionBundle(submission, nextManifest, form);
+    nextManifest.submissions[0].blobId = bundle.blobId;
+
+    upsertFormBlobIndex({
+      formId: submission.formId,
+      formBlobId: form ? bundle.blobId : manifest.formBlobId,
+      formBlobObjectId: form ? bundle.blobObjectId : entry.formBlobObjectId,
+      manifestBlobId: bundle.blobId,
+      manifestBlobObjectId: bundle.blobObjectId,
+      createdAt: manifest.createdAt,
+    });
+    replaceSubmissionBlobIndex(
       submission.formId,
-      nextManifest,
-      manifest.formBlobId,
-      {
-        ...existingSubmissionObjectIds,
-        [submission.id]: blobObjectId,
-      },
-      form,
+      nextManifest.submissions.map((manifestEntry) => ({
+        submissionId: manifestEntry.submissionId,
+        formId: submission.formId,
+        blobId: manifestEntry.blobId,
+        blobObjectId:
+          manifestEntry.submissionId === submission.id
+            ? bundle.blobObjectId
+            : existingSubmissionObjectIds[manifestEntry.submissionId],
+        createdAt: manifestEntry.createdAt,
+      })),
     );
+    await localStorageAdapter.updateSubmission({ ...submission, blobId: bundle.blobId });
     await deleteBlobObjectsFromWalrus([
-      replacedSubmissionObjectId,
       entry.manifestBlobObjectId,
-      replacedFormObjectId,
+      form ? entry.formBlobObjectId : undefined,
     ]);
   },
 

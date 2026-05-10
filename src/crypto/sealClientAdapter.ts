@@ -50,6 +50,9 @@ const sealClient = new SealClient({
   serverConfigs: [serverConfig],
 });
 
+const SESSION_KEY_STORAGE_PREFIX = "deepsignal.seal.sessionKey";
+const sessionKeyCache = new Map<string, SessionKey>();
+
 function createRandomObjectId() {
   const bytes = crypto.getRandomValues(new Uint8Array(32));
   return `0x${Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("")}`;
@@ -90,7 +93,7 @@ export const sealClientAdapter: SealAdapter = {
       return value;
     }
 
-    if (!context?.walletAddress || !context.signPersonalMessage) {
+    if (!context?.walletAddress) {
       throw new Error(SEAL_ADMIN_WALLET_REQUIRED_MESSAGE);
     }
     if (!context.suiClient) {
@@ -103,14 +106,12 @@ export const sealClientAdapter: SealAdapter = {
     }
 
     try {
-      const sessionKey = await SessionKey.create({
-        address: context.walletAddress,
+      const sessionKey = await getOrCreateSessionKey({
+        walletAddress: context.walletAddress,
         packageId: envelope.packageId,
-        ttlMin: REAL_SEAL_SESSION_TTL_MIN,
         suiClient: context.suiClient as SealCompatibleClient,
+        signPersonalMessage: context.signPersonalMessage,
       });
-      const signature = await context.signPersonalMessage(sessionKey.getPersonalMessage());
-      await sessionKey.setPersonalMessageSignature(signature);
 
       const txBytes = await buildSealApproveTransactionBytes({
         objectId: envelope.objectId,
@@ -172,4 +173,105 @@ async function buildSealApproveTransactionBytes({
     client: activeSuiClient,
     onlyTransactionKind: true,
   });
+}
+
+function createSessionCacheKey(walletAddress: string, packageId: string) {
+  return `${SESSION_KEY_STORAGE_PREFIX}:${walletAddress.toLowerCase()}:${packageId.toLowerCase()}`;
+}
+
+async function getOrCreateSessionKey({
+  walletAddress,
+  packageId,
+  suiClient: activeSuiClient,
+  signPersonalMessage,
+}: {
+  walletAddress: string;
+  packageId: string;
+  suiClient: SealCompatibleClient;
+  signPersonalMessage?: (message: Uint8Array) => Promise<string>;
+}) {
+  const cacheKey = createSessionCacheKey(walletAddress, packageId);
+  const cachedSessionKey = loadCachedSessionKey(cacheKey, activeSuiClient);
+  if (cachedSessionKey) {
+    return cachedSessionKey;
+  }
+  if (!signPersonalMessage) {
+    throw new Error(SEAL_ADMIN_WALLET_REQUIRED_MESSAGE);
+  }
+
+  const sessionKey = await SessionKey.create({
+    address: walletAddress,
+    packageId,
+    ttlMin: REAL_SEAL_SESSION_TTL_MIN,
+    suiClient: activeSuiClient,
+  });
+  const signature = await signPersonalMessage(sessionKey.getPersonalMessage());
+  await sessionKey.setPersonalMessageSignature(signature);
+  persistSessionKey(cacheKey, sessionKey);
+  return sessionKey;
+}
+
+function loadCachedSessionKey(cacheKey: string, suiClientForSession: SealCompatibleClient) {
+  const inMemory = sessionKeyCache.get(cacheKey);
+  if (inMemory) {
+    if (!inMemory.isExpired()) {
+      return inMemory;
+    }
+    clearCachedSessionKey(cacheKey);
+  }
+
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  const raw = window.sessionStorage.getItem(cacheKey);
+  if (!raw) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(raw) as Parameters<typeof SessionKey.import>[0];
+    const restored = SessionKey.import(parsed, suiClientForSession);
+    if (restored.isExpired()) {
+      clearCachedSessionKey(cacheKey);
+      return null;
+    }
+    sessionKeyCache.set(cacheKey, restored);
+    return restored;
+  } catch {
+    clearCachedSessionKey(cacheKey);
+    return null;
+  }
+}
+
+function persistSessionKey(cacheKey: string, sessionKey: SessionKey) {
+  sessionKeyCache.set(cacheKey, sessionKey);
+  if (typeof window === "undefined") {
+    return;
+  }
+  try {
+    const exported = sessionKey.export();
+    window.sessionStorage.setItem(
+      cacheKey,
+      JSON.stringify({
+        address: exported.address,
+        packageId: exported.packageId,
+        mvrName: exported.mvrName,
+        creationTimeMs: exported.creationTimeMs,
+        ttlMin: exported.ttlMin,
+        personalMessageSignature: exported.personalMessageSignature,
+        sessionKey: exported.sessionKey,
+      }),
+    );
+  } catch {
+    // Keep the in-memory session key even when sessionStorage is unavailable.
+  }
+}
+
+function clearCachedSessionKey(cacheKey: string) {
+  sessionKeyCache.delete(cacheKey);
+  if (typeof window === "undefined") {
+    return;
+  }
+  window.sessionStorage.removeItem(cacheKey);
 }

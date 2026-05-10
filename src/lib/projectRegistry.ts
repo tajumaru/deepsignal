@@ -13,6 +13,7 @@ export type OnchainSignalStatus = "new" | "triaged" | "archived";
 
 const RECENT_PROJECTS_KEY = "deepsignal.projectRegistry.recentProjects";
 const SELECTED_PROJECT_ID_KEY = "deepsignal.projectRegistry.selectedProjectId";
+const PROJECT_REGISTRY_STORAGE_EVENT = "deepsignal:project-registry-storage";
 
 export interface ProjectSummary {
   objectId: string;
@@ -50,6 +51,13 @@ export interface AddProjectAdminArgs {
   projectId: string;
   ownerCapId: string;
   adminAddress: string;
+  packageId?: string;
+  tx?: Transaction;
+}
+
+export interface DeleteProjectArgs {
+  projectId: string;
+  ownerCapId: string;
   packageId?: string;
   tx?: Transaction;
 }
@@ -106,6 +114,13 @@ function resolveRegistryId(registryId?: string) {
 
 function createOrReuseTransaction(tx?: Transaction) {
   return tx ?? new Transaction();
+}
+
+function emitProjectRegistryStorageChange() {
+  if (typeof window === "undefined") {
+    return;
+  }
+  window.dispatchEvent(new Event(PROJECT_REGISTRY_STORAGE_EVENT));
 }
 
 function normalizeObjectId(value?: string | null) {
@@ -310,6 +325,27 @@ export function saveRecentProject(project: ProjectSummary) {
     ...loadRecentProjects().filter((entry) => entry.objectId !== project.objectId),
   ].slice(0, 12);
   window.localStorage.setItem(RECENT_PROJECTS_KEY, JSON.stringify(next));
+  emitProjectRegistryStorageChange();
+}
+
+export function removeRecentProject(projectId: string) {
+  if (typeof window === "undefined") {
+    return;
+  }
+  const normalized = normalizeObjectId(projectId);
+  if (!normalized) {
+    return;
+  }
+  const next = loadRecentProjects().filter((entry) => entry.objectId !== normalized);
+  if (next.length > 0) {
+    window.localStorage.setItem(RECENT_PROJECTS_KEY, JSON.stringify(next));
+  } else {
+    window.localStorage.removeItem(RECENT_PROJECTS_KEY);
+  }
+  if (getSelectedProjectId() === normalized) {
+    window.localStorage.removeItem(SELECTED_PROJECT_ID_KEY);
+  }
+  emitProjectRegistryStorageChange();
 }
 
 export function getSelectedProjectId() {
@@ -326,9 +362,11 @@ export function setSelectedProjectId(projectId: string) {
   const normalized = normalizeObjectId(projectId);
   if (!normalized) {
     window.localStorage.removeItem(SELECTED_PROJECT_ID_KEY);
+    emitProjectRegistryStorageChange();
     return;
   }
   window.localStorage.setItem(SELECTED_PROJECT_ID_KEY, normalized);
+  emitProjectRegistryStorageChange();
 }
 
 export function triageStatusToOnchainStatus(
@@ -412,6 +450,21 @@ export function removeProjectAdmin(args: AddProjectAdminArgs) {
   return tx;
 }
 
+export function deleteProject(args: DeleteProjectArgs) {
+  const packageId = resolvePackageId(args.packageId);
+  const tx = createOrReuseTransaction(args.tx);
+
+  tx.moveCall({
+    target: `${packageId}::${PROJECT_REGISTRY_MODULE}::delete_project`,
+    arguments: [
+      tx.object(requireValue(args.projectId, "Project object id")),
+      tx.object(requireValue(args.ownerCapId, "Project owner cap id")),
+    ],
+  });
+
+  return tx;
+}
+
 export function createFormOnChain(args: CreateFormOnChainArgs) {
   const packageId = resolvePackageId(args.packageId);
   const tx = createOrReuseTransaction(args.tx);
@@ -486,3 +539,5 @@ export function buildAccessControlTarget(functionName: string, packageId?: strin
 export const projectRegistryBcs = {
   sealIdentity: bcs.option(bcs.string()),
 };
+
+export { PROJECT_REGISTRY_STORAGE_EVENT };

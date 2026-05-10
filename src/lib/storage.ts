@@ -169,6 +169,14 @@ export function normalizeSubmission(raw: Submission | (Record<string, unknown> &
     formId: raw.formId,
     answers: typeof raw.answers === "object" && raw.answers ? (raw.answers as Record<string, unknown>) : {},
     attachments: Array.isArray(raw.attachments) ? raw.attachments : [],
+    publicPayload:
+      raw.publicPayload && typeof raw.publicPayload === "object"
+        ? (raw.publicPayload as Submission["publicPayload"])
+        : undefined,
+    respondentMeta:
+      raw.respondentMeta && typeof raw.respondentMeta === "object"
+        ? (raw.respondentMeta as Submission["respondentMeta"])
+        : undefined,
     metadata: typeof raw.metadata === "object" && raw.metadata ? (raw.metadata as Record<string, unknown>) : undefined,
     category:
       raw.category === "bug" || raw.category === "feature" || raw.category === "survey" || raw.category === "general"
@@ -343,7 +351,7 @@ export async function saveSubmissionWithEncryption(
   const triagedSubmission = enrichSubmissionWithTriage(form, baseSubmission);
 
   if (form.encryptSubmissions) {
-    let encryptedBlobId = submission.encryptedBlobId;
+    const encryptedBlobId = submission.encryptedBlobId;
     let encryptedPayload = submission.encryptedPayload;
     if (!encryptedBlobId) {
       if (!encryptedPayload) {
@@ -373,6 +381,7 @@ export async function saveSubmissionWithEncryption(
     answers,
     isEncrypted: false,
     encryptedBlobId: undefined,
+    encryptedPayload: undefined,
   };
   return targetStorage.saveSubmission(standardSubmission);
 }

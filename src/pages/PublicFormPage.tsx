@@ -1,8 +1,6 @@
 import {
   useCurrentAccount,
-  useSignAndExecuteTransaction,
   useSignPersonalMessage,
-  useSuiClient,
 } from "@mysten/dapp-kit";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
@@ -10,13 +8,16 @@ import { BlobLink } from "../components/BlobLink";
 import { DynamicField } from "../components/DynamicField";
 import { EmptyState } from "../components/EmptyState";
 import { SignalMetaChip, SignalMetaRow } from "../components/SignalMetaChip";
+import { WalletConnect } from "../components/WalletConnect";
 import { parseRealSealEnvelope } from "../crypto/sealPayload";
 import { useI18n } from "../i18n";
+import { getEncryptedPayloadAvailabilityLabel } from "../lib/encryptionDisplay";
 import { getSubmissionCategoryFromPurpose } from "../lib/formTemplates";
+import { getSubmissionRespondentMeta } from "../lib/respondentMeta";
 import {
-  createMetadataDigest,
-  registerSignalReceipt,
-} from "../lib/projectRegistry";
+  ensureRespondentSession,
+  getRespondentSessionTtlHours,
+} from "../lib/respondentSession";
 import { getStorageDetailLabels, isLocalFallbackBlob } from "../lib/signalInbox";
 import {
   activeSealAdapter,
@@ -39,9 +40,7 @@ const MAX_VIDEO_BYTES = 25 * 1024 * 1024;
 export function PublicFormPage() {
   const { t } = useI18n();
   const account = useCurrentAccount();
-  const suiClient = useSuiClient();
   const signPersonalMessage = useSignPersonalMessage();
-  const registerSignalTx = useSignAndExecuteTransaction();
   const { formId = "" } = useParams();
   const [searchParams] = useSearchParams();
   const [form, setForm] = useState<FormSchema | null>(null);
@@ -52,6 +51,7 @@ export function PublicFormPage() {
   const [submitted, setSubmitted] = useState<Submission | null>(null);
   const [submitError, setSubmitError] = useState("");
   const [submitNotice, setSubmitNotice] = useState("");
+  const [sendAnonymously, setSendAnonymously] = useState(false);
   const manifestBlobId = searchParams.get("manifest") ?? "";
 
   useEffect(() => {
@@ -162,6 +162,25 @@ export function PublicFormPage() {
     setSubmitError("");
     setSubmitNotice("");
     try {
+      const signedAt = new Date().toISOString();
+      const isAnonymous = sendAnonymously || !account?.address;
+      const session = await ensureRespondentSession({
+        walletAddress: account?.address,
+        isAnonymous,
+        signPersonalMessage: isAnonymous
+          ? undefined
+          : async (message) => {
+              const result = await signPersonalMessage.mutateAsync({ message });
+              return result.signature;
+            },
+      });
+      const respondentMeta = {
+        walletAddress: isAnonymous ? undefined : account?.address,
+        chain: "sui" as const,
+        sessionId: session.sessionId,
+        submittedAt: signedAt,
+        isAnonymous,
+      };
       const attachments: SubmissionAttachment[] = [];
       const plainAnswers: PublicAnswers = {};
 
@@ -187,48 +206,30 @@ export function PublicFormPage() {
         }
       }
 
-      const signedAt = new Date().toISOString();
-      let signatureResult:
-        | {
-            signature: string;
-            bytes: string;
-          }
-        | undefined;
-
-      if (account) {
-        try {
-          const signPayload = {
-            app: "DeepSignal",
-            action: "submit_signal",
-            formId: form.id,
-            submittedAt: signedAt,
-            fieldCount: form.fields.length,
-          };
-          const signedMessage = new TextEncoder().encode(JSON.stringify(signPayload));
-          signatureResult = await signPersonalMessage.mutateAsync({
-            message: signedMessage,
-          });
-        } catch (signatureError) {
-          console.warn("Submission signature skipped", signatureError);
-          setSubmitNotice("Signal saved without a wallet signature.");
-        }
-      }
-
+      const publicPayloadAnswers = Object.fromEntries(
+        form.fields
+          .filter((field) => !field.sensitive)
+          .map((field) => [field.id, plainAnswers[field.id]]),
+      );
       const submission: Submission = {
         id: makeId("submission"),
         formId: form.id,
         answers: plainAnswers,
         attachments,
+        publicPayload: form.encryptSubmissions
+          ? undefined
+          : {
+              answers: publicPayloadAnswers,
+              attachments,
+            },
+        respondentMeta,
         category: getSubmissionCategoryFromPurpose(form.purpose),
         status: "unread",
         priority: "medium",
         triageStatus: "new",
         tags: [],
         notes: "",
-        contributorId: account?.address ?? `anonymous-${makeId("responder").slice(-6)}`,
-        responderSignature: signatureResult?.signature,
-        responderSignedBytes: signatureResult?.bytes,
-        responderSignedAt: signatureResult ? signedAt : undefined,
+        contributorId: respondentMeta.walletAddress ?? respondentMeta.sessionId,
         isEncrypted: Boolean(form.encryptSubmissions),
         createdAt: signedAt,
         updatedAt: signedAt,
@@ -246,8 +247,6 @@ export function PublicFormPage() {
         const sealIdentity = parsedEnvelope
           ? `seal:${parsedEnvelope.packageId}:${parsedEnvelope.objectId}`
           : undefined;
-        let onchainSignalId: number | undefined;
-        let onchainStatus: Submission["onchainStatus"];
 
         const savedSubmissionDraft = {
           ...submission,
@@ -255,131 +254,26 @@ export function PublicFormPage() {
           sealIdentity,
         } satisfies Submission;
 
-        const result = await saveSubmissionWithEncryption(form, savedSubmissionDraft, undefined, storageAdapter);
-        const receiptBlobId = result.blobId;
-        const signalReceiptMetadataDigest = await createMetadataDigest({
-          localSubmissionId: submission.id,
-          formId: form.id,
-          walrusBlobId: receiptBlobId ?? null,
-          encrypted: true,
-          attachmentBlobIds: attachments.map((attachment) => attachment.blobId),
-          contributorId: submission.contributorId,
-          createdAt: signedAt,
-        });
-
-        if (
-          account &&
-          form.projectId &&
-          typeof form.onchainFormId === "number" &&
-          receiptBlobId &&
-          !isLocalFallbackBlob(receiptBlobId)
-        ) {
-          try {
-            const tx = registerSignalReceipt({
-              projectId: form.projectId,
-              formId: form.onchainFormId,
-              walrusBlobId: receiptBlobId,
-              metadataDigest: signalReceiptMetadataDigest,
-              encrypted: true,
-              sealIdentity,
-            });
-            const txResult = await registerSignalTx.mutateAsync({ transaction: tx });
-            const confirmed = await suiClient.waitForTransaction({
-              digest: txResult.digest,
-              options: {
-                showEvents: true,
-              },
-            });
-            const signalRegisteredEvent = (confirmed.events ?? []).find((event) =>
-              String(event.type ?? "").endsWith("::SignalRegistered"),
-            );
-            const rawSignalId = (signalRegisteredEvent?.parsedJson as { signal_id?: string | number } | undefined)
-              ?.signal_id;
-            const parsedSignalId = typeof rawSignalId === "number" ? rawSignalId : Number(rawSignalId ?? NaN);
-            if (Number.isFinite(parsedSignalId)) {
-              onchainSignalId = parsedSignalId;
-              onchainStatus = "new";
-              setSubmitNotice("Signal saved and linked to the project registry.");
-            }
-          } catch (chainError) {
-            console.warn("register_signal failed, keeping Walrus/local submission only", chainError);
-            setSubmitNotice("Signal saved, but project receipt registration was skipped.");
-          }
-        }
-
+        const result = await saveSubmissionWithEncryption(
+          form,
+          savedSubmissionDraft,
+          undefined,
+          storageAdapter,
+        );
         const savedSubmission = {
           ...savedSubmissionDraft,
           blobId: result.blobId,
-          encryptedBlobId: result.encryptedBlobId,
-          receiptBlobId,
-          onchainSignalId,
-          signalReceiptMetadataDigest,
-          onchainStatus,
+          encryptedBlobId: "encryptedBlobId" in result ? result.encryptedBlobId : undefined,
+          receiptBlobId: result.blobId ?? undefined,
         } satisfies Submission;
         setSubmitted(savedSubmission);
       } else {
         const result = await saveSubmissionWithEncryption(form, submission, undefined, storageAdapter);
-        const receiptBlobId = result.blobId;
-        const signalReceiptMetadataDigest = await createMetadataDigest({
-          localSubmissionId: submission.id,
-          formId: form.id,
-          walrusBlobId: receiptBlobId ?? null,
-          encrypted: false,
-          attachmentBlobIds: attachments.map((attachment) => attachment.blobId),
-          contributorId: submission.contributorId,
-          createdAt: signedAt,
-        });
-        let onchainSignalId: number | undefined;
-        let onchainStatus: Submission["onchainStatus"];
-
-        if (
-          account &&
-          form.projectId &&
-          typeof form.onchainFormId === "number" &&
-          receiptBlobId &&
-          !isLocalFallbackBlob(receiptBlobId)
-        ) {
-          try {
-            const tx = registerSignalReceipt({
-              projectId: form.projectId,
-              formId: form.onchainFormId,
-              walrusBlobId: receiptBlobId,
-              metadataDigest: signalReceiptMetadataDigest,
-              encrypted: false,
-            });
-            const txResult = await registerSignalTx.mutateAsync({ transaction: tx });
-            const confirmed = await suiClient.waitForTransaction({
-              digest: txResult.digest,
-              options: {
-                showEvents: true,
-              },
-            });
-            const signalRegisteredEvent = (confirmed.events ?? []).find((event) =>
-              String(event.type ?? "").endsWith("::SignalRegistered"),
-            );
-            const rawSignalId = (signalRegisteredEvent?.parsedJson as { signal_id?: string | number } | undefined)
-              ?.signal_id;
-            const parsedSignalId = typeof rawSignalId === "number" ? rawSignalId : Number(rawSignalId ?? NaN);
-            if (Number.isFinite(parsedSignalId)) {
-              onchainSignalId = parsedSignalId;
-              onchainStatus = "new";
-              setSubmitNotice("Signal saved and linked to the project registry.");
-            }
-          } catch (chainError) {
-            console.warn("register_signal failed, keeping Walrus/local submission only", chainError);
-            setSubmitNotice("Signal saved, but project receipt registration was skipped.");
-          }
-        }
-
         const savedSubmission = {
           ...submission,
           blobId: result.blobId,
-          receiptBlobId,
-          onchainSignalId,
-          signalReceiptMetadataDigest,
-          onchainStatus,
+          receiptBlobId: result.blobId ?? undefined,
         } satisfies Submission;
-        await storageAdapter.updateSubmission(savedSubmission);
         setSubmitted(savedSubmission);
       }
     } catch (error) {
@@ -404,11 +298,16 @@ export function PublicFormPage() {
 
   if (submitted) {
     const storageLabels = getStorageDetailLabels(submitted.encryptedBlobId ?? submitted.blobId);
+    const submittedRespondentMeta = getSubmissionRespondentMeta(submitted);
     return (
       <section className="panel glow-panel success-screen">
         <p className="eyebrow">{t("signalReceived")}</p>
         <h1>Signal Captured</h1>
-        <p>{isLocalFallbackBlob(submitted.encryptedBlobId ?? submitted.blobId) ? "Stored locally only" : "Stored on Walrus"}</p>
+        <p>
+          {isLocalFallbackBlob(submitted.encryptedBlobId ?? submitted.blobId)
+            ? "Stored locally only"
+            : "Stored on Walrus"}
+        </p>
         <p>{t("thanksForFeedback")}</p>
         {submitNotice ? <p className="muted">{submitNotice}</p> : null}
         <div className="success-copy">
@@ -427,10 +326,21 @@ export function PublicFormPage() {
             <SignalMetaRow label="Submission Blob ID" type="blob" value={submitted.blobId}>
               <BlobLink blobId={submitted.blobId} label="Verify on Walrus" />
             </SignalMetaRow>
-            <SignalMetaRow label="Encrypted Payload Blob ID" type="seal" value={submitted.encryptedBlobId}>
+            <SignalMetaRow
+              label="Encrypted Payload Blob ID"
+              type="seal"
+              value={submitted.encryptedBlobId}
+              emptyLabel={getEncryptedPayloadAvailabilityLabel(submitted)}
+            >
               <BlobLink blobId={submitted.encryptedBlobId} label="Verify on Walrus" />
             </SignalMetaRow>
             <SignalMetaRow label="Seal Identity" type="seal" value={submitted.sealIdentity} />
+            <div className="metadata-row">
+              <span>Respondent</span>
+              <strong>
+                {submittedRespondentMeta.isAnonymous ? "Anonymous respondent" : "Wallet connected"}
+              </strong>
+            </div>
             <div className="metadata-row signal-meta-row">
               <span>Attachment Blob IDs</span>
               <div className="stack signal-meta-row-value">
@@ -460,14 +370,55 @@ export function PublicFormPage() {
       <p className="eyebrow">{t("publicEyebrow")}</p>
       <h1>{form.title}</h1>
       <p className="lede">{form.description || t("publicDefaultBody")}</p>
-      <div className="info-banner">
-        <strong>Responder wallet</strong>
-        <span>{account ? "Connected and ready to sign" : "Optional. Submit anonymously or connect to attach a receipt."}</span>
-      </div>
+
+      <section className="answer-card public-identity-card">
+        <div className="public-identity-topline">
+          <div className="public-identity-copy">
+            <p className="eyebrow">Responder identity</p>
+            <h3>Choose how to send</h3>
+            <p className="muted">
+              Viewing the form never requires a wallet. You can submit anonymously or attach wallet
+              context without showing it publicly.
+            </p>
+          </div>
+          <div className="public-identity-wallet">
+            <WalletConnect />
+          </div>
+        </div>
+
+        <div className="public-identity-grid">
+          <div className="public-identity-mode">
+            <span className="public-identity-label">Send mode</span>
+            <label className="public-identity-toggle">
+              <input
+                type="checkbox"
+                checked={sendAnonymously}
+                onChange={(event) => setSendAnonymously(event.target.checked)}
+              />
+              <span>
+                <strong>匿名で送信</strong>
+                <small>公開画面や管理画面にウォレットアドレスを表示しません。</small>
+              </span>
+            </label>
+          </div>
+
+          <div className="public-identity-note">
+            <span className="public-identity-label">Current mode</span>
+            <strong>{sendAnonymously || !account ? "Anonymous submit" : "Wallet-backed submit"}</strong>
+            <p className="muted">
+              {sendAnonymously || !account
+                ? "You can submit immediately without any wallet signature."
+                : `A posting session is reused for ${getRespondentSessionTtlHours()} hours, so you should not need to sign every submission.`}
+            </p>
+          </div>
+        </div>
+      </section>
+
       <div className="info-banner">
         <strong>{t("encryptSubmissions")}</strong>
         <span>{form.encryptSubmissions ? t("enabled") : t("disabled")}</span>
       </div>
+
       <div className="stack">
         {groupedFields.sections.map((section) =>
           section.fields.length ? (

@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { EmptyState } from "../components/EmptyState";
-import { SignalMetaChip, SignalMetaRow } from "../components/SignalMetaChip";
+import { SignalMetaRow } from "../components/SignalMetaChip";
+import { getSubmissionRespondentMeta } from "../lib/respondentMeta";
 import { PUBLIC_ROADMAP_TRIAGE_STATUSES, getTriageStatusLabel } from "../lib/signalOps";
 import { getSignalPreview, inferSignalCategory } from "../lib/signalInbox";
 import { normalizeForm, normalizeSubmission, storageAdapter } from "../lib/storage";
@@ -103,7 +104,9 @@ export function PublicRoadmapPage() {
                     <div className="pill-row">
                       <span className="signal-chip">{inferSignalCategory(submission)}</span>
                       <span className="signal-chip">{formatDate(submission.createdAt)}</span>
-                      {submission.contributorId ? <SignalMetaChip type="contributor" value={submission.contributorId} /> : <span className="signal-chip">Contributor Anonymous</span>}
+                      <span className="signal-chip">
+                        {getSubmissionRespondentMeta(submission).isAnonymous ? "Anonymous respondent" : "Wallet respondent"}
+                      </span>
                       {typeof submission.signalValue === "number" ? (
                         <span className="signal-chip">Signal Value {submission.signalValue}/5</span>
                       ) : null}

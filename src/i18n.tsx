@@ -1,4 +1,4 @@
-import {
+﻿import {
   createContext,
   useContext,
   useEffect,
@@ -379,7 +379,7 @@ const messages = {
       "Select a signal from the stream to project its metadata, answers, and attachments into this chamber.",
     selectedForm: "Selected form",
     unreadCountSummary: (params) =>
-      `${params?.count ?? 0} unread · ${params?.scope ?? ""}`,
+      `${params?.count ?? 0} unread ﾂｷ ${params?.scope ?? ""}`,
     signalDetailTitle: "Signal Detail",
     openFormInbox: "Open form inbox",
     decryptSignal: "Decrypt Signal",
@@ -837,17 +837,17 @@ const messages = {
     decryptingSignal: "\u5fa9\u53f7\u4e2d...",
     demoDecryptAvailable: "Demo decrypt available.",
     policyGatedDecryption:
-      "Policy-gated Decryption\u3002Wallet approval \u304c\u5fc5\u8981\u3067\u3059\u3002",
-    answersTitle: "\u56de\u7b54",
-    noAttachments: "\u6dfb\u4ed8\u306a\u3057",
-    reviewControlsTitle: "\u30ec\u30d3\u30e5\u30fc\u64cd\u4f5c",
-    notesTitle: "\u30ce\u30fc\u30c8",
-    captureReviewNotes: "\u30ec\u30d3\u30e5\u30fc\u30ce\u30fc\u30c8\u3092\u8a18\u9332",
+      "Policy-gated decryption. Wallet approval is required.",
+    answersTitle: "Answers",
+    noAttachments: "No attachments",
+    reviewControlsTitle: "Review controls",
+    notesTitle: "Notes",
+    captureReviewNotes: "Capture review notes",
     signalMetadataTitle: "Signal Metadata",
-    showSignalMetadata: "Signal Metadata を表示",
-    hideSignalMetadata: "Signal Metadata を閉じる",
-    showEncryptedSignal: "Encrypted Signal を表示",
-    hideEncryptedSignal: "Encrypted Signal を閉じる",
+    showSignalMetadata: "Show Signal Metadata",
+    hideSignalMetadata: "Hide Signal Metadata",
+    showEncryptedSignal: "Show Encrypted Signal",
+    hideEncryptedSignal: "Hide Encrypted Signal",
     formBlobId: "Form Blob ID",
     submissionBlobIdLabel: "Submission Blob ID",
     encryptedPayloadBlobId: "Encrypted Payload Blob ID",
@@ -956,3 +956,4 @@ export function useI18n() {
   }
   return value;
 }
+
