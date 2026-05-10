@@ -1,3 +1,4 @@
+import { useCurrentAccount } from "@mysten/dapp-kit";
 import { Link, NavLink } from "react-router-dom";
 import { type PropsWithChildren } from "react";
 import { WalletConnect } from "./WalletConnect";
@@ -5,6 +6,8 @@ import { useI18n } from "../i18n";
 
 export function AppShell({ children }: PropsWithChildren) {
   const { language, setLanguage, t } = useI18n();
+  const account = useCurrentAccount();
+  const isWalletConnected = Boolean(account?.address);
 
   return (
     <div className="app-shell">
@@ -20,8 +23,8 @@ export function AppShell({ children }: PropsWithChildren) {
         </Link>
         <nav className="topnav">
           <NavLink to="/">{t("navHome")}</NavLink>
-          <NavLink to="/admin">{t("navLab")}</NavLink>
-          <NavLink to="/admin/access">{t("navAccess")}</NavLink>
+          {isWalletConnected ? <NavLink to="/admin">{t("navLab")}</NavLink> : null}
+          {isWalletConnected ? <NavLink to="/admin/access">{t("navAccess")}</NavLink> : null}
           <NavLink to="/admin/forms/new">{t("navCreateForm")}</NavLink>
         </nav>
         <div className="topbar-actions">

@@ -24,8 +24,22 @@ export default function App() {
     <AppShell>
       <Routes>
         <Route path="/" element={<LandingPage />} />
-        <Route path="/admin" element={<AdminDashboardPage />} />
-        <Route path="/dashboard" element={<AdminDashboardPage />} />
+        <Route
+          path="/admin"
+          element={
+            <WithWalrusRuntime>
+              <AdminDashboardPage />
+            </WithWalrusRuntime>
+          }
+        />
+        <Route
+          path="/dashboard"
+          element={
+            <WithWalrusRuntime>
+              <AdminDashboardPage />
+            </WithWalrusRuntime>
+          }
+        />
         <Route path="/admin/access" element={<AccessManagementPage />} />
         <Route path="/dashboard/access" element={<AccessManagementPage />} />
         <Route
