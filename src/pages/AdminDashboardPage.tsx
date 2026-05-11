@@ -171,6 +171,7 @@ export function AdminDashboardPage() {
   const [notesDraft, setNotesDraft] = useState("");
   const [draftTag, setDraftTag] = useState("");
   const [deletingFormId, setDeletingFormId] = useState<string | null>(null);
+  const [deletingVisibleNodes, setDeletingVisibleNodes] = useState(false);
   const [showMetadata, setShowMetadata] = useState(false);
   const [showEncryptedSignal, setShowEncryptedSignal] = useState(false);
   const [nodeDirectoryOpen, setNodeDirectoryOpen] = useState(false);
@@ -443,6 +444,38 @@ export function AdminDashboardPage() {
       });
     } finally {
       setDeletingFormId(null);
+    }
+  }
+
+  async function handleDeleteVisibleNodes(formIds: string[]) {
+    if (formIds.length === 0) {
+      return;
+    }
+    if (!window.confirm(t("deleteVisibleNodesConfirm", { count: formIds.length }))) {
+      return;
+    }
+    setDeletingVisibleNodes(true);
+    setDeletingFormId(null);
+    const results = await Promise.allSettled(formIds.map(async (formId) => storageAdapter.deleteForm(formId)));
+    const deletedCount = results.filter((result) => result.status === "fulfilled").length;
+    const failedCount = results.length - deletedCount;
+    try {
+      await loadConsole();
+      if (failedCount === 0) {
+        setToast({ tone: "success", message: t("deleteVisibleNodesSuccess", { count: deletedCount }) });
+        return;
+      }
+      setToast({
+        tone: deletedCount > 0 ? "success" : "error",
+        message: t("deleteVisibleNodesPartial", { deletedCount, failedCount }),
+      });
+    } catch (error) {
+      setToast({
+        tone: "error",
+        message: error instanceof Error ? error.message : t("deleteNodeFailed"),
+      });
+    } finally {
+      setDeletingVisibleNodes(false);
     }
   }
 
@@ -1138,6 +1171,11 @@ export function AdminDashboardPage() {
     return [allFormsItem, ...formItems];
   }, [accessibleForms, allSignals, nodeSearch, t, unreadCountByFormId]);
 
+  const deletableNodeIds = useMemo(
+    () => nodeDirectoryItems.filter((item) => item.id !== "all").map((item) => item.id),
+    [nodeDirectoryItems],
+  );
+
   if (loading) {
     return <div className="panel">{t("loadingResearchLab")}</div>;
   }
@@ -1515,7 +1553,7 @@ export function AdminDashboardPage() {
                   />
                 </div>
               </div>
-              <section className="answer-card">
+              <section className="answer-card answer-card-plain">
                 <div className="section-row">
                   <div>
                     <p className="eyebrow">Pending Sui Registration</p>
@@ -2455,13 +2493,25 @@ export function AdminDashboardPage() {
                 onChange={(event) => setNodeSearch(event.target.value)}
                 placeholder={t("searchNodesPlaceholder")}
               />
-              <div className="node-directory-stats">
-                <span className="signal-chip">
-                  {t("activeNodeSummary", { count: accessibleForms.length })}
-                </span>
-                <span className="signal-chip">
-                  {t("signalsCount", { count: allSignals.length })}
-                </span>
+              <div className="node-directory-toolbar-actions">
+                <div className="node-directory-stats">
+                  <span className="signal-chip">
+                    {t("activeNodeSummary", { count: accessibleForms.length })}
+                  </span>
+                  <span className="signal-chip">
+                    {t("signalsCount", { count: allSignals.length })}
+                  </span>
+                </div>
+                {hasAdminAccess || !capabilityProfile.isConfigured ? (
+                  <button
+                    type="button"
+                    className="ghost-button node-directory-delete"
+                    onClick={() => void handleDeleteVisibleNodes(deletableNodeIds)}
+                    disabled={deletingVisibleNodes || deletableNodeIds.length === 0}
+                  >
+                    {deletingVisibleNodes ? t("deletingLabel") : t("deleteVisibleNodes", { count: deletableNodeIds.length })}
+                  </button>
+                ) : null}
               </div>
             </div>
 
@@ -2510,7 +2560,7 @@ export function AdminDashboardPage() {
                             type="button"
                             className="ghost-button node-directory-delete"
                             onClick={() => void handleDelete(item.id)}
-                            disabled={deletingFormId === item.id}
+                            disabled={deletingVisibleNodes || deletingFormId === item.id}
                           >
                             {deletingFormId === item.id ? t("deletingLabel") : t("deleteNode")}
                           </button>

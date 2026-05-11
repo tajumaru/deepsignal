@@ -7,6 +7,7 @@ interface ImportMetaEnv {
   readonly VITE_WALRUS_PUBLISHER_URL?: string;
   readonly VITE_WALRUS_AGGREGATOR_URL?: string;
   readonly VITE_WALRUS_UPLOAD_RELAY_URL?: string;
+  readonly VITE_WALRUS_UPLOAD_RELAY_TIMEOUT_MS?: string;
   readonly VITE_WALRUS_UPLOAD_RELAY_TIP_MAX?: string;
   readonly VITE_WALRUS_STORAGE_EPOCHS?: string;
   readonly VITE_SEAL_MODE?: string;

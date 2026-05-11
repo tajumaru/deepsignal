@@ -5,11 +5,21 @@ import {
   clearFormMetadataOverlay,
 } from "./formMetadataOverlay";
 import { walrusAdapter } from "./walrusAdapter";
+import {
+  formatWalrusFailureStage,
+  getWalrusErrorMessage,
+  isWalrusDiagnosticError,
+  type WalrusFailureDetails,
+} from "./walrusDiagnostics";
 import type { FormSchema, StorageAdapter, Submission } from "../types";
 import { WALRUS_AGGREGATOR_URL, WALRUS_UPLOAD_RELAY_URL } from "../lib/sui";
 
 type RuntimeMode = "walrus" | "local-fallback";
-type RuntimeStatus = { mode: RuntimeMode; notice: string | null };
+type RuntimeStatus = {
+  mode: RuntimeMode;
+  notice: string | null;
+  diagnostics: WalrusFailureDetails | null;
+};
 
 const listeners = new Set<() => void>();
 const WALRUS_READ_TIMEOUT_MS = 4000;
@@ -32,6 +42,7 @@ let runtimeStatus: RuntimeStatus = {
         ? "Walrus is required, but the publisher or aggregator URL is not configured."
         : "Walrus is required, but the upload relay or aggregator URL is not configured."
       : null,
+  diagnostics: null,
 };
 
 function emitStatus(next: Partial<RuntimeStatus>) {
@@ -40,7 +51,17 @@ function emitStatus(next: Partial<RuntimeStatus>) {
 }
 
 function formatWalrusFallbackNotice(error: unknown) {
-  const detail = error instanceof Error && error.message.trim() ? error.message.trim() : "Walrus upload failed.";
+  if (isWalrusDiagnosticError(error)) {
+    const detail =
+      error.details.stage === "rpc-visibility"
+        ? "Walrus transaction is still waiting on RPC visibility."
+        : error.details.stage === "upload-relay"
+          ? "Walrus upload relay timed out before the blob write completed."
+        : error.message.trim();
+    const digest = error.details.digest ? ` digest=${error.details.digest}` : "";
+    return `${detail}${digest} Saved locally instead.`;
+  }
+  const detail = getWalrusErrorMessage(error) || "Walrus upload failed.";
   return `${detail} Saved locally instead.`;
 }
 
@@ -69,20 +90,23 @@ function mergeById<T extends { id: string }>(primary: T[], secondary: T[]) {
 async function withWriteFallback<T>(walrusTask: () => Promise<T>, localTask: () => Promise<T>) {
   try {
     const result = await walrusTask();
-    emitStatus({ mode: "walrus", notice: null });
+    emitStatus({ mode: "walrus", notice: null, diagnostics: null });
     return result;
   } catch (error) {
-    console.error(error);
     if (requireWalrus) {
+      console.error(error);
       emitStatus({
         mode: "walrus",
         notice: error instanceof Error ? error.message : "Walrus is required for this build.",
+        diagnostics: isWalrusDiagnosticError(error) ? error.details : null,
       });
       throw error;
     }
+    console.warn("Walrus write failed; using local fallback.", error);
     emitStatus({
       mode: "local-fallback",
       notice: formatWalrusFallbackNotice(error),
+      diagnostics: isWalrusDiagnosticError(error) ? error.details : null,
     });
     return localTask();
   }
@@ -119,12 +143,13 @@ const hybridWalrusStorage: StorageAdapter = {
       await walrusAdapter.deleteForm(id);
       await localStorageAdapter.deleteForm(id);
       clearFormMetadataOverlay(id);
-      emitStatus({ mode: "walrus", notice: null });
+      emitStatus({ mode: "walrus", notice: null, diagnostics: null });
     } catch (error) {
       console.error(error);
       emitStatus({
         mode: "walrus",
         notice: error instanceof Error ? error.message : "Walrus delete failed.",
+        diagnostics: isWalrusDiagnosticError(error) ? error.details : null,
       });
       throw error;
     }
@@ -175,6 +200,10 @@ export const storage: StorageAdapter = walrusRequested ? hybridWalrusStorage : l
 
 export function getStorageRuntimeStatus() {
   return runtimeStatus;
+}
+
+export function getStorageRuntimeStageLabel() {
+  return runtimeStatus.diagnostics ? formatWalrusFailureStage(runtimeStatus.diagnostics.stage) : null;
 }
 
 export function subscribeStorageRuntime(listener: () => void) {

@@ -1,3 +1,5 @@
+import { useEffect, useRef } from "react";
+
 interface ComposerStep {
   key: string;
   title: string;
@@ -17,14 +19,42 @@ export function FormBuilderSteps({
   completedSteps = [],
   onSelect,
 }: FormBuilderStepsProps) {
+  const navRef = useRef<HTMLElement | null>(null);
+  const stepRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+
+  useEffect(() => {
+    const nav = navRef.current;
+    const currentButton = stepRefs.current[currentStep];
+    if (!nav || !currentButton) {
+      return;
+    }
+
+    const isHorizontallyScrollable = nav.scrollWidth > nav.clientWidth;
+    if (!isHorizontallyScrollable) {
+      return;
+    }
+
+    const targetLeft = Math.max(
+      0,
+      currentButton.offsetLeft - (nav.clientWidth - currentButton.offsetWidth) / 2,
+    );
+    nav.scrollTo({
+      left: targetLeft,
+      behavior: "smooth",
+    });
+  }, [currentStep]);
+
   return (
-    <nav className="composer-flow-steps" aria-label="Composer steps">
+    <nav ref={navRef} className="composer-flow-steps" aria-label="Composer steps">
       {steps.map((step, index) => {
         const isCurrent = currentStep === step.key;
         const isComplete = completedSteps.includes(step.key);
         return (
           <button
             key={step.key}
+            ref={(node) => {
+              stepRefs.current[step.key] = node;
+            }}
             type="button"
             className={`composer-flow-step ${isCurrent ? "is-current" : ""} ${isComplete ? "is-complete" : ""}`}
             onClick={() => onSelect?.(step.key)}

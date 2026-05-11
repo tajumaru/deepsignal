@@ -77,6 +77,13 @@ const messages = {
       "Delete this form and all submissions collected for it? This cannot be undone.",
     deleteNodeSuccess: "Node deleted from Walrus and removed from the inbox.",
     deleteNodeFailed: "Node deletion failed.",
+    deleteVisibleNodes: (params) => `Delete Visible Nodes (${params?.count ?? 0})`,
+    deleteVisibleNodesConfirm: (params) =>
+      `Delete ${params?.count ?? 0} visible nodes and all submissions collected for them? This cannot be undone.`,
+    deleteVisibleNodesSuccess: (params) =>
+      `${params?.count ?? 0} visible nodes were deleted from Walrus and removed from the inbox.`,
+    deleteVisibleNodesPartial: (params) =>
+      `${params?.deletedCount ?? 0} nodes deleted, ${params?.failedCount ?? 0} failed.`,
     adminBlob: (params) => `Walrus blob: ${params?.blobId ?? ""}`,
     pending: "pending",
     noDescription: "No description provided.",
@@ -540,6 +547,14 @@ const messages = {
       "\u3053\u306e\u30d5\u30a9\u30fc\u30e0\u3068\u7d10\u3065\u304f\u3059\u3079\u3066\u306e\u6295\u7a3f\u3092\u524a\u9664\u3057\u307e\u3059\u304b\uff1f\u3053\u306e\u64cd\u4f5c\u306f\u5143\u306b\u623b\u305b\u307e\u305b\u3093\u3002",
     deleteNodeSuccess: "Node \u3092 Walrus \u304a\u3088\u3073 inbox \u304b\u3089\u524a\u9664\u3057\u307e\u3057\u305f\u3002",
     deleteNodeFailed: "Node \u306e\u524a\u9664\u306b\u5931\u6557\u3057\u307e\u3057\u305f\u3002",
+    deleteVisibleNodes: (params) =>
+      `\u8868\u793a\u4e2d\u306e Node \u3092\u4e00\u62ec\u524a\u9664 (${params?.count ?? 0})`,
+    deleteVisibleNodesConfirm: (params) =>
+      `\u8868\u793a\u4e2d\u306e ${params?.count ?? 0} \u4ef6\u306e Node \u3068\u3001\u305d\u3053\u306b\u542b\u307e\u308c\u308b\u3059\u3079\u3066\u306e submission \u3092\u524a\u9664\u3057\u307e\u3059\u304b\uff1f \u3053\u306e\u64cd\u4f5c\u306f\u5143\u306b\u623b\u305b\u307e\u305b\u3093\u3002`,
+    deleteVisibleNodesSuccess: (params) =>
+      `\u8868\u793a\u4e2d\u306e ${params?.count ?? 0} \u4ef6\u306e Node \u3092 Walrus \u304a\u3088\u3073 inbox \u304b\u3089\u524a\u9664\u3057\u307e\u3057\u305f\u3002`,
+    deleteVisibleNodesPartial: (params) =>
+      `${params?.deletedCount ?? 0} \u4ef6\u524a\u9664\u3001${params?.failedCount ?? 0} \u4ef6\u5931\u6557\u3057\u307e\u3057\u305f\u3002`,
     adminBlob: (params) => `Walrus blob: ${params?.blobId ?? ""}`,
     pending: "\u672a\u8a2d\u5b9a",
     noDescription: "\u8aac\u660e\u306f\u307e\u3060\u3042\u308a\u307e\u305b\u3093\u3002",

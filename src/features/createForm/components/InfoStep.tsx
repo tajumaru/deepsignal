@@ -29,7 +29,7 @@ export function InfoStep({
         </div>
       </div>
 
-      <section className="answer-card contest-builder-quickstart">
+      <section className="contest-builder-quickstart contest-builder-quickstart-plain">
         <div className="section-row">
           <div>
             <p className="eyebrow">Contest Defaults</p>

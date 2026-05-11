@@ -5,6 +5,7 @@ import { SignalMetaRow } from "../../../components/SignalMetaChip";
 import { LivePreview } from "../../../components/formBuilder/LivePreview";
 import { isLocalFallbackBlob } from "../../../lib/proof";
 import { shortAddress, SUI_NETWORK } from "../../../lib/sui";
+import { formatWalrusFailureStage, type WalrusFailureDetails } from "../../../storage/walrusDiagnostics";
 import type { FormField, FormSection, MobileBuilderPane, PreparedPublishForm, ProjectOption, Translate } from "../types";
 
 interface PublishStepProps {
@@ -30,6 +31,7 @@ interface PublishStepProps {
   uploadRelayUrl: string;
   storageRuntimeMode: string;
   storageRuntimeNotice?: string;
+  storageRuntimeDiagnostics?: WalrusFailureDetails | null;
   selectedProjectId: string;
   selectedProject: ProjectOption | null;
   projects: ProjectOption[];
@@ -64,6 +66,7 @@ export function PublishStep({
   uploadRelayUrl,
   storageRuntimeMode,
   storageRuntimeNotice,
+  storageRuntimeDiagnostics,
   selectedProjectId,
   selectedProject,
   projects,
@@ -148,6 +151,24 @@ export function PublishStep({
                     <strong>{storageRuntimeNotice}</strong>
                   </div>
                 ) : null}
+                {storageRuntimeDiagnostics ? (
+                  <div className="metadata-row">
+                    <span>Walrus stage</span>
+                    <strong>{formatWalrusFailureStage(storageRuntimeDiagnostics.stage)}</strong>
+                  </div>
+                ) : null}
+                {storageRuntimeDiagnostics?.digest ? (
+                  <div className="metadata-row">
+                    <span>Tx digest</span>
+                    <strong>{storageRuntimeDiagnostics.digest}</strong>
+                  </div>
+                ) : null}
+                {storageRuntimeDiagnostics?.lastRpcError ? (
+                  <div className="metadata-row">
+                    <span>Last RPC error</span>
+                    <strong>{storageRuntimeDiagnostics.lastRpcError}</strong>
+                  </div>
+                ) : null}
               </div>
             </section>
           ) : null}
@@ -158,6 +179,24 @@ export function PublishStep({
                 <span>Walrus notice</span>
                 <strong>{storageRuntimeNotice}</strong>
               </div>
+              {storageRuntimeDiagnostics ? (
+                <div className="metadata-row">
+                  <span>Walrus stage</span>
+                  <strong>{formatWalrusFailureStage(storageRuntimeDiagnostics.stage)}</strong>
+                </div>
+              ) : null}
+              {storageRuntimeDiagnostics?.digest ? (
+                <div className="metadata-row">
+                  <span>Tx digest</span>
+                  <strong>{storageRuntimeDiagnostics.digest}</strong>
+                </div>
+              ) : null}
+              {storageRuntimeDiagnostics?.lastRpcError ? (
+                <div className="metadata-row">
+                  <span>Last RPC error</span>
+                  <strong>{storageRuntimeDiagnostics.lastRpcError}</strong>
+                </div>
+              ) : null}
             </section>
           ) : null}
 

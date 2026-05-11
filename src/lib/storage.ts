@@ -328,14 +328,20 @@ export async function saveSubmissionWithEncryption(
   seal: SealAdapter = activeSealAdapter,
   targetStorage: StorageAdapter = storageAdapter,
 ): Promise<SaveSubmissionWithEncryptionResult> {
+  const isFullyEncrypted = form.encryptSubmissions === true;
+  const subjectPreview = isFullyEncrypted ? "Private signal" : getSubjectPreview(form, submission.answers);
+  const ratingValue = isFullyEncrypted ? undefined : getRatingValue(form, submission.answers);
+  const priority =
+    submission.priority === "low" || submission.priority === "medium" || submission.priority === "high"
+      ? submission.priority
+      : isFullyEncrypted
+        ? "medium"
+        : inferPriorityFromTemplateAnswers(normalizeFormPurpose(form.purpose), form.fields, submission.answers);
   const baseSubmission: Submission = {
     ...submission,
     category: submission.category ?? getSubmissionCategoryFromPurpose(normalizeFormPurpose(form.purpose)),
     status: coerceStatus(submission.status),
-    priority:
-      submission.priority === "low" || submission.priority === "medium" || submission.priority === "high"
-        ? submission.priority
-        : inferPriorityFromTemplateAnswers(normalizeFormPurpose(form.purpose), form.fields, submission.answers),
+    priority,
     triageStatus: coerceTriageStatus(submission.triageStatus),
     tags: submission.tags ?? [],
     notes: submission.notes ?? "",
@@ -355,12 +361,17 @@ export async function saveSubmissionWithEncryption(
     signalValue: coerceSignalValue(submission.signalValue),
     githubIssueUrl: typeof submission.githubIssueUrl === "string" ? submission.githubIssueUrl.trim() || undefined : undefined,
     githubPrUrl: typeof submission.githubPrUrl === "string" ? submission.githubPrUrl.trim() || undefined : undefined,
-    // TODO: subjectPreview may still reveal sensitive context for fully encrypted forms; revisit whether it should be redacted.
-    subjectPreview: getSubjectPreview(form, submission.answers),
-    ratingValue: getRatingValue(form, submission.answers),
+    subjectPreview,
+    ratingValue,
     updatedAt: submission.updatedAt ?? submission.createdAt,
   };
-  const triagedSubmission = enrichSubmissionWithTriage(form, baseSubmission);
+  const triageInput = isFullyEncrypted
+    ? {
+        ...baseSubmission,
+        answers: {},
+      }
+    : baseSubmission;
+  const triagedSubmission = enrichSubmissionWithTriage(form, triageInput);
 
   if (form.encryptSubmissions) {
     const encryptedBlobId = submission.encryptedBlobId;

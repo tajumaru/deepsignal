@@ -1,27 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
-const featureCards = [
-  {
-    title: "Create structured forms",
-    body: "Launch feedback forms for bug reports, feature requests, applications, and surveys.",
-  },
-  {
-    title: "Collect responses by link",
-    body: "Keep responder flows simple with wallet-optional access for public submissions.",
-  },
-  {
-    title: "Review in a private inbox",
-    body: "Route every submission into an encrypted signal inbox for teams and community operators.",
-  },
-];
-
-const workflowSteps = [
-  "Create a form",
-  "Share the link",
-  "Review submissions",
-];
-
 const capabilityNotes = [
   "Wallet-optional responder flow",
   "Walrus-backed storage",
@@ -123,22 +102,39 @@ export function LandingPage() {
             </div>
 
             <div className="landing-mock-layout">
-              <section className="landing-mock-card landing-mock-form">
-                <p className="landing-mock-card-label">Form builder</p>
-                <div className="landing-mock-field">
-                  <span>Category</span>
-                  <strong>Bug report</strong>
-                </div>
-                <div className="landing-mock-field">
-                  <span>Summary</span>
-                  <strong>Wallet connect fails on mobile</strong>
-                </div>
-                <div className="landing-mock-field">
-                  <span>Attachment</span>
-                  <strong>Screenshot.png</strong>
-                </div>
-                <div className="landing-mock-button">Submit response</div>
-              </section>
+              <div className="landing-mock-stack">
+                <section className="landing-mock-card landing-mock-form">
+                  <p className="landing-mock-card-label">Form builder</p>
+                  <div className="landing-mock-field">
+                    <span>Category</span>
+                    <strong>Bug report</strong>
+                  </div>
+                  <div className="landing-mock-field">
+                    <span>Summary</span>
+                    <strong>Wallet connect fails on mobile</strong>
+                  </div>
+                  <div className="landing-mock-field">
+                    <span>Attachment</span>
+                    <strong>Screenshot.png</strong>
+                  </div>
+                </section>
+
+                <section className="landing-mock-card landing-mock-public">
+                  <div className="landing-mock-public-head">
+                    <div>
+                      <p className="landing-mock-card-label">Public form</p>
+                      <strong>Shareable response page</strong>
+                    </div>
+                    <span className="landing-mock-public-pill">Wallet optional</span>
+                  </div>
+                  <div className="landing-mock-public-lines">
+                    <span className="landing-mock-line landing-mock-line-title" />
+                    <span className="landing-mock-line" />
+                    <span className="landing-mock-line landing-mock-line-short" />
+                  </div>
+                  <div className="landing-mock-button">Submit response</div>
+                </section>
+              </div>
 
               <section className="landing-mock-card landing-mock-inbox">
                 <div className="landing-mock-inbox-head">
@@ -184,46 +180,6 @@ export function LandingPage() {
         </div>
       </div>
 
-      <div className="card-grid landing-feature-grid">
-        {featureCards.map((feature) => (
-          <article key={feature.title} className="panel feature-card landing-feature-card">
-            <div className="feature-icon" aria-hidden="true" />
-            <h2>{feature.title}</h2>
-            <p>{feature.body}</p>
-          </article>
-        ))}
-      </div>
-
-      <div className="landing-lower-grid">
-        <section className="panel landing-info-card">
-          <p className="eyebrow">How it works</p>
-          <h2>From form link to private review</h2>
-          <p className="lede">
-            DeepSignal keeps the flow simple for responders and structured for operators,
-            so teams can launch a form quickly and review submissions in one place.
-          </p>
-          <div className="info-pills" aria-label="DeepSignal flow">
-            {workflowSteps.map((step) => (
-              <span key={step} className="signal-chip">
-                {step}
-              </span>
-            ))}
-          </div>
-        </section>
-
-        <section className="panel landing-support-card">
-          <p className="eyebrow">Storage and privacy</p>
-          <h2>Walrus-native, with privacy when you need it</h2>
-          <p>
-            Walrus handles durable submission storage, while private access can be added
-            when a form needs a more controlled review path.
-          </p>
-          <p>
-            Seal stays in the background as infrastructure, not the headline of the
-            product experience.
-          </p>
-        </section>
-      </div>
     </section>
   );
 }

@@ -6,7 +6,12 @@ import {
   type WalletAccount,
   type WalletWithRequiredFeatures,
 } from "@mysten/wallet-standard";
-import { StorageNodeAPIError, WalrusClientError, type WalrusClient } from "@mysten/walrus";
+import {
+  RetryableWalrusClientError,
+  StorageNodeAPIError,
+  WalrusClientError,
+  type WalrusClient,
+} from "@mysten/walrus";
 import {
   deleteFormBlobIndex,
   getFormBlobIndex,
@@ -17,6 +22,11 @@ import {
   upsertSubmissionBlobIndex,
 } from "./blobIndex";
 import { localStorageAdapter } from "./localStorageAdapter";
+import {
+  WalrusDiagnosticError,
+  getWalrusErrorMessage,
+  isWalrusDiagnosticError,
+} from "./walrusDiagnostics";
 import {
   SUI_NETWORK,
   WALRUS_AGGREGATOR_URL,
@@ -219,45 +229,84 @@ function extractBlobObjectId(payload: unknown): string | undefined {
 }
 
 function normalizeWalrusWriteError(error: unknown) {
+  if (isWalrusDiagnosticError(error)) {
+    if (error.details.stage === "rpc-visibility") {
+      return new WalrusDiagnosticError(
+        "Walrus transaction submitted, but RPC visibility timed out.",
+        error.details,
+        error,
+      );
+    }
+    return error;
+  }
+
   if (error instanceof Error) {
     const message = error.message;
     const lower = message.toLowerCase();
+
+    if (error.name === "TimeoutError" || lower.includes("signal timed out")) {
+      return new WalrusDiagnosticError(
+        walrusStorageMode === "uploadRelay"
+          ? "Walrus upload relay timed out before the blob write completed."
+          : "Walrus transaction visibility timed out before the write completed.",
+        {
+          stage: walrusStorageMode === "uploadRelay" ? "upload-relay" : "rpc-visibility",
+        },
+        error,
+      );
+    }
 
     if (
       lower.includes("insufficientgas") ||
       lower.includes("insufficientcoinbalance") ||
       lower.includes("insufficientbalanceforwithdraw")
     ) {
-      return new Error(
+      return new WalrusDiagnosticError(
         "Walrus storage transaction failed: wallet balance is insufficient for storage cost or gas.",
+        { stage: "wallet-balance" },
+        error,
       );
     }
 
     if (error instanceof StorageNodeAPIError) {
       if (lower.includes("tip") && (lower.includes("max") || lower.includes("limit"))) {
-        return new Error("Walrus upload relay failed: the required relay tip exceeded the configured tip max.");
+        return new WalrusDiagnosticError(
+          "Walrus upload relay failed: the required relay tip exceeded the configured tip max.",
+          { stage: "upload-relay" },
+          error,
+        );
       }
-      return new Error(`Walrus upload relay failed: ${message}`);
+      return new WalrusDiagnosticError(`Walrus upload relay failed: ${message}`, { stage: "upload-relay" }, error);
     }
 
     if (lower.includes("failed to certify blob") || lower.includes("certify blob")) {
-      return new Error(`Walrus certification failed: ${message}`);
+      return new WalrusDiagnosticError(`Walrus certification failed: ${message}`, { stage: "certification" }, error);
     }
 
     if (lower.includes("tip") && (lower.includes("max") || lower.includes("limit"))) {
-      return new Error("Walrus upload relay failed: the required relay tip exceeded the configured tip max.");
+      return new WalrusDiagnosticError(
+        "Walrus upload relay failed: the required relay tip exceeded the configured tip max.",
+        { stage: "upload-relay" },
+        error,
+      );
     }
 
     if (lower.includes("upload relay")) {
-      return new Error(`Walrus upload relay failed: ${message}`);
+      return new WalrusDiagnosticError(`Walrus upload relay failed: ${message}`, { stage: "upload-relay" }, error);
     }
 
     if (error instanceof WalrusClientError) {
-      return new Error(`Walrus storage transaction failed: ${message}`);
+      return new WalrusDiagnosticError(
+        `Walrus storage transaction failed: ${message}`,
+        { stage: "transaction-execution" },
+        error,
+      );
     }
   }
 
-  return error instanceof Error ? error : new Error("Walrus upload failed.");
+  return error instanceof Error
+    ? new WalrusDiagnosticError(getWalrusErrorMessage(error), { stage: "unknown" }, error)
+    : new WalrusDiagnosticError("Walrus upload failed.", { stage: "unknown" }, error);
 }
 
 function isObjectVersionRetryableError(error: unknown) {
@@ -269,6 +318,27 @@ function isObjectVersionRetryableError(error: unknown) {
     message.includes("needs to be rebuilt because object") ||
     message.includes("is unavailable for consumption") ||
     message.includes("current version:")
+  );
+}
+
+function isTransientWalrusWriteError(error: unknown) {
+  if (error instanceof RetryableWalrusClientError) {
+    return true;
+  }
+  if (error instanceof StorageNodeAPIError) {
+    return error.status === 429 || (typeof error.status === "number" && error.status >= 500);
+  }
+  if (!(error instanceof Error)) {
+    return false;
+  }
+  const message = error.message.toLowerCase();
+  return (
+    isObjectVersionRetryableError(error) ||
+    message.includes("request timed out") ||
+    message.includes("timed out") ||
+    message.includes("rate limit") ||
+    message.includes("too many requests") ||
+    message.includes("current epoch")
   );
 }
 
@@ -290,7 +360,7 @@ async function uploadBodyWithPublisher(body: Blob | File): Promise<UploadResult>
 
 async function uploadBodyWithSdk(body: Blob | File): Promise<UploadResult> {
   const blob = new Uint8Array(await body.arrayBuffer());
-  const maxAttempts = 3;
+  const maxAttempts = 4;
 
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     try {
@@ -310,8 +380,8 @@ async function uploadBodyWithSdk(body: Blob | File): Promise<UploadResult> {
         blobObjectId: result.blobObject.id,
       };
     } catch (error) {
-      if (attempt < maxAttempts && isObjectVersionRetryableError(error)) {
-        await new Promise((resolve) => window.setTimeout(resolve, 400 * attempt));
+      if (attempt < maxAttempts && isTransientWalrusWriteError(error)) {
+        await new Promise((resolve) => window.setTimeout(resolve, 500 * 2 ** (attempt - 1)));
         continue;
       }
       throw normalizeWalrusWriteError(error);
@@ -347,6 +417,14 @@ async function deleteBlobObjectsFromWalrus(blobObjectIds: Array<string | undefin
     transaction,
     client,
   });
+}
+
+async function cleanupSupersededWalrusObjects(blobObjectIds: Array<string | undefined>, context: string) {
+  try {
+    await deleteBlobObjectsFromWalrus(blobObjectIds);
+  } catch (error) {
+    console.warn(`Walrus cleanup skipped after ${context}.`, error);
+  }
 }
 
 function getMissingDeleteTargets(
@@ -514,6 +592,13 @@ async function readManifestCarrier(blobId: string) {
   };
 }
 
+export async function readManifestWithForm(blobId: string): Promise<{
+  manifest: SignalManifest;
+  form: FormSchema | null;
+} | null> {
+  return readManifestCarrier(blobId);
+}
+
 function createSubmissionBundle(
   submission: Submission,
   manifest: SignalManifest,
@@ -605,7 +690,7 @@ export async function saveManifest(manifest: SignalManifest): Promise<UploadResu
 }
 
 export async function readManifest(blobId: string): Promise<SignalManifest | null> {
-  const carrier = await readManifestCarrier(blobId);
+  const carrier = await readManifestWithForm(blobId);
   return carrier?.manifest ?? null;
 }
 
@@ -744,10 +829,10 @@ export const walrusAdapter: StorageAdapter = {
       })),
     );
     await localStorageAdapter.saveSubmission({ ...submission, blobId: bundle.blobId });
-    await deleteBlobObjectsFromWalrus([
+    await cleanupSupersededWalrusObjects([
       entry.manifestBlobObjectId,
       form ? entry.formBlobObjectId : undefined,
-    ]);
+    ], `saving submission ${submission.id}`);
     return { id: submission.id, blobId: bundle.blobId };
   },
 
@@ -842,10 +927,10 @@ export const walrusAdapter: StorageAdapter = {
       })),
     );
     await localStorageAdapter.updateSubmission({ ...submission, blobId: bundle.blobId });
-    await deleteBlobObjectsFromWalrus([
+    await cleanupSupersededWalrusObjects([
       entry.manifestBlobObjectId,
       form ? entry.formBlobObjectId : undefined,
-    ]);
+    ], `updating submission ${submission.id}`);
   },
 
   async saveEncryptedPayload(payload) {

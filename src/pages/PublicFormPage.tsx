@@ -24,7 +24,7 @@ import {
 import { makeId } from "../lib/utils";
 import { upsertFormBlobIndex } from "../storage/blobIndex";
 import { localStorageAdapter } from "../storage/localStorageAdapter";
-import { fetchJsonBlob, readManifest } from "../storage/walrusAdapter";
+import { fetchJsonBlob, readManifestWithForm } from "../storage/walrusAdapter";
 import type { FormSchema, Submission, SubmissionAttachment } from "../types";
 
 type PublicAnswers = Record<string, unknown>;
@@ -52,23 +52,32 @@ export function PublicFormPage() {
     async function load() {
       let nextForm = await storageAdapter.getForm(formId);
       if (!nextForm && manifestBlobId) {
-        const manifest = await readManifest(manifestBlobId);
-        if (manifest?.formBlobId) {
-          const restoredForm = await fetchJsonBlob<FormSchema>(manifest.formBlobId);
-          if (restoredForm && restoredForm.id === formId) {
-            nextForm = {
-              ...restoredForm,
-              blobId: manifest.formBlobId,
-              manifestBlobId,
-            };
-            await localStorageAdapter.saveForm(nextForm);
-            upsertFormBlobIndex({
-              formId: nextForm.id,
-              formBlobId: manifest.formBlobId,
-              manifestBlobId,
-              createdAt: manifest.createdAt,
-            });
-          }
+        const carrier = await readManifestWithForm(manifestBlobId);
+        const manifest = carrier?.manifest ?? null;
+        let restoredForm: FormSchema | null = null;
+        let restoredFormBlobId = "";
+
+        if (carrier?.form && carrier.form.id === formId) {
+          restoredForm = carrier.form;
+          restoredFormBlobId = manifestBlobId;
+        } else if (manifest?.formBlobId && manifest.formBlobId !== "__bundled_form__") {
+          restoredForm = await fetchJsonBlob<FormSchema>(manifest.formBlobId);
+          restoredFormBlobId = manifest.formBlobId;
+        }
+
+        if (manifest && restoredForm && restoredForm.id === formId) {
+          nextForm = {
+            ...restoredForm,
+            blobId: restoredFormBlobId,
+            manifestBlobId,
+          };
+          await localStorageAdapter.saveForm(nextForm);
+          upsertFormBlobIndex({
+            formId: nextForm.id,
+            formBlobId: restoredFormBlobId,
+            manifestBlobId,
+            createdAt: manifest.createdAt,
+          });
         }
       }
       setForm(nextForm ? normalizeForm(nextForm) : null);
@@ -387,7 +396,11 @@ export function PublicFormPage() {
   return (
     <form className="panel glow-panel public-form" onSubmit={handleSubmit}>
       <ContestGuidedFlow
-        summary="Submit a private signal. Wallet connection stays optional."
+        summary={
+          form.encryptSubmissions
+            ? "Submit a private signal. Wallet connection stays optional."
+            : "Submit a signal. Wallet connection stays optional."
+        }
         steps={[
           { label: "Select Project", status: "complete" },
           { label: "Create Form", status: "complete" },

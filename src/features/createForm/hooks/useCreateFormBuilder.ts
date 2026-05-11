@@ -20,7 +20,7 @@ export function useCreateFormBuilder({ t, projects }: UseCreateFormBuilderArgs) 
   const [sections, setSections] = useState<FormSection[]>([]);
   const [purpose, setPurpose] = useState(initialTemplate.purpose);
   const [encryptSubmissions, setEncryptSubmissions] = useState(true);
-  const [currentStep, setCurrentStep] = useState<BuilderStepKey>("info");
+  const [currentStep, setCurrentStep] = useState<BuilderStepKey>("template");
   const [mobilePane, setMobilePane] = useState<MobileBuilderPane>("editor");
   const [fieldTypePickerOpen, setFieldTypePickerOpen] = useState(false);
   const [selectedProjectId, setSelectedProjectIdState] = useState(() => getSelectedProjectId());

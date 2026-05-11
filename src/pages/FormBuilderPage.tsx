@@ -2,7 +2,6 @@ import { useCurrentAccount, useCurrentWallet, useSignAndExecuteTransaction, useS
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { AdminAccessGate } from "../components/AdminAccessGate";
-import { ContestGuidedFlow, type ContestGuidedFlowStep } from "../components/ContestGuidedFlow";
 import { FieldTypePicker } from "../components/formBuilder/FieldTypePicker";
 import { useAccessControl } from "../hooks/useAccessControl";
 import { useProjectRegistry } from "../hooks/useProjectRegistry";
@@ -63,12 +62,12 @@ export function FormBuilderPage() {
   const completedSteps = useMemo(
     () =>
       [
-        builder.values.selectedTemplateKey ? "template" : "",
-        builder.hasValidTitle ? "info" : "",
-        builder.hasQuestions ? "fields" : "",
+        builder.values.selectedTemplateKey && builder.values.currentStep !== "template" ? "template" : "",
+        builder.hasValidTitle && ["fields", "publish"].includes(builder.values.currentStep) ? "info" : "",
+        builder.hasQuestions && builder.values.currentStep === "publish" ? "fields" : "",
         publish.savedForm ? "publish" : "",
       ].filter(Boolean),
-    [builder.hasQuestions, builder.hasValidTitle, builder.values.selectedTemplateKey, publish.savedForm],
+    [builder.hasQuestions, builder.hasValidTitle, builder.values.currentStep, builder.values.selectedTemplateKey, publish.savedForm],
   );
 
   useEffect(() => {
@@ -112,22 +111,6 @@ export function FormBuilderPage() {
     setSelectedProjectId(projectId);
   }
 
-  const contestFlowSteps: ContestGuidedFlowStep[] = [
-    { label: "Select Project", status: builder.selectedProject ? "complete" : "current" },
-    {
-      label: "Create Form",
-      status: builder.selectedProject && !publish.savedForm ? "current" : publish.savedForm ? "complete" : "upcoming",
-    },
-    {
-      label: "Share Public Link",
-      status: publish.savedForm ? "current" : "upcoming",
-    },
-    { label: "Submit Private Signal", status: "upcoming" },
-    { label: "Review Inbox", status: "upcoming" },
-    { label: "Decrypt with Wallet", status: "upcoming" },
-    { label: "Publish Roadmap", status: "upcoming" },
-  ];
-
   if (isLoadingAccess) {
     return <div className="panel">Checking wallet capabilities...</div>;
   }
@@ -143,18 +126,6 @@ export function FormBuilderPage() {
       }
     >
       <section className="composer-shell">
-        <ContestGuidedFlow
-          title="Contest Guided Flow"
-          summary={
-            builder.selectedProject
-              ? publish.savedForm
-                ? "Next: share the public link and submit a private signal."
-                : "Next: publish this form for the selected project."
-              : "Next: choose the destination project before publishing."
-          }
-          steps={contestFlowSteps}
-        />
-
         <PublishOverlay
           open={publish.overlay.open}
           overlay={publish.overlay}
@@ -264,6 +235,7 @@ export function FormBuilderPage() {
               uploadRelayUrl={WALRUS_UPLOAD_RELAY_URL || "Not configured"}
               storageRuntimeMode={storageRuntime.mode}
               storageRuntimeNotice={storageRuntime.notice ?? undefined}
+              storageRuntimeDiagnostics={storageRuntime.diagnostics}
               selectedProjectId={builder.values.selectedProjectId}
               selectedProject={builder.selectedProject}
               projects={projects}
