@@ -1,4 +1,5 @@
 import { cryptoAdapter } from "../crypto/cryptoFactory";
+import { parseRealSealEnvelope } from "../crypto/sealPayload";
 import {
   getSubmissionCategoryFromPurpose,
   inferPriorityFromTemplateAnswers,
@@ -19,6 +20,14 @@ import type {
 
 export const storageAdapter: StorageAdapter = storage;
 export const activeSealAdapter: SealAdapter = cryptoAdapter;
+
+export interface SaveSubmissionWithEncryptionResult {
+  id: string;
+  blobId?: string;
+  encryptedBlobId?: string;
+  encryptedPayload?: string;
+  sealIdentity?: string;
+}
 
 function stringifySensitiveValue(value: unknown) {
   if (Array.isArray(value)) {
@@ -318,7 +327,7 @@ export async function saveSubmissionWithEncryption(
   submission: Submission,
   seal: SealAdapter = activeSealAdapter,
   targetStorage: StorageAdapter = storageAdapter,
-) {
+): Promise<SaveSubmissionWithEncryptionResult> {
   const baseSubmission: Submission = {
     ...submission,
     category: submission.category ?? getSubmissionCategoryFromPurpose(normalizeFormPurpose(form.purpose)),
@@ -346,6 +355,7 @@ export async function saveSubmissionWithEncryption(
     signalValue: coerceSignalValue(submission.signalValue),
     githubIssueUrl: typeof submission.githubIssueUrl === "string" ? submission.githubIssueUrl.trim() || undefined : undefined,
     githubPrUrl: typeof submission.githubPrUrl === "string" ? submission.githubPrUrl.trim() || undefined : undefined,
+    // TODO: subjectPreview may still reveal sensitive context for fully encrypted forms; revisit whether it should be redacted.
     subjectPreview: getSubjectPreview(form, submission.answers),
     ratingValue: getRatingValue(form, submission.answers),
     updatedAt: submission.updatedAt ?? submission.createdAt,
@@ -355,24 +365,32 @@ export async function saveSubmissionWithEncryption(
   if (form.encryptSubmissions) {
     const encryptedBlobId = submission.encryptedBlobId;
     let encryptedPayload = submission.encryptedPayload;
-    if (!encryptedBlobId) {
-      if (!encryptedPayload) {
-        const payload = JSON.stringify({
-          answers: submission.answers,
-          attachments: submission.attachments,
-        });
-        encryptedPayload = await seal.encrypt(payload, { projectId: form.projectId });
-      }
+    if (!encryptedPayload) {
+      const payload = JSON.stringify({
+        answers: submission.answers,
+        attachments: submission.attachments,
+      });
+      encryptedPayload = await seal.encrypt(payload, { projectId: form.projectId });
     }
+    const parsedEnvelope = parseRealSealEnvelope(encryptedPayload);
+    const sealIdentity = parsedEnvelope
+      ? `seal:${parsedEnvelope.packageId}:${parsedEnvelope.objectId}`
+      : submission.sealIdentity;
     const metadataSubmission: Submission = {
       ...triagedSubmission,
       answers: {},
       isEncrypted: true,
       encryptedBlobId,
       encryptedPayload,
+      sealIdentity,
     };
     const saved = await targetStorage.saveSubmission(metadataSubmission);
-    return { ...saved, encryptedBlobId };
+    return {
+      ...saved,
+      encryptedBlobId,
+      encryptedPayload,
+      sealIdentity,
+    };
   }
 
   const answers = await encryptSensitiveAnswers(form, submission.answers, seal, {
@@ -384,6 +402,7 @@ export async function saveSubmissionWithEncryption(
     isEncrypted: false,
     encryptedBlobId: undefined,
     encryptedPayload: undefined,
+    sealIdentity: undefined,
   };
   return targetStorage.saveSubmission(standardSubmission);
 }

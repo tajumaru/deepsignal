@@ -9,7 +9,6 @@ import { DynamicField } from "../components/DynamicField";
 import { EmptyState } from "../components/EmptyState";
 import { SignalMetaChip, SignalMetaRow } from "../components/SignalMetaChip";
 import { WalletConnect } from "../components/WalletConnect";
-import { parseRealSealEnvelope } from "../crypto/sealPayload";
 import { useI18n } from "../i18n";
 import { getEncryptedPayloadAvailabilityLabel, hasDedicatedEncryptedPayloadBlob } from "../lib/encryptionDisplay";
 import { getSubmissionCategoryFromPurpose } from "../lib/formTemplates";
@@ -17,7 +16,6 @@ import { getSubmissionRespondentMeta } from "../lib/respondentMeta";
 import { ensureRespondentSession } from "../lib/respondentSession";
 import { getStorageDetailLabels, isLocalFallbackBlob } from "../lib/signalInbox";
 import {
-  activeSealAdapter,
   createEmptyAnswer,
   normalizeForm,
   saveSubmissionWithEncryption,
@@ -237,47 +235,17 @@ export function PublicFormPage() {
         updatedAt: signedAt,
       };
 
-      if (form.encryptSubmissions) {
-        const encryptedPayload = await activeSealAdapter.encrypt(
-          JSON.stringify({
-            answers: submission.answers,
-            attachments: submission.attachments,
-          }),
-          { projectId: form.projectId },
-        );
-        const parsedEnvelope = parseRealSealEnvelope(encryptedPayload);
-        const sealIdentity = parsedEnvelope
-          ? `seal:${parsedEnvelope.packageId}:${parsedEnvelope.objectId}`
-          : undefined;
-
-        const savedSubmissionDraft = {
-          ...submission,
-          encryptedPayload,
-          sealIdentity,
-        } satisfies Submission;
-
-        const result = await saveSubmissionWithEncryption(
-          form,
-          savedSubmissionDraft,
-          undefined,
-          storageAdapter,
-        );
-        const savedSubmission = {
-          ...savedSubmissionDraft,
-          blobId: result.blobId,
-          encryptedBlobId: "encryptedBlobId" in result ? result.encryptedBlobId : undefined,
-          receiptBlobId: result.blobId ?? undefined,
-        } satisfies Submission;
-        setSubmitted(savedSubmission);
-      } else {
-        const result = await saveSubmissionWithEncryption(form, submission, undefined, storageAdapter);
-        const savedSubmission = {
-          ...submission,
-          blobId: result.blobId,
-          receiptBlobId: result.blobId ?? undefined,
-        } satisfies Submission;
-        setSubmitted(savedSubmission);
-      }
+      const result = await saveSubmissionWithEncryption(form, submission, undefined, storageAdapter);
+      const savedSubmission = {
+        ...submission,
+        isEncrypted: Boolean(form.encryptSubmissions),
+        blobId: result.blobId,
+        encryptedBlobId: "encryptedBlobId" in result ? result.encryptedBlobId : undefined,
+        encryptedPayload: "encryptedPayload" in result ? result.encryptedPayload : undefined,
+        sealIdentity: "sealIdentity" in result ? result.sealIdentity : undefined,
+        receiptBlobId: result.blobId ?? undefined,
+      } satisfies Submission;
+      setSubmitted(savedSubmission);
       setSubmitNotice(form.projectId ? t("suiRegistrationDeferredNotice") : "");
     } catch (error) {
       setSubmitError(error instanceof Error ? error.message : t("submitFailed"));
@@ -373,6 +341,12 @@ export function PublicFormPage() {
                   <strong>{getEncryptedPayloadAvailabilityLabel(submitted)}</strong>
                 </div>
               ) : null}
+              <SignalMetaRow
+                label="Seal Identity"
+                type="seal"
+                value={submitted.sealIdentity}
+                emptyLabel={t("notAvailable")}
+              />
               <div className="metadata-row">
                 <span>Respondent</span>
                 <strong>

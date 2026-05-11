@@ -1,82 +1,184 @@
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
 const featureCards = [
   {
-    title: "Create Forms",
-    body: "Build custom feedback forms with fields, ratings, files, and URLs.",
+    title: "Create structured forms",
+    body: "Launch feedback forms for bug reports, feature requests, applications, and surveys.",
   },
   {
-    title: "Collect Signals",
-    body: "Share a link and collect feedback from users.",
+    title: "Collect responses by link",
+    body: "Keep responder flows simple with wallet-optional access for public submissions.",
   },
   {
-    title: "Review Insights",
-    body: "Review submitted feedback in a private dashboard.",
+    title: "Review in a private inbox",
+    body: "Route every submission into an encrypted signal inbox for teams and community operators.",
   },
 ];
 
-const signalMetrics = [
-  { label: "Signal Forms", value: "Custom" },
-  { label: "Submission Flow", value: "Live" },
-  { label: "Storage Layer", value: "Walrus" },
+const workflowSteps = [
+  "Create a form",
+  "Share the link",
+  "Review submissions",
+];
+
+const capabilityNotes = [
+  "Wallet-optional responder flow",
+  "Walrus-backed storage",
+  "Optional private access",
+];
+
+const activityItems = [
+  "New bug report received",
+  "Review synced",
+  "Private submission stored",
+  "Priority updated",
+];
+
+const heroUseCases = [
+  "Bug reports",
+  "Feature requests",
+  "Applications",
+  "Surveys",
 ];
 
 export function LandingPage() {
+  const [activityIndex, setActivityIndex] = useState(0);
+  const [isActivityVisible, setIsActivityVisible] = useState(true);
+
+  useEffect(() => {
+    let timeoutId: number | undefined;
+
+    const intervalId = window.setInterval(() => {
+      setIsActivityVisible(false);
+
+      timeoutId = window.setTimeout(() => {
+        setActivityIndex((current) => (current + 1) % activityItems.length);
+        setIsActivityVisible(true);
+      }, 220);
+    }, 3200);
+
+    return () => {
+      window.clearInterval(intervalId);
+      if (timeoutId) {
+        window.clearTimeout(timeoutId);
+      }
+    };
+  }, []);
+
   return (
     <section className="landing-shell">
       <div className="hero-layout landing-hero">
         <div className="hero-copy panel glow-panel landing-copy">
-          <p className="eyebrow">Deep-Sea Feedback Interface</p>
+          <p className="eyebrow">Walrus-native feedback forms</p>
           <h1>DeepSignal</h1>
-          <p className="landing-tagline">Feedback signals from the deep. Stored on Walrus.</p>
-          <p className="lede">
-            Create feedback forms, collect submissions, and preserve every signal on
-            Walrus.
+
+          <p className="landing-tagline">
+            Walrus-native feedback forms for teams and communities.
           </p>
+
+          <p className="lede">
+            Collect bug reports, feature requests, applications, and surveys. Store
+            submissions on Walrus with optional private access.
+          </p>
+
           <div className="cta-row">
             <Link className="primary-button" to="/admin/forms/new">
-              Create Signal
+              Create form
             </Link>
             <Link className="ghost-button" to="/dashboard">
-              Explore Dashboard
+              View demo
             </Link>
           </div>
-          <div className="signal-stat-row" aria-label="DeepSignal capabilities">
-            {signalMetrics.map((item) => (
-              <div key={item.label} className="signal-stat-card">
-                <span>{item.label}</span>
-                <strong>{item.value}</strong>
-              </div>
+
+          <div className="hero-use-cases" aria-label="DeepSignal use cases">
+            {heroUseCases.map((item) => (
+              <span key={item}>{item}</span>
+            ))}
+          </div>
+
+          <div className="landing-proof-row" aria-label="DeepSignal capabilities">
+            {capabilityNotes.map((note) => (
+              <span key={note} className="landing-proof-chip">
+                {note}
+              </span>
             ))}
           </div>
         </div>
 
-        <div className="panel glow-panel signal-visual-panel" aria-hidden="true">
-          <div className="signal-visual">
-            <div className="signal-ring signal-ring-a" />
-            <div className="signal-ring signal-ring-b" />
-            <div className="signal-ring signal-ring-c" />
-            <div className="signal-sweep" />
-            <div className="signal-grid" />
-            <div className="signal-core" />
-            <span className="signal-dot signal-dot-a" />
-            <span className="signal-dot signal-dot-b" />
-            <span className="signal-dot signal-dot-c" />
-            <span className="signal-dot signal-dot-d" />
-            <svg
-              className="signal-waveform"
-              viewBox="0 0 420 180"
-              role="presentation"
-              focusable="false"
-            >
-              <path
-                d="M0 102C22 102 22 75 44 75C66 75 66 122 88 122C110 122 110 64 132 64C154 64 154 130 176 130C198 130 198 84 220 84C242 84 242 115 264 115C286 115 286 52 308 52C330 52 330 109 352 109C374 109 374 92 396 92C408 92 414 96 420 101"
-                pathLength="100"
-              />
-            </svg>
-            <div className="signal-readout">
-              <span>Listening for new feedback</span>
-              <strong>Walrus signal lock</strong>
+        <div className="panel glow-panel landing-mock-panel" aria-hidden="true">
+          <div className="landing-mock">
+            <div className="landing-mock-header">
+              <div>
+                <p className="landing-mock-label">Public form</p>
+                <strong>Product feedback intake</strong>
+              </div>
+              <span className="landing-mock-badge">Live on Walrus</span>
+            </div>
+
+            <div className="landing-mock-status-row">
+              <span>Accepting responses</span>
+              <span>24 submissions</span>
+              <span>Private review enabled</span>
+            </div>
+
+            <div className="landing-mock-layout">
+              <section className="landing-mock-card landing-mock-form">
+                <p className="landing-mock-card-label">Form builder</p>
+                <div className="landing-mock-field">
+                  <span>Category</span>
+                  <strong>Bug report</strong>
+                </div>
+                <div className="landing-mock-field">
+                  <span>Summary</span>
+                  <strong>Wallet connect fails on mobile</strong>
+                </div>
+                <div className="landing-mock-field">
+                  <span>Attachment</span>
+                  <strong>Screenshot.png</strong>
+                </div>
+                <div className="landing-mock-button">Submit response</div>
+              </section>
+
+              <section className="landing-mock-card landing-mock-inbox">
+                <div className="landing-mock-inbox-head">
+                  <div>
+                    <p className="landing-mock-card-label">Encrypted signal inbox</p>
+                    <strong>Recent submissions</strong>
+                  </div>
+                  <div className="landing-mock-inbox-status">
+                    <span className="landing-sync-dot" />
+                    <span>Synced</span>
+                    <span className="landing-mock-count">24</span>
+                  </div>
+                </div>
+
+                <div
+                  className={`landing-activity-line ${isActivityVisible ? "is-visible" : ""}`}
+                  aria-live="polite"
+                >
+                  <span className="landing-activity-marker">+</span>
+                  <span>{activityItems[activityIndex]}</span>
+                </div>
+
+                <div className="landing-mock-thread is-active">
+                  <strong>Bug report</strong>
+                  <span>Wallet connect fails on mobile</span>
+                </div>
+                <div className="landing-mock-thread">
+                  <strong>Feature request</strong>
+                  <span>Add upvote field to roadmap form</span>
+                </div>
+                <div className="landing-mock-thread">
+                  <strong>Survey response</strong>
+                  <span>Users prefer shorter intake forms</span>
+                </div>
+
+                <div className="landing-mock-meta">
+                  <span>Stored on Walrus</span>
+                  <span>Private access optional</span>
+                </div>
+              </section>
             </div>
           </div>
         </div>
@@ -84,7 +186,7 @@ export function LandingPage() {
 
       <div className="card-grid landing-feature-grid">
         {featureCards.map((feature) => (
-          <article key={feature.title} className="panel feature-card">
+          <article key={feature.title} className="panel feature-card landing-feature-card">
             <div className="feature-icon" aria-hidden="true" />
             <h2>{feature.title}</h2>
             <p>{feature.body}</p>
@@ -93,29 +195,33 @@ export function LandingPage() {
       </div>
 
       <div className="landing-lower-grid">
-        <section className="panel glow-panel landing-empty-state">
-          <p className="eyebrow">Signal Status</p>
-          <h2>No signals detected yet.</h2>
-          <p>Create your first form to start listening.</p>
-          <Link className="primary-button" to="/admin/forms/new">
-            Create Signal
-          </Link>
-        </section>
-
         <section className="panel landing-info-card">
-          <p className="eyebrow">How It Works</p>
-          <h2>From intake to preserved insight</h2>
+          <p className="eyebrow">How it works</p>
+          <h2>From form link to private review</h2>
           <p className="lede">
-            DeepSignal gives teams a Walrus-native path to launch forms, collect
-            submissions, and review feedback inside a private dashboard without changing
-            the existing flow.
+            DeepSignal keeps the flow simple for responders and structured for operators,
+            so teams can launch a form quickly and review submissions in one place.
           </p>
           <div className="info-pills" aria-label="DeepSignal flow">
-            <span className="signal-chip">Create a form</span>
-            <span className="signal-chip">Share a link</span>
-            <span className="signal-chip">Collect submissions</span>
-            <span className="signal-chip">Store on Walrus</span>
+            {workflowSteps.map((step) => (
+              <span key={step} className="signal-chip">
+                {step}
+              </span>
+            ))}
           </div>
+        </section>
+
+        <section className="panel landing-support-card">
+          <p className="eyebrow">Storage and privacy</p>
+          <h2>Walrus-native, with privacy when you need it</h2>
+          <p>
+            Walrus handles durable submission storage, while private access can be added
+            when a form needs a more controlled review path.
+          </p>
+          <p>
+            Seal stays in the background as infrastructure, not the headline of the
+            product experience.
+          </p>
         </section>
       </div>
     </section>

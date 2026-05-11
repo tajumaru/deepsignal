@@ -5,7 +5,7 @@ import {
   useSuiClient,
 } from "@mysten/dapp-kit";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useLocation, useParams } from "react-router-dom";
 import { AdminAccessGate } from "../components/AdminAccessGate";
 import { BlobLink } from "../components/BlobLink";
 import { EmptyState } from "../components/EmptyState";
@@ -93,6 +93,7 @@ export function FormSubmissionsPage() {
   const signPersonalMessage = useSignPersonalMessage();
   const updateSignalStatusTx = useSignAndExecuteTransaction();
   const { capabilityProfile, isLoadingAccess } = useAccessControl(account?.address);
+  const location = useLocation();
   const { formId = "", submissionId = "" } = useParams();
   const sealRuntime = getSealRuntimeStatus();
   const storageRuntime = getStorageRuntimeStatus();
@@ -121,6 +122,7 @@ export function FormSubmissionsPage() {
   const [loading, setLoading] = useState(true);
   const [showMetadata, setShowMetadata] = useState(false);
   const [showEncryptedSignal, setShowEncryptedSignal] = useState(false);
+  const [toast, setToast] = useState<{ tone: "success" | "error"; message: string } | null>(null);
   const saveQueueRef = useRef(Promise.resolve());
 
   useEffect(() => {
@@ -137,6 +139,14 @@ export function FormSubmissionsPage() {
 
     void loadInbox();
   }, [formId, submissionId]);
+
+  useEffect(() => {
+    if (!toast) {
+      return;
+    }
+    const timer = window.setTimeout(() => setToast(null), 3200);
+    return () => window.clearTimeout(timer);
+  }, [toast]);
 
   const visibleSignals = useMemo(() => {
     const normalizedSearch = search.trim().toLowerCase();
@@ -205,7 +215,10 @@ export function FormSubmissionsPage() {
     );
   }
 
-  async function updateSubmission(nextSubmission: Submission) {
+  async function updateSubmission(
+    nextSubmission: Submission,
+    options?: { notifyOnSuccess?: boolean },
+  ) {
     const normalized = normalizeSubmission({
       ...nextSubmission,
       updatedAt: new Date().toISOString(),
@@ -217,6 +230,7 @@ export function FormSubmissionsPage() {
     setSaveError("");
     const runSave = async () => {
       try {
+        let successMessage = "Review controls saved.";
         await storageAdapter.updateSubmission(normalized);
         const nextOnchainStatus = triageStatusToOnchainStatus(normalized.triageStatus, normalized.status);
         const previousOnchainStatus = previousSubmission
@@ -245,17 +259,25 @@ export function FormSubmissionsPage() {
             await storageAdapter.updateSubmission(normalized);
           } catch (chainError) {
             console.warn("update_signal_status failed, keeping local triage state", chainError);
-            setSaveError(
+            successMessage =
               chainError instanceof Error
                 ? `Saved locally. Project status sync skipped: ${chainError.message}`
-                : "Saved locally. Project status sync skipped.",
-            );
+                : "Saved locally. Project status sync skipped.";
+            setSaveError(successMessage);
           }
         }
         setSaveState("saved");
+        if (options?.notifyOnSuccess) {
+          setToast({ tone: "success", message: successMessage });
+        }
       } catch (error) {
         setSaveState("error");
-        setSaveError(error instanceof Error ? error.message : "Failed to save signal operations.");
+        const message =
+          error instanceof Error ? error.message : "Failed to save signal operations.";
+        setSaveError(message);
+        if (options?.notifyOnSuccess) {
+          setToast({ tone: "error", message });
+        }
       }
     };
     saveQueueRef.current = saveQueueRef.current.then(runSave, runSave);
@@ -297,14 +319,17 @@ export function FormSubmissionsPage() {
     if (!selectedSubmission) {
       return;
     }
-    await updateSubmission({
-      ...selectedSubmission,
-      status: statusDraft,
-      triageStatus: triageStatusDraft,
-      priority: priorityDraft,
-      signalValue: signalValueDraft ? Number(signalValueDraft) : undefined,
-      notes: notesDraft,
-    });
+    await updateSubmission(
+      {
+        ...selectedSubmission,
+        status: statusDraft,
+        triageStatus: triageStatusDraft,
+        priority: priorityDraft,
+        signalValue: signalValueDraft ? Number(signalValueDraft) : undefined,
+        notes: notesDraft,
+      },
+      { notifyOnSuccess: true },
+    );
   }
 
   const streamItems = [
@@ -419,6 +444,9 @@ export function FormSubmissionsPage() {
   const activeForm = form as FormSchema;
   const resolvedDetailAnswers = detailAnswers ?? {};
   const isDetailOnly = Boolean(submissionId);
+  const inboxPath = `${
+    location.pathname.startsWith("/dashboard") ? "/dashboard" : "/admin"
+  }/forms/${formId}`;
 
   return (
     <AdminAccessGate
@@ -432,6 +460,11 @@ export function FormSubmissionsPage() {
       }
     >
       <section className={isDetailOnly ? "signal-detail-only-shell" : "stack"}>
+        {toast ? (
+          <div className={`signal-toast is-${toast.tone}`} role="status" aria-live="polite">
+            {toast.message}
+          </div>
+        ) : null}
         {isDetailOnly ? (
           <article className="panel signal-detail-column">
             {!selectedSubmission ? (
@@ -444,6 +477,9 @@ export function FormSubmissionsPage() {
               <>
                 <div className="signal-detail-heading">
                   <div>
+                    <Link className="ghost-button signal-back-link" to={inboxPath}>
+                      Back to inbox
+                    </Link>
                     <p className="eyebrow">Contributor Signal</p>
                     <h2>{getSignalSubject(selectedSubmission)}</h2>
                     <p className="muted">{formatDate(selectedSubmission.createdAt)}</p>
@@ -603,14 +639,16 @@ export function FormSubmissionsPage() {
                         placeholder={t("captureReviewNotes")}
                       />
                     </label>
-                    <button
-                      type="button"
-                      className="primary-button"
-                      disabled={saveState === "saving"}
-                      onClick={() => void handleSaveReviewControls()}
-                    >
-                      Save Review Controls
-                    </button>
+                    <div className="review-controls-actions">
+                      <button
+                        type="button"
+                        className="primary-button"
+                        disabled={saveState === "saving"}
+                        onClick={() => void handleSaveReviewControls()}
+                      >
+                        Save Review Controls
+                      </button>
+                    </div>
                   </section>
                 </div>
               </>
