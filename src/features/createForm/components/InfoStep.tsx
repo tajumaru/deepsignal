@@ -1,4 +1,4 @@
-import { RichTextEditor } from "../../../components/RichText";
+import { RichTextEditor } from "../../../components/RichTextEditor";
 import type { Translate } from "../types";
 
 interface InfoStepProps {
