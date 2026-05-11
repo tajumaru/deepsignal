@@ -161,7 +161,7 @@ export function PublishStep({
             </section>
           ) : null}
 
-          <details className="composer-advanced-settings" open>
+          <details className="composer-advanced-settings">
             <summary>{t("advanced")}</summary>
             <div className="stack composer-advanced-grid">
               <section className="panel composer-settings-card">
@@ -194,8 +194,8 @@ export function PublishStep({
               <section className="panel composer-settings-card">
                 <div className="section-row">
                   <div>
-                    <p className="eyebrow">{t("sealEyebrow")}</p>
-                    <h3>{t("encryptSubmissions")}</h3>
+                    <p className="eyebrow">Private Signal</p>
+                    <h3>Encrypt submissions</h3>
                   </div>
                   <label className="toggle">
                     <input
@@ -206,7 +206,7 @@ export function PublishStep({
                     <span>{encryptSubmissions ? t("enabled") : t("disabled")}</span>
                   </label>
                 </div>
-                <p className="muted">{t("encryptSubmissionsHelp")}</p>
+                <p className="muted">Keep this on so reviewers unlock the signal later with an authorized wallet.</p>
               </section>
 
               {showWalrusDiagnostics ? (
@@ -244,6 +244,33 @@ export function PublishStep({
                   <p key={check}>{check}</p>
                 ))}
               </div>
+
+              <section className="answer-card contest-share-ready-card">
+                <div className="section-row">
+                  <div>
+                    <p className="eyebrow">Step 3</p>
+                    <h4>Share Public Link</h4>
+                  </div>
+                  <span className="signal-chip signal-chip-accent">Anonymous ready</span>
+                </div>
+                <p className="muted">
+                  This is the judge handoff moment. Open the public link, copy it, or scan the QR code to submit a private signal.
+                </p>
+                {savedForm.manifestBlobId ? (
+                  <ShareCard
+                    formId={savedForm.id}
+                    blobId={savedForm.blobId}
+                    createdAt={savedForm.createdAt}
+                    manifestBlobId={savedForm.manifestBlobId}
+                  />
+                ) : (
+                  <section className="answer-card">
+                    <p className="eyebrow">Share Ready</p>
+                    <h4>QR sharing is unavailable</h4>
+                    <p className="muted">This form is currently stored in local fallback mode, so phones and other browsers cannot restore it from a QR code yet.</p>
+                  </section>
+                )}
+              </section>
 
               <div className="composer-link-grid">
                 <p>
@@ -306,21 +333,6 @@ export function PublishStep({
                   </div>
                 </section>
               ) : null}
-
-              {savedForm.manifestBlobId ? (
-                <ShareCard
-                  formId={savedForm.id}
-                  blobId={savedForm.blobId}
-                  createdAt={savedForm.createdAt}
-                  manifestBlobId={savedForm.manifestBlobId}
-                />
-              ) : (
-                <section className="answer-card">
-                  <p className="eyebrow">Share Ready</p>
-                  <h4>QR sharing is unavailable</h4>
-                  <p className="muted">This form is currently stored in local fallback mode, so phones and other browsers cannot restore it from a QR code yet.</p>
-                </section>
-              )}
             </div>
           ) : (
             <p className="muted">{t("saveFormHint")}</p>

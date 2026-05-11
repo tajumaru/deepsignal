@@ -4,6 +4,7 @@ import {
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import { BlobLink } from "../components/BlobLink";
+import { ContestGuidedFlow } from "../components/ContestGuidedFlow";
 import { DynamicField } from "../components/DynamicField";
 import { EmptyState } from "../components/EmptyState";
 import { SignalMetaChip, SignalMetaRow } from "../components/SignalMetaChip";
@@ -301,80 +302,109 @@ export function PublicFormPage() {
   if (submitted) {
     const storageLabels = getStorageDetailLabels(submitted.encryptedBlobId ?? submitted.blobId);
     const submittedRespondentMeta = getSubmissionRespondentMeta(submitted);
+    const isEncryptedSubmission = Boolean(submitted.isEncrypted);
     return (
-      <section className="panel glow-panel success-screen">
-        <p className="eyebrow">{t("signalReceived")}</p>
-        <h1>Signal Captured</h1>
-        <p>
-          {isLocalFallbackBlob(submitted.encryptedBlobId ?? submitted.blobId)
-            ? "Stored locally only"
-            : "Stored on Walrus"}
-        </p>
-        <p>{t("thanksForFeedback")}</p>
-        {submitNotice ? <p className="muted">{submitNotice}</p> : null}
-        <div className="success-copy">
-          {storageLabels.map((label) => (
-            <p key={label}>{label}</p>
-          ))}
-        </div>
-        <section className="answer-card">
-          <div className="metadata-list">
-            {submitted.onchainSignalId !== undefined ? (
-              <div className="metadata-row">
-                <span>Signal Receipt</span>
-                <strong>{submitted.onchainSignalId}</strong>
-              </div>
-            ) : null}
-            <SignalMetaRow label="Submission Blob ID" type="blob" value={submitted.blobId}>
-              <BlobLink blobId={submitted.blobId} label="Verify on Walrus" />
-            </SignalMetaRow>
-            {hasDedicatedEncryptedPayloadBlob(submitted) ? (
-              <SignalMetaRow
-                label="Encrypted Payload Blob ID"
-                type="seal"
-                value={submitted.encryptedBlobId}
-              >
-                <BlobLink blobId={submitted.encryptedBlobId} label="Verify on Walrus" />
-              </SignalMetaRow>
-            ) : null}
-            <SignalMetaRow label="Seal Identity" type="seal" value={submitted.sealIdentity} />
-            {submitted.isEncrypted && !hasDedicatedEncryptedPayloadBlob(submitted) ? (
-              <div className="metadata-row">
-                <span>Encrypted Payload</span>
-                <strong>{getEncryptedPayloadAvailabilityLabel(submitted)}</strong>
-              </div>
-            ) : null}
-            <div className="metadata-row">
-              <span>Respondent</span>
-              <strong>
-                {submittedRespondentMeta.isAnonymous ? "Anonymous respondent" : "Wallet connected"}
-              </strong>
-            </div>
-            {submitted.pendingOnchainRegistration ? (
-              <div className="metadata-row">
-                <span>Sui registration</span>
-                <strong>{t("pendingSuiRegistration")}</strong>
-              </div>
-            ) : null}
-            <div className="metadata-row signal-meta-row">
-              <span>Attachment Blob IDs</span>
-              <div className="stack signal-meta-row-value">
-                {submitted.attachments.length === 0 ? (
-                  <strong>Not available</strong>
-                ) : (
-                  submitted.attachments.map((attachment, index) => (
-                    <div key={attachment.blobId} className="signal-meta-row-value">
-                      <span>Attachment {index + 1}</span>
-                      <SignalMetaChip type="blob" value={attachment.blobId} />
-                      <div className="signal-meta-row-value">
-                        <BlobLink blobId={attachment.blobId} label="Verify on Walrus" />
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
+      <section className="stack">
+        <ContestGuidedFlow
+          summary={
+            isEncryptedSubmission
+              ? "Private signal submitted. Reviewers can now unlock it from the inbox."
+              : "Signal submitted. Reviewers can now review it from the inbox."
+          }
+          steps={[
+            { label: "Select Project", status: "complete" },
+            { label: "Create Form", status: "complete" },
+            { label: "Share Public Link", status: "complete" },
+            { label: "Submit Private Signal", status: "current" },
+            { label: "Review Inbox", status: "upcoming" },
+            { label: "Decrypt with Wallet", status: "upcoming" },
+            { label: "Publish Roadmap", status: "upcoming" },
+          ]}
+        />
+        <section className="panel glow-panel success-screen">
+          <p className="eyebrow">{t("signalReceived")}</p>
+          <h1>{isEncryptedSubmission ? "Private Signal sent" : "Signal sent"}</h1>
+          <p className="lede">
+            {isEncryptedSubmission
+              ? "Only project reviewers can decrypt this message."
+              : "Reviewers can open this submission directly from the inbox."}
+          </p>
+          <p>
+            {isLocalFallbackBlob(submitted.encryptedBlobId ?? submitted.blobId)
+              ? "Stored locally only"
+              : "Trusted storage ready"}
+          </p>
+          <p>{t("thanksForFeedback")}</p>
+          {submitNotice ? <p className="muted">{submitNotice}</p> : null}
+          <div className="success-copy">
+            {storageLabels.map((label) => (
+              <p key={label}>{label}</p>
+            ))}
           </div>
+          <details className="answer-card public-submit-details">
+            <summary>
+              <span>
+                <p className="eyebrow">Trusted storage</p>
+                <h3>Submission details</h3>
+              </span>
+            </summary>
+            <div className="metadata-list">
+              {submitted.onchainSignalId !== undefined ? (
+                <div className="metadata-row">
+                  <span>Signal Receipt</span>
+                  <strong>{submitted.onchainSignalId}</strong>
+                </div>
+              ) : null}
+              <SignalMetaRow label="Submission Blob ID" type="blob" value={submitted.blobId}>
+                <BlobLink blobId={submitted.blobId} label="Verify on Walrus" />
+              </SignalMetaRow>
+              {hasDedicatedEncryptedPayloadBlob(submitted) ? (
+                <SignalMetaRow
+                  label="Private Signal Blob"
+                  type="seal"
+                  value={submitted.encryptedBlobId}
+                >
+                  <BlobLink blobId={submitted.encryptedBlobId} label="Verify on Walrus" />
+                </SignalMetaRow>
+              ) : null}
+              {submitted.isEncrypted && !hasDedicatedEncryptedPayloadBlob(submitted) ? (
+                <div className="metadata-row">
+                  <span>Private Signal</span>
+                  <strong>{getEncryptedPayloadAvailabilityLabel(submitted)}</strong>
+                </div>
+              ) : null}
+              <div className="metadata-row">
+                <span>Respondent</span>
+                <strong>
+                  {submittedRespondentMeta.isAnonymous ? "Anonymous respondent" : "Wallet connected"}
+                </strong>
+              </div>
+              {submitted.pendingOnchainRegistration ? (
+                <div className="metadata-row">
+                  <span>Sui registration</span>
+                  <strong>{t("pendingSuiRegistration")}</strong>
+                </div>
+              ) : null}
+              <div className="metadata-row signal-meta-row">
+                <span>Attachment Blob IDs</span>
+                <div className="stack signal-meta-row-value">
+                  {submitted.attachments.length === 0 ? (
+                    <strong>Not available</strong>
+                  ) : (
+                    submitted.attachments.map((attachment, index) => (
+                      <div key={attachment.blobId} className="signal-meta-row-value">
+                        <span>Attachment {index + 1}</span>
+                        <SignalMetaChip type="blob" value={attachment.blobId} />
+                        <div className="signal-meta-row-value">
+                          <BlobLink blobId={attachment.blobId} label="Verify on Walrus" />
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
+          </details>
         </section>
       </section>
     );
@@ -382,9 +412,28 @@ export function PublicFormPage() {
 
   return (
     <form className="panel glow-panel public-form" onSubmit={handleSubmit}>
+      <ContestGuidedFlow
+        summary="Submit a private signal. Wallet connection stays optional."
+        steps={[
+          { label: "Select Project", status: "complete" },
+          { label: "Create Form", status: "complete" },
+          { label: "Share Public Link", status: "complete" },
+          { label: "Submit Private Signal", status: "current" },
+          { label: "Review Inbox", status: "upcoming" },
+          { label: "Decrypt with Wallet", status: "upcoming" },
+          { label: "Publish Roadmap", status: "upcoming" },
+        ]}
+      />
       <p className="eyebrow">{t("publicEyebrow")}</p>
       <h1>{form.title}</h1>
       <p className="lede">{form.description || t("publicDefaultBody")}</p>
+      {form.encryptSubmissions ? (
+        <section className="answer-card public-private-signal-note">
+          <p className="eyebrow">Private Signal</p>
+          <h3>Private Signal</h3>
+          <p className="muted">Only project reviewers can decrypt this message.</p>
+        </section>
+      ) : null}
 
       <section className="answer-card public-identity-card">
         <div className="public-identity-topline">
@@ -482,7 +531,11 @@ export function PublicFormPage() {
       {submitError ? <p className="error-text">{submitError}</p> : null}
       <div className="public-form-actions">
         <button type="submit" className="primary-button" disabled={submitting}>
-          {submitting ? t("submitting") : t("submitFeedback")}
+          {submitting
+            ? t("submitting")
+            : attachWallet && account?.address
+              ? "Submit with wallet"
+              : "Submit anonymously"}
         </button>
       </div>
     </form>

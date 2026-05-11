@@ -1,12 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams, useSearchParams } from "react-router-dom";
+import { ContestGuidedFlow } from "../components/ContestGuidedFlow";
 import { EmptyState } from "../components/EmptyState";
+import { getPublicFormPath } from "../lib/publicLinks";
 import { SignalMetaRow } from "../components/SignalMetaChip";
 import { getSubmissionRespondentMeta } from "../lib/respondentMeta";
 import { PUBLIC_ROADMAP_TRIAGE_STATUSES, getTriageStatusLabel } from "../lib/signalOps";
 import { getSignalPreview, inferSignalCategory } from "../lib/signalInbox";
 import { normalizeForm, normalizeSubmission, storageAdapter } from "../lib/storage";
 import { formatDate } from "../lib/utils";
+import { upsertFormBlobIndex } from "../storage/blobIndex";
+import { localStorageAdapter } from "../storage/localStorageAdapter";
+import { fetchJsonBlob, readManifest } from "../storage/walrusAdapter";
 import type { FormSchema, Submission } from "../types";
 
 const ROADMAP_GROUPS = [
@@ -17,16 +22,36 @@ const ROADMAP_GROUPS = [
 
 export function PublicRoadmapPage() {
   const { formId = "" } = useParams();
+  const [searchParams] = useSearchParams();
   const [form, setForm] = useState<FormSchema | null>(null);
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [loading, setLoading] = useState(true);
+  const manifestBlobId = searchParams.get("manifest") ?? "";
 
   useEffect(() => {
     async function loadRoadmap() {
-      const [nextForm, rawSubmissions] = await Promise.all([
-        storageAdapter.getForm(formId),
-        storageAdapter.listSubmissions(formId),
-      ]);
+      let nextForm = await storageAdapter.getForm(formId);
+      if (!nextForm && manifestBlobId) {
+        const manifest = await readManifest(manifestBlobId);
+        if (manifest?.formBlobId) {
+          const restoredForm = await fetchJsonBlob<FormSchema>(manifest.formBlobId);
+          if (restoredForm && restoredForm.id === formId) {
+            nextForm = {
+              ...restoredForm,
+              blobId: manifest.formBlobId,
+              manifestBlobId,
+            };
+            await localStorageAdapter.saveForm(nextForm);
+            upsertFormBlobIndex({
+              formId: nextForm.id,
+              formBlobId: manifest.formBlobId,
+              manifestBlobId,
+              createdAt: manifest.createdAt,
+            });
+          }
+        }
+      }
+      const rawSubmissions = await storageAdapter.listSubmissions(formId);
       setForm(nextForm ? normalizeForm(nextForm) : null);
       setSubmissions(
         rawSubmissions
@@ -36,7 +61,7 @@ export function PublicRoadmapPage() {
       setLoading(false);
     }
     void loadRoadmap();
-  }, [formId]);
+  }, [formId, manifestBlobId]);
 
   const groupedSubmissions = useMemo(
     () =>
@@ -64,12 +89,24 @@ export function PublicRoadmapPage() {
 
   return (
     <section className="stack">
+      <ContestGuidedFlow
+        summary="Signals marked Planned, In Progress, or Fixed appear here on the public roadmap."
+        steps={[
+          { label: "Select Project", status: "complete" },
+          { label: "Create Form", status: "complete" },
+          { label: "Share Public Link", status: "complete" },
+          { label: "Submit Private Signal", status: "complete" },
+          { label: "Review Inbox", status: "complete" },
+          { label: "Decrypt with Wallet", status: "complete" },
+          { label: "Publish Roadmap", status: "current" },
+        ]}
+      />
       <div className="panel glow-panel roadmap-hero">
         <p className="eyebrow">Public Roadmap</p>
         <h1>{form.title}</h1>
         <p className="lede">{form.description || "Deep Signals Worth Tracking"}</p>
         <div className="inline-actions">
-          <Link className="ghost-button" to={`/f/${form.id}`}>
+          <Link className="ghost-button" to={getPublicFormPath(form.id, form.manifestBlobId)}>
             Open Public Form
           </Link>
         </div>

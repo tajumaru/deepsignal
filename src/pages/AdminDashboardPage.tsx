@@ -9,18 +9,25 @@ import { Link } from "react-router-dom";
 import { AdminAccessGate } from "../components/AdminAccessGate";
 import { BlobLink } from "../components/BlobLink";
 import { EmptyState } from "../components/EmptyState";
+import { OperationsStatusRail, type OperationsStatusItem } from "../components/OperationsStatusRail";
 import { SealStatusCard } from "../components/SealStatusCard";
 import { ShareCard } from "../components/ShareCard";
 import { SignalClusterPanel } from "../components/SignalClusterPanel";
 import { SignalMetaChip, SignalMetaRow } from "../components/SignalMetaChip";
 import { getSealRuntimeStatus } from "../crypto/cryptoFactory";
-import { REAL_SEAL_SESSION_TTL_MIN } from "../crypto/sealPayload";
+import {
+  REAL_SEAL_SESSION_TTL_MIN,
+  SEAL_ADMIN_WALLET_REQUIRED_MESSAGE,
+  SEAL_PERMISSION_DENIED_MESSAGE,
+  SEAL_WALLET_CANCELLED_MESSAGE,
+} from "../crypto/sealPayload";
 import { useAccessControl } from "../hooks/useAccessControl";
 import { useProjectRegistry } from "../hooks/useProjectRegistry";
 import { useI18n } from "../i18n";
 import {
   createMetadataDigest,
   createProject,
+  deleteFormOnChain,
   deleteProject,
   getSelectedProjectId,
   isProjectObjectType,
@@ -35,6 +42,7 @@ import {
 } from "../lib/projectRegistry";
 import {
   canAdmin,
+  canReview,
   canReviewForm,
   getAdminSurfaceAccessState,
   getRoleLabel,
@@ -42,6 +50,7 @@ import {
 import { getTriageStatusLabel, TRIAGE_STATUS_OPTIONS } from "../lib/signalOps";
 import { exportSubmissionJson } from "../lib/export";
 import { getEncryptedPayloadAvailabilityLabel, hasDedicatedEncryptedPayloadBlob } from "../lib/encryptionDisplay";
+import { getPublicFormPath, getPublicRoadmapPath } from "../lib/publicLinks";
 import { getRespondentDisplayLabel, getSubmissionRespondentMeta } from "../lib/respondentMeta";
 import {
   getSignalPreview,
@@ -81,12 +90,31 @@ interface SignalRecord {
   category: SignalCategory;
 }
 
+const ROADMAP_READY_STATUSES = new Set<Submission["triageStatus"]>([
+  "planned",
+  "in_progress",
+  "fixed",
+]);
+
 function formatWorkspaceCount(count: number, singular: string, plural = `${singular}s`) {
   return `${count} ${count === 1 ? singular : plural}`;
 }
 
 function formatAccessLabel(roleLabel: string) {
   return `${roleLabel} access`;
+}
+
+function getFriendlyDecryptError(message: string) {
+  if (message === SEAL_ADMIN_WALLET_REQUIRED_MESSAGE) {
+    return "Connect an authorized reviewer wallet to decrypt this private signal.";
+  }
+  if (message === SEAL_PERMISSION_DENIED_MESSAGE) {
+    return "This wallet is not authorized for this project.";
+  }
+  if (message === SEAL_WALLET_CANCELLED_MESSAGE) {
+    return "Wallet approval was cancelled.";
+  }
+  return message;
 }
 
 function matchesStream(record: SignalRecord, streamId: StreamId) {
@@ -123,6 +151,7 @@ export function AdminDashboardPage() {
   const { projects, refetch: refetchProjects } = useProjectRegistry(account?.address);
   const createProjectTx = useSignAndExecuteTransaction();
   const deleteProjectTx = useSignAndExecuteTransaction();
+  const deleteOnchainFormTx = useSignAndExecuteTransaction();
   const registerSignalReceiptTx = useSignAndExecuteTransaction();
   const sealRuntime = getSealRuntimeStatus();
   const storageRuntime = getStorageRuntimeStatus();
@@ -155,7 +184,11 @@ export function AdminDashboardPage() {
   const [deletingProject, setDeletingProject] = useState(false);
   const [selectedPendingSignalIds, setSelectedPendingSignalIds] = useState<string[]>([]);
   const [registeringSignalIds, setRegisteringSignalIds] = useState<string[]>([]);
+  const [deletingOnchainFormIds, setDeletingOnchainFormIds] = useState<number[]>([]);
   const saveQueueRef = useRef(Promise.resolve());
+  const advancedProjectSettingsRef = useRef<HTMLDetailsElement | null>(null);
+  const manualProjectInputRef = useRef<HTMLInputElement | null>(null);
+  const projectCreateInputRef = useRef<HTMLInputElement | null>(null);
   const hasAdminAccess = canAdmin(capabilityProfile);
   const selectedProject = projects.find((project) => project.objectId === selectedProjectId) ?? null;
   const projectMemberCount = selectedProject ? selectedProject.admins.length + 1 : 0;
@@ -245,6 +278,21 @@ export function AdminDashboardPage() {
     } catch (projectError) {
       setProjectState(projectError instanceof Error ? projectError.message : "Failed to load project.");
     }
+  }
+
+  function revealProjectTools(mode: "connect" | "create") {
+    const details = advancedProjectSettingsRef.current;
+    if (details && !details.open) {
+      details.open = true;
+    }
+    details?.scrollIntoView({ behavior: "smooth", block: "start" });
+    window.setTimeout(() => {
+      if (mode === "create") {
+        projectCreateInputRef.current?.focus();
+        return;
+      }
+      manualProjectInputRef.current?.focus();
+    }, 160);
   }
 
   async function handleCreateProject() {
@@ -445,6 +493,20 @@ export function AdminDashboardPage() {
     () => allSignals.filter((record) => record.submission.pendingOnchainRegistration),
     [allSignals],
   );
+  const selectedProjectForms = useMemo(
+    () =>
+      selectedProject
+        ? accessibleForms.filter((form) => form.projectId === selectedProject.objectId)
+        : [],
+    [accessibleForms, selectedProject],
+  );
+  const selectedProjectSignals = useMemo(
+    () =>
+      selectedProject
+        ? allSignals.filter((record) => record.form.projectId === selectedProject.objectId)
+        : [],
+    [allSignals, selectedProject],
+  );
   useEffect(() => {
     setSelectedPendingSignalIds((current) =>
       current.filter((signalId) =>
@@ -487,6 +549,176 @@ export function AdminDashboardPage() {
     allSignals.find((record) => record.submission.id === selectedSignalId) ??
     visibleSignals[0] ??
     null;
+  const roadmapReadySignals = useMemo(
+    () => selectedProjectSignals.filter((record) => ROADMAP_READY_STATUSES.has(record.submission.triageStatus)),
+    [selectedProjectSignals],
+  );
+  const operationsStatusItems: OperationsStatusItem[] = [
+    {
+      label: "Project Connected",
+      tone: selectedProject ? "ready" : "action",
+      detail: selectedProject ? selectedProject.name : "Select, create, or connect a project",
+    },
+    {
+      label: "Private Signals Enabled",
+      tone:
+        selectedProjectForms.length === 0
+          ? "pending"
+          : selectedProjectForms.some((form) => form.encryptSubmissions)
+            ? "ready"
+            : "warning",
+      detail:
+        selectedProjectForms.length === 0
+          ? "No form published yet"
+          : selectedProjectForms.some((form) => form.encryptSubmissions)
+            ? `${selectedProjectForms.filter((form) => form.encryptSubmissions).length} protected form${selectedProjectForms.filter((form) => form.encryptSubmissions).length === 1 ? "" : "s"} active`
+            : "Forms exist, but private signal protection is off",
+    },
+    {
+      label: "Reviewer Wallet Ready",
+      tone: !account?.address ? "action" : canReview(capabilityProfile) || !capabilityProfile.isConfigured ? "ready" : "warning",
+      detail: !account?.address
+        ? "Connect reviewer wallet"
+        : canReview(capabilityProfile) || !capabilityProfile.isConfigured
+          ? `${getRoleLabel(capabilityProfile)} wallet verified`
+          : "Connected wallet does not have reviewer access",
+    },
+    {
+      label: "Walrus Sync Active",
+      tone: storageRuntime.mode === "walrus" ? "ready" : "warning",
+      detail: storageRuntime.mode === "walrus"
+        ? "Trusted storage available"
+        : "Local fallback active",
+    },
+    {
+      label: "Pending Sui Verification",
+      tone: pendingSignals.length > 0 ? "pending" : selectedProjectSignals.length > 0 ? "ready" : "pending",
+      detail: pendingSignals.length > 0
+        ? `${pendingSignals.length} signal${pendingSignals.length === 1 ? "" : "s"} waiting for verification`
+        : selectedProjectSignals.length > 0
+          ? "No pending proof registrations"
+          : "Awaiting project signals",
+    },
+    {
+      label: "Roadmap Publishing Ready",
+      tone: roadmapReadySignals.length > 0 ? "ready" : selectedProjectSignals.length > 0 ? "pending" : "pending",
+      detail: roadmapReadySignals.length > 0
+        ? `${roadmapReadySignals.length} signal${roadmapReadySignals.length === 1 ? "" : "s"} ready for the Public Roadmap`
+        : selectedProjectSignals.length > 0
+          ? "Mark signals as Planned, In Progress, or Fixed"
+          : "No roadmap candidates yet",
+    },
+  ];
+  const selectedRoadmapUrl = selectedRecord
+    ? getPublicRoadmapPath(selectedRecord.form.id, selectedRecord.form.manifestBlobId)
+    : "";
+  const isSelectedRecordOnRoadmap = selectedRecord
+    ? ROADMAP_READY_STATUSES.has(selectedRecord.submission.triageStatus)
+    : false;
+  const selectedRecordNeedsDecrypt = Boolean(
+    selectedRecord?.submission.isEncrypted && !detailAnswers,
+  );
+  const deleteProjectBlockedReason = !selectedProject
+    ? ""
+    : !selectedProject.ownedOwnerCapId
+      ? "This wallet is not holding the project owner capability."
+      : selectedProject.formsCount > 0
+        ? `This project still has ${selectedProject.formsCount} on-chain form record${selectedProject.formsCount === 1 ? "" : "s"}.`
+        : selectedProject.signalsCount > 0
+          ? `This project still has ${selectedProject.signalsCount} on-chain signal${selectedProject.signalsCount === 1 ? "" : "s"}.`
+          : localProjectFormsCount > 0
+            ? `This workspace still has ${localProjectFormsCount} local form${localProjectFormsCount === 1 ? "" : "s"} linked to the project.`
+            : "";
+  const visibleOnchainForms = selectedProject?.onchainForms ?? [];
+  const firstProjectForm = selectedProjectForms[0] ?? null;
+  const firstProtectedSignal = selectedProjectSignals.find((record) => record.submission.isEncrypted) ?? null;
+  const nextRecommendedAction =
+    !selectedProject
+      ? {
+          label: "Connect a project",
+          detail: "Create a new project or connect an existing one before you create or review private signals.",
+          cta: (
+            <div className="inline-actions">
+              {hasAdminAccess ? (
+                <button
+                  type="button"
+                  className="primary-button"
+                  onClick={() => revealProjectTools("create")}
+                >
+                  Create project
+                </button>
+              ) : null}
+              <button
+                type="button"
+                className="ghost-button"
+                onClick={() => revealProjectTools("connect")}
+              >
+                Connect existing
+              </button>
+            </div>
+          ),
+        }
+      : selectedProjectForms.length === 0
+        ? {
+            label: "Create your first private signal form",
+            detail: "Publish one protected form for this project so judges can submit anonymously.",
+            cta: <Link className="primary-button" to="/admin/forms/new">Create Signal Form</Link>,
+          }
+        : selectedProjectSignals.length === 0
+          ? {
+              label: "Share your public signal link",
+              detail: "Open the latest public form and send one anonymous private signal into the inbox.",
+              cta: firstProjectForm ? <Link className="primary-button" to={getPublicFormPath(firstProjectForm.id, firstProjectForm.manifestBlobId)}>Open Public Link</Link> : null,
+            }
+          : firstProtectedSignal && !detailAnswers
+            ? {
+                label: "Decrypt protected signals",
+                detail: "Select a protected signal and verify reviewer wallet access to unlock the message.",
+                cta: firstProtectedSignal ? (
+                  <button
+                    type="button"
+                    className="primary-button"
+                    onClick={() => setSelectedSignalId(firstProtectedSignal.submission.id)}
+                  >
+                    Open Protected Signal
+                  </button>
+                ) : null,
+              }
+            : pendingSignals.length > 0
+              ? {
+                  label: "Register signals on Sui",
+                  detail: "Clear the proof queue so pending signals become verified records.",
+                  cta: (
+                    <button
+                      type="button"
+                      className="primary-button"
+                      disabled={registeringSignalIds.length > 0}
+                      onClick={() => void handleRegisterPendingSignals()}
+                    >
+                      {registeringSignalIds.length > 0 ? "Registering..." : "Register Pending Signals"}
+                    </button>
+                  ),
+                }
+              : roadmapReadySignals.length === 0
+                ? {
+                    label: "Publish signals to roadmap",
+                    detail: "Move at least one reviewed signal into a roadmap status so the public roadmap becomes live.",
+                    cta: selectedRecord ? (
+                      <button
+                        type="button"
+                        className="primary-button"
+                        disabled={saving}
+                        onClick={() => void handleMoveToRoadmap()}
+                      >
+                        Move to Public Roadmap
+                      </button>
+                    ) : null,
+                  }
+                : {
+                    label: "Review signal inbox",
+                    detail: "The console is operational. Continue triage, proof verification, or roadmap updates as new signals arrive.",
+                    cta: selectedRoadmapUrl ? <Link className="primary-button" to={selectedRoadmapUrl}>Open Public Roadmap</Link> : null,
+                  };
 
   useEffect(() => {
     if (!selectedRecord) {
@@ -536,6 +768,38 @@ export function AdminDashboardPage() {
     };
     saveQueueRef.current = saveQueueRef.current.then(runSave, runSave);
     await saveQueueRef.current;
+  }
+
+  async function handleDeleteOnchainForm(formId: number) {
+    if (!selectedProject) {
+      setProjectState("Select a project first.");
+      return;
+    }
+    if (selectedProject.signalsCount > 0) {
+      setProjectState("This project still has on-chain signals. Forms with linked signals cannot be deleted.");
+      return;
+    }
+    if (!window.confirm(`Delete on-chain form ${formId} from ${selectedProject.name}?`)) {
+      return;
+    }
+
+    try {
+      setDeletingOnchainFormIds((current) => [...current, formId]);
+      setProjectState("Awaiting wallet approval...");
+      const tx = deleteFormOnChain({
+        projectId: selectedProject.objectId,
+        formId,
+      });
+      const result = await deleteOnchainFormTx.mutateAsync({ transaction: tx });
+      await suiClient.waitForTransaction({ digest: result.digest });
+      await refetchProjects();
+      await loadConsole();
+      setProjectState(`Removed on-chain form ${formId}.`);
+    } catch (projectError) {
+      setProjectState(projectError instanceof Error ? projectError.message : "Failed to delete on-chain form.");
+    } finally {
+      setDeletingOnchainFormIds((current) => current.filter((entry) => entry !== formId));
+    }
   }
 
   function isRegisteringSignal(signalId: string) {
@@ -666,10 +930,6 @@ export function AdminDashboardPage() {
     });
   }
 
-  async function handleSelect(record: SignalRecord) {
-    setSelectedSignalId(record.submission.id);
-  }
-
   async function handleDecrypt() {
     if (!selectedRecord) {
       return;
@@ -694,12 +954,29 @@ export function AdminDashboardPage() {
       if (resolved) {
         setDetailAnswers(resolved.answers);
         setDetailAttachments(resolved.attachments);
+        setToast({ tone: "success", message: "Wallet verified. Private signal unlocked." });
       }
     } catch (error) {
-      setDecryptError(error instanceof Error ? error.message : t("decryptFailed"));
+      setDecryptError(
+        error instanceof Error ? getFriendlyDecryptError(error.message) : t("decryptFailed"),
+      );
     } finally {
       setDecrypting(false);
     }
+  }
+
+  async function handleMoveToRoadmap() {
+    if (!selectedRecord) {
+      return;
+    }
+    const nextStatus = ROADMAP_READY_STATUSES.has(selectedRecord.submission.triageStatus)
+      ? selectedRecord.submission.triageStatus
+      : "planned";
+    await updateSubmission({
+      ...selectedRecord.submission,
+      triageStatus: nextStatus,
+    });
+    setToast({ tone: "success", message: "Signal added to the Public Roadmap." });
   }
 
   const streamItems = [
@@ -798,6 +1075,8 @@ export function AdminDashboardPage() {
   const selectedPendingVisibleCount = visibleSignals.filter((record) =>
     selectedPendingSignalIds.includes(record.submission.id),
   ).length;
+  const activeFormsCount = selectedFormId === "all" ? accessibleForms.length : 1;
+  const hasProjects = projects.length > 0;
   const overviewCards = [
     {
       label: "Current scope",
@@ -819,11 +1098,15 @@ export function AdminDashboardPage() {
       value: String(pendingSignals.length),
       meta: "Optional proof queue",
     },
-    {
-      label: "Active forms",
-      value: String(selectedFormId === "all" ? accessibleForms.length : 1),
-      meta: selectedProject ? selectedProject.name : "Walrus / local mode",
-    },
+    ...(activeFormsCount > 0
+      ? [
+          {
+            label: "Active forms",
+            value: String(activeFormsCount),
+            meta: selectedProject ? selectedProject.name : "Walrus / local mode",
+          },
+        ]
+      : []),
   ];
 
   const nodeDirectoryItems = useMemo(() => {
@@ -891,15 +1174,22 @@ export function AdminDashboardPage() {
             {toast.message}
           </div>
         ) : null}
+        <OperationsStatusRail
+          items={operationsStatusItems}
+          nextActionLabel={nextRecommendedAction.label}
+          nextActionDetail={nextRecommendedAction.detail}
+          nextActionCta={nextRecommendedAction.cta}
+        />
+
         <section className="panel glow-panel workspace-hero">
           <div className="workspace-hero-main">
             <div className="workspace-hero-copy">
               <p className="eyebrow">{t("creatorOnlyInbox")}</p>
-              <h1>{selectedProject ? selectedProject.name : "Signal workspace"}</h1>
+              <h1>{selectedProject ? selectedProject.name : "Contest demo workspace"}</h1>
               <p className="lede">
                 {selectedProject
-                  ? "Review incoming signals, manage who can read them, and launch the next protected form from one place."
-                  : "Choose a project to review protected signals, or stay in Walrus / local mode while you set things up."}
+                  ? "Run the full judge demo from one place: create the form, collect a private signal, unlock it with reviewer access, and publish the roadmap."
+                  : "Start by selecting the project for this demo. Once a project is active, the next step is creating a signal form."}
               </p>
               <div className="workspace-hero-meta">
                 {workspaceMetaItems.map((item) => (
@@ -926,7 +1216,7 @@ export function AdminDashboardPage() {
                     setSelectedProjectId(event.target.value);
                   }}
                 >
-                  <option value="">Walrus / local only</option>
+                  <option value="">Choose a project</option>
                   {projects.map((project) => (
                     <option key={project.objectId} value={project.objectId}>
                       {project.name} ({project.formsCount} forms / {project.signalsCount} signals)
@@ -939,30 +1229,9 @@ export function AdminDashboardPage() {
               </Link>
             </div>
           </div>
-
         </section>
 
-        <section className="panel workspace-primary-action">
-          <div>
-            <p className="eyebrow">Primary action</p>
-            <h2>{selectedProject ? "New Signal Form" : t("createSignalForm")}</h2>
-            <p className="muted">Launch a new protected feedback entrypoint.</p>
-          </div>
-          <div className="workspace-primary-actions">
-            <Link className="primary-button" to="/admin/forms/new">
-              {selectedProject ? "Create form for this project" : "New Signal Form"}
-            </Link>
-            <button
-              type="button"
-              className="ghost-button"
-              onClick={() => setNodeDirectoryOpen(true)}
-            >
-              {t("openNodeDirectory")}
-            </button>
-          </div>
-        </section>
-
-        <details className="panel advanced-project-settings">
+        <details ref={advancedProjectSettingsRef} className="panel advanced-project-settings">
           <summary>
             <span>
               <strong>Advanced project settings</strong>
@@ -991,6 +1260,7 @@ export function AdminDashboardPage() {
                 </p>
                 <div className="inline-actions">
                   <input
+                    ref={manualProjectInputRef}
                     value={manualProjectId}
                     onChange={(event) => setManualProjectId(event.target.value)}
                     placeholder="Project or ProjectOwnerCap object id"
@@ -1015,6 +1285,7 @@ export function AdminDashboardPage() {
                   </p>
                   <div className="inline-actions">
                     <input
+                      ref={projectCreateInputRef}
                       value={projectCreateName}
                       onChange={(event) => setProjectCreateName(event.target.value)}
                       placeholder="New project name"
@@ -1049,6 +1320,43 @@ export function AdminDashboardPage() {
                       <span className="workspace-meta-item">{selectedProject.signalsCount} on-chain signals</span>
                       <span className="workspace-meta-item">{localProjectFormsCount} local forms</span>
                     </div>
+                    {deleteProjectBlockedReason ? (
+                      <p className="warning-text">{deleteProjectBlockedReason} Local form visibility can differ from the on-chain registry.</p>
+                    ) : (
+                      <p className="muted">This project is empty and can be deleted by the owner wallet.</p>
+                    )}
+                    {visibleOnchainForms.length > 0 ? (
+                      <div className="stack onchain-form-list">
+                        <p className="muted">On-chain form records</p>
+                        {visibleOnchainForms.map((form) => (
+                          <div key={form.formId} className="metadata-row onchain-form-row">
+                            <div>
+                              <strong>Form #{form.formId}</strong>
+                              <p className="muted">{form.title || "Untitled form"}</p>
+                            </div>
+                            <div className="inline-actions">
+                              <span className={`signal-chip ${form.active ? "signal-chip-accent" : "signal-chip-soft"}`}>
+                                {form.active ? "Active" : "Inactive"}
+                              </span>
+                              <button
+                                type="button"
+                                className="ghost-button"
+                                disabled={
+                                  deletingOnchainFormIds.includes(form.formId) ||
+                                  selectedProject.signalsCount > 0
+                                }
+                                onClick={() => void handleDeleteOnchainForm(form.formId)}
+                              >
+                                {deletingOnchainFormIds.includes(form.formId) ? "Deleting..." : "Delete on-chain form"}
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                        {selectedProject.signalsCount > 0 ? (
+                          <p className="muted">On-chain forms can only be deleted when no on-chain signals reference this project.</p>
+                        ) : null}
+                      </div>
+                    ) : null}
                     <button
                       type="button"
                       className="ghost-button node-directory-delete"
@@ -1085,6 +1393,7 @@ export function AdminDashboardPage() {
         </section>
 
         {accessibleForms.length === 0 ? (
+          hasProjects ? (
           <EmptyState>
             <h2>{t("noCreatorInboxesTitle")}</h2>
             <p>{t("noCreatorInboxesBody")}</p>
@@ -1094,6 +1403,7 @@ export function AdminDashboardPage() {
               </Link>
             ) : null}
           </EmptyState>
+          ) : null
         ) : (
           <div className="signal-console-layout admin-console-layout">
             <aside className="panel signal-sidebar">
@@ -1227,10 +1537,36 @@ export function AdminDashboardPage() {
 
               {visibleSignals.length === 0 ? (
                 <EmptyState variant="abyss">
-                  <p className="eyebrow">Abyssal Scan</p>
-                  <h2>{t("abyssNoSignalsTitle")}</h2>
-                  <p>{t("abyssNoSignalsBody")}</p>
-                  <p className="muted">{t("abyssNoSignalsHint")}</p>
+                  <p className="eyebrow">Inbox empty</p>
+                  <h2>
+                    {!selectedProject
+                      ? "Choose a project first"
+                      : selectedProjectForms.length === 0
+                        ? "Create your first signal form"
+                        : "Waiting for a private signal"}
+                  </h2>
+                  <p>
+                    {!selectedProject
+                      ? "The contest flow starts with project selection so reviewer access and roadmap publishing stay scoped correctly."
+                      : selectedProjectForms.length === 0
+                        ? "Publish a form for this project, then share the public link so someone can submit anonymously."
+                        : "Share the public link and send one anonymous submission to demonstrate the locked inbox state."}
+                  </p>
+                  <div className="inline-actions">
+                    {!selectedProject ? null : selectedProjectForms.length === 0 ? (
+                      <Link className="primary-button" to="/admin/forms/new">
+                        Create Signal Form
+                      </Link>
+                    ) : (
+                      <button
+                        type="button"
+                        className="primary-button"
+                        onClick={() => setNodeDirectoryOpen(true)}
+                      >
+                        Open public link
+                      </button>
+                    )}
+                  </div>
                 </EmptyState>
               ) : (
                 <div className="signal-list">
@@ -1249,7 +1585,11 @@ export function AdminDashboardPage() {
                           <strong>{getSignalSubject(submission)}</strong>
                           <span className="signal-card-time">{formatDate(submission.createdAt)}</span>
                         </div>
-                        <p className="signal-card-preview">{getSignalPreview(submission)}</p>
+                        <p className={`signal-card-preview ${submission.isEncrypted ? "is-locked" : ""}`}>
+                          {submission.isEncrypted
+                            ? "Encrypted private signal. Requires reviewer access to unlock."
+                            : getSignalPreview(submission)}
+                        </p>
                         <div className="signal-card-formline">
                           <span className="signal-card-form">{form.title}</span>
                           {getSubmissionRespondentMeta(submission).isAnonymous ? (
@@ -1266,7 +1606,7 @@ export function AdminDashboardPage() {
                             <span className="signal-chip signal-chip-accent">Pending Sui</span>
                           ) : null}
                           {submission.isEncrypted ? (
-                            <span className="signal-chip signal-chip-soft">Protected</span>
+                            <span className="signal-chip signal-chip-soft">Encrypted private signal</span>
                           ) : null}
                           {submission.clusterId ? (
                             <span className="signal-chip signal-chip-accent">
@@ -1327,7 +1667,7 @@ export function AdminDashboardPage() {
                 <EmptyState variant="abyss" animated={false} showVisual={false}>
                   <p className="eyebrow">Signal detail</p>
                   <h2>No signal selected</h2>
-                  <p>Choose a signal from the inbox to review its original content, attachments, and AI interpretation.</p>
+                  <p>Choose a signal from the inbox to review it, unlock the private message, and move it toward the Public Roadmap.</p>
                 </EmptyState>
               ) : (
                 <>
@@ -1384,7 +1724,11 @@ export function AdminDashboardPage() {
                       Severity {selectedRecord.submission.severity ?? "medium"}
                       </span>
                       <span className={`signal-chip ${detailAnswers ? "signal-chip-accent" : ""}`}>
-                        {detailAnswers ? "Decrypted" : selectedRecord.submission.isEncrypted ? "Encrypted" : "Open"}
+                        {detailAnswers
+                          ? "Private signal unlocked"
+                          : selectedRecord.submission.isEncrypted
+                            ? "Encrypted private signal"
+                            : "Open submission"}
                       </span>
                       {typeof selectedRecord.submission.ratingValue === "number" ? (
                         <span className="signal-chip">
@@ -1396,9 +1740,9 @@ export function AdminDashboardPage() {
                     </div>
                   </section>
 
-                  {selectedRecord.submission.isEncrypted && !detailAnswers ? (
+                  {selectedRecordNeedsDecrypt ? (
                     <div className="stack private-access-copy">
-                      <p className="muted">{privateReviewLabel}</p>
+                      <p className="muted">Encrypted private signal</p>
                       <p className="muted">
                         {sealRuntime.activeMode === "mock"
                           ? `${t("demoDecryptAvailable")} Mock mode only.`
@@ -1417,6 +1761,12 @@ export function AdminDashboardPage() {
                   ) : null}
 
                   {decryptError ? <p className="warning-text">{decryptError}</p> : null}
+                  {selectedRecord.submission.isEncrypted && detailAnswers ? (
+                    <div className="contest-inline-success" role="status" aria-live="polite">
+                      <strong>Wallet verified</strong>
+                      <span>Private signal unlocked</span>
+                    </div>
+                  ) : null}
 
                   <div className="signal-detail-sections">
                     <section className="answer-card review-controls-section">
@@ -1429,6 +1779,48 @@ export function AdminDashboardPage() {
                           {saving ? "Saving..." : "Ready"}
                         </span>
                       </div>
+                      {selectedRecord.submission.isEncrypted ? (
+                        <section className="contest-review-lock-card">
+                          <div className="section-row">
+                            <div>
+                              <p className="eyebrow">Reviewer access</p>
+                              <h4>{detailAnswers ? "Private signal unlocked" : "Decrypt with Wallet"}</h4>
+                            </div>
+                            {detailAnswers ? (
+                              <span className="signal-chip signal-chip-accent">Wallet verified</span>
+                            ) : (
+                              <span className="signal-chip signal-chip-soft">Requires reviewer access</span>
+                            )}
+                          </div>
+                          <p className="muted">
+                            {detailAnswers
+                              ? "This reviewer wallet has been verified for the project."
+                              : "Connect an authorized reviewer wallet to decrypt this private signal."}
+                          </p>
+                          {!detailAnswers ? (
+                            <div className="inline-actions">
+                              <button
+                                type="button"
+                                className="primary-button"
+                                onClick={() => void handleDecrypt()}
+                                disabled={decrypting}
+                              >
+                                {decrypting
+                                  ? t("decryptingSignal")
+                                  : sealRuntime.activeMode === "mock"
+                                    ? t("decryptSignal")
+                                    : "Decrypt private signal"}
+                              </button>
+                              {!isLocalFallbackBlob(selectedRecord.submission.encryptedBlobId) ? (
+                                <BlobLink
+                                  blobId={selectedRecord.submission.encryptedBlobId}
+                                  label={t("verifyOnWalrus")}
+                                />
+                              ) : null}
+                            </div>
+                          ) : null}
+                        </section>
+                      ) : null}
                       <div className="review-field-row">
                         <label className="review-select">
                           <span>{t("status")}</span>
@@ -1529,10 +1921,41 @@ export function AdminDashboardPage() {
                         >
                           Review thread
                         </Link>
+                        {isSelectedRecordOnRoadmap ? (
+                          <Link className="review-inline-link" to={selectedRoadmapUrl}>
+                            Open Public Roadmap
+                          </Link>
+                        ) : null}
                       </div>
                       <p className="review-helper-copy muted">
                         {selectedRecord.submission.notes.trim() ? "Notes saved." : "Notes empty."} Tags {selectedRecord.submission.tags.length}.
                       </p>
+                      <section className="review-support-card contest-roadmap-card">
+                        <div className="section-row">
+                          <div>
+                            <h4>Public Roadmap</h4>
+                            <p className="muted">Planned, In Progress, and Fixed signals appear on the roadmap.</p>
+                          </div>
+                          <span className="signal-chip">
+                            {getTriageStatusLabel(selectedRecord.submission.triageStatus)}
+                          </span>
+                        </div>
+                        <div className="inline-actions">
+                          <button
+                            type="button"
+                            className="ghost-button"
+                            disabled={saving}
+                            onClick={() => void handleMoveToRoadmap()}
+                          >
+                            {isSelectedRecordOnRoadmap ? "Keep on Public Roadmap" : "Move to Public Roadmap"}
+                          </button>
+                          {isSelectedRecordOnRoadmap ? (
+                            <Link className="ghost-button" to={selectedRoadmapUrl}>
+                              Open roadmap
+                            </Link>
+                          ) : null}
+                        </div>
+                      </section>
                       <div className="review-support-grid">
                         <section className="review-support-card">
                           <div className="section-row">
@@ -1629,30 +2052,6 @@ export function AdminDashboardPage() {
                         <h3>Original Signal</h3>
                         <p className="muted">Read the submitted feedback first, then move back to review actions.</p>
                       </div>
-                      {selectedRecord.submission.isEncrypted ? (
-                        <div className="private-access-card private-access-inline">
-                          <div className="private-access-actions">
-                          <button
-                            type="button"
-                            className="primary-button"
-                            onClick={() => void handleDecrypt()}
-                            disabled={decrypting}
-                          >
-                            {decrypting
-                              ? t("decryptingSignal")
-                              : sealRuntime.activeMode === "mock"
-                                ? t("decryptSignal")
-                                : "Decrypt private signal"}
-                          </button>
-                          {!isLocalFallbackBlob(selectedRecord.submission.encryptedBlobId) ? (
-                            <BlobLink
-                              blobId={selectedRecord.submission.encryptedBlobId}
-                              label={t("verifyOnWalrus")}
-                            />
-                          ) : null}
-                          </div>
-                        </div>
-                      ) : null}
                       <div className="original-signal-block">
                         <div className="section-row">
                           <div>
@@ -1669,8 +2068,20 @@ export function AdminDashboardPage() {
                             </div>
                           ))}
                         </div>
+                      ) : selectedRecordNeedsDecrypt ? (
+                        <div className="locked-signal-state">
+                          <div className="locked-signal-copy">
+                            <strong>Encrypted private signal</strong>
+                            <p>Requires reviewer access. Decrypt with wallet to reveal the message.</p>
+                          </div>
+                          <div className="locked-signal-skeleton" aria-hidden="true">
+                            <span />
+                            <span />
+                            <span />
+                          </div>
+                        </div>
                       ) : (
-                        <p className="muted">Private signal. Decrypt to view content.</p>
+                        <p className="muted">No response content is available yet.</p>
                       )}
                       </div>
                       <div className="original-signal-block">
@@ -1680,7 +2091,9 @@ export function AdminDashboardPage() {
                             <h4>{t("attachments")}</h4>
                           </div>
                         </div>
-                      {detailAttachments.length === 0 ? (
+                      {selectedRecordNeedsDecrypt ? (
+                        <p className="muted">Attachments stay hidden until the private signal is unlocked.</p>
+                      ) : detailAttachments.length === 0 ? (
                         <p className="muted">{t("noAttachments")}</p>
                       ) : (
                         <div className="stack">
@@ -1759,9 +2172,9 @@ export function AdminDashboardPage() {
 
                     <section className="signal-detail-group details-group-section">
                       <div className="signal-detail-group-header signal-detail-group-header-details">
-                        <p className="eyebrow">More Details</p>
-                        <h3>Expandable Details</h3>
-                        <p className="muted">Tertiary context stays collapsed until you need it.</p>
+                        <p className="eyebrow">Trust Metadata</p>
+                        <h3>Trust Metadata</h3>
+                        <p className="muted">Technical proof stays grouped here so review actions remain the focus.</p>
                       </div>
 
                       <details className="answer-card collapsible-detail-card ai-similar-section ai-card">
@@ -1791,11 +2204,19 @@ export function AdminDashboardPage() {
                       >
                         <summary>
                           <span>
-                            <p className="eyebrow">Metadata</p>
-                            <h3>{t("signalMetadataTitle")}</h3>
+                            <p className="eyebrow">Trust Metadata</p>
+                            <h3>Trusted storage and proof</h3>
                           </span>
                         </summary>
                         <div className="metadata-list">
+                          <div className="metadata-row">
+                            <span>Review state</span>
+                            <strong>{detailAnswers ? "Private signal unlocked" : "Encrypted private signal"}</strong>
+                          </div>
+                          <div className="metadata-row">
+                            <span>Seal runtime</span>
+                            <strong>{sealRuntime.activeMode === "mock" ? "Mock reviewer mode" : "Project reviewer access"}</strong>
+                          </div>
                           <SignalMetaRow label="Project" type="registry" value={selectedRecord.form.projectId} emptyLabel={t("notAvailable")} />
                           {typeof selectedRecord.form.onchainFormId === "number" ? (
                             <div className="metadata-row">
@@ -1902,7 +2323,7 @@ export function AdminDashboardPage() {
                             </strong>
                           </div>
                           <div className="metadata-row">
-                            <span>Private review</span>
+                            <span>Reviewer access</span>
                             <strong>{privateReviewLabel}</strong>
                           </div>
                           <div className="metadata-row">
@@ -1912,7 +2333,7 @@ export function AdminDashboardPage() {
                             </strong>
                           </div>
                           <div className="metadata-row">
-                            <span>Project status sync</span>
+                            <span>Pending Sui registration</span>
                             <strong>
                               {selectedRecord.submission.onchainStatus ??
                                 (selectedRecord.submission.pendingOnchainRegistration
@@ -1920,7 +2341,34 @@ export function AdminDashboardPage() {
                                   : "offchain only")}
                             </strong>
                           </div>
+                          <div className="inline-actions metadata-action-row">
+                            {selectedRecord.submission.pendingOnchainRegistration ? (
+                              <button
+                                type="button"
+                                className="ghost-button"
+                                disabled={isRegisteringSignal(selectedRecord.submission.id)}
+                                onClick={() => void handleRegisterPendingSignals([selectedRecord.submission.id])}
+                              >
+                                {isRegisteringSignal(selectedRecord.submission.id)
+                                  ? "Registering..."
+                                  : "Register on Sui"}
+                              </button>
+                            ) : null}
+                            <button
+                              type="button"
+                              className="ghost-button"
+                              disabled={saving}
+                              onClick={() => void handleMoveToRoadmap()}
+                            >
+                              {isSelectedRecordOnRoadmap ? "On Public Roadmap" : "Move to Public Roadmap"}
+                            </button>
+                            {isSelectedRecordOnRoadmap ? (
+                              <Link className="ghost-button" to={selectedRoadmapUrl}>
+                                Open Public Roadmap
+                              </Link>
+                            ) : null}
                           </div>
+                        </div>
                       </details>
 
                       <details
@@ -1932,8 +2380,8 @@ export function AdminDashboardPage() {
                       >
                         <summary>
                           <span>
-                            <p className="eyebrow">Payload</p>
-                            <h3>Raw payload</h3>
+                            <p className="eyebrow">Technical details</p>
+                            <h3>Encrypted payload details</h3>
                           </span>
                         </summary>
                         <SealStatusCard
@@ -1963,7 +2411,10 @@ export function AdminDashboardPage() {
                           >
                             {t("openNodeDirectory")}
                           </button>
-                          <Link className="ghost-button" to={`/f/${selectedRecord.form.id}`}>
+                          <Link
+                            className="ghost-button"
+                            to={getPublicFormPath(selectedRecord.form.id, selectedRecord.form.manifestBlobId)}
+                          >
                             {t("openPublicForm")}
                           </Link>
                           <Link className="ghost-button" to={`/dashboard/forms/${selectedRecord.form.id}`}>

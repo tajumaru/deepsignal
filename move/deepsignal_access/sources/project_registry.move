@@ -10,6 +10,7 @@ module deepsignal::project_registry {
     const E_FORM_NOT_FOUND: u64 = 6;
     const E_FORM_INACTIVE: u64 = 7;
     const E_SIGNAL_NOT_FOUND: u64 = 8;
+    const E_FORM_HAS_SIGNALS: u64 = 9;
 
     const SIGNAL_STATUS_NEW: u8 = 0;
     const SIGNAL_STATUS_TRIAGED: u8 = 1;
@@ -87,6 +88,13 @@ module deepsignal::project_registry {
         project_id: sui::object::ID,
         form_id: u64,
         active: bool,
+        actor: address,
+    }
+
+    public struct FormDeleted has copy, drop {
+        project_id: sui::object::ID,
+        form_id: u64,
+        title: String,
         actor: address,
     }
 
@@ -255,6 +263,35 @@ module deepsignal::project_registry {
         0
     }
 
+    fun next_form_id(forms: &vector<Form>): u64 {
+        let mut index = 0;
+        let total = vector::length(forms);
+        let mut next_id = 0;
+
+        while (index < total) {
+            let form = vector::borrow(forms, index);
+            if (form.form_id >= next_id) {
+                next_id = form.form_id + 1;
+            };
+            index = index + 1;
+        };
+
+        next_id
+    }
+
+    fun form_has_signals(signals: &vector<SignalReceipt>, form_id: u64): bool {
+        let mut index = 0;
+        let total = vector::length(signals);
+        while (index < total) {
+            let signal = vector::borrow(signals, index);
+            if (signal.form_id == form_id) {
+                return true
+            };
+            index = index + 1;
+        };
+        false
+    }
+
     public fun create_project(
         admin_cap: &access_control::AdminCap,
         registry: &access_control::Registry,
@@ -382,7 +419,7 @@ module deepsignal::project_registry {
         let sender = sui::tx_context::sender(ctx);
         assert_project_admin(project, sender);
 
-        let form_id = project.forms_count;
+        let form_id = next_form_id(&project.forms);
         let created_at = sui::tx_context::epoch_timestamp_ms(ctx);
         let form = Form {
             form_id,
@@ -396,7 +433,7 @@ module deepsignal::project_registry {
         let event_title = form.title;
         let event_digest = form.metadata_digest;
         vector::push_back(&mut project.forms, form);
-        project.forms_count = project.forms_count + 1;
+        project.forms_count = vector::length(&project.forms);
 
         sui::event::emit(FormCreated {
             project_id: project.project_id,
@@ -492,6 +529,27 @@ module deepsignal::project_registry {
             project_id: project.project_id,
             signal_id,
             status,
+            actor: sender,
+        });
+    }
+
+    public fun delete_form(
+        project: &mut Project,
+        form_id: u64,
+        ctx: &mut sui::tx_context::TxContext,
+    ) {
+        let sender = sui::tx_context::sender(ctx);
+        assert_project_admin(project, sender);
+        assert!(!form_has_signals(&project.signals, form_id), E_FORM_HAS_SIGNALS);
+
+        let index = find_form_index(&project.forms, form_id);
+        let form = vector::swap_remove(&mut project.forms, index);
+        project.forms_count = vector::length(&project.forms);
+
+        sui::event::emit(FormDeleted {
+            project_id: project.project_id,
+            form_id,
+            title: form.title,
             actor: sender,
         });
     }
@@ -856,6 +914,113 @@ module deepsignal::project_registry {
 
         delete_project(project, project_owner_cap, owner_ctx);
 
+        access_control::destroy_test_owner_cap(owner_cap);
+        access_control::destroy_test_registry(registry);
+    }
+
+    #[test]
+    fun admin_can_delete_form_without_signals() {
+        let owner = @0xA;
+        let admin = @0xB;
+        let owner_ctx = &mut sui::tx_context::new_from_hint(owner, 19, 7, 1900, 0);
+        let (registry, owner_cap) = access_control::new_test_registry(owner, owner_ctx);
+        let (mut project, project_owner_cap) = create_project_internal(
+            std::string::utf8(b"alpha"),
+            owner,
+            1900,
+            owner_ctx,
+        );
+        add_admin(&mut project, &project_owner_cap, admin, owner_ctx);
+        let admin_ctx = &mut sui::tx_context::new_from_hint(admin, 20, 7, 1901, 0);
+
+        create_form(
+            &mut project,
+            std::string::utf8(b"feedback"),
+            std::string::utf8(b"digest-1"),
+            owner_ctx,
+        );
+        delete_form(&mut project, 0, admin_ctx);
+
+        let (_, forms_count, _) = project_stats(&project);
+        assert!(forms_count == 0, 0);
+
+        destroy_project_owner_cap(project_owner_cap);
+        destroy_project(project);
+        access_control::destroy_test_owner_cap(owner_cap);
+        access_control::destroy_test_registry(registry);
+    }
+
+    #[test]
+    #[expected_failure(abort_code = E_FORM_HAS_SIGNALS)]
+    fun form_with_signals_cannot_be_deleted() {
+        let owner = @0xA;
+        let submitter = @0xD;
+        let owner_ctx = &mut sui::tx_context::new_from_hint(owner, 21, 7, 2000, 0);
+        let (registry, owner_cap) = access_control::new_test_registry(owner, owner_ctx);
+        let (mut project, project_owner_cap) = create_project_internal(
+            std::string::utf8(b"alpha"),
+            owner,
+            2000,
+            owner_ctx,
+        );
+
+        create_form(
+            &mut project,
+            std::string::utf8(b"feedback"),
+            std::string::utf8(b"digest-1"),
+            owner_ctx,
+        );
+
+        let submitter_ctx = &mut sui::tx_context::new_from_hint(submitter, 22, 7, 2001, 0);
+        register_signal(
+            &mut project,
+            0,
+            std::string::utf8(b"blob-1"),
+            std::string::utf8(b"meta-1"),
+            true,
+            option::none(),
+            submitter_ctx,
+        );
+
+        delete_form(&mut project, 0, owner_ctx);
+
+        destroy_project_owner_cap(project_owner_cap);
+        destroy_project(project);
+        access_control::destroy_test_owner_cap(owner_cap);
+        access_control::destroy_test_registry(registry);
+    }
+
+    #[test]
+    fun deleted_form_id_is_not_reused() {
+        let owner = @0xA;
+        let owner_ctx = &mut sui::tx_context::new_from_hint(owner, 23, 7, 2100, 0);
+        let (registry, owner_cap) = access_control::new_test_registry(owner, owner_ctx);
+        let (mut project, project_owner_cap) = create_project_internal(
+            std::string::utf8(b"alpha"),
+            owner,
+            2100,
+            owner_ctx,
+        );
+
+        create_form(
+            &mut project,
+            std::string::utf8(b"feedback"),
+            std::string::utf8(b"digest-1"),
+            owner_ctx,
+        );
+        delete_form(&mut project, 0, owner_ctx);
+        create_form(
+            &mut project,
+            std::string::utf8(b"second"),
+            std::string::utf8(b"digest-2"),
+            owner_ctx,
+        );
+
+        let form = vector::borrow(&project.forms, 0);
+        assert!(form.form_id == 1, 0);
+
+        destroy_project_owner_cap(project_owner_cap);
+        destroy_project(project);
         access_control::destroy_test_owner_cap(owner_cap);
         access_control::destroy_test_registry(registry);
     }

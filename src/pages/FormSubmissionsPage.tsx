@@ -19,6 +19,7 @@ import { useI18n } from "../i18n";
 import { getReviewAccessState, getRoleLabel } from "../lib/adminAccess";
 import { getEncryptedPayloadAvailabilityLabel, hasDedicatedEncryptedPayloadBlob } from "../lib/encryptionDisplay";
 import { exportSubmissionJson, exportSubmissionsCsv, exportSummaryJson } from "../lib/export";
+import { getPublicFormPath, getPublicRoadmapPath } from "../lib/publicLinks";
 import { getRespondentDisplayLabel, getSubmissionRespondentMeta } from "../lib/respondentMeta";
 import {
   triageStatusToOnchainStatus,
@@ -627,10 +628,10 @@ export function FormSubmissionsPage() {
             <Link className="ghost-button" to="/admin">
               {t("allInboxes")}
             </Link>
-            <Link className="ghost-button" to={`/roadmap/${form.id}`}>
+            <Link className="ghost-button" to={getPublicRoadmapPath(form.id, form.manifestBlobId)}>
               Open Public Roadmap
             </Link>
-            <Link className="primary-button" to={`/f/${form.id}`}>
+            <Link className="primary-button" to={getPublicFormPath(form.id, form.manifestBlobId)}>
               {t("openPublicForm")}
             </Link>
           </div>
@@ -982,7 +983,7 @@ export function FormSubmissionsPage() {
                   </section>
                 </div>
 
-                {false ? (
+                {selectedSubmission ? (
                 <div className="signal-detail-sections">
                   {showSurveySummary ? (
                     <section className="answer-card">

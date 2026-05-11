@@ -22,8 +22,17 @@ export interface ProjectSummary {
   admins: string[];
   formsCount: number;
   signalsCount: number;
+  onchainForms?: OnchainProjectFormSummary[];
   createdAt?: string;
   ownedOwnerCapId?: string;
+}
+
+export interface OnchainProjectFormSummary {
+  formId: number;
+  title: string;
+  metadataDigest: string;
+  active: boolean;
+  createdAt?: string;
 }
 
 export interface ProjectOwnerCapSummary {
@@ -74,6 +83,13 @@ export interface SetFormActiveArgs {
   projectId: string;
   formId: number | string | bigint;
   active: boolean;
+  packageId?: string;
+  tx?: Transaction;
+}
+
+export interface DeleteFormOnChainArgs {
+  projectId: string;
+  formId: number | string | bigint;
   packageId?: string;
   tx?: Transaction;
 }
@@ -227,6 +243,62 @@ function readU64(source: unknown) {
   return 0;
 }
 
+function readBool(source: unknown) {
+  if (typeof source === "boolean") {
+    return source;
+  }
+  if (typeof source === "string") {
+    return source === "true";
+  }
+  if (source && typeof source === "object") {
+    return readBool(readNestedValue(source));
+  }
+  return false;
+}
+
+function readVectorEntries(source: unknown): Record<string, unknown>[] {
+  if (Array.isArray(source)) {
+    return source.filter(
+      (entry): entry is Record<string, unknown> => Boolean(entry) && typeof entry === "object" && !Array.isArray(entry),
+    );
+  }
+  if (!source || typeof source !== "object") {
+    return [];
+  }
+
+  const record = source as Record<string, unknown>;
+  if (Array.isArray(record.contents)) {
+    return readVectorEntries(record.contents);
+  }
+  if (record.fields && typeof record.fields === "object") {
+    return readVectorEntries(record.fields);
+  }
+  return [];
+}
+
+export function parseProjectForms(source: unknown) {
+  return readVectorEntries(source)
+    .map((entry) => {
+      const fields =
+        entry.fields && typeof entry.fields === "object"
+          ? (entry.fields as Record<string, unknown>)
+          : entry;
+      const formId = readU64(fields.form_id);
+      const title = readString(fields.title);
+      return {
+        formId,
+        title,
+        metadataDigest: readString(fields.metadata_digest),
+        active: readBool(fields.active),
+        createdAt: readU64(fields.created_at)
+          ? new Date(readU64(fields.created_at)).toISOString()
+          : undefined,
+      } satisfies OnchainProjectFormSummary;
+    })
+    .filter((form) => Boolean(form.title) || Number.isFinite(form.formId))
+    .sort((left, right) => left.formId - right.formId);
+}
+
 function stableSerialize(value: unknown): string {
   if (Array.isArray(value)) {
     return `[${value.map((item) => stableSerialize(item)).join(",")}]`;
@@ -282,6 +354,7 @@ export function parseProjectSummary(
     admins: readAddressVector(fields.admins),
     formsCount: readU64(fields.forms_count),
     signalsCount: readU64(fields.signals_count),
+    onchainForms: parseProjectForms(fields.forms),
     createdAt: createdAtMs ? new Date(createdAtMs).toISOString() : undefined,
     ownedOwnerCapId: normalizeObjectId(ownedOwnerCapId),
   } satisfies ProjectSummary;
@@ -522,6 +595,21 @@ export function setFormActiveOnChain(args: SetFormActiveArgs) {
       tx.object(requireValue(args.projectId, "Project object id")),
       tx.pure.u64(args.formId),
       tx.pure.bool(args.active),
+    ],
+  });
+
+  return tx;
+}
+
+export function deleteFormOnChain(args: DeleteFormOnChainArgs) {
+  const packageId = resolvePackageId(args.packageId);
+  const tx = createOrReuseTransaction(args.tx);
+
+  tx.moveCall({
+    target: `${packageId}::${PROJECT_REGISTRY_MODULE}::delete_form`,
+    arguments: [
+      tx.object(requireValue(args.projectId, "Project object id")),
+      tx.pure.u64(args.formId),
     ],
   });
 
