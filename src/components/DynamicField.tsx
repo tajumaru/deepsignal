@@ -46,13 +46,18 @@ export function DynamicField({
       </span>
 
       {field.type === "shortText" && (
-        <input value={String(value ?? "")} onChange={(event) => onChange(event.target.value)} />
+        <input
+          value={String(value ?? "")}
+          placeholder={field.placeholder ?? ""}
+          onChange={(event) => onChange(event.target.value)}
+        />
       )}
 
       {field.type === "longText" && (
         <textarea
           rows={5}
           value={String(value ?? "")}
+          placeholder={field.placeholder ?? ""}
           onChange={(event) => onChange(event.target.value)}
         />
       )}
@@ -110,7 +115,7 @@ export function DynamicField({
         <input
           type="url"
           inputMode="url"
-          placeholder="https://example.com"
+          placeholder={field.placeholder ?? "https://example.com"}
           value={String(value ?? "")}
           onChange={(event) => onChange(event.target.value)}
         />
@@ -136,6 +141,7 @@ export function DynamicField({
         </div>
       )}
 
+      {field.helpText ? <small className="muted">{field.helpText}</small> : null}
       {error ? <small className="error-text">{error}</small> : null}
     </label>
   );

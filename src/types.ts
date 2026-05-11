@@ -27,6 +27,8 @@ export interface FormField {
   required: boolean;
   sensitive: boolean;
   sectionId?: string;
+  placeholder?: string;
+  helpText?: string;
   validationHint?: string;
   visibility?: "public" | "admin";
   adminOnly?: boolean;

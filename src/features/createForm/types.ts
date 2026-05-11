@@ -46,6 +46,8 @@ export interface FormBuilderValues {
   fieldTypePickerOpen: boolean;
   activeFieldId: string;
   draggedFieldId: string | null;
+  dragOverFieldId: string | null;
+  dragOverPlacement: "before" | "after" | null;
   selectedProjectId: string;
   projectState: string;
 }

@@ -192,11 +192,16 @@ export function FormBuilderPage() {
               encryptSubmissions={builder.values.encryptSubmissions}
               mobilePane={builder.values.mobilePane}
               draggedFieldId={builder.values.draggedFieldId}
+              dragOverFieldId={builder.values.dragOverFieldId}
+              dragOverPlacement={builder.values.dragOverPlacement}
               refs={builder.refs}
               setMobilePane={builder.setMobilePane}
               setActiveFieldId={builder.setActiveFieldId}
               setDraggedFieldId={builder.setDraggedFieldId}
+              setDragOverFieldId={builder.setDragOverFieldId}
+              setDragOverPlacement={builder.setDragOverPlacement}
               onAddSection={builder.addSection}
+              onInsertSmartTemplate={builder.insertSmartTemplate}
               onUpdateSection={builder.updateSection}
               onRemoveSection={builder.removeSection}
               onUpdateField={builder.updateField}
@@ -204,6 +209,7 @@ export function FormBuilderPage() {
               onDuplicateField={builder.duplicateFieldAt}
               onInsertField={builder.insertField}
               onReorderFields={builder.reorderFields}
+              onOpenFieldTypePicker={() => builder.setFieldTypePickerOpen(true)}
               onBack={() => builder.moveStep(-1)}
               onContinue={handleFieldsContinue}
             />
@@ -246,16 +252,6 @@ export function FormBuilderPage() {
             />
           ) : null}
         </form>
-
-        {builder.values.currentStep === "fields" ? (
-          <button
-            type="button"
-            className="primary-button composer-floating-add"
-            onClick={() => builder.setFieldTypePickerOpen(true)}
-          >
-            + {t("addFieldFloating")}
-          </button>
-        ) : null}
       </section>
     </AdminAccessGate>
   );

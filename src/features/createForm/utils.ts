@@ -15,6 +15,8 @@ export function createField(type: FieldType = "shortText", sectionId?: string): 
     visibility: "public",
     adminOnly: false,
     sectionId,
+    placeholder: "",
+    helpText: "",
     options: type === "dropdown" || type === "checkbox" ? ["Option 1", "Option 2"] : undefined,
   };
 }
@@ -60,6 +62,8 @@ export function serializeDraft(
       required: field.required,
       sensitive: field.sensitive,
       sectionId: field.sectionId ?? "",
+      placeholder: field.placeholder ?? "",
+      helpText: field.helpText ?? "",
       adminOnly: Boolean(field.adminOnly),
       visibility: field.visibility ?? "public",
       validationHint: field.validationHint ?? "",
@@ -86,6 +90,8 @@ export function buildFormSchema(args: {
     fields: args.fields.map((field) => ({
       ...field,
       label: field.label.trim(),
+      placeholder: field.placeholder?.trim() || undefined,
+      helpText: field.helpText?.trim() || undefined,
       validationHint: field.validationHint?.trim() || undefined,
       options:
         field.type === "dropdown" || field.type === "checkbox"

@@ -1,5 +1,5 @@
 import { makeId } from "./utils";
-import type { FieldType, FormField, FormPurpose, SubmissionCategory } from "../types";
+import type { FieldType, FormField, FormPurpose, FormSection, SubmissionCategory } from "../types";
 
 export interface FormTemplateDefinition {
   key: string;
@@ -14,6 +14,31 @@ export interface FormTemplateDefinition {
     required?: boolean;
     sensitive?: boolean;
     options?: string[];
+    placeholder?: string;
+    helpText?: string;
+    validationHint?: string;
+  }>;
+}
+
+export interface SmartTemplateDefinition {
+  key: string;
+  label: string;
+  description: string;
+  sections: Array<{
+    key: string;
+    title: string;
+    description?: string;
+  }>;
+  fields: Array<{
+    type: FieldType;
+    label: string;
+    sectionKey?: string;
+    required?: boolean;
+    sensitive?: boolean;
+    options?: string[];
+    placeholder?: string;
+    helpText?: string;
+    validationHint?: string;
   }>;
 }
 
@@ -29,8 +54,8 @@ export const formTemplates: FormTemplateDefinition[] = [
     description: "Share the issue, how to reproduce it, and any proof that helps us fix it fast.",
     fields: [
       { type: "shortText", label: "Bug title", required: true },
-      { type: "longText", label: "What happened?", required: true },
-      { type: "longText", label: "How can we reproduce it?", required: true },
+      { type: "longText", label: "What happened?", required: true, placeholder: "What did you expect, and what happened instead?" },
+      { type: "longText", label: "How can we reproduce it?", required: true, placeholder: "List the steps one by one." },
       {
         type: "dropdown",
         label: "Severity",
@@ -49,7 +74,7 @@ export const formTemplates: FormTemplateDefinition[] = [
     description: "Collect clear product ideas without making people over-explain.",
     fields: [
       { type: "shortText", label: "Feature idea", required: true },
-      { type: "longText", label: "What problem would this solve?", required: true },
+      { type: "longText", label: "What problem would this solve?", required: true, placeholder: "What is hard or slow today?" },
       { type: "longText", label: "What would a good outcome look like?" },
       {
         type: "dropdown",
@@ -155,11 +180,134 @@ export function createTemplateFields(template: FormTemplateDefinition): FormFiel
     label: field.label,
     required: Boolean(field.required),
     sensitive: Boolean(field.sensitive),
+    placeholder: field.placeholder,
+    helpText: field.helpText,
+    validationHint: field.validationHint,
     options:
       field.type === "dropdown" || field.type === "checkbox"
         ? [...(field.options ?? ["Option 1", "Option 2"])]
         : undefined,
   }));
+}
+
+export const smartComposerTemplates: SmartTemplateDefinition[] = [
+  {
+    key: "bugReport",
+    label: "Bug Report",
+    description: "Add a clean repro-first report with environment and media sections.",
+    sections: [
+      { key: "repro", title: "Reproduction" },
+      { key: "environment", title: "Environment" },
+      { key: "media", title: "Media" },
+    ],
+    fields: [
+      { type: "shortText", label: "Bug title", required: true, sectionKey: "repro" },
+      { type: "longText", label: "What happened?", required: true, sectionKey: "repro" },
+      { type: "longText", label: "Steps to reproduce", required: true, sectionKey: "repro", validationHint: "Include at least 3 concrete steps." },
+      { type: "shortText", label: "Device / OS / Browser", sectionKey: "environment", placeholder: "iPhone 15 / iOS 18 / Safari" },
+      { type: "dropdown", label: "Severity", required: true, sectionKey: "environment", options: ["Low", "Medium", "High", "Critical"] },
+      { type: "screenshot", label: "Screenshot", sectionKey: "media" },
+      { type: "url", label: "Relevant URL", sectionKey: "media", placeholder: "https://..." },
+    ],
+  },
+  {
+    key: "featureRequest",
+    label: "Feature Request",
+    description: "Capture the problem, the desired outcome, and supporting context.",
+    sections: [
+      { key: "problem", title: "Problem" },
+      { key: "proposal", title: "Proposal" },
+      { key: "proof", title: "Proof" },
+    ],
+    fields: [
+      { type: "shortText", label: "Feature idea", required: true, sectionKey: "problem" },
+      { type: "longText", label: "What is hard today?", required: true, sectionKey: "problem" },
+      { type: "longText", label: "What should the improved flow look like?", sectionKey: "proposal" },
+      { type: "dropdown", label: "Priority", sectionKey: "proposal", options: ["Nice to have", "Important", "Critical"] },
+      { type: "url", label: "Reference issue or doc", sectionKey: "proof", placeholder: "https://..." },
+    ],
+  },
+  {
+    key: "grantApplication",
+    label: "Grant Application",
+    description: "Create a concise intake for project background, request, and links.",
+    sections: [
+      { key: "team", title: "Team" },
+      { key: "project", title: "Project" },
+      { key: "request", title: "Request" },
+    ],
+    fields: [
+      { type: "shortText", label: "Team name", required: true, sectionKey: "team" },
+      { type: "url", label: "Project URL", required: true, sectionKey: "team", placeholder: "https://..." },
+      { type: "longText", label: "What are you building?", required: true, sectionKey: "project" },
+      { type: "longText", label: "Why now?", sectionKey: "project" },
+      { type: "shortText", label: "Funding request", required: true, sectionKey: "request", placeholder: "Amount, token, or budget range" },
+      { type: "longText", label: "How will the funds be used?", required: true, sectionKey: "request" },
+    ],
+  },
+  {
+    key: "eventSurvey",
+    label: "Event Survey",
+    description: "Gather fast sentiment and deeper session feedback after an event.",
+    sections: [
+      { key: "experience", title: "Experience" },
+      { key: "sessions", title: "Sessions" },
+      { key: "followup", title: "Follow-up" },
+    ],
+    fields: [
+      { type: "rating", label: "Overall event experience", required: true, sectionKey: "experience" },
+      { type: "checkbox", label: "Which parts did you join?", sectionKey: "sessions", options: ["Talks", "Workshop", "Office hours", "Networking"] },
+      { type: "longText", label: "What stood out most?", sectionKey: "sessions" },
+      { type: "longText", label: "What should improve next time?", sectionKey: "followup" },
+    ],
+  },
+  {
+    key: "communityFeedback",
+    label: "Community Feedback",
+    description: "A lightweight structure for ongoing community input and moderation signals.",
+    sections: [
+      { key: "signal", title: "Signal" },
+      { key: "context", title: "Context" },
+      { key: "followup", title: "Follow-up" },
+    ],
+    fields: [
+      { type: "shortText", label: "Feedback summary", required: true, sectionKey: "signal" },
+      { type: "longText", label: "What happened or what should change?", required: true, sectionKey: "signal" },
+      { type: "checkbox", label: "Category", sectionKey: "context", options: ["Product", "Community", "Moderation", "Events"] },
+      { type: "url", label: "Relevant link", sectionKey: "context", placeholder: "https://..." },
+      { type: "shortText", label: "How can we follow up?", sectionKey: "followup", sensitive: true, helpText: "Use this for private contact details only when needed." },
+    ],
+  },
+];
+
+export function createSmartTemplateBundle(template: SmartTemplateDefinition): {
+  sections: FormSection[];
+  fields: FormField[];
+} {
+  const sections = template.sections.map((section) => ({
+    id: makeId("section"),
+    title: section.title,
+    description: section.description,
+  }));
+  const sectionMap = new Map(template.sections.map((section, index) => [section.key, sections[index]?.id]));
+
+  const fields = template.fields.map((field) => ({
+    id: makeId("field"),
+    type: field.type,
+    label: field.label,
+    required: Boolean(field.required),
+    sensitive: Boolean(field.sensitive),
+    sectionId: field.sectionKey ? sectionMap.get(field.sectionKey) : undefined,
+    placeholder: field.placeholder,
+    helpText: field.helpText,
+    validationHint: field.validationHint,
+    options:
+      field.type === "dropdown" || field.type === "checkbox"
+        ? [...(field.options ?? ["Option 1", "Option 2"])]
+        : undefined,
+  }));
+
+  return { sections, fields };
 }
 
 export function getTemplateDefinition(templateKey: string) {

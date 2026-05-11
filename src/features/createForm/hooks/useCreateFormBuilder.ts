@@ -1,5 +1,11 @@
 import { startTransition, useEffect, useMemo, useRef, useState } from "react";
-import { createTemplateFields, getTemplateDefinition, normalizeFormPurpose } from "../../../lib/formTemplates";
+import {
+  createSmartTemplateBundle,
+  createTemplateFields,
+  getTemplateDefinition,
+  normalizeFormPurpose,
+  smartComposerTemplates,
+} from "../../../lib/formTemplates";
 import { getSelectedProjectId, setSelectedProjectId } from "../../../lib/projectRegistry";
 import { INITIAL_DRAFT_SNAPSHOT, initialFields, initialTemplate } from "../constants";
 import type { BuilderStepKey, FieldType, FormBuilderValues, FormSection, MobileBuilderPane, ProjectOption, Translate } from "../types";
@@ -28,6 +34,8 @@ export function useCreateFormBuilder({ t, projects }: UseCreateFormBuilderArgs) 
   const [lastSavedSnapshot, setLastSavedSnapshot] = useState(INITIAL_DRAFT_SNAPSHOT);
   const [activeFieldId, setActiveFieldId] = useState(initialFields[0]?.id ?? "");
   const [draggedFieldId, setDraggedFieldId] = useState<string | null>(null);
+  const [dragOverFieldId, setDragOverFieldId] = useState<string | null>(null);
+  const [dragOverPlacement, setDragOverPlacement] = useState<"before" | "after" | null>(null);
   const [pendingFocusFieldId, setPendingFocusFieldId] = useState(initialFields[0]?.id ?? "");
 
   const createOnSui = Boolean(selectedProjectId);
@@ -125,11 +133,20 @@ export function useCreateFormBuilder({ t, projects }: UseCreateFormBuilderArgs) 
     setFields((current) => current.map((field, currentIndex) => (currentIndex === index ? nextField : field)));
   }
 
-  function insertField(type: FieldType, afterIndex?: number) {
+  function insertField(type: FieldType, afterIndex?: number, sectionId?: string) {
     const activeField = fields.find((field) => field.id === activeFieldId);
-    const nextField = createField(type, activeField?.sectionId);
+    const resolvedSectionId = sectionId ?? activeField?.sectionId;
+    const nextField = createField(type, resolvedSectionId);
     setFields((current) => {
       if (afterIndex === undefined || afterIndex < 0 || afterIndex >= current.length) {
+        if (resolvedSectionId) {
+          const lastSectionIndex = [...current].map((field) => field.sectionId).lastIndexOf(resolvedSectionId);
+          if (lastSectionIndex >= 0) {
+            const next = [...current];
+            next.splice(lastSectionIndex + 1, 0, nextField);
+            return next;
+          }
+        }
         return [...current, nextField];
       }
       const next = [...current];
@@ -168,7 +185,7 @@ export function useCreateFormBuilder({ t, projects }: UseCreateFormBuilderArgs) 
     });
   }
 
-  function reorderFields(sourceId: string, targetId: string) {
+  function reorderFields(sourceId: string, targetId: string, placement: "before" | "after" = "before") {
     if (!sourceId || !targetId || sourceId === targetId) return;
     setFields((current) => {
       const sourceIndex = current.findIndex((field) => field.id === sourceId);
@@ -176,9 +193,13 @@ export function useCreateFormBuilder({ t, projects }: UseCreateFormBuilderArgs) 
       if (sourceIndex === -1 || targetIndex === -1) return current;
       const next = [...current];
       const [moved] = next.splice(sourceIndex, 1);
-      next.splice(targetIndex, 0, moved);
+      const adjustedTargetIndex = next.findIndex((field) => field.id === targetId);
+      const insertIndex = placement === "after" ? adjustedTargetIndex + 1 : adjustedTargetIndex;
+      next.splice(insertIndex, 0, moved);
       return next;
     });
+    setDragOverFieldId(null);
+    setDragOverPlacement(null);
   }
 
   function addSection(preset?: string) {
@@ -195,6 +216,19 @@ export function useCreateFormBuilder({ t, projects }: UseCreateFormBuilderArgs) 
     setFields((current) =>
       current.map((field) => (field.sectionId === sectionId ? { ...field, sectionId: undefined } : field)),
     );
+  }
+
+  function insertSmartTemplate(templateKey: string) {
+    const template = smartComposerTemplates.find((candidate) => candidate.key === templateKey);
+    if (!template) {
+      return;
+    }
+    const bundle = createSmartTemplateBundle(template);
+    setSections((current) => [...current, ...bundle.sections]);
+    setFields((current) => [...current, ...bundle.fields]);
+    setPendingFocusFieldId(bundle.fields[0]?.id ?? "");
+    setActiveFieldId(bundle.fields[0]?.id ?? "");
+    setMobilePane("editor");
   }
 
   function focusFieldError(fieldId: string) {
@@ -246,6 +280,8 @@ export function useCreateFormBuilder({ t, projects }: UseCreateFormBuilderArgs) 
     fieldTypePickerOpen,
     activeFieldId,
     draggedFieldId,
+    dragOverFieldId,
+    dragOverPlacement,
     selectedProjectId,
     projectState,
   };
@@ -266,6 +302,8 @@ export function useCreateFormBuilder({ t, projects }: UseCreateFormBuilderArgs) 
     setMobilePane,
     setActiveFieldId,
     setDraggedFieldId,
+    setDragOverFieldId,
+    setDragOverPlacement,
     setSelectedProjectIdState,
     setProjectState,
     goToStep,
@@ -276,6 +314,7 @@ export function useCreateFormBuilder({ t, projects }: UseCreateFormBuilderArgs) 
     duplicateFieldAt,
     removeField,
     reorderFields,
+    insertSmartTemplate,
     addSection,
     updateSection,
     removeSection,
