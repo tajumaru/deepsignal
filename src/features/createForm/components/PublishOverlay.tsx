@@ -1,4 +1,6 @@
-import { Link } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import QRCode from "qrcode";
+import { RichTextContent } from "../../../components/RichText";
 import { publishPhases } from "../constants";
 import type { PublishOverlayState } from "../types";
 
@@ -11,11 +13,9 @@ interface PublishOverlayProps {
   fieldsCount: number;
   encryptSubmissions: boolean;
   purpose?: string;
-  savedFormId?: string;
   publicPath: string;
   isCrossDeviceShareReady: boolean;
   onCopyBlobId: () => Promise<void>;
-  onCopyLink: () => Promise<void>;
   onClose: () => void;
 }
 
@@ -28,13 +28,47 @@ export function PublishOverlay({
   fieldsCount,
   encryptSubmissions,
   purpose,
-  savedFormId,
   publicPath,
   isCrossDeviceShareReady,
   onCopyBlobId,
-  onCopyLink,
   onClose,
 }: PublishOverlayProps) {
+  const [qrMarkup, setQrMarkup] = useState("");
+  const isBeaconVisible = overlay.stageIndex >= publishPhases.length - 1 && isCrossDeviceShareReady;
+
+  const absolutePublicUrl = useMemo(() => {
+    if (typeof window === "undefined") {
+      return publicPath;
+    }
+    return `${window.location.origin}${publicPath}`;
+  }, [publicPath]);
+
+  useEffect(() => {
+    if (!open || !isCrossDeviceShareReady || !publicPath) {
+      setQrMarkup("");
+      return;
+    }
+
+    let cancelled = false;
+    void QRCode.toString(absolutePublicUrl, {
+      type: "svg",
+      margin: 1,
+      width: 256,
+      color: {
+        dark: "#04131e",
+        light: "#ffffff",
+      },
+    }).then((svg: string) => {
+      if (!cancelled) {
+        setQrMarkup(svg);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [absolutePublicUrl, isCrossDeviceShareReady, open, publicPath]);
+
   if (!open) {
     return null;
   }
@@ -60,7 +94,7 @@ export function PublishOverlay({
           <div className="publish-signal-card">
             <span className="publish-signal-label">SIGNAL PAYLOAD</span>
             <strong>{title.trim() || "Untitled signal"}</strong>
-            <p>{description.trim() || "No intro recorded."}</p>
+            <RichTextContent value={description} className="rich-text-content" fallback="No intro recorded." />
             <div className="publish-signal-metrics">
               <span>{fieldsCount} nodes</span>
               <span>{encryptSubmissions ? "sealed" : "plain"}</span>
@@ -69,12 +103,30 @@ export function PublishOverlay({
           </div>
         </div>
 
-        <div className="publish-overlay-copy">
-          <p className="eyebrow">Deep Transit</p>
-          <h2 id="publish-overlay-title">Signal processing</h2>
-          <p className="muted publish-overlay-intro">
-            The payload is being reduced, submerged, and fixed into the Walrus observation layer.
-          </p>
+        <div className="publish-overlay-hero">
+          <div className="publish-overlay-copy">
+            <p className="eyebrow">Deep Transit</p>
+            <h2 id="publish-overlay-title">Signal processing</h2>
+            <p className="muted publish-overlay-intro">
+              The payload is being reduced, submerged, and fixed into the Walrus observation layer.
+            </p>
+          </div>
+          {isBeaconVisible ? (
+            <div className="publish-beacon-panel publish-beacon-panel-top" aria-label="BEACON QR">
+              <p className="eyebrow">BEACON</p>
+              <div className="beacon-qr-shell publish-beacon-qr-shell">
+                {qrMarkup ? (
+                  <div
+                    className="beacon-qr-markup publish-beacon-qr-markup"
+                    dangerouslySetInnerHTML={{ __html: qrMarkup }}
+                  />
+                ) : (
+                  <div className="beacon-qr-placeholder" aria-hidden="true" />
+                )}
+              </div>
+              <p className="publish-beacon-note muted">Scan to open the public responder flow on another device.</p>
+            </div>
+          ) : null}
         </div>
 
         <div className="publish-terminal panel">
@@ -121,34 +173,18 @@ export function PublishOverlay({
         </div>
 
         <div className={`publish-active-panel ${overlay.stageIndex >= publishPhases.length - 1 ? "is-visible" : ""}`}>
-          <div>
-            <p className="eyebrow">Observation State</p>
-            <h3>SIGNAL ACTIVE</h3>
-            <p className="muted">
-              {overlay.resultNote || "The signal is now available for monitoring, routing, and review."}
-            </p>
+          <div className="publish-active-layout">
+            <div>
+              <p className="eyebrow">Observation State</p>
+              <h3>SIGNAL ACTIVE</h3>
+              <p className="muted">
+                {overlay.resultNote || "The signal is now available for monitoring, routing, and review."}
+              </p>
+            </div>
           </div>
           <div className="publish-active-actions">
-            <button
-              type="button"
-              className="primary-button"
-              onClick={() => void onCopyLink()}
-              disabled={!isCrossDeviceShareReady}
-            >
-              {overlay.linkCopied ? "Copied Link" : "Copy Link"}
-            </button>
-            {savedFormId ? (
-              <>
-                <Link className="ghost-button" to={`/dashboard/forms/${savedFormId}`}>
-                  Open Dashboard
-                </Link>
-                <Link className="ghost-button" to={publicPath}>
-                  View Signals
-                </Link>
-              </>
-            ) : null}
-            <button type="button" className="ghost-button" onClick={onClose}>
-              Close Monitor
+            <button type="button" className="primary-button" onClick={onClose}>
+              DONE
             </button>
           </div>
         </div>

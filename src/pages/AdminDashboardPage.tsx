@@ -456,19 +456,10 @@ export function AdminDashboardPage() {
     }
     setDeletingVisibleNodes(true);
     setDeletingFormId(null);
-    const results = await Promise.allSettled(formIds.map(async (formId) => storageAdapter.deleteForm(formId)));
-    const deletedCount = results.filter((result) => result.status === "fulfilled").length;
-    const failedCount = results.length - deletedCount;
     try {
+      await storageAdapter.deleteForms(formIds);
       await loadConsole();
-      if (failedCount === 0) {
-        setToast({ tone: "success", message: t("deleteVisibleNodesSuccess", { count: deletedCount }) });
-        return;
-      }
-      setToast({
-        tone: deletedCount > 0 ? "success" : "error",
-        message: t("deleteVisibleNodesPartial", { deletedCount, failedCount }),
-      });
+      setToast({ tone: "success", message: t("deleteVisibleNodesSuccess", { count: formIds.length }) });
     } catch (error) {
       setToast({
         tone: "error",

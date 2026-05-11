@@ -135,11 +135,9 @@ export function FormBuilderPage() {
           fieldsCount={builder.values.fields.length}
           encryptSubmissions={builder.values.encryptSubmissions}
           purpose={builder.values.purpose}
-          savedFormId={publish.savedForm?.id}
           publicPath={publish.publicPath}
           isCrossDeviceShareReady={publish.isCrossDeviceShareReady}
           onCopyBlobId={publish.handleCopyBlobId}
-          onCopyLink={publish.handleCopyLink}
           onClose={() => publish.setOverlay((current) => ({ ...current, open: false }))}
         />
 

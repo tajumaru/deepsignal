@@ -134,15 +134,21 @@ const hybridWalrusStorage: StorageAdapter = {
     return applyFormMetadataOverlays(mergeById(walrusForms, localForms));
   },
   async deleteForm(id) {
+    await this.deleteForms([id]);
+  },
+  async deleteForms(ids) {
+    if (ids.length === 0) {
+      return;
+    }
     if (!walrusRequested) {
-      await localStorageAdapter.deleteForm(id);
-      clearFormMetadataOverlay(id);
+      await localStorageAdapter.deleteForms(ids);
+      ids.forEach((id) => clearFormMetadataOverlay(id));
       return;
     }
     try {
-      await walrusAdapter.deleteForm(id);
-      await localStorageAdapter.deleteForm(id);
-      clearFormMetadataOverlay(id);
+      await walrusAdapter.deleteForms(ids);
+      await localStorageAdapter.deleteForms(ids);
+      ids.forEach((id) => clearFormMetadataOverlay(id));
       emitStatus({ mode: "walrus", notice: null, diagnostics: null });
     } catch (error) {
       console.error(error);

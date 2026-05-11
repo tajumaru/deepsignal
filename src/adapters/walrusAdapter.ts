@@ -17,6 +17,9 @@ export const walrusAdapter: StorageAdapter = {
   async deleteForm() {
     // TODO: Delete or tombstone the form metadata and any associated submission index in Walrus.
   },
+  async deleteForms() {
+    // TODO: Batch-delete form metadata and associated submission indexes in Walrus.
+  },
   async saveSubmission(submission: Submission) {
     // TODO: Serialize the submission and persist as a Walrus blob.
     return { id: submission.id, blobId: `todo-walrus-submission-${submission.id}` };

@@ -278,12 +278,6 @@ export function PublishStep({
                 <span className="composer-live-pill">Observing</span>
               </div>
 
-              <div className="composer-publish-checks">
-                {publishChecks.map((check) => (
-                  <p key={check}>{check}</p>
-                ))}
-              </div>
-
               <section className="answer-card contest-share-ready-card">
                 <div className="section-row">
                   <div>
@@ -355,7 +349,7 @@ export function PublishStep({
               </div>
 
               {savedForm.projectId && !isRegisteredOnSui ? (
-                <section className="answer-card">
+                <section className="answer-card sui-optional-card">
                   <p className="eyebrow">Optional Sui step</p>
                   <h4>{t("registerOnSuiTitle")}</h4>
                   <p className="muted">{t("registerOnSuiBody")}</p>

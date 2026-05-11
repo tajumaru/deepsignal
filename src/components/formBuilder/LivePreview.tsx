@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { DynamicField } from "../DynamicField";
+import { RichTextContent } from "../RichText";
 import { useI18n } from "../../i18n";
 import { createEmptyAnswer } from "../../lib/storage";
 import type { FormField, FormSection } from "../../types";
@@ -49,7 +50,7 @@ export function LivePreview({
         <div>
           <p className="eyebrow">{t("preview")}</p>
           <h2>{title.trim() || t("untitledForm")}</h2>
-          <p className="lede">{description.trim() || t("publicDefaultBody")}</p>
+          <RichTextContent value={description} className="lede rich-text-content" fallback={t("publicDefaultBody")} />
         </div>
         <div className="info-banner composer-preview-banner">
           <strong>{t("encryptSubmissions")}</strong>

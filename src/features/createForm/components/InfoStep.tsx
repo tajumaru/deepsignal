@@ -1,3 +1,4 @@
+import { RichTextEditor } from "../../../components/RichText";
 import type { Translate } from "../types";
 
 interface InfoStepProps {
@@ -50,10 +51,9 @@ export function InfoStep({
 
         <label className="composer-info-intro">
           <span>{t("description")}</span>
-          <textarea
-            rows={5}
+          <RichTextEditor
             value={description}
-            onChange={(event) => setDescription(event.target.value)}
+            onChange={setDescription}
             placeholder={t("builderDescriptionPlaceholder")}
           />
         </label>

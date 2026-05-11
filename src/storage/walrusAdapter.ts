@@ -454,24 +454,56 @@ async function uploadBody(body: Blob | File, kind: UploadKind): Promise<UploadRe
 }
 
 async function deleteBlobObjectsFromWalrus(blobObjectIds: Array<string | undefined>) {
-  const uniqueBlobObjectIds = [...new Set(blobObjectIds.filter((value): value is string => Boolean(value)))];
-  if (uniqueBlobObjectIds.length === 0) {
+  let remainingBlobObjectIds = [...new Set(blobObjectIds.filter((value): value is string => Boolean(value)))];
+  if (remainingBlobObjectIds.length === 0) {
     return;
   }
+
   const client = getRuntimeWalrusClient();
   const signer = createWalletSigner();
-  let transaction = new Transaction();
-  for (const blobObjectId of uniqueBlobObjectIds) {
-    transaction = client.walrus.deleteBlobTransaction({
-      blobObjectId,
-      owner: signer.toSuiAddress(),
-      transaction,
-    });
+  while (remainingBlobObjectIds.length > 0) {
+    let transaction = new Transaction();
+    for (const blobObjectId of remainingBlobObjectIds) {
+      transaction = client.walrus.deleteBlobTransaction({
+        blobObjectId,
+        owner: signer.toSuiAddress(),
+        transaction,
+      });
+    }
+
+    try {
+      await signer.signAndExecuteTransaction({
+        transaction,
+        client,
+      });
+      return;
+    } catch (error) {
+      const missingObjectIds = extractMissingObjectIdsFromDeleteError(error);
+      if (missingObjectIds.length === 0) {
+        throw error;
+      }
+
+      const missingSet = new Set(missingObjectIds);
+      const nextRemainingBlobObjectIds = remainingBlobObjectIds.filter(
+        (blobObjectId) => !missingSet.has(blobObjectId.toLowerCase()),
+      );
+      if (nextRemainingBlobObjectIds.length === remainingBlobObjectIds.length) {
+        throw error;
+      }
+
+      console.warn(
+        "Skipping already-missing Walrus objects during delete.",
+        nextRemainingBlobObjectIds.length === 0 ? [...missingSet] : [...missingSet, "retrying remaining objects"],
+      );
+      remainingBlobObjectIds = nextRemainingBlobObjectIds;
+    }
   }
-  await signer.signAndExecuteTransaction({
-    transaction,
-    client,
-  });
+}
+
+function extractMissingObjectIdsFromDeleteError(error: unknown) {
+  const message = getWalrusErrorMessage(error);
+  const matches = [...message.matchAll(/Object\s+(0x[a-f0-9]+)\s+does not exist/gi)];
+  return [...new Set(matches.map((match) => match[1]?.toLowerCase()).filter((value): value is string => Boolean(value)))];
 }
 
 async function cleanupSupersededWalrusObjects(blobObjectIds: Array<string | undefined>, context: string) {
@@ -817,19 +849,33 @@ export const walrusAdapter: StorageAdapter = {
   },
 
   async deleteForm(id) {
-    const formEntry = getFormBlobIndex(id);
-    const submissionEntries = listSubmissionBlobIndex(id);
-    const missingTrackedObjects = getMissingDeleteTargets(formEntry, submissionEntries);
-    const trackedBlobObjectIds = [
-      formEntry?.formBlobObjectId,
-      formEntry?.manifestBlobObjectId,
-      ...submissionEntries.map((entry) => entry.blobObjectId),
-    ];
+    await this.deleteForms([id]);
+  },
+
+  async deleteForms(ids) {
+    const uniqueIds = [...new Set(ids)];
+    if (uniqueIds.length === 0) {
+      return;
+    }
+
+    const trackedBlobObjectIds: Array<string | undefined> = [];
+    for (const id of uniqueIds) {
+      const formEntry = getFormBlobIndex(id);
+      const submissionEntries = listSubmissionBlobIndex(id);
+      const missingTrackedObjects = getMissingDeleteTargets(formEntry, submissionEntries);
+      trackedBlobObjectIds.push(
+        formEntry?.formBlobObjectId,
+        formEntry?.manifestBlobObjectId,
+        ...submissionEntries.map((entry) => entry.blobObjectId),
+      );
+      warnAboutPartialDelete(id, missingTrackedObjects);
+    }
+
     if (trackedBlobObjectIds.some(Boolean)) {
       await deleteBlobObjectsFromWalrus(trackedBlobObjectIds);
     }
-    warnAboutPartialDelete(id, missingTrackedObjects);
-    deleteFormBlobIndex(id);
+
+    uniqueIds.forEach((id) => deleteFormBlobIndex(id));
   },
 
   async saveSubmission(submission: Submission) {

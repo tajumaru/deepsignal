@@ -141,6 +141,7 @@ export interface StorageAdapter {
   getForm(id: string): Promise<FormSchema | null>;
   listForms(): Promise<FormSchema[]>;
   deleteForm(id: string): Promise<void>;
+  deleteForms(ids: string[]): Promise<void>;
   saveSubmission(submission: Submission): Promise<{ id: string; blobId?: string }>;
   listSubmissions(formId: string): Promise<Submission[]>;
   updateSubmission(submission: Submission): Promise<void>;

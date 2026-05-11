@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { ContestGuidedFlow } from "../components/ContestGuidedFlow";
 import { EmptyState } from "../components/EmptyState";
+import { RichTextContent } from "../components/RichText";
 import { getPublicFormPath } from "../lib/publicLinks";
 import { SignalMetaRow } from "../components/SignalMetaChip";
 import { getSubmissionRespondentMeta } from "../lib/respondentMeta";
@@ -104,7 +105,7 @@ export function PublicRoadmapPage() {
       <div className="panel glow-panel roadmap-hero">
         <p className="eyebrow">Public Roadmap</p>
         <h1>{form.title}</h1>
-        <p className="lede">{form.description || "Deep Signals Worth Tracking"}</p>
+        <RichTextContent value={form.description ?? ""} className="lede rich-text-content" fallback="Deep Signals Worth Tracking" />
         <div className="inline-actions">
           <Link className="ghost-button" to={getPublicFormPath(form.id, form.manifestBlobId)}>
             Open Public Form

@@ -51,15 +51,23 @@ export const localStorageAdapter: StorageAdapter = {
   },
 
   async deleteForm(id) {
+    await this.deleteForms([id]);
+  },
+
+  async deleteForms(ids) {
+    const targetIds = new Set(ids);
+    if (targetIds.size === 0) {
+      return;
+    }
     const forms = readJson<FormSchema[]>(FORMS_KEY, []);
     const submissions = readJson<Submission[]>(SUBMISSIONS_KEY, []);
     writeJson(
       FORMS_KEY,
-      forms.filter((form) => form.id !== id),
+      forms.filter((form) => !targetIds.has(form.id)),
     );
     writeJson(
       SUBMISSIONS_KEY,
-      submissions.filter((submission) => submission.formId !== id),
+      submissions.filter((submission) => !targetIds.has(submission.formId)),
     );
   },
 

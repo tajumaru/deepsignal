@@ -4,9 +4,9 @@ import {
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import { BlobLink } from "../components/BlobLink";
-import { ContestGuidedFlow } from "../components/ContestGuidedFlow";
 import { DynamicField } from "../components/DynamicField";
 import { EmptyState } from "../components/EmptyState";
+import { RichTextContent } from "../components/RichText";
 import { SignalMetaChip, SignalMetaRow } from "../components/SignalMetaChip";
 import { WalletConnect } from "../components/WalletConnect";
 import { useI18n } from "../i18n";
@@ -45,7 +45,8 @@ export function PublicFormPage() {
   const [submitted, setSubmitted] = useState<Submission | null>(null);
   const [submitError, setSubmitError] = useState("");
   const [submitNotice, setSubmitNotice] = useState("");
-  const [attachWallet, setAttachWallet] = useState(false);
+  const [attachWallet, setAttachWallet] = useState(() => Boolean(account?.address));
+  const [attachWalletTouched, setAttachWalletTouched] = useState(false);
   const manifestBlobId = searchParams.get("manifest") ?? "";
 
   useEffect(() => {
@@ -92,10 +93,20 @@ export function PublicFormPage() {
   }, [formId, manifestBlobId]);
 
   useEffect(() => {
-    if (!account?.address && attachWallet) {
-      setAttachWallet(false);
+    if (!account?.address) {
+      if (attachWallet) {
+        setAttachWallet(false);
+      }
+      if (attachWalletTouched) {
+        setAttachWalletTouched(false);
+      }
+      return;
     }
-  }, [account?.address, attachWallet]);
+
+    if (!attachWalletTouched) {
+      setAttachWallet(true);
+    }
+  }, [account?.address, attachWallet, attachWalletTouched]);
 
   const attachmentFields = useMemo(
     () =>
@@ -282,22 +293,6 @@ export function PublicFormPage() {
     const isEncryptedSubmission = Boolean(submitted.isEncrypted);
     return (
       <section className="stack">
-        <ContestGuidedFlow
-          summary={
-            isEncryptedSubmission
-              ? "Private signal submitted. Reviewers can now unlock it from the inbox."
-              : "Signal submitted. Reviewers can now review it from the inbox."
-          }
-          steps={[
-            { label: "Select Project", status: "complete" },
-            { label: "Create Form", status: "complete" },
-            { label: "Share Public Link", status: "complete" },
-            { label: "Submit Private Signal", status: "current" },
-            { label: "Review Inbox", status: "upcoming" },
-            { label: "Decrypt with Wallet", status: "upcoming" },
-            { label: "Publish Roadmap", status: "upcoming" },
-          ]}
-        />
         <section className="panel glow-panel success-screen">
           <p className="eyebrow">{t("signalReceived")}</p>
           <h1>{isEncryptedSubmission ? "Private Signal sent" : "Signal sent"}</h1>
@@ -395,25 +390,9 @@ export function PublicFormPage() {
 
   return (
     <form className="panel glow-panel public-form" onSubmit={handleSubmit}>
-      <ContestGuidedFlow
-        summary={
-          form.encryptSubmissions
-            ? "Submit a private signal. Wallet connection stays optional."
-            : "Submit a signal. Wallet connection stays optional."
-        }
-        steps={[
-          { label: "Select Project", status: "complete" },
-          { label: "Create Form", status: "complete" },
-          { label: "Share Public Link", status: "complete" },
-          { label: "Submit Private Signal", status: "current" },
-          { label: "Review Inbox", status: "upcoming" },
-          { label: "Decrypt with Wallet", status: "upcoming" },
-          { label: "Publish Roadmap", status: "upcoming" },
-        ]}
-      />
       <p className="eyebrow">{t("publicEyebrow")}</p>
       <h1>{form.title}</h1>
-      <p className="lede">{form.description || t("publicDefaultBody")}</p>
+      <RichTextContent value={form.description ?? ""} className="lede rich-text-content" fallback={t("publicDefaultBody")} />
       {form.encryptSubmissions ? (
         <section className="answer-card public-private-signal-note">
           <p className="eyebrow">Private Signal</p>
@@ -442,7 +421,10 @@ export function PublicFormPage() {
                 type="checkbox"
                 checked={attachWallet}
                 disabled={!account?.address}
-                onChange={(event) => setAttachWallet(event.target.checked)}
+                onChange={(event) => {
+                  setAttachWalletTouched(true);
+                  setAttachWallet(event.target.checked);
+                }}
               />
               <span>
                 <strong>{t("publicWalletAttach")}</strong>
