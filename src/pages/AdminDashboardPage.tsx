@@ -96,6 +96,7 @@ const ROADMAP_READY_STATUSES = new Set<Submission["triageStatus"]>([
   "in_progress",
   "fixed",
 ]);
+const ADMIN_SUBMISSION_BATCH_SIZE = 4;
 
 function formatWorkspaceCount(count: number, singular: string, plural = `${singular}s`) {
   return `${count} ${count === 1 ? singular : plural}`;
@@ -159,6 +160,7 @@ export function AdminDashboardPage() {
   const [forms, setForms] = useState<FormWithCount[]>([]);
   const [submissionsByFormId, setSubmissionsByFormId] = useState<Record<string, Submission[]>>({});
   const [loading, setLoading] = useState(true);
+  const [submissionsLoading, setSubmissionsLoading] = useState(false);
   const [loadError, setLoadError] = useState("");
   const [selectedFormId, setSelectedFormId] = useState("all");
   const [selectedStreamId, setSelectedStreamId] = useState<StreamId>("all");
@@ -188,6 +190,7 @@ export function AdminDashboardPage() {
   const [registeringSignalIds, setRegisteringSignalIds] = useState<string[]>([]);
   const [deletingOnchainFormIds, setDeletingOnchainFormIds] = useState<number[]>([]);
   const saveQueueRef = useRef(Promise.resolve());
+  const loadConsoleRunRef = useRef(0);
   const advancedProjectSettingsRef = useRef<HTMLDetailsElement | null>(null);
   const manualProjectInputRef = useRef<HTMLInputElement | null>(null);
   const projectCreateInputRef = useRef<HTMLInputElement | null>(null);
@@ -392,29 +395,71 @@ export function AdminDashboardPage() {
   }
 
   async function loadConsole(preferredSignalId?: string) {
+    const runId = loadConsoleRunRef.current + 1;
+    loadConsoleRunRef.current = runId;
     setLoading(true);
+    setSubmissionsLoading(false);
     setLoadError("");
     try {
       const allForms = await storageAdapter.listForms();
-      const pairs = await Promise.all(
-        allForms.map(async (form) => {
-          const raw = await storageAdapter.listSubmissions(form.id);
-          const submissions = raw.map((submission) => normalizeSubmission(submission));
-          return {
-            form: { ...form, submissionCount: submissions.length },
-            submissions,
-          };
-        }),
-      );
+      if (runId !== loadConsoleRunRef.current) {
+        return;
+      }
 
-      const nextForms = pairs.map((pair) => pair.form);
-      const nextSubmissions = Object.fromEntries(
-        pairs.map((pair) => [pair.form.id, pair.submissions]),
-      ) as Record<string, Submission[]>;
-
+      const nextForms = allForms.map((form) => ({ ...form, submissionCount: 0 }));
       setForms(nextForms);
-      setSubmissionsByFormId(nextSubmissions);
+      setSubmissionsByFormId({});
       setSelectedSignalId((current) => preferredSignalId ?? current);
+      setLoading(false);
+
+      if (nextForms.length === 0) {
+        return;
+      }
+
+      setSubmissionsLoading(true);
+      const nextSubmissions: Record<string, Submission[]> = {};
+
+      for (let index = 0; index < nextForms.length; index += ADMIN_SUBMISSION_BATCH_SIZE) {
+        const formBatch = nextForms.slice(index, index + ADMIN_SUBMISSION_BATCH_SIZE);
+        const batchResults = await Promise.all(
+          formBatch.map(async (form) => {
+            try {
+              const raw = await storageAdapter.listSubmissions(form.id);
+              return {
+                formId: form.id,
+                submissions: raw.map((submission) => normalizeSubmission(submission)),
+              };
+            } catch (error) {
+              console.error(`Failed to load submissions for form ${form.id}`, error);
+              return {
+                formId: form.id,
+                submissions: [] as Submission[],
+              };
+            }
+          }),
+        );
+
+        if (runId !== loadConsoleRunRef.current) {
+          return;
+        }
+
+        batchResults.forEach((result) => {
+          nextSubmissions[result.formId] = result.submissions;
+        });
+
+        setSubmissionsByFormId((current) => ({
+          ...current,
+          ...Object.fromEntries(batchResults.map((result) => [result.formId, result.submissions])),
+        }));
+        setForms((current) =>
+          current.map((form) => {
+            const loaded = nextSubmissions[form.id];
+            return loaded
+              ? { ...form, submissionCount: loaded.length }
+              : form;
+          }),
+        );
+      }
     } catch (error) {
       console.error("Failed to load admin console", error);
       setForms([]);
@@ -425,6 +470,9 @@ export function AdminDashboardPage() {
           : "Failed to load Research Lab.",
       );
     } finally {
+      if (runId === loadConsoleRunRef.current) {
+        setSubmissionsLoading(false);
+      }
       setLoading(false);
     }
   }

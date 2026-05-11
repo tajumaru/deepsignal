@@ -1,14 +1,11 @@
-import {
-  useCurrentAccount,
-} from "@mysten/dapp-kit";
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useCurrentAccount } from "@mysten/dapp-kit";
+import { lazy, Suspense, useEffect, useMemo, useState, type FormEvent } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import { BlobLink } from "../components/BlobLink";
 import { DynamicField } from "../components/DynamicField";
 import { EmptyState } from "../components/EmptyState";
 import { RichTextContent } from "../components/RichText";
 import { SignalMetaChip, SignalMetaRow } from "../components/SignalMetaChip";
-import { WalletConnect } from "../components/WalletConnect";
 import { useI18n } from "../i18n";
 import { getEncryptedPayloadAvailabilityLabel, hasDedicatedEncryptedPayloadBlob } from "../lib/encryptionDisplay";
 import { getSubmissionCategoryFromPurpose } from "../lib/formTemplates";
@@ -24,8 +21,11 @@ import {
 import { makeId } from "../lib/utils";
 import { upsertFormBlobIndex } from "../storage/blobIndex";
 import { localStorageAdapter } from "../storage/localStorageAdapter";
-import { fetchJsonBlob, readManifestWithForm } from "../storage/walrusAdapter";
 import type { FormSchema, Submission, SubmissionAttachment } from "../types";
+
+const WalletConnect = lazy(() =>
+  import("../components/WalletConnect").then((module) => ({ default: module.WalletConnect })),
+);
 
 type PublicAnswers = Record<string, unknown>;
 type ValidationErrors = Record<string, string>;
@@ -57,6 +57,7 @@ export function PublicFormPage() {
       try {
         let nextForm: FormSchema | null = null;
         if (manifestBlobId) {
+          const { fetchJsonBlob, readManifestWithForm } = await import("../storage/walrusAdapter");
           const carrier = await readManifestWithForm(manifestBlobId);
           const manifest = carrier?.manifest ?? null;
           let restoredForm: FormSchema | null = null;
@@ -429,7 +430,9 @@ export function PublicFormPage() {
             <p className="muted">{t("publicIdentityBody")}</p>
           </div>
           <div className="public-identity-wallet">
-            <WalletConnect />
+            <Suspense fallback={<div className="wallet-connect-shell" />}>
+              <WalletConnect />
+            </Suspense>
           </div>
         </div>
 
