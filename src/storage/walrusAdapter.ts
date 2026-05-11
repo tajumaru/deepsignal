@@ -53,6 +53,12 @@ type UploadResult = {
   blobId: string;
   blobObjectId?: string;
 };
+type UploadKind =
+  | "form-bundle"
+  | "submission-bundle"
+  | "manifest"
+  | "encrypted-payload"
+  | "attachment";
 type WalrusRuntimeContext = {
   account: WalletAccount | null;
   wallet: WalletWithRequiredFeatures | null;
@@ -342,28 +348,48 @@ function isTransientWalrusWriteError(error: unknown) {
   );
 }
 
-async function uploadBodyWithPublisher(body: Blob | File): Promise<UploadResult> {
+async function uploadBodyWithPublisher(body: Blob | File, kind: UploadKind): Promise<UploadResult> {
   assertPublisherEnv();
+  const startedAt = performance.now();
   const response = await fetch(`${publisherUrl}/v1/blobs`, {
     method: "PUT",
     body,
   });
   const payload = await parseResponseBody(response);
+  const durationMs = Math.round(performance.now() - startedAt);
   if (!response.ok) {
+    console.warn("[walrus upload] publisher:error", {
+      kind,
+      durationMs,
+      status: response.status,
+      payload,
+    });
     throw new Error(`Walrus upload failed: ${response.status} ${JSON.stringify(payload)}`);
   }
+  console.info("[walrus upload] publisher:success", {
+    kind,
+    durationMs,
+  });
   return {
     blobId: extractBlobId(payload),
     blobObjectId: extractBlobObjectId(payload),
   };
 }
 
-async function uploadBodyWithSdk(body: Blob | File): Promise<UploadResult> {
+async function uploadBodyWithSdk(body: Blob | File, kind: UploadKind): Promise<UploadResult> {
   const blob = new Uint8Array(await body.arrayBuffer());
   const maxAttempts = 4;
 
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    const startedAt = performance.now();
     try {
+      console.info("[walrus upload] attempt:start", {
+        kind,
+        attempt,
+        maxAttempts,
+        bytes: blob.byteLength,
+        mimeType: body.type || "application/octet-stream",
+      });
       const client = getWalrusClient();
       const signer = createWalletSigner();
       const owner = runtimeContext.account?.address;
@@ -375,12 +401,41 @@ async function uploadBodyWithSdk(body: Blob | File): Promise<UploadResult> {
         deletable: true,
         attributes: body.type ? { "content-type": body.type } : undefined,
       });
+      const durationMs = Math.round(performance.now() - startedAt);
+      console.info("[walrus upload] attempt:success", {
+        kind,
+        attempt,
+        maxAttempts,
+        durationMs,
+        blobId: result.blobId,
+        blobObjectId: result.blobObject.id,
+      });
       return {
         blobId: result.blobId,
         blobObjectId: result.blobObject.id,
       };
     } catch (error) {
-      if (attempt < maxAttempts && isTransientWalrusWriteError(error)) {
+      const durationMs = Math.round(performance.now() - startedAt);
+      const retryable = isTransientWalrusWriteError(error);
+      console.warn("[walrus upload] attempt:error", {
+        kind,
+        attempt,
+        maxAttempts,
+        durationMs,
+        retryable,
+        errorName: error instanceof Error ? error.name : typeof error,
+        errorMessage: error instanceof Error ? error.message : String(error),
+      });
+      if (error instanceof Error && error.name === "TimeoutError") {
+        console.warn("[walrus upload] timeout", {
+          kind,
+          attempt,
+          maxAttempts,
+          durationMs,
+          retryable,
+        });
+      }
+      if (attempt < maxAttempts && retryable) {
         await new Promise((resolve) => window.setTimeout(resolve, 500 * 2 ** (attempt - 1)));
         continue;
       }
@@ -391,11 +446,11 @@ async function uploadBodyWithSdk(body: Blob | File): Promise<UploadResult> {
   throw new Error("Walrus upload failed.");
 }
 
-async function uploadBody(body: Blob | File): Promise<UploadResult> {
+async function uploadBody(body: Blob | File, kind: UploadKind): Promise<UploadResult> {
   if (walrusStorageMode === "publisher") {
-    return uploadBodyWithPublisher(body);
+    return uploadBodyWithPublisher(body, kind);
   }
-  return uploadBodyWithSdk(body);
+  return uploadBodyWithSdk(body, kind);
 }
 
 async function deleteBlobObjectsFromWalrus(blobObjectIds: Array<string | undefined>) {
@@ -618,6 +673,7 @@ async function writeFormBundle(form: FormSchema, manifest: SignalManifest) {
     new Blob([JSON.stringify(createFormBundle(form, manifest))], {
       type: "application/json",
     }),
+    "form-bundle",
   );
 }
 
@@ -630,6 +686,7 @@ async function writeSubmissionBundle(
     new Blob([JSON.stringify(createSubmissionBundle(submission, manifest, form))], {
       type: "application/json",
     }),
+    "submission-bundle",
   );
 }
 
@@ -686,6 +743,7 @@ export function getWalrusBlobUrl(blobId: string) {
 export async function saveManifest(manifest: SignalManifest): Promise<UploadResult> {
   return uploadBody(
     new Blob([JSON.stringify(manifest)], { type: "application/json" }),
+    "manifest",
   );
 }
 
@@ -779,6 +837,7 @@ export const walrusAdapter: StorageAdapter = {
     if (!entry?.manifestBlobId || !manifest) {
       const { blobId, blobObjectId } = await uploadBody(
         new Blob([JSON.stringify(submission)], { type: "application/json" }),
+        "submission-bundle",
       );
       await localStorageAdapter.saveSubmission({ ...submission, blobId });
       upsertSubmissionBlobIndex({
@@ -873,6 +932,7 @@ export const walrusAdapter: StorageAdapter = {
     if (!entry?.manifestBlobId || !manifest) {
       const { blobId, blobObjectId } = await uploadBody(
         new Blob([JSON.stringify(submission)], { type: "application/json" }),
+        "submission-bundle",
       );
       await localStorageAdapter.updateSubmission({ ...submission, blobId });
       upsertSubmissionBlobIndex({
@@ -934,7 +994,7 @@ export const walrusAdapter: StorageAdapter = {
   },
 
   async saveEncryptedPayload(payload) {
-    const { blobId } = await uploadBody(new Blob([payload], { type: "text/plain" }));
+    const { blobId } = await uploadBody(new Blob([payload], { type: "text/plain" }), "encrypted-payload");
     return { blobId };
   },
 
@@ -943,7 +1003,7 @@ export const walrusAdapter: StorageAdapter = {
   },
 
   async uploadFile(file) {
-    const { blobId } = await uploadBody(file);
+    const { blobId } = await uploadBody(file, "attachment");
     return {
       blobId,
       url: getWalrusBlobUrl(blobId) ?? undefined,

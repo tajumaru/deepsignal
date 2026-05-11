@@ -2062,10 +2062,16 @@ body.composer-mode .bg-orb {
   margin-top: 0.6rem;
   display: grid;
   gap: 1rem;
+  padding: 1.1rem;
+  border-radius: 28px;
+  overflow: hidden;
   background:
     linear-gradient(180deg, rgba(3, 14, 24, 0.96), rgba(4, 18, 29, 0.92)),
     radial-gradient(circle at top right, rgba(96, 165, 250, 0.08), transparent 30%);
   border-color: rgba(120, 198, 255, 0.18);
+  box-shadow:
+    inset 0 1px 0 rgba(196, 245, 255, 0.04),
+    0 18px 40px rgba(2, 10, 18, 0.3);
 }
 
 .composer-success-header {
@@ -2099,6 +2105,12 @@ body.composer-mode .bg-orb {
 .composer-link-grid {
   display: grid;
   gap: 0.65rem;
+}
+
+.composer-success-card > .answer-card,
+.composer-success-card > .contest-share-ready-card,
+.composer-success-card .contest-share-ready-card > .answer-card {
+  border-radius: 22px;
 }
 
 .composer-step-actions {
@@ -4657,14 +4669,22 @@ body.composer-mode .bg-orb {
 }
 
 .publish-terminal-row.is-active {
-  color: #ecfdff;
-  border-color: rgba(131, 232, 255, 0.32);
-  background: rgba(11, 32, 44, 0.88);
-  box-shadow: inset 0 0 0 1px rgba(131, 232, 255, 0.08);
+  color: #dce7eb;
+  border-color: rgba(198, 214, 221, 0.28);
+  background: rgba(17, 28, 35, 0.88);
+  box-shadow: inset 0 0 0 1px rgba(214, 226, 232, 0.06);
 }
 
 .publish-terminal-row.is-done {
-  color: #c8edf7;
+  color: #cbff8f;
+  border-color: rgba(181, 255, 99, 0.24);
+  background: rgba(18, 33, 15, 0.74);
+}
+
+.publish-terminal-row.is-error {
+  color: #ff8f8f;
+  border-color: rgba(255, 107, 107, 0.28);
+  background: rgba(42, 13, 17, 0.82);
 }
 
 .publish-terminal-row small {
