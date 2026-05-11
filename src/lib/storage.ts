@@ -1,4 +1,4 @@
-import { cryptoAdapter } from "../crypto/cryptoFactory";
+import { cryptoAdapter, getSealRuntimeStatus } from "../crypto/cryptoFactory";
 import { parseRealSealEnvelope } from "../crypto/sealPayload";
 import {
   getSubmissionCategoryFromPurpose,
@@ -28,6 +28,9 @@ export interface SaveSubmissionWithEncryptionResult {
   encryptedPayload?: string;
   sealIdentity?: string;
 }
+
+const REAL_SEAL_PROJECT_REQUIRED_MESSAGE =
+  "Real Seal encrypted submissions require a selected project. Choose a project or turn off Encrypt submissions.";
 
 function stringifySensitiveValue(value: unknown) {
   if (Array.isArray(value)) {
@@ -374,6 +377,11 @@ export async function saveSubmissionWithEncryption(
   const triagedSubmission = enrichSubmissionWithTriage(form, triageInput);
 
   if (form.encryptSubmissions) {
+    const sealRuntime = getSealRuntimeStatus();
+    if (sealRuntime.activeMode === "seal" && !form.projectId?.trim()) {
+      throw new Error(REAL_SEAL_PROJECT_REQUIRED_MESSAGE);
+    }
+
     const encryptedBlobId = submission.encryptedBlobId;
     let encryptedPayload = submission.encryptedPayload;
     if (!encryptedPayload) {

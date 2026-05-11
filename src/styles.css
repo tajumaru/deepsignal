@@ -3143,7 +3143,7 @@ body.composer-mode .bg-orb {
 
 .inbox-overview-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 0.75rem;
 }
 
@@ -3180,7 +3180,7 @@ body.composer-mode .bg-orb {
 
 .signal-console-layout {
   display: grid;
-  grid-template-columns: minmax(0, 320px) minmax(0, 1fr) minmax(0, 1.35fr);
+  grid-template-columns: minmax(0, 280px) minmax(0, 0.95fr) minmax(0, 1.05fr);
   gap: 1rem;
   align-items: start;
 }
@@ -3411,6 +3411,18 @@ body.composer-mode .bg-orb {
 .signal-badge-row-compact .signal-chip,
 .signal-badge-row-compact .pill {
   font-size: 0.75rem;
+}
+
+.signal-card-actions {
+  display: flex;
+  gap: 0.55rem;
+  flex-wrap: wrap;
+  padding-top: 0.2rem;
+}
+
+.signal-card-actions .ghost-button {
+  min-width: 0;
+  padding-inline: 0.85rem;
 }
 
 .signal-summary-card-meta,
@@ -3679,6 +3691,8 @@ body.composer-mode .bg-orb {
   display: grid;
   gap: 0.75rem;
   align-content: start;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .signal-detail-column.panel {
@@ -3689,6 +3703,7 @@ body.composer-mode .bg-orb {
 }
 
 .signal-detail-column .answer-card {
+  min-width: 0;
   border: 0;
   border-radius: 18px;
   padding: 0.9rem 1rem;
@@ -3746,6 +3761,14 @@ body.composer-mode .bg-orb {
   padding: 0.55rem 0.9rem;
 }
 
+.signal-detail-utility-actions {
+  justify-content: flex-end;
+}
+
+.signal-detail-utility-actions > * {
+  min-width: 0;
+}
+
 .private-access-card {
   display: grid;
   gap: 0.65rem;
@@ -3757,6 +3780,33 @@ body.composer-mode .bg-orb {
 
 .private-access-copy {
   gap: 0.25rem;
+}
+
+.review-focus-card {
+  display: grid;
+  gap: 0.75rem;
+  padding: 1rem;
+  background:
+    radial-gradient(circle at top right, rgba(102, 227, 255, 0.12), transparent 36%),
+    linear-gradient(180deg, rgba(8, 27, 43, 0.92), rgba(5, 20, 33, 0.9));
+  box-shadow:
+    inset 0 1px 0 rgba(199, 248, 255, 0.08),
+    inset 0 0 0 1px rgba(116, 226, 255, 0.12);
+}
+
+.review-focus-copy {
+  display: grid;
+  gap: 0.3rem;
+}
+
+.review-focus-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+}
+
+.review-focus-actions > * {
+  min-width: 0;
 }
 
 .triage-compact-card {
@@ -3822,17 +3872,16 @@ body.composer-mode .bg-orb {
 }
 
 .review-field-row {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: 1fr;
   gap: 0.7rem;
-  align-items: end;
 }
 
 .review-select {
   display: grid;
   gap: 0.35rem;
-  min-width: 8.5rem;
-  flex: 0 1 10rem;
+  min-width: 0;
+  width: 100%;
 }
 
 .review-select span {
@@ -3842,6 +3891,16 @@ body.composer-mode .bg-orb {
 
 .review-select select {
   min-width: 0;
+  width: 100%;
+}
+
+.signal-detail-heading > div:first-child,
+.signal-detail-meta-row > * {
+  min-width: 0;
+}
+
+.signal-detail-meta-row {
+  justify-content: flex-start;
 }
 
 .review-primary-button {
@@ -3898,6 +3957,10 @@ body.composer-mode .bg-orb {
 
 .review-support-card textarea {
   min-height: 7rem;
+}
+
+.review-secondary-panel {
+  gap: 0.8rem;
 }
 
 .review-tag-list {

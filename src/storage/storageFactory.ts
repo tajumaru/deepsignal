@@ -76,6 +76,9 @@ async function swallow<T>(task: () => Promise<T>, fallback: T): Promise<T> {
       }),
     ]);
   } catch (error) {
+    if (error instanceof Error && error.message === "Walrus read timed out.") {
+      return fallback;
+    }
     console.error(error);
     return fallback;
   }

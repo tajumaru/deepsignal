@@ -41,6 +41,7 @@ export function PublicFormPage() {
   const [answers, setAnswers] = useState<PublicAnswers>({});
   const [errors, setErrors] = useState<ValidationErrors>({});
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState<Submission | null>(null);
   const [submitError, setSubmitError] = useState("");
@@ -51,43 +52,62 @@ export function PublicFormPage() {
 
   useEffect(() => {
     async function load() {
-      let nextForm = await storageAdapter.getForm(formId);
-      if (!nextForm && manifestBlobId) {
-        const carrier = await readManifestWithForm(manifestBlobId);
-        const manifest = carrier?.manifest ?? null;
-        let restoredForm: FormSchema | null = null;
-        let restoredFormBlobId = "";
+      setLoading(true);
+      setLoadError("");
+      try {
+        let nextForm: FormSchema | null = null;
+        if (manifestBlobId) {
+          const carrier = await readManifestWithForm(manifestBlobId);
+          const manifest = carrier?.manifest ?? null;
+          let restoredForm: FormSchema | null = null;
+          let restoredFormBlobId = "";
 
-        if (carrier?.form && carrier.form.id === formId) {
-          restoredForm = carrier.form;
-          restoredFormBlobId = manifestBlobId;
-        } else if (manifest?.formBlobId && manifest.formBlobId !== "__bundled_form__") {
-          restoredForm = await fetchJsonBlob<FormSchema>(manifest.formBlobId);
-          restoredFormBlobId = manifest.formBlobId;
+          if (carrier?.form && carrier.form.id === formId) {
+            restoredForm = carrier.form;
+            restoredFormBlobId = manifestBlobId;
+          } else if (manifest?.formBlobId && manifest.formBlobId !== "__bundled_form__") {
+            restoredForm = await fetchJsonBlob<FormSchema>(manifest.formBlobId);
+            restoredFormBlobId = manifest.formBlobId;
+          }
+
+          if (manifest && restoredForm && restoredForm.id === formId) {
+            nextForm = {
+              ...restoredForm,
+              blobId: restoredFormBlobId,
+              manifestBlobId,
+            };
+            await localStorageAdapter.saveForm(nextForm);
+            upsertFormBlobIndex({
+              formId: nextForm.id,
+              formBlobId: restoredFormBlobId,
+              manifestBlobId,
+              createdAt: manifest.createdAt,
+            });
+          }
         }
 
-        if (manifest && restoredForm && restoredForm.id === formId) {
-          nextForm = {
-            ...restoredForm,
-            blobId: restoredFormBlobId,
-            manifestBlobId,
-          };
-          await localStorageAdapter.saveForm(nextForm);
-          upsertFormBlobIndex({
-            formId: nextForm.id,
-            formBlobId: restoredFormBlobId,
-            manifestBlobId,
-            createdAt: manifest.createdAt,
-          });
+        if (!nextForm) {
+          nextForm = await storageAdapter.getForm(formId);
         }
-      }
-      setForm(nextForm ? normalizeForm(nextForm) : null);
-      if (nextForm) {
-        setAnswers(
-          Object.fromEntries(nextForm.fields.map((field) => [field.id, createEmptyAnswer(field)])),
+
+        setForm(nextForm ? normalizeForm(nextForm) : null);
+        if (nextForm) {
+          setAnswers(
+            Object.fromEntries(nextForm.fields.map((field) => [field.id, createEmptyAnswer(field)])),
+          );
+        }
+      } catch (error) {
+        const details = error instanceof Error ? error.message : t("publicFormMissingBody");
+        setForm(null);
+        setAnswers({});
+        setLoadError(
+          manifestBlobId
+            ? `This shared form could not be restored from Walrus. ${details} Ask the creator to republish until Walrus storage succeeds, then open the new shared link.`
+            : `This form is not available in this browser yet. ${details}`,
         );
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     }
     void load();
   }, [formId, manifestBlobId]);
@@ -282,7 +302,7 @@ export function PublicFormPage() {
     return (
       <EmptyState>
         <h1>{t("emptyFormNotFound")}</h1>
-        <p>{t("publicFormMissingBody")}</p>
+        <p>{loadError || t("publicFormMissingBody")}</p>
       </EmptyState>
     );
   }

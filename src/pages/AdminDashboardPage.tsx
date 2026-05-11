@@ -88,6 +88,7 @@ interface SignalRecord {
   form: FormWithCount;
   submission: Submission;
   category: SignalCategory;
+  searchText: string;
 }
 
 const ROADMAP_READY_STATUSES = new Set<Submission["triageStatus"]>([
@@ -502,17 +503,80 @@ export function AdminDashboardPage() {
     }
   }, [accessibleForms, selectedFormId]);
 
-  const allSignals = useMemo<SignalRecord[]>(
-    () =>
-      accessibleForms.flatMap((form) =>
-        (submissionsByFormId[form.id] ?? []).map((submission) => ({
+  const signalIndex = useMemo(() => {
+    const signals: SignalRecord[] = [];
+    const signalById: Record<string, SignalRecord | undefined> = {};
+    const counts = {
+      unread: 0,
+      encrypted: 0,
+      high: 0,
+      pendingSui: 0,
+      archived: 0,
+    };
+    const unreadCountByFormId: Record<string, number> = {};
+    const clusterCountById: Record<string, number> = {};
+    const pendingSignalIdSet = new Set<string>();
+
+    for (const form of accessibleForms) {
+      let unreadCount = 0;
+      const submissions = submissionsByFormId[form.id] ?? [];
+
+      for (const submission of submissions) {
+        const category = inferSignalCategory(submission);
+        const record = {
           form,
           submission,
-          category: inferSignalCategory(submission),
-        })),
-      ),
-    [accessibleForms, submissionsByFormId],
-  );
+          category,
+          searchText: [
+            form.title,
+            getSignalSubject(submission),
+            getSignalPreview(submission),
+            flattenAnswer(submission.answers),
+            submission.tags.join(" "),
+            category,
+          ]
+            .join(" ")
+            .toLowerCase(),
+        } satisfies SignalRecord;
+
+        signals.push(record);
+        signalById[submission.id] = record;
+
+        if (submission.status === "unread") {
+          unreadCount += 1;
+          counts.unread += 1;
+        }
+        if (submission.isEncrypted) {
+          counts.encrypted += 1;
+        }
+        if (submission.priority === "high") {
+          counts.high += 1;
+        }
+        if (submission.pendingOnchainRegistration) {
+          counts.pendingSui += 1;
+          pendingSignalIdSet.add(submission.id);
+        }
+        if (submission.status === "archived") {
+          counts.archived += 1;
+        }
+        if (submission.clusterId) {
+          clusterCountById[submission.clusterId] = (clusterCountById[submission.clusterId] ?? 0) + 1;
+        }
+      }
+
+      unreadCountByFormId[form.id] = unreadCount;
+    }
+
+    return {
+      signals,
+      signalById,
+      counts,
+      unreadCountByFormId,
+      clusterCountById,
+      pendingSignalIdSet,
+    };
+  }, [accessibleForms, submissionsByFormId]);
+  const allSignals = signalIndex.signals;
   const pendingSignals = useMemo(
     () => allSignals.filter((record) => record.submission.pendingOnchainRegistration),
     [allSignals],
@@ -534,13 +598,10 @@ export function AdminDashboardPage() {
   useEffect(() => {
     setSelectedPendingSignalIds((current) =>
       current.filter((signalId) =>
-        allSignals.some(
-          (record) =>
-            record.submission.id === signalId && record.submission.pendingOnchainRegistration,
-        ),
+        signalIndex.pendingSignalIdSet.has(signalId),
       ),
     );
-  }, [allSignals]);
+  }, [signalIndex]);
 
   const visibleSignals = useMemo(() => {
     const normalizedSearch = search.trim().toLowerCase();
@@ -554,29 +615,22 @@ export function AdminDashboardPage() {
       if (!normalizedSearch) {
         return true;
       }
-      const searchBody = [
-        record.form.title,
-        getSignalSubject(record.submission),
-        getSignalPreview(record.submission),
-        flattenAnswer(record.submission.answers),
-        record.submission.tags.join(" "),
-        record.category,
-      ]
-        .join(" ")
-        .toLowerCase();
-      return searchBody.includes(normalizedSearch);
+      return record.searchText.includes(normalizedSearch);
     });
   }, [allSignals, search, selectedFormId, selectedStreamId]);
 
   const selectedRecord =
     visibleSignals.find((record) => record.submission.id === selectedSignalId) ??
-    allSignals.find((record) => record.submission.id === selectedSignalId) ??
+    signalIndex.signalById[selectedSignalId] ??
     visibleSignals[0] ??
     null;
   const roadmapReadySignals = useMemo(
     () => selectedProjectSignals.filter((record) => ROADMAP_READY_STATUSES.has(record.submission.triageStatus)),
     [selectedProjectSignals],
   );
+  const protectedSelectedProjectFormsCount = selectedProjectForms.filter(
+    (form) => form.encryptSubmissions,
+  ).length;
   const operationsStatusItems: OperationsStatusItem[] = [
     {
       label: "Project Connected",
@@ -588,14 +642,14 @@ export function AdminDashboardPage() {
       tone:
         selectedProjectForms.length === 0
           ? "pending"
-          : selectedProjectForms.some((form) => form.encryptSubmissions)
+          : protectedSelectedProjectFormsCount > 0
             ? "ready"
             : "warning",
       detail:
         selectedProjectForms.length === 0
           ? "No form published yet"
-          : selectedProjectForms.some((form) => form.encryptSubmissions)
-            ? `${selectedProjectForms.filter((form) => form.encryptSubmissions).length} protected form${selectedProjectForms.filter((form) => form.encryptSubmissions).length === 1 ? "" : "s"} active`
+          : protectedSelectedProjectFormsCount > 0
+            ? `${protectedSelectedProjectFormsCount} protected form${protectedSelectedProjectFormsCount === 1 ? "" : "s"} active`
             : "Forms exist, but private signal protection is off",
     },
     {
@@ -642,6 +696,87 @@ export function AdminDashboardPage() {
   const selectedRecordNeedsDecrypt = Boolean(
     selectedRecord?.submission.isEncrypted && !detailAnswers,
   );
+  const selectedRecordFocusAction = !selectedRecord
+    ? null
+    : selectedRecordNeedsDecrypt
+      ? {
+          eyebrow: "Next step",
+          title: "Unlock this private signal",
+          detail: "Decrypt with an authorized reviewer wallet first. Review notes and roadmap actions can wait until the message is visible.",
+          cta: (
+            <button
+              type="button"
+              className="primary-button"
+              onClick={() => void handleDecrypt()}
+              disabled={decrypting}
+            >
+              {decrypting
+                ? t("decryptingSignal")
+                : sealRuntime.activeMode === "mock"
+                  ? t("decryptSignal")
+                  : "Decrypt private signal"}
+            </button>
+          ),
+        }
+      : selectedRecord.submission.status === "unread"
+        ? {
+            eyebrow: "Next step",
+            title: "Mark the signal as reviewed",
+            detail: "You can read the signal now. Change the status to Read, then decide whether it should move toward the public roadmap.",
+            cta: (
+              <button
+                type="button"
+                className="primary-button"
+                disabled={saving}
+                onClick={() =>
+                  void updateSubmission({
+                    ...selectedRecord.submission,
+                    status: "read",
+                  })
+                }
+              >
+                Mark reviewed
+              </button>
+            ),
+          }
+        : selectedRecord.submission.pendingOnchainRegistration
+          ? {
+              eyebrow: "Next step",
+              title: "Optional proof: register on Sui",
+              detail: "Review is already possible. Use this only when you want the signal recorded as an onchain proof entry.",
+              cta: (
+                <button
+                  type="button"
+                  className="ghost-button"
+                  disabled={isRegisteringSignal(selectedRecord.submission.id)}
+                  onClick={() => void handleRegisterPendingSignals([selectedRecord.submission.id])}
+                >
+                  {isRegisteringSignal(selectedRecord.submission.id) ? "Registering..." : "Register on Sui"}
+                </button>
+              ),
+            }
+          : !isSelectedRecordOnRoadmap
+            ? {
+                eyebrow: "Next step",
+                title: "Decide whether this belongs on the roadmap",
+                detail: "If this signal is ready for external visibility, move it into a roadmap status such as Planned, In Progress, or Fixed.",
+                cta: (
+                  <button
+                    type="button"
+                    className="ghost-button"
+                    disabled={saving}
+                    onClick={() => void handleMoveToRoadmap()}
+                  >
+                    Move to Public Roadmap
+                  </button>
+                ),
+              }
+            : {
+                eyebrow: "Next step",
+                title: "This signal is already in review flow",
+                detail: "You can refine notes, tags, or roadmap status, but no urgent action is required right now.",
+                cta: selectedRoadmapUrl ? <Link className="ghost-button" to={selectedRoadmapUrl}>Open Public Roadmap</Link> : null,
+              };
   const deleteProjectBlockedReason = !selectedProject
     ? ""
     : !selectedProject.ownedOwnerCapId
@@ -1008,41 +1143,30 @@ export function AdminDashboardPage() {
     {
       id: "unread",
       label: "Unread",
-      count: allSignals.filter((record) => record.submission.status === "unread").length,
+      count: signalIndex.counts.unread,
     },
     {
       id: "encrypted",
       label: "Protected",
-      count: allSignals.filter((record) => record.submission.isEncrypted).length,
+      count: signalIndex.counts.encrypted,
     },
     {
       id: "high",
       label: "Flagged",
-      count: allSignals.filter((record) => record.submission.priority === "high").length,
+      count: signalIndex.counts.high,
     },
     {
       id: "pending_sui",
       label: "Pending Sui",
-      count: pendingSignals.length,
+      count: signalIndex.counts.pendingSui,
     },
     {
       id: "archived",
       label: "Resolved",
-      count: allSignals.filter((record) => record.submission.status === "archived").length,
+      count: signalIndex.counts.archived,
     },
   ] satisfies Array<{ id: StreamId; label: string; count: number }>;
-
-  const unreadCountByFormId = useMemo(
-    () =>
-      Object.fromEntries(
-        accessibleForms.map((form) => [
-          form.id,
-          (submissionsByFormId[form.id] ?? []).filter((submission) => submission.status === "unread")
-            .length,
-        ]),
-      ) as Record<string, number>,
-    [accessibleForms, submissionsByFormId],
-  );
+  const unreadCountByFormId = signalIndex.unreadCountByFormId;
 
   const selectedForm = accessibleForms.find((form) => form.id === selectedFormId) ?? null;
   const selectedBeaconForm =
@@ -1063,16 +1187,7 @@ export function AdminDashboardPage() {
       >,
     [accessibleForms],
   );
-  const clusterCountById = useMemo(
-    () =>
-      allSignals.reduce<Record<string, number>>((counts, record) => {
-        if (record.submission.clusterId) {
-          counts[record.submission.clusterId] = (counts[record.submission.clusterId] ?? 0) + 1;
-        }
-        return counts;
-      }, {}),
-    [allSignals],
-  );
+  const clusterCountById = signalIndex.clusterCountById;
   const inferredAiConfidence = selectedRecord
     ? selectedRecord.submission.aiSummary
       ? selectedRecord.submission.keywords?.length
@@ -1099,38 +1214,23 @@ export function AdminDashboardPage() {
   const selectedPendingVisibleCount = visibleSignals.filter((record) =>
     selectedPendingSignalIds.includes(record.submission.id),
   ).length;
-  const activeFormsCount = selectedFormId === "all" ? accessibleForms.length : 1;
   const hasProjects = projects.length > 0;
   const overviewCards = [
-    {
-      label: "Current scope",
-      value: activeScopeLabel,
-      meta: `${visibleSignals.length} visible`,
-    },
     {
       label: "Unread queue",
       value: String(visibleUnreadCount),
       meta: activeStreamLabel,
     },
     {
-      label: "Protected signals",
-      value: String(visibleSignals.filter((record) => record.submission.isEncrypted).length),
-      meta: privateReviewLabel,
-    },
-    {
       label: "Pending Sui",
       value: String(pendingSignals.length),
       meta: "Optional proof queue",
     },
-    ...(activeFormsCount > 0
-      ? [
-          {
-            label: "Active forms",
-            value: String(activeFormsCount),
-            meta: selectedProject ? selectedProject.name : "Walrus / local mode",
-          },
-        ]
-      : []),
+    {
+      label: "Roadmap ready",
+      value: String(roadmapReadySignals.length),
+      meta: selectedProject ? selectedProject.name : "Select a project",
+    },
   ];
 
   const nodeDirectoryItems = useMemo(() => {
@@ -1139,7 +1239,7 @@ export function AdminDashboardPage() {
       id: "all",
       title: t("allSignalNodes"),
       submissionCount: allSignals.length,
-      unreadCount: allSignals.filter((record) => record.submission.status === "unread").length,
+      unreadCount: signalIndex.counts.unread,
       isLegacyDemo: false,
     };
     const formItems = accessibleForms
@@ -1160,7 +1260,7 @@ export function AdminDashboardPage() {
         isLegacyDemo: !form.ownerAddress,
       }));
     return [allFormsItem, ...formItems];
-  }, [accessibleForms, allSignals, nodeSearch, t, unreadCountByFormId]);
+  }, [accessibleForms, allSignals.length, nodeSearch, signalIndex.counts.unread, t, unreadCountByFormId]);
 
   const deletableNodeIds = useMemo(
     () => nodeDirectoryItems.filter((item) => item.id !== "all").map((item) => item.id),
@@ -1604,6 +1704,9 @@ export function AdminDashboardPage() {
                     const storageLabel = getStorageBadgeLabel(
                       submission.encryptedBlobId ?? submission.blobId,
                     );
+                    const isPendingSui = submission.pendingOnchainRegistration;
+                    const isSelectedForSui = selectedPendingSignalIds.includes(submission.id);
+                    const isLocalOnlySignal = storageLabel === "Stored locally only";
                     return (
                       <Link
                         key={submission.id}
@@ -1631,12 +1734,10 @@ export function AdminDashboardPage() {
                           <span className={`pill status-${submission.status}`}>{submission.status}</span>
                           <span className={`pill priority-${submission.priority}`}>{submission.priority}</span>
                           <span className="signal-chip">{category}</span>
-                          {submission.pendingOnchainRegistration ? (
+                          {isPendingSui ? (
                             <span className="signal-chip signal-chip-accent">Pending Sui</span>
                           ) : null}
-                          {submission.isEncrypted ? (
-                            <span className="signal-chip signal-chip-soft">Encrypted private signal</span>
-                          ) : null}
+                          {isSelectedForSui ? <span className="signal-chip signal-chip-soft">Selected for Sui</span> : null}
                           {submission.clusterId ? (
                             <span className="signal-chip signal-chip-accent">
                               AI grouped
@@ -1655,10 +1756,10 @@ export function AdminDashboardPage() {
                               {t("newSignalLabel")}
                             </span>
                           ) : null}
-                          <span className="signal-chip">{storageLabel}</span>
+                          {isLocalOnlySignal ? <span className="signal-chip">{storageLabel}</span> : null}
                         </div>
-                        {submission.pendingOnchainRegistration ? (
-                          <div className="inline-actions">
+                        {isPendingSui ? (
+                          <div className="signal-card-actions">
                             <button
                               type="button"
                               className="ghost-button"
@@ -1668,7 +1769,7 @@ export function AdminDashboardPage() {
                                 togglePendingSelection(submission.id);
                               }}
                             >
-                              {selectedPendingSignalIds.includes(submission.id) ? "Selected" : "Select for Sui"}
+                              {isSelectedForSui ? "Selected" : "Select for Sui"}
                             </button>
                             <button
                               type="button"
@@ -1768,6 +1869,19 @@ export function AdminDashboardPage() {
                       ) : null}
                     </div>
                   </section>
+
+                  {selectedRecordFocusAction ? (
+                    <section className="answer-card review-focus-card">
+                      <div className="review-focus-copy">
+                        <p className="eyebrow">{selectedRecordFocusAction.eyebrow}</p>
+                        <h3>{selectedRecordFocusAction.title}</h3>
+                        <p className="muted">{selectedRecordFocusAction.detail}</p>
+                      </div>
+                      {selectedRecordFocusAction.cta ? (
+                        <div className="review-focus-actions">{selectedRecordFocusAction.cta}</div>
+                      ) : null}
+                    </section>
+                  ) : null}
 
                   {selectedRecordNeedsDecrypt ? (
                     <div className="stack private-access-copy">
@@ -1956,37 +2070,44 @@ export function AdminDashboardPage() {
                           </Link>
                         ) : null}
                       </div>
-                      <p className="review-helper-copy muted">
-                        {selectedRecord.submission.notes.trim() ? "Notes saved." : "Notes empty."} Tags {selectedRecord.submission.tags.length}.
-                      </p>
-                      <section className="review-support-card contest-roadmap-card">
-                        <div className="section-row">
-                          <div>
-                            <h4>Public Roadmap</h4>
-                            <p className="muted">Planned, In Progress, and Fixed signals appear on the roadmap.</p>
-                          </div>
-                          <span className="signal-chip">
-                            {getTriageStatusLabel(selectedRecord.submission.triageStatus)}
+                      <details className="answer-card collapsible-detail-card review-secondary-panel">
+                        <summary>
+                          <span>
+                            <p className="eyebrow">Review notes and roadmap</p>
+                            <h3>Secondary actions</h3>
                           </span>
-                        </div>
-                        <div className="inline-actions">
-                          <button
-                            type="button"
-                            className="ghost-button"
-                            disabled={saving}
-                            onClick={() => void handleMoveToRoadmap()}
-                          >
-                            {isSelectedRecordOnRoadmap ? "Keep on Public Roadmap" : "Move to Public Roadmap"}
-                          </button>
-                          {isSelectedRecordOnRoadmap ? (
-                            <Link className="ghost-button" to={selectedRoadmapUrl}>
-                              Open roadmap
-                            </Link>
-                          ) : null}
-                        </div>
-                      </section>
-                      <div className="review-support-grid">
-                        <section className="review-support-card">
+                        </summary>
+                        <p className="review-helper-copy muted">
+                          {selectedRecord.submission.notes.trim() ? "Notes saved." : "Notes empty."} Tags {selectedRecord.submission.tags.length}.
+                        </p>
+                        <section className="review-support-card contest-roadmap-card">
+                          <div className="section-row">
+                            <div>
+                              <h4>Public Roadmap</h4>
+                              <p className="muted">Planned, In Progress, and Fixed signals appear on the roadmap.</p>
+                            </div>
+                            <span className="signal-chip">
+                              {getTriageStatusLabel(selectedRecord.submission.triageStatus)}
+                            </span>
+                          </div>
+                          <div className="inline-actions">
+                            <button
+                              type="button"
+                              className="ghost-button"
+                              disabled={saving}
+                              onClick={() => void handleMoveToRoadmap()}
+                            >
+                              {isSelectedRecordOnRoadmap ? "Keep on Public Roadmap" : "Move to Public Roadmap"}
+                            </button>
+                            {isSelectedRecordOnRoadmap ? (
+                              <Link className="ghost-button" to={selectedRoadmapUrl}>
+                                Open roadmap
+                              </Link>
+                            ) : null}
+                          </div>
+                        </section>
+                        <div className="review-support-grid">
+                          <section className="review-support-card">
                           <div className="section-row">
                             <h4>{t("tags")}</h4>
                             <span className="muted">{selectedRecord.submission.tags.length}</span>
@@ -2035,9 +2156,9 @@ export function AdminDashboardPage() {
                               {t("addTag")}
                             </button>
                           </div>
-                        </section>
+                          </section>
 
-                        <section className="review-support-card">
+                          <section className="review-support-card">
                           <div className="section-row">
                             <h4>{t("notesTitle")}</h4>
                             <span className="muted">{saving ? "Saving..." : "Private"}</span>
@@ -2071,8 +2192,9 @@ export function AdminDashboardPage() {
                               {t("saveNote")}
                             </button>
                           </div>
-                        </section>
-                      </div>
+                          </section>
+                        </div>
+                      </details>
                     </section>
 
                     <section className="answer-card original-signal-section">
@@ -2150,16 +2272,16 @@ export function AdminDashboardPage() {
                       </div>
                     </section>
 
-                    <section className="answer-card ai-card ai-summary-section">
-                      <div className="section-row">
-                        <div>
+                    <details className="answer-card collapsible-detail-card ai-summary-section ai-card">
+                      <summary>
+                        <span>
                           <p className="eyebrow">AI Summary</p>
                           <h3>AI Summary</h3>
-                        </div>
-                        <span className="signal-chip">Confidence {inferredAiConfidence}</span>
-                      </div>
+                        </span>
+                      </summary>
                       <p>{selectedRecord.submission.aiSummary || getSignalPreview(selectedRecord.submission)}</p>
                       <div className="signal-badge-row signal-badge-row-compact">
+                        <span className="signal-chip">Confidence {inferredAiConfidence}</span>
                         <span className="signal-chip">{selectedRecord.category}</span>
                         {selectedRecord.submission.keywords?.slice(0, 3).map((keyword) => (
                           <span key={keyword} className="signal-chip">
@@ -2175,16 +2297,15 @@ export function AdminDashboardPage() {
                           </span>
                         ) : null}
                       </div>
-                    </section>
+                    </details>
 
-                    <section className="answer-card triage-compact-card ai-card ai-triage-section">
-                      <div className="section-row">
-                        <div>
+                    <details className="answer-card collapsible-detail-card triage-compact-card ai-card ai-triage-section">
+                      <summary>
+                        <span>
                           <p className="eyebrow">AI Triage</p>
                           <h3>AI Triage</h3>
-                        </div>
-                        <span className="muted">Secondary</span>
-                      </div>
+                        </span>
+                      </summary>
                       <div className="signal-badge-row signal-badge-row-compact">
                         <span className="signal-chip">{selectedRecord.category}</span>
                         <span className="signal-chip">
@@ -2197,7 +2318,7 @@ export function AdminDashboardPage() {
                           Duplicate {selectedRecord.submission.clusterId ? "Possible" : "None"}
                         </span>
                       </div>
-                    </section>
+                    </details>
 
                     <section className="signal-detail-group details-group-section">
                       <div className="signal-detail-group-header signal-detail-group-header-details">

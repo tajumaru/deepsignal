@@ -78,8 +78,9 @@ export function PublishStep({
   onBack,
 }: PublishStepProps) {
   const isRegisteredOnSui = Boolean(savedForm?.isOnchain && typeof savedForm.onchainFormId === "number");
+  const isLocalOnlyForm = Boolean(savedForm?.blobId && isLocalFallbackBlob(savedForm.blobId));
   const storageModeLabel = savedForm
-    ? isLocalFallbackBlob(savedForm.blobId)
+    ? isLocalOnlyForm
       ? "Local mode"
       : "Walrus mode"
     : "Local / Walrus mode";
@@ -282,12 +283,14 @@ export function PublishStep({
                 <div className="section-row">
                   <div>
                     <p className="eyebrow">Step 3</p>
-                    <h4>Share Public Link</h4>
+                    <h4>{isLocalOnlyForm ? "Local preview only" : "Share Public Link"}</h4>
                   </div>
-                  <span className="signal-chip signal-chip-accent">Anonymous ready</span>
+                  <span className="signal-chip signal-chip-accent">{isLocalOnlyForm ? "Same browser only" : "Anonymous ready"}</span>
                 </div>
                 <p className="muted">
-                  This is the judge handoff moment. Open the public link, copy it, or scan the QR code to submit a private signal.
+                  {isLocalOnlyForm
+                    ? "This save fell back to browser-local storage. You can preview the responder flow on this device, but other phones and browsers cannot open the form yet."
+                    : "This is the judge handoff moment. Open the public link, copy it, or scan the QR code to submit a private signal."}
                 </p>
                 {savedForm.manifestBlobId ? (
                   <ShareCard
@@ -298,17 +301,26 @@ export function PublishStep({
                   />
                 ) : (
                   <section className="answer-card">
-                    <p className="eyebrow">Share Ready</p>
-                    <h4>QR sharing is unavailable</h4>
-                    <p className="muted">This form is currently stored in local fallback mode, so phones and other browsers cannot restore it from a QR code yet.</p>
+                    <p className="eyebrow">{isLocalOnlyForm ? "Cross-device share blocked" : "Share Ready"}</p>
+                    <h4>{isLocalOnlyForm ? "Walrus publish is required before sharing" : "QR sharing is unavailable"}</h4>
+                    <p className="muted">
+                      {isLocalOnlyForm
+                        ? "Republish after Walrus storage succeeds, then share the public link or QR code."
+                        : "This form is currently stored in local fallback mode, so phones and other browsers cannot restore it from a QR code yet."}
+                    </p>
                   </section>
                 )}
               </section>
 
               <div className="composer-link-grid">
                 <p>
-                  {t("publicShareLink")}: <Link to={publicPath}>{publicPath}</Link>
+                  {isLocalOnlyForm ? "Local responder preview" : t("publicShareLink")}: <Link to={publicPath}>{publicPath}</Link>
                 </p>
+                {isLocalOnlyForm ? (
+                  <p className="warning-text">
+                    Do not share this URL yet. It only works in the current browser until Walrus storage succeeds.
+                  </p>
+                ) : null}
                 <p>
                   {t("adminPage")}: <Link to={`/dashboard/forms/${savedForm.id}`}>{t("adminPageCta")}</Link>
                 </p>

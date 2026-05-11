@@ -1,16 +1,49 @@
+import { lazy, Suspense, type ReactNode } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
-import type { ReactNode } from "react";
 import { AppShell } from "./components/AppShell";
-import { AccessManagementPage } from "./pages/AccessManagementPage";
-import { AdminDashboardPage } from "./pages/AdminDashboardPage";
-import { FormBuilderPage } from "./pages/FormBuilderPage";
-import { ManifestRestorePage } from "./pages/ManifestRestorePage";
-import { FormSubmissionsPage } from "./pages/FormSubmissionsPage";
 import { LandingPage } from "./pages/LandingPage";
-import { PublicFormPage } from "./pages/PublicFormPage";
-import { PublicRoadmapPage } from "./pages/PublicRoadmapPage";
-import { SubmissionDetailPage } from "./pages/SubmissionDetailPage";
 import { REQUIRE_GLOBAL_WALRUS_RUNTIME, WalrusRuntimeProvider } from "./providers";
+
+const AccessManagementPage = lazy(() =>
+  import("./pages/AccessManagementPage").then((module) => ({
+    default: module.AccessManagementPage,
+  })),
+);
+const AdminDashboardPage = lazy(() =>
+  import("./pages/AdminDashboardPage").then((module) => ({
+    default: module.AdminDashboardPage,
+  })),
+);
+const FormBuilderPage = lazy(() =>
+  import("./pages/FormBuilderPage").then((module) => ({
+    default: module.FormBuilderPage,
+  })),
+);
+const ManifestRestorePage = lazy(() =>
+  import("./pages/ManifestRestorePage").then((module) => ({
+    default: module.ManifestRestorePage,
+  })),
+);
+const FormSubmissionsPage = lazy(() =>
+  import("./pages/FormSubmissionsPage").then((module) => ({
+    default: module.FormSubmissionsPage,
+  })),
+);
+const PublicFormPage = lazy(() =>
+  import("./pages/PublicFormPage").then((module) => ({
+    default: module.PublicFormPage,
+  })),
+);
+const PublicRoadmapPage = lazy(() =>
+  import("./pages/PublicRoadmapPage").then((module) => ({
+    default: module.PublicRoadmapPage,
+  })),
+);
+const SubmissionDetailPage = lazy(() =>
+  import("./pages/SubmissionDetailPage").then((module) => ({
+    default: module.SubmissionDetailPage,
+  })),
+);
 
 function WithWalrusRuntime({ children }: { children: ReactNode }) {
   if (REQUIRE_GLOBAL_WALRUS_RUNTIME) {
@@ -19,82 +52,88 @@ function WithWalrusRuntime({ children }: { children: ReactNode }) {
   return <WalrusRuntimeProvider>{children}</WalrusRuntimeProvider>;
 }
 
+function RouteFallback() {
+  return <div className="panel">Loading workspace...</div>;
+}
+
 export default function App() {
   return (
     <AppShell>
-      <Routes>
-        <Route path="/" element={<LandingPage />} />
-        <Route
-          path="/admin"
-          element={
-            <WithWalrusRuntime>
-              <AdminDashboardPage />
-            </WithWalrusRuntime>
-          }
-        />
-        <Route
-          path="/dashboard"
-          element={
-            <WithWalrusRuntime>
-              <AdminDashboardPage />
-            </WithWalrusRuntime>
-          }
-        />
-        <Route path="/admin/access" element={<AccessManagementPage />} />
-        <Route path="/dashboard/access" element={<AccessManagementPage />} />
-        <Route
-          path="/admin/forms/new"
-          element={
-            <WithWalrusRuntime>
-              <FormBuilderPage />
-            </WithWalrusRuntime>
-          }
-        />
-        <Route
-          path="/admin/forms/:formId"
-          element={
-            <WithWalrusRuntime>
-              <FormSubmissionsPage />
-            </WithWalrusRuntime>
-          }
-        />
-        <Route
-          path="/dashboard/forms/:formId"
-          element={
-            <WithWalrusRuntime>
-              <FormSubmissionsPage />
-            </WithWalrusRuntime>
-          }
-        />
-        <Route
-          path="/admin/forms/:formId/submissions/:submissionId"
-          element={
-            <WithWalrusRuntime>
-              <FormSubmissionsPage />
-            </WithWalrusRuntime>
-          }
-        />
-        <Route
-          path="/dashboard/forms/:formId/submissions/:submissionId"
-          element={
-            <WithWalrusRuntime>
-              <FormSubmissionsPage />
-            </WithWalrusRuntime>
-          }
-        />
-        <Route path="/admin/submissions/:submissionId" element={<SubmissionDetailPage />} />
-        <Route
-          path="/f/:formId"
-          element={
-            <WithWalrusRuntime>
-              <PublicFormPage />
-            </WithWalrusRuntime>
-          }
-        />
-        <Route path="/roadmap/:formId" element={<PublicRoadmapPage />} />
-        <Route path="/m/:manifestBlobId" element={<ManifestRestorePage />} />
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
+      <Suspense fallback={<RouteFallback />}>
+        <Routes>
+          <Route path="/" element={<LandingPage />} />
+          <Route
+            path="/admin"
+            element={
+              <WithWalrusRuntime>
+                <AdminDashboardPage />
+              </WithWalrusRuntime>
+            }
+          />
+          <Route
+            path="/dashboard"
+            element={
+              <WithWalrusRuntime>
+                <AdminDashboardPage />
+              </WithWalrusRuntime>
+            }
+          />
+          <Route path="/admin/access" element={<AccessManagementPage />} />
+          <Route path="/dashboard/access" element={<AccessManagementPage />} />
+          <Route
+            path="/admin/forms/new"
+            element={
+              <WithWalrusRuntime>
+                <FormBuilderPage />
+              </WithWalrusRuntime>
+            }
+          />
+          <Route
+            path="/admin/forms/:formId"
+            element={
+              <WithWalrusRuntime>
+                <FormSubmissionsPage />
+              </WithWalrusRuntime>
+            }
+          />
+          <Route
+            path="/dashboard/forms/:formId"
+            element={
+              <WithWalrusRuntime>
+                <FormSubmissionsPage />
+              </WithWalrusRuntime>
+            }
+          />
+          <Route
+            path="/admin/forms/:formId/submissions/:submissionId"
+            element={
+              <WithWalrusRuntime>
+                <FormSubmissionsPage />
+              </WithWalrusRuntime>
+            }
+          />
+          <Route
+            path="/dashboard/forms/:formId/submissions/:submissionId"
+            element={
+              <WithWalrusRuntime>
+                <FormSubmissionsPage />
+              </WithWalrusRuntime>
+            }
+          />
+          <Route path="/admin/submissions/:submissionId" element={<SubmissionDetailPage />} />
+          <Route
+            path="/f/:formId"
+            element={
+              <WithWalrusRuntime>
+                <PublicFormPage />
+              </WithWalrusRuntime>
+            }
+          />
+          <Route path="/roadmap/:formId" element={<PublicRoadmapPage />} />
+          <Route path="/m/:manifestBlobId" element={<ManifestRestorePage />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </Suspense>
     </AppShell>
   );
 }

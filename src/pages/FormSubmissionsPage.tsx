@@ -9,15 +9,12 @@ import { Link, useLocation, useParams } from "react-router-dom";
 import { AdminAccessGate } from "../components/AdminAccessGate";
 import { BlobLink } from "../components/BlobLink";
 import { EmptyState } from "../components/EmptyState";
-import { SealStatusCard } from "../components/SealStatusCard";
-import { SignalClusterPanel } from "../components/SignalClusterPanel";
-import { SignalMetaChip, SignalMetaRow } from "../components/SignalMetaChip";
+import { SignalMetaChip } from "../components/SignalMetaChip";
 import { useAccessControl } from "../hooks/useAccessControl";
 import { getSealRuntimeStatus } from "../crypto/cryptoFactory";
 import { REAL_SEAL_SESSION_TTL_MIN } from "../crypto/sealPayload";
 import { useI18n } from "../i18n";
-import { getReviewAccessState, getRoleLabel } from "../lib/adminAccess";
-import { getEncryptedPayloadAvailabilityLabel, hasDedicatedEncryptedPayloadBlob } from "../lib/encryptionDisplay";
+import { getReviewAccessState } from "../lib/adminAccess";
 import { exportSubmissionJson, exportSubmissionsCsv, exportSummaryJson } from "../lib/export";
 import { getPublicFormPath, getPublicRoadmapPath } from "../lib/publicLinks";
 import { getRespondentDisplayLabel, getSubmissionRespondentMeta } from "../lib/respondentMeta";
@@ -28,7 +25,6 @@ import {
 import {
   getSignalPreview,
   getSignalSubject,
-  getStorageDetailLabels,
   getWalletAccessLabel,
   inferSignalCategory,
   isLocalFallbackBlob,
@@ -117,11 +113,7 @@ export function FormSubmissionsPage() {
   const [signalValueDraft, setSignalValueDraft] = useState("");
   const [notesDraft, setNotesDraft] = useState("");
   const [draftTag, setDraftTag] = useState("");
-  const [githubIssueDraft, setGithubIssueDraft] = useState("");
-  const [githubPrDraft, setGithubPrDraft] = useState("");
   const [loading, setLoading] = useState(true);
-  const [showMetadata, setShowMetadata] = useState(false);
-  const [showEncryptedSignal, setShowEncryptedSignal] = useState(false);
   const [toast, setToast] = useState<{ tone: "success" | "error"; message: string } | null>(null);
   const saveQueueRef = useRef(Promise.resolve());
 
@@ -183,8 +175,6 @@ export function FormSubmissionsPage() {
       setDetailAnswers(null);
       setDetailAttachments([]);
       setNotesDraft("");
-      setGithubIssueDraft("");
-      setGithubPrDraft("");
       setDecryptError("");
       setSaveError("");
       setSaveState("idle");
@@ -199,8 +189,6 @@ export function FormSubmissionsPage() {
         ? selectedSubmission.signalValue.toString()
         : "",
     );
-    setGithubIssueDraft(selectedSubmission.githubIssueUrl ?? "");
-    setGithubPrDraft(selectedSubmission.githubPrUrl ?? "");
     setDetailAnswers(selectedSubmission.isEncrypted ? null : selectedSubmission.answers);
     setDetailAttachments(selectedSubmission.attachments ?? []);
     setDecryptError("");
@@ -443,6 +431,12 @@ export function FormSubmissionsPage() {
     submissions.some((submission) => inferSignalCategory(submission) === "Survey");
   const activeForm = form as FormSchema;
   const resolvedDetailAnswers = detailAnswers ?? {};
+  const previewAnswerFields = detailAnswers
+    ? activeForm.fields.filter((field) => {
+        const value = flattenAnswer(resolvedDetailAnswers[field.id]).trim();
+        return Boolean(value);
+      }).slice(0, 3)
+    : [];
   const isDetailOnly = Boolean(submissionId);
   const inboxPath = `${
     location.pathname.startsWith("/dashboard") ? "/dashboard" : "/admin"
@@ -549,12 +543,15 @@ export function FormSubmissionsPage() {
                     <h3>Signal Detail</h3>
                     {detailAnswers ? (
                       <div className="stack">
-                        {form.fields.map((field) => (
+                        {previewAnswerFields.map((field) => (
                           <div key={field.id} className="answer-line">
                             <strong>{field.label}</strong>
                             <p>{flattenAnswer(detailAnswers[field.id]) || t("noAnswerLabel")}</p>
                           </div>
                         ))}
+                        {activeForm.fields.length > previewAnswerFields.length ? (
+                          <p className="muted">Open Answers to view the full response.</p>
+                        ) : null}
                       </div>
                     ) : (
                       <p className="muted">{t("encryptedFeedbackHidden")}</p>
@@ -706,24 +703,6 @@ export function FormSubmissionsPage() {
             </div>
 
             <div className="signal-sidebar-section stack">
-              <div className="wallet-status-card">
-                <p className="eyebrow">{t("walletStatus")}</p>
-                <strong>{getWalletAccessLabel(form, account?.address)}</strong>
-                {form.ownerAddress ? <SignalMetaChip type="contributor" value={form.ownerAddress} /> : <p className="muted">{t("legacyDemoForm")}</p>}
-              </div>
-
-              {capabilityProfile.isConfigured ? (
-                <div className="wallet-status-card">
-                  <p className="eyebrow">Access role</p>
-                  <strong>{getRoleLabel(capabilityProfile)}</strong>
-                  <p className="muted">
-                    OwnerCap {capabilityProfile.ownerCapIds.length} / AdminCap{" "}
-                    {capabilityProfile.adminCapIds.length} / ReviewerCap{" "}
-                    {capabilityProfile.reviewerCapIds.length}
-                  </p>
-                </div>
-              ) : null}
-
               <div className="wallet-status-card">
                 <p className="eyebrow">{t("formBlobId")}</p>
                 {form.blobId ? <SignalMetaChip type="blob" value={form.blobId} /> : <strong>{t("notAvailable")}</strong>}
@@ -923,12 +902,15 @@ export function FormSubmissionsPage() {
                     <h3>Signal Detail</h3>
                     {detailAnswers ? (
                       <div className="stack">
-                        {activeForm.fields.map((field) => (
+                        {previewAnswerFields.map((field) => (
                           <div key={field.id} className="answer-line">
                             <strong>{field.label}</strong>
                             <p>{flattenAnswer(resolvedDetailAnswers[field.id]) || t("noAnswerLabel")}</p>
                           </div>
                         ))}
+                        {activeForm.fields.length > previewAnswerFields.length ? (
+                          <p className="muted">Open Answers to view the full response.</p>
+                        ) : null}
                       </div>
                     ) : (
                       <p className="muted">{t("encryptedFeedbackHidden")}</p>
@@ -1046,22 +1028,6 @@ export function FormSubmissionsPage() {
                   ) : null}
 
                   <section className="answer-card">
-                    <h3>{t("answersTitle")}</h3>
-                    {detailAnswers ? (
-                      <div className="stack">
-                        {activeForm.fields.map((field) => (
-                          <div key={field.id} className="answer-line">
-                            <strong>{field.label}</strong>
-                            <p>{flattenAnswer(detailAnswers?.[field.id]) || t("noAnswerLabel")}</p>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="muted">{t("encryptedFeedbackHidden")}</p>
-                    )}
-                  </section>
-
-                  <section className="answer-card">
                     <h3>{t("attachments")}</h3>
                     {detailAttachments.length === 0 ? (
                       <p className="muted">{t("noAttachments")}</p>
@@ -1087,102 +1053,7 @@ export function FormSubmissionsPage() {
                     )}
                   </section>
 
-                  <SignalClusterPanel
-                    selectedSubmission={selectedSubmission}
-                    submissions={submissions}
-                    formById={{ [activeForm.id]: activeForm }}
-                    formTitleById={{ [activeForm.id]: activeForm.title }}
-                    busy={saveState === "saving"}
-                    onSelectSignal={(nextSignalId) => setSelectedSignalId(nextSignalId)}
-                    onSaveSubmission={updateSubmission}
-                  />
-
-                  <section className="answer-card">
-                    <div className="section-row">
-                      <h3>Signal Operations</h3>
-                      <span className={`save-state-pill is-${saveState}`}>
-                        {saveState === "saving"
-                          ? "Saving signal ops..."
-                          : saveState === "saved"
-                            ? "Saved"
-                            : saveState === "error"
-                              ? "Save failed"
-                              : "Ready"}
-                      </span>
-                    </div>
-                    {saveError ? <p className="warning-text">{saveError}</p> : null}
-                    <label>
-                      <span>{t("status")}</span>
-                      <select
-                        value={selectedSubmission.status}
-                        onChange={(event) =>
-                          void updateSubmission({
-                            ...selectedSubmission,
-                            status: event.target.value as Submission["status"],
-                          })
-                        }
-                      >
-                        <option value="unread">{t("statusUnread")}</option>
-                        <option value="read">{t("statusRead")}</option>
-                        <option value="archived">{t("statusArchived")}</option>
-                      </select>
-                    </label>
-                    <label>
-                      <span>Signal Triage</span>
-                      <select
-                        value={selectedSubmission.triageStatus}
-                        onChange={(event) =>
-                          void updateSubmission({
-                            ...selectedSubmission,
-                            triageStatus: event.target.value as Submission["triageStatus"],
-                          })
-                        }
-                      >
-                        {TRIAGE_STATUS_OPTIONS.map((option) => (
-                          <option key={option.value} value={option.value}>
-                            {option.label}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <label>
-                      <span>{t("priority")}</span>
-                      <select
-                        value={selectedSubmission.priority}
-                        onChange={(event) =>
-                          void updateSubmission({
-                            ...selectedSubmission,
-                            priority: event.target.value as Submission["priority"],
-                          })
-                        }
-                      >
-                        <option value="low">{t("priorityLow")}</option>
-                        <option value="medium">{t("priorityMedium")}</option>
-                        <option value="high">{t("priorityHigh")}</option>
-                      </select>
-                    </label>
-                    <label>
-                      <span>Signal Value</span>
-                      <select
-                        value={selectedSubmission.signalValue?.toString() ?? ""}
-                        onChange={(event) =>
-                          void updateSubmission({
-                            ...selectedSubmission,
-                            signalValue: event.target.value ? Number(event.target.value) : undefined,
-                          })
-                        }
-                      >
-                        <option value="">Not scored</option>
-                        {[1, 2, 3, 4, 5].map((value) => (
-                          <option key={value} value={value}>
-                            {value}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                  </section>
-
-                  <section className="answer-card">
+                  <section className="answer-card" hidden>
                     <div className="section-row">
                       <h3>{t("tags")}</h3>
                       <span className="muted">{selectedSubmission.tags.length}</span>
@@ -1255,194 +1126,6 @@ export function FormSubmissionsPage() {
                     </button>
                   </section>
 
-                  <section className="answer-card">
-                    <h3>GitHub Prep</h3>
-                    <label>
-                      <span>GitHub Issue URL</span>
-                      <input
-                        value={githubIssueDraft}
-                        onChange={(event) => setGithubIssueDraft(event.target.value)}
-                        placeholder="https://github.com/org/repo/issues/123"
-                      />
-                    </label>
-                    <label>
-                      <span>GitHub PR URL</span>
-                      <input
-                        value={githubPrDraft}
-                        onChange={(event) => setGithubPrDraft(event.target.value)}
-                        placeholder="https://github.com/org/repo/pull/456"
-                      />
-                    </label>
-                    <button
-                      type="button"
-                      className="primary-button"
-                      disabled={saveState === "saving"}
-                      onClick={() =>
-                        void updateSubmission({
-                          ...selectedSubmission,
-                          githubIssueUrl: githubIssueDraft,
-                          githubPrUrl: githubPrDraft,
-                        })
-                      }
-                    >
-                      Save GitHub Links
-                    </button>
-                  </section>
-
-                  <section className="answer-card">
-                    <h3>Respondent Meta</h3>
-                    <div className="metadata-list">
-                      <div className="metadata-row">
-                        <span>Wallet</span>
-                        <strong>
-                          {getSubmissionRespondentMeta(selectedSubmission).isAnonymous
-                            ? "Anonymous respondent"
-                            : getSubmissionRespondentMeta(selectedSubmission).walletAddress ?? t("notAvailable")}
-                        </strong>
-                      </div>
-                      <div className="metadata-row">
-                        <span>Anonymous</span>
-                        <strong>{getSubmissionRespondentMeta(selectedSubmission).isAnonymous ? "Yes" : "No"}</strong>
-                      </div>
-                      <div className="metadata-row">
-                        <span>Submitted</span>
-                        <strong>{formatDate(getSubmissionRespondentMeta(selectedSubmission).submittedAt)}</strong>
-                      </div>
-                      <div className="metadata-row">
-                        <span>Chain</span>
-                        <strong>{getSubmissionRespondentMeta(selectedSubmission).chain}</strong>
-                      </div>
-                    </div>
-                  </section>
-
-                  <section className="answer-card">
-                    <div className="section-row">
-                      <h3>{t("signalMetadataTitle")}</h3>
-                      <button
-                        type="button"
-                        className="ghost-button"
-                        onClick={() => setShowMetadata((current) => !current)}
-                      >
-                        {showMetadata ? t("hideSignalMetadata") : t("showSignalMetadata")}
-                      </button>
-                    </div>
-                    {showMetadata ? (
-                      <div className="metadata-list">
-                        <SignalMetaRow label="Project" type="registry" value={activeForm.projectId} emptyLabel={t("notAvailable")} />
-                        {typeof activeForm.onchainFormId === "number" ? (
-                          <div className="metadata-row">
-                            <span>Registry Form ID</span>
-                            <strong>{activeForm.onchainFormId}</strong>
-                          </div>
-                        ) : null}
-                        {typeof selectedSubmission.onchainSignalId === "number" ? (
-                          <div className="metadata-row">
-                            <span>Signal Receipt</span>
-                            <strong>{selectedSubmission.onchainSignalId}</strong>
-                          </div>
-                        ) : null}
-                        <SignalMetaRow label={t("formBlobId")} type="blob" value={activeForm.blobId} emptyLabel={t("notAvailable")}>
-                          {!isLocalFallbackBlob(activeForm.blobId) ? (
-                            <BlobLink blobId={activeForm.blobId} label={t("verifyOnWalrus")} />
-                          ) : null}
-                        </SignalMetaRow>
-                        <SignalMetaRow label={t("submissionBlobIdLabel")} type="blob" value={selectedSubmission.blobId} emptyLabel={t("notAvailable")}>
-                          {!isLocalFallbackBlob(selectedSubmission.blobId) ? (
-                            <BlobLink blobId={selectedSubmission.blobId} label={t("verifyOnWalrus")} />
-                          ) : null}
-                        </SignalMetaRow>
-                        {hasDedicatedEncryptedPayloadBlob(selectedSubmission) ? (
-                          <SignalMetaRow
-                            label={t("encryptedPayloadBlobId")}
-                            type="seal"
-                            value={selectedSubmission.encryptedBlobId}
-                          >
-                            {!isLocalFallbackBlob(selectedSubmission.encryptedBlobId) ? (
-                              <BlobLink
-                                blobId={selectedSubmission.encryptedBlobId}
-                                label={t("verifyOnWalrus")}
-                              />
-                            ) : null}
-                          </SignalMetaRow>
-                        ) : selectedSubmission.isEncrypted ? (
-                          <div className="metadata-row">
-                            <span>Encrypted Payload</span>
-                            <strong>{getEncryptedPayloadAvailabilityLabel(selectedSubmission)}</strong>
-                          </div>
-                        ) : null}
-                        <SignalMetaRow label="Seal Identity" type="seal" value={selectedSubmission.sealIdentity} emptyLabel={t("notAvailable")} />
-                        {selectedSubmission.signalReceiptMetadataDigest ? (
-                          <SignalMetaRow
-                            label="Receipt Metadata Digest"
-                            type="registry"
-                            value={selectedSubmission.signalReceiptMetadataDigest}
-                            emptyLabel={t("notAvailable")}
-                          />
-                        ) : null}
-                        <div className="metadata-row signal-meta-row">
-                          <span>{t("attachmentBlobIds")}</span>
-                          <div className="stack signal-meta-row-value">
-                            {selectedSubmission.attachments.length === 0 ? (
-                              <strong>{t("notAvailable")}</strong>
-                            ) : (
-                              selectedSubmission.attachments.map((attachment) => (
-                                <div key={attachment.blobId} className="signal-meta-row-value">
-                                  <SignalMetaChip type="blob" value={attachment.blobId} />
-                                  {!isLocalFallbackBlob(attachment.blobId) ? (
-                                    <BlobLink blobId={attachment.blobId} label={t("verifyOnWalrus")} />
-                                  ) : null}
-                                </div>
-                              ))
-                            )}
-                          </div>
-                        </div>
-                        <div className="metadata-row">
-                          <span>{t("storageMode")}</span>
-                          <div className="stack">
-                            {getStorageDetailLabels(selectedSubmission.encryptedBlobId ?? selectedSubmission.blobId).map((label) => (
-                              <strong key={label}>{label}</strong>
-                            ))}
-                            {storageRuntime.mode === "walrus" ? <strong>{t("storageWalrus")}</strong> : null}
-                          </div>
-                        </div>
-                        <div className="metadata-row">
-                          <span>{t("sealModeLabel")}</span>
-                          <strong>{sealRuntimeLabel}</strong>
-                        </div>
-                        <div className="metadata-row">
-                          <span>Project status sync</span>
-                          <strong>
-                            {selectedSubmission.onchainStatus ??
-                              (selectedSubmission.pendingOnchainRegistration
-                                ? t("pendingSuiRegistration")
-                                : "offchain only")}
-                          </strong>
-                        </div>
-                      </div>
-                    ) : null}
-                  </section>
-
-                  <section className="answer-card">
-                    <div className="section-row">
-                      <h3>{t("encryptedSignalLabel")}</h3>
-                      <button
-                        type="button"
-                        className="ghost-button"
-                        onClick={() => setShowEncryptedSignal((current) => !current)}
-                      >
-                        {showEncryptedSignal ? t("hideEncryptedSignal") : t("showEncryptedSignal")}
-                      </button>
-                    </div>
-                    {showEncryptedSignal ? (
-                      <SealStatusCard
-                        encryptSubmissions={activeForm.encryptSubmissions}
-                        encryptedBlobId={selectedSubmission.encryptedBlobId}
-                        encryptedPayloadEmbedded={Boolean(selectedSubmission.encryptedPayload) && !selectedSubmission.encryptedBlobId}
-                        canDecrypt={Boolean(account?.address)}
-                        walletAccessStatus={getWalletAccessLabel(activeForm, account?.address)}
-                      />
-                    ) : null}
-                  </section>
                 </div>
                 ) : null}
               </>

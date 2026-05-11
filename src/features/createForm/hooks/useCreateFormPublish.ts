@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { getSealRuntimeStatus } from "../../../crypto/cryptoFactory";
 import { getPublicFormPath } from "../../../lib/publicLinks";
 import { createFormOnChain } from "../../../lib/projectRegistry";
 import { isLocalFallbackBlob } from "../../../lib/proof";
@@ -47,6 +48,9 @@ const initialOverlayState: PublishOverlayState = {
   storageMode: "walrus",
   resultNote: "",
 };
+
+const REAL_SEAL_PROJECT_REQUIRED_MESSAGE =
+  "Real Seal encrypted submissions require a selected project. Choose a project or turn off Encrypt submissions.";
 
 export function useCreateFormPublish({
   t,
@@ -175,6 +179,13 @@ export function useCreateFormPublish({
 
     if (!accountAddress) {
       setError(t("connectWalletFirst"));
+      goToStep("publish");
+      return;
+    }
+
+    const sealRuntime = getSealRuntimeStatus();
+    if (encryptSubmissions && sealRuntime.activeMode === "seal" && !selectedProject?.objectId) {
+      setError(REAL_SEAL_PROJECT_REQUIRED_MESSAGE);
       goToStep("publish");
       return;
     }
