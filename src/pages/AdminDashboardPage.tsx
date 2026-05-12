@@ -10,6 +10,7 @@ import { AdminAccessGate } from "../components/AdminAccessGate";
 import { BlobLink } from "../components/BlobLink";
 import { EmptyState } from "../components/EmptyState";
 import { OperationsStatusRail, type OperationsStatusItem } from "../components/OperationsStatusRail";
+import { PrivateSignalUnlockCard } from "../components/PrivateSignalUnlockCard";
 import { SealStatusCard } from "../components/SealStatusCard";
 import { ShareCard } from "../components/ShareCard";
 import { SignalClusterPanel } from "../components/SignalClusterPanel";
@@ -92,6 +93,19 @@ interface SignalRecord {
   searchText: string;
 }
 
+function getDecryptStatusMessage(
+  status: "waiting_wallet_approval" | "decrypting_private_signal" | "finishing",
+) {
+  switch (status) {
+    case "waiting_wallet_approval":
+      return "Waiting for wallet approval...";
+    case "decrypting_private_signal":
+      return "Decrypting private signal...";
+    case "finishing":
+      return "Finishing...";
+  }
+}
+
 const ROADMAP_READY_STATUSES = new Set<Submission["triageStatus"]>([
   "planned",
   "in_progress",
@@ -165,7 +179,7 @@ export function AdminDashboardPage() {
   const [forms, setForms] = useState<FormWithCount[]>([]);
   const [submissionsByFormId, setSubmissionsByFormId] = useState<Record<string, Submission[]>>({});
   const [loading, setLoading] = useState(true);
-  const [submissionsLoading, setSubmissionsLoading] = useState(false);
+  const [, setSubmissionsLoading] = useState(false);
   const [loadError, setLoadError] = useState("");
   const [selectedFormId, setSelectedFormId] = useState("all");
   const [selectedStreamId, setSelectedStreamId] = useState<StreamId>("all");
@@ -174,6 +188,7 @@ export function AdminDashboardPage() {
   const [detailAnswers, setDetailAnswers] = useState<Record<string, unknown> | null>(null);
   const [detailAttachments, setDetailAttachments] = useState<Submission["attachments"]>([]);
   const [decrypting, setDecrypting] = useState(false);
+  const [decryptStatusMessage, setDecryptStatusMessage] = useState("");
   const [decryptError, setDecryptError] = useState("");
   const [saving, setSaving] = useState(false);
   const [notesDraft, setNotesDraft] = useState("");
@@ -196,10 +211,19 @@ export function AdminDashboardPage() {
   const [deletingOnchainFormIds, setDeletingOnchainFormIds] = useState<number[]>([]);
   const saveQueueRef = useRef(Promise.resolve());
   const loadConsoleRunRef = useRef(0);
+  const decryptInFlightRef = useRef(false);
+  const decryptRequestIdRef = useRef(0);
+  const activeDecryptRequestRef = useRef<{ requestId: number; submissionId: string } | null>(null);
+  const selectedSignalIdRef = useRef(selectedSignalId);
+  const previousSelectedRecordIdRef = useRef<string | null>(null);
   const advancedProjectSettingsRef = useRef<HTMLDetailsElement | null>(null);
   const manualProjectInputRef = useRef<HTMLInputElement | null>(null);
   const projectCreateInputRef = useRef<HTMLInputElement | null>(null);
   const hasAdminAccess = canAdmin(capabilityProfile);
+  useEffect(() => {
+    selectedSignalIdRef.current = selectedSignalId;
+  }, [selectedSignalId]);
+
   const selectedProject = projects.find((project) => project.objectId === selectedProjectId) ?? null;
   const projectMemberCount = selectedProject ? selectedProject.admins.length + 1 : 0;
   const localProjectFormsCount = useMemo(
@@ -833,6 +857,13 @@ export function AdminDashboardPage() {
   const selectedRecordNeedsDecrypt = Boolean(
     selectedRecord?.submission.isEncrypted && !detailAnswers,
   );
+  const selectedRecordUnlockDisabledReason = detailAnswers
+    ? undefined
+    : !selectedRecord?.submission.isEncrypted
+      ? t("privateSignalUnlockUnavailable")
+      : !account?.address || (!canReview(capabilityProfile) && capabilityProfile.isConfigured)
+        ? t("privateSignalUnlockDisabled")
+        : undefined;
   const selectedRecordFocusAction = !selectedRecord
     ? null
     : selectedRecordNeedsDecrypt
@@ -845,13 +876,11 @@ export function AdminDashboardPage() {
               type="button"
               className="primary-button"
               onClick={() => void handleDecrypt()}
-              disabled={decrypting}
+              disabled={decrypting || decryptInFlightRef.current}
             >
-              {decrypting
-                ? t("decryptingSignal")
-                : sealRuntime.activeMode === "mock"
-                  ? t("decryptSignal")
-                  : "Decrypt private signal"}
+              {decrypting || decryptInFlightRef.current
+                ? t("privateSignalUnlockLoading")
+                : t("privateSignalUnlockAction")}
             </button>
           ),
         }
@@ -971,11 +1000,17 @@ export function AdminDashboardPage() {
                 label: "Decrypt protected signals",
                 detail: "Select a protected signal and verify reviewer wallet access to unlock the message.",
                 cta: firstProtectedSignal ? (
-                  <button
-                    type="button"
-                    className="primary-button"
-                    onClick={() => setSelectedSignalId(firstProtectedSignal.submission.id)}
-                  >
+                <button
+                  type="button"
+                  className="primary-button"
+                  disabled={decrypting || decryptInFlightRef.current}
+                  onClick={() => {
+                    if (decryptInFlightRef.current) {
+                      return;
+                    }
+                    setSelectedSignalId(firstProtectedSignal.submission.id);
+                  }}
+                >
                     Open Protected Signal
                   </button>
                 ) : null,
@@ -1025,17 +1060,29 @@ export function AdminDashboardPage() {
       setShowMetadata(false);
       setShowEncryptedSignal(false);
       setDecryptError("");
+      if (!decryptInFlightRef.current) {
+        setDecryptStatusMessage("");
+      }
+      previousSelectedRecordIdRef.current = null;
       return;
     }
+    const previousSelectedRecordId = previousSelectedRecordIdRef.current;
+    const didSelectionChange = previousSelectedRecordId !== selectedRecord.submission.id;
+    previousSelectedRecordIdRef.current = selectedRecord.submission.id;
     setNotesDraft(selectedRecord.submission.notes);
     setDraftTag("");
-    setDetailAnswers(
-      selectedRecord.submission.isEncrypted ? null : selectedRecord.submission.answers,
-    );
-    setDetailAttachments(selectedRecord.submission.attachments ?? []);
+    if (didSelectionChange) {
+      setDetailAnswers(
+        selectedRecord.submission.isEncrypted ? null : selectedRecord.submission.answers,
+      );
+      setDetailAttachments(selectedRecord.submission.attachments ?? []);
+      setDecryptError("");
+      if (!decryptInFlightRef.current) {
+        setDecryptStatusMessage("");
+      }
+    }
     setShowMetadata(false);
     setShowEncryptedSignal(false);
-    setDecryptError("");
   }, [selectedRecord]);
 
   function applySubmissionUpdate(nextSubmission: Submission) {
@@ -1227,10 +1274,16 @@ export function AdminDashboardPage() {
   }
 
   async function handleDecrypt() {
-    if (!selectedRecord) {
+    if (!selectedRecord || decryptInFlightRef.current) {
       return;
     }
+    const requestId = decryptRequestIdRef.current + 1;
+    decryptRequestIdRef.current = requestId;
+    const submissionId = selectedRecord.submission.id;
+    decryptInFlightRef.current = true;
+    activeDecryptRequestRef.current = { requestId, submissionId };
     setDecrypting(true);
+    setDecryptStatusMessage("Waiting for wallet approval...");
     setDecryptError("");
     try {
       const resolved = await resolveSubmissionAnswers(
@@ -1245,19 +1298,45 @@ export function AdminDashboardPage() {
             const result = await signPersonalMessage.mutateAsync({ message });
             return result.signature;
           },
+          onStatusChange: (status) => {
+            const activeRequest = activeDecryptRequestRef.current;
+            if (
+              activeRequest?.requestId !== requestId ||
+              activeRequest.submissionId !== submissionId
+            ) {
+              return;
+            }
+            setDecryptStatusMessage(getDecryptStatusMessage(status));
+          },
         },
       );
-      if (resolved) {
+      const isLatestRequest =
+        activeDecryptRequestRef.current?.requestId === requestId &&
+        activeDecryptRequestRef.current?.submissionId === submissionId;
+      if (resolved && isLatestRequest && selectedSignalIdRef.current === submissionId) {
         setDetailAnswers(resolved.answers);
         setDetailAttachments(resolved.attachments);
         setToast({ tone: "success", message: "Wallet verified. Private signal unlocked." });
       }
     } catch (error) {
-      setDecryptError(
-        error instanceof Error ? getFriendlyDecryptError(error.message) : t("decryptFailed"),
-      );
+      const isLatestRequest =
+        activeDecryptRequestRef.current?.requestId === requestId &&
+        activeDecryptRequestRef.current?.submissionId === submissionId;
+      if (isLatestRequest && selectedSignalIdRef.current === submissionId) {
+        setDecryptError(
+          error instanceof Error ? getFriendlyDecryptError(error.message) : t("decryptFailed"),
+        );
+      }
     } finally {
+      const isLatestRequest =
+        activeDecryptRequestRef.current?.requestId === requestId &&
+        activeDecryptRequestRef.current?.submissionId === submissionId;
+      if (isLatestRequest) {
+        activeDecryptRequestRef.current = null;
+      }
+      decryptInFlightRef.current = false;
       setDecrypting(false);
+      setDecryptStatusMessage("");
     }
   }
 
@@ -2020,14 +2099,33 @@ export function AdminDashboardPage() {
                     </section>
                   ) : null}
 
+                  {selectedRecord.submission.isEncrypted ? (
+                    <PrivateSignalUnlockCard
+                      onUnlock={() => void handleDecrypt()}
+                      isDecrypting={decrypting || decryptInFlightRef.current}
+                      isUnlocked={Boolean(detailAnswers)}
+                      errorMessage={decryptError}
+                      disabledReason={selectedRecordUnlockDisabledReason}
+                    >
+                      {!isLocalFallbackBlob(selectedRecord.submission.encryptedBlobId) ? (
+                        <BlobLink
+                          blobId={selectedRecord.submission.encryptedBlobId}
+                          label={t("verifyOnWalrus")}
+                        />
+                      ) : null}
+                    </PrivateSignalUnlockCard>
+                  ) : null}
+
                   {selectedRecordNeedsDecrypt ? (
                     <div className="stack private-access-copy">
-                      <p className="muted">Encrypted private signal</p>
                       <p className="muted">
                         {sealRuntime.activeMode === "mock"
                           ? `${t("demoDecryptAvailable")} Mock mode only.`
                           : t("walletApprovalReuseNotice", { minutes: REAL_SEAL_SESSION_TTL_MIN })}
                       </p>
+                      {decryptStatusMessage ? (
+                        <p className="muted" role="status" aria-live="polite">{decryptStatusMessage}</p>
+                      ) : null}
                     </div>
                   ) : null}
 
@@ -2040,7 +2138,6 @@ export function AdminDashboardPage() {
                     </div>
                   ) : null}
 
-                  {decryptError ? <p className="warning-text">{decryptError}</p> : null}
                   {selectedRecord.submission.isEncrypted && detailAnswers ? (
                     <div className="contest-inline-success" role="status" aria-live="polite">
                       <strong>Wallet verified</strong>
@@ -2059,48 +2156,6 @@ export function AdminDashboardPage() {
                           {saving ? "Saving..." : "Ready"}
                         </span>
                       </div>
-                      {selectedRecord.submission.isEncrypted ? (
-                        <section className="contest-review-lock-card">
-                          <div className="section-row">
-                            <div>
-                              <p className="eyebrow">Reviewer access</p>
-                              <h4>{detailAnswers ? "Private signal unlocked" : "Decrypt with Wallet"}</h4>
-                            </div>
-                            {detailAnswers ? (
-                              <span className="signal-chip signal-chip-accent">Wallet verified</span>
-                            ) : (
-                              <span className="signal-chip signal-chip-soft">Requires reviewer access</span>
-                            )}
-                          </div>
-                          <p className="muted">
-                            {detailAnswers
-                              ? "This reviewer wallet has been verified for the project."
-                              : "Connect an authorized reviewer wallet to decrypt this private signal."}
-                          </p>
-                          {!detailAnswers ? (
-                            <div className="inline-actions">
-                              <button
-                                type="button"
-                                className="primary-button"
-                                onClick={() => void handleDecrypt()}
-                                disabled={decrypting}
-                              >
-                                {decrypting
-                                  ? t("decryptingSignal")
-                                  : sealRuntime.activeMode === "mock"
-                                    ? t("decryptSignal")
-                                    : "Decrypt private signal"}
-                              </button>
-                              {!isLocalFallbackBlob(selectedRecord.submission.encryptedBlobId) ? (
-                                <BlobLink
-                                  blobId={selectedRecord.submission.encryptedBlobId}
-                                  label={t("verifyOnWalrus")}
-                                />
-                              ) : null}
-                            </div>
-                          ) : null}
-                        </section>
-                      ) : null}
                       <div className="review-field-row">
                         <label className="review-select">
                           <span>{t("status")}</span>
@@ -2519,7 +2574,12 @@ export function AdminDashboardPage() {
                           formById={formById}
                           formTitleById={formTitleById}
                           busy={saving}
-                          onSelectSignal={(submissionId) => setSelectedSignalId(submissionId)}
+                          onSelectSignal={(submissionId) => {
+                            if (decryptInFlightRef.current) {
+                              return;
+                            }
+                            setSelectedSignalId(submissionId);
+                          }}
                           onSaveSubmission={updateSubmission}
                         />
                       </details>

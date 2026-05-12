@@ -8,7 +8,7 @@ import {
 import { SuiJsonRpcClient, getJsonRpcFullnodeUrl } from "@mysten/sui/jsonRpc";
 import { Transaction } from "@mysten/sui/transactions";
 import { fromHex } from "@mysten/sui/utils";
-import type { SealAdapter } from "../types";
+import type { SealAdapter, SealDecryptContext } from "../types";
 import { SUI_NETWORK } from "../lib/sui";
 import { localSealMock } from "./localSealMock";
 import {
@@ -52,6 +52,17 @@ const sealClient = new SealClient({
 
 const SESSION_KEY_STORAGE_PREFIX = "deepsignal.seal.sessionKey";
 const sessionKeyCache = new Map<string, SessionKey>();
+const pendingSessionKeyPromises = new Map<string, Promise<SessionKey>>();
+
+function debugSessionKeyCache(
+  event: "cache_hit" | "cache_miss" | "cache_expired" | "import_failed" | "pending_reuse" | "persist_failed",
+  details: Record<string, unknown>,
+) {
+  if (!import.meta.env.DEV) {
+    return;
+  }
+  console.debug("[seal-session-key]", event, details);
+}
 
 function createRandomObjectId() {
   const bytes = crypto.getRandomValues(new Uint8Array(32));
@@ -111,6 +122,7 @@ export const sealClientAdapter: SealAdapter = {
         packageId: envelope.packageId,
         suiClient: context.suiClient as SealCompatibleClient,
         signPersonalMessage: context.signPersonalMessage,
+        onStatusChange: context.onStatusChange,
       });
 
       const primaryApprovalPolicy =
@@ -121,6 +133,7 @@ export const sealClientAdapter: SealAdapter = {
 
       let plaintext: Uint8Array;
       try {
+        context.onStatusChange?.("decrypting_private_signal");
         const txBytes = await buildSealApproveTransactionBytes({
           objectId: envelope.objectId,
           projectId,
@@ -152,6 +165,7 @@ export const sealClientAdapter: SealAdapter = {
           packageId: envelope.packageId,
         });
 
+        context.onStatusChange?.("decrypting_private_signal");
         plaintext = await sealClient.decrypt({
           data: fromBase64(envelope.encryptedObject),
           sessionKey,
@@ -159,6 +173,7 @@ export const sealClientAdapter: SealAdapter = {
         });
       }
 
+      context.onStatusChange?.("finishing");
       return new TextDecoder().decode(plaintext);
     } catch (error) {
       if (isLikelyWalletCancelError(error)) {
@@ -212,48 +227,83 @@ async function getOrCreateSessionKey({
   packageId,
   suiClient: activeSuiClient,
   signPersonalMessage,
+  onStatusChange,
 }: {
   walletAddress: string;
   packageId: string;
   suiClient: SealCompatibleClient;
   signPersonalMessage?: (message: Uint8Array) => Promise<string>;
+  onStatusChange?: SealDecryptContext["onStatusChange"];
 }) {
   const cacheKey = createSessionCacheKey(walletAddress, packageId);
   const cachedSessionKey = loadCachedSessionKey(cacheKey, activeSuiClient);
   if (cachedSessionKey) {
     return cachedSessionKey;
   }
+  const pendingSessionKey = pendingSessionKeyPromises.get(cacheKey);
+  if (pendingSessionKey) {
+    debugSessionKeyCache("pending_reuse", {
+      walletAddress,
+      packageId,
+    });
+    return pendingSessionKey;
+  }
   if (!signPersonalMessage) {
     throw new Error(SEAL_ADMIN_WALLET_REQUIRED_MESSAGE);
   }
 
-  const sessionKey = await SessionKey.create({
-    address: walletAddress,
-    packageId,
-    ttlMin: REAL_SEAL_SESSION_TTL_MIN,
-    suiClient: activeSuiClient,
-  });
-  const signature = await signPersonalMessage(sessionKey.getPersonalMessage());
-  await sessionKey.setPersonalMessageSignature(signature);
-  persistSessionKey(cacheKey, sessionKey);
-  return sessionKey;
+  const pendingPromise = (async () => {
+    onStatusChange?.("waiting_wallet_approval");
+    const sessionKey = await SessionKey.create({
+      address: walletAddress,
+      packageId,
+      ttlMin: REAL_SEAL_SESSION_TTL_MIN,
+      suiClient: activeSuiClient,
+    });
+    const signature = await signPersonalMessage(sessionKey.getPersonalMessage());
+    await sessionKey.setPersonalMessageSignature(signature);
+    persistSessionKey(cacheKey, sessionKey);
+    return sessionKey;
+  })();
+  pendingSessionKeyPromises.set(cacheKey, pendingPromise);
+  try {
+    return await pendingPromise;
+  } finally {
+    pendingSessionKeyPromises.delete(cacheKey);
+  }
 }
 
 function loadCachedSessionKey(cacheKey: string, suiClientForSession: SealCompatibleClient) {
   const inMemory = sessionKeyCache.get(cacheKey);
   if (inMemory) {
     if (!inMemory.isExpired()) {
+      debugSessionKeyCache("cache_hit", {
+        cacheKey,
+        source: "memory",
+      });
       return inMemory;
     }
+    debugSessionKeyCache("cache_expired", {
+      cacheKey,
+      source: "memory",
+    });
     clearCachedSessionKey(cacheKey);
   }
 
   if (typeof window === "undefined") {
+    debugSessionKeyCache("cache_miss", {
+      cacheKey,
+      source: "server",
+    });
     return null;
   }
 
   const raw = window.sessionStorage.getItem(cacheKey);
   if (!raw) {
+    debugSessionKeyCache("cache_miss", {
+      cacheKey,
+      source: "sessionStorage",
+    });
     return null;
   }
 
@@ -261,12 +311,24 @@ function loadCachedSessionKey(cacheKey: string, suiClientForSession: SealCompati
     const parsed = JSON.parse(raw) as Parameters<typeof SessionKey.import>[0];
     const restored = SessionKey.import(parsed, suiClientForSession);
     if (restored.isExpired()) {
+      debugSessionKeyCache("cache_expired", {
+        cacheKey,
+        source: "sessionStorage",
+      });
       clearCachedSessionKey(cacheKey);
       return null;
     }
     sessionKeyCache.set(cacheKey, restored);
+    debugSessionKeyCache("cache_hit", {
+      cacheKey,
+      source: "sessionStorage",
+    });
     return restored;
-  } catch {
+  } catch (error) {
+    debugSessionKeyCache("import_failed", {
+      cacheKey,
+      error: error instanceof Error ? error.message : String(error),
+    });
     clearCachedSessionKey(cacheKey);
     return null;
   }
@@ -291,7 +353,11 @@ function persistSessionKey(cacheKey: string, sessionKey: SessionKey) {
         sessionKey: exported.sessionKey,
       }),
     );
-  } catch {
+  } catch (error) {
+    debugSessionKeyCache("persist_failed", {
+      cacheKey,
+      error: error instanceof Error ? error.message : String(error),
+    });
     // Keep the in-memory session key even when sessionStorage is unavailable.
   }
 }

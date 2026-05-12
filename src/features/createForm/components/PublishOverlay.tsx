@@ -152,40 +152,42 @@ export function PublishOverlay({
           </p>
         </div>
 
-        <div className={`publish-blob-panel ${overlay.stageIndex >= 3 ? "is-visible" : ""}`}>
-          <p className="eyebrow">Blob Address</p>
-          <code className="publish-blob-id">{overlay.typedBlobId || "BLOB://........"}</code>
-          <div className="publish-blob-actions">
-            <button
-              type="button"
-              className="ghost-button"
-              onClick={() => void onCopyBlobId()}
-              disabled={overlay.stageIndex < 3 || !overlay.blobId}
-            >
-              {overlay.blobCopied ? "Copied" : "Copy Blob ID"}
-            </button>
-            <span className="publish-storage-note">
-              {overlay.storageMode === "walrus"
-                ? "Immutable Walrus blob confirmed."
-                : "Stored locally. Walrus relay unavailable."}
-            </span>
-          </div>
-        </div>
-
-        <div className={`publish-active-panel ${overlay.stageIndex >= publishPhases.length - 1 ? "is-visible" : ""}`}>
-          <div className="publish-active-layout">
-            <div>
-              <p className="eyebrow">Observation State</p>
-              <h3>SIGNAL ACTIVE</h3>
-              <p className="muted">
-                {overlay.resultNote || "The signal is now available for monitoring, routing, and review."}
-              </p>
+        <div className="publish-status-grid">
+          <div className={`publish-blob-panel ${overlay.stageIndex >= 3 ? "is-visible" : ""}`}>
+            <p className="eyebrow">Blob Address</p>
+            <code className="publish-blob-id">{overlay.typedBlobId || "BLOB://........"}</code>
+            <div className="publish-blob-actions">
+              <button
+                type="button"
+                className="ghost-button"
+                onClick={() => void onCopyBlobId()}
+                disabled={overlay.stageIndex < 3 || !overlay.blobId}
+              >
+                {overlay.blobCopied ? "Copied" : "Copy Blob ID"}
+              </button>
+              <span className="publish-storage-note">
+                {overlay.storageMode === "walrus"
+                  ? "Immutable Walrus blob confirmed."
+                  : "Stored locally. Walrus relay unavailable."}
+              </span>
             </div>
           </div>
-          <div className="publish-active-actions">
-            <button type="button" className="primary-button" onClick={onClose}>
-              DONE
-            </button>
+
+          <div className={`publish-active-panel ${overlay.stageIndex >= publishPhases.length - 1 ? "is-visible" : ""}`}>
+            <div className="publish-active-layout">
+              <div>
+                <p className="eyebrow">Observation State</p>
+                <h3>SIGNAL ACTIVE</h3>
+                <p className="muted">
+                  {overlay.resultNote || "The signal is now available for monitoring, routing, and review."}
+                </p>
+              </div>
+            </div>
+            <div className="publish-active-actions">
+              <button type="button" className="primary-button" onClick={onClose}>
+                DONE
+              </button>
+            </div>
           </div>
         </div>
       </div>

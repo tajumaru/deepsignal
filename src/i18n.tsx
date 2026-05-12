@@ -425,6 +425,17 @@ const messages = {
     openFormInbox: "Open form inbox",
     decryptSignal: "Decrypt Signal",
     decryptingSignal: "Decrypting...",
+    privateSignalLockedEyebrow: "Private Signal",
+    privateSignalLockedTitle: "Private content locked",
+    privateSignalUnlockedTitle: "Private signal unlocked",
+    privateSignalUnlockHelper: "This signal is encrypted and requires wallet authorization.",
+    privateSignalUnlockSuccessDetail: "Wallet authorization confirmed. The encrypted response is now visible.",
+    privateSignalUnlockAction: "Unlock private signal",
+    privateSignalUnlockLoading: "Decrypting...",
+    privateSignalUnlockSuccess: "Unlocked",
+    privateSignalUnlockError: "Unable to decrypt. Check wallet permissions.",
+    privateSignalUnlockDisabled: "Connect an authorized reviewer wallet to continue.",
+    privateSignalUnlockUnavailable: "Select an encrypted private signal to unlock it.",
     demoDecryptAvailable: "Demo decrypt available.",
     policyGatedDecryption: "Policy-gated Decryption. Wallet approval required.",
     answersTitle: "Answers",
@@ -938,6 +949,22 @@ const messages = {
     openFormInbox: "\u3053\u306e form inbox \u3092\u958b\u304f",
     decryptSignal: "Decrypt Signal",
     decryptingSignal: "\u5fa9\u53f7\u4e2d...",
+    privateSignalLockedEyebrow: "Private Signal",
+    privateSignalLockedTitle: "Private content locked",
+    privateSignalUnlockedTitle: "Private signal unlocked",
+    privateSignalUnlockHelper:
+      "\u3053\u306e signal \u306f\u6697\u53f7\u5316\u3055\u308c\u3066\u304a\u308a\u3001wallet \u306e\u8a8d\u53ef\u3067\u5fa9\u53f7\u3057\u307e\u3059\u3002",
+    privateSignalUnlockSuccessDetail:
+      "wallet \u8a8d\u53ef\u304c\u78ba\u8a8d\u3055\u308c\u3001\u6697\u53f7\u5316\u3055\u308c\u305f\u56de\u7b54\u3092\u8868\u793a\u3067\u304d\u308b\u72b6\u614b\u3067\u3059\u3002",
+    privateSignalUnlockAction: "Private signal\u3092\u5fa9\u53f7",
+    privateSignalUnlockLoading: "\u5fa9\u53f7\u4e2d...",
+    privateSignalUnlockSuccess: "\u5fa9\u53f7\u6e08\u307f",
+    privateSignalUnlockError:
+      "\u5fa9\u53f7\u3067\u304d\u307e\u305b\u3093\u3002Wallet \u306e\u6a29\u9650\u3092\u78ba\u8a8d\u3057\u3066\u304f\u3060\u3055\u3044\u3002",
+    privateSignalUnlockDisabled:
+      "\u7d99\u7d9a\u3059\u308b\u306b\u306f\u8a8d\u53ef\u6e08\u307f\u306e reviewer wallet \u304c\u5fc5\u8981\u3067\u3059\u3002",
+    privateSignalUnlockUnavailable:
+      "\u6697\u53f7\u5316\u3055\u308c\u305f private signal \u3092\u9078\u3093\u3067\u5fa9\u53f7\u3057\u3066\u304f\u3060\u3055\u3044\u3002",
     demoDecryptAvailable: "Demo decrypt available.",
     policyGatedDecryption:
       "Policy-gated decryption. Wallet approval is required.",

@@ -440,10 +440,22 @@ export async function resolveSubmissionAnswers(
       return null;
     }
     const decrypted = await seal.decrypt(payload, context);
-    const parsed = JSON.parse(decrypted) as {
+    let parsed: {
       answers?: Record<string, unknown>;
       attachments?: Submission["attachments"];
     };
+    try {
+      parsed = JSON.parse(decrypted) as {
+        answers?: Record<string, unknown>;
+        attachments?: Submission["attachments"];
+      };
+    } catch (error) {
+      throw new Error(
+        error instanceof Error
+          ? `Failed to parse decrypted submission payload: ${error.message}`
+          : "Failed to parse decrypted submission payload.",
+      );
+    }
     return {
       answers: parsed.answers ?? {},
       attachments:

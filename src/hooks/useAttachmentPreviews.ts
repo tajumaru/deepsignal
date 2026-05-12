@@ -12,7 +12,7 @@ export interface AttachmentPreviewState {
   error?: string;
 }
 
-function getPreviewKind(mimeType: string | undefined, fallbackType: SubmissionAttachment["type"]) {
+function getPreviewKind(mimeType: string | undefined) {
   if (mimeType?.startsWith("image/")) {
     return "image" as const;
   }
@@ -43,9 +43,10 @@ export function useAttachmentPreviews(
   },
 ) {
   const [previews, setPreviews] = useState<Record<string, AttachmentPreviewState>>({});
+  const { enabled, decryptContext } = options;
 
   useEffect(() => {
-    if (!options.enabled || attachments.length === 0) {
+    if (!enabled || attachments.length === 0) {
       setPreviews({});
       return;
     }
@@ -62,7 +63,7 @@ export function useAttachmentPreviews(
               {
                 blobId: attachment.blobId,
                 encrypted: false,
-                kind: getPreviewKind(attachment.originalType, attachment.type),
+                kind: getPreviewKind(attachment.originalType),
                 name: attachment.originalName ?? attachment.name,
               } satisfies AttachmentPreviewState,
             ] as const;
@@ -72,7 +73,7 @@ export function useAttachmentPreviews(
             const resolved = await decryptAttachmentBlob(
               attachment,
               activeSealAdapter,
-              options.decryptContext,
+              decryptContext,
               storageAdapter,
             );
             if (!resolved) {
@@ -85,7 +86,7 @@ export function useAttachmentPreviews(
               {
                 blobId: attachment.blobId,
                 encrypted: true,
-                kind: getPreviewKind(resolved.mimeType, attachment.type),
+                kind: getPreviewKind(resolved.mimeType),
                 url,
                 mimeType: resolved.mimeType,
                 name: resolved.name,
@@ -97,7 +98,7 @@ export function useAttachmentPreviews(
               {
                 blobId: attachment.blobId,
                 encrypted: true,
-                kind: getPreviewKind(attachment.originalType, attachment.type),
+                kind: getPreviewKind(attachment.originalType),
                 name: attachment.originalName ?? attachment.name,
                 error: "添付を復号できません",
               } satisfies AttachmentPreviewState,
@@ -121,11 +122,8 @@ export function useAttachmentPreviews(
     };
   }, [
     attachments,
-    options.enabled,
-    options.decryptContext.projectId,
-    options.decryptContext.signPersonalMessage,
-    options.decryptContext.suiClient,
-    options.decryptContext.walletAddress,
+    decryptContext,
+    enabled,
   ]);
 
   return previews;

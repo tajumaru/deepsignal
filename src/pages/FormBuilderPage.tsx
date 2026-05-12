@@ -31,6 +31,7 @@ export function FormBuilderPage() {
   const navigate = useNavigate();
   const [isScrolled, setIsScrolled] = useState(false);
   const [storageRuntime, setStorageRuntime] = useState(() => getStorageRuntimeStatus());
+  const [showPublishSuccessView, setShowPublishSuccessView] = useState(false);
 
   const builder = useCreateFormBuilder({ t, projects });
   const publish = useCreateFormPublish({
@@ -76,6 +77,16 @@ export function FormBuilderPage() {
       unsubscribe();
     };
   }, []);
+
+  useEffect(() => {
+    if (publish.overlay.open) {
+      setShowPublishSuccessView(false);
+      return;
+    }
+    if (!publish.savedForm || builder.isDirty) {
+      setShowPublishSuccessView(false);
+    }
+  }, [builder.isDirty, publish.overlay.open, publish.savedForm]);
 
   useEffect(() => {
     document.body.classList.add("composer-mode");
@@ -138,7 +149,12 @@ export function FormBuilderPage() {
           publicPath={publish.publicPath}
           isCrossDeviceShareReady={publish.isCrossDeviceShareReady}
           onCopyBlobId={publish.handleCopyBlobId}
-          onClose={() => publish.setOverlay((current) => ({ ...current, open: false }))}
+          onClose={() => {
+            publish.setOverlay((current) => ({ ...current, open: false }));
+            if (publish.savedForm) {
+              setShowPublishSuccessView(true);
+            }
+          }}
         />
 
         <FieldTypePicker
@@ -231,6 +247,7 @@ export function FormBuilderPage() {
               isReadyToPublish={builder.isReadyToPublish}
               publicPath={publish.publicPath}
               publishChecks={publish.publishChecks}
+              showPublishSuccessView={showPublishSuccessView}
               showWalrusDiagnostics={showWalrusDiagnostics}
               isConnected={isConnected}
               currentWalletName={currentWallet?.name ?? undefined}

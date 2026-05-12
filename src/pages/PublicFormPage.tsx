@@ -112,7 +112,7 @@ export function PublicFormPage() {
       }
     }
     void load();
-  }, [formId, manifestBlobId]);
+  }, [formId, manifestBlobId, t]);
 
   useEffect(() => {
     if (!account?.address) {
