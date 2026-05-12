@@ -203,6 +203,20 @@ const hybridWalrusStorage: StorageAdapter = {
       () => localStorageAdapter.uploadFile(file),
     );
   },
+  async readFileBlob(blobId) {
+    const walrusBlob = await swallow(() => walrusAdapter.readFileBlob(blobId), null);
+    if (walrusBlob) {
+      return walrusBlob;
+    }
+    return localStorageAdapter.readFileBlob(blobId);
+  },
+  async readFileText(blobId) {
+    const walrusText = await swallow(() => walrusAdapter.readFileText(blobId), null);
+    if (walrusText) {
+      return walrusText;
+    }
+    return localStorageAdapter.readFileText(blobId);
+  },
 };
 
 export const storage: StorageAdapter = walrusRequested ? hybridWalrusStorage : localStorageAdapter;

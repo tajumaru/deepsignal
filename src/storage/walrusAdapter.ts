@@ -565,6 +565,26 @@ async function fetchBlobTextFromWalrus(
   }
 }
 
+async function fetchBlobFromWalrus(blobId: string): Promise<Blob | null> {
+  if (!blobId.trim()) {
+    return null;
+  }
+  assertReadEnv();
+  try {
+    const response = await fetch(`${aggregatorUrl}/v1/blobs/${blobId}`);
+    if (response.status === 404) {
+      return null;
+    }
+    if (!response.ok) {
+      throw new Error(`Walrus fetch failed: ${response.status}`);
+    }
+    return await response.blob();
+  } catch (error) {
+    console.error("Walrus binary blob read failed", blobId, error);
+    return null;
+  }
+}
+
 export async function fetchJsonBlob<T>(blobId: string): Promise<T | null> {
   if (!blobId.trim()) {
     return null;
@@ -1054,5 +1074,13 @@ export const walrusAdapter: StorageAdapter = {
       blobId,
       url: getWalrusBlobUrl(blobId) ?? undefined,
     };
+  },
+
+  async readFileBlob(blobId) {
+    return fetchBlobFromWalrus(blobId);
+  },
+
+  async readFileText(blobId) {
+    return fetchTextBlob(blobId);
   },
 };

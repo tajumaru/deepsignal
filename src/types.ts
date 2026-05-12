@@ -80,6 +80,12 @@ export interface SubmissionAttachment {
   blobId: string;
   name: string;
   size: number;
+  storage?: "blob" | "inline";
+  encrypted?: boolean;
+  originalName?: string;
+  originalType?: string;
+  encoding?: "seal-base64-v1";
+  inlineData?: string;
 }
 
 export interface SubmissionPublicPayload {
@@ -150,6 +156,8 @@ export interface StorageAdapter {
   saveEncryptedPayload(payload: string): Promise<{ blobId: string }>;
   readEncryptedPayload(blobId: string): Promise<string | null>;
   uploadFile(file: File): Promise<{ blobId: string; url?: string }>;
+  readFileBlob(blobId: string): Promise<Blob | null>;
+  readFileText(blobId: string): Promise<string | null>;
 }
 
 export interface SealEncryptContext {

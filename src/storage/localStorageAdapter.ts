@@ -18,6 +18,24 @@ interface StoredEncryptedPayload {
   payload: string;
 }
 
+function findStoredFile(blobId: string) {
+  const files = readJson<StoredFileRecord[]>(FILES_KEY, []);
+  return files.find((item) => item.blobId === blobId) ?? null;
+}
+
+function dataUrlToBlob(dataUrl: string) {
+  const [header, body] = dataUrl.split(",", 2);
+  if (!header || body === undefined) {
+    return null;
+  }
+  const mimeMatch = header.match(/^data:([^;,]+)?(?:;charset=[^;,]+)?(;base64)?$/i);
+  const mimeType = mimeMatch?.[1] ?? "application/octet-stream";
+  const isBase64 = Boolean(mimeMatch?.[2]);
+  const binary = isBase64 ? atob(body) : decodeURIComponent(body);
+  const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
+  return new Blob([bytes], { type: mimeType });
+}
+
 function readJson<T>(key: string, fallback: T): T {
   try {
     const raw = window.localStorage.getItem(key);
@@ -127,5 +145,18 @@ export const localStorageAdapter: StorageAdapter = {
     });
     writeJson(FILES_KEY, files);
     return { blobId, url: dataUrl };
+  },
+
+  async readFileBlob(blobId) {
+    const stored = findStoredFile(blobId);
+    if (!stored) {
+      return null;
+    }
+    return dataUrlToBlob(stored.dataUrl);
+  },
+
+  async readFileText(blobId) {
+    const blob = await this.readFileBlob(blobId);
+    return blob ? blob.text() : null;
   },
 };

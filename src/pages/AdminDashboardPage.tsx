@@ -15,6 +15,7 @@ import { ShareCard } from "../components/ShareCard";
 import { SignalClusterPanel } from "../components/SignalClusterPanel";
 import { SignalMetaChip, SignalMetaRow } from "../components/SignalMetaChip";
 import { getSealRuntimeStatus } from "../crypto/cryptoFactory";
+import { getAttachmentDownloadHref, useAttachmentPreviews } from "../hooks/useAttachmentPreviews";
 import {
   REAL_SEAL_SESSION_TTL_MIN,
   SEAL_ADMIN_WALLET_REQUIRED_MESSAGE,
@@ -97,6 +98,10 @@ const ROADMAP_READY_STATUSES = new Set<Submission["triageStatus"]>([
   "fixed",
 ]);
 const ADMIN_SUBMISSION_BATCH_SIZE = 4;
+
+function isAttachmentFieldType(type: FormSchema["fields"][number]["type"]) {
+  return type === "screenshot" || type === "video";
+}
 
 function formatWorkspaceCount(count: number, singular: string, plural = `${singular}s`) {
   return `${count} ${count === 1 ? singular : plural}`;
@@ -672,6 +677,87 @@ export function AdminDashboardPage() {
     signalIndex.signalById[selectedSignalId] ??
     visibleSignals[0] ??
     null;
+  const attachmentPreviews = useAttachmentPreviews(detailAttachments, {
+    enabled:
+      detailAttachments.length > 0 &&
+      (!detailAttachments.some((attachment) => attachment.encrypted) || Boolean(detailAnswers)),
+    decryptContext: {
+      walletAddress: account?.address,
+      projectId: selectedRecord?.form.projectId,
+      suiClient,
+      signPersonalMessage: async (message) => {
+        const result = await signPersonalMessage.mutateAsync({ message });
+        return result.signature;
+      },
+    },
+  });
+  const renderAttachmentCards = (attachments: Submission["attachments"]) => {
+    if (attachments.length === 0) {
+      return null;
+    }
+    return (
+      <div className="stack">
+        {attachments.map((attachment) => (
+          <div key={attachment.blobId} className="attachment-row">
+            {(() => {
+              const preview = attachmentPreviews[attachment.blobId];
+              const label = preview?.name ?? attachment.originalName ?? attachment.name;
+              const downloadHref = getAttachmentDownloadHref(attachment, preview);
+              return (
+                <>
+                  <div>
+                    <strong>{label}</strong>
+                    <p className="muted">
+                      {attachment.type} ﾂｷ {Math.round(attachment.size / 1024)} KB
+                    </p>
+                    {attachment.encrypted && preview?.error ? (
+                      <p className="warning-text">{preview.error}</p>
+                    ) : null}
+                    {preview?.kind === "image" && preview.url ? (
+                      <img
+                        src={preview.url}
+                        alt={label}
+                        className="attachment-preview-image"
+                      />
+                    ) : null}
+                    {preview?.kind === "video" && preview.url ? (
+                      <video
+                        src={preview.url}
+                        className="attachment-preview-video"
+                        controls
+                      />
+                    ) : null}
+                  </div>
+                  <div className="stack signal-meta-row-value">
+                    {attachment.storage === "inline" ? (
+                      <strong>Embedded in private signal</strong>
+                    ) : (
+                      <SignalMetaChip type="blob" value={attachment.blobId} />
+                    )}
+                    {attachment.storage !== "inline" && !isLocalFallbackBlob(attachment.blobId) ? (
+                      <BlobLink
+                        blobId={attachment.blobId}
+                        label={t("verifyOnWalrus")}
+                      />
+                    ) : null}
+                    {downloadHref ? (
+                      <a
+                        className="ghost-button"
+                        href={downloadHref}
+                        download={label}
+                      >
+                        Download attachment
+                      </a>
+                    ) : null}
+                  </div>
+                </>
+              );
+            })()}
+          </div>
+        ))}
+      </div>
+    );
+  };
   const roadmapReadySignals = useMemo(
     () => selectedProjectSignals.filter((record) => ROADMAP_READY_STATUSES.has(record.submission.triageStatus)),
     [selectedProjectSignals],
@@ -679,12 +765,15 @@ export function AdminDashboardPage() {
   const protectedSelectedProjectFormsCount = selectedProjectForms.filter(
     (form) => form.encryptSubmissions,
   ).length;
+  const hasProjectAndForms = Boolean(selectedProject) && selectedProjectForms.length > 0;
   const operationsStatusItems: OperationsStatusItem[] = [
-    {
-      label: "Project Connected",
-      tone: selectedProject ? "ready" : "action",
-      detail: selectedProject ? selectedProject.name : "Select, create, or connect a project",
-    },
+    ...(!hasProjectAndForms
+      ? [{
+          label: "Project Connected",
+          tone: selectedProject ? "ready" : "action",
+          detail: selectedProject ? selectedProject.name : "Select, create, or connect a project",
+        } satisfies OperationsStatusItem]
+      : []),
     {
       label: "Private Signals Enabled",
       tone:
@@ -2260,12 +2349,15 @@ export function AdminDashboardPage() {
                         </div>
                       {detailAnswers ? (
                         <div className="stack">
-                          {selectedRecord.form.fields.map((field) => (
-                            <div key={field.id} className="answer-line">
-                              <strong>{field.label}</strong>
-                              <p>{flattenAnswer(detailAnswers[field.id]) || t("noAnswerLabel")}</p>
-                            </div>
-                          ))}
+                          {selectedRecord.form.fields
+                            .filter((field) => !isAttachmentFieldType(field.type))
+                            .map((field) => (
+                              <div key={field.id} className="answer-line">
+                                <strong>{field.label}</strong>
+                                <p>{flattenAnswer(detailAnswers[field.id]) || t("noAnswerLabel")}</p>
+                              </div>
+                            ))}
+                          {renderAttachmentCards(detailAttachments)}
                         </div>
                       ) : selectedRecordNeedsDecrypt ? (
                         <div className="locked-signal-state">
@@ -2298,21 +2390,60 @@ export function AdminDashboardPage() {
                         <div className="stack">
                           {detailAttachments.map((attachment) => (
                             <div key={attachment.blobId} className="attachment-row">
+                              {(() => {
+                                const preview = attachmentPreviews[attachment.blobId];
+                                const label = preview?.name ?? attachment.originalName ?? attachment.name;
+                                const downloadHref = getAttachmentDownloadHref(attachment, preview);
+                                return (
+                                  <>
                               <div>
-                                <strong>{attachment.name}</strong>
+                                <strong>{label}</strong>
                                 <p className="muted">
                                   {attachment.type} · {Math.round(attachment.size / 1024)} KB
                                 </p>
+                                {attachment.encrypted && preview?.error ? (
+                                  <p className="warning-text">{preview.error}</p>
+                                ) : null}
+                                {preview?.kind === "image" && preview.url ? (
+                                  <img
+                                    src={preview.url}
+                                    alt={label}
+                                    className="attachment-preview-image"
+                                  />
+                                ) : null}
+                                {preview?.kind === "video" && preview.url ? (
+                                  <video
+                                    src={preview.url}
+                                    className="attachment-preview-video"
+                                    controls
+                                  />
+                                ) : null}
                               </div>
                               <div className="stack signal-meta-row-value">
-                                <SignalMetaChip type="blob" value={attachment.blobId} />
-                                {!isLocalFallbackBlob(attachment.blobId) ? (
+                                {attachment.storage === "inline" ? (
+                                  <strong>Embedded in private signal</strong>
+                                ) : (
+                                  <SignalMetaChip type="blob" value={attachment.blobId} />
+                                )}
+                                {attachment.storage !== "inline" && !isLocalFallbackBlob(attachment.blobId) ? (
                                   <BlobLink
                                     blobId={attachment.blobId}
                                     label={t("verifyOnWalrus")}
                                   />
                                 ) : null}
+                                {downloadHref ? (
+                                  <a
+                                    className="ghost-button"
+                                    href={downloadHref}
+                                    download={label}
+                                  >
+                                    Download attachment
+                                  </a>
+                                ) : null}
                               </div>
+                                  </>
+                                );
+                              })()}
                             </div>
                           ))}
                         </div>
@@ -2480,8 +2611,12 @@ export function AdminDashboardPage() {
                               ) : (
                                 selectedRecord.submission.attachments.map((attachment) => (
                                   <div key={attachment.blobId} className="signal-meta-row-value">
-                                    <SignalMetaChip type="blob" value={attachment.blobId} />
-                                    {!isLocalFallbackBlob(attachment.blobId) ? (
+                                    {attachment.storage === "inline" ? (
+                                      <strong>Embedded in private signal</strong>
+                                    ) : (
+                                      <SignalMetaChip type="blob" value={attachment.blobId} />
+                                    )}
+                                    {attachment.storage !== "inline" && !isLocalFallbackBlob(attachment.blobId) ? (
                                       <BlobLink
                                         blobId={attachment.blobId}
                                         label={t("verifyOnWalrus")}

@@ -11,6 +11,7 @@ import { BlobLink } from "../components/BlobLink";
 import { EmptyState } from "../components/EmptyState";
 import { SignalMetaChip } from "../components/SignalMetaChip";
 import { useAccessControl } from "../hooks/useAccessControl";
+import { getAttachmentDownloadHref, useAttachmentPreviews } from "../hooks/useAttachmentPreviews";
 import { getSealRuntimeStatus } from "../crypto/cryptoFactory";
 import { REAL_SEAL_SESSION_TTL_MIN } from "../crypto/sealPayload";
 import { useI18n } from "../i18n";
@@ -53,6 +54,10 @@ type StreamId =
   | "feature"
   | "survey"
   | "archived";
+
+function isAttachmentFieldType(type: FormSchema["fields"][number]["type"]) {
+  return type === "screenshot" || type === "video";
+}
 
 function matchesStream(submission: Submission, streamId: StreamId) {
   const category = inferSignalCategory(submission);
@@ -169,6 +174,84 @@ export function FormSubmissionsPage() {
     submissions.find((submission) => submission.id === selectedSignalId) ??
     visibleSignals[0] ??
     null;
+  const attachmentPreviews = useAttachmentPreviews(detailAttachments, {
+    enabled:
+      detailAttachments.length > 0 &&
+      (!detailAttachments.some((attachment) => attachment.encrypted) || Boolean(detailAnswers)),
+    decryptContext: {
+      walletAddress: account?.address,
+      projectId: form?.projectId,
+      suiClient,
+      signPersonalMessage: async (message) => {
+        const result = await signPersonalMessage.mutateAsync({ message });
+        return result.signature;
+      },
+    },
+  });
+  const renderAttachmentCards = (attachments: Submission["attachments"]) => {
+    if (attachments.length === 0) {
+      return null;
+    }
+    return (
+      <div className="stack">
+        {attachments.map((attachment) => (
+          <div key={attachment.blobId} className="attachment-row">
+            {(() => {
+              const preview = attachmentPreviews[attachment.blobId];
+              const label = preview?.name ?? attachment.originalName ?? attachment.name;
+              const downloadHref = getAttachmentDownloadHref(attachment, preview);
+              return (
+                <>
+                  <div>
+                    <strong>{label}</strong>
+                    <p className="muted">
+                      {attachment.type} ﾂｷ {Math.round(attachment.size / 1024)} KB
+                    </p>
+                    {attachment.encrypted && preview?.error ? (
+                      <p className="warning-text">{preview.error}</p>
+                    ) : null}
+                    {preview?.kind === "image" && preview.url ? (
+                      <img
+                        src={preview.url}
+                        alt={label}
+                        className="attachment-preview-image"
+                      />
+                    ) : null}
+                    {preview?.kind === "video" && preview.url ? (
+                      <video
+                        src={preview.url}
+                        className="attachment-preview-video"
+                        controls
+                      />
+                    ) : null}
+                  </div>
+                  <div className="stack signal-meta-row-value">
+                    {attachment.storage === "inline" ? (
+                      <strong>Embedded in private signal</strong>
+                    ) : (
+                      <SignalMetaChip type="blob" value={attachment.blobId} />
+                    )}
+                    {attachment.storage !== "inline" && !isLocalFallbackBlob(attachment.blobId) ? (
+                      <BlobLink blobId={attachment.blobId} label={t("verifyOnWalrus")} />
+                    ) : null}
+                    {downloadHref ? (
+                      <a
+                        className="ghost-button"
+                        href={downloadHref}
+                        download={label}
+                      >
+                        Download attachment
+                      </a>
+                    ) : null}
+                  </div>
+                </>
+              );
+            })()}
+          </div>
+        ))}
+      </div>
+    );
+  };
 
   useEffect(() => {
     if (!selectedSubmission) {
@@ -433,6 +516,9 @@ export function FormSubmissionsPage() {
   const resolvedDetailAnswers = detailAnswers ?? {};
   const previewAnswerFields = detailAnswers
     ? activeForm.fields.filter((field) => {
+        if (isAttachmentFieldType(field.type)) {
+          return false;
+        }
         const value = flattenAnswer(resolvedDetailAnswers[field.id]).trim();
         return Boolean(value);
       }).slice(0, 3)
@@ -549,6 +635,7 @@ export function FormSubmissionsPage() {
                             <p>{flattenAnswer(detailAnswers[field.id]) || t("noAnswerLabel")}</p>
                           </div>
                         ))}
+                        {renderAttachmentCards(detailAttachments)}
                         {activeForm.fields.length > previewAnswerFields.length ? (
                           <p className="muted">Open Answers to view the full response.</p>
                         ) : null}
@@ -908,6 +995,7 @@ export function FormSubmissionsPage() {
                             <p>{flattenAnswer(resolvedDetailAnswers[field.id]) || t("noAnswerLabel")}</p>
                           </div>
                         ))}
+                        {renderAttachmentCards(detailAttachments)}
                         {activeForm.fields.length > previewAnswerFields.length ? (
                           <p className="muted">Open Answers to view the full response.</p>
                         ) : null}
@@ -1035,18 +1123,57 @@ export function FormSubmissionsPage() {
                       <div className="stack">
                         {detailAttachments.map((attachment) => (
                           <div key={attachment.blobId} className="attachment-row">
+                            {(() => {
+                              const preview = attachmentPreviews[attachment.blobId];
+                              const label = preview?.name ?? attachment.originalName ?? attachment.name;
+                              const downloadHref = getAttachmentDownloadHref(attachment, preview);
+                              return (
+                                <>
                             <div>
-                              <strong>{attachment.name}</strong>
+                              <strong>{label}</strong>
                               <p className="muted">
                                 {attachment.type} · {Math.round(attachment.size / 1024)} KB
                               </p>
-                            </div>
-                            <div className="stack signal-meta-row-value">
-                              <SignalMetaChip type="blob" value={attachment.blobId} />
-                              {!isLocalFallbackBlob(attachment.blobId) ? (
-                                <BlobLink blobId={attachment.blobId} label={t("verifyOnWalrus")} />
+                              {attachment.encrypted && preview?.error ? (
+                                <p className="warning-text">{preview.error}</p>
+                              ) : null}
+                              {preview?.kind === "image" && preview.url ? (
+                                <img
+                                  src={preview.url}
+                                  alt={label}
+                                  className="attachment-preview-image"
+                                />
+                              ) : null}
+                              {preview?.kind === "video" && preview.url ? (
+                                <video
+                                  src={preview.url}
+                                  className="attachment-preview-video"
+                                  controls
+                                />
                               ) : null}
                             </div>
+                            <div className="stack signal-meta-row-value">
+                              {attachment.storage === "inline" ? (
+                                <strong>Embedded in private signal</strong>
+                              ) : (
+                                <SignalMetaChip type="blob" value={attachment.blobId} />
+                              )}
+                              {attachment.storage !== "inline" && !isLocalFallbackBlob(attachment.blobId) ? (
+                                <BlobLink blobId={attachment.blobId} label={t("verifyOnWalrus")} />
+                              ) : null}
+                              {downloadHref ? (
+                                <a
+                                  className="ghost-button"
+                                  href={downloadHref}
+                                  download={label}
+                                >
+                                  Download attachment
+                                </a>
+                              ) : null}
+                            </div>
+                                </>
+                              );
+                            })()}
                           </div>
                         ))}
                       </div>

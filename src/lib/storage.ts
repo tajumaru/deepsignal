@@ -1,5 +1,5 @@
 import { cryptoAdapter, getSealRuntimeStatus } from "../crypto/cryptoFactory";
-import { parseRealSealEnvelope } from "../crypto/sealPayload";
+import { fromBase64, parseRealSealEnvelope, toBase64 } from "../crypto/sealPayload";
 import {
   getSubmissionCategoryFromPurpose,
   inferPriorityFromTemplateAnswers,
@@ -16,6 +16,7 @@ import type {
   SealEncryptContext,
   StorageAdapter,
   Submission,
+  SubmissionAttachment,
 } from "../types";
 
 export const storageAdapter: StorageAdapter = storage;
@@ -52,6 +53,131 @@ function parseSensitiveValue(form: FormSchema, fieldId: string, value: string) {
     return value;
   }
   return value;
+}
+
+function normalizeSubmissionAttachment(raw: unknown): SubmissionAttachment | null {
+  if (!raw || typeof raw !== "object") {
+    return null;
+  }
+  const attachment = raw as Partial<SubmissionAttachment> & Record<string, unknown>;
+  if (typeof attachment.fieldId !== "string" || typeof attachment.blobId !== "string") {
+    return null;
+  }
+  return {
+    fieldId: attachment.fieldId,
+    type: attachment.type === "video" ? "video" : "image",
+    blobId: attachment.blobId,
+    name: typeof attachment.name === "string" ? attachment.name : attachment.originalName ?? "attachment",
+    size: typeof attachment.size === "number" ? attachment.size : 0,
+    storage: attachment.storage === "inline" ? "inline" : attachment.storage === "blob" ? "blob" : undefined,
+    encrypted: attachment.encrypted === true ? true : undefined,
+    originalName: typeof attachment.originalName === "string" ? attachment.originalName : undefined,
+    originalType: typeof attachment.originalType === "string" ? attachment.originalType : undefined,
+    encoding: attachment.encoding === "seal-base64-v1" ? "seal-base64-v1" : undefined,
+    inlineData: typeof attachment.inlineData === "string" ? attachment.inlineData : undefined,
+  };
+}
+
+function normalizeSubmissionAttachments(raw: unknown) {
+  if (!Array.isArray(raw)) {
+    return [] as SubmissionAttachment[];
+  }
+  return raw
+    .map((attachment) => normalizeSubmissionAttachment(attachment))
+    .filter((attachment): attachment is SubmissionAttachment => Boolean(attachment));
+}
+
+export async function createEncryptedAttachmentUpload(
+  file: File,
+  seal: SealAdapter = activeSealAdapter,
+  context: SealEncryptContext = {},
+) {
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  const encryptedPayload = await seal.encrypt(toBase64(bytes), context);
+  const encryptedFile = new File([encryptedPayload], `${file.name}.seal`, {
+    type: "text/plain",
+    lastModified: file.lastModified,
+  });
+  return {
+    file: encryptedFile,
+    attachment: {
+      encrypted: true as const,
+      originalName: file.name,
+      originalType: file.type || "application/octet-stream",
+      encoding: "seal-base64-v1" as const,
+    },
+  };
+}
+
+export async function createInlineEncryptedAttachment(file: File) {
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  return {
+    fieldId: "",
+    type: file.type.startsWith("video/") ? ("video" as const) : ("image" as const),
+    blobId: `inline:${crypto.randomUUID()}`,
+    name: file.name,
+    size: file.size,
+    storage: "inline" as const,
+    encrypted: true as const,
+    originalName: file.name,
+    originalType: file.type || "application/octet-stream",
+    encoding: "seal-base64-v1" as const,
+    inlineData: toBase64(bytes),
+  } satisfies SubmissionAttachment;
+}
+
+function stripInlineAttachmentData(attachments: SubmissionAttachment[]) {
+  return attachments.map((attachment) => {
+    if (attachment.storage !== "inline") {
+      return attachment;
+    }
+    return {
+      ...attachment,
+      inlineData: undefined,
+    } satisfies SubmissionAttachment;
+  });
+}
+
+export async function decryptAttachmentBlob(
+  attachment: SubmissionAttachment,
+  seal: SealAdapter = activeSealAdapter,
+  context: SealDecryptContext = {},
+  targetStorage: StorageAdapter = storageAdapter,
+) {
+  if (attachment.storage === "inline" && attachment.inlineData) {
+    const blob = new Blob([fromBase64(attachment.inlineData)], {
+      type: attachment.originalType || "application/octet-stream",
+    });
+    return {
+      blob,
+      name: attachment.originalName ?? attachment.name,
+      mimeType: attachment.originalType || "application/octet-stream",
+    };
+  }
+  if (!attachment.encrypted) {
+    const blob = await targetStorage.readFileBlob(attachment.blobId);
+    if (!blob) {
+      return null;
+    }
+    return {
+      blob,
+      name: attachment.originalName ?? attachment.name,
+      mimeType: attachment.originalType || blob.type || "application/octet-stream",
+    };
+  }
+  const encryptedPayload = await targetStorage.readFileText(attachment.blobId);
+  if (!encryptedPayload) {
+    return null;
+  }
+  const decrypted = await seal.decrypt(encryptedPayload, context);
+  const blob = new Blob([fromBase64(decrypted)], {
+    type: attachment.originalType || "application/octet-stream",
+  });
+  return {
+    blob,
+    name: attachment.originalName ?? attachment.name,
+    mimeType: attachment.originalType || "application/octet-stream",
+  };
 }
 
 export async function encryptSensitiveAnswers(
@@ -175,16 +301,22 @@ export function normalizeSubmission(raw: Submission | (Record<string, unknown> &
     : typeof raw.notes === "string"
       ? raw.notes
       : "";
+  const publicPayload =
+    raw.publicPayload && typeof raw.publicPayload === "object"
+      ? (raw.publicPayload as NonNullable<Submission["publicPayload"]>)
+      : null;
 
   return {
     id: raw.id,
     formId: raw.formId,
     answers: typeof raw.answers === "object" && raw.answers ? (raw.answers as Record<string, unknown>) : {},
-    attachments: Array.isArray(raw.attachments) ? raw.attachments : [],
-    publicPayload:
-      raw.publicPayload && typeof raw.publicPayload === "object"
-        ? (raw.publicPayload as Submission["publicPayload"])
-        : undefined,
+    attachments: normalizeSubmissionAttachments(raw.attachments),
+    publicPayload: publicPayload
+      ? {
+          ...publicPayload,
+          attachments: normalizeSubmissionAttachments(publicPayload.attachments),
+        }
+      : undefined,
     respondentMeta:
       raw.respondentMeta && typeof raw.respondentMeta === "object"
         ? (raw.respondentMeta as Submission["respondentMeta"])
@@ -314,7 +446,10 @@ export async function resolveSubmissionAnswers(
     };
     return {
       answers: parsed.answers ?? {},
-      attachments: parsed.attachments ?? submission.attachments,
+      attachments:
+        parsed.attachments === undefined
+          ? submission.attachments
+          : normalizeSubmissionAttachments(parsed.attachments),
     };
   }
 
@@ -397,6 +532,7 @@ export async function saveSubmissionWithEncryption(
       : submission.sealIdentity;
     const metadataSubmission: Submission = {
       ...triagedSubmission,
+      attachments: stripInlineAttachmentData(submission.attachments),
       answers: {},
       isEncrypted: true,
       encryptedBlobId,

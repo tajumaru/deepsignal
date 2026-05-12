@@ -43,4 +43,12 @@ export const walrusAdapter: StorageAdapter = {
     // TODO: Stream the file into Walrus and return the blob id plus optional public gateway URL.
     return { blobId: `todo-walrus-file-${file.name}` };
   },
+  async readFileBlob() {
+    // TODO: Read attachment blobs back from Walrus.
+    return null;
+  },
+  async readFileText() {
+    // TODO: Read attachment text payloads back from Walrus.
+    return null;
+  },
 };

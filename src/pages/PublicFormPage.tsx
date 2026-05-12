@@ -13,6 +13,7 @@ import { getSubmissionRespondentMeta } from "../lib/respondentMeta";
 import { ensureRespondentSession } from "../lib/respondentSession";
 import { getStorageDetailLabels, isLocalFallbackBlob } from "../lib/signalInbox";
 import {
+  createInlineEncryptedAttachment,
   createEmptyAnswer,
   normalizeForm,
   saveSubmissionWithEncryption,
@@ -229,14 +230,24 @@ export function PublicFormPage() {
         if (attachmentFields.has(field.id)) {
           const file = value instanceof File ? value : null;
           if (file) {
-            const upload = await storageAdapter.uploadFile(file);
-            attachments.push({
-              fieldId: field.id,
-              type: field.type === "video" ? "video" : "image",
-              blobId: upload.blobId,
-              name: file.name,
-              size: file.size,
-            });
+            if (form.encryptSubmissions) {
+              const inlineAttachment = await createInlineEncryptedAttachment(file);
+              attachments.push({
+                ...inlineAttachment,
+                fieldId: field.id,
+                type: field.type === "video" ? "video" : "image",
+              });
+            } else {
+              const upload = await storageAdapter.uploadFile(file);
+              attachments.push({
+                fieldId: field.id,
+                type: field.type === "video" ? "video" : "image",
+                blobId: upload.blobId,
+                name: file.name,
+                size: file.size,
+                storage: "blob",
+              });
+            }
             plainAnswers[field.id] = file.name;
           } else {
             plainAnswers[field.id] = "";
@@ -393,10 +404,16 @@ export function PublicFormPage() {
                     submitted.attachments.map((attachment, index) => (
                       <div key={attachment.blobId} className="signal-meta-row-value">
                         <span>Attachment {index + 1}</span>
-                        <SignalMetaChip type="blob" value={attachment.blobId} />
-                        <div className="signal-meta-row-value">
-                          <BlobLink blobId={attachment.blobId} label="Verify on Walrus" />
-                        </div>
+                        {attachment.storage === "inline" ? (
+                          <strong>Embedded in private signal</strong>
+                        ) : (
+                          <>
+                            <SignalMetaChip type="blob" value={attachment.blobId} />
+                            <div className="signal-meta-row-value">
+                              <BlobLink blobId={attachment.blobId} label="Verify on Walrus" />
+                            </div>
+                          </>
+                        )}
                       </div>
                     ))
                   )}

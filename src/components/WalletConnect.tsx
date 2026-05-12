@@ -1,9 +1,8 @@
 import {
-  useConnectWallet,
+  ConnectButton,
   useCurrentAccount,
   useCurrentWallet,
   useDisconnectWallet,
-  useWallets,
 } from "@mysten/dapp-kit";
 import { useEffect, useRef, useState } from "react";
 import { useI18n } from "../i18n";
@@ -20,14 +19,12 @@ function formatWalletAddress(address?: string | null) {
 
 export function WalletConnect() {
   const { t } = useI18n();
-  const wallets = useWallets();
   const account = useCurrentAccount();
   const {
     currentWallet,
     isConnected,
     isConnecting,
   } = useCurrentWallet();
-  const connectWallet = useConnectWallet();
   const disconnectWallet = useDisconnectWallet();
   const [menuOpen, setMenuOpen] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -66,19 +63,6 @@ export function WalletConnect() {
     return () => window.clearTimeout(timeoutId);
   }, [copied]);
 
-  async function handleConnect(walletName: string) {
-    const wallet = wallets.find((entry) => entry.name === walletName);
-    if (!wallet) {
-      return;
-    }
-    try {
-      await connectWallet.mutateAsync({ wallet });
-      setMenuOpen(false);
-    } catch (error) {
-      console.error(error);
-    }
-  }
-
   async function handleDisconnect() {
     try {
       await disconnectWallet.mutateAsync();
@@ -112,6 +96,20 @@ export function WalletConnect() {
       ? "Establishing wallet uplink"
       : "Wallet-optional public mode";
 
+  if (!isConnected) {
+    return (
+      <div className="wallet-connect-shell">
+        <div className="wallet-connect-direct panel">
+          <div className="wallet-connect-direct-copy">
+            <strong>{buttonLabel}</strong>
+            <span>{statusCopy}</span>
+          </div>
+          <ConnectButton />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div ref={shellRef} className="wallet-connect-shell">
       <button
@@ -138,68 +136,30 @@ export function WalletConnect() {
 
       {menuOpen ? (
         <div className="wallet-sync-menu panel" role="menu">
-          {isConnected ? (
-            <>
-              <div className="wallet-sync-menu-header">
-                <span className="wallet-sync-menu-eyebrow">{t("connectedLabel")}</span>
-                <strong>{currentWallet?.name ?? "Wallet"}</strong>
-                <code>{account?.address ?? "No address available"}</code>
-              </div>
-              <button
-                type="button"
-                className="wallet-sync-menu-item"
-                onClick={() => void handleCopyAddress()}
-                role="menuitem"
-              >
-                <span>{copied ? "Address Copied" : "Copy Address"}</span>
-                <small>{formatWalletAddress(account?.address)}</small>
-              </button>
-              <button
-                type="button"
-                className="wallet-sync-menu-item wallet-sync-menu-item-danger"
-                onClick={() => void handleDisconnect()}
-                disabled={disconnectWallet.isPending}
-                role="menuitem"
-              >
-                <span>{disconnectWallet.isPending ? "Disconnecting..." : "Disconnect"}</span>
-                <small>Return to wallet-optional mode</small>
-              </button>
-            </>
-          ) : (
-            <>
-              <div className="wallet-sync-menu-header">
-                <span className="wallet-sync-menu-eyebrow">Wallet Uplink</span>
-                <strong>Select a signal-compatible wallet</strong>
-                <p className="wallet-sync-menu-note">
-                  {wallets.length > 0
-                    ? "Choose a wallet to sync DeepSignal author and review flows."
-                    : "No compatible wallet detected in this browser."}
-                </p>
-              </div>
-              <div className="wallet-sync-wallets">
-                {wallets.length > 0 ? (
-                  wallets.map((wallet) => (
-                    <button
-                      key={wallet.name}
-                      type="button"
-                      className="wallet-sync-menu-item"
-                      onClick={() => void handleConnect(wallet.name)}
-                      disabled={connectWallet.isPending}
-                      role="menuitem"
-                    >
-                      <span>{wallet.name}</span>
-                      <small>{connectWallet.isPending ? "Syncing Signal..." : "Connect"}</small>
-                    </button>
-                  ))
-                ) : (
-                  <div className="wallet-sync-empty">
-                    <strong>Wallet unavailable</strong>
-                    <p>Install a Sui wallet extension to enable creator and reviewer sync.</p>
-                  </div>
-                )}
-              </div>
-            </>
-          )}
+          <div className="wallet-sync-menu-header">
+            <span className="wallet-sync-menu-eyebrow">{t("connectedLabel")}</span>
+            <strong>{currentWallet?.name ?? "Wallet"}</strong>
+            <code>{account?.address ?? "No address available"}</code>
+          </div>
+          <button
+            type="button"
+            className="wallet-sync-menu-item"
+            onClick={() => void handleCopyAddress()}
+            role="menuitem"
+          >
+            <span>{copied ? "Address Copied" : "Copy Address"}</span>
+            <small>{formatWalletAddress(account?.address)}</small>
+          </button>
+          <button
+            type="button"
+            className="wallet-sync-menu-item wallet-sync-menu-item-danger"
+            onClick={() => void handleDisconnect()}
+            disabled={disconnectWallet.isPending}
+            role="menuitem"
+          >
+            <span>{disconnectWallet.isPending ? "Disconnecting..." : "Disconnect"}</span>
+            <small>Return to wallet-optional mode</small>
+          </button>
         </div>
       ) : null}
     </div>

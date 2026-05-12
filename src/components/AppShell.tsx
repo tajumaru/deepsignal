@@ -1,5 +1,6 @@
 import { lazy, Suspense, type PropsWithChildren } from "react";
-import { Link, NavLink } from "react-router-dom";
+import { useCurrentAccount } from "@mysten/dapp-kit";
+import { Link, NavLink, useLocation } from "react-router-dom";
 import { useI18n } from "../i18n";
 
 const WalletConnect = lazy(() =>
@@ -10,7 +11,12 @@ const WalletNav = lazy(() =>
 );
 
 export function AppShell({ children }: PropsWithChildren) {
+  const account = useCurrentAccount();
+  const location = useLocation();
   const { language, setLanguage, t } = useI18n();
+  const shouldHideTopbarWallet =
+    !account?.address &&
+    (location.pathname.startsWith("/admin") || location.pathname.startsWith("/dashboard"));
 
   return (
     <div className="app-shell">
@@ -32,9 +38,11 @@ export function AppShell({ children }: PropsWithChildren) {
           <NavLink to="/admin/forms/new">{t("navCreateForm")}</NavLink>
         </nav>
         <div className="topbar-actions">
-          <Suspense fallback={<div className="wallet-connect-shell" />}>
-            <WalletConnect />
-          </Suspense>
+          {!shouldHideTopbarWallet ? (
+            <Suspense fallback={<div className="wallet-connect-shell" />}>
+              <WalletConnect />
+            </Suspense>
+          ) : null}
           <label className="language-switch">
             <span>{t("languageLabel")}</span>
             <select

@@ -5,6 +5,7 @@ import {
   SuiClientProvider,
   WalletProvider,
 } from "@mysten/dapp-kit";
+import type { WalletWithRequiredFeatures } from "@mysten/wallet-standard";
 import { getJsonRpcFullnodeUrl } from "@mysten/sui/jsonRpc";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { SUI_FULLNODE_URL, SUI_NETWORK } from "./lib/sui";
@@ -12,6 +13,16 @@ import { SUI_FULLNODE_URL, SUI_NETWORK } from "./lib/sui";
 export const REQUIRE_GLOBAL_WALRUS_RUNTIME =
   String(import.meta.env.VITE_REQUIRE_WALRUS || "").toLowerCase() === "true";
 const LazyWalrusRuntimeBridge = lazy(() => import("./walrusRuntimeBridge"));
+const PREFERRED_WALLETS = ["Sui Wallet", "Slush", "Phantom", "OKX Wallet"];
+
+function walletFilter(wallet: WalletWithRequiredFeatures) {
+  if (wallet.name.toLowerCase().includes("nightly")) {
+    return false;
+  }
+  return Boolean(
+    wallet.features["sui:signTransaction"] || wallet.features["sui:signTransactionBlock"],
+  );
+}
 
 const { networkConfig } = createNetworkConfig({
   testnet: {
@@ -44,7 +55,11 @@ export function Providers({ children }: PropsWithChildren) {
   return (
     <QueryClientProvider client={queryClient}>
       <SuiClientProvider networks={networkConfig} defaultNetwork={SUI_NETWORK}>
-        <WalletProvider autoConnect>
+        <WalletProvider
+          autoConnect
+          preferredWallets={PREFERRED_WALLETS}
+          walletFilter={walletFilter}
+        >
           {REQUIRE_GLOBAL_WALRUS_RUNTIME ? (
             <Suspense fallback={null}>
               <LazyWalrusRuntimeBridge />
