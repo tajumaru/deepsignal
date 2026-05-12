@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { buildExploreAiPreview, getExploreCategory, getPurposeLabel, isFormPubliclyExplorable, type ExploreCategory, type ExploreTabKey } from "../lib/explore";
+import { buildExploreAiPreview, getExploreCategory, getPurposeLabel, isFormPubliclyExplorable, type ExploreCategory } from "../lib/explore";
 import { getPublicFormPath } from "../lib/publicLinks";
 import { normalizeForm, normalizeSubmission, storageAdapter } from "../lib/storage";
 import { formatDate } from "../lib/utils";
@@ -22,20 +22,8 @@ type HiddenFormSummary = {
   publicPath: string;
 };
 
-const TABS: Array<{ key: ExploreTabKey; label: string }> = [
-  { key: "trending", label: "Trending" },
-  { key: "recent", label: "Recent" },
-  { key: "active", label: "Most Active" },
-  { key: "ai", label: "AI Summaries" },
-];
-
-const CATEGORIES: ExploreCategory[] = ["All", "Bug", "Feature", "Survey", "Application"];
-
 export function ExploreSignalsPage() {
   const [loading, setLoading] = useState(true);
-  const [query, setQuery] = useState("");
-  const [tab, setTab] = useState<ExploreTabKey>("trending");
-  const [category, setCategory] = useState<ExploreCategory>("All");
   const [cards, setCards] = useState<ExploreCard[]>([]);
   const [hiddenForms, setHiddenForms] = useState<HiddenFormSummary[]>([]);
 
@@ -87,7 +75,8 @@ export function ExploreSignalsPage() {
   }, []);
 
   const filteredCards = useMemo(() => {
-    const normalizedQuery = query.trim().toLowerCase();
+    const normalizedQuery = "";
+    const category: ExploreCategory = "All";
 
     const matching = cards.filter((card) => {
       if (category !== "All" && card.category !== category) {
@@ -114,21 +103,12 @@ export function ExploreSignalsPage() {
     sorted.sort((left, right) => {
       const leftUpdated = new Date(left.updatedAt).getTime();
       const rightUpdated = new Date(right.updatedAt).getTime();
-      if (tab === "recent") {
-        return rightUpdated - leftUpdated;
-      }
-      if (tab === "active") {
-        return right.signalCount - left.signalCount || rightUpdated - leftUpdated;
-      }
-      if (tab === "ai") {
-        return right.aiPreview.length - left.aiPreview.length || right.signalCount - left.signalCount;
-      }
       const leftScore = left.signalCount * 3 + (Date.now() - leftUpdated < 1000 * 60 * 60 * 24 ? 8 : 0);
       const rightScore = right.signalCount * 3 + (Date.now() - rightUpdated < 1000 * 60 * 60 * 24 ? 8 : 0);
       return rightScore - leftScore || rightUpdated - leftUpdated;
     });
     return sorted;
-  }, [cards, category, query, tab]);
+  }, [cards]);
 
   if (loading) {
     return <div className="panel">Scanning Walrus signal network...</div>;
@@ -147,64 +127,6 @@ export function ExploreSignalsPage() {
             <span className="signal-chip">Live feedback stream</span>
             <span className="signal-chip">AI Observatory</span>
           </div>
-        </div>
-        <div className="explore-hero-panel">
-          <div className="explore-terminal-line">
-            <span className="explore-pulse-dot" />
-            <strong>Signal Terminal</strong>
-            <span>{cards.reduce((sum, card) => sum + card.signalCount, 0)} signals indexed</span>
-          </div>
-          <div className="explore-terminal-stack">
-            <div>
-              <span>Visibility filter</span>
-              <strong>Public Explore only</strong>
-            </div>
-            <div>
-              <span>Safe surface</span>
-              <strong>Metadata only, no private payloads</strong>
-            </div>
-            <div>
-              <span>Source</span>
-              <strong>Walrus-native forms + local fallback compatibility</strong>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section className="panel glow-panel explore-toolbar">
-        <label className="explore-search">
-          <span className="sr-only">Search</span>
-          <input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search projects, forms, signals..."
-          />
-        </label>
-
-        <div className="explore-tab-row" role="tablist" aria-label="Explore tabs">
-          {TABS.map((item) => (
-            <button
-              key={item.key}
-              type="button"
-              className={`explore-tab ${tab === item.key ? "is-active" : ""}`}
-              onClick={() => setTab(item.key)}
-            >
-              {item.label}
-            </button>
-          ))}
-        </div>
-
-        <div className="explore-filter-row" aria-label="Category filters">
-          {CATEGORIES.map((item) => (
-            <button
-              key={item}
-              type="button"
-              className={`signal-chip explore-filter-chip ${category === item ? "is-active" : ""}`}
-              onClick={() => setCategory(item)}
-            >
-              {item}
-            </button>
-          ))}
         </div>
       </section>
 
