@@ -77,6 +77,8 @@ export interface PublishOverlayState {
   blobCopied: boolean;
   storageMode: "walrus" | "local";
   resultNote: string;
+  activeStageStatus: string;
+  activeStageDetail: string;
 }
 
 export interface PreparedPublishForm extends FormSchema {

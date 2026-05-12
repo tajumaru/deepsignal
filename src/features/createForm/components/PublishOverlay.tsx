@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from "react";
-import QRCode from "qrcode";
 import { RichTextContent } from "../../../components/RichText";
 import { publishPhases } from "../constants";
 import type { PublishOverlayState } from "../types";
@@ -35,6 +34,7 @@ export function PublishOverlay({
 }: PublishOverlayProps) {
   const [qrMarkup, setQrMarkup] = useState("");
   const isBeaconVisible = overlay.stageIndex >= publishPhases.length - 1 && isCrossDeviceShareReady;
+  const activePhase = publishPhases[overlay.stageIndex];
 
   const absolutePublicUrl = useMemo(() => {
     if (typeof window === "undefined") {
@@ -50,19 +50,23 @@ export function PublishOverlay({
     }
 
     let cancelled = false;
-    void QRCode.toString(absolutePublicUrl, {
-      type: "svg",
-      margin: 1,
-      width: 256,
-      color: {
-        dark: "#04131e",
-        light: "#ffffff",
-      },
-    }).then((svg: string) => {
-      if (!cancelled) {
-        setQrMarkup(svg);
-      }
-    });
+    void import("qrcode")
+      .then(({ default: QRCode }) =>
+        QRCode.toString(absolutePublicUrl, {
+          type: "svg",
+          margin: 1,
+          width: 256,
+          color: {
+            dark: "#04131e",
+            light: "#ffffff",
+          },
+        }),
+      )
+      .then((svg: string) => {
+        if (!cancelled) {
+          setQrMarkup(svg);
+        }
+      });
 
     return () => {
       cancelled = true;
@@ -90,7 +94,7 @@ export function PublishOverlay({
           <span />
         </div>
 
-        <div className={`publish-signal-shell stage-${publishPhases[overlay.stageIndex]?.key ?? "encoding"}`}>
+        <div className={`publish-signal-shell stage-${activePhase?.key ?? "encoding"}`}>
           <div className="publish-signal-card">
             <span className="publish-signal-label">SIGNAL PAYLOAD</span>
             <strong>{title.trim() || "Untitled signal"}</strong>
@@ -137,10 +141,18 @@ export function PublishOverlay({
           <div className="publish-terminal-log" aria-live="polite">
             {publishPhases.map((phase, index) => {
               const state = index < overlay.stageIndex ? "done" : index === overlay.stageIndex ? "active" : "queued";
+              const statusText =
+                state === "active" && overlay.activeStageStatus
+                  ? overlay.activeStageStatus
+                  : state === "done"
+                    ? "complete"
+                    : state === "active"
+                      ? "in progress"
+                      : "queued";
               return (
                 <div key={phase.key} className={`publish-terminal-row is-${state}`}>
                   <span>{phase.label}</span>
-                  <small>{state === "done" ? "complete" : state === "active" ? "in progress" : "queued"}</small>
+                  <small>{statusText}</small>
                 </div>
               );
             })}
@@ -148,7 +160,7 @@ export function PublishOverlay({
           <p className="publish-terminal-detail">
             {overlay.stageIndex >= publishPhases.length - 1 && overlay.resultNote
               ? overlay.resultNote
-              : publishPhases[overlay.stageIndex]?.detail}
+              : overlay.activeStageDetail || activePhase?.detail}
           </p>
         </div>
 

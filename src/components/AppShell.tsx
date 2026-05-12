@@ -1,7 +1,7 @@
 import { lazy, Suspense, type PropsWithChildren } from "react";
-import { useCurrentAccount } from "@mysten/dapp-kit";
 import { Link, NavLink, useLocation } from "react-router-dom";
 import { useI18n } from "../i18n";
+import { WalletSurface } from "./WalletSurface";
 
 const WalletConnect = lazy(() =>
   import("./WalletConnect").then((module) => ({ default: module.WalletConnect })),
@@ -11,20 +11,22 @@ const WalletNav = lazy(() =>
 );
 
 export function AppShell({ children }: PropsWithChildren) {
-  const account = useCurrentAccount();
   const location = useLocation();
   const { language, setLanguage, t } = useI18n();
-  const shouldHideTopbarWallet =
-    !account?.address &&
-    (location.pathname.startsWith("/admin") || location.pathname.startsWith("/dashboard"));
+  const showsWalletControls =
+    location.pathname.startsWith("/admin") ||
+    location.pathname.startsWith("/dashboard") ||
+    location.pathname.startsWith("/f/");
 
-  return (
+  const shell = (
     <div className="app-shell">
       <div className="bg-orb bg-orb-a" />
       <div className="bg-orb bg-orb-b" />
       <header className="topbar panel">
         <Link className="brand" to="/">
-          <span className="brand-mark">DS</span>
+          <span className="brand-mark" aria-hidden="true">
+            <img src="/deepsignal-icon.png" alt="" />
+          </span>
           <div>
             <strong>DeepSignal</strong>
             <p>{t("brandTagline")}</p>
@@ -33,13 +35,15 @@ export function AppShell({ children }: PropsWithChildren) {
         <nav className="topnav">
           <NavLink to="/">{t("navHome")}</NavLink>
           <NavLink to="/explore">{t("navExplore")}</NavLink>
-          <Suspense fallback={null}>
-            <WalletNav />
-          </Suspense>
+          {showsWalletControls ? (
+            <Suspense fallback={null}>
+              <WalletNav />
+            </Suspense>
+          ) : null}
           <NavLink to="/admin/forms/new">{t("navCreateForm")}</NavLink>
         </nav>
         <div className="topbar-actions">
-          {!shouldHideTopbarWallet ? (
+          {showsWalletControls ? (
             <Suspense fallback={<div className="wallet-connect-shell" />}>
               <WalletConnect />
             </Suspense>
@@ -59,4 +63,6 @@ export function AppShell({ children }: PropsWithChildren) {
       <main className="page-wrap">{children}</main>
     </div>
   );
+
+  return showsWalletControls ? <WalletSurface>{shell}</WalletSurface> : shell;
 }

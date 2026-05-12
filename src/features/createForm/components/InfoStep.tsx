@@ -1,6 +1,12 @@
+import { lazy, Suspense } from "react";
 import { toDateTimeLocalValue } from "../../../lib/responseDeadline";
-import { RichTextEditor } from "../../../components/RichTextEditor";
 import type { ResponseDeadlinePreset, Translate } from "../types";
+
+const RichTextEditor = lazy(() =>
+  import("../../../components/RichTextEditor").then((module) => ({
+    default: module.RichTextEditor,
+  })),
+);
 
 interface InfoStepProps {
   t: Translate;
@@ -30,12 +36,12 @@ export function InfoStep({
   onContinue,
 }: InfoStepProps) {
   const deadlineOptions: Array<{ value: ResponseDeadlinePreset; label: string }> = [
-    { value: "none", label: "無期限" },
-    { value: "1h", label: "1時間" },
-    { value: "24h", label: "24時間" },
-    { value: "7d", label: "7日" },
-    { value: "30d", label: "30日" },
-    { value: "custom", label: "カスタム日時" },
+    { value: "none", label: t("responseDeadlineNone") },
+    { value: "1h", label: t("responseDeadlineOneHour") },
+    { value: "24h", label: t("responseDeadlineTwentyFourHours") },
+    { value: "7d", label: t("responseDeadlineSevenDays") },
+    { value: "30d", label: t("responseDeadlineThirtyDays") },
+    { value: "custom", label: t("responseDeadlineCustom") },
   ];
 
   return (
@@ -69,23 +75,34 @@ export function InfoStep({
 
         <label className="composer-info-intro">
           <span>{t("description")}</span>
-          <RichTextEditor
-            value={description}
-            onChange={setDescription}
-            placeholder={t("builderDescriptionPlaceholder")}
-          />
+          <Suspense
+            fallback={
+              <textarea
+                value={description}
+                onChange={(event) => setDescription(event.target.value)}
+                placeholder={t("builderDescriptionPlaceholder")}
+                rows={6}
+              />
+            }
+          >
+            <RichTextEditor
+              value={description}
+              onChange={setDescription}
+              placeholder={t("builderDescriptionPlaceholder")}
+            />
+          </Suspense>
         </label>
 
         <section className="composer-deadline-card">
           <div className="section-row">
             <div>
-              <span>回答期限</span>
-              <p className="muted">期限後は新しい回答を送信できません</p>
-              <p className="muted">管理者は期限後も回答済みデータを確認できます</p>
+              <span>{t("responseDeadlineTitle")}</span>
+              <p className="muted">{t("responseDeadlineHelp")}</p>
+              <p className="muted">{t("responseDeadlineAdminHelp")}</p>
             </div>
           </div>
 
-          <div className="composer-deadline-options" role="radiogroup" aria-label="回答期限">
+          <div className="composer-deadline-options" role="radiogroup" aria-label={t("responseDeadlineTitle")}>
             {deadlineOptions.map((option) => (
               <label key={option.value} className="composer-deadline-option">
                 <input
@@ -107,7 +124,7 @@ export function InfoStep({
 
           {responseDeadlinePreset === "custom" ? (
             <label>
-              <span>期限日時</span>
+              <span>{t("responseDeadlineCustomAt")}</span>
               <input
                 type="datetime-local"
                 value={responseDeadlineCustomAt}

@@ -1,8 +1,9 @@
 import { lazy, Suspense, type ReactNode } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import { AppShell } from "./components/AppShell";
+import { WalrusRuntimeSurface } from "./components/WalrusRuntimeSurface";
+import { REQUIRE_GLOBAL_WALRUS_RUNTIME } from "./lib/runtimeFlags";
 import { LandingPage } from "./pages/LandingPage";
-import { REQUIRE_GLOBAL_WALRUS_RUNTIME, WalrusRuntimeProvider } from "./providers";
 
 const AccessManagementPage = lazy(() =>
   import("./pages/AccessManagementPage").then((module) => ({
@@ -54,7 +55,7 @@ function WithWalrusRuntime({ children }: { children: ReactNode }) {
   if (REQUIRE_GLOBAL_WALRUS_RUNTIME) {
     return <>{children}</>;
   }
-  return <WalrusRuntimeProvider>{children}</WalrusRuntimeProvider>;
+  return <WalrusRuntimeSurface>{children}</WalrusRuntimeSurface>;
 }
 
 function RouteFallback() {

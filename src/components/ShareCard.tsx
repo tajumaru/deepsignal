@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from "react";
-import QRCode from "qrcode";
 import { useI18n } from "../i18n";
 import { getPublicFormPath } from "../lib/publicLinks";
 import { formatDate } from "../lib/utils";
@@ -31,19 +30,23 @@ export function ShareCard({ formId, blobId, createdAt, manifestBlobId }: ShareCa
 
   useEffect(() => {
     let cancelled = false;
-    void QRCode.toString(absoluteUrl, {
-      type: "svg",
-      margin: 1,
-      width: 256,
-      color: {
-        dark: "#04131e",
-        light: "#ffffff",
-      },
-    }).then((svg: string) => {
-      if (!cancelled) {
-        setQrMarkup(svg);
-      }
-    });
+    void import("qrcode")
+      .then(({ default: QRCode }) =>
+        QRCode.toString(absoluteUrl, {
+          type: "svg",
+          margin: 1,
+          width: 256,
+          color: {
+            dark: "#04131e",
+            light: "#ffffff",
+          },
+        }),
+      )
+      .then((svg: string) => {
+        if (!cancelled) {
+          setQrMarkup(svg);
+        }
+      });
     return () => {
       cancelled = true;
     };

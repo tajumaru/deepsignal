@@ -1,7 +1,6 @@
 ﻿import {
   useCurrentAccount,
   useSignAndExecuteTransaction,
-  useSignPersonalMessage,
   useSuiClient,
 } from "@mysten/dapp-kit";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -16,36 +15,23 @@ import { ShareCard } from "../components/ShareCard";
 import { SignalClusterPanel } from "../components/SignalClusterPanel";
 import { SignalMetaChip, SignalMetaRow } from "../components/SignalMetaChip";
 import { getSealRuntimeStatus } from "../crypto/cryptoFactory";
-import { getAttachmentDownloadHref, useAttachmentPreviews } from "../hooks/useAttachmentPreviews";
+import { usePrivateSignalDecrypt } from "../features/admin/hooks/usePrivateSignalDecrypt";
+import { useProjectWorkspace } from "../features/admin/hooks/useProjectWorkspace";
 import {
-  REAL_SEAL_SESSION_TTL_MIN,
-  SEAL_ADMIN_WALLET_REQUIRED_MESSAGE,
-  SEAL_PERMISSION_DENIED_MESSAGE,
-  SEAL_WALLET_CANCELLED_MESSAGE,
-} from "../crypto/sealPayload";
+  useSignalInboxData,
+  type SignalRecord,
+  type StreamId,
+} from "../features/admin/hooks/useSignalInboxData";
+import { getAttachmentDownloadHref, useAttachmentPreviews } from "../hooks/useAttachmentPreviews";
 import { useAccessControl } from "../hooks/useAccessControl";
-import { useProjectRegistry } from "../hooks/useProjectRegistry";
 import { useI18n } from "../i18n";
 import {
   createMetadataDigest,
-  createProject,
-  deleteFormOnChain,
-  deleteProject,
-  getSelectedProjectId,
-  isProjectObjectType,
-  isProjectOwnerCapType,
-  parseProjectIdFromOwnerCapFields,
-  parseSuiObjectData,
-  parseProjectSummary,
   registerSignalReceipt,
-  removeRecentProject,
-  saveRecentProject,
-  setSelectedProjectId,
 } from "../lib/projectRegistry";
 import {
   canAdmin,
   canReview,
-  canReviewForm,
   getAdminSurfaceAccessState,
   getRoleLabel,
 } from "../lib/adminAccess";
@@ -60,60 +46,21 @@ import {
   getSignalSubject,
   getStorageBadgeLabel,
   getWalletAccessLabel,
-  inferSignalCategory,
   isLocalFallbackBlob,
-  type SignalCategory,
 } from "../lib/signalInbox";
 import {
-  normalizeForm,
   normalizeSubmission,
-  resolveSubmissionAnswers,
   storageAdapter,
 } from "../lib/storage";
-import { formatDate, flattenAnswer } from "../lib/utils";
+import { flattenAnswer, formatDate } from "../lib/utils";
 import { getStorageRuntimeStatus } from "../storage/storageFactory";
 import type { FormSchema, Submission } from "../types";
-
-interface FormWithCount extends FormSchema {
-  submissionCount: number;
-}
-
-type StreamId =
-  | "all"
-  | "unread"
-  | "encrypted"
-  | "high"
-  | "pending_sui"
-  | "bug"
-  | "feature"
-  | "archived";
-
-interface SignalRecord {
-  form: FormWithCount;
-  submission: Submission;
-  category: SignalCategory;
-  searchText: string;
-}
-
-function getDecryptStatusMessage(
-  status: "waiting_wallet_approval" | "decrypting_private_signal" | "finishing",
-) {
-  switch (status) {
-    case "waiting_wallet_approval":
-      return "Waiting for wallet approval...";
-    case "decrypting_private_signal":
-      return "Decrypting private signal...";
-    case "finishing":
-      return "Finishing...";
-  }
-}
 
 const ROADMAP_READY_STATUSES = new Set<Submission["triageStatus"]>([
   "planned",
   "in_progress",
   "fixed",
 ]);
-const ADMIN_SUBMISSION_BATCH_SIZE = 4;
 
 function isAttachmentFieldType(type: FormSchema["fields"][number]["type"]) {
   return type === "screenshot" || type === "video";
@@ -127,71 +74,18 @@ function formatAccessLabel(roleLabel: string) {
   return `${roleLabel} access`;
 }
 
-function getFriendlyDecryptError(message: string) {
-  if (message === SEAL_ADMIN_WALLET_REQUIRED_MESSAGE) {
-    return "Connect an authorized reviewer wallet to decrypt this private signal.";
-  }
-  if (message === SEAL_PERMISSION_DENIED_MESSAGE) {
-    return "This wallet is not authorized for this project.";
-  }
-  if (message === SEAL_WALLET_CANCELLED_MESSAGE) {
-    return "Wallet approval was cancelled.";
-  }
-  return message;
-}
-
-function matchesStream(record: SignalRecord, streamId: StreamId) {
-  switch (streamId) {
-    case "unread":
-      return record.submission.status === "unread";
-    case "encrypted":
-      return record.submission.isEncrypted;
-    case "high":
-      return record.submission.priority === "high";
-    case "pending_sui":
-      return Boolean(record.submission.pendingOnchainRegistration);
-    case "bug":
-      return record.category === "Bug";
-    case "feature":
-      return record.category === "Feature";
-    case "archived":
-      return record.submission.status === "archived";
-    default:
-      return true;
-  }
-}
-
 export function AdminDashboardPage() {
   const { t } = useI18n();
   const account = useCurrentAccount();
   const suiClient = useSuiClient();
-  const signPersonalMessage = useSignPersonalMessage();
   const {
     capabilityProfile,
     isPending: isLoadingCapabilities,
     isLoadingAccess,
   } = useAccessControl(account?.address);
-  const { projects, refetch: refetchProjects } = useProjectRegistry(account?.address);
-  const createProjectTx = useSignAndExecuteTransaction();
-  const deleteProjectTx = useSignAndExecuteTransaction();
-  const deleteOnchainFormTx = useSignAndExecuteTransaction();
   const registerSignalReceiptTx = useSignAndExecuteTransaction();
   const sealRuntime = getSealRuntimeStatus();
   const storageRuntime = getStorageRuntimeStatus();
-  const [forms, setForms] = useState<FormWithCount[]>([]);
-  const [submissionsByFormId, setSubmissionsByFormId] = useState<Record<string, Submission[]>>({});
-  const [loading, setLoading] = useState(true);
-  const [, setSubmissionsLoading] = useState(false);
-  const [loadError, setLoadError] = useState("");
-  const [selectedFormId, setSelectedFormId] = useState("all");
-  const [selectedStreamId, setSelectedStreamId] = useState<StreamId>("all");
-  const [selectedSignalId, setSelectedSignalId] = useState("");
-  const [search, setSearch] = useState("");
-  const [detailAnswers, setDetailAnswers] = useState<Record<string, unknown> | null>(null);
-  const [detailAttachments, setDetailAttachments] = useState<Submission["attachments"]>([]);
-  const [decrypting, setDecrypting] = useState(false);
-  const [decryptStatusMessage, setDecryptStatusMessage] = useState("");
-  const [decryptError, setDecryptError] = useState("");
   const [saving, setSaving] = useState(false);
   const [notesDraft, setNotesDraft] = useState("");
   const [draftTag, setDraftTag] = useState("");
@@ -203,35 +97,83 @@ export function AdminDashboardPage() {
   const [beaconFormId, setBeaconFormId] = useState<string | null>(null);
   const [nodeSearch, setNodeSearch] = useState("");
   const [toast, setToast] = useState<{ tone: "success" | "error"; message: string } | null>(null);
-  const [selectedProjectId, setSelectedProjectIdState] = useState(() => getSelectedProjectId());
-  const [manualProjectId, setManualProjectId] = useState("");
-  const [projectCreateName, setProjectCreateName] = useState("");
-  const [projectState, setProjectState] = useState("");
-  const [deletingProject, setDeletingProject] = useState(false);
   const [selectedPendingSignalIds, setSelectedPendingSignalIds] = useState<string[]>([]);
   const [registeringSignalIds, setRegisteringSignalIds] = useState<string[]>([]);
-  const [deletingOnchainFormIds, setDeletingOnchainFormIds] = useState<number[]>([]);
   const saveQueueRef = useRef(Promise.resolve());
-  const loadConsoleRunRef = useRef(0);
-  const decryptInFlightRef = useRef(false);
-  const decryptRequestIdRef = useRef(0);
-  const activeDecryptRequestRef = useRef<{ requestId: number; submissionId: string } | null>(null);
-  const selectedSignalIdRef = useRef(selectedSignalId);
-  const previousSelectedRecordIdRef = useRef<string | null>(null);
-  const advancedProjectSettingsRef = useRef<HTMLDetailsElement | null>(null);
-  const manualProjectInputRef = useRef<HTMLInputElement | null>(null);
-  const projectCreateInputRef = useRef<HTMLInputElement | null>(null);
   const hasAdminAccess = canAdmin(capabilityProfile);
-  useEffect(() => {
-    selectedSignalIdRef.current = selectedSignalId;
-  }, [selectedSignalId]);
-
-  const selectedProject = projects.find((project) => project.objectId === selectedProjectId) ?? null;
-  const projectMemberCount = selectedProject ? selectedProject.admins.length + 1 : 0;
-  const localProjectFormsCount = useMemo(
-    () => forms.filter((form) => form.projectId === selectedProject?.objectId).length,
-    [forms, selectedProject?.objectId],
-  );
+  const {
+    forms,
+    loading,
+    loadError,
+    selectedFormId,
+    setSelectedFormId,
+    selectedStreamId,
+    setSelectedStreamId,
+    selectedSignalId,
+    setSelectedSignalId,
+    search,
+    setSearch,
+    loadConsole,
+    accessibleForms,
+    signalIndex,
+    allSignals,
+    pendingSignals,
+    visibleSignals,
+    selectedRecord,
+    applySubmissionUpdate,
+  } = useSignalInboxData({
+    accountAddress: account?.address,
+    capabilityProfile,
+  });
+  const {
+    projects,
+    selectedProjectId,
+    selectProject,
+    selectedProject,
+    localProjectFormsCount,
+    projectMemberCount,
+    manualProjectId,
+    setManualProjectId,
+    projectCreateName,
+    setProjectCreateName,
+    isCreatingProject,
+    projectState,
+    deletingProject,
+    deletingOnchainFormIds,
+    advancedProjectSettingsRef,
+    manualProjectInputRef,
+    projectCreateInputRef,
+    deleteProjectBlockedReason,
+    visibleOnchainForms,
+    connectManualProject,
+    revealProjectTools,
+    handleCreateProject,
+    handleDeleteProject,
+    handleDeleteOnchainForm,
+  } = useProjectWorkspace({
+    accountAddress: account?.address,
+    capabilityProfile,
+    forms,
+    loadConsole,
+  });
+  const {
+    detailAnswers,
+    detailAttachments,
+    decrypting,
+    decryptStatusMessage,
+    decryptError,
+    setDecryptError,
+    decryptInFlightRef,
+    decryptContext: attachmentDecryptContext,
+    handleDecrypt,
+    realSealSessionTtlMinutes,
+  } = usePrivateSignalDecrypt({
+    accountAddress: account?.address,
+    selectedRecord,
+    selectedSignalId,
+    setToast,
+    decryptFailedLabel: t("decryptFailed"),
+  });
   const roleLabel = getRoleLabel(capabilityProfile);
   const accessState = getAdminSurfaceAccessState(
     "reviewer",
@@ -242,271 +184,12 @@ export function AdminDashboardPage() {
     sealRuntime.activeMode === "mock" ? "Private review ready" : "Private review enabled";
 
   useEffect(() => {
-    void loadConsole();
-  }, []);
-
-  useEffect(() => {
     if (!toast) {
       return;
     }
     const timer = window.setTimeout(() => setToast(null), 3200);
     return () => window.clearTimeout(timer);
   }, [toast]);
-
-  useEffect(() => {
-    if (selectedProjectId) {
-      setSelectedProjectId(selectedProjectId);
-      return;
-    }
-    if (projects[0]?.objectId) {
-      setSelectedProjectIdState(projects[0].objectId);
-      setSelectedProjectId(projects[0].objectId);
-    }
-  }, [projects, selectedProjectId]);
-
-  async function hydrateProject(projectId: string) {
-    const response = await suiClient.getObject({
-      id: projectId,
-      options: {
-        showType: true,
-        showContent: true,
-      },
-    });
-    const parsed = parseSuiObjectData(response);
-    if (!parsed) {
-      throw new Error("Project object was not found on Sui.");
-    }
-
-    if (isProjectOwnerCapType(parsed.type)) {
-      const linkedProjectId = parseProjectIdFromOwnerCapFields(parsed.fields);
-      if (!linkedProjectId) {
-        throw new Error("Project owner cap is missing its linked project id.");
-      }
-      return hydrateProject(linkedProjectId);
-    }
-
-    if (!isProjectObjectType(parsed.type)) {
-      throw new Error("That object is not a DeepSignal project or project owner cap.");
-    }
-
-    const summary = parseProjectSummary(parsed.objectId, parsed.fields);
-    if (!summary) {
-      throw new Error("Project exists on Sui, but its fields could not be parsed.");
-    }
-    saveRecentProject(summary);
-    return summary;
-  }
-
-  async function connectManualProject() {
-    const nextProjectId = manualProjectId.trim();
-    if (!nextProjectId) {
-      setProjectState("Enter a project object id.");
-      return;
-    }
-    try {
-      setProjectState("Loading project...");
-      const project = await hydrateProject(nextProjectId);
-      await refetchProjects();
-      setSelectedProjectIdState(project.objectId);
-      setSelectedProjectId(project.objectId);
-      setManualProjectId("");
-      setProjectState(`Connected to ${project.name}.`);
-    } catch (projectError) {
-      setProjectState(projectError instanceof Error ? projectError.message : "Failed to load project.");
-    }
-  }
-
-  function revealProjectTools(mode: "connect" | "create") {
-    const details = advancedProjectSettingsRef.current;
-    if (details && !details.open) {
-      details.open = true;
-    }
-    details?.scrollIntoView({ behavior: "smooth", block: "start" });
-    window.setTimeout(() => {
-      if (mode === "create") {
-        projectCreateInputRef.current?.focus();
-        return;
-      }
-      manualProjectInputRef.current?.focus();
-    }, 160);
-  }
-
-  async function handleCreateProject() {
-    if (!hasAdminAccess) {
-      setProjectState("OwnerCap or AdminCap is required to create a project.");
-      return;
-    }
-
-    const role = capabilityProfile.ownerCapIds[0] ? "owner" : "admin";
-    const capId = capabilityProfile.ownerCapIds[0] ?? capabilityProfile.adminCapIds[0] ?? "";
-    if (!capId) {
-      setProjectState("No active OwnerCap or AdminCap object was found in the connected wallet.");
-      return;
-    }
-    if (!projectCreateName.trim()) {
-      setProjectState("Enter a project name.");
-      return;
-    }
-
-    try {
-      setProjectState("Awaiting wallet approval...");
-      const tx = createProject({
-        name: projectCreateName.trim(),
-        capId,
-        role,
-        recipientAddress: account?.address ?? "",
-      });
-      const result = await createProjectTx.mutateAsync({ transaction: tx });
-      const confirmed = await suiClient.waitForTransaction({
-        digest: result.digest,
-        options: {
-          showEvents: true,
-        },
-      });
-      const projectCreatedEvent = (confirmed.events ?? []).find((event) =>
-        String(event.type ?? "").endsWith("::ProjectCreated"),
-      );
-      const projectId = String((projectCreatedEvent?.parsedJson as { project_id?: string } | undefined)?.project_id ?? "");
-      if (!projectId) {
-        throw new Error("Project was created, but the new project id could not be resolved.");
-      }
-      const project = await hydrateProject(projectId);
-      await refetchProjects();
-      setSelectedProjectIdState(project.objectId);
-      setSelectedProjectId(project.objectId);
-      setProjectCreateName("");
-      setProjectState(`Project ${project.name} is ready.`);
-    } catch (projectError) {
-      setProjectState(projectError instanceof Error ? projectError.message : "Failed to create project.");
-    }
-  }
-
-  async function handleDeleteProject() {
-    if (!selectedProject) {
-      setProjectState("Select a project first.");
-      return;
-    }
-    if (!selectedProject.ownedOwnerCapId) {
-      setProjectState("Only the project owner wallet can delete this project.");
-      return;
-    }
-    if (selectedProject.formsCount > 0 || selectedProject.signalsCount > 0 || localProjectFormsCount > 0) {
-      setProjectState(
-        "Only empty projects can be deleted. Remove linked forms and signals first so public routes and local fallback data do not become orphaned.",
-      );
-      return;
-    }
-    if (
-      !window.confirm(
-        `Delete project ${selectedProject.name}? This removes the on-chain project object and cannot be undone.`,
-      )
-    ) {
-      return;
-    }
-
-    try {
-      setDeletingProject(true);
-      setProjectState("Awaiting wallet approval...");
-      const tx = deleteProject({
-        projectId: selectedProject.objectId,
-        ownerCapId: selectedProject.ownedOwnerCapId,
-      });
-      const result = await deleteProjectTx.mutateAsync({ transaction: tx });
-      await suiClient.waitForTransaction({ digest: result.digest });
-      removeRecentProject(selectedProject.objectId);
-      setSelectedProjectIdState("");
-      setSelectedProjectId("");
-      await refetchProjects();
-      setProjectState(`Project ${selectedProject.name} was deleted.`);
-    } catch (projectError) {
-      setProjectState(projectError instanceof Error ? projectError.message : "Failed to delete project.");
-    } finally {
-      setDeletingProject(false);
-    }
-  }
-
-  async function loadConsole(preferredSignalId?: string) {
-    const runId = loadConsoleRunRef.current + 1;
-    loadConsoleRunRef.current = runId;
-    setLoading(true);
-    setSubmissionsLoading(false);
-    setLoadError("");
-    try {
-      const allForms = await storageAdapter.listForms();
-      if (runId !== loadConsoleRunRef.current) {
-        return;
-      }
-
-      const nextForms = allForms.map((form) => ({ ...normalizeForm(form), submissionCount: 0 }));
-      setForms(nextForms);
-      setSubmissionsByFormId({});
-      setSelectedSignalId((current) => preferredSignalId ?? current);
-      setLoading(false);
-
-      if (nextForms.length === 0) {
-        return;
-      }
-
-      setSubmissionsLoading(true);
-      const nextSubmissions: Record<string, Submission[]> = {};
-
-      for (let index = 0; index < nextForms.length; index += ADMIN_SUBMISSION_BATCH_SIZE) {
-        const formBatch = nextForms.slice(index, index + ADMIN_SUBMISSION_BATCH_SIZE);
-        const batchResults = await Promise.all(
-          formBatch.map(async (form) => {
-            try {
-              const raw = await storageAdapter.listSubmissions(form.id);
-              return {
-                formId: form.id,
-                submissions: raw.map((submission) => normalizeSubmission(submission)),
-              };
-            } catch (error) {
-              console.error(`Failed to load submissions for form ${form.id}`, error);
-              return {
-                formId: form.id,
-                submissions: [] as Submission[],
-              };
-            }
-          }),
-        );
-
-        if (runId !== loadConsoleRunRef.current) {
-          return;
-        }
-
-        batchResults.forEach((result) => {
-          nextSubmissions[result.formId] = result.submissions;
-        });
-
-        setSubmissionsByFormId((current) => ({
-          ...current,
-          ...Object.fromEntries(batchResults.map((result) => [result.formId, result.submissions])),
-        }));
-        setForms((current) =>
-          current.map((form) => {
-            const loaded = nextSubmissions[form.id];
-            return loaded
-              ? { ...form, submissionCount: loaded.length }
-              : form;
-          }),
-        );
-      }
-    } catch (error) {
-      console.error("Failed to load admin console", error);
-      setForms([]);
-      setSubmissionsByFormId({});
-      setLoadError(
-        error instanceof Error
-          ? `Failed to load Research Lab: ${error.message}`
-          : "Failed to load Research Lab.",
-      );
-    } finally {
-      if (runId === loadConsoleRunRef.current) {
-        setSubmissionsLoading(false);
-      }
-      setLoading(false);
-    }
-  }
 
   async function handleDelete(formId: string) {
     if (!window.confirm(t("deleteFormConfirm"))) {
@@ -567,99 +250,6 @@ export function AdminDashboardPage() {
     return () => window.removeEventListener("keydown", handleEscape);
   }, [beaconFormId, nodeDirectoryOpen]);
 
-  const accessibleForms = useMemo(
-    () =>
-      forms.filter((form) => canReviewForm(form, account?.address, capabilityProfile)),
-    [account?.address, capabilityProfile, forms],
-  );
-
-  useEffect(() => {
-    if (selectedFormId === "all") {
-      return;
-    }
-    if (!accessibleForms.some((form) => form.id === selectedFormId)) {
-      setSelectedFormId("all");
-    }
-  }, [accessibleForms, selectedFormId]);
-
-  const signalIndex = useMemo(() => {
-    const signals: SignalRecord[] = [];
-    const signalById: Record<string, SignalRecord | undefined> = {};
-    const counts = {
-      unread: 0,
-      encrypted: 0,
-      high: 0,
-      pendingSui: 0,
-      archived: 0,
-    };
-    const unreadCountByFormId: Record<string, number> = {};
-    const clusterCountById: Record<string, number> = {};
-    const pendingSignalIdSet = new Set<string>();
-
-    for (const form of accessibleForms) {
-      let unreadCount = 0;
-      const submissions = submissionsByFormId[form.id] ?? [];
-
-      for (const submission of submissions) {
-        const category = inferSignalCategory(submission);
-        const record = {
-          form,
-          submission,
-          category,
-          searchText: [
-            form.title,
-            getSignalSubject(submission),
-            getSignalPreview(submission),
-            flattenAnswer(submission.answers),
-            submission.tags.join(" "),
-            category,
-          ]
-            .join(" ")
-            .toLowerCase(),
-        } satisfies SignalRecord;
-
-        signals.push(record);
-        signalById[submission.id] = record;
-
-        if (submission.status === "unread") {
-          unreadCount += 1;
-          counts.unread += 1;
-        }
-        if (submission.isEncrypted) {
-          counts.encrypted += 1;
-        }
-        if (submission.priority === "high") {
-          counts.high += 1;
-        }
-        if (submission.pendingOnchainRegistration) {
-          counts.pendingSui += 1;
-          pendingSignalIdSet.add(submission.id);
-        }
-        if (submission.status === "archived") {
-          counts.archived += 1;
-        }
-        if (submission.clusterId) {
-          clusterCountById[submission.clusterId] = (clusterCountById[submission.clusterId] ?? 0) + 1;
-        }
-      }
-
-      unreadCountByFormId[form.id] = unreadCount;
-    }
-
-    return {
-      signals,
-      signalById,
-      counts,
-      unreadCountByFormId,
-      clusterCountById,
-      pendingSignalIdSet,
-    };
-  }, [accessibleForms, submissionsByFormId]);
-  const allSignals = signalIndex.signals;
-  const pendingSignals = useMemo(
-    () => allSignals.filter((record) => record.submission.pendingOnchainRegistration),
-    [allSignals],
-  );
   const selectedProjectForms = useMemo(
     () =>
       selectedProject
@@ -681,40 +271,6 @@ export function AdminDashboardPage() {
       ),
     );
   }, [signalIndex]);
-
-  const visibleSignals = useMemo(() => {
-    const normalizedSearch = search.trim().toLowerCase();
-    return allSignals.filter((record) => {
-      if (selectedFormId !== "all" && record.form.id !== selectedFormId) {
-        return false;
-      }
-      if (!matchesStream(record, selectedStreamId)) {
-        return false;
-      }
-      if (!normalizedSearch) {
-        return true;
-      }
-      return record.searchText.includes(normalizedSearch);
-    });
-  }, [allSignals, search, selectedFormId, selectedStreamId]);
-
-  const selectedRecord =
-    visibleSignals.find((record) => record.submission.id === selectedSignalId) ??
-    signalIndex.signalById[selectedSignalId] ??
-    visibleSignals[0] ??
-    null;
-  const attachmentDecryptContext = useMemo(
-    () => ({
-      walletAddress: account?.address,
-      projectId: selectedRecord?.form.projectId,
-      suiClient,
-      signPersonalMessage: async (message: Uint8Array) => {
-        const result = await signPersonalMessage.mutateAsync({ message });
-        return result.signature;
-      },
-    }),
-    [account?.address, selectedRecord?.form.projectId, signPersonalMessage, suiClient],
-  );
   const attachmentPreviews = useAttachmentPreviews(detailAttachments, {
     enabled:
       detailAttachments.length > 0 &&
@@ -949,18 +505,6 @@ export function AdminDashboardPage() {
                 detail: "You can refine notes, tags, or roadmap status, but no urgent action is required right now.",
                 cta: selectedRoadmapUrl ? <Link className="ghost-button" to={selectedRoadmapUrl}>Open Public Roadmap</Link> : null,
               };
-  const deleteProjectBlockedReason = !selectedProject
-    ? ""
-    : !selectedProject.ownedOwnerCapId
-      ? "This wallet is not holding the project owner capability."
-      : selectedProject.formsCount > 0
-        ? `This project still has ${selectedProject.formsCount} on-chain form record${selectedProject.formsCount === 1 ? "" : "s"}.`
-        : selectedProject.signalsCount > 0
-          ? `This project still has ${selectedProject.signalsCount} on-chain signal${selectedProject.signalsCount === 1 ? "" : "s"}.`
-          : localProjectFormsCount > 0
-            ? `This workspace still has ${localProjectFormsCount} local form${localProjectFormsCount === 1 ? "" : "s"} linked to the project.`
-            : "";
-  const visibleOnchainForms = selectedProject?.onchainForms ?? [];
   const firstProjectForm = selectedProjectForms[0] ?? null;
   const firstProtectedSignal = selectedProjectSignals.find((record) => record.submission.isEncrypted) ?? null;
   const nextRecommendedAction =
@@ -1059,46 +603,19 @@ export function AdminDashboardPage() {
 
   useEffect(() => {
     if (!selectedRecord) {
-      setDetailAnswers(null);
-      setDetailAttachments([]);
       setNotesDraft("");
       setDraftTag("");
       setShowMetadata(false);
       setShowEncryptedSignal(false);
       setDecryptError("");
-      if (!decryptInFlightRef.current) {
-        setDecryptStatusMessage("");
-      }
-      previousSelectedRecordIdRef.current = null;
       return;
     }
-    const previousSelectedRecordId = previousSelectedRecordIdRef.current;
-    const didSelectionChange = previousSelectedRecordId !== selectedRecord.submission.id;
-    previousSelectedRecordIdRef.current = selectedRecord.submission.id;
     setNotesDraft(selectedRecord.submission.notes);
     setDraftTag("");
-    if (didSelectionChange) {
-      setDetailAnswers(
-        selectedRecord.submission.isEncrypted ? null : selectedRecord.submission.answers,
-      );
-      setDetailAttachments(selectedRecord.submission.attachments ?? []);
-      setDecryptError("");
-      if (!decryptInFlightRef.current) {
-        setDecryptStatusMessage("");
-      }
-    }
+    setDecryptError("");
     setShowMetadata(false);
     setShowEncryptedSignal(false);
-  }, [selectedRecord]);
-
-  function applySubmissionUpdate(nextSubmission: Submission) {
-    setSubmissionsByFormId((current) => ({
-      ...current,
-      [nextSubmission.formId]: (current[nextSubmission.formId] ?? []).map((submission) =>
-        submission.id === nextSubmission.id ? nextSubmission : submission,
-      ),
-    }));
-  }
+  }, [selectedRecord, setDecryptError]);
 
   async function updateSubmission(nextSubmission: Submission) {
     const normalized = normalizeSubmission({
@@ -1117,38 +634,6 @@ export function AdminDashboardPage() {
     };
     saveQueueRef.current = saveQueueRef.current.then(runSave, runSave);
     await saveQueueRef.current;
-  }
-
-  async function handleDeleteOnchainForm(formId: number) {
-    if (!selectedProject) {
-      setProjectState("Select a project first.");
-      return;
-    }
-    if (selectedProject.signalsCount > 0) {
-      setProjectState("This project still has on-chain signals. Forms with linked signals cannot be deleted.");
-      return;
-    }
-    if (!window.confirm(`Delete on-chain form ${formId} from ${selectedProject.name}?`)) {
-      return;
-    }
-
-    try {
-      setDeletingOnchainFormIds((current) => [...current, formId]);
-      setProjectState("Awaiting wallet approval...");
-      const tx = deleteFormOnChain({
-        projectId: selectedProject.objectId,
-        formId,
-      });
-      const result = await deleteOnchainFormTx.mutateAsync({ transaction: tx });
-      await suiClient.waitForTransaction({ digest: result.digest });
-      await refetchProjects();
-      await loadConsole();
-      setProjectState(`Removed on-chain form ${formId}.`);
-    } catch (projectError) {
-      setProjectState(projectError instanceof Error ? projectError.message : "Failed to delete on-chain form.");
-    } finally {
-      setDeletingOnchainFormIds((current) => current.filter((entry) => entry !== formId));
-    }
   }
 
   function isRegisteringSignal(signalId: string) {
@@ -1277,73 +762,6 @@ export function AdminDashboardPage() {
       tone: "success",
       message: `Registered ${successes.length} pending signal${successes.length === 1 ? "" : "s"} on Sui.`,
     });
-  }
-
-  async function handleDecrypt() {
-    if (!selectedRecord || decryptInFlightRef.current) {
-      return;
-    }
-    const requestId = decryptRequestIdRef.current + 1;
-    decryptRequestIdRef.current = requestId;
-    const submissionId = selectedRecord.submission.id;
-    decryptInFlightRef.current = true;
-    activeDecryptRequestRef.current = { requestId, submissionId };
-    setDecrypting(true);
-    setDecryptStatusMessage("Waiting for wallet approval...");
-    setDecryptError("");
-    try {
-      const resolved = await resolveSubmissionAnswers(
-        selectedRecord.form,
-        selectedRecord.submission,
-        undefined,
-        {
-          walletAddress: account?.address,
-          projectId: selectedRecord.form.projectId,
-          suiClient,
-          signPersonalMessage: async (message) => {
-            const result = await signPersonalMessage.mutateAsync({ message });
-            return result.signature;
-          },
-          onStatusChange: (status) => {
-            const activeRequest = activeDecryptRequestRef.current;
-            if (
-              activeRequest?.requestId !== requestId ||
-              activeRequest.submissionId !== submissionId
-            ) {
-              return;
-            }
-            setDecryptStatusMessage(getDecryptStatusMessage(status));
-          },
-        },
-      );
-      const isLatestRequest =
-        activeDecryptRequestRef.current?.requestId === requestId &&
-        activeDecryptRequestRef.current?.submissionId === submissionId;
-      if (resolved && isLatestRequest && selectedSignalIdRef.current === submissionId) {
-        setDetailAnswers(resolved.answers);
-        setDetailAttachments(resolved.attachments);
-        setToast({ tone: "success", message: "Wallet verified. Private signal unlocked." });
-      }
-    } catch (error) {
-      const isLatestRequest =
-        activeDecryptRequestRef.current?.requestId === requestId &&
-        activeDecryptRequestRef.current?.submissionId === submissionId;
-      if (isLatestRequest && selectedSignalIdRef.current === submissionId) {
-        setDecryptError(
-          error instanceof Error ? getFriendlyDecryptError(error.message) : t("decryptFailed"),
-        );
-      }
-    } finally {
-      const isLatestRequest =
-        activeDecryptRequestRef.current?.requestId === requestId &&
-        activeDecryptRequestRef.current?.submissionId === submissionId;
-      if (isLatestRequest) {
-        activeDecryptRequestRef.current = null;
-      }
-      decryptInFlightRef.current = false;
-      setDecrypting(false);
-      setDecryptStatusMessage("");
-    }
   }
 
   async function handleMoveToRoadmap() {
@@ -1563,8 +981,7 @@ export function AdminDashboardPage() {
                   className="project-selector-field"
                   value={selectedProjectId}
                   onChange={(event) => {
-                    setSelectedProjectIdState(event.target.value);
-                    setSelectedProjectId(event.target.value);
+                    selectProject(event.target.value);
                   }}
                 >
                   <option value="">Choose a project</option>
@@ -1645,9 +1062,9 @@ export function AdminDashboardPage() {
                       type="button"
                       className="primary-button"
                       onClick={() => void handleCreateProject()}
-                      disabled={createProjectTx.isPending}
+                      disabled={isCreatingProject}
                     >
-                      {createProjectTx.isPending ? "Creating..." : "Create Project"}
+                      {isCreatingProject ? "Creating..." : "Create Project"}
                     </button>
                   </div>
                 </article>
@@ -2128,7 +1545,7 @@ export function AdminDashboardPage() {
                       <p className="muted">
                         {sealRuntime.activeMode === "mock"
                           ? `${t("demoDecryptAvailable")} Mock mode only.`
-                          : t("walletApprovalReuseNotice", { minutes: REAL_SEAL_SESSION_TTL_MIN })}
+                          : t("walletApprovalReuseNotice", { minutes: realSealSessionTtlMinutes })}
                       </p>
                       {decryptStatusMessage ? (
                         <p className="muted" role="status" aria-live="polite">{decryptStatusMessage}</p>

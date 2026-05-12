@@ -8,10 +8,9 @@ import {
 import type { WalletWithRequiredFeatures } from "@mysten/wallet-standard";
 import { getJsonRpcFullnodeUrl } from "@mysten/sui/jsonRpc";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { REQUIRE_GLOBAL_WALRUS_RUNTIME } from "./lib/runtimeFlags";
 import { SUI_FULLNODE_URL, SUI_NETWORK } from "./lib/sui";
 
-export const REQUIRE_GLOBAL_WALRUS_RUNTIME =
-  String(import.meta.env.VITE_REQUIRE_WALRUS || "").toLowerCase() === "true";
 const LazyWalrusRuntimeBridge = lazy(() => import("./walrusRuntimeBridge"));
 const PREFERRED_WALLETS = ["Sui Wallet", "Slush", "Phantom", "OKX Wallet"];
 
@@ -49,7 +48,7 @@ export function WalrusRuntimeProvider({ children }: PropsWithChildren) {
   );
 }
 
-export function Providers({ children }: PropsWithChildren) {
+export function WalletProviders({ children }: PropsWithChildren) {
   const [queryClient] = useState(() => new QueryClient());
 
   return (

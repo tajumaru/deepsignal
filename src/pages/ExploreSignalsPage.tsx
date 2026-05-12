@@ -15,6 +15,13 @@ type ExploreCard = {
   roadmapCount: number;
 };
 
+type HiddenFormSummary = {
+  id: string;
+  title: string;
+  visibility: FormSchema["visibility"];
+  publicPath: string;
+};
+
 const TABS: Array<{ key: ExploreTabKey; label: string }> = [
   { key: "trending", label: "Trending" },
   { key: "recent", label: "Recent" },
@@ -30,12 +37,20 @@ export function ExploreSignalsPage() {
   const [tab, setTab] = useState<ExploreTabKey>("trending");
   const [category, setCategory] = useState<ExploreCategory>("All");
   const [cards, setCards] = useState<ExploreCard[]>([]);
+  const [hiddenForms, setHiddenForms] = useState<HiddenFormSummary[]>([]);
 
   useEffect(() => {
     async function loadExplore() {
-      const forms = (await storageAdapter.listForms())
-        .map((form) => normalizeForm(form))
-        .filter((form) => isFormPubliclyExplorable(form));
+      const allForms: FormSchema[] = (await storageAdapter.listForms()).map((form) => normalizeForm(form));
+      const forms = allForms.filter((form) => isFormPubliclyExplorable(form));
+      const nextHiddenForms = allForms
+        .filter((form) => !isFormPubliclyExplorable(form))
+        .map((form) => ({
+          id: form.id,
+          title: form.title || "Untitled form",
+          visibility: form.visibility,
+          publicPath: getPublicFormPath(form.id, form.manifestBlobId),
+        }));
 
       const nextCards = await Promise.all(
         forms.map(async (form) => {
@@ -64,6 +79,7 @@ export function ExploreSignalsPage() {
       );
 
       setCards(nextCards);
+      setHiddenForms(nextHiddenForms);
       setLoading(false);
     }
 
@@ -197,6 +213,57 @@ export function ExploreSignalsPage() {
           <p className="eyebrow">No public streams detected</p>
           <h2>Nothing matches the current scan.</h2>
           <p className="muted">Try another query or switch a form to Public Explore from Create Form.</p>
+          {hiddenForms.length > 0 ? (
+            <>
+              <div className="explore-hidden-summary">
+                <span className="signal-chip signal-chip-accent">
+                  {hiddenForms.length} hidden form{hiddenForms.length === 1 ? "" : "s"}
+                </span>
+                <p className="muted">
+                  This browser still has saved forms, but they are currently hidden from Public Explore.
+                </p>
+              </div>
+              <div className="explore-card-grid explore-hidden-grid">
+                {hiddenForms.slice(0, 3).map((form) => (
+                  <article key={form.id} className="panel glow-panel explore-card explore-card-muted">
+                    <div className="explore-card-head">
+                      <div>
+                        <div className="pill-row">
+                          <span className="signal-chip">Hidden</span>
+                          <span className="signal-chip">{form.visibility === "private" ? "Private" : "Unlisted"}</span>
+                          <span className="signal-chip">Saved locally</span>
+                        </div>
+                        <h2>{form.title}</h2>
+                      </div>
+                      <div className="explore-card-count">
+                        <strong>0</strong>
+                        <span>listed</span>
+                      </div>
+                    </div>
+                    <section className="explore-ai-preview explore-muted-panel">
+                      <div className="section-row">
+                        <strong>Visibility note</strong>
+                        <span className="signal-chip">{form.visibility === "private" ? "Admin only" : "Direct link only"}</span>
+                      </div>
+                      <p className="muted">
+                        {form.visibility === "private"
+                          ? "Private forms stay admin-only and never appear in Public Explore."
+                          : "Unlisted forms can be opened directly, but they are excluded from the public directory."}
+                      </p>
+                    </section>
+                    <div className="inline-actions">
+                      <Link className="primary-button" to={form.publicPath}>
+                        Open form directly
+                      </Link>
+                      <Link className="ghost-button" to="/create">
+                        Change visibility
+                      </Link>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </>
+          ) : null}
         </section>
       ) : (
         <section className="explore-card-grid">

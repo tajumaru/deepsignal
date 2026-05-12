@@ -12,6 +12,8 @@ interface PublishFormArgs {
   setPublishBlobId: (blobId: string) => void;
   setPublishStorageMode: (mode: "walrus" | "local") => void;
   setPublishResultNote: (note: string) => void;
+  setPublishActiveStageStatus: (status: string) => void;
+  setPublishActiveStageDetail: (detail: string) => void;
   setProjectState: (value: string) => void;
   shouldContinue: () => boolean;
 }
@@ -23,6 +25,8 @@ export async function publishForm({
   setPublishBlobId,
   setPublishStorageMode,
   setPublishResultNote,
+  setPublishActiveStageStatus,
+  setPublishActiveStageDetail,
   setProjectState,
   shouldContinue,
 }: PublishFormArgs): Promise<PreparedPublishForm | null> {
@@ -59,11 +63,15 @@ export async function publishForm({
     return null;
   }
   setPublishStageIndex(2);
+  setPublishActiveStageStatus("awaiting wallet approval");
+  setPublishActiveStageDetail("Approve the Walrus transaction in your wallet to start the upload.");
 
   const { blobId, manifestBlobId } = await saveFormPromise;
   if (!shouldContinue()) {
     return null;
   }
+  setPublishActiveStageStatus("in progress");
+  setPublishActiveStageDetail("");
 
   await wait(620);
   setPublishStageIndex(3);
@@ -105,6 +113,8 @@ export async function publishForm({
     return null;
   }
 
+  setPublishActiveStageStatus("");
+  setPublishActiveStageDetail("");
   setPublishStageIndex(5);
   return finalPersistedForm;
 }

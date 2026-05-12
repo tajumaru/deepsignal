@@ -56,6 +56,8 @@ const initialOverlayState: PublishOverlayState = {
   blobCopied: false,
   storageMode: "walrus",
   resultNote: "",
+  activeStageStatus: "",
+  activeStageDetail: "",
 };
 
 const REAL_SEAL_PROJECT_REQUIRED_MESSAGE =
@@ -254,6 +256,8 @@ export function useCreateFormPublish({
         setPublishBlobId: (blobId) => updateOverlay({ blobId }),
         setPublishStorageMode: (storageMode) => updateOverlay({ storageMode }),
         setPublishResultNote: (resultNote) => updateOverlay({ resultNote }),
+        setPublishActiveStageStatus: (activeStageStatus) => updateOverlay({ activeStageStatus }),
+        setPublishActiveStageDetail: (activeStageDetail) => updateOverlay({ activeStageDetail }),
         setProjectState,
         shouldContinue: () => publishRunRef.current === runId,
       });
