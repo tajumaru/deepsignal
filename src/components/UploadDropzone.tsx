@@ -240,19 +240,12 @@ export function UploadDropzone({
     onChange(attachments.filter((attachment) => attachment.id !== id));
   }
 
-  function openPicker() {
-    if (!disabled) {
-      inputRef.current?.click();
-    }
-  }
-
   return (
     <div className="upload-dropzone-shell">
       <div
         className={`upload-dropzone ${isDragging ? "is-dragging" : ""} ${disabled ? "is-disabled" : ""}`}
         role="button"
         tabIndex={disabled ? -1 : 0}
-        onClick={openPicker}
         onKeyDown={handleKeyDown}
         onDrop={handleDrop}
         onDragOver={handleDragOver}
