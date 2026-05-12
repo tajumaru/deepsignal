@@ -42,6 +42,7 @@ export function FormBuilderPage() {
     fields: builder.values.fields,
     sections: builder.values.sections,
     purpose: builder.values.purpose,
+    visibility: builder.values.visibility,
     encryptSubmissions: builder.values.encryptSubmissions,
     isDirty: builder.isDirty,
     selectedProject: builder.selectedProject,
@@ -216,7 +217,6 @@ export function FormBuilderPage() {
               setDraggedFieldId={builder.setDraggedFieldId}
               setDragOverFieldId={builder.setDragOverFieldId}
               setDragOverPlacement={builder.setDragOverPlacement}
-              onAddSection={builder.addSection}
               onInsertSmartTemplate={builder.insertSmartTemplate}
               onUpdateSection={builder.updateSection}
               onRemoveSection={builder.removeSection}
@@ -242,6 +242,7 @@ export function FormBuilderPage() {
               description={builder.values.description}
               fields={builder.values.fields}
               sections={builder.values.sections}
+              visibility={builder.values.visibility}
               encryptSubmissions={builder.values.encryptSubmissions}
               mobilePane={builder.values.mobilePane}
               isReadyToPublish={builder.isReadyToPublish}
@@ -263,6 +264,7 @@ export function FormBuilderPage() {
               projectState={builder.values.projectState}
               onSetMobilePane={builder.setMobilePane}
               onSelectProject={handleSelectProject}
+              onChangeVisibility={builder.setVisibility}
               onToggleEncryptSubmissions={builder.setEncryptSubmissions}
               onRegisterOnSui={() => void publish.handleRegisterOnSui()}
               onBack={() => builder.moveStep(-1)}

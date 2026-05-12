@@ -1,6 +1,6 @@
-import type { ChangeEvent } from "react";
 import { useI18n } from "../i18n";
 import type { FormField } from "../types";
+import { UploadDropzone, type UploadDropzoneItem } from "./UploadDropzone";
 
 interface DynamicFieldProps {
   field: FormField;
@@ -8,6 +8,7 @@ interface DynamicFieldProps {
   error?: string;
   hint?: string;
   questionNumber?: number;
+  required?: boolean;
   onChange: (value: unknown) => void;
 }
 
@@ -17,10 +18,13 @@ export function DynamicField({
   error,
   hint,
   questionNumber,
+  required,
   onChange,
 }: DynamicFieldProps) {
   const { t } = useI18n();
-  const selectedFile = value instanceof File ? value : null;
+  const selectedAttachments = Array.isArray(value)
+    ? value.filter((item): item is UploadDropzoneItem => Boolean(item) && typeof item === "object" && "id" in item)
+    : [];
 
   function updateCheckbox(option: string, checked: boolean) {
     const current = Array.isArray(value) ? value : [];
@@ -30,18 +34,13 @@ export function DynamicField({
     onChange(next);
   }
 
-  function onFileChange(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0] ?? null;
-    onChange(file);
-  }
-
   return (
     <label className={`field-block ${questionNumber ? "numbered-field" : ""}`}>
       <span className="field-label-row">
         {questionNumber ? <span className="field-question-index">Q{questionNumber}</span> : null}
         <span className="field-label-text">
           {field.label}
-          {field.required ? " *" : ""}
+          {(required ?? field.required) ? " *" : ""}
         </span>
       </span>
 
@@ -123,21 +122,12 @@ export function DynamicField({
 
       {(field.type === "screenshot" || field.type === "video") && (
         <div className="upload-card">
-          <input
-            type="file"
-            accept={field.type === "screenshot" ? "image/*" : "video/*"}
+          <UploadDropzone
+            attachments={selectedAttachments}
+            hint={hint ?? (field.type === "screenshot" ? t("screenshotHint") : t("videoHint"))}
             capture={field.type === "screenshot" ? "environment" : undefined}
-            onChange={onFileChange}
+            onChange={onChange}
           />
-          <small className="muted">
-            {hint ?? (field.type === "screenshot" ? t("screenshotHint") : t("videoHint"))}
-          </small>
-          {selectedFile ? (
-            <div className="file-pill">
-              <strong>{selectedFile.name}</strong>
-              <span>{Math.round(selectedFile.size / 1024)} KB</span>
-            </div>
-          ) : null}
         </div>
       )}
 

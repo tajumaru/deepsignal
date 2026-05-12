@@ -1,6 +1,7 @@
 import { useCurrentAccount } from "@mysten/dapp-kit";
 import { lazy, Suspense, useEffect, useMemo, useState, type FormEvent } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
+import type { UploadDropzoneItem } from "../components/UploadDropzone";
 import { BlobLink } from "../components/BlobLink";
 import { DynamicField } from "../components/DynamicField";
 import { EmptyState } from "../components/EmptyState";
@@ -8,6 +9,7 @@ import { RichTextContent } from "../components/RichText";
 import { SignalMetaChip, SignalMetaRow } from "../components/SignalMetaChip";
 import { useI18n } from "../i18n";
 import { getEncryptedPayloadAvailabilityLabel, hasDedicatedEncryptedPayloadBlob } from "../lib/encryptionDisplay";
+import { getVisibleFieldIds, isFieldRequired } from "../lib/formLogic";
 import { getSubmissionCategoryFromPurpose } from "../lib/formTemplates";
 import { getSubmissionRespondentMeta } from "../lib/respondentMeta";
 import { ensureRespondentSession } from "../lib/respondentSession";
@@ -30,8 +32,32 @@ const WalletConnect = lazy(() =>
 
 type PublicAnswers = Record<string, unknown>;
 type ValidationErrors = Record<string, string>;
-const MAX_SCREENSHOT_BYTES = 5 * 1024 * 1024;
-const MAX_VIDEO_BYTES = 25 * 1024 * 1024;
+const MAX_ATTACHMENT_BYTES = 50 * 1024 * 1024;
+
+function getUploadAnswer(value: unknown) {
+  return Array.isArray(value)
+    ? value.filter((item): item is UploadDropzoneItem => Boolean(item) && typeof item === "object" && "id" in item)
+    : [];
+}
+
+function getAttachmentType(file: File): SubmissionAttachment["type"] {
+  if (file.type.startsWith("video/")) {
+    return "video";
+  }
+  if (file.type.startsWith("image/")) {
+    return "image";
+  }
+  return "document";
+}
+
+function createPseudoProgress(onTick: (progress: number) => void) {
+  let progress = 8;
+  onTick(progress);
+  return window.setInterval(() => {
+    progress = Math.min(progress + (progress < 60 ? 12 : progress < 85 ? 6 : 2), 94);
+    onTick(progress);
+  }, 180);
+}
 
 export function PublicFormPage() {
   const { t } = useI18n();
@@ -47,7 +73,7 @@ export function PublicFormPage() {
   const [submitted, setSubmitted] = useState<Submission | null>(null);
   const [submitError, setSubmitError] = useState("");
   const [submitNotice, setSubmitNotice] = useState("");
-  const [attachWallet, setAttachWallet] = useState(() => Boolean(account?.address));
+  const [attachWallet, setAttachWallet] = useState(false);
   const [attachWalletTouched, setAttachWalletTouched] = useState(false);
   const manifestBlobId = searchParams.get("manifest") ?? "";
 
@@ -125,9 +151,6 @@ export function PublicFormPage() {
       return;
     }
 
-    if (!attachWalletTouched) {
-      setAttachWallet(true);
-    }
   }, [account?.address, attachWallet, attachWalletTouched]);
 
   const attachmentFields = useMemo(
@@ -144,53 +167,54 @@ export function PublicFormPage() {
     if (!form) {
       return { sections: [], unsectionedFields: [] };
     }
+    const currentlyVisibleFieldIds = getVisibleFieldIds(form.fields, answers);
     return {
       sections: (form.sections ?? []).map((section) => ({
         ...section,
-        fields: form.fields.filter((field) => field.sectionId === section.id),
+        fields: form.fields.filter((field) => field.sectionId === section.id && currentlyVisibleFieldIds.has(field.id)),
       })),
-      unsectionedFields: form.fields.filter((field) => !field.sectionId),
+      unsectionedFields: form.fields.filter((field) => !field.sectionId && currentlyVisibleFieldIds.has(field.id)),
     };
-  }, [form]);
+  }, [answers, form]);
 
-  const questionNumbers = useMemo(
-    () => new Map(form?.fields.map((field, index) => [field.id, index + 1]) ?? []),
-    [form],
+  const visibleFieldIds = useMemo(
+    () => (form ? getVisibleFieldIds(form.fields, answers) : new Set<string>()),
+    [answers, form],
   );
 
+  const questionNumbers = useMemo(() => {
+    const visibleFields = form?.fields.filter((field) => visibleFieldIds.has(field.id)) ?? [];
+    return new Map(visibleFields.map((field, index) => [field.id, index + 1]));
+  }, [form, visibleFieldIds]);
+
+  useEffect(() => {
+    setErrors((current) => {
+      const nextEntries = Object.entries(current).filter(([fieldId, message]) => visibleFieldIds.has(fieldId) || !message);
+      return nextEntries.length === Object.keys(current).length ? current : Object.fromEntries(nextEntries);
+    });
+  }, [visibleFieldIds]);
+
   function updateAnswer(fieldId: string, value: unknown) {
-    const field = form?.fields.find((candidate) => candidate.id === fieldId);
-    let nextValue = value;
-    let nextError = "";
-
-    if (field && (field.type === "screenshot" || field.type === "video")) {
-      const file = value instanceof File ? value : null;
-      const maxBytes = field.type === "screenshot" ? MAX_SCREENSHOT_BYTES : MAX_VIDEO_BYTES;
-      if (file && file.size > maxBytes) {
-        nextValue = null;
-        nextError = t("uploadTooLarge", {
-          fieldLabel: field.label,
-          maxSize: field.type === "screenshot" ? "5MB" : "25MB",
-        });
-      }
-    }
-
-    setAnswers((current) => ({ ...current, [fieldId]: nextValue }));
-    setErrors((current) => ({ ...current, [fieldId]: nextError }));
+    setAnswers((current) => ({ ...current, [fieldId]: value }));
+    setErrors((current) => ({ ...current, [fieldId]: "" }));
   }
 
   function validate(currentForm: FormSchema) {
     const nextErrors: ValidationErrors = {};
     currentForm.fields.forEach((field) => {
+      const visible = visibleFieldIds.has(field.id);
       const value = answers[field.id];
-      if (!field.required) {
+      const uploadItems = attachmentFields.has(field.id) ? getUploadAnswer(value) : [];
+      if (!isFieldRequired(field, answers, visible)) {
         return;
       }
       const missing =
         value === "" ||
         value === null ||
         value === undefined ||
-        (Array.isArray(value) && value.length === 0);
+        (Array.isArray(value) && value.length === 0) ||
+        (attachmentFields.has(field.id) &&
+          uploadItems.filter((attachment) => attachment.status !== "failed").length === 0);
       if (missing) {
         nextErrors[field.id] = t("requiredFieldError");
       }
@@ -211,6 +235,7 @@ export function PublicFormPage() {
     try {
       const signedAt = new Date().toISOString();
       const isAnonymous = !attachWallet || !account?.address;
+      const submissionStorage = isAnonymous ? localStorageAdapter : storageAdapter;
       const session = await ensureRespondentSession({
         walletAddress: account?.address,
         isAnonymous,
@@ -224,41 +249,110 @@ export function PublicFormPage() {
       };
       const attachments: SubmissionAttachment[] = [];
       const plainAnswers: PublicAnswers = {};
+      const visibleFields = form.fields.filter((field) => visibleFieldIds.has(field.id));
 
-      for (const field of form.fields) {
+      for (const field of visibleFields) {
         const value = answers[field.id];
         if (attachmentFields.has(field.id)) {
-          const file = value instanceof File ? value : null;
-          if (file) {
-            if (form.encryptSubmissions) {
-              const inlineAttachment = await createInlineEncryptedAttachment(file);
-              attachments.push({
-                ...inlineAttachment,
-                fieldId: field.id,
-                type: field.type === "video" ? "video" : "image",
-              });
-            } else {
-              const upload = await storageAdapter.uploadFile(file);
-              attachments.push({
-                fieldId: field.id,
-                type: field.type === "video" ? "video" : "image",
-                blobId: upload.blobId,
-                name: file.name,
-                size: file.size,
-                storage: "blob",
-              });
-            }
-            plainAnswers[field.id] = file.name;
-          } else {
+          const fieldUploads = getUploadAnswer(value).filter((attachment) => attachment.file);
+          const validUploads = fieldUploads.filter((attachment) => attachment.status !== "failed");
+
+          if (validUploads.length === 0) {
             plainAnswers[field.id] = "";
+            continue;
           }
+
+          for (const attachment of validUploads) {
+            const file = attachment.file;
+            if (!file) {
+              continue;
+            }
+
+            setAnswers((current) => ({
+              ...current,
+              [field.id]: getUploadAnswer(current[field.id]).map((item) =>
+                item.id === attachment.id
+                  ? { ...item, status: "uploading", progress: 0, error: undefined }
+                  : item,
+              ),
+            }));
+
+            const progressTimer = createPseudoProgress((progress) => {
+              setAnswers((current) => ({
+                ...current,
+                [field.id]: getUploadAnswer(current[field.id]).map((item) =>
+                  item.id === attachment.id ? { ...item, progress, status: "uploading" } : item,
+                ),
+              }));
+            });
+
+            try {
+              if (form.encryptSubmissions) {
+                const inlineAttachment = await createInlineEncryptedAttachment(file);
+                window.clearInterval(progressTimer);
+                attachments.push({
+                  ...inlineAttachment,
+                  fieldId: field.id,
+                  type: getAttachmentType(file),
+                });
+                setAnswers((current) => ({
+                  ...current,
+                  [field.id]: getUploadAnswer(current[field.id]).map((item) =>
+                    item.id === attachment.id
+                      ? { ...item, status: "uploaded", progress: 100 }
+                      : item,
+                  ),
+                }));
+              } else {
+                const upload = await submissionStorage.uploadFile(file);
+                window.clearInterval(progressTimer);
+                attachments.push({
+                  fieldId: field.id,
+                  type: getAttachmentType(file),
+                  blobId: upload.blobId,
+                  name: file.name,
+                  size: file.size,
+                  storage: "blob",
+                  originalName: file.name,
+                  originalType: file.type || "application/octet-stream",
+                });
+                setAnswers((current) => ({
+                  ...current,
+                  [field.id]: getUploadAnswer(current[field.id]).map((item) =>
+                    item.id === attachment.id
+                      ? {
+                          ...item,
+                          status: "uploaded",
+                          progress: 100,
+                          walrusBlobId: upload.blobId,
+                        }
+                      : item,
+                  ),
+                }));
+              }
+            } catch (error) {
+              window.clearInterval(progressTimer);
+              const message = error instanceof Error ? error.message : t("submitFailed");
+              setAnswers((current) => ({
+                ...current,
+                [field.id]: getUploadAnswer(current[field.id]).map((item) =>
+                  item.id === attachment.id
+                    ? { ...item, status: "failed", progress: 0, error: message }
+                    : item,
+                ),
+              }));
+              throw error;
+            }
+          }
+
+          plainAnswers[field.id] = validUploads.map((attachment) => attachment.fileName).join(", ");
         } else {
           plainAnswers[field.id] = value;
         }
       }
 
       const publicPayloadAnswers = Object.fromEntries(
-        form.fields
+        visibleFields
           .filter((field) => !field.sensitive)
           .map((field) => [field.id, plainAnswers[field.id]]),
       );
@@ -287,7 +381,7 @@ export function PublicFormPage() {
         updatedAt: signedAt,
       };
 
-      const result = await saveSubmissionWithEncryption(form, submission, undefined, storageAdapter);
+      const result = await saveSubmissionWithEncryption(form, submission, undefined, submissionStorage);
       const savedSubmission = {
         ...submission,
         isEncrypted: Boolean(form.encryptSubmissions),
@@ -505,11 +599,12 @@ export function PublicFormPage() {
                     value={answers[field.id]}
                     error={errors[field.id]}
                     questionNumber={questionNumbers.get(field.id)}
+                    required={isFieldRequired(field, answers, true)}
                     hint={
                       field.type === "screenshot"
-                        ? t("screenshotHintWithLimit")
+                        ? `${t("screenshotHint")} Max ${Math.round(MAX_ATTACHMENT_BYTES / (1024 * 1024))}MB per file.`
                         : field.type === "video"
-                          ? t("videoHintWithLimit")
+                          ? `${t("videoHint")} Max ${Math.round(MAX_ATTACHMENT_BYTES / (1024 * 1024))}MB per file.`
                           : undefined
                     }
                     onChange={(value) => updateAnswer(field.id, value)}
@@ -526,11 +621,12 @@ export function PublicFormPage() {
             value={answers[field.id]}
             error={errors[field.id]}
             questionNumber={questionNumbers.get(field.id)}
+            required={isFieldRequired(field, answers, true)}
             hint={
               field.type === "screenshot"
-                ? t("screenshotHintWithLimit")
+                ? `${t("screenshotHint")} Max ${Math.round(MAX_ATTACHMENT_BYTES / (1024 * 1024))}MB per file.`
                 : field.type === "video"
-                  ? t("videoHintWithLimit")
+                  ? `${t("videoHint")} Max ${Math.round(MAX_ATTACHMENT_BYTES / (1024 * 1024))}MB per file.`
                   : undefined
             }
             onChange={(value) => updateAnswer(field.id, value)}

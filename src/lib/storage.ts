@@ -1,10 +1,12 @@
 import { cryptoAdapter, getSealRuntimeStatus } from "../crypto/cryptoFactory";
 import { fromBase64, parseRealSealEnvelope, toBase64 } from "../crypto/sealPayload";
+import { normalizeLogicGroup, sanitizeConditionalLogicFields } from "./formLogic";
 import {
   getSubmissionCategoryFromPurpose,
   inferPriorityFromTemplateAnswers,
   normalizeFormPurpose,
 } from "./formTemplates";
+import { normalizeFormVisibility } from "./explore";
 import { enrichSubmissionWithTriage } from "./signalTriage";
 import { storage } from "../storage/storageFactory";
 import type {
@@ -32,6 +34,16 @@ export interface SaveSubmissionWithEncryptionResult {
 
 const REAL_SEAL_PROJECT_REQUIRED_MESSAGE =
   "Real Seal encrypted submissions require a selected project. Choose a project or turn off Encrypt submissions.";
+
+function inferAttachmentType(mimeType: string | undefined) {
+  if (mimeType?.startsWith("video/")) {
+    return "video" as const;
+  }
+  if (mimeType?.startsWith("image/")) {
+    return "image" as const;
+  }
+  return "document" as const;
+}
 
 function stringifySensitiveValue(value: unknown) {
   if (Array.isArray(value)) {
@@ -65,7 +77,12 @@ function normalizeSubmissionAttachment(raw: unknown): SubmissionAttachment | nul
   }
   return {
     fieldId: attachment.fieldId,
-    type: attachment.type === "video" ? "video" : "image",
+    type:
+      attachment.type === "video"
+        ? "video"
+        : attachment.type === "document"
+          ? "document"
+          : "image",
     blobId: attachment.blobId,
     name: typeof attachment.name === "string" ? attachment.name : attachment.originalName ?? "attachment",
     size: typeof attachment.size === "number" ? attachment.size : 0,
@@ -113,7 +130,7 @@ export async function createInlineEncryptedAttachment(file: File) {
   const bytes = new Uint8Array(await file.arrayBuffer());
   return {
     fieldId: "",
-    type: file.type.startsWith("video/") ? ("video" as const) : ("image" as const),
+    type: inferAttachmentType(file.type),
     blobId: `inline:${crypto.randomUUID()}`,
     name: file.name,
     size: file.size,
@@ -224,7 +241,7 @@ export async function decryptSensitiveAnswers(
 }
 
 export function createEmptyAnswer(field: FormField) {
-  if (field.type === "checkbox") {
+  if (field.type === "checkbox" || field.type === "screenshot" || field.type === "video") {
     return [] as string[];
   }
   return "";
@@ -379,14 +396,24 @@ export function normalizeSubmission(raw: Submission | (Record<string, unknown> &
 }
 
 export function normalizeForm(raw: FormSchema | (Record<string, unknown> & { id: string })) {
+  const rawFields = Array.isArray(raw.fields) ? (raw.fields as FormField[]) : [];
   return {
     ...raw,
     title: typeof raw.title === "string" ? raw.title : "",
     description: typeof raw.description === "string" ? raw.description : "",
-    fields: Array.isArray(raw.fields) ? (raw.fields as FormField[]) : [],
+    fields: sanitizeConditionalLogicFields(
+      rawFields.map((field) => ({
+        ...field,
+        visibilityRules: normalizeLogicGroup(field.visibilityRules),
+        requiredRules: normalizeLogicGroup(field.requiredRules),
+      })),
+    ),
     sections: Array.isArray(raw.sections) ? (raw.sections as FormSection[]) : [],
     purpose: normalizeFormPurpose(raw.purpose),
+    visibility: normalizeFormVisibility(raw.visibility, raw.publicExplore),
+    publicExplore: raw.publicExplore === true || normalizeFormVisibility(raw.visibility, raw.publicExplore) === "public",
     createdAt: typeof raw.createdAt === "string" ? raw.createdAt : new Date(0).toISOString(),
+    updatedAt: typeof raw.updatedAt === "string" ? raw.updatedAt : typeof raw.createdAt === "string" ? raw.createdAt : new Date(0).toISOString(),
     projectId: typeof raw.projectId === "string" ? raw.projectId : undefined,
     projectName: typeof raw.projectName === "string" ? raw.projectName : undefined,
     onchainFormId:

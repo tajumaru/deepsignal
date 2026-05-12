@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState, type DragEvent } from "react";
 import { FormFieldEditor } from "../../../components/FormFieldEditor";
 import { LivePreview } from "../../../components/formBuilder/LivePreview";
-import { useI18n } from "../../../i18n";
 import { smartComposerTemplates } from "../../../lib/formTemplates";
 import type { FieldType, FormBuilderRefs, FormField, FormSection, MobileBuilderPane, Translate } from "../types";
 
@@ -22,7 +21,6 @@ interface FieldsStepProps {
   setDraggedFieldId: (fieldId: string | null) => void;
   setDragOverFieldId: (fieldId: string | null) => void;
   setDragOverPlacement: (placement: "before" | "after" | null) => void;
-  onAddSection: (preset?: string) => void;
   onInsertSmartTemplate: (templateKey: string) => void;
   onUpdateSection: (sectionId: string, patch: Partial<FormSection>) => void;
   onRemoveSection: (sectionId: string) => void;
@@ -35,9 +33,6 @@ interface FieldsStepProps {
   onBack: () => void;
   onContinue: () => void;
 }
-
-const quickAddTypes: FieldType[] = ["longText", "shortText", "rating", "checkbox", "dropdown", "screenshot", "url"];
-const sectionPresets = ["Reproduction", "Environment", "Media"];
 
 export function FieldsStep({
   t,
@@ -56,7 +51,6 @@ export function FieldsStep({
   setDraggedFieldId,
   setDragOverFieldId,
   setDragOverPlacement,
-  onAddSection,
   onInsertSmartTemplate,
   onUpdateSection,
   onRemoveSection,
@@ -69,9 +63,7 @@ export function FieldsStep({
   onBack,
   onContinue,
 }: FieldsStepProps) {
-  const { fieldTypeLabel } = useI18n();
   const [expandedFieldId, setExpandedFieldId] = useState(fields[0]?.id ?? "");
-  const [newFieldSectionId, setNewFieldSectionId] = useState("");
 
   useEffect(() => {
     if (!fields.length) {
@@ -98,6 +90,7 @@ export function FieldsStep({
       <FormFieldEditor
         key={field.id}
         field={field}
+        fields={fields}
         index={index}
         sections={sections}
         rootRef={(node) => {
@@ -239,56 +232,9 @@ export function FieldsStep({
 
           <section className="composer-add-bar">
             <div className="composer-add-bar-main">
-              <button
-                type="button"
-                className="primary-button composer-add-question-button"
-                onClick={() => onInsertField("shortText", undefined, newFieldSectionId || undefined)}
-              >
+              <button type="button" className="primary-button composer-add-question-button" onClick={onOpenFieldTypePicker}>
                 + {t("addQuestion")}
               </button>
-              <button type="button" className="ghost-button" onClick={onOpenFieldTypePicker}>
-                {t("moreTypes")}
-              </button>
-              <button type="button" className="ghost-button" onClick={() => onAddSection()}>
-                + {t("addSection")}
-              </button>
-            </div>
-
-            <div className="composer-add-bar-secondary">
-              <div className="question-type-quick-picks">
-                {quickAddTypes.map((type) => (
-                  <button
-                    key={type}
-                    type="button"
-                    className="question-type-pill"
-                    onClick={() => onInsertField(type, undefined, newFieldSectionId || undefined)}
-                  >
-                    + {fieldTypeLabel(type)}
-                  </button>
-                ))}
-              </div>
-
-              {sections.length > 0 ? (
-                <label className="composer-add-target">
-                  <span>{t("addToSection")}</span>
-                  <select value={newFieldSectionId} onChange={(event) => setNewFieldSectionId(event.target.value)}>
-                    <option value="">{t("noSection")}</option>
-                    {sections.map((section) => (
-                      <option key={section.id} value={section.id}>
-                        {section.title || t("untitledSection")}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              ) : null}
-            </div>
-
-            <div className="composer-section-preset-row">
-              {sectionPresets.map((preset) => (
-                <button key={preset} type="button" className="ghost-button" onClick={() => onAddSection(preset)}>
-                  + {preset}
-                </button>
-              ))}
             </div>
           </section>
 

@@ -44,6 +44,11 @@ const SubmissionDetailPage = lazy(() =>
     default: module.SubmissionDetailPage,
   })),
 );
+const ExploreSignalsPage = lazy(() =>
+  import("./pages/ExploreSignalsPage").then((module) => ({
+    default: module.ExploreSignalsPage,
+  })),
+);
 
 function WithWalrusRuntime({ children }: { children: ReactNode }) {
   if (REQUIRE_GLOBAL_WALRUS_RUNTIME) {
@@ -62,6 +67,8 @@ export default function App() {
       <Suspense fallback={<RouteFallback />}>
         <Routes>
           <Route path="/" element={<LandingPage />} />
+          <Route path="/explore" element={<ExploreSignalsPage />} />
+          <Route path="/signals" element={<Navigate to="/explore" replace />} />
           <Route
             path="/admin"
             element={

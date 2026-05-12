@@ -83,6 +83,7 @@ If `VITE_SEAL_MODE` is not `seal`, or the Seal env vars are incomplete, the app 
 - Landing page at `/`
 - Form builder at `/admin/forms/new`
 - Public form route at `/f/:formId`
+- Explore Signals route at `/explore`
 - Public roadmap route at `/roadmap/:formId`
 - Manifest restore route at `/m/:manifestBlobId`
 - Admin Signal Inbox at `/admin`
@@ -99,6 +100,7 @@ If `VITE_SEAL_MODE` is not `seal`, or the Seal env vars are incomplete, the app 
 - Summary cards for total signals, new signals, planned, fixed, high-value, and average signal value
 - Contributor identity capture using wallet address or anonymous fallback id
 - Public roadmap publishing for `planned`, `in_progress`, and `fixed` signals
+- Form-level visibility modes: `private`, `unlisted`, and `public`
 - Sensitive-field encryption through a swappable crypto adapter
 - Walrus blob ids surfaced in the UI
 - Desktop-first creator review console with mobile-friendly public forms
@@ -119,6 +121,7 @@ Current behavior:
 - every newly created form stores `ownerAddress` from the connected wallet
 - public respondents do not need a wallet to submit
 - public forms can be opened without connecting a wallet, and wallet connect stays optional on the responder flow
+- only forms marked `public` / `Public Explore` appear in `/explore`; private payloads remain excluded from that directory surface
 - anonymous send is now the default responder path, even when a wallet is connected
 - when a public respondent chooses wallet-backed submit, DeepSignal attaches wallet context without requesting a personal-message signature on submit
 - public form submit no longer registers a `SignalReceipt` onchain during responder submission

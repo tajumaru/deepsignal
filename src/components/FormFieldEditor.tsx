@@ -6,6 +6,7 @@ import { AdvancedSettings } from "./formBuilder/AdvancedSettings";
 
 interface FormFieldEditorProps {
   field: FormField;
+  fields: FormField[];
   index: number;
   isDragging: boolean;
   isExpanded: boolean;
@@ -40,6 +41,7 @@ function normalizeFieldForType(field: FormField, type: FieldType) {
 
 export function FormFieldEditor({
   field,
+  fields,
   index,
   isDragging,
   isExpanded,
@@ -216,7 +218,7 @@ export function FormFieldEditor({
             </label>
           )}
 
-          <AdvancedSettings field={field} onChange={onChange} />
+          <AdvancedSettings field={field} fields={fields} onChange={onChange} />
         </div>
       ) : null}
     </section>

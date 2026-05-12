@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { DynamicField } from "../DynamicField";
 import { RichTextContent } from "../RichText";
 import { useI18n } from "../../i18n";
+import { getVisibleFieldIds, isFieldRequired } from "../../lib/formLogic";
 import { createEmptyAnswer } from "../../lib/storage";
 import type { FormField, FormSection } from "../../types";
 
@@ -35,14 +36,16 @@ export function LivePreview({
     });
   }, [fields]);
 
+  const visibleFieldIds = useMemo(() => getVisibleFieldIds(fields, answers), [answers, fields]);
+
   const sectionedFields = useMemo(() => {
     const orderedSections = sections.map((section) => ({
       ...section,
-      fields: fields.filter((field) => field.sectionId === section.id),
+      fields: fields.filter((field) => field.sectionId === section.id && visibleFieldIds.has(field.id)),
     }));
-    const unsectionedFields = fields.filter((field) => !field.sectionId);
+    const unsectionedFields = fields.filter((field) => !field.sectionId && visibleFieldIds.has(field.id));
     return { orderedSections, unsectionedFields };
-  }, [fields, sections]);
+  }, [fields, sections, visibleFieldIds]);
 
   return (
     <section className="panel glow-panel composer-live-preview">
@@ -72,6 +75,7 @@ export function LivePreview({
                     key={field.id}
                     field={field}
                     value={answers[field.id]}
+                    required={isFieldRequired(field, answers, true)}
                     onChange={(value) => setAnswers((current) => ({ ...current, [field.id]: value }))}
                   />
                 ))}
@@ -85,6 +89,7 @@ export function LivePreview({
             key={field.id}
             field={field}
             value={answers[field.id]}
+            required={isFieldRequired(field, answers, true)}
             onChange={(value) => setAnswers((current) => ({ ...current, [field.id]: value }))}
           />
         ))}

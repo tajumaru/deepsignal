@@ -1,4 +1,6 @@
+import { sanitizeConditionalLogicFields } from "../../lib/formLogic";
 import { makeId } from "../../lib/utils";
+import { normalizeFormVisibility } from "../../lib/explore";
 import type { FieldType, FormField, FormPurpose, FormSchema, FormSection } from "./types";
 
 export function wait(ms: number) {
@@ -26,6 +28,18 @@ export function cloneField(field: FormField): FormField {
     ...field,
     id: makeId("field"),
     options: field.options ? [...field.options] : undefined,
+    visibilityRules: field.visibilityRules
+      ? {
+          logic: field.visibilityRules.logic,
+          conditions: field.visibilityRules.conditions.map((condition) => ({ ...condition })),
+        }
+      : undefined,
+    requiredRules: field.requiredRules
+      ? {
+          logic: field.requiredRules.logic,
+          conditions: field.requiredRules.conditions.map((condition) => ({ ...condition })),
+        }
+      : undefined,
   };
 }
 
@@ -42,6 +56,7 @@ export function serializeDraft(
   description: string,
   fields: FormField[],
   purpose: FormPurpose,
+  visibility: FormSchema["visibility"],
   createOnSui: boolean,
   encryptSubmissions: boolean,
   sections: FormSection[],
@@ -50,13 +65,14 @@ export function serializeDraft(
     title,
     description,
     purpose,
+    visibility: normalizeFormVisibility(visibility),
     createOnSui,
     encryptSubmissions,
     sections: sections.map((section) => ({
       title: section.title,
       description: section.description ?? "",
     })),
-    fields: fields.map((field) => ({
+    fields: sanitizeConditionalLogicFields(fields).map((field) => ({
       type: field.type,
       label: field.label,
       required: field.required,
@@ -68,6 +84,8 @@ export function serializeDraft(
       visibility: field.visibility ?? "public",
       validationHint: field.validationHint ?? "",
       options: field.options ?? [],
+      visibilityRules: field.visibilityRules,
+      requiredRules: field.requiredRules,
     })),
   });
 }
@@ -78,6 +96,7 @@ export function buildFormSchema(args: {
   fields: FormField[];
   sections: FormSection[];
   purpose: FormPurpose;
+  visibility: NonNullable<FormSchema["visibility"]>;
   ownerAddress: string;
   projectId?: string;
   projectName?: string;
@@ -87,7 +106,7 @@ export function buildFormSchema(args: {
     id: makeId("form"),
     title: args.title.trim(),
     description: args.description.trim(),
-    fields: args.fields.map((field) => ({
+    fields: sanitizeConditionalLogicFields(args.fields).map((field) => ({
       ...field,
       label: field.label.trim(),
       placeholder: field.placeholder?.trim() || undefined,
@@ -106,7 +125,10 @@ export function buildFormSchema(args: {
       }))
       .filter((section) => section.title),
     purpose: args.purpose,
+    visibility: args.visibility,
+    publicExplore: args.visibility === "public",
     createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
     ownerAddress: args.ownerAddress,
     isOnchain: false,
     projectId: args.projectId,

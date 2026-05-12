@@ -7,7 +7,7 @@ import { LivePreview } from "../../../components/formBuilder/LivePreview";
 import { isLocalFallbackBlob } from "../../../lib/proof";
 import { shortAddress, SUI_NETWORK } from "../../../lib/sui";
 import { formatWalrusFailureStage, type WalrusFailureDetails } from "../../../storage/walrusDiagnostics";
-import type { FormField, FormSection, MobileBuilderPane, PreparedPublishForm, ProjectOption, Translate } from "../types";
+import type { FormField, FormSection, FormVisibility, MobileBuilderPane, PreparedPublishForm, ProjectOption, Translate } from "../types";
 
 interface PublishStepProps {
   t: Translate;
@@ -19,6 +19,7 @@ interface PublishStepProps {
   description: string;
   fields: FormField[];
   sections: FormSection[];
+  visibility: FormVisibility;
   encryptSubmissions: boolean;
   mobilePane: MobileBuilderPane;
   isReadyToPublish: boolean;
@@ -40,6 +41,7 @@ interface PublishStepProps {
   projectState: string;
   onSetMobilePane: (pane: MobileBuilderPane) => void;
   onSelectProject: (projectId: string) => void;
+  onChangeVisibility: (value: FormVisibility) => void;
   onToggleEncryptSubmissions: (value: boolean) => void;
   onRegisterOnSui: () => void;
   onBack: () => void;
@@ -55,6 +57,7 @@ export function PublishStep({
   description,
   fields,
   sections,
+  visibility,
   encryptSubmissions,
   mobilePane,
   isReadyToPublish,
@@ -75,6 +78,7 @@ export function PublishStep({
   projectState,
   onSetMobilePane,
   onSelectProject,
+  onChangeVisibility,
   onToggleEncryptSubmissions,
   onRegisterOnSui,
   onBack,
@@ -253,6 +257,26 @@ export function PublishStep({
                   </p>
                   {projectState ? <p className="muted">{projectState}</p> : null}
                   <p className="muted">{t("suiRegistrationDeferredNotice")}</p>
+                </section>
+
+                <section className="panel composer-settings-card">
+                  <div className="section-row">
+                    <div>
+                      <p className="eyebrow">Explore routing</p>
+                      <h3>Visibility</h3>
+                    </div>
+                  </div>
+                  <label>
+                    <span>Form visibility</span>
+                    <select value={visibility} onChange={(event) => onChangeVisibility(event.target.value as FormVisibility)}>
+                      <option value="private">Private</option>
+                      <option value="unlisted">Unlisted</option>
+                      <option value="public">Public Explore</option>
+                    </select>
+                  </label>
+                  <p className="muted">
+                    Private stays admin-oriented. Unlisted works for anyone with the URL. Public Explore also lists this form in the network view.
+                  </p>
                 </section>
 
                 <section className="panel composer-settings-card">

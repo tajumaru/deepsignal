@@ -18,6 +18,7 @@ const STORAGE_KEY = "deepsignal.language";
 const messages = {
   en: {
     navHome: "Home",
+    navExplore: "Explore",
     backToHome: "Back to Home",
     discardChangesConfirm:
       "You have unsaved changes. Do you want to discard them and leave this page?",
@@ -153,6 +154,7 @@ const messages = {
     errorNeedField: "Add at least one question before publishing.",
     errorEveryFieldNeedsLabel: "Every question needs a label before you can publish.",
     errorFieldNeedsOption: "Multiple choice and checkbox questions need at least one option.",
+    errorConditionalLogicCycle: "Conditional logic cannot contain circular references.",
     fieldLabel: (params) => `Question ${params?.index ?? ""}`,
     moveUp: "Up",
     moveDown: "Down",
@@ -202,6 +204,12 @@ const messages = {
     responseSettings: "Response settings",
     privacySettings: "Privacy and inbox visibility",
     validationPlaceholder: "Optional rule or note, for example: 3+ steps, build number, repro URL.",
+    conditionalLogic: "Conditional Logic",
+    conditionalRequired: "Conditional Required",
+    showThisFieldWhen: "Show this field when...",
+    requireThisFieldWhen: "Require this field when...",
+    conditionalLogicEmpty: "No visibility rules yet.",
+    conditionalRequiredEmpty: "No conditional required rules yet.",
     smartTemplates: "Smart templates",
     smartTemplatesBody: "Drop in a ready-made section + question set, then tune the copy.",
     moreTypes: "More types",
@@ -231,14 +239,15 @@ const messages = {
     publicAnonymousSendHelp:
       "Do not show your wallet address on the public page or in the admin inbox.",
     publicWalletAttach: "Attach connected wallet (optional)",
-    publicWalletAttachHelp: "Only attach wallet information when it helps your report. No extra signature is required.",
+    publicWalletAttachHelp:
+      "Only attach wallet information when it helps your report. DeepSignal does not ask for a personal-message signature here.",
     publicWalletConnectOptional: "You can send now without connecting a wallet.",
     publicCurrentMode: "Current mode",
     publicModeAnonymous: "Anonymous submit",
     publicModeWallet: "Wallet-backed submit",
     publicAnonymousModeHelp: "You can submit immediately without any wallet signature.",
     publicWalletModeHelpNoSignature:
-      "Wallet information is attached only because you opted in. DeepSignal does not ask for a personal-message signature on submit.",
+      "Wallet information is attached only because you opted in. DeepSignal does not ask for a personal-message signature, but Walrus storage may still ask your wallet to approve the write.",
     publicWalletModeHelp: (params) =>
       `A posting session is reused for ${params?.hours ?? 24} hours, so you should not need to sign every submission.`,
     requiredFieldError: "This field is required.",
@@ -510,6 +519,7 @@ const messages = {
   },
   ja: {
     navHome: "\u30db\u30fc\u30e0",
+    navExplore: "Explore",
     backToHome: "\u30db\u30fc\u30e0\u306b\u623b\u308b",
     discardChangesConfirm:
       "\u672a\u4fdd\u5b58\u306e\u5909\u66f4\u304c\u3042\u308a\u307e\u3059\u3002\u7834\u68c4\u3057\u3066\u3053\u306e\u30da\u30fc\u30b8\u3092\u96e2\u308c\u307e\u3059\u304b\uff1f",
@@ -652,6 +662,7 @@ const messages = {
     errorNeedField: "\u516c\u958b\u524d\u306b\u5c11\u306a\u304f\u3068\u30821\u3064\u8cea\u554f\u3092\u8ffd\u52a0\u3057\u3066\u304f\u3060\u3055\u3044\u3002",
     errorEveryFieldNeedsLabel: "\u3059\u3079\u3066\u306e\u8cea\u554f\u306b\u30e9\u30d9\u30eb\u304c\u5fc5\u8981\u3067\u3059\u3002",
     errorFieldNeedsOption: "\u8907\u6570\u9078\u629e\u3068 checkbox \u306e\u8cea\u554f\u306b\u306f\u9078\u629e\u80a2\u304c\u5fc5\u8981\u3067\u3059\u3002",
+    errorConditionalLogicCycle: "\u6761\u4ef6\u30ed\u30b8\u30c3\u30af\u306b\u5faa\u74b0\u53c2\u7167\u306f\u8a2d\u5b9a\u3067\u304d\u307e\u305b\u3093\u3002",
     fieldLabel: (params) => `\u8cea\u554f ${params?.index ?? ""}`,
     moveUp: "\u4e0a\u3078",
     moveDown: "\u4e0b\u3078",
@@ -703,6 +714,12 @@ const messages = {
     privacySettings: "\u6a5f\u5bc6 / Inbox \u8868\u793a\u8a2d\u5b9a",
     validationPlaceholder:
       "\u4f8b: 3\u30b9\u30c6\u30c3\u30d7\u4ee5\u4e0a\u3001build number\u3001repro URL \u306a\u3069\u306e\u88dc\u8db3\u30eb\u30fc\u30eb",
+    conditionalLogic: "Conditional Logic",
+    conditionalRequired: "\u6761\u4ef6\u4ed8\u304d\u5fc5\u9808",
+    showThisFieldWhen: "\u3053\u306e\u9805\u76ee\u3092\u8868\u793a\u3059\u308b\u6761\u4ef6",
+    requireThisFieldWhen: "\u3053\u306e\u9805\u76ee\u3092\u5fc5\u9808\u306b\u3059\u308b\u6761\u4ef6",
+    conditionalLogicEmpty: "\u307e\u3060\u8868\u793a\u6761\u4ef6\u306f\u3042\u308a\u307e\u305b\u3093\u3002",
+    conditionalRequiredEmpty: "\u307e\u3060\u6761\u4ef6\u4ed8\u304d\u5fc5\u9808\u30eb\u30fc\u30eb\u306f\u3042\u308a\u307e\u305b\u3093\u3002",
     smartTemplates: "\u30b9\u30de\u30fc\u30c8\u30c6\u30f3\u30d7\u30ec\u30fc\u30c8",
     smartTemplatesBody: "\u30bb\u30af\u30b7\u30e7\u30f3\u3068\u8cea\u554f\u30bb\u30c3\u30c8\u3092\u307e\u3068\u3081\u3066\u8ffd\u52a0\u3057\u3001\u305d\u306e\u5f8c\u306b\u5fae\u8abf\u6574\u3067\u304d\u307e\u3059\u3002",
     moreTypes: "\u305d\u306e\u4ed6\u306e\u578b",
@@ -734,7 +751,7 @@ const messages = {
       "\u516c\u958b\u753b\u9762\u3084\u7ba1\u7406\u753b\u9762\u306b\u30a6\u30a9\u30ec\u30c3\u30c8\u30a2\u30c9\u30ec\u30b9\u3092\u8868\u793a\u3057\u307e\u305b\u3093\u3002",
     publicWalletAttach: "\u30a6\u30a9\u30ec\u30c3\u30c8\u60c5\u5831\u3092\u4ed8\u3051\u308b\uff08\u4efb\u610f\uff09",
     publicWalletAttachHelp:
-      "\u5fc5\u8981\u306a\u3068\u304d\u3060\u3051\u30a6\u30a9\u30ec\u30c3\u30c8\u60c5\u5831\u3092\u4ed8\u3051\u307e\u3059\u3002\u8ffd\u52a0\u306e personal message \u7f72\u540d\u306f\u6c42\u3081\u307e\u305b\u3093\u3002",
+      "\u5fc5\u8981\u306a\u3068\u304d\u3060\u3051\u30a6\u30a9\u30ec\u30c3\u30c8\u60c5\u5831\u3092\u4ed8\u3051\u307e\u3059\u3002\u3053\u3053\u3067 personal message \u7f72\u540d\u306f\u6c42\u3081\u307e\u305b\u3093\u3002",
     publicWalletConnectOptional:
       "\u30a6\u30a9\u30ec\u30c3\u30c8\u63a5\u7d9a\u306a\u3057\u3067\u305d\u306e\u307e\u307e\u9001\u4fe1\u3067\u304d\u307e\u3059\u3002",
     publicCurrentMode: "\u73fe\u5728\u306e\u30e2\u30fc\u30c9",
@@ -743,7 +760,7 @@ const messages = {
     publicAnonymousModeHelp:
       "\u30a6\u30a9\u30ec\u30c3\u30c8\u7f72\u540d\u306a\u3057\u3067\u3059\u3050\u306b\u9001\u4fe1\u3067\u304d\u307e\u3059\u3002",
     publicWalletModeHelpNoSignature:
-      "\u81ea\u5206\u3067\u9078\u3093\u3060\u5834\u5408\u3060\u3051\u30a6\u30a9\u30ec\u30c3\u30c8\u60c5\u5831\u3092\u4ed8\u3051\u307e\u3059\u3002\u9001\u4fe1\u6642\u306b personal message \u7f72\u540d\u306f\u6c42\u3081\u307e\u305b\u3093\u3002",
+      "\u81ea\u5206\u3067\u9078\u3093\u3060\u5834\u5408\u3060\u3051\u30a6\u30a9\u30ec\u30c3\u30c8\u60c5\u5831\u3092\u4ed8\u3051\u307e\u3059\u3002personal message \u7f72\u540d\u306f\u6c42\u3081\u307e\u305b\u3093\u304c\u3001Walrus \u4fdd\u5b58\u304c\u6709\u52b9\u306a\u5834\u5408\u306f\u66f8\u304d\u8fbc\u307f\u627f\u8a8d\u3092 wallet \u306b\u6c42\u3081\u308b\u3053\u3068\u304c\u3042\u308a\u307e\u3059\u3002",
     publicWalletModeHelp: (params) =>
       `\u6295\u7a3f\u30bb\u30c3\u30b7\u30e7\u30f3\u306f ${params?.hours ?? 24} \u6642\u9593\u518d\u5229\u7528\u3055\u308c\u308b\u306e\u3067\u3001\u6bce\u56de\u7f72\u540d\u3059\u308b\u5fc5\u8981\u306f\u307b\u307c\u3042\u308a\u307e\u305b\u3093\u3002`,
     requiredFieldError: "\u3053\u306e\u9805\u76ee\u306f\u5fc5\u9808\u3067\u3059\u3002",

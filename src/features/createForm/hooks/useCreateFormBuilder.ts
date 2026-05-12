@@ -1,4 +1,5 @@
 import { startTransition, useEffect, useMemo, useRef, useState } from "react";
+import { hasConditionalLogicCycle, sanitizeConditionalLogicFields } from "../../../lib/formLogic";
 import {
   createSmartTemplateBundle,
   createTemplateFields,
@@ -25,6 +26,7 @@ export function useCreateFormBuilder({ t, projects }: UseCreateFormBuilderArgs) 
   const [fields, setFields] = useState(initialFields);
   const [sections, setSections] = useState<FormSection[]>([]);
   const [purpose, setPurpose] = useState(initialTemplate.purpose);
+  const [visibility, setVisibility] = useState<"private" | "unlisted" | "public">("unlisted");
   const [encryptSubmissions, setEncryptSubmissions] = useState(true);
   const [currentStep, setCurrentStep] = useState<BuilderStepKey>("template");
   const [mobilePane, setMobilePane] = useState<MobileBuilderPane>("editor");
@@ -40,8 +42,8 @@ export function useCreateFormBuilder({ t, projects }: UseCreateFormBuilderArgs) 
 
   const createOnSui = Boolean(selectedProjectId);
   const draftSnapshot = useMemo(
-    () => serializeDraft(title, description, fields, purpose, createOnSui, encryptSubmissions, sections),
-    [createOnSui, description, encryptSubmissions, fields, purpose, sections, title],
+    () => serializeDraft(title, description, fields, purpose, visibility, createOnSui, encryptSubmissions, sections),
+    [createOnSui, description, encryptSubmissions, fields, purpose, sections, title, visibility],
   );
   const isDirty = draftSnapshot !== lastSavedSnapshot;
   const hasValidTitle = Boolean(title.trim());
@@ -124,13 +126,16 @@ export function useCreateFormBuilder({ t, projects }: UseCreateFormBuilderArgs) 
       setTitle(template.title);
       setDescription(template.description);
       setSections([]);
+      setVisibility("unlisted");
       replaceFields(nextFields);
       goToStep("info");
     });
   }
 
   function updateField(index: number, nextField: typeof fields[number]) {
-    setFields((current) => current.map((field, currentIndex) => (currentIndex === index ? nextField : field)));
+    setFields((current) =>
+      sanitizeConditionalLogicFields(current.map((field, currentIndex) => (currentIndex === index ? nextField : field))),
+    );
   }
 
   function insertField(type: FieldType, afterIndex?: number, sectionId?: string) {
@@ -177,7 +182,7 @@ export function useCreateFormBuilder({ t, projects }: UseCreateFormBuilderArgs) 
       if (current.length === 1) {
         return current;
       }
-      const next = current.filter((field) => field.id !== fieldId);
+      const next = sanitizeConditionalLogicFields(current.filter((field) => field.id !== fieldId));
       if (activeFieldId === fieldId) {
         setActiveFieldId(next[0]?.id ?? "");
       }
@@ -256,6 +261,10 @@ export function useCreateFormBuilder({ t, projects }: UseCreateFormBuilderArgs) 
       return { isValid: false, error: t("errorFieldNeedsOption") };
     }
 
+    if (hasConditionalLogicCycle(fields)) {
+      return { isValid: false, error: t("errorConditionalLogicCycle") };
+    }
+
     return { isValid: true, error: "" };
   }
 
@@ -274,6 +283,7 @@ export function useCreateFormBuilder({ t, projects }: UseCreateFormBuilderArgs) 
     fields,
     sections,
     purpose,
+    visibility,
     encryptSubmissions,
     currentStep,
     mobilePane,
@@ -298,6 +308,7 @@ export function useCreateFormBuilder({ t, projects }: UseCreateFormBuilderArgs) 
     setTitle,
     setDescription,
     setEncryptSubmissions,
+    setVisibility,
     setFieldTypePickerOpen,
     setMobilePane,
     setActiveFieldId,

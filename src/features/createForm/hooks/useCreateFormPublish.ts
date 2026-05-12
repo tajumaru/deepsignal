@@ -11,6 +11,7 @@ import type {
   FormField,
   FormPurpose,
   FormSection,
+  FormVisibility,
   PreparedPublishForm,
   ProjectOption,
   PublishOverlayState,
@@ -27,6 +28,7 @@ interface UseCreateFormPublishArgs {
   fields: FormField[];
   sections: FormSection[];
   purpose: FormPurpose;
+  visibility: FormVisibility;
   encryptSubmissions: boolean;
   isDirty: boolean;
   selectedProject: ProjectOption | null;
@@ -60,6 +62,7 @@ export function useCreateFormPublish({
   fields,
   sections,
   purpose,
+  visibility,
   encryptSubmissions,
   isDirty,
   selectedProject,
@@ -201,6 +204,7 @@ export function useCreateFormPublish({
       fields,
       sections,
       purpose,
+      visibility,
       ownerAddress: accountAddress,
       projectId: selectedProject?.objectId,
       projectName: selectedProject?.name,

@@ -9,9 +9,19 @@ export type FieldType =
   | "video";
 
 export type FormPurpose = "bug" | "feature" | "survey" | "custom";
+export type FormVisibility = "private" | "unlisted" | "public";
 export type SubmissionCategory = "bug" | "feature" | "survey" | "general";
 export type SubmissionPriority = "low" | "medium" | "high";
 export type SignalSeverity = "low" | "medium" | "high";
+export type ConditionalLogicOperator =
+  | "equals"
+  | "notEquals"
+  | "contains"
+  | "greaterThan"
+  | "lessThan"
+  | "isEmpty"
+  | "isNotEmpty";
+export type ConditionalLogicMode = "all" | "any";
 export type SubmissionTriageStatus =
   | "new"
   | "investigating"
@@ -19,6 +29,17 @@ export type SubmissionTriageStatus =
   | "in_progress"
   | "fixed"
   | "closed";
+
+export interface ConditionalLogicCondition {
+  fieldId: string;
+  operator: ConditionalLogicOperator;
+  value?: string;
+}
+
+export interface ConditionalLogicGroup {
+  logic: ConditionalLogicMode;
+  conditions: ConditionalLogicCondition[];
+}
 
 export interface FormField {
   id: string;
@@ -33,6 +54,8 @@ export interface FormField {
   visibility?: "public" | "admin";
   adminOnly?: boolean;
   options?: string[];
+  visibilityRules?: ConditionalLogicGroup;
+  requiredRules?: ConditionalLogicGroup;
 }
 
 export interface FormSection {
@@ -48,7 +71,10 @@ export interface FormSchema {
   fields: FormField[];
   sections?: FormSection[];
   purpose?: FormPurpose;
+  visibility?: FormVisibility;
+  publicExplore?: boolean;
   createdAt: string;
+  updatedAt?: string;
   ownerAddress?: string;
   isOnchain?: boolean;
   encryptSubmissions?: boolean;
@@ -76,7 +102,7 @@ export interface SignalManifest {
 
 export interface SubmissionAttachment {
   fieldId: string;
-  type: "image" | "video";
+  type: "image" | "video" | "document";
   blobId: string;
   name: string;
   size: number;
@@ -86,6 +112,18 @@ export interface SubmissionAttachment {
   originalType?: string;
   encoding?: "seal-base64-v1";
   inlineData?: string;
+}
+
+export interface UploadedAttachment {
+  id: string;
+  fileName: string;
+  fileSize: number;
+  mimeType: string;
+  previewUrl?: string;
+  status: "pending" | "uploading" | "uploaded" | "failed";
+  progress: number;
+  walrusBlobId?: string;
+  error?: string;
 }
 
 export interface SubmissionPublicPayload {

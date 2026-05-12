@@ -32,6 +32,7 @@ export function AppShell({ children }: PropsWithChildren) {
         </Link>
         <nav className="topnav">
           <NavLink to="/">{t("navHome")}</NavLink>
+          <NavLink to="/explore">{t("navExplore")}</NavLink>
           <Suspense fallback={null}>
             <WalletNav />
           </Suspense>

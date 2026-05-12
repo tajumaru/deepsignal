@@ -31,6 +31,8 @@ export async function publishForm({
     title: form.title,
     description: form.description,
     purpose: form.purpose,
+    visibility: form.visibility,
+    publicExplore: form.publicExplore,
     fieldCount: form.fields.length,
     sectionCount: form.sections?.length ?? 0,
     encryptSubmissions: form.encryptSubmissions,

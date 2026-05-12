@@ -33,6 +33,7 @@ export const INITIAL_DRAFT_SNAPSHOT = serializeDraft(
   initialTemplate.description,
   initialFields,
   initialTemplate.purpose,
+  "unlisted",
   false,
   true,
   initialSections,
