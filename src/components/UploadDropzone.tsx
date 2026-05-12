@@ -314,6 +314,7 @@ export function UploadDropzone({
                     <button
                       type="button"
                       className="ghost-button upload-attachment-remove"
+                      disabled={disabled}
                       onClick={(event) => {
                         event.stopPropagation();
                         removeAttachment(attachment.id);

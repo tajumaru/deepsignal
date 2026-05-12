@@ -13,6 +13,8 @@ type FormMetadataOverlay = Pick<
   | "projectName"
   | "ownerAddress"
   | "encryptSubmissions"
+  | "responseDeadline"
+  | "responseDeadlineMode"
   | "blobId"
   | "manifestBlobId"
 >;
@@ -48,6 +50,8 @@ export function saveFormMetadataOverlay(form: FormSchema) {
     projectName: form.projectName,
     ownerAddress: form.ownerAddress,
     encryptSubmissions: form.encryptSubmissions,
+    responseDeadline: form.responseDeadline ?? null,
+    responseDeadlineMode: form.responseDeadlineMode ?? "none",
     blobId: form.blobId,
     manifestBlobId: form.manifestBlobId,
   };

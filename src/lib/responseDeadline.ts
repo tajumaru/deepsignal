@@ -1,0 +1,63 @@
+import { formatDate } from "./utils";
+
+export type ResponseDeadlinePreset = "none" | "1h" | "24h" | "7d" | "30d" | "custom";
+
+const PRESET_TO_MS: Record<Exclude<ResponseDeadlinePreset, "none" | "custom">, number> = {
+  "1h": 60 * 60 * 1000,
+  "24h": 24 * 60 * 60 * 1000,
+  "7d": 7 * 24 * 60 * 60 * 1000,
+  "30d": 30 * 24 * 60 * 60 * 1000,
+};
+
+export function isResponseDeadlinePassed(responseDeadline?: number | null): boolean {
+  return typeof responseDeadline === "number" && Number.isFinite(responseDeadline)
+    ? Date.now() > responseDeadline
+    : false;
+}
+
+export function formatResponseDeadline(responseDeadline?: number | null): string {
+  if (responseDeadline == null || !Number.isFinite(responseDeadline)) {
+    return "無期限";
+  }
+  if (isResponseDeadlinePassed(responseDeadline)) {
+    return "回答受付終了";
+  }
+
+  const diffMs = responseDeadline - Date.now();
+  const diffHours = diffMs / (60 * 60 * 1000);
+  if (diffHours <= 48) {
+    return `あと${Math.max(1, Math.ceil(diffHours))}時間`;
+  }
+
+  const diffDays = diffMs / (24 * 60 * 60 * 1000);
+  if (diffDays <= 60) {
+    return `あと${Math.max(1, Math.ceil(diffDays))}日`;
+  }
+
+  return formatDate(new Date(responseDeadline).toISOString());
+}
+
+export function getResponseDeadlineFromPreset(preset: ResponseDeadlinePreset): number | null {
+  if (preset === "none" || preset === "custom") {
+    return null;
+  }
+  return Date.now() + PRESET_TO_MS[preset];
+}
+
+export function parseCustomResponseDeadline(value: string): number | null {
+  if (!value.trim()) {
+    return null;
+  }
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+export function toDateTimeLocalValue(timestamp?: number | null): string {
+  if (timestamp == null || !Number.isFinite(timestamp)) {
+    return "";
+  }
+  const date = new Date(timestamp);
+  const offset = date.getTimezoneOffset();
+  const localDate = new Date(date.getTime() - offset * 60 * 1000);
+  return localDate.toISOString().slice(0, 16);
+}

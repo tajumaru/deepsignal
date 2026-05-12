@@ -78,6 +78,8 @@ export interface FormSchema {
   ownerAddress?: string;
   isOnchain?: boolean;
   encryptSubmissions?: boolean;
+  responseDeadline?: number | null;
+  responseDeadlineMode?: "none" | "relative" | "custom";
   projectId?: string;
   projectName?: string;
   onchainFormId?: number;

@@ -44,6 +44,8 @@ export function FormBuilderPage() {
     purpose: builder.values.purpose,
     visibility: builder.values.visibility,
     encryptSubmissions: builder.values.encryptSubmissions,
+    responseDeadlinePreset: builder.values.responseDeadlinePreset,
+    responseDeadlineCustomAt: builder.values.responseDeadlineCustomAt,
     isDirty: builder.isDirty,
     selectedProject: builder.selectedProject,
     setProjectState: builder.setProjectState,
@@ -192,8 +194,12 @@ export function FormBuilderPage() {
               t={t}
               title={builder.values.title}
               description={builder.values.description}
+              responseDeadlinePreset={builder.values.responseDeadlinePreset}
+              responseDeadlineCustomAt={builder.values.responseDeadlineCustomAt}
               setTitle={builder.setTitle}
               setDescription={builder.setDescription}
+              setResponseDeadlinePreset={builder.setResponseDeadlinePreset}
+              setResponseDeadlineCustomAt={builder.setResponseDeadlineCustomAt}
               onBack={() => builder.moveStep(-1)}
               onContinue={() => builder.moveStep(1)}
             />

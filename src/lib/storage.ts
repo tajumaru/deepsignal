@@ -7,6 +7,7 @@ import {
   normalizeFormPurpose,
 } from "./formTemplates";
 import { normalizeFormVisibility } from "./explore";
+import { isResponseDeadlinePassed } from "./responseDeadline";
 import { enrichSubmissionWithTriage } from "./signalTriage";
 import { storage } from "../storage/storageFactory";
 import type {
@@ -416,6 +417,18 @@ export function normalizeForm(raw: FormSchema | (Record<string, unknown> & { id:
     updatedAt: typeof raw.updatedAt === "string" ? raw.updatedAt : typeof raw.createdAt === "string" ? raw.createdAt : new Date(0).toISOString(),
     projectId: typeof raw.projectId === "string" ? raw.projectId : undefined,
     projectName: typeof raw.projectName === "string" ? raw.projectName : undefined,
+    responseDeadline:
+      typeof raw.responseDeadline === "number"
+        ? raw.responseDeadline
+        : typeof raw.responseDeadline === "string"
+          ? Number(raw.responseDeadline)
+          : null,
+    responseDeadlineMode:
+      raw.responseDeadlineMode === "relative"
+        ? "relative"
+        : raw.responseDeadlineMode === "custom"
+          ? "custom"
+          : "none",
     onchainFormId:
       typeof raw.onchainFormId === "number"
         ? raw.onchainFormId
@@ -505,6 +518,10 @@ export async function saveSubmissionWithEncryption(
   seal: SealAdapter = activeSealAdapter,
   targetStorage: StorageAdapter = storageAdapter,
 ): Promise<SaveSubmissionWithEncryptionResult> {
+  if (isResponseDeadlinePassed(form.responseDeadline)) {
+    throw new Error("このフォームの回答受付は終了しました");
+  }
+
   const isFullyEncrypted = form.encryptSubmissions === true;
   const subjectPreview = isFullyEncrypted ? "Private signal" : getSubjectPreview(form, submission.answers);
   const ratingValue = isFullyEncrypted ? undefined : getRatingValue(form, submission.answers);

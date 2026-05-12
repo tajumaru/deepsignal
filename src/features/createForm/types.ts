@@ -8,6 +8,7 @@ export type { FieldType, FormField, FormPurpose, FormSchema, FormSection, FormVi
 export type PublishStageKey = "encoding" | "encrypting" | "sending" | "stored" | "registering" | "active";
 export type BuilderStepKey = "template" | "info" | "fields" | "publish";
 export type MobileBuilderPane = "editor" | "preview";
+export type ResponseDeadlinePreset = "none" | "1h" | "24h" | "7d" | "30d" | "custom";
 
 export interface PublishPhase {
   key: PublishStageKey;
@@ -42,6 +43,8 @@ export interface FormBuilderValues {
   purpose: FormPurpose;
   visibility: FormVisibility;
   encryptSubmissions: boolean;
+  responseDeadlinePreset: ResponseDeadlinePreset;
+  responseDeadlineCustomAt: string;
   currentStep: BuilderStepKey;
   mobilePane: MobileBuilderPane;
   fieldTypePickerOpen: boolean;

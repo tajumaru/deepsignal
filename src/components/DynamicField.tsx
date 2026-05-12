@@ -9,6 +9,7 @@ interface DynamicFieldProps {
   hint?: string;
   questionNumber?: number;
   required?: boolean;
+  disabled?: boolean;
   onChange: (value: unknown) => void;
 }
 
@@ -19,6 +20,7 @@ export function DynamicField({
   hint,
   questionNumber,
   required,
+  disabled,
   onChange,
 }: DynamicFieldProps) {
   const { t } = useI18n();
@@ -48,6 +50,7 @@ export function DynamicField({
         <input
           value={String(value ?? "")}
           placeholder={field.placeholder ?? ""}
+          disabled={disabled}
           onChange={(event) => onChange(event.target.value)}
         />
       )}
@@ -57,12 +60,13 @@ export function DynamicField({
           rows={5}
           value={String(value ?? "")}
           placeholder={field.placeholder ?? ""}
+          disabled={disabled}
           onChange={(event) => onChange(event.target.value)}
         />
       )}
 
       {field.type === "dropdown" && (
-        <select value={String(value ?? "")} onChange={(event) => onChange(event.target.value)}>
+        <select value={String(value ?? "")} disabled={disabled} onChange={(event) => onChange(event.target.value)}>
           <option value="">{t("selectOption")}</option>
           {(field.options ?? []).map((option) => (
             <option key={option} value={option}>
@@ -79,6 +83,7 @@ export function DynamicField({
               <input
                 type="checkbox"
                 checked={Array.isArray(value) ? value.includes(option) : false}
+                disabled={disabled}
                 onChange={(event) => updateCheckbox(option, event.target.checked)}
               />
               <span>{option}</span>
@@ -98,6 +103,7 @@ export function DynamicField({
                 className={`star-button ${active ? "active" : ""}`}
                 aria-label={t("ratingValue", { score })}
                 aria-pressed={String(value ?? "") === String(score)}
+                disabled={disabled}
                 onClick={() => onChange(String(score))}
               >
                 ★
@@ -116,6 +122,7 @@ export function DynamicField({
           inputMode="url"
           placeholder={field.placeholder ?? "https://example.com"}
           value={String(value ?? "")}
+          disabled={disabled}
           onChange={(event) => onChange(event.target.value)}
         />
       )}
@@ -124,6 +131,7 @@ export function DynamicField({
         <div className="upload-card">
           <UploadDropzone
             attachments={selectedAttachments}
+            disabled={disabled}
             hint={hint ?? (field.type === "screenshot" ? t("screenshotHint") : t("videoHint"))}
             capture={field.type === "screenshot" ? "environment" : undefined}
             onChange={onChange}

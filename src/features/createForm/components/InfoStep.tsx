@@ -1,12 +1,17 @@
+import { toDateTimeLocalValue } from "../../../lib/responseDeadline";
 import { RichTextEditor } from "../../../components/RichTextEditor";
-import type { Translate } from "../types";
+import type { ResponseDeadlinePreset, Translate } from "../types";
 
 interface InfoStepProps {
   t: Translate;
   title: string;
   description: string;
+  responseDeadlinePreset: ResponseDeadlinePreset;
+  responseDeadlineCustomAt: string;
   setTitle: (value: string) => void;
   setDescription: (value: string) => void;
+  setResponseDeadlinePreset: (value: ResponseDeadlinePreset) => void;
+  setResponseDeadlineCustomAt: (value: string) => void;
   onBack: () => void;
   onContinue: () => void;
 }
@@ -15,11 +20,24 @@ export function InfoStep({
   t,
   title,
   description,
+  responseDeadlinePreset,
+  responseDeadlineCustomAt,
   setTitle,
   setDescription,
+  setResponseDeadlinePreset,
+  setResponseDeadlineCustomAt,
   onBack,
   onContinue,
 }: InfoStepProps) {
+  const deadlineOptions: Array<{ value: ResponseDeadlinePreset; label: string }> = [
+    { value: "none", label: "無期限" },
+    { value: "1h", label: "1時間" },
+    { value: "24h", label: "24時間" },
+    { value: "7d", label: "7日" },
+    { value: "30d", label: "30日" },
+    { value: "custom", label: "カスタム日時" },
+  ];
+
   return (
     <section className="panel composer-section-card composer-step-card">
       <div className="section-row">
@@ -57,6 +75,48 @@ export function InfoStep({
             placeholder={t("builderDescriptionPlaceholder")}
           />
         </label>
+
+        <section className="composer-deadline-card">
+          <div className="section-row">
+            <div>
+              <span>回答期限</span>
+              <p className="muted">期限後は新しい回答を送信できません</p>
+              <p className="muted">管理者は期限後も回答済みデータを確認できます</p>
+            </div>
+          </div>
+
+          <div className="composer-deadline-options" role="radiogroup" aria-label="回答期限">
+            {deadlineOptions.map((option) => (
+              <label key={option.value} className="composer-deadline-option">
+                <input
+                  type="radio"
+                  name="responseDeadlinePreset"
+                  value={option.value}
+                  checked={responseDeadlinePreset === option.value}
+                  onChange={() => {
+                    setResponseDeadlinePreset(option.value);
+                    if (option.value === "custom" && !responseDeadlineCustomAt) {
+                      setResponseDeadlineCustomAt(toDateTimeLocalValue(Date.now() + 60 * 60 * 1000));
+                    }
+                  }}
+                />
+                <span>{option.label}</span>
+              </label>
+            ))}
+          </div>
+
+          {responseDeadlinePreset === "custom" ? (
+            <label>
+              <span>期限日時</span>
+              <input
+                type="datetime-local"
+                value={responseDeadlineCustomAt}
+                min={toDateTimeLocalValue(Date.now() + 60 * 1000)}
+                onChange={(event) => setResponseDeadlineCustomAt(event.target.value)}
+              />
+            </label>
+          ) : null}
+        </section>
       </div>
 
       <div className="composer-step-actions">

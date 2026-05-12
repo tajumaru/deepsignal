@@ -37,4 +37,6 @@ export const INITIAL_DRAFT_SNAPSHOT = serializeDraft(
   false,
   true,
   initialSections,
+  "none",
+  "",
 );

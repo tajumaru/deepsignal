@@ -36,6 +36,8 @@ export async function publishForm({
     fieldCount: form.fields.length,
     sectionCount: form.sections?.length ?? 0,
     encryptSubmissions: form.encryptSubmissions,
+    responseDeadline: form.responseDeadline ?? null,
+    responseDeadlineMode: form.responseDeadlineMode ?? "none",
     ownerAddress: form.ownerAddress,
     projectId: form.projectId ?? null,
   });

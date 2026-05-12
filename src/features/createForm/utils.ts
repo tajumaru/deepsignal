@@ -1,7 +1,7 @@
 import { sanitizeConditionalLogicFields } from "../../utils/formLogic";
 import { makeId } from "../../lib/utils";
 import { normalizeFormVisibility } from "../../lib/explore";
-import type { FieldType, FormField, FormPurpose, FormSchema, FormSection } from "./types";
+import type { FieldType, FormField, FormPurpose, FormSchema, FormSection, ResponseDeadlinePreset } from "./types";
 
 export function wait(ms: number) {
   return new Promise((resolve) => window.setTimeout(resolve, ms));
@@ -60,6 +60,8 @@ export function serializeDraft(
   createOnSui: boolean,
   encryptSubmissions: boolean,
   sections: FormSection[],
+  responseDeadlinePreset: ResponseDeadlinePreset,
+  responseDeadlineCustomAt: string,
 ) {
   return JSON.stringify({
     title,
@@ -68,6 +70,8 @@ export function serializeDraft(
     visibility: normalizeFormVisibility(visibility),
     createOnSui,
     encryptSubmissions,
+    responseDeadlinePreset,
+    responseDeadlineCustomAt,
     sections: sections.map((section) => ({
       title: section.title,
       description: section.description ?? "",
@@ -101,6 +105,8 @@ export function buildFormSchema(args: {
   projectId?: string;
   projectName?: string;
   encryptSubmissions: boolean;
+  responseDeadline?: number | null;
+  responseDeadlineMode?: "none" | "relative" | "custom";
 }): FormSchema {
   return {
     id: makeId("form"),
@@ -134,6 +140,8 @@ export function buildFormSchema(args: {
     projectId: args.projectId,
     projectName: args.projectName,
     encryptSubmissions: args.encryptSubmissions,
+    responseDeadline: args.responseDeadline ?? null,
+    responseDeadlineMode: args.responseDeadlineMode ?? "none",
     registrationMode: "walrus",
   };
 }

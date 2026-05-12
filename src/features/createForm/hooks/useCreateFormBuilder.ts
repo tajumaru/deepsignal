@@ -17,6 +17,7 @@ import type {
   FormSection,
   MobileBuilderPane,
   ProjectOption,
+  ResponseDeadlinePreset,
   Translate,
 } from "../types";
 import { cloneField, createField, createSection, serializeDraft } from "../utils";
@@ -37,6 +38,8 @@ export function useCreateFormBuilder({ t, projects }: UseCreateFormBuilderArgs) 
   const [purpose, setPurpose] = useState(initialTemplate.purpose);
   const [visibility, setVisibility] = useState<"private" | "unlisted" | "public">("unlisted");
   const [encryptSubmissions, setEncryptSubmissions] = useState(true);
+  const [responseDeadlinePreset, setResponseDeadlinePreset] = useState<ResponseDeadlinePreset>("none");
+  const [responseDeadlineCustomAt, setResponseDeadlineCustomAt] = useState("");
   const [currentStep, setCurrentStep] = useState<BuilderStepKey>("template");
   const [mobilePane, setMobilePane] = useState<MobileBuilderPane>("editor");
   const [fieldTypePickerOpen, setFieldTypePickerOpen] = useState(false);
@@ -51,8 +54,31 @@ export function useCreateFormBuilder({ t, projects }: UseCreateFormBuilderArgs) 
 
   const createOnSui = Boolean(selectedProjectId);
   const draftSnapshot = useMemo(
-    () => serializeDraft(title, description, fields, purpose, visibility, createOnSui, encryptSubmissions, sections),
-    [createOnSui, description, encryptSubmissions, fields, purpose, sections, title, visibility],
+    () =>
+      serializeDraft(
+        title,
+        description,
+        fields,
+        purpose,
+        visibility,
+        createOnSui,
+        encryptSubmissions,
+        sections,
+        responseDeadlinePreset,
+        responseDeadlineCustomAt,
+      ),
+    [
+      createOnSui,
+      description,
+      encryptSubmissions,
+      fields,
+      purpose,
+      responseDeadlineCustomAt,
+      responseDeadlinePreset,
+      sections,
+      title,
+      visibility,
+    ],
   );
   const isDirty = draftSnapshot !== lastSavedSnapshot;
   const hasValidTitle = Boolean(title.trim());
@@ -136,6 +162,8 @@ export function useCreateFormBuilder({ t, projects }: UseCreateFormBuilderArgs) 
       setDescription(template.description);
       setSections([]);
       setVisibility("unlisted");
+      setResponseDeadlinePreset("none");
+      setResponseDeadlineCustomAt("");
       replaceFields(nextFields);
       goToStep("info");
     });
@@ -310,6 +338,8 @@ export function useCreateFormBuilder({ t, projects }: UseCreateFormBuilderArgs) 
     purpose,
     visibility,
     encryptSubmissions,
+    responseDeadlinePreset,
+    responseDeadlineCustomAt,
     currentStep,
     mobilePane,
     fieldTypePickerOpen,
@@ -333,6 +363,8 @@ export function useCreateFormBuilder({ t, projects }: UseCreateFormBuilderArgs) 
     setTitle,
     setDescription,
     setEncryptSubmissions,
+    setResponseDeadlinePreset,
+    setResponseDeadlineCustomAt,
     setVisibility,
     setFieldTypePickerOpen,
     setMobilePane,

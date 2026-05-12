@@ -2,6 +2,10 @@ import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { getSealRuntimeStatus } from "../../../crypto/cryptoFactory";
 import { getPublicFormPath } from "../../../lib/publicLinks";
 import { createFormOnChain } from "../../../lib/projectRegistry";
+import {
+  getResponseDeadlineFromPreset,
+  parseCustomResponseDeadline,
+} from "../../../lib/responseDeadline";
 import { isLocalFallbackBlob } from "../../../lib/proof";
 import { publishForm } from "../services";
 import { localStorageAdapter } from "../../../storage/localStorageAdapter";
@@ -31,6 +35,8 @@ interface UseCreateFormPublishArgs {
   purpose: FormPurpose;
   visibility: FormVisibility;
   encryptSubmissions: boolean;
+  responseDeadlinePreset: "none" | "1h" | "24h" | "7d" | "30d" | "custom";
+  responseDeadlineCustomAt: string;
   isDirty: boolean;
   selectedProject: ProjectOption | null;
   setProjectState: (value: string) => void;
@@ -65,6 +71,8 @@ export function useCreateFormPublish({
   purpose,
   visibility,
   encryptSubmissions,
+  responseDeadlinePreset,
+  responseDeadlineCustomAt,
   isDirty,
   selectedProject,
   setProjectState,
@@ -194,6 +202,30 @@ export function useCreateFormPublish({
       return;
     }
 
+    const responseDeadline =
+      responseDeadlinePreset === "custom"
+        ? parseCustomResponseDeadline(responseDeadlineCustomAt)
+        : getResponseDeadlineFromPreset(responseDeadlinePreset);
+    const responseDeadlineMode =
+      responseDeadlinePreset === "none"
+        ? "none"
+        : responseDeadlinePreset === "custom"
+          ? "custom"
+          : "relative";
+
+    if (responseDeadlinePreset === "custom") {
+      if (!responseDeadline) {
+        setError("カスタム日時を入力してください。");
+        goToStep("info");
+        return;
+      }
+      if (responseDeadline <= Date.now()) {
+        setError("カスタム日時は現在時刻より未来を指定してください。");
+        goToStep("info");
+        return;
+      }
+    }
+
     const runId = publishRunRef.current + 1;
     publishRunRef.current = runId;
     setSaving(true);
@@ -210,6 +242,8 @@ export function useCreateFormPublish({
       projectId: selectedProject?.objectId,
       projectName: selectedProject?.name,
       encryptSubmissions,
+      responseDeadline,
+      responseDeadlineMode,
     });
 
     try {

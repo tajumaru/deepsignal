@@ -19,6 +19,7 @@ import { useI18n } from "../i18n";
 import { getReviewAccessState } from "../lib/adminAccess";
 import { exportSubmissionJson, exportSubmissionsCsv, exportSummaryJson } from "../lib/export";
 import { getPublicFormPath, getPublicRoadmapPath } from "../lib/publicLinks";
+import { formatResponseDeadline } from "../lib/responseDeadline";
 import { getRespondentDisplayLabel, getSubmissionRespondentMeta } from "../lib/respondentMeta";
 import {
   triageStatusToOnchainStatus,
@@ -820,6 +821,7 @@ export function FormSubmissionsPage() {
             <p className="eyebrow">Signal Triage</p>
             <h1>{form.title}</h1>
             <p className="lede">{form.description || t("encryptedSignalReviewForForm")}</p>
+            <p className="muted">回答期限: {formatResponseDeadline(form.responseDeadline)}</p>
           </div>
           <div className="inbox-header-actions">
             <Link className="ghost-button" to="/admin">

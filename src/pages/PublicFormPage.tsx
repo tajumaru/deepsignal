@@ -10,6 +10,7 @@ import { SignalMetaChip, SignalMetaRow } from "../components/SignalMetaChip";
 import { useI18n } from "../i18n";
 import { getEncryptedPayloadAvailabilityLabel, hasDedicatedEncryptedPayloadBlob } from "../lib/encryptionDisplay";
 import { getSubmissionCategoryFromPurpose } from "../lib/formTemplates";
+import { formatResponseDeadline, isResponseDeadlinePassed } from "../lib/responseDeadline";
 import { getSubmissionRespondentMeta } from "../lib/respondentMeta";
 import { ensureRespondentSession } from "../lib/respondentSession";
 import { getStorageDetailLabels, isLocalFallbackBlob } from "../lib/signalInbox";
@@ -186,6 +187,8 @@ export function PublicFormPage() {
     const visibleFields = form?.fields.filter((field) => visibleFieldIds.has(field.id)) ?? [];
     return new Map(visibleFields.map((field, index) => [field.id, index + 1]));
   }, [form, visibleFieldIds]);
+  const deadlinePassed = useMemo(() => isResponseDeadlinePassed(form?.responseDeadline), [form?.responseDeadline]);
+  const deadlineLabel = useMemo(() => formatResponseDeadline(form?.responseDeadline), [form?.responseDeadline]);
 
   useEffect(() => {
     setErrors((current) => {
@@ -225,7 +228,15 @@ export function PublicFormPage() {
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
-    if (!form || !validate(form)) {
+    if (!form) {
+      return;
+    }
+    if (isResponseDeadlinePassed(form.responseDeadline)) {
+      setSubmitError("このフォームの回答受付は終了しました");
+      setSubmitNotice("");
+      return;
+    }
+    if (!validate(form)) {
       return;
     }
 
@@ -525,6 +536,15 @@ export function PublicFormPage() {
       <p className="eyebrow">{t("publicEyebrow")}</p>
       <h1>{form.title}</h1>
       <RichTextContent value={form.description ?? ""} className="lede rich-text-content" fallback={t("publicDefaultBody")} />
+      <section className={`answer-card public-deadline-card ${deadlinePassed ? "is-expired" : ""}`}>
+        <p className="eyebrow">回答期限</p>
+        <h3>{deadlineLabel}</h3>
+        <p className="muted">
+          {deadlinePassed
+            ? "このフォームの回答受付は終了しました"
+            : "期限後は新しい回答を送信できません"}
+        </p>
+      </section>
       {form.encryptSubmissions ? (
         <section className="answer-card public-private-signal-note">
           <p className="eyebrow">Private Signal</p>
@@ -554,7 +574,7 @@ export function PublicFormPage() {
               <input
                 type="checkbox"
                 checked={attachWallet}
-                disabled={!account?.address}
+                disabled={!account?.address || deadlinePassed}
                 onChange={(event) => {
                   setAttachWalletTouched(true);
                   setAttachWallet(event.target.checked);
@@ -608,6 +628,7 @@ export function PublicFormPage() {
                           : undefined
                     }
                     onChange={(value) => updateAnswer(field.id, value)}
+                    disabled={deadlinePassed}
                   />
                 ))}
               </div>
@@ -630,17 +651,20 @@ export function PublicFormPage() {
                   : undefined
             }
             onChange={(value) => updateAnswer(field.id, value)}
+            disabled={deadlinePassed}
           />
         ))}
       </div>
       {submitError ? <p className="error-text">{submitError}</p> : null}
       <div className="public-form-actions">
-        <button type="submit" className="primary-button" disabled={submitting}>
-          {submitting
-            ? t("submitting")
-            : attachWallet && account?.address
-              ? "Submit with wallet"
-              : "Submit anonymously"}
+        <button type="submit" className="primary-button" disabled={submitting || deadlinePassed}>
+          {deadlinePassed
+            ? "回答受付終了"
+            : submitting
+              ? t("submitting")
+              : attachWallet && account?.address
+                ? "Submit with wallet"
+                : "Submit anonymously"}
         </button>
       </div>
     </form>

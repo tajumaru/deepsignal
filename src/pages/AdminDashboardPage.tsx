@@ -53,6 +53,7 @@ import { getTriageStatusLabel, TRIAGE_STATUS_OPTIONS } from "../lib/signalOps";
 import { exportSubmissionJson } from "../lib/export";
 import { getEncryptedPayloadAvailabilityLabel, hasDedicatedEncryptedPayloadBlob } from "../lib/encryptionDisplay";
 import { getPublicFormPath, getPublicRoadmapPath } from "../lib/publicLinks";
+import { formatResponseDeadline } from "../lib/responseDeadline";
 import { getRespondentDisplayLabel, getSubmissionRespondentMeta } from "../lib/respondentMeta";
 import {
   getSignalPreview,
@@ -64,6 +65,7 @@ import {
   type SignalCategory,
 } from "../lib/signalInbox";
 import {
+  normalizeForm,
   normalizeSubmission,
   resolveSubmissionAnswers,
   storageAdapter,
@@ -435,7 +437,7 @@ export function AdminDashboardPage() {
         return;
       }
 
-      const nextForms = allForms.map((form) => ({ ...form, submissionCount: 0 }));
+      const nextForms = allForms.map((form) => ({ ...normalizeForm(form), submissionCount: 0 }));
       setForms(nextForms);
       setSubmissionsByFormId({});
       setSelectedSignalId((current) => preferredSignalId ?? current);
@@ -1812,6 +1814,7 @@ export function AdminDashboardPage() {
                             {form.submissionCount} signals
                             {form.encryptSubmissions ? " · protected inbox" : " · open inbox"}
                           </p>
+                          <p className="muted">回答期限: {formatResponseDeadline(form.responseDeadline)}</p>
                         </div>
                         <div className="form-stream-actions">
                           <span className="signal-chip">{unreadCount} unread</span>
@@ -2722,6 +2725,10 @@ export function AdminDashboardPage() {
                           <div className="metadata-row">
                             <span>Reviewer access</span>
                             <strong>{privateReviewLabel}</strong>
+                          </div>
+                          <div className="metadata-row">
+                            <span>回答期限</span>
+                            <strong>{formatResponseDeadline(selectedRecord.form.responseDeadline)}</strong>
                           </div>
                           <div className="metadata-row">
                             <span>{t("walletAccessStatus")}</span>
