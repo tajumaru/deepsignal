@@ -130,7 +130,11 @@ export function PublishStep({
               <p className="muted">{savedForm ? t("publishSavedModeBody") : t("publishReadyBody")}</p>
             </div>
             {!savedForm ? (
-              <button type="submit" className="primary-button" disabled={saving || !isReadyToPublish}>
+              <button
+                type="submit"
+                className="primary-button publish-cta-button"
+                disabled={saving || !isReadyToPublish}
+              >
                 {saving ? t("builderSaving") : t("builderSave")}
               </button>
             ) : null}

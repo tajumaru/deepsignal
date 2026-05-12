@@ -53,6 +53,13 @@ export interface FormBuilderValues {
   projectState: string;
 }
 
+export interface FieldsStepValidationResult {
+  isValid: boolean;
+  error: string;
+  fieldId?: string;
+  relatedFieldIds?: string[];
+}
+
 export interface FormBuilderRefs {
   labelRefs: MutableRefObject<Record<string, HTMLInputElement | null>>;
   fieldCardRefs: MutableRefObject<Record<string, HTMLElement | null>>;

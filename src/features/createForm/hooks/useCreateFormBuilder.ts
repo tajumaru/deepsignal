@@ -1,5 +1,5 @@
 import { startTransition, useEffect, useMemo, useRef, useState } from "react";
-import { hasConditionalLogicCycle, sanitizeConditionalLogicFields } from "../../../utils/formLogic";
+import { getConditionalLogicCycle, sanitizeConditionalLogicFields } from "../../../utils/formLogic";
 import {
   createSmartTemplateBundle,
   createTemplateFields,
@@ -9,7 +9,16 @@ import {
 } from "../../../lib/formTemplates";
 import { getSelectedProjectId, setSelectedProjectId } from "../../../lib/projectRegistry";
 import { INITIAL_DRAFT_SNAPSHOT, initialFields, initialTemplate } from "../constants";
-import type { BuilderStepKey, FieldType, FormBuilderValues, FormSection, MobileBuilderPane, ProjectOption, Translate } from "../types";
+import type {
+  BuilderStepKey,
+  FieldType,
+  FieldsStepValidationResult,
+  FormBuilderValues,
+  FormSection,
+  MobileBuilderPane,
+  ProjectOption,
+  Translate,
+} from "../types";
 import { cloneField, createField, createSection, serializeDraft } from "../utils";
 
 interface UseCreateFormBuilderArgs {
@@ -242,13 +251,13 @@ export function useCreateFormBuilder({ t, projects }: UseCreateFormBuilderArgs) 
     setPendingFocusFieldId(fieldId);
   }
 
-  function validateFieldsStep() {
+  function validateFieldsStep(): FieldsStepValidationResult {
     if (fields.length === 0) return { isValid: false, error: t("errorNeedField") };
 
     const emptyLabelField = fields.find((field) => !field.label.trim());
     if (emptyLabelField) {
       focusFieldError(emptyLabelField.id);
-      return { isValid: false, error: t("errorEveryFieldNeedsLabel") };
+      return { isValid: false, error: t("errorEveryFieldNeedsLabel"), fieldId: emptyLabelField.id };
     }
 
     const emptyOptionsField = fields.find(
@@ -258,11 +267,27 @@ export function useCreateFormBuilder({ t, projects }: UseCreateFormBuilderArgs) 
     );
     if (emptyOptionsField) {
       focusFieldError(emptyOptionsField.id);
-      return { isValid: false, error: t("errorFieldNeedsOption") };
+      return { isValid: false, error: t("errorFieldNeedsOption"), fieldId: emptyOptionsField.id };
     }
 
-    if (hasConditionalLogicCycle(fields)) {
-      return { isValid: false, error: t("errorConditionalLogicCycle") };
+    const cycle = getConditionalLogicCycle(fields);
+    if (cycle) {
+      const relatedFields = cycle.fieldIds
+        .map((fieldId) => fields.find((field) => field.id === fieldId))
+        .filter((field): field is (typeof fields)[number] => Boolean(field));
+      const firstFieldId = relatedFields[0]?.id;
+      if (firstFieldId) {
+        focusFieldError(firstFieldId);
+      }
+      const relatedLabels = relatedFields
+        .map((field) => field.label.trim() || t("fieldLabel", { index: fields.findIndex((item) => item.id === field.id) + 1 }))
+        .join(" -> ");
+      return {
+        isValid: false,
+        error: t("errorConditionalLogicCycleDetails", { fields: relatedLabels || t("conditionalLogic") }),
+        fieldId: firstFieldId,
+        relatedFieldIds: relatedFields.map((field) => field.id),
+      };
     }
 
     return { isValid: true, error: "" };

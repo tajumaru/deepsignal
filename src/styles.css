@@ -1467,6 +1467,81 @@ h2 {
   color: white;
 }
 
+.publish-cta-button {
+  position: relative;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  box-shadow:
+    0 0 0 0 rgba(59, 130, 246, 0.45),
+    0 12px 28px rgba(14, 165, 198, 0.24);
+  animation: publish-cta-pulse 1.9s ease-in-out infinite;
+}
+
+.publish-cta-button:hover,
+.publish-cta-button:focus-visible {
+  transform: translateY(-1px) scale(1.02);
+  box-shadow:
+    0 0 0 0.3rem rgba(125, 211, 252, 0.16),
+    0 16px 34px rgba(59, 130, 246, 0.28);
+}
+
+.publish-cta-button:not(:disabled)::after {
+  content: "";
+  position: absolute;
+  inset: -0.35rem;
+  border-radius: inherit;
+  border: 1px solid rgba(125, 211, 252, 0.28);
+  opacity: 0.45;
+  pointer-events: none;
+  animation: publish-cta-ring 1.9s ease-out infinite;
+}
+
+.publish-cta-button:disabled {
+  animation: none;
+  box-shadow: none;
+}
+
+.publish-cta-button:disabled::after {
+  display: none;
+}
+
+@keyframes publish-cta-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    filter: saturate(1);
+    box-shadow:
+      0 0 0 0 rgba(59, 130, 246, 0.18),
+      0 12px 28px rgba(14, 165, 198, 0.2);
+  }
+  50% {
+    transform: scale(1.045);
+    filter: saturate(1.14) brightness(1.06);
+    box-shadow:
+      0 0 0 0.5rem rgba(59, 130, 246, 0.08),
+      0 18px 38px rgba(59, 130, 246, 0.3);
+  }
+}
+
+@keyframes publish-cta-ring {
+  0% {
+    opacity: 0.5;
+    transform: scale(0.98);
+  }
+  70%,
+  100% {
+    opacity: 0;
+    transform: scale(1.12);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .publish-cta-button,
+  .publish-cta-button:not(:disabled)::after {
+    animation: none;
+  }
+}
+
 .ghost-button {
   background: rgba(102, 227, 255, 0.08);
   border-color: rgba(102, 227, 255, 0.18);
@@ -1668,6 +1743,10 @@ label,
 
 .field-label-text {
   font-weight: 600;
+}
+
+.field-required-mark {
+  color: #ff5c73;
 }
 
 .field-question-index {

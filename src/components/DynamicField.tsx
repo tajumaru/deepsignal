@@ -40,7 +40,7 @@ export function DynamicField({
         {questionNumber ? <span className="field-question-index">Q{questionNumber}</span> : null}
         <span className="field-label-text">
           {field.label}
-          {(required ?? field.required) ? " *" : ""}
+          {(required ?? field.required) ? <span className="field-required-mark"> *</span> : ""}
         </span>
       </span>
 

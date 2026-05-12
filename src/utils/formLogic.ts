@@ -213,6 +213,34 @@ function getDependencyGraph(fields: FormField[]) {
   return graph;
 }
 
+function findCyclePathFrom(
+  graph: Map<string, Set<string>>,
+  currentId: string,
+  visiting: Set<string>,
+  stack: string[],
+): string[] | null {
+  visiting.add(currentId);
+  stack.push(currentId);
+
+  for (const nextId of graph.get(currentId) ?? []) {
+    const cycleStartIndex = stack.indexOf(nextId);
+    if (cycleStartIndex >= 0) {
+      return [...stack.slice(cycleStartIndex), nextId];
+    }
+    if (visiting.has(nextId)) {
+      continue;
+    }
+    const nested = findCyclePathFrom(graph, nextId, visiting, stack);
+    if (nested) {
+      return nested;
+    }
+  }
+
+  visiting.delete(currentId);
+  stack.pop();
+  return null;
+}
+
 function hasPath(graph: Map<string, Set<string>>, startId: string, targetId: string, visited = new Set<string>()) {
   if (startId === targetId) {
     return true;
@@ -240,6 +268,20 @@ export function wouldCreateConditionalCycle(fields: FormField[], fieldId: string
 export function hasConditionalLogicCycle(fields: FormField[]) {
   const graph = getDependencyGraph(fields);
   return fields.some((field) => hasPath(graph, field.id, field.id));
+}
+
+export function getConditionalLogicCycle(fields: FormField[]) {
+  const graph = getDependencyGraph(fields);
+  const visiting = new Set<string>();
+  for (const field of fields) {
+    const cyclePath = findCyclePathFrom(graph, field.id, visiting, []);
+    if (cyclePath?.length) {
+      return {
+        fieldIds: [...new Set(cyclePath)],
+      };
+    }
+  }
+  return null;
 }
 
 export function sanitizeConditionalLogicFields(fields: FormField[]) {

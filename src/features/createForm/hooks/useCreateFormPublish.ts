@@ -15,6 +15,7 @@ import type {
   PreparedPublishForm,
   ProjectOption,
   PublishOverlayState,
+  FieldsStepValidationResult,
   TransactionConfirmation,
   Translate,
 } from "../types";
@@ -35,7 +36,7 @@ interface UseCreateFormPublishArgs {
   setProjectState: (value: string) => void;
   signAndExecuteTransaction: (transaction: CreateFormTransaction) => Promise<{ digest: string }>;
   waitForTransaction: (digest: string) => Promise<TransactionConfirmation>;
-  validateFieldsStep: () => { isValid: boolean; error: string };
+  validateFieldsStep: () => FieldsStepValidationResult;
   goToStep: (step: "info" | "fields" | "publish") => void;
   onSaved: (form: PreparedPublishForm) => void;
 }

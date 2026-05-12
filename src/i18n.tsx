@@ -155,6 +155,8 @@ const messages = {
     errorEveryFieldNeedsLabel: "Every question needs a label before you can publish.",
     errorFieldNeedsOption: "Multiple choice and checkbox questions need at least one option.",
     errorConditionalLogicCycle: "Conditional logic cannot contain circular references.",
+    errorConditionalLogicCycleDetails: (params) =>
+      `Conditional logic loops across these fields: ${params?.fields ?? ""}. Open Step 3 and remove the circular reference.`,
     fieldLabel: (params) => `Question ${params?.index ?? ""}`,
     moveUp: "Up",
     moveDown: "Down",
@@ -663,6 +665,8 @@ const messages = {
     errorEveryFieldNeedsLabel: "\u3059\u3079\u3066\u306e\u8cea\u554f\u306b\u30e9\u30d9\u30eb\u304c\u5fc5\u8981\u3067\u3059\u3002",
     errorFieldNeedsOption: "\u8907\u6570\u9078\u629e\u3068 checkbox \u306e\u8cea\u554f\u306b\u306f\u9078\u629e\u80a2\u304c\u5fc5\u8981\u3067\u3059\u3002",
     errorConditionalLogicCycle: "\u6761\u4ef6\u30ed\u30b8\u30c3\u30af\u306b\u5faa\u74b0\u53c2\u7167\u306f\u8a2d\u5b9a\u3067\u304d\u307e\u305b\u3093\u3002",
+    errorConditionalLogicCycleDetails: (params) =>
+      `\u6761\u4ef6\u30ed\u30b8\u30c3\u30af\u304c\u5faa\u74b0\u3057\u3066\u3044\u307e\u3059: ${params?.fields ?? ""}\u3002Step 3 \u3067\u8a72\u5f53\u30d5\u30a3\u30fc\u30eb\u30c9\u306e Conditional Logic \u3092\u4fee\u6b63\u3057\u3066\u304f\u3060\u3055\u3044\u3002`,
     fieldLabel: (params) => `\u8cea\u554f ${params?.index ?? ""}`,
     moveUp: "\u4e0a\u3078",
     moveDown: "\u4e0b\u3078",
