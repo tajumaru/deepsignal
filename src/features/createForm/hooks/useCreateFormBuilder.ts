@@ -1,5 +1,5 @@
 import { startTransition, useEffect, useMemo, useRef, useState } from "react";
-import { hasConditionalLogicCycle, sanitizeConditionalLogicFields } from "../../../lib/formLogic";
+import { hasConditionalLogicCycle, sanitizeConditionalLogicFields } from "../../../utils/formLogic";
 import {
   createSmartTemplateBundle,
   createTemplateFields,

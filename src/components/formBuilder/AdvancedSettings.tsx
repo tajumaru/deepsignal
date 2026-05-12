@@ -1,6 +1,6 @@
-import { wouldCreateConditionalCycle } from "../../lib/formLogic";
 import { useI18n } from "../../i18n";
 import type { ConditionalLogicCondition, ConditionalLogicGroup, ConditionalLogicOperator, FormField } from "../../types";
+import { wouldCreateConditionalCycle } from "../../utils/formLogic";
 
 interface AdvancedSettingsProps {
   field: FormField;

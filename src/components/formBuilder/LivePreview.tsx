@@ -2,8 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { DynamicField } from "../DynamicField";
 import { RichTextContent } from "../RichText";
 import { useI18n } from "../../i18n";
-import { getVisibleFieldIds, isFieldRequired } from "../../lib/formLogic";
 import { createEmptyAnswer } from "../../lib/storage";
+import { getVisibleFieldIds, isFieldRequired } from "../../utils/formLogic";
 import type { FormField, FormSection } from "../../types";
 
 interface LivePreviewProps {
@@ -11,7 +11,6 @@ interface LivePreviewProps {
   description: string;
   fields: FormField[];
   sections: FormSection[];
-  encryptSubmissions: boolean;
 }
 
 type PreviewAnswers = Record<string, unknown>;
@@ -21,7 +20,6 @@ export function LivePreview({
   description,
   fields,
   sections,
-  encryptSubmissions,
 }: LivePreviewProps) {
   const { t } = useI18n();
   const [answers, setAnswers] = useState<PreviewAnswers>({});
@@ -54,10 +52,6 @@ export function LivePreview({
           <p className="eyebrow">{t("preview")}</p>
           <h2>{title.trim() || t("untitledForm")}</h2>
           <RichTextContent value={description} className="lede rich-text-content" fallback={t("publicDefaultBody")} />
-        </div>
-        <div className="info-banner composer-preview-banner">
-          <strong>{t("encryptSubmissions")}</strong>
-          <span>{encryptSubmissions ? t("enabled") : t("disabled")}</span>
         </div>
       </div>
 

@@ -195,19 +195,23 @@ export function FormSubmissionsPage() {
     submissions.find((submission) => submission.id === selectedSignalId) ??
     visibleSignals[0] ??
     null;
+  const attachmentDecryptContext = useMemo(
+    () => ({
+      walletAddress: account?.address,
+      projectId: form?.projectId,
+      suiClient,
+      signPersonalMessage: async (message: Uint8Array) => {
+        const result = await signPersonalMessage.mutateAsync({ message });
+        return result.signature;
+      },
+    }),
+    [account?.address, form?.projectId, signPersonalMessage, suiClient],
+  );
   const attachmentPreviews = useAttachmentPreviews(detailAttachments, {
     enabled:
       detailAttachments.length > 0 &&
       (!detailAttachments.some((attachment) => attachment.encrypted) || Boolean(detailAnswers)),
-    decryptContext: {
-      walletAddress: account?.address,
-      projectId: form?.projectId,
-      suiClient,
-      signPersonalMessage: async (message) => {
-        const result = await signPersonalMessage.mutateAsync({ message });
-        return result.signature;
-      },
-    },
+    decryptContext: attachmentDecryptContext,
   });
   const renderAttachmentCards = (attachments: Submission["attachments"]) => {
     if (attachments.length === 0) {

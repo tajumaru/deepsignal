@@ -35,7 +35,12 @@ function normalizeCondition(raw: unknown): ConditionalLogicCondition | null {
   return {
     fieldId: candidate.fieldId,
     operator: candidate.operator,
-    value: typeof candidate.value === "string" ? candidate.value : candidate.value == null ? undefined : String(candidate.value),
+    value:
+      typeof candidate.value === "string"
+        ? candidate.value
+        : candidate.value == null
+          ? undefined
+          : String(candidate.value),
   };
 }
 
@@ -47,7 +52,9 @@ export function normalizeLogicGroup(raw: unknown): ConditionalLogicGroup | undef
   if (!isConditionalMode(candidate.logic) || !Array.isArray(candidate.conditions)) {
     return undefined;
   }
-  const conditions = candidate.conditions.map(normalizeCondition).filter((condition): condition is ConditionalLogicCondition => Boolean(condition));
+  const conditions = candidate.conditions
+    .map(normalizeCondition)
+    .filter((condition): condition is ConditionalLogicCondition => Boolean(condition));
   if (!conditions.length) {
     return undefined;
   }
@@ -133,27 +140,41 @@ export function evaluateCondition(condition: ConditionalLogicCondition, answers:
   }
 }
 
-export function evaluateLogicGroup(group: ConditionalLogicGroup | undefined, answers: Record<string, unknown>, fallback: boolean) {
-  if (!group?.conditions.length) {
+export function evaluateRuleGroup(
+  ruleGroup: ConditionalLogicGroup | undefined,
+  answers: Record<string, unknown>,
+  fallback = true,
+) {
+  if (!ruleGroup?.conditions.length) {
     return fallback;
   }
-  const results = group.conditions.map((condition) => evaluateCondition(condition, answers));
-  return group.logic === "all" ? results.every(Boolean) : results.some(Boolean);
+  const results = ruleGroup.conditions.map((condition) => evaluateCondition(condition, answers));
+  return ruleGroup.logic === "all" ? results.every(Boolean) : results.some(Boolean);
 }
 
 export function isFieldVisible(field: FormField, answers: Record<string, unknown>) {
-  return evaluateLogicGroup(field.visibilityRules, answers, true);
+  return evaluateRuleGroup(field.visibilityRules, answers, true);
 }
 
-export function isFieldRequired(field: FormField, answers: Record<string, unknown>, visible: boolean) {
-  if (!visible) {
+export function isFieldRequired(field: FormField, answers: Record<string, unknown>, visible?: boolean) {
+  const resolvedVisible = visible ?? isFieldVisible(field, answers);
+  if (!resolvedVisible) {
     return false;
   }
-  return field.required || evaluateLogicGroup(field.requiredRules, answers, false);
+  return field.required || evaluateRuleGroup(field.requiredRules, answers, false);
+}
+
+export function getVisibleFields(fields: FormField[], answers: Record<string, unknown>) {
+  return fields.filter((field) => isFieldVisible(field, answers));
 }
 
 export function getVisibleFieldIds(fields: FormField[], answers: Record<string, unknown>) {
-  return new Set(fields.filter((field) => isFieldVisible(field, answers)).map((field) => field.id));
+  return new Set(getVisibleFields(fields, answers).map((field) => field.id));
+}
+
+export function getRequiredFields(fields: FormField[], answers: Record<string, unknown>) {
+  const visibleFieldIds = getVisibleFieldIds(fields, answers);
+  return fields.filter((field) => isFieldRequired(field, answers, visibleFieldIds.has(field.id)));
 }
 
 function sanitizeLogicGroup(

@@ -9,7 +9,6 @@ import { RichTextContent } from "../components/RichText";
 import { SignalMetaChip, SignalMetaRow } from "../components/SignalMetaChip";
 import { useI18n } from "../i18n";
 import { getEncryptedPayloadAvailabilityLabel, hasDedicatedEncryptedPayloadBlob } from "../lib/encryptionDisplay";
-import { getVisibleFieldIds, isFieldRequired } from "../lib/formLogic";
 import { getSubmissionCategoryFromPurpose } from "../lib/formTemplates";
 import { getSubmissionRespondentMeta } from "../lib/respondentMeta";
 import { ensureRespondentSession } from "../lib/respondentSession";
@@ -25,6 +24,7 @@ import { makeId } from "../lib/utils";
 import { upsertFormBlobIndex } from "../storage/blobIndex";
 import { localStorageAdapter } from "../storage/localStorageAdapter";
 import type { FormSchema, Submission, SubmissionAttachment } from "../types";
+import { getVisibleFieldIds, isFieldRequired } from "../utils/formLogic";
 
 const WalletConnect = lazy(() =>
   import("../components/WalletConnect").then((module) => ({ default: module.WalletConnect })),

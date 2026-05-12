@@ -1,4 +1,4 @@
-import { sanitizeConditionalLogicFields } from "../../lib/formLogic";
+import { sanitizeConditionalLogicFields } from "../../utils/formLogic";
 import { makeId } from "../../lib/utils";
 import { normalizeFormVisibility } from "../../lib/explore";
 import type { FieldType, FormField, FormPurpose, FormSchema, FormSection } from "./types";

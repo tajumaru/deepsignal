@@ -1,6 +1,6 @@
 import { cryptoAdapter, getSealRuntimeStatus } from "../crypto/cryptoFactory";
 import { fromBase64, parseRealSealEnvelope, toBase64 } from "../crypto/sealPayload";
-import { normalizeLogicGroup, sanitizeConditionalLogicFields } from "./formLogic";
+import { normalizeLogicGroup, sanitizeConditionalLogicFields } from "../utils/formLogic";
 import {
   getSubmissionCategoryFromPurpose,
   inferPriorityFromTemplateAnswers,

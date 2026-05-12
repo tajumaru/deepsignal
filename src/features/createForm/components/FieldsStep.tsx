@@ -255,7 +255,6 @@ export function FieldsStep({
           description={description}
           fields={fields}
           sections={sections}
-          encryptSubmissions={encryptSubmissions}
         />
       </div>
     </section>

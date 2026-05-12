@@ -460,7 +460,6 @@ export function PublishStep({
             description={description}
             fields={fields}
             sections={sections}
-            encryptSubmissions={encryptSubmissions}
           />
         </div>
       ) : null}
