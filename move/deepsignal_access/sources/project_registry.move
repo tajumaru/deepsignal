@@ -201,6 +201,17 @@ module deepsignal::project_registry {
         assert!(is_project_admin_address(project, sender), E_PROJECT_ADMIN_REQUIRED);
     }
 
+    fun assert_project_reviewer(
+        registry: &access_control::Registry,
+        reviewer_cap: &access_control::ReviewerCap,
+        sender: address,
+    ) {
+        assert!(
+            access_control::is_reviewer(registry, sender, sui::object::id(reviewer_cap)),
+            E_PROJECT_ADMIN_REQUIRED
+        );
+    }
+
     fun contains_admin(admins: &vector<address>, candidate: address): bool {
         let mut index = 0;
         let total = vector::length(admins);
@@ -570,6 +581,28 @@ module deepsignal::project_registry {
         ctx: &sui::tx_context::TxContext,
     ) {
         assert_project_admin(project, sui::tx_context::sender(ctx));
+    }
+
+    entry fun seal_approve_project_signal_reviewer(
+        id: vector<u8>,
+        registry: &access_control::Registry,
+        reviewer_cap: &access_control::ReviewerCap,
+        project: &Project,
+        ctx: &sui::tx_context::TxContext,
+    ) {
+        let sender = sui::tx_context::sender(ctx);
+        assert_project_reviewer(registry, reviewer_cap, sender);
+        assert!(has_prefix(&namespace(project), &id), E_PROJECT_ADMIN_REQUIRED);
+    }
+
+    entry fun seal_approve_project_reviewer(
+        _id: vector<u8>,
+        registry: &access_control::Registry,
+        reviewer_cap: &access_control::ReviewerCap,
+        _project: &Project,
+        ctx: &sui::tx_context::TxContext,
+    ) {
+        assert_project_reviewer(registry, reviewer_cap, sui::tx_context::sender(ctx));
     }
 
     public fun project_id(cap: &ProjectOwnerCap): sui::object::ID {

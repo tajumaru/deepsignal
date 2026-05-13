@@ -208,6 +208,10 @@ export function FormSubmissionsPage() {
     () => ({
       walletAddress: account?.address,
       projectId: form?.projectId,
+      reviewerCapId:
+        capabilityProfile.hasOwnerCap || capabilityProfile.hasAdminCap
+          ? undefined
+          : capabilityProfile.reviewerCapIds[0],
       suiClient,
       signPersonalMessage: async (message: Uint8Array) => {
         const result = await signPersonalMessage.mutateAsync({ message });
@@ -424,6 +428,10 @@ export function FormSubmissionsPage() {
       const resolved = await resolveSubmissionAnswers(form, selectedSubmission, undefined, {
         walletAddress: account?.address,
         projectId: form.projectId,
+        reviewerCapId:
+          capabilityProfile.hasOwnerCap || capabilityProfile.hasAdminCap
+            ? undefined
+            : capabilityProfile.reviewerCapIds[0],
         suiClient,
         signPersonalMessage: async (message) => {
           const result = await signPersonalMessage.mutateAsync({ message });

@@ -9,6 +9,7 @@ import {
   SEAL_PERMISSION_DENIED_MESSAGE,
   SEAL_WALLET_CANCELLED_MESSAGE,
 } from "../../../crypto/sealPayload";
+import type { CapabilityProfile } from "../../../hooks/useAccessControl";
 import { resolveSubmissionAnswers } from "../../../lib/storage";
 import type { Submission } from "../../../types";
 import type { SignalRecord } from "./useSignalInboxData";
@@ -43,6 +44,7 @@ function getFriendlyDecryptError(message: string) {
 
 interface UsePrivateSignalDecryptArgs {
   accountAddress?: string | null;
+  capabilityProfile: CapabilityProfile;
   selectedRecord: SignalRecord | null;
   selectedSignalId: string;
   setToast: ToastSetter;
@@ -51,6 +53,7 @@ interface UsePrivateSignalDecryptArgs {
 
 export function usePrivateSignalDecrypt({
   accountAddress,
+  capabilityProfile,
   selectedRecord,
   selectedSignalId,
   setToast,
@@ -77,13 +80,17 @@ export function usePrivateSignalDecrypt({
     () => ({
       walletAddress: accountAddress ?? undefined,
       projectId: selectedRecord?.form.projectId,
+      reviewerCapId:
+        capabilityProfile.hasOwnerCap || capabilityProfile.hasAdminCap
+          ? undefined
+          : capabilityProfile.reviewerCapIds[0],
       suiClient,
       signPersonalMessage: async (message: Uint8Array) => {
         const result = await signPersonalMessage.mutateAsync({ message });
         return result.signature;
       },
     }),
-    [accountAddress, selectedRecord?.form.projectId, signPersonalMessage, suiClient],
+    [accountAddress, capabilityProfile, selectedRecord?.form.projectId, signPersonalMessage, suiClient],
   );
 
   useEffect(() => {

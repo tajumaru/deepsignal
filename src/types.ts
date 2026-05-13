@@ -213,6 +213,7 @@ export interface SealDecryptContext {
   signPersonalMessage?: (message: Uint8Array) => Promise<string>;
   projectId?: string;
   suiClient?: unknown;
+  reviewerCapId?: string;
   onStatusChange?: (status: "waiting_wallet_approval" | "decrypting_private_signal" | "finishing") => void;
 }
 

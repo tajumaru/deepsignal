@@ -180,6 +180,7 @@ export function AdminDashboardPage() {
     realSealSessionTtlMinutes,
   } = usePrivateSignalDecrypt({
     accountAddress: account?.address,
+    capabilityProfile,
     selectedRecord,
     selectedSignalId,
     setToast,

@@ -472,7 +472,7 @@ In real Seal mode, payloads are saved as JSON envelopes that include the base64-
 - Mock Seal is reversible locally and exists to keep dev, demos, and fallback mode working without any wallet or onchain policy.
 - Real Seal encrypts with `@mysten/seal` and depends on a real Sui package namespace plus one or more key server objects.
 - Real Seal decryption is policy-gated: you need a Sui wallet, a session key, and an approval transaction that calls a `seal_approve*` Move function for the target access policy.
-- DeepSignal now ships `deepsignal::project_registry::seal_approve_project_signal` and `seal_approve_project_admin` so project owners/admins can decrypt private signals from the review UI.
+- DeepSignal now ships `deepsignal::project_registry::seal_approve_project_signal`, `seal_approve_project_admin`, and reviewer approval routes so project owners/admins/reviewers can decrypt private signals from the review UI.
 
 ## Seal mode in the UI
 
@@ -487,7 +487,7 @@ In real Seal mode, payloads are saved as JSON envelopes that include the base64-
 
 ### Current limitations of real Seal mode
 
-- Real decrypt now works only for signals tied to a DeepSignal `Project` object and reviewed by a wallet that is the project owner or a project admin.
+- Real decrypt now works only for signals tied to a DeepSignal `Project` object and reviewed by a wallet that is the project owner, project admin, or an authorized reviewer.
 - New project-backed encryptions use a stricter `projectId + nonce` identity prefix and are approved by `seal_approve_project_signal`.
 - Older real Seal envelopes that predate project scoping can still be attempted through the looser `seal_approve_project_admin` path when the submission belongs to a project, but they are not bound to a per-signal namespace. This is a compatibility fallback for previously stored envelopes.
 - If you switch back to mock mode, older mock-encrypted payloads remain readable, but real Seal payloads will correctly report that seal mode plus wallet approval is required.

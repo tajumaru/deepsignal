@@ -9,7 +9,7 @@ import { SuiJsonRpcClient, getJsonRpcFullnodeUrl } from "@mysten/sui/jsonRpc";
 import { Transaction } from "@mysten/sui/transactions";
 import { fromHex } from "@mysten/sui/utils";
 import type { SealAdapter, SealDecryptContext } from "../types";
-import { SUI_NETWORK } from "../lib/sui";
+import { ACCESS_CONTROL_REGISTRY_ID, SUI_NETWORK } from "../lib/sui";
 import { localSealMock } from "./localSealMock";
 import {
   createProjectScopedSealId,
@@ -125,11 +125,16 @@ export const sealClientAdapter: SealAdapter = {
         onStatusChange: context.onStatusChange,
       });
 
+      const reviewerCapId = context.reviewerCapId?.trim() || undefined;
       const primaryApprovalPolicy =
         envelope.approvalPolicy ??
         (doesSealIdMatchProject(envelope.objectId, projectId)
-          ? "project_signal_v1"
-          : "project_admin_v0");
+          ? reviewerCapId
+            ? "project_signal_reviewer_v1"
+            : "project_signal_v1"
+          : reviewerCapId
+            ? "project_reviewer_v0"
+            : "project_admin_v0");
 
       let plaintext: Uint8Array;
       try {
@@ -138,6 +143,7 @@ export const sealClientAdapter: SealAdapter = {
           objectId: envelope.objectId,
           projectId,
           approvalPolicy: primaryApprovalPolicy,
+          reviewerCapId,
           suiClient: context.suiClient as SealCompatibleClient,
           packageId: envelope.packageId,
         });
@@ -151,16 +157,19 @@ export const sealClientAdapter: SealAdapter = {
         const canRetryWithAdminPolicy =
           error instanceof NoAccessError &&
           projectId &&
-          primaryApprovalPolicy === "project_signal_v1";
+          (primaryApprovalPolicy === "project_signal_v1" ||
+            primaryApprovalPolicy === "project_signal_reviewer_v1");
 
         if (!canRetryWithAdminPolicy) {
           throw error;
         }
 
+        const fallbackApprovalPolicy = reviewerCapId ? "project_reviewer_v0" : "project_admin_v0";
         const fallbackTxBytes = await buildSealApproveTransactionBytes({
           objectId: envelope.objectId,
           projectId,
-          approvalPolicy: "project_admin_v0",
+          approvalPolicy: fallbackApprovalPolicy,
+          reviewerCapId,
           suiClient: context.suiClient as SealCompatibleClient,
           packageId: envelope.packageId,
         });
@@ -194,23 +203,47 @@ async function buildSealApproveTransactionBytes({
   objectId,
   projectId,
   approvalPolicy,
+  reviewerCapId,
   suiClient: activeSuiClient,
   packageId,
 }: {
   objectId: string;
   projectId: string;
-  approvalPolicy: "project_signal_v1" | "project_admin_v0";
+  approvalPolicy:
+    | "project_signal_v1"
+    | "project_admin_v0"
+    | "project_signal_reviewer_v1"
+    | "project_reviewer_v0";
+  reviewerCapId?: string;
   suiClient: SealCompatibleClient;
   packageId: string;
 }) {
   const tx = new Transaction();
+  if (
+    (approvalPolicy === "project_signal_reviewer_v1" || approvalPolicy === "project_reviewer_v0") &&
+    (!ACCESS_CONTROL_REGISTRY_ID || !reviewerCapId)
+  ) {
+    throw new Error(SEAL_PERMISSION_DENIED_MESSAGE);
+  }
   tx.moveCall({
     target: `${packageId}::project_registry::${
       approvalPolicy === "project_signal_v1"
         ? "seal_approve_project_signal"
-        : "seal_approve_project_admin"
+        : approvalPolicy === "project_signal_reviewer_v1"
+          ? "seal_approve_project_signal_reviewer"
+          : approvalPolicy === "project_reviewer_v0"
+            ? "seal_approve_project_reviewer"
+            : "seal_approve_project_admin"
     }`,
-    arguments: [tx.pure.vector("u8", fromHex(objectId)), tx.object(projectId)],
+    arguments:
+      approvalPolicy === "project_signal_reviewer_v1" || approvalPolicy === "project_reviewer_v0"
+        ? [
+            tx.pure.vector("u8", fromHex(objectId)),
+            tx.object(ACCESS_CONTROL_REGISTRY_ID),
+            tx.object(reviewerCapId ?? ""),
+            tx.object(projectId),
+          ]
+        : [tx.pure.vector("u8", fromHex(objectId)), tx.object(projectId)],
   });
   return tx.build({
     client: activeSuiClient,
