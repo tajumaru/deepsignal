@@ -1,5 +1,12 @@
 import { startTransition, useEffect, useMemo, useRef, useState } from "react";
-import { getConditionalLogicCycle, sanitizeConditionalLogicFields } from "../../../utils/formLogic";
+import {
+  canFieldHaveConditionalChildren,
+  getConditionalLogicCycle,
+  getConditionalParentField,
+  hasValidConditionalParent,
+  hasValidConditionalValue,
+  sanitizeConditionalLogicFields,
+} from "../../../utils/formLogic";
 import {
   createSmartTemplateBundle,
   createTemplateFields,
@@ -283,9 +290,37 @@ export function useCreateFormBuilder({ t, projects }: UseCreateFormBuilderArgs) 
   }
 
   function updateField(index: number, nextField: typeof fields[number]) {
-    setFields((current) =>
-      sanitizeConditionalLogicFields(current.map((field, currentIndex) => (currentIndex === index ? nextField : field))),
-    );
+    setFields((current) => {
+      const previousField = current[index];
+      let invalidatedConditionalChildren = false;
+      const nextOptions =
+        nextField.type === "dropdown" || nextField.type === "checkbox"
+          ? (nextField.options ?? []).map((option) => option.trim()).filter(Boolean)
+          : [];
+
+      const updatedFields = current.map((field, currentIndex) => {
+        if (currentIndex === index) {
+          return nextField;
+        }
+        if (field.conditionalParentId !== previousField?.id) {
+          return field;
+        }
+        if (nextOptions.length === 0 || (field.conditionalValue && !nextOptions.includes(field.conditionalValue))) {
+          invalidatedConditionalChildren = true;
+          return {
+            ...field,
+            conditionalValue: undefined,
+          };
+        }
+        return field;
+      });
+
+      if (invalidatedConditionalChildren) {
+        window.setTimeout(() => window.alert(t("conditionalOptionRemovedWarning")), 0);
+      }
+
+      return sanitizeConditionalLogicFields(updatedFields);
+    });
   }
 
   function insertField(type: FieldType, afterIndex?: number, sectionId?: string) {
@@ -332,7 +367,9 @@ export function useCreateFormBuilder({ t, projects }: UseCreateFormBuilderArgs) 
       if (current.length === 1) {
         return current;
       }
-      const next = sanitizeConditionalLogicFields(current.filter((field) => field.id !== fieldId));
+      const next = sanitizeConditionalLogicFields(
+        current.filter((field) => field.id !== fieldId && field.conditionalParentId !== fieldId),
+      );
       if (activeFieldId === fieldId) {
         setActiveFieldId(next[0]?.id ?? "");
       }
@@ -340,26 +377,30 @@ export function useCreateFormBuilder({ t, projects }: UseCreateFormBuilderArgs) 
     });
   }
 
-  function insertFollowUpField(sourceFieldId: string) {
-    if (!sourceFieldId) return;
+  function insertConditionalField(parentFieldId: string) {
+    if (!parentFieldId) return;
     setFields((current) => {
-      const sourceIndex = current.findIndex((field) => field.id === sourceFieldId);
-      if (sourceIndex === -1) {
+      const parentIndex = current.findIndex((field) => field.id === parentFieldId);
+      if (parentIndex === -1) {
         return current;
       }
-      const sourceField = current[sourceIndex];
-      const nextField = createField("shortText", sourceField.sectionId);
-      nextField.label = t("followUpDefaultLabel");
+      const parentField = current[parentIndex];
+      if (!canFieldHaveConditionalChildren(parentField)) {
+        return current;
+      }
+      const nextField = createField("shortText", parentField.sectionId);
+      nextField.label = t("conditionalQuestionDefaultLabel");
       nextField.placeholder = t("placeholderExample");
-      nextField.visibilityRules = {
-        logic: "all",
-        conditions: [{ fieldId: sourceField.id, operator: "isNotEmpty" }],
-      };
+      nextField.conditionalParentId = parentField.id;
+      nextField.conditionalValue = (parentField.options ?? []).map((option) => option.trim()).filter(Boolean)[0];
       const next = [...current];
-      next.splice(sourceIndex + 1, 0, nextField);
+      const lastChildIndex = current.reduce((latestIndex, field, fieldIndex) => {
+        return field.conditionalParentId === parentField.id ? fieldIndex : latestIndex;
+      }, parentIndex);
+      next.splice(lastChildIndex + 1, 0, nextField);
       setPendingFocusFieldId(nextField.id);
       setActiveFieldId(nextField.id);
-      return next;
+      return sanitizeConditionalLogicFields(next);
     });
     setMobilePane("editor");
   }
@@ -433,6 +474,29 @@ export function useCreateFormBuilder({ t, projects }: UseCreateFormBuilderArgs) 
     if (emptyOptionsField) {
       focusFieldError(emptyOptionsField.id);
       return { isValid: false, error: t("errorFieldNeedsOption"), fieldId: emptyOptionsField.id };
+    }
+
+    const invalidConditionalField = fields.find((field) => !hasValidConditionalParent(field, fields) || !hasValidConditionalValue(field, fields));
+    if (invalidConditionalField) {
+      focusFieldError(invalidConditionalField.id);
+      return {
+        isValid: false,
+        error: t("errorConditionalQuestionNeedsValue"),
+        fieldId: invalidConditionalField.id,
+      };
+    }
+
+    const nestedConditionalField = fields.find((field) => {
+      const parent = getConditionalParentField(field, fields);
+      return Boolean(field.conditionalParentId && parent?.conditionalParentId);
+    });
+    if (nestedConditionalField) {
+      focusFieldError(nestedConditionalField.id);
+      return {
+        isValid: false,
+        error: t("errorConditionalNesting"),
+        fieldId: nestedConditionalField.id,
+      };
     }
 
     const cycle = getConditionalLogicCycle(fields);
@@ -523,7 +587,7 @@ export function useCreateFormBuilder({ t, projects }: UseCreateFormBuilderArgs) 
     insertField,
     duplicateFieldAt,
     removeField,
-    insertFollowUpField,
+    insertConditionalField,
     reorderFields,
     insertSmartTemplate,
     addSection,

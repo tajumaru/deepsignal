@@ -244,7 +244,7 @@ export function FormBuilderPage() {
               onUpdateField={builder.updateField}
               onRemoveField={builder.removeField}
               onDuplicateField={builder.duplicateFieldAt}
-              onInsertFollowUp={builder.insertFollowUpField}
+              onInsertConditionalField={builder.insertConditionalField}
               onInsertField={builder.insertField}
               onReorderFields={builder.reorderFields}
               onOpenFieldTypePicker={() => builder.setFieldTypePickerOpen(true)}

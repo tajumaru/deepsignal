@@ -30,6 +30,8 @@ export function createField(type: FieldType = "shortText", sectionId?: string): 
     placeholder: "",
     helpText: "",
     options: type === "dropdown" || type === "checkbox" ? ["Option 1", "Option 2"] : undefined,
+    conditionalParentId: undefined,
+    conditionalValue: undefined,
   };
 }
 
@@ -100,6 +102,8 @@ export function serializeDraft(
       visibility: field.visibility ?? "public",
       validationHint: field.validationHint ?? "",
       options: field.options ?? [],
+      conditionalParentId: field.conditionalParentId ?? "",
+      conditionalValue: field.conditionalValue ?? "",
       visibilityRules: field.visibilityRules,
       requiredRules: field.requiredRules,
     })),

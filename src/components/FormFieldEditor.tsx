@@ -2,6 +2,13 @@ import type { ChangeEvent, DragEvent, KeyboardEvent } from "react";
 import { fieldTypeOptions } from "../lib/constants";
 import { useI18n } from "../i18n";
 import type { FieldType, FormField } from "../types";
+import {
+  canFieldHaveConditionalChildren,
+  getConditionalParentField,
+  getConditionalValueOptions,
+  hasValidConditionalValue,
+  isConditionalChildField,
+} from "../utils/formLogic";
 import { AdvancedSettings } from "./formBuilder/AdvancedSettings";
 
 interface FormFieldEditorProps {
@@ -18,7 +25,7 @@ interface FormFieldEditorProps {
   onRemove: () => void;
   onDuplicate: () => void;
   onAddBelow: () => void;
-  onAddFollowUp: () => void;
+  onAddConditionalQuestion: () => void;
   onToggleExpand: () => void;
   onFocus: () => void;
   onDragStart: (event: DragEvent<HTMLElement>) => void;
@@ -54,7 +61,7 @@ export function FormFieldEditor({
   onRemove,
   onDuplicate,
   onAddBelow,
-  onAddFollowUp,
+  onAddConditionalQuestion,
   onToggleExpand,
   onFocus,
   onDragStart,
@@ -63,6 +70,11 @@ export function FormFieldEditor({
   onDrop,
 }: FormFieldEditorProps) {
   const { fieldTypeLabel, t } = useI18n();
+  const isConditionalChild = isConditionalChildField(field);
+  const conditionalParent = getConditionalParentField(field, fields);
+  const conditionalOptions = getConditionalValueOptions(conditionalParent);
+  const canAddConditionalQuestion = canFieldHaveConditionalChildren(field);
+  const hasConditionalValue = hasValidConditionalValue(field, fields);
 
   function update<K extends keyof FormField>(key: K, value: FormField[K]) {
     onChange({ ...field, [key]: value });
@@ -101,6 +113,19 @@ export function FormFieldEditor({
       event.preventDefault();
       onAddBelow();
     }
+  }
+
+  function conditionalSummary() {
+    if (!conditionalParent) {
+      return t("conditionalQuestionMissingParent");
+    }
+    if (!field.conditionalValue) {
+      return t("conditionalQuestionNeedsValue");
+    }
+    return t("conditionalShowWhenSentence", {
+      parent: conditionalParent.label.trim() || t("label"),
+      value: field.conditionalValue,
+    });
   }
 
   function renderPreview() {
@@ -148,7 +173,7 @@ export function FormFieldEditor({
     if (field.type === "rating") {
       return (
         <div className="composer-canvas-rating" aria-hidden="true">
-          <span>☆☆☆☆☆</span>
+          <span>*****</span>
           <small className="muted">{t("chooseRating")}</small>
         </div>
       );
@@ -167,9 +192,9 @@ export function FormFieldEditor({
   return (
     <section
       ref={rootRef}
-      className={`panel question-card composer-canvas-card ${isDragging ? "is-dragging" : ""} ${isExpanded ? "is-expanded" : ""} ${
-        dropIndicator ? `is-drop-${dropIndicator}` : ""
-      }`}
+      className={`panel question-card composer-canvas-card ${isConditionalChild ? "is-conditional-child" : ""} ${
+        isDragging ? "is-dragging" : ""
+      } ${isExpanded ? "is-expanded" : ""} ${dropIndicator ? `is-drop-${dropIndicator}` : ""}`}
       onFocusCapture={onFocus}
       onDragOver={onDragOver}
       onDrop={onDrop}
@@ -198,13 +223,20 @@ export function FormFieldEditor({
             >
               {field.required ? t("required") : t("optional")}
             </button>
-            {field.visibilityRules?.conditions.length ? <span className="question-card-type">{t("quickFollowUp")}</span> : null}
+            {isConditionalChild ? <span className="question-card-type">{t("conditionalQuestionBadge")}</span> : null}
             {field.sectionId ? (
               <span className="question-card-type">
                 {sections.find((section) => section.id === field.sectionId)?.title || t("untitledSection")}
               </span>
             ) : null}
           </div>
+
+          {isConditionalChild ? (
+            <div className={`composer-conditional-inline-label ${hasConditionalValue ? "" : "is-warning"}`}>
+              <strong>{t("conditionalIfAnswerIs")}</strong>
+              <span>{conditionalSummary()}</span>
+            </div>
+          ) : null}
 
           <input
             ref={labelRef}
@@ -249,9 +281,11 @@ export function FormFieldEditor({
               <button type="button" className="ghost-button" onClick={onAddBelow}>
                 + {t("addQuestion")}
               </button>
-              <button type="button" className="ghost-button" onClick={onAddFollowUp}>
-                + {t("quickFollowUp")}
-              </button>
+              {canAddConditionalQuestion ? (
+                <button type="button" className="ghost-button" onClick={onAddConditionalQuestion}>
+                  + {t("addConditionalQuestion")}
+                </button>
+              ) : null}
               <button type="button" className="ghost-button" onClick={onDuplicate}>
                 {t("duplicate")}
               </button>
@@ -265,6 +299,28 @@ export function FormFieldEditor({
 
       {isExpanded ? (
         <div className="question-card-details composer-canvas-card-body">
+          {isConditionalChild && conditionalParent ? (
+            <label className="composer-conditional-rule-editor">
+              <span>{t("conditionalShowWhen")}</span>
+              <div className="composer-conditional-rule-row">
+                <span className="composer-conditional-rule-source">
+                  "{conditionalParent.label.trim() || t("label")}" {t("conditionalIs")}
+                </span>
+                <select
+                  value={field.conditionalValue ?? ""}
+                  onChange={(event) => update("conditionalValue", event.target.value || undefined)}
+                >
+                  <option value="">{t("conditionalSelectValue")}</option>
+                  {conditionalOptions.map((option) => (
+                    <option key={option} value={option}>
+                      {option}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </label>
+          ) : null}
+
           <div className="grid composer-question-row">
             <label>
               <span>{t("type")}</span>
@@ -333,7 +389,7 @@ export function FormFieldEditor({
                 ))}
               </div>
               <button type="button" className="ghost-button" onClick={handleAddOption}>
-                + Add option
+                + {t("addOption")}
               </button>
             </div>
           )}
@@ -342,9 +398,11 @@ export function FormFieldEditor({
             <button type="button" className="ghost-button" onClick={onAddBelow}>
               + {t("addQuestion")}
             </button>
-            <button type="button" className="ghost-button" onClick={onAddFollowUp}>
-              + {t("quickFollowUp")}
-            </button>
+            {canAddConditionalQuestion ? (
+              <button type="button" className="ghost-button" onClick={onAddConditionalQuestion}>
+                + {t("addConditionalQuestion")}
+              </button>
+            ) : null}
           </div>
 
           <AdvancedSettings field={field} fields={fields} onChange={onChange} />

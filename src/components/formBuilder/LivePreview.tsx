@@ -3,7 +3,7 @@ import { DynamicField } from "../DynamicField";
 import { RichTextContent } from "../RichText";
 import { useI18n } from "../../i18n";
 import { createEmptyAnswer } from "../../lib/storage";
-import { getVisibleFieldIds, isFieldRequired } from "../../utils/formLogic";
+import { getOrderedFields, getVisibleFieldIds, isFieldRequired } from "../../utils/formLogic";
 import type { FormField, FormSection } from "../../types";
 
 interface LivePreviewProps {
@@ -37,11 +37,12 @@ export function LivePreview({
   const visibleFieldIds = useMemo(() => getVisibleFieldIds(fields, answers), [answers, fields]);
 
   const sectionedFields = useMemo(() => {
+    const orderedFields = getOrderedFields(fields);
     const orderedSections = sections.map((section) => ({
       ...section,
-      fields: fields.filter((field) => field.sectionId === section.id && visibleFieldIds.has(field.id)),
+      fields: orderedFields.filter((field) => field.sectionId === section.id && visibleFieldIds.has(field.id)),
     }));
-    const unsectionedFields = fields.filter((field) => !field.sectionId && visibleFieldIds.has(field.id));
+    const unsectionedFields = orderedFields.filter((field) => !field.sectionId && visibleFieldIds.has(field.id));
     return { orderedSections, unsectionedFields };
   }, [fields, sections, visibleFieldIds]);
 
@@ -69,7 +70,7 @@ export function LivePreview({
                     key={field.id}
                     field={field}
                     value={answers[field.id]}
-                    required={isFieldRequired(field, answers, true)}
+                    required={isFieldRequired(field, fields, answers, true)}
                     onChange={(value) => setAnswers((current) => ({ ...current, [field.id]: value }))}
                   />
                 ))}
@@ -83,7 +84,7 @@ export function LivePreview({
             key={field.id}
             field={field}
             value={answers[field.id]}
-            required={isFieldRequired(field, answers, true)}
+            required={isFieldRequired(field, fields, answers, true)}
             onChange={(value) => setAnswers((current) => ({ ...current, [field.id]: value }))}
           />
         ))}

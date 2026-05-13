@@ -26,7 +26,7 @@ import { makeId } from "../lib/utils";
 import { upsertFormBlobIndex } from "../storage/blobIndex";
 import { localStorageAdapter } from "../storage/localStorageAdapter";
 import type { FormSchema, Submission, SubmissionAttachment } from "../types";
-import { getVisibleFieldIds, isFieldRequired } from "../utils/formLogic";
+import { getOrderedFields, getVisibleFieldIds, isFieldRequired } from "../utils/formLogic";
 
 const WalletConnect = lazy(() =>
   import("../components/WalletConnect").then((module) => ({ default: module.WalletConnect })),
@@ -175,12 +175,13 @@ export function PublicFormPage() {
       return { sections: [], unsectionedFields: [] };
     }
     const currentlyVisibleFieldIds = getVisibleFieldIds(form.fields, answers);
+    const orderedFields = getOrderedFields(form.fields);
     return {
       sections: (form.sections ?? []).map((section) => ({
         ...section,
-        fields: form.fields.filter((field) => field.sectionId === section.id && currentlyVisibleFieldIds.has(field.id)),
+        fields: orderedFields.filter((field) => field.sectionId === section.id && currentlyVisibleFieldIds.has(field.id)),
       })),
-      unsectionedFields: form.fields.filter((field) => !field.sectionId && currentlyVisibleFieldIds.has(field.id)),
+      unsectionedFields: orderedFields.filter((field) => !field.sectionId && currentlyVisibleFieldIds.has(field.id)),
     };
   }, [answers, form]);
 
@@ -190,7 +191,7 @@ export function PublicFormPage() {
   );
 
   const questionNumbers = useMemo(() => {
-    const visibleFields = form?.fields.filter((field) => visibleFieldIds.has(field.id)) ?? [];
+    const visibleFields = form ? getOrderedFields(form.fields).filter((field) => visibleFieldIds.has(field.id)) : [];
     return new Map(visibleFields.map((field, index) => [field.id, index + 1]));
   }, [form, visibleFieldIds]);
   const deadlinePassed = useMemo(() => isResponseDeadlinePassed(form?.responseDeadline), [form?.responseDeadline]);
@@ -227,7 +228,7 @@ export function PublicFormPage() {
       const visible = visibleFieldIds.has(field.id);
       const value = answers[field.id];
       const uploadItems = attachmentFields.has(field.id) ? getUploadAnswer(value) : [];
-      if (!isFieldRequired(field, answers, visible)) {
+      if (!isFieldRequired(field, currentForm.fields, answers, visible)) {
         return;
       }
       const missing =
@@ -289,7 +290,7 @@ export function PublicFormPage() {
       };
       const attachments: SubmissionAttachment[] = [];
       const plainAnswers: PublicAnswers = {};
-      const visibleFields = form.fields.filter((field) => visibleFieldIds.has(field.id));
+      const visibleFields = getOrderedFields(form.fields).filter((field) => visibleFieldIds.has(field.id));
 
       for (const field of visibleFields) {
         const value = answers[field.id];
@@ -628,7 +629,7 @@ export function PublicFormPage() {
                     value={answers[field.id]}
                     error={errors[field.id]}
                     questionNumber={questionNumbers.get(field.id)}
-                    required={isFieldRequired(field, answers, true)}
+                    required={isFieldRequired(field, form.fields, answers, true)}
                     hint={
                       field.type === "screenshot"
                         ? `${t("screenshotHint")} Max ${Math.round(MAX_ATTACHMENT_BYTES / (1024 * 1024))}MB per file.`
@@ -651,7 +652,7 @@ export function PublicFormPage() {
             value={answers[field.id]}
             error={errors[field.id]}
             questionNumber={questionNumbers.get(field.id)}
-            required={isFieldRequired(field, answers, true)}
+            required={isFieldRequired(field, form.fields, answers, true)}
             hint={
               field.type === "screenshot"
                 ? `${t("screenshotHint")} Max ${Math.round(MAX_ATTACHMENT_BYTES / (1024 * 1024))}MB per file.`

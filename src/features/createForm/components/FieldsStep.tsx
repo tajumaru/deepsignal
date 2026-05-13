@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type DragEvent } from "react";
 import { FormFieldEditor } from "../../../components/FormFieldEditor";
+import { getConditionalChildFields, getOrderedFields } from "../../../utils/formLogic";
 import type { FieldType, FormBuilderRefs, FormField, FormSection, Translate } from "../types";
 
 interface FieldsStepProps {
@@ -23,7 +24,7 @@ interface FieldsStepProps {
   onUpdateField: (index: number, field: FormField) => void;
   onRemoveField: (fieldId: string) => void;
   onDuplicateField: (fieldId: string) => void;
-  onInsertFollowUp: (fieldId: string) => void;
+  onInsertConditionalField: (fieldId: string) => void;
   onInsertField: (type: FieldType, afterIndex?: number, sectionId?: string) => void;
   onReorderFields: (sourceId: string, targetId: string, placement?: "before" | "after") => void;
   onOpenFieldTypePicker: () => void;
@@ -35,19 +36,18 @@ const libraryBlocks: Array<{
   type?: FieldType;
   icon: string;
   title: string;
-  description: string;
   soon?: boolean;
 }> = [
-  { type: "shortText", icon: "Aa", title: "Short Text", description: "Names, handles, wallet labels, and short answers." },
-  { type: "longText", icon: "¶", title: "Long Text", description: "Detailed reports, context, and open-ended feedback." },
-  { type: "dropdown", icon: "▾", title: "Single Select", description: "One answer from a controlled option list." },
-  { type: "checkbox", icon: "☑", title: "Multiple Select", description: "Let responders choose several tags or states." },
-  { type: "screenshot", icon: "⌁", title: "File Upload", description: "Capture screenshots or visual evidence." },
-  { type: "url", icon: "↗", title: "Verification Link", description: "Collect proof links, issues, docs, or references." },
-  { type: "rating", icon: "★", title: "Signal Rating", description: "Quick 1-5 sentiment or urgency scoring." },
-  { icon: "◎", title: "Wallet Address", description: "Collect verified wallet context inline.", soon: true },
-  { icon: "✓", title: "Signature / Verification", description: "Attach proof-backed acknowledgement blocks.", soon: true },
-  { icon: "✦", title: "Encrypted Answer", description: "Future private-answer blocks for sealed fields.", soon: true },
+  { type: "shortText", icon: "Aa", title: "Short Text" },
+  { type: "longText", icon: "LT", title: "Long Text" },
+  { type: "dropdown", icon: "v", title: "Single Select" },
+  { type: "checkbox", icon: "[]", title: "Multiple Select" },
+  { type: "screenshot", icon: "UP", title: "File Upload" },
+  { type: "url", icon: "->", title: "Verification Link" },
+  { type: "rating", icon: "*", title: "Signal Rating" },
+  { icon: "ID", title: "Wallet Address", soon: true },
+  { icon: "OK", title: "Signature / Verification", soon: true },
+  { icon: "PX", title: "Encrypted Answer", soon: true },
 ];
 
 export function FieldsStep({
@@ -71,7 +71,7 @@ export function FieldsStep({
   onUpdateField,
   onRemoveField,
   onDuplicateField,
-  onInsertFollowUp,
+  onInsertConditionalField,
   onInsertField,
   onReorderFields,
   onOpenFieldTypePicker,
@@ -90,70 +90,128 @@ export function FieldsStep({
     }
   }, [expandedFieldId, fields]);
 
-  const unsectionedFields = useMemo(() => fields.filter((field) => !field.sectionId), [fields]);
+  const orderedFields = useMemo(() => getOrderedFields(fields), [fields]);
+  const unsectionedFields = useMemo(
+    () => orderedFields.filter((field) => !field.sectionId && !field.conditionalParentId),
+    [orderedFields],
+  );
   const sectionGroups = useMemo(
     () =>
       sections.map((section) => ({
         ...section,
-        fields: fields.filter((field) => field.sectionId === section.id),
+        fields: orderedFields.filter((field) => field.sectionId === section.id && !field.conditionalParentId),
       })),
-    [fields, sections],
+    [orderedFields, sections],
   );
 
-  function renderField(field: FormField, index: number) {
+  function sharedCardHandlers(field: FormField) {
+    return {
+      rootRef(node: HTMLElement | null) {
+        refs.fieldCardRefs.current[field.id] = node;
+      },
+      labelRef(node: HTMLInputElement | null) {
+        refs.labelRefs.current[field.id] = node;
+      },
+      onToggleExpand() {
+        setExpandedFieldId((current) => (current === field.id ? "" : field.id));
+      },
+      onFocus() {
+        setActiveFieldId(field.id);
+        setExpandedFieldId(field.id);
+      },
+      onDragStart(event: DragEvent<HTMLElement>) {
+        event.dataTransfer.effectAllowed = "move";
+        setDraggedFieldId(field.id);
+      },
+      onDragEnd() {
+        setDraggedFieldId(null);
+        setDragOverFieldId(null);
+        setDragOverPlacement(null);
+      },
+      onDragOver(event: DragEvent<HTMLElement>) {
+        event.preventDefault();
+        event.dataTransfer.dropEffect = "move";
+        const bounds = event.currentTarget.getBoundingClientRect();
+        const placement = event.clientY - bounds.top > bounds.height / 2 ? "after" : "before";
+        setDragOverFieldId(field.id);
+        setDragOverPlacement(placement);
+      },
+      onDrop(event: DragEvent<HTMLElement>) {
+        event.preventDefault();
+        if (draggedFieldId) {
+          onReorderFields(draggedFieldId, field.id, dragOverPlacement ?? "before");
+        }
+        setDraggedFieldId(null);
+        setDragOverFieldId(null);
+        setDragOverPlacement(null);
+      },
+    };
+  }
+
+  function renderFieldNode(field: FormField, index: number) {
+    const conditionalChildren = getConditionalChildFields(fields, field.id);
+    const handlers = sharedCardHandlers(field);
+
     return (
-      <FormFieldEditor
-        key={field.id}
-        field={field}
-        fields={fields}
-        index={index}
-        sections={sections}
-        rootRef={(node) => {
-          refs.fieldCardRefs.current[field.id] = node;
-        }}
-        isDragging={draggedFieldId === field.id}
-        isExpanded={expandedFieldId === field.id}
-        dropIndicator={dragOverFieldId === field.id ? dragOverPlacement : null}
-        labelRef={(node) => {
-          refs.labelRefs.current[field.id] = node;
-        }}
-        onChange={(nextField) => onUpdateField(index, nextField)}
-        onRemove={() => onRemoveField(field.id)}
-        onDuplicate={() => onDuplicateField(field.id)}
-        onAddBelow={() => onInsertField(field.type, index, field.sectionId)}
-        onAddFollowUp={() => onInsertFollowUp(field.id)}
-        onToggleExpand={() => setExpandedFieldId((current) => (current === field.id ? "" : field.id))}
-        onFocus={() => {
-          setActiveFieldId(field.id);
-          setExpandedFieldId(field.id);
-        }}
-        onDragStart={(event: DragEvent<HTMLElement>) => {
-          event.dataTransfer.effectAllowed = "move";
-          setDraggedFieldId(field.id);
-        }}
-        onDragEnd={() => {
-          setDraggedFieldId(null);
-          setDragOverFieldId(null);
-          setDragOverPlacement(null);
-        }}
-        onDragOver={(event: DragEvent<HTMLElement>) => {
-          event.preventDefault();
-          event.dataTransfer.dropEffect = "move";
-          const bounds = event.currentTarget.getBoundingClientRect();
-          const placement = event.clientY - bounds.top > bounds.height / 2 ? "after" : "before";
-          setDragOverFieldId(field.id);
-          setDragOverPlacement(placement);
-        }}
-        onDrop={(event: DragEvent<HTMLElement>) => {
-          event.preventDefault();
-          if (draggedFieldId) {
-            onReorderFields(draggedFieldId, field.id, dragOverPlacement ?? "before");
-          }
-          setDraggedFieldId(null);
-          setDragOverFieldId(null);
-          setDragOverPlacement(null);
-        }}
-      />
+      <div key={field.id} className="composer-question-node">
+        <FormFieldEditor
+          field={field}
+          fields={fields}
+          index={index}
+          sections={sections}
+          isDragging={draggedFieldId === field.id}
+          isExpanded={expandedFieldId === field.id}
+          dropIndicator={dragOverFieldId === field.id ? dragOverPlacement : null}
+          onChange={(nextField) => onUpdateField(index, nextField)}
+          onRemove={() => onRemoveField(field.id)}
+          onDuplicate={() => onDuplicateField(field.id)}
+          onAddBelow={() => onInsertField(field.type, index, field.sectionId)}
+          onAddConditionalQuestion={() => onInsertConditionalField(field.id)}
+          rootRef={handlers.rootRef}
+          labelRef={handlers.labelRef}
+          onToggleExpand={handlers.onToggleExpand}
+          onFocus={handlers.onFocus}
+          onDragStart={handlers.onDragStart}
+          onDragEnd={handlers.onDragEnd}
+          onDragOver={handlers.onDragOver}
+          onDrop={handlers.onDrop}
+        />
+
+        {conditionalChildren.map((child) => {
+          const childIndex = fields.findIndex((item) => item.id === child.id);
+          const childHandlers = sharedCardHandlers(child);
+          return (
+            <div key={child.id} className="composer-conditional-branch">
+              <div className="composer-conditional-branch-label">
+                <span className="composer-conditional-branch-arrow">{"->"}</span>
+                <span>{child.conditionalValue ? t("conditionalBranchLabel", { value: child.conditionalValue }) : t("conditionalQuestionNeedsValue")}</span>
+              </div>
+              <FormFieldEditor
+                field={child}
+                fields={fields}
+                index={childIndex}
+                sections={sections}
+                isDragging={draggedFieldId === child.id}
+                isExpanded={expandedFieldId === child.id}
+                dropIndicator={dragOverFieldId === child.id ? dragOverPlacement : null}
+                onChange={(nextField) => onUpdateField(childIndex, nextField)}
+                onRemove={() => onRemoveField(child.id)}
+                onDuplicate={() => onDuplicateField(child.id)}
+                onAddBelow={() => onInsertField(child.type, childIndex, child.sectionId)}
+                onAddConditionalQuestion={() => undefined}
+                rootRef={childHandlers.rootRef}
+                labelRef={childHandlers.labelRef}
+                onToggleExpand={childHandlers.onToggleExpand}
+                onFocus={childHandlers.onFocus}
+                onDragStart={childHandlers.onDragStart}
+                onDragEnd={childHandlers.onDragEnd}
+                onDragOver={childHandlers.onDragOver}
+                onDrop={childHandlers.onDrop}
+              />
+            </div>
+          );
+        })}
+      </div>
     );
   }
 
@@ -201,7 +259,7 @@ export function FieldsStep({
           </div>
 
           <div className="composer-library-footer">
-            <p className="muted">{t("shortcutHint")}</p>
+            <p className="muted">{t("conditionalShortcutHint")}</p>
             <button type="button" className="ghost-button" onClick={onOpenFieldTypePicker}>
               {t("moreTypes")}
             </button>
@@ -231,11 +289,11 @@ export function FieldsStep({
 
           <div className="composer-canvas-intro">
             <strong>{title.trim() || t("untitledForm")}</strong>
-            <p className="muted">{t("liveCanvasBody")}</p>
+            <p className="muted">{description.trim() || t("liveCanvasBody")}</p>
           </div>
 
           <div className="stack composer-question-stack">
-            {unsectionedFields.map((field) => renderField(field, fields.findIndex((item) => item.id === field.id)))}
+            {unsectionedFields.map((field) => renderFieldNode(field, fields.findIndex((item) => item.id === field.id)))}
 
             {sectionGroups.map((section) => (
               <section key={section.id} className="composer-inline-section composer-canvas-section">
@@ -264,7 +322,7 @@ export function FieldsStep({
 
                 {section.fields.length > 0 ? (
                   <div className="stack composer-question-stack">
-                    {section.fields.map((field) => renderField(field, fields.findIndex((item) => item.id === field.id)))}
+                    {section.fields.map((field) => renderFieldNode(field, fields.findIndex((item) => item.id === field.id)))}
                   </div>
                 ) : (
                   <div className="composer-section-empty">

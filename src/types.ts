@@ -55,6 +55,8 @@ export interface FormField {
   visibility?: "public" | "admin";
   adminOnly?: boolean;
   options?: string[];
+  conditionalParentId?: string;
+  conditionalValue?: string;
   visibilityRules?: ConditionalLogicGroup;
   requiredRules?: ConditionalLogicGroup;
 }

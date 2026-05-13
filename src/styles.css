@@ -4008,6 +4008,11 @@ body.composer-mode .bg-orb {
   align-self: start;
 }
 
+.composer-question-node {
+  display: grid;
+  gap: 0.85rem;
+}
+
 .composer-mobile-tabs {
   display: none;
 }
@@ -4323,6 +4328,13 @@ body.composer-mode .bg-orb {
     rgba(5, 18, 29, 0.96);
 }
 
+.composer-canvas-card.is-conditional-child {
+  background:
+    radial-gradient(circle at top right, rgba(102, 227, 255, 0.05), transparent 26%),
+    rgba(7, 19, 30, 0.82);
+  border-color: rgba(116, 226, 255, 0.1);
+}
+
 .question-card.is-dragging {
   opacity: 0.82;
   transform: rotate(0.4deg) scale(1.01);
@@ -4470,6 +4482,77 @@ body.composer-mode .bg-orb {
 .question-card-details {
   display: grid;
   gap: 0.9rem;
+}
+
+.composer-conditional-branch {
+  position: relative;
+  margin-left: 2.2rem;
+  padding-left: 1.15rem;
+  display: grid;
+  gap: 0.55rem;
+}
+
+.composer-conditional-branch::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 2px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(102, 227, 255, 0.34), rgba(102, 227, 255, 0.08));
+}
+
+.composer-conditional-branch-label {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  color: var(--text-soft);
+  font-size: 0.85rem;
+}
+
+.composer-conditional-branch-arrow {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.2rem;
+  color: var(--accent-strong);
+  font-weight: 700;
+}
+
+.composer-conditional-inline-label {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  align-items: center;
+  color: var(--text-soft);
+  font-size: 0.88rem;
+}
+
+.composer-conditional-inline-label strong {
+  color: var(--accent-strong);
+}
+
+.composer-conditional-inline-label.is-warning {
+  color: #ffd9a0;
+}
+
+.composer-conditional-rule-editor {
+  display: grid;
+  gap: 0.55rem;
+  padding: 0.9rem 1rem;
+  border-radius: 18px;
+  border: 1px solid rgba(116, 226, 255, 0.1);
+  background: rgba(5, 16, 27, 0.58);
+}
+
+.composer-conditional-rule-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(180px, 240px);
+  gap: 0.7rem;
+  align-items: center;
+}
+
+.composer-conditional-rule-source {
+  color: var(--text-soft);
 }
 
 .composer-canvas-question-input {
@@ -9330,6 +9413,15 @@ body.composer-mode .bg-orb {
   }
 
   .composer-option-row {
+    grid-template-columns: 1fr;
+  }
+
+  .composer-conditional-branch {
+    margin-left: 1rem;
+    padding-left: 0.85rem;
+  }
+
+  .composer-conditional-rule-row {
     grid-template-columns: 1fr;
   }
 

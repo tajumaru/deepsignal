@@ -98,6 +98,71 @@ function toComparableNumber(value: unknown) {
   return null;
 }
 
+function isConditionalParentType(field: FormField | undefined) {
+  return field?.type === "dropdown" || field?.type === "checkbox";
+}
+
+export function isConditionalChildField(field: FormField) {
+  return Boolean(field.conditionalParentId);
+}
+
+export function canFieldHaveConditionalChildren(field: FormField) {
+  return !field.conditionalParentId && (field.type === "dropdown" || field.type === "checkbox");
+}
+
+export function getConditionalParentField(field: FormField, fields: FormField[]) {
+  if (!field.conditionalParentId) {
+    return null;
+  }
+  return fields.find((candidate) => candidate.id === field.conditionalParentId) ?? null;
+}
+
+export function getConditionalChildFields(fields: FormField[], parentId: string) {
+  return fields.filter((field) => field.conditionalParentId === parentId);
+}
+
+export function getConditionalValueOptions(field: FormField | null) {
+  if (!field || !isConditionalParentType(field)) {
+    return [];
+  }
+  return (field.options ?? []).map((option) => option.trim()).filter(Boolean);
+}
+
+export function hasValidConditionalParent(field: FormField, fields: FormField[]) {
+  if (!field.conditionalParentId) {
+    return true;
+  }
+  const parent = getConditionalParentField(field, fields);
+  return Boolean(parent && !parent.conditionalParentId && isConditionalParentType(parent));
+}
+
+export function hasValidConditionalValue(field: FormField, fields: FormField[]) {
+  if (!field.conditionalParentId) {
+    return true;
+  }
+  const parent = getConditionalParentField(field, fields);
+  const options = getConditionalValueOptions(parent);
+  return Boolean(field.conditionalValue && options.includes(field.conditionalValue));
+}
+
+function evaluateConditionalChildVisibility(field: FormField, fields: FormField[], answers: Record<string, unknown>) {
+  if (!field.conditionalParentId) {
+    return true;
+  }
+  const parent = getConditionalParentField(field, fields);
+  if (!parent || parent.conditionalParentId || !isConditionalParentType(parent)) {
+    return false;
+  }
+  if (!field.conditionalValue || !getConditionalValueOptions(parent).includes(field.conditionalValue)) {
+    return false;
+  }
+  const parentValue = answers[parent.id];
+  if (parent.type === "checkbox") {
+    return Array.isArray(parentValue) && parentValue.map((item) => String(item)).includes(field.conditionalValue);
+  }
+  return String(parentValue ?? "") === field.conditionalValue;
+}
+
 export function evaluateCondition(condition: ConditionalLogicCondition, answers: Record<string, unknown>) {
   const sourceValue = answers[condition.fieldId];
   switch (condition.operator) {
@@ -152,12 +217,16 @@ export function evaluateRuleGroup(
   return ruleGroup.logic === "all" ? results.every(Boolean) : results.some(Boolean);
 }
 
-export function isFieldVisible(field: FormField, answers: Record<string, unknown>) {
+export function isFieldVisible(field: FormField, fields: FormField[], answers: Record<string, unknown>) {
+  const conditionalVisibility = evaluateConditionalChildVisibility(field, fields, answers);
+  if (!conditionalVisibility) {
+    return false;
+  }
   return evaluateRuleGroup(field.visibilityRules, answers, true);
 }
 
-export function isFieldRequired(field: FormField, answers: Record<string, unknown>, visible?: boolean) {
-  const resolvedVisible = visible ?? isFieldVisible(field, answers);
+export function isFieldRequired(field: FormField, fields: FormField[], answers: Record<string, unknown>, visible?: boolean) {
+  const resolvedVisible = visible ?? isFieldVisible(field, fields, answers);
   if (!resolvedVisible) {
     return false;
   }
@@ -165,7 +234,7 @@ export function isFieldRequired(field: FormField, answers: Record<string, unknow
 }
 
 export function getVisibleFields(fields: FormField[], answers: Record<string, unknown>) {
-  return fields.filter((field) => isFieldVisible(field, answers));
+  return getOrderedFields(fields).filter((field) => isFieldVisible(field, fields, answers));
 }
 
 export function getVisibleFieldIds(fields: FormField[], answers: Record<string, unknown>) {
@@ -174,7 +243,7 @@ export function getVisibleFieldIds(fields: FormField[], answers: Record<string, 
 
 export function getRequiredFields(fields: FormField[], answers: Record<string, unknown>) {
   const visibleFieldIds = getVisibleFieldIds(fields, answers);
-  return fields.filter((field) => isFieldRequired(field, answers, visibleFieldIds.has(field.id)));
+  return fields.filter((field) => isFieldRequired(field, fields, answers, visibleFieldIds.has(field.id)));
 }
 
 function sanitizeLogicGroup(
@@ -201,6 +270,9 @@ function getDependencyGraph(fields: FormField[]) {
   const graph = new Map<string, Set<string>>();
   fields.forEach((field) => {
     const dependencies = new Set<string>();
+    if (field.conditionalParentId) {
+      dependencies.add(field.conditionalParentId);
+    }
     for (const group of [field.visibilityRules, field.requiredRules]) {
       group?.conditions.forEach((condition) => {
         if (condition.fieldId) {
@@ -286,9 +358,58 @@ export function getConditionalLogicCycle(fields: FormField[]) {
 
 export function sanitizeConditionalLogicFields(fields: FormField[]) {
   const allowedFieldIds = new Set(fields.map((field) => field.id));
-  return fields.map((field) => ({
+  const normalized = fields.map((field) => ({
     ...field,
+    conditionalParentId:
+      typeof field.conditionalParentId === "string" && allowedFieldIds.has(field.conditionalParentId)
+        ? field.conditionalParentId
+        : undefined,
+    conditionalValue: typeof field.conditionalValue === "string" ? field.conditionalValue : undefined,
     visibilityRules: sanitizeLogicGroup(normalizeLogicGroup(field.visibilityRules), field.id, allowedFieldIds),
     requiredRules: sanitizeLogicGroup(normalizeLogicGroup(field.requiredRules), field.id, allowedFieldIds),
   }));
+
+  return normalized.map((field) => {
+    if (!field.conditionalParentId) {
+      return field;
+    }
+    const parent = normalized.find((candidate) => candidate.id === field.conditionalParentId);
+    if (!parent || parent.conditionalParentId || !isConditionalParentType(parent)) {
+      return {
+        ...field,
+        conditionalParentId: undefined,
+        conditionalValue: undefined,
+      };
+    }
+    return field;
+  });
+}
+
+export function getOrderedFields(fields: FormField[]) {
+  const normalized = sanitizeConditionalLogicFields(fields);
+  const childIds = new Set(
+    normalized.filter((field) => field.conditionalParentId).map((field) => field.id),
+  );
+  const childrenByParent = new Map<string, FormField[]>();
+
+  normalized.forEach((field) => {
+    if (!field.conditionalParentId) {
+      return;
+    }
+    const bucket = childrenByParent.get(field.conditionalParentId) ?? [];
+    bucket.push(field);
+    childrenByParent.set(field.conditionalParentId, bucket);
+  });
+
+  const ordered: FormField[] = [];
+  normalized.forEach((field) => {
+    if (childIds.has(field.id)) {
+      return;
+    }
+    ordered.push(field);
+    const children = childrenByParent.get(field.id) ?? [];
+    children.forEach((child) => ordered.push(child));
+  });
+
+  return ordered;
 }
