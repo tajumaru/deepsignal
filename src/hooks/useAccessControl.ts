@@ -40,6 +40,19 @@ type OwnedObjectsResponse = {
   nextCursor?: string | null;
 };
 
+type OwnedObjectsRequest = {
+  owner: string;
+  cursor?: string;
+  options?: {
+    showType?: boolean;
+    showContent?: boolean;
+  };
+  limit?: number;
+  filter?: {
+    StructType: string;
+  };
+};
+
 export type DebugOwnedObject = {
   objectId: string;
   type: string;
@@ -105,6 +118,37 @@ function extractCapIds(
     .filter(Boolean);
 }
 
+async function fetchOwnedObjectsByType(
+  suiClient: ReturnType<typeof useSuiClient>,
+  owner: string,
+  structType: string,
+) {
+  const matches: OwnedObjectEntry[] = [];
+  let cursor: string | null | undefined = null;
+  let pageCount = 0;
+
+  do {
+    const page = (await suiClient.getOwnedObjects({
+      owner,
+      cursor: cursor ?? undefined,
+      filter: {
+        StructType: structType,
+      },
+      options: {
+        showType: true,
+        showContent: true,
+      },
+      limit: 50,
+    } as OwnedObjectsRequest)) as OwnedObjectsResponse;
+
+    matches.push(...(page.data ?? []));
+    cursor = page.hasNextPage ? page.nextCursor : null;
+    pageCount += 1;
+  } while (cursor && pageCount < 20);
+
+  return matches;
+}
+
 export function useAccessControl(address?: string | null) {
   const suiClient = useSuiClient();
   const { registry, isLoadingRegistry, error: registryError } = useAccessRegistry();
@@ -131,37 +175,18 @@ export function useAccessControl(address?: string | null) {
     retry: 1,
     refetchOnWindowFocus: false,
     queryFn: async () => {
-      const matches: OwnedObjectEntry[] = [];
-      let cursor: string | null | undefined = null;
-      let pageCount = 0;
+      const capTypes = [
+        ACCESS_CONTROL_OWNER_CAP_TYPE,
+        ACCESS_CONTROL_ADMIN_CAP_TYPE,
+        ACCESS_CONTROL_REVIEWER_CAP_TYPE,
+      ].filter(Boolean);
+      const pages = await Promise.all(
+        capTypes.map((capType) => fetchOwnedObjectsByType(suiClient, address ?? "", capType)),
+      );
 
-      do {
-        const page = (await suiClient.getOwnedObjects({
-          owner: address ?? "",
-          cursor: cursor ?? undefined,
-          options: {
-            showType: true,
-            showContent: true,
-          },
-          limit: 50,
-        })) as OwnedObjectsResponse;
-
-        for (const entry of page.data ?? []) {
-          const normalizedType = normalizeType(entry.data?.type);
-          if (!normalizedType) {
-            continue;
-          }
-
-          if (targetTypes.has(normalizedType)) {
-            matches.push(entry);
-          }
-        }
-
-        cursor = page.hasNextPage ? page.nextCursor : null;
-        pageCount += 1;
-      } while (cursor && pageCount < 20);
-
-      return matches;
+      return pages
+        .flat()
+        .filter((entry) => targetTypes.has(normalizeType(entry.data?.type)));
     },
   });
 

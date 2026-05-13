@@ -141,6 +141,7 @@ export function UploadDropzone({
   const inputRef = useRef<HTMLInputElement | null>(null);
   const previewUrlsRef = useRef(new Map<string, string>());
   const [isDragging, setIsDragging] = useState(false);
+  const [selectionError, setSelectionError] = useState("");
 
   useEffect(() => {
     const activeIds = new Set(attachments.map((attachment) => attachment.id));
@@ -189,14 +190,21 @@ export function UploadDropzone({
     if (!fileList || disabled) {
       return;
     }
-    const files = [...fileList].filter((file) => isSupportedFile(file));
-    if (files.length === 0) {
+    const files = [...fileList];
+    const supportedFiles = files.filter((file) => isSupportedFile(file));
+    const unsupportedFiles = files.filter((file) => !isSupportedFile(file));
+    if (unsupportedFiles.length > 0) {
+      setSelectionError("Some files were skipped. Use images, mp4/webm videos, PDF, text, or zip files.");
+    } else {
+      setSelectionError("");
+    }
+    if (supportedFiles.length === 0) {
       return;
     }
 
-    const next = files.map((file) => createAttachmentRecord(file, maxSizeBytes));
+    const next = supportedFiles.map((file) => createAttachmentRecord(file, maxSizeBytes));
     onChange(multiple ? [...attachments, ...next] : next.slice(0, 1));
-    onFilesSelected?.(files);
+    onFilesSelected?.(supportedFiles);
   }
 
   function handleInputChange(event: ChangeEvent<HTMLInputElement>) {
@@ -265,9 +273,11 @@ export function UploadDropzone({
           <strong>Drag &amp; drop evidence files here</strong>
           <span>or click to upload</span>
           <small>{summaryLabel}</small>
+          <small className="muted">Supports images, mp4/webm, PDF, text, and zip files.</small>
           {hint ? <small className="muted">{hint}</small> : null}
         </div>
       </div>
+      {selectionError ? <p className="warning-text">{selectionError}</p> : null}
 
       {attachments.length > 0 ? (
         <div className="upload-dropzone-list">
@@ -327,6 +337,7 @@ export function UploadDropzone({
                   <div className="upload-attachment-details">
                     <span>{formatBytes(attachment.fileSize)}</span>
                     <span>{getStatusLabel(attachment.status)}</span>
+                    {attachment.error ? <span className="upload-attachment-status-pill is-error">Needs retry</span> : null}
                     {attachment.walrusBlobId ? <span>{attachment.walrusBlobId}</span> : null}
                   </div>
 

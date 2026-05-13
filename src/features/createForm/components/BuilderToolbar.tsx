@@ -11,6 +11,7 @@ interface BuilderToolbarProps {
   capabilityConfigured: boolean;
   accessRoleLabel: string;
   adminCapLabel?: string;
+  draftStateLabel?: string;
   savedFormId?: string;
   onSelectStep: (step: BuilderStepKey) => void;
   onNavigateHome: () => void;
@@ -24,6 +25,7 @@ export function BuilderToolbar({
   capabilityConfigured,
   accessRoleLabel,
   adminCapLabel,
+  draftStateLabel,
   savedFormId,
   onSelectStep,
   onNavigateHome,
@@ -40,6 +42,7 @@ export function BuilderToolbar({
             {adminCapLabel ? ` (${adminCapLabel})` : ""}
           </p>
         ) : null}
+        {draftStateLabel ? <p className="muted composer-draft-status">{draftStateLabel}</p> : null}
       </div>
 
       <FormBuilderSteps

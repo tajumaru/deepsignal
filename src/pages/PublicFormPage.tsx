@@ -60,6 +60,11 @@ function createPseudoProgress(onTick: (progress: number) => void) {
   }, 180);
 }
 
+function formatUploadFailure(fieldLabel: string, error: unknown) {
+  const detail = error instanceof Error ? error.message : "Upload failed.";
+  return `${fieldLabel}: ${detail} Remove the failed file or retry before sending your signal.`;
+}
+
 export function PublicFormPage() {
   const { t } = useI18n();
   const account = useCurrentAccount();
@@ -149,9 +154,7 @@ export function PublicFormPage() {
       if (attachWalletTouched) {
         setAttachWalletTouched(false);
       }
-      return;
     }
-
   }, [account?.address, attachWallet, attachWalletTouched]);
 
   const attachmentFields = useMemo(
@@ -189,6 +192,8 @@ export function PublicFormPage() {
   }, [form, visibleFieldIds]);
   const deadlinePassed = useMemo(() => isResponseDeadlinePassed(form?.responseDeadline), [form?.responseDeadline]);
   const deadlineLabel = useMemo(() => formatResponseDeadline(form?.responseDeadline), [form?.responseDeadline]);
+  const submitModeLabel = attachWallet && account?.address ? "Wallet attached, no extra personal-message signature" : "Anonymous signal";
+  const storageModeLabel = form?.encryptSubmissions ? "Walrus with optional Seal encryption" : "Walrus or local fallback";
 
   useEffect(() => {
     setErrors((current) => {
@@ -232,7 +237,7 @@ export function PublicFormPage() {
       return;
     }
     if (isResponseDeadlinePassed(form.responseDeadline)) {
-      setSubmitError("このフォームの回答受付は終了しました");
+      setSubmitError("This signal intake is closed because the response deadline has passed.");
       setSubmitNotice("");
       return;
     }
@@ -282,9 +287,7 @@ export function PublicFormPage() {
             setAnswers((current) => ({
               ...current,
               [field.id]: getUploadAnswer(current[field.id]).map((item) =>
-                item.id === attachment.id
-                  ? { ...item, status: "uploading", progress: 0, error: undefined }
-                  : item,
+                item.id === attachment.id ? { ...item, status: "uploading", progress: 0, error: undefined } : item,
               ),
             }));
 
@@ -309,9 +312,7 @@ export function PublicFormPage() {
                 setAnswers((current) => ({
                   ...current,
                   [field.id]: getUploadAnswer(current[field.id]).map((item) =>
-                    item.id === attachment.id
-                      ? { ...item, status: "uploaded", progress: 100 }
-                      : item,
+                    item.id === attachment.id ? { ...item, status: "uploaded", progress: 100 } : item,
                   ),
                 }));
               } else {
@@ -331,28 +332,21 @@ export function PublicFormPage() {
                   ...current,
                   [field.id]: getUploadAnswer(current[field.id]).map((item) =>
                     item.id === attachment.id
-                      ? {
-                          ...item,
-                          status: "uploaded",
-                          progress: 100,
-                          walrusBlobId: upload.blobId,
-                        }
+                      ? { ...item, status: "uploaded", progress: 100, walrusBlobId: upload.blobId }
                       : item,
                   ),
                 }));
               }
             } catch (error) {
               window.clearInterval(progressTimer);
-              const message = error instanceof Error ? error.message : t("submitFailed");
+              const message = formatUploadFailure(field.label || "Attachment", error);
               setAnswers((current) => ({
                 ...current,
                 [field.id]: getUploadAnswer(current[field.id]).map((item) =>
-                  item.id === attachment.id
-                    ? { ...item, status: "failed", progress: 0, error: message }
-                    : item,
+                  item.id === attachment.id ? { ...item, status: "failed", progress: 0, error: message } : item,
                 ),
               }));
-              throw error;
+              throw new Error(message);
             }
           }
 
@@ -363,9 +357,7 @@ export function PublicFormPage() {
       }
 
       const publicPayloadAnswers = Object.fromEntries(
-        visibleFields
-          .filter((field) => !field.sensitive)
-          .map((field) => [field.id, plainAnswers[field.id]]),
+        visibleFields.filter((field) => !field.sensitive).map((field) => [field.id, plainAnswers[field.id]]),
       );
       const submission: Submission = {
         id: makeId("submission"),
@@ -432,17 +424,13 @@ export function PublicFormPage() {
       <section className="stack">
         <section className="panel glow-panel success-screen">
           <p className="eyebrow">{t("signalReceived")}</p>
-          <h1>{isEncryptedSubmission ? "Private Signal sent" : "Signal sent"}</h1>
+          <h1>{isEncryptedSubmission ? "Private signal sent" : "Signal sent"}</h1>
           <p className="lede">
             {isEncryptedSubmission
-              ? "Only project reviewers can decrypt this message."
+              ? "Only authorized reviewers can unlock this message inside the encrypted feedback inbox."
               : "Reviewers can open this submission directly from the inbox."}
           </p>
-          <p>
-            {isLocalFallbackBlob(submitted.encryptedBlobId ?? submitted.blobId)
-              ? "Stored locally only"
-              : "Trusted storage ready"}
-          </p>
+          <p>{isLocalFallbackBlob(submitted.encryptedBlobId ?? submitted.blobId) ? "Stored locally only" : "Trusted storage ready"}</p>
           <p>{t("thanksForFeedback")}</p>
           {submitNotice ? <p className="muted">{submitNotice}</p> : null}
           <div className="success-copy">
@@ -468,11 +456,7 @@ export function PublicFormPage() {
                 <BlobLink blobId={submitted.blobId} label="Verify on Walrus" />
               </SignalMetaRow>
               {hasDedicatedEncryptedPayloadBlob(submitted) ? (
-                <SignalMetaRow
-                  label="Private Signal Blob"
-                  type="seal"
-                  value={submitted.encryptedBlobId}
-                >
+                <SignalMetaRow label="Private Signal Blob" type="seal" value={submitted.encryptedBlobId}>
                   <BlobLink blobId={submitted.encryptedBlobId} label="Verify on Walrus" />
                 </SignalMetaRow>
               ) : null}
@@ -482,17 +466,10 @@ export function PublicFormPage() {
                   <strong>{getEncryptedPayloadAvailabilityLabel(submitted)}</strong>
                 </div>
               ) : null}
-              <SignalMetaRow
-                label="Seal Identity"
-                type="seal"
-                value={submitted.sealIdentity}
-                emptyLabel={t("notAvailable")}
-              />
+              <SignalMetaRow label="Seal Identity" type="seal" value={submitted.sealIdentity} emptyLabel={t("notAvailable")} />
               <div className="metadata-row">
                 <span>Respondent</span>
-                <strong>
-                  {submittedRespondentMeta.isAnonymous ? "Anonymous respondent" : "Wallet connected"}
-                </strong>
+                <strong>{submittedRespondentMeta.isAnonymous ? "Anonymous respondent" : "Wallet attached"}</strong>
               </div>
               {submitted.pendingOnchainRegistration ? (
                 <div className="metadata-row">
@@ -537,19 +514,19 @@ export function PublicFormPage() {
       <h1>{form.title}</h1>
       <RichTextContent value={form.description ?? ""} className="lede rich-text-content" fallback={t("publicDefaultBody")} />
       <section className={`answer-card public-deadline-card ${deadlinePassed ? "is-expired" : ""}`}>
-        <p className="eyebrow">回答期限</p>
+        <p className="eyebrow">Response window</p>
         <h3>{deadlineLabel}</h3>
         <p className="muted">
           {deadlinePassed
-            ? "このフォームの回答受付は終了しました"
-            : "期限後は新しい回答を送信できません"}
+            ? "This intake is closed. Reviewers can still inspect signals already stored in the inbox."
+            : "Send your signal before the deadline to keep it in the active review queue."}
         </p>
       </section>
       {form.encryptSubmissions ? (
         <section className="answer-card public-private-signal-note">
-          <p className="eyebrow">Private Signal</p>
-          <h3>Private Signal</h3>
-          <p className="muted">Only project reviewers can decrypt this message.</p>
+          <p className="eyebrow">Encrypted Feedback Inbox</p>
+          <h3>Private signal enabled</h3>
+          <p className="muted">Your message stays private until an authorized reviewer unlocks it.</p>
         </section>
       ) : null}
 
@@ -582,22 +559,16 @@ export function PublicFormPage() {
               />
               <span>
                 <strong>{t("publicWalletAttach")}</strong>
-                <small>
-                  {account?.address ? t("publicWalletAttachHelp") : t("publicWalletConnectOptional")}
-                </small>
+                <small>{account?.address ? t("publicWalletAttachHelp") : t("publicWalletConnectOptional")}</small>
               </span>
             </label>
           </div>
 
           <div className="public-identity-note">
             <span className="public-identity-label">{t("publicCurrentMode")}</span>
-            <strong>
-              {attachWallet && account?.address ? t("publicModeWallet") : t("publicModeAnonymous")}
-            </strong>
+            <strong>{attachWallet && account?.address ? t("publicModeWallet") : t("publicModeAnonymous")}</strong>
             <p className="muted">
-              {attachWallet && account?.address
-                ? t("publicWalletModeHelpNoSignature")
-                : t("publicAnonymousModeHelp")}
+              {attachWallet && account?.address ? t("publicWalletModeHelpNoSignature") : t("publicAnonymousModeHelp")}
             </p>
           </div>
         </div>
@@ -655,11 +626,29 @@ export function PublicFormPage() {
           />
         ))}
       </div>
+
+      <section className="answer-card public-submit-readiness">
+        <div className="metadata-list">
+          <div className="metadata-row">
+            <span>Delivery mode</span>
+            <strong>{submitModeLabel}</strong>
+          </div>
+          <div className="metadata-row">
+            <span>Storage target</span>
+            <strong>{storageModeLabel}</strong>
+          </div>
+          <div className="metadata-row">
+            <span>Attachments</span>
+            <strong>Preview before submit. Failed uploads stay visible until you remove or replace them.</strong>
+          </div>
+        </div>
+      </section>
+
       {submitError ? <p className="error-text">{submitError}</p> : null}
       <div className="public-form-actions">
         <button type="submit" className="primary-button" disabled={submitting || deadlinePassed}>
           {deadlinePassed
-            ? "回答受付終了"
+            ? "Submission closed"
             : submitting
               ? t("submitting")
               : attachWallet && account?.address

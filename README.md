@@ -1,44 +1,63 @@
-# DeepSignal - Walrus Feedback Lab
+# DeepSignal
 
-DeepSignal is a Walrus-native feedback and forms MVP built with Vite, React, and TypeScript. It supports custom public forms, an encrypted Signal Inbox review console, public roadmap publishing, feedback triage workflows, contributor tracking, sensitive-field encryption, file uploads, JSON/CSV export, and a dual storage strategy that prefers Walrus while falling back to `localStorage` when needed.
+DeepSignal is an encrypted feedback inbox built for Walrus-native forms.
 
-## How to run
+It is designed around one contest-ready flow:
+
+`Create form -> Share link -> Submit signal -> Store on Walrus -> Optional Seal encryption -> Admin inbox -> Review -> AI summary -> CSV export`
+
+Public responders can submit without connecting a wallet. Walrus, Seal, and Sui features enhance the flow when configured, but the app still works in local demo mode through the existing `localStorage` fallback.
+
+## What is DeepSignal?
+
+- A form builder for collecting product feedback, bug reports, and roadmap signals
+- A wallet-aware admin inbox for encrypted review and prioritization
+- A Walrus-first storage flow with local fallback for demos and recovery
+- A contest-focused MVP that keeps Signal / Inbox / Review / Encryption as the core product language
+
+## Quick start
 
 ```bash
 npm install
-npm run typecheck
 npm run dev
 ```
 
-For a production bundle:
-
-```bash
-npm run build
-```
-
-`npm run build` always runs `npm run typecheck` first, so the production build fails fast if the TypeScript project does not pass a full type check.
-
-## Quality checks
-
-Use the standalone type check when you want a quick submission-safe verification without starting Vite:
+## Verification
 
 ```bash
 npm run typecheck
-```
-
-Run lint only:
-
-```bash
 npm run lint
+npm run build
 ```
 
-Run both quality gates together:
+`npm run build` runs `npm run typecheck` first so broken TypeScript fails early.
+
+## Dev code index
+
+DeepSignal includes a lightweight local code index for development and bug investigation. It scans `src`, writes JSON to `.codex/code-index.json`, and does not affect the app's runtime behavior.
 
 ```bash
-npm run check
+npm run code:index
+npm run code:search -- create form
+npm run code:search -- walrus upload
+npm run code:search -- seal decrypt
 ```
 
-This is intentionally separated from Vite dev mode because Vite does not guarantee a full TypeScript type check during normal development, and `npm run check` is the safest pre-submission pass.
+- `npm run code:index` rebuilds the local search index from source files
+- `npm run code:search -- <terms>` searches the generated JSON with local keyword matching only
+- this is a developer support utility only and does not change shipped UI, UX, storage, crypto, or routing behavior
+
+## Demo flow
+
+1. Connect an admin wallet.
+2. Open `/admin/forms/new` and create a form.
+3. Keep `Encrypt submissions` enabled.
+4. Publish the form and open the public link.
+5. Submit one signal, ideally with a screenshot or video attachment.
+6. Open `/admin` to review the signal inside the Encrypted Feedback Inbox.
+7. Unlock the private signal when Seal / reviewer access is enabled.
+8. Set status, priority, tags, notes, and roadmap stage.
+9. Export JSON or CSV from the inbox.
 
 ## Future CI notes
 

@@ -56,6 +56,8 @@ export interface FormBuilderValues {
   projectState: string;
 }
 
+export type DraftSaveState = "idle" | "saving" | "saved" | "restored";
+
 export interface FieldsStepValidationResult {
   isValid: boolean;
   error: string;

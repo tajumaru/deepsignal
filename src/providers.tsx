@@ -55,9 +55,9 @@ export function WalletProviders({ children }: PropsWithChildren) {
     <QueryClientProvider client={queryClient}>
       <SuiClientProvider networks={networkConfig} defaultNetwork={SUI_NETWORK}>
         <WalletProvider
-          autoConnect
           preferredWallets={PREFERRED_WALLETS}
           walletFilter={walletFilter}
+          autoConnect
         >
           {REQUIRE_GLOBAL_WALRUS_RUNTIME ? (
             <Suspense fallback={null}>

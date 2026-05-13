@@ -3,6 +3,8 @@ import { makeId } from "../../lib/utils";
 import { normalizeFormVisibility } from "../../lib/explore";
 import type { FieldType, FormField, FormPurpose, FormSchema, FormSection, ResponseDeadlinePreset } from "./types";
 
+export const CREATE_FORM_DRAFT_STORAGE_KEY = "deepsignal:create-form-draft:v1";
+
 export function wait(ms: number) {
   return new Promise((resolve) => window.setTimeout(resolve, ms));
 }

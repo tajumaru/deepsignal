@@ -1,7 +1,6 @@
 import { lazy, Suspense, type PropsWithChildren } from "react";
-import { Link, NavLink, useLocation } from "react-router-dom";
+import { Link, NavLink } from "react-router-dom";
 import { useI18n } from "../i18n";
-import { WalletSurface } from "./WalletSurface";
 
 const WalletConnect = lazy(() =>
   import("./WalletConnect").then((module) => ({ default: module.WalletConnect })),
@@ -11,12 +10,7 @@ const WalletNav = lazy(() =>
 );
 
 export function AppShell({ children }: PropsWithChildren) {
-  const location = useLocation();
   const { language, setLanguage, t } = useI18n();
-  const showsWalletControls =
-    location.pathname.startsWith("/admin") ||
-    location.pathname.startsWith("/dashboard") ||
-    location.pathname.startsWith("/f/");
 
   const shell = (
     <div className="app-shell">
@@ -25,7 +19,7 @@ export function AppShell({ children }: PropsWithChildren) {
       <header className="topbar panel">
         <Link className="brand" to="/">
           <span className="brand-mark" aria-hidden="true">
-            <img src="/deepsignal-icon.png" alt="" />
+            <img src="/deepsignal-icon.webp" alt="" />
           </span>
           <div>
             <strong>DeepSignal</strong>
@@ -35,19 +29,15 @@ export function AppShell({ children }: PropsWithChildren) {
         <nav className="topnav">
           <NavLink to="/">{t("navHome")}</NavLink>
           <NavLink to="/explore">{t("navExplore")}</NavLink>
-          {showsWalletControls ? (
-            <Suspense fallback={null}>
-              <WalletNav />
-            </Suspense>
-          ) : null}
+          <Suspense fallback={null}>
+            <WalletNav />
+          </Suspense>
           <NavLink to="/admin/forms/new">{t("navCreateForm")}</NavLink>
         </nav>
         <div className="topbar-actions">
-          {showsWalletControls ? (
-            <Suspense fallback={<div className="wallet-connect-shell" />}>
-              <WalletConnect />
-            </Suspense>
-          ) : null}
+          <Suspense fallback={<div className="wallet-connect-shell" />}>
+            <WalletConnect />
+          </Suspense>
           <label className="language-switch">
             <span>{t("languageLabel")}</span>
             <select
@@ -64,5 +54,5 @@ export function AppShell({ children }: PropsWithChildren) {
     </div>
   );
 
-  return showsWalletControls ? <WalletSurface>{shell}</WalletSurface> : shell;
+  return shell;
 }

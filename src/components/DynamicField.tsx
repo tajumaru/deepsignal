@@ -24,15 +24,14 @@ export function DynamicField({
   onChange,
 }: DynamicFieldProps) {
   const { t } = useI18n();
+  const isRequired = required ?? field.required;
   const selectedAttachments = Array.isArray(value)
     ? value.filter((item): item is UploadDropzoneItem => Boolean(item) && typeof item === "object" && "id" in item)
     : [];
 
   function updateCheckbox(option: string, checked: boolean) {
     const current = Array.isArray(value) ? value : [];
-    const next = checked
-      ? [...current, option]
-      : current.filter((item) => item !== option);
+    const next = checked ? [...current, option] : current.filter((item) => item !== option);
     onChange(next);
   }
 
@@ -40,22 +39,22 @@ export function DynamicField({
     <label className={`field-block ${questionNumber ? "numbered-field" : ""}`}>
       <span className="field-label-row">
         {questionNumber ? <span className="field-question-index">Q{questionNumber}</span> : null}
-        <span className="field-label-text">
-          {field.label}
-          {(required ?? field.required) ? <span className="field-required-mark"> *</span> : ""}
+        <span className="field-label-text">{field.label}</span>
+        <span className={`field-required-chip ${isRequired ? "is-required" : "is-optional"}`}>
+          {isRequired ? "Required" : "Optional"}
         </span>
       </span>
 
-      {field.type === "shortText" && (
+      {field.type === "shortText" ? (
         <input
           value={String(value ?? "")}
           placeholder={field.placeholder ?? ""}
           disabled={disabled}
           onChange={(event) => onChange(event.target.value)}
         />
-      )}
+      ) : null}
 
-      {field.type === "longText" && (
+      {field.type === "longText" ? (
         <textarea
           rows={5}
           value={String(value ?? "")}
@@ -63,9 +62,9 @@ export function DynamicField({
           disabled={disabled}
           onChange={(event) => onChange(event.target.value)}
         />
-      )}
+      ) : null}
 
-      {field.type === "dropdown" && (
+      {field.type === "dropdown" ? (
         <select value={String(value ?? "")} disabled={disabled} onChange={(event) => onChange(event.target.value)}>
           <option value="">{t("selectOption")}</option>
           {(field.options ?? []).map((option) => (
@@ -74,9 +73,9 @@ export function DynamicField({
             </option>
           ))}
         </select>
-      )}
+      ) : null}
 
-      {field.type === "checkbox" && (
+      {field.type === "checkbox" ? (
         <div className="checkbox-group">
           {(field.options ?? []).map((option) => (
             <label key={option} className="check-item">
@@ -90,9 +89,9 @@ export function DynamicField({
             </label>
           ))}
         </div>
-      )}
+      ) : null}
 
-      {field.type === "rating" && (
+      {field.type === "rating" ? (
         <div className="rating-picker" role="radiogroup" aria-label={field.label}>
           {[1, 2, 3, 4, 5].map((score) => {
             const active = Number(value ?? 0) >= score;
@@ -106,7 +105,7 @@ export function DynamicField({
                 disabled={disabled}
                 onClick={() => onChange(String(score))}
               >
-                ★
+                {"★"}
               </button>
             );
           })}
@@ -114,9 +113,9 @@ export function DynamicField({
             {value ? t("ratingValue", { score: Number(value) }) : t("chooseRating")}
           </span>
         </div>
-      )}
+      ) : null}
 
-      {field.type === "url" && (
+      {field.type === "url" ? (
         <input
           type="url"
           inputMode="url"
@@ -125,9 +124,9 @@ export function DynamicField({
           disabled={disabled}
           onChange={(event) => onChange(event.target.value)}
         />
-      )}
+      ) : null}
 
-      {(field.type === "screenshot" || field.type === "video") && (
+      {field.type === "screenshot" || field.type === "video" ? (
         <div className="upload-card">
           <UploadDropzone
             attachments={selectedAttachments}
@@ -137,7 +136,7 @@ export function DynamicField({
             onChange={onChange}
           />
         </div>
-      )}
+      ) : null}
 
       {field.helpText ? <small className="muted">{field.helpText}</small> : null}
       {error ? <small className="error-text">{error}</small> : null}

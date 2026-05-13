@@ -36,7 +36,7 @@ import {
   getRoleLabel,
 } from "../lib/adminAccess";
 import { getTriageStatusLabel, TRIAGE_STATUS_OPTIONS } from "../lib/signalOps";
-import { exportSubmissionJson } from "../lib/export";
+import { exportSubmissionJson, exportSubmissionsCsv } from "../lib/export";
 import { getEncryptedPayloadAvailabilityLabel, hasDedicatedEncryptedPayloadBlob } from "../lib/encryptionDisplay";
 import { getPublicFormPath, getPublicRoadmapPath } from "../lib/publicLinks";
 import { formatResponseDeadline } from "../lib/responseDeadline";
@@ -115,6 +115,7 @@ export function AdminDashboardPage() {
     setSearch,
     loadConsole,
     accessibleForms,
+    submissionsByFormId,
     signalIndex,
     allSignals,
     pendingSignals,
@@ -844,6 +845,7 @@ export function AdminDashboardPage() {
     selectedProject ? "Protected" : "Local mode",
     formatAccessLabel(roleLabel),
   ];
+  const selectedFormSubmissionCount = selectedRecord ? (submissionsByFormId[selectedRecord.form.id] ?? []).length : 0;
   const activeScopeLabel =
     selectedFormId === "all" ? t("allSignalNodes") : selectedForm?.title ?? t("selectedNode");
   const activeStreamLabel =
@@ -1449,6 +1451,7 @@ export function AdminDashboardPage() {
                       <p className="muted">
                         {selectedRecord.form.title} / {formatDate(selectedRecord.submission.createdAt)}
                       </p>
+                      <p className="muted">Read the original signal first, then set review state, priority, notes, roadmap status, and export actions.</p>
                     </div>
                     <div className="inline-actions signal-detail-utility-actions">
                       <Link
@@ -1465,6 +1468,18 @@ export function AdminDashboardPage() {
                         }
                       >
                         {t("exportJson")}
+                      </button>
+                      <button
+                        type="button"
+                        className="ghost-button"
+                        onClick={() =>
+                          exportSubmissionsCsv(
+                            selectedRecord.form,
+                            (submissionsByFormId[selectedRecord.form.id] ?? []).map((submission) => normalizeSubmission(submission)),
+                          )
+                        }
+                      >
+                        {t("exportCsv")}
                       </button>
                       {selectedRecord.submission.pendingOnchainRegistration ? (
                         <button
@@ -1507,6 +1522,7 @@ export function AdminDashboardPage() {
                           })}
                         </span>
                       ) : null}
+                      <span className="signal-chip">{selectedFormSubmissionCount} signals in this form</span>
                     </div>
                   </section>
 
@@ -1576,7 +1592,7 @@ export function AdminDashboardPage() {
                           <p className="eyebrow">Review Workflow</p>
                           <h3>{t("reviewControlsTitle")}</h3>
                         </div>
-                        <span className={`save-state-pill ${saving ? "is-pending" : ""}`}>
+                        <span className={`save-state-pill ${saving ? "is-saving" : ""}`}>
                           {saving ? "Saving..." : "Ready"}
                         </span>
                       </div>
@@ -1690,7 +1706,7 @@ export function AdminDashboardPage() {
                         <summary>
                           <span>
                             <p className="eyebrow">Review notes and roadmap</p>
-                            <h3>Secondary actions</h3>
+                            <h3>Notes, tags, and public roadmap</h3>
                           </span>
                         </summary>
                         <p className="review-helper-copy muted">
@@ -1930,6 +1946,13 @@ export function AdminDashboardPage() {
                       </div>
                     </section>
 
+                    <section className="signal-detail-group details-group-section">
+                      <div className="signal-detail-group-header signal-detail-group-header-details">
+                        <p className="eyebrow">AI Assist</p>
+                        <h3>AI summary and clustering</h3>
+                        <p className="muted">AI stays separate from the original signal so reviewer judgment remains primary.</p>
+                      </div>
+
                     <details className="answer-card collapsible-detail-card ai-summary-section ai-card">
                       <summary>
                         <span>
@@ -1977,12 +2000,13 @@ export function AdminDashboardPage() {
                         </span>
                       </div>
                     </details>
+                    </section>
 
                     <section className="signal-detail-group details-group-section">
                       <div className="signal-detail-group-header signal-detail-group-header-details">
-                        <p className="eyebrow">Trust Metadata</p>
-                        <h3>Trust Metadata</h3>
-                        <p className="muted">Technical proof stays grouped here so review actions remain the focus.</p>
+                        <p className="eyebrow">Proof and technical details</p>
+                        <h3>Storage, encryption, and receipt metadata</h3>
+                        <p className="muted">These details stay collapsed until you need to verify Walrus, Seal, or Sui proof state.</p>
                       </div>
 
                       <details className="answer-card collapsible-detail-card ai-similar-section ai-card">

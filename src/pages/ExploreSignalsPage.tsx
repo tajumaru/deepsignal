@@ -4,7 +4,7 @@ import { buildExploreAiPreview, getExploreCategory, getPurposeLabel, isFormPubli
 import { getPublicFormPath } from "../lib/publicLinks";
 import { normalizeForm, normalizeSubmission, storageAdapter } from "../lib/storage";
 import { formatDate } from "../lib/utils";
-import type { FormSchema, Submission } from "../types";
+import type { FormSchema } from "../types";
 
 type ExploreCard = {
   form: FormSchema;

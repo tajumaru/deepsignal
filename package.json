@@ -9,7 +9,9 @@
     "typecheck": "tsc -b",
     "check": "npm run typecheck && npm run lint",
     "build": "npm run typecheck && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "code:index": "tsx scripts/index-code.ts",
+    "code:search": "tsx scripts/search-code.ts"
   },
   "dependencies": {
     "@mysten/dapp-kit": "^1.0.4",
@@ -38,6 +40,7 @@
     "eslint-plugin-react-refresh": "^0.4.20",
     "globals": "^16.0.0",
     "rollup-plugin-visualizer": "^7.0.1",
+    "tsx": "^4.21.0",
     "typescript": "^5.6.3",
     "typescript-eslint": "^8.31.1",
     "vite": "^5.4.10"

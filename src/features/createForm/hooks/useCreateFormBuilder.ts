@@ -14,13 +14,15 @@ import type {
   FieldType,
   FieldsStepValidationResult,
   FormBuilderValues,
+  FormField,
   FormSection,
   MobileBuilderPane,
   ProjectOption,
   ResponseDeadlinePreset,
   Translate,
 } from "../types";
-import { cloneField, createField, createSection, serializeDraft } from "../utils";
+import type { DraftSaveState } from "../types";
+import { cloneField, CREATE_FORM_DRAFT_STORAGE_KEY, createField, createSection, serializeDraft } from "../utils";
 
 interface UseCreateFormBuilderArgs {
   t: Translate;
@@ -28,6 +30,7 @@ interface UseCreateFormBuilderArgs {
 }
 
 export function useCreateFormBuilder({ t, projects }: UseCreateFormBuilderArgs) {
+  const hasLoadedDraftRef = useRef(false);
   const labelRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const fieldCardRefs = useRef<Record<string, HTMLElement | null>>({});
   const [selectedTemplateKey, setSelectedTemplateKey] = useState(initialTemplate.key);
@@ -46,6 +49,7 @@ export function useCreateFormBuilder({ t, projects }: UseCreateFormBuilderArgs) 
   const [selectedProjectId, setSelectedProjectIdState] = useState(() => getSelectedProjectId());
   const [projectState, setProjectState] = useState("");
   const [lastSavedSnapshot, setLastSavedSnapshot] = useState(INITIAL_DRAFT_SNAPSHOT);
+  const [draftSaveState, setDraftSaveState] = useState<DraftSaveState>("idle");
   const [activeFieldId, setActiveFieldId] = useState(initialFields[0]?.id ?? "");
   const [draggedFieldId, setDraggedFieldId] = useState<string | null>(null);
   const [dragOverFieldId, setDragOverFieldId] = useState<string | null>(null);
@@ -91,6 +95,57 @@ export function useCreateFormBuilder({ t, projects }: UseCreateFormBuilderArgs) 
   }, [selectedProjectId]);
 
   useEffect(() => {
+    if (hasLoadedDraftRef.current) {
+      return;
+    }
+    hasLoadedDraftRef.current = true;
+    try {
+      const rawDraft = window.localStorage.getItem(CREATE_FORM_DRAFT_STORAGE_KEY);
+      if (!rawDraft) {
+        return;
+      }
+      const parsedDraft = JSON.parse(rawDraft) as {
+        selectedTemplateKey?: string;
+        title?: string;
+        description?: string;
+        fields?: FormField[];
+        sections?: FormSection[];
+        purpose?: FormBuilderValues["purpose"];
+        visibility?: FormBuilderValues["visibility"];
+        encryptSubmissions?: boolean;
+        responseDeadlinePreset?: ResponseDeadlinePreset;
+        responseDeadlineCustomAt?: string;
+        currentStep?: BuilderStepKey;
+        selectedProjectId?: string;
+        projectState?: string;
+      };
+      if (!Array.isArray(parsedDraft.fields) || parsedDraft.fields.length === 0) {
+        window.localStorage.removeItem(CREATE_FORM_DRAFT_STORAGE_KEY);
+        return;
+      }
+      setSelectedTemplateKey(parsedDraft.selectedTemplateKey ?? initialTemplate.key);
+      setTitle(typeof parsedDraft.title === "string" ? parsedDraft.title : initialTemplate.title);
+      setDescription(typeof parsedDraft.description === "string" ? parsedDraft.description : initialTemplate.description);
+      setFields(sanitizeConditionalLogicFields(parsedDraft.fields));
+      setSections(Array.isArray(parsedDraft.sections) ? parsedDraft.sections : []);
+      setPurpose(parsedDraft.purpose ?? initialTemplate.purpose);
+      setVisibility(parsedDraft.visibility ?? "unlisted");
+      setEncryptSubmissions(parsedDraft.encryptSubmissions ?? true);
+      setResponseDeadlinePreset(parsedDraft.responseDeadlinePreset ?? "none");
+      setResponseDeadlineCustomAt(parsedDraft.responseDeadlineCustomAt ?? "");
+      setCurrentStep(parsedDraft.currentStep ?? "fields");
+      setSelectedProjectIdState(parsedDraft.selectedProjectId ?? "");
+      setProjectState(parsedDraft.projectState ?? "");
+      setActiveFieldId(parsedDraft.fields[0]?.id ?? "");
+      setPendingFocusFieldId(parsedDraft.fields[0]?.id ?? "");
+      setDraftSaveState("restored");
+    } catch (error) {
+      console.warn("Failed to restore create form draft.", error);
+      window.localStorage.removeItem(CREATE_FORM_DRAFT_STORAGE_KEY);
+    }
+  }, []);
+
+  useEffect(() => {
     if (!pendingFocusFieldId) {
       return;
     }
@@ -131,6 +186,56 @@ export function useCreateFormBuilder({ t, projects }: UseCreateFormBuilderArgs) 
     window.addEventListener("keydown", handleDuplicateShortcut);
     return () => window.removeEventListener("keydown", handleDuplicateShortcut);
   }, [activeFieldId]);
+
+  useEffect(() => {
+    if (!hasLoadedDraftRef.current) {
+      return;
+    }
+    if (draftSnapshot === INITIAL_DRAFT_SNAPSHOT) {
+      window.localStorage.removeItem(CREATE_FORM_DRAFT_STORAGE_KEY);
+      if (draftSaveState !== "restored") {
+        setDraftSaveState("idle");
+      }
+      return;
+    }
+    setDraftSaveState((current) => (current === "restored" ? current : "saving"));
+    const timeoutId = window.setTimeout(() => {
+      const payload = {
+        selectedTemplateKey,
+        title,
+        description,
+        fields,
+        sections,
+        purpose,
+        visibility,
+        encryptSubmissions,
+        responseDeadlinePreset,
+        responseDeadlineCustomAt,
+        currentStep,
+        selectedProjectId,
+        projectState,
+      };
+      window.localStorage.setItem(CREATE_FORM_DRAFT_STORAGE_KEY, JSON.stringify(payload));
+      setDraftSaveState("saved");
+    }, 500);
+    return () => window.clearTimeout(timeoutId);
+  }, [
+    currentStep,
+    description,
+    draftSaveState,
+    draftSnapshot,
+    encryptSubmissions,
+    fields,
+    projectState,
+    purpose,
+    responseDeadlineCustomAt,
+    responseDeadlinePreset,
+    sections,
+    selectedProjectId,
+    selectedTemplateKey,
+    title,
+    visibility,
+  ]);
 
   function goToStep(step: BuilderStepKey) {
     setCurrentStep(step);
@@ -327,6 +432,8 @@ export function useCreateFormBuilder({ t, projects }: UseCreateFormBuilderArgs) 
 
   function markSaved() {
     setLastSavedSnapshot(draftSnapshot);
+    window.localStorage.removeItem(CREATE_FORM_DRAFT_STORAGE_KEY);
+    setDraftSaveState("idle");
   }
 
   const values: FormBuilderValues = {
@@ -355,6 +462,7 @@ export function useCreateFormBuilder({ t, projects }: UseCreateFormBuilderArgs) 
     values,
     refs: { labelRefs, fieldCardRefs },
     draftSnapshot,
+    draftSaveState,
     isDirty,
     hasValidTitle,
     hasQuestions,

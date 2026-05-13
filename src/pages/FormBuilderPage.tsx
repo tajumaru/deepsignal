@@ -73,6 +73,21 @@ export function FormBuilderPage() {
       ].filter(Boolean),
     [builder.hasQuestions, builder.hasValidTitle, builder.values.currentStep, builder.values.selectedTemplateKey, publish.savedForm],
   );
+  const draftStateLabel = useMemo(() => {
+    if (!builder.isDirty && publish.savedForm) {
+      return "Draft cleared after publish.";
+    }
+    switch (builder.draftSaveState) {
+      case "restored":
+        return "Restored unsent draft from this browser.";
+      case "saving":
+        return "Saving draft...";
+      case "saved":
+        return "Draft autosaved in this browser.";
+      default:
+        return builder.isDirty ? "Unsaved changes in progress." : "";
+    }
+  }, [builder.draftSaveState, builder.isDirty, publish.savedForm]);
 
   useEffect(() => {
     const unsubscribe = subscribeStorageRuntime(() => setStorageRuntime(getStorageRuntimeStatus()));
@@ -174,6 +189,7 @@ export function FormBuilderPage() {
           capabilityConfigured={capabilityProfile.isConfigured}
           accessRoleLabel={getRoleLabel(capabilityProfile)}
           adminCapLabel={hasAdminAccess && capabilityProfile.adminCapIds[0] ? shortAddress(capabilityProfile.adminCapIds[0]) : undefined}
+          draftStateLabel={draftStateLabel || undefined}
           savedFormId={publish.savedForm?.id}
           onSelectStep={builder.goToStep}
           onNavigateHome={handleNavigateHome}
@@ -223,7 +239,7 @@ export function FormBuilderPage() {
               setDraggedFieldId={builder.setDraggedFieldId}
               setDragOverFieldId={builder.setDragOverFieldId}
               setDragOverPlacement={builder.setDragOverPlacement}
-              onInsertSmartTemplate={builder.insertSmartTemplate}
+              onAddSection={builder.addSection}
               onUpdateSection={builder.updateSection}
               onRemoveSection={builder.removeSection}
               onUpdateField={builder.updateField}

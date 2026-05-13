@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type DragEvent } from "react";
 import { FormFieldEditor } from "../../../components/FormFieldEditor";
 import { LivePreview } from "../../../components/formBuilder/LivePreview";
-import { smartComposerTemplates } from "../../../lib/formTemplates";
+import { SectionEditor } from "../../../components/formBuilder/SectionEditor";
 import type { FieldType, FormBuilderRefs, FormField, FormSection, MobileBuilderPane, Translate } from "../types";
 
 interface FieldsStepProps {
@@ -21,7 +21,7 @@ interface FieldsStepProps {
   setDraggedFieldId: (fieldId: string | null) => void;
   setDragOverFieldId: (fieldId: string | null) => void;
   setDragOverPlacement: (placement: "before" | "after" | null) => void;
-  onInsertSmartTemplate: (templateKey: string) => void;
+  onAddSection: (preset?: string) => void;
   onUpdateSection: (sectionId: string, patch: Partial<FormSection>) => void;
   onRemoveSection: (sectionId: string) => void;
   onUpdateField: (index: number, field: FormField) => void;
@@ -51,7 +51,7 @@ export function FieldsStep({
   setDraggedFieldId,
   setDragOverFieldId,
   setDragOverPlacement,
-  onInsertSmartTemplate,
+  onAddSection,
   onUpdateSection,
   onRemoveSection,
   onUpdateField,
@@ -166,28 +166,18 @@ export function FieldsStep({
             <div>
               <p className="eyebrow">Step 3</p>
               <h2>{t("fields")}</h2>
-              <p className="muted">{t("questionCount", { count: fields.length })}</p>
+              <p className="muted">
+                {t("questionCount", { count: fields.length })} / {encryptSubmissions ? "Private signal mode on" : "Open signal mode"}
+              </p>
             </div>
           </div>
 
-          <section className="composer-smart-template-strip">
-            <div>
-              <strong>{t("smartTemplates")}</strong>
-              <p className="muted">{t("smartTemplatesBody")}</p>
-            </div>
-            <div className="composer-smart-template-row">
-              {smartComposerTemplates.map((template) => (
-                <button
-                  key={template.key}
-                  type="button"
-                  className="ghost-button composer-smart-template-button"
-                  onClick={() => onInsertSmartTemplate(template.key)}
-                >
-                  + {template.label}
-                </button>
-              ))}
-            </div>
-          </section>
+          <SectionEditor
+            sections={sections}
+            onAddSection={onAddSection}
+            onUpdateSection={onUpdateSection}
+            onRemoveSection={onRemoveSection}
+          />
 
           <div className="stack composer-question-stack">
             {unsectionedFields.map((field) => renderField(field, fields.findIndex((item) => item.id === field.id)))}
