@@ -536,20 +536,20 @@ export function AdminDashboardPage() {
         }
       : selectedProjectForms.length === 0
         ? {
-            label: "Create your first private signal form",
-            detail: "Publish one protected form for this project so judges can submit anonymously.",
+            label: "Create your first signal inbox",
+            detail: "Publish one protected form for this project so reviewers have signals to read.",
             cta: <Link className="primary-button" to="/admin/forms/new">Create Signal Form</Link>,
           }
         : selectedProjectSignals.length === 0
           ? {
-              label: "Share your public signal link",
-              detail: "Open the latest public form and send one anonymous private signal into the inbox.",
+              label: "Send a test signal",
+              detail: "Open the public form and submit one signal so the review inbox has something to process.",
               cta: firstProjectForm ? <Link className="primary-button" to={getPublicFormPath(firstProjectForm.id, firstProjectForm.manifestBlobId)}>Open Public Link</Link> : null,
             }
           : firstProtectedSignal && !detailAnswers
             ? {
-                label: "Decrypt protected signals",
-                detail: "Select a protected signal and verify reviewer wallet access to unlock the message.",
+                label: "Unlock private signal",
+                detail: "Open the next protected signal, then decrypt it with reviewer wallet access.",
                 cta: firstProtectedSignal ? (
                 <button
                   type="button"
@@ -566,25 +566,10 @@ export function AdminDashboardPage() {
                   </button>
                 ) : null,
               }
-            : pendingSignals.length > 0
-              ? {
-                  label: "Register signals on Sui",
-                  detail: "Clear the proof queue so pending signals become verified records.",
-                  cta: (
-                    <button
-                      type="button"
-                      className="primary-button"
-                      disabled={registeringSignalIds.length > 0}
-                      onClick={() => void handleRegisterPendingSignals()}
-                    >
-                      {registeringSignalIds.length > 0 ? "Registering..." : "Register Pending Signals"}
-                    </button>
-                  ),
-                }
-              : roadmapReadySignals.length === 0
+            : roadmapReadySignals.length === 0
                 ? {
-                    label: "Publish signals to roadmap",
-                    detail: "Move at least one reviewed signal into a roadmap status so the public roadmap becomes live.",
+                    label: "Move to Public Roadmap",
+                    detail: "Choose one reviewed signal and place it into a roadmap status such as Planned or In Progress.",
                     cta: selectedRecord ? (
                       <button
                         type="button"
@@ -596,9 +581,24 @@ export function AdminDashboardPage() {
                       </button>
                     ) : null,
                   }
+                : pendingSignals.length > 0
+                  ? {
+                      label: "Register proof on Sui",
+                      detail: "Review is already complete. Use Sui only when you want to add optional proof records.",
+                      cta: (
+                        <button
+                          type="button"
+                          className="ghost-button"
+                          disabled={registeringSignalIds.length > 0}
+                          onClick={() => void handleRegisterPendingSignals()}
+                        >
+                          {registeringSignalIds.length > 0 ? "Registering..." : "Register Pending Signals"}
+                        </button>
+                      ),
+                    }
                 : {
                     label: "Review signal inbox",
-                    detail: "The console is operational. Continue triage, proof verification, or roadmap updates as new signals arrive.",
+                    detail: "The queue is healthy. Keep reviewing new signals and update roadmap entries as they change.",
                     cta: selectedRoadmapUrl ? <Link className="primary-button" to={selectedRoadmapUrl}>Open Public Roadmap</Link> : null,
                   };
 
@@ -853,25 +853,45 @@ export function AdminDashboardPage() {
   const visibleUnreadCount = visibleSignals.filter(
     (record) => record.submission.status === "unread",
   ).length;
+  const visibleNeedsDecryptCount = visibleSignals.filter(
+    (record) => record.submission.isEncrypted && record.submission.id !== selectedRecord?.submission.id,
+  ).length + (selectedRecordNeedsDecrypt ? 1 : 0);
+  const visibleRoadmapCandidateCount = visibleSignals.filter((record) =>
+    ROADMAP_READY_STATUSES.has(record.submission.triageStatus),
+  ).length;
   const selectedPendingVisibleCount = visibleSignals.filter((record) =>
     selectedPendingSignalIds.includes(record.submission.id),
   ).length;
   const hasProjects = projects.length > 0;
+  const currentSelectedSignalLabel = selectedRecord
+    ? getSignalSubject(selectedRecord.submission)
+    : "No signal selected";
+  const currentNextStepLabel = selectedRecordFocusAction?.title ?? nextRecommendedAction.label;
   const overviewCards = [
     {
-      label: "Unread queue",
+      label: "Unread signals",
       value: String(visibleUnreadCount),
       meta: activeStreamLabel,
     },
     {
-      label: "Pending Sui",
-      value: String(pendingSignals.length),
-      meta: "Optional proof queue",
+      label: "Needs decrypt",
+      value: String(visibleNeedsDecryptCount),
+      meta: "Private signals waiting to be unlocked",
     },
     {
-      label: "Roadmap ready",
-      value: String(roadmapReadySignals.length),
+      label: "Roadmap candidates",
+      value: String(visibleRoadmapCandidateCount),
       meta: selectedProject ? selectedProject.name : "Select a project",
+    },
+    {
+      label: "Selected signal",
+      value: currentSelectedSignalLabel,
+      meta: selectedRecord ? formatDate(selectedRecord.submission.createdAt) : "Pick a signal to review",
+    },
+    {
+      label: "Next action",
+      value: currentNextStepLabel,
+      meta: selectedRecord ? selectedRecord.form.title : activeScopeLabel,
     },
   ];
 
@@ -946,6 +966,7 @@ export function AdminDashboardPage() {
           </div>
         ) : null}
         <OperationsStatusRail
+          title="Review Queue"
           items={operationsStatusItems}
           nextActionLabel={nextRecommendedAction.label}
           nextActionDetail={nextRecommendedAction.detail}
@@ -1152,7 +1173,17 @@ export function AdminDashboardPage() {
 
         <div className="mobile-console-banner">{t("adminDesktopNotice")}</div>
 
-        <section className="inbox-overview-grid" aria-label="Inbox overview">
+        <section className="inbox-overview-section" aria-label="Review queue overview">
+          <div className="section-row inbox-overview-heading">
+            <div>
+              <p className="eyebrow">Review Queue</p>
+              <h2>What needs attention now</h2>
+            </div>
+            <p className="muted">
+              Keep the inbox centered on reading, decrypting, triaging, and moving signals toward the roadmap.
+            </p>
+          </div>
+          <div className="inbox-overview-grid">
           {overviewCards.map((card) => (
             <article key={card.label} className="panel inbox-overview-card">
               <span>{card.label}</span>
@@ -1160,6 +1191,7 @@ export function AdminDashboardPage() {
               <p className="muted">{card.meta}</p>
             </article>
           ))}
+          </div>
         </section>
 
         {accessibleForms.length === 0 ? (
@@ -1314,29 +1346,48 @@ export function AdminDashboardPage() {
                       ? "Choose a project first"
                       : selectedProjectForms.length === 0
                         ? "Create your first signal form"
-                        : "Waiting for a private signal"}
+                        : "Send a test signal to start review"}
                   </h2>
                   <p>
                     {!selectedProject
                       ? "The contest flow starts with project selection so reviewer access and roadmap publishing stay scoped correctly."
                       : selectedProjectForms.length === 0
-                        ? "Publish a form for this project, then share the public link so someone can submit anonymously."
-                        : "Share the public link and send one anonymous submission to demonstrate the locked inbox state."}
+                        ? "Publish a form for this project, then open the public link so someone can submit feedback."
+                        : "Open the public form, submit one test signal, then return here to review it in the inbox."}
                   </p>
                   <div className="inline-actions">
                     {!selectedProject ? null : selectedProjectForms.length === 0 ? (
                       <Link className="primary-button" to="/admin/forms/new">
                         Create Signal Form
                       </Link>
-                    ) : (
-                      <button
-                        type="button"
-                        className="primary-button"
-                        onClick={() => setNodeDirectoryOpen(true)}
-                      >
-                        Open public link
-                      </button>
-                    )}
+                    ) : firstProjectForm ? (
+                      <>
+                        <Link
+                          className="primary-button"
+                          to={getPublicFormPath(firstProjectForm.id, firstProjectForm.manifestBlobId)}
+                        >
+                          Open public link
+                        </Link>
+                        <Link
+                          className="ghost-button"
+                          to={getPublicFormPath(firstProjectForm.id, firstProjectForm.manifestBlobId)}
+                        >
+                          Send test signal
+                        </Link>
+                        <button
+                          type="button"
+                          className="ghost-button"
+                          onClick={() => {
+                            setSelectedFormId("all");
+                            setSelectedStreamId("all");
+                            setSearch("");
+                          }}
+                        >
+                          Return to admin inbox
+                        </button>
+                      </>
+                    ) : null
+                    }
                   </div>
                 </EmptyState>
               ) : (
@@ -1539,301 +1590,12 @@ export function AdminDashboardPage() {
                     </section>
                   ) : null}
 
-                  {selectedRecord.submission.isEncrypted ? (
-                    <PrivateSignalUnlockCard
-                      onUnlock={() => void handleDecrypt()}
-                      isDecrypting={decrypting || decryptInFlightRef.current}
-                      isUnlocked={Boolean(detailAnswers)}
-                      errorMessage={decryptError}
-                      disabledReason={selectedRecordUnlockDisabledReason}
-                    >
-                      {!isLocalFallbackBlob(selectedRecord.submission.encryptedBlobId) ? (
-                        <BlobLink
-                          blobId={selectedRecord.submission.encryptedBlobId}
-                          label={t("verifyOnWalrus")}
-                        />
-                      ) : null}
-                    </PrivateSignalUnlockCard>
-                  ) : null}
-
-                  {selectedRecordNeedsDecrypt ? (
-                    <div className="stack private-access-copy">
-                      <p className="muted">
-                        {sealRuntime.activeMode === "mock"
-                          ? `${t("demoDecryptAvailable")} Mock mode only.`
-                          : t("walletApprovalReuseNotice", { minutes: realSealSessionTtlMinutes })}
-                      </p>
-                      {decryptStatusMessage ? (
-                        <p className="muted" role="status" aria-live="polite">{decryptStatusMessage}</p>
-                      ) : null}
-                    </div>
-                  ) : null}
-
-                  {selectedRecord.submission.pendingOnchainRegistration ? (
-                    <div className="stack private-access-copy">
-                      <p className="muted">Pending Sui Registration</p>
-                      <p className="muted">
-                        Sui registration is optional proof, not required for review.
-                      </p>
-                    </div>
-                  ) : null}
-
-                  {selectedRecord.submission.isEncrypted && detailAnswers ? (
-                    <div className="contest-inline-success" role="status" aria-live="polite">
-                      <strong>Wallet verified</strong>
-                      <span>Private signal unlocked</span>
-                    </div>
-                  ) : null}
-
                   <div className="signal-detail-sections">
-                    <section className="answer-card review-controls-section">
-                      <div className="review-controls-header">
-                        <div>
-                          <p className="eyebrow">Review Workflow</p>
-                          <h3>{t("reviewControlsTitle")}</h3>
-                        </div>
-                        <span className={`save-state-pill ${saving ? "is-saving" : ""}`}>
-                          {saving ? "Saving..." : "Ready"}
-                        </span>
-                      </div>
-                      <div className="review-field-row">
-                        <label className="review-select">
-                          <span>{t("status")}</span>
-                          <select
-                            value={selectedRecord.submission.status}
-                            onChange={(event) =>
-                              void updateSubmission({
-                                ...selectedRecord.submission,
-                                status: event.target.value as Submission["status"],
-                              })
-                            }
-                          >
-                            <option value="unread">{t("statusUnread")}</option>
-                            <option value="read">{t("statusRead")}</option>
-                            <option value="archived">{t("statusArchived")}</option>
-                          </select>
-                        </label>
-                        <label className="review-select">
-                          <span>Review Stage</span>
-                          <select
-                            value={selectedRecord.submission.triageStatus}
-                            onChange={(event) =>
-                              void updateSubmission({
-                                ...selectedRecord.submission,
-                                triageStatus: event.target.value as Submission["triageStatus"],
-                              })
-                            }
-                          >
-                            {TRIAGE_STATUS_OPTIONS.map((option) => (
-                              <option key={option.value} value={option.value}>
-                                {option.label}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
-                        <label className="review-select">
-                          <span>{t("priority")}</span>
-                          <select
-                            value={selectedRecord.submission.priority}
-                            onChange={(event) =>
-                              void updateSubmission({
-                                ...selectedRecord.submission,
-                                priority: event.target.value as Submission["priority"],
-                              })
-                            }
-                          >
-                            <option value="low">{t("priorityLow")}</option>
-                            <option value="medium">{t("priorityMedium")}</option>
-                            <option value="high">{t("priorityHigh")}</option>
-                          </select>
-                        </label>
-                      </div>
-                      <div className="review-action-bar">
-                        <button
-                          type="button"
-                          className="ghost-button review-secondary-button"
-                          disabled={saving || selectedRecord.submission.status === "read"}
-                          onClick={() =>
-                            void updateSubmission({
-                              ...selectedRecord.submission,
-                              status: "read",
-                            })
-                          }
-                        >
-                          Mark reviewed
-                        </button>
-                        <button
-                          type="button"
-                          className="primary-button review-primary-button"
-                          disabled={saving}
-                          onClick={() =>
-                            void updateSubmission({
-                              ...selectedRecord.submission,
-                              status: "archived",
-                              triageStatus: "closed",
-                            })
-                          }
-                        >
-                          Mark resolved
-                        </button>
-                      </div>
-                      <div className="review-secondary-links">
-                        {selectedRecord.submission.githubIssueUrl ? (
-                          <a
-                            className="review-inline-link"
-                            href={selectedRecord.submission.githubIssueUrl}
-                            target="_blank"
-                            rel="noreferrer"
-                          >
-                            Open GitHub issue
-                          </a>
-                        ) : (
-                          <span className="muted">GitHub issue not linked yet</span>
-                        )}
-                        <Link
-                          className="review-inline-link"
-                          to={`/dashboard/forms/${selectedRecord.form.id}/submissions/${selectedRecord.submission.id}`}
-                        >
-                          Review thread
-                        </Link>
-                        {isSelectedRecordOnRoadmap ? (
-                          <Link className="review-inline-link" to={selectedRoadmapUrl}>
-                            Open Public Roadmap
-                          </Link>
-                        ) : null}
-                      </div>
-                      <details className="answer-card collapsible-detail-card review-secondary-panel">
-                        <summary>
-                          <span>
-                            <p className="eyebrow">Review notes and roadmap</p>
-                            <h3>Notes, tags, and public roadmap</h3>
-                          </span>
-                        </summary>
-                        <p className="review-helper-copy muted">
-                          {selectedRecord.submission.notes.trim() ? "Notes saved." : "Notes empty."} Tags {selectedRecord.submission.tags.length}.
-                        </p>
-                        <section className="review-support-card contest-roadmap-card">
-                          <div className="section-row">
-                            <div>
-                              <h4>Public Roadmap</h4>
-                              <p className="muted">Planned, In Progress, and Fixed signals appear on the roadmap.</p>
-                            </div>
-                            <span className="signal-chip">
-                              {getTriageStatusLabel(selectedRecord.submission.triageStatus)}
-                            </span>
-                          </div>
-                          <div className="inline-actions">
-                            <button
-                              type="button"
-                              className="ghost-button"
-                              disabled={saving}
-                              onClick={() => void handleMoveToRoadmap()}
-                            >
-                              {isSelectedRecordOnRoadmap ? "Keep on Public Roadmap" : "Move to Public Roadmap"}
-                            </button>
-                            {isSelectedRecordOnRoadmap ? (
-                              <Link className="ghost-button" to={selectedRoadmapUrl}>
-                                Open roadmap
-                              </Link>
-                            ) : null}
-                          </div>
-                        </section>
-                        <div className="review-support-grid">
-                          <section className="review-support-card">
-                          <div className="section-row">
-                            <h4>{t("tags")}</h4>
-                            <span className="muted">{selectedRecord.submission.tags.length}</span>
-                          </div>
-                          <div className="pill-row review-tag-list">
-                            {selectedRecord.submission.tags.map((tag) => (
-                              <button
-                                key={tag}
-                                type="button"
-                                className="tag-pill"
-                                aria-label={`Remove tag ${tag}`}
-                                onClick={() =>
-                                  void updateSubmission({
-                                    ...selectedRecord.submission,
-                                    tags: selectedRecord.submission.tags.filter((item) => item !== tag),
-                                  })
-                                }
-                              >
-                                {tag} x
-                              </button>
-                            ))}
-                          </div>
-                          <div className="inline-actions">
-                            <input
-                              value={draftTag}
-                              onChange={(event) => setDraftTag(event.target.value)}
-                              placeholder={t("addTagPlaceholder")}
-                            />
-                            <button
-                              type="button"
-                              className="ghost-button"
-                              disabled={!draftTag.trim() || saving}
-                              onClick={() => {
-                                const nextTag = draftTag.trim();
-                                if (selectedRecord.submission.tags.includes(nextTag)) {
-                                  setDraftTag("");
-                                  return;
-                                }
-                                setDraftTag("");
-                                void updateSubmission({
-                                  ...selectedRecord.submission,
-                                  tags: [...selectedRecord.submission.tags, nextTag],
-                                });
-                              }}
-                            >
-                              {t("addTag")}
-                            </button>
-                          </div>
-                          </section>
-
-                          <section className="review-support-card">
-                          <div className="section-row">
-                            <h4>{t("notesTitle")}</h4>
-                            <span className="muted">{saving ? "Saving..." : "Private"}</span>
-                          </div>
-                          <textarea
-                            rows={4}
-                            value={notesDraft}
-                            onChange={(event) => setNotesDraft(event.target.value)}
-                            placeholder={t("captureReviewNotes")}
-                          />
-                          <div className="review-action-bar">
-                            <button
-                              type="button"
-                              className="ghost-button review-secondary-button"
-                              disabled={saving}
-                              onClick={() => setNotesDraft(selectedRecord.submission.notes)}
-                            >
-                              Reset
-                            </button>
-                            <button
-                              type="button"
-                              className="primary-button review-primary-button"
-                              disabled={saving}
-                              onClick={() =>
-                                void updateSubmission({
-                                  ...selectedRecord.submission,
-                                  notes: notesDraft,
-                                })
-                              }
-                            >
-                              {t("saveNote")}
-                            </button>
-                          </div>
-                          </section>
-                        </div>
-                      </details>
-                    </section>
-
                     <section className="answer-card original-signal-section">
                       <div className="signal-detail-group-header signal-detail-group-header-original">
                         <p className="eyebrow">Original Signal</p>
                         <h3>Original Signal</h3>
-                        <p className="muted">Read the submitted feedback first, then move back to review actions.</p>
+                        <p className="muted">Read the submitted feedback first, then continue with triage and roadmap decisions.</p>
                       </div>
                       <div className="original-signal-block">
                         <div className="section-row">
@@ -1946,91 +1708,300 @@ export function AdminDashboardPage() {
                       </div>
                     </section>
 
-                    <section className="signal-detail-group details-group-section">
-                      <div className="signal-detail-group-header signal-detail-group-header-details">
-                        <p className="eyebrow">AI Assist</p>
-                        <h3>AI summary and clustering</h3>
-                        <p className="muted">AI stays separate from the original signal so reviewer judgment remains primary.</p>
-                      </div>
+                    {selectedRecord.submission.isEncrypted ? (
+                      <PrivateSignalUnlockCard
+                        onUnlock={() => void handleDecrypt()}
+                        isDecrypting={decrypting || decryptInFlightRef.current}
+                        isUnlocked={Boolean(detailAnswers)}
+                        errorMessage={decryptError}
+                        disabledReason={selectedRecordUnlockDisabledReason}
+                      >
+                        {!isLocalFallbackBlob(selectedRecord.submission.encryptedBlobId) ? (
+                          <BlobLink
+                            blobId={selectedRecord.submission.encryptedBlobId}
+                            label={t("verifyOnWalrus")}
+                          />
+                        ) : null}
+                      </PrivateSignalUnlockCard>
+                    ) : null}
 
-                    <details className="answer-card collapsible-detail-card ai-summary-section ai-card">
-                      <summary>
-                        <span>
-                          <p className="eyebrow">AI Summary</p>
-                          <h3>AI Summary</h3>
-                        </span>
-                      </summary>
-                      <p>{selectedRecord.submission.aiSummary || getSignalPreview(selectedRecord.submission)}</p>
-                      <div className="signal-badge-row signal-badge-row-compact">
-                        <span className="signal-chip">Confidence {inferredAiConfidence}</span>
-                        <span className="signal-chip">{selectedRecord.category}</span>
-                        {selectedRecord.submission.keywords?.slice(0, 3).map((keyword) => (
-                          <span key={keyword} className="signal-chip">
-                            {keyword}
-                          </span>
-                        ))}
-                        {selectedRecord.submission.clusterId ? (
-                          <span className="signal-chip signal-chip-accent">
-                            AI grouped
-                            {clusterCountById[selectedRecord.submission.clusterId]
-                              ? ` (${clusterCountById[selectedRecord.submission.clusterId]})`
-                              : ""}
-                          </span>
+                    {selectedRecordNeedsDecrypt ? (
+                      <div className="stack private-access-copy">
+                        <p className="muted">
+                          {sealRuntime.activeMode === "mock"
+                            ? `${t("demoDecryptAvailable")} Mock mode only.`
+                            : t("walletApprovalReuseNotice", { minutes: realSealSessionTtlMinutes })}
+                        </p>
+                        {decryptStatusMessage ? (
+                          <p className="muted" role="status" aria-live="polite">{decryptStatusMessage}</p>
                         ) : null}
                       </div>
-                    </details>
+                    ) : null}
 
-                    <details className="answer-card collapsible-detail-card triage-compact-card ai-card ai-triage-section">
-                      <summary>
-                        <span>
-                          <p className="eyebrow">AI Triage</p>
-                          <h3>AI Triage</h3>
-                        </span>
-                      </summary>
-                      <div className="signal-badge-row signal-badge-row-compact">
-                        <span className="signal-chip">{selectedRecord.category}</span>
-                        <span className="signal-chip">
-                          Severity {selectedRecord.submission.severity ?? "medium"}
-                        </span>
-                        <span className="signal-chip">
-                          Emotion {selectedRecord.submission.emotion ?? "neutral"}
-                        </span>
-                        <span className="signal-chip">
-                          Duplicate {selectedRecord.submission.clusterId ? "Possible" : "None"}
+                    {selectedRecord.submission.isEncrypted && detailAnswers ? (
+                      <div className="contest-inline-success" role="status" aria-live="polite">
+                        <strong>Wallet verified</strong>
+                        <span>Private signal unlocked</span>
+                      </div>
+                    ) : null}
+
+                    <section className="answer-card review-controls-section">
+                      <div className="review-controls-header">
+                        <div>
+                          <p className="eyebrow">Review Actions</p>
+                          <h3>Priority and status</h3>
+                        </div>
+                        <span className={`save-state-pill ${saving ? "is-saving" : ""}`}>
+                          {saving ? "Saving..." : "Ready"}
                         </span>
                       </div>
-                    </details>
+                      <div className="review-field-row">
+                        <label className="review-select">
+                          <span>{t("priority")}</span>
+                          <select
+                            value={selectedRecord.submission.priority}
+                            onChange={(event) =>
+                              void updateSubmission({
+                                ...selectedRecord.submission,
+                                priority: event.target.value as Submission["priority"],
+                              })
+                            }
+                          >
+                            <option value="low">{t("priorityLow")}</option>
+                            <option value="medium">{t("priorityMedium")}</option>
+                            <option value="high">{t("priorityHigh")}</option>
+                          </select>
+                        </label>
+                        <label className="review-select">
+                          <span>Triage Status</span>
+                          <select
+                            value={selectedRecord.submission.triageStatus}
+                            onChange={(event) =>
+                              void updateSubmission({
+                                ...selectedRecord.submission,
+                                triageStatus: event.target.value as Submission["triageStatus"],
+                              })
+                            }
+                          >
+                            {TRIAGE_STATUS_OPTIONS.map((option) => (
+                              <option key={option.value} value={option.value}>
+                                {option.label}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <label className="review-select">
+                          <span>Review State</span>
+                          <select
+                            value={selectedRecord.submission.status}
+                            onChange={(event) =>
+                              void updateSubmission({
+                                ...selectedRecord.submission,
+                                status: event.target.value as Submission["status"],
+                              })
+                            }
+                          >
+                            <option value="unread">{t("statusUnread")}</option>
+                            <option value="read">{t("statusRead")}</option>
+                            <option value="archived">{t("statusArchived")}</option>
+                          </select>
+                        </label>
+                      </div>
+                      <div className="review-action-bar">
+                        <button
+                          type="button"
+                          className="ghost-button review-secondary-button"
+                          disabled={saving || selectedRecord.submission.status === "read"}
+                          onClick={() =>
+                            void updateSubmission({
+                              ...selectedRecord.submission,
+                              status: "read",
+                            })
+                          }
+                        >
+                          Mark reviewed
+                        </button>
+                        <button
+                          type="button"
+                          className="primary-button review-primary-button"
+                          disabled={saving}
+                          onClick={() =>
+                            void updateSubmission({
+                              ...selectedRecord.submission,
+                              status: "archived",
+                              triageStatus: "closed",
+                            })
+                          }
+                        >
+                          Mark resolved
+                        </button>
+                      </div>
+                    </section>
+
+                    <section className="answer-card review-support-card review-inline-card">
+                      <div className="section-row">
+                        <div>
+                          <p className="eyebrow">Tags</p>
+                          <h3>{t("tags")}</h3>
+                        </div>
+                        <span className="muted">{selectedRecord.submission.tags.length}</span>
+                      </div>
+                      <div className="pill-row review-tag-list">
+                        {selectedRecord.submission.tags.length === 0 ? (
+                          <span className="muted">No tags yet.</span>
+                        ) : (
+                          selectedRecord.submission.tags.map((tag) => (
+                            <button
+                              key={tag}
+                              type="button"
+                              className="tag-pill"
+                              aria-label={`Remove tag ${tag}`}
+                              onClick={() =>
+                                void updateSubmission({
+                                  ...selectedRecord.submission,
+                                  tags: selectedRecord.submission.tags.filter((item) => item !== tag),
+                                })
+                              }
+                            >
+                              {tag} x
+                            </button>
+                          ))
+                        )}
+                      </div>
+                      <div className="inline-actions">
+                        <input
+                          value={draftTag}
+                          onChange={(event) => setDraftTag(event.target.value)}
+                          placeholder={t("addTagPlaceholder")}
+                        />
+                        <button
+                          type="button"
+                          className="ghost-button"
+                          disabled={!draftTag.trim() || saving}
+                          onClick={() => {
+                            const nextTag = draftTag.trim();
+                            if (selectedRecord.submission.tags.includes(nextTag)) {
+                              setDraftTag("");
+                              return;
+                            }
+                            setDraftTag("");
+                            void updateSubmission({
+                              ...selectedRecord.submission,
+                              tags: [...selectedRecord.submission.tags, nextTag],
+                            });
+                          }}
+                        >
+                          {t("addTag")}
+                        </button>
+                      </div>
+                    </section>
+
+                    <section className="answer-card review-support-card review-inline-card">
+                      <div className="section-row">
+                        <div>
+                          <p className="eyebrow">Internal Notes</p>
+                          <h3>{t("notesTitle")}</h3>
+                        </div>
+                        <span className="muted">{saving ? "Saving..." : "Private"}</span>
+                      </div>
+                      <textarea
+                        rows={4}
+                        value={notesDraft}
+                        onChange={(event) => setNotesDraft(event.target.value)}
+                        placeholder={t("captureReviewNotes")}
+                      />
+                      <div className="review-action-bar">
+                        <button
+                          type="button"
+                          className="ghost-button review-secondary-button"
+                          disabled={saving}
+                          onClick={() => setNotesDraft(selectedRecord.submission.notes)}
+                        >
+                          Reset
+                        </button>
+                        <button
+                          type="button"
+                          className="primary-button review-primary-button"
+                          disabled={saving}
+                          onClick={() =>
+                            void updateSubmission({
+                              ...selectedRecord.submission,
+                              notes: notesDraft,
+                            })
+                          }
+                        >
+                          {t("saveNote")}
+                        </button>
+                      </div>
+                    </section>
+
+                    <section className="answer-card review-support-card contest-roadmap-card review-inline-card">
+                      <div className="section-row">
+                        <div>
+                          <p className="eyebrow">Move to Roadmap</p>
+                          <h3>Public Roadmap</h3>
+                          <p className="muted">Planned, In Progress, and Fixed signals appear on the roadmap.</p>
+                        </div>
+                        <span className="signal-chip">
+                          {getTriageStatusLabel(selectedRecord.submission.triageStatus)}
+                        </span>
+                      </div>
+                      <div className="review-action-bar">
+                        <button
+                          type="button"
+                          className="ghost-button"
+                          disabled={saving}
+                          onClick={() => void handleMoveToRoadmap()}
+                        >
+                          {isSelectedRecordOnRoadmap ? "Keep on Public Roadmap" : "Move to Public Roadmap"}
+                        </button>
+                        {selectedRecord.submission.pendingOnchainRegistration ? (
+                          <button
+                            type="button"
+                            className="ghost-button"
+                            disabled={isRegisteringSignal(selectedRecord.submission.id)}
+                            onClick={() => void handleRegisterPendingSignals([selectedRecord.submission.id])}
+                          >
+                            {isRegisteringSignal(selectedRecord.submission.id) ? "Registering..." : "Register proof on Sui"}
+                          </button>
+                        ) : null}
+                        {isSelectedRecordOnRoadmap ? (
+                          <Link className="ghost-button" to={selectedRoadmapUrl}>
+                            Open roadmap
+                          </Link>
+                        ) : null}
+                      </div>
+                      <div className="review-secondary-links">
+                        {selectedRecord.submission.githubIssueUrl ? (
+                          <a
+                            className="review-inline-link"
+                            href={selectedRecord.submission.githubIssueUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            Open GitHub issue
+                          </a>
+                        ) : (
+                          <span className="muted">GitHub issue not linked yet</span>
+                        )}
+                        <Link
+                          className="review-inline-link"
+                          to={`/dashboard/forms/${selectedRecord.form.id}/submissions/${selectedRecord.submission.id}`}
+                        >
+                          Review thread
+                        </Link>
+                      </div>
+                      {selectedRecord.submission.pendingOnchainRegistration ? (
+                        <p className="muted">Sui registration is optional proof, not required for review.</p>
+                      ) : null}
                     </section>
 
                     <section className="signal-detail-group details-group-section">
                       <div className="signal-detail-group-header signal-detail-group-header-details">
-                        <p className="eyebrow">Proof and technical details</p>
-                        <h3>Storage, encryption, and receipt metadata</h3>
-                        <p className="muted">These details stay collapsed until you need to verify Walrus, Seal, or Sui proof state.</p>
+                        <p className="eyebrow">System Details</p>
+                        <h3>Metadata, Walrus, Seal, and Sui</h3>
+                        <p className="muted">These details stay collapsed until you need to verify storage, encryption, or proof state.</p>
                       </div>
-
-                      <details className="answer-card collapsible-detail-card ai-similar-section ai-card">
-                        <summary>
-                          <span>
-                            <p className="eyebrow">Similar Signals</p>
-                            <h3>Similar Signals</h3>
-                          </span>
-                        </summary>
-                        <SignalClusterPanel
-                          selectedSubmission={selectedRecord.submission}
-                          submissions={allSignals.map((record) => record.submission)}
-                          formById={formById}
-                          formTitleById={formTitleById}
-                          busy={saving}
-                          onSelectSignal={(submissionId) => {
-                            if (decryptInFlightRef.current) {
-                              return;
-                            }
-                            setSelectedSignalId(submissionId);
-                          }}
-                          onSaveSubmission={updateSubmission}
-                        />
-                      </details>
 
                       <details
                         className="answer-card collapsible-detail-card tertiary-detail-section"
@@ -2041,8 +2012,8 @@ export function AdminDashboardPage() {
                       >
                         <summary>
                           <span>
-                            <p className="eyebrow">Trust Metadata</p>
-                            <h3>Trusted storage and proof</h3>
+                            <p className="eyebrow">Metadata</p>
+                            <h3>Signal metadata and proof</h3>
                           </span>
                         </summary>
                         <div className="metadata-list">
@@ -2186,33 +2157,6 @@ export function AdminDashboardPage() {
                                   : "offchain only")}
                             </strong>
                           </div>
-                          <div className="inline-actions metadata-action-row">
-                            {selectedRecord.submission.pendingOnchainRegistration ? (
-                              <button
-                                type="button"
-                                className="ghost-button"
-                                disabled={isRegisteringSignal(selectedRecord.submission.id)}
-                                onClick={() => void handleRegisterPendingSignals([selectedRecord.submission.id])}
-                              >
-                                {isRegisteringSignal(selectedRecord.submission.id)
-                                  ? "Registering..."
-                                  : "Register on Sui"}
-                              </button>
-                            ) : null}
-                            <button
-                              type="button"
-                              className="ghost-button"
-                              disabled={saving}
-                              onClick={() => void handleMoveToRoadmap()}
-                            >
-                              {isSelectedRecordOnRoadmap ? "On Public Roadmap" : "Move to Public Roadmap"}
-                            </button>
-                            {isSelectedRecordOnRoadmap ? (
-                              <Link className="ghost-button" to={selectedRoadmapUrl}>
-                                Open Public Roadmap
-                              </Link>
-                            ) : null}
-                          </div>
                         </div>
                       </details>
 
@@ -2225,7 +2169,7 @@ export function AdminDashboardPage() {
                       >
                         <summary>
                           <span>
-                            <p className="eyebrow">Technical details</p>
+                            <p className="eyebrow">Seal Details</p>
                             <h3>Encrypted payload details</h3>
                           </span>
                         </summary>
@@ -2244,7 +2188,7 @@ export function AdminDashboardPage() {
                       <details className="answer-card collapsible-detail-card tertiary-detail-section">
                         <summary>
                           <span>
-                            <p className="eyebrow">{t("nodeActions")}</p>
+                            <p className="eyebrow">Node Actions</p>
                             <h3>{selectedRecord.form.title}</h3>
                           </span>
                         </summary>
@@ -2266,6 +2210,64 @@ export function AdminDashboardPage() {
                             {t("reviewSubmissions")}
                           </Link>
                         </div>
+                      </details>
+                    </section>
+
+                    <section className="signal-detail-group details-group-section">
+                      <div className="signal-detail-group-header signal-detail-group-header-details">
+                        <p className="eyebrow">Review Support</p>
+                        <h3>AI summary and similar signals</h3>
+                        <p className="muted">AI stays separate from the original signal so reviewer judgment remains primary.</p>
+                      </div>
+
+                      <details className="answer-card collapsible-detail-card ai-summary-section ai-card">
+                        <summary>
+                          <span>
+                            <p className="eyebrow">AI Summary</p>
+                            <h3>AI Summary</h3>
+                          </span>
+                        </summary>
+                        <p>{selectedRecord.submission.aiSummary || getSignalPreview(selectedRecord.submission)}</p>
+                        <div className="signal-badge-row signal-badge-row-compact">
+                          <span className="signal-chip">Confidence {inferredAiConfidence}</span>
+                          <span className="signal-chip">{selectedRecord.category}</span>
+                          {selectedRecord.submission.keywords?.slice(0, 3).map((keyword) => (
+                            <span key={keyword} className="signal-chip">
+                              {keyword}
+                            </span>
+                          ))}
+                          {selectedRecord.submission.clusterId ? (
+                            <span className="signal-chip signal-chip-accent">
+                              AI grouped
+                              {clusterCountById[selectedRecord.submission.clusterId]
+                                ? ` (${clusterCountById[selectedRecord.submission.clusterId]})`
+                                : ""}
+                            </span>
+                          ) : null}
+                        </div>
+                      </details>
+
+                      <details className="answer-card collapsible-detail-card triage-compact-card ai-card ai-similar-section">
+                        <summary>
+                          <span>
+                            <p className="eyebrow">Similar Signals</p>
+                            <h3>Similar Signals</h3>
+                          </span>
+                        </summary>
+                        <SignalClusterPanel
+                          selectedSubmission={selectedRecord.submission}
+                          submissions={allSignals.map((record) => record.submission)}
+                          formById={formById}
+                          formTitleById={formTitleById}
+                          busy={saving}
+                          onSelectSignal={(submissionId) => {
+                            if (decryptInFlightRef.current) {
+                              return;
+                            }
+                            setSelectedSignalId(submissionId);
+                          }}
+                          onSaveSubmission={updateSubmission}
+                        />
                       </details>
                     </section>
                   </div>

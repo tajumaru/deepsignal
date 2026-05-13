@@ -29,8 +29,11 @@ export function SealStatusCard({
 
   return (
     <section className="panel seal-status-card">
-      <p className="eyebrow">{t("encryptedSignalLabel")}</p>
-      <h3>{t("sealStatusTitle")}</h3>
+      <p className="eyebrow">Seal / Encryption</p>
+      <h3>Private signal details</h3>
+      <p className="muted">
+        Open this only when you need to verify how the encrypted payload is stored or how reviewer access is being resolved.
+      </p>
       <div className="proof-grid">
         <div className="proof-row">
           <span>{t("requestedModeLabel")}</span>
@@ -83,7 +86,7 @@ export function SealStatusCard({
       ) : (
         <>
           <p className="muted">Seal Runtime: {sealMode}</p>
-          <p className="muted">Private Signal / Team only.</p>
+          <p className="muted">Reviewer wallet access only.</p>
           <p className="muted">{t("walletApprovalReuseNotice", { minutes: REAL_SEAL_SESSION_TTL_MIN })}</p>
         </>
       )}

@@ -5854,6 +5854,20 @@ body.composer-mode .bg-orb {
   line-height: 1.3;
 }
 
+.inbox-overview-section {
+  display: grid;
+  gap: 1rem;
+}
+
+.inbox-overview-heading {
+  align-items: end;
+}
+
+.inbox-overview-heading .muted {
+  max-width: 42rem;
+  margin-bottom: 0;
+}
+
 .signal-console-layout {
   display: grid;
   grid-template-columns: minmax(0, 280px) minmax(0, 0.95fr) minmax(0, 1.05fr);
@@ -5862,11 +5876,11 @@ body.composer-mode .bg-orb {
 }
 
 .admin-console-layout {
-  grid-template-columns: minmax(0, 320px) minmax(0, 1fr);
+  grid-template-columns: minmax(280px, 320px) minmax(0, 0.9fr) minmax(0, 1.1fr);
 }
 
 .admin-console-layout .signal-detail-column {
-  display: none;
+  display: grid;
 }
 
 .signal-sidebar,
@@ -6635,6 +6649,10 @@ body.composer-mode .bg-orb {
   min-height: 7rem;
 }
 
+.review-inline-card {
+  border-radius: 18px;
+}
+
 .review-secondary-panel {
   gap: 0.8rem;
 }
@@ -7080,6 +7098,11 @@ body.composer-mode .bg-orb {
   color: #effcff;
 }
 
+.operations-rail-intro {
+  margin-bottom: 0;
+  max-width: 54ch;
+}
+
 .operations-next-action p {
   margin-bottom: 0;
   color: var(--text-soft);
@@ -7099,6 +7122,40 @@ body.composer-mode .bg-orb {
   display: grid;
   grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 0.75rem;
+}
+
+.operations-system-details {
+  display: grid;
+  gap: 0.8rem;
+  padding: 0.95rem 1rem;
+  border-radius: 20px;
+  border: 1px solid rgba(116, 226, 255, 0.12);
+  background:
+    linear-gradient(180deg, rgba(5, 19, 31, 0.54), rgba(4, 14, 25, 0.38));
+}
+
+.operations-system-details summary {
+  cursor: pointer;
+  list-style: none;
+}
+
+.operations-system-details summary::-webkit-details-marker {
+  display: none;
+}
+
+.operations-system-details summary > span {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.operations-system-details summary::after {
+  content: "+";
+  float: right;
+  color: #9fe8f7;
+}
+
+.operations-system-details[open] summary::after {
+  content: "-";
 }
 
 .operations-status-chip {
@@ -8478,7 +8535,7 @@ body.composer-mode .bg-orb {
 
 }
 
-@media (max-width: 1600px) {
+@media (max-width: 1200px) {
   .signal-console-layout {
     grid-template-columns: 1fr;
   }

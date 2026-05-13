@@ -68,7 +68,7 @@ export function SignalClusterPanel({
     <>
       <section className="answer-card">
         <div className="section-row">
-          <h3>AI Triage</h3>
+          <h3>Review Support Summary</h3>
           <span className="muted">
             {selectedSubmission.clusterId ? "Cluster attached" : "Not clustered yet"}
           </span>
@@ -159,7 +159,7 @@ export function SignalClusterPanel({
 
       <section className="answer-card">
         <div className="section-row">
-          <h3>Cluster Actions</h3>
+          <h3>Clustering Actions</h3>
           <span className="muted">{currentCluster ? `${currentCluster.signalCount} signals` : "No active cluster"}</span>
         </div>
         {currentCluster ? (
