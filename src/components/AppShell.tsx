@@ -1,5 +1,6 @@
 import { lazy, Suspense, type PropsWithChildren } from "react";
 import { Link, NavLink } from "react-router-dom";
+import { CreateFormLink } from "./CreateFormLink";
 import { useI18n } from "../i18n";
 
 const WalletConnect = lazy(() =>
@@ -32,7 +33,7 @@ export function AppShell({ children }: PropsWithChildren) {
           <Suspense fallback={null}>
             <WalletNav />
           </Suspense>
-          <NavLink to="/admin/forms/new">{t("navCreateForm")}</NavLink>
+          <CreateFormLink nav>{t("navCreateForm")}</CreateFormLink>
         </nav>
         <div className="topbar-actions">
           <Suspense fallback={<div className="wallet-connect-shell" />}>

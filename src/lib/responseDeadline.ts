@@ -2,6 +2,13 @@ import { formatDate } from "./utils";
 
 export type ResponseDeadlinePreset = "none" | "1h" | "24h" | "7d" | "30d" | "custom";
 
+export interface ResponseDeadlineLabels {
+  noLimit: string;
+  closed: string;
+  hoursLeft: (hours: number) => string;
+  daysLeft: (days: number) => string;
+}
+
 const PRESET_TO_MS: Record<Exclude<ResponseDeadlinePreset, "none" | "custom">, number> = {
   "1h": 60 * 60 * 1000,
   "24h": 24 * 60 * 60 * 1000,
@@ -15,23 +22,28 @@ export function isResponseDeadlinePassed(responseDeadline?: number | null): bool
     : false;
 }
 
-export function formatResponseDeadline(responseDeadline?: number | null): string {
+export function formatResponseDeadline(
+  responseDeadline?: number | null,
+  labels?: ResponseDeadlineLabels,
+): string {
   if (responseDeadline == null || !Number.isFinite(responseDeadline)) {
-    return "無期限";
+    return labels?.noLimit ?? "No limit";
   }
   if (isResponseDeadlinePassed(responseDeadline)) {
-    return "回答受付終了";
+    return labels?.closed ?? "Closed";
   }
 
   const diffMs = responseDeadline - Date.now();
   const diffHours = diffMs / (60 * 60 * 1000);
   if (diffHours <= 48) {
-    return `あと${Math.max(1, Math.ceil(diffHours))}時間`;
+    const hours = Math.max(1, Math.ceil(diffHours));
+    return labels?.hoursLeft(hours) ?? `${hours} hour(s) left`;
   }
 
   const diffDays = diffMs / (24 * 60 * 60 * 1000);
   if (diffDays <= 60) {
-    return `あと${Math.max(1, Math.ceil(diffDays))}日`;
+    const days = Math.max(1, Math.ceil(diffDays));
+    return labels?.daysLeft(days) ?? `${days} day(s) left`;
   }
 
   return formatDate(new Date(responseDeadline).toISOString());

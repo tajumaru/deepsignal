@@ -523,9 +523,13 @@ export async function saveSubmissionWithEncryption(
   submission: Submission,
   seal: SealAdapter = activeSealAdapter,
   targetStorage: StorageAdapter = storageAdapter,
+  messages?: {
+    responseDeadlinePassed?: string;
+  },
 ): Promise<SaveSubmissionWithEncryptionResult> {
   if (isResponseDeadlinePassed(form.responseDeadline)) {
-    throw new Error("このフォームの回答受付は終了しました");
+    throw new Error(messages?.responseDeadlinePassed ?? "This form is no longer accepting responses.");
+    throw new Error(messages?.responseDeadlinePassed ?? "This form is no longer accepting responses.");
   }
 
   const isFullyEncrypted = form.encryptSubmissions === true;

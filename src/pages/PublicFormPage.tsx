@@ -11,7 +11,11 @@ import { SignalMetaChip, SignalMetaRow } from "../components/SignalMetaChip";
 import { useI18n } from "../i18n";
 import { getEncryptedPayloadAvailabilityLabel, hasDedicatedEncryptedPayloadBlob } from "../lib/encryptionDisplay";
 import { getSubmissionCategoryFromPurpose } from "../lib/formTemplates";
-import { formatResponseDeadline, isResponseDeadlinePassed } from "../lib/responseDeadline";
+import {
+  formatResponseDeadline,
+  isResponseDeadlinePassed,
+  type ResponseDeadlineLabels,
+} from "../lib/responseDeadline";
 import { getSubmissionRespondentMeta } from "../lib/respondentMeta";
 import { ensureRespondentSession } from "../lib/respondentSession";
 import { getStorageDetailLabels, isLocalFallbackBlob } from "../lib/signalInbox";
@@ -196,7 +200,15 @@ export function PublicFormPage() {
   }, [form, visibleFieldIds]);
   const deadlinePassed = useMemo(() => isResponseDeadlinePassed(form?.responseDeadline), [form?.responseDeadline]);
   const walletRequired = form?.identityPolicy === "wallet_required";
-  const deadlineLabel = useMemo(() => formatResponseDeadline(form?.responseDeadline), [form?.responseDeadline]);
+  const deadlineLabel = useMemo(() => {
+    const responseDeadlineLabels: ResponseDeadlineLabels = {
+      noLimit: t("responseDeadlineNone"),
+      closed: t("responseDeadlineClosed"),
+      hoursLeft: (hours) => t("responseDeadlineHoursLeft", { count: hours }),
+      daysLeft: (days) => t("responseDeadlineDaysLeft", { count: days }),
+    };
+    return formatResponseDeadline(form?.responseDeadline, responseDeadlineLabels);
+  }, [form?.responseDeadline, t]);
   const submitModeLabel =
     walletRequired || (attachWallet && account?.address)
       ? "Wallet attached, no extra personal-message signature"
@@ -409,7 +421,9 @@ export function PublicFormPage() {
         updatedAt: signedAt,
       };
 
-      const result = await saveSubmissionWithEncryption(form, submission, undefined, storageAdapter);
+      const result = await saveSubmissionWithEncryption(form, submission, undefined, storageAdapter, {
+        responseDeadlinePassed: t("formResponseClosed"),
+      });
       const savedSubmission = {
         ...submission,
         isEncrypted: Boolean(form.encryptSubmissions),

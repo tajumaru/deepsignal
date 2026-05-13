@@ -223,12 +223,25 @@ export function useCreateFormPublish({
 
     if (responseDeadlinePreset === "custom") {
       if (!responseDeadline) {
-        setError("カスタム日時を入力してください。");
+        setError(t("customDateRequired"));
         goToStep("info");
         return;
       }
       if (responseDeadline <= Date.now()) {
-        setError("カスタム日時は現在時刻より未来を指定してください。");
+        setError(t("customDateFuture"));
+        goToStep("info");
+        return;
+      }
+    }
+
+    if (responseDeadlinePreset === "custom") {
+      if (!responseDeadline) {
+        setError(t("customDateRequired"));
+        goToStep("info");
+        return;
+      }
+      if (responseDeadline <= Date.now()) {
+        setError(t("customDateFuture"));
         goToStep("info");
         return;
       }

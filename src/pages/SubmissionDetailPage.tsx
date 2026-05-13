@@ -14,6 +14,7 @@ export function SubmissionDetailPage() {
   const account = useCurrentAccount();
   const { capabilityProfile, isLoadingAccess } = useAccessControl(account?.address);
   const { formId = "", submissionId = "" } = useParams();
+  const reviewDeniedBody = capabilityProfile.isConfigured ? t("reviewAccessRequiresCapability") : undefined;
   const [resolvedForm, setResolvedForm] = useState<FormSchema | null>(null);
   const [loading, setLoading] = useState(!formId && Boolean(submissionId));
 
@@ -59,11 +60,11 @@ export function SubmissionDetailPage() {
     <AdminAccessGate
       hasWallet={Boolean(account?.address)}
       access={getReviewAccessState(resolvedForm, account?.address, capabilityProfile)}
-      deniedBody={
+      deniedBody={reviewDeniedBody ?? (
         capabilityProfile.isConfigured
-          ? "OwnerCap / AdminCap / ReviewerCap を持つウォレットだけが review 画面を開けます。"
+          ? t("reviewAccessRequiresCapability")
           : undefined
-      }
+      )}
     >
       <EmptyState>
         <h1>{t("emptySubmissionNotFound")}</h1>

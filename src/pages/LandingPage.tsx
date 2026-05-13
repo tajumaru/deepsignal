@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { Link } from "react-router-dom";
+import { CreateFormLink } from "../components/CreateFormLink";
 import { useI18n } from "../i18n";
 
 function useScrollReveal() {
@@ -74,9 +75,9 @@ function ExploreIntroSection() {
           <Link className="primary-button landing-cta-primary" to="/explore">
             {t("landingExploreCtaPrimary")}
           </Link>
-          <Link className="ghost-button landing-cta-secondary" to="/admin/forms/new">
+          <CreateFormLink className="ghost-button landing-cta-secondary">
             {t("landingExploreCtaSecondary")}
-          </Link>
+          </CreateFormLink>
         </div>
       </div>
     </section>
@@ -163,9 +164,9 @@ function SignalInboxIntroSection() {
             <Link className="primary-button landing-cta-primary" to="/dashboard">
               {t("landingInboxCtaPrimary")}
             </Link>
-            <Link className="ghost-button landing-cta-secondary" to="/admin/forms/new">
+            <CreateFormLink className="ghost-button landing-cta-secondary">
               {t("landingInboxCtaSecondary")}
-            </Link>
+            </CreateFormLink>
           </div>
         </div>
 
@@ -244,6 +245,39 @@ function LiveSystemStatusSection() {
 
 export function LandingPage() {
   const { t } = useI18n();
+  const heroPreviewFeatures = [
+    t("landingHeroPreviewFeature1"),
+    t("landingHeroPreviewFeature2"),
+    t("landingHeroPreviewFeature3"),
+    t("landingHeroPreviewFeature4"),
+  ];
+  const heroPreviewRows = [
+    { label: t("landingHeroPreviewRow1"), value: t("landingHeroPreviewRow1Value"), tone: "active" },
+    { label: t("landingHeroPreviewRow2"), value: t("landingHeroPreviewRow2Value"), tone: "enabled" },
+    { label: t("landingHeroPreviewRow3"), value: t("landingHeroPreviewRow3Value"), tone: "ready" },
+    { label: t("landingHeroPreviewRow4"), value: t("landingHeroPreviewRow4Value"), tone: "ready" },
+  ];
+  const heroBackdropCards = [
+    {
+      title: t("landingHeroPreviewBackdrop1Title"),
+      body: t("landingHeroPreviewBackdrop1Body"),
+    },
+    {
+      title: t("landingHeroPreviewBackdrop2Title"),
+      body: t("landingHeroPreviewBackdrop2Body"),
+    },
+    {
+      title: t("landingHeroPreviewBackdrop3Title"),
+      body: t("landingHeroPreviewBackdrop3Body"),
+    },
+  ];
+  const heroSummaryBullets = [
+    t("landingHeroPreviewSummaryItem1"),
+    t("landingHeroPreviewSummaryItem2"),
+    t("landingHeroPreviewSummaryItem3"),
+  ];
+  const heroSummaryBars = [0.82, 0.72, 0.45, 0.88, 0.76, 0.54];
+  const heroChartBars = [0.58, 0.34, 0.41, 0.62, 0.29, 0.46, 0.22, 0.68, 0.44, 0.31, 0.52, 0.27];
 
   return (
     <section className="landing-shell">
@@ -255,52 +289,116 @@ export function LandingPage() {
             <p className="eyebrow">{t("landingHeroEyebrow")}</p>
 
             <h1 className="landing-hero-title">
-              <span>Deep</span>
-              <span className="landing-hero-title-accent">Signal</span>
+              <span>{t("landingHeroTitleLine1")}</span>
+              <span className="landing-hero-title-accent">{t("landingHeroTitleLine2")}</span>
             </h1>
 
             <p className="landing-tagline">{t("landingHeroTagline")}</p>
 
             <p className="lede">{t("landingHeroBody")}</p>
 
+            <p className="landing-hero-support">{t("landingHeroSupport")}</p>
+
             <div className="cta-row landing-hero-actions">
-              <Link className="primary-button landing-cta-primary" to="/admin/forms/new">
+              <Link className="primary-button landing-cta-primary" to="/dashboard">
                 {t("landingHeroCreate")}
               </Link>
-              <Link className="ghost-button landing-cta-secondary" to="/dashboard">
+              <Link className="ghost-button landing-cta-secondary" to="/explore">
                 {t("landingHeroDemo")}
               </Link>
             </div>
+
+            <p className="landing-hero-proofline">{t("landingHeroProofline")}</p>
           </div>
 
-          <div className="landing-sonar-column" aria-hidden="true">
-            <div className="landing-sonar-panel">
-              <div className="landing-sonar-hud">
-                <span>{t("landingSonarInbox")}</span>
-                <span>{t("landingSonarRelay")}</span>
+          <div className="landing-sonar-column">
+            <article className="landing-hero-app-preview">
+              <div className="landing-hero-backdrop-stack" aria-hidden="true">
+                {heroBackdropCards.map((card, index) => (
+                  <div key={card.title} className={`landing-hero-backdrop-card landing-hero-backdrop-card-${index + 1}`}>
+                    <strong>{card.title}</strong>
+                    <span>{card.body}</span>
+                  </div>
+                ))}
               </div>
 
-              <div className="landing-sonar-core">
-                <div className="landing-sonar-rings" />
-                <div className="landing-sonar-crosshair landing-sonar-crosshair-x" />
-                <div className="landing-sonar-crosshair landing-sonar-crosshair-y" />
-                <div className="landing-sonar-center-dot" />
-                <span className="landing-sonar-blip landing-sonar-blip-a" />
-                <span className="landing-sonar-blip landing-sonar-blip-b" />
-                <span className="landing-sonar-blip landing-sonar-blip-c" />
+              <div className="landing-hero-app-copy">
+                <span className="landing-hero-form-preview-eyebrow">{t("landingHeroPreviewEyebrow")}</span>
+                <h2>{t("landingHeroPreviewTitle")}</h2>
+                <p>{t("landingHeroPreviewBody")}</p>
               </div>
 
-              <div className="landing-sonar-legend">
-                <div className="landing-sonar-legend-card">
-                  <span>{t("landingSonarPublic")}</span>
-                  <strong>{t("landingSonarPublicBody")}</strong>
+              <div className="landing-hero-feature-row">
+                {heroPreviewFeatures.map((feature) => (
+                  <div key={feature} className="landing-hero-feature-pill">
+                    <span className="landing-hero-feature-icon" aria-hidden="true" />
+                    <span>{feature}</span>
+                  </div>
+                ))}
+              </div>
+
+              <div className="landing-hero-workbench">
+                <div className="landing-hero-form-builder">
+                  <div className="landing-hero-question-row">
+                    <span className="landing-hero-question-badge">Q1</span>
+                    <strong>{t("landingHeroPreviewQuestion")}</strong>
+                  </div>
+
+                  <div className="landing-hero-answer-field">{t("landingHeroPreviewAnswerPlaceholder")}</div>
+
+                  <div className="landing-hero-setting-list">
+                    {heroPreviewRows.map((row) => (
+                      <div key={row.label} className="landing-hero-setting-row">
+                        <span>{row.label}</span>
+                        <strong className={`landing-hero-status-pill is-${row.tone}`}>{row.value}</strong>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-                <div className="landing-sonar-legend-card">
-                  <span>{t("landingSonarPrivate")}</span>
-                  <strong>{t("landingSonarPrivateBody")}</strong>
+
+                <div className="landing-hero-summary-panel">
+                  <div className="landing-hero-summary-header">
+                    <strong>{t("landingHeroPreviewSummaryTitle")}</strong>
+                    <span>{t("landingHeroPreviewSummaryMeta")}</span>
+                  </div>
+
+                  <div className="landing-hero-summary-copy">
+                    <span>{t("landingHeroPreviewSummaryLead")}</span>
+                    <ul className="landing-hero-summary-bullets">
+                      {heroSummaryBullets.map((item) => (
+                        <li key={item}>{item}</li>
+                      ))}
+                    </ul>
+                  </div>
+
+                  <div className="landing-hero-summary-lines">
+                    {heroSummaryBars.map((width, index) => (
+                      <span
+                        key={index}
+                        className="landing-hero-summary-line"
+                        style={{ "--line-width": `${width * 100}%` } as CSSProperties}
+                      />
+                    ))}
+                  </div>
+
+                  <div className="landing-hero-summary-chart">
+                    {heroChartBars.map((height, index) => (
+                      <span
+                        key={index}
+                        className="landing-hero-chart-bar"
+                        style={{ "--bar-height": `${height * 100}%` } as CSSProperties}
+                      />
+                    ))}
+                  </div>
                 </div>
               </div>
-            </div>
+
+              <CreateFormLink className="primary-button landing-hero-form-preview-cta">
+                {t("landingHeroPreviewCta")}
+              </CreateFormLink>
+
+              <p className="landing-hero-powered-by">{t("landingHeroPreviewPoweredBy")}</p>
+            </article>
           </div>
         </div>
       </section>

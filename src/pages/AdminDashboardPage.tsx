@@ -5,6 +5,7 @@
 } from "@mysten/dapp-kit";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
+import { CreateFormLink } from "../components/CreateFormLink";
 import { AdminAccessGate } from "../components/AdminAccessGate";
 import { BlobLink } from "../components/BlobLink";
 import { EmptyState } from "../components/EmptyState";
@@ -13,6 +14,7 @@ import { PrivateSignalUnlockCard } from "../components/PrivateSignalUnlockCard";
 import { SealStatusCard } from "../components/SealStatusCard";
 import { ShareCard } from "../components/ShareCard";
 import { SignalClusterPanel } from "../components/SignalClusterPanel";
+import { SignalStatusBadges } from "../components/SignalStatusBadges";
 import { SignalMetaChip, SignalMetaRow } from "../components/SignalMetaChip";
 import { getSealRuntimeStatus } from "../crypto/cryptoFactory";
 import { usePrivateSignalDecrypt } from "../features/admin/hooks/usePrivateSignalDecrypt";
@@ -39,7 +41,7 @@ import { getTriageStatusLabel, TRIAGE_STATUS_OPTIONS } from "../lib/signalOps";
 import { exportSubmissionJson, exportSubmissionsCsv } from "../lib/export";
 import { getEncryptedPayloadAvailabilityLabel, hasDedicatedEncryptedPayloadBlob } from "../lib/encryptionDisplay";
 import { getPublicFormPath, getPublicRoadmapPath } from "../lib/publicLinks";
-import { formatResponseDeadline } from "../lib/responseDeadline";
+import { formatResponseDeadline, type ResponseDeadlineLabels } from "../lib/responseDeadline";
 import { getRespondentDisplayLabel, getSubmissionRespondentMeta } from "../lib/respondentMeta";
 import {
   getSignalPreview,
@@ -86,6 +88,12 @@ export function AdminDashboardPage() {
   const registerSignalReceiptTx = useSignAndExecuteTransaction();
   const sealRuntime = getSealRuntimeStatus();
   const storageRuntime = getStorageRuntimeStatus();
+  const responseDeadlineLabels: ResponseDeadlineLabels = {
+    noLimit: t("responseDeadlineNone"),
+    closed: t("responseDeadlineClosed"),
+    hoursLeft: (hours) => t("responseDeadlineHoursLeft", { count: hours }),
+    daysLeft: (days) => t("responseDeadlineDaysLeft", { count: days }),
+  };
   const [saving, setSaving] = useState(false);
   const [notesDraft, setNotesDraft] = useState("");
   const [draftTag, setDraftTag] = useState("");
@@ -100,6 +108,7 @@ export function AdminDashboardPage() {
   const [selectedPendingSignalIds, setSelectedPendingSignalIds] = useState<string[]>([]);
   const [registeringSignalIds, setRegisteringSignalIds] = useState<string[]>([]);
   const saveQueueRef = useRef(Promise.resolve());
+  const reviewInboxRef = useRef<HTMLDivElement | null>(null);
   const hasAdminAccess = canAdmin(capabilityProfile);
   const {
     forms,
@@ -430,23 +439,7 @@ export function AdminDashboardPage() {
   const selectedRecordFocusAction = !selectedRecord
     ? null
     : selectedRecordNeedsDecrypt
-      ? {
-          eyebrow: "Next step",
-          title: "Unlock this private signal",
-          detail: "Decrypt with an authorized reviewer wallet first. Review notes and roadmap actions can wait until the message is visible.",
-          cta: (
-            <button
-              type="button"
-              className="primary-button"
-              onClick={() => void handleDecrypt()}
-              disabled={decrypting || decryptInFlightRef.current}
-            >
-              {decrypting || decryptInFlightRef.current
-                ? t("privateSignalUnlockLoading")
-                : t("privateSignalUnlockAction")}
-            </button>
-          ),
-        }
+      ? null
       : selectedRecord.submission.status === "unread"
         ? {
             eyebrow: "Next step",
@@ -538,7 +531,7 @@ export function AdminDashboardPage() {
         ? {
             label: "Create your first signal inbox",
             detail: "Publish one protected form for this project so reviewers have signals to read.",
-            cta: <Link className="primary-button" to="/admin/forms/new">Create Signal Form</Link>,
+            cta: <CreateFormLink className="primary-button">Create Signal Form</CreateFormLink>,
           }
         : selectedProjectSignals.length === 0
           ? {
@@ -853,47 +846,13 @@ export function AdminDashboardPage() {
   const visibleUnreadCount = visibleSignals.filter(
     (record) => record.submission.status === "unread",
   ).length;
-  const visibleNeedsDecryptCount = visibleSignals.filter(
-    (record) => record.submission.isEncrypted && record.submission.id !== selectedRecord?.submission.id,
-  ).length + (selectedRecordNeedsDecrypt ? 1 : 0);
-  const visibleRoadmapCandidateCount = visibleSignals.filter((record) =>
-    ROADMAP_READY_STATUSES.has(record.submission.triageStatus),
-  ).length;
   const selectedPendingVisibleCount = visibleSignals.filter((record) =>
     selectedPendingSignalIds.includes(record.submission.id),
   ).length;
   const hasProjects = projects.length > 0;
-  const currentSelectedSignalLabel = selectedRecord
-    ? getSignalSubject(selectedRecord.submission)
-    : "No signal selected";
-  const currentNextStepLabel = selectedRecordFocusAction?.title ?? nextRecommendedAction.label;
-  const overviewCards = [
-    {
-      label: "Unread signals",
-      value: String(visibleUnreadCount),
-      meta: activeStreamLabel,
-    },
-    {
-      label: "Needs decrypt",
-      value: String(visibleNeedsDecryptCount),
-      meta: "Private signals waiting to be unlocked",
-    },
-    {
-      label: "Roadmap candidates",
-      value: String(visibleRoadmapCandidateCount),
-      meta: selectedProject ? selectedProject.name : "Select a project",
-    },
-    {
-      label: "Selected signal",
-      value: currentSelectedSignalLabel,
-      meta: selectedRecord ? formatDate(selectedRecord.submission.createdAt) : "Pick a signal to review",
-    },
-    {
-      label: "Next action",
-      value: currentNextStepLabel,
-      meta: selectedRecord ? selectedRecord.form.title : activeScopeLabel,
-    },
-  ];
+  const projectIdentityDescription = selectedProject
+    ? "Create forms, collect private signals, review protected responses, and publish roadmap-ready updates from one workspace."
+    : "Choose or create a project, then publish your first protected form and start reviewing signals.";
 
   const nodeDirectoryItems = useMemo(() => {
     const normalizedSearch = nodeSearch.trim().toLowerCase();
@@ -965,24 +924,12 @@ export function AdminDashboardPage() {
             {toast.message}
           </div>
         ) : null}
-        <OperationsStatusRail
-          title="Review Queue"
-          items={operationsStatusItems}
-          nextActionLabel={nextRecommendedAction.label}
-          nextActionDetail={nextRecommendedAction.detail}
-          nextActionCta={nextRecommendedAction.cta}
-        />
 
-        <section className="panel glow-panel workspace-hero">
-          <div className="workspace-hero-main">
+        <section className="panel glow-panel workspace-hero workspace-hero-compact">
+          <div className="workspace-hero-main workspace-overview-shell">
             <div className="workspace-hero-copy">
-              <p className="eyebrow">{t("creatorOnlyInbox")}</p>
+              <p className="eyebrow">{t("signalInboxTitle")}</p>
               <h1>{selectedProject ? selectedProject.name : "Contest demo workspace"}</h1>
-              <p className="lede">
-                {selectedProject
-                  ? "Run the full judge demo from one place: create the form, collect a private signal, unlock it with reviewer access, and publish the roadmap."
-                  : "Start by selecting the project for this demo. Once a project is active, the next step is creating a signal form."}
-              </p>
               <div className="workspace-hero-meta">
                 {workspaceMetaItems.map((item) => (
                   <span key={item} className="workspace-meta-item">
@@ -996,201 +943,40 @@ export function AdminDashboardPage() {
               </div>
             </div>
 
-            <div className="workspace-hero-controls">
-              <label className="project-selector-inline" htmlFor="workspace-project-selector">
-                <span className="eyebrow">Current project</span>
-                <select
-                  id="workspace-project-selector"
-                  className="project-selector-field"
-                  value={selectedProjectId}
-                  onChange={(event) => {
-                    selectProject(event.target.value);
+            <aside className="workspace-action-dock">
+              <div className="workspace-dock-actions">
+                <CreateFormLink className="primary-button">
+                  Create Form
+                </CreateFormLink>
+                <button
+                  type="button"
+                  className="ghost-button"
+                  onClick={() => {
+                    setSelectedStreamId("all");
+                    setSelectedFormId("all");
+                    reviewInboxRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
                   }}
                 >
-                  <option value="">Choose a project</option>
-                  {projects.map((project) => (
-                    <option key={project.objectId} value={project.objectId}>
-                      {project.name} ({project.formsCount} forms / {project.signalsCount} signals)
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <Link className="ghost-button" to="/admin/access">
-                {t("manageMembers")}
-              </Link>
-            </div>
-          </div>
-        </section>
-
-        <details ref={advancedProjectSettingsRef} className="panel advanced-project-settings">
-          <summary>
-            <span>
-              <strong>Advanced project settings</strong>
-              <span className="muted">
-                Connect an existing project, create a new one, and use registry tools when needed.
-              </span>
-            </span>
-          </summary>
-          <div className="advanced-project-settings-body">
-            <div className="project-registry-status">
-              <span className="signal-chip">{selectedProject ? "Project selected" : "No project selected"}</span>
-              <span className="signal-chip">{privateReviewLabel}</span>
-            </div>
-
-            <div className="project-registry-grid">
-              <article className="project-registry-subpanel">
-                <div className="project-panel-head">
-                  <div>
-                    <p className="eyebrow">Existing Project</p>
-                    <h3>Connect existing project</h3>
-                  </div>
-                  <span className="signal-chip">Project / OwnerCap</span>
-                </div>
-                <p className="muted">
-                  Attach this workspace to an existing DeepSignal project by pasting a Project or ProjectOwnerCap object id.
-                </p>
-                <div className="inline-actions">
-                  <input
-                    ref={manualProjectInputRef}
-                    value={manualProjectId}
-                    onChange={(event) => setManualProjectId(event.target.value)}
-                    placeholder="Project or ProjectOwnerCap object id"
-                  />
-                  <button type="button" className="ghost-button" onClick={() => void connectManualProject()}>
-                    Connect
-                  </button>
-                </div>
-              </article>
-
-              {hasAdminAccess ? (
-                <article className="project-registry-subpanel">
-                  <div className="project-panel-head">
-                    <div>
-                      <p className="eyebrow">Create New Project</p>
-                      <h3>Create project</h3>
-                    </div>
-                    <span className="signal-chip signal-chip-accent">Owner / Admin</span>
-                  </div>
-                  <p className="muted">
-                    Start a fresh project container for forms and signal routing, then make it the active destination.
-                  </p>
-                  <div className="inline-actions">
-                    <input
-                      ref={projectCreateInputRef}
-                      value={projectCreateName}
-                      onChange={(event) => setProjectCreateName(event.target.value)}
-                      placeholder="New project name"
-                    />
-                    <button
-                      type="button"
-                      className="primary-button"
-                      onClick={() => void handleCreateProject()}
-                      disabled={isCreatingProject}
-                    >
-                      {isCreatingProject ? "Creating..." : "Create Project"}
-                    </button>
-                  </div>
-                </article>
-              ) : null}
-
-              {selectedProject ? (
-                <article className="project-registry-subpanel">
-                  <div className="project-panel-head">
-                    <div>
-                      <p className="eyebrow">Project Lifecycle</p>
-                      <h3>Delete project</h3>
-                    </div>
-                    <span className="signal-chip">Owner only</span>
-                  </div>
-                  <p className="muted">
-                    Delete is available only for empty projects so existing form routes and fallback data are not orphaned.
-                  </p>
-                  <div className="stack">
-                    <div className="workspace-hero-meta">
-                      <span className="workspace-meta-item">{selectedProject.formsCount} on-chain forms</span>
-                      <span className="workspace-meta-item">{selectedProject.signalsCount} on-chain signals</span>
-                      <span className="workspace-meta-item">{localProjectFormsCount} local forms</span>
-                    </div>
-                    {deleteProjectBlockedReason ? (
-                      <p className="warning-text">{deleteProjectBlockedReason} Local form visibility can differ from the on-chain registry.</p>
-                    ) : (
-                      <p className="muted">This project is empty and can be deleted by the owner wallet.</p>
-                    )}
-                    {visibleOnchainForms.length > 0 ? (
-                      <div className="stack onchain-form-list">
-                        <p className="muted">On-chain form records</p>
-                        {visibleOnchainForms.map((form) => (
-                          <div key={form.formId} className="metadata-row onchain-form-row">
-                            <div>
-                              <strong>Form #{form.formId}</strong>
-                              <p className="muted">{form.title || "Untitled form"}</p>
-                            </div>
-                            <div className="inline-actions">
-                              <span className={`signal-chip ${form.active ? "signal-chip-accent" : "signal-chip-soft"}`}>
-                                {form.active ? "Active" : "Inactive"}
-                              </span>
-                              <button
-                                type="button"
-                                className="ghost-button"
-                                disabled={
-                                  deletingOnchainFormIds.includes(form.formId) ||
-                                  selectedProject.signalsCount > 0
-                                }
-                                onClick={() => void handleDeleteOnchainForm(form.formId)}
-                              >
-                                {deletingOnchainFormIds.includes(form.formId) ? "Deleting..." : "Delete on-chain form"}
-                              </button>
-                            </div>
-                          </div>
-                        ))}
-                        {selectedProject.signalsCount > 0 ? (
-                          <p className="muted">On-chain forms can only be deleted when no on-chain signals reference this project.</p>
-                        ) : null}
-                      </div>
-                    ) : null}
-                    <button
-                      type="button"
-                      className="ghost-button node-directory-delete"
-                      onClick={() => void handleDeleteProject()}
-                      disabled={
-                        deletingProject ||
-                        !selectedProject.ownedOwnerCapId ||
-                        selectedProject.formsCount > 0 ||
-                        selectedProject.signalsCount > 0 ||
-                        localProjectFormsCount > 0
-                      }
-                    >
-                      {deletingProject ? "Deleting..." : "Delete Project"}
-                    </button>
-                  </div>
-                </article>
-              ) : null}
-            </div>
-
-            {projectState ? <p className="muted">{projectState}</p> : null}
-          </div>
-        </details>
-
-        <div className="mobile-console-banner">{t("adminDesktopNotice")}</div>
-
-        <section className="inbox-overview-section" aria-label="Review queue overview">
-          <div className="section-row inbox-overview-heading">
-            <div>
-              <p className="eyebrow">Review Queue</p>
-              <h2>What needs attention now</h2>
-            </div>
-            <p className="muted">
-              Keep the inbox centered on reading, decrypting, triaging, and moving signals toward the roadmap.
-            </p>
-          </div>
-          <div className="inbox-overview-grid">
-          {overviewCards.map((card) => (
-            <article key={card.label} className="panel inbox-overview-card">
-              <span>{card.label}</span>
-              <strong>{card.value}</strong>
-              <p className="muted">{card.meta}</p>
-            </article>
-          ))}
+                  Review
+                </button>
+                <Link className="ghost-button" to="/admin/access">
+                  Members
+                </Link>
+                <button
+                  type="button"
+                  className="ghost-button workspace-project-trigger"
+                  onClick={() => {
+                    advancedProjectSettingsRef.current?.open = true;
+                    advancedProjectSettingsRef.current?.scrollIntoView({
+                      behavior: "smooth",
+                      block: "start",
+                    });
+                  }}
+                >
+                  {selectedProject ? `Project: ${selectedProject.name}` : "Choose Project"}
+                </button>
+              </div>
+            </aside>
           </div>
         </section>
 
@@ -1200,14 +986,28 @@ export function AdminDashboardPage() {
             <h2>{t("noCreatorInboxesTitle")}</h2>
             <p>{t("noCreatorInboxesBody")}</p>
             {hasAdminAccess || !capabilityProfile.isConfigured ? (
-              <Link className="primary-button" to="/admin/forms/new">
+              <CreateFormLink className="primary-button">
                 {t("createSignalForm")}
-              </Link>
+              </CreateFormLink>
             ) : null}
           </EmptyState>
           ) : null
         ) : (
-          <div className="signal-console-layout admin-console-layout">
+          <section ref={reviewInboxRef} className="panel signal-inbox-workbench">
+            <div className="signal-workbench-header">
+              <div className="signal-workbench-copy">
+                <p className="eyebrow">{t("signalInboxTitle")}</p>
+                <h2>Review workspace</h2>
+                <p className="muted">Streams, inbox, and detail stay visible together so triage work starts immediately.</p>
+              </div>
+              <div className="signal-workbench-summary">
+                <span className="signal-chip">{visibleSignals.length} visible signals</span>
+                <span className="signal-chip signal-chip-soft">{visibleUnreadCount} unread</span>
+                <span className="signal-chip signal-chip-soft">{activeScopeLabel}</span>
+              </div>
+            </div>
+
+            <div className="signal-console-layout admin-console-layout signal-console-layout-priority">
             <aside className="panel signal-sidebar">
               <div className="signal-sidebar-section">
                 <div>
@@ -1265,7 +1065,7 @@ export function AdminDashboardPage() {
                             {form.submissionCount} signals
                             {form.encryptSubmissions ? " · protected inbox" : " · open inbox"}
                           </p>
-                          <p className="muted">回答期限: {formatResponseDeadline(form.responseDeadline)}</p>
+                          <p className="muted">{t("responseDeadlineLabel")}: {formatResponseDeadline(form.responseDeadline, responseDeadlineLabels)}</p>
                         </div>
                         <div className="form-stream-actions">
                           <span className="signal-chip">{unreadCount} unread</span>
@@ -1357,9 +1157,9 @@ export function AdminDashboardPage() {
                   </p>
                   <div className="inline-actions">
                     {!selectedProject ? null : selectedProjectForms.length === 0 ? (
-                      <Link className="primary-button" to="/admin/forms/new">
+                      <CreateFormLink className="primary-button">
                         Create Signal Form
-                      </Link>
+                      </CreateFormLink>
                     ) : firstProjectForm ? (
                       <>
                         <Link
@@ -1424,32 +1224,13 @@ export function AdminDashboardPage() {
                           ) : null}
                         </div>
                         <div className="signal-badge-row signal-badge-row-compact">
-                          <span className={`pill status-${submission.status}`}>{submission.status}</span>
-                          <span className={`pill priority-${submission.priority}`}>{submission.priority}</span>
-                          <span className="signal-chip">{category}</span>
-                          {isPendingSui ? (
-                            <span className="signal-chip signal-chip-accent">Pending Sui</span>
-                          ) : null}
-                          {isSelectedForSui ? <span className="signal-chip signal-chip-soft">Selected for Sui</span> : null}
-                          {submission.clusterId ? (
-                            <span className="signal-chip signal-chip-accent">
-                              AI grouped
-                              {clusterCountById[submission.clusterId]
-                                ? ` (${clusterCountById[submission.clusterId]})`
-                                : ""}
-                            </span>
-                          ) : null}
-                          {submission.attachments.length > 0 ? (
-                            <span className="signal-chip">
-                              {t("attachmentCountLabel", { count: submission.attachments.length })}
-                            </span>
-                          ) : null}
-                          {submission.status === "unread" ? (
-                            <span className="signal-chip signal-chip-accent">
-                              {t("newSignalLabel")}
-                            </span>
-                          ) : null}
-                          {isLocalOnlySignal ? <span className="signal-chip">{storageLabel}</span> : null}
+                          <SignalStatusBadges
+                            submission={submission}
+                            category={category}
+                            pendingSui={isPendingSui}
+                            selectedForSui={isSelectedForSui}
+                            storageLabel={isLocalOnlySignal ? storageLabel : undefined}
+                          />
                         </div>
                         {isPendingSui ? (
                           <div className="signal-card-actions">
@@ -2139,8 +1920,8 @@ export function AdminDashboardPage() {
                             <strong>{privateReviewLabel}</strong>
                           </div>
                           <div className="metadata-row">
-                            <span>回答期限</span>
-                            <strong>{formatResponseDeadline(selectedRecord.form.responseDeadline)}</strong>
+                            <span>{t("responseDeadlineLabel")}</span>
+                            <strong>{formatResponseDeadline(selectedRecord.form.responseDeadline, responseDeadlineLabels)}</strong>
                           </div>
                           <div className="metadata-row">
                             <span>{t("walletAccessStatus")}</span>
@@ -2275,7 +2056,183 @@ export function AdminDashboardPage() {
               )}
             </article>
           </div>
+          </section>
         )}
+
+        <OperationsStatusRail
+          title="Review Queue"
+          items={operationsStatusItems}
+          nextActionLabel={nextRecommendedAction.label}
+          nextActionDetail={nextRecommendedAction.detail}
+          nextActionCta={nextRecommendedAction.cta}
+        />
+
+        <details ref={advancedProjectSettingsRef} className="panel advanced-project-settings">
+          <summary>
+            <span>
+              <strong>Advanced project settings</strong>
+              <span className="muted">Connect an existing project, review registry state, or use danger-zone actions.</span>
+            </span>
+          </summary>
+          <div className="advanced-project-settings-body">
+            <div className="project-registry-status">
+              <span className="signal-chip">{selectedProject ? "Project selected" : "No project selected"}</span>
+              <span className="signal-chip">{privateReviewLabel}</span>
+            </div>
+
+            <article className="project-registry-subpanel project-registry-subpanel-soft advanced-project-switcher">
+              <div className="project-panel-head">
+                <div>
+                  <p className="eyebrow">Current Project</p>
+                  <h3>Create or switch project</h3>
+                </div>
+                <span className="signal-chip">Workspace scope</span>
+              </div>
+              <p className="muted">Switch the active project for this inbox or create a fresh destination.</p>
+              <label className="project-selector-inline" htmlFor="workspace-project-selector">
+                <span className="eyebrow">Selected project</span>
+                <select
+                  id="workspace-project-selector"
+                  className="project-selector-field"
+                  value={selectedProjectId}
+                  onChange={(event) => {
+                    selectProject(event.target.value);
+                  }}
+                >
+                  <option value="">Choose a project</option>
+                  {projects.map((project) => (
+                    <option key={project.objectId} value={project.objectId}>
+                      {project.name} ({project.formsCount} forms / {project.signalsCount} signals)
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {hasAdminAccess ? (
+                <div className="workspace-create-project">
+                  <div className="workspace-create-project-copy">
+                    <span className="eyebrow">Create project</span>
+                    <p className="muted">Provision a new project without leaving the inbox workspace.</p>
+                  </div>
+                  <div className="workspace-create-project-actions">
+                    <input
+                      ref={projectCreateInputRef}
+                      value={projectCreateName}
+                      onChange={(event) => setProjectCreateName(event.target.value)}
+                      placeholder="New project name"
+                    />
+                    <button
+                      type="button"
+                      className="ghost-button"
+                      onClick={() => void handleCreateProject()}
+                      disabled={isCreatingProject}
+                    >
+                      {isCreatingProject ? "Creating..." : "Create Project"}
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+            </article>
+
+            <div className="project-registry-grid project-registry-grid-advanced">
+              <article className="project-registry-subpanel project-registry-subpanel-soft">
+                <div className="project-panel-head">
+                  <div>
+                    <p className="eyebrow">Existing Project</p>
+                    <h3>Connect existing project</h3>
+                  </div>
+                  <span className="signal-chip">Project / OwnerCap</span>
+                </div>
+                <p className="muted">Paste a Project or ProjectOwnerCap object id to attach this workspace.</p>
+                <div className="inline-actions">
+                  <input
+                    ref={manualProjectInputRef}
+                    value={manualProjectId}
+                    onChange={(event) => setManualProjectId(event.target.value)}
+                    placeholder="Project or ProjectOwnerCap object id"
+                  />
+                  <button type="button" className="ghost-button" onClick={() => void connectManualProject()}>
+                    Connect
+                  </button>
+                </div>
+              </article>
+
+              {selectedProject ? (
+                <article className="project-registry-subpanel project-registry-danger">
+                  <div className="project-panel-head">
+                    <div>
+                      <p className="eyebrow">Danger Zone</p>
+                      <h3>Delete project</h3>
+                    </div>
+                    <span className="signal-chip">Owner only</span>
+                  </div>
+                  <p className="muted">Only empty projects can be deleted.</p>
+                  <div className="stack">
+                    <div className="workspace-hero-meta">
+                      <span className="workspace-meta-item">{selectedProject.formsCount} on-chain forms</span>
+                      <span className="workspace-meta-item">{selectedProject.signalsCount} on-chain signals</span>
+                      <span className="workspace-meta-item">{localProjectFormsCount} local forms</span>
+                    </div>
+                    {deleteProjectBlockedReason ? (
+                      <p className="warning-text">{deleteProjectBlockedReason} Local forms may still differ from the on-chain registry.</p>
+                    ) : (
+                      <p className="muted">This project is empty and can be deleted by the owner wallet.</p>
+                    )}
+                    {visibleOnchainForms.length > 0 ? (
+                      <div className="stack onchain-form-list">
+                        <p className="muted">On-chain form records</p>
+                        {visibleOnchainForms.map((form) => (
+                          <div key={form.formId} className="metadata-row onchain-form-row">
+                            <div>
+                              <strong>Form #{form.formId}</strong>
+                              <p className="muted">{form.title || "Untitled form"}</p>
+                            </div>
+                            <div className="inline-actions">
+                              <span className={`signal-chip ${form.active ? "signal-chip-accent" : "signal-chip-soft"}`}>
+                                {form.active ? "Active" : "Inactive"}
+                              </span>
+                              <button
+                                type="button"
+                                className="ghost-button"
+                                disabled={
+                                  deletingOnchainFormIds.includes(form.formId) ||
+                                  selectedProject.signalsCount > 0
+                                }
+                                onClick={() => void handleDeleteOnchainForm(form.formId)}
+                              >
+                                {deletingOnchainFormIds.includes(form.formId) ? "Deleting..." : "Delete on-chain form"}
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                        {selectedProject.signalsCount > 0 ? (
+                          <p className="muted">On-chain forms can only be deleted when no on-chain signals reference this project.</p>
+                        ) : null}
+                      </div>
+                    ) : null}
+                    <button
+                      type="button"
+                      className="ghost-button node-directory-delete"
+                      onClick={() => void handleDeleteProject()}
+                      disabled={
+                        deletingProject ||
+                        !selectedProject.ownedOwnerCapId ||
+                        selectedProject.formsCount > 0 ||
+                        selectedProject.signalsCount > 0 ||
+                        localProjectFormsCount > 0
+                      }
+                    >
+                      {deletingProject ? "Deleting..." : "Delete Project"}
+                    </button>
+                  </div>
+                </article>
+              ) : null}
+            </div>
+
+            {projectState ? <p className="muted">{projectState}</p> : null}
+          </div>
+        </details>
+
+        <div className="mobile-console-banner">{t("adminDesktopNotice")}</div>
       </section>
       {nodeDirectoryOpen ? (
         <div className="node-directory-overlay" role="dialog" aria-modal="true">

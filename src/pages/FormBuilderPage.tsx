@@ -1,6 +1,6 @@
 import { useCurrentAccount, useCurrentWallet, useSignAndExecuteTransaction, useSuiClient } from "@mysten/dapp-kit";
-import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { AdminAccessGate } from "../components/AdminAccessGate";
 import { FieldTypePicker } from "../components/formBuilder/FieldTypePicker";
 import { useAccessControl } from "../hooks/useAccessControl";
@@ -29,11 +29,14 @@ export function FormBuilderPage() {
   const { projects } = useProjectRegistry(account?.address);
   const createFormTx = useSignAndExecuteTransaction();
   const navigate = useNavigate();
+  const location = useLocation();
+  const composerShellRef = useRef<HTMLElement | null>(null);
   const [isScrolled, setIsScrolled] = useState(false);
   const [storageRuntime, setStorageRuntime] = useState(() => getStorageRuntimeStatus());
   const [showPublishSuccessView, setShowPublishSuccessView] = useState(false);
+  const freshStartToken = new URLSearchParams(location.search).get("fresh") ?? "";
 
-  const builder = useCreateFormBuilder({ t, projects });
+  const builder = useCreateFormBuilder({ t, projects, freshStartToken });
   const publish = useCreateFormPublish({
     t,
     accountAddress: account?.address,
@@ -119,6 +122,25 @@ export function FormBuilderPage() {
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
+  useEffect(() => {
+    if (!freshStartToken) {
+      return;
+    }
+    const frameId = window.requestAnimationFrame(() => {
+      const composerShell = composerShellRef.current;
+      if (!composerShell) {
+        return;
+      }
+      const topbarHeight = document.querySelector<HTMLElement>(".topbar")?.getBoundingClientRect().height ?? 0;
+      const nextTop = Math.max(
+        0,
+        window.scrollY + composerShell.getBoundingClientRect().top - topbarHeight - 12,
+      );
+      window.scrollTo({ top: nextTop, behavior: "smooth" });
+    });
+    return () => window.cancelAnimationFrame(frameId);
+  }, [freshStartToken]);
+
   function handleNavigateHome() {
     if (!builder.confirmDiscardChanges()) {
       return;
@@ -155,7 +177,7 @@ export function FormBuilderPage() {
           : undefined
       }
     >
-      <section className="composer-shell">
+      <section ref={composerShellRef} className="composer-shell">
         <PublishOverlay
           open={publish.overlay.open}
           overlay={publish.overlay}

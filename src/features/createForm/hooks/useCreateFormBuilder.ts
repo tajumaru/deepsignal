@@ -34,9 +34,10 @@ import { cloneField, CREATE_FORM_DRAFT_STORAGE_KEY, createField, createSection, 
 interface UseCreateFormBuilderArgs {
   t: Translate;
   projects: ProjectOption[];
+  freshStartToken?: string;
 }
 
-export function useCreateFormBuilder({ t, projects }: UseCreateFormBuilderArgs) {
+export function useCreateFormBuilder({ t, projects, freshStartToken = "" }: UseCreateFormBuilderArgs) {
   const hasLoadedDraftRef = useRef(false);
   const labelRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const fieldCardRefs = useRef<Record<string, HTMLElement | null>>({});
@@ -100,6 +101,34 @@ export function useCreateFormBuilder({ t, projects }: UseCreateFormBuilderArgs) 
   const isReadyToPublish = hasValidTitle && hasQuestions;
   const selectedProject = projects.find((project) => project.objectId === selectedProjectId) ?? null;
 
+  function resetBuilderState() {
+    const nextFields = createTemplateFields(initialTemplate);
+    const nextSelectedProjectId = getSelectedProjectId();
+    setSelectedTemplateKey(initialTemplate.key);
+    setTitle(initialTemplate.title);
+    setDescription(initialTemplate.description);
+    setFields(nextFields);
+    setSections([]);
+    setPurpose(initialTemplate.purpose);
+    setVisibility("unlisted");
+    setIdentityPolicy("anonymous_allowed");
+    setEncryptSubmissions(true);
+    setResponseDeadlinePreset("none");
+    setResponseDeadlineCustomAt("");
+    setCurrentStep("template");
+    setMobilePane("editor");
+    setFieldTypePickerOpen(false);
+    setSelectedProjectIdState(nextSelectedProjectId);
+    setProjectState("");
+    setLastSavedSnapshot(INITIAL_DRAFT_SNAPSHOT);
+    setDraftSaveState("idle");
+    setActiveFieldId(nextFields[0]?.id ?? "");
+    setDraggedFieldId(null);
+    setDragOverFieldId(null);
+    setDragOverPlacement(null);
+    setPendingFocusFieldId(nextFields[0]?.id ?? "");
+  }
+
   useEffect(() => {
     setSelectedProjectId(selectedProjectId);
   }, [selectedProjectId]);
@@ -110,6 +139,10 @@ export function useCreateFormBuilder({ t, projects }: UseCreateFormBuilderArgs) 
     }
     hasLoadedDraftRef.current = true;
     try {
+      if (freshStartToken) {
+        window.localStorage.removeItem(CREATE_FORM_DRAFT_STORAGE_KEY);
+        return;
+      }
       const rawDraft = window.localStorage.getItem(CREATE_FORM_DRAFT_STORAGE_KEY);
       if (!rawDraft) {
         return;
@@ -155,7 +188,15 @@ export function useCreateFormBuilder({ t, projects }: UseCreateFormBuilderArgs) 
       console.warn("Failed to restore create form draft.", error);
       window.localStorage.removeItem(CREATE_FORM_DRAFT_STORAGE_KEY);
     }
-  }, []);
+  }, [freshStartToken]);
+
+  useEffect(() => {
+    if (!hasLoadedDraftRef.current || !freshStartToken) {
+      return;
+    }
+    window.localStorage.removeItem(CREATE_FORM_DRAFT_STORAGE_KEY);
+    resetBuilderState();
+  }, [freshStartToken]);
 
   useEffect(() => {
     if (!pendingFocusFieldId) {

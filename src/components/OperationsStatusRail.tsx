@@ -24,15 +24,26 @@ export function OperationsStatusRail({
   return (
     <section className="panel operations-rail-card">
       <div className="operations-rail-header">
-        <div>
-          <p className="eyebrow">Encrypted Signal Inbox</p>
-          <h2>{title}</h2>
-          <p className="muted operations-rail-intro">
-            Read incoming signals, unlock private content when needed, and move reviewed items toward the roadmap.
-          </p>
+        <div className="operations-rail-summary">
+          <div>
+            <p className="eyebrow">Encrypted Signal Inbox</p>
+            <h2>{title}</h2>
+          </div>
+          <div className="operations-rail-strip" role="list" aria-label="Review queue status">
+            {items.map((item) => (
+              <article
+                key={item.label}
+                className={`operations-strip-pill is-${item.tone}`}
+                role="listitem"
+              >
+                <span className="operations-status-dot" aria-hidden="true" />
+                <strong>{item.label}</strong>
+              </article>
+            ))}
+          </div>
         </div>
         <section className="operations-next-action" aria-label="Next review action">
-          <span className="operations-next-action-label">Next Step</span>
+          <span className="operations-next-action-label">Next review action</span>
           <strong>{nextActionLabel}</strong>
           <p>{nextActionDetail}</p>
           {nextActionCta ? <div className="operations-next-action-cta">{nextActionCta}</div> : null}
@@ -42,8 +53,8 @@ export function OperationsStatusRail({
       <details className="operations-system-details">
         <summary>
           <span>
-            <p className="eyebrow">Infrastructure Status</p>
-            <h3>System Details</h3>
+            <p className="eyebrow">System Details</p>
+            <h3>Open operational details</h3>
           </span>
         </summary>
         <div className="operations-rail" role="list" aria-label="System details">

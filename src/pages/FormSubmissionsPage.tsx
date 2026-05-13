@@ -10,6 +10,7 @@ import { AdminAccessGate } from "../components/AdminAccessGate";
 import { BlobLink } from "../components/BlobLink";
 import { EmptyState } from "../components/EmptyState";
 import { PrivateSignalUnlockCard } from "../components/PrivateSignalUnlockCard";
+import { SignalStatusBadges } from "../components/SignalStatusBadges";
 import { SignalMetaChip } from "../components/SignalMetaChip";
 import { useAccessControl } from "../hooks/useAccessControl";
 import { getAttachmentDownloadHref, useAttachmentPreviews } from "../hooks/useAttachmentPreviews";
@@ -19,7 +20,7 @@ import { useI18n } from "../i18n";
 import { getReviewAccessState } from "../lib/adminAccess";
 import { exportSubmissionJson, exportSubmissionsCsv, exportSummaryJson } from "../lib/export";
 import { getPublicFormPath, getPublicRoadmapPath } from "../lib/publicLinks";
-import { formatResponseDeadline } from "../lib/responseDeadline";
+import { formatResponseDeadline, type ResponseDeadlineLabels } from "../lib/responseDeadline";
 import { getRespondentDisplayLabel, getSubmissionRespondentMeta } from "../lib/respondentMeta";
 import {
   triageStatusToOnchainStatus,
@@ -107,9 +108,16 @@ export function FormSubmissionsPage() {
   const signPersonalMessage = useSignPersonalMessage();
   const updateSignalStatusTx = useSignAndExecuteTransaction();
   const { capabilityProfile, isLoadingAccess } = useAccessControl(account?.address);
+  const reviewDeniedBody = capabilityProfile.isConfigured ? t("reviewAccessRequiresCapability") : undefined;
   const location = useLocation();
   const { formId = "", submissionId = "" } = useParams();
   const sealRuntime = getSealRuntimeStatus();
+  const responseDeadlineLabels: ResponseDeadlineLabels = {
+    noLimit: t("responseDeadlineNone"),
+    closed: t("responseDeadlineClosed"),
+    hoursLeft: (hours) => t("responseDeadlineHoursLeft", { count: hours }),
+    daysLeft: (days) => t("responseDeadlineDaysLeft", { count: days }),
+  };
   const sealRuntimeLabel = sealRuntime.isFallback
     ? "FALLBACK"
     : sealRuntime.activeMode.toUpperCase();
@@ -614,11 +622,11 @@ export function FormSubmissionsPage() {
       hasWallet={Boolean(account?.address)}
       access={access}
       legacyMessage={t("legacyDemoFormBody")}
-      deniedBody={
+      deniedBody={reviewDeniedBody ?? (
         capabilityProfile.isConfigured
-          ? "OwnerCap / AdminCap / ReviewerCap を持つウォレットだけが review 操作を実行できます。"
+          ? t("reviewAccessRequiresCapability")
           : undefined
-      }
+      )}
     >
       <section className={isDetailOnly ? "signal-detail-only-shell" : "stack"}>
         {toast ? (
@@ -821,7 +829,7 @@ export function FormSubmissionsPage() {
             <p className="eyebrow">Signal Triage</p>
             <h1>{form.title}</h1>
             <p className="lede">{form.description || t("encryptedSignalReviewForForm")}</p>
-            <p className="muted">回答期限: {formatResponseDeadline(form.responseDeadline)}</p>
+            <p className="muted">{t("responseDeadlineLabel")}: {formatResponseDeadline(form.responseDeadline, responseDeadlineLabels)}</p>
           </div>
           <div className="inbox-header-actions">
             <Link className="ghost-button" to="/admin">
@@ -941,15 +949,14 @@ export function FormSubmissionsPage() {
                       <p className="signal-card-form">{form.title}</p>
                       <p className="signal-card-preview">{getSignalPreview(submission)}</p>
                       <div className="signal-badge-row">
-                        <span className="signal-chip">{category}</span>
+                        <SignalStatusBadges
+                          submission={submission}
+                          category={category}
+                          showEncrypted
+                        />
                         <span className="signal-chip">{getTriageStatusLabel(submission.triageStatus)}</span>
                         {submission.severity ? (
                           <span className="signal-chip">Severity {submission.severity}</span>
-                        ) : null}
-                        {submission.clusterId ? (
-                          <span className="signal-chip signal-chip-accent">
-                            Clustered
-                          </span>
                         ) : null}
                         {getSubmissionRespondentMeta(submission).isAnonymous ? (
                           <span className="signal-chip">Anonymous respondent</span>
@@ -962,21 +969,6 @@ export function FormSubmissionsPage() {
                         {typeof submission.ratingValue === "number" ? (
                           <span className="signal-chip">
                             {t("ratingLabel", { value: submission.ratingValue })}
-                          </span>
-                        ) : null}
-                        {submission.isEncrypted ? (
-                          <span className="signal-chip signal-chip-accent">
-                            {t("encryptedSignalLabel")}
-                          </span>
-                        ) : null}
-                        {submission.status === "unread" ? (
-                          <span className="signal-chip signal-chip-accent">
-                            {t("newSignalLabel")}
-                          </span>
-                        ) : null}
-                        {submission.priority === "high" ? (
-                          <span className="signal-chip signal-chip-warn">
-                            {t("highPrioritySignals")}
                           </span>
                         ) : null}
                       </div>

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useI18n } from "../i18n";
 import { activeSealAdapter, decryptAttachmentBlob, storageAdapter } from "../lib/storage";
 import type { SealDecryptContext, SubmissionAttachment } from "../types";
 
@@ -44,6 +45,7 @@ export function useAttachmentPreviews(
 ) {
   const [previews, setPreviews] = useState<Record<string, AttachmentPreviewState>>({});
   const { enabled, decryptContext } = options;
+  const { t } = useI18n();
 
   useEffect(() => {
     if (!enabled || attachments.length === 0) {
@@ -100,7 +102,7 @@ export function useAttachmentPreviews(
                 encrypted: true,
                 kind: getPreviewKind(attachment.originalType),
                 name: attachment.originalName ?? attachment.name,
-                error: "添付を復号できません",
+                error: t("attachmentDecryptFailed"),
               } satisfies AttachmentPreviewState,
             ] as const;
           }
@@ -120,11 +122,7 @@ export function useAttachmentPreviews(
       cancelled = true;
       objectUrls.forEach((url) => URL.revokeObjectURL(url));
     };
-  }, [
-    attachments,
-    decryptContext,
-    enabled,
-  ]);
+  }, [attachments, decryptContext, enabled, t]);
 
   return previews;
 }
