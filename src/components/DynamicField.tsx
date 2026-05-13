@@ -25,6 +25,8 @@ export function DynamicField({
 }: DynamicFieldProps) {
   const { t } = useI18n();
   const isRequired = required ?? field.required;
+  const fieldErrorId = `${field.id}-error`;
+  const hasError = Boolean(error);
   const selectedAttachments = Array.isArray(value)
     ? value.filter((item): item is UploadDropzoneItem => Boolean(item) && typeof item === "object" && "id" in item)
     : [];
@@ -36,7 +38,10 @@ export function DynamicField({
   }
 
   return (
-    <label className={`field-block ${questionNumber ? "numbered-field" : ""}`}>
+    <label
+      className={`field-block ${questionNumber ? "numbered-field" : ""} ${hasError ? "has-error" : ""}`}
+      data-field-id={field.id}
+    >
       <span className="field-label-row">
         {questionNumber ? <span className="field-question-index">Q{questionNumber}</span> : null}
         <span className="field-label-text">{field.label}</span>
@@ -50,6 +55,8 @@ export function DynamicField({
           value={String(value ?? "")}
           placeholder={field.placeholder ?? ""}
           disabled={disabled}
+          aria-invalid={hasError}
+          aria-describedby={hasError ? fieldErrorId : undefined}
           onChange={(event) => onChange(event.target.value)}
         />
       ) : null}
@@ -60,12 +67,20 @@ export function DynamicField({
           value={String(value ?? "")}
           placeholder={field.placeholder ?? ""}
           disabled={disabled}
+          aria-invalid={hasError}
+          aria-describedby={hasError ? fieldErrorId : undefined}
           onChange={(event) => onChange(event.target.value)}
         />
       ) : null}
 
       {field.type === "dropdown" ? (
-        <select value={String(value ?? "")} disabled={disabled} onChange={(event) => onChange(event.target.value)}>
+        <select
+          value={String(value ?? "")}
+          disabled={disabled}
+          aria-invalid={hasError}
+          aria-describedby={hasError ? fieldErrorId : undefined}
+          onChange={(event) => onChange(event.target.value)}
+        >
           <option value="">{t("selectOption")}</option>
           {(field.options ?? []).map((option) => (
             <option key={option} value={option}>
@@ -76,7 +91,11 @@ export function DynamicField({
       ) : null}
 
       {field.type === "checkbox" ? (
-        <div className="checkbox-group">
+        <div
+          className={`checkbox-group ${hasError ? "is-error" : ""}`}
+          aria-invalid={hasError}
+          aria-describedby={hasError ? fieldErrorId : undefined}
+        >
           {(field.options ?? []).map((option) => (
             <label key={option} className="check-item">
               <input
@@ -92,7 +111,13 @@ export function DynamicField({
       ) : null}
 
       {field.type === "rating" ? (
-        <div className="rating-picker" role="radiogroup" aria-label={field.label}>
+        <div
+          className={`rating-picker ${hasError ? "is-error" : ""}`}
+          role="radiogroup"
+          aria-label={field.label}
+          aria-invalid={hasError}
+          aria-describedby={hasError ? fieldErrorId : undefined}
+        >
           {[1, 2, 3, 4, 5].map((score) => {
             const active = Number(value ?? 0) >= score;
             return (
@@ -122,12 +147,18 @@ export function DynamicField({
           placeholder={field.placeholder ?? "https://example.com"}
           value={String(value ?? "")}
           disabled={disabled}
+          aria-invalid={hasError}
+          aria-describedby={hasError ? fieldErrorId : undefined}
           onChange={(event) => onChange(event.target.value)}
         />
       ) : null}
 
       {field.type === "screenshot" || field.type === "video" ? (
-        <div className="upload-card">
+        <div
+          className={`upload-card ${hasError ? "is-error" : ""}`}
+          aria-invalid={hasError}
+          aria-describedby={hasError ? fieldErrorId : undefined}
+        >
           <UploadDropzone
             attachments={selectedAttachments}
             disabled={disabled}
@@ -139,7 +170,7 @@ export function DynamicField({
       ) : null}
 
       {field.helpText ? <small className="muted">{field.helpText}</small> : null}
-      {error ? <small className="error-text">{error}</small> : null}
+      {error ? <small id={fieldErrorId} className="error-text">{error}</small> : null}
     </label>
   );
 }

@@ -255,6 +255,21 @@ export function PublicFormPage() {
       }
     });
     setErrors(nextErrors);
+    if (Object.keys(nextErrors).length > 0) {
+      window.requestAnimationFrame(() => {
+        const firstInvalidFieldId = currentForm.fields.find((field) => nextErrors[field.id])?.id;
+        if (!firstInvalidFieldId) {
+          return;
+        }
+        const fieldElement = document.querySelector<HTMLElement>(`[data-field-id="${firstInvalidFieldId}"]`);
+        if (!fieldElement) {
+          return;
+        }
+        fieldElement.scrollIntoView({ behavior: "smooth", block: "center" });
+        const focusTarget = fieldElement.querySelector<HTMLElement>("input, textarea, select, button");
+        focusTarget?.focus({ preventScroll: true });
+      });
+    }
     return Object.keys(nextErrors).length === 0;
   }
 
