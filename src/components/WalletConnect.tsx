@@ -7,6 +7,10 @@ import {
 import { useEffect, useRef, useState } from "react";
 import { useI18n } from "../i18n";
 
+interface WalletConnectProps {
+  compact?: boolean;
+}
+
 function formatWalletAddress(address?: string | null) {
   if (!address) {
     return "No address";
@@ -17,7 +21,7 @@ function formatWalletAddress(address?: string | null) {
   return `${address.slice(0, 6)}...${address.slice(-4)}`;
 }
 
-export function WalletConnect() {
+export function WalletConnect({ compact = false }: WalletConnectProps) {
   const { t } = useI18n();
   const account = useCurrentAccount();
   const {
@@ -98,7 +102,7 @@ export function WalletConnect() {
 
   if (!isConnected) {
     return (
-      <div className="wallet-connect-shell">
+      <div className={`wallet-connect-shell ${compact ? "wallet-connect-shell-compact" : ""}`.trim()}>
         <div className="wallet-connect-direct panel">
           <div className="wallet-connect-direct-copy">
             <strong>{buttonLabel}</strong>
@@ -111,7 +115,7 @@ export function WalletConnect() {
   }
 
   return (
-    <div ref={shellRef} className="wallet-connect-shell">
+    <div ref={shellRef} className={`wallet-connect-shell ${compact ? "wallet-connect-shell-compact" : ""}`.trim()}>
       <button
         type="button"
         className={`wallet-sync-button ${isConnected ? "is-synced" : ""} ${isConnecting ? "is-syncing" : ""}`}

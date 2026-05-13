@@ -21,7 +21,7 @@ export function AppShell({ children }: PropsWithChildren) {
           <span className="brand-mark" aria-hidden="true">
             <img src="/deepsignal-icon.webp" alt="" />
           </span>
-          <div>
+          <div className="brand-copy">
             <strong>DeepSignal</strong>
             <p>{t("brandTagline")}</p>
           </div>

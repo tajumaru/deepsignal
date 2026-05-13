@@ -83,6 +83,45 @@ function ExploreIntroSection() {
   );
 }
 
+function SignalFlowSection() {
+  const { sectionRef, isVisible } = useScrollReveal();
+  const { t } = useI18n();
+  const flowSteps = [
+    { label: "01", title: t("landingFlowStep1Title"), body: t("landingFlowStep1Body") },
+    { label: "02", title: t("landingFlowStep2Title"), body: t("landingFlowStep2Body") },
+    { label: "03", title: t("landingFlowStep3Title"), body: t("landingFlowStep3Body") },
+    { label: "04", title: t("landingFlowStep4Title"), body: t("landingFlowStep4Body") },
+    { label: "05", title: t("landingFlowStep5Title"), body: t("landingFlowStep5Body") },
+    { label: "06", title: t("landingFlowStep6Title"), body: t("landingFlowStep6Body") },
+  ];
+
+  return (
+    <section
+      ref={sectionRef}
+      className={`landing-flow-section ${isVisible ? "is-visible" : ""}`}
+      aria-labelledby="landing-flow-title"
+    >
+      <div className="landing-flow-panel">
+        <div className="landing-flow-header">
+          <p className="eyebrow">{t("landingFlowEyebrow")}</p>
+          <h2 id="landing-flow-title">{t("landingFlowTitle")}</h2>
+          <p className="muted">{t("landingFlowBody")}</p>
+        </div>
+
+        <div className="landing-flow-track" aria-label={t("landingFlowTrackLabel")}>
+          {flowSteps.map((step, index) => (
+            <article key={step.title} className="landing-flow-card" style={{ "--reveal-index": index } as CSSProperties}>
+              <span className="landing-flow-step-label">{step.label}</span>
+              <h3>{step.title}</h3>
+              <p>{step.body}</p>
+            </article>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function SignalInboxIntroSection() {
   const { sectionRef, isVisible } = useScrollReveal();
   const { t } = useI18n();
@@ -159,6 +198,50 @@ function SignalInboxIntroSection() {
   );
 }
 
+function LiveSystemStatusSection() {
+  const { sectionRef, isVisible } = useScrollReveal();
+  const { t } = useI18n();
+  const statuses = [
+    { label: t("landingStatusItem1Label"), value: t("landingStatusItem1Value"), tone: "connected" },
+    { label: t("landingStatusItem2Label"), value: t("landingStatusItem2Value"), tone: "active" },
+    { label: t("landingStatusItem3Label"), value: t("landingStatusItem3Value"), tone: "verified" },
+    { label: t("landingStatusItem4Label"), value: t("landingStatusItem4Value"), tone: "running" },
+    { label: t("landingStatusItem5Label"), value: t("landingStatusItem5Value"), tone: "monitoring" },
+  ];
+
+  return (
+    <section
+      ref={sectionRef}
+      className={`landing-status-section ${isVisible ? "is-visible" : ""}`}
+      aria-labelledby="landing-status-title"
+    >
+      <div className="landing-status-panel">
+        <div className="landing-status-copy">
+          <p className="eyebrow">{t("landingStatusEyebrow")}</p>
+          <h2 id="landing-status-title">{t("landingStatusTitle")}</h2>
+          <p className="muted">{t("landingStatusBody")}</p>
+        </div>
+
+        <div className="landing-status-console" role="status" aria-label={t("landingStatusConsoleLabel")}>
+          <div className="landing-status-console-topline">
+            <span>{t("landingStatusConsoleTitle")}</span>
+            <strong>{t("landingStatusConsoleMeta")}</strong>
+          </div>
+
+          <div className="landing-status-list">
+            {statuses.map((item, index) => (
+              <div key={item.label} className="landing-status-row" style={{ "--reveal-index": index } as CSSProperties}>
+                <span className="landing-status-label">{item.label}</span>
+                <span className={`landing-status-pill is-${item.tone}`}>{item.value}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 export function LandingPage() {
   const { t } = useI18n();
 
@@ -222,8 +305,10 @@ export function LandingPage() {
         </div>
       </section>
 
+      <SignalFlowSection />
       <ExploreIntroSection />
       <SignalInboxIntroSection />
+      <LiveSystemStatusSection />
     </section>
   );
 }

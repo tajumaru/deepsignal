@@ -231,7 +231,7 @@ export function FormSubmissionsPage() {
                   <div>
                     <strong>{label}</strong>
                     <p className="muted">
-                      {attachment.type} ﾂｷ {Math.round(attachment.size / 1024)} KB
+                      {attachment.type} · {Math.round(attachment.size / 1024)} KB
                     </p>
                     {attachment.encrypted && preview?.error ? (
                       <p className="warning-text">{preview.error}</p>

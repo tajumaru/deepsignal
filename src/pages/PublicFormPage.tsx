@@ -538,8 +538,8 @@ export function PublicFormPage() {
             <p className="muted">{t("publicIdentityBody")}</p>
           </div>
           <div className="public-identity-wallet">
-            <Suspense fallback={<div className="wallet-connect-shell" />}>
-              <WalletConnect />
+            <Suspense fallback={<div className="wallet-connect-shell wallet-connect-shell-compact" />}>
+              <WalletConnect compact />
             </Suspense>
           </div>
         </div>
