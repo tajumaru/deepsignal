@@ -230,12 +230,10 @@ export function FormBuilderPage() {
               fields={builder.values.fields}
               sections={builder.values.sections}
               encryptSubmissions={builder.values.encryptSubmissions}
-              mobilePane={builder.values.mobilePane}
               draggedFieldId={builder.values.draggedFieldId}
               dragOverFieldId={builder.values.dragOverFieldId}
               dragOverPlacement={builder.values.dragOverPlacement}
               refs={builder.refs}
-              setMobilePane={builder.setMobilePane}
               setActiveFieldId={builder.setActiveFieldId}
               setDraggedFieldId={builder.setDraggedFieldId}
               setDragOverFieldId={builder.setDragOverFieldId}
@@ -246,6 +244,7 @@ export function FormBuilderPage() {
               onUpdateField={builder.updateField}
               onRemoveField={builder.removeField}
               onDuplicateField={builder.duplicateFieldAt}
+              onInsertFollowUp={builder.insertFollowUpField}
               onInsertField={builder.insertField}
               onReorderFields={builder.reorderFields}
               onOpenFieldTypePicker={() => builder.setFieldTypePickerOpen(true)}

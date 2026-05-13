@@ -18,6 +18,7 @@ interface FormFieldEditorProps {
   onRemove: () => void;
   onDuplicate: () => void;
   onAddBelow: () => void;
+  onAddFollowUp: () => void;
   onToggleExpand: () => void;
   onFocus: () => void;
   onDragStart: (event: DragEvent<HTMLElement>) => void;
@@ -53,6 +54,7 @@ export function FormFieldEditor({
   onRemove,
   onDuplicate,
   onAddBelow,
+  onAddFollowUp,
   onToggleExpand,
   onFocus,
   onDragStart,
@@ -70,8 +72,21 @@ export function FormFieldEditor({
     onChange(normalizeFieldForType(field, event.target.value as FieldType));
   }
 
-  function handleOptionsChange(event: ChangeEvent<HTMLTextAreaElement>) {
-    update("options", event.target.value.split("\n"));
+  function handleOptionsChange(index: number, value: string) {
+    const currentOptions = field.options ?? ["Option 1", "Option 2"];
+    const nextOptions = currentOptions.map((option, optionIndex) => (optionIndex === index ? value : option));
+    update("options", nextOptions);
+  }
+
+  function handleAddOption() {
+    update("options", [...(field.options ?? ["Option 1", "Option 2"]), `Option ${(field.options?.length ?? 2) + 1}`]);
+  }
+
+  function handleRemoveOption(index: number) {
+    update(
+      "options",
+      (field.options ?? []).filter((_, optionIndex) => optionIndex !== index),
+    );
   }
 
   function handlePromptKeyDown(event: KeyboardEvent<HTMLInputElement>) {
@@ -88,17 +103,78 @@ export function FormFieldEditor({
     }
   }
 
+  function renderPreview() {
+    if (field.type === "shortText" || field.type === "url") {
+      return (
+        <input
+          disabled
+          value=""
+          placeholder={field.placeholder ?? (field.type === "url" ? "https://example.com" : t("placeholderExample"))}
+          readOnly
+        />
+      );
+    }
+
+    if (field.type === "longText") {
+      return <textarea rows={4} disabled value="" placeholder={field.placeholder ?? t("helpTextExample")} readOnly />;
+    }
+
+    if (field.type === "dropdown") {
+      return (
+        <select disabled value="">
+          <option value="">{t("selectOption")}</option>
+          {(field.options ?? []).map((option) => (
+            <option key={option} value={option}>
+              {option}
+            </option>
+          ))}
+        </select>
+      );
+    }
+
+    if (field.type === "checkbox") {
+      return (
+        <div className="composer-canvas-checkboxes" aria-hidden="true">
+          {(field.options ?? []).map((option) => (
+            <div key={option} className="composer-canvas-checkbox">
+              <span className="composer-canvas-checkbox-mark" />
+              <span>{option}</span>
+            </div>
+          ))}
+        </div>
+      );
+    }
+
+    if (field.type === "rating") {
+      return (
+        <div className="composer-canvas-rating" aria-hidden="true">
+          <span>☆☆☆☆☆</span>
+          <small className="muted">{t("chooseRating")}</small>
+        </div>
+      );
+    }
+
+    return (
+      <div className="composer-upload-placeholder" aria-hidden="true">
+        <strong>{field.type === "screenshot" ? t("fieldTypeScreenshot") : t("fieldTypeVideo")}</strong>
+        <span className="muted">
+          {field.type === "screenshot" ? t("screenshotHint") : t("videoHint")}
+        </span>
+      </div>
+    );
+  }
+
   return (
     <section
       ref={rootRef}
-      className={`panel question-card ${isDragging ? "is-dragging" : ""} ${isExpanded ? "is-expanded" : ""} ${
+      className={`panel question-card composer-canvas-card ${isDragging ? "is-dragging" : ""} ${isExpanded ? "is-expanded" : ""} ${
         dropIndicator ? `is-drop-${dropIndicator}` : ""
       }`}
       onFocusCapture={onFocus}
       onDragOver={onDragOver}
       onDrop={onDrop}
     >
-      <div className="question-card-summary" onClick={isExpanded ? undefined : onToggleExpand}>
+      <div className="question-card-summary composer-canvas-card-head">
         <button
           type="button"
           className="ghost-button icon-button question-drag-handle"
@@ -114,17 +190,15 @@ export function FormFieldEditor({
         <div className="question-card-main">
           <div className="question-card-topline">
             <span className="question-card-index">{t("fieldLabel", { index: index + 1 })}</span>
+            <span className="question-card-type">{fieldTypeLabel(field.type)}</span>
             <button
               type="button"
               className={`question-card-badge ${field.required ? "is-active" : ""}`}
-              onClick={(event) => {
-                event.stopPropagation();
-                update("required", !field.required);
-              }}
+              onClick={() => update("required", !field.required)}
             >
               {field.required ? t("required") : t("optional")}
             </button>
-            <span className="question-card-type">{fieldTypeLabel(field.type)}</span>
+            {field.visibilityRules?.conditions.length ? <span className="question-card-type">{t("quickFollowUp")}</span> : null}
             {field.sectionId ? (
               <span className="question-card-type">
                 {sections.find((section) => section.id === field.sectionId)?.title || t("untitledSection")}
@@ -134,9 +208,8 @@ export function FormFieldEditor({
 
           <input
             ref={labelRef}
-            className="question-card-inline-input"
+            className="question-card-inline-input composer-canvas-question-input"
             value={field.label}
-            onClick={(event) => event.stopPropagation()}
             onFocus={() => {
               if (!isExpanded) {
                 onToggleExpand();
@@ -149,22 +222,38 @@ export function FormFieldEditor({
             }}
             placeholder={t("askPlaceholder")}
           />
+
+          {isExpanded ? (
+            <input
+              className="composer-canvas-help-input"
+              value={field.helpText ?? ""}
+              onChange={(event) => update("helpText", event.target.value)}
+              placeholder={t("helpTextExample")}
+            />
+          ) : field.helpText ? (
+            <small className="muted">{field.helpText}</small>
+          ) : null}
+
+          <div className="composer-canvas-preview">{renderPreview()}</div>
         </div>
 
         <div className="question-card-actions question-card-actions-visible">
           <button type="button" className="ghost-button icon-button" onClick={onToggleExpand}>
             {isExpanded ? t("collapse") : t("edit")}
           </button>
-          <details className="question-card-menu" onClick={(event) => event.stopPropagation()}>
+          <details className="question-card-menu">
             <summary className="ghost-button icon-button" aria-label={t("moreActions")}>
               ...
             </summary>
             <div className="question-card-menu-panel">
+              <button type="button" className="ghost-button" onClick={onAddBelow}>
+                + {t("addQuestion")}
+              </button>
+              <button type="button" className="ghost-button" onClick={onAddFollowUp}>
+                + {t("quickFollowUp")}
+              </button>
               <button type="button" className="ghost-button" onClick={onDuplicate}>
                 {t("duplicate")}
-              </button>
-              <button type="button" className="ghost-button" onClick={onToggleExpand}>
-                {isExpanded ? t("collapse") : t("advanced")}
               </button>
               <button type="button" className="danger-button" onClick={onRemove}>
                 {t("remove")}
@@ -175,7 +264,7 @@ export function FormFieldEditor({
       </div>
 
       {isExpanded ? (
-        <div className="question-card-details">
+        <div className="question-card-details composer-canvas-card-body">
           <div className="grid composer-question-row">
             <label>
               <span>{t("type")}</span>
@@ -203,20 +292,60 @@ export function FormFieldEditor({
                   ))}
                 </select>
               </label>
-            ) : null}
+            ) : (
+              <label>
+                <span>{t("placeholder")}</span>
+                <input
+                  value={field.placeholder ?? ""}
+                  onChange={(event) => update("placeholder", event.target.value)}
+                  placeholder={t("placeholderExample")}
+                />
+              </label>
+            )}
           </div>
 
-          {(field.type === "dropdown" || field.type === "checkbox") && (
+          {sections.length > 0 ? (
             <label>
-              <span>{t("optionsOnePerLine")}</span>
-              <textarea
-                rows={4}
-                value={field.options?.join("\n") ?? ""}
-                onChange={handleOptionsChange}
-                placeholder={t("optionExamples")}
+              <span>{t("placeholder")}</span>
+              <input
+                value={field.placeholder ?? ""}
+                onChange={(event) => update("placeholder", event.target.value)}
+                placeholder={t("placeholderExample")}
               />
             </label>
+          ) : null}
+
+          {(field.type === "dropdown" || field.type === "checkbox") && (
+            <div className="composer-option-editor">
+              <span>{t("optionsOnePerLine")}</span>
+              <div className="composer-option-stack">
+                {(field.options ?? []).map((option, optionIndex) => (
+                  <div key={`${field.id}-option-${optionIndex}`} className="composer-option-row">
+                    <input
+                      value={option}
+                      onChange={(event) => handleOptionsChange(optionIndex, event.target.value)}
+                      placeholder={`Option ${optionIndex + 1}`}
+                    />
+                    <button type="button" className="ghost-button" onClick={() => handleRemoveOption(optionIndex)}>
+                      {t("remove")}
+                    </button>
+                  </div>
+                ))}
+              </div>
+              <button type="button" className="ghost-button" onClick={handleAddOption}>
+                + Add option
+              </button>
+            </div>
           )}
+
+          <div className="composer-canvas-quick-actions">
+            <button type="button" className="ghost-button" onClick={onAddBelow}>
+              + {t("addQuestion")}
+            </button>
+            <button type="button" className="ghost-button" onClick={onAddFollowUp}>
+              + {t("quickFollowUp")}
+            </button>
+          </div>
 
           <AdvancedSettings field={field} fields={fields} onChange={onChange} />
         </div>

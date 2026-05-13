@@ -11,17 +11,18 @@ interface FieldTypePickerProps {
 
 const fieldTypeChoices: Array<{
   type: PickerFieldType;
+  icon: string;
   title: string;
   description: string;
 }> = [
-  { type: "shortText", title: "Text", description: "Single-line answers, names, labels, and short summaries." },
-  { type: "richText", title: "Rich Text", description: "Long-form responses, bug details, and narrative feedback." },
-  { type: "dropdown", title: "Dropdown", description: "One choice from a compact option list." },
-  { type: "checkbox", title: "Checkbox", description: "Multiple selections for tags, surfaces, or used features." },
-  { type: "rating", title: "Star Rating", description: "1-5 sentiment scoring with fast input." },
-  { type: "url", title: "URL", description: "Links to docs, builds, issues, or external proof." },
-  { type: "screenshot", title: "Screenshot Upload", description: "Image evidence from desktop or mobile capture." },
-  { type: "video", title: "Video Upload", description: "Short clips showing flow, bugs, or reactions." },
+  { type: "shortText", icon: "Aa", title: "Text", description: "Single-line answers, names, labels, and short summaries." },
+  { type: "richText", icon: "¶", title: "Rich Text", description: "Long-form responses, bug details, and narrative feedback." },
+  { type: "dropdown", icon: "▾", title: "Dropdown", description: "One choice from a compact option list." },
+  { type: "checkbox", icon: "☑", title: "Checkbox", description: "Multiple selections for tags, surfaces, or used features." },
+  { type: "rating", icon: "★", title: "Star Rating", description: "1-5 sentiment scoring with fast input." },
+  { type: "url", icon: "↗", title: "URL", description: "Links to docs, builds, issues, or external proof." },
+  { type: "screenshot", icon: "⌁", title: "Screenshot Upload", description: "Image evidence from desktop or mobile capture." },
+  { type: "video", icon: "▶", title: "Video Upload", description: "Short clips showing flow, bugs, or reactions." },
 ];
 
 function toFieldType(type: PickerFieldType): FieldType {
@@ -61,8 +62,13 @@ export function FieldTypePicker({ open, onClose, onPick }: FieldTypePickerProps)
                 onClose();
               }}
             >
-              <strong>{choice.title}</strong>
-              <span className="muted">{choice.description}</span>
+              <span className="composer-field-type-icon" aria-hidden="true">
+                {choice.icon}
+              </span>
+              <span className="composer-field-type-copy">
+                <strong>{choice.title}</strong>
+                <span className="muted">{choice.description}</span>
+              </span>
             </button>
           ))}
         </div>

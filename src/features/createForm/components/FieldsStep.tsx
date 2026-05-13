@@ -1,8 +1,6 @@
 import { useEffect, useMemo, useState, type DragEvent } from "react";
 import { FormFieldEditor } from "../../../components/FormFieldEditor";
-import { LivePreview } from "../../../components/formBuilder/LivePreview";
-import { SectionEditor } from "../../../components/formBuilder/SectionEditor";
-import type { FieldType, FormBuilderRefs, FormField, FormSection, MobileBuilderPane, Translate } from "../types";
+import type { FieldType, FormBuilderRefs, FormField, FormSection, Translate } from "../types";
 
 interface FieldsStepProps {
   t: Translate;
@@ -11,12 +9,10 @@ interface FieldsStepProps {
   fields: FormField[];
   sections: FormSection[];
   encryptSubmissions: boolean;
-  mobilePane: MobileBuilderPane;
   draggedFieldId: string | null;
   dragOverFieldId: string | null;
   dragOverPlacement: "before" | "after" | null;
   refs: FormBuilderRefs;
-  setMobilePane: (pane: MobileBuilderPane) => void;
   setActiveFieldId: (fieldId: string) => void;
   setDraggedFieldId: (fieldId: string | null) => void;
   setDragOverFieldId: (fieldId: string | null) => void;
@@ -27,12 +23,32 @@ interface FieldsStepProps {
   onUpdateField: (index: number, field: FormField) => void;
   onRemoveField: (fieldId: string) => void;
   onDuplicateField: (fieldId: string) => void;
+  onInsertFollowUp: (fieldId: string) => void;
   onInsertField: (type: FieldType, afterIndex?: number, sectionId?: string) => void;
   onReorderFields: (sourceId: string, targetId: string, placement?: "before" | "after") => void;
   onOpenFieldTypePicker: () => void;
   onBack: () => void;
   onContinue: () => void;
 }
+
+const libraryBlocks: Array<{
+  type?: FieldType;
+  icon: string;
+  title: string;
+  description: string;
+  soon?: boolean;
+}> = [
+  { type: "shortText", icon: "Aa", title: "Short Text", description: "Names, handles, wallet labels, and short answers." },
+  { type: "longText", icon: "¶", title: "Long Text", description: "Detailed reports, context, and open-ended feedback." },
+  { type: "dropdown", icon: "▾", title: "Single Select", description: "One answer from a controlled option list." },
+  { type: "checkbox", icon: "☑", title: "Multiple Select", description: "Let responders choose several tags or states." },
+  { type: "screenshot", icon: "⌁", title: "File Upload", description: "Capture screenshots or visual evidence." },
+  { type: "url", icon: "↗", title: "Verification Link", description: "Collect proof links, issues, docs, or references." },
+  { type: "rating", icon: "★", title: "Signal Rating", description: "Quick 1-5 sentiment or urgency scoring." },
+  { icon: "◎", title: "Wallet Address", description: "Collect verified wallet context inline.", soon: true },
+  { icon: "✓", title: "Signature / Verification", description: "Attach proof-backed acknowledgement blocks.", soon: true },
+  { icon: "✦", title: "Encrypted Answer", description: "Future private-answer blocks for sealed fields.", soon: true },
+];
 
 export function FieldsStep({
   t,
@@ -41,12 +57,10 @@ export function FieldsStep({
   fields,
   sections,
   encryptSubmissions,
-  mobilePane,
   draggedFieldId,
   dragOverFieldId,
   dragOverPlacement,
   refs,
-  setMobilePane,
   setActiveFieldId,
   setDraggedFieldId,
   setDragOverFieldId,
@@ -57,6 +71,7 @@ export function FieldsStep({
   onUpdateField,
   onRemoveField,
   onDuplicateField,
+  onInsertFollowUp,
   onInsertField,
   onReorderFields,
   onOpenFieldTypePicker,
@@ -106,6 +121,7 @@ export function FieldsStep({
         onRemove={() => onRemoveField(field.id)}
         onDuplicate={() => onDuplicateField(field.id)}
         onAddBelow={() => onInsertField(field.type, index, field.sectionId)}
+        onAddFollowUp={() => onInsertFollowUp(field.id)}
         onToggleExpand={() => setExpandedFieldId((current) => (current === field.id ? "" : field.id))}
         onFocus={() => {
           setActiveFieldId(field.id);
@@ -142,48 +158,87 @@ export function FieldsStep({
   }
 
   return (
-    <section className="composer-builder-grid composer-builder-grid-wide">
-      <div className="composer-mobile-tabs" role="tablist" aria-label="Builder view">
-        <button
-          type="button"
-          className={`composer-mobile-tab ${mobilePane === "editor" ? "is-active" : ""}`}
-          onClick={() => setMobilePane("editor")}
-        >
-          {t("editorTab")}
-        </button>
-        <button
-          type="button"
-          className={`composer-mobile-tab ${mobilePane === "preview" ? "is-active" : ""}`}
-          onClick={() => setMobilePane("preview")}
-        >
-          {t("previewTab")}
-        </button>
-      </div>
-
-      <div className={`composer-builder-column composer-editor-column ${mobilePane === "preview" ? "is-hidden-mobile" : ""}`}>
-        <section className="panel composer-section-card composer-step-card">
-          <div className="section-row composer-question-header">
+    <section className="composer-builder-grid composer-builder-grid-composer">
+      <aside className="composer-builder-column composer-library-column">
+        <section className="panel composer-section-card composer-library-panel">
+          <div className="composer-pane-heading">
             <div>
               <p className="eyebrow">Step 3</p>
+              <h2>{t("blockLibraryTitle")}</h2>
+              <p className="muted">{t("blockLibraryBody")}</p>
+            </div>
+            <button type="button" className="ghost-button" onClick={() => onAddSection()}>
+              {t("addSection")}
+            </button>
+          </div>
+
+          <div className="composer-library-list">
+            {libraryBlocks.map((block) => (
+              <button
+                key={block.title}
+                type="button"
+                className={`composer-library-card ${block.soon ? "is-soon" : ""}`}
+                onClick={() => {
+                  if (block.type) {
+                    onInsertField(block.type);
+                  }
+                }}
+                disabled={!block.type}
+              >
+                <span className="composer-library-card-icon" aria-hidden="true">
+                  {block.icon}
+                </span>
+                <span className="composer-library-card-copy">
+                  <span className="composer-library-card-topline">
+                    <strong>{block.title}</strong>
+                    <span className={`composer-library-chip ${block.soon ? "is-soon" : "is-ready"}`}>
+                      {block.soon ? t("librarySoon") : t("libraryReady")}
+                    </span>
+                  </span>
+                </span>
+              </button>
+            ))}
+          </div>
+
+          <div className="composer-library-footer">
+            <p className="muted">{t("shortcutHint")}</p>
+            <button type="button" className="ghost-button" onClick={onOpenFieldTypePicker}>
+              {t("moreTypes")}
+            </button>
+          </div>
+        </section>
+      </aside>
+
+      <div className="composer-builder-column composer-editor-column">
+        <section className="panel composer-section-card composer-step-card composer-canvas-panel">
+          <div className="composer-pane-heading composer-question-header">
+            <div>
+              <p className="eyebrow">{t("liveCanvas")}</p>
               <h2>{t("fields")}</h2>
               <p className="muted">
                 {t("questionCount", { count: fields.length })} / {encryptSubmissions ? "Private signal mode on" : "Open signal mode"}
               </p>
             </div>
+            <div className="composer-canvas-header-actions">
+              <button type="button" className="ghost-button" onClick={() => onAddSection()}>
+                {t("addSection")}
+              </button>
+              <button type="button" className="primary-button composer-add-question-button" onClick={onOpenFieldTypePicker}>
+                + {t("addQuestion")}
+              </button>
+            </div>
           </div>
 
-          <SectionEditor
-            sections={sections}
-            onAddSection={onAddSection}
-            onUpdateSection={onUpdateSection}
-            onRemoveSection={onRemoveSection}
-          />
+          <div className="composer-canvas-intro">
+            <strong>{title.trim() || t("untitledForm")}</strong>
+            <p className="muted">{t("liveCanvasBody")}</p>
+          </div>
 
           <div className="stack composer-question-stack">
             {unsectionedFields.map((field) => renderField(field, fields.findIndex((item) => item.id === field.id)))}
 
             {sectionGroups.map((section) => (
-              <section key={section.id} className="composer-inline-section">
+              <section key={section.id} className="composer-inline-section composer-canvas-section">
                 <div className="composer-inline-section-header">
                   <div className="composer-inline-section-rule" aria-hidden="true" />
                   <div className="composer-inline-section-main">
@@ -212,21 +267,29 @@ export function FieldsStep({
                     {section.fields.map((field) => renderField(field, fields.findIndex((item) => item.id === field.id)))}
                   </div>
                 ) : (
-                  <p className="muted composer-inline-empty">{t("sectionEmptyQuestions")}</p>
+                  <div className="composer-section-empty">
+                    <p className="muted composer-inline-empty">{t("sectionEmptyQuestions")}</p>
+                    <button
+                      type="button"
+                      className="ghost-button"
+                      onClick={() => onInsertField("shortText", undefined, section.id)}
+                    >
+                      + {t("addQuestion")}
+                    </button>
+                  </div>
                 )}
               </section>
             ))}
           </div>
 
-          {fields.length === 0 ? <p className="muted">{t("fieldEmptyState")}</p> : null}
-
-          <section className="composer-add-bar">
-            <div className="composer-add-bar-main">
-              <button type="button" className="primary-button composer-add-question-button" onClick={onOpenFieldTypePicker}>
-                + {t("addQuestion")}
+          {fields.length === 0 ? (
+            <section className="composer-empty-canvas">
+              <p className="muted">{t("fieldEmptyState")}</p>
+              <button type="button" className="primary-button" onClick={() => onInsertField("shortText")}>
+                + Short Text
               </button>
-            </div>
-          </section>
+            </section>
+          ) : null}
 
           <div className="composer-step-actions">
             <button type="button" className="ghost-button" onClick={onBack}>
@@ -237,15 +300,6 @@ export function FieldsStep({
             </button>
           </div>
         </section>
-      </div>
-
-      <div className={`composer-builder-column composer-preview-column ${mobilePane === "editor" ? "is-hidden-mobile" : ""}`}>
-        <LivePreview
-          title={title}
-          description={description}
-          fields={fields}
-          sections={sections}
-        />
       </div>
     </section>
   );

@@ -340,6 +340,30 @@ export function useCreateFormBuilder({ t, projects }: UseCreateFormBuilderArgs) 
     });
   }
 
+  function insertFollowUpField(sourceFieldId: string) {
+    if (!sourceFieldId) return;
+    setFields((current) => {
+      const sourceIndex = current.findIndex((field) => field.id === sourceFieldId);
+      if (sourceIndex === -1) {
+        return current;
+      }
+      const sourceField = current[sourceIndex];
+      const nextField = createField("shortText", sourceField.sectionId);
+      nextField.label = t("followUpDefaultLabel");
+      nextField.placeholder = t("placeholderExample");
+      nextField.visibilityRules = {
+        logic: "all",
+        conditions: [{ fieldId: sourceField.id, operator: "isNotEmpty" }],
+      };
+      const next = [...current];
+      next.splice(sourceIndex + 1, 0, nextField);
+      setPendingFocusFieldId(nextField.id);
+      setActiveFieldId(nextField.id);
+      return next;
+    });
+    setMobilePane("editor");
+  }
+
   function reorderFields(sourceId: string, targetId: string, placement: "before" | "after" = "before") {
     if (!sourceId || !targetId || sourceId === targetId) return;
     setFields((current) => {
@@ -499,6 +523,7 @@ export function useCreateFormBuilder({ t, projects }: UseCreateFormBuilderArgs) 
     insertField,
     duplicateFieldAt,
     removeField,
+    insertFollowUpField,
     reorderFields,
     insertSmartTemplate,
     addSection,
