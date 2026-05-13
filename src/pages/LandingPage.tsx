@@ -88,12 +88,12 @@ function SignalFlowSection() {
   const { sectionRef, isVisible } = useScrollReveal();
   const { t } = useI18n();
   const flowSteps = [
-    { label: "01", title: t("landingFlowStep1Title"), body: t("landingFlowStep1Body") },
-    { label: "02", title: t("landingFlowStep2Title"), body: t("landingFlowStep2Body") },
-    { label: "03", title: t("landingFlowStep3Title"), body: t("landingFlowStep3Body") },
-    { label: "04", title: t("landingFlowStep4Title"), body: t("landingFlowStep4Body") },
-    { label: "05", title: t("landingFlowStep5Title"), body: t("landingFlowStep5Body") },
-    { label: "06", title: t("landingFlowStep6Title"), body: t("landingFlowStep6Body") },
+    { label: "01", title: t("landingFlowStep1Title"), body: t("landingFlowStep1Body"), tone: "origin" },
+    { label: "02", title: t("landingFlowStep2Title"), body: t("landingFlowStep2Body"), tone: "storage" },
+    { label: "03", title: t("landingFlowStep3Title"), body: t("landingFlowStep3Body"), tone: "seal" },
+    { label: "04", title: t("landingFlowStep4Title"), body: t("landingFlowStep4Body"), tone: "triage" },
+    { label: "05", title: t("landingFlowStep5Title"), body: t("landingFlowStep5Body"), tone: "inbox" },
+    { label: "06", title: t("landingFlowStep6Title"), body: t("landingFlowStep6Body"), tone: "sync" },
   ];
 
   return (
@@ -103,18 +103,49 @@ function SignalFlowSection() {
       aria-labelledby="landing-flow-title"
     >
       <div className="landing-flow-panel">
+        <div className="landing-flow-background" aria-hidden="true">
+          <span className="landing-flow-orb landing-flow-orb-1" />
+          <span className="landing-flow-orb landing-flow-orb-2" />
+          <span className="landing-flow-orb landing-flow-orb-3" />
+          <span className="landing-flow-grid" />
+          <span className="landing-flow-particle landing-flow-particle-1" />
+          <span className="landing-flow-particle landing-flow-particle-2" />
+          <span className="landing-flow-particle landing-flow-particle-3" />
+          <span className="landing-flow-particle landing-flow-particle-4" />
+        </div>
+
         <div className="landing-flow-header">
-          <p className="eyebrow">{t("landingFlowEyebrow")}</p>
-          <h2 id="landing-flow-title">{t("landingFlowTitle")}</h2>
-          <p className="muted">{t("landingFlowBody")}</p>
+          <div className="landing-flow-header-copy">
+            <p className="eyebrow">{t("landingFlowEyebrow")}</p>
+            <h2 id="landing-flow-title">{t("landingFlowTitle")}</h2>
+            <p className="muted">{t("landingFlowBody")}</p>
+          </div>
+
+          <div className="landing-flow-header-actions">
+            <CreateFormLink className="primary-button landing-cta-primary landing-flow-cta">
+              {t("landingFlowCtaPrimary")}
+            </CreateFormLink>
+          </div>
         </div>
 
         <div className="landing-flow-track" aria-label={t("landingFlowTrackLabel")}>
           {flowSteps.map((step, index) => (
-            <article key={step.title} className="landing-flow-card" style={{ "--reveal-index": index } as CSSProperties}>
-              <span className="landing-flow-step-label">{step.label}</span>
-              <h3>{step.title}</h3>
-              <p>{step.body}</p>
+            <article
+              key={step.title}
+              className={`landing-flow-card landing-flow-card-${step.tone}`}
+              style={{ "--reveal-index": index } as CSSProperties}
+            >
+              <div className="landing-flow-node">
+                <span className="landing-flow-node-core" />
+                <span className="landing-flow-node-ring landing-flow-node-ring-1" />
+                <span className="landing-flow-node-ring landing-flow-node-ring-2" />
+              </div>
+
+              <div className="landing-flow-card-copy">
+                <span className="landing-flow-step-label">{step.label}</span>
+                <h3>{step.title}</h3>
+                <p>{step.body}</p>
+              </div>
             </article>
           ))}
         </div>

@@ -44,6 +44,7 @@ export function useProjectWorkspace({
   const [manualProjectId, setManualProjectId] = useState("");
   const [projectCreateName, setProjectCreateName] = useState("");
   const [projectState, setProjectState] = useState("");
+  const [highlightCreateFormCta, setHighlightCreateFormCta] = useState(false);
   const [deletingProject, setDeletingProject] = useState(false);
   const [deletingOnchainFormIds, setDeletingOnchainFormIds] = useState<number[]>([]);
   const advancedProjectSettingsRef = useRef<HTMLDetailsElement | null>(null);
@@ -80,6 +81,16 @@ export function useProjectWorkspace({
       setSelectedProjectId(projects[0].objectId);
     }
   }, [projects, selectedProjectId]);
+
+  useEffect(() => {
+    if (!highlightCreateFormCta) {
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      setHighlightCreateFormCta(false);
+    }, 5200);
+    return () => window.clearTimeout(timer);
+  }, [highlightCreateFormCta]);
 
   async function hydrateProject(projectId: string) {
     const response = await suiClient.getObject({
@@ -198,6 +209,11 @@ export function useProjectWorkspace({
       setSelectedProjectId(project.objectId);
       setProjectCreateName("");
       setProjectState(`Project ${project.name} is ready.`);
+      setHighlightCreateFormCta(true);
+      window.scrollTo({
+        top: 0,
+        behavior: "smooth",
+      });
     } catch (projectError) {
       setProjectState(projectError instanceof Error ? projectError.message : "Failed to create project.");
     }
@@ -291,6 +307,7 @@ export function useProjectWorkspace({
     setManualProjectId,
     projectCreateName,
     setProjectCreateName,
+    highlightCreateFormCta,
     isCreatingProject: createProjectTx.isPending,
     projectState,
     setProjectState,

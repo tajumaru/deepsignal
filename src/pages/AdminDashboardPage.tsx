@@ -146,6 +146,7 @@ export function AdminDashboardPage() {
     setManualProjectId,
     projectCreateName,
     setProjectCreateName,
+    highlightCreateFormCta,
     isCreatingProject,
     projectState,
     deletingProject,
@@ -501,6 +502,7 @@ export function AdminDashboardPage() {
               };
   const firstProjectForm = selectedProjectForms[0] ?? null;
   const firstProtectedSignal = selectedProjectSignals.find((record) => record.submission.isEncrypted) ?? null;
+  const shouldHighlightCreateProjectCta = projects.length === 0 && hasAdminAccess;
   const nextRecommendedAction =
     !selectedProject
       ? {
@@ -511,7 +513,7 @@ export function AdminDashboardPage() {
               {hasAdminAccess ? (
                 <button
                   type="button"
-                  className="primary-button"
+                  className={`primary-button ${shouldHighlightCreateProjectCta ? "create-project-cta-highlight" : ""}`}
                   onClick={() => revealProjectTools("create")}
                 >
                   Create project
@@ -945,7 +947,9 @@ export function AdminDashboardPage() {
 
             <aside className="workspace-action-dock">
               <div className="workspace-dock-actions">
-                <CreateFormLink className="primary-button">
+                <CreateFormLink
+                  className={`primary-button ${highlightCreateFormCta ? "create-form-cta-highlight" : ""}`}
+                >
                   Create Form
                 </CreateFormLink>
                 <button
@@ -966,8 +970,12 @@ export function AdminDashboardPage() {
                   type="button"
                   className="ghost-button workspace-project-trigger"
                   onClick={() => {
-                    advancedProjectSettingsRef.current?.open = true;
-                    advancedProjectSettingsRef.current?.scrollIntoView({
+                    const details = advancedProjectSettingsRef.current;
+                    if (!details) {
+                      return;
+                    }
+                    details.open = true;
+                    details.scrollIntoView({
                       behavior: "smooth",
                       block: "start",
                     });
