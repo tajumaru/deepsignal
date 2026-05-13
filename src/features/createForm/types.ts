@@ -1,9 +1,17 @@
 import type { MutableRefObject } from "react";
 import { useI18n } from "../../i18n";
 import { createFormOnChain } from "../../lib/projectRegistry";
-import type { FieldType, FormField, FormPurpose, FormSchema, FormSection, FormVisibility } from "../../types";
+import type {
+  FieldType,
+  FormField,
+  FormIdentityPolicy,
+  FormPurpose,
+  FormSchema,
+  FormSection,
+  FormVisibility,
+} from "../../types";
 
-export type { FieldType, FormField, FormPurpose, FormSchema, FormSection, FormVisibility };
+export type { FieldType, FormField, FormIdentityPolicy, FormPurpose, FormSchema, FormSection, FormVisibility };
 
 export type PublishStageKey = "encoding" | "encrypting" | "sending" | "stored" | "registering" | "active";
 export type BuilderStepKey = "template" | "info" | "fields" | "publish";
@@ -42,6 +50,7 @@ export interface FormBuilderValues {
   sections: FormSection[];
   purpose: FormPurpose;
   visibility: FormVisibility;
+  identityPolicy: FormIdentityPolicy;
   encryptSubmissions: boolean;
   responseDeadlinePreset: ResponseDeadlinePreset;
   responseDeadlineCustomAt: string;

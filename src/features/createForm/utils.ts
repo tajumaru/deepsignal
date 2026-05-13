@@ -1,7 +1,15 @@
 import { sanitizeConditionalLogicFields } from "../../utils/formLogic";
 import { makeId } from "../../lib/utils";
 import { normalizeFormVisibility } from "../../lib/explore";
-import type { FieldType, FormField, FormPurpose, FormSchema, FormSection, ResponseDeadlinePreset } from "./types";
+import type {
+  FieldType,
+  FormField,
+  FormIdentityPolicy,
+  FormPurpose,
+  FormSchema,
+  FormSection,
+  ResponseDeadlinePreset,
+} from "./types";
 
 export const CREATE_FORM_DRAFT_STORAGE_KEY = "deepsignal:create-form-draft:v1";
 
@@ -59,6 +67,7 @@ export function serializeDraft(
   fields: FormField[],
   purpose: FormPurpose,
   visibility: FormSchema["visibility"],
+  identityPolicy: FormIdentityPolicy,
   createOnSui: boolean,
   encryptSubmissions: boolean,
   sections: FormSection[],
@@ -70,6 +79,7 @@ export function serializeDraft(
     description,
     purpose,
     visibility: normalizeFormVisibility(visibility),
+    identityPolicy,
     createOnSui,
     encryptSubmissions,
     responseDeadlinePreset,
@@ -103,6 +113,7 @@ export function buildFormSchema(args: {
   sections: FormSection[];
   purpose: FormPurpose;
   visibility: NonNullable<FormSchema["visibility"]>;
+  identityPolicy: FormIdentityPolicy;
   ownerAddress: string;
   projectId?: string;
   projectName?: string;
@@ -134,6 +145,7 @@ export function buildFormSchema(args: {
       .filter((section) => section.title),
     purpose: args.purpose,
     visibility: args.visibility,
+    identityPolicy: args.identityPolicy,
     publicExplore: args.visibility === "public",
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),

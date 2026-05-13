@@ -7,7 +7,16 @@ import { LivePreview } from "../../../components/formBuilder/LivePreview";
 import { isLocalFallbackBlob } from "../../../lib/proof";
 import { shortAddress, SUI_NETWORK } from "../../../lib/sui";
 import { formatWalrusFailureStage, type WalrusFailureDetails } from "../../../storage/walrusDiagnostics";
-import type { FormField, FormSection, FormVisibility, MobileBuilderPane, PreparedPublishForm, ProjectOption, Translate } from "../types";
+import type {
+  FormField,
+  FormIdentityPolicy,
+  FormSection,
+  FormVisibility,
+  MobileBuilderPane,
+  PreparedPublishForm,
+  ProjectOption,
+  Translate,
+} from "../types";
 
 interface PublishStepProps {
   t: Translate;
@@ -20,6 +29,7 @@ interface PublishStepProps {
   fields: FormField[];
   sections: FormSection[];
   visibility: FormVisibility;
+  identityPolicy: FormIdentityPolicy;
   encryptSubmissions: boolean;
   mobilePane: MobileBuilderPane;
   isReadyToPublish: boolean;
@@ -42,6 +52,7 @@ interface PublishStepProps {
   onSetMobilePane: (pane: MobileBuilderPane) => void;
   onSelectProject: (projectId: string) => void;
   onChangeVisibility: (value: FormVisibility) => void;
+  onChangeIdentityPolicy: (value: FormIdentityPolicy) => void;
   onToggleEncryptSubmissions: (value: boolean) => void;
   onRegisterOnSui: () => void;
   onBack: () => void;
@@ -58,6 +69,7 @@ export function PublishStep({
   fields,
   sections,
   visibility,
+  identityPolicy,
   encryptSubmissions,
   mobilePane,
   isReadyToPublish,
@@ -79,6 +91,7 @@ export function PublishStep({
   onSetMobilePane,
   onSelectProject,
   onChangeVisibility,
+  onChangeIdentityPolicy,
   onToggleEncryptSubmissions,
   onRegisterOnSui,
   onBack,
@@ -280,6 +293,28 @@ export function PublishStep({
                   </label>
                   <p className="muted">
                     Private stays admin-oriented. Unlisted works for anyone with the URL. Public Explore also lists this form in the network view.
+                  </p>
+                </section>
+
+                <section className="panel composer-settings-card">
+                  <div className="section-row">
+                    <div>
+                      <p className="eyebrow">Responder identity</p>
+                      <h3>Identity policy</h3>
+                    </div>
+                  </div>
+                  <label>
+                    <span>Submission identity</span>
+                    <select
+                      value={identityPolicy}
+                      onChange={(event) => onChangeIdentityPolicy(event.target.value as FormIdentityPolicy)}
+                    >
+                      <option value="anonymous_allowed">Anonymous allowed</option>
+                      <option value="wallet_required">Wallet required</option>
+                    </select>
+                  </label>
+                  <p className="muted">
+                    Anonymous allowed keeps the public intake wallet-optional. Wallet required still keeps the page public, but blocks sending until the responder connects a wallet.
                   </p>
                 </section>
 

@@ -334,18 +334,26 @@ const messages = {
     publicIdentityTitle: "Choose how to send",
     publicIdentityBody:
       "Viewing the form never requires a wallet. You can submit anonymously or attach wallet context without showing it publicly.",
+    publicIdentityBodyWalletRequired:
+      "Viewing the form never requires a wallet. This form's creator requires a connected wallet before you can submit.",
     publicSendMode: "Send mode",
     publicAnonymousSend: "Send anonymously",
     publicAnonymousSendHelp:
       "Do not show your wallet address on the public page or in the admin inbox.",
     publicWalletAttach: "Attach connected wallet (optional)",
+    publicWalletRequired: "Connected wallet required",
     publicWalletAttachHelp:
       "Only attach wallet information when it helps your report. DeepSignal does not ask for a personal-message signature here.",
     publicWalletConnectOptional: "You can send now without connecting a wallet.",
+    publicWalletRequiredHelp: "This form blocks anonymous submissions. Connect a wallet to continue.",
+    publicWalletRequiredConnectedHelp:
+      "This form requires a connected wallet. Your wallet context will be attached without asking for a personal-message signature here.",
     publicCurrentMode: "Current mode",
     publicModeAnonymous: "Anonymous submit",
     publicModeWallet: "Wallet-backed submit",
     publicAnonymousModeHelp: "You can submit immediately without any wallet signature.",
+    publicConnectWalletToSubmit: "Connect wallet to submit",
+    publicSubmitWithRequiredWallet: "Submit with required wallet",
     publicWalletModeHelpNoSignature:
       "Wallet information is attached only because you opted in. DeepSignal does not ask for a personal-message signature, but Walrus storage may still ask your wallet to approve the write.",
     publicWalletModeHelp: (params) =>
@@ -945,20 +953,29 @@ const messages = {
     publicIdentityTitle: "\u9001\u4fe1\u65b9\u6cd5\u3092\u9078\u629e",
     publicIdentityBody:
       "\u30d5\u30a9\u30fc\u30e0\u306e\u95b2\u89a7\u306b\u30a6\u30a9\u30ec\u30c3\u30c8\u306f\u5fc5\u8981\u3042\u308a\u307e\u305b\u3093\u3002\u533f\u540d\u3067\u9001\u4fe1\u3059\u308b\u304b\u3001\u516c\u958b\u306b\u8868\u793a\u305b\u305a\u306b\u30a6\u30a9\u30ec\u30c3\u30c8\u60c5\u5831\u3092\u4ed8\u3051\u3066\u9001\u4fe1\u3067\u304d\u307e\u3059\u3002",
+    publicIdentityBodyWalletRequired:
+      "\u30d5\u30a9\u30fc\u30e0\u306e\u95b2\u89a7\u306b\u30a6\u30a9\u30ec\u30c3\u30c8\u306f\u5fc5\u8981\u3042\u308a\u307e\u305b\u3093\u3002\u305f\u3060\u3057\u3053\u306e\u30d5\u30a9\u30fc\u30e0\u306f\u4f5c\u6210\u8005\u306e\u8a2d\u5b9a\u306b\u3088\u308a\u3001\u9001\u4fe1\u306b\u306f\u30a6\u30a9\u30ec\u30c3\u30c8\u63a5\u7d9a\u304c\u5fc5\u8981\u3067\u3059\u3002",
     publicSendMode: "\u9001\u4fe1\u30e2\u30fc\u30c9",
     publicAnonymousSend: "\u533f\u540d\u3067\u9001\u4fe1",
     publicAnonymousSendHelp:
       "\u516c\u958b\u753b\u9762\u3084\u7ba1\u7406\u753b\u9762\u306b\u30a6\u30a9\u30ec\u30c3\u30c8\u30a2\u30c9\u30ec\u30b9\u3092\u8868\u793a\u3057\u307e\u305b\u3093\u3002",
     publicWalletAttach: "\u30a6\u30a9\u30ec\u30c3\u30c8\u60c5\u5831\u3092\u4ed8\u3051\u308b\uff08\u4efb\u610f\uff09",
+    publicWalletRequired: "\u30a6\u30a9\u30ec\u30c3\u30c8\u63a5\u7d9a\u304c\u5fc5\u9808",
     publicWalletAttachHelp:
       "\u5fc5\u8981\u306a\u3068\u304d\u3060\u3051\u30a6\u30a9\u30ec\u30c3\u30c8\u60c5\u5831\u3092\u4ed8\u3051\u307e\u3059\u3002\u3053\u3053\u3067 personal message \u7f72\u540d\u306f\u6c42\u3081\u307e\u305b\u3093\u3002",
     publicWalletConnectOptional:
       "\u30a6\u30a9\u30ec\u30c3\u30c8\u63a5\u7d9a\u306a\u3057\u3067\u305d\u306e\u307e\u307e\u9001\u4fe1\u3067\u304d\u307e\u3059\u3002",
+    publicWalletRequiredHelp:
+      "\u3053\u306e\u30d5\u30a9\u30fc\u30e0\u3067\u306f\u533f\u540d\u56de\u7b54\u306f\u3067\u304d\u307e\u305b\u3093\u3002\u7d9a\u884c\u3059\u308b\u306b\u306f\u30a6\u30a9\u30ec\u30c3\u30c8\u3092\u63a5\u7d9a\u3057\u3066\u304f\u3060\u3055\u3044\u3002",
+    publicWalletRequiredConnectedHelp:
+      "\u3053\u306e\u30d5\u30a9\u30fc\u30e0\u3067\u306f\u30a6\u30a9\u30ec\u30c3\u30c8\u63a5\u7d9a\u304c\u5fc5\u9808\u3067\u3059\u3002personal message \u7f72\u540d\u306f\u6c42\u3081\u307e\u305b\u3093\u304c\u3001\u63a5\u7d9a\u4e2d\u306e\u30a6\u30a9\u30ec\u30c3\u30c8\u60c5\u5831\u306f\u4ed8\u4e0e\u3055\u308c\u307e\u3059\u3002",
     publicCurrentMode: "\u73fe\u5728\u306e\u30e2\u30fc\u30c9",
     publicModeAnonymous: "\u533f\u540d\u9001\u4fe1",
     publicModeWallet: "\u30a6\u30a9\u30ec\u30c3\u30c8\u9023\u643a\u3067\u9001\u4fe1",
     publicAnonymousModeHelp:
       "\u30a6\u30a9\u30ec\u30c3\u30c8\u7f72\u540d\u306a\u3057\u3067\u3059\u3050\u306b\u9001\u4fe1\u3067\u304d\u307e\u3059\u3002",
+    publicConnectWalletToSubmit: "\u9001\u4fe1\u306b\u306f\u30a6\u30a9\u30ec\u30c3\u30c8\u63a5\u7d9a\u304c\u5fc5\u8981",
+    publicSubmitWithRequiredWallet: "\u30a6\u30a9\u30ec\u30c3\u30c8\u4ed8\u304d\u3067\u9001\u4fe1",
     publicWalletModeHelpNoSignature:
       "\u81ea\u5206\u3067\u9078\u3093\u3060\u5834\u5408\u3060\u3051\u30a6\u30a9\u30ec\u30c3\u30c8\u60c5\u5831\u3092\u4ed8\u3051\u307e\u3059\u3002personal message \u7f72\u540d\u306f\u6c42\u3081\u307e\u305b\u3093\u304c\u3001Walrus \u4fdd\u5b58\u304c\u6709\u52b9\u306a\u5834\u5408\u306f\u66f8\u304d\u8fbc\u307f\u627f\u8a8d\u3092 wallet \u306b\u6c42\u3081\u308b\u3053\u3068\u304c\u3042\u308a\u307e\u3059\u3002",
     publicWalletModeHelp: (params) =>

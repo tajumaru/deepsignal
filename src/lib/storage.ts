@@ -12,6 +12,7 @@ import { enrichSubmissionWithTriage } from "./signalTriage";
 import { storage } from "../storage/storageFactory";
 import type {
   FormField,
+  FormIdentityPolicy,
   FormSchema,
   FormSection,
   SealAdapter,
@@ -302,6 +303,10 @@ function coerceSeverity(severity: unknown): Submission["severity"] {
   return undefined;
 }
 
+function normalizeFormIdentityPolicy(identityPolicy: unknown): FormIdentityPolicy {
+  return identityPolicy === "wallet_required" ? "wallet_required" : "anonymous_allowed";
+}
+
 export function normalizeSubmission(raw: Submission | (Record<string, unknown> & { id: string; formId: string; createdAt: string })) {
   const legacyNotes = Array.isArray(raw.notes)
     ? raw.notes
@@ -412,6 +417,7 @@ export function normalizeForm(raw: FormSchema | (Record<string, unknown> & { id:
     sections: Array.isArray(raw.sections) ? (raw.sections as FormSection[]) : [],
     purpose: normalizeFormPurpose(raw.purpose),
     visibility: normalizeFormVisibility(raw.visibility, raw.publicExplore),
+    identityPolicy: normalizeFormIdentityPolicy(raw.identityPolicy),
     publicExplore: raw.publicExplore === true || normalizeFormVisibility(raw.visibility, raw.publicExplore) === "public",
     createdAt: typeof raw.createdAt === "string" ? raw.createdAt : new Date(0).toISOString(),
     updatedAt: typeof raw.updatedAt === "string" ? raw.updatedAt : typeof raw.createdAt === "string" ? raw.createdAt : new Date(0).toISOString(),

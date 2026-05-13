@@ -13,6 +13,7 @@ import { saveFormMetadataOverlay } from "../../../storage/formMetadataOverlay";
 import type {
   CreateFormTransaction,
   FormField,
+  FormIdentityPolicy,
   FormPurpose,
   FormSection,
   FormVisibility,
@@ -34,6 +35,7 @@ interface UseCreateFormPublishArgs {
   sections: FormSection[];
   purpose: FormPurpose;
   visibility: FormVisibility;
+  identityPolicy: FormIdentityPolicy;
   encryptSubmissions: boolean;
   responseDeadlinePreset: "none" | "1h" | "24h" | "7d" | "30d" | "custom";
   responseDeadlineCustomAt: string;
@@ -72,6 +74,7 @@ export function useCreateFormPublish({
   sections,
   purpose,
   visibility,
+  identityPolicy,
   encryptSubmissions,
   responseDeadlinePreset,
   responseDeadlineCustomAt,
@@ -175,6 +178,9 @@ export function useCreateFormPublish({
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
+    if (saving) {
+      return;
+    }
     setError("");
     setProjectState("");
 
@@ -240,6 +246,7 @@ export function useCreateFormPublish({
       sections,
       purpose,
       visibility,
+      identityPolicy,
       ownerAddress: accountAddress,
       projectId: selectedProject?.objectId,
       projectName: selectedProject?.name,

@@ -43,6 +43,7 @@ export function FormBuilderPage() {
     sections: builder.values.sections,
     purpose: builder.values.purpose,
     visibility: builder.values.visibility,
+    identityPolicy: builder.values.identityPolicy,
     encryptSubmissions: builder.values.encryptSubmissions,
     responseDeadlinePreset: builder.values.responseDeadlinePreset,
     responseDeadlineCustomAt: builder.values.responseDeadlineCustomAt,
@@ -265,6 +266,7 @@ export function FormBuilderPage() {
               fields={builder.values.fields}
               sections={builder.values.sections}
               visibility={builder.values.visibility}
+              identityPolicy={builder.values.identityPolicy}
               encryptSubmissions={builder.values.encryptSubmissions}
               mobilePane={builder.values.mobilePane}
               isReadyToPublish={builder.isReadyToPublish}
@@ -287,6 +289,7 @@ export function FormBuilderPage() {
               onSetMobilePane={builder.setMobilePane}
               onSelectProject={handleSelectProject}
               onChangeVisibility={builder.setVisibility}
+              onChangeIdentityPolicy={builder.setIdentityPolicy}
               onToggleEncryptSubmissions={builder.setEncryptSubmissions}
               onRegisterOnSui={() => void publish.handleRegisterOnSui()}
               onBack={() => builder.moveStep(-1)}

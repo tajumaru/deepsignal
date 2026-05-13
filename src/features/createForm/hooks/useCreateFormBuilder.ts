@@ -40,6 +40,7 @@ export function useCreateFormBuilder({ t, projects }: UseCreateFormBuilderArgs) 
   const [sections, setSections] = useState<FormSection[]>([]);
   const [purpose, setPurpose] = useState(initialTemplate.purpose);
   const [visibility, setVisibility] = useState<"private" | "unlisted" | "public">("unlisted");
+  const [identityPolicy, setIdentityPolicy] = useState<"anonymous_allowed" | "wallet_required">("anonymous_allowed");
   const [encryptSubmissions, setEncryptSubmissions] = useState(true);
   const [responseDeadlinePreset, setResponseDeadlinePreset] = useState<ResponseDeadlinePreset>("none");
   const [responseDeadlineCustomAt, setResponseDeadlineCustomAt] = useState("");
@@ -65,6 +66,7 @@ export function useCreateFormBuilder({ t, projects }: UseCreateFormBuilderArgs) 
         fields,
         purpose,
         visibility,
+        identityPolicy,
         createOnSui,
         encryptSubmissions,
         sections,
@@ -76,6 +78,7 @@ export function useCreateFormBuilder({ t, projects }: UseCreateFormBuilderArgs) 
       description,
       encryptSubmissions,
       fields,
+      identityPolicy,
       purpose,
       responseDeadlineCustomAt,
       responseDeadlinePreset,
@@ -112,6 +115,7 @@ export function useCreateFormBuilder({ t, projects }: UseCreateFormBuilderArgs) 
         sections?: FormSection[];
         purpose?: FormBuilderValues["purpose"];
         visibility?: FormBuilderValues["visibility"];
+        identityPolicy?: FormBuilderValues["identityPolicy"];
         encryptSubmissions?: boolean;
         responseDeadlinePreset?: ResponseDeadlinePreset;
         responseDeadlineCustomAt?: string;
@@ -130,6 +134,7 @@ export function useCreateFormBuilder({ t, projects }: UseCreateFormBuilderArgs) 
       setSections(Array.isArray(parsedDraft.sections) ? parsedDraft.sections : []);
       setPurpose(parsedDraft.purpose ?? initialTemplate.purpose);
       setVisibility(parsedDraft.visibility ?? "unlisted");
+      setIdentityPolicy(parsedDraft.identityPolicy === "wallet_required" ? "wallet_required" : "anonymous_allowed");
       setEncryptSubmissions(parsedDraft.encryptSubmissions ?? true);
       setResponseDeadlinePreset(parsedDraft.responseDeadlinePreset ?? "none");
       setResponseDeadlineCustomAt(parsedDraft.responseDeadlineCustomAt ?? "");
@@ -208,6 +213,7 @@ export function useCreateFormBuilder({ t, projects }: UseCreateFormBuilderArgs) 
         sections,
         purpose,
         visibility,
+        identityPolicy,
         encryptSubmissions,
         responseDeadlinePreset,
         responseDeadlineCustomAt,
@@ -226,6 +232,7 @@ export function useCreateFormBuilder({ t, projects }: UseCreateFormBuilderArgs) 
     draftSnapshot,
     encryptSubmissions,
     fields,
+    identityPolicy,
     projectState,
     purpose,
     responseDeadlineCustomAt,
@@ -267,6 +274,7 @@ export function useCreateFormBuilder({ t, projects }: UseCreateFormBuilderArgs) 
       setDescription(template.description);
       setSections([]);
       setVisibility("unlisted");
+      setIdentityPolicy("anonymous_allowed");
       setResponseDeadlinePreset("none");
       setResponseDeadlineCustomAt("");
       replaceFields(nextFields);
@@ -444,6 +452,7 @@ export function useCreateFormBuilder({ t, projects }: UseCreateFormBuilderArgs) 
     sections,
     purpose,
     visibility,
+    identityPolicy,
     encryptSubmissions,
     responseDeadlinePreset,
     responseDeadlineCustomAt,
@@ -471,6 +480,7 @@ export function useCreateFormBuilder({ t, projects }: UseCreateFormBuilderArgs) 
     setTitle,
     setDescription,
     setEncryptSubmissions,
+    setIdentityPolicy,
     setResponseDeadlinePreset,
     setResponseDeadlineCustomAt,
     setVisibility,

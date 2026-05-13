@@ -34,6 +34,7 @@ export const INITIAL_DRAFT_SNAPSHOT = serializeDraft(
   initialFields,
   initialTemplate.purpose,
   "unlisted",
+  "anonymous_allowed",
   false,
   true,
   initialSections,

@@ -10,6 +10,7 @@ export type FieldType =
 
 export type FormPurpose = "bug" | "feature" | "survey" | "custom";
 export type FormVisibility = "private" | "unlisted" | "public";
+export type FormIdentityPolicy = "anonymous_allowed" | "wallet_required";
 export type SubmissionCategory = "bug" | "feature" | "survey" | "general";
 export type SubmissionPriority = "low" | "medium" | "high";
 export type SignalSeverity = "low" | "medium" | "high";
@@ -72,6 +73,7 @@ export interface FormSchema {
   sections?: FormSection[];
   purpose?: FormPurpose;
   visibility?: FormVisibility;
+  identityPolicy?: FormIdentityPolicy;
   publicExplore?: boolean;
   createdAt: string;
   updatedAt?: string;

@@ -2,6 +2,7 @@ import { useCurrentAccount } from "@mysten/dapp-kit";
 import { lazy, Suspense, useEffect, useMemo, useState, type FormEvent } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import type { UploadDropzoneItem } from "../components/UploadDropzone";
+import { getSealRuntimeStatus } from "../crypto/cryptoFactory";
 import { BlobLink } from "../components/BlobLink";
 import { DynamicField } from "../components/DynamicField";
 import { EmptyState } from "../components/EmptyState";
@@ -34,6 +35,8 @@ const WalletConnect = lazy(() =>
 type PublicAnswers = Record<string, unknown>;
 type ValidationErrors = Record<string, string>;
 const MAX_ATTACHMENT_BYTES = 50 * 1024 * 1024;
+const REAL_SEAL_PROJECT_REQUIRED_MESSAGE =
+  "Real Seal encrypted submissions require a selected project. Choose a project or turn off Encrypt submissions.";
 
 function getUploadAnswer(value: unknown) {
   return Array.isArray(value)
@@ -191,9 +194,20 @@ export function PublicFormPage() {
     return new Map(visibleFields.map((field, index) => [field.id, index + 1]));
   }, [form, visibleFieldIds]);
   const deadlinePassed = useMemo(() => isResponseDeadlinePassed(form?.responseDeadline), [form?.responseDeadline]);
+  const walletRequired = form?.identityPolicy === "wallet_required";
   const deadlineLabel = useMemo(() => formatResponseDeadline(form?.responseDeadline), [form?.responseDeadline]);
-  const submitModeLabel = attachWallet && account?.address ? "Wallet attached, no extra personal-message signature" : "Anonymous signal";
+  const submitModeLabel =
+    walletRequired || (attachWallet && account?.address)
+      ? "Wallet attached, no extra personal-message signature"
+      : "Anonymous signal";
   const storageModeLabel = form?.encryptSubmissions ? "Walrus with optional Seal encryption" : "Walrus or local fallback";
+
+  useEffect(() => {
+    if (walletRequired) {
+      setAttachWallet(Boolean(account?.address));
+      setAttachWalletTouched(Boolean(account?.address));
+    }
+  }, [account?.address, walletRequired]);
 
   useEffect(() => {
     setErrors((current) => {
@@ -233,11 +247,22 @@ export function PublicFormPage() {
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
-    if (!form) {
+    if (!form || submitting) {
       return;
     }
     if (isResponseDeadlinePassed(form.responseDeadline)) {
       setSubmitError("This signal intake is closed because the response deadline has passed.");
+      setSubmitNotice("");
+      return;
+    }
+    const sealRuntime = getSealRuntimeStatus();
+    if (form.encryptSubmissions && sealRuntime.activeMode === "seal" && !form.projectId?.trim()) {
+      setSubmitError(REAL_SEAL_PROJECT_REQUIRED_MESSAGE);
+      setSubmitNotice("");
+      return;
+    }
+    if (walletRequired && !account?.address) {
+      setSubmitError("This form requires a connected wallet before you can submit.");
       setSubmitNotice("");
       return;
     }
@@ -250,8 +275,7 @@ export function PublicFormPage() {
     setSubmitNotice("");
     try {
       const signedAt = new Date().toISOString();
-      const isAnonymous = !attachWallet || !account?.address;
-      const submissionStorage = isAnonymous ? localStorageAdapter : storageAdapter;
+      const isAnonymous = walletRequired ? false : !attachWallet || !account?.address;
       const session = await ensureRespondentSession({
         walletAddress: account?.address,
         isAnonymous,
@@ -316,7 +340,7 @@ export function PublicFormPage() {
                   ),
                 }));
               } else {
-                const upload = await submissionStorage.uploadFile(file);
+                const upload = await storageAdapter.uploadFile(file);
                 window.clearInterval(progressTimer);
                 attachments.push({
                   fieldId: field.id,
@@ -384,7 +408,7 @@ export function PublicFormPage() {
         updatedAt: signedAt,
       };
 
-      const result = await saveSubmissionWithEncryption(form, submission, undefined, submissionStorage);
+      const result = await saveSubmissionWithEncryption(form, submission, undefined, storageAdapter);
       const savedSubmission = {
         ...submission,
         isEncrypted: Boolean(form.encryptSubmissions),
@@ -535,7 +559,7 @@ export function PublicFormPage() {
           <div className="public-identity-copy">
             <p className="eyebrow">{t("publicIdentityEyebrow")}</p>
             <h3>{t("publicIdentityTitle")}</h3>
-            <p className="muted">{t("publicIdentityBody")}</p>
+            <p className="muted">{t(walletRequired ? "publicIdentityBodyWalletRequired" : "publicIdentityBody")}</p>
           </div>
           <div className="public-identity-wallet">
             <Suspense fallback={<div className="wallet-connect-shell wallet-connect-shell-compact" />}>
@@ -551,24 +575,38 @@ export function PublicFormPage() {
               <input
                 type="checkbox"
                 checked={attachWallet}
-                disabled={!account?.address || deadlinePassed}
+                disabled={walletRequired || !account?.address || deadlinePassed}
                 onChange={(event) => {
                   setAttachWalletTouched(true);
                   setAttachWallet(event.target.checked);
                 }}
               />
               <span>
-                <strong>{t("publicWalletAttach")}</strong>
-                <small>{account?.address ? t("publicWalletAttachHelp") : t("publicWalletConnectOptional")}</small>
+                <strong>{walletRequired ? t("publicWalletRequired") : t("publicWalletAttach")}</strong>
+                <small>
+                  {walletRequired
+                    ? account?.address
+                      ? t("publicWalletRequiredConnectedHelp")
+                      : t("publicWalletRequiredHelp")
+                    : account?.address
+                      ? t("publicWalletAttachHelp")
+                      : t("publicWalletConnectOptional")}
+                </small>
               </span>
             </label>
           </div>
 
           <div className="public-identity-note">
             <span className="public-identity-label">{t("publicCurrentMode")}</span>
-            <strong>{attachWallet && account?.address ? t("publicModeWallet") : t("publicModeAnonymous")}</strong>
+            <strong>{walletRequired || (attachWallet && account?.address) ? t("publicModeWallet") : t("publicModeAnonymous")}</strong>
             <p className="muted">
-              {attachWallet && account?.address ? t("publicWalletModeHelpNoSignature") : t("publicAnonymousModeHelp")}
+              {walletRequired
+                ? account?.address
+                  ? t("publicWalletRequiredConnectedHelp")
+                  : t("publicWalletRequiredHelp")
+                : attachWallet && account?.address
+                  ? t("publicWalletModeHelpNoSignature")
+                  : t("publicAnonymousModeHelp")}
             </p>
           </div>
         </div>
@@ -651,7 +689,11 @@ export function PublicFormPage() {
             ? "Submission closed"
             : submitting
               ? t("submitting")
-              : attachWallet && account?.address
+              : walletRequired
+                ? account?.address
+                  ? t("publicSubmitWithRequiredWallet")
+                  : t("publicConnectWalletToSubmit")
+                : attachWallet && account?.address
                 ? "Submit with wallet"
                 : "Submit anonymously"}
         </button>
