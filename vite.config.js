@@ -2,7 +2,8 @@ import { defineConfig } from "vitest/config";
 import react from "@vitejs/plugin-react";
 import { visualizer } from "rollup-plugin-visualizer";
 import { execSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { readFileSync, rmSync } from "node:fs";
+import { resolve } from "node:path";
 function formatBuildTime(date) {
     if (date === void 0) { date = new Date(); }
     var pad = function (value) { return String(value).padStart(2, "0"); };
@@ -24,6 +25,23 @@ var packageMetadata = JSON.parse(readFileSync(new URL("./package.json", import.m
 var appVersion = process.env.VITE_APP_VERSION || packageMetadata.version || "0.0.0";
 var buildTime = process.env.VITE_BUILD_TIME || formatBuildTime();
 var gitHash = process.env.VITE_GIT_HASH || getGitHash();
+var unusedPublicBuildAssets = ["deepsignal-icon.png", "favicon.png"];
+function pruneUnusedPublicBuildAssets() {
+    var outDir = "dist";
+    return {
+        name: "deepsignal-prune-unused-public-build-assets",
+        apply: "build",
+        configResolved: function (config) {
+            outDir = resolve(config.root, config.build.outDir);
+        },
+        closeBundle: function () {
+            for (var _i = 0, unusedPublicBuildAssets_1 = unusedPublicBuildAssets; _i < unusedPublicBuildAssets_1.length; _i++) {
+                var filename = unusedPublicBuildAssets_1[_i];
+                rmSync(resolve(outDir, filename), { force: true });
+            }
+        },
+    };
+}
 export default defineConfig({
     base: "./",
     assetsInclude: ["**/*.wasm"],
@@ -35,6 +53,7 @@ export default defineConfig({
     },
     plugins: [
         react(),
+        pruneUnusedPublicBuildAssets(),
         process.env.ANALYZE === "true"
             ? visualizer({
                 emitFile: true,

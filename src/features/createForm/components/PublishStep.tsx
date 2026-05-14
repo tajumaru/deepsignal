@@ -114,13 +114,20 @@ export function PublishStep({
     : t("localWalrusMode");
   const visibleSelectedProject = canManageProjects ? selectedProject : null;
   const publishReadyBody = isGuestDraftMode ? t("guestDraftPublishBody") : t("publishReadyBody");
-  const encryptionScopeMessage = encryptSubmissions
-    ? visibleSelectedProject
-      ? t("projectEncryptedFormHelp", { name: visibleSelectedProject.name })
+  const isProjectEncryptedForm = Boolean(encryptSubmissions && visibleSelectedProject);
+  const isPersonalEncryptedForm = Boolean(encryptSubmissions && !visibleSelectedProject);
+  const encryptionScopePrimary = encryptSubmissions
+    ? isProjectEncryptedForm
+      ? t("projectEncryptedFormHelp", { name: visibleSelectedProject?.name ?? "" })
       : accountAddress
         ? t("personalEncryptedFormHelp")
         : t("personalEncryptedFormConnectHelp")
     : t("openFormEncryptionHelp");
+  const encryptionScopeContrast = encryptSubmissions
+    ? isProjectEncryptedForm
+      ? t("projectEncryptedFormPersonalContrast")
+      : t("personalEncryptedFormProjectContrast")
+    : "";
   function getEncryptionWarningMessage(warning: EncryptionReadinessWarning) {
     switch (warning.kind) {
       case "project-missing":
@@ -359,7 +366,18 @@ export function PublishStep({
                     </label>
                   </div>
                   <p className="muted">{t("encryptSubmissionsReviewHelp")}</p>
-                  <p className="muted">{encryptionScopeMessage}</p>
+                  <div className="metadata-list">
+                    <div className="metadata-row">
+                      <span>{t("encryptedScopeCurrentLabel")}</span>
+                      <strong>{encryptionScopePrimary}</strong>
+                    </div>
+                    {isPersonalEncryptedForm || isProjectEncryptedForm ? (
+                      <div className="metadata-row">
+                        <span>{t("encryptedScopeProjectLabel")}</span>
+                        <strong>{encryptionScopeContrast}</strong>
+                      </div>
+                    ) : null}
+                  </div>
                   {encryptionWarnings.length > 0 ? (
                     <div className="composer-warning-list" aria-live="polite">
                       {encryptionWarnings.map((warning) => (

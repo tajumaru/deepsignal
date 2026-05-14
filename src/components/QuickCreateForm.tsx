@@ -4,11 +4,16 @@ import { useI18n } from "../i18n";
 import type { Translate } from "../features/createForm/types";
 
 const quickCreateTemplates = [
-  { key: "feedback", labelKey: "quickCreateFeedback", ideaKey: "quickCreateFeedbackIdea" },
-  { key: "bug", labelKey: "quickCreateBugReport", ideaKey: "quickCreateBugReportIdea" },
-  { key: "feature", labelKey: "quickCreateFeatureRequest", ideaKey: "quickCreateFeatureRequestIdea" },
-  { key: "survey", labelKey: "quickCreateEventSurvey", ideaKey: "quickCreateEventSurveyIdea" },
-  { key: "feedback", labelKey: "quickCreateAnonymousFeedback", ideaKey: "quickCreateAnonymousFeedbackIdea" },
+  { id: "feedback", templateKey: "feedback", labelKey: "quickCreateFeedback", ideaKey: "quickCreateFeedbackIdea" },
+  { id: "bug", templateKey: "bug", labelKey: "quickCreateBugReport", ideaKey: "quickCreateBugReportIdea" },
+  { id: "feature", templateKey: "feature", labelKey: "quickCreateFeatureRequest", ideaKey: "quickCreateFeatureRequestIdea" },
+  { id: "survey", templateKey: "survey", labelKey: "quickCreateEventSurvey", ideaKey: "quickCreateEventSurveyIdea" },
+  {
+    id: "anonymous_feedback",
+    templateKey: "feedback",
+    labelKey: "quickCreateAnonymousFeedback",
+    ideaKey: "quickCreateAnonymousFeedbackIdea",
+  },
 ];
 
 interface QuickCreateFormProps {
@@ -19,7 +24,8 @@ export function QuickCreateForm({ compact = false }: QuickCreateFormProps) {
   const { t } = useI18n();
   const navigate = useNavigate();
   const [idea, setIdea] = useState("");
-  const [templateKey, setTemplateKey] = useState(quickCreateTemplates[0].key);
+  const [templateId, setTemplateId] = useState(quickCreateTemplates[0].id);
+  const [templateKey, setTemplateKey] = useState(quickCreateTemplates[0].templateKey);
   const [activeIdeaKey, setActiveIdeaKey] = useState<string | null>(null);
 
   function openGuestDraft(nextIdea = idea, nextTemplateKey = templateKey) {
@@ -66,17 +72,18 @@ export function QuickCreateForm({ compact = false }: QuickCreateFormProps) {
       <div className="quick-create-chip-row" aria-label={t("quickCreateTemplatesLabel")}>
         {quickCreateTemplates.map((template) => (
           <button
-            key={`${template.key}-${template.labelKey}`}
+            key={template.id}
             type="button"
             className={`quick-create-chip ${
-              templateKey === template.key && activeIdeaKey === template.ideaKey ? "is-active" : ""
+              templateId === template.id && activeIdeaKey === template.ideaKey ? "is-active" : ""
             }`}
             onClick={() => {
               const templateIdea = t(template.ideaKey as Parameters<Translate>[0]);
-              setTemplateKey(template.key);
+              setTemplateId(template.id);
+              setTemplateKey(template.templateKey);
               setActiveIdeaKey(template.ideaKey);
               setIdea(templateIdea);
-              openGuestDraft(templateIdea, template.key);
+              openGuestDraft(templateIdea, template.templateKey);
             }}
           >
             {t(template.labelKey as Parameters<Translate>[0])}
