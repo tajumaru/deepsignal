@@ -73,9 +73,14 @@ export type WalrusBlobReadErrorCode =
 const publisherUrl = import.meta.env.VITE_WALRUS_PUBLISHER_URL?.replace(/\/$/, "");
 const aggregatorUrl = WALRUS_AGGREGATOR_URL.replace(/\/$/, "");
 const uploadRelayUrl = WALRUS_UPLOAD_RELAY_URL.replace(/\/$/, "");
+const fallbackAggregatorUrls = String(import.meta.env.VITE_WALRUS_FALLBACK_AGGREGATOR_URLS || "")
+  .split(",")
+  .map((url) => url.trim().replace(/\/$/, ""))
+  .filter(Boolean);
 const storageEpochs = Math.max(1, Number(import.meta.env.VITE_WALRUS_STORAGE_EPOCHS || "5"));
 const bundledFormPointer = "__bundled_form__";
 const WALRUS_READ_TIMEOUT_MS = 4000;
+const WALRUS_READ_MAX_ATTEMPTS = 3;
 const walrusStorageMode = (
   String(import.meta.env.VITE_WALRUS_STORAGE_MODE || "uploadRelay").toLowerCase() === "publisher"
     ? "publisher"
@@ -126,6 +131,10 @@ function assertReadEnv() {
   if (!aggregatorUrl) {
     throw new Error("Walrus aggregator URL is not configured.");
   }
+}
+
+function getReadAggregatorUrls() {
+  return [...new Set([aggregatorUrl, ...fallbackAggregatorUrls].filter(Boolean))];
 }
 
 function assertPublisherEnv() {
@@ -601,19 +610,43 @@ async function fetchBlobTextFromWalrus(
     return null;
   }
   assertReadEnv();
-  try {
-    const response = await withWalrusReadTimeout(blobId, fetch(`${aggregatorUrl}/v1/blobs/${blobId}`));
-    if (response.status === 404) {
-      return null;
+  for (const gateway of getReadAggregatorUrls()) {
+    for (let attempt = 1; attempt <= WALRUS_READ_MAX_ATTEMPTS; attempt += 1) {
+      try {
+        console.debug("[walrus read] attempt:start", {
+          blobId,
+          gateway,
+          attempt,
+          maxAttempts: WALRUS_READ_MAX_ATTEMPTS,
+        });
+        const response = await withWalrusReadTimeout(blobId, fetch(`${gateway}/v1/blobs/${blobId}`));
+        if (response.status === 404) {
+          return null;
+        }
+        if (!response.ok) {
+          throw new Error(`Walrus fetch failed: ${response.status}`);
+        }
+        return await response.text();
+      } catch (error) {
+        console.debug("[walrus read] attempt:error", {
+          blobId,
+          gateway,
+          attempt,
+          maxAttempts: WALRUS_READ_MAX_ATTEMPTS,
+          errorName: error instanceof Error ? error.name : typeof error,
+          errorMessage: error instanceof Error ? error.message : String(error),
+          errorStack: error instanceof Error ? error.stack : undefined,
+          rawError: error,
+        });
+        if (attempt === WALRUS_READ_MAX_ATTEMPTS) {
+          break;
+        }
+        await new Promise((resolve) => window.setTimeout(resolve, 250 * attempt));
+      }
     }
-    if (!response.ok) {
-      throw new Error(`Walrus fetch failed: ${response.status}`);
-    }
-    return await response.text();
-  } catch (error) {
-    console.error(logLabel, blobId, error);
-    return null;
   }
+  console.error(logLabel, blobId);
+  return null;
 }
 
 async function fetchBlobTextFromWalrusOrThrow(blobId: string): Promise<string> {
@@ -622,22 +655,52 @@ async function fetchBlobTextFromWalrusOrThrow(blobId: string): Promise<string> {
   }
   try {
     assertReadEnv();
-    const response = await withWalrusReadTimeout(blobId, fetch(`${aggregatorUrl}/v1/blobs/${blobId}`));
-    if (response.status === 404) {
-      throw new WalrusBlobReadError(
-        "blob_unavailable",
-        blobId,
-        `Walrus blob ${blobId} could not be fetched from the aggregator.`,
-      );
+    let lastError: unknown;
+    for (const gateway of getReadAggregatorUrls()) {
+      for (let attempt = 1; attempt <= WALRUS_READ_MAX_ATTEMPTS; attempt += 1) {
+        try {
+          console.debug("[walrus read] attempt:start", {
+            blobId,
+            gateway,
+            attempt,
+            maxAttempts: WALRUS_READ_MAX_ATTEMPTS,
+          });
+          const response = await withWalrusReadTimeout(blobId, fetch(`${gateway}/v1/blobs/${blobId}`));
+          if (response.status === 404) {
+            throw new WalrusBlobReadError(
+              "blob_unavailable",
+              blobId,
+              `Walrus blob ${blobId} could not be fetched from the aggregator.`,
+            );
+          }
+          if (!response.ok) {
+            throw new WalrusBlobReadError(
+              "blob_unavailable",
+              blobId,
+              `Walrus fetch failed for blob ${blobId}: ${response.status}.`,
+            );
+          }
+          return await response.text();
+        } catch (error) {
+          lastError = error;
+          console.debug("[walrus read] attempt:error", {
+            blobId,
+            gateway,
+            attempt,
+            maxAttempts: WALRUS_READ_MAX_ATTEMPTS,
+            errorName: error instanceof Error ? error.name : typeof error,
+            errorMessage: error instanceof Error ? error.message : String(error),
+            errorStack: error instanceof Error ? error.stack : undefined,
+            rawError: error,
+          });
+          if (attempt === WALRUS_READ_MAX_ATTEMPTS) {
+            break;
+          }
+          await new Promise((resolve) => window.setTimeout(resolve, 250 * attempt));
+        }
+      }
     }
-    if (!response.ok) {
-      throw new WalrusBlobReadError(
-        "blob_unavailable",
-        blobId,
-        `Walrus fetch failed for blob ${blobId}: ${response.status}.`,
-      );
-    }
-    return await response.text();
+    throw lastError ?? new Error(`Walrus blob ${blobId} could not be fetched from the aggregator.`);
   } catch (error) {
     if (error instanceof WalrusBlobReadError) {
       throw error;
@@ -658,19 +721,43 @@ async function fetchBlobFromWalrus(blobId: string): Promise<Blob | null> {
     return null;
   }
   assertReadEnv();
-  try {
-    const response = await withWalrusReadTimeout(blobId, fetch(`${aggregatorUrl}/v1/blobs/${blobId}`));
-    if (response.status === 404) {
-      return null;
+  for (const gateway of getReadAggregatorUrls()) {
+    for (let attempt = 1; attempt <= WALRUS_READ_MAX_ATTEMPTS; attempt += 1) {
+      try {
+        console.debug("[walrus read] attempt:start", {
+          blobId,
+          gateway,
+          attempt,
+          maxAttempts: WALRUS_READ_MAX_ATTEMPTS,
+        });
+        const response = await withWalrusReadTimeout(blobId, fetch(`${gateway}/v1/blobs/${blobId}`));
+        if (response.status === 404) {
+          return null;
+        }
+        if (!response.ok) {
+          throw new Error(`Walrus fetch failed: ${response.status}`);
+        }
+        return await response.blob();
+      } catch (error) {
+        console.debug("[walrus read] attempt:error", {
+          blobId,
+          gateway,
+          attempt,
+          maxAttempts: WALRUS_READ_MAX_ATTEMPTS,
+          errorName: error instanceof Error ? error.name : typeof error,
+          errorMessage: error instanceof Error ? error.message : String(error),
+          errorStack: error instanceof Error ? error.stack : undefined,
+          rawError: error,
+        });
+        if (attempt === WALRUS_READ_MAX_ATTEMPTS) {
+          break;
+        }
+        await new Promise((resolve) => window.setTimeout(resolve, 250 * attempt));
+      }
     }
-    if (!response.ok) {
-      throw new Error(`Walrus fetch failed: ${response.status}`);
-    }
-    return await response.blob();
-  } catch (error) {
-    console.error("Walrus binary blob read failed", blobId, error);
-    return null;
   }
+  console.error("Walrus binary blob read failed", blobId);
+  return null;
 }
 
 export async function fetchJsonBlob<T>(blobId: string): Promise<T | null> {

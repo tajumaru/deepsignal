@@ -43,11 +43,18 @@ export function isLegacyUnencryptedPayload(value: string | undefined | null) {
   return Boolean(value && !parseRealSealEnvelope(value));
 }
 
+function assertProductionSealAdapter(seal: SealAdapter) {
+  if (!import.meta.env.DEV && seal !== sealServiceAdapter) {
+    throw new Error("Production Seal runtime must use the real Seal adapter.");
+  }
+}
+
 export async function encryptSensitiveResponse(
   value: string,
   context: SealEncryptContext = {},
   seal: SealAdapter = sealServiceAdapter,
 ) {
+  assertProductionSealAdapter(seal);
   if (!hasSealEnv) {
     throw new Error(ENCRYPTION_FAILED_MESSAGE);
   }
@@ -67,6 +74,7 @@ export async function decryptSensitiveResponse(
   context: SealDecryptContext = {},
   seal: SealAdapter = sealServiceAdapter,
 ) {
+  assertProductionSealAdapter(seal);
   if (!parseRealSealEnvelope(value)) {
     return {
       plaintext: value,

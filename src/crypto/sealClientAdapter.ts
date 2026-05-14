@@ -10,6 +10,7 @@ import { Transaction } from "@mysten/sui/transactions";
 import { fromHex } from "@mysten/sui/utils";
 import type { SealAdapter, SealDecryptContext } from "../types";
 import { ACCESS_CONTROL_REGISTRY_ID, SUI_NETWORK } from "../lib/sui";
+import { serializeDecryptError } from "./decryptDiagnostics";
 import {
   createProjectScopedSealId,
   createRealSealEnvelope,
@@ -53,6 +54,19 @@ const sealClient = new SealClient({
 const SESSION_KEY_STORAGE_PREFIX = "deepsignal.seal.sessionKey";
 const sessionKeyCache = new Map<string, SessionKey>();
 const pendingSessionKeyPromises = new Map<string, Promise<SessionKey>>();
+
+function debugSealClientError(event: string, details: Record<string, unknown>, error: unknown) {
+  console.debug("[seal-client]", event, {
+    ...details,
+    error: serializeDecryptError(error),
+  });
+}
+
+function createErrorWithCause(message: string, cause: unknown) {
+  const error = new Error(message) as Error & { cause?: unknown };
+  error.cause = cause;
+  return error;
+}
 
 function debugSessionKeyCache(
   event: "cache_hit" | "cache_miss" | "cache_expired" | "import_failed" | "pending_reuse" | "persist_failed",
@@ -160,10 +174,35 @@ export const sealClientAdapter: SealAdapter = {
             primaryApprovalPolicy === "project_signal_reviewer_v1");
 
         if (!canRetryWithAdminPolicy) {
+          debugSealClientError(
+            "primary_decrypt_failed",
+            {
+              walletAddress: context.walletAddress,
+              packageId: envelope.packageId,
+              objectId: envelope.objectId,
+              projectId,
+              approvalPolicy: primaryApprovalPolicy,
+              network: SUI_NETWORK,
+            },
+            error,
+          );
           throw error;
         }
 
         const fallbackApprovalPolicy = reviewerCapId ? "project_reviewer_v0" : "project_admin_v0";
+        debugSealClientError(
+          "primary_decrypt_retrying_admin_policy",
+          {
+            walletAddress: context.walletAddress,
+            packageId: envelope.packageId,
+            objectId: envelope.objectId,
+            projectId,
+            approvalPolicy: primaryApprovalPolicy,
+            fallbackApprovalPolicy,
+            network: SUI_NETWORK,
+          },
+          error,
+        );
         const fallbackTxBytes = await buildSealApproveTransactionBytes({
           objectId: envelope.objectId,
           projectId,
@@ -184,16 +223,27 @@ export const sealClientAdapter: SealAdapter = {
       context.onStatusChange?.("finishing");
       return new TextDecoder().decode(plaintext);
     } catch (error) {
+      debugSealClientError(
+        "decrypt_failed",
+        {
+          walletAddress: context.walletAddress,
+          packageId: envelope.packageId,
+          objectId: envelope.objectId,
+          projectId,
+          network: SUI_NETWORK,
+        },
+        error,
+      );
       if (isLikelyWalletCancelError(error)) {
-        throw new Error(SEAL_WALLET_CANCELLED_MESSAGE);
+        throw createErrorWithCause(SEAL_WALLET_CANCELLED_MESSAGE, error);
       }
       if (error instanceof NoAccessError) {
-        throw new Error(SEAL_PERMISSION_DENIED_MESSAGE);
+        throw createErrorWithCause(SEAL_PERMISSION_DENIED_MESSAGE, error);
       }
       if (error instanceof Error && error.message === SEAL_DECRYPT_APPROVAL_REQUIRED_MESSAGE) {
         throw error;
       }
-      throw error instanceof Error ? error : new Error(SEAL_DECRYPT_APPROVAL_REQUIRED_MESSAGE);
+      throw error instanceof Error ? error : createErrorWithCause(SEAL_DECRYPT_APPROVAL_REQUIRED_MESSAGE, error);
     }
   },
 };

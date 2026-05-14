@@ -3,6 +3,14 @@ import {
   encryptSensitiveResponse,
   sealServiceAdapter,
 } from "../crypto/sealService";
+import {
+  DecryptDiagnosticError,
+  buildDecryptDiagnosticContext,
+  classifyDecryptError,
+  describeEncryptedPayloadShape,
+  logDecryptDiagnostic,
+  validateEncryptedPayloadOrThrow,
+} from "../crypto/decryptDiagnostics";
 import { fromBase64, parseRealSealEnvelope, toBase64 } from "../crypto/sealPayload";
 import { hasChoiceOptions, isAttachmentFieldType, isConfirmationCheckboxField, normalizeFieldType } from "./fieldTypes";
 import { normalizeLogicGroup, sanitizeConditionalLogicFields } from "../utils/formLogic";
@@ -503,40 +511,81 @@ export async function resolveSubmissionAnswers(
   context: SealDecryptContext = {},
 ) {
   if (submission.isEncrypted && (submission.encryptedPayload || submission.encryptedBlobId)) {
-    const payload =
-      submission.encryptedPayload ??
-      (submission.encryptedBlobId
-        ? await storageAdapter.readEncryptedPayload(submission.encryptedBlobId)
-        : null);
-    if (!payload) {
-      return null;
-    }
-    const decryptedResult = await decryptSensitiveResponse(payload, context, seal);
-    const decrypted = decryptedResult.plaintext;
-    let parsed: {
-      answers?: Record<string, unknown>;
-      attachments?: Submission["attachments"];
-    };
     try {
-      parsed = JSON.parse(decrypted) as {
+      const baseDiagnostics = buildDecryptDiagnosticContext(form, submission, context);
+      logDecryptDiagnostic("start", baseDiagnostics);
+      const payload =
+        submission.encryptedPayload ??
+        (submission.encryptedBlobId
+          ? await storageAdapter.readEncryptedPayload(submission.encryptedBlobId)
+          : null);
+      if (!payload) {
+        throw new DecryptDiagnosticError(
+          submission.encryptedBlobId ? "WALRUS_BLOB_FETCH_FAILED" : "MANIFEST_NOT_FOUND",
+          submission.encryptedBlobId
+            ? "Encrypted payload blob could not be fetched."
+            : "Encrypted payload manifest reference is missing.",
+          baseDiagnostics,
+        );
+      }
+      const envelope = validateEncryptedPayloadOrThrow(payload, baseDiagnostics);
+      const diagnostics = {
+        ...baseDiagnostics,
+        packageId: envelope.packageId,
+        policyId: envelope.approvalPolicy,
+        accessObjectId: envelope.objectId,
+        approvalPolicy: envelope.approvalPolicy,
+        encryptedPayloadShape: describeEncryptedPayloadShape(payload),
+        ciphertextSize: envelope.encryptedObject.length,
+      };
+      logDecryptDiagnostic("payload_validated", diagnostics);
+      const decryptedResult = await decryptSensitiveResponse(payload, context, seal);
+      const decrypted = decryptedResult.plaintext;
+      let parsed: {
         answers?: Record<string, unknown>;
         attachments?: Submission["attachments"];
       };
+      try {
+        parsed = JSON.parse(decrypted) as {
+          answers?: Record<string, unknown>;
+          attachments?: Submission["attachments"];
+        };
+      } catch (error) {
+        throw new DecryptDiagnosticError(
+          "INVALID_ENCRYPTED_PAYLOAD",
+          error instanceof Error
+            ? `Failed to parse decrypted submission payload: ${error.message}`
+            : "Failed to parse decrypted submission payload.",
+          diagnostics,
+          error,
+        );
+      }
+      logDecryptDiagnostic("success", diagnostics);
+      return {
+        answers: parsed.answers ?? {},
+        attachments:
+          parsed.attachments === undefined
+            ? submission.attachments
+            : normalizeSubmissionAttachments(parsed.attachments),
+        legacyUnencrypted: decryptedResult.legacyUnencrypted,
+      };
     } catch (error) {
-      throw new Error(
-        error instanceof Error
-          ? `Failed to parse decrypted submission payload: ${error.message}`
-          : "Failed to parse decrypted submission payload.",
+      const reasonCode = classifyDecryptError(error);
+      const diagnostics =
+        error instanceof DecryptDiagnosticError
+          ? error.diagnostics
+          : buildDecryptDiagnosticContext(form, submission, context);
+      logDecryptDiagnostic("failure", diagnostics, error);
+      if (error instanceof DecryptDiagnosticError) {
+        throw error;
+      }
+      throw new DecryptDiagnosticError(
+        reasonCode,
+        `Decrypt failed: ${reasonCode}`,
+        diagnostics,
+        error,
       );
     }
-    return {
-      answers: parsed.answers ?? {},
-      attachments:
-        parsed.attachments === undefined
-          ? submission.attachments
-          : normalizeSubmissionAttachments(parsed.attachments),
-      legacyUnencrypted: decryptedResult.legacyUnencrypted,
-    };
   }
 
   const decryptedAnswers = await decryptSensitiveAnswers(form, submission.answers, seal, context);

@@ -9,6 +9,7 @@ import {
   SEAL_PERMISSION_DENIED_MESSAGE,
   SEAL_WALLET_CANCELLED_MESSAGE,
 } from "../../../crypto/sealPayload";
+import { isDecryptDiagnosticError } from "../../../crypto/decryptDiagnostics";
 import type { CapabilityProfile } from "../../../hooks/useAccessControl";
 import { resolveSubmissionAnswers } from "../../../lib/storage";
 import type { Submission } from "../../../types";
@@ -174,7 +175,11 @@ export function usePrivateSignalDecrypt({
         activeDecryptRequestRef.current?.submissionId === submissionId;
       if (isLatestRequest && selectedSignalIdRef.current === submissionId) {
         setDecryptError(
-          error instanceof Error ? getFriendlyDecryptError(error.message) : decryptFailedLabel,
+          isDecryptDiagnosticError(error)
+            ? `Decrypt failed: ${error.reasonCode}`
+            : error instanceof Error
+              ? getFriendlyDecryptError(error.message)
+              : decryptFailedLabel,
         );
       }
     } finally {

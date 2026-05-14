@@ -17,6 +17,7 @@ import { SignalMetaChip } from "../components/SignalMetaChip";
 import { useAccessControl } from "../hooks/useAccessControl";
 import { getAttachmentDownloadHref, useAttachmentPreviews } from "../hooks/useAttachmentPreviews";
 import { getSealRuntimeStatus } from "../crypto/cryptoFactory";
+import { isDecryptDiagnosticError } from "../crypto/decryptDiagnostics";
 import { REAL_SEAL_SESSION_TTL_MIN } from "../crypto/sealPayload";
 import { useI18n } from "../i18n";
 import { formatAnswerText } from "../lib/answerFormatting";
@@ -482,7 +483,13 @@ export function FormSubmissionsPage() {
         activeDecryptRequestRef.current?.requestId === requestId &&
         activeDecryptRequestRef.current?.submissionId === submissionId;
       if (isLatestRequest && selectedSignalIdRef.current === submissionId) {
-        setDecryptError(error instanceof Error ? error.message : t("decryptFailed"));
+        setDecryptError(
+          isDecryptDiagnosticError(error)
+            ? `Decrypt failed: ${error.reasonCode}`
+            : error instanceof Error
+              ? error.message
+              : t("decryptFailed"),
+        );
       }
     } finally {
       const isLatestRequest =
@@ -636,9 +643,7 @@ export function FormSubmissionsPage() {
       }).slice(0, 3)
     : [];
   const isDetailOnly = Boolean(submissionId);
-  const inboxPath = `${
-    location.pathname.startsWith("/dashboard") ? "/dashboard" : "/admin"
-  }/forms/${formId}`;
+  const inboxPath = "/admin";
   const unlockDisabledReason = detailAnswers
     ? undefined
     : !selectedSubmission?.isEncrypted
