@@ -359,6 +359,10 @@ export function AdminDashboardPage() {
   const selectedRecordNeedsDecrypt = Boolean(
     selectedRecord?.submission.isEncrypted && !detailAnswers,
   );
+  const selectedRecordEncryptedBlobId = selectedRecord?.submission.encryptedBlobId;
+  const selectedRecordEncryptedBlobStoredOnWalrus = Boolean(
+    selectedRecordEncryptedBlobId && !isLocalFallbackBlob(selectedRecordEncryptedBlobId),
+  );
   const selectedRecordUnlockDisabledReason = detailAnswers
     ? undefined
     : !selectedRecord?.submission.isEncrypted
@@ -1046,6 +1050,9 @@ export function AdminDashboardPage() {
                       >
                         {t("exportCsv")}
                       </button>
+                      <p className="export-privacy-note">
+                        Private exports should be shared only with authorized team members.
+                      </p>
                       {selectedRecord.submission.pendingOnchainRegistration ? (
                         <button
                           type="button"
@@ -1121,9 +1128,20 @@ export function AdminDashboardPage() {
                       {detailAnswers ? (
                         <div className="stack">
                           {detailLegacyUnencrypted ? (
-                            <p className="warning-text">Legacy unencrypted response</p>
+                            <p className="warning-text">Legacy unencrypted response · created before Seal enforcement</p>
                           ) : (
-                            <span className="signal-chip signal-chip-accent">Seal encrypted</span>
+                            <div className="signal-badge-row signal-badge-row-compact">
+                              <span className="signal-chip signal-chip-accent">Seal encrypted · creator/admin only</span>
+                              {selectedRecordEncryptedBlobStoredOnWalrus && selectedRecordEncryptedBlobId ? (
+                                <>
+                                  <span className="signal-chip signal-chip-soft">Stored on Walrus</span>
+                                  <span className="signal-meta-inline">
+                                    <span className="signal-meta-inline-label">Blob ID</span>
+                                    <SignalMetaChip type="blob" value={selectedRecordEncryptedBlobId} />
+                                  </span>
+                                </>
+                              ) : null}
+                            </div>
                           )}
                           {selectedRecord.form.fields
                             .filter((field) => !isAttachmentFieldType(field.type))
@@ -1487,7 +1505,7 @@ export function AdminDashboardPage() {
                           <span>Review state</span>
                             <strong>
                               {detailLegacyUnencrypted
-                                ? "Legacy unencrypted response"
+                                ? "Legacy unencrypted response · created before Seal enforcement"
                                 : detailAnswers
                                   ? "Private signal unlocked"
                                   : "Encrypted private signal"}

@@ -7,6 +7,7 @@ import { LivePreview } from "../../../components/formBuilder/LivePreview";
 import { isLocalFallbackBlob } from "../../../lib/proof";
 import { shortAddress, SUI_NETWORK } from "../../../lib/sui";
 import { formatWalrusFailureStage, type WalrusFailureDetails } from "../../../storage/walrusDiagnostics";
+import type { EncryptionReadinessWarning } from "../encryptionReadiness";
 import type {
   FormField,
   FormIdentityPolicy,
@@ -35,6 +36,7 @@ interface PublishStepProps {
   isReadyToPublish: boolean;
   publicPath: string;
   publishChecks: string[];
+  encryptionWarnings: EncryptionReadinessWarning[];
   showPublishSuccessView: boolean;
   showWalrusDiagnostics: boolean;
   isConnected: boolean;
@@ -74,6 +76,7 @@ export function PublishStep({
   mobilePane,
   isReadyToPublish,
   publicPath,
+  encryptionWarnings,
   showPublishSuccessView,
   showWalrusDiagnostics,
   isConnected,
@@ -334,6 +337,18 @@ export function PublishStep({
                     </label>
                   </div>
                   <p className="muted">Keep this on so reviewers unlock the signal later with an authorized wallet.</p>
+                  {encryptionWarnings.length > 0 ? (
+                    <div className="composer-warning-list" aria-live="polite">
+                      {encryptionWarnings.map((warning) => (
+                        <p
+                          key={`${warning.kind}-${warning.message}`}
+                          className={warning.blocksPublish ? "error-text" : "warning-text"}
+                        >
+                          {warning.message}
+                        </p>
+                      ))}
+                    </div>
+                  ) : null}
                 </section>
 
                 {showWalrusDiagnostics ? (

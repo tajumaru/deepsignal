@@ -947,6 +947,13 @@ button {
   flex-wrap: wrap;
 }
 
+.signal-meta-inline-label {
+  color: var(--text-soft);
+  font-family: var(--font-body);
+  font-size: 0.74rem;
+  text-transform: uppercase;
+}
+
 .hero-layout,
 .builder-layout,
 .detail-layout,
@@ -5362,6 +5369,58 @@ body.composer-mode .bg-orb {
   gap: 0.8rem;
 }
 
+.markdown-editor-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.45rem;
+  border: 1px solid rgba(116, 226, 255, 0.16);
+  border-radius: 14px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.012)),
+    rgba(5, 20, 31, 0.88);
+}
+
+.markdown-toolbar-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2.4rem;
+  min-height: 2.15rem;
+  padding: 0 0.62rem;
+  border: 1px solid rgba(135, 244, 255, 0.18);
+  border-radius: 8px;
+  background: rgba(116, 226, 255, 0.07);
+  color: var(--text);
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0;
+  line-height: 1;
+}
+
+.markdown-toolbar-button:hover:not(:disabled),
+.markdown-toolbar-button:focus-visible:not(:disabled) {
+  border-color: rgba(135, 244, 255, 0.42);
+  background: rgba(116, 226, 255, 0.14);
+  box-shadow: 0 0 0 3px rgba(116, 226, 255, 0.08);
+}
+
+.markdown-toolbar-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.54;
+}
+
+.markdown-toolbar-button-italic {
+  font-style: italic;
+}
+
+.markdown-toolbar-button-bullet,
+.markdown-toolbar-button-link {
+  min-width: 3.2rem;
+  font-size: 0.72rem;
+}
+
 .markdown-preview-panel {
   display: grid;
   gap: 0.5rem;
@@ -5825,6 +5884,25 @@ body.composer-mode .bg-orb {
 .composer-settings-card {
   padding: 1rem;
   background: rgba(4, 18, 31, 0.66);
+}
+
+.composer-warning-list {
+  display: grid;
+  gap: 0.45rem;
+  margin-top: 0.85rem;
+}
+
+.composer-warning-list p {
+  margin: 0;
+  padding: 0.7rem 0.75rem;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 211, 163, 0.18);
+  background: rgba(53, 33, 10, 0.36);
+}
+
+.composer-warning-list .error-text {
+  border-color: rgba(255, 126, 143, 0.24);
+  background: rgba(62, 13, 24, 0.42);
 }
 
 .composer-success-card {
@@ -6541,6 +6619,12 @@ body.composer-mode .bg-orb {
   border: 0;
 }
 
+.public-submit-readiness .metadata-row strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  text-align: right;
+}
+
 .public-deadline-card.is-expired {
   border-color: rgba(255, 139, 120, 0.45);
   background: rgba(61, 19, 18, 0.42);
@@ -6567,6 +6651,10 @@ body.composer-mode .bg-orb {
 
   .country-picker-clear {
     width: 100%;
+  }
+
+  .public-submit-readiness .metadata-row strong {
+    text-align: left;
   }
 }
 
@@ -8010,6 +8098,14 @@ body.composer-mode .bg-orb {
 
 .signal-detail-utility-actions > * {
   min-width: 0;
+}
+
+.export-privacy-note {
+  flex: 1 1 100%;
+  margin: 0;
+  color: var(--text-soft);
+  font-size: 0.78rem;
+  line-height: 1.35;
 }
 
 .private-access-card {

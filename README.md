@@ -401,6 +401,7 @@ Older forms that do not have a manifest pointer are treated as legacy local-inde
 CSV export remains compatible and now includes operational metadata columns before form-answer columns:
 
 - `submissionId`
+- `encryptionStatus`
 - `createdAt`
 - `status`
 - `triageStatus`
@@ -464,6 +465,7 @@ Current behavior:
 
 - decryption happens only in the admin detail view
 - legacy unencrypted payloads may be read for compatibility and are labeled `Legacy unencrypted response`
+- admin JSON and CSV exports include `encryptionStatus` metadata with `seal_encrypted`, `legacy_unencrypted`, or `public`
 
 In real Seal mode, payloads are saved as JSON envelopes that include the base64-encoded Seal ciphertext plus the metadata needed for a later wallet-backed decrypt flow. For project-backed forms, the envelope also records the `projectId` and approval policy used by the admin decrypt path.
 

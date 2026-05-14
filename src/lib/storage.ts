@@ -62,17 +62,18 @@ function stringifySensitiveValue(value: unknown) {
 
 function parseSensitiveValue(form: FormSchema, fieldId: string, value: string) {
   const field = form.fields.find((item) => item.id === fieldId);
-  if (field?.type === "checkbox") {
+  const fieldType = field ? normalizeFieldType(field.type) : undefined;
+  if (fieldType === "checkbox") {
     try {
       return JSON.parse(value);
     } catch {
       return [];
     }
   }
-  if (field && isConfirmationCheckboxField(field.type)) {
+  if (fieldType && isConfirmationCheckboxField(fieldType)) {
     return value === "true";
   }
-  if (field?.type === "rating") {
+  if (fieldType === "rating") {
     return value;
   }
   return value;
@@ -137,7 +138,10 @@ export async function createEncryptedAttachmentUpload(
   };
 }
 
-export async function createInlineEncryptedAttachment(file: File) {
+// This does not Seal-encrypt the file by itself. The attachment bytes are embedded
+// into the private submission payload, and the full payload is Seal-encrypted in
+// saveSubmissionWithEncryption().
+export async function createInlinePrivateAttachment(file: File) {
   const bytes = new Uint8Array(await file.arrayBuffer());
   return {
     fieldId: "",
@@ -253,10 +257,11 @@ export async function decryptSensitiveAnswers(
 }
 
 export function createEmptyAnswer(field: FormField) {
-  if (field.type === "checkbox" || isAttachmentFieldType(field.type)) {
+  const fieldType = normalizeFieldType(field.type);
+  if (fieldType === "checkbox" || isAttachmentFieldType(fieldType)) {
     return [] as string[];
   }
-  if (isConfirmationCheckboxField(field.type)) {
+  if (isConfirmationCheckboxField(fieldType)) {
     return false;
   }
   return "";
@@ -423,17 +428,20 @@ export function normalizeForm(raw: FormSchema | (Record<string, unknown> & { id:
     title: typeof raw.title === "string" ? raw.title : "",
     description: typeof raw.description === "string" ? raw.description : "",
     fields: sanitizeConditionalLogicFields(
-      rawFields.map((field) => ({
-        ...field,
-        type: normalizeFieldType(field.type),
-        options: hasChoiceOptions(normalizeFieldType(field.type))
-          ? Array.isArray(field.options)
-            ? field.options.map((option) => String(option))
-            : []
-          : undefined,
-        visibilityRules: normalizeLogicGroup(field.visibilityRules),
-        requiredRules: normalizeLogicGroup(field.requiredRules),
-      })),
+      rawFields.map((field) => {
+        const fieldType = normalizeFieldType(field.type);
+        return {
+          ...field,
+          type: fieldType,
+          options: hasChoiceOptions(fieldType)
+            ? Array.isArray(field.options)
+              ? field.options.map((option) => String(option))
+              : []
+            : undefined,
+          visibilityRules: normalizeLogicGroup(field.visibilityRules),
+          requiredRules: normalizeLogicGroup(field.requiredRules),
+        };
+      }),
     ),
     sections: Array.isArray(raw.sections) ? (raw.sections as FormSection[]) : [],
     purpose: normalizeFormPurpose(raw.purpose),

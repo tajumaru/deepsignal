@@ -48,7 +48,7 @@ export function SealStatusCard({
           <strong>{sealMode}</strong>
         </div>
         <div className="proof-row">
-          <span>Seal encrypted</span>
+          <span>Seal encrypted · creator/admin only</span>
           <strong>{encryptSubmissions ? "required" : "sensitive fields only"}</strong>
         </div>
         <div className="proof-row">

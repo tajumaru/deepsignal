@@ -1,7 +1,7 @@
 import type { Language } from "../i18n";
 import type { FormField } from "../types";
 import { formatCountryAnswerText } from "./countries";
-import { isConfirmationCheckboxField } from "./fieldTypes";
+import { isConfirmationCheckboxField, normalizeFieldType } from "./fieldTypes";
 import { flattenAnswer } from "./utils";
 
 function formatDateAnswerText(value: string, language: Language) {
@@ -19,13 +19,14 @@ function formatDateAnswerText(value: string, language: Language) {
 }
 
 export function formatAnswerText(field: FormField | undefined, value: unknown, language: Language) {
-  if (field?.type === "country_select" && typeof value === "string" && value.trim()) {
+  const fieldType = field ? normalizeFieldType(field.type) : undefined;
+  if (fieldType === "country_select" && typeof value === "string" && value.trim()) {
     return formatCountryAnswerText(value, language);
   }
-  if (field?.type === "date" && typeof value === "string" && value.trim()) {
+  if (fieldType === "date" && typeof value === "string" && value.trim()) {
     return formatDateAnswerText(value, language);
   }
-  if (field && isConfirmationCheckboxField(field.type)) {
+  if (fieldType && isConfirmationCheckboxField(fieldType)) {
     return value === true ? "Confirmed" : "Not confirmed";
   }
   return flattenAnswer(value);

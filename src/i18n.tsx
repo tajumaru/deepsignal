@@ -1458,7 +1458,6 @@ const fieldTypeKeys: Record<FieldType, keyof (typeof messages)["en"]> = {
   checkbox: "fieldTypeCheckbox",
   country_select: "fieldTypeCountrySelect",
   confirmation: "fieldTypeConfirmationCheckbox",
-  confirmationCheckbox: "fieldTypeConfirmationCheckbox",
   rating: "fieldTypeRating",
   url: "fieldTypeUrl",
   screenshot: "fieldTypeScreenshot",

@@ -1,0 +1,99 @@
+import { getSealRuntimeStatus } from "../../crypto/cryptoFactory";
+import { SUI_FULLNODE_URL, SUI_NETWORK, WALRUS_AGGREGATOR_URL, WALRUS_UPLOAD_RELAY_URL } from "../../lib/sui";
+import { getWalrusMutationRuntimeStatus } from "../../storage/walrusAdapter";
+
+type NetworkName = "mainnet" | "testnet";
+
+export type EncryptionReadinessWarningKind =
+  | "project-missing"
+  | "seal-env-incomplete"
+  | "walrus-write-unavailable"
+  | "network-mismatch";
+
+export interface EncryptionReadinessWarning {
+  kind: EncryptionReadinessWarningKind;
+  message: string;
+  blocksPublish: boolean;
+}
+
+function inferNetworkFromUrl(value: string): NetworkName | null {
+  const lower = value.toLowerCase();
+  if (lower.includes("mainnet")) {
+    return "mainnet";
+  }
+  if (lower.includes("testnet")) {
+    return "testnet";
+  }
+  return null;
+}
+
+function getNetworkMismatchWarnings(): EncryptionReadinessWarning[] {
+  const endpoints = [
+    { label: "Walrus aggregator", value: WALRUS_AGGREGATOR_URL },
+    { label: "Walrus upload relay", value: WALRUS_UPLOAD_RELAY_URL },
+    { label: "Sui fullnode", value: SUI_FULLNODE_URL },
+    { label: "Seal aggregator", value: import.meta.env.VITE_SEAL_AGGREGATOR_URL ?? "" },
+  ];
+
+  return endpoints.reduce<EncryptionReadinessWarning[]>((warnings, endpoint) => {
+    const detectedNetwork = inferNetworkFromUrl(endpoint.value);
+    if (detectedNetwork && detectedNetwork !== SUI_NETWORK) {
+      warnings.push({
+        kind: "network-mismatch",
+        message: `${endpoint.label} appears to target ${detectedNetwork}, but DeepSignal is configured for ${SUI_NETWORK}. Align mainnet/testnet settings before using encrypted submissions.`,
+        blocksPublish: false,
+      });
+    }
+    return warnings;
+  }, []);
+}
+
+export function getCreateFormEncryptionReadiness({
+  encryptSubmissions,
+  projectId,
+}: {
+  encryptSubmissions: boolean;
+  projectId?: string | null;
+}): EncryptionReadinessWarning[] {
+  if (!encryptSubmissions) {
+    return [];
+  }
+
+  const warnings: EncryptionReadinessWarning[] = [];
+  const sealRuntime = getSealRuntimeStatus();
+  const walrusRuntime = getWalrusMutationRuntimeStatus();
+  const walrusWriteUnavailable =
+    !walrusRuntime.aggregatorConfigured ||
+    !walrusRuntime.writeConfigured ||
+    (walrusRuntime.storageMode === "uploadRelay" && (!walrusRuntime.hasClient || !walrusRuntime.hasWallet));
+
+  if (!projectId?.trim()) {
+    warnings.push({
+      kind: "project-missing",
+      message:
+        "Seal encryption is enabled, but this form is not linked to a project. Private submissions require a project-backed Seal policy.",
+      blocksPublish: true,
+    });
+  }
+
+  if (!sealRuntime.canEncrypt) {
+    warnings.push({
+      kind: "seal-env-incomplete",
+      message:
+        "Seal environment is incomplete. Encrypted submissions will fail closed until Seal package and key server are configured.",
+      blocksPublish: true,
+    });
+  }
+
+  if (walrusWriteUnavailable) {
+    warnings.push({
+      kind: "walrus-write-unavailable",
+      message: "Walrus write access is unavailable. Publishing or receiving responses may fail.",
+      blocksPublish: false,
+    });
+  }
+
+  warnings.push(...getNetworkMismatchWarnings());
+
+  return warnings;
+}

@@ -6,7 +6,7 @@ import { getSubmissionCategoryFromPurpose } from "../../../lib/formTemplates";
 import { isResponseDeadlinePassed } from "../../../lib/responseDeadline";
 import { ensureRespondentSession } from "../../../lib/respondentSession";
 import {
-  createInlineEncryptedAttachment,
+  createInlinePrivateAttachment,
   saveSubmissionWithEncryption,
   storageAdapter,
 } from "../../../lib/storage";
@@ -265,7 +265,7 @@ export function usePublicSubmission({
 
             try {
               if (form.encryptSubmissions) {
-                const inlineAttachment = await createInlineEncryptedAttachment(file);
+                const inlineAttachment = await createInlinePrivateAttachment(file);
                 window.clearInterval(progressTimer);
                 attachments.push({
                   ...inlineAttachment,

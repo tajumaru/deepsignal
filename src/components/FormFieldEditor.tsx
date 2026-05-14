@@ -2,7 +2,7 @@ import type { ChangeEvent, DragEvent, KeyboardEvent } from "react";
 import { fieldTypeOptions } from "../lib/constants";
 import { useI18n } from "../i18n";
 import { getCountryFlag } from "../lib/countries";
-import { hasChoiceOptions, isConfirmationCheckboxField, isLongTextLikeField } from "../lib/fieldTypes";
+import { hasChoiceOptions, isConfirmationCheckboxField, isLongTextLikeField, normalizeFieldType } from "../lib/fieldTypes";
 import type { FieldType, FormField } from "../types";
 import { DateInput } from "./DateInput";
 import {
@@ -38,8 +38,8 @@ interface FormFieldEditorProps {
 }
 
 function normalizeFieldForType(field: FormField, type: FieldType): FormField {
-  const isConfirmation = isConfirmationCheckboxField(type);
-  const normalizedType: FieldType = isConfirmation ? "confirmation" : type;
+  const normalizedType = normalizeFieldType(type);
+  const isConfirmation = isConfirmationCheckboxField(normalizedType);
   return {
     ...field,
     type: normalizedType,
@@ -48,7 +48,7 @@ function normalizeFieldForType(field: FormField, type: FieldType): FormField {
       isConfirmation && !field.placeholder?.trim()
         ? "I confirm this information is accurate"
         : field.placeholder,
-    options: hasChoiceOptions(type) ? (field.options && field.options.length > 0 ? field.options : ["Option 1", "Option 2"]) : undefined,
+    options: hasChoiceOptions(normalizedType) ? (field.options && field.options.length > 0 ? field.options : ["Option 1", "Option 2"]) : undefined,
   };
 }
 

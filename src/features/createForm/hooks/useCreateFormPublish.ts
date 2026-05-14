@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
-import { getSealRuntimeStatus } from "../../../crypto/cryptoFactory";
 import { getPublicFormPath } from "../../../lib/publicLinks";
 import { createFormOnChain } from "../../../lib/projectRegistry";
 import {
@@ -10,6 +9,7 @@ import { isLocalFallbackBlob } from "../../../lib/proof";
 import { publishForm } from "../services";
 import { localStorageAdapter } from "../../../storage/localStorageAdapter";
 import { saveFormMetadataOverlay } from "../../../storage/formMetadataOverlay";
+import { getCreateFormEncryptionReadiness } from "../encryptionReadiness";
 import type {
   CreateFormTransaction,
   FormField,
@@ -61,9 +61,6 @@ const initialOverlayState: PublishOverlayState = {
   activeStageStatus: "",
   activeStageDetail: "",
 };
-
-const REAL_SEAL_PROJECT_REQUIRED_MESSAGE =
-  "Real Seal encrypted submissions require a selected project. Choose a project or turn off Encrypt submissions.";
 
 export function useCreateFormPublish({
   t,
@@ -203,9 +200,12 @@ export function useCreateFormPublish({
       return;
     }
 
-    const sealRuntime = getSealRuntimeStatus();
-    if (encryptSubmissions && sealRuntime.activeMode === "seal" && !selectedProject?.objectId) {
-      setError(REAL_SEAL_PROJECT_REQUIRED_MESSAGE);
+    const blockingEncryptionWarning = getCreateFormEncryptionReadiness({
+      encryptSubmissions,
+      projectId: selectedProject?.objectId,
+    }).find((warning) => warning.blocksPublish);
+    if (blockingEncryptionWarning) {
+      setError(blockingEncryptionWarning.message);
       goToStep("publish");
       return;
     }

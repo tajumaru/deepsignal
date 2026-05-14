@@ -9,7 +9,6 @@ export const fieldTypeLabels: Record<FieldType, string> = {
   checkbox: "Checkboxes",
   country_select: "Country select",
   confirmation: "Confirmation checkbox",
-  confirmationCheckbox: "Confirmation checkbox",
   rating: "Star rating",
   url: "URL",
   screenshot: "Screenshot upload",

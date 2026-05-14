@@ -16,6 +16,7 @@ import { InfoStep } from "../features/createForm/components/InfoStep";
 import { PublishOverlay } from "../features/createForm/components/PublishOverlay";
 import { PublishStep } from "../features/createForm/components/PublishStep";
 import { TemplateStep } from "../features/createForm/components/TemplateStep";
+import { getCreateFormEncryptionReadiness } from "../features/createForm/encryptionReadiness";
 import { useCreateFormBuilder } from "../features/createForm/hooks/useCreateFormBuilder";
 import { useCreateFormPublish } from "../features/createForm/hooks/useCreateFormPublish";
 import { getStorageRuntimeStatus, subscribeStorageRuntime } from "../storage/storageFactory";
@@ -77,6 +78,10 @@ export function FormBuilderPage() {
       ].filter(Boolean),
     [builder.hasQuestions, builder.hasValidTitle, builder.values.currentStep, builder.values.selectedTemplateKey, publish.savedForm],
   );
+  const encryptionWarnings = getCreateFormEncryptionReadiness({
+    encryptSubmissions: builder.values.encryptSubmissions,
+    projectId: builder.selectedProject?.objectId,
+  });
   const draftStateLabel = useMemo(() => {
     if (!builder.isDirty && publish.savedForm) {
       return "Draft cleared after publish.";
@@ -293,6 +298,7 @@ export function FormBuilderPage() {
               isReadyToPublish={builder.isReadyToPublish}
               publicPath={publish.publicPath}
               publishChecks={publish.publishChecks}
+              encryptionWarnings={encryptionWarnings}
               showPublishSuccessView={showPublishSuccessView}
               showWalrusDiagnostics={showWalrusDiagnostics}
               isConnected={isConnected}

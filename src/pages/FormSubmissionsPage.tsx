@@ -211,6 +211,10 @@ export function FormSubmissionsPage() {
     submissions.find((submission) => submission.id === selectedSignalId) ??
     visibleSignals[0] ??
     null;
+  const selectedSubmissionEncryptedBlobId = selectedSubmission?.encryptedBlobId;
+  const selectedSubmissionEncryptedBlobStoredOnWalrus = Boolean(
+    selectedSubmissionEncryptedBlobId && !isLocalFallbackBlob(selectedSubmissionEncryptedBlobId),
+  );
   const attachmentDecryptContext = useMemo(
     () => ({
       walletAddress: account?.address,
@@ -687,6 +691,9 @@ export function FormSubmissionsPage() {
                     >
                       {t("exportJson")}
                     </button>
+                    <p className="export-privacy-note">
+                      Private exports should be shared only with authorized team members.
+                    </p>
                   </div>
                 </div>
 
@@ -738,9 +745,20 @@ export function FormSubmissionsPage() {
                     {detailAnswers ? (
                       <div className="stack">
                         {detailLegacyUnencrypted ? (
-                          <p className="warning-text">Legacy unencrypted response</p>
+                          <p className="warning-text">Legacy unencrypted response · created before Seal enforcement</p>
                         ) : (
-                          <span className="signal-chip signal-chip-accent">Seal encrypted</span>
+                          <div className="signal-badge-row signal-badge-row-compact">
+                            <span className="signal-chip signal-chip-accent">Seal encrypted · creator/admin only</span>
+                            {selectedSubmissionEncryptedBlobStoredOnWalrus && selectedSubmissionEncryptedBlobId ? (
+                              <>
+                                <span className="signal-chip signal-chip-soft">Stored on Walrus</span>
+                                <span className="signal-meta-inline">
+                                  <span className="signal-meta-inline-label">Blob ID</span>
+                                  <SignalMetaChip type="blob" value={selectedSubmissionEncryptedBlobId} />
+                                </span>
+                              </>
+                            ) : null}
+                          </div>
                         )}
                         {previewAnswerFields.map((field) => (
                           <div key={field.id} className="answer-line">
@@ -920,6 +938,9 @@ export function FormSubmissionsPage() {
               >
                 {t("exportCsv")}
               </button>
+              <p className="export-privacy-note">
+                Private exports should be shared only with authorized team members.
+              </p>
               {showSurveySummary ? (
                 <button
                   type="button"
@@ -1031,6 +1052,9 @@ export function FormSubmissionsPage() {
                     >
                       {t("exportJson")}
                     </button>
+                    <p className="export-privacy-note">
+                      Private exports should be shared only with authorized team members.
+                    </p>
                   </div>
                 </div>
 
@@ -1082,9 +1106,20 @@ export function FormSubmissionsPage() {
                     {detailAnswers ? (
                       <div className="stack">
                         {detailLegacyUnencrypted ? (
-                          <p className="warning-text">Legacy unencrypted response</p>
+                          <p className="warning-text">Legacy unencrypted response · created before Seal enforcement</p>
                         ) : (
-                          <span className="signal-chip signal-chip-accent">Seal encrypted</span>
+                          <div className="signal-badge-row signal-badge-row-compact">
+                            <span className="signal-chip signal-chip-accent">Seal encrypted · creator/admin only</span>
+                            {selectedSubmissionEncryptedBlobStoredOnWalrus && selectedSubmissionEncryptedBlobId ? (
+                              <>
+                                <span className="signal-chip signal-chip-soft">Stored on Walrus</span>
+                                <span className="signal-meta-inline">
+                                  <span className="signal-meta-inline-label">Blob ID</span>
+                                  <SignalMetaChip type="blob" value={selectedSubmissionEncryptedBlobId} />
+                                </span>
+                              </>
+                            ) : null}
+                          </div>
                         )}
                         {previewAnswerFields.map((field) => (
                           <div key={field.id} className="answer-line">

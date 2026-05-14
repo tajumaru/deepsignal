@@ -100,7 +100,9 @@ export function PublicFormPage() {
     walletRequired || (attachWallet && account?.address)
       ? "Wallet attached, no extra personal-message signature"
       : "Anonymous signal";
-  const storageModeLabel = form?.encryptSubmissions ? "Walrus with optional Seal encryption" : "Walrus or local fallback";
+  const storageModeLabel = form?.encryptSubmissions
+    ? "Walrus storage + Seal-encrypted private payload"
+    : "Walrus storage for public feedback";
 
   useEffect(() => {
     if (walletRequired) {
@@ -153,7 +155,9 @@ export function PublicFormPage() {
         <section className="answer-card public-private-signal-note">
           <p className="eyebrow">Encrypted Feedback Inbox</p>
           <h3>Private signal enabled</h3>
-          <p className="muted">Your message stays private until an authorized reviewer unlocks it.</p>
+          <p className="muted">
+            Your response is sealed into a private payload and can only be unlocked by the creator or approved admins.
+          </p>
         </section>
       ) : null}
 

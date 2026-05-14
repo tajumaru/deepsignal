@@ -7,7 +7,6 @@ export type FieldType =
   | "checkbox"
   | "country_select"
   | "confirmation"
-  | "confirmationCheckbox"
   | "rating"
   | "url"
   | "screenshot"
@@ -118,6 +117,9 @@ export interface SubmissionAttachment {
   name: string;
   size: number;
   storage?: "blob" | "inline";
+  // For blob attachments, this means the blob payload is encrypted. For inline
+  // private attachments, it means the bytes are contained in the encrypted
+  // submission envelope rather than encrypted as a standalone attachment.
   encrypted?: boolean;
   originalName?: string;
   originalType?: string;

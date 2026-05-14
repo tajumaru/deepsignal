@@ -1,5 +1,5 @@
 import { sanitizeConditionalLogicFields } from "../../utils/formLogic";
-import { hasChoiceOptions, isConfirmationCheckboxField } from "../../lib/fieldTypes";
+import { hasChoiceOptions, isConfirmationCheckboxField, normalizeFieldType } from "../../lib/fieldTypes";
 import { makeId } from "../../lib/utils";
 import { normalizeFormVisibility } from "../../lib/explore";
 import type {
@@ -19,10 +19,11 @@ export function wait(ms: number) {
 }
 
 export function createField(type: FieldType = "shortText", sectionId?: string): FormField {
-  const isConfirmation = isConfirmationCheckboxField(type);
+  const normalizedType = normalizeFieldType(type);
+  const isConfirmation = isConfirmationCheckboxField(normalizedType);
   return {
     id: makeId("field"),
-    type: isConfirmation ? "confirmation" : type,
+    type: normalizedType,
     label: isConfirmation ? "Consent / confirmation" : "",
     required: false,
     sensitive: false,
@@ -31,7 +32,7 @@ export function createField(type: FieldType = "shortText", sectionId?: string): 
     sectionId,
     placeholder: isConfirmation ? "I confirm this information is accurate" : "",
     helpText: "",
-    options: hasChoiceOptions(type) ? ["Option 1", "Option 2"] : undefined,
+    options: hasChoiceOptions(normalizedType) ? ["Option 1", "Option 2"] : undefined,
     conditionalParentId: undefined,
     conditionalValue: undefined,
   };
@@ -93,7 +94,7 @@ export function serializeDraft(
       description: section.description ?? "",
     })),
     fields: sanitizeConditionalLogicFields(fields).map((field) => ({
-      type: field.type,
+      type: normalizeFieldType(field.type),
       label: field.label,
       required: field.required,
       sensitive: field.sensitive,
@@ -131,14 +132,18 @@ export function buildFormSchema(args: {
     id: makeId("form"),
     title: args.title.trim(),
     description: args.description.trim(),
-    fields: sanitizeConditionalLogicFields(args.fields).map((field) => ({
-      ...field,
-      label: field.label.trim(),
-      placeholder: field.placeholder?.trim() || undefined,
-      helpText: field.helpText?.trim() || undefined,
-      validationHint: field.validationHint?.trim() || undefined,
-      options: hasChoiceOptions(field.type) ? (field.options ?? []).map((option) => option.trim()).filter(Boolean) : undefined,
-    })),
+    fields: sanitizeConditionalLogicFields(args.fields).map((field) => {
+      const fieldType = normalizeFieldType(field.type);
+      return {
+        ...field,
+        type: fieldType,
+        label: field.label.trim(),
+        placeholder: field.placeholder?.trim() || undefined,
+        helpText: field.helpText?.trim() || undefined,
+        validationHint: field.validationHint?.trim() || undefined,
+        options: hasChoiceOptions(fieldType) ? (field.options ?? []).map((option) => option.trim()).filter(Boolean) : undefined,
+      };
+    }),
     sections: args.sections
       .map((section) => ({
         ...section,

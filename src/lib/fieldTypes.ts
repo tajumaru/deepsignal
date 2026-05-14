@@ -59,5 +59,5 @@ export function isAttachmentFieldType(type: FieldType) {
 }
 
 export function isConfirmationCheckboxField(type: FieldType) {
-  return type === "confirmation" || type === "confirmationCheckbox";
+  return type === "confirmation";
 }

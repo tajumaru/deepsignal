@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import { useI18n } from "../i18n";
 import { isAttachmentFieldType, isConfirmationCheckboxField, isLongTextLikeField } from "../lib/fieldTypes";
 import type { FormField } from "../types";
@@ -17,6 +18,49 @@ interface DynamicFieldProps {
   onChange: (value: unknown) => void;
 }
 
+type MarkdownToolbarAction = "bold" | "italic" | "bullet" | "link";
+
+const markdownToolbarActions: Array<{
+  action: MarkdownToolbarAction;
+  icon: string;
+  label: string;
+}> = [
+  { action: "bold", icon: "B", label: "Bold" },
+  { action: "italic", icon: "I", label: "Italic" },
+  { action: "bullet", icon: "List", label: "Bullet list" },
+  { action: "link", icon: "Link", label: "Link" },
+];
+
+function getMarkdownInsertion(action: MarkdownToolbarAction, selectedText: string) {
+  const hasSelection = selectedText.length > 0;
+
+  if (action === "bold") {
+    const text = hasSelection ? selectedText : "bold text";
+    return { value: `**${text}**`, selectionStart: 2, selectionEnd: 2 + text.length };
+  }
+
+  if (action === "italic") {
+    const text = hasSelection ? selectedText : "italic text";
+    return { value: `_${text}_`, selectionStart: 1, selectionEnd: 1 + text.length };
+  }
+
+  if (action === "bullet") {
+    const text = hasSelection ? selectedText : "list item";
+    const value = text
+      .split(/\r?\n/)
+      .map((line) => `- ${line || "list item"}`)
+      .join("\n");
+    return { value, selectionStart: 2, selectionEnd: value.length };
+  }
+
+  const text = hasSelection ? selectedText : "link text";
+  return {
+    value: `[${text}](https://example.com)`,
+    selectionStart: 1,
+    selectionEnd: 1 + text.length,
+  };
+}
+
 export function DynamicField({
   field,
   value,
@@ -28,6 +72,7 @@ export function DynamicField({
   onChange,
 }: DynamicFieldProps) {
   const { language, t } = useI18n();
+  const markdownTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const isRequired = required ?? field.required;
   const fieldErrorId = `${field.id}-error`;
   const hasError = Boolean(error);
@@ -39,6 +84,30 @@ export function DynamicField({
     const current = Array.isArray(value) ? value : [];
     const next = checked ? [...current, option] : current.filter((item) => item !== option);
     onChange(next);
+  }
+
+  function applyMarkdownAction(action: MarkdownToolbarAction) {
+    const textarea = markdownTextareaRef.current;
+    const currentValue = String(value ?? "");
+    const selectionStart = textarea?.selectionStart ?? currentValue.length;
+    const selectionEnd = textarea?.selectionEnd ?? currentValue.length;
+    const selectedText = currentValue.slice(selectionStart, selectionEnd);
+    const insertion = getMarkdownInsertion(action, selectedText);
+    const nextValue = `${currentValue.slice(0, selectionStart)}${insertion.value}${currentValue.slice(selectionEnd)}`;
+
+    onChange(nextValue);
+
+    window.requestAnimationFrame(() => {
+      const nextTextarea = markdownTextareaRef.current;
+      if (!nextTextarea) {
+        return;
+      }
+      nextTextarea.focus();
+      nextTextarea.setSelectionRange(
+        selectionStart + insertion.selectionStart,
+        selectionStart + insertion.selectionEnd,
+      );
+    });
   }
 
   return (
@@ -78,7 +147,26 @@ export function DynamicField({
 
       {isLongTextLikeField(field.type) ? (
         <div className={field.type === "markdown" ? "markdown-answer-field" : undefined}>
+          {field.type === "markdown" ? (
+            <div className="markdown-editor-toolbar" role="toolbar" aria-label="Rich text editor toolbar">
+              {markdownToolbarActions.map((item) => (
+                <button
+                  key={item.action}
+                  type="button"
+                  className={`markdown-toolbar-button markdown-toolbar-button-${item.action}`}
+                  disabled={disabled}
+                  title={item.label}
+                  aria-label={item.label}
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => applyMarkdownAction(item.action)}
+                >
+                  <span aria-hidden="true">{item.icon}</span>
+                </button>
+              ))}
+            </div>
+          ) : null}
           <textarea
+            ref={field.type === "markdown" ? markdownTextareaRef : undefined}
             rows={field.type === "markdown" ? 8 : 5}
             value={String(value ?? "")}
             placeholder={field.placeholder ?? (field.type === "markdown" ? "**Bold**, _italic_, links, and lists are supported." : "")}
