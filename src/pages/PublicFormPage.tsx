@@ -52,6 +52,7 @@ export function PublicFormPage() {
     manifestBlobId,
     requiredFieldError: t("requiredFieldError"),
     responseDeadlinePassedLabel: t("formResponseClosed"),
+    localFallbackNotice: t("signalStoredLocally"),
     suiRegistrationDeferredNotice: t("suiRegistrationDeferredNotice"),
     submitFailedLabel: t("submitFailed"),
   });

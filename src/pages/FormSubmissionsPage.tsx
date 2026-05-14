@@ -372,7 +372,7 @@ export function FormSubmissionsPage() {
     setSaveError("");
     const runSave = async () => {
       try {
-        let successMessage = "Review controls saved.";
+        let successMessage = "Review & triage saved.";
         await storageAdapter.updateSubmission(normalized);
         const nextOnchainStatus = triageStatusToOnchainStatus(normalized.triageStatus, normalized.status);
         const previousOnchainStatus = previousSubmission
@@ -670,7 +670,7 @@ export function FormSubmissionsPage() {
         </PrivateSignalUnlockCard>
         {!detailAnswers ? (
           <div className="review-unlock-context">
-            <strong>Unlock private signal to review</strong>
+            <strong>Unlock private signal to review and triage.</strong>
             <p className="muted">Seal Runtime: {sealRuntimeLabel}</p>
             <p className="muted">
               {t("walletApprovalReuseNotice", { minutes: REAL_SEAL_SESSION_TTL_MIN })}
@@ -728,7 +728,7 @@ export function FormSubmissionsPage() {
           </div>
         ) : (
           <div className="review-locked-signal-copy">
-            <strong>Unlock private signal to review</strong>
+            <strong>Unlock private signal to review and triage.</strong>
             <p className="muted">{t("encryptedFeedbackHidden")}</p>
           </div>
         )}
@@ -742,6 +742,7 @@ export function FormSubmissionsPage() {
         <div>
           <p className="eyebrow">Review workbench</p>
           <h3>Review & Triage</h3>
+          <p className="review-helper-copy">Turn this raw feedback into an actionable signal.</p>
         </div>
         <span className={`save-state-pill is-${saveState}`}>
           {saveState === "saving"
@@ -827,7 +828,7 @@ export function FormSubmissionsPage() {
           disabled={saveState === "saving"}
           onClick={() => void handleSaveReviewControls()}
         >
-          Save Review Controls
+          Save Review & Triage
         </button>
       </div>
     </section>

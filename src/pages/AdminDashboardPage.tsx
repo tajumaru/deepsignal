@@ -99,6 +99,7 @@ export function AdminDashboardPage() {
   const { toast, setToast } = useAdminToast();
   const saveQueueRef = useRef(Promise.resolve());
   const reviewInboxRef = useRef<HTMLDivElement | null>(null);
+  const selectedRecordResetRef = useRef<string | null>(null);
   const hasAdminAccess = canAdmin(capabilityProfile);
   const {
     forms,
@@ -195,7 +196,7 @@ export function AdminDashboardPage() {
     account?.address,
     capabilityProfile,
   );
-  const privateReviewLabel = "Private review enabled";
+  const privateReviewLabel = t("privateReviewEnabled");
 
   function renderAnswerValue(field: { type: string }, value: unknown) {
     if (isLongTextLikeField(field.type as FormSchema["fields"][number]["type"])) {
@@ -295,13 +296,13 @@ export function AdminDashboardPage() {
   const operationsStatusItems: OperationsStatusItem[] = [
     ...(!hasProjectAndForms
       ? [{
-          label: "Project Connected",
+          label: t("projectConnectedStatusLabel"),
           tone: selectedProject ? "ready" : "action",
-          detail: selectedProject ? selectedProject.name : "Select, create, or connect a project",
+          detail: selectedProject ? selectedProject.name : t("selectCreateOrConnectProject"),
         } satisfies OperationsStatusItem]
       : []),
     {
-      label: "Private Signals Enabled",
+      label: t("privateSignalsEnabledStatusLabel"),
       tone:
         selectedProjectForms.length === 0
           ? "pending"
@@ -310,44 +311,44 @@ export function AdminDashboardPage() {
             : "warning",
       detail:
         selectedProjectForms.length === 0
-          ? "No form published yet"
+          ? t("noFormPublishedYet")
           : protectedSelectedProjectFormsCount > 0
-            ? `${protectedSelectedProjectFormsCount} protected form${protectedSelectedProjectFormsCount === 1 ? "" : "s"} active`
-            : "Forms exist, but private signal protection is off",
+            ? t("protectedFormsActive", { count: protectedSelectedProjectFormsCount })
+            : t("privateSignalProtectionOff"),
     },
     {
-      label: "Reviewer Wallet Ready",
+      label: t("reviewerWalletReadyStatusLabel"),
       tone: !account?.address ? "action" : canReview(capabilityProfile) || !capabilityProfile.isConfigured ? "ready" : "warning",
       detail: !account?.address
-        ? "Connect reviewer wallet"
+        ? t("connectReviewerWallet")
         : canReview(capabilityProfile) || !capabilityProfile.isConfigured
-          ? `${getRoleLabel(capabilityProfile)} wallet verified`
-          : "Connected wallet does not have reviewer access",
+          ? t("walletVerifiedWithRole", { role: getRoleLabel(capabilityProfile) })
+          : t("connectedWalletNoReviewerAccess"),
     },
     {
-      label: "Walrus Sync Active",
+      label: t("walrusSyncActiveStatusLabel"),
       tone: storageRuntime.mode === "walrus" ? "ready" : "warning",
       detail: storageRuntime.mode === "walrus"
-        ? "Trusted storage available"
-        : "Local fallback active",
+        ? t("trustedStorageAvailable")
+        : t("localFallbackActive"),
     },
     {
-      label: "Pending Sui Verification",
+      label: t("pendingSuiVerificationStatusLabel"),
       tone: pendingSignals.length > 0 ? "pending" : selectedProjectSignals.length > 0 ? "ready" : "pending",
       detail: pendingSignals.length > 0
-        ? `${pendingSignals.length} signal${pendingSignals.length === 1 ? "" : "s"} waiting for verification`
+        ? t("signalsWaitingForVerification", { count: pendingSignals.length })
         : selectedProjectSignals.length > 0
-          ? "No pending proof registrations"
-          : "Awaiting project signals",
+          ? t("noPendingProofRegistrations")
+          : t("awaitingProjectSignals"),
     },
     {
-      label: "Roadmap Publishing Ready",
+      label: t("roadmapPublishingReadyStatusLabel"),
       tone: roadmapReadySignals.length > 0 ? "ready" : selectedProjectSignals.length > 0 ? "pending" : "pending",
       detail: roadmapReadySignals.length > 0
-        ? `${roadmapReadySignals.length} signal${roadmapReadySignals.length === 1 ? "" : "s"} ready for the Public Roadmap`
+        ? t("signalsReadyForPublicRoadmap", { count: roadmapReadySignals.length })
         : selectedProjectSignals.length > 0
-          ? "Mark signals as Planned, In Progress, or Fixed"
-          : "No roadmap candidates yet",
+          ? t("markSignalsForRoadmap")
+          : t("noRoadmapCandidatesYet"),
     },
   ];
   const selectedRoadmapUrl = selectedRecord
@@ -457,7 +458,7 @@ export function AdminDashboardPage() {
                 className="ghost-button"
                 onClick={() => revealProjectTools("connect")}
               >
-                Connect existing
+                {t("connectExistingShort")}
               </button>
             </div>
           ),
@@ -531,6 +532,12 @@ export function AdminDashboardPage() {
                   };
 
   useEffect(() => {
+    const selectedRecordId = selectedRecord?.submission.id ?? null;
+    if (selectedRecordId === selectedRecordResetRef.current) {
+      return;
+    }
+    selectedRecordResetRef.current = selectedRecordId;
+
     if (!selectedRecord) {
       setNotesDraft("");
       setDraftTag("");
@@ -576,34 +583,34 @@ export function AdminDashboardPage() {
       ...selectedRecord.submission,
       triageStatus: nextStatus,
     });
-    setToast({ tone: "success", message: "Signal added to the Public Roadmap." });
+    setToast({ tone: "success", message: t("signalAddedToPublicRoadmap") });
   }
 
   const streamItems = [
-    { id: "all", label: "All Signals", count: allSignals.length },
+    { id: "all", label: t("allSignals"), count: allSignals.length },
     {
       id: "unread",
-      label: "Unread",
+      label: t("unreadSignals"),
       count: signalIndex.counts.unread,
     },
     {
       id: "encrypted",
-      label: "Protected",
+      label: t("protectedLabel"),
       count: signalIndex.counts.encrypted,
     },
     {
       id: "high",
-      label: "Flagged",
+      label: t("flaggedLabel"),
       count: signalIndex.counts.high,
     },
     {
       id: "pending_sui",
-      label: "Pending Sui",
+      label: t("pendingSuiShortLabel"),
       count: signalIndex.counts.pendingSui,
     },
     {
       id: "archived",
-      label: "Resolved",
+      label: t("resolvedLabel"),
       count: signalIndex.counts.archived,
     },
   ] satisfies Array<{ id: StreamId; label: string; count: number }>;
@@ -699,28 +706,28 @@ export function AdminDashboardPage() {
   if (loadError) {
     return (
       <div className="panel stack">
-        <strong>Research Lab failed to load</strong>
+        <strong>{t("researchLabFailedToLoad")}</strong>
         <p className="warning-text">{loadError}</p>
         <button
           type="button"
           className="ghost-button"
           onClick={() => void loadConsole()}
         >
-          Retry
+          {t("retryLabel")}
         </button>
       </div>
     );
   }
 
   if (isLoadingAccess) {
-    return <div className="panel">Checking wallet capabilities...</div>;
+    return <div className="panel">{t("checkingWalletCapabilities")}</div>;
   }
 
   return (
     <AdminAccessGate
       hasWallet={Boolean(account?.address)}
       access={accessState}
-      deniedBody={capabilityProfile.isConfigured ? "Only wallets with OwnerCap / AdminCap / ReviewerCap can open the review console." : undefined}
+      deniedBody={capabilityProfile.isConfigured ? t("reviewConsoleCapabilityRequirement") : undefined}
     >
       <section className="stack">
         <AdminToast toast={toast} />
@@ -729,7 +736,7 @@ export function AdminDashboardPage() {
           <div className="workspace-hero-main workspace-overview-shell">
             <div className="workspace-hero-copy">
               <p className="eyebrow">{t("signalInboxTitle")}</p>
-              <h1>{selectedProject ? selectedProject.name : "Contest demo workspace"}</h1>
+              <h1>{selectedProject ? selectedProject.name : t("contestDemoWorkspace")}</h1>
               <div className="workspace-hero-meta">
                 {workspaceMetaItems.map((item) => (
                   <span key={item} className="workspace-meta-item">
@@ -738,7 +745,7 @@ export function AdminDashboardPage() {
                 ))}
                 <span className="workspace-meta-item">{privateReviewLabel}</span>
                 {isLoadingCapabilities ? (
-                  <span className="workspace-meta-item">Checking wallet access...</span>
+                  <span className="workspace-meta-item">{t("checkingWalletAccess")}</span>
                 ) : null}
               </div>
             </div>
@@ -748,7 +755,7 @@ export function AdminDashboardPage() {
                 <CreateFormLink
                   className={`primary-button ${highlightCreateFormCta ? "create-form-cta-highlight" : ""}`}
                 >
-                  Create Form
+                  {t("navCreateForm")}
                 </CreateFormLink>
                 <button
                   type="button"
@@ -759,10 +766,10 @@ export function AdminDashboardPage() {
                     reviewInboxRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
                   }}
                 >
-                  Review
+                  {t("reviewButton")}
                 </button>
                 <Link className="ghost-button" to="/admin/access">
-                  Members
+                  {t("membersButton")}
                 </Link>
                 <button
                   type="button"
@@ -779,7 +786,7 @@ export function AdminDashboardPage() {
                     });
                   }}
                 >
-                  {selectedProject ? `Project: ${selectedProject.name}` : "Choose Project"}
+                  {selectedProject ? t("projectButtonLabel", { name: selectedProject.name }) : t("chooseProjectButton")}
                 </button>
               </div>
             </aside>
@@ -803,12 +810,12 @@ export function AdminDashboardPage() {
             <div className="signal-workbench-header">
               <div className="signal-workbench-copy">
                 <p className="eyebrow">{t("signalInboxTitle")}</p>
-                <h2>Review workspace</h2>
-                <p className="muted">Streams, inbox, and detail stay visible together so triage work starts immediately.</p>
+                <h2>{t("reviewWorkspaceTitle")}</h2>
+                <p className="muted">{t("reviewWorkspaceBody")}</p>
               </div>
               <div className="signal-workbench-summary">
-                <span className="signal-chip">{visibleSignals.length} visible signals</span>
-                <span className="signal-chip signal-chip-soft">{visibleUnreadCount} unread</span>
+                <span className="signal-chip">{t("visibleSignalsLabel", { count: visibleSignals.length })}</span>
+                <span className="signal-chip signal-chip-soft">{t("unreadBadge", { count: visibleUnreadCount })}</span>
                 <span className="signal-chip signal-chip-soft">{activeScopeLabel}</span>
               </div>
             </div>
@@ -846,8 +853,8 @@ export function AdminDashboardPage() {
                   </p>
                 </div>
                 <div className="signal-column-tools">
-                  <span className="signal-chip signal-chip-soft">{visibleSignals.length} results</span>
-                  <span className="signal-chip signal-chip-soft">{pendingSignals.length} pending Sui</span>
+                  <span className="signal-chip signal-chip-soft">{t("resultsLabel", { count: visibleSignals.length })}</span>
+                  <span className="signal-chip signal-chip-soft">{t("pendingSuiResultsLabel", { count: pendingSignals.length })}</span>
                   <input
                     value={search}
                     onChange={(event) => setSearch(event.target.value)}
@@ -858,8 +865,8 @@ export function AdminDashboardPage() {
               <section className="answer-card answer-card-plain">
                 <div className="section-row">
                   <div>
-                    <p className="eyebrow">Pending Sui Registration</p>
-                    <h3>Optional proof queue</h3>
+                    <p className="eyebrow">{t("pendingSuiRegistrationEyebrow")}</p>
+                    <h3>{t("optionalProofQueueTitle")}</h3>
                   </div>
                   <button
                     type="button"
@@ -868,34 +875,34 @@ export function AdminDashboardPage() {
                     onClick={() => void handleRegisterPendingSignals()}
                   >
                     {registeringSignalIds.length > 0
-                      ? "Registering on Sui..."
-                      : `Register selected on Sui${selectedPendingVisibleCount > 0 ? ` (${selectedPendingVisibleCount})` : ""}`}
+                      ? t("registeringOnSui")
+                      : t("registerSelectedOnSui", { count: selectedPendingVisibleCount })}
                   </button>
                 </div>
-                <p className="muted">Sui registration is optional proof, not required for review.</p>
+                <p className="muted">{t("optionalProofQueueBody")}</p>
               </section>
 
               {visibleSignals.length === 0 ? (
                 <EmptyState variant="abyss">
-                  <p className="eyebrow">Inbox empty</p>
+                  <p className="eyebrow">{t("inboxEmptyEyebrow")}</p>
                   <h2>
                     {!selectedProject
-                      ? "Choose a project first"
+                      ? t("chooseProjectFirstTitle")
                       : selectedProjectForms.length === 0
-                        ? "Create your first signal form"
-                        : "Send a test signal to start review"}
+                        ? t("createFirstSignalFormTitle")
+                        : t("sendTestSignalToStartReviewTitle")}
                   </h2>
                   <p>
                     {!selectedProject
-                      ? "The contest flow starts with project selection so reviewer access and roadmap publishing stay scoped correctly."
+                      ? t("chooseProjectFirstBody")
                       : selectedProjectForms.length === 0
-                        ? "Publish a form for this project, then open the public link so someone can submit feedback."
-                        : "Open the public form, submit one test signal, then return here to review it in the inbox."}
+                        ? t("createFirstSignalFormBody")
+                        : t("sendTestSignalToStartReviewBody")}
                   </p>
                   <div className="inline-actions">
                     {!selectedProject ? null : selectedProjectForms.length === 0 ? (
                       <CreateFormLink className="primary-button">
-                        Create Signal Form
+                        {t("createSignalForm")}
                       </CreateFormLink>
                     ) : firstProjectForm ? (
                       <>
@@ -903,13 +910,13 @@ export function AdminDashboardPage() {
                           className="primary-button"
                           to={getPublicFormPath(firstProjectForm.id, firstProjectForm.manifestBlobId)}
                         >
-                          Open public link
+                          {t("openPublicLink")}
                         </Link>
                         <Link
                           className="ghost-button"
                           to={getPublicFormPath(firstProjectForm.id, firstProjectForm.manifestBlobId)}
                         >
-                          Send test signal
+                          {t("sendTestSignal")}
                         </Link>
                         <button
                           type="button"
@@ -920,7 +927,7 @@ export function AdminDashboardPage() {
                             setSearch("");
                           }}
                         >
-                          Return to admin inbox
+                          {t("returnToAdminInbox")}
                         </button>
                       </>
                     ) : null
@@ -949,13 +956,13 @@ export function AdminDashboardPage() {
                         </div>
                         <p className={`signal-card-preview ${submission.isEncrypted ? "is-locked" : ""}`}>
                           {submission.isEncrypted
-                            ? "Encrypted private signal. Requires reviewer access to unlock."
+                            ? t("encryptedPrivateSignalUnlockHint")
                             : getSignalPreview(submission)}
                         </p>
                         <div className="signal-card-formline">
                           <span className="signal-card-form">{form.title}</span>
                           {getSubmissionRespondentMeta(submission).isAnonymous ? (
-                            <span className="signal-chip">Anonymous respondent</span>
+                            <span className="signal-chip">{t("anonymousRespondent")}</span>
                           ) : submission.contributorId ? (
                             <SignalMetaChip type="contributor" value={getRespondentDisplayLabel(submission)} />
                           ) : null}
@@ -1020,7 +1027,7 @@ export function AdminDashboardPage() {
                       <p className="muted">
                         {selectedRecord.form.title} / {formatDate(selectedRecord.submission.createdAt)}
                       </p>
-                      <p className="muted">Read the original signal first, then set review state, priority, notes, roadmap status, and export actions.</p>
+                      <p className="muted">Read the original signal first, then turn it into an actionable review signal.</p>
                     </div>
                     <div className="inline-actions signal-detail-utility-actions">
                       <Link
@@ -1029,42 +1036,7 @@ export function AdminDashboardPage() {
                       >
                         {t("openFormInbox")}
                       </Link>
-                      <button
-                        type="button"
-                        className="ghost-button"
-                        onClick={() =>
-                          exportSubmissionJson(selectedRecord.form, selectedRecord.submission)
-                        }
-                      >
-                        {t("exportJson")}
-                      </button>
-                      <button
-                        type="button"
-                        className="ghost-button"
-                        onClick={() =>
-                          exportSubmissionsCsv(
-                            selectedRecord.form,
-                            (submissionsByFormId[selectedRecord.form.id] ?? []).map((submission) => normalizeSubmission(submission)),
-                          )
-                        }
-                      >
-                        {t("exportCsv")}
-                      </button>
-                      <p className="export-privacy-note">
-                        Private exports should be shared only with authorized team members.
-                      </p>
-                      {selectedRecord.submission.pendingOnchainRegistration ? (
-                        <button
-                          type="button"
-                          className="ghost-button"
-                          disabled={isRegisteringSignal(selectedRecord.submission.id)}
-                          onClick={() => void handleRegisterPendingSignals([selectedRecord.submission.id])}
-                        >
-                          {isRegisteringSignal(selectedRecord.submission.id)
-                            ? "Registering..."
-                            : "Register on Sui"}
-                        </button>
-                      ) : null}
+                      <span className="signal-chip signal-chip-soft">Review first</span>
                     </div>
                     </div>
 
@@ -1078,14 +1050,14 @@ export function AdminDashboardPage() {
                       <span className="pill">{getTriageStatusLabel(selectedRecord.submission.triageStatus)}</span>
                       <span className="signal-chip">{selectedRecord.category}</span>
                       <span className="signal-chip">
-                      Severity {selectedRecord.submission.severity ?? "medium"}
+                      {t("severityLabel", { value: selectedRecord.submission.severity ?? t("mediumLabel") })}
                       </span>
                       <span className={`signal-chip ${detailAnswers ? "signal-chip-accent" : ""}`}>
                         {detailAnswers
-                          ? "Private signal unlocked"
+                          ? t("privateSignalUnlockedStatus")
                           : selectedRecord.submission.isEncrypted
-                            ? "Encrypted private signal"
-                            : "Open submission"}
+                            ? t("encryptedPrivateSignalStatus")
+                            : t("openSubmissionLabel")}
                       </span>
                       {typeof selectedRecord.submission.ratingValue === "number" ? (
                         <span className="signal-chip">
@@ -1094,7 +1066,7 @@ export function AdminDashboardPage() {
                           })}
                         </span>
                       ) : null}
-                      <span className="signal-chip">{selectedFormSubmissionCount} signals in this form</span>
+                      <span className="signal-chip">{t("signalsInThisFormLabel", { count: selectedFormSubmissionCount })}</span>
                     </div>
                   </section>
 
@@ -1111,32 +1083,32 @@ export function AdminDashboardPage() {
                     </section>
                   ) : null}
 
-                  <div className="signal-detail-sections">
+                  <div className="signal-detail-sections review-primary-sections">
                     <section className="answer-card original-signal-section">
                       <div className="signal-detail-group-header signal-detail-group-header-original">
-                        <p className="eyebrow">Original Signal</p>
-                        <h3>Original Signal</h3>
-                        <p className="muted">Read the submitted feedback first, then continue with triage and roadmap decisions.</p>
+                        <p className="eyebrow">{t("originalSignalTitle")}</p>
+                        <h3>{t("originalSignalTitle")}</h3>
+                        <p className="muted">{t("originalSignalBody")}</p>
                       </div>
                       <div className="original-signal-block">
                         <div className="section-row">
                           <div>
-                            <p className="eyebrow">Feedback body</p>
-                            <h4>Submitted Feedback</h4>
+                            <p className="eyebrow">{t("feedbackBodyLabel")}</p>
+                            <h4>{t("submittedFeedbackTitle")}</h4>
                           </div>
                         </div>
                       {detailAnswers ? (
                         <div className="stack">
                           {detailLegacyUnencrypted ? (
-                            <p className="warning-text">Legacy unencrypted response · created before Seal enforcement</p>
+                            <p className="warning-text">{t("legacyUnencryptedResponse")}</p>
                           ) : (
                             <div className="signal-badge-row signal-badge-row-compact">
-                              <span className="signal-chip signal-chip-accent">Seal encrypted · creator/admin only</span>
+                              <span className="signal-chip signal-chip-accent">{t("sealEncryptedCreatorAdminOnly")}</span>
                               {selectedRecordEncryptedBlobStoredOnWalrus && selectedRecordEncryptedBlobId ? (
                                 <>
-                                  <span className="signal-chip signal-chip-soft">Stored on Walrus</span>
+                                  <span className="signal-chip signal-chip-soft">{t("storedOnWalrus")}</span>
                                   <span className="signal-meta-inline">
-                                    <span className="signal-meta-inline-label">Blob ID</span>
+                                    <span className="signal-meta-inline-label">{t("blobIdLabel")}</span>
                                     <SignalMetaChip type="blob" value={selectedRecordEncryptedBlobId} />
                                   </span>
                                 </>
@@ -1160,8 +1132,8 @@ export function AdminDashboardPage() {
                       ) : selectedRecordNeedsDecrypt ? (
                         <div className="locked-signal-state">
                           <div className="locked-signal-copy">
-                            <strong>Encrypted private signal</strong>
-                            <p>Requires reviewer access. Decrypt with wallet to reveal the message.</p>
+                            <strong>{t("encryptedPrivateSignalStatus")}</strong>
+                            <p>{t("requiresReviewerAccessDecryptHint")}</p>
                           </div>
                           <div className="locked-signal-skeleton" aria-hidden="true">
                             <span />
@@ -1212,7 +1184,8 @@ export function AdminDashboardPage() {
                     ) : null}
 
                     {selectedRecordNeedsDecrypt ? (
-                      <div className="stack private-access-copy">
+                      <div className="review-unlock-context">
+                        <strong>Unlock private signal to review.</strong>
                         <p className="muted">
                           {t("walletApprovalReuseNotice", { minutes: realSealSessionTtlMinutes })}
                         </p>
@@ -1229,31 +1202,32 @@ export function AdminDashboardPage() {
                       </div>
                     ) : null}
 
-                    <section className="answer-card review-controls-section">
+                    <section className="answer-card review-controls-section review-triage-card">
                       <div className="review-controls-header">
                         <div>
-                          <p className="eyebrow">Review Actions</p>
-                          <h3>Priority and status</h3>
+                          <p className="eyebrow">Review workbench</p>
+                          <h3>Review & Triage</h3>
+                          <p className="review-helper-copy">Turn this raw feedback into an actionable signal.</p>
                         </div>
                         <span className={`save-state-pill ${saving ? "is-saving" : ""}`}>
                           {saving ? "Saving..." : "Ready"}
                         </span>
                       </div>
-                      <div className="review-field-row">
+                      <div className="review-field-grid">
                         <label className="review-select">
-                          <span>{t("priority")}</span>
+                          <span>Review State</span>
                           <select
-                            value={selectedRecord.submission.priority}
+                            value={selectedRecord.submission.status}
                             onChange={(event) =>
                               void updateSubmission({
                                 ...selectedRecord.submission,
-                                priority: event.target.value as Submission["priority"],
+                                status: event.target.value as Submission["status"],
                               })
                             }
                           >
-                            <option value="low">{t("priorityLow")}</option>
-                            <option value="medium">{t("priorityMedium")}</option>
-                            <option value="high">{t("priorityHigh")}</option>
+                            <option value="unread">{t("statusUnread")}</option>
+                            <option value="read">{t("statusRead")}</option>
+                            <option value="archived">{t("statusArchived")}</option>
                           </select>
                         </label>
                         <label className="review-select">
@@ -1275,22 +1249,50 @@ export function AdminDashboardPage() {
                           </select>
                         </label>
                         <label className="review-select">
-                          <span>Review State</span>
+                          <span>{t("priority")}</span>
                           <select
-                            value={selectedRecord.submission.status}
+                            value={selectedRecord.submission.priority}
                             onChange={(event) =>
                               void updateSubmission({
                                 ...selectedRecord.submission,
-                                status: event.target.value as Submission["status"],
+                                priority: event.target.value as Submission["priority"],
                               })
                             }
                           >
-                            <option value="unread">{t("statusUnread")}</option>
-                            <option value="read">{t("statusRead")}</option>
-                            <option value="archived">{t("statusArchived")}</option>
+                            <option value="low">{t("priorityLow")}</option>
+                            <option value="medium">{t("priorityMedium")}</option>
+                            <option value="high">{t("priorityHigh")}</option>
+                          </select>
+                        </label>
+                        <label className="review-select">
+                          <span>Signal Value</span>
+                          <select
+                            value={selectedRecord.submission.signalValue?.toString() ?? ""}
+                            onChange={(event) =>
+                              void updateSubmission({
+                                ...selectedRecord.submission,
+                                signalValue: event.target.value ? Number(event.target.value) : undefined,
+                              })
+                            }
+                          >
+                            <option value="">Not scored</option>
+                            {[1, 2, 3, 4, 5].map((value) => (
+                              <option key={value} value={value}>
+                                {value}
+                              </option>
+                            ))}
                           </select>
                         </label>
                       </div>
+                      <label className="review-select">
+                        <span>Internal note</span>
+                        <textarea
+                          rows={5}
+                          value={notesDraft}
+                          onChange={(event) => setNotesDraft(event.target.value)}
+                          placeholder={t("captureReviewNotes")}
+                        />
+                      </label>
                       <div className="review-action-bar">
                         <button
                           type="button"
@@ -1319,9 +1321,24 @@ export function AdminDashboardPage() {
                         >
                           Mark resolved
                         </button>
+                        <button
+                          type="button"
+                          className="primary-button review-primary-button"
+                          disabled={saving}
+                          onClick={() =>
+                            void updateSubmission({
+                              ...selectedRecord.submission,
+                              notes: notesDraft,
+                            })
+                          }
+                        >
+                          Save Review & Triage
+                        </button>
                       </div>
                     </section>
+                  </div>
 
+                  <div className="signal-detail-sections review-secondary-sections">
                     <section className="answer-card review-support-card review-inline-card">
                       <div className="section-row">
                         <div>
@@ -1380,7 +1397,7 @@ export function AdminDashboardPage() {
                       </div>
                     </section>
 
-                    <section className="answer-card review-support-card review-inline-card">
+                    <section className="answer-card review-support-card review-inline-card" hidden>
                       <div className="section-row">
                         <div>
                           <p className="eyebrow">Internal Notes</p>
@@ -1482,10 +1499,45 @@ export function AdminDashboardPage() {
 
                     <section className="signal-detail-group details-group-section">
                       <div className="signal-detail-group-header signal-detail-group-header-details">
-                        <p className="eyebrow">System Details</p>
-                        <h3>Metadata, Walrus, Seal, and Sui</h3>
+                        <p className="eyebrow">Secondary tools</p>
+                        <h3>Metadata / Export</h3>
                         <p className="muted">These details stay collapsed until you need to verify storage, encryption, or proof state.</p>
                       </div>
+
+                      <section className="answer-card review-secondary-card">
+                        <div className="section-row">
+                          <div>
+                            <p className="eyebrow">Export</p>
+                            <h3>JSON / CSV</h3>
+                          </div>
+                          <div className="inline-actions">
+                            <button
+                              type="button"
+                              className="ghost-button"
+                              onClick={() =>
+                                exportSubmissionJson(selectedRecord.form, selectedRecord.submission)
+                              }
+                            >
+                              {t("exportJson")}
+                            </button>
+                            <button
+                              type="button"
+                              className="ghost-button"
+                              onClick={() =>
+                                exportSubmissionsCsv(
+                                  selectedRecord.form,
+                                  (submissionsByFormId[selectedRecord.form.id] ?? []).map((submission) => normalizeSubmission(submission)),
+                                )
+                              }
+                            >
+                              {t("exportCsv")}
+                            </button>
+                          </div>
+                        </div>
+                        <p className="export-privacy-note">
+                          Private exports should be shared only with authorized team members.
+                        </p>
+                      </section>
 
                       <details
                         className="answer-card collapsible-detail-card tertiary-detail-section"
@@ -1497,34 +1549,34 @@ export function AdminDashboardPage() {
                         <summary>
                           <span>
                             <p className="eyebrow">Metadata</p>
-                            <h3>Signal metadata and proof</h3>
+                            <h3>{t("signalMetadataAndProofTitle")}</h3>
                           </span>
                         </summary>
                         <div className="metadata-list">
                         <div className="metadata-row">
-                          <span>Review state</span>
+                          <span>{t("reviewStateLabel")}</span>
                             <strong>
                               {detailLegacyUnencrypted
-                                ? "Legacy unencrypted response · created before Seal enforcement"
+                                ? t("legacyUnencryptedResponse")
                                 : detailAnswers
-                                  ? "Private signal unlocked"
-                                  : "Encrypted private signal"}
+                                  ? t("privateSignalUnlockedStatus")
+                                  : t("encryptedPrivateSignalStatus")}
                             </strong>
                         </div>
                           <div className="metadata-row">
-                            <span>Seal runtime</span>
-                            <strong>Project reviewer access</strong>
+                            <span>{t("sealRuntimeLabel")}</span>
+                            <strong>{t("projectReviewerAccess")}</strong>
                           </div>
                           <SignalMetaRow label="Project" type="registry" value={selectedRecord.form.projectId} emptyLabel={t("notAvailable")} />
                           {typeof selectedRecord.form.onchainFormId === "number" ? (
                             <div className="metadata-row">
-                              <span>Registry Form ID</span>
+                              <span>{t("registryFormIdLabel")}</span>
                               <strong>{selectedRecord.form.onchainFormId}</strong>
                             </div>
                           ) : null}
                           {typeof selectedRecord.submission.onchainSignalId === "number" ? (
                             <div className="metadata-row">
-                              <span>Signal Receipt</span>
+                              <span>{t("signalReceiptLabel")}</span>
                               <strong>{selectedRecord.submission.onchainSignalId}</strong>
                             </div>
                           ) : null}
@@ -1559,14 +1611,14 @@ export function AdminDashboardPage() {
                             </SignalMetaRow>
                           ) : selectedRecord.submission.isEncrypted ? (
                             <div className="metadata-row">
-                              <span>Encrypted Payload</span>
+                              <span>{t("encryptedPayloadLabel")}</span>
                               <strong>{getEncryptedPayloadAvailabilityLabel(selectedRecord.submission)}</strong>
                             </div>
                           ) : null}
-                          <SignalMetaRow label="Seal Identity" type="seal" value={selectedRecord.submission.sealIdentity} emptyLabel={t("notAvailable")} />
+                          <SignalMetaRow label={t("sealIdentityLabel")} type="seal" value={selectedRecord.submission.sealIdentity} emptyLabel={t("notAvailable")} />
                           {selectedRecord.submission.signalReceiptMetadataDigest ? (
                             <SignalMetaRow
-                              label="Receipt Metadata Digest"
+                              label={t("receiptMetadataDigestLabel")}
                               type="registry"
                               value={selectedRecord.submission.signalReceiptMetadataDigest}
                               emptyLabel={t("notAvailable")}
@@ -1581,7 +1633,7 @@ export function AdminDashboardPage() {
                                 selectedRecord.submission.attachments.map((attachment) => (
                                   <div key={attachment.blobId} className="signal-meta-row-value">
                                     {attachment.storage === "inline" ? (
-                                      <strong>Embedded in private signal</strong>
+                                      <strong>{t("embeddedInPrivateSignal")}</strong>
                                     ) : (
                                       <SignalMetaChip type="blob" value={attachment.blobId} />
                                     )}
@@ -1597,23 +1649,23 @@ export function AdminDashboardPage() {
                             </div>
                           </div>
                           <div className="metadata-row">
-                            <span>Wallet</span>
+                            <span>{t("walletLabel")}</span>
                             <strong>
                               {getSubmissionRespondentMeta(selectedRecord.submission).isAnonymous
-                                ? "Anonymous respondent"
+                                ? t("anonymousRespondent")
                                 : getSubmissionRespondentMeta(selectedRecord.submission).walletAddress ?? t("notAvailable")}
                             </strong>
                           </div>
                           <div className="metadata-row">
-                            <span>Anonymous</span>
-                            <strong>{getSubmissionRespondentMeta(selectedRecord.submission).isAnonymous ? "Yes" : "No"}</strong>
+                            <span>{t("anonymousLabel")}</span>
+                            <strong>{getSubmissionRespondentMeta(selectedRecord.submission).isAnonymous ? t("yesLabel") : t("noLabel")}</strong>
                           </div>
                           <div className="metadata-row">
-                            <span>Submitted</span>
+                            <span>{t("submittedLabel")}</span>
                             <strong>{formatDate(getSubmissionRespondentMeta(selectedRecord.submission).submittedAt)}</strong>
                           </div>
                           <div className="metadata-row">
-                            <span>Chain</span>
+                            <span>{t("chainLabel")}</span>
                             <strong>{getSubmissionRespondentMeta(selectedRecord.submission).chain}</strong>
                           </div>
                           <div className="metadata-row">
@@ -1625,7 +1677,7 @@ export function AdminDashboardPage() {
                             </strong>
                           </div>
                           <div className="metadata-row">
-                            <span>Reviewer access</span>
+                            <span>{t("reviewerAccessLabel")}</span>
                             <strong>{privateReviewLabel}</strong>
                           </div>
                           <div className="metadata-row">
@@ -1639,12 +1691,12 @@ export function AdminDashboardPage() {
                             </strong>
                           </div>
                           <div className="metadata-row">
-                            <span>Pending Sui registration</span>
+                            <span>{t("pendingSuiRegistrationLabel")}</span>
                             <strong>
                               {selectedRecord.submission.onchainStatus ??
                                 (selectedRecord.submission.pendingOnchainRegistration
                                   ? t("pendingSuiRegistration")
-                                  : "offchain only")}
+                                  : t("offchainOnlyLabel"))}
                             </strong>
                           </div>
                         </div>
@@ -1659,8 +1711,8 @@ export function AdminDashboardPage() {
                       >
                         <summary>
                           <span>
-                            <p className="eyebrow">Seal Details</p>
-                            <h3>Encrypted payload details</h3>
+                            <p className="eyebrow">{t("sealDetailsEyebrow")}</p>
+                            <h3>{t("encryptedPayloadDetailsTitle")}</h3>
                           </span>
                         </summary>
                         <SealStatusCard
@@ -1678,7 +1730,7 @@ export function AdminDashboardPage() {
                       <details className="answer-card collapsible-detail-card tertiary-detail-section">
                         <summary>
                           <span>
-                            <p className="eyebrow">Node Actions</p>
+                            <p className="eyebrow">{t("nodeActions")}</p>
                             <h3>{selectedRecord.form.title}</h3>
                           </span>
                         </summary>
@@ -1705,21 +1757,21 @@ export function AdminDashboardPage() {
 
                     <section className="signal-detail-group details-group-section">
                       <div className="signal-detail-group-header signal-detail-group-header-details">
-                        <p className="eyebrow">Review Support</p>
-                        <h3>AI summary and similar signals</h3>
-                        <p className="muted">AI stays separate from the original signal so reviewer judgment remains primary.</p>
+                        <p className="eyebrow">{t("reviewSupportEyebrow")}</p>
+                        <h3>{t("aiSummaryAndSimilarSignalsTitle")}</h3>
+                        <p className="muted">{t("aiReviewerNote")}</p>
                       </div>
 
                       <details className="answer-card collapsible-detail-card ai-summary-section ai-card">
                         <summary>
                           <span>
-                            <p className="eyebrow">AI Summary</p>
-                            <h3>AI Summary</h3>
+                            <p className="eyebrow">{t("aiSummaryEyebrow")}</p>
+                            <h3>{t("aiSummaryTitle")}</h3>
                           </span>
                         </summary>
                         <p>{selectedRecord.submission.aiSummary || getSignalPreview(selectedRecord.submission)}</p>
                         <div className="signal-badge-row signal-badge-row-compact">
-                          <span className="signal-chip">Confidence {inferredAiConfidence}</span>
+                          <span className="signal-chip">{t("aiConfidenceLabel", { value: inferredAiConfidence })}</span>
                           <span className="signal-chip">{selectedRecord.category}</span>
                           {selectedRecord.submission.keywords?.slice(0, 3).map((keyword) => (
                             <span key={keyword} className="signal-chip">
@@ -1728,7 +1780,7 @@ export function AdminDashboardPage() {
                           ))}
                           {selectedRecord.submission.clusterId ? (
                             <span className="signal-chip signal-chip-accent">
-                              AI grouped
+                              {t("aiGroupedLabel")}
                               {clusterCountById[selectedRecord.submission.clusterId]
                                 ? ` (${clusterCountById[selectedRecord.submission.clusterId]})`
                                 : ""}
@@ -1740,8 +1792,8 @@ export function AdminDashboardPage() {
                       <details className="answer-card collapsible-detail-card triage-compact-card ai-card ai-similar-section">
                         <summary>
                           <span>
-                            <p className="eyebrow">Similar Signals</p>
-                            <h3>Similar Signals</h3>
+                            <p className="eyebrow">{t("similarSignalsEyebrow")}</p>
+                            <h3>{t("similarSignalsTitle")}</h3>
                           </span>
                         </summary>
                         <SignalClusterPanel
@@ -1778,27 +1830,27 @@ export function AdminDashboardPage() {
         <details ref={advancedProjectSettingsRef} className="panel advanced-project-settings">
           <summary>
             <span>
-              <strong>Advanced project settings</strong>
-              <span className="muted">Connect an existing project, review registry state, or use danger-zone actions.</span>
+              <strong>{t("advancedProjectSettingsTitle")}</strong>
+              <span className="muted">{t("advancedProjectSettingsBody")}</span>
             </span>
           </summary>
           <div className="advanced-project-settings-body">
             <div className="project-registry-status">
-              <span className="signal-chip">{selectedProject ? "Project selected" : "No project selected"}</span>
+              <span className="signal-chip">{selectedProject ? t("projectSelectedStatus") : t("noProjectSelectedStatus")}</span>
               <span className="signal-chip">{privateReviewLabel}</span>
             </div>
 
             <article className="project-registry-subpanel project-registry-subpanel-soft advanced-project-switcher">
               <div className="project-panel-head">
                 <div>
-                  <p className="eyebrow">Current Project</p>
-                  <h3>Create or switch project</h3>
+                  <p className="eyebrow">{t("currentProjectEyebrow")}</p>
+                  <h3>{t("createOrSwitchProjectTitle")}</h3>
                 </div>
-                <span className="signal-chip">Workspace scope</span>
+                <span className="signal-chip">{t("workspaceScopeLabel")}</span>
               </div>
-              <p className="muted">Switch the active project for this inbox or create a fresh destination.</p>
+              <p className="muted">{t("switchProjectBody")}</p>
               <label className="project-selector-inline" htmlFor="workspace-project-selector">
-                <span className="eyebrow">Selected project</span>
+                <span className="eyebrow">{t("selectedProjectLabel")}</span>
                 <select
                   id="workspace-project-selector"
                   className="project-selector-field"
@@ -1807,7 +1859,7 @@ export function AdminDashboardPage() {
                     selectProject(event.target.value);
                   }}
                 >
-                  <option value="">Choose a project</option>
+                  <option value="">{t("chooseProjectButton")}</option>
                   {projects.map((project) => (
                     <option key={project.objectId} value={project.objectId}>
                       {project.name} ({project.formsCount} forms / {project.signalsCount} signals)
@@ -1818,15 +1870,15 @@ export function AdminDashboardPage() {
               {hasAdminAccess ? (
                 <div className="workspace-create-project">
                   <div className="workspace-create-project-copy">
-                    <span className="eyebrow">Create project</span>
-                    <p className="muted">Provision a new project without leaving the inbox workspace.</p>
+                    <span className="eyebrow">{t("createProjectEyebrow")}</span>
+                    <p className="muted">{t("createProjectBody")}</p>
                   </div>
                   <div className="workspace-create-project-actions">
                     <input
                       ref={projectCreateInputRef}
                       value={projectCreateName}
                       onChange={(event) => setProjectCreateName(event.target.value)}
-                      placeholder="New project name"
+                      placeholder={t("newProjectNamePlaceholder")}
                     />
                     <button
                       type="button"
@@ -1834,7 +1886,7 @@ export function AdminDashboardPage() {
                       onClick={() => void handleCreateProject()}
                       disabled={isCreatingProject}
                     >
-                      {isCreatingProject ? "Creating..." : "Create Project"}
+                      {isCreatingProject ? t("creatingLabel") : t("createProjectButton")}
                     </button>
                   </div>
                 </div>
@@ -1845,21 +1897,21 @@ export function AdminDashboardPage() {
               <article className="project-registry-subpanel project-registry-subpanel-soft">
                 <div className="project-panel-head">
                   <div>
-                    <p className="eyebrow">Existing Project</p>
-                    <h3>Connect existing project</h3>
+                    <p className="eyebrow">{t("existingProjectEyebrow")}</p>
+                    <h3>{t("connectExistingProjectTitle")}</h3>
                   </div>
-                  <span className="signal-chip">Project / OwnerCap</span>
+                  <span className="signal-chip">{t("projectOwnerCapLabel")}</span>
                 </div>
-                <p className="muted">Paste a Project or ProjectOwnerCap object id to attach this workspace.</p>
+                <p className="muted">{t("attachWorkspaceBody")}</p>
                 <div className="inline-actions">
                   <input
                     ref={manualProjectInputRef}
                     value={manualProjectId}
                     onChange={(event) => setManualProjectId(event.target.value)}
-                    placeholder="Project or ProjectOwnerCap object id"
+                    placeholder={t("projectOrOwnerCapPlaceholder")}
                   />
                   <button type="button" className="ghost-button" onClick={() => void connectManualProject()}>
-                    Connect
+                    {t("connectLabel")}
                   </button>
                 </div>
               </article>
@@ -1868,35 +1920,35 @@ export function AdminDashboardPage() {
                 <article className="project-registry-subpanel project-registry-danger">
                   <div className="project-panel-head">
                     <div>
-                      <p className="eyebrow">Danger Zone</p>
-                      <h3>Delete project</h3>
+                      <p className="eyebrow">{t("dangerZoneEyebrow")}</p>
+                      <h3>{t("deleteProjectTitle")}</h3>
                     </div>
-                    <span className="signal-chip">Owner only</span>
+                    <span className="signal-chip">{t("ownerOnlyLabel")}</span>
                   </div>
-                  <p className="muted">Only empty projects can be deleted.</p>
+                  <p className="muted">{t("emptyProjectsDeleteOnly")}</p>
                   <div className="stack">
                     <div className="workspace-hero-meta">
-                      <span className="workspace-meta-item">{selectedProject.formsCount} on-chain forms</span>
-                      <span className="workspace-meta-item">{selectedProject.signalsCount} on-chain signals</span>
-                      <span className="workspace-meta-item">{localProjectFormsCount} local forms</span>
+                      <span className="workspace-meta-item">{t("onchainFormsCount", { count: selectedProject.formsCount })}</span>
+                      <span className="workspace-meta-item">{t("onchainSignalsCount", { count: selectedProject.signalsCount })}</span>
+                      <span className="workspace-meta-item">{t("localFormsCount", { count: localProjectFormsCount })}</span>
                     </div>
                     {deleteProjectBlockedReason ? (
-                      <p className="warning-text">{deleteProjectBlockedReason} Local forms may still differ from the on-chain registry.</p>
+                      <p className="warning-text">{deleteProjectBlockedReason} {t("localFormsDifferWarningSuffix")}</p>
                     ) : (
-                      <p className="muted">This project is empty and can be deleted by the owner wallet.</p>
+                      <p className="muted">{t("projectEmptyDeleteBody")}</p>
                     )}
                     {visibleOnchainForms.length > 0 ? (
                       <div className="stack onchain-form-list">
-                        <p className="muted">On-chain form records</p>
+                        <p className="muted">{t("onchainFormRecords")}</p>
                         {visibleOnchainForms.map((form) => (
                           <div key={form.formId} className="metadata-row onchain-form-row">
                             <div>
-                              <strong>Form #{form.formId}</strong>
-                              <p className="muted">{form.title || "Untitled form"}</p>
+                              <strong>{t("formNumberLabel", { id: form.formId })}</strong>
+                              <p className="muted">{form.title || t("untitledForm")}</p>
                             </div>
                             <div className="inline-actions">
                               <span className={`signal-chip ${form.active ? "signal-chip-accent" : "signal-chip-soft"}`}>
-                                {form.active ? "Active" : "Inactive"}
+                                {form.active ? t("activeLabel") : t("inactiveLabel")}
                               </span>
                               <button
                                 type="button"
@@ -1907,13 +1959,13 @@ export function AdminDashboardPage() {
                                 }
                                 onClick={() => void handleDeleteOnchainForm(form.formId)}
                               >
-                                {deletingOnchainFormIds.includes(form.formId) ? "Deleting..." : "Delete on-chain form"}
+                                {deletingOnchainFormIds.includes(form.formId) ? t("deletingLabel") : t("deleteOnchainFormButton")}
                               </button>
                             </div>
                           </div>
                         ))}
                         {selectedProject.signalsCount > 0 ? (
-                          <p className="muted">On-chain forms can only be deleted when no on-chain signals reference this project.</p>
+                          <p className="muted">{t("deleteOnchainFormsNoSignalsOnly")}</p>
                         ) : null}
                       </div>
                     ) : null}
@@ -1929,7 +1981,7 @@ export function AdminDashboardPage() {
                         localProjectFormsCount > 0
                       }
                     >
-                      {deletingProject ? "Deleting..." : "Delete Project"}
+                      {deletingProject ? t("deletingLabel") : t("deleteProjectButton")}
                     </button>
                   </div>
                 </article>

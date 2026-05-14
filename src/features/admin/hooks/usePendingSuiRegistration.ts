@@ -12,6 +12,7 @@ import {
   normalizeSubmission,
   storageAdapter,
 } from "../../../lib/storage";
+import { useI18n } from "../../../i18n";
 import type { Submission } from "../../../types";
 import type { AdminToastState } from "./useAdminToast";
 import type { SignalRecord } from "./useSignalInboxData";
@@ -30,14 +31,16 @@ export function usePendingSuiRegistration({
   setToast,
 }: UsePendingSuiRegistrationArgs) {
   const suiClient = useSuiClient();
+  const { t } = useI18n();
   const registerSignalReceiptTx = useSignAndExecuteTransaction();
   const [selectedPendingSignalIds, setSelectedPendingSignalIds] = useState<string[]>([]);
   const [registeringSignalIds, setRegisteringSignalIds] = useState<string[]>([]);
 
   useEffect(() => {
-    setSelectedPendingSignalIds((current) =>
-      current.filter((signalId) => pendingSignalIdSet.has(signalId)),
-    );
+    setSelectedPendingSignalIds((current) => {
+      const next = current.filter((signalId) => pendingSignalIdSet.has(signalId));
+      return next.length === current.length ? current : next;
+    });
   }, [pendingSignalIdSet]);
 
   function isRegisteringSignal(signalId: string) {
@@ -109,7 +112,7 @@ export function usePendingSuiRegistration({
   async function handleRegisterPendingSignals(targetSignalIds?: string[]) {
     const nextTargetIds = (targetSignalIds ?? selectedPendingSignalIds).filter(Boolean);
     if (nextTargetIds.length === 0) {
-      setToast({ tone: "error", message: "Select at least one pending signal first." });
+      setToast({ tone: "error", message: t("selectPendingSignalFirst") });
       return;
     }
 
@@ -122,7 +125,7 @@ export function usePendingSuiRegistration({
       )
       .filter((record): record is SignalRecord => Boolean(record));
     if (targetRecords.length === 0) {
-      setToast({ tone: "error", message: "No pending Sui registrations were found for the selected signals." });
+      setToast({ tone: "error", message: t("noPendingSuiRegistrationsFound") });
       return;
     }
 
@@ -139,7 +142,7 @@ export function usePendingSuiRegistration({
         failures.push(
           error instanceof Error
             ? `${getSignalSubject(record.submission)}: ${error.message}`
-            : `${getSignalSubject(record.submission)}: Failed to register on Sui.`,
+            : `${getSignalSubject(record.submission)}: ${t("failedToRegisterOnSui")}`,
         );
       }
     }
@@ -157,14 +160,14 @@ export function usePendingSuiRegistration({
         tone: successes.length > 0 ? "success" : "error",
         message:
           successes.length > 0
-            ? `Registered ${successes.length} signal${successes.length === 1 ? "" : "s"} on Sui. ${failures[0]}`
+            ? `${t("registeredSignalsOnSui", { count: successes.length })} ${failures[0]}`
             : failures[0],
       });
       return;
     }
     setToast({
       tone: "success",
-      message: `Registered ${successes.length} pending signal${successes.length === 1 ? "" : "s"} on Sui.`,
+      message: t("registeredPendingSignalsOnSui", { count: successes.length }),
     });
   }
 

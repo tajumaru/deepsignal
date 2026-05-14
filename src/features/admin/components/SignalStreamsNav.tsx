@@ -1,3 +1,4 @@
+import { useI18n } from "../../../i18n";
 import { formatResponseDeadline, type ResponseDeadlineLabels } from "../../../lib/responseDeadline";
 import type { FormWithCount, StreamId } from "../hooks/useSignalInboxData";
 
@@ -44,12 +45,14 @@ export function SignalStreamsNav({
   openNodeDirectoryLabel,
   onOpenNodeDirectory,
 }: SignalStreamsNavProps) {
+  const { t } = useI18n();
+
   return (
     <aside className="panel signal-sidebar">
       <div className="signal-sidebar-section">
         <div>
-          <p className="eyebrow">Streams</p>
-          <h2>Streams</h2>
+          <p className="eyebrow">{t("signalStreamsTitle")}</p>
+          <h2>{t("signalStreamsTitle")}</h2>
         </div>
         <div className="stream-list">
           {streamItems.map((stream) => (
@@ -68,7 +71,7 @@ export function SignalStreamsNav({
 
       <div className="signal-sidebar-section">
         <div className="section-row">
-          <p className="eyebrow">Forms</p>
+          <p className="eyebrow">{t("formsTitle")}</p>
           <span className="muted">{accessibleForms.length}</span>
         </div>
         <div className="form-stream-list">
@@ -79,11 +82,11 @@ export function SignalStreamsNav({
           >
             <div className="form-stream-select">
               <strong>{allSignalNodesLabel}</strong>
-              <p className="muted">{allSignalsCount} signals across every form inbox.</p>
+              <p className="muted">{t("signalsAcrossEveryFormInbox", { count: allSignalsCount })}</p>
             </div>
             <div className="form-stream-actions">
-              <span className="signal-chip">{visibleUnreadCount} unread</span>
-              <span className="signal-chip signal-chip-soft">{allSignalsCount} total</span>
+              <span className="signal-chip">{t("unreadBadge", { count: visibleUnreadCount })}</span>
+              <span className="signal-chip signal-chip-soft">{t("totalCountLabel", { count: allSignalsCount })}</span>
             </div>
           </button>
           {accessibleForms.map((form) => {
@@ -99,15 +102,19 @@ export function SignalStreamsNav({
                 <div className="form-stream-select">
                   <strong>{form.title}</strong>
                   <p className="muted">
-                    {form.submissionCount} signals
-                    {form.encryptSubmissions ? " · protected inbox" : " · open inbox"}
+                    {t("formSignalsSummary", {
+                      count: form.submissionCount,
+                      inboxType: form.encryptSubmissions ? t("protectedInboxLabel") : t("openInboxLabel"),
+                    })}
                   </p>
-                  <p className="muted">{responseDeadlineLabel}: {formatResponseDeadline(form.responseDeadline, responseDeadlineLabels)}</p>
+                  <p className="muted">
+                    {responseDeadlineLabel}: {formatResponseDeadline(form.responseDeadline, responseDeadlineLabels)}
+                  </p>
                 </div>
                 <div className="form-stream-actions">
-                  <span className="signal-chip">{unreadCount} unread</span>
+                  <span className="signal-chip">{t("unreadBadge", { count: unreadCount })}</span>
                   {form.projectId ? (
-                    <span className="signal-chip signal-chip-soft">Project linked</span>
+                    <span className="signal-chip signal-chip-soft">{t("projectLinkedLabel")}</span>
                   ) : null}
                 </div>
               </button>

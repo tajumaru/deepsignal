@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import {
   createEmptyAnswer,
-  getStorageRuntimeStatus,
   normalizeForm,
   storageAdapter,
 } from "../../../lib/storage";
@@ -87,14 +86,6 @@ function formatSharedFormRestoreMessage(error: unknown) {
     }
   }
   return error instanceof Error ? error.message : "This shared form could not be restored from Walrus.";
-}
-
-export function getSharedWalrusSubmitRequirementError() {
-  const storageRuntime = getStorageRuntimeStatus();
-  if (storageRuntime.mode !== "walrus") {
-    return "This shared form can be viewed here, but sending it requires Walrus write access. This browser is currently in local fallback mode.";
-  }
-  return "This shared form can be viewed without a wallet, but sending it requires a connected wallet and Walrus write runtime in this browser.";
 }
 
 interface UsePublicFormLoaderArgs {

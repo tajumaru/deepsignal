@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useI18n } from "../i18n";
 import { activeSealAdapter, decryptAttachmentBlob, storageAdapter } from "../lib/storage";
 import type { SealDecryptContext, SubmissionAttachment } from "../types";
@@ -21,6 +21,30 @@ function getPreviewKind(mimeType: string | undefined) {
     return "video" as const;
   }
   return "download" as const;
+}
+
+function arePreviewStatesEqual(left: AttachmentPreviewState, right: AttachmentPreviewState) {
+  return (
+    left.blobId === right.blobId &&
+    left.encrypted === right.encrypted &&
+    left.kind === right.kind &&
+    left.url === right.url &&
+    left.mimeType === right.mimeType &&
+    left.name === right.name &&
+    left.error === right.error
+  );
+}
+
+function arePreviewMapsEqual(
+  left: Record<string, AttachmentPreviewState>,
+  right: Record<string, AttachmentPreviewState>,
+) {
+  const leftKeys = Object.keys(left);
+  const rightKeys = Object.keys(right);
+  return (
+    leftKeys.length === rightKeys.length &&
+    leftKeys.every((key) => right[key] && arePreviewStatesEqual(left[key], right[key]))
+  );
 }
 
 export function getAttachmentDownloadHref(
@@ -46,10 +70,31 @@ export function useAttachmentPreviews(
   const [previews, setPreviews] = useState<Record<string, AttachmentPreviewState>>({});
   const { enabled, decryptContext } = options;
   const { t } = useI18n();
+  const attachmentPreviewKey = useMemo(
+    () =>
+      attachments
+        .map((attachment) =>
+          [
+            attachment.blobId,
+            attachment.encrypted ? "encrypted" : "plain",
+            attachment.storage ?? "",
+            attachment.originalName ?? attachment.name,
+            attachment.originalType ?? "",
+            attachment.inlineData ?? "",
+          ].join(":"),
+        )
+        .join("|"),
+    [attachments],
+  );
+  const decryptContextKey = [
+    decryptContext.walletAddress ?? "",
+    decryptContext.projectId ?? "",
+    decryptContext.reviewerCapId ?? "",
+  ].join("|");
 
   useEffect(() => {
     if (!enabled || attachments.length === 0) {
-      setPreviews({});
+      setPreviews((current) => (Object.keys(current).length === 0 ? current : {}));
       return;
     }
 
@@ -113,7 +158,14 @@ export function useAttachmentPreviews(
         objectUrls.forEach((url) => URL.revokeObjectURL(url));
         return;
       }
-      setPreviews(Object.fromEntries(nextEntries));
+      const nextPreviews = Object.fromEntries(nextEntries);
+      setPreviews((current) => {
+        if (arePreviewMapsEqual(current, nextPreviews)) {
+          objectUrls.forEach((url) => URL.revokeObjectURL(url));
+          return current;
+        }
+        return nextPreviews;
+      });
     }
 
     void loadPreviews();
@@ -122,7 +174,7 @@ export function useAttachmentPreviews(
       cancelled = true;
       objectUrls.forEach((url) => URL.revokeObjectURL(url));
     };
-  }, [attachments, decryptContext, enabled, t]);
+  }, [attachmentPreviewKey, decryptContextKey, enabled, t]);
 
   return previews;
 }

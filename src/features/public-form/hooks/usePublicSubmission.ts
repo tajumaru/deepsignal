@@ -10,10 +10,10 @@ import {
   saveSubmissionWithEncryption,
   storageAdapter,
 } from "../../../lib/storage";
+import { isLocalFallbackBlob } from "../../../lib/signalInbox";
 import { makeId } from "../../../lib/utils";
 import type { FormSchema, Submission, SubmissionAttachment } from "../../../types";
 import { getOrderedFields, getVisibleFieldIds, isFieldRequired } from "../../../utils/formLogic";
-import { getSharedWalrusSubmitRequirementError } from "./usePublicFormLoader";
 import type { PublicAnswers, ValidationErrors } from "../types";
 
 const REAL_SEAL_PROJECT_REQUIRED_MESSAGE =
@@ -70,6 +70,7 @@ interface UsePublicSubmissionArgs {
   manifestBlobId: string;
   requiredFieldError: string;
   responseDeadlinePassedLabel: string;
+  localFallbackNotice: string;
   suiRegistrationDeferredNotice: string;
   submitFailedLabel: string;
 }
@@ -83,6 +84,7 @@ export function usePublicSubmission({
   manifestBlobId,
   requiredFieldError,
   responseDeadlinePassedLabel,
+  localFallbackNotice,
   suiRegistrationDeferredNotice,
   submitFailedLabel,
 }: UsePublicSubmissionArgs) {
@@ -199,16 +201,6 @@ export function usePublicSubmission({
     if (!validate(form)) {
       return;
     }
-    if (manifestBlobId) {
-      const { getWalrusMutationRuntimeStatus } = await import("../../../storage/walrusAdapter");
-      const walrusRuntime = getWalrusMutationRuntimeStatus();
-      if (!walrusRuntime.canWrite) {
-        setSubmitError(getSharedWalrusSubmitRequirementError());
-        setSubmitNotice("");
-        return;
-      }
-    }
-
     setSubmitting(true);
     setSubmitError("");
     setSubmitNotice("");
@@ -359,8 +351,15 @@ export function usePublicSubmission({
         sealIdentity: "sealIdentity" in result ? result.sealIdentity : undefined,
         receiptBlobId: result.blobId ?? undefined,
       } satisfies Submission;
+      const notices = [];
+      if (manifestBlobId && isLocalFallbackBlob(savedSubmission.encryptedBlobId ?? savedSubmission.blobId)) {
+        notices.push(localFallbackNotice);
+      }
+      if (form.projectId) {
+        notices.push(suiRegistrationDeferredNotice);
+      }
       setSubmitted(savedSubmission);
-      setSubmitNotice(form.projectId ? suiRegistrationDeferredNotice : "");
+      setSubmitNotice(notices.join(" "));
     } catch (error) {
       setSubmitError(error instanceof Error ? error.message : submitFailedLabel);
     } finally {
