@@ -17,7 +17,7 @@ import { getOrderedFields, getVisibleFieldIds, isFieldRequired } from "../../../
 import type { PublicAnswers, ValidationErrors } from "../types";
 
 const REAL_SEAL_PROJECT_REQUIRED_MESSAGE =
-  "Real Seal encrypted submissions require a selected project. Choose a project or turn off Encrypt submissions.";
+  "Real Seal encrypted submissions require a project or form owner wallet. Connect the creator wallet or turn off Encrypt submissions.";
 
 export const SIGNAL_PIPELINE_STAGES = [
   "preparing_signal",
@@ -227,7 +227,12 @@ export function usePublicSubmission({
       return;
     }
     const sealRuntime = getSealRuntimeStatus();
-    if (form.encryptSubmissions && sealRuntime.activeMode === "seal" && !form.projectId?.trim()) {
+    if (
+      form.encryptSubmissions &&
+      sealRuntime.activeMode === "seal" &&
+      !form.projectId?.trim() &&
+      !form.ownerAddress?.trim()
+    ) {
       setSubmitError(REAL_SEAL_PROJECT_REQUIRED_MESSAGE);
       setSubmitNotice("");
       return;

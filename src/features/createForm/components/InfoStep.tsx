@@ -50,21 +50,19 @@ export function InfoStep({
         <div>
           <p className="eyebrow">Step 2</p>
           <h2>{t("basicInfoTitle")}</h2>
-          <p className="muted">Keep this short for the demo. Title and description are enough to publish a private signal form.</p>
+          <p className="muted">{t("infoStepBody")}</p>
         </div>
       </div>
 
       <section className="contest-builder-quickstart contest-builder-quickstart-plain">
         <div className="section-row">
           <div>
-            <p className="eyebrow">Contest Defaults</p>
-            <h3>Private Signal ready</h3>
+            <p className="eyebrow">{t("contestDefaultsEyebrow")}</p>
+            <h3>{t("privateSignalReady")}</h3>
           </div>
-          <span className="signal-chip signal-chip-accent">Encrypt submissions ON</span>
+          <span className="signal-chip signal-chip-accent">{t("encryptSubmissionsOn")}</span>
         </div>
-        <p className="muted">
-          Advanced settings stay tucked away until publish. You can create the form now and share the public link right after.
-        </p>
+        <p className="muted">{t("contestDefaultsBody")}</p>
       </section>
 
       <div className="composer-info-grid">

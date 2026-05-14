@@ -124,6 +124,14 @@ export default function App() {
             <Route path="/explore" element={<ExploreSignalsPage />} />
             <Route path="/signals" element={<Navigate to="/explore" replace />} />
             <Route
+              path="/create"
+              element={
+                <WithWalrusRuntime>
+                  <FormBuilderPage />
+                </WithWalrusRuntime>
+              }
+            />
+            <Route
               path="/admin"
               element={
                 <WithWalrusRuntime>

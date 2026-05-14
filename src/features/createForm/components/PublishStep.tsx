@@ -47,6 +47,7 @@ interface PublishStepProps {
   storageRuntimeMode: string;
   storageRuntimeNotice?: string;
   storageRuntimeDiagnostics?: WalrusFailureDetails | null;
+  canManageProjects: boolean;
   selectedProjectId: string;
   selectedProject: ProjectOption | null;
   projects: ProjectOption[];
@@ -87,6 +88,7 @@ export function PublishStep({
   storageRuntimeMode,
   storageRuntimeNotice,
   storageRuntimeDiagnostics,
+  canManageProjects,
   selectedProjectId,
   selectedProject,
   projects,
@@ -105,9 +107,28 @@ export function PublishStep({
   const beaconScrollRef = useRef<HTMLDivElement | null>(null);
   const storageModeLabel = savedForm
     ? isLocalOnlyForm
-      ? "Local mode"
-      : "Walrus mode"
-    : "Local / Walrus mode";
+      ? t("localMode")
+      : t("walrusMode")
+    : t("localWalrusMode");
+  const visibleSelectedProject = canManageProjects ? selectedProject : null;
+  function getEncryptionWarningMessage(warning: EncryptionReadinessWarning) {
+    switch (warning.kind) {
+      case "project-missing":
+        return t("encryptionProjectMissing");
+      case "seal-env-incomplete":
+        return t("encryptionSealIncomplete");
+      case "walrus-write-unavailable":
+        return t("encryptionWalrusWriteUnavailable");
+      case "network-mismatch":
+        return t("encryptionNetworkMismatch", {
+          endpoint: warning.endpoint ?? "",
+          detectedNetwork: warning.detectedNetwork ?? "",
+          configuredNetwork: warning.configuredNetwork ?? "",
+        });
+      default:
+        return warning.message;
+    }
+  }
 
   useEffect(() => {
     if (!showFocusedSuccessCard || !savedForm?.manifestBlobId) {
@@ -165,55 +186,55 @@ export function PublishStep({
               <div className="section-row">
                 <div>
                   <p className="eyebrow">Walrus Runtime</p>
-                  <h3>Publish diagnostics</h3>
+                  <h3>{t("publishDiagnosticsTitle")}</h3>
                 </div>
               </div>
               <div className="metadata-list">
                 <div className="metadata-row">
-                  <span>Wallet</span>
-                  <strong>{isConnected ? currentWalletName ?? "Connected" : "Not connected"}</strong>
+                  <span>{t("walletLabel")}</span>
+                  <strong>{isConnected ? currentWalletName ?? t("connected") : t("notConnected")}</strong>
                 </div>
                 <div className="metadata-row">
-                  <span>Address</span>
-                  <strong>{accountAddress ? shortAddress(accountAddress) : "Not connected"}</strong>
+                  <span>{t("addressLabel")}</span>
+                  <strong>{accountAddress ? shortAddress(accountAddress) : t("notConnected")}</strong>
                 </div>
                 <div className="metadata-row">
-                  <span>Network</span>
+                  <span>{t("networkLabel")}</span>
                   <strong>{SUI_NETWORK}</strong>
                 </div>
                 <div className="metadata-row">
-                  <span>Storage mode</span>
+                  <span>{t("storageModeDetailLabel")}</span>
                   <strong>{storageMode}</strong>
                 </div>
                 <div className="metadata-row">
-                  <span>Upload relay</span>
-                  <strong>{uploadRelayUrl || "Not configured"}</strong>
+                  <span>{t("uploadRelayLabel")}</span>
+                  <strong>{uploadRelayUrl || t("notConfigured")}</strong>
                 </div>
                 <div className="metadata-row">
-                  <span>Runtime state</span>
+                  <span>{t("runtimeStateLabel")}</span>
                   <strong>{storageRuntimeMode}</strong>
                 </div>
                 {storageRuntimeNotice ? (
                   <div className="metadata-row">
-                    <span>Walrus notice</span>
+                    <span>{t("walrusNoticeLabel")}</span>
                     <strong>{storageRuntimeNotice}</strong>
                   </div>
                 ) : null}
                 {storageRuntimeDiagnostics ? (
                   <div className="metadata-row">
-                    <span>Walrus stage</span>
+                    <span>{t("walrusStageLabel")}</span>
                     <strong>{formatWalrusFailureStage(storageRuntimeDiagnostics.stage)}</strong>
                   </div>
                 ) : null}
                 {storageRuntimeDiagnostics?.digest ? (
                   <div className="metadata-row">
-                    <span>Tx digest</span>
+                    <span>{t("txDigestLabel")}</span>
                     <strong>{storageRuntimeDiagnostics.digest}</strong>
                   </div>
                 ) : null}
                 {storageRuntimeDiagnostics?.lastRpcError ? (
                   <div className="metadata-row">
-                    <span>Last RPC error</span>
+                    <span>{t("lastRpcErrorLabel")}</span>
                     <strong>{storageRuntimeDiagnostics.lastRpcError}</strong>
                   </div>
                 ) : null}
@@ -222,29 +243,11 @@ export function PublishStep({
           ) : null}
 
           {!showWalrusDiagnostics && storageRuntimeNotice ? (
-            <section className="answer-card">
+            <section className="answer-card composer-friendly-storage-notice">
               <div className="metadata-row">
-                <span>Walrus notice</span>
-                <strong>{storageRuntimeNotice}</strong>
+                <span>{t("storageNoticeLabel")}</span>
+                <strong>{t("localStorageNoticeBody")}</strong>
               </div>
-              {storageRuntimeDiagnostics ? (
-                <div className="metadata-row">
-                  <span>Walrus stage</span>
-                  <strong>{formatWalrusFailureStage(storageRuntimeDiagnostics.stage)}</strong>
-                </div>
-              ) : null}
-              {storageRuntimeDiagnostics?.digest ? (
-                <div className="metadata-row">
-                  <span>Tx digest</span>
-                  <strong>{storageRuntimeDiagnostics.digest}</strong>
-                </div>
-              ) : null}
-              {storageRuntimeDiagnostics?.lastRpcError ? (
-                <div className="metadata-row">
-                  <span>Last RPC error</span>
-                  <strong>{storageRuntimeDiagnostics.lastRpcError}</strong>
-                </div>
-              ) : null}
             </section>
           ) : null}
 
@@ -255,77 +258,83 @@ export function PublishStep({
                 <section className="panel composer-settings-card">
                   <div className="section-row">
                     <div>
-                      <p className="eyebrow">Project routing</p>
-                      <h3>Signal registry</h3>
+                      <p className="eyebrow">{t("projectRoutingEyebrow")}</p>
+                      <h3>{t("signalRegistryTitle")}</h3>
                     </div>
                   </div>
                   <label>
-                    <span>Selected project</span>
-                    <select value={selectedProjectId} onChange={(event) => onSelectProject(event.target.value)}>
-                      <option value="">Walrus / local only</option>
-                      {projects.map((project) => (
-                        <option key={project.objectId} value={project.objectId}>
-                          {project.name}
-                        </option>
-                      ))}
+                    <span>{canManageProjects ? t("selectedProjectLabel") : t("storageRouteLabel")}</span>
+                    <select
+                      value={canManageProjects ? selectedProjectId : ""}
+                      onChange={(event) => onSelectProject(event.target.value)}
+                      disabled={!canManageProjects}
+                    >
+                      <option value="">Walrus</option>
+                      {canManageProjects
+                        ? projects.map((project) => (
+                            <option key={project.objectId} value={project.objectId}>
+                              {project.name}
+                            </option>
+                          ))
+                        : null}
                     </select>
                   </label>
                   <p className="muted">
-                    {selectedProject
-                      ? `Save to Walrus/local first. ${selectedProject.name} can be registered on Sui later from an explicit action.`
-                      : "Leave this empty to keep the existing Walrus / local form flow only."}
+                    {visibleSelectedProject
+                      ? t("projectRoutingSelectedHelp", { name: visibleSelectedProject.name })
+                      : t("projectRoutingWalrusHelp")}
                   </p>
-                  {projectState ? <p className="muted">{projectState}</p> : null}
-                  <p className="muted">{t("suiRegistrationDeferredNotice")}</p>
+                  {canManageProjects && projectState ? <p className="muted">{projectState}</p> : null}
+                  {canManageProjects ? <p className="muted">{t("suiRegistrationDeferredNotice")}</p> : null}
                 </section>
 
                 <section className="panel composer-settings-card">
                   <div className="section-row">
                     <div>
-                      <p className="eyebrow">Explore routing</p>
-                      <h3>Visibility</h3>
+                      <p className="eyebrow">{t("exploreRoutingEyebrow")}</p>
+                      <h3>{t("visibilityTitle")}</h3>
                     </div>
                   </div>
                   <label>
-                    <span>Form visibility</span>
+                    <span>{t("formVisibilityLabel")}</span>
                     <select value={visibility} onChange={(event) => onChangeVisibility(event.target.value as FormVisibility)}>
-                      <option value="private">Private</option>
-                      <option value="unlisted">Unlisted</option>
-                      <option value="public">Public Explore</option>
+                      <option value="private">{t("visibilityPrivate")}</option>
+                      <option value="unlisted">{t("visibilityUnlisted")}</option>
+                      <option value="public">{t("visibilityPublicExplore")}</option>
                     </select>
                   </label>
                   <p className="muted">
-                    Private stays admin-oriented. Unlisted works for anyone with the URL. Public Explore also lists this form in the network view.
+                    {t("visibilityHelp")}
                   </p>
                 </section>
 
                 <section className="panel composer-settings-card">
                   <div className="section-row">
                     <div>
-                      <p className="eyebrow">Responder identity</p>
-                      <h3>Identity policy</h3>
+                      <p className="eyebrow">{t("responderIdentityEyebrow")}</p>
+                      <h3>{t("identityPolicyTitle")}</h3>
                     </div>
                   </div>
                   <label>
-                    <span>Submission identity</span>
+                    <span>{t("submissionIdentityLabel")}</span>
                     <select
                       value={identityPolicy}
                       onChange={(event) => onChangeIdentityPolicy(event.target.value as FormIdentityPolicy)}
                     >
-                      <option value="anonymous_allowed">Anonymous allowed</option>
-                      <option value="wallet_required">Wallet required</option>
+                      <option value="anonymous_allowed">{t("anonymousAllowed")}</option>
+                      <option value="wallet_required">{t("walletRequired")}</option>
                     </select>
                   </label>
                   <p className="muted">
-                    Anonymous allowed keeps the public intake wallet-optional. Wallet required still keeps the page public, but blocks sending until the responder connects a wallet.
+                    {t("identityPolicyHelp")}
                   </p>
                 </section>
 
                 <section className="panel composer-settings-card">
                   <div className="section-row">
                     <div>
-                      <p className="eyebrow">Private Signal</p>
-                      <h3>Encrypt submissions</h3>
+                      <p className="eyebrow">{t("privateSignalEyebrow")}</p>
+                      <h3>{t("encryptSubmissions")}</h3>
                     </div>
                     <label className="toggle">
                       <input
@@ -336,7 +345,7 @@ export function PublishStep({
                       <span>{encryptSubmissions ? t("enabled") : t("disabled")}</span>
                     </label>
                   </div>
-                  <p className="muted">Keep this on so reviewers unlock the signal later with an authorized wallet.</p>
+                  <p className="muted">{t("encryptSubmissionsReviewHelp")}</p>
                   {encryptionWarnings.length > 0 ? (
                     <div className="composer-warning-list" aria-live="polite">
                       {encryptionWarnings.map((warning) => (
@@ -344,7 +353,7 @@ export function PublishStep({
                           key={`${warning.kind}-${warning.message}`}
                           className={warning.blocksPublish ? "error-text" : "warning-text"}
                         >
-                          {warning.message}
+                          {getEncryptionWarningMessage(warning)}
                         </p>
                       ))}
                     </div>
@@ -355,7 +364,7 @@ export function PublishStep({
                   <section className="panel composer-settings-card">
                     <div className="section-row">
                       <div>
-                        <p className="eyebrow">Proof-backed routing</p>
+                        <p className="eyebrow">{t("proofBackedRoutingEyebrow")}</p>
                         <h3>{t("storageAndSignatureTitle")}</h3>
                       </div>
                     </div>
@@ -375,25 +384,25 @@ export function PublishStep({
             <div className={`success-card composer-success-card ${showFocusedSuccessCard ? "is-focused-success" : ""}`}>
               <div className="composer-success-header">
                 <div>
-                  <p className="eyebrow">Observation Relay</p>
-                  <h3>SIGNAL ACTIVE</h3>
+                  <p className="eyebrow">{t("observationRelay")}</p>
+                  <h3>{t("signalActiveTitle")}</h3>
                   <p className="muted">{storageModeLabel}</p>
                 </div>
-                <span className="composer-live-pill">Observing</span>
+                <span className="composer-live-pill">{t("observing")}</span>
               </div>
 
               <section className="answer-card contest-share-ready-card">
                 <div className="section-row">
                   <div>
                     <p className="eyebrow">Step 3</p>
-                    <h4>{isLocalOnlyForm ? "Local preview only" : "Share Public Link"}</h4>
+                    <h4>{isLocalOnlyForm ? t("localPreviewOnly") : t("sharePublicLink")}</h4>
                   </div>
-                  <span className="signal-chip signal-chip-accent">{isLocalOnlyForm ? "Same browser only" : "Anonymous ready"}</span>
+                  <span className="signal-chip signal-chip-accent">{isLocalOnlyForm ? t("sameBrowserOnly") : t("anonymousReady")}</span>
                 </div>
                 <p className="muted">
                   {isLocalOnlyForm
-                    ? "This save fell back to browser-local storage. You can preview the responder flow on this device, but other phones and browsers cannot open the form yet."
-                    : "This is the judge handoff moment. Open the public link, copy it, or scan the QR code to submit a private signal."}
+                    ? t("localPreviewOnlyBody")
+                    : t("sharePublicLinkBody")}
                 </p>
                 {savedForm.manifestBlobId ? (
                   <div ref={beaconScrollRef}>
@@ -406,12 +415,12 @@ export function PublishStep({
                   </div>
                 ) : (
                   <section className="answer-card">
-                    <p className="eyebrow">{isLocalOnlyForm ? "Cross-device share blocked" : "Share Ready"}</p>
-                    <h4>{isLocalOnlyForm ? "Walrus publish is required before sharing" : "QR sharing is unavailable"}</h4>
+                    <p className="eyebrow">{isLocalOnlyForm ? t("crossDeviceShareBlocked") : t("shareReady")}</p>
+                    <h4>{isLocalOnlyForm ? t("walrusPublishRequiredBeforeSharing") : t("qrSharingUnavailable")}</h4>
                     <p className="muted">
                       {isLocalOnlyForm
-                        ? "Republish after Walrus storage succeeds, then share the public link or QR code."
-                        : "This form is currently stored in local fallback mode, so phones and other browsers cannot restore it from a QR code yet."}
+                        ? t("republishAfterWalrus")
+                        : t("localFallbackQrUnavailable")}
                     </p>
                   </section>
                 )}
@@ -423,12 +432,12 @@ export function PublishStep({
                     {t("signalInboxTitle")}
                   </Link>
                   <p>
-                    {isLocalOnlyForm ? "Local responder preview" : t("publicShareLink")}: <Link to={publicPath}>{publicPath}</Link>
+                    {isLocalOnlyForm ? t("localResponderPreview") : t("publicShareLink")}: <Link to={publicPath}>{publicPath}</Link>
                   </p>
                 </div>
                 {isLocalOnlyForm ? (
                   <p className="warning-text">
-                    Do not share this URL yet. It only works in the current browser until Walrus storage succeeds.
+                    {t("doNotShareLocalUrl")}
                   </p>
                 ) : null}
                 {!showFocusedSuccessCard ? (
@@ -452,11 +461,11 @@ export function PublishStep({
                         </div>
                       ) : null}
                       {savedForm.projectId && isRegisteredOnSui ? (
-                        <SignalMetaRow label="Project" type="registry" value={savedForm.projectId} />
+                        <SignalMetaRow label={t("projectLabel")} type="registry" value={savedForm.projectId} />
                       ) : null}
                       {isRegisteredOnSui ? (
                         <div className="metadata-row">
-                          <span>Registry Form ID</span>
+                          <span>{t("registryFormId")}</span>
                           <strong>{savedForm.onchainFormId}</strong>
                         </div>
                       ) : null}
@@ -464,8 +473,8 @@ export function PublishStep({
                         <BlobLink blobId={savedForm.blobId} />
                       </SignalMetaRow>
                       {savedForm.manifestBlobId ? (
-                        <SignalMetaRow label="Manifest Blob ID" type="manifest" value={savedForm.manifestBlobId}>
-                          <BlobLink blobId={savedForm.manifestBlobId} label="Verify manifest on Walrus" />
+                        <SignalMetaRow label={t("manifestBlobId")} type="manifest" value={savedForm.manifestBlobId}>
+                          <BlobLink blobId={savedForm.manifestBlobId} label={t("verifyManifestOnWalrus")} />
                           <Link to={`/m/${savedForm.manifestBlobId}`}>{t("restoreLink")}</Link>
                         </SignalMetaRow>
                       ) : null}
@@ -476,7 +485,7 @@ export function PublishStep({
 
               {savedForm.projectId && !isRegisteredOnSui && !showFocusedSuccessCard ? (
                 <section className="answer-card sui-optional-card">
-                  <p className="eyebrow">Optional Sui step</p>
+                  <p className="eyebrow">{t("optionalSuiStep")}</p>
                   <h4>{t("registerOnSuiTitle")}</h4>
                   <p className="muted">{t("registerOnSuiBody")}</p>
                   <div className="inline-actions">

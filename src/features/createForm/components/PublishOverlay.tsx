@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { RichTextContent } from "../../../components/RichText";
 import { publishPhases } from "../constants";
-import type { PublishOverlayState } from "../types";
+import type { PublishOverlayState, Translate } from "../types";
 
 interface PublishOverlayProps {
+  t: Translate;
   open: boolean;
   overlay: PublishOverlayState;
   saving: boolean;
@@ -19,6 +20,7 @@ interface PublishOverlayProps {
 }
 
 export function PublishOverlay({
+  t,
   open,
   overlay,
   saving,
@@ -35,6 +37,14 @@ export function PublishOverlay({
   const [qrMarkup, setQrMarkup] = useState("");
   const isBeaconVisible = overlay.stageIndex >= publishPhases.length - 1 && isCrossDeviceShareReady;
   const activePhase = publishPhases[overlay.stageIndex];
+  const phaseMessages = {
+    encoding: { label: t("publishPhaseEncodingLabel"), detail: t("publishPhaseEncodingDetail") },
+    encrypting: { label: t("publishPhaseEncryptingLabel"), detail: t("publishPhaseEncryptingDetail") },
+    sending: { label: t("publishPhaseSendingLabel"), detail: t("publishPhaseSendingDetail") },
+    stored: { label: t("publishPhaseStoredLabel"), detail: t("publishPhaseStoredDetail") },
+    registering: { label: t("publishPhaseRegisteringLabel"), detail: t("publishPhaseRegisteringDetail") },
+    active: { label: t("publishPhaseActiveLabel"), detail: t("publishPhaseActiveDetail") },
+  };
 
   const absolutePublicUrl = useMemo(() => {
     if (typeof window === "undefined") {
@@ -96,12 +106,12 @@ export function PublishOverlay({
 
         <div className={`publish-signal-shell stage-${activePhase?.key ?? "encoding"}`}>
           <div className="publish-signal-card">
-            <span className="publish-signal-label">SIGNAL PAYLOAD</span>
-            <strong>{title.trim() || "Untitled signal"}</strong>
-            <RichTextContent value={description} className="rich-text-content" fallback="No intro recorded." />
+            <span className="publish-signal-label">{t("publishOverlayPayloadLabel")}</span>
+            <strong>{title.trim() || t("publishOverlayUntitledSignal")}</strong>
+            <RichTextContent value={description} className="rich-text-content" fallback={t("publishOverlayNoIntro")} />
             <div className="publish-signal-metrics">
-              <span>{fieldsCount} nodes</span>
-              <span>{encryptSubmissions ? "sealed" : "plain"}</span>
+              <span>{t("publishOverlayNodes", { count: fieldsCount })}</span>
+              <span>{encryptSubmissions ? t("publishOverlaySealed") : t("publishOverlayPlain")}</span>
               <span>{purpose}</span>
             </div>
           </div>
@@ -109,14 +119,14 @@ export function PublishOverlay({
 
         <div className="publish-overlay-hero">
           <div className="publish-overlay-copy">
-            <p className="eyebrow">Deep Transit</p>
-            <h2 id="publish-overlay-title">Signal processing</h2>
+            <p className="eyebrow">{t("publishOverlayEyebrow")}</p>
+            <h2 id="publish-overlay-title">{t("publishOverlayTitle")}</h2>
             <p className="muted publish-overlay-intro">
-              The payload is being reduced, submerged, and fixed into the Walrus observation layer.
+              {t("publishOverlayIntro")}
             </p>
           </div>
           {isBeaconVisible ? (
-            <div className="publish-beacon-panel publish-beacon-panel-top" aria-label="BEACON QR">
+            <div className="publish-beacon-panel publish-beacon-panel-top" aria-label={t("publishBeaconAria")}>
               <p className="eyebrow">BEACON</p>
               <div className="beacon-qr-shell publish-beacon-qr-shell">
                 {qrMarkup ? (
@@ -128,15 +138,15 @@ export function PublishOverlay({
                   <div className="beacon-qr-placeholder" aria-hidden="true" />
                 )}
               </div>
-              <p className="publish-beacon-note muted">Scan to open the public responder flow on another device.</p>
+              <p className="publish-beacon-note muted">{t("publishBeaconNote")}</p>
             </div>
           ) : null}
         </div>
 
         <div className="publish-terminal panel">
           <div className="publish-terminal-header">
-            <span>OBSERVATION // WALRUS UPLINK</span>
-            <strong>{overlay.stageIndex >= publishPhases.length - 1 ? "PASSIVE WATCH" : "TRANSIT"}</strong>
+            <span>{t("publishTerminalHeader")}</span>
+            <strong>{overlay.stageIndex >= publishPhases.length - 1 ? t("publishTerminalPassiveWatch") : t("publishTerminalTransit")}</strong>
           </div>
           <div className="publish-terminal-log" aria-live="polite">
             {publishPhases.map((phase, index) => {
@@ -145,13 +155,14 @@ export function PublishOverlay({
                 state === "active" && overlay.activeStageStatus
                   ? overlay.activeStageStatus
                   : state === "done"
-                    ? "complete"
+                    ? t("publishStatusComplete")
                     : state === "active"
-                      ? "in progress"
-                      : "queued";
+                      ? t("publishStatusInProgress")
+                      : t("publishStatusQueued");
+              const phaseMessage = phaseMessages[phase.key];
               return (
                 <div key={phase.key} className={`publish-terminal-row is-${state}`}>
-                  <span>{phase.label}</span>
+                  <span>{phaseMessage.label}</span>
                   <small>{statusText}</small>
                 </div>
               );
@@ -160,14 +171,14 @@ export function PublishOverlay({
           <p className="publish-terminal-detail">
             {overlay.stageIndex >= publishPhases.length - 1 && overlay.resultNote
               ? overlay.resultNote
-              : overlay.activeStageDetail || activePhase?.detail}
+              : overlay.activeStageDetail || (activePhase ? phaseMessages[activePhase.key].detail : "")}
           </p>
         </div>
 
         <div className="publish-status-grid">
           <div className={`publish-blob-panel ${overlay.stageIndex >= 3 ? "is-visible" : ""}`}>
-            <p className="eyebrow">Blob Address</p>
-            <code className="publish-blob-id">{overlay.typedBlobId || "BLOB://........"}</code>
+            <p className="eyebrow">{t("blobAddress")}</p>
+            <code className="publish-blob-id">{overlay.typedBlobId || t("blobPlaceholder")}</code>
             <div className="publish-blob-actions">
               <button
                 type="button"
@@ -175,12 +186,12 @@ export function PublishOverlay({
                 onClick={() => void onCopyBlobId()}
                 disabled={overlay.stageIndex < 3 || !overlay.blobId}
               >
-                {overlay.blobCopied ? "Copied" : "Copy Blob ID"}
+                {overlay.blobCopied ? t("copied") : t("copyBlobId")}
               </button>
               <span className="publish-storage-note">
                 {overlay.storageMode === "walrus"
-                  ? "Immutable Walrus blob confirmed."
-                  : "Stored locally. Walrus relay unavailable."}
+                  ? t("immutableWalrusBlobConfirmed")
+                  : t("storedLocallyWalrusUnavailable")}
               </span>
             </div>
           </div>
@@ -188,16 +199,16 @@ export function PublishOverlay({
           <div className={`publish-active-panel ${overlay.stageIndex >= publishPhases.length - 1 ? "is-visible" : ""}`}>
             <div className="publish-active-layout">
               <div>
-                <p className="eyebrow">Observation State</p>
-                <h3>SIGNAL ACTIVE</h3>
+                <p className="eyebrow">{t("observationState")}</p>
+                <h3>{t("signalActiveTitle")}</h3>
                 <p className="muted">
-                  {overlay.resultNote || "The signal is now available for monitoring, routing, and review."}
+                  {overlay.resultNote || t("signalAvailableForReview")}
                 </p>
               </div>
             </div>
             <div className="publish-active-actions">
               <button type="button" className="primary-button" onClick={onClose}>
-                DONE
+                {t("publishOverlayDone")}
               </button>
             </div>
           </div>

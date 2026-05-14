@@ -14,6 +14,9 @@ export interface EncryptionReadinessWarning {
   kind: EncryptionReadinessWarningKind;
   message: string;
   blocksPublish: boolean;
+  endpoint?: string;
+  detectedNetwork?: NetworkName;
+  configuredNetwork?: NetworkName;
 }
 
 function inferNetworkFromUrl(value: string): NetworkName | null {
@@ -42,6 +45,9 @@ function getNetworkMismatchWarnings(): EncryptionReadinessWarning[] {
         kind: "network-mismatch",
         message: `${endpoint.label} appears to target ${detectedNetwork}, but DeepSignal is configured for ${SUI_NETWORK}. Align mainnet/testnet settings before using encrypted submissions.`,
         blocksPublish: false,
+        endpoint: endpoint.label,
+        detectedNetwork,
+        configuredNetwork: SUI_NETWORK,
       });
     }
     return warnings;
@@ -51,9 +57,11 @@ function getNetworkMismatchWarnings(): EncryptionReadinessWarning[] {
 export function getCreateFormEncryptionReadiness({
   encryptSubmissions,
   projectId,
+  ownerAddress,
 }: {
   encryptSubmissions: boolean;
   projectId?: string | null;
+  ownerAddress?: string | null;
 }): EncryptionReadinessWarning[] {
   if (!encryptSubmissions) {
     return [];
@@ -67,11 +75,11 @@ export function getCreateFormEncryptionReadiness({
     !walrusRuntime.writeConfigured ||
     (walrusRuntime.storageMode === "uploadRelay" && (!walrusRuntime.hasClient || !walrusRuntime.hasWallet));
 
-  if (!projectId?.trim()) {
+  if (!projectId?.trim() && !ownerAddress?.trim()) {
     warnings.push({
       kind: "project-missing",
       message:
-        "Seal encryption is enabled, but this form is not linked to a project. Private submissions require a project-backed Seal policy.",
+        "Seal encryption is enabled, but no project or owner wallet is available. Connect a wallet before publishing private submissions.",
       blocksPublish: true,
     });
   }

@@ -49,7 +49,7 @@ export interface SaveSubmissionWithEncryptionResult {
 }
 
 const REAL_SEAL_PROJECT_REQUIRED_MESSAGE =
-  "Real Seal encrypted submissions require a selected project. Choose a project or turn off Encrypt submissions.";
+  "Real Seal encrypted submissions require a project or form owner wallet. Connect the creator wallet or turn off Encrypt submissions.";
 
 function inferAttachmentType(mimeType: string | undefined) {
   if (mimeType?.startsWith("video/")) {
@@ -471,6 +471,8 @@ export function normalizeForm(raw: FormSchema | (Record<string, unknown> & { id:
     publicExplore: raw.publicExplore === true || normalizeFormVisibility(raw.visibility, raw.publicExplore) === "public",
     createdAt: typeof raw.createdAt === "string" ? raw.createdAt : new Date(0).toISOString(),
     updatedAt: typeof raw.updatedAt === "string" ? raw.updatedAt : typeof raw.createdAt === "string" ? raw.createdAt : new Date(0).toISOString(),
+    ownerAddress: typeof raw.ownerAddress === "string" ? raw.ownerAddress : undefined,
+    creationMode: raw.creationMode === "guest" || raw.creationMode === "admin" ? raw.creationMode : undefined,
     projectId: typeof raw.projectId === "string" ? raw.projectId : undefined,
     projectName: typeof raw.projectName === "string" ? raw.projectName : undefined,
     responseDeadline:
@@ -672,7 +674,7 @@ export async function saveSubmissionWithEncryption(
   const triagedSubmission = enrichSubmissionWithTriage(form, triageInput);
 
   if (form.encryptSubmissions) {
-    if (!form.projectId?.trim()) {
+    if (!form.projectId?.trim() && !form.ownerAddress?.trim()) {
       throw new Error(REAL_SEAL_PROJECT_REQUIRED_MESSAGE);
     }
 
@@ -684,7 +686,11 @@ export async function saveSubmissionWithEncryption(
         attachments: submission.attachments,
       });
       messages?.onPipelineStage?.("encrypting");
-      encryptedPayload = await encryptSensitiveResponse(payload, { projectId: form.projectId }, seal);
+      encryptedPayload = await encryptSensitiveResponse(
+        payload,
+        { projectId: form.projectId, ownerAddress: form.ownerAddress },
+        seal,
+      );
     }
     const parsedEnvelope = parseRealSealEnvelope(encryptedPayload);
     const sealIdentity = parsedEnvelope
@@ -711,6 +717,7 @@ export async function saveSubmissionWithEncryption(
 
   const answers = await encryptSensitiveAnswers(form, submission.answers, seal, {
     projectId: form.projectId,
+    ownerAddress: form.ownerAddress,
   });
   const standardSubmission: Submission = {
     ...triagedSubmission,

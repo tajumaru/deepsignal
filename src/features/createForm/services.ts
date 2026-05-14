@@ -2,10 +2,11 @@ import { createMetadataDigest } from "../../lib/projectRegistry";
 import { isLocalFallbackBlob } from "../../lib/proof";
 import { storageAdapter } from "../../lib/storage";
 import { saveFormMetadataOverlay } from "../../storage/formMetadataOverlay";
-import type { PreparedPublishForm, ProjectOption } from "./types";
+import type { PreparedPublishForm, ProjectOption, Translate } from "./types";
 import { wait } from "./utils";
 
 interface PublishFormArgs {
+  t: Translate;
   form: PreparedPublishForm;
   selectedProject: ProjectOption | null;
   setPublishStageIndex: (index: number) => void;
@@ -19,6 +20,7 @@ interface PublishFormArgs {
 }
 
 export async function publishForm({
+  t,
   form,
   selectedProject,
   setPublishStageIndex,
@@ -63,14 +65,14 @@ export async function publishForm({
     return null;
   }
   setPublishStageIndex(2);
-  setPublishActiveStageStatus("awaiting wallet approval");
-  setPublishActiveStageDetail("Approve the Walrus transaction in your wallet to start the upload.");
+  setPublishActiveStageStatus(t("walletApprovalStatus"));
+  setPublishActiveStageDetail(t("walletApprovalDetail"));
 
   const { blobId, manifestBlobId } = await saveFormPromise;
   if (!shouldContinue()) {
     return null;
   }
-  setPublishActiveStageStatus("in progress");
+  setPublishActiveStageStatus(t("publishInProgressStatus"));
   setPublishActiveStageDetail("");
 
   await wait(620);
@@ -84,14 +86,14 @@ export async function publishForm({
       return null;
     }
     setPublishStageIndex(4);
-    setProjectState("Saved to Walrus/local. Register on Sui later when you want an onchain form record.");
-    setPublishResultNote("Walrus publish completed. Sui registration is deferred until you explicitly run it.");
+    setProjectState(t("projectStateSavedRegisterLater"));
+    setPublishResultNote(t("publishResultDeferredSui"));
   } else {
     await wait(780);
     if (!shouldContinue()) {
       return null;
     }
-    setPublishResultNote("Walrus publish completed. The signal is live in local/Walrus mode.");
+    setPublishResultNote(t("publishResultLiveLocalWalrus"));
   }
 
   const finalForm = {

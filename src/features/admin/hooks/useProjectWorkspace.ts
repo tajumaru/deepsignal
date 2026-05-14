@@ -52,7 +52,9 @@ export function useProjectWorkspace({
   const projectCreateInputRef = useRef<HTMLInputElement | null>(null);
   const hasAdminAccess = canAdmin(capabilityProfile);
 
-  const selectedProject = projects.find((project) => project.objectId === selectedProjectId) ?? null;
+  const visibleProjects = hasAdminAccess ? projects : [];
+  const visibleSelectedProjectId = hasAdminAccess ? selectedProjectId : "";
+  const selectedProject = visibleProjects.find((project) => project.objectId === visibleSelectedProjectId) ?? null;
   const projectMemberCount = selectedProject ? selectedProject.admins.length + 1 : 0;
   const localProjectFormsCount = useMemo(
     () => forms.filter((form) => form.projectId === selectedProject?.objectId).length,
@@ -72,6 +74,9 @@ export function useProjectWorkspace({
   const visibleOnchainForms = selectedProject?.onchainForms ?? [];
 
   useEffect(() => {
+    if (!hasAdminAccess) {
+      return;
+    }
     if (selectedProjectId) {
       setSelectedProjectId(selectedProjectId);
       return;
@@ -80,7 +85,7 @@ export function useProjectWorkspace({
       setSelectedProjectIdState(projects[0].objectId);
       setSelectedProjectId(projects[0].objectId);
     }
-  }, [projects, selectedProjectId]);
+  }, [hasAdminAccess, projects, selectedProjectId]);
 
   useEffect(() => {
     if (!highlightCreateFormCta) {
@@ -126,6 +131,10 @@ export function useProjectWorkspace({
   }
 
   async function connectManualProject() {
+    if (!hasAdminAccess) {
+      setProjectState("OwnerCap or AdminCap is required to connect a project.");
+      return;
+    }
     const nextProjectId = manualProjectId.trim();
     if (!nextProjectId) {
       setProjectState("Enter a project object id.");
@@ -145,6 +154,9 @@ export function useProjectWorkspace({
   }
 
   function revealProjectTools(mode: "connect" | "create") {
+    if (!hasAdminAccess) {
+      return;
+    }
     const details = advancedProjectSettingsRef.current;
     if (details && !details.open) {
       details.open = true;
@@ -160,6 +172,9 @@ export function useProjectWorkspace({
   }
 
   function selectProject(projectId: string) {
+    if (!hasAdminAccess) {
+      return;
+    }
     setSelectedProjectIdState(projectId);
     setSelectedProjectId(projectId);
   }
@@ -296,9 +311,9 @@ export function useProjectWorkspace({
   }
 
   return {
-    projects,
+    projects: visibleProjects,
     refetchProjects,
-    selectedProjectId,
+    selectedProjectId: visibleSelectedProjectId,
     selectProject,
     selectedProject,
     localProjectFormsCount,

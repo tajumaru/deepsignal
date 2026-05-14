@@ -21,14 +21,15 @@ export const SEAL_PERMISSION_DENIED_MESSAGE =
   "You do not have permission to decrypt this signal.";
 
 export const SEAL_PROJECT_CONTEXT_REQUIRED_MESSAGE =
-  "This private signal needs a project-backed Seal policy.";
+  "This private signal needs a project-backed or owner-wallet Seal policy.";
 
 export const SEAL_SUI_CLIENT_REQUIRED_MESSAGE =
   "Seal decrypt requires a Sui client.";
 
 export type RealSealApprovalPolicy =
   | "project_signal_v1"
-  | "project_admin_v0";
+  | "project_admin_v0"
+  | "owner_wallet_v1";
 
 export interface RealSealEnvelope {
   kind: typeof REAL_SEAL_ENVELOPE_KIND;
@@ -41,6 +42,7 @@ export interface RealSealEnvelope {
   serverObjectIds: string[];
   encryptedObject: string;
   projectId?: string;
+  ownerAddress?: string;
   approvalPolicy?: RealSealApprovalPolicy;
   createdAt: string;
 }
@@ -73,9 +75,11 @@ export function parseRealSealEnvelope(value: string): RealSealEnvelope | null {
       parsed.serverObjectIds.some((item) => typeof item !== "string") ||
       typeof parsed.encryptedObject !== "string" ||
       (parsed.projectId !== undefined && typeof parsed.projectId !== "string") ||
+      (parsed.ownerAddress !== undefined && typeof parsed.ownerAddress !== "string") ||
       (parsed.approvalPolicy !== undefined &&
         parsed.approvalPolicy !== "project_signal_v1" &&
-        parsed.approvalPolicy !== "project_admin_v0") ||
+        parsed.approvalPolicy !== "project_admin_v0" &&
+        parsed.approvalPolicy !== "owner_wallet_v1") ||
       typeof parsed.createdAt !== "string"
     ) {
       return null;
@@ -108,6 +112,15 @@ export function createProjectScopedSealId(projectId: string) {
   return toHex(merged);
 }
 
+export function createOwnerScopedSealId(ownerAddress: string) {
+  const ownerBytes = hexToBytes(ownerAddress);
+  const nonceBytes = crypto.getRandomValues(new Uint8Array(16));
+  const merged = new Uint8Array(ownerBytes.length + nonceBytes.length);
+  merged.set(ownerBytes, 0);
+  merged.set(nonceBytes, ownerBytes.length);
+  return toHex(merged);
+}
+
 export function doesSealIdMatchProject(objectId: string, projectId: string) {
   const objectBytes = hexToBytes(objectId);
   const projectBytes = hexToBytes(projectId);
@@ -115,6 +128,15 @@ export function doesSealIdMatchProject(objectId: string, projectId: string) {
     return false;
   }
   return projectBytes.every((byte, index) => objectBytes[index] === byte);
+}
+
+export function doesSealIdMatchOwner(objectId: string, ownerAddress: string) {
+  const objectBytes = hexToBytes(objectId);
+  const ownerBytes = hexToBytes(ownerAddress);
+  if (objectBytes.length < ownerBytes.length) {
+    return false;
+  }
+  return ownerBytes.every((byte, index) => objectBytes[index] === byte);
 }
 
 export function isLikelyWalletCancelError(error: unknown) {

@@ -1,5 +1,8 @@
 import { localStorageAdapter } from "./localStorageAdapter";
 import {
+  deleteFormBlobIndex,
+} from "./blobIndex";
+import {
   applyFormMetadataOverlay,
   applyFormMetadataOverlays,
   clearFormMetadataOverlay,
@@ -154,13 +157,23 @@ const hybridWalrusStorage: StorageAdapter = {
       ids.forEach((id) => clearFormMetadataOverlay(id));
       emitStatus({ mode: "walrus", notice: null, diagnostics: null });
     } catch (error) {
-      console.error(error);
+      if (requireWalrus) {
+        console.error(error);
+        emitStatus({
+          mode: "walrus",
+          notice: error instanceof Error ? error.message : "Walrus delete failed.",
+          diagnostics: isWalrusDiagnosticError(error) ? error.details : null,
+        });
+        throw error;
+      }
+      console.warn("Walrus delete failed; deleting local fallback records.", error);
+      await localStorageAdapter.deleteForms(ids);
+      ids.forEach((id) => clearFormMetadataOverlay(id));
       emitStatus({
-        mode: "walrus",
-        notice: error instanceof Error ? error.message : "Walrus delete failed.",
+        mode: "local-fallback",
+        notice: "Walrus delete was unavailable. Removed local records from this browser.",
         diagnostics: isWalrusDiagnosticError(error) ? error.details : null,
       });
-      throw error;
     }
   },
   async saveSubmission(submission) {
@@ -223,6 +236,18 @@ export const storage: StorageAdapter = walrusRequested ? hybridWalrusStorage : l
 
 export function getStorageRuntimeStatus() {
   return runtimeStatus;
+}
+
+export async function deleteFormsFromLocalCache(ids: string[]) {
+  const uniqueIds = [...new Set(ids)];
+  if (uniqueIds.length === 0) {
+    return;
+  }
+  await localStorageAdapter.deleteForms(uniqueIds);
+  uniqueIds.forEach((id) => {
+    clearFormMetadataOverlay(id);
+    deleteFormBlobIndex(id);
+  });
 }
 
 export function getStorageRuntimeStageLabel() {

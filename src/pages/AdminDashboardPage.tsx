@@ -2,7 +2,7 @@
   useCurrentAccount,
 } from "@mysten/dapp-kit";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, Navigate, useLocation } from "react-router-dom";
 import { CreateFormLink } from "../components/CreateFormLink";
 import { AdminAccessGate } from "../components/AdminAccessGate";
 import { BlobLink } from "../components/BlobLink";
@@ -34,9 +34,9 @@ import { useAccessControl } from "../hooks/useAccessControl";
 import { useI18n } from "../i18n";
 import { isAttachmentFieldType, isLongTextLikeField } from "../lib/fieldTypes";
 import {
+  addressesMatch,
   canAdmin,
   canReview,
-  getAdminSurfaceAccessState,
   getRoleLabel,
 } from "../lib/adminAccess";
 import { getTriageStatusLabel, TRIAGE_STATUS_OPTIONS } from "../lib/signalOps";
@@ -57,7 +57,7 @@ import {
   storageAdapter,
 } from "../lib/storage";
 import { formatDate } from "../lib/utils";
-import { getStorageRuntimeStatus } from "../storage/storageFactory";
+import { deleteFormsFromLocalCache, getStorageRuntimeStatus } from "../storage/storageFactory";
 import type { FormSchema, Submission } from "../types";
 
 const ROADMAP_READY_STATUSES = new Set<Submission["triageStatus"]>(["planned", "in_progress", "fixed"]);
@@ -72,6 +72,7 @@ function formatAccessLabel(roleLabel: string) {
 
 export function AdminDashboardPage() {
   const { t } = useI18n();
+  const location = useLocation();
   const account = useCurrentAccount();
   const {
     capabilityProfile,
@@ -190,11 +191,7 @@ export function AdminDashboardPage() {
     decryptFailedLabel: t("decryptFailed"),
   });
   const roleLabel = getRoleLabel(capabilityProfile);
-  const accessState = getAdminSurfaceAccessState(
-    "reviewer",
-    account?.address,
-    capabilityProfile,
-  );
+  const accessState = account?.address ? "allowed" : "denied";
   const privateReviewLabel = t("privateReviewEnabled");
 
   function renderAnswerValue(field: { type: string }, value: unknown) {
@@ -205,15 +202,53 @@ export function AdminDashboardPage() {
     return <FormattedAnswerValue field={field as FormSchema["fields"][number]} value={value} emptyLabel={t("noAnswerLabel")} showCountryIso />;
   }
 
+  async function deleteNodes(formIds: string[]) {
+    const uniqueIds = [...new Set(formIds)];
+    const walletOwnedIds = uniqueIds.filter((formId) => {
+      const form = forms.find((item) => item.id === formId);
+      return addressesMatch(form?.ownerAddress, account?.address);
+    });
+    const localCacheOnlyIds = uniqueIds.filter((formId) => !walletOwnedIds.includes(formId));
+
+    if (walletOwnedIds.length > 0) {
+      await storageAdapter.deleteForms(walletOwnedIds);
+    }
+    if (localCacheOnlyIds.length > 0) {
+      await deleteFormsFromLocalCache(localCacheOnlyIds);
+    }
+
+    return {
+      walletDeletedCount: walletOwnedIds.length,
+      localCacheDeletedCount: localCacheOnlyIds.length,
+      totalDeletedCount: uniqueIds.length,
+    };
+  }
+
+  function getDeleteSuccessMessage(result: Awaited<ReturnType<typeof deleteNodes>>, singleNode = false) {
+    if (result.localCacheDeletedCount > 0 && result.walletDeletedCount === 0) {
+      return t("deleteNodeLocalSuccess", { count: result.localCacheDeletedCount });
+    }
+    if (result.localCacheDeletedCount > 0) {
+      return t("deleteVisibleNodesLocalMixedSuccess", {
+        walrusCount: result.walletDeletedCount,
+        localCount: result.localCacheDeletedCount,
+      });
+    }
+    if (singleNode) {
+      return t("deleteNodeSuccess");
+    }
+    return t("deleteVisibleNodesSuccess", { count: result.totalDeletedCount });
+  }
+
   async function handleDelete(formId: string) {
     if (!window.confirm(t("deleteFormConfirm"))) {
       return;
     }
     setDeletingFormId(formId);
     try {
-      await storageAdapter.deleteForm(formId);
+      const result = await deleteNodes([formId]);
       await loadConsole();
-      setToast({ tone: "success", message: t("deleteNodeSuccess") });
+      setToast({ tone: "success", message: getDeleteSuccessMessage(result, true) });
     } catch (error) {
       setToast({
         tone: "error",
@@ -234,9 +269,9 @@ export function AdminDashboardPage() {
     setDeletingVisibleNodes(true);
     setDeletingFormId(null);
     try {
-      await storageAdapter.deleteForms(formIds);
+      const result = await deleteNodes(formIds);
       await loadConsole();
-      setToast({ tone: "success", message: t("deleteVisibleNodesSuccess", { count: formIds.length }) });
+      setToast({ tone: "success", message: getDeleteSuccessMessage(result) });
     } catch (error) {
       setToast({
         tone: "error",
@@ -288,12 +323,14 @@ export function AdminDashboardPage() {
     () => selectedProjectSignals.filter((record) => ROADMAP_READY_STATUSES.has(record.submission.triageStatus)),
     [selectedProjectSignals],
   );
-  const protectedSelectedProjectFormsCount = selectedProjectForms.filter(
+  const statusForms = hasAdminAccess ? selectedProjectForms : accessibleForms;
+  const statusSignals = hasAdminAccess ? selectedProjectSignals : allSignals;
+  const protectedStatusFormsCount = statusForms.filter(
     (form) => form.encryptSubmissions,
   ).length;
   const hasProjectAndForms = Boolean(selectedProject) && selectedProjectForms.length > 0;
   const operationsStatusItems: OperationsStatusItem[] = [
-    ...(!hasProjectAndForms
+    ...(hasAdminAccess && !hasProjectAndForms
       ? [{
           label: t("projectConnectedStatusLabel"),
           tone: selectedProject ? "ready" : "action",
@@ -303,16 +340,16 @@ export function AdminDashboardPage() {
     {
       label: t("privateSignalsEnabledStatusLabel"),
       tone:
-        selectedProjectForms.length === 0
+        statusForms.length === 0
           ? "pending"
-          : protectedSelectedProjectFormsCount > 0
+          : protectedStatusFormsCount > 0
             ? "ready"
             : "warning",
       detail:
-        selectedProjectForms.length === 0
+        statusForms.length === 0
           ? t("noFormPublishedYet")
-          : protectedSelectedProjectFormsCount > 0
-            ? t("protectedFormsActive", { count: protectedSelectedProjectFormsCount })
+          : protectedStatusFormsCount > 0
+            ? t("protectedFormsActive", { count: protectedStatusFormsCount })
             : t("privateSignalProtectionOff"),
     },
     {
@@ -331,24 +368,28 @@ export function AdminDashboardPage() {
         ? t("trustedStorageAvailable")
         : t("localFallbackActive"),
     },
-    {
-      label: t("pendingSuiVerificationStatusLabel"),
-      tone: pendingSignals.length > 0 ? "pending" : selectedProjectSignals.length > 0 ? "ready" : "pending",
-      detail: pendingSignals.length > 0
-        ? t("signalsWaitingForVerification", { count: pendingSignals.length })
-        : selectedProjectSignals.length > 0
-          ? t("noPendingProofRegistrations")
-          : t("awaitingProjectSignals"),
-    },
-    {
-      label: t("roadmapPublishingReadyStatusLabel"),
-      tone: roadmapReadySignals.length > 0 ? "ready" : selectedProjectSignals.length > 0 ? "pending" : "pending",
-      detail: roadmapReadySignals.length > 0
-        ? t("signalsReadyForPublicRoadmap", { count: roadmapReadySignals.length })
-        : selectedProjectSignals.length > 0
-          ? t("markSignalsForRoadmap")
-          : t("noRoadmapCandidatesYet"),
-    },
+    ...(hasAdminAccess
+      ? [
+          {
+            label: t("pendingSuiVerificationStatusLabel"),
+            tone: pendingSignals.length > 0 ? "pending" : statusSignals.length > 0 ? "ready" : "pending",
+            detail: pendingSignals.length > 0
+              ? t("signalsWaitingForVerification", { count: pendingSignals.length })
+              : statusSignals.length > 0
+                ? t("noPendingProofRegistrations")
+                : t("awaitingProjectSignals"),
+          },
+          {
+            label: t("roadmapPublishingReadyStatusLabel"),
+            tone: roadmapReadySignals.length > 0 ? "ready" : statusSignals.length > 0 ? "pending" : "pending",
+            detail: roadmapReadySignals.length > 0
+              ? t("signalsReadyForPublicRoadmap", { count: roadmapReadySignals.length })
+              : statusSignals.length > 0
+                ? t("markSignalsForRoadmap")
+                : t("noRoadmapCandidatesYet"),
+          },
+        ] satisfies OperationsStatusItem[]
+      : []),
   ];
   const selectedRoadmapUrl = selectedRecord
     ? getPublicRoadmapPath(selectedRecord.form.id, selectedRecord.form.manifestBlobId)
@@ -434,10 +475,29 @@ export function AdminDashboardPage() {
                 cta: selectedRoadmapUrl ? <Link className="ghost-button" to={selectedRoadmapUrl}>Open Public Roadmap</Link> : null,
               };
   const firstProjectForm = selectedProjectForms[0] ?? null;
-  const firstProtectedSignal = selectedProjectSignals.find((record) => record.submission.isEncrypted) ?? null;
+  const firstVisibleForm = statusForms[0] ?? null;
+  const firstProtectedSignal = statusSignals.find((record) => record.submission.isEncrypted) ?? null;
   const shouldHighlightCreateProjectCta = projects.length === 0 && hasAdminAccess;
   const nextRecommendedAction =
-    !selectedProject
+    !hasAdminAccess
+      ? accessibleForms.length === 0
+        ? {
+            label: "Create your first signal inbox",
+            detail: "Create a wallet-owned form. Project controls stay hidden until this wallet has AdminCap or OwnerCap.",
+            cta: <CreateFormLink className="primary-button">Create Signal Form</CreateFormLink>,
+          }
+        : allSignals.length === 0
+          ? {
+              label: "Send a test signal",
+              detail: "Open your public form and submit one signal so this inbox has something to process.",
+              cta: firstVisibleForm ? <Link className="primary-button" to={getPublicFormPath(firstVisibleForm.id, firstVisibleForm.manifestBlobId)}>Open Public Link</Link> : null,
+            }
+          : {
+              label: "Review signal inbox",
+              detail: "This wallet can review its own forms. Project management requires AdminCap or OwnerCap.",
+              cta: null,
+            }
+    : !selectedProject
       ? {
           label: "Connect a project",
           detail: "Create a new project or connect an existing one before you create or review private signals.",
@@ -642,13 +702,19 @@ export function AdminDashboardPage() {
         ? "Medium"
         : "Low"
     : "Low";
-  const workspaceMetaItems = [
-    formatWorkspaceCount(selectedProject ? selectedProject.formsCount : accessibleForms.length, "Form"),
-    formatWorkspaceCount(selectedProject ? selectedProject.signalsCount : allSignals.length, "Signal"),
-    formatWorkspaceCount(projectMemberCount || 1, "Member"),
-    selectedProject ? "Protected" : "Local mode",
-    formatAccessLabel(roleLabel),
-  ];
+  const workspaceMetaItems = hasAdminAccess
+    ? [
+        formatWorkspaceCount(selectedProject ? selectedProject.formsCount : accessibleForms.length, "Form"),
+        formatWorkspaceCount(selectedProject ? selectedProject.signalsCount : allSignals.length, "Signal"),
+        formatWorkspaceCount(projectMemberCount || 1, "Member"),
+        selectedProject ? "Protected" : "Local mode",
+        formatAccessLabel(roleLabel),
+      ]
+    : [
+        formatWorkspaceCount(accessibleForms.length, "Form"),
+        formatWorkspaceCount(allSignals.length, "Signal"),
+        "Owner wallet",
+      ];
   const selectedFormSubmissionCount = selectedRecord ? (submissionsByFormId[selectedRecord.form.id] ?? []).length : 0;
   const activeScopeLabel =
     selectedFormId === "all" ? t("allSignalNodes") : selectedForm?.title ?? t("selectedNode");
@@ -660,8 +726,6 @@ export function AdminDashboardPage() {
   const selectedPendingVisibleCount = visibleSignals.filter((record) =>
     selectedPendingSignalIds.includes(record.submission.id),
   ).length;
-  const hasProjects = projects.length > 0;
-
   const nodeDirectoryItems = useMemo(() => {
     const normalizedSearch = nodeSearch.trim().toLowerCase();
     const allFormsItem = {
@@ -720,6 +784,10 @@ export function AdminDashboardPage() {
     return <div className="panel">{t("checkingWalletCapabilities")}</div>;
   }
 
+  if (account?.address && !hasAdminAccess && location.pathname.startsWith("/admin")) {
+    return <Navigate to={location.pathname.replace(/^\/admin/, "/dashboard")} replace />;
+  }
+
   return (
     <AdminAccessGate
       hasWallet={Boolean(account?.address)}
@@ -733,7 +801,7 @@ export function AdminDashboardPage() {
           <div className="workspace-hero-main workspace-overview-shell">
             <div className="workspace-hero-copy">
               <p className="eyebrow">{t("signalInboxTitle")}</p>
-              <h1>{selectedProject ? selectedProject.name : t("contestDemoWorkspace")}</h1>
+              <h1>{hasAdminAccess && selectedProject ? selectedProject.name : t("signalInboxTitle")}</h1>
               <div className="workspace-hero-meta">
                 {workspaceMetaItems.map((item) => (
                   <span key={item} className="workspace-meta-item">
@@ -765,43 +833,43 @@ export function AdminDashboardPage() {
                 >
                   {t("reviewButton")}
                 </button>
-                <Link className="ghost-button" to="/admin/access">
-                  {t("membersButton")}
-                </Link>
-                <button
-                  type="button"
-                  className="ghost-button workspace-project-trigger"
-                  onClick={() => {
-                    const details = advancedProjectSettingsRef.current;
-                    if (!details) {
-                      return;
-                    }
-                    details.open = true;
-                    details.scrollIntoView({
-                      behavior: "smooth",
-                      block: "start",
-                    });
-                  }}
-                >
-                  {selectedProject ? t("projectButtonLabel", { name: selectedProject.name }) : t("chooseProjectButton")}
-                </button>
+                {hasAdminAccess ? (
+                  <>
+                    <Link className="ghost-button" to="/admin/access">
+                      {t("membersButton")}
+                    </Link>
+                    <button
+                      type="button"
+                      className="ghost-button workspace-project-trigger"
+                      onClick={() => {
+                        const details = advancedProjectSettingsRef.current;
+                        if (!details) {
+                          return;
+                        }
+                        details.open = true;
+                        details.scrollIntoView({
+                          behavior: "smooth",
+                          block: "start",
+                        });
+                      }}
+                    >
+                      {selectedProject ? t("projectButtonLabel", { name: selectedProject.name }) : t("chooseProjectButton")}
+                    </button>
+                  </>
+                ) : null}
               </div>
             </aside>
           </div>
         </section>
 
         {accessibleForms.length === 0 ? (
-          hasProjects ? (
           <EmptyState>
             <h2>{t("noCreatorInboxesTitle")}</h2>
             <p>{t("noCreatorInboxesBody")}</p>
-            {hasAdminAccess || !capabilityProfile.isConfigured ? (
-              <CreateFormLink className="primary-button">
-                {t("createSignalForm")}
-              </CreateFormLink>
-            ) : null}
+            <CreateFormLink className="primary-button">
+              {t("createSignalForm")}
+            </CreateFormLink>
           </EmptyState>
-          ) : null
         ) : (
           <section ref={reviewInboxRef} className="panel signal-inbox-workbench">
             <div className="signal-workbench-header">
@@ -859,45 +927,58 @@ export function AdminDashboardPage() {
                   />
                 </div>
               </div>
-              <section className="answer-card answer-card-plain">
-                <div className="section-row">
-                  <div>
-                    <p className="eyebrow">{t("pendingSuiRegistrationEyebrow")}</p>
-                    <h3>{t("optionalProofQueueTitle")}</h3>
+              {hasAdminAccess ? (
+                <section className="answer-card answer-card-plain">
+                  <div className="section-row">
+                    <div>
+                      <p className="eyebrow">{t("pendingSuiRegistrationEyebrow")}</p>
+                      <h3>{t("optionalProofQueueTitle")}</h3>
+                    </div>
+                    <button
+                      type="button"
+                      className="ghost-button"
+                      disabled={selectedPendingSignalIds.length === 0 || registeringSignalIds.length > 0}
+                      onClick={() => void handleRegisterPendingSignals()}
+                    >
+                      {registeringSignalIds.length > 0
+                        ? t("registeringOnSui")
+                        : t("registerSelectedOnSui", { count: selectedPendingVisibleCount })}
+                    </button>
                   </div>
-                  <button
-                    type="button"
-                    className="ghost-button"
-                    disabled={selectedPendingSignalIds.length === 0 || registeringSignalIds.length > 0}
-                    onClick={() => void handleRegisterPendingSignals()}
-                  >
-                    {registeringSignalIds.length > 0
-                      ? t("registeringOnSui")
-                      : t("registerSelectedOnSui", { count: selectedPendingVisibleCount })}
-                  </button>
-                </div>
-                <p className="muted">{t("optionalProofQueueBody")}</p>
-              </section>
+                  <p className="muted">{t("optionalProofQueueBody")}</p>
+                </section>
+              ) : null}
 
               {visibleSignals.length === 0 ? (
                 <EmptyState variant="abyss">
                   <p className="eyebrow">{t("inboxEmptyEyebrow")}</p>
                   <h2>
-                    {!selectedProject
+                    {!hasAdminAccess
+                      ? t("sendTestSignalToStartReviewTitle")
+                      : !selectedProject
                       ? t("chooseProjectFirstTitle")
                       : selectedProjectForms.length === 0
                         ? t("createFirstSignalFormTitle")
                         : t("sendTestSignalToStartReviewTitle")}
                   </h2>
                   <p>
-                    {!selectedProject
+                    {!hasAdminAccess
+                      ? t("sendTestSignalToStartReviewBody")
+                      : !selectedProject
                       ? t("chooseProjectFirstBody")
                       : selectedProjectForms.length === 0
                         ? t("createFirstSignalFormBody")
                         : t("sendTestSignalToStartReviewBody")}
                   </p>
                   <div className="inline-actions">
-                    {!selectedProject ? null : selectedProjectForms.length === 0 ? (
+                    {!hasAdminAccess && firstVisibleForm ? (
+                      <Link
+                        className="primary-button"
+                        to={getPublicFormPath(firstVisibleForm.id, firstVisibleForm.manifestBlobId)}
+                      >
+                        {t("openPublicLink")}
+                      </Link>
+                    ) : !selectedProject ? null : selectedProjectForms.length === 0 ? (
                       <CreateFormLink className="primary-button">
                         {t("createSignalForm")}
                       </CreateFormLink>
@@ -1479,9 +1560,11 @@ export function AdminDashboardPage() {
                         </div>
                           <div className="metadata-row">
                             <span>{t("sealRuntimeLabel")}</span>
-                            <strong>{t("projectReviewerAccess")}</strong>
+                            <strong>{hasAdminAccess ? t("projectReviewerAccess") : t("walletLabel")}</strong>
                           </div>
-                          <SignalMetaRow label="Project" type="registry" value={selectedRecord.form.projectId} emptyLabel={t("notAvailable")} />
+                          {hasAdminAccess ? (
+                            <SignalMetaRow label="Project" type="registry" value={selectedRecord.form.projectId} emptyLabel={t("notAvailable")} />
+                          ) : null}
                           {typeof selectedRecord.form.onchainFormId === "number" ? (
                             <div className="metadata-row">
                               <span>{t("registryFormIdLabel")}</span>
@@ -1741,6 +1824,7 @@ export function AdminDashboardPage() {
           nextActionCta={nextRecommendedAction.cta}
         />
 
+        {hasAdminAccess ? (
         <details ref={advancedProjectSettingsRef} className="panel advanced-project-settings">
           <summary>
             <span>
@@ -1905,6 +1989,7 @@ export function AdminDashboardPage() {
             {projectState ? <p className="muted">{projectState}</p> : null}
           </div>
         </details>
+        ) : null}
 
         <div className="mobile-console-banner">{t("adminDesktopNotice")}</div>
       </section>

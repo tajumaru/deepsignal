@@ -84,6 +84,7 @@ export interface FormSchema {
   createdAt: string;
   updatedAt?: string;
   ownerAddress?: string;
+  creationMode?: "admin" | "guest";
   isOnchain?: boolean;
   encryptSubmissions?: boolean;
   responseDeadline?: number | null;
@@ -213,12 +214,14 @@ export interface StorageAdapter {
 
 export interface SealEncryptContext {
   projectId?: string;
+  ownerAddress?: string;
 }
 
 export interface SealDecryptContext {
   walletAddress?: string;
   signPersonalMessage?: (message: Uint8Array) => Promise<string>;
   projectId?: string;
+  ownerAddress?: string;
   suiClient?: unknown;
   reviewerCapId?: string;
   onStatusChange?: (status: "waiting_wallet_approval" | "decrypting_private_signal" | "finishing") => void;

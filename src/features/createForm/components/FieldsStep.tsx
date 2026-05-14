@@ -35,24 +35,24 @@ interface FieldsStepProps {
 const libraryBlocks: Array<{
   type?: FieldType;
   icon: string;
-  title: string;
+  titleKey: "libraryShortText" | "libraryLongText" | "libraryRichText" | "libraryDate" | "libraryDropdown" | "libraryCheckboxes" | "libraryCountrySelect" | "libraryConfirmationCheckbox" | "libraryScreenshotUpload" | "libraryVideoUpload" | "libraryUrl" | "libraryStarRating" | "libraryWalletAddress" | "librarySignatureVerification" | "libraryEncryptedAnswer";
   soon?: boolean;
 }> = [
-  { type: "shortText", icon: "Aa", title: "Short Text" },
-  { type: "longText", icon: "LT", title: "Long Text" },
-  { type: "markdown", icon: "MD", title: "Rich Text" },
-  { type: "date", icon: "CAL", title: "Date" },
-  { type: "dropdown", icon: "v", title: "Dropdown" },
-  { type: "checkbox", icon: "[]", title: "Checkboxes" },
-  { type: "country_select", icon: "JP", title: "Country Select" },
-  { type: "confirmation", icon: "OK", title: "Confirmation Checkbox" },
-  { type: "screenshot", icon: "UP", title: "Screenshot Upload" },
-  { type: "video", icon: "VID", title: "Video Upload" },
-  { type: "url", icon: "->", title: "URL" },
-  { type: "rating", icon: "*", title: "Star Rating" },
-  { icon: "ID", title: "Wallet Address", soon: true },
-  { icon: "OK", title: "Signature / Verification", soon: true },
-  { icon: "PX", title: "Encrypted Answer", soon: true },
+  { type: "shortText", icon: "Aa", titleKey: "libraryShortText" },
+  { type: "longText", icon: "LT", titleKey: "libraryLongText" },
+  { type: "markdown", icon: "MD", titleKey: "libraryRichText" },
+  { type: "date", icon: "CAL", titleKey: "libraryDate" },
+  { type: "dropdown", icon: "v", titleKey: "libraryDropdown" },
+  { type: "checkbox", icon: "[]", titleKey: "libraryCheckboxes" },
+  { type: "country_select", icon: "JP", titleKey: "libraryCountrySelect" },
+  { type: "confirmation", icon: "OK", titleKey: "libraryConfirmationCheckbox" },
+  { type: "screenshot", icon: "UP", titleKey: "libraryScreenshotUpload" },
+  { type: "video", icon: "VID", titleKey: "libraryVideoUpload" },
+  { type: "url", icon: "->", titleKey: "libraryUrl" },
+  { type: "rating", icon: "*", titleKey: "libraryStarRating" },
+  { icon: "ID", titleKey: "libraryWalletAddress", soon: true },
+  { icon: "OK", titleKey: "librarySignatureVerification", soon: true },
+  { icon: "PX", titleKey: "libraryEncryptedAnswer", soon: true },
 ];
 
 export function FieldsStep({
@@ -238,7 +238,7 @@ export function FieldsStep({
           <div className="composer-library-list">
             {libraryBlocks.map((block) => (
               <button
-                key={block.title}
+                key={block.titleKey}
                 type="button"
                 className={`composer-library-card ${block.soon ? "is-soon" : ""}`}
                 onClick={() => {
@@ -253,7 +253,7 @@ export function FieldsStep({
                 </span>
                 <span className="composer-library-card-copy">
                   <span className="composer-library-card-topline">
-                    <strong>{block.title}</strong>
+                    <strong>{t(block.titleKey)}</strong>
                     <span className={`composer-library-chip ${block.soon ? "is-soon" : "is-ready"}`}>
                       {block.soon ? t("librarySoon") : t("libraryReady")}
                     </span>
@@ -279,7 +279,7 @@ export function FieldsStep({
               <p className="eyebrow">{t("liveCanvas")}</p>
               <h2>{t("fields")}</h2>
               <p className="muted">
-                {t("questionCount", { count: fields.length })} / {encryptSubmissions ? "Private signal mode on" : "Open signal mode"}
+                {t("questionCount", { count: fields.length })} / {encryptSubmissions ? t("signalModePrivate") : t("signalModeOpen")}
               </p>
             </div>
             <div className="composer-canvas-header-actions">
@@ -349,7 +349,7 @@ export function FieldsStep({
             <section className="composer-empty-canvas">
               <p className="muted">{t("fieldEmptyState")}</p>
               <button type="button" className="primary-button" onClick={() => onInsertField("shortText")}>
-                + Short Text
+                + {t("shortTextLabel")}
               </button>
             </section>
           ) : null}

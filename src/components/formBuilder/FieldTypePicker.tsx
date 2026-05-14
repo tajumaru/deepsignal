@@ -10,25 +10,36 @@ interface FieldTypePickerProps {
 const fieldTypeChoices: Array<{
   type: FieldType;
   icon: string;
-  title: string;
-  description: string;
+  descriptionKey:
+    | "fieldTypeDescriptionShortText"
+    | "fieldTypeDescriptionLongText"
+    | "fieldTypeDescriptionMarkdown"
+    | "fieldTypeDescriptionDate"
+    | "fieldTypeDescriptionDropdown"
+    | "fieldTypeDescriptionCheckbox"
+    | "fieldTypeDescriptionCountrySelect"
+    | "fieldTypeDescriptionConfirmation"
+    | "fieldTypeDescriptionRating"
+    | "fieldTypeDescriptionUrl"
+    | "fieldTypeDescriptionScreenshot"
+    | "fieldTypeDescriptionVideo";
 }> = [
-  { type: "shortText", icon: "Aa", title: "Short Text", description: "Single-line answers, names, labels, and short summaries." },
-  { type: "longText", icon: "LT", title: "Long Text", description: "Backward-compatible rich text textarea for longer narrative answers." },
-  { type: "markdown", icon: "MD", title: "Rich Text", description: "Markdown textarea with preview for formatted detail, release notes, or detailed reports." },
-  { type: "date", icon: "CAL", title: "Date", description: "Calendar-based input for event dates, deadlines, launches, or follow-up timing." },
-  { type: "dropdown", icon: "v", title: "Dropdown", description: "One choice from a compact option list." },
-  { type: "checkbox", icon: "[]", title: "Checkboxes", description: "Multiple selections for tags, surfaces, or used features." },
-  { type: "country_select", icon: "JP", title: "Country Select", description: "Searchable country picker with flags, readable labels, and ISO storage." },
-  { type: "confirmation", icon: "OK", title: "Confirmation Checkbox", description: "Single agreement checkbox for confirmation, consent, or acknowledgement." },
-  { type: "rating", icon: "*", title: "Star Rating", description: "1-5 sentiment scoring with fast input." },
-  { type: "url", icon: "->", title: "URL", description: "Links to docs, builds, issues, or external proof." },
-  { type: "screenshot", icon: "IMG", title: "Screenshot Upload", description: "Image evidence from desktop or mobile capture." },
-  { type: "video", icon: "VID", title: "Video Upload", description: "Short clips showing flow, bugs, or reactions." },
+  { type: "shortText", icon: "Aa", descriptionKey: "fieldTypeDescriptionShortText" },
+  { type: "longText", icon: "LT", descriptionKey: "fieldTypeDescriptionLongText" },
+  { type: "markdown", icon: "MD", descriptionKey: "fieldTypeDescriptionMarkdown" },
+  { type: "date", icon: "CAL", descriptionKey: "fieldTypeDescriptionDate" },
+  { type: "dropdown", icon: "v", descriptionKey: "fieldTypeDescriptionDropdown" },
+  { type: "checkbox", icon: "[]", descriptionKey: "fieldTypeDescriptionCheckbox" },
+  { type: "country_select", icon: "JP", descriptionKey: "fieldTypeDescriptionCountrySelect" },
+  { type: "confirmation", icon: "OK", descriptionKey: "fieldTypeDescriptionConfirmation" },
+  { type: "rating", icon: "*", descriptionKey: "fieldTypeDescriptionRating" },
+  { type: "url", icon: "->", descriptionKey: "fieldTypeDescriptionUrl" },
+  { type: "screenshot", icon: "IMG", descriptionKey: "fieldTypeDescriptionScreenshot" },
+  { type: "video", icon: "VID", descriptionKey: "fieldTypeDescriptionVideo" },
 ];
 
 export function FieldTypePicker({ open, onClose, onPick }: FieldTypePickerProps) {
-  const { t } = useI18n();
+  const { t, fieldTypeLabel } = useI18n();
 
   if (!open) {
     return null;
@@ -40,9 +51,9 @@ export function FieldTypePicker({ open, onClose, onPick }: FieldTypePickerProps)
       <div className="panel composer-modal-panel">
         <div className="section-row">
           <div>
-            <p className="eyebrow">Field Library</p>
-            <h2 id="field-type-picker-title">Add a signal input</h2>
-            <p className="muted">Pick the input that best captures the next part of the signal.</p>
+            <p className="eyebrow">{t("blockLibraryTitle")}</p>
+            <h2 id="field-type-picker-title">{t("fieldTypePickerTitle")}</h2>
+            <p className="muted">{t("liveCanvasBody")}</p>
           </div>
           <button type="button" className="ghost-button" onClick={onClose}>
             {t("close")}
@@ -64,8 +75,8 @@ export function FieldTypePicker({ open, onClose, onPick }: FieldTypePickerProps)
                 {choice.icon}
               </span>
               <span className="composer-field-type-copy">
-                <strong>{choice.title}</strong>
-                <span className="muted">{choice.description}</span>
+                <strong>{fieldTypeLabel(choice.type)}</strong>
+                <span className="muted">{t(choice.descriptionKey)}</span>
               </span>
             </button>
           ))}

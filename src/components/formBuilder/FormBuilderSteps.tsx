@@ -10,6 +10,7 @@ interface FormBuilderStepsProps {
   steps: ComposerStep[];
   currentStep: string;
   completedSteps?: string[];
+  getStateLabel?: (state: "current" | "done" | "upcoming") => string;
   onSelect?: (stepKey: string) => void;
 }
 
@@ -17,6 +18,7 @@ export function FormBuilderSteps({
   steps,
   currentStep,
   completedSteps = [],
+  getStateLabel,
   onSelect,
 }: FormBuilderStepsProps) {
   const navRef = useRef<HTMLElement | null>(null);
@@ -49,6 +51,7 @@ export function FormBuilderSteps({
       {steps.map((step, index) => {
         const isCurrent = currentStep === step.key;
         const isComplete = completedSteps.includes(step.key);
+        const state = isCurrent ? "current" : isComplete ? "done" : "upcoming";
         return (
           <button
             key={step.key}
@@ -61,7 +64,7 @@ export function FormBuilderSteps({
             aria-current={isCurrent ? "step" : undefined}
           >
             <span className="composer-flow-step-state">
-              {isCurrent ? "Current" : isComplete ? "Done" : "Upcoming"}
+              {getStateLabel?.(state) ?? (isCurrent ? "Current" : isComplete ? "Done" : "Upcoming")}
             </span>
             <span className="composer-flow-step-index">{index + 1}</span>
             <span className="composer-flow-step-copy">

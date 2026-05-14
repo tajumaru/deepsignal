@@ -13,26 +13,33 @@ import type {
 } from "./types";
 
 export const CREATE_FORM_DRAFT_STORAGE_KEY = "deepsignal:create-form-draft:v1";
+export const CREATE_FORM_GUEST_DRAFT_STORAGE_KEY = "deepsignal:create-form-guest-draft:v1";
 
 export function wait(ms: number) {
   return new Promise((resolve) => window.setTimeout(resolve, ms));
 }
 
-export function createField(type: FieldType = "shortText", sectionId?: string): FormField {
+interface CreateFieldLabels {
+  confirmationLabel?: string;
+  confirmationPlaceholder?: string;
+  options?: string[];
+}
+
+export function createField(type: FieldType = "shortText", sectionId?: string, labels: CreateFieldLabels = {}): FormField {
   const normalizedType = normalizeFieldType(type);
   const isConfirmation = isConfirmationCheckboxField(normalizedType);
   return {
     id: makeId("field"),
     type: normalizedType,
-    label: isConfirmation ? "Consent / confirmation" : "",
+    label: isConfirmation ? labels.confirmationLabel ?? "Consent / confirmation" : "",
     required: false,
     sensitive: false,
     visibility: "public",
     adminOnly: false,
     sectionId,
-    placeholder: isConfirmation ? "I confirm this information is accurate" : "",
+    placeholder: isConfirmation ? labels.confirmationPlaceholder ?? "I confirm this information is accurate" : "",
     helpText: "",
-    options: hasChoiceOptions(normalizedType) ? ["Option 1", "Option 2"] : undefined,
+    options: hasChoiceOptions(normalizedType) ? labels.options ?? ["Option 1", "Option 2"] : undefined,
     conditionalParentId: undefined,
     conditionalValue: undefined,
   };
@@ -122,6 +129,7 @@ export function buildFormSchema(args: {
   visibility: NonNullable<FormSchema["visibility"]>;
   identityPolicy: FormIdentityPolicy;
   ownerAddress: string;
+  creationMode: NonNullable<FormSchema["creationMode"]>;
   projectId?: string;
   projectName?: string;
   encryptSubmissions: boolean;
@@ -158,6 +166,7 @@ export function buildFormSchema(args: {
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
     ownerAddress: args.ownerAddress,
+    creationMode: args.creationMode,
     isOnchain: false,
     projectId: args.projectId,
     projectName: args.projectName,

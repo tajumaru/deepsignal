@@ -86,7 +86,7 @@ export function getReviewAccessState(
   profile?: CapabilityProfile | null,
 ): FormAccessState {
   if (profile?.isConfigured) {
-    return canReview(profile) ? "allowed" : "denied";
+    return canReview(profile) || getFormAccessState(form, currentAddress) !== "denied" ? "allowed" : "denied";
   }
 
   return getFormAccessState(form, currentAddress);
@@ -98,7 +98,7 @@ export function canReviewForm(
   profile?: CapabilityProfile | null,
 ) {
   if (profile?.isConfigured) {
-    return canReview(profile);
+    return canReview(profile) || getFormAccessState(form, currentAddress) !== "denied";
   }
 
   return canAccessForm(form, currentAddress);

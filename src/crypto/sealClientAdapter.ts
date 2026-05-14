@@ -12,8 +12,10 @@ import type { SealAdapter, SealDecryptContext } from "../types";
 import { ACCESS_CONTROL_REGISTRY_ID, SUI_NETWORK } from "../lib/sui";
 import { serializeDecryptError } from "./decryptDiagnostics";
 import {
+  createOwnerScopedSealId,
   createProjectScopedSealId,
   createRealSealEnvelope,
+  doesSealIdMatchOwner,
   doesSealIdMatchProject,
   fromBase64,
   isLikelyWalletCancelError,
@@ -89,7 +91,12 @@ export const sealClientAdapter: SealAdapter = {
       throw new Error(SEAL_NOT_CONFIGURED_MESSAGE);
     }
     const projectId = context?.projectId?.trim() || undefined;
-    const objectId = projectId ? createProjectScopedSealId(projectId) : createRandomObjectId();
+    const ownerAddress = context?.ownerAddress?.trim() || undefined;
+    const objectId = projectId
+      ? createProjectScopedSealId(projectId)
+      : ownerAddress
+        ? createOwnerScopedSealId(ownerAddress)
+        : createRandomObjectId();
     const data = new TextEncoder().encode(value);
     const { encryptedObject } = await sealClient.encrypt({
       threshold: 1,
@@ -106,7 +113,8 @@ export const sealClientAdapter: SealAdapter = {
         serverObjectIds: [serverConfig.objectId],
         encryptedObject: toBase64(encryptedObject),
         projectId,
-        approvalPolicy: projectId ? "project_admin_v0" : undefined,
+        ownerAddress: projectId ? undefined : ownerAddress,
+        approvalPolicy: projectId ? "project_admin_v0" : ownerAddress ? "owner_wallet_v1" : undefined,
       }),
     );
   },
@@ -125,6 +133,40 @@ export const sealClientAdapter: SealAdapter = {
     }
 
     const projectId = envelope.projectId ?? context.projectId?.trim();
+    const ownerAddress = envelope.ownerAddress ?? context.ownerAddress?.trim();
+    if (!projectId && !ownerAddress) {
+      throw new Error(SEAL_PROJECT_CONTEXT_REQUIRED_MESSAGE);
+    }
+    if (!projectId && ownerAddress) {
+      if (
+        context.walletAddress.toLowerCase() !== ownerAddress.toLowerCase() ||
+        !doesSealIdMatchOwner(envelope.objectId, ownerAddress)
+      ) {
+        throw new Error(SEAL_PERMISSION_DENIED_MESSAGE);
+      }
+
+      const sessionKey = await getOrCreateSessionKey({
+        walletAddress: context.walletAddress,
+        packageId: envelope.packageId,
+        suiClient: context.suiClient as SealCompatibleClient,
+        signPersonalMessage: context.signPersonalMessage,
+        onStatusChange: context.onStatusChange,
+      });
+      context.onStatusChange?.("decrypting_private_signal");
+      const txBytes = await buildSealApproveTransactionBytes({
+        objectId: envelope.objectId,
+        approvalPolicy: "owner_wallet_v1",
+        suiClient: context.suiClient as SealCompatibleClient,
+        packageId: envelope.packageId,
+      });
+      const plaintext = await sealClient.decrypt({
+        data: fromBase64(envelope.encryptedObject),
+        sessionKey,
+        txBytes,
+      });
+      context.onStatusChange?.("finishing");
+      return new TextDecoder().decode(plaintext);
+    }
     if (!projectId) {
       throw new Error(SEAL_PROJECT_CONTEXT_REQUIRED_MESSAGE);
     }
@@ -257,17 +299,31 @@ async function buildSealApproveTransactionBytes({
   packageId,
 }: {
   objectId: string;
-  projectId: string;
+  projectId?: string;
   approvalPolicy:
     | "project_signal_v1"
     | "project_admin_v0"
     | "project_signal_reviewer_v1"
-    | "project_reviewer_v0";
+    | "project_reviewer_v0"
+    | "owner_wallet_v1";
   reviewerCapId?: string;
   suiClient: SealCompatibleClient;
   packageId: string;
 }) {
   const tx = new Transaction();
+  if (approvalPolicy === "owner_wallet_v1") {
+    tx.moveCall({
+      target: `${packageId}::project_registry::seal_approve_owner_signal`,
+      arguments: [tx.pure.vector("u8", fromHex(objectId))],
+    });
+    return tx.build({
+      client: activeSuiClient,
+      onlyTransactionKind: true,
+    });
+  }
+  if (!projectId) {
+    throw new Error(SEAL_PROJECT_CONTEXT_REQUIRED_MESSAGE);
+  }
   if (
     (approvalPolicy === "project_signal_reviewer_v1" || approvalPolicy === "project_reviewer_v0") &&
     (!ACCESS_CONTROL_REGISTRY_ID || !reviewerCapId)

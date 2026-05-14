@@ -3549,6 +3549,127 @@ h2 {
   border-color: rgba(255, 126, 143, 0.22);
 }
 
+.landing-quick-create-panel,
+.explore-quick-create-panel {
+  max-width: 1180px;
+  margin: 0 auto;
+}
+
+.quick-create {
+  display: grid;
+  grid-template-columns: minmax(0, 0.85fr) minmax(320px, 1.15fr);
+  gap: 1.1rem;
+  align-items: center;
+}
+
+.quick-create-compact {
+  grid-template-columns: minmax(0, 0.75fr) minmax(320px, 1.25fr);
+}
+
+.quick-create-copy {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.quick-create-copy h2,
+.quick-create-copy p {
+  margin: 0;
+}
+
+.quick-create-copy h2 {
+  font-size: clamp(1.45rem, 3vw, 2.35rem);
+  line-height: 1.05;
+}
+
+.quick-create-control {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.7rem;
+  align-items: center;
+}
+
+.quick-create-control input {
+  width: 100%;
+  min-height: 3.8rem;
+  border-radius: 999px;
+  border: 1px solid rgba(149, 242, 255, 0.22);
+  background: rgba(2, 12, 22, 0.62);
+  color: #f2fdff;
+  padding: 0.9rem 1.2rem;
+  outline: none;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.quick-create-control input:focus {
+  border-color: rgba(149, 242, 255, 0.62);
+  box-shadow: 0 0 0 0.22rem rgba(102, 227, 255, 0.12);
+}
+
+.quick-create-chip-row {
+  grid-column: 2;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+}
+
+.quick-create-chip {
+  border: 1px solid rgba(116, 226, 255, 0.18);
+  border-radius: 999px;
+  background: rgba(102, 227, 255, 0.08);
+  color: #c7f6ff;
+  min-height: 2.35rem;
+  padding: 0.45rem 0.85rem;
+}
+
+.quick-create-chip.is-active {
+  border-color: rgba(149, 242, 255, 0.48);
+  background: rgba(102, 227, 255, 0.16);
+  color: #ffffff;
+}
+
+.composer-guest-draft-banner {
+  width: min(100%, 1180px);
+  margin: 0 auto 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid rgba(125, 211, 252, 0.24);
+  border-radius: 8px;
+  background: rgba(102, 227, 255, 0.08);
+  color: #e9fbff;
+}
+
+.composer-guest-draft-banner span {
+  color: #a9cddd;
+}
+
+.composer-friendly-storage-notice .metadata-row strong {
+  color: #d9f8ff;
+  font-weight: 650;
+}
+
+@media (max-width: 860px) {
+  .quick-create,
+  .quick-create-compact {
+    grid-template-columns: 1fr;
+  }
+
+  .quick-create-control {
+    grid-template-columns: 1fr;
+  }
+
+  .quick-create-chip-row {
+    grid-column: auto;
+  }
+
+  .composer-guest-draft-banner {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+
 .primary-button:disabled,
 .ghost-button:disabled,
 .danger-button:disabled {
@@ -9630,7 +9751,32 @@ body.composer-mode .bg-orb {
 
 .review-primary-sections {
   grid-template-columns: minmax(0, 1.05fr) minmax(280px, 0.95fr);
+  grid-template-areas:
+    "unlock unlock"
+    "original triage"
+    "context triage"
+    "success triage";
   align-items: start;
+}
+
+.review-primary-sections .original-signal-section {
+  grid-area: original;
+}
+
+.review-primary-sections .private-signal-unlock-card {
+  grid-area: unlock;
+}
+
+.review-primary-sections .review-unlock-context {
+  grid-area: context;
+}
+
+.review-primary-sections .contest-inline-success {
+  grid-area: success;
+}
+
+.review-primary-sections .review-triage-card {
+  grid-area: triage;
 }
 
 .review-triage-card {
@@ -11537,6 +11683,15 @@ body.composer-mode .bg-orb {
   .review-primary-sections,
   .review-field-grid {
     grid-template-columns: 1fr;
+  }
+
+  .review-primary-sections {
+    grid-template-areas:
+      "unlock"
+      "original"
+      "context"
+      "success"
+      "triage";
   }
 
   .signal-sidebar {

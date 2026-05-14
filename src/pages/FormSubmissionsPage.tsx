@@ -220,6 +220,7 @@ export function FormSubmissionsPage() {
     () => ({
       walletAddress: account?.address,
       projectId: form?.projectId,
+      ownerAddress: form?.ownerAddress,
       reviewerCapId:
         capabilityProfile.hasOwnerCap || capabilityProfile.hasAdminCap
           ? undefined
@@ -236,6 +237,7 @@ export function FormSubmissionsPage() {
       capabilityProfile.hasOwnerCap,
       capabilityProfile.reviewerCapIds,
       form?.projectId,
+      form?.ownerAddress,
       signPersonalMessage,
       suiClient,
     ],
@@ -450,6 +452,7 @@ export function FormSubmissionsPage() {
       const resolved = await resolveSubmissionAnswers(form, selectedSubmission, undefined, {
         walletAddress: account?.address,
         projectId: form.projectId,
+        ownerAddress: form.ownerAddress,
         reviewerCapId:
           capabilityProfile.hasOwnerCap || capabilityProfile.hasAdminCap
             ? undefined

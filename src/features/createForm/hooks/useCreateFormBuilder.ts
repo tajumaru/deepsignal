@@ -30,16 +30,37 @@ import type {
   Translate,
 } from "../types";
 import type { DraftSaveState } from "../types";
-import { cloneField, CREATE_FORM_DRAFT_STORAGE_KEY, createField, createSection, serializeDraft } from "../utils";
+import {
+  cloneField,
+  CREATE_FORM_DRAFT_STORAGE_KEY,
+  CREATE_FORM_GUEST_DRAFT_STORAGE_KEY,
+  createField,
+  createSection,
+  serializeDraft,
+} from "../utils";
 
 interface UseCreateFormBuilderArgs {
   t: Translate;
   projects: ProjectOption[];
   freshStartToken?: string;
+  mode?: "admin" | "guestDraft";
+  draftSeed?: {
+    templateKey?: string;
+    idea?: string;
+  };
 }
 
-export function useCreateFormBuilder({ t, projects, freshStartToken = "" }: UseCreateFormBuilderArgs) {
+export function useCreateFormBuilder({
+  t,
+  projects,
+  freshStartToken = "",
+  mode = "admin",
+  draftSeed,
+}: UseCreateFormBuilderArgs) {
   const hasLoadedDraftRef = useRef(false);
+  const previousModeRef = useRef(mode);
+  const draftStorageKey = mode === "guestDraft" ? CREATE_FORM_GUEST_DRAFT_STORAGE_KEY : CREATE_FORM_DRAFT_STORAGE_KEY;
+  const isGuestDraftMode = mode === "guestDraft";
   const labelRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const fieldCardRefs = useRef<Record<string, HTMLElement | null>>({});
   const [selectedTemplateKey, setSelectedTemplateKey] = useState(initialTemplate.key);
@@ -56,7 +77,7 @@ export function useCreateFormBuilder({ t, projects, freshStartToken = "" }: UseC
   const [currentStep, setCurrentStep] = useState<BuilderStepKey>("template");
   const [mobilePane, setMobilePane] = useState<MobileBuilderPane>("editor");
   const [fieldTypePickerOpen, setFieldTypePickerOpen] = useState(false);
-  const [selectedProjectId, setSelectedProjectIdState] = useState(() => getSelectedProjectId());
+  const [selectedProjectId, setSelectedProjectIdState] = useState(() => (isGuestDraftMode ? "" : getSelectedProjectId()));
   const [projectState, setProjectState] = useState("");
   const [lastSavedSnapshot, setLastSavedSnapshot] = useState(INITIAL_DRAFT_SNAPSHOT);
   const [draftSaveState, setDraftSaveState] = useState<DraftSaveState>("idle");
@@ -104,7 +125,7 @@ export function useCreateFormBuilder({ t, projects, freshStartToken = "" }: UseC
 
   function resetBuilderState() {
     const nextFields = createTemplateFields(initialTemplate);
-    const nextSelectedProjectId = getSelectedProjectId();
+    const nextSelectedProjectId = isGuestDraftMode ? "" : getSelectedProjectId();
     setSelectedTemplateKey(initialTemplate.key);
     setTitle(initialTemplate.title);
     setDescription(initialTemplate.description);
@@ -113,7 +134,7 @@ export function useCreateFormBuilder({ t, projects, freshStartToken = "" }: UseC
     setPurpose(initialTemplate.purpose);
     setVisibility("unlisted");
     setIdentityPolicy("anonymous_allowed");
-    setEncryptSubmissions(true);
+    setEncryptSubmissions(!isGuestDraftMode);
     setResponseDeadlinePreset("none");
     setResponseDeadlineCustomAt("");
     setCurrentStep("template");
@@ -131,8 +152,20 @@ export function useCreateFormBuilder({ t, projects, freshStartToken = "" }: UseC
   }
 
   useEffect(() => {
+    if (isGuestDraftMode) {
+      return;
+    }
     setSelectedProjectId(selectedProjectId);
-  }, [selectedProjectId]);
+  }, [isGuestDraftMode, selectedProjectId]);
+
+  useEffect(() => {
+    if (previousModeRef.current === mode) {
+      return;
+    }
+    previousModeRef.current = mode;
+    hasLoadedDraftRef.current = false;
+    setDraftSaveState("idle");
+  }, [mode]);
 
   useEffect(() => {
     if (hasLoadedDraftRef.current) {
@@ -141,11 +174,31 @@ export function useCreateFormBuilder({ t, projects, freshStartToken = "" }: UseC
     hasLoadedDraftRef.current = true;
     try {
       if (freshStartToken) {
-        window.localStorage.removeItem(CREATE_FORM_DRAFT_STORAGE_KEY);
-        return;
+        window.localStorage.removeItem(draftStorageKey);
       }
-      const rawDraft = window.localStorage.getItem(CREATE_FORM_DRAFT_STORAGE_KEY);
+      const rawDraft = freshStartToken ? null : window.localStorage.getItem(draftStorageKey);
       if (!rawDraft) {
+        if (isGuestDraftMode) {
+          const template = getTemplateDefinition(draftSeed?.templateKey ?? initialTemplate.key);
+          const nextFields = createTemplateFields(template);
+          const idea = draftSeed?.idea?.trim() ?? "";
+          setSelectedTemplateKey(template.key);
+          setTitle(idea || template.title);
+          setDescription(idea ? `A quick form for ${idea.toLowerCase()}.` : template.description);
+          setFields(nextFields);
+          setSections([]);
+          setPurpose(normalizeFormPurpose(template.purpose));
+          setVisibility("unlisted");
+          setIdentityPolicy("anonymous_allowed");
+          setEncryptSubmissions(false);
+          setResponseDeadlinePreset("none");
+          setResponseDeadlineCustomAt("");
+          setCurrentStep("fields");
+          setSelectedProjectIdState("");
+          setProjectState("");
+          setActiveFieldId(nextFields[0]?.id ?? "");
+          setPendingFocusFieldId(nextFields[0]?.id ?? "");
+        }
         return;
       }
       const parsedDraft = JSON.parse(rawDraft) as {
@@ -165,7 +218,7 @@ export function useCreateFormBuilder({ t, projects, freshStartToken = "" }: UseC
         projectState?: string;
       };
       if (!Array.isArray(parsedDraft.fields) || parsedDraft.fields.length === 0) {
-        window.localStorage.removeItem(CREATE_FORM_DRAFT_STORAGE_KEY);
+        window.localStorage.removeItem(draftStorageKey);
         return;
       }
       setSelectedTemplateKey(parsedDraft.selectedTemplateKey ?? initialTemplate.key);
@@ -183,28 +236,28 @@ export function useCreateFormBuilder({ t, projects, freshStartToken = "" }: UseC
       setPurpose(parsedDraft.purpose ?? initialTemplate.purpose);
       setVisibility(parsedDraft.visibility ?? "unlisted");
       setIdentityPolicy(parsedDraft.identityPolicy === "wallet_required" ? "wallet_required" : "anonymous_allowed");
-      setEncryptSubmissions(parsedDraft.encryptSubmissions ?? true);
+      setEncryptSubmissions(parsedDraft.encryptSubmissions ?? !isGuestDraftMode);
       setResponseDeadlinePreset(parsedDraft.responseDeadlinePreset ?? "none");
       setResponseDeadlineCustomAt(parsedDraft.responseDeadlineCustomAt ?? "");
       setCurrentStep(parsedDraft.currentStep ?? "fields");
-      setSelectedProjectIdState(parsedDraft.selectedProjectId ?? "");
+      setSelectedProjectIdState(isGuestDraftMode ? "" : parsedDraft.selectedProjectId ?? "");
       setProjectState(parsedDraft.projectState ?? "");
       setActiveFieldId(parsedDraft.fields[0]?.id ?? "");
       setPendingFocusFieldId(parsedDraft.fields[0]?.id ?? "");
       setDraftSaveState("restored");
     } catch (error) {
       console.warn("Failed to restore create form draft.", error);
-      window.localStorage.removeItem(CREATE_FORM_DRAFT_STORAGE_KEY);
+      window.localStorage.removeItem(draftStorageKey);
     }
-  }, [freshStartToken]);
+  }, [draftSeed?.idea, draftSeed?.templateKey, draftStorageKey, freshStartToken, isGuestDraftMode]);
 
   useEffect(() => {
-    if (!hasLoadedDraftRef.current || !freshStartToken) {
+    if (isGuestDraftMode || !hasLoadedDraftRef.current || !freshStartToken) {
       return;
     }
-    window.localStorage.removeItem(CREATE_FORM_DRAFT_STORAGE_KEY);
+    window.localStorage.removeItem(draftStorageKey);
     resetBuilderState();
-  }, [freshStartToken]);
+  }, [draftStorageKey, freshStartToken, isGuestDraftMode]);
 
   useEffect(() => {
     if (!pendingFocusFieldId) {
@@ -253,7 +306,7 @@ export function useCreateFormBuilder({ t, projects, freshStartToken = "" }: UseC
       return;
     }
     if (draftSnapshot === INITIAL_DRAFT_SNAPSHOT) {
-      window.localStorage.removeItem(CREATE_FORM_DRAFT_STORAGE_KEY);
+      window.localStorage.removeItem(draftStorageKey);
       if (draftSaveState !== "restored") {
         setDraftSaveState("idle");
       }
@@ -277,7 +330,7 @@ export function useCreateFormBuilder({ t, projects, freshStartToken = "" }: UseC
         selectedProjectId,
         projectState,
       };
-      window.localStorage.setItem(CREATE_FORM_DRAFT_STORAGE_KEY, JSON.stringify(payload));
+      window.localStorage.setItem(draftStorageKey, JSON.stringify(payload));
       setDraftSaveState("saved");
     }, 500);
     return () => window.clearTimeout(timeoutId);
@@ -285,6 +338,7 @@ export function useCreateFormBuilder({ t, projects, freshStartToken = "" }: UseC
     currentStep,
     description,
     draftSaveState,
+    draftStorageKey,
     draftSnapshot,
     encryptSubmissions,
     fields,
@@ -375,7 +429,11 @@ export function useCreateFormBuilder({ t, projects, freshStartToken = "" }: UseC
   function insertField(type: FieldType, afterIndex?: number, sectionId?: string) {
     const activeField = fields.find((field) => field.id === activeFieldId);
     const resolvedSectionId = sectionId ?? activeField?.sectionId;
-    const nextField = createField(type, resolvedSectionId);
+    const nextField = createField(type, resolvedSectionId, {
+      confirmationLabel: t("confirmationDefaultLabel"),
+      confirmationPlaceholder: t("confirmationDefaultPlaceholder"),
+      options: [t("optionDefault", { index: 1 }), t("optionDefault", { index: 2 })],
+    });
     setFields((current) => {
       if (afterIndex === undefined || afterIndex < 0 || afterIndex >= current.length) {
         if (resolvedSectionId) {
@@ -437,7 +495,11 @@ export function useCreateFormBuilder({ t, projects, freshStartToken = "" }: UseC
       if (!canFieldHaveConditionalChildren(parentField)) {
         return current;
       }
-      const nextField = createField("shortText", parentField.sectionId);
+      const nextField = createField("shortText", parentField.sectionId, {
+        confirmationLabel: t("confirmationDefaultLabel"),
+        confirmationPlaceholder: t("confirmationDefaultPlaceholder"),
+        options: [t("optionDefault", { index: 1 }), t("optionDefault", { index: 2 })],
+      });
       nextField.label = t("conditionalQuestionDefaultLabel");
       nextField.placeholder = t("placeholderExample");
       nextField.conditionalParentId = parentField.id;
@@ -577,7 +639,7 @@ export function useCreateFormBuilder({ t, projects, freshStartToken = "" }: UseC
 
   function markSaved() {
     setLastSavedSnapshot(draftSnapshot);
-    window.localStorage.removeItem(CREATE_FORM_DRAFT_STORAGE_KEY);
+    window.localStorage.removeItem(draftStorageKey);
     setDraftSaveState("idle");
   }
 

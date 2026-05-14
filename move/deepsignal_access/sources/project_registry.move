@@ -605,6 +605,14 @@ module deepsignal::project_registry {
         assert_project_reviewer(registry, reviewer_cap, sui::tx_context::sender(ctx));
     }
 
+    entry fun seal_approve_owner_signal(
+        id: vector<u8>,
+        ctx: &sui::tx_context::TxContext,
+    ) {
+        let sender = sui::tx_context::sender(ctx);
+        assert!(has_prefix(&sender.to_bytes(), &id), E_PROJECT_ADMIN_REQUIRED);
+    }
+
     public fun project_id(cap: &ProjectOwnerCap): sui::object::ID {
         cap.project_id
     }

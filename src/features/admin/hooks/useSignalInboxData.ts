@@ -92,20 +92,21 @@ export function useSignalInboxData({
       }
 
       const nextForms = allForms.map((form) => ({ ...normalizeForm(form), submissionCount: 0 }));
+      const nextAccessibleForms = nextForms.filter((form) => canReviewForm(form, accountAddress, capabilityProfile));
       setForms(nextForms);
       setSubmissionsByFormId({});
       setSelectedSignalId((current) => preferredSignalId ?? current);
       setLoading(false);
 
-      if (nextForms.length === 0) {
+      if (nextAccessibleForms.length === 0) {
         return;
       }
 
       setSubmissionsLoading(true);
       const nextSubmissions: Record<string, Submission[]> = {};
 
-      for (let index = 0; index < nextForms.length; index += ADMIN_SUBMISSION_BATCH_SIZE) {
-        const formBatch = nextForms.slice(index, index + ADMIN_SUBMISSION_BATCH_SIZE);
+      for (let index = 0; index < nextAccessibleForms.length; index += ADMIN_SUBMISSION_BATCH_SIZE) {
+        const formBatch = nextAccessibleForms.slice(index, index + ADMIN_SUBMISSION_BATCH_SIZE);
         const batchResults = await Promise.all(
           formBatch.map(async (form) => {
             try {

@@ -82,6 +82,7 @@ export function usePrivateSignalDecrypt({
     () => ({
       walletAddress: accountAddress ?? undefined,
       projectId: selectedRecord?.form.projectId,
+      ownerAddress: selectedRecord?.form.ownerAddress,
       reviewerCapId:
         capabilityProfile.hasOwnerCap || capabilityProfile.hasAdminCap
           ? undefined
@@ -92,7 +93,7 @@ export function usePrivateSignalDecrypt({
         return result.signature;
       },
     }),
-    [accountAddress, capabilityProfile, selectedRecord?.form.projectId, signPersonalMessage, suiClient],
+    [accountAddress, capabilityProfile, selectedRecord?.form.ownerAddress, selectedRecord?.form.projectId, signPersonalMessage, suiClient],
   );
 
   useEffect(() => {

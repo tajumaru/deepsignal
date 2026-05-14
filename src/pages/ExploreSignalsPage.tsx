@@ -1,3 +1,4 @@
+import { useCurrentAccount } from "@mysten/dapp-kit";
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { CreateFormLink } from "../components/CreateFormLink";
@@ -23,9 +24,12 @@ type HiddenFormSummary = {
   visibility: FormSchema["visibility"];
   publicPath: string;
   responseDeadline?: FormSchema["responseDeadline"];
+  ownerAddress?: string;
 };
 
 type DiscoverTab = "trending" | "new" | "active" | "ai" | "governance" | "anonymous" | "encrypted";
+
+const EXPLORE_DELETED_FORMS_KEY = "deepsignal.exploreDeletedForms";
 
 const DISCOVER_TABS: Array<{ key: DiscoverTab; label: string }> = [
   { key: "trending", label: "Trending" },
@@ -82,59 +86,121 @@ function getDeadlineTone(form: Pick<FormSchema, "responseDeadline">) {
   return "scheduled";
 }
 
+function readExploreDeletedFormIds() {
+  if (typeof window === "undefined") {
+    return new Set<string>();
+  }
+  try {
+    const raw = window.localStorage.getItem(EXPLORE_DELETED_FORMS_KEY);
+    const ids = raw ? (JSON.parse(raw) as string[]) : [];
+    return new Set(ids.filter((id) => typeof id === "string" && id.trim()));
+  } catch {
+    return new Set<string>();
+  }
+}
+
+function saveExploreDeletedFormIds(ids: Set<string>) {
+  if (typeof window === "undefined") {
+    return;
+  }
+  window.localStorage.setItem(EXPLORE_DELETED_FORMS_KEY, JSON.stringify([...ids]));
+}
+
+function rememberExploreDeletedForm(formId: string) {
+  const ids = readExploreDeletedFormIds();
+  ids.add(formId);
+  saveExploreDeletedFormIds(ids);
+}
+
 export function ExploreSignalsPage() {
+  const account = useCurrentAccount();
   const [loading, setLoading] = useState(true);
   const [cards, setCards] = useState<ExploreCard[]>([]);
   const [hiddenForms, setHiddenForms] = useState<HiddenFormSummary[]>([]);
   const [activeTab, setActiveTab] = useState<DiscoverTab>("trending");
+  const [deletingFormId, setDeletingFormId] = useState("");
 
-  useEffect(() => {
-    async function loadExplore() {
-      const allForms: FormSchema[] = (await storageAdapter.listForms()).map((form) => normalizeForm(form));
-      const forms = allForms.filter((form) => isFormPubliclyExplorable(form));
-      const nextHiddenForms = allForms
-        .filter((form) => !isFormPubliclyExplorable(form))
-        .map((form) => ({
-          id: form.id,
-          title: form.title || "Untitled form",
-          visibility: form.visibility,
-          publicPath: getPublicFormPath(form.id, form.manifestBlobId),
-          responseDeadline: form.responseDeadline,
-        }));
+  async function loadExplore() {
+    setLoading(true);
+    const allStorageForms = await storageAdapter.listForms();
+    const deletedFormIds = readExploreDeletedFormIds();
+    const allForms: FormSchema[] = allStorageForms
+      .filter((form) => !deletedFormIds.has(form.id))
+      .map((form) => normalizeForm(form));
+    const forms = allForms.filter((form) => isFormPubliclyExplorable(form));
+    const nextHiddenForms = allForms
+      .filter((form) => !isFormPubliclyExplorable(form))
+      .map((form) => ({
+        id: form.id,
+        title: form.title || "Untitled form",
+        visibility: form.visibility,
+        publicPath: getPublicFormPath(form.id, form.manifestBlobId),
+        responseDeadline: form.responseDeadline,
+        ownerAddress: form.ownerAddress,
+      }));
 
-      const nextCards = await Promise.all(
-        forms.map(async (form) => {
-          const submissions = (await storageAdapter.listSubmissions(form.id)).map((submission) => normalizeSubmission(submission));
-          const updatedAt = submissions[0]?.updatedAt ?? form.updatedAt ?? form.createdAt;
-          const exploreCategory = getExploreCategory(form);
-          const roadmapCount = submissions.filter((submission) =>
-            submission.triageStatus === "planned" ||
-            submission.triageStatus === "in_progress" ||
-            submission.triageStatus === "fixed",
-          ).length;
+    const nextCards = await Promise.all(
+      forms.map(async (form) => {
+        const submissions = (await storageAdapter.listSubmissions(form.id)).map((submission) => normalizeSubmission(submission));
+        const updatedAt = submissions[0]?.updatedAt ?? form.updatedAt ?? form.createdAt;
+        const exploreCategory = getExploreCategory(form);
+        const roadmapCount = submissions.filter((submission) =>
+          submission.triageStatus === "planned" ||
+          submission.triageStatus === "in_progress" ||
+          submission.triageStatus === "fixed",
+        ).length;
 
-          return {
-            form,
+        return {
+          form,
+          category: exploreCategory,
+          signalCount: submissions.length,
+          updatedAt,
+          roadmapCount,
+          aiPreview: buildExploreAiPreview({
             category: exploreCategory,
             signalCount: submissions.length,
             updatedAt,
-            roadmapCount,
-            aiPreview: buildExploreAiPreview({
-              category: exploreCategory,
-              signalCount: submissions.length,
-              updatedAt,
-            }),
-          } satisfies ExploreCard;
-        }),
-      );
+          }),
+        } satisfies ExploreCard;
+      }),
+    );
 
-      setCards(nextCards);
-      setHiddenForms(nextHiddenForms);
-      setLoading(false);
-    }
+    setCards(nextCards);
+    setHiddenForms(nextHiddenForms);
+    setLoading(false);
+  }
 
+  useEffect(() => {
     void loadExplore();
   }, []);
+
+  function canDeleteForm(form: Pick<FormSchema, "creationMode" | "ownerAddress">) {
+    return (
+      form.creationMode === "guest" &&
+      Boolean(account?.address && form.ownerAddress && form.ownerAddress.toLowerCase() === account.address.toLowerCase())
+    );
+  }
+
+  function canOpenFormDashboard(form: Pick<FormSchema, "ownerAddress">) {
+    return Boolean(account?.address && form.ownerAddress && form.ownerAddress.toLowerCase() === account.address.toLowerCase());
+  }
+
+  async function handleDeleteForm(formId: string, title: string) {
+    if (!window.confirm(`Delete "${title || "Untitled form"}" from this browser?`)) {
+      return;
+    }
+    setDeletingFormId(formId);
+    try {
+      rememberExploreDeletedForm(formId);
+      await storageAdapter.deleteForm(formId);
+      await loadExplore();
+    } catch (error) {
+      console.warn("Delete fell back to hiding the form from this browser.", error);
+      await loadExplore();
+    } finally {
+      setDeletingFormId("");
+    }
+  }
 
   const filteredCards = useMemo(() => {
     const next = cards.filter((card) => {
@@ -260,6 +326,21 @@ export function ExploreSignalsPage() {
                       <Link className="ghost-button" to={form.publicPath}>
                         Open direct
                       </Link>
+                      {canOpenFormDashboard(form) ? (
+                        <Link className="ghost-button" to={`/dashboard/forms/${form.id}`}>
+                          Open dashboard
+                        </Link>
+                      ) : null}
+                      {canDeleteForm(form) ? (
+                        <button
+                          type="button"
+                          className="danger-button"
+                          onClick={() => void handleDeleteForm(form.id, form.title)}
+                          disabled={deletingFormId === form.id}
+                        >
+                          {deletingFormId === form.id ? "Deleting..." : "Delete"}
+                        </button>
+                      ) : null}
                     </div>
                   </div>
                 ))}
@@ -281,6 +362,7 @@ export function ExploreSignalsPage() {
             {filteredCards.map((card) => {
               const publicPath = getPublicFormPath(card.form.id, card.form.manifestBlobId);
               const creatorLabel = getCreatorLabel(card.form);
+              const isOwnForm = canDeleteForm(card.form);
 
               return (
                 <article key={card.form.id} className="panel glow-panel explore-card explore-feed-card">
@@ -342,6 +424,16 @@ export function ExploreSignalsPage() {
                     <Link className="primary-button" to={publicPath}>
                       Open signal
                     </Link>
+                    {isOwnForm ? (
+                      <button
+                        type="button"
+                        className="danger-button"
+                        onClick={() => void handleDeleteForm(card.form.id, card.form.title)}
+                        disabled={deletingFormId === card.form.id}
+                      >
+                        {deletingFormId === card.form.id ? "Deleting..." : "Delete"}
+                      </button>
+                    ) : null}
                   </div>
                 </article>
               );

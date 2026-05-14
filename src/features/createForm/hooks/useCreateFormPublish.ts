@@ -29,6 +29,7 @@ import { buildFormSchema } from "../utils";
 interface UseCreateFormPublishArgs {
   t: Translate;
   accountAddress?: string;
+  creationMode: "admin" | "guest";
   title: string;
   description: string;
   fields: FormField[];
@@ -65,6 +66,7 @@ const initialOverlayState: PublishOverlayState = {
 export function useCreateFormPublish({
   t,
   accountAddress,
+  creationMode,
   title,
   description,
   fields,
@@ -203,6 +205,7 @@ export function useCreateFormPublish({
     const blockingEncryptionWarning = getCreateFormEncryptionReadiness({
       encryptSubmissions,
       projectId: selectedProject?.objectId,
+      ownerAddress: accountAddress,
     }).find((warning) => warning.blocksPublish);
     if (blockingEncryptionWarning) {
       setError(blockingEncryptionWarning.message);
@@ -261,6 +264,7 @@ export function useCreateFormPublish({
       visibility,
       identityPolicy,
       ownerAddress: accountAddress,
+      creationMode,
       projectId: selectedProject?.objectId,
       projectName: selectedProject?.name,
       encryptSubmissions,
@@ -270,6 +274,7 @@ export function useCreateFormPublish({
 
     try {
       const finalForm = await publishForm({
+        t,
         form,
         selectedProject,
         setPublishStageIndex: (stageIndex) => updateOverlay({ stageIndex }),

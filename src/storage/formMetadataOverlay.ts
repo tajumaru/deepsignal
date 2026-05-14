@@ -12,6 +12,7 @@ type FormMetadataOverlay = Pick<
   | "projectId"
   | "projectName"
   | "ownerAddress"
+  | "creationMode"
   | "encryptSubmissions"
   | "responseDeadline"
   | "responseDeadlineMode"
@@ -49,6 +50,7 @@ export function saveFormMetadataOverlay(form: FormSchema) {
     projectId: form.projectId,
     projectName: form.projectName,
     ownerAddress: form.ownerAddress,
+    creationMode: form.creationMode,
     encryptSubmissions: form.encryptSubmissions,
     responseDeadline: form.responseDeadline ?? null,
     responseDeadlineMode: form.responseDeadlineMode ?? "none",

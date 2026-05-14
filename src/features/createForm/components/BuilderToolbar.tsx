@@ -1,6 +1,5 @@
 import { Link } from "react-router-dom";
 import { FormBuilderSteps } from "../../../components/formBuilder/FormBuilderSteps";
-import { builderSteps } from "../constants";
 import type { BuilderStepKey, Translate } from "../types";
 
 interface BuilderToolbarProps {
@@ -30,6 +29,13 @@ export function BuilderToolbar({
   onSelectStep,
   onNavigateHome,
 }: BuilderToolbarProps) {
+  const builderSteps = [
+    { key: "template", title: "Step 1", description: t("stepTemplateDescription") },
+    { key: "info", title: "Step 2", description: t("stepInfoDescription") },
+    { key: "fields", title: "Step 3", description: t("stepFieldsDescription") },
+    { key: "publish", title: "Step 4", description: t("stepPublishDescription") },
+  ];
+
   return (
     <div className={`composer-toolbar panel ${isScrolled ? "is-scrolled" : ""}`}>
       <div className="composer-toolbar-copy">
@@ -38,7 +44,7 @@ export function BuilderToolbar({
         <p className="muted composer-intro">{t("composerIntro")}</p>
         {capabilityConfigured ? (
           <p className="muted">
-            Access Role: {accessRoleLabel}
+            {t("accessRoleLabel")}: {accessRoleLabel}
             {adminCapLabel ? ` (${adminCapLabel})` : ""}
           </p>
         ) : null}
@@ -49,6 +55,9 @@ export function BuilderToolbar({
         steps={builderSteps}
         currentStep={currentStep}
         completedSteps={completedSteps}
+        getStateLabel={(state) =>
+          state === "current" ? t("stepStateCurrent") : state === "done" ? t("stepStateDone") : t("stepStateUpcoming")
+        }
         onSelect={(stepKey) => onSelectStep(stepKey as BuilderStepKey)}
       />
 

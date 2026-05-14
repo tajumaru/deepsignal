@@ -21,7 +21,16 @@ import { useCreateFormBuilder } from "../features/createForm/hooks/useCreateForm
 import { useCreateFormPublish } from "../features/createForm/hooks/useCreateFormPublish";
 import { getStorageRuntimeStatus, subscribeStorageRuntime } from "../storage/storageFactory";
 
-export function FormBuilderPage() {
+interface FormBuilderComposerProps {
+  mode: "admin" | "guestDraft";
+  freshStartToken: string;
+  draftSeed: {
+    templateKey?: string;
+    idea?: string;
+  };
+}
+
+function FormBuilderComposer({ mode, freshStartToken, draftSeed }: FormBuilderComposerProps) {
   const { t } = useI18n();
   const account = useCurrentAccount();
   const { currentWallet, isConnected } = useCurrentWallet();
@@ -30,17 +39,25 @@ export function FormBuilderPage() {
   const { projects } = useProjectRegistry(account?.address);
   const createFormTx = useSignAndExecuteTransaction();
   const navigate = useNavigate();
-  const location = useLocation();
   const composerShellRef = useRef<HTMLElement | null>(null);
   const [isScrolled, setIsScrolled] = useState(false);
   const [storageRuntime, setStorageRuntime] = useState(() => getStorageRuntimeStatus());
   const [showPublishSuccessView, setShowPublishSuccessView] = useState(false);
-  const freshStartToken = new URLSearchParams(location.search).get("fresh") ?? "";
+  const hasAdminAccess = canAdmin(capabilityProfile);
+  const isGuestDraftMode = mode === "guestDraft";
 
-  const builder = useCreateFormBuilder({ t, projects, freshStartToken });
+  const builder = useCreateFormBuilder({
+    t,
+    projects,
+    freshStartToken,
+    mode: isGuestDraftMode ? "guestDraft" : "admin",
+    draftSeed,
+  });
+  const selectedProjectForPublish = hasAdminAccess ? builder.selectedProject : null;
   const publish = useCreateFormPublish({
     t,
     accountAddress: account?.address,
+    creationMode: isGuestDraftMode ? "guest" : "admin",
     title: builder.values.title,
     description: builder.values.description,
     fields: builder.values.fields,
@@ -52,7 +69,7 @@ export function FormBuilderPage() {
     responseDeadlinePreset: builder.values.responseDeadlinePreset,
     responseDeadlineCustomAt: builder.values.responseDeadlineCustomAt,
     isDirty: builder.isDirty,
-    selectedProject: builder.selectedProject,
+    selectedProject: selectedProjectForPublish,
     setProjectState: builder.setProjectState,
     signAndExecuteTransaction: async (transaction) => createFormTx.mutateAsync({ transaction }),
     waitForTransaction: async (digest) =>
@@ -65,7 +82,6 @@ export function FormBuilderPage() {
     onSaved: () => builder.markSaved(),
   });
 
-  const hasAdminAccess = canAdmin(capabilityProfile);
   const accessState = getAdminSurfaceAccessState("admin", account?.address, capabilityProfile);
 
   const completedSteps = useMemo(
@@ -80,23 +96,24 @@ export function FormBuilderPage() {
   );
   const encryptionWarnings = getCreateFormEncryptionReadiness({
     encryptSubmissions: builder.values.encryptSubmissions,
-    projectId: builder.selectedProject?.objectId,
+    projectId: selectedProjectForPublish?.objectId,
+    ownerAddress: account?.address,
   });
   const draftStateLabel = useMemo(() => {
     if (!builder.isDirty && publish.savedForm) {
-      return "Draft cleared after publish.";
+      return t("draftClearedAfterPublish");
     }
     switch (builder.draftSaveState) {
       case "restored":
-        return "Restored unsent draft from this browser.";
+        return t("draftRestored");
       case "saving":
-        return "Saving draft...";
+        return t("draftSaving");
       case "saved":
-        return "Draft autosaved in this browser.";
+        return t("draftSaved");
       default:
-        return builder.isDirty ? "Unsaved changes in progress." : "";
+        return builder.isDirty ? t("draftUnsaved") : "";
     }
-  }, [builder.draftSaveState, builder.isDirty, publish.savedForm]);
+  }, [builder.draftSaveState, builder.isDirty, publish.savedForm, t]);
 
   useEffect(() => {
     const unsubscribe = subscribeStorageRuntime(() => setStorageRuntime(getStorageRuntimeStatus()));
@@ -165,25 +182,19 @@ export function FormBuilderPage() {
 
   function handleSelectProject(projectId: string) {
     builder.setSelectedProjectIdState(projectId);
-    setSelectedProjectId(projectId);
+    if (!isGuestDraftMode) {
+      setSelectedProjectId(projectId);
+    }
   }
 
-  if (isLoadingAccess) {
-    return <div className="panel">Checking wallet capabilities...</div>;
+  if (!isGuestDraftMode && account?.address && isLoadingAccess) {
+    return <div className="panel">{t("checkingWalletCapabilities")}</div>;
   }
 
-  return (
-    <AdminAccessGate
-      hasWallet={Boolean(account?.address)}
-      access={accessState}
-      deniedBody={
-        capabilityProfile.isConfigured
-          ? "Only wallets with OwnerCap or AdminCap can open the form composer and publish new signals."
-          : undefined
-      }
-    >
+  const composer = (
       <section ref={composerShellRef} className="composer-shell">
         <PublishOverlay
+          t={t}
           open={publish.overlay.open}
           overlay={publish.overlay}
           saving={publish.saving}
@@ -214,14 +225,21 @@ export function FormBuilderPage() {
           isScrolled={isScrolled}
           currentStep={builder.values.currentStep}
           completedSteps={completedSteps}
-          capabilityConfigured={capabilityProfile.isConfigured}
-          accessRoleLabel={getRoleLabel(capabilityProfile)}
-          adminCapLabel={hasAdminAccess && capabilityProfile.adminCapIds[0] ? shortAddress(capabilityProfile.adminCapIds[0]) : undefined}
+          capabilityConfigured={!isGuestDraftMode && capabilityProfile.isConfigured}
+          accessRoleLabel={isGuestDraftMode ? t("guestDraftRole") : getRoleLabel(capabilityProfile)}
+          adminCapLabel={!isGuestDraftMode && hasAdminAccess && capabilityProfile.adminCapIds[0] ? shortAddress(capabilityProfile.adminCapIds[0]) : undefined}
           draftStateLabel={draftStateLabel || undefined}
           savedFormId={publish.savedForm?.id}
           onSelectStep={builder.goToStep}
           onNavigateHome={handleNavigateHome}
         />
+
+        {isGuestDraftMode ? (
+          <section className="composer-guest-draft-banner">
+            <strong>{t("guestDraftBannerTitle")}</strong>
+            <span>{t("guestDraftBannerBody")}</span>
+          </section>
+        ) : null}
 
         <form id="create-form" className="composer-stage composer-step-stage" onSubmit={publish.handleSubmit}>
           {builder.values.currentStep === "template" ? (
@@ -305,13 +323,14 @@ export function FormBuilderPage() {
               currentWalletName={currentWallet?.name ?? undefined}
               accountAddress={account?.address}
               storageMode={import.meta.env.VITE_WALRUS_STORAGE_MODE || "uploadRelay"}
-              uploadRelayUrl={WALRUS_UPLOAD_RELAY_URL || "Not configured"}
+              uploadRelayUrl={WALRUS_UPLOAD_RELAY_URL || t("notConfigured")}
               storageRuntimeMode={storageRuntime.mode}
               storageRuntimeNotice={storageRuntime.notice ?? undefined}
               storageRuntimeDiagnostics={storageRuntime.diagnostics}
+              canManageProjects={hasAdminAccess}
               selectedProjectId={builder.values.selectedProjectId}
-              selectedProject={builder.selectedProject}
-              projects={projects}
+              selectedProject={hasAdminAccess ? builder.selectedProject : null}
+              projects={hasAdminAccess ? projects : []}
               projectState={builder.values.projectState}
               onSetMobilePane={builder.setMobilePane}
               onSelectProject={handleSelectProject}
@@ -324,6 +343,58 @@ export function FormBuilderPage() {
           ) : null}
         </form>
       </section>
+  );
+
+  if (isGuestDraftMode) {
+    return composer;
+  }
+
+  return (
+    <AdminAccessGate
+      hasWallet={Boolean(account?.address)}
+      access={accessState}
+      deniedBody={
+        capabilityProfile.isConfigured
+          ? t("formComposerDeniedBody")
+          : undefined
+      }
+    >
+      {composer}
     </AdminAccessGate>
+  );
+}
+
+export function FormBuilderPage() {
+  const account = useCurrentAccount();
+  const location = useLocation();
+  const { t } = useI18n();
+  const { capabilityProfile, isLoadingAccess } = useAccessControl(account?.address);
+  const searchParams = new URLSearchParams(location.search);
+  const requestedGuestDraftMode = searchParams.get("mode") === "guestDraft";
+  const freshStartToken = searchParams.get("fresh") ?? "";
+  const draftSeed = {
+    templateKey: searchParams.get("template") ?? undefined,
+    idea: searchParams.get("idea") ?? undefined,
+  };
+  const hasAdminAccess = canAdmin(capabilityProfile);
+
+  if (!requestedGuestDraftMode && account?.address && isLoadingAccess) {
+    return <div className="panel">{t("checkingWalletCapabilities")}</div>;
+  }
+
+  const mode =
+    requestedGuestDraftMode ||
+    !account?.address ||
+    (capabilityProfile.isConfigured && !hasAdminAccess)
+      ? "guestDraft"
+      : "admin";
+
+  return (
+    <FormBuilderComposer
+      key={`${mode}:${freshStartToken || "restored"}`}
+      mode={mode}
+      freshStartToken={freshStartToken}
+      draftSeed={draftSeed}
+    />
   );
 }

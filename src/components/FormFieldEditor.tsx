@@ -37,18 +37,22 @@ interface FormFieldEditorProps {
   onDrop: (event: DragEvent<HTMLElement>) => void;
 }
 
-function normalizeFieldForType(field: FormField, type: FieldType): FormField {
+function getDefaultOptions(t: ReturnType<typeof useI18n>["t"]) {
+  return [t("optionDefault", { index: 1 }), t("optionDefault", { index: 2 })];
+}
+
+function normalizeFieldForType(field: FormField, type: FieldType, t: ReturnType<typeof useI18n>["t"]): FormField {
   const normalizedType = normalizeFieldType(type);
   const isConfirmation = isConfirmationCheckboxField(normalizedType);
   return {
     ...field,
     type: normalizedType,
-    label: isConfirmation && !field.label.trim() ? "Consent / confirmation" : field.label,
+    label: isConfirmation && !field.label.trim() ? t("confirmationDefaultLabel") : field.label,
     placeholder:
       isConfirmation && !field.placeholder?.trim()
-        ? "I confirm this information is accurate"
+        ? t("confirmationDefaultPlaceholder")
         : field.placeholder,
-    options: hasChoiceOptions(normalizedType) ? (field.options && field.options.length > 0 ? field.options : ["Option 1", "Option 2"]) : undefined,
+    options: hasChoiceOptions(normalizedType) ? (field.options && field.options.length > 0 ? field.options : getDefaultOptions(t)) : undefined,
   };
 }
 
@@ -85,17 +89,18 @@ export function FormFieldEditor({
   }
 
   function handleTypeChange(event: ChangeEvent<HTMLSelectElement>) {
-    onChange(normalizeFieldForType(field, event.target.value as FieldType));
+    onChange(normalizeFieldForType(field, event.target.value as FieldType, t));
   }
 
   function handleOptionsChange(index: number, value: string) {
-    const currentOptions = field.options ?? ["Option 1", "Option 2"];
+    const currentOptions = field.options ?? getDefaultOptions(t);
     const nextOptions = currentOptions.map((option, optionIndex) => (optionIndex === index ? value : option));
     update("options", nextOptions);
   }
 
   function handleAddOption() {
-    update("options", [...(field.options ?? ["Option 1", "Option 2"]), `Option ${(field.options?.length ?? 2) + 1}`]);
+    const currentOptions = field.options ?? getDefaultOptions(t);
+    update("options", [...currentOptions, t("optionDefault", { index: currentOptions.length + 1 })]);
   }
 
   function handleRemoveOption(index: number) {
@@ -157,8 +162,8 @@ export function FormFieldEditor({
         <textarea
           rows={field.type === "markdown" ? 6 : 4}
           disabled
-          value={field.type === "markdown" ? "**Bold**, _italic_, links, and lists preview for responders." : ""}
-          placeholder={field.placeholder ?? (field.type === "markdown" ? "# Add markdown-friendly prompt" : t("helpTextExample"))}
+          value={field.type === "markdown" ? t("markdownPreviewExample") : ""}
+          placeholder={field.placeholder ?? (field.type === "markdown" ? t("markdownPlaceholder") : t("helpTextExample"))}
           readOnly
         />
       );
@@ -182,9 +187,9 @@ export function FormFieldEditor({
         <div className="composer-country-preview" aria-hidden="true">
           <span className="composer-country-preview-main">
             <span>{getCountryFlag("JP")}</span>
-            <strong>{field.placeholder?.trim() || "Search or select a country"}</strong>
+            <strong>{field.placeholder?.trim() || t("countrySelectPlaceholder")}</strong>
           </span>
-          <small className="muted">Flag, country name, and ISO code appear in responses.</small>
+          <small className="muted">{t("countrySelectPreviewHelp")}</small>
         </div>
       );
     }
@@ -207,7 +212,7 @@ export function FormFieldEditor({
         <div className="composer-canvas-checkboxes" aria-hidden="true">
           <div className="composer-canvas-checkbox">
             <span className="composer-canvas-checkbox-mark" />
-            <span>{field.placeholder?.trim() || "I confirm the above is correct"}</span>
+            <span>{field.placeholder?.trim() || t("confirmationPreviewDefault")}</span>
           </div>
         </div>
       );
@@ -423,7 +428,7 @@ export function FormFieldEditor({
                     <input
                       value={option}
                       onChange={(event) => handleOptionsChange(optionIndex, event.target.value)}
-                      placeholder={`Option ${optionIndex + 1}`}
+                      placeholder={t("optionDefault", { index: optionIndex + 1 })}
                     />
                     <button type="button" className="ghost-button" onClick={() => handleRemoveOption(optionIndex)}>
                       {t("remove")}
