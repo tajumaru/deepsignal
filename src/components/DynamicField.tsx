@@ -1,8 +1,9 @@
 import { useI18n } from "../i18n";
-import { isAttachmentFieldType } from "../lib/fieldTypes";
+import { isAttachmentFieldType, isConfirmationCheckboxField, isLongTextLikeField } from "../lib/fieldTypes";
 import type { FormField } from "../types";
 import { CountrySelectQuestion } from "./CountrySelectQuestion";
 import { DateInput } from "./DateInput";
+import { RichTextContent } from "./RichText";
 import { UploadDropzone, type UploadDropzoneItem } from "./UploadDropzone";
 
 interface DynamicFieldProps {
@@ -75,16 +76,28 @@ export function DynamicField({
         />
       ) : null}
 
-      {field.type === "longText" || field.type === "markdown" ? (
-        <textarea
-          rows={field.type === "markdown" ? 8 : 5}
-          value={String(value ?? "")}
-          placeholder={field.placeholder ?? (field.type === "markdown" ? "# Share details here" : "")}
-          disabled={disabled}
-          aria-invalid={hasError}
-          aria-describedby={hasError ? fieldErrorId : undefined}
-          onChange={(event) => onChange(event.target.value)}
-        />
+      {isLongTextLikeField(field.type) ? (
+        <div className={field.type === "markdown" ? "markdown-answer-field" : undefined}>
+          <textarea
+            rows={field.type === "markdown" ? 8 : 5}
+            value={String(value ?? "")}
+            placeholder={field.placeholder ?? (field.type === "markdown" ? "**Bold**, _italic_, links, and lists are supported." : "")}
+            disabled={disabled}
+            aria-invalid={hasError}
+            aria-describedby={hasError ? fieldErrorId : undefined}
+            onChange={(event) => onChange(event.target.value)}
+          />
+          {field.type === "markdown" ? (
+            <div className="markdown-preview-panel" aria-live="polite">
+              <span className="markdown-preview-label">Preview</span>
+              <RichTextContent
+                value={String(value ?? "")}
+                className="rich-text-content"
+                fallback="Markdown preview appears here."
+              />
+            </div>
+          ) : null}
+        </div>
       ) : null}
 
       {field.type === "dropdown" ? (
@@ -135,9 +148,9 @@ export function DynamicField({
         </div>
       ) : null}
 
-      {field.type === "confirmationCheckbox" ? (
+      {isConfirmationCheckboxField(field.type) ? (
         <div
-          className={`checkbox-group ${hasError ? "is-error" : ""}`}
+          className={`checkbox-group confirmation-checkbox ${hasError ? "is-error" : ""}`}
           aria-invalid={hasError}
           aria-describedby={hasError ? fieldErrorId : undefined}
         >

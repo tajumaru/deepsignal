@@ -126,72 +126,77 @@ export function usePublicFormLoader({
       setLoadError("");
       try {
         let nextForm: FormSchema | null = null;
+        let manifestRestoreError: unknown = null;
         if (manifestBlobId) {
-          const {
-            getWalrusMutationRuntimeStatus,
-            readJsonBlobOrThrow,
-            readManifestWithForm,
-          } = await import("../../../storage/walrusAdapter");
-          const carrier = await readManifestWithForm(manifestBlobId).catch((error) => {
-            throw toSharedFormRestoreError("manifest", error, manifestBlobId);
-          });
-          const manifest = carrier.manifest;
-          const walrusRuntime = getWalrusMutationRuntimeStatus();
-          let restoredForm: FormSchema | null = null;
-          let restoredFormBlobId = "";
-
-          if (!walrusRuntime.aggregatorConfigured) {
-            throw new SharedFormRestoreError(
-              "aggregator_unconfigured",
-              "Walrus aggregator URL is not configured in this build.",
-            );
-          }
-          if (manifest.formId !== formId) {
-            throw new SharedFormRestoreError(
-              "form_id_mismatch",
-              `This shared link points to form ${manifest.formId}, but the page expected ${formId}.`,
-            );
-          }
-          if (carrier.form) {
-            if (carrier.form.id !== formId) {
+          try {
+            const {
+              getWalrusMutationRuntimeStatus,
+              readJsonBlobOrThrow,
+              readManifestWithForm,
+            } = await import("../../../storage/walrusAdapter");
+            const walrusRuntime = getWalrusMutationRuntimeStatus();
+            if (!walrusRuntime.aggregatorConfigured) {
               throw new SharedFormRestoreError(
-                "form_id_mismatch",
-                `The bundled form inside manifest ${manifestBlobId} has id ${carrier.form.id}, which does not match ${formId}.`,
+                "aggregator_unconfigured",
+                "Walrus aggregator URL is not configured in this build.",
               );
             }
-            restoredForm = carrier.form;
-            restoredFormBlobId = manifestBlobId;
-          } else if (manifest.formBlobId && manifest.formBlobId !== "__bundled_form__") {
-            restoredForm = await readJsonBlobOrThrow<FormSchema>(manifest.formBlobId).catch((error) => {
-              throw toSharedFormRestoreError("form", error, manifest.formBlobId);
+            const carrier = await readManifestWithForm(manifestBlobId).catch((error) => {
+              throw toSharedFormRestoreError("manifest", error, manifestBlobId);
             });
-            restoredFormBlobId = manifest.formBlobId;
-            if (restoredForm.id !== formId) {
+            const manifest = carrier.manifest;
+            let restoredForm: FormSchema | null = null;
+            let restoredFormBlobId = "";
+
+            if (manifest.formId !== formId) {
               throw new SharedFormRestoreError(
                 "form_id_mismatch",
-                `The linked form blob ${manifest.formBlobId} has id ${restoredForm.id}, which does not match ${formId}.`,
+                `This shared link points to form ${manifest.formId}, but the page expected ${formId}.`,
               );
             }
-          } else {
-            throw new SharedFormRestoreError(
-              "form_id_mismatch",
-              `Manifest ${manifestBlobId} does not contain a bundled form or a matching form blob for ${formId}.`,
-            );
-          }
+            if (carrier.form) {
+              if (carrier.form.id !== formId) {
+                throw new SharedFormRestoreError(
+                  "form_id_mismatch",
+                  `The bundled form inside manifest ${manifestBlobId} has id ${carrier.form.id}, which does not match ${formId}.`,
+                );
+              }
+              restoredForm = carrier.form;
+              restoredFormBlobId = manifestBlobId;
+            } else if (manifest.formBlobId && manifest.formBlobId !== "__bundled_form__") {
+              restoredForm = await readJsonBlobOrThrow<FormSchema>(manifest.formBlobId).catch((error) => {
+                throw toSharedFormRestoreError("form", error, manifest.formBlobId);
+              });
+              restoredFormBlobId = manifest.formBlobId;
+              if (restoredForm.id !== formId) {
+                throw new SharedFormRestoreError(
+                  "form_id_mismatch",
+                  `The linked form blob ${manifest.formBlobId} has id ${restoredForm.id}, which does not match ${formId}.`,
+                );
+              }
+            } else {
+              throw new SharedFormRestoreError(
+                "form_id_mismatch",
+                `Manifest ${manifestBlobId} does not contain a bundled form or a matching form blob for ${formId}.`,
+              );
+            }
 
-          if (restoredForm) {
-            nextForm = {
-              ...restoredForm,
-              blobId: restoredFormBlobId,
-              manifestBlobId,
-            };
-            await localStorageAdapter.saveForm(nextForm);
-            upsertFormBlobIndex({
-              formId: nextForm.id,
-              formBlobId: restoredFormBlobId,
-              manifestBlobId,
-              createdAt: manifest.createdAt,
-            });
+            if (restoredForm) {
+              nextForm = {
+                ...restoredForm,
+                blobId: restoredFormBlobId,
+                manifestBlobId,
+              };
+              await localStorageAdapter.saveForm(nextForm);
+              upsertFormBlobIndex({
+                formId: nextForm.id,
+                formBlobId: restoredFormBlobId,
+                manifestBlobId,
+                createdAt: manifest.createdAt,
+              });
+            }
+          } catch (error) {
+            manifestRestoreError = error;
           }
         }
 
@@ -199,9 +204,14 @@ export function usePublicFormLoader({
           nextForm = await storageAdapter.getForm(formId);
         }
 
-        setForm(nextForm ? normalizeForm(nextForm) : null);
+        if (!nextForm && manifestRestoreError) {
+          throw manifestRestoreError;
+        }
+
+        const normalizedForm = nextForm ? normalizeForm(nextForm) : null;
+        setForm(normalizedForm);
         setInitialAnswers(
-          nextForm ? Object.fromEntries(nextForm.fields.map((field) => [field.id, createEmptyAnswer(field)])) : {},
+          normalizedForm ? Object.fromEntries(normalizedForm.fields.map((field) => [field.id, createEmptyAnswer(field)])) : {},
         );
       } catch (error) {
         setForm(null);

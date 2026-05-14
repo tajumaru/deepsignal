@@ -27,6 +27,13 @@ export function ShareCard({ formId, blobId, createdAt, manifestBlobId }: ShareCa
     }
     return `${window.location.origin}${publicPath}`;
   }, [publicPath]);
+  const xShareUrl = useMemo(() => {
+    const params = new URLSearchParams({
+      text: t("xShareText"),
+      url: absoluteUrl,
+    });
+    return `https://twitter.com/intent/tweet?${params.toString()}`;
+  }, [absoluteUrl, t]);
 
   useEffect(() => {
     let cancelled = false;
@@ -147,6 +154,9 @@ export function ShareCard({ formId, blobId, createdAt, manifestBlobId }: ShareCa
           </button>
           <a className="ghost-button" href={absoluteUrl} target="_blank" rel="noreferrer">
             {t("openTransmissionLink")}
+          </a>
+          <a className="ghost-button x-share-button" href={xShareUrl} target="_blank" rel="noreferrer">
+            {t("shareToX")}
           </a>
         </div>
       </div>

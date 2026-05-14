@@ -79,7 +79,6 @@ VITE_WALRUS_AGGREGATOR_URL=https://aggregator.walrus-testnet.walrus.space
 VITE_WALRUS_UPLOAD_RELAY_TIMEOUT_MS=90000
 VITE_WALRUS_UPLOAD_RELAY_TIP_MAX=1000000
 VITE_WALRUS_STORAGE_EPOCHS=5
-VITE_SEAL_MODE=mock
 VITE_SEAL_PACKAGE_ID=
 VITE_SEAL_KEY_SERVER_OBJECT_ID=
 VITE_SEAL_AGGREGATOR_URL=
@@ -95,7 +94,7 @@ If `VITE_STORAGE_MODE` is not `walrus`, or the required Walrus URLs are missing,
 
 `VITE_WALRUS_NETWORK` accepts `testnet` or `mainnet`. Switch `VITE_WALRUS_UPLOAD_RELAY_URL`, `VITE_WALRUS_AGGREGATOR_URL`, and `VITE_SUI_FULLNODE_URL` to the matching network when you promote from testnet to mainnet.
 
-If `VITE_SEAL_MODE` is not `seal`, or the Seal env vars are incomplete, the app keeps using the local mock adapter.
+Seal encryption is fail-closed in runtime code. If `VITE_SEAL_PACKAGE_ID` or `VITE_SEAL_KEY_SERVER_OBJECT_ID` is missing, encrypted submissions are not saved and responders see an encryption failure instead of a plaintext fallback.
 
 ## Current MVP features
 
@@ -438,20 +437,20 @@ When the blob is a real Walrus blob and an aggregator URL is configured, the UI 
 {VITE_WALRUS_AGGREGATOR_URL}/v1/blobs/{blobId}
 ```
 
-## Seal / crypto adapter structure
+## Seal / crypto service structure
 
-The encryption layer is intentionally adapter-based:
+The production encryption entrypoint is intentionally narrow:
 
-- [src/crypto/sealAdapter.ts](./src/crypto/sealAdapter.ts)
-- [src/crypto/localSealMock.ts](./src/crypto/localSealMock.ts)
+- [src/crypto/sealService.ts](./src/crypto/sealService.ts)
 - [src/crypto/sealClientAdapter.ts](./src/crypto/sealClientAdapter.ts)
 - [src/crypto/cryptoFactory.ts](./src/crypto/cryptoFactory.ts)
 
 Current behavior:
 
-- fields marked `sensitive: true` are encrypted before submission save
-- `VITE_SEAL_MODE=mock` uses the legacy local adapter that base64-wraps values for development and fallback flows
-- `VITE_SEAL_MODE=seal` uses `@mysten/seal` for new encryptions when `VITE_SEAL_PACKAGE_ID` and `VITE_SEAL_KEY_SERVER_OBJECT_ID` are configured
+- fields marked `sensitive: true` are encrypted through the Seal service before submission save
+- full private submissions use `@mysten/seal` for new encryptions when `VITE_SEAL_PACKAGE_ID` and `VITE_SEAL_KEY_SERVER_OBJECT_ID` are configured
+- production runtime does not import mock, fake, or no-op Seal adapters
+- encryption failures stop the submission; DeepSignal does not save a plaintext fallback
 - `VITE_SEAL_AGGREGATOR_URL` is only needed when the configured Seal key server is a committee server
 - real Seal encryptions created from project-backed forms now scope the Seal identity to the `projectId` prefix and store the policy metadata needed for later admin decrypt
 - encrypted answers are stored as:
@@ -464,12 +463,13 @@ Current behavior:
 ```
 
 - decryption happens only in the admin detail view
+- legacy unencrypted payloads may be read for compatibility and are labeled `Legacy unencrypted response`
 
 In real Seal mode, payloads are saved as JSON envelopes that include the base64-encoded Seal ciphertext plus the metadata needed for a later wallet-backed decrypt flow. For project-backed forms, the envelope also records the `projectId` and approval policy used by the admin decrypt path.
 
-### Mock vs real Seal
+### Test mocks
 
-- Mock Seal is reversible locally and exists to keep dev, demos, and fallback mode working without any wallet or onchain policy.
+- Test-only mocks live outside production runtime under [tests/mocks/mockSealAdapter.ts](./tests/mocks/mockSealAdapter.ts).
 - Real Seal encrypts with `@mysten/seal` and depends on a real Sui package namespace plus one or more key server objects.
 - Real Seal decryption is policy-gated: you need a Sui wallet, a session key, and an approval transaction that calls a `seal_approve*` Move function for the target access policy.
 - DeepSignal now ships `deepsignal::project_registry::seal_approve_project_signal`, `seal_approve_project_admin`, and reviewer approval routes so project owners/admins/reviewers can decrypt private signals from the review UI.
@@ -477,12 +477,11 @@ In real Seal mode, payloads are saved as JSON envelopes that include the base64-
 ## Seal mode in the UI
 
 - the admin dashboard and submission detail surfaces a Seal Status Card
-- the card shows `requestedMode`, `activeMode`, `isFallback`, and `warning`
+- the card shows `requestedMode`, `activeMode`, warning state, Seal encrypted state, and decryption requirements
 - the card also shows encryption state, `encryptedBlobId`, and wallet access context
-- the detail panel also shows `Seal Runtime: REAL|MOCK|FALLBACK`
+- the detail panel also shows `Seal Runtime: SEAL`
 - encrypted forms highlight `Encrypted payload stored` plus the `encryptedBlobId`
-- mock mode shows `Demo decrypt available`
-- real seal mode shows `Private Signal / Team only` plus a wallet-backed `Decrypt private signal` action
+- real Seal mode shows creator/admin-only access plus a wallet-backed `Decrypt private signal` action
 - decrypt failures should explain the missing wallet or approval condition instead of ending with a generic error
 
 ### Current limitations of real Seal mode
@@ -490,14 +489,13 @@ In real Seal mode, payloads are saved as JSON envelopes that include the base64-
 - Real decrypt now works only for signals tied to a DeepSignal `Project` object and reviewed by a wallet that is the project owner, project admin, or an authorized reviewer.
 - New project-backed encryptions use a stricter `projectId + nonce` identity prefix and are approved by `seal_approve_project_signal`.
 - Older real Seal envelopes that predate project scoping can still be attempted through the looser `seal_approve_project_admin` path when the submission belongs to a project, but they are not bound to a per-signal namespace. This is a compatibility fallback for previously stored envelopes.
-- If you switch back to mock mode, older mock-encrypted payloads remain readable, but real Seal payloads will correctly report that seal mode plus wallet approval is required.
+- Older unencrypted legacy payloads are read-only compatibility data and are clearly labeled in the admin UI.
 
 ## Seal demo checklist
 
 Set these env vars for a real Seal demo:
 
 ```bash
-VITE_SEAL_MODE=seal
 VITE_SEAL_PACKAGE_ID=0x...
 VITE_SEAL_KEY_SERVER_OBJECT_ID=0x...
 VITE_SEAL_SERVER_TYPE=independent
@@ -517,16 +515,16 @@ Recommended demo flow for contest review:
 3. Create or select a project-backed form with `Encrypt submissions` enabled.
 4. Open the public form and submit a private signal.
 5. Return to the admin inbox or form submission detail.
-6. Confirm the detail panel shows `Seal Runtime: REAL`.
+6. Confirm the detail panel shows `Seal Runtime: SEAL`.
 7. Click `Decrypt private signal`.
 8. Approve the wallet personal-message prompt for the Seal session.
 9. Confirm the answers and attachments appear only after approval, and that subsequent decrypts reuse the session for the configured TTL window.
 
-Mock mode comparison:
+Fail-closed comparison:
 
-- `VITE_SEAL_MODE=mock` keeps the legacy reversible adapter and does not require wallet approval.
-- `VITE_SEAL_MODE=seal` stores a real Seal envelope and requires admin wallet approval before the private signal body is revealed.
-- If the Seal env vars are incomplete, DeepSignal reports `FALLBACK` and keeps the existing local demo behavior.
+- configured Seal stores a real Seal envelope and requires admin wallet approval before the private signal body is revealed
+- incomplete Seal env vars stop encrypted submission saves with `Encryption failed. Response was not submitted.`
+- localStorage remains available for non-sensitive app continuity, but sensitive response payloads do not fall back to plaintext
 
 Contest demo verification points:
 

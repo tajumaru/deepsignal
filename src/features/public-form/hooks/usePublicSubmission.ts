@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import type { UploadDropzoneItem } from "../../../components/UploadDropzone";
 import { getSealRuntimeStatus } from "../../../crypto/cryptoFactory";
-import { isAttachmentFieldType } from "../../../lib/fieldTypes";
+import { isAttachmentFieldType, isConfirmationCheckboxField } from "../../../lib/fieldTypes";
 import { getSubmissionCategoryFromPurpose } from "../../../lib/formTemplates";
 import { isResponseDeadlinePassed } from "../../../lib/responseDeadline";
 import { ensureRespondentSession } from "../../../lib/respondentSession";
@@ -144,7 +144,7 @@ export function usePublicSubmission({
         value === "" ||
         value === null ||
         value === undefined ||
-        (field.type === "confirmationCheckbox" && value !== true) ||
+        (isConfirmationCheckboxField(field.type) && value !== true) ||
         (Array.isArray(value) && value.length === 0) ||
         (attachmentFields.has(field.id) &&
           uploadItems.filter((attachment) => attachment.status !== "failed").length === 0);

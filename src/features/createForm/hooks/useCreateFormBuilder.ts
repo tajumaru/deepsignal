@@ -14,6 +14,7 @@ import {
   normalizeFormPurpose,
   smartComposerTemplates,
 } from "../../../lib/formTemplates";
+import { normalizeFieldType } from "../../../lib/fieldTypes";
 import { getSelectedProjectId, setSelectedProjectId } from "../../../lib/projectRegistry";
 import { INITIAL_DRAFT_SNAPSHOT, initialFields, initialTemplate } from "../constants";
 import type {
@@ -170,7 +171,14 @@ export function useCreateFormBuilder({ t, projects, freshStartToken = "" }: UseC
       setSelectedTemplateKey(parsedDraft.selectedTemplateKey ?? initialTemplate.key);
       setTitle(typeof parsedDraft.title === "string" ? parsedDraft.title : initialTemplate.title);
       setDescription(typeof parsedDraft.description === "string" ? parsedDraft.description : initialTemplate.description);
-      setFields(sanitizeConditionalLogicFields(parsedDraft.fields));
+      setFields(
+        sanitizeConditionalLogicFields(
+          parsedDraft.fields.map((field) => ({
+            ...field,
+            type: normalizeFieldType(field.type),
+          })),
+        ),
+      );
       setSections(Array.isArray(parsedDraft.sections) ? parsedDraft.sections : []);
       setPurpose(parsedDraft.purpose ?? initialTemplate.purpose);
       setVisibility(parsedDraft.visibility ?? "unlisted");

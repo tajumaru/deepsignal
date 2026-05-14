@@ -10,7 +10,6 @@ import { Transaction } from "@mysten/sui/transactions";
 import { fromHex } from "@mysten/sui/utils";
 import type { SealAdapter, SealDecryptContext } from "../types";
 import { ACCESS_CONTROL_REGISTRY_ID, SUI_NETWORK } from "../lib/sui";
-import { localSealMock } from "./localSealMock";
 import {
   createProjectScopedSealId,
   createRealSealEnvelope,
@@ -21,6 +20,7 @@ import {
   REAL_SEAL_SESSION_TTL_MIN,
   SEAL_ADMIN_WALLET_REQUIRED_MESSAGE,
   SEAL_DECRYPT_APPROVAL_REQUIRED_MESSAGE,
+  SEAL_NOT_CONFIGURED_MESSAGE,
   SEAL_PERMISSION_DENIED_MESSAGE,
   SEAL_PROJECT_CONTEXT_REQUIRED_MESSAGE,
   SEAL_SUI_CLIENT_REQUIRED_MESSAGE,
@@ -71,6 +71,9 @@ function createRandomObjectId() {
 
 export const sealClientAdapter: SealAdapter = {
   async encrypt(value, context) {
+    if (!import.meta.env.VITE_SEAL_PACKAGE_ID || !serverConfig.objectId) {
+      throw new Error(SEAL_NOT_CONFIGURED_MESSAGE);
+    }
     const projectId = context?.projectId?.trim() || undefined;
     const objectId = projectId ? createProjectScopedSealId(projectId) : createRandomObjectId();
     const data = new TextEncoder().encode(value);
@@ -95,13 +98,9 @@ export const sealClientAdapter: SealAdapter = {
   },
 
   async decrypt(value, context) {
-    if (value.startsWith("seal:")) {
-      return localSealMock.decrypt(value, context);
-    }
-
     const envelope = parseRealSealEnvelope(value);
     if (!envelope) {
-      return value;
+      throw new Error("Legacy unencrypted response.");
     }
 
     if (!context?.walletAddress) {

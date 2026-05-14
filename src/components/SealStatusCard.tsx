@@ -20,7 +20,7 @@ export function SealStatusCard({
 }: SealStatusCardProps) {
   const { t } = useI18n();
   const status = getSealRuntimeStatus();
-  const sealMode = status.isFallback ? "FALLBACK" : status.activeMode.toUpperCase();
+  const sealMode = status.activeMode.toUpperCase();
   const encryptedPayloadStatus = encryptedBlobId
     ? "Available as dedicated blob"
     : encryptedPayloadEmbedded
@@ -48,12 +48,16 @@ export function SealStatusCard({
           <strong>{sealMode}</strong>
         </div>
         <div className="proof-row">
-          <span>{t("isFallbackLabel")}</span>
-          <strong>{status.isFallback ? "true" : "false"}</strong>
+          <span>Seal encrypted</span>
+          <strong>{encryptSubmissions ? "required" : "sensitive fields only"}</strong>
         </div>
         <div className="proof-row">
           <span>{t("warningLabel")}</span>
           <strong>{status.warning ?? "none"}</strong>
+        </div>
+        <div className="proof-row">
+          <span>Decryption required</span>
+          <strong>{encryptSubmissions ? "creator/admin only" : "as needed"}</strong>
         </div>
         <div className="proof-row">
           <span>{t("encryptionLabel")}</span>
@@ -81,15 +85,9 @@ export function SealStatusCard({
         <p className="muted">{t("encryptionDisabledForForm")}</p>
       )}
 
-      {status.activeMode === "mock" ? (
-        <p className="muted">{t("demoDecryptAvailable")} Mock mode only.</p>
-      ) : (
-        <>
-          <p className="muted">Seal Runtime: {sealMode}</p>
-          <p className="muted">Reviewer wallet access only.</p>
-          <p className="muted">{t("walletApprovalReuseNotice", { minutes: REAL_SEAL_SESSION_TTL_MIN })}</p>
-        </>
-      )}
+      <p className="muted">Seal Runtime: {sealMode}</p>
+      <p className="muted">Creator/admin only access. Reviewer wallet approval is required before private responses are revealed.</p>
+      <p className="muted">{t("walletApprovalReuseNotice", { minutes: REAL_SEAL_SESSION_TTL_MIN })}</p>
 
       {!canDecrypt && encryptSubmissions ? (
         <p className="warning-text">

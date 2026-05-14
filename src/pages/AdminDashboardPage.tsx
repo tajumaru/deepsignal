@@ -32,7 +32,7 @@ import {
 import { useAttachmentPreviews } from "../hooks/useAttachmentPreviews";
 import { useAccessControl } from "../hooks/useAccessControl";
 import { useI18n } from "../i18n";
-import { isAttachmentFieldType } from "../lib/fieldTypes";
+import { isAttachmentFieldType, isLongTextLikeField } from "../lib/fieldTypes";
 import {
   canAdmin,
   canReview,
@@ -172,6 +172,7 @@ export function AdminDashboardPage() {
   const {
     detailAnswers,
     detailAttachments,
+    detailLegacyUnencrypted,
     decrypting,
     decryptStatusMessage,
     decryptError,
@@ -194,11 +195,10 @@ export function AdminDashboardPage() {
     account?.address,
     capabilityProfile,
   );
-  const privateReviewLabel =
-    sealRuntime.activeMode === "mock" ? "Private review ready" : "Private review enabled";
+  const privateReviewLabel = "Private review enabled";
 
   function renderAnswerValue(field: { type: string }, value: unknown) {
-    if (field.type === "markdown") {
+    if (isLongTextLikeField(field.type as FormSchema["fields"][number]["type"])) {
       const text = typeof value === "string" ? value : "";
       return text ? <RichTextContent value={text} className="rich-text-content" /> : <p>{t("noAnswerLabel")}</p>;
     }
@@ -1120,6 +1120,11 @@ export function AdminDashboardPage() {
                         </div>
                       {detailAnswers ? (
                         <div className="stack">
+                          {detailLegacyUnencrypted ? (
+                            <p className="warning-text">Legacy unencrypted response</p>
+                          ) : (
+                            <span className="signal-chip signal-chip-accent">Seal encrypted</span>
+                          )}
                           {selectedRecord.form.fields
                             .filter((field) => !isAttachmentFieldType(field.type))
                             .map((field) => (
@@ -1191,9 +1196,7 @@ export function AdminDashboardPage() {
                     {selectedRecordNeedsDecrypt ? (
                       <div className="stack private-access-copy">
                         <p className="muted">
-                          {sealRuntime.activeMode === "mock"
-                            ? `${t("demoDecryptAvailable")} Mock mode only.`
-                            : t("walletApprovalReuseNotice", { minutes: realSealSessionTtlMinutes })}
+                          {t("walletApprovalReuseNotice", { minutes: realSealSessionTtlMinutes })}
                         </p>
                         {decryptStatusMessage ? (
                           <p className="muted" role="status" aria-live="polite">{decryptStatusMessage}</p>
@@ -1480,13 +1483,19 @@ export function AdminDashboardPage() {
                           </span>
                         </summary>
                         <div className="metadata-list">
-                          <div className="metadata-row">
-                            <span>Review state</span>
-                            <strong>{detailAnswers ? "Private signal unlocked" : "Encrypted private signal"}</strong>
-                          </div>
+                        <div className="metadata-row">
+                          <span>Review state</span>
+                            <strong>
+                              {detailLegacyUnencrypted
+                                ? "Legacy unencrypted response"
+                                : detailAnswers
+                                  ? "Private signal unlocked"
+                                  : "Encrypted private signal"}
+                            </strong>
+                        </div>
                           <div className="metadata-row">
                             <span>Seal runtime</span>
-                            <strong>{sealRuntime.activeMode === "mock" ? "Mock reviewer mode" : "Project reviewer access"}</strong>
+                            <strong>Project reviewer access</strong>
                           </div>
                           <SignalMetaRow label="Project" type="registry" value={selectedRecord.form.projectId} emptyLabel={t("notAvailable")} />
                           {typeof selectedRecord.form.onchainFormId === "number" ? (

@@ -14,13 +14,13 @@ const fieldTypeChoices: Array<{
   description: string;
 }> = [
   { type: "shortText", icon: "Aa", title: "Short Text", description: "Single-line answers, names, labels, and short summaries." },
-  { type: "longText", icon: "LT", title: "Long Text", description: "Plain textarea for longer narrative answers." },
-  { type: "markdown", icon: "MD", title: "Rich Text / Markdown", description: "Markdown-friendly textarea for formatted detail, release notes, or detailed reports." },
+  { type: "longText", icon: "LT", title: "Long Text", description: "Backward-compatible rich text textarea for longer narrative answers." },
+  { type: "markdown", icon: "MD", title: "Rich Text", description: "Markdown textarea with preview for formatted detail, release notes, or detailed reports." },
   { type: "date", icon: "CAL", title: "Date", description: "Calendar-based input for event dates, deadlines, launches, or follow-up timing." },
   { type: "dropdown", icon: "v", title: "Dropdown", description: "One choice from a compact option list." },
   { type: "checkbox", icon: "[]", title: "Checkboxes", description: "Multiple selections for tags, surfaces, or used features." },
   { type: "country_select", icon: "JP", title: "Country Select", description: "Searchable country picker with flags, readable labels, and ISO storage." },
-  { type: "confirmationCheckbox", icon: "OK", title: "Confirmation Checkbox", description: "Single agreement checkbox for confirmation, consent, or acknowledgement." },
+  { type: "confirmation", icon: "OK", title: "Confirmation Checkbox", description: "Single agreement checkbox for confirmation, consent, or acknowledgement." },
   { type: "rating", icon: "*", title: "Star Rating", description: "1-5 sentiment scoring with fast input." },
   { type: "url", icon: "->", title: "URL", description: "Links to docs, builds, issues, or external proof." },
   { type: "screenshot", icon: "IMG", title: "Screenshot Upload", description: "Image evidence from desktop or mobile capture." },

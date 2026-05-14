@@ -104,6 +104,7 @@ export default function App() {
 
       exitTimer = window.setTimeout(() => {
         bootOverlay?.remove();
+        document.body.classList.remove("booting");
         setBootDismissed(true);
       }, exitDurationMs);
     }, delay);

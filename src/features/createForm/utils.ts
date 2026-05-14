@@ -1,5 +1,5 @@
 import { sanitizeConditionalLogicFields } from "../../utils/formLogic";
-import { hasChoiceOptions } from "../../lib/fieldTypes";
+import { hasChoiceOptions, isConfirmationCheckboxField } from "../../lib/fieldTypes";
 import { makeId } from "../../lib/utils";
 import { normalizeFormVisibility } from "../../lib/explore";
 import type {
@@ -19,16 +19,17 @@ export function wait(ms: number) {
 }
 
 export function createField(type: FieldType = "shortText", sectionId?: string): FormField {
+  const isConfirmation = isConfirmationCheckboxField(type);
   return {
     id: makeId("field"),
-    type,
-    label: "",
+    type: isConfirmation ? "confirmation" : type,
+    label: isConfirmation ? "Consent / confirmation" : "",
     required: false,
     sensitive: false,
     visibility: "public",
     adminOnly: false,
     sectionId,
-    placeholder: "",
+    placeholder: isConfirmation ? "I confirm this information is accurate" : "",
     helpText: "",
     options: hasChoiceOptions(type) ? ["Option 1", "Option 2"] : undefined,
     conditionalParentId: undefined,

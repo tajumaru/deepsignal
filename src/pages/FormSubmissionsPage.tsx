@@ -20,7 +20,7 @@ import { getSealRuntimeStatus } from "../crypto/cryptoFactory";
 import { REAL_SEAL_SESSION_TTL_MIN } from "../crypto/sealPayload";
 import { useI18n } from "../i18n";
 import { formatAnswerText } from "../lib/answerFormatting";
-import { isAttachmentFieldType } from "../lib/fieldTypes";
+import { isAttachmentFieldType, isLongTextLikeField } from "../lib/fieldTypes";
 import { getReviewAccessState } from "../lib/adminAccess";
 import { exportSubmissionJson, exportSubmissionsCsv, exportSummaryJson } from "../lib/export";
 import { getPublicFormPath, getPublicRoadmapPath } from "../lib/publicLinks";
@@ -118,12 +118,10 @@ export function FormSubmissionsPage() {
     hoursLeft: (hours) => t("responseDeadlineHoursLeft", { count: hours }),
     daysLeft: (days) => t("responseDeadlineDaysLeft", { count: days }),
   };
-  const sealRuntimeLabel = sealRuntime.isFallback
-    ? "FALLBACK"
-    : sealRuntime.activeMode.toUpperCase();
+  const sealRuntimeLabel = sealRuntime.activeMode.toUpperCase();
 
   function renderAnswerValue(field: FormSchema["fields"][number], value: unknown) {
-    if (field.type === "markdown") {
+    if (isLongTextLikeField(field.type)) {
       const text = typeof value === "string" ? value : "";
       return text ? <RichTextContent value={text} className="rich-text-content" /> : <p>{t("noAnswerLabel")}</p>;
     }
@@ -136,6 +134,7 @@ export function FormSubmissionsPage() {
   const [search, setSearch] = useState("");
   const [detailAnswers, setDetailAnswers] = useState<Record<string, unknown> | null>(null);
   const [detailAttachments, setDetailAttachments] = useState<Submission["attachments"]>([]);
+  const [detailLegacyUnencrypted, setDetailLegacyUnencrypted] = useState(false);
   const [decrypting, setDecrypting] = useState(false);
   const [decryptStatusMessage, setDecryptStatusMessage] = useState("");
   const [decryptError, setDecryptError] = useState("");
@@ -311,6 +310,7 @@ export function FormSubmissionsPage() {
     if (!selectedSubmission) {
       setDetailAnswers(null);
       setDetailAttachments([]);
+      setDetailLegacyUnencrypted(false);
       setNotesDraft("");
       setDecryptError("");
       setSaveError("");
@@ -336,6 +336,7 @@ export function FormSubmissionsPage() {
     if (didSelectionChange) {
       setDetailAnswers(selectedSubmission.isEncrypted ? null : selectedSubmission.answers);
       setDetailAttachments(selectedSubmission.attachments ?? []);
+      setDetailLegacyUnencrypted(false);
       setDecryptError("");
       if (!decryptInFlightRef.current) {
         setDecryptStatusMessage("");
@@ -470,6 +471,7 @@ export function FormSubmissionsPage() {
       if (resolved && isLatestRequest && selectedSignalIdRef.current === submissionId) {
         setDetailAnswers(resolved.answers);
         setDetailAttachments(resolved.attachments);
+        setDetailLegacyUnencrypted(Boolean(resolved.legacyUnencrypted));
       }
     } catch (error) {
       const isLatestRequest =
@@ -722,9 +724,7 @@ export function FormSubmissionsPage() {
                   <div className="stack">
                     <p className="muted">Seal Runtime: {sealRuntimeLabel}</p>
                     <p className="muted">
-                      {sealRuntime.activeMode === "mock"
-                        ? `${t("demoDecryptAvailable")} Mock mode only.`
-                        : t("walletApprovalReuseNotice", { minutes: REAL_SEAL_SESSION_TTL_MIN })}
+                      {t("walletApprovalReuseNotice", { minutes: REAL_SEAL_SESSION_TTL_MIN })}
                     </p>
                     {decryptStatusMessage ? (
                       <p className="muted" role="status" aria-live="polite">{decryptStatusMessage}</p>
@@ -737,6 +737,11 @@ export function FormSubmissionsPage() {
                     <h3>Signal Detail</h3>
                     {detailAnswers ? (
                       <div className="stack">
+                        {detailLegacyUnencrypted ? (
+                          <p className="warning-text">Legacy unencrypted response</p>
+                        ) : (
+                          <span className="signal-chip signal-chip-accent">Seal encrypted</span>
+                        )}
                         {previewAnswerFields.map((field) => (
                           <div key={field.id} className="answer-line">
                             <strong>{field.label}</strong>
@@ -1063,9 +1068,7 @@ export function FormSubmissionsPage() {
                   <div className="stack">
                     <p className="muted">Seal Runtime: {sealRuntimeLabel}</p>
                     <p className="muted">
-                      {sealRuntime.activeMode === "mock"
-                        ? `${t("demoDecryptAvailable")} Mock mode only.`
-                        : t("walletApprovalReuseNotice", { minutes: REAL_SEAL_SESSION_TTL_MIN })}
+                      {t("walletApprovalReuseNotice", { minutes: REAL_SEAL_SESSION_TTL_MIN })}
                     </p>
                     {decryptStatusMessage ? (
                       <p className="muted" role="status" aria-live="polite">{decryptStatusMessage}</p>
@@ -1078,6 +1081,11 @@ export function FormSubmissionsPage() {
                     <h3>Signal Detail</h3>
                     {detailAnswers ? (
                       <div className="stack">
+                        {detailLegacyUnencrypted ? (
+                          <p className="warning-text">Legacy unencrypted response</p>
+                        ) : (
+                          <span className="signal-chip signal-chip-accent">Seal encrypted</span>
+                        )}
                         {previewAnswerFields.map((field) => (
                           <div key={field.id} className="answer-line">
                             <strong>{field.label}</strong>

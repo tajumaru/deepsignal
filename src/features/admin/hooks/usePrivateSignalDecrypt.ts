@@ -63,6 +63,7 @@ export function usePrivateSignalDecrypt({
   const signPersonalMessage = useSignPersonalMessage();
   const [detailAnswers, setDetailAnswers] = useState<Record<string, unknown> | null>(null);
   const [detailAttachments, setDetailAttachments] = useState<Submission["attachments"]>([]);
+  const [detailLegacyUnencrypted, setDetailLegacyUnencrypted] = useState(false);
   const [decrypting, setDecrypting] = useState(false);
   const [decryptStatusMessage, setDecryptStatusMessage] = useState("");
   const [decryptError, setDecryptError] = useState("");
@@ -97,6 +98,7 @@ export function usePrivateSignalDecrypt({
     if (!selectedRecord) {
       setDetailAnswers(null);
       setDetailAttachments([]);
+      setDetailLegacyUnencrypted(false);
       setDecryptError("");
       if (!decryptInFlightRef.current) {
         setDecryptStatusMessage("");
@@ -112,6 +114,7 @@ export function usePrivateSignalDecrypt({
         selectedRecord.submission.isEncrypted ? null : selectedRecord.submission.answers,
       );
       setDetailAttachments(selectedRecord.submission.attachments ?? []);
+      setDetailLegacyUnencrypted(false);
       setDecryptError("");
       if (!decryptInFlightRef.current) {
         setDecryptStatusMessage("");
@@ -156,6 +159,7 @@ export function usePrivateSignalDecrypt({
       if (resolved && isLatestRequest && selectedSignalIdRef.current === submissionId) {
         setDetailAnswers(resolved.answers);
         setDetailAttachments(resolved.attachments);
+        setDetailLegacyUnencrypted(Boolean(resolved.legacyUnencrypted));
         setToast({ tone: "success", message: "Wallet verified. Private signal unlocked." });
       }
     } catch (error) {
@@ -185,6 +189,7 @@ export function usePrivateSignalDecrypt({
     setDetailAnswers,
     detailAttachments,
     setDetailAttachments,
+    detailLegacyUnencrypted,
     decrypting,
     decryptStatusMessage,
     decryptError,

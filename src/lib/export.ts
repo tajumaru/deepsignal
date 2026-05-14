@@ -1,6 +1,7 @@
 import type { FormSchema, Submission } from "../types";
+import { formatAnswerText } from "./answerFormatting";
 import { getSubmissionRespondentMeta } from "./respondentMeta";
-import { downloadTextFile, flattenAnswer } from "./utils";
+import { downloadTextFile } from "./utils";
 
 export function exportSubmissionJson(form: FormSchema, submission: Submission) {
   downloadTextFile(
@@ -47,7 +48,7 @@ export function exportSubmissionsCsv(form: FormSchema, submissions: Submission[]
       submission.githubIssueUrl ?? "",
       submission.githubPrUrl ?? "",
     ];
-    const answers = form.fields.map((field) => flattenAnswer(submission.answers[field.id]));
+    const answers = form.fields.map((field) => formatAnswerText(field, submission.answers[field.id], "en"));
     return [...base, ...answers];
   });
 

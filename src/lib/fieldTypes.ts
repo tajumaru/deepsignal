@@ -8,7 +8,7 @@ const FIELD_TYPES: FieldType[] = [
   "dropdown",
   "checkbox",
   "country_select",
-  "confirmationCheckbox",
+  "confirmation",
   "rating",
   "url",
   "screenshot",
@@ -28,6 +28,11 @@ export function normalizeFieldType(raw: unknown): FieldType {
       return "markdown";
     case "checkboxes":
       return "checkbox";
+    case "confirmationCheckbox":
+    case "confirmation_checkbox":
+    case "consent":
+    case "consentCheckbox":
+      return "confirmation";
     case "countrySelect":
       return "country_select";
     case "starRating":
@@ -54,5 +59,5 @@ export function isAttachmentFieldType(type: FieldType) {
 }
 
 export function isConfirmationCheckboxField(type: FieldType) {
-  return type === "confirmationCheckbox";
+  return type === "confirmation" || type === "confirmationCheckbox";
 }

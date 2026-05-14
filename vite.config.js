@@ -1,9 +1,38 @@
 import { defineConfig } from "vitest/config";
 import react from "@vitejs/plugin-react";
 import { visualizer } from "rollup-plugin-visualizer";
+import { execSync } from "node:child_process";
+import { readFileSync } from "node:fs";
+function formatBuildTime(date) {
+    if (date === void 0) { date = new Date(); }
+    var pad = function (value) { return String(value).padStart(2, "0"); };
+    return [
+        date.getFullYear(),
+        pad(date.getMonth() + 1),
+        pad(date.getDate()),
+    ].join(".") + "-".concat(pad(date.getHours())).concat(pad(date.getMinutes()));
+}
+function getGitHash() {
+    try {
+        return execSync("git rev-parse --short HEAD", { encoding: "utf8" }).trim();
+    }
+    catch (_a) {
+        return "local";
+    }
+}
+var packageMetadata = JSON.parse(readFileSync(new URL("./package.json", import.meta.url), "utf8"));
+var appVersion = process.env.VITE_APP_VERSION || packageMetadata.version || "0.0.0";
+var buildTime = process.env.VITE_BUILD_TIME || formatBuildTime();
+var gitHash = process.env.VITE_GIT_HASH || getGitHash();
 export default defineConfig({
     base: "./",
     assetsInclude: ["**/*.wasm"],
+    define: {
+        "import.meta.env.VITE_APP_VERSION": JSON.stringify(appVersion),
+        "import.meta.env.VITE_BUILD_TIME": JSON.stringify(buildTime),
+        "import.meta.env.VITE_GIT_HASH": JSON.stringify(gitHash),
+        "import.meta.env.VITE_APP_ENV": JSON.stringify(process.env.VITE_APP_ENV || process.env.VERCEL_ENV || process.env.NODE_ENV || "dev"),
+    },
     plugins: [
         react(),
         process.env.ANALYZE === "true"

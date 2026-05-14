@@ -126,4 +126,39 @@ describe("PublicFormPage shared manifest restore", () => {
     expect(mockGetForm).not.toHaveBeenCalled();
     expect(mockSaveForm).toHaveBeenCalledTimes(1);
   });
+
+  it("falls back to a cached form when the shared manifest cannot be restored", async () => {
+    const cachedForm: FormSchema = {
+      id: "form-123",
+      title: "Cached Feedback Form",
+      description: "Loaded from local fallback.",
+      fields: [
+        {
+          id: "field-1",
+          type: "shortText",
+          label: "What should we know?",
+          required: false,
+          sensitive: false,
+        },
+      ],
+      createdAt: "2026-05-14T00:00:00.000Z",
+      manifestBlobId: "blob-abc",
+    };
+
+    mockReadManifestWithForm.mockRejectedValue(new Error("Walrus read timed out."));
+    mockGetForm.mockResolvedValue(cachedForm);
+
+    render(
+      <MemoryRouter initialEntries={["/f/form-123?manifest=blob-abc"]}>
+        <Routes>
+          <Route path="/f/:formId" element={<PublicFormPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Cached Feedback Form" })).toBeInTheDocument());
+    expect(screen.getByText("What should we know?")).toBeInTheDocument();
+    expect(mockGetForm).toHaveBeenCalledWith("form-123");
+    expect(mockSaveForm).not.toHaveBeenCalled();
+  });
 });

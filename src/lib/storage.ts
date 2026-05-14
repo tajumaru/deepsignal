@@ -1,6 +1,10 @@
-import { cryptoAdapter, getSealRuntimeStatus } from "../crypto/cryptoFactory";
+import {
+  decryptSensitiveResponse,
+  encryptSensitiveResponse,
+  sealServiceAdapter,
+} from "../crypto/sealService";
 import { fromBase64, parseRealSealEnvelope, toBase64 } from "../crypto/sealPayload";
-import { hasChoiceOptions, isAttachmentFieldType, normalizeFieldType } from "./fieldTypes";
+import { hasChoiceOptions, isAttachmentFieldType, isConfirmationCheckboxField, normalizeFieldType } from "./fieldTypes";
 import { normalizeLogicGroup, sanitizeConditionalLogicFields } from "../utils/formLogic";
 import {
   getSubmissionCategoryFromPurpose,
@@ -26,7 +30,7 @@ import type {
 } from "../types";
 
 export const storageAdapter: StorageAdapter = storage;
-export const activeSealAdapter: SealAdapter = cryptoAdapter;
+export const activeSealAdapter: SealAdapter = sealServiceAdapter;
 
 export interface SaveSubmissionWithEncryptionResult {
   id: string;
@@ -65,7 +69,7 @@ function parseSensitiveValue(form: FormSchema, fieldId: string, value: string) {
       return [];
     }
   }
-  if (field?.type === "confirmationCheckbox") {
+  if (field && isConfirmationCheckboxField(field.type)) {
     return value === "true";
   }
   if (field?.type === "rating") {
@@ -117,7 +121,7 @@ export async function createEncryptedAttachmentUpload(
   context: SealEncryptContext = {},
 ) {
   const bytes = new Uint8Array(await file.arrayBuffer());
-  const encryptedPayload = await seal.encrypt(toBase64(bytes), context);
+  const encryptedPayload = await encryptSensitiveResponse(toBase64(bytes), context, seal);
   const encryptedFile = new File([encryptedPayload], `${file.name}.seal`, {
     type: "text/plain",
     lastModified: file.lastModified,
@@ -193,7 +197,7 @@ export async function decryptAttachmentBlob(
   if (!encryptedPayload) {
     return null;
   }
-  const decrypted = await seal.decrypt(encryptedPayload, context);
+  const { plaintext: decrypted } = await decryptSensitiveResponse(encryptedPayload, context, seal);
   const blob = new Blob([fromBase64(decrypted)], {
     type: attachment.originalType || "application/octet-stream",
   });
@@ -216,7 +220,7 @@ export async function encryptSensitiveAnswers(
       if (!field?.sensitive || value === null || value === undefined || value === "") {
         return [fieldId, value] as const;
       }
-      const encrypted = await seal.encrypt(stringifySensitiveValue(value), context);
+      const encrypted = await encryptSensitiveResponse(stringifySensitiveValue(value), context, seal);
       return [fieldId, { value: encrypted, encrypted: true }] as const;
     }),
   );
@@ -240,7 +244,8 @@ export async function decryptSensitiveAnswers(
       if (!encryptedValue.encrypted || !encryptedValue.value) {
         return [fieldId, value] as const;
       }
-      const decrypted = await seal.decrypt(encryptedValue.value, context);
+      const { plaintext } = await decryptSensitiveResponse(encryptedValue.value, context, seal);
+      const decrypted = plaintext;
       return [fieldId, parseSensitiveValue(form, fieldId, decrypted)] as const;
     }),
   );
@@ -251,7 +256,7 @@ export function createEmptyAnswer(field: FormField) {
   if (field.type === "checkbox" || isAttachmentFieldType(field.type)) {
     return [] as string[];
   }
-  if (field.type === "confirmationCheckbox") {
+  if (isConfirmationCheckboxField(field.type)) {
     return false;
   }
   return "";
@@ -498,7 +503,8 @@ export async function resolveSubmissionAnswers(
     if (!payload) {
       return null;
     }
-    const decrypted = await seal.decrypt(payload, context);
+    const decryptedResult = await decryptSensitiveResponse(payload, context, seal);
+    const decrypted = decryptedResult.plaintext;
     let parsed: {
       answers?: Record<string, unknown>;
       attachments?: Submission["attachments"];
@@ -521,6 +527,7 @@ export async function resolveSubmissionAnswers(
         parsed.attachments === undefined
           ? submission.attachments
           : normalizeSubmissionAttachments(parsed.attachments),
+      legacyUnencrypted: decryptedResult.legacyUnencrypted,
     };
   }
 
@@ -528,6 +535,7 @@ export async function resolveSubmissionAnswers(
   return {
     answers: decryptedAnswers,
     attachments: submission.attachments,
+    legacyUnencrypted: false,
   };
 }
 
@@ -541,7 +549,6 @@ export async function saveSubmissionWithEncryption(
   },
 ): Promise<SaveSubmissionWithEncryptionResult> {
   if (isResponseDeadlinePassed(form.responseDeadline)) {
-    throw new Error(messages?.responseDeadlinePassed ?? "This form is no longer accepting responses.");
     throw new Error(messages?.responseDeadlinePassed ?? "This form is no longer accepting responses.");
   }
 
@@ -591,8 +598,7 @@ export async function saveSubmissionWithEncryption(
   const triagedSubmission = enrichSubmissionWithTriage(form, triageInput);
 
   if (form.encryptSubmissions) {
-    const sealRuntime = getSealRuntimeStatus();
-    if (sealRuntime.activeMode === "seal" && !form.projectId?.trim()) {
+    if (!form.projectId?.trim()) {
       throw new Error(REAL_SEAL_PROJECT_REQUIRED_MESSAGE);
     }
 
@@ -603,7 +609,7 @@ export async function saveSubmissionWithEncryption(
         answers: submission.answers,
         attachments: submission.attachments,
       });
-      encryptedPayload = await seal.encrypt(payload, { projectId: form.projectId });
+      encryptedPayload = await encryptSensitiveResponse(payload, { projectId: form.projectId }, seal);
     }
     const parsedEnvelope = parseRealSealEnvelope(encryptedPayload);
     const sealIdentity = parsedEnvelope

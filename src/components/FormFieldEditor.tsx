@@ -2,7 +2,7 @@ import type { ChangeEvent, DragEvent, KeyboardEvent } from "react";
 import { fieldTypeOptions } from "../lib/constants";
 import { useI18n } from "../i18n";
 import { getCountryFlag } from "../lib/countries";
-import { hasChoiceOptions } from "../lib/fieldTypes";
+import { hasChoiceOptions, isConfirmationCheckboxField, isLongTextLikeField } from "../lib/fieldTypes";
 import type { FieldType, FormField } from "../types";
 import { DateInput } from "./DateInput";
 import {
@@ -37,10 +37,17 @@ interface FormFieldEditorProps {
   onDrop: (event: DragEvent<HTMLElement>) => void;
 }
 
-function normalizeFieldForType(field: FormField, type: FieldType) {
+function normalizeFieldForType(field: FormField, type: FieldType): FormField {
+  const isConfirmation = isConfirmationCheckboxField(type);
+  const normalizedType: FieldType = isConfirmation ? "confirmation" : type;
   return {
     ...field,
-    type,
+    type: normalizedType,
+    label: isConfirmation && !field.label.trim() ? "Consent / confirmation" : field.label,
+    placeholder:
+      isConfirmation && !field.placeholder?.trim()
+        ? "I confirm this information is accurate"
+        : field.placeholder,
     options: hasChoiceOptions(type) ? (field.options && field.options.length > 0 ? field.options : ["Option 1", "Option 2"]) : undefined,
   };
 }
@@ -145,12 +152,12 @@ export function FormFieldEditor({
       );
     }
 
-    if (field.type === "longText" || field.type === "markdown") {
+    if (isLongTextLikeField(field.type)) {
       return (
         <textarea
           rows={field.type === "markdown" ? 6 : 4}
           disabled
-          value=""
+          value={field.type === "markdown" ? "**Bold**, _italic_, links, and lists preview for responders." : ""}
           placeholder={field.placeholder ?? (field.type === "markdown" ? "# Add markdown-friendly prompt" : t("helpTextExample"))}
           readOnly
         />
@@ -195,7 +202,7 @@ export function FormFieldEditor({
       );
     }
 
-    if (field.type === "confirmationCheckbox") {
+    if (isConfirmationCheckboxField(field.type)) {
       return (
         <div className="composer-canvas-checkboxes" aria-hidden="true">
           <div className="composer-canvas-checkbox">

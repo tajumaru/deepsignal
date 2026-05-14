@@ -1,6 +1,7 @@
 import type { Language } from "../i18n";
 import type { FormField } from "../types";
 import { formatCountryAnswerText } from "./countries";
+import { isConfirmationCheckboxField } from "./fieldTypes";
 import { flattenAnswer } from "./utils";
 
 function formatDateAnswerText(value: string, language: Language) {
@@ -23,6 +24,9 @@ export function formatAnswerText(field: FormField | undefined, value: unknown, l
   }
   if (field?.type === "date" && typeof value === "string" && value.trim()) {
     return formatDateAnswerText(value, language);
+  }
+  if (field && isConfirmationCheckboxField(field.type)) {
+    return value === true ? "Confirmed" : "Not confirmed";
   }
   return flattenAnswer(value);
 }

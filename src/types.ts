@@ -6,6 +6,7 @@ export type FieldType =
   | "dropdown"
   | "checkbox"
   | "country_select"
+  | "confirmation"
   | "confirmationCheckbox"
   | "rating"
   | "url"

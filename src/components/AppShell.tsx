@@ -1,6 +1,7 @@
 import { lazy, Suspense, type PropsWithChildren } from "react";
 import { Link, NavLink } from "react-router-dom";
 import { CreateFormLink } from "./CreateFormLink";
+import { BuildIndicator } from "./system/BuildIndicator";
 import { useI18n } from "../i18n";
 
 const WalletConnect = lazy(() =>
@@ -37,7 +38,7 @@ export function AppShell({ children }: PropsWithChildren) {
         </nav>
         <div className="topbar-actions">
           <Suspense fallback={<div className="wallet-connect-shell" />}>
-            <WalletConnect />
+            <WalletConnect compact />
           </Suspense>
           <label className="language-switch">
             <span>{t("languageLabel")}</span>
@@ -52,6 +53,7 @@ export function AppShell({ children }: PropsWithChildren) {
         </div>
       </header>
       <main className="page-wrap">{children}</main>
+      <BuildIndicator />
     </div>
   );
 
