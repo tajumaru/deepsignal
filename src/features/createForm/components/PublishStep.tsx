@@ -39,6 +39,7 @@ interface PublishStepProps {
   encryptionWarnings: EncryptionReadinessWarning[];
   showPublishSuccessView: boolean;
   showWalrusDiagnostics: boolean;
+  isGuestDraftMode: boolean;
   isConnected: boolean;
   currentWalletName?: string;
   accountAddress?: string;
@@ -80,6 +81,7 @@ export function PublishStep({
   encryptionWarnings,
   showPublishSuccessView,
   showWalrusDiagnostics,
+  isGuestDraftMode,
   isConnected,
   currentWalletName,
   accountAddress,
@@ -111,6 +113,14 @@ export function PublishStep({
       : t("walrusMode")
     : t("localWalrusMode");
   const visibleSelectedProject = canManageProjects ? selectedProject : null;
+  const publishReadyBody = isGuestDraftMode ? t("guestDraftPublishBody") : t("publishReadyBody");
+  const encryptionScopeMessage = encryptSubmissions
+    ? visibleSelectedProject
+      ? t("projectEncryptedFormHelp", { name: visibleSelectedProject.name })
+      : accountAddress
+        ? t("personalEncryptedFormHelp")
+        : t("personalEncryptedFormConnectHelp")
+    : t("openFormEncryptionHelp");
   function getEncryptionWarningMessage(warning: EncryptionReadinessWarning) {
     switch (warning.kind) {
       case "project-missing":
@@ -164,7 +174,7 @@ export function PublishStep({
             <div>
               <p className="eyebrow">Step 4</p>
               <h2>{savedForm ? t("formPublished") : t("publishReadyTitle")}</h2>
-              <p className="muted">{savedForm ? t("publishSavedModeBody") : t("publishReadyBody")}</p>
+              <p className="muted">{savedForm ? t("publishSavedModeBody") : publishReadyBody}</p>
             </div>
             {!savedForm ? (
               <button
@@ -180,6 +190,9 @@ export function PublishStep({
           <p className="wallet-inline-note">
             {t("formOwnerLabel")}: {accountAddress ? shortAddress(accountAddress) : t("walletPublishHint")}
           </p>
+          {isGuestDraftMode && !savedForm ? (
+            <p className="wallet-inline-note">{t("guestDraftPublishWalletRequired")}</p>
+          ) : null}
 
           {showWalrusDiagnostics ? (
             <section className="answer-card">
@@ -346,6 +359,7 @@ export function PublishStep({
                     </label>
                   </div>
                   <p className="muted">{t("encryptSubmissionsReviewHelp")}</p>
+                  <p className="muted">{encryptionScopeMessage}</p>
                   {encryptionWarnings.length > 0 ? (
                     <div className="composer-warning-list" aria-live="polite">
                       {encryptionWarnings.map((warning) => (

@@ -319,6 +319,7 @@ function FormBuilderComposer({ mode, freshStartToken, draftSeed }: FormBuilderCo
               encryptionWarnings={encryptionWarnings}
               showPublishSuccessView={showPublishSuccessView}
               showWalrusDiagnostics={showWalrusDiagnostics}
+              isGuestDraftMode={isGuestDraftMode}
               isConnected={isConnected}
               currentWalletName={currentWallet?.name ?? undefined}
               accountAddress={account?.address}

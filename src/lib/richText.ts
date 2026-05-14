@@ -30,7 +30,7 @@ function hasRichTextMarkup(value: string) {
 function renderInlineMarkdown(value: string) {
   const tokens: string[] = [];
   const stash = (html: string) => {
-    const token = `\u0000${tokens.length}\u0000`;
+    const token = `\uE000${tokens.length}\uE000`;
     tokens.push(html);
     return token;
   };
@@ -43,9 +43,9 @@ function renderInlineMarkdown(value: string) {
   );
   escaped = escaped.replace(/\*\*([^\n]+?)\*\*/g, (_match, text: string) => stash(`<strong>${text}</strong>`));
   escaped = escaped.replace(/__([^\n]+?)__/g, (_match, text: string) => stash(`<strong>${text}</strong>`));
-  escaped = escaped.replace(/(^|[^\*])\*([^*\n]+)\*/g, (_match, prefix: string, text: string) => `${prefix}${stash(`<em>${text}</em>`)}`);
+  escaped = escaped.replace(/(^|[^*])\*([^*\n]+)\*/g, (_match, prefix: string, text: string) => `${prefix}${stash(`<em>${text}</em>`)}`);
   escaped = escaped.replace(/(^|[^_])_([^_\n]+)_/g, (_match, prefix: string, text: string) => `${prefix}${stash(`<em>${text}</em>`)}`);
-  return escaped.replace(/\u0000(\d+)\u0000/g, (_match, index: string) => tokens[Number(index)] ?? "");
+  return escaped.replace(/\uE000(\d+)\uE000/g, (_match, index: string) => tokens[Number(index)] ?? "");
 }
 
 function normalizeMarkdown(value: string) {

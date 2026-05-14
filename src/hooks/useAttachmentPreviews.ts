@@ -174,6 +174,8 @@ export function useAttachmentPreviews(
       cancelled = true;
       objectUrls.forEach((url) => URL.revokeObjectURL(url));
     };
+    // Attachment and decrypt inputs are represented by stable keys so previews reload only on semantic changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [attachmentPreviewKey, decryptContextKey, enabled, t]);
 
   return previews;

@@ -237,19 +237,6 @@ export function useCreateFormPublish({
       }
     }
 
-    if (responseDeadlinePreset === "custom") {
-      if (!responseDeadline) {
-        setError(t("customDateRequired"));
-        goToStep("info");
-        return;
-      }
-      if (responseDeadline <= Date.now()) {
-        setError(t("customDateFuture"));
-        goToStep("info");
-        return;
-      }
-    }
-
     const runId = publishRunRef.current + 1;
     publishRunRef.current = runId;
     setSaving(true);

@@ -257,6 +257,8 @@ export function useCreateFormBuilder({
     }
     window.localStorage.removeItem(draftStorageKey);
     resetBuilderState();
+    // resetBuilderState closes over the current builder state; this effect only responds to explicit fresh starts.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draftStorageKey, freshStartToken, isGuestDraftMode]);
 
   useEffect(() => {

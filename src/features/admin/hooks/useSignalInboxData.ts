@@ -165,6 +165,8 @@ export function useSignalInboxData({
 
   useEffect(() => {
     void loadConsole();
+    // loadConsole intentionally owns a fresh run id and reads the latest scoped state when this hook mounts.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const accessibleForms = useMemo(

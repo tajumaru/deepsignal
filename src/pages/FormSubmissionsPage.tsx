@@ -5,7 +5,7 @@ import {
   useSuiClient,
 } from "@mysten/dapp-kit";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link, useLocation, useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import { AdminAccessGate } from "../components/AdminAccessGate";
 import { BlobLink } from "../components/BlobLink";
 import { EmptyState } from "../components/EmptyState";
@@ -110,7 +110,6 @@ export function FormSubmissionsPage() {
   const updateSignalStatusTx = useSignAndExecuteTransaction();
   const { capabilityProfile, isLoadingAccess } = useAccessControl(account?.address);
   const reviewDeniedBody = capabilityProfile.isConfigured ? t("reviewAccessRequiresCapability") : undefined;
-  const location = useLocation();
   const { formId = "", submissionId = "" } = useParams();
   const sealRuntime = getSealRuntimeStatus();
   const responseDeadlineLabels: ResponseDeadlineLabels = {
@@ -146,7 +145,6 @@ export function FormSubmissionsPage() {
   const [priorityDraft, setPriorityDraft] = useState<Submission["priority"]>("medium");
   const [signalValueDraft, setSignalValueDraft] = useState("");
   const [notesDraft, setNotesDraft] = useState("");
-  const [draftTag, setDraftTag] = useState("");
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState<{ tone: "success" | "error"; message: string } | null>(null);
   const saveQueueRef = useRef(Promise.resolve());

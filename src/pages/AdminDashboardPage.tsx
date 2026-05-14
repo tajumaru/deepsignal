@@ -16,7 +16,6 @@ import { ShareCard } from "../components/ShareCard";
 import { SignalClusterPanel } from "../components/SignalClusterPanel";
 import { SignalStatusBadges } from "../components/SignalStatusBadges";
 import { SignalMetaChip, SignalMetaRow } from "../components/SignalMetaChip";
-import { getSealRuntimeStatus } from "../crypto/cryptoFactory";
 import { AdminOperationsStatus } from "../features/admin/components/AdminOperationsStatus";
 import { AdminToast } from "../features/admin/components/AdminToast";
 import { SignalAttachmentList } from "../features/admin/components/SignalAttachmentList";
@@ -79,7 +78,6 @@ export function AdminDashboardPage() {
     isPending: isLoadingCapabilities,
     isLoadingAccess,
   } = useAccessControl(account?.address);
-  const sealRuntime = getSealRuntimeStatus();
   const storageRuntime = getStorageRuntimeStatus();
   const responseDeadlineLabels: ResponseDeadlineLabels = {
     noLimit: t("responseDeadlineNone"),
