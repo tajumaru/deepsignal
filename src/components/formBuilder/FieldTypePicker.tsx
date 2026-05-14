@@ -1,7 +1,5 @@
-import type { FieldType } from "../../types";
 import { useI18n } from "../../i18n";
-
-type PickerFieldType = FieldType | "richText";
+import type { FieldType } from "../../types";
 
 interface FieldTypePickerProps {
   open: boolean;
@@ -10,24 +8,23 @@ interface FieldTypePickerProps {
 }
 
 const fieldTypeChoices: Array<{
-  type: PickerFieldType;
+  type: FieldType;
   icon: string;
   title: string;
   description: string;
 }> = [
-  { type: "shortText", icon: "Aa", title: "Text", description: "Single-line answers, names, labels, and short summaries." },
-  { type: "richText", icon: "¶", title: "Rich Text", description: "Long-form responses, bug details, and narrative feedback." },
-  { type: "dropdown", icon: "▾", title: "Dropdown", description: "One choice from a compact option list." },
-  { type: "checkbox", icon: "☑", title: "Checkbox", description: "Multiple selections for tags, surfaces, or used features." },
-  { type: "rating", icon: "★", title: "Star Rating", description: "1-5 sentiment scoring with fast input." },
-  { type: "url", icon: "↗", title: "URL", description: "Links to docs, builds, issues, or external proof." },
-  { type: "screenshot", icon: "⌁", title: "Screenshot Upload", description: "Image evidence from desktop or mobile capture." },
-  { type: "video", icon: "▶", title: "Video Upload", description: "Short clips showing flow, bugs, or reactions." },
+  { type: "shortText", icon: "Aa", title: "Short Text", description: "Single-line answers, names, labels, and short summaries." },
+  { type: "longText", icon: "LT", title: "Long Text", description: "Plain textarea for longer narrative answers." },
+  { type: "markdown", icon: "MD", title: "Rich Text / Markdown", description: "Markdown-friendly textarea for formatted detail, release notes, or detailed reports." },
+  { type: "dropdown", icon: "v", title: "Dropdown", description: "One choice from a compact option list." },
+  { type: "checkbox", icon: "[]", title: "Checkboxes", description: "Multiple selections for tags, surfaces, or used features." },
+  { type: "country_select", icon: "JP", title: "Country Select", description: "Searchable country picker with flags, readable labels, and ISO storage." },
+  { type: "confirmationCheckbox", icon: "OK", title: "Confirmation Checkbox", description: "Single agreement checkbox for confirmation, consent, or acknowledgement." },
+  { type: "rating", icon: "*", title: "Star Rating", description: "1-5 sentiment scoring with fast input." },
+  { type: "url", icon: "->", title: "URL", description: "Links to docs, builds, issues, or external proof." },
+  { type: "screenshot", icon: "IMG", title: "Screenshot Upload", description: "Image evidence from desktop or mobile capture." },
+  { type: "video", icon: "VID", title: "Video Upload", description: "Short clips showing flow, bugs, or reactions." },
 ];
-
-function toFieldType(type: PickerFieldType): FieldType {
-  return type === "richText" ? "longText" : type;
-}
 
 export function FieldTypePicker({ open, onClose, onPick }: FieldTypePickerProps) {
   const { t } = useI18n();
@@ -58,7 +55,7 @@ export function FieldTypePicker({ open, onClose, onPick }: FieldTypePickerProps)
               type="button"
               className="composer-field-type-card"
               onClick={() => {
-                onPick(toFieldType(choice.type));
+                onPick(choice.type);
                 onClose();
               }}
             >

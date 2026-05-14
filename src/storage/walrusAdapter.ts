@@ -65,12 +65,17 @@ type WalrusRuntimeContext = {
   supportedIntents: string[];
   client: WalrusEnabledClient | null;
 };
+export type WalrusBlobReadErrorCode =
+  | "aggregator_unconfigured"
+  | "blob_unavailable"
+  | "json_parse_failed";
 
 const publisherUrl = import.meta.env.VITE_WALRUS_PUBLISHER_URL?.replace(/\/$/, "");
 const aggregatorUrl = WALRUS_AGGREGATOR_URL.replace(/\/$/, "");
 const uploadRelayUrl = WALRUS_UPLOAD_RELAY_URL.replace(/\/$/, "");
 const storageEpochs = Math.max(1, Number(import.meta.env.VITE_WALRUS_STORAGE_EPOCHS || "5"));
 const bundledFormPointer = "__bundled_form__";
+const WALRUS_READ_TIMEOUT_MS = 4000;
 const walrusStorageMode = (
   String(import.meta.env.VITE_WALRUS_STORAGE_MODE || "uploadRelay").toLowerCase() === "publisher"
     ? "publisher"
@@ -84,8 +89,37 @@ let runtimeContext: WalrusRuntimeContext = {
   client: null,
 };
 
+export class WalrusBlobReadError extends Error {
+  code: WalrusBlobReadErrorCode;
+  blobId: string;
+
+  constructor(code: WalrusBlobReadErrorCode, blobId: string, message: string) {
+    super(message);
+    this.name = "WalrusBlobReadError";
+    this.code = code;
+    this.blobId = blobId;
+  }
+}
+
 export function setWalrusRuntimeContext(next: WalrusRuntimeContext) {
   runtimeContext = next;
+}
+
+export function getWalrusMutationRuntimeStatus() {
+  return {
+    aggregatorConfigured: Boolean(aggregatorUrl),
+    writeConfigured: walrusStorageMode === "publisher" ? Boolean(publisherUrl) : Boolean(uploadRelayUrl),
+    hasClient: Boolean(runtimeContext.client),
+    hasWallet: Boolean(runtimeContext.account && runtimeContext.wallet),
+    canWrite: Boolean(
+      aggregatorUrl &&
+        (walrusStorageMode === "publisher" ? publisherUrl : uploadRelayUrl) &&
+        runtimeContext.client &&
+        runtimeContext.account &&
+        runtimeContext.wallet,
+    ),
+    storageMode: walrusStorageMode,
+  };
 }
 
 function assertReadEnv() {
@@ -116,6 +150,23 @@ function getRuntimeWalrusClient() {
 function getWalrusClient() {
   assertUploadRelayEnv();
   return getRuntimeWalrusClient();
+}
+
+async function withWalrusReadTimeout<T>(blobId: string, task: Promise<T>): Promise<T> {
+  return Promise.race([
+    task,
+    new Promise<T>((_, reject) => {
+      window.setTimeout(() => {
+        reject(
+          new WalrusBlobReadError(
+            "blob_unavailable",
+            blobId,
+            `Walrus blob ${blobId} could not be fetched from the aggregator before the read timed out.`,
+          ),
+        );
+      }, WALRUS_READ_TIMEOUT_MS);
+    }),
+  ]);
 }
 
 function createWalletSigner(): Signer {
@@ -551,7 +602,7 @@ async function fetchBlobTextFromWalrus(
   }
   assertReadEnv();
   try {
-    const response = await fetch(`${aggregatorUrl}/v1/blobs/${blobId}`);
+    const response = await withWalrusReadTimeout(blobId, fetch(`${aggregatorUrl}/v1/blobs/${blobId}`));
     if (response.status === 404) {
       return null;
     }
@@ -565,13 +616,50 @@ async function fetchBlobTextFromWalrus(
   }
 }
 
+async function fetchBlobTextFromWalrusOrThrow(blobId: string): Promise<string> {
+  if (!blobId.trim()) {
+    throw new WalrusBlobReadError("blob_unavailable", blobId, "Walrus blob id is missing.");
+  }
+  try {
+    assertReadEnv();
+    const response = await withWalrusReadTimeout(blobId, fetch(`${aggregatorUrl}/v1/blobs/${blobId}`));
+    if (response.status === 404) {
+      throw new WalrusBlobReadError(
+        "blob_unavailable",
+        blobId,
+        `Walrus blob ${blobId} could not be fetched from the aggregator.`,
+      );
+    }
+    if (!response.ok) {
+      throw new WalrusBlobReadError(
+        "blob_unavailable",
+        blobId,
+        `Walrus fetch failed for blob ${blobId}: ${response.status}.`,
+      );
+    }
+    return await response.text();
+  } catch (error) {
+    if (error instanceof WalrusBlobReadError) {
+      throw error;
+    }
+    if (error instanceof Error && error.message === "Walrus aggregator URL is not configured.") {
+      throw new WalrusBlobReadError("aggregator_unconfigured", blobId, error.message);
+    }
+    const message =
+      error instanceof Error
+        ? `Walrus blob ${blobId} could not be fetched from the aggregator. ${error.message}`
+        : `Walrus blob ${blobId} could not be fetched from the aggregator.`;
+    throw new WalrusBlobReadError("blob_unavailable", blobId, message);
+  }
+}
+
 async function fetchBlobFromWalrus(blobId: string): Promise<Blob | null> {
   if (!blobId.trim()) {
     return null;
   }
   assertReadEnv();
   try {
-    const response = await fetch(`${aggregatorUrl}/v1/blobs/${blobId}`);
+    const response = await withWalrusReadTimeout(blobId, fetch(`${aggregatorUrl}/v1/blobs/${blobId}`));
     if (response.status === 404) {
       return null;
     }
@@ -598,6 +686,20 @@ export async function fetchJsonBlob<T>(blobId: string): Promise<T | null> {
   } catch (error) {
     console.error("Walrus blob parse failed", blobId, error);
     return null;
+  }
+}
+
+export async function readJsonBlobOrThrow<T>(blobId: string): Promise<T> {
+  const text = await fetchBlobTextFromWalrusOrThrow(blobId);
+  try {
+    return JSON.parse(text) as T;
+  } catch (error) {
+    console.error("Walrus blob parse failed", blobId, error);
+    throw new WalrusBlobReadError(
+      "json_parse_failed",
+      blobId,
+      `Walrus blob ${blobId} did not contain valid JSON.`,
+    );
   }
 }
 
@@ -662,12 +764,12 @@ function createFormBundle(form: FormSchema, manifest: SignalManifest): FormBundl
 }
 
 async function readFormBundle(blobId: string): Promise<FormBundle | null> {
-  const payload = await fetchJsonBlob<unknown>(blobId);
+  const payload = await readJsonBlobOrThrow<unknown>(blobId);
   return isFormBundle(payload) ? payload : null;
 }
 
 async function readSubmissionBundle(blobId: string): Promise<SubmissionBundle | null> {
-  const payload = await fetchJsonBlob<unknown>(blobId);
+  const payload = await readJsonBlobOrThrow<unknown>(blobId);
   return isSubmissionBundle(payload) ? payload : null;
 }
 
@@ -688,11 +790,7 @@ async function readManifestCarrier(blobId: string) {
     };
   }
 
-  const manifest = await fetchJsonBlob<SignalManifest>(blobId);
-  if (!manifest) {
-    return null;
-  }
-
+  const manifest = await readJsonBlobOrThrow<SignalManifest>(blobId);
   return {
     manifest,
     form: null as FormSchema | null,
@@ -702,7 +800,7 @@ async function readManifestCarrier(blobId: string) {
 export async function readManifestWithForm(blobId: string): Promise<{
   manifest: SignalManifest;
   form: FormSchema | null;
-} | null> {
+}> {
   return readManifestCarrier(blobId);
 }
 
@@ -800,8 +898,12 @@ export async function saveManifest(manifest: SignalManifest): Promise<UploadResu
 }
 
 export async function readManifest(blobId: string): Promise<SignalManifest | null> {
-  const carrier = await readManifestWithForm(blobId);
-  return carrier?.manifest ?? null;
+  try {
+    const carrier = await readManifestWithForm(blobId);
+    return carrier.manifest;
+  } catch {
+    return null;
+  }
 }
 
 export const walrusAdapter: StorageAdapter = {

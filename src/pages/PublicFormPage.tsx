@@ -9,6 +9,7 @@ import { EmptyState } from "../components/EmptyState";
 import { RichTextContent } from "../components/RichText";
 import { SignalMetaChip, SignalMetaRow } from "../components/SignalMetaChip";
 import { useI18n } from "../i18n";
+import { isAttachmentFieldType } from "../lib/fieldTypes";
 import { getEncryptedPayloadAvailabilityLabel, hasDedicatedEncryptedPayloadBlob } from "../lib/encryptionDisplay";
 import { getSubmissionCategoryFromPurpose } from "../lib/formTemplates";
 import {
@@ -22,6 +23,7 @@ import { getStorageDetailLabels, isLocalFallbackBlob } from "../lib/signalInbox"
 import {
   createInlineEncryptedAttachment,
   createEmptyAnswer,
+  getStorageRuntimeStatus,
   normalizeForm,
   saveSubmissionWithEncryption,
   storageAdapter,
@@ -41,11 +43,39 @@ type ValidationErrors = Record<string, string>;
 const MAX_ATTACHMENT_BYTES = 50 * 1024 * 1024;
 const REAL_SEAL_PROJECT_REQUIRED_MESSAGE =
   "Real Seal encrypted submissions require a selected project. Choose a project or turn off Encrypt submissions.";
+type SharedFormRestoreErrorCode =
+  | "aggregator_unconfigured"
+  | "manifest_blob_unavailable"
+  | "form_blob_unavailable"
+  | "json_parse_failed"
+  | "form_id_mismatch";
+
+class SharedFormRestoreError extends Error {
+  code: SharedFormRestoreErrorCode;
+
+  constructor(code: SharedFormRestoreErrorCode, message: string) {
+    super(message);
+    this.name = "SharedFormRestoreError";
+    this.code = code;
+  }
+}
 
 function getUploadAnswer(value: unknown) {
   return Array.isArray(value)
     ? value.filter((item): item is UploadDropzoneItem => Boolean(item) && typeof item === "object" && "id" in item)
     : [];
+}
+
+function isValidUrlAnswer(value: unknown) {
+  if (typeof value !== "string" || !value.trim()) {
+    return true;
+  }
+  try {
+    const parsed = new URL(value.trim());
+    return parsed.protocol === "http:" || parsed.protocol === "https:";
+  } catch {
+    return false;
+  }
 }
 
 function getAttachmentType(file: File): SubmissionAttachment["type"] {
@@ -70,6 +100,76 @@ function createPseudoProgress(onTick: (progress: number) => void) {
 function formatUploadFailure(fieldLabel: string, error: unknown) {
   const detail = error instanceof Error ? error.message : "Upload failed.";
   return `${fieldLabel}: ${detail} Remove the failed file or retry before sending your signal.`;
+}
+
+function toSharedFormRestoreError(
+  stage: "manifest" | "form",
+  error: unknown,
+  blobId: string,
+): SharedFormRestoreError {
+  if (
+    error &&
+    typeof error === "object" &&
+    "name" in error &&
+    error.name === "WalrusBlobReadError" &&
+    "code" in error &&
+    typeof (error as { code: unknown }).code === "string"
+  ) {
+    const walrusError = error as { code: string; message?: string };
+    if (walrusError.code === "aggregator_unconfigured") {
+      return new SharedFormRestoreError(
+        "aggregator_unconfigured",
+        "Walrus aggregator URL is not configured in this build.",
+      );
+    }
+    if (walrusError.code === "json_parse_failed") {
+      return new SharedFormRestoreError(
+        "json_parse_failed",
+        stage === "manifest"
+          ? `Manifest blob ${blobId} was downloaded but could not be parsed as JSON.`
+          : `Linked form blob ${blobId} was downloaded but could not be parsed as JSON.`,
+      );
+    }
+    return new SharedFormRestoreError(
+      stage === "manifest" ? "manifest_blob_unavailable" : "form_blob_unavailable",
+      stage === "manifest"
+        ? `Manifest blob ${blobId} could not be fetched from Walrus.`
+        : `Linked form blob ${blobId} could not be fetched from Walrus.`,
+    );
+  }
+
+  return new SharedFormRestoreError(
+    stage === "manifest" ? "manifest_blob_unavailable" : "form_blob_unavailable",
+    error instanceof Error ? error.message : "Walrus restore failed.",
+  );
+}
+
+function formatSharedFormRestoreMessage(error: unknown) {
+  if (error instanceof SharedFormRestoreError) {
+    switch (error.code) {
+      case "aggregator_unconfigured":
+        return "This shared form cannot be restored here because the Walrus aggregator URL is not configured.";
+      case "manifest_blob_unavailable":
+        return "This shared form could not be restored because the manifest blob could not be fetched from Walrus.";
+      case "form_blob_unavailable":
+        return "This shared form could not be restored because the linked form blob could not be fetched from Walrus.";
+      case "json_parse_failed":
+        return "This shared form could not be restored because the Walrus JSON payload is invalid.";
+      case "form_id_mismatch":
+        return error.message;
+      default:
+        return error.message;
+    }
+  }
+  return error instanceof Error ? error.message : "This shared form could not be restored from Walrus.";
+}
+
+function getSharedWalrusSubmitRequirementError() {
+  const storageRuntime = getStorageRuntimeStatus();
+  if (storageRuntime.mode !== "walrus") {
+    return "This shared form can be viewed here, but sending it requires Walrus write access. This browser is currently in local fallback mode.";
+  }
+  return "This shared form can be viewed without a wallet, but sending it requires a connected wallet and Walrus write runtime in this browser.";
 }
 
 export function PublicFormPage() {
@@ -97,21 +197,59 @@ export function PublicFormPage() {
       try {
         let nextForm: FormSchema | null = null;
         if (manifestBlobId) {
-          const { fetchJsonBlob, readManifestWithForm } = await import("../storage/walrusAdapter");
-          const carrier = await readManifestWithForm(manifestBlobId);
-          const manifest = carrier?.manifest ?? null;
+          const {
+            getWalrusMutationRuntimeStatus,
+            readJsonBlobOrThrow,
+            readManifestWithForm,
+          } = await import("../storage/walrusAdapter");
+          const carrier = await readManifestWithForm(manifestBlobId).catch((error) => {
+            throw toSharedFormRestoreError("manifest", error, manifestBlobId);
+          });
+          const manifest = carrier.manifest;
+          const walrusRuntime = getWalrusMutationRuntimeStatus();
           let restoredForm: FormSchema | null = null;
           let restoredFormBlobId = "";
 
-          if (carrier?.form && carrier.form.id === formId) {
+          if (!walrusRuntime.aggregatorConfigured) {
+            throw new SharedFormRestoreError(
+              "aggregator_unconfigured",
+              "Walrus aggregator URL is not configured in this build.",
+            );
+          }
+          if (manifest.formId !== formId) {
+            throw new SharedFormRestoreError(
+              "form_id_mismatch",
+              `This shared link points to form ${manifest.formId}, but the page expected ${formId}.`,
+            );
+          }
+          if (carrier.form) {
+            if (carrier.form.id !== formId) {
+              throw new SharedFormRestoreError(
+                "form_id_mismatch",
+                `The bundled form inside manifest ${manifestBlobId} has id ${carrier.form.id}, which does not match ${formId}.`,
+              );
+            }
             restoredForm = carrier.form;
             restoredFormBlobId = manifestBlobId;
-          } else if (manifest?.formBlobId && manifest.formBlobId !== "__bundled_form__") {
-            restoredForm = await fetchJsonBlob<FormSchema>(manifest.formBlobId);
+          } else if (manifest.formBlobId && manifest.formBlobId !== "__bundled_form__") {
+            restoredForm = await readJsonBlobOrThrow<FormSchema>(manifest.formBlobId).catch((error) => {
+              throw toSharedFormRestoreError("form", error, manifest.formBlobId);
+            });
             restoredFormBlobId = manifest.formBlobId;
+            if (restoredForm.id !== formId) {
+              throw new SharedFormRestoreError(
+                "form_id_mismatch",
+                `The linked form blob ${manifest.formBlobId} has id ${restoredForm.id}, which does not match ${formId}.`,
+              );
+            }
+          } else {
+            throw new SharedFormRestoreError(
+              "form_id_mismatch",
+              `Manifest ${manifestBlobId} does not contain a bundled form or a matching form blob for ${formId}.`,
+            );
           }
 
-          if (manifest && restoredForm && restoredForm.id === formId) {
+          if (restoredForm) {
             nextForm = {
               ...restoredForm,
               blobId: restoredFormBlobId,
@@ -138,13 +276,12 @@ export function PublicFormPage() {
           );
         }
       } catch (error) {
-        const details = error instanceof Error ? error.message : t("publicFormMissingBody");
         setForm(null);
         setAnswers({});
         setLoadError(
           manifestBlobId
-            ? `This shared form could not be restored from Walrus. ${details} Ask the creator to republish until Walrus storage succeeds, then open the new shared link.`
-            : `This form is not available in this browser yet. ${details}`,
+            ? `${formatSharedFormRestoreMessage(error)} Ask the creator to republish until Walrus storage succeeds, then open the new shared link.`
+            : `This form is not available in this browser yet. ${error instanceof Error ? error.message : t("publicFormMissingBody")}`,
         );
       } finally {
         setLoading(false);
@@ -168,7 +305,7 @@ export function PublicFormPage() {
     () =>
       new Set(
         form?.fields
-          .filter((field) => field.type === "screenshot" || field.type === "video")
+          .filter((field) => isAttachmentFieldType(field.type))
           .map((field) => field.id) ?? [],
       ),
     [form],
@@ -241,17 +378,25 @@ export function PublicFormPage() {
       const value = answers[field.id];
       const uploadItems = attachmentFields.has(field.id) ? getUploadAnswer(value) : [];
       if (!isFieldRequired(field, currentForm.fields, answers, visible)) {
+        if (field.type === "url" && value && !isValidUrlAnswer(value)) {
+          nextErrors[field.id] = "Enter a valid URL starting with http:// or https://";
+        }
         return;
       }
       const missing =
         value === "" ||
         value === null ||
         value === undefined ||
+        (field.type === "confirmationCheckbox" && value !== true) ||
         (Array.isArray(value) && value.length === 0) ||
         (attachmentFields.has(field.id) &&
           uploadItems.filter((attachment) => attachment.status !== "failed").length === 0);
       if (missing) {
         nextErrors[field.id] = t("requiredFieldError");
+        return;
+      }
+      if (field.type === "url" && value && !isValidUrlAnswer(value)) {
+        nextErrors[field.id] = "Enter a valid URL starting with http:// or https://";
       }
     });
     setErrors(nextErrors);
@@ -296,6 +441,15 @@ export function PublicFormPage() {
     }
     if (!validate(form)) {
       return;
+    }
+    if (manifestBlobId) {
+      const { getWalrusMutationRuntimeStatus } = await import("../storage/walrusAdapter");
+      const walrusRuntime = getWalrusMutationRuntimeStatus();
+      if (!walrusRuntime.canWrite) {
+        setSubmitError(getSharedWalrusSubmitRequirementError());
+        setSubmitNotice("");
+        return;
+      }
     }
 
     setSubmitting(true);

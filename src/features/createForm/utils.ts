@@ -1,4 +1,5 @@
 import { sanitizeConditionalLogicFields } from "../../utils/formLogic";
+import { hasChoiceOptions } from "../../lib/fieldTypes";
 import { makeId } from "../../lib/utils";
 import { normalizeFormVisibility } from "../../lib/explore";
 import type {
@@ -29,7 +30,7 @@ export function createField(type: FieldType = "shortText", sectionId?: string): 
     sectionId,
     placeholder: "",
     helpText: "",
-    options: type === "dropdown" || type === "checkbox" ? ["Option 1", "Option 2"] : undefined,
+    options: hasChoiceOptions(type) ? ["Option 1", "Option 2"] : undefined,
     conditionalParentId: undefined,
     conditionalValue: undefined,
   };
@@ -135,10 +136,7 @@ export function buildFormSchema(args: {
       placeholder: field.placeholder?.trim() || undefined,
       helpText: field.helpText?.trim() || undefined,
       validationHint: field.validationHint?.trim() || undefined,
-      options:
-        field.type === "dropdown" || field.type === "checkbox"
-          ? (field.options ?? []).map((option) => option.trim()).filter(Boolean)
-          : undefined,
+      options: hasChoiceOptions(field.type) ? (field.options ?? []).map((option) => option.trim()).filter(Boolean) : undefined,
     })),
     sections: args.sections
       .map((section) => ({

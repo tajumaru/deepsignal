@@ -1,11 +1,14 @@
 import { cryptoAdapter, getSealRuntimeStatus } from "../crypto/cryptoFactory";
 import { fromBase64, parseRealSealEnvelope, toBase64 } from "../crypto/sealPayload";
+import { hasChoiceOptions, isAttachmentFieldType, normalizeFieldType } from "./fieldTypes";
 import { normalizeLogicGroup, sanitizeConditionalLogicFields } from "../utils/formLogic";
 import {
   getSubmissionCategoryFromPurpose,
   inferPriorityFromTemplateAnswers,
   normalizeFormPurpose,
 } from "./formTemplates";
+import { formatAnswerText } from "./answerFormatting";
+import { flattenAnswer } from "./utils";
 import { normalizeFormVisibility } from "./explore";
 import { isResponseDeadlinePassed } from "./responseDeadline";
 import { enrichSubmissionWithTriage } from "./signalTriage";
@@ -62,6 +65,9 @@ function parseSensitiveValue(form: FormSchema, fieldId: string, value: string) {
     } catch {
       return [];
     }
+  }
+  if (field?.type === "confirmationCheckbox") {
+    return value === "true";
   }
   if (field?.type === "rating") {
     return value;
@@ -243,11 +249,16 @@ export async function decryptSensitiveAnswers(
 }
 
 export function createEmptyAnswer(field: FormField) {
-  if (field.type === "checkbox" || field.type === "screenshot" || field.type === "video") {
+  if (field.type === "checkbox" || isAttachmentFieldType(field.type)) {
     return [] as string[];
+  }
+  if (field.type === "confirmationCheckbox") {
+    return false;
   }
   return "";
 }
+
+export { getStorageRuntimeStatus } from "../storage/storageFactory";
 
 function coerceStatus(status: unknown): Submission["status"] {
   if (status === "read" || status === "archived" || status === "unread") {
@@ -410,6 +421,12 @@ export function normalizeForm(raw: FormSchema | (Record<string, unknown> & { id:
     fields: sanitizeConditionalLogicFields(
       rawFields.map((field) => ({
         ...field,
+        type: normalizeFieldType(field.type),
+        options: hasChoiceOptions(normalizeFieldType(field.type))
+          ? Array.isArray(field.options)
+            ? field.options.map((option) => String(option))
+            : []
+          : undefined,
         visibilityRules: normalizeLogicGroup(field.visibilityRules),
         requiredRules: normalizeLogicGroup(field.requiredRules),
       })),
@@ -451,11 +468,8 @@ function getSubjectPreview(form: FormSchema, answers: Record<string, unknown>) {
   if (!firstField) {
     return "Untitled signal";
   }
-  const raw = answers[firstField.id];
-  if (Array.isArray(raw)) {
-    return raw.join(", ") || firstField.label;
-  }
-  return String(raw ?? "").trim() || firstField.label;
+  const preview = formatAnswerText(firstField, answers[firstField.id], "en").trim();
+  return preview || firstField.label;
 }
 
 function getRatingValue(form: FormSchema, answers: Record<string, unknown>) {

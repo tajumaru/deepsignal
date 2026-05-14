@@ -1,6 +1,8 @@
 import type { ChangeEvent, DragEvent, KeyboardEvent } from "react";
 import { fieldTypeOptions } from "../lib/constants";
 import { useI18n } from "../i18n";
+import { getCountryFlag } from "../lib/countries";
+import { hasChoiceOptions } from "../lib/fieldTypes";
 import type { FieldType, FormField } from "../types";
 import {
   canFieldHaveConditionalChildren,
@@ -38,12 +40,7 @@ function normalizeFieldForType(field: FormField, type: FieldType) {
   return {
     ...field,
     type,
-    options:
-      type === "dropdown" || type === "checkbox"
-        ? field.options && field.options.length > 0
-          ? field.options
-          : ["Option 1", "Option 2"]
-        : undefined,
+    options: hasChoiceOptions(type) ? (field.options && field.options.length > 0 ? field.options : ["Option 1", "Option 2"]) : undefined,
   };
 }
 
@@ -140,8 +137,16 @@ export function FormFieldEditor({
       );
     }
 
-    if (field.type === "longText") {
-      return <textarea rows={4} disabled value="" placeholder={field.placeholder ?? t("helpTextExample")} readOnly />;
+    if (field.type === "longText" || field.type === "markdown") {
+      return (
+        <textarea
+          rows={field.type === "markdown" ? 6 : 4}
+          disabled
+          value=""
+          placeholder={field.placeholder ?? (field.type === "markdown" ? "# Add markdown-friendly prompt" : t("helpTextExample"))}
+          readOnly
+        />
+      );
     }
 
     if (field.type === "dropdown") {
@@ -157,6 +162,18 @@ export function FormFieldEditor({
       );
     }
 
+    if (field.type === "country_select") {
+      return (
+        <div className="composer-country-preview" aria-hidden="true">
+          <span className="composer-country-preview-main">
+            <span>{getCountryFlag("JP")}</span>
+            <strong>{field.placeholder?.trim() || "Search or select a country"}</strong>
+          </span>
+          <small className="muted">Flag, country name, and ISO code appear in responses.</small>
+        </div>
+      );
+    }
+
     if (field.type === "checkbox") {
       return (
         <div className="composer-canvas-checkboxes" aria-hidden="true">
@@ -166,6 +183,17 @@ export function FormFieldEditor({
               <span>{option}</span>
             </div>
           ))}
+        </div>
+      );
+    }
+
+    if (field.type === "confirmationCheckbox") {
+      return (
+        <div className="composer-canvas-checkboxes" aria-hidden="true">
+          <div className="composer-canvas-checkbox">
+            <span className="composer-canvas-checkbox-mark" />
+            <span>{field.placeholder?.trim() || "I confirm the above is correct"}</span>
+          </div>
         </div>
       );
     }
@@ -371,7 +399,7 @@ export function FormFieldEditor({
             </label>
           ) : null}
 
-          {(field.type === "dropdown" || field.type === "checkbox") && (
+          {hasChoiceOptions(field.type) && (
             <div className="composer-option-editor">
               <span>{t("optionsOnePerLine")}</span>
               <div className="composer-option-stack">

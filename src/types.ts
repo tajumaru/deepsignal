@@ -1,8 +1,11 @@
 export type FieldType =
   | "shortText"
   | "longText"
+  | "markdown"
   | "dropdown"
   | "checkbox"
+  | "country_select"
+  | "confirmationCheckbox"
   | "rating"
   | "url"
   | "screenshot"

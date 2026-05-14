@@ -9,7 +9,9 @@ import { Link, useLocation, useParams } from "react-router-dom";
 import { AdminAccessGate } from "../components/AdminAccessGate";
 import { BlobLink } from "../components/BlobLink";
 import { EmptyState } from "../components/EmptyState";
+import { FormattedAnswerValue } from "../components/FormattedAnswerValue";
 import { PrivateSignalUnlockCard } from "../components/PrivateSignalUnlockCard";
+import { RichTextContent } from "../components/RichText";
 import { SignalStatusBadges } from "../components/SignalStatusBadges";
 import { SignalMetaChip } from "../components/SignalMetaChip";
 import { useAccessControl } from "../hooks/useAccessControl";
@@ -17,6 +19,8 @@ import { getAttachmentDownloadHref, useAttachmentPreviews } from "../hooks/useAt
 import { getSealRuntimeStatus } from "../crypto/cryptoFactory";
 import { REAL_SEAL_SESSION_TTL_MIN } from "../crypto/sealPayload";
 import { useI18n } from "../i18n";
+import { formatAnswerText } from "../lib/answerFormatting";
+import { isAttachmentFieldType } from "../lib/fieldTypes";
 import { getReviewAccessState } from "../lib/adminAccess";
 import { exportSubmissionJson, exportSubmissionsCsv, exportSummaryJson } from "../lib/export";
 import { getPublicFormPath, getPublicRoadmapPath } from "../lib/publicLinks";
@@ -69,10 +73,6 @@ function getDecryptStatusMessage(
   }
 }
 
-function isAttachmentFieldType(type: FormSchema["fields"][number]["type"]) {
-  return type === "screenshot" || type === "video";
-}
-
 function matchesStream(submission: Submission, streamId: StreamId) {
   const category = inferSignalCategory(submission);
   switch (streamId) {
@@ -102,7 +102,7 @@ function matchesStream(submission: Submission, streamId: StreamId) {
 }
 
 export function FormSubmissionsPage() {
-  const { t } = useI18n();
+  const { language, t } = useI18n();
   const account = useCurrentAccount();
   const suiClient = useSuiClient();
   const signPersonalMessage = useSignPersonalMessage();
@@ -121,6 +121,14 @@ export function FormSubmissionsPage() {
   const sealRuntimeLabel = sealRuntime.isFallback
     ? "FALLBACK"
     : sealRuntime.activeMode.toUpperCase();
+
+  function renderAnswerValue(field: FormSchema["fields"][number], value: unknown) {
+    if (field.type === "markdown") {
+      const text = typeof value === "string" ? value : "";
+      return text ? <RichTextContent value={text} className="rich-text-content" /> : <p>{t("noAnswerLabel")}</p>;
+    }
+    return <FormattedAnswerValue field={field} value={value} emptyLabel={t("noAnswerLabel")} showCountryIso />;
+  }
   const [form, setForm] = useState<FormSchema | null>(null);
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [selectedSignalId, setSelectedSignalId] = useState(submissionId);
@@ -218,7 +226,15 @@ export function FormSubmissionsPage() {
         return result.signature;
       },
     }),
-    [account?.address, form?.projectId, signPersonalMessage, suiClient],
+    [
+      account?.address,
+      capabilityProfile.hasAdminCap,
+      capabilityProfile.hasOwnerCap,
+      capabilityProfile.reviewerCapIds,
+      form?.projectId,
+      signPersonalMessage,
+      suiClient,
+    ],
   );
   const attachmentPreviews = useAttachmentPreviews(detailAttachments, {
     enabled:
@@ -609,7 +625,7 @@ export function FormSubmissionsPage() {
         if (isAttachmentFieldType(field.type)) {
           return false;
         }
-        const value = flattenAnswer(resolvedDetailAnswers[field.id]).trim();
+        const value = formatAnswerText(field, resolvedDetailAnswers[field.id], language).trim();
         return Boolean(value);
       }).slice(0, 3)
     : [];
@@ -724,7 +740,7 @@ export function FormSubmissionsPage() {
                         {previewAnswerFields.map((field) => (
                           <div key={field.id} className="answer-line">
                             <strong>{field.label}</strong>
-                            <p>{flattenAnswer(detailAnswers[field.id]) || t("noAnswerLabel")}</p>
+                            {renderAnswerValue(field, detailAnswers[field.id])}
                           </div>
                         ))}
                         {renderAttachmentCards(detailAttachments)}
@@ -1065,7 +1081,7 @@ export function FormSubmissionsPage() {
                         {previewAnswerFields.map((field) => (
                           <div key={field.id} className="answer-line">
                             <strong>{field.label}</strong>
-                            <p>{flattenAnswer(resolvedDetailAnswers[field.id]) || t("noAnswerLabel")}</p>
+                            {renderAnswerValue(field, resolvedDetailAnswers[field.id])}
                           </div>
                         ))}
                         {renderAttachmentCards(detailAttachments)}

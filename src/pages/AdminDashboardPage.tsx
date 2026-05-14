@@ -9,8 +9,10 @@ import { CreateFormLink } from "../components/CreateFormLink";
 import { AdminAccessGate } from "../components/AdminAccessGate";
 import { BlobLink } from "../components/BlobLink";
 import { EmptyState } from "../components/EmptyState";
+import { FormattedAnswerValue } from "../components/FormattedAnswerValue";
 import { OperationsStatusRail, type OperationsStatusItem } from "../components/OperationsStatusRail";
 import { PrivateSignalUnlockCard } from "../components/PrivateSignalUnlockCard";
+import { RichTextContent } from "../components/RichText";
 import { SealStatusCard } from "../components/SealStatusCard";
 import { ShareCard } from "../components/ShareCard";
 import { SignalClusterPanel } from "../components/SignalClusterPanel";
@@ -27,6 +29,7 @@ import {
 import { getAttachmentDownloadHref, useAttachmentPreviews } from "../hooks/useAttachmentPreviews";
 import { useAccessControl } from "../hooks/useAccessControl";
 import { useI18n } from "../i18n";
+import { isAttachmentFieldType } from "../lib/fieldTypes";
 import {
   createMetadataDigest,
   registerSignalReceipt,
@@ -54,19 +57,11 @@ import {
   normalizeSubmission,
   storageAdapter,
 } from "../lib/storage";
-import { flattenAnswer, formatDate } from "../lib/utils";
+import { formatDate } from "../lib/utils";
 import { getStorageRuntimeStatus } from "../storage/storageFactory";
 import type { FormSchema, Submission } from "../types";
 
-const ROADMAP_READY_STATUSES = new Set<Submission["triageStatus"]>([
-  "planned",
-  "in_progress",
-  "fixed",
-]);
-
-function isAttachmentFieldType(type: FormSchema["fields"][number]["type"]) {
-  return type === "screenshot" || type === "video";
-}
+const ROADMAP_READY_STATUSES = new Set<Submission["triageStatus"]>(["planned", "in_progress", "fixed"]);
 
 function formatWorkspaceCount(count: number, singular: string, plural = `${singular}s`) {
   return `${count} ${count === 1 ? singular : plural}`;
@@ -194,6 +189,14 @@ export function AdminDashboardPage() {
   );
   const privateReviewLabel =
     sealRuntime.activeMode === "mock" ? "Private review ready" : "Private review enabled";
+
+  function renderAnswerValue(field: { type: string }, value: unknown) {
+    if (field.type === "markdown") {
+      const text = typeof value === "string" ? value : "";
+      return text ? <RichTextContent value={text} className="rich-text-content" /> : <p>{t("noAnswerLabel")}</p>;
+    }
+    return <FormattedAnswerValue field={field as FormSchema["fields"][number]} value={value} emptyLabel={t("noAnswerLabel")} showCountryIso />;
+  }
 
   useEffect(() => {
     if (!toast) {
@@ -853,9 +856,6 @@ export function AdminDashboardPage() {
     selectedPendingSignalIds.includes(record.submission.id),
   ).length;
   const hasProjects = projects.length > 0;
-  const projectIdentityDescription = selectedProject
-    ? "Create forms, collect private signals, review protected responses, and publish roadmap-ready updates from one workspace."
-    : "Choose or create a project, then publish your first protected form and start reviewing signals.";
 
   const nodeDirectoryItems = useMemo(() => {
     const normalizedSearch = nodeSearch.trim().toLowerCase();
@@ -1401,7 +1401,7 @@ export function AdminDashboardPage() {
                             .map((field) => (
                               <div key={field.id} className="answer-line">
                                 <strong>{field.label}</strong>
-                                <p>{flattenAnswer(detailAnswers[field.id]) || t("noAnswerLabel")}</p>
+                                {renderAnswerValue(field, detailAnswers[field.id])}
                               </div>
                             ))}
                           {renderAttachmentCards(detailAttachments)}

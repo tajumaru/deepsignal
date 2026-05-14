@@ -1,5 +1,7 @@
 import { useI18n } from "../i18n";
+import { isAttachmentFieldType } from "../lib/fieldTypes";
 import type { FormField } from "../types";
+import { CountrySelectQuestion } from "./CountrySelectQuestion";
 import { UploadDropzone, type UploadDropzoneItem } from "./UploadDropzone";
 
 interface DynamicFieldProps {
@@ -61,11 +63,11 @@ export function DynamicField({
         />
       ) : null}
 
-      {field.type === "longText" ? (
+      {field.type === "longText" || field.type === "markdown" ? (
         <textarea
-          rows={5}
+          rows={field.type === "markdown" ? 8 : 5}
           value={String(value ?? "")}
-          placeholder={field.placeholder ?? ""}
+          placeholder={field.placeholder ?? (field.type === "markdown" ? "# Share details here" : "")}
           disabled={disabled}
           aria-invalid={hasError}
           aria-describedby={hasError ? fieldErrorId : undefined}
@@ -90,6 +92,17 @@ export function DynamicField({
         </select>
       ) : null}
 
+      {field.type === "country_select" ? (
+        <CountrySelectQuestion
+          field={field}
+          value={value}
+          error={error}
+          disabled={disabled}
+          required={isRequired}
+          onChange={onChange}
+        />
+      ) : null}
+
       {field.type === "checkbox" ? (
         <div
           className={`checkbox-group ${hasError ? "is-error" : ""}`}
@@ -107,6 +120,24 @@ export function DynamicField({
               <span>{option}</span>
             </label>
           ))}
+        </div>
+      ) : null}
+
+      {field.type === "confirmationCheckbox" ? (
+        <div
+          className={`checkbox-group ${hasError ? "is-error" : ""}`}
+          aria-invalid={hasError}
+          aria-describedby={hasError ? fieldErrorId : undefined}
+        >
+          <label className="check-item">
+            <input
+              type="checkbox"
+              checked={Boolean(value)}
+              disabled={disabled}
+              onChange={(event) => onChange(event.target.checked)}
+            />
+            <span>{field.placeholder?.trim() || "I confirm"}</span>
+          </label>
         </div>
       ) : null}
 
@@ -153,7 +184,7 @@ export function DynamicField({
         />
       ) : null}
 
-      {field.type === "screenshot" || field.type === "video" ? (
+      {isAttachmentFieldType(field.type) ? (
         <div
           className={`upload-card ${hasError ? "is-error" : ""}`}
           aria-invalid={hasError}
