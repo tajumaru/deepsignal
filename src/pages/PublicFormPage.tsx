@@ -7,6 +7,7 @@ import { RichTextContent } from "../components/RichText";
 import { PublicFormSuccess } from "../features/public-form/components/PublicFormSuccess";
 import { PublicIdentityCard } from "../features/public-form/components/PublicIdentityCard";
 import { PublicSubmitReadiness } from "../features/public-form/components/PublicSubmitReadiness";
+import { SignalSubmissionPipeline } from "../features/public-form/components/SignalSubmissionPipeline";
 import { usePublicFormLoader } from "../features/public-form/hooks/usePublicFormLoader";
 import { usePublicSubmission } from "../features/public-form/hooks/usePublicSubmission";
 import { useI18n } from "../i18n";
@@ -40,6 +41,7 @@ export function PublicFormPage() {
     submitted,
     submitError,
     submitNotice,
+    submitPipeline,
     visibleFieldIds,
     updateAnswer,
     handleSubmit,
@@ -243,13 +245,15 @@ export function PublicFormPage() {
 
       <PublicSubmitReadiness submitModeLabel={submitModeLabel} storageModeLabel={storageModeLabel} />
 
+      <SignalSubmissionPipeline pipeline={submitPipeline} visible={submitting || submitPipeline.status === "failed"} />
+
       {submitError ? <p className="error-text">{submitError}</p> : null}
       <div className="public-form-actions">
         <button type="submit" className="primary-button" disabled={submitting || deadlinePassed}>
           {deadlinePassed
             ? "Submission closed"
             : submitting
-              ? t("submitting")
+              ? "Securing signal..."
               : walletRequired
                 ? account?.address
                   ? t("publicSubmitWithRequiredWallet")

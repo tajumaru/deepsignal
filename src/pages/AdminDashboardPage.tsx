@@ -941,11 +941,22 @@ export function AdminDashboardPage() {
                     const isPendingSui = submission.pendingOnchainRegistration;
                     const isSelectedForSui = selectedPendingSignalIds.includes(submission.id);
                     const isLocalOnlySignal = storageLabel === "Stored locally only";
+                    const isSelectedSignal = selectedRecord?.submission.id === submission.id;
                     return (
-                      <Link
+                      <div
                         key={submission.id}
-                        className={`signal-card ${submission.status === "unread" ? "is-unread" : "is-read"}`}
-                        to={`/admin/forms/${form.id}/submissions/${submission.id}`}
+                        className={`signal-card ${isSelectedSignal ? "is-active" : ""} ${submission.status === "unread" ? "is-unread" : "is-read"}`}
+                        role="button"
+                        tabIndex={0}
+                        aria-current={isSelectedSignal ? "true" : undefined}
+                        onClick={() => setSelectedSignalId(submission.id)}
+                        onKeyDown={(event) => {
+                          if (event.key !== "Enter" && event.key !== " ") {
+                            return;
+                          }
+                          event.preventDefault();
+                          setSelectedSignalId(submission.id);
+                        }}
                       >
                         <div className="signal-card-topline">
                           <strong>{getSignalSubject(submission)}</strong>
@@ -1000,7 +1011,7 @@ export function AdminDashboardPage() {
                             </button>
                           </div>
                         ) : null}
-                      </Link>
+                      </div>
                     );
                   })}
                 </div>

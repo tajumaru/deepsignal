@@ -209,7 +209,13 @@ export async function decryptAttachmentBlob(
   if (!encryptedPayload) {
     return null;
   }
-  const { plaintext: decrypted } = await decryptSensitiveResponse(encryptedPayload, context, seal);
+  const { plaintext: decrypted } = await decryptSensitiveResponse(encryptedPayload, context, seal, {
+    encryptedMarker: true,
+    diagnostics: {
+      encryptedBlobId: attachment.blobId,
+      source: "storage.readFileText",
+    },
+  });
   const blob = new Blob([fromBase64(decrypted)], {
     type: attachment.originalType || "application/octet-stream",
   });
@@ -253,10 +259,17 @@ export async function decryptSensitiveAnswers(
         return [fieldId, value] as const;
       }
       const encryptedValue = value as { encrypted?: boolean; value?: string };
-      if (!encryptedValue.encrypted || !encryptedValue.value) {
+      if (!encryptedValue.encrypted) {
         return [fieldId, value] as const;
       }
-      const { plaintext } = await decryptSensitiveResponse(encryptedValue.value, context, seal);
+      const encryptedPayload = typeof encryptedValue.value === "string" ? encryptedValue.value : "";
+      const { plaintext } = await decryptSensitiveResponse(encryptedPayload, context, seal, {
+        encryptedMarker: true,
+        diagnostics: {
+          formId: form.id,
+          source: "submission.answers.encryptedField",
+        },
+      });
       const decrypted = plaintext;
       return [fieldId, parseSensitiveValue(form, fieldId, decrypted)] as const;
     }),
@@ -539,7 +552,10 @@ export async function resolveSubmissionAnswers(
         ciphertextSize: envelope.encryptedObject.length,
       };
       logDecryptDiagnostic("payload_validated", diagnostics);
-      const decryptedResult = await decryptSensitiveResponse(payload, context, seal);
+      const decryptedResult = await decryptSensitiveResponse(payload, context, seal, {
+        encryptedMarker: true,
+        diagnostics,
+      });
       const decrypted = decryptedResult.plaintext;
       let parsed: {
         answers?: Record<string, unknown>;
@@ -603,6 +619,7 @@ export async function saveSubmissionWithEncryption(
   targetStorage: StorageAdapter = storageAdapter,
   messages?: {
     responseDeadlinePassed?: string;
+    onPipelineStage?: (stage: "encrypting" | "uploading_to_walrus") => void;
   },
 ): Promise<SaveSubmissionWithEncryptionResult> {
   if (isResponseDeadlinePassed(form.responseDeadline)) {
@@ -666,6 +683,7 @@ export async function saveSubmissionWithEncryption(
         answers: submission.answers,
         attachments: submission.attachments,
       });
+      messages?.onPipelineStage?.("encrypting");
       encryptedPayload = await encryptSensitiveResponse(payload, { projectId: form.projectId }, seal);
     }
     const parsedEnvelope = parseRealSealEnvelope(encryptedPayload);
@@ -681,6 +699,7 @@ export async function saveSubmissionWithEncryption(
       encryptedPayload,
       sealIdentity,
     };
+    messages?.onPipelineStage?.("uploading_to_walrus");
     const saved = await targetStorage.saveSubmission(metadataSubmission);
     return {
       ...saved,
@@ -701,5 +720,6 @@ export async function saveSubmissionWithEncryption(
     encryptedPayload: undefined,
     sealIdentity: undefined,
   };
+  messages?.onPipelineStage?.("uploading_to_walrus");
   return targetStorage.saveSubmission(standardSubmission);
 }

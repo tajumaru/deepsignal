@@ -1,4 +1,9 @@
 import type { SealAdapter, SealDecryptContext, SealEncryptContext } from "../types";
+import {
+  DecryptDiagnosticError,
+  type DecryptDiagnosticContext,
+  validateEncryptedPayloadOrThrow,
+} from "./decryptDiagnostics";
 import { sealClientAdapter } from "./sealClientAdapter";
 import {
   parseRealSealEnvelope,
@@ -43,6 +48,12 @@ export function isLegacyUnencryptedPayload(value: string | undefined | null) {
   return Boolean(value && !parseRealSealEnvelope(value));
 }
 
+export interface DecryptSensitiveResponseOptions {
+  allowLegacyUnencrypted?: boolean;
+  encryptedMarker?: boolean;
+  diagnostics?: DecryptDiagnosticContext;
+}
+
 function assertProductionSealAdapter(seal: SealAdapter) {
   if (!import.meta.env.DEV && seal !== sealServiceAdapter) {
     throw new Error("Production Seal runtime must use the real Seal adapter.");
@@ -73,17 +84,38 @@ export async function decryptSensitiveResponse(
   value: string,
   context: SealDecryptContext = {},
   seal: SealAdapter = sealServiceAdapter,
+  options: DecryptSensitiveResponseOptions = {},
 ) {
   assertProductionSealAdapter(seal);
-  if (!parseRealSealEnvelope(value)) {
-    return {
-      plaintext: value,
-      legacyUnencrypted: true,
-    };
+  const envelope = parseRealSealEnvelope(value);
+  if (!envelope) {
+    if (options.allowLegacyUnencrypted && options.encryptedMarker !== true) {
+      return {
+        plaintext: value,
+        legacyUnencrypted: true,
+      };
+    }
+    validateEncryptedPayloadOrThrow(value, options.diagnostics);
+    throw new DecryptDiagnosticError(
+      "INVALID_ENCRYPTED_PAYLOAD",
+      "Decrypt failed: INVALID_ENCRYPTED_PAYLOAD",
+      options.diagnostics,
+    );
   }
   const plaintext = await seal.decrypt(value, context);
   return {
     plaintext,
     legacyUnencrypted: false,
   };
+}
+
+export async function decryptLegacyUnencryptedResponse(
+  value: string,
+  context: SealDecryptContext = {},
+  seal: SealAdapter = sealServiceAdapter,
+) {
+  return decryptSensitiveResponse(value, context, seal, {
+    allowLegacyUnencrypted: true,
+    encryptedMarker: false,
+  });
 }

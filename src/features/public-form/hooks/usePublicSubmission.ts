@@ -19,6 +19,24 @@ import type { PublicAnswers, ValidationErrors } from "../types";
 const REAL_SEAL_PROJECT_REQUIRED_MESSAGE =
   "Real Seal encrypted submissions require a selected project. Choose a project or turn off Encrypt submissions.";
 
+export const SIGNAL_PIPELINE_STAGES = [
+  "preparing_signal",
+  "encrypting",
+  "uploading_to_walrus",
+  "confirming_blob",
+  "generating_manifest",
+  "signal_secured",
+] as const;
+
+export type SignalPipelineStage = (typeof SIGNAL_PIPELINE_STAGES)[number];
+export type SignalPipelineStatus = "idle" | "active" | "failed" | "complete";
+
+export interface SignalPipelineState {
+  stage: SignalPipelineStage;
+  status: SignalPipelineStatus;
+  message?: string;
+}
+
 function getUploadAnswer(value: unknown) {
   return Array.isArray(value)
     ? value.filter((item): item is UploadDropzoneItem => Boolean(item) && typeof item === "object" && "id" in item)
@@ -61,6 +79,10 @@ function formatUploadFailure(fieldLabel: string, error: unknown) {
   return `${fieldLabel}: ${detail} Remove the failed file or retry before sending your signal.`;
 }
 
+function pausePipelineStep(durationMs = 220) {
+  return new Promise((resolve) => window.setTimeout(resolve, durationMs));
+}
+
 interface UsePublicSubmissionArgs {
   form: FormSchema | null;
   initialAnswers: PublicAnswers;
@@ -94,6 +116,10 @@ export function usePublicSubmission({
   const [submitted, setSubmitted] = useState<Submission | null>(null);
   const [submitError, setSubmitError] = useState("");
   const [submitNotice, setSubmitNotice] = useState("");
+  const [submitPipeline, setSubmitPipeline] = useState<SignalPipelineState>({
+    stage: "preparing_signal",
+    status: "idle",
+  });
 
   useEffect(() => {
     setAnswers(initialAnswers);
@@ -101,6 +127,7 @@ export function usePublicSubmission({
     setSubmitted(null);
     setSubmitError("");
     setSubmitNotice("");
+    setSubmitPipeline({ stage: "preparing_signal", status: "idle" });
   }, [initialAnswers]);
 
   const attachmentFields = useMemo(
@@ -177,6 +204,18 @@ export function usePublicSubmission({
     return Object.keys(nextErrors).length === 0;
   }
 
+  function activatePipeline(stage: SignalPipelineStage, message?: string) {
+    setSubmitPipeline({ stage, status: "active", message });
+  }
+
+  function failPipeline(message: string) {
+    setSubmitPipeline((current) => ({
+      ...current,
+      status: "failed",
+      message,
+    }));
+  }
+
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
     if (!form || submitting) {
@@ -204,6 +243,7 @@ export function usePublicSubmission({
     setSubmitting(true);
     setSubmitError("");
     setSubmitNotice("");
+    activatePipeline("preparing_signal", "Preparing your message for secure delivery.");
     try {
       const signedAt = new Date().toISOString();
       const isAnonymous = walletRequired ? false : !attachWallet || !accountAddress;
@@ -257,6 +297,7 @@ export function usePublicSubmission({
 
             try {
               if (form.encryptSubmissions) {
+                activatePipeline("preparing_signal", `Packing ${file.name} into the protected signal.`);
                 const inlineAttachment = await createInlinePrivateAttachment(file);
                 window.clearInterval(progressTimer);
                 attachments.push({
@@ -271,6 +312,7 @@ export function usePublicSubmission({
                   ),
                 }));
               } else {
+                activatePipeline("uploading_to_walrus", `Uploading ${file.name} to Walrus.`);
                 const upload = await storageAdapter.uploadFile(file);
                 window.clearInterval(progressTimer);
                 attachments.push({
@@ -339,9 +381,31 @@ export function usePublicSubmission({
         updatedAt: signedAt,
       };
 
+      activatePipeline(
+        form.encryptSubmissions ? "encrypting" : "preparing_signal",
+        form.encryptSubmissions ? "Sealing the private payload for approved reviewers." : "Finalizing the signal envelope.",
+      );
       const result = await saveSubmissionWithEncryption(form, submission, undefined, storageAdapter, {
         responseDeadlinePassed: responseDeadlinePassedLabel,
+        onPipelineStage(stage) {
+          activatePipeline(
+            stage,
+            stage === "encrypting"
+              ? "Sealing the private payload for approved reviewers."
+              : "Writing the secured signal to Walrus.",
+          );
+        },
       });
+      activatePipeline(
+        "confirming_blob",
+        isLocalFallbackBlob(result.blobId) ? "Local fallback accepted the signal." : "Walrus accepted the signal blob.",
+      );
+      await pausePipelineStep();
+      activatePipeline(
+        "generating_manifest",
+        isLocalFallbackBlob(result.blobId) ? "Updating the local recovery index." : "Updating the recovery manifest.",
+      );
+      await pausePipelineStep();
       const savedSubmission = {
         ...submission,
         isEncrypted: Boolean(form.encryptSubmissions),
@@ -360,8 +424,11 @@ export function usePublicSubmission({
       }
       setSubmitted(savedSubmission);
       setSubmitNotice(notices.join(" "));
+      setSubmitPipeline({ stage: "signal_secured", status: "complete", message: "Signal secured." });
     } catch (error) {
-      setSubmitError(error instanceof Error ? error.message : submitFailedLabel);
+      const message = error instanceof Error ? error.message : submitFailedLabel;
+      setSubmitError(message);
+      failPipeline(message);
     } finally {
       setSubmitting(false);
     }
@@ -374,6 +441,7 @@ export function usePublicSubmission({
     submitted,
     submitError,
     submitNotice,
+    submitPipeline,
     visibleFieldIds,
     updateAnswer,
     handleSubmit,
