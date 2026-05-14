@@ -262,7 +262,7 @@ export function FormSubmissionsPage() {
                   <div>
                     <strong>{label}</strong>
                     <p className="muted">
-                      {attachment.type} · {Math.round(attachment.size / 1024)} KB
+                      {attachment.type} - {Math.round(attachment.size / 1024)} KB
                     </p>
                     {attachment.encrypted && preview?.error ? (
                       <p className="warning-text">{preview.error}</p>
@@ -647,6 +647,306 @@ export function FormSubmissionsPage() {
         ? t("privateSignalUnlockDisabled")
         : undefined;
 
+  const renderUnlockGate = () => {
+    if (!selectedSubmission?.isEncrypted) {
+      return null;
+    }
+
+    return (
+      <div className="review-unlock-block">
+        <PrivateSignalUnlockCard
+          onUnlock={() => void handleDecrypt()}
+          isDecrypting={isDecryptInteractionLocked}
+          isUnlocked={Boolean(detailAnswers)}
+          errorMessage={decryptError}
+          disabledReason={unlockDisabledReason}
+        >
+          {!isLocalFallbackBlob(selectedSubmission.encryptedBlobId) ? (
+            <BlobLink
+              blobId={selectedSubmission.encryptedBlobId}
+              label={t("verifyOnWalrus")}
+            />
+          ) : null}
+        </PrivateSignalUnlockCard>
+        {!detailAnswers ? (
+          <div className="review-unlock-context">
+            <strong>Unlock private signal to review</strong>
+            <p className="muted">Seal Runtime: {sealRuntimeLabel}</p>
+            <p className="muted">
+              {t("walletApprovalReuseNotice", { minutes: REAL_SEAL_SESSION_TTL_MIN })}
+            </p>
+            {decryptStatusMessage ? (
+              <p className="muted" role="status" aria-live="polite">{decryptStatusMessage}</p>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
+    );
+  };
+
+  const renderSignalDetailCard = () => {
+    if (!selectedSubmission) {
+      return null;
+    }
+
+    return (
+      <section className="answer-card signal-detail-primary-card">
+        <div className="section-row">
+          <h3>Signal Detail</h3>
+          {selectedSubmission.isEncrypted && detailAnswers ? (
+            <span className="signal-chip signal-chip-soft">Unlocked for review</span>
+          ) : null}
+        </div>
+        {detailAnswers ? (
+          <div className="stack">
+            {detailLegacyUnencrypted ? (
+              <p className="warning-text">Legacy unencrypted response - created before Seal enforcement</p>
+            ) : selectedSubmission.isEncrypted ? (
+              <div className="signal-badge-row signal-badge-row-compact signal-storage-badges">
+                <span className="signal-chip signal-chip-accent">Seal encrypted - creator/admin only</span>
+                {selectedSubmissionEncryptedBlobStoredOnWalrus && selectedSubmissionEncryptedBlobId ? (
+                  <>
+                    <span className="signal-chip signal-chip-soft">Stored on Walrus</span>
+                    <span className="signal-meta-inline">
+                      <span className="signal-meta-inline-label">Blob ID</span>
+                      <SignalMetaChip type="blob" value={selectedSubmissionEncryptedBlobId} />
+                    </span>
+                  </>
+                ) : null}
+              </div>
+            ) : null}
+            {previewAnswerFields.map((field) => (
+              <div key={field.id} className="answer-line">
+                <strong>{field.label}</strong>
+                {renderAnswerValue(field, resolvedDetailAnswers[field.id])}
+              </div>
+            ))}
+            {renderAttachmentCards(detailAttachments)}
+            {activeForm.fields.length > previewAnswerFields.length ? (
+              <p className="muted">Open Answers to view the full response.</p>
+            ) : null}
+          </div>
+        ) : (
+          <div className="review-locked-signal-copy">
+            <strong>Unlock private signal to review</strong>
+            <p className="muted">{t("encryptedFeedbackHidden")}</p>
+          </div>
+        )}
+      </section>
+    );
+  };
+
+  const renderReviewTriageCard = () => (
+    <section className="answer-card review-triage-card">
+      <div className="section-row">
+        <div>
+          <p className="eyebrow">Review workbench</p>
+          <h3>Review & Triage</h3>
+        </div>
+        <span className={`save-state-pill is-${saveState}`}>
+          {saveState === "saving"
+            ? "Saving signal ops..."
+            : saveState === "saved"
+              ? "Saved"
+              : saveState === "error"
+                ? "Save failed"
+                : "Ready"}
+        </span>
+      </div>
+      {saveError ? <p className="warning-text">{saveError}</p> : null}
+      <div className="review-field-grid">
+        <label>
+          <span>{t("status")}</span>
+          <select
+            value={statusDraft}
+            onChange={(event) =>
+              setStatusDraft(event.target.value as Submission["status"])
+            }
+          >
+            <option value="unread">{t("statusUnread")}</option>
+            <option value="read">{t("statusRead")}</option>
+            <option value="archived">{t("statusArchived")}</option>
+          </select>
+        </label>
+        <label>
+          <span>Signal Triage</span>
+          <select
+            value={triageStatusDraft}
+            onChange={(event) =>
+              setTriageStatusDraft(event.target.value as Submission["triageStatus"])
+            }
+          >
+            {TRIAGE_STATUS_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          <span>{t("priority")}</span>
+          <select
+            value={priorityDraft}
+            onChange={(event) =>
+              setPriorityDraft(event.target.value as Submission["priority"])
+            }
+          >
+            <option value="low">{t("priorityLow")}</option>
+            <option value="medium">{t("priorityMedium")}</option>
+            <option value="high">{t("priorityHigh")}</option>
+          </select>
+        </label>
+        <label>
+          <span>Signal Value</span>
+          <select
+            value={signalValueDraft}
+            onChange={(event) => setSignalValueDraft(event.target.value)}
+          >
+            <option value="">Not scored</option>
+            {[1, 2, 3, 4, 5].map((value) => (
+              <option key={value} value={value}>
+                {value}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+      <label>
+        <span>Internal note</span>
+        <textarea
+          rows={5}
+          value={notesDraft}
+          onChange={(event) => setNotesDraft(event.target.value)}
+          placeholder={t("captureReviewNotes")}
+        />
+      </label>
+      <div className="review-controls-actions">
+        <button
+          type="button"
+          className="primary-button"
+          disabled={saveState === "saving"}
+          onClick={() => void handleSaveReviewControls()}
+        >
+          Save Review Controls
+        </button>
+      </div>
+    </section>
+  );
+
+  const renderMetadataExportCard = () => {
+    if (!selectedSubmission) {
+      return null;
+    }
+
+    return (
+      <section className="answer-card review-secondary-card">
+        <div className="section-row">
+          <div>
+            <p className="eyebrow">Secondary tools</p>
+            <h3>Metadata / Export</h3>
+          </div>
+          <div className="inline-actions">
+            <button
+              type="button"
+              className="ghost-button"
+              onClick={() => exportSubmissionJson(form, selectedSubmission)}
+            >
+              {t("exportJson")}
+            </button>
+            <button
+              type="button"
+              className="ghost-button"
+              onClick={() => exportSubmissionsCsv(form, submissions)}
+              disabled={submissions.length === 0}
+            >
+              {t("exportCsv")}
+            </button>
+          </div>
+        </div>
+        <p className="export-privacy-note">
+          Private exports should be shared only with authorized team members.
+        </p>
+        <div className="metadata-list">
+          <div className="metadata-row">
+            <span>Seal unlock status</span>
+            <strong>{selectedSubmission.isEncrypted ? (detailAnswers ? "Unlocked" : "Locked") : "Not encrypted"}</strong>
+          </div>
+          <div className="metadata-row">
+            <span>{t("sealModeLabel")}</span>
+            <strong>{sealRuntimeLabel}</strong>
+          </div>
+          <div className="metadata-row">
+            <span>{t("submissionBlobIdLabel")}</span>
+            <div className="signal-meta-row-value">
+              {selectedSubmission.blobId ? (
+                <>
+                  <SignalMetaChip type="blob" value={selectedSubmission.blobId} />
+                  {!isLocalFallbackBlob(selectedSubmission.blobId) ? (
+                    <BlobLink blobId={selectedSubmission.blobId} label={t("verifyOnWalrus")} />
+                  ) : null}
+                </>
+              ) : (
+                <strong>{t("notAvailable")}</strong>
+              )}
+            </div>
+          </div>
+          {selectedSubmissionEncryptedBlobId ? (
+            <div className="metadata-row">
+              <span>{t("encryptedPayloadBlobId")}</span>
+              <div className="signal-meta-row-value">
+                <SignalMetaChip type="blob" value={selectedSubmissionEncryptedBlobId} />
+                {selectedSubmissionEncryptedBlobStoredOnWalrus ? (
+                  <BlobLink blobId={selectedSubmissionEncryptedBlobId} label={t("verifyOnWalrus")} />
+                ) : null}
+              </div>
+            </div>
+          ) : null}
+          <div className="metadata-row">
+            <span>Respondent</span>
+            <strong>{getRespondentDisplayLabel(selectedSubmission)}</strong>
+          </div>
+          <div className="metadata-row">
+            <span>{t("attachments")}</span>
+            <strong>{t("attachmentCountLabel", { count: detailAttachments.length })}</strong>
+          </div>
+        </div>
+      </section>
+    );
+  };
+
+  const renderReviewSecondaryPanels = () => {
+    if (!selectedSubmission) {
+      return null;
+    }
+
+    return (
+      <div className="signal-detail-sections review-secondary-sections">
+        {renderMetadataExportCard()}
+        {showSurveySummary ? (
+          <section className="answer-card review-secondary-card">
+            <div className="section-row">
+              <h3>{t("surveySummaryTitle")}</h3>
+              <span className="muted">{t("submissionCountLabel", { count: surveySummary.submissionCount })}</span>
+            </div>
+            <div className="metadata-list">
+              <div className="metadata-row">
+                <span>{t("submissionCount")}</span>
+                <strong>{surveySummary.submissionCount}</strong>
+              </div>
+              <div className="metadata-row">
+                <span>{t("averageRating")}</span>
+                <strong>{surveySummary.averageRating ?? t("notAvailable")}</strong>
+              </div>
+            </div>
+            {surveySummary.encryptedPendingCount > 0 ? (
+              <p className="warning-text">{t("surveySummaryEncryptedNotice")}</p>
+            ) : null}
+          </section>
+        ) : null}
+      </div>
+    );
+  };
+
   return (
     <AdminAccessGate
       hasWallet={Boolean(account?.address)}
@@ -683,17 +983,8 @@ export function FormSubmissionsPage() {
                     <h2>{getSignalSubject(selectedSubmission)}</h2>
                     <p className="muted">{formatDate(selectedSubmission.createdAt)}</p>
                   </div>
-                  <div className="inline-actions">
-                    <button
-                      type="button"
-                      className="ghost-button"
-                      onClick={() => exportSubmissionJson(form, selectedSubmission)}
-                    >
-                      {t("exportJson")}
-                    </button>
-                    <p className="export-privacy-note">
-                      Private exports should be shared only with authorized team members.
-                    </p>
+                  <div className="signal-detail-heading-support">
+                    <span className="signal-chip signal-chip-soft">Review first</span>
                   </div>
                 </div>
 
@@ -710,162 +1001,14 @@ export function FormSubmissionsPage() {
                   <span className="pill">Signal Value {selectedSubmission.signalValue ?? "N/A"}</span>
                 </div>
 
-                {selectedSubmission.isEncrypted ? (
-                  <PrivateSignalUnlockCard
-                    onUnlock={() => void handleDecrypt()}
-                    isDecrypting={isDecryptInteractionLocked}
-                    isUnlocked={Boolean(detailAnswers)}
-                    errorMessage={decryptError}
-                    disabledReason={unlockDisabledReason}
-                  >
-                    {!isLocalFallbackBlob(selectedSubmission.encryptedBlobId) ? (
-                      <BlobLink
-                        blobId={selectedSubmission.encryptedBlobId}
-                        label={t("verifyOnWalrus")}
-                      />
-                    ) : null}
-                  </PrivateSignalUnlockCard>
-                ) : null}
+                {renderUnlockGate()}
 
-                {selectedSubmission.isEncrypted && !detailAnswers ? (
-                  <div className="stack">
-                    <p className="muted">Seal Runtime: {sealRuntimeLabel}</p>
-                    <p className="muted">
-                      {t("walletApprovalReuseNotice", { minutes: REAL_SEAL_SESSION_TTL_MIN })}
-                    </p>
-                    {decryptStatusMessage ? (
-                      <p className="muted" role="status" aria-live="polite">{decryptStatusMessage}</p>
-                    ) : null}
-                  </div>
-                ) : null}
-
-                <div className="signal-detail-sections">
-                  <section className="answer-card">
-                    <h3>Signal Detail</h3>
-                    {detailAnswers ? (
-                      <div className="stack">
-                        {detailLegacyUnencrypted ? (
-                          <p className="warning-text">Legacy unencrypted response · created before Seal enforcement</p>
-                        ) : (
-                          <div className="signal-badge-row signal-badge-row-compact">
-                            <span className="signal-chip signal-chip-accent">Seal encrypted · creator/admin only</span>
-                            {selectedSubmissionEncryptedBlobStoredOnWalrus && selectedSubmissionEncryptedBlobId ? (
-                              <>
-                                <span className="signal-chip signal-chip-soft">Stored on Walrus</span>
-                                <span className="signal-meta-inline">
-                                  <span className="signal-meta-inline-label">Blob ID</span>
-                                  <SignalMetaChip type="blob" value={selectedSubmissionEncryptedBlobId} />
-                                </span>
-                              </>
-                            ) : null}
-                          </div>
-                        )}
-                        {previewAnswerFields.map((field) => (
-                          <div key={field.id} className="answer-line">
-                            <strong>{field.label}</strong>
-                            {renderAnswerValue(field, detailAnswers[field.id])}
-                          </div>
-                        ))}
-                        {renderAttachmentCards(detailAttachments)}
-                        {activeForm.fields.length > previewAnswerFields.length ? (
-                          <p className="muted">Open Answers to view the full response.</p>
-                        ) : null}
-                      </div>
-                    ) : (
-                      <p className="muted">{t("encryptedFeedbackHidden")}</p>
-                    )}
-                  </section>
-
-                  <section className="answer-card">
-                    <div className="section-row">
-                      <h3>Review Controls</h3>
-                      <span className={`save-state-pill is-${saveState}`}>
-                        {saveState === "saving"
-                          ? "Saving signal ops..."
-                          : saveState === "saved"
-                            ? "Saved"
-                            : saveState === "error"
-                              ? "Save failed"
-                              : "Ready"}
-                      </span>
-                    </div>
-                    {saveError ? <p className="warning-text">{saveError}</p> : null}
-                    <label>
-                      <span>{t("status")}</span>
-                      <select
-                        value={statusDraft}
-                        onChange={(event) =>
-                          setStatusDraft(event.target.value as Submission["status"])
-                        }
-                      >
-                        <option value="unread">{t("statusUnread")}</option>
-                        <option value="read">{t("statusRead")}</option>
-                        <option value="archived">{t("statusArchived")}</option>
-                      </select>
-                    </label>
-                    <label>
-                      <span>Signal Triage</span>
-                      <select
-                        value={triageStatusDraft}
-                        onChange={(event) =>
-                          setTriageStatusDraft(event.target.value as Submission["triageStatus"])
-                        }
-                      >
-                        {TRIAGE_STATUS_OPTIONS.map((option) => (
-                          <option key={option.value} value={option.value}>
-                            {option.label}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <label>
-                      <span>{t("priority")}</span>
-                      <select
-                        value={priorityDraft}
-                        onChange={(event) =>
-                          setPriorityDraft(event.target.value as Submission["priority"])
-                        }
-                      >
-                        <option value="low">{t("priorityLow")}</option>
-                        <option value="medium">{t("priorityMedium")}</option>
-                        <option value="high">{t("priorityHigh")}</option>
-                      </select>
-                    </label>
-                    <label>
-                      <span>Signal Value</span>
-                      <select
-                        value={signalValueDraft}
-                        onChange={(event) => setSignalValueDraft(event.target.value)}
-                      >
-                        <option value="">Not scored</option>
-                        {[1, 2, 3, 4, 5].map((value) => (
-                          <option key={value} value={value}>
-                            {value}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <label>
-                      <span>Note</span>
-                      <textarea
-                        rows={5}
-                        value={notesDraft}
-                        onChange={(event) => setNotesDraft(event.target.value)}
-                        placeholder={t("captureReviewNotes")}
-                      />
-                    </label>
-                    <div className="review-controls-actions">
-                      <button
-                        type="button"
-                        className="primary-button"
-                        disabled={saveState === "saving"}
-                        onClick={() => void handleSaveReviewControls()}
-                      >
-                        Save Review Controls
-                      </button>
-                    </div>
-                  </section>
+                <div className="signal-detail-sections review-primary-sections">
+                  {renderSignalDetailCard()}
+                  {renderReviewTriageCard()}
                 </div>
+                {renderReviewSecondaryPanels()}
+
               </>
             )}
           </article>
@@ -1044,17 +1187,8 @@ export function FormSubmissionsPage() {
                     <h2>{getSignalSubject(selectedSubmission)}</h2>
                     <p className="muted">{formatDate(selectedSubmission.createdAt)}</p>
                   </div>
-                  <div className="inline-actions">
-                    <button
-                      type="button"
-                      className="ghost-button"
-                      onClick={() => exportSubmissionJson(form, selectedSubmission)}
-                    >
-                      {t("exportJson")}
-                    </button>
-                    <p className="export-privacy-note">
-                      Private exports should be shared only with authorized team members.
-                    </p>
+                  <div className="signal-detail-heading-support">
+                    <span className="signal-chip signal-chip-soft">Review first</span>
                   </div>
                 </div>
 
@@ -1071,322 +1205,15 @@ export function FormSubmissionsPage() {
                   <span className="pill">Signal Value {selectedSubmission.signalValue ?? "N/A"}</span>
                 </div>
 
-                {selectedSubmission.isEncrypted ? (
-                  <PrivateSignalUnlockCard
-                    onUnlock={() => void handleDecrypt()}
-                    isDecrypting={isDecryptInteractionLocked}
-                    isUnlocked={Boolean(detailAnswers)}
-                    errorMessage={decryptError}
-                    disabledReason={unlockDisabledReason}
-                  >
-                    {!isLocalFallbackBlob(selectedSubmission.encryptedBlobId) ? (
-                      <BlobLink
-                        blobId={selectedSubmission.encryptedBlobId}
-                        label={t("verifyOnWalrus")}
-                      />
-                    ) : null}
-                  </PrivateSignalUnlockCard>
-                ) : null}
+                {renderUnlockGate()}
 
-                {selectedSubmission.isEncrypted && !detailAnswers ? (
-                  <div className="stack">
-                    <p className="muted">Seal Runtime: {sealRuntimeLabel}</p>
-                    <p className="muted">
-                      {t("walletApprovalReuseNotice", { minutes: REAL_SEAL_SESSION_TTL_MIN })}
-                    </p>
-                    {decryptStatusMessage ? (
-                      <p className="muted" role="status" aria-live="polite">{decryptStatusMessage}</p>
-                    ) : null}
-                  </div>
-                ) : null}
-
-                <div className="signal-detail-sections">
-                  <section className="answer-card">
-                    <h3>Signal Detail</h3>
-                    {detailAnswers ? (
-                      <div className="stack">
-                        {detailLegacyUnencrypted ? (
-                          <p className="warning-text">Legacy unencrypted response · created before Seal enforcement</p>
-                        ) : (
-                          <div className="signal-badge-row signal-badge-row-compact">
-                            <span className="signal-chip signal-chip-accent">Seal encrypted · creator/admin only</span>
-                            {selectedSubmissionEncryptedBlobStoredOnWalrus && selectedSubmissionEncryptedBlobId ? (
-                              <>
-                                <span className="signal-chip signal-chip-soft">Stored on Walrus</span>
-                                <span className="signal-meta-inline">
-                                  <span className="signal-meta-inline-label">Blob ID</span>
-                                  <SignalMetaChip type="blob" value={selectedSubmissionEncryptedBlobId} />
-                                </span>
-                              </>
-                            ) : null}
-                          </div>
-                        )}
-                        {previewAnswerFields.map((field) => (
-                          <div key={field.id} className="answer-line">
-                            <strong>{field.label}</strong>
-                            {renderAnswerValue(field, resolvedDetailAnswers[field.id])}
-                          </div>
-                        ))}
-                        {renderAttachmentCards(detailAttachments)}
-                        {activeForm.fields.length > previewAnswerFields.length ? (
-                          <p className="muted">Open Answers to view the full response.</p>
-                        ) : null}
-                      </div>
-                    ) : (
-                      <p className="muted">{t("encryptedFeedbackHidden")}</p>
-                    )}
-                  </section>
-
-                  <section className="answer-card">
-                    <div className="section-row">
-                      <h3>Review Controls</h3>
-                      <span className={`save-state-pill is-${saveState}`}>
-                        {saveState === "saving"
-                          ? "Saving signal ops..."
-                          : saveState === "saved"
-                            ? "Saved"
-                            : saveState === "error"
-                              ? "Save failed"
-                              : "Ready"}
-                      </span>
-                    </div>
-                    {saveError ? <p className="warning-text">{saveError}</p> : null}
-                    <label>
-                      <span>{t("status")}</span>
-                      <select
-                        value={selectedSubmission.status}
-                        onChange={(event) =>
-                          void updateSubmission({
-                            ...selectedSubmission,
-                            status: event.target.value as Submission["status"],
-                          })
-                        }
-                      >
-                        <option value="unread">{t("statusUnread")}</option>
-                        <option value="read">{t("statusRead")}</option>
-                        <option value="archived">{t("statusArchived")}</option>
-                      </select>
-                    </label>
-                    <label>
-                      <span>Signal Triage</span>
-                      <select
-                        value={selectedSubmission.triageStatus}
-                        onChange={(event) =>
-                          void updateSubmission({
-                            ...selectedSubmission,
-                            triageStatus: event.target.value as Submission["triageStatus"],
-                          })
-                        }
-                      >
-                        {TRIAGE_STATUS_OPTIONS.map((option) => (
-                          <option key={option.value} value={option.value}>
-                            {option.label}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <label>
-                      <span>{t("priority")}</span>
-                      <select
-                        value={selectedSubmission.priority}
-                        onChange={(event) =>
-                          void updateSubmission({
-                            ...selectedSubmission,
-                            priority: event.target.value as Submission["priority"],
-                          })
-                        }
-                      >
-                        <option value="low">{t("priorityLow")}</option>
-                        <option value="medium">{t("priorityMedium")}</option>
-                        <option value="high">{t("priorityHigh")}</option>
-                      </select>
-                    </label>
-                    <label>
-                      <span>Signal Value</span>
-                      <select
-                        value={selectedSubmission.signalValue?.toString() ?? ""}
-                        onChange={(event) =>
-                          void updateSubmission({
-                            ...selectedSubmission,
-                            signalValue: event.target.value ? Number(event.target.value) : undefined,
-                          })
-                        }
-                      >
-                        <option value="">Not scored</option>
-                        {[1, 2, 3, 4, 5].map((value) => (
-                          <option key={value} value={value}>
-                            {value}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                  </section>
+                <div className="signal-detail-sections review-primary-sections">
+                  {renderSignalDetailCard()}
+                  {renderReviewTriageCard()}
                 </div>
+                {renderReviewSecondaryPanels()}
 
-                {selectedSubmission ? (
-                <div className="signal-detail-sections">
-                  {showSurveySummary ? (
-                    <section className="answer-card">
-                      <div className="section-row">
-                        <h3>{t("surveySummaryTitle")}</h3>
-                        <span className="muted">{t("submissionCountLabel", { count: surveySummary.submissionCount })}</span>
-                      </div>
-                      <div className="metadata-list">
-                        <div className="metadata-row">
-                          <span>{t("submissionCount")}</span>
-                          <strong>{surveySummary.submissionCount}</strong>
-                        </div>
-                        <div className="metadata-row">
-                          <span>{t("averageRating")}</span>
-                          <strong>{surveySummary.averageRating ?? t("notAvailable")}</strong>
-                        </div>
-                      </div>
-                      {surveySummary.encryptedPendingCount > 0 ? (
-                        <p className="warning-text">{t("surveySummaryEncryptedNotice")}</p>
-                      ) : null}
-                    </section>
-                  ) : null}
 
-                  <section className="answer-card">
-                    <h3>{t("attachments")}</h3>
-                    {detailAttachments.length === 0 ? (
-                      <p className="muted">{t("noAttachments")}</p>
-                    ) : (
-                      <div className="stack">
-                        {detailAttachments.map((attachment) => (
-                          <div key={attachment.blobId} className="attachment-row">
-                            {(() => {
-                              const preview = attachmentPreviews[attachment.blobId];
-                              const label = preview?.name ?? attachment.originalName ?? attachment.name;
-                              const downloadHref = getAttachmentDownloadHref(attachment, preview);
-                              return (
-                                <>
-                            <div>
-                              <strong>{label}</strong>
-                              <p className="muted">
-                                {attachment.type} · {Math.round(attachment.size / 1024)} KB
-                              </p>
-                              {attachment.encrypted && preview?.error ? (
-                                <p className="warning-text">{preview.error}</p>
-                              ) : null}
-                              {preview?.kind === "image" && preview.url ? (
-                                <img
-                                  src={preview.url}
-                                  alt={label}
-                                  className="attachment-preview-image"
-                                />
-                              ) : null}
-                              {preview?.kind === "video" && preview.url ? (
-                                <video
-                                  src={preview.url}
-                                  className="attachment-preview-video"
-                                  controls
-                                />
-                              ) : null}
-                            </div>
-                            <div className="stack signal-meta-row-value">
-                              {attachment.storage === "inline" ? (
-                                <strong>Embedded in private signal</strong>
-                              ) : (
-                                <SignalMetaChip type="blob" value={attachment.blobId} />
-                              )}
-                              {attachment.storage !== "inline" && !isLocalFallbackBlob(attachment.blobId) ? (
-                                <BlobLink blobId={attachment.blobId} label={t("verifyOnWalrus")} />
-                              ) : null}
-                              {downloadHref ? (
-                                <a
-                                  className="ghost-button"
-                                  href={downloadHref}
-                                  download={label}
-                                >
-                                  Download attachment
-                                </a>
-                              ) : null}
-                            </div>
-                                </>
-                              );
-                            })()}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </section>
-
-                  <section className="answer-card" hidden>
-                    <div className="section-row">
-                      <h3>{t("tags")}</h3>
-                      <span className="muted">{selectedSubmission.tags.length}</span>
-                    </div>
-                    <div className="pill-row">
-                      {selectedSubmission.tags.map((tag) => (
-                        <button
-                          key={tag}
-                          type="button"
-                          className="tag-pill"
-                          onClick={() =>
-                            void updateSubmission({
-                              ...selectedSubmission,
-                              tags: selectedSubmission.tags.filter((item) => item !== tag),
-                            })
-                          }
-                        >
-                          {tag} ×
-                        </button>
-                      ))}
-                    </div>
-                    <div className="inline-actions">
-                      <input
-                        value={draftTag}
-                        onChange={(event) => setDraftTag(event.target.value)}
-                        placeholder={t("addTagPlaceholder")}
-                      />
-                      <button
-                        type="button"
-                        className="ghost-button"
-                        disabled={!draftTag.trim() || saveState === "saving"}
-                        onClick={() => {
-                          const nextTag = draftTag.trim();
-                          if (selectedSubmission.tags.includes(nextTag)) {
-                            setDraftTag("");
-                            return;
-                          }
-                          setDraftTag("");
-                          void updateSubmission({
-                            ...selectedSubmission,
-                            tags: [...selectedSubmission.tags, nextTag],
-                          });
-                        }}
-                      >
-                        {t("addTag")}
-                      </button>
-                    </div>
-                  </section>
-
-                  <section className="answer-card">
-                    <h3>{t("internalNotes")}</h3>
-                    <textarea
-                      rows={6}
-                      value={notesDraft}
-                      onChange={(event) => setNotesDraft(event.target.value)}
-                      placeholder={t("captureReviewNotes")}
-                    />
-                    <button
-                      type="button"
-                      className="primary-button"
-                      disabled={saveState === "saving"}
-                      onClick={() =>
-                        void updateSubmission({
-                          ...selectedSubmission,
-                          notes: notesDraft,
-                        })
-                      }
-                    >
-                      {t("saveNote")}
-                    </button>
-                  </section>
-
-                </div>
-                ) : null}
               </>
             )}
           </article>
