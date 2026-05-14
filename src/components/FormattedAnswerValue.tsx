@@ -1,6 +1,6 @@
 import { useI18n } from "../i18n";
+import { formatAnswerText } from "../lib/answerFormatting";
 import { findCountryOption } from "../lib/countries";
-import { flattenAnswer } from "../lib/utils";
 import type { FormField } from "../types";
 
 interface FormattedAnswerValueProps {
@@ -32,6 +32,6 @@ export function FormattedAnswerValue({
     }
   }
 
-  const text = flattenAnswer(value).trim();
+  const text = formatAnswerText(field, value, language).trim();
   return <span className="formatted-answer-value">{text || emptyLabel}</span>;
 }

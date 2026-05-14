@@ -25,10 +25,11 @@ export function DynamicField({
   disabled,
   onChange,
 }: DynamicFieldProps) {
-  const { t } = useI18n();
+  const { language, t } = useI18n();
   const isRequired = required ?? field.required;
   const fieldErrorId = `${field.id}-error`;
   const hasError = Boolean(error);
+  const dateInputLang = language === "ja" ? "ja-JP" : "en-US";
   const selectedAttachments = Array.isArray(value)
     ? value.filter((item): item is UploadDropzoneItem => Boolean(item) && typeof item === "object" && "id" in item)
     : [];
@@ -56,6 +57,18 @@ export function DynamicField({
         <input
           value={String(value ?? "")}
           placeholder={field.placeholder ?? ""}
+          disabled={disabled}
+          aria-invalid={hasError}
+          aria-describedby={hasError ? fieldErrorId : undefined}
+          onChange={(event) => onChange(event.target.value)}
+        />
+      ) : null}
+
+      {field.type === "date" ? (
+        <input
+          type="date"
+          lang={dateInputLang}
+          value={String(value ?? "")}
           disabled={disabled}
           aria-invalid={hasError}
           aria-describedby={hasError ? fieldErrorId : undefined}

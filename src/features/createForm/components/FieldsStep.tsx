@@ -41,6 +41,7 @@ const libraryBlocks: Array<{
   { type: "shortText", icon: "Aa", title: "Short Text" },
   { type: "longText", icon: "LT", title: "Long Text" },
   { type: "markdown", icon: "MD", title: "Rich Text / Markdown" },
+  { type: "date", icon: "CAL", title: "Date" },
   { type: "dropdown", icon: "v", title: "Dropdown" },
   { type: "checkbox", icon: "[]", title: "Checkboxes" },
   { type: "country_select", icon: "JP", title: "Country Select" },

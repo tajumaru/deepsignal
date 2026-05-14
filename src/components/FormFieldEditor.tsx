@@ -66,12 +66,13 @@ export function FormFieldEditor({
   onDragOver,
   onDrop,
 }: FormFieldEditorProps) {
-  const { fieldTypeLabel, t } = useI18n();
+  const { fieldTypeLabel, language, t } = useI18n();
   const isConditionalChild = isConditionalChildField(field);
   const conditionalParent = getConditionalParentField(field, fields);
   const conditionalOptions = getConditionalValueOptions(conditionalParent);
   const canAddConditionalQuestion = canFieldHaveConditionalChildren(field);
   const hasConditionalValue = hasValidConditionalValue(field, fields);
+  const dateInputLang = language === "ja" ? "ja-JP" : "en-US";
 
   function update<K extends keyof FormField>(key: K, value: FormField[K]) {
     onChange({ ...field, [key]: value });
@@ -126,12 +127,21 @@ export function FormFieldEditor({
   }
 
   function renderPreview() {
-    if (field.type === "shortText" || field.type === "url") {
+    if (field.type === "shortText" || field.type === "url" || field.type === "date") {
       return (
         <input
+          type={field.type === "date" ? "date" : field.type === "url" ? "url" : "text"}
+          lang={field.type === "date" ? dateInputLang : undefined}
           disabled
           value=""
-          placeholder={field.placeholder ?? (field.type === "url" ? "https://example.com" : t("placeholderExample"))}
+          placeholder={
+            field.placeholder ??
+            (field.type === "url"
+              ? "https://example.com"
+              : field.type === "date"
+                ? ""
+                : t("placeholderExample"))
+          }
           readOnly
         />
       );

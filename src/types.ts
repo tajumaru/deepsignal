@@ -2,6 +2,7 @@ export type FieldType =
   | "shortText"
   | "longText"
   | "markdown"
+  | "date"
   | "dropdown"
   | "checkbox"
   | "country_select"
