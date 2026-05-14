@@ -5708,9 +5708,10 @@ body.composer-mode .bg-orb {
 
 .composer-header-logo-grid {
   display: grid;
-  grid-template-columns: minmax(230px, 0.92fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 0.92fr) minmax(0, 1fr);
   gap: 0.8rem;
   align-items: stretch;
+  min-width: 0;
 }
 
 .composer-header-upload-control {
@@ -5757,9 +5758,10 @@ body.composer-mode .bg-orb {
 
 .signal-identity-layout {
   display: grid;
-  grid-template-columns: minmax(320px, 1.12fr) minmax(280px, 0.88fr);
+  grid-template-columns: minmax(0, 1.12fr) minmax(0, 0.88fr);
   gap: 1rem;
   align-items: start;
+  min-width: 0;
 }
 
 .signal-preview-stage {
@@ -5985,12 +5987,14 @@ body.composer-mode .bg-orb {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0.5rem;
+  min-width: 0;
 }
 
 .signal-position-selector button {
   display: grid;
   gap: 0.35rem;
   justify-items: center;
+  min-width: 0;
   min-height: 4.55rem;
   padding: 0.55rem 0.42rem;
   border-radius: 14px;
@@ -5998,6 +6002,7 @@ body.composer-mode .bg-orb {
   background: rgba(3, 14, 25, 0.64);
   color: #a9cad7;
   font-weight: 740;
+  overflow-wrap: anywhere;
   transition: border-color 160ms ease, color 160ms ease, background 160ms ease, box-shadow 160ms ease;
 }
 
@@ -11955,7 +11960,7 @@ body.composer-mode .bg-orb {
   }
 
   .signal-preview-stage {
-    position: relative;
+    position: static;
     top: auto;
   }
 
@@ -13105,10 +13110,11 @@ body.composer-mode .bg-orb {
 
   .signal-identity-layout {
     grid-template-columns: 1fr;
+    width: 100%;
   }
 
   .signal-preview-stage {
-    position: relative;
+    position: static;
     top: auto;
   }
 
