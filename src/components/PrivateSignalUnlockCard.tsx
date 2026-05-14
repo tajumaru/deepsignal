@@ -46,6 +46,39 @@ function LockIcon() {
   );
 }
 
+function OpenLockIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" className="private-signal-unlock-icon">
+      <path
+        d="M9 10V7.75a4 4 0 0 1 7.08-2.56"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <rect
+        x="5"
+        y="10"
+        width="14"
+        height="10"
+        rx="3"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+      />
+      <path
+        d="M12 13.25a1.75 1.75 0 0 1 .75 3.33V18"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 function SpinnerIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true" className="private-signal-action-icon private-signal-spinner">
@@ -56,21 +89,6 @@ function SpinnerIcon() {
         stroke="currentColor"
         strokeWidth="2"
         strokeLinecap="round"
-      />
-    </svg>
-  );
-}
-
-function CheckIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" className="private-signal-action-icon">
-      <path
-        d="M6.5 12.5 10 16l7.5-8"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
       />
     </svg>
   );
@@ -128,10 +146,22 @@ export function PrivateSignalUnlockCard({
 
   return (
     <section className={`private-signal-unlock-card is-${state}`} aria-live="polite">
-      <div className="private-signal-unlock-header">
-        <div className="private-signal-unlock-badge">
-          <LockIcon />
+      <div className="private-signal-vault-visual" aria-hidden="true">
+        <div className="private-signal-vault-lock">
+          {state === "success" ? <OpenLockIcon /> : <LockIcon />}
         </div>
+        <div className="private-signal-vault-grid">
+          {Array.from({ length: 18 }).map((_, index) => (
+            <span key={index} />
+          ))}
+        </div>
+      </div>
+      <div className="private-signal-unlock-header">
+        {state === "success" ? null : (
+          <div className="private-signal-unlock-badge">
+            <LockIcon />
+          </div>
+        )}
         <div className="private-signal-unlock-copy">
           <p className="eyebrow">{t("privateSignalLockedEyebrow")}</p>
           <h4>{isUnlocked ? t("privateSignalUnlockedTitle") : t("privateSignalLockedTitle")}</h4>
@@ -148,7 +178,6 @@ export function PrivateSignalUnlockCard({
           aria-describedby={statusMessage ? statusId : undefined}
         >
           {state === "loading" ? <SpinnerIcon /> : null}
-          {state === "success" ? <CheckIcon /> : null}
           {state === "error" || state === "idle" ? <LockIcon /> : null}
           <span>
             {state === "loading"

@@ -728,6 +728,14 @@ export function FormSubmissionsPage() {
           </div>
         ) : (
           <div className="review-locked-signal-copy">
+            <div className="classified-signal-redaction" aria-hidden="true">
+              <span />
+              <span />
+              <span />
+              <span />
+              <span />
+              <span />
+            </div>
             <strong>Unlock private signal to review and triage.</strong>
             <p className="muted">{t("encryptedFeedbackHidden")}</p>
           </div>
@@ -978,7 +986,7 @@ export function FormSubmissionsPage() {
                 <div className="signal-detail-heading">
                   <div>
                     <Link className="ghost-button signal-back-link" to={inboxPath}>
-                      Back to inbox
+                      {t("openInboxView")}
                     </Link>
                     <p className="eyebrow">Contributor Signal</p>
                     <h2>{getSignalSubject(selectedSubmission)}</h2>

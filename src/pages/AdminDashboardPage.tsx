@@ -88,7 +88,6 @@ export function AdminDashboardPage() {
   };
   const [saving, setSaving] = useState(false);
   const [notesDraft, setNotesDraft] = useState("");
-  const [draftTag, setDraftTag] = useState("");
   const [deletingFormId, setDeletingFormId] = useState<string | null>(null);
   const [deletingVisibleNodes, setDeletingVisibleNodes] = useState(false);
   const [showMetadata, setShowMetadata] = useState(false);
@@ -540,14 +539,12 @@ export function AdminDashboardPage() {
 
     if (!selectedRecord) {
       setNotesDraft("");
-      setDraftTag("");
       setShowMetadata(false);
       setShowEncryptedSignal(false);
       setDecryptError("");
       return;
     }
     setNotesDraft(selectedRecord.submission.notes);
-    setDraftTag("");
     setDecryptError("");
     setShowMetadata(false);
     setShowEncryptedSignal(false);
@@ -1123,15 +1120,18 @@ export function AdminDashboardPage() {
                                 {renderAnswerValue(field, detailAnswers[field.id])}
                               </div>
                             ))}
-                          <SignalAttachmentList
-                            attachments={detailAttachments}
-                            attachmentPreviews={attachmentPreviews}
-                            verifyOnWalrusLabel={t("verifyOnWalrus")}
-                          />
                         </div>
                       ) : selectedRecordNeedsDecrypt ? (
                         <div className="locked-signal-state">
                           <div className="locked-signal-copy">
+                            <div className="classified-signal-redaction" aria-hidden="true">
+                              <span />
+                              <span />
+                              <span />
+                              <span />
+                              <span />
+                              <span />
+                            </div>
                             <strong>{t("encryptedPrivateSignalStatus")}</strong>
                             <p>{t("requiresReviewerAccessDecryptHint")}</p>
                           </div>
@@ -1339,103 +1339,6 @@ export function AdminDashboardPage() {
                   </div>
 
                   <div className="signal-detail-sections review-secondary-sections">
-                    <section className="answer-card review-support-card review-inline-card">
-                      <div className="section-row">
-                        <div>
-                          <p className="eyebrow">Tags</p>
-                          <h3>{t("tags")}</h3>
-                        </div>
-                        <span className="muted">{selectedRecord.submission.tags.length}</span>
-                      </div>
-                      <div className="pill-row review-tag-list">
-                        {selectedRecord.submission.tags.length === 0 ? (
-                          <span className="muted">No tags yet.</span>
-                        ) : (
-                          selectedRecord.submission.tags.map((tag) => (
-                            <button
-                              key={tag}
-                              type="button"
-                              className="tag-pill"
-                              aria-label={`Remove tag ${tag}`}
-                              onClick={() =>
-                                void updateSubmission({
-                                  ...selectedRecord.submission,
-                                  tags: selectedRecord.submission.tags.filter((item) => item !== tag),
-                                })
-                              }
-                            >
-                              {tag} x
-                            </button>
-                          ))
-                        )}
-                      </div>
-                      <div className="inline-actions">
-                        <input
-                          value={draftTag}
-                          onChange={(event) => setDraftTag(event.target.value)}
-                          placeholder={t("addTagPlaceholder")}
-                        />
-                        <button
-                          type="button"
-                          className="ghost-button"
-                          disabled={!draftTag.trim() || saving}
-                          onClick={() => {
-                            const nextTag = draftTag.trim();
-                            if (selectedRecord.submission.tags.includes(nextTag)) {
-                              setDraftTag("");
-                              return;
-                            }
-                            setDraftTag("");
-                            void updateSubmission({
-                              ...selectedRecord.submission,
-                              tags: [...selectedRecord.submission.tags, nextTag],
-                            });
-                          }}
-                        >
-                          {t("addTag")}
-                        </button>
-                      </div>
-                    </section>
-
-                    <section className="answer-card review-support-card review-inline-card" hidden>
-                      <div className="section-row">
-                        <div>
-                          <p className="eyebrow">Internal Notes</p>
-                          <h3>{t("notesTitle")}</h3>
-                        </div>
-                        <span className="muted">{saving ? "Saving..." : "Private"}</span>
-                      </div>
-                      <textarea
-                        rows={4}
-                        value={notesDraft}
-                        onChange={(event) => setNotesDraft(event.target.value)}
-                        placeholder={t("captureReviewNotes")}
-                      />
-                      <div className="review-action-bar">
-                        <button
-                          type="button"
-                          className="ghost-button review-secondary-button"
-                          disabled={saving}
-                          onClick={() => setNotesDraft(selectedRecord.submission.notes)}
-                        >
-                          Reset
-                        </button>
-                        <button
-                          type="button"
-                          className="primary-button review-primary-button"
-                          disabled={saving}
-                          onClick={() =>
-                            void updateSubmission({
-                              ...selectedRecord.submission,
-                              notes: notesDraft,
-                            })
-                          }
-                        >
-                          {t("saveNote")}
-                        </button>
-                      </div>
-                    </section>
-
                     <section className="answer-card review-support-card contest-roadmap-card review-inline-card">
                       <div className="section-row">
                         <div>

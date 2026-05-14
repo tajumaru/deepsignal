@@ -74,8 +74,8 @@ export function usePrivateSignalDecrypt({
   const previousSelectedRecordIdRef = useRef<string | null>(null);
 
   useEffect(() => {
-    selectedSignalIdRef.current = selectedSignalId;
-  }, [selectedSignalId]);
+    selectedSignalIdRef.current = selectedRecord?.submission.id ?? selectedSignalId;
+  }, [selectedRecord?.submission.id, selectedSignalId]);
 
   const decryptContext = useMemo(
     () => ({
@@ -156,6 +156,12 @@ export function usePrivateSignalDecrypt({
       const isLatestRequest =
         activeDecryptRequestRef.current?.requestId === requestId &&
         activeDecryptRequestRef.current?.submissionId === submissionId;
+      if (!resolved) {
+        if (isLatestRequest && selectedSignalIdRef.current === submissionId) {
+          setDecryptError("Encrypted payload could not be found. Try refreshing the inbox, then unlock again.");
+        }
+        return;
+      }
       if (resolved && isLatestRequest && selectedSignalIdRef.current === submissionId) {
         setDetailAnswers(resolved.answers);
         setDetailAttachments(resolved.attachments);
