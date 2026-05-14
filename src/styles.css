@@ -5677,12 +5677,19 @@ body.composer-mode .bg-orb {
 }
 
 .composer-header-image-card {
+  position: relative;
   display: grid;
-  gap: 0.85rem;
-  padding: 0.95rem;
-  border-radius: 12px;
-  border: 1px solid rgba(116, 226, 255, 0.14);
-  background: rgba(8, 21, 34, 0.72);
+  gap: 1rem;
+  padding: clamp(1rem, 2vw, 1.25rem);
+  overflow: hidden;
+  border-radius: 18px;
+  border: 1px solid rgba(116, 226, 255, 0.16);
+  background:
+    linear-gradient(135deg, rgba(7, 21, 35, 0.94), rgba(5, 13, 25, 0.94)),
+    radial-gradient(circle at top right, rgba(100, 255, 218, 0.12), transparent 34%);
+  box-shadow:
+    inset 0 1px 0 rgba(215, 250, 255, 0.06),
+    0 22px 52px rgba(0, 0, 0, 0.18);
 }
 
 .composer-header-image-grid {
@@ -5694,16 +5701,16 @@ body.composer-mode .bg-orb {
 
 .composer-header-logo-card {
   display: grid;
-  gap: 0.85rem;
-  padding-top: 0.85rem;
-  border-top: 1px solid rgba(116, 226, 255, 0.12);
+  gap: 0.95rem;
+  padding-top: 0;
+  border-top: 0;
 }
 
 .composer-header-logo-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-columns: minmax(230px, 0.92fr) minmax(0, 1fr);
   gap: 0.8rem;
-  align-items: end;
+  align-items: stretch;
 }
 
 .composer-header-upload-control {
@@ -5720,6 +5727,344 @@ body.composer-mode .bg-orb {
 
 .composer-header-image-clear {
   justify-self: start;
+}
+
+.signal-identity-builder::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(rgba(126, 239, 255, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(126, 239, 255, 0.035) 1px, transparent 1px);
+  background-size: 26px 26px;
+  mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.78), transparent 72%);
+}
+
+.signal-identity-heading,
+.signal-identity-layout,
+.signal-logo-panel {
+  position: relative;
+  z-index: 1;
+}
+
+.signal-identity-heading span:not(.signal-chip) {
+  display: block;
+  color: #effcff;
+  font-size: 1.06rem;
+  font-weight: 760;
+}
+
+.signal-identity-layout {
+  display: grid;
+  grid-template-columns: minmax(320px, 1.12fr) minmax(280px, 0.88fr);
+  gap: 1rem;
+  align-items: start;
+}
+
+.signal-preview-stage {
+  position: sticky;
+  top: 110px;
+  min-width: 0;
+  padding: 0.55rem;
+  overflow: hidden;
+  border-radius: 18px;
+  border: 1px solid rgba(116, 226, 255, 0.18);
+  background:
+    linear-gradient(180deg, rgba(13, 37, 55, 0.78), rgba(4, 15, 26, 0.86)),
+    radial-gradient(circle at top left, rgba(87, 255, 220, 0.1), transparent 34%);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.025),
+    0 18px 36px rgba(0, 0, 0, 0.16);
+}
+
+.signal-preview-stage::before {
+  content: "";
+  position: absolute;
+  top: 0.85rem;
+  left: 0.9rem;
+  z-index: 3;
+  width: 4.2rem;
+  height: 1.2rem;
+  border-top: 1px solid rgba(134, 244, 255, 0.38);
+  border-left: 1px solid rgba(134, 244, 255, 0.38);
+  border-radius: 12px 0 0 0;
+  box-shadow: -6px -6px 18px rgba(91, 231, 255, 0.08);
+}
+
+.signal-preview-stage .form-header-image {
+  margin-bottom: 2.6rem;
+}
+
+.signal-preview-stage .form-header-image > img,
+.signal-preview-stage .form-header-default-art,
+.signal-preview-stage .form-header-logo {
+  animation: signalPreviewFade 380ms ease both;
+}
+
+.signal-preview-shimmer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(110deg, transparent 24%, rgba(196, 252, 255, 0.14) 46%, transparent 66%);
+  transform: translateX(-120%);
+  animation: signalPreviewShimmer 700ms ease both;
+}
+
+.signal-identity-controls,
+.signal-asset-panel {
+  display: grid;
+  gap: 0.9rem;
+  min-width: 0;
+}
+
+.signal-asset-panel {
+  padding: 0.95rem;
+  border-radius: 16px;
+  border: 1px solid rgba(116, 226, 255, 0.13);
+  background:
+    linear-gradient(180deg, rgba(6, 20, 33, 0.78), rgba(4, 14, 25, 0.7)),
+    radial-gradient(circle at top right, rgba(85, 255, 218, 0.07), transparent 32%);
+}
+
+.signal-logo-panel {
+  margin-top: 0.15rem;
+}
+
+.signal-asset-heading {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.signal-asset-heading strong,
+.signal-logo-panel strong {
+  color: #effcff;
+}
+
+.signal-asset-heading small {
+  color: #9fc2cf;
+}
+
+.signal-source-control {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.35rem;
+  padding: 0.32rem;
+  border-radius: 999px;
+  border: 1px solid rgba(116, 226, 255, 0.13);
+  background: rgba(2, 12, 22, 0.62);
+}
+
+.signal-source-control button {
+  min-height: 2.35rem;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: #a9cad7;
+  font-weight: 760;
+  transition: background 160ms ease, color 160ms ease, box-shadow 160ms ease;
+}
+
+.signal-source-control button:hover,
+.signal-source-control button:focus-visible {
+  color: #effcff;
+  box-shadow: 0 0 0 1px rgba(116, 226, 255, 0.18);
+}
+
+.signal-source-control button.is-active {
+  background: linear-gradient(135deg, rgba(32, 211, 238, 0.24), rgba(86, 126, 255, 0.2));
+  color: #f2fdff;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.09),
+    0 0 22px rgba(91, 231, 255, 0.12);
+}
+
+.signal-upload-zone {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.8rem;
+  align-items: center;
+  min-height: 116px;
+  padding: 0.95rem;
+  overflow: hidden;
+  cursor: pointer;
+  border-radius: 16px;
+  border: 1px dashed rgba(126, 239, 255, 0.3);
+  background:
+    radial-gradient(circle at 12% 18%, rgba(108, 255, 214, 0.13), transparent 28%),
+    rgba(3, 15, 26, 0.68);
+  transition: border-color 170ms ease, box-shadow 170ms ease, transform 170ms ease, background 170ms ease;
+}
+
+.signal-upload-zone:hover,
+.signal-upload-zone:focus-visible,
+.signal-upload-zone.is-dragging {
+  transform: translateY(-1px);
+  border-color: rgba(143, 251, 255, 0.66);
+  background:
+    radial-gradient(circle at 16% 18%, rgba(108, 255, 214, 0.18), transparent 30%),
+    rgba(6, 25, 42, 0.82);
+  box-shadow:
+    0 0 0 1px rgba(126, 239, 255, 0.12),
+    0 0 34px rgba(67, 219, 255, 0.16);
+}
+
+.signal-upload-zone input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.signal-upload-icon {
+  display: grid;
+  place-items: center;
+  width: 3.1rem;
+  height: 3.1rem;
+  border-radius: 14px;
+  border: 1px solid rgba(137, 244, 255, 0.22);
+  background:
+    linear-gradient(135deg, rgba(33, 219, 239, 0.18), rgba(91, 117, 255, 0.12)),
+    rgba(3, 16, 29, 0.86);
+  color: #c8fbff;
+}
+
+.signal-upload-icon svg {
+  width: 1.45rem;
+  height: 1.45rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.signal-upload-copy {
+  display: grid;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.signal-upload-copy strong {
+  color: #effcff;
+}
+
+.signal-upload-copy span {
+  color: #b8dce7;
+  line-height: 1.35;
+}
+
+.signal-upload-copy small {
+  color: #8faebb;
+  line-height: 1.35;
+}
+
+.signal-asset-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.8rem;
+}
+
+.signal-position-field {
+  display: grid;
+  gap: 0.45rem;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+}
+
+.signal-position-field legend {
+  color: #d9f8ff;
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.signal-position-selector {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+
+.signal-position-selector button {
+  display: grid;
+  gap: 0.35rem;
+  justify-items: center;
+  min-height: 4.55rem;
+  padding: 0.55rem 0.42rem;
+  border-radius: 14px;
+  border: 1px solid rgba(116, 226, 255, 0.13);
+  background: rgba(3, 14, 25, 0.64);
+  color: #a9cad7;
+  font-weight: 740;
+  transition: border-color 160ms ease, color 160ms ease, background 160ms ease, box-shadow 160ms ease;
+}
+
+.signal-position-selector button:hover,
+.signal-position-selector button:focus-visible,
+.signal-position-selector button.is-active {
+  border-color: rgba(139, 246, 255, 0.46);
+  color: #effcff;
+  background: rgba(9, 31, 48, 0.86);
+  box-shadow: 0 0 22px rgba(83, 231, 255, 0.11);
+}
+
+.position-glyph {
+  position: relative;
+  width: 2.1rem;
+  height: 1.35rem;
+  border-radius: 7px;
+  border: 1px solid rgba(141, 242, 255, 0.28);
+  background: linear-gradient(180deg, rgba(125, 235, 255, 0.1), rgba(81, 104, 255, 0.05));
+}
+
+.position-glyph i {
+  position: absolute;
+  left: 0.35rem;
+  right: 0.35rem;
+  height: 0.22rem;
+  border-radius: 999px;
+  background: #8df5ff;
+  box-shadow: 0 0 12px rgba(141, 245, 255, 0.45);
+}
+
+.position-glyph-top i {
+  top: 0.28rem;
+}
+
+.position-glyph-center i {
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.position-glyph-bottom i {
+  bottom: 0.28rem;
+}
+
+@keyframes signalPreviewFade {
+  from {
+    opacity: 0.42;
+    filter: saturate(0.78) brightness(1.16);
+  }
+  to {
+    opacity: 1;
+    filter: none;
+  }
+}
+
+@keyframes signalPreviewShimmer {
+  0% {
+    opacity: 0;
+    transform: translateX(-120%);
+  }
+  24% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(120%);
+  }
 }
 
 .form-header-image {
@@ -11604,8 +11949,14 @@ body.composer-mode .bg-orb {
   .landing-channel-grid,
   .landing-roadmap-flow,
   .landing-sonar-legend,
+  .signal-identity-layout,
   .explore-feed-stats {
     grid-template-columns: 1fr;
+  }
+
+  .signal-preview-stage {
+    position: relative;
+    top: auto;
   }
 
   .landing-shell {
@@ -12752,6 +13103,19 @@ body.composer-mode .bg-orb {
     grid-template-columns: 1fr;
   }
 
+  .signal-identity-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .signal-preview-stage {
+    position: relative;
+    top: auto;
+  }
+
+  .signal-position-selector {
+    grid-template-columns: 1fr;
+  }
+
   .composer-step-card,
   .composer-hero-card,
   .composer-section-card {
@@ -13442,6 +13806,10 @@ body.composer-mode .bg-orb {
   .beacon-particle,
   .beacon-scan,
   .beacon-qr-placeholder,
+  .signal-preview-stage .form-header-image > img,
+  .signal-preview-stage .form-header-default-art,
+  .signal-preview-stage .form-header-logo,
+  .signal-preview-shimmer,
   .explore-scanlines,
   .explore-dataflow,
   .explore-radar-sweep,

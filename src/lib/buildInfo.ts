@@ -15,14 +15,14 @@ const gitHash = import.meta.env.VITE_GIT_HASH || fallback;
 const appEnvironment = import.meta.env.VITE_APP_ENV || import.meta.env.MODE || fallback;
 
 const hashLabel = gitHash === fallback ? "local" : gitHash;
-const envLabel = appEnvironment === fallback ? "" : ` · ${appEnvironment}`;
+const envLabel = appEnvironment === fallback ? "" : ` - ${appEnvironment}`;
 
 export const buildInfo: BuildInfo = {
   appVersion,
   buildTime,
   gitHash,
   appEnvironment,
-  label: `v${appVersion} · build ${buildTime} · ${hashLabel}${envLabel}`,
+  label: `v${appVersion} - build ${buildTime} - ${hashLabel}${envLabel}`,
   copyText: [
     `DeepSignal v${appVersion}`,
     `build ${buildTime}`,
