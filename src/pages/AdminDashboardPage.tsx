@@ -1,7 +1,5 @@
 ﻿import {
   useCurrentAccount,
-  useSignAndExecuteTransaction,
-  useSuiClient,
 } from "@mysten/dapp-kit";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
@@ -10,7 +8,7 @@ import { AdminAccessGate } from "../components/AdminAccessGate";
 import { BlobLink } from "../components/BlobLink";
 import { EmptyState } from "../components/EmptyState";
 import { FormattedAnswerValue } from "../components/FormattedAnswerValue";
-import { OperationsStatusRail, type OperationsStatusItem } from "../components/OperationsStatusRail";
+import type { OperationsStatusItem } from "../components/OperationsStatusRail";
 import { PrivateSignalUnlockCard } from "../components/PrivateSignalUnlockCard";
 import { RichTextContent } from "../components/RichText";
 import { SealStatusCard } from "../components/SealStatusCard";
@@ -19,21 +17,22 @@ import { SignalClusterPanel } from "../components/SignalClusterPanel";
 import { SignalStatusBadges } from "../components/SignalStatusBadges";
 import { SignalMetaChip, SignalMetaRow } from "../components/SignalMetaChip";
 import { getSealRuntimeStatus } from "../crypto/cryptoFactory";
+import { AdminOperationsStatus } from "../features/admin/components/AdminOperationsStatus";
+import { AdminToast } from "../features/admin/components/AdminToast";
+import { SignalAttachmentList } from "../features/admin/components/SignalAttachmentList";
+import { SignalStreamsNav } from "../features/admin/components/SignalStreamsNav";
+import { useAdminToast } from "../features/admin/hooks/useAdminToast";
+import { usePendingSuiRegistration } from "../features/admin/hooks/usePendingSuiRegistration";
 import { usePrivateSignalDecrypt } from "../features/admin/hooks/usePrivateSignalDecrypt";
 import { useProjectWorkspace } from "../features/admin/hooks/useProjectWorkspace";
 import {
   useSignalInboxData,
-  type SignalRecord,
   type StreamId,
 } from "../features/admin/hooks/useSignalInboxData";
-import { getAttachmentDownloadHref, useAttachmentPreviews } from "../hooks/useAttachmentPreviews";
+import { useAttachmentPreviews } from "../hooks/useAttachmentPreviews";
 import { useAccessControl } from "../hooks/useAccessControl";
 import { useI18n } from "../i18n";
 import { isAttachmentFieldType } from "../lib/fieldTypes";
-import {
-  createMetadataDigest,
-  registerSignalReceipt,
-} from "../lib/projectRegistry";
 import {
   canAdmin,
   canReview,
@@ -74,13 +73,11 @@ function formatAccessLabel(roleLabel: string) {
 export function AdminDashboardPage() {
   const { t } = useI18n();
   const account = useCurrentAccount();
-  const suiClient = useSuiClient();
   const {
     capabilityProfile,
     isPending: isLoadingCapabilities,
     isLoadingAccess,
   } = useAccessControl(account?.address);
-  const registerSignalReceiptTx = useSignAndExecuteTransaction();
   const sealRuntime = getSealRuntimeStatus();
   const storageRuntime = getStorageRuntimeStatus();
   const responseDeadlineLabels: ResponseDeadlineLabels = {
@@ -99,9 +96,7 @@ export function AdminDashboardPage() {
   const [nodeDirectoryOpen, setNodeDirectoryOpen] = useState(false);
   const [beaconFormId, setBeaconFormId] = useState<string | null>(null);
   const [nodeSearch, setNodeSearch] = useState("");
-  const [toast, setToast] = useState<{ tone: "success" | "error"; message: string } | null>(null);
-  const [selectedPendingSignalIds, setSelectedPendingSignalIds] = useState<string[]>([]);
-  const [registeringSignalIds, setRegisteringSignalIds] = useState<string[]>([]);
+  const { toast, setToast } = useAdminToast();
   const saveQueueRef = useRef(Promise.resolve());
   const reviewInboxRef = useRef<HTMLDivElement | null>(null);
   const hasAdminAccess = canAdmin(capabilityProfile);
@@ -129,6 +124,18 @@ export function AdminDashboardPage() {
   } = useSignalInboxData({
     accountAddress: account?.address,
     capabilityProfile,
+  });
+  const {
+    selectedPendingSignalIds,
+    registeringSignalIds,
+    isRegisteringSignal,
+    togglePendingSelection,
+    handleRegisterPendingSignals,
+  } = usePendingSuiRegistration({
+    allSignals,
+    pendingSignalIdSet: signalIndex.pendingSignalIdSet,
+    applySubmissionUpdate,
+    setToast,
   });
   const {
     projects,
@@ -197,14 +204,6 @@ export function AdminDashboardPage() {
     }
     return <FormattedAnswerValue field={field as FormSchema["fields"][number]} value={value} emptyLabel={t("noAnswerLabel")} showCountryIso />;
   }
-
-  useEffect(() => {
-    if (!toast) {
-      return;
-    }
-    const timer = window.setTimeout(() => setToast(null), 3200);
-    return () => window.clearTimeout(timer);
-  }, [toast]);
 
   async function handleDelete(formId: string) {
     if (!window.confirm(t("deleteFormConfirm"))) {
@@ -279,86 +278,12 @@ export function AdminDashboardPage() {
         : [],
     [allSignals, selectedProject],
   );
-  useEffect(() => {
-    setSelectedPendingSignalIds((current) =>
-      current.filter((signalId) =>
-        signalIndex.pendingSignalIdSet.has(signalId),
-      ),
-    );
-  }, [signalIndex]);
   const attachmentPreviews = useAttachmentPreviews(detailAttachments, {
     enabled:
       detailAttachments.length > 0 &&
       (!detailAttachments.some((attachment) => attachment.encrypted) || Boolean(detailAnswers)),
     decryptContext: attachmentDecryptContext,
   });
-  const renderAttachmentCards = (attachments: Submission["attachments"]) => {
-    if (attachments.length === 0) {
-      return null;
-    }
-    return (
-      <div className="stack">
-        {attachments.map((attachment) => (
-          <div key={attachment.blobId} className="attachment-row">
-            {(() => {
-              const preview = attachmentPreviews[attachment.blobId];
-              const label = preview?.name ?? attachment.originalName ?? attachment.name;
-              const downloadHref = getAttachmentDownloadHref(attachment, preview);
-              return (
-                <>
-                  <div>
-                    <strong>{label}</strong>
-                    <p className="muted">
-                      {attachment.type} · {Math.round(attachment.size / 1024)} KB
-                    </p>
-                    {attachment.encrypted && preview?.error ? (
-                      <p className="warning-text">{preview.error}</p>
-                    ) : null}
-                    {preview?.kind === "image" && preview.url ? (
-                      <img
-                        src={preview.url}
-                        alt={label}
-                        className="attachment-preview-image"
-                      />
-                    ) : null}
-                    {preview?.kind === "video" && preview.url ? (
-                      <video
-                        src={preview.url}
-                        className="attachment-preview-video"
-                        controls
-                      />
-                    ) : null}
-                  </div>
-                  <div className="stack signal-meta-row-value">
-                    {attachment.storage === "inline" ? (
-                      <strong>Embedded in private signal</strong>
-                    ) : (
-                      <SignalMetaChip type="blob" value={attachment.blobId} />
-                    )}
-                    {attachment.storage !== "inline" && !isLocalFallbackBlob(attachment.blobId) ? (
-                      <BlobLink
-                        blobId={attachment.blobId}
-                        label={t("verifyOnWalrus")}
-                      />
-                    ) : null}
-                    {downloadHref ? (
-                      <a
-                        className="ghost-button"
-                        href={downloadHref}
-                        download={label}
-                      >
-                        Download attachment
-                      </a>
-                    ) : null}
-                  </div>
-                </>
-              );
-            })()}
-          </div>
-        ))}
-      </div>
-    );
-  };
   const roadmapReadySignals = useMemo(
     () => selectedProjectSignals.filter((record) => ROADMAP_READY_STATUSES.has(record.submission.triageStatus)),
     [selectedProjectSignals],
@@ -636,134 +561,6 @@ export function AdminDashboardPage() {
     await saveQueueRef.current;
   }
 
-  function isRegisteringSignal(signalId: string) {
-    return registeringSignalIds.includes(signalId);
-  }
-
-  function togglePendingSelection(signalId: string) {
-    setSelectedPendingSignalIds((current) =>
-      current.includes(signalId)
-        ? current.filter((entry) => entry !== signalId)
-        : [...current, signalId],
-    );
-  }
-
-  async function registerSubmissionRecordOnSui(record: SignalRecord) {
-    const { form, submission } = record;
-    if (
-      !form.projectId ||
-      typeof form.onchainFormId !== "number" ||
-      !submission.receiptBlobId ||
-      isLocalFallbackBlob(submission.receiptBlobId)
-    ) {
-      throw new Error("This signal is not eligible for Sui registration yet.");
-    }
-
-    const signalReceiptMetadataDigest = await createMetadataDigest({
-      submissionId: submission.id,
-      formId: submission.formId,
-      createdAt: submission.createdAt,
-      receiptBlobId: submission.receiptBlobId,
-      attachmentBlobIds: submission.attachments.map((attachment) => attachment.blobId),
-      encrypted: submission.isEncrypted,
-      sealIdentity: submission.sealIdentity ?? null,
-      respondentWalletAddress: submission.respondentMeta?.walletAddress ?? null,
-      respondentSessionId: submission.respondentMeta?.sessionId ?? null,
-      isAnonymous: submission.respondentMeta?.isAnonymous ?? true,
-    });
-    const tx = registerSignalReceipt({
-      projectId: form.projectId,
-      formId: form.onchainFormId,
-      walrusBlobId: submission.receiptBlobId,
-      metadataDigest: signalReceiptMetadataDigest,
-      encrypted: submission.isEncrypted,
-      sealIdentity: submission.sealIdentity ?? null,
-    });
-    const result = await registerSignalReceiptTx.mutateAsync({ transaction: tx });
-    const confirmed = await suiClient.waitForTransaction({
-      digest: result.digest,
-      options: { showEvents: true },
-    });
-    const signalRegisteredEvent = (confirmed.events ?? []).find((chainEvent) =>
-      String(chainEvent.type ?? "").endsWith("::SignalRegistered"),
-    );
-    const rawSignalId = (signalRegisteredEvent?.parsedJson as { signal_id?: string | number } | undefined)?.signal_id;
-    const parsedSignalId = typeof rawSignalId === "number" ? rawSignalId : Number(rawSignalId ?? Number.NaN);
-    const registeredSubmission = normalizeSubmission({
-      ...submission,
-      pendingOnchainRegistration: false,
-      onchainSignalId: Number.isFinite(parsedSignalId) ? parsedSignalId : undefined,
-      signalReceiptMetadataDigest,
-      onchainStatus: "new",
-      updatedAt: new Date().toISOString(),
-    });
-    await storageAdapter.updateSubmission(registeredSubmission);
-    applySubmissionUpdate(registeredSubmission);
-    return registeredSubmission;
-  }
-
-  async function handleRegisterPendingSignals(targetSignalIds?: string[]) {
-    const nextTargetIds = (targetSignalIds ?? selectedPendingSignalIds).filter(Boolean);
-    if (nextTargetIds.length === 0) {
-      setToast({ tone: "error", message: "Select at least one pending signal first." });
-      return;
-    }
-
-    const targetRecords = nextTargetIds
-      .map((signalId) =>
-        allSignals.find(
-          (record) =>
-            record.submission.id === signalId && record.submission.pendingOnchainRegistration,
-        ) ?? null,
-      )
-      .filter((record): record is SignalRecord => Boolean(record));
-    if (targetRecords.length === 0) {
-      setToast({ tone: "error", message: "No pending Sui registrations were found for the selected signals." });
-      return;
-    }
-
-    setRegisteringSignalIds((current) => [...new Set([...current, ...targetRecords.map((record) => record.submission.id)])]);
-    const successes: string[] = [];
-    const failures: string[] = [];
-
-    for (const record of targetRecords) {
-      try {
-        await registerSubmissionRecordOnSui(record);
-        successes.push(record.submission.id);
-      } catch (error) {
-        console.warn("register_signal failed from admin dashboard", error);
-        failures.push(
-          error instanceof Error
-            ? `${getSignalSubject(record.submission)}: ${error.message}`
-            : `${getSignalSubject(record.submission)}: Failed to register on Sui.`,
-        );
-      }
-    }
-
-    setRegisteringSignalIds((current) =>
-      current.filter((signalId) => !targetRecords.some((record) => record.submission.id === signalId)),
-    );
-    if (successes.length > 0) {
-      setSelectedPendingSignalIds((current) =>
-        current.filter((signalId) => !successes.includes(signalId)),
-      );
-    }
-    if (failures.length > 0) {
-      setToast({
-        tone: successes.length > 0 ? "success" : "error",
-        message:
-          successes.length > 0
-            ? `Registered ${successes.length} signal${successes.length === 1 ? "" : "s"} on Sui. ${failures[0]}`
-            : failures[0],
-      });
-      return;
-    }
-    setToast({
-      tone: "success",
-      message: `Registered ${successes.length} pending signal${successes.length === 1 ? "" : "s"} on Sui.`,
-    });
-  }
-
   async function handleMoveToRoadmap() {
     if (!selectedRecord) {
       return;
@@ -922,11 +719,7 @@ export function AdminDashboardPage() {
       deniedBody={capabilityProfile.isConfigured ? "Only wallets with OwnerCap / AdminCap / ReviewerCap can open the review console." : undefined}
     >
       <section className="stack">
-        {toast ? (
-          <div className={`signal-toast is-${toast.tone}`} role="status" aria-live="polite">
-            {toast.message}
-          </div>
-        ) : null}
+        <AdminToast toast={toast} />
 
         <section className="panel glow-panel workspace-hero workspace-hero-compact">
           <div className="workspace-hero-main workspace-overview-shell">
@@ -1017,93 +810,24 @@ export function AdminDashboardPage() {
             </div>
 
             <div className="signal-console-layout admin-console-layout signal-console-layout-priority">
-            <aside className="panel signal-sidebar">
-              <div className="signal-sidebar-section">
-                <div>
-                  <p className="eyebrow">Streams</p>
-                  <h2>Streams</h2>
-                </div>
-                <div className="stream-list">
-                  {streamItems.map((stream) => (
-                    <button
-                      key={stream.id}
-                      type="button"
-                      className={`stream-item ${selectedStreamId === stream.id ? "is-active" : ""}`}
-                      onClick={() => setSelectedStreamId(stream.id)}
-                    >
-                      <span>{stream.label}</span>
-                      <strong>{stream.count}</strong>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="signal-sidebar-section">
-                <div className="section-row">
-                  <p className="eyebrow">Forms</p>
-                  <span className="muted">{accessibleForms.length}</span>
-                </div>
-                <div className="form-stream-list">
-                  <button
-                    type="button"
-                    className={`form-stream-item ${selectedFormId === "all" ? "is-active" : ""}`}
-                    onClick={() => setSelectedFormId("all")}
-                  >
-                    <div className="form-stream-select">
-                      <strong>{t("allSignalNodes")}</strong>
-                      <p className="muted">{allSignals.length} signals across every form inbox.</p>
-                    </div>
-                    <div className="form-stream-actions">
-                      <span className="signal-chip">{visibleUnreadCount} unread</span>
-                      <span className="signal-chip signal-chip-soft">{allSignals.length} total</span>
-                    </div>
-                  </button>
-                  {accessibleForms.map((form) => {
-                    const isSelected = selectedFormId === form.id;
-                    const unreadCount = unreadCountByFormId[form.id] ?? 0;
-                    return (
-                      <button
-                        key={form.id}
-                        type="button"
-                        className={`form-stream-item ${isSelected ? "is-active" : ""}`}
-                        onClick={() => setSelectedFormId(form.id)}
-                      >
-                        <div className="form-stream-select">
-                          <strong>{form.title}</strong>
-                          <p className="muted">
-                            {form.submissionCount} signals
-                            {form.encryptSubmissions ? " · protected inbox" : " · open inbox"}
-                          </p>
-                          <p className="muted">{t("responseDeadlineLabel")}: {formatResponseDeadline(form.responseDeadline, responseDeadlineLabels)}</p>
-                        </div>
-                        <div className="form-stream-actions">
-                          <span className="signal-chip">{unreadCount} unread</span>
-                          {form.projectId ? (
-                            <span className="signal-chip signal-chip-soft">Project linked</span>
-                          ) : null}
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-                <div className="signal-node-summary">
-                  <div className="signal-node-summary-copy">
-                    <strong>{activeScopeLabel}</strong>
-                    <p className="muted">
-                      {t("activeNodeSummary", { count: accessibleForms.length })}
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    className="primary-button signal-node-directory-trigger"
-                    onClick={() => setNodeDirectoryOpen(true)}
-                  >
-                    {t("openNodeDirectory")}
-                  </button>
-                </div>
-              </div>
-
-            </aside>
+            <SignalStreamsNav
+              streamItems={streamItems}
+              selectedStreamId={selectedStreamId}
+              onSelectStream={setSelectedStreamId}
+              accessibleForms={accessibleForms}
+              selectedFormId={selectedFormId}
+              onSelectForm={setSelectedFormId}
+              unreadCountByFormId={unreadCountByFormId}
+              visibleUnreadCount={visibleUnreadCount}
+              allSignalsCount={allSignals.length}
+              activeScopeLabel={activeScopeLabel}
+              activeNodeSummary={t("activeNodeSummary", { count: accessibleForms.length })}
+              allSignalNodesLabel={t("allSignalNodes")}
+              responseDeadlineLabel={t("responseDeadlineLabel")}
+              responseDeadlineLabels={responseDeadlineLabels}
+              openNodeDirectoryLabel={t("openNodeDirectory")}
+              onOpenNodeDirectory={() => setNodeDirectoryOpen(true)}
+            />
 
             <section className="panel signal-inbox-column">
               <div className="signal-column-header">
@@ -1404,7 +1128,11 @@ export function AdminDashboardPage() {
                                 {renderAnswerValue(field, detailAnswers[field.id])}
                               </div>
                             ))}
-                          {renderAttachmentCards(detailAttachments)}
+                          <SignalAttachmentList
+                            attachments={detailAttachments}
+                            attachmentPreviews={attachmentPreviews}
+                            verifyOnWalrusLabel={t("verifyOnWalrus")}
+                          />
                         </div>
                       ) : selectedRecordNeedsDecrypt ? (
                         <div className="locked-signal-state">
@@ -1434,66 +1162,11 @@ export function AdminDashboardPage() {
                       ) : detailAttachments.length === 0 ? (
                         <p className="muted">{t("noAttachments")}</p>
                       ) : (
-                        <div className="stack">
-                          {detailAttachments.map((attachment) => (
-                            <div key={attachment.blobId} className="attachment-row">
-                              {(() => {
-                                const preview = attachmentPreviews[attachment.blobId];
-                                const label = preview?.name ?? attachment.originalName ?? attachment.name;
-                                const downloadHref = getAttachmentDownloadHref(attachment, preview);
-                                return (
-                                  <>
-                              <div>
-                                <strong>{label}</strong>
-                                <p className="muted">
-                                  {attachment.type} · {Math.round(attachment.size / 1024)} KB
-                                </p>
-                                {attachment.encrypted && preview?.error ? (
-                                  <p className="warning-text">{preview.error}</p>
-                                ) : null}
-                                {preview?.kind === "image" && preview.url ? (
-                                  <img
-                                    src={preview.url}
-                                    alt={label}
-                                    className="attachment-preview-image"
-                                  />
-                                ) : null}
-                                {preview?.kind === "video" && preview.url ? (
-                                  <video
-                                    src={preview.url}
-                                    className="attachment-preview-video"
-                                    controls
-                                  />
-                                ) : null}
-                              </div>
-                              <div className="stack signal-meta-row-value">
-                                {attachment.storage === "inline" ? (
-                                  <strong>Embedded in private signal</strong>
-                                ) : (
-                                  <SignalMetaChip type="blob" value={attachment.blobId} />
-                                )}
-                                {attachment.storage !== "inline" && !isLocalFallbackBlob(attachment.blobId) ? (
-                                  <BlobLink
-                                    blobId={attachment.blobId}
-                                    label={t("verifyOnWalrus")}
-                                  />
-                                ) : null}
-                                {downloadHref ? (
-                                  <a
-                                    className="ghost-button"
-                                    href={downloadHref}
-                                    download={label}
-                                  >
-                                    Download attachment
-                                  </a>
-                                ) : null}
-                              </div>
-                                  </>
-                                );
-                              })()}
-                            </div>
-                          ))}
-                        </div>
+                        <SignalAttachmentList
+                          attachments={detailAttachments}
+                          attachmentPreviews={attachmentPreviews}
+                          verifyOnWalrusLabel={t("verifyOnWalrus")}
+                        />
                       )}
                       </div>
                     </section>
@@ -2068,8 +1741,7 @@ export function AdminDashboardPage() {
           </section>
         )}
 
-        <OperationsStatusRail
-          title="Review Queue"
+        <AdminOperationsStatus
           items={operationsStatusItems}
           nextActionLabel={nextRecommendedAction.label}
           nextActionDetail={nextRecommendedAction.detail}

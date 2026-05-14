@@ -8,7 +8,6 @@ import {
   normalizeFormPurpose,
 } from "./formTemplates";
 import { formatAnswerText } from "./answerFormatting";
-import { flattenAnswer } from "./utils";
 import { normalizeFormVisibility } from "./explore";
 import { isResponseDeadlinePassed } from "./responseDeadline";
 import { enrichSubmissionWithTriage } from "./signalTriage";

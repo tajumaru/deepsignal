@@ -4,6 +4,7 @@ import { useI18n } from "../i18n";
 import { getCountryFlag } from "../lib/countries";
 import { hasChoiceOptions } from "../lib/fieldTypes";
 import type { FieldType, FormField } from "../types";
+import { DateInput } from "./DateInput";
 import {
   canFieldHaveConditionalChildren,
   getConditionalParentField,
@@ -72,8 +73,6 @@ export function FormFieldEditor({
   const conditionalOptions = getConditionalValueOptions(conditionalParent);
   const canAddConditionalQuestion = canFieldHaveConditionalChildren(field);
   const hasConditionalValue = hasValidConditionalValue(field, fields);
-  const dateInputLang = language === "ja" ? "ja-JP" : "en-US";
-
   function update<K extends keyof FormField>(key: K, value: FormField[K]) {
     onChange({ ...field, [key]: value });
   }
@@ -127,20 +126,19 @@ export function FormFieldEditor({
   }
 
   function renderPreview() {
-    if (field.type === "shortText" || field.type === "url" || field.type === "date") {
+    if (field.type === "date") {
+      return <DateInput value="" language={language} disabled readOnly />;
+    }
+
+    if (field.type === "shortText" || field.type === "url") {
       return (
         <input
-          type={field.type === "date" ? "date" : field.type === "url" ? "url" : "text"}
-          lang={field.type === "date" ? dateInputLang : undefined}
+          type={field.type === "url" ? "url" : "text"}
           disabled
           value=""
           placeholder={
             field.placeholder ??
-            (field.type === "url"
-              ? "https://example.com"
-              : field.type === "date"
-                ? ""
-                : t("placeholderExample"))
+            (field.type === "url" ? "https://example.com" : t("placeholderExample"))
           }
           readOnly
         />

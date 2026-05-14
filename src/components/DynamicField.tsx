@@ -2,6 +2,7 @@ import { useI18n } from "../i18n";
 import { isAttachmentFieldType } from "../lib/fieldTypes";
 import type { FormField } from "../types";
 import { CountrySelectQuestion } from "./CountrySelectQuestion";
+import { DateInput } from "./DateInput";
 import { UploadDropzone, type UploadDropzoneItem } from "./UploadDropzone";
 
 interface DynamicFieldProps {
@@ -29,7 +30,6 @@ export function DynamicField({
   const isRequired = required ?? field.required;
   const fieldErrorId = `${field.id}-error`;
   const hasError = Boolean(error);
-  const dateInputLang = language === "ja" ? "ja-JP" : "en-US";
   const selectedAttachments = Array.isArray(value)
     ? value.filter((item): item is UploadDropzoneItem => Boolean(item) && typeof item === "object" && "id" in item)
     : [];
@@ -65,14 +65,13 @@ export function DynamicField({
       ) : null}
 
       {field.type === "date" ? (
-        <input
-          type="date"
-          lang={dateInputLang}
+        <DateInput
           value={String(value ?? "")}
+          language={language}
           disabled={disabled}
-          aria-invalid={hasError}
-          aria-describedby={hasError ? fieldErrorId : undefined}
-          onChange={(event) => onChange(event.target.value)}
+          ariaInvalid={hasError}
+          ariaDescribedBy={hasError ? fieldErrorId : undefined}
+          onChange={onChange}
         />
       ) : null}
 
