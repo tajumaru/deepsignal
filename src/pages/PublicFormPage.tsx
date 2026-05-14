@@ -101,11 +101,22 @@ export function PublicFormPage() {
   }, [form?.responseDeadline, t]);
   const submitModeLabel =
     walletRequired || (attachWallet && account?.address)
-      ? "Wallet attached, no extra personal-message signature"
-      : "Anonymous signal";
+      ? t("publicSubmitModeWalletAttached")
+      : t("publicSubmitModeAnonymous");
   const storageModeLabel = form?.encryptSubmissions
-    ? "Walrus storage + Seal-encrypted private payload"
-    : "Walrus storage for public feedback";
+    ? t("publicStorageModeEncrypted")
+    : t("publicStorageModePlain");
+  const submitButtonLabel = deadlinePassed
+    ? t("publicSubmissionClosed")
+    : submitting
+      ? t("publicSubmittingSecure")
+      : walletRequired
+        ? account?.address
+          ? t("publicSubmitWithRequiredWallet")
+          : t("publicConnectWalletToSubmit")
+        : attachWallet && account?.address
+          ? t("publicSubmitWithWallet")
+          : t("publicSubmitAnonymously");
 
   useEffect(() => {
     if (walletRequired) {
@@ -145,24 +156,24 @@ export function PublicFormPage() {
       <p className="eyebrow">{t("publicEyebrow")}</p>
       <h1>{form.title}</h1>
       <RichTextContent value={form.description ?? ""} className="lede rich-text-content" fallback={t("publicDefaultBody")} />
-      <section className={`answer-card public-deadline-card ${deadlinePassed ? "is-expired" : ""}`}>
-        <p className="eyebrow">Response window</p>
-        <h3>{deadlineLabel}</h3>
-        <p className="muted">
-          {deadlinePassed
-            ? "This intake is closed. Reviewers can still inspect signals already stored in the inbox."
-            : "Send your signal before the deadline to keep it in the active review queue."}
-        </p>
-      </section>
-      {form.encryptSubmissions ? (
-        <section className="answer-card public-private-signal-note">
-          <p className="eyebrow">Encrypted Feedback Inbox</p>
-          <h3>Private signal enabled</h3>
+      <div className="public-form-summary-row">
+        <section className={`answer-card public-deadline-card ${deadlinePassed ? "is-expired" : ""}`}>
+          <p className="eyebrow">{t("publicResponseWindow")}</p>
+          <h3>{deadlineLabel}</h3>
           <p className="muted">
-            Your response is sealed into a private payload and can only be unlocked by the creator or approved admins.
+            {deadlinePassed
+              ? t("publicDeadlineClosedHelp")
+              : t("publicDeadlineActiveHelp")}
           </p>
         </section>
-      ) : null}
+        {form.encryptSubmissions ? (
+          <section className="answer-card public-private-signal-note">
+            <p className="eyebrow">{t("publicEncryptedInboxEyebrow")}</p>
+            <h3>{t("publicPrivateSignalEnabled")}</h3>
+            <p className="muted">{t("publicPrivateSignalHelp")}</p>
+          </section>
+        ) : null}
+      </div>
 
       <PublicIdentityCard
         walletRequired={walletRequired}
@@ -209,9 +220,15 @@ export function PublicFormPage() {
                     required={isFieldRequired(field, form.fields, answers, true)}
                     hint={
                       field.type === "screenshot"
-                        ? `${t("screenshotHint")} Max ${Math.round(MAX_ATTACHMENT_BYTES / (1024 * 1024))}MB per file.`
+                        ? t("attachmentMaxFileSize", {
+                            hint: t("screenshotHint"),
+                            size: Math.round(MAX_ATTACHMENT_BYTES / (1024 * 1024)),
+                          })
                         : field.type === "video"
-                          ? `${t("videoHint")} Max ${Math.round(MAX_ATTACHMENT_BYTES / (1024 * 1024))}MB per file.`
+                          ? t("attachmentMaxFileSize", {
+                              hint: t("videoHint"),
+                              size: Math.round(MAX_ATTACHMENT_BYTES / (1024 * 1024)),
+                            })
                           : undefined
                     }
                     onChange={(value) => updateAnswer(field.id, value)}
@@ -232,9 +249,15 @@ export function PublicFormPage() {
             required={isFieldRequired(field, form.fields, answers, true)}
             hint={
               field.type === "screenshot"
-                ? `${t("screenshotHint")} Max ${Math.round(MAX_ATTACHMENT_BYTES / (1024 * 1024))}MB per file.`
+                ? t("attachmentMaxFileSize", {
+                    hint: t("screenshotHint"),
+                    size: Math.round(MAX_ATTACHMENT_BYTES / (1024 * 1024)),
+                  })
                 : field.type === "video"
-                  ? `${t("videoHint")} Max ${Math.round(MAX_ATTACHMENT_BYTES / (1024 * 1024))}MB per file.`
+                  ? t("attachmentMaxFileSize", {
+                      hint: t("videoHint"),
+                      size: Math.round(MAX_ATTACHMENT_BYTES / (1024 * 1024)),
+                    })
                   : undefined
             }
             onChange={(value) => updateAnswer(field.id, value)}
@@ -243,24 +266,23 @@ export function PublicFormPage() {
         ))}
       </div>
 
-      <PublicSubmitReadiness submitModeLabel={submitModeLabel} storageModeLabel={storageModeLabel} />
+      <PublicSubmitReadiness
+        submitModeLabel={submitModeLabel}
+        storageModeLabel={storageModeLabel}
+        labels={{
+          deliveryMode: t("publicReadinessDeliveryMode"),
+          storageTarget: t("publicReadinessStorageTarget"),
+          attachments: t("publicReadinessAttachments"),
+          attachmentsHelp: t("publicReadinessAttachmentsHelp"),
+        }}
+      />
 
       <SignalSubmissionPipeline pipeline={submitPipeline} visible={submitting || submitPipeline.status === "failed"} />
 
       {submitError ? <p className="error-text">{submitError}</p> : null}
       <div className="public-form-actions">
         <button type="submit" className="primary-button" disabled={submitting || deadlinePassed}>
-          {deadlinePassed
-            ? "Submission closed"
-            : submitting
-              ? "Securing signal..."
-              : walletRequired
-                ? account?.address
-                  ? t("publicSubmitWithRequiredWallet")
-                  : t("publicConnectWalletToSubmit")
-                : attachWallet && account?.address
-                ? "Submit with wallet"
-                : "Submit anonymously"}
+          {submitButtonLabel}
         </button>
       </div>
     </form>

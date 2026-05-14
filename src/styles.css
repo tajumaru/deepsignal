@@ -5752,7 +5752,7 @@ body.composer-mode .bg-orb {
   box-shadow: inset 0 0 0 1px rgba(135, 244, 255, 0.28);
 }
 
-.rich-text-surface .ProseMirror {
+.rich-text-input {
   min-height: 8.5rem;
   padding: 1rem 1rem 1.1rem;
   color: var(--text-main);
@@ -5760,29 +5760,27 @@ body.composer-mode .bg-orb {
   outline: none;
 }
 
-.rich-text-surface .ProseMirror p.is-editor-empty:first-child::before {
+.rich-text-input:empty::before {
   content: attr(data-placeholder);
   color: var(--text-soft);
   pointer-events: none;
-  float: left;
-  height: 0;
 }
 
-.rich-text-surface .ProseMirror ul {
+.rich-text-input ul {
   padding-left: 1.2rem;
 }
 
-.rich-text-surface .ProseMirror ol {
+.rich-text-input ol {
   padding-left: 1.35rem;
 }
 
-.rich-text-surface .ProseMirror h3 {
+.rich-text-input h3 {
   margin: 0 0 0.75rem;
   font-size: 1.05rem;
   line-height: 1.3;
 }
 
-.rich-text-surface .ProseMirror blockquote {
+.rich-text-input blockquote {
   margin: 0 0 0.9rem;
   padding-left: 0.9rem;
   border-left: 3px solid rgba(116, 226, 255, 0.28);
@@ -5897,6 +5895,10 @@ body.composer-mode .bg-orb {
   font-weight: 700;
   letter-spacing: 0;
   text-transform: uppercase;
+}
+
+.markdown-preview-details {
+  display: none;
 }
 
 .confirmation-checkbox {
@@ -7031,6 +7033,16 @@ body.composer-mode .bg-orb {
   gap: 1.25rem;
 }
 
+.public-form-summary-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.85rem;
+}
+
+.public-form-summary-row .answer-card {
+  min-width: 0;
+}
+
 .public-form .composer-preview-section {
   gap: 1rem;
   padding: 1.2rem;
@@ -7101,6 +7113,19 @@ body.composer-mode .bg-orb {
 .public-form .rating-picker {
   gap: 0.55rem;
   padding-top: 0.2rem;
+}
+
+.public-form .check-item {
+  min-height: 44px;
+  padding: 0.55rem 0.65rem;
+  border-radius: 14px;
+  background: rgba(116, 226, 255, 0.04);
+}
+
+.public-form .check-item input {
+  flex: 0 0 auto;
+  min-width: 1.25rem;
+  min-height: 1.25rem;
 }
 
 .public-form-actions {
@@ -7238,6 +7263,10 @@ body.composer-mode .bg-orb {
 }
 
 @media (max-width: 860px) {
+  .public-form-summary-row {
+    grid-template-columns: 1fr;
+  }
+
   .public-identity-topline,
   .public-identity-grid {
     grid-template-columns: 1fr;
@@ -12227,23 +12256,241 @@ body.composer-mode .bg-orb {
   }
 
   .public-form {
-    padding-bottom: calc(1.1rem + env(safe-area-inset-bottom, 0px));
+    gap: 0.85rem;
+    padding: 0.78rem 0.78rem calc(5.9rem + env(safe-area-inset-bottom, 0px));
+    border-radius: 18px;
+  }
+
+  .public-form > .eyebrow {
+    margin-bottom: -0.25rem;
+  }
+
+  .public-form h1 {
+    margin: 0;
+    font-size: 1.55rem;
+    line-height: 1.16;
+  }
+
+  .public-form > .lede {
+    margin: 0;
+    font-size: 0.94rem;
+    line-height: 1.45;
+  }
+
+  .public-form-summary-row {
+    gap: 0.55rem;
+  }
+
+  .public-deadline-card,
+  .public-private-signal-note,
+  .public-identity-card,
+  .public-submit-readiness {
+    padding: 0.72rem 0.78rem;
+    border-radius: 16px;
+  }
+
+  .public-deadline-card .eyebrow,
+  .public-private-signal-note .eyebrow {
+    margin-bottom: 0.08rem;
+    font-size: 0.62rem;
+  }
+
+  .public-deadline-card h3,
+  .public-private-signal-note h3,
+  .public-identity-copy h3 {
+    margin: 0;
+    font-size: 0.98rem;
+    line-height: 1.22;
+  }
+
+  .public-deadline-card .muted,
+  .public-private-signal-note .muted,
+  .public-identity-copy .muted {
+    margin: 0.12rem 0 0;
+    font-size: 0.82rem;
+    line-height: 1.38;
+  }
+
+  .public-identity-card {
+    gap: 0.62rem;
+  }
+
+  .public-identity-topline {
+    gap: 0.55rem;
+  }
+
+  .public-identity-grid {
+    gap: 0.5rem;
+    padding-top: 0;
+    border-top: 0;
+  }
+
+  .public-identity-mode,
+  .public-identity-note {
+    gap: 0.38rem;
+    padding: 0.68rem;
+    border-radius: 14px;
+  }
+
+  .public-identity-label {
+    font-size: 0.64rem;
+    letter-spacing: 0.08em;
+  }
+
+  .public-identity-toggle {
+    min-height: 44px;
+    align-items: center;
+  }
+
+  .public-submit-readiness .metadata-list {
+    gap: 0.45rem;
+  }
+
+  .public-submit-readiness .metadata-row {
+    gap: 0.3rem;
+    padding: 0.45rem 0;
+  }
+
+  .public-submit-readiness .metadata-row span,
+  .public-submit-readiness .metadata-row strong {
+    font-size: 0.78rem;
+    line-height: 1.35;
+  }
+
+  .public-form-fields {
+    gap: 0.85rem;
+  }
+
+  .public-form .composer-preview-section {
+    gap: 0.72rem;
+    padding: 0.85rem;
+    border-radius: 16px;
+  }
+
+  .public-form .composer-preview-section-copy h3 {
+    margin: 0;
+    font-size: 1rem;
+  }
+
+  .public-form .field-block {
+    gap: 0.55rem;
+    padding: 0.12rem 0;
+  }
+
+  .field-label-row {
+    gap: 0.45rem;
+  }
+
+  .field-label-text {
+    font-size: 0.98rem;
+    line-height: 1.32;
+  }
+
+  .field-question-index {
+    min-width: 2.35rem;
+    padding: 0.22rem 0.48rem;
+    font-size: 0.66rem;
+  }
+
+  .field-required-chip {
+    padding: 0.18rem 0.45rem;
+    font-size: 0.62rem;
   }
 
   .public-form .field-block textarea,
   .public-form .field-block input,
-  .public-form .field-block select {
+  .public-form .field-block select,
+  .public-form .field-block .country-picker-trigger {
     font-size: 16px;
+    min-height: 44px;
+    border-radius: 14px;
+    padding: 0.76rem 0.82rem;
+  }
+
+  .public-form .field-block textarea {
+    min-height: 7rem;
+  }
+
+  .public-form .check-item {
+    width: 100%;
+    min-height: 48px;
+    padding: 0.68rem 0.75rem;
+  }
+
+  .public-form .checkbox-group {
+    gap: 0.5rem;
+  }
+
+  .public-form .rating-picker {
+    gap: 0.45rem;
+  }
+
+  .public-form .star-button,
+  .star-button {
+    min-width: 44px;
+    min-height: 44px;
+    font-size: 1.24rem;
+  }
+
+  .markdown-editor-toolbar {
+    gap: 0.35rem;
+    padding: 0.38rem;
+    border-radius: 12px;
+  }
+
+  .markdown-toolbar-button {
+    min-width: 44px;
+    min-height: 44px;
+    padding: 0 0.55rem;
+  }
+
+  .markdown-toolbar-button-bullet,
+  .markdown-toolbar-button-link {
+    min-width: 54px;
+  }
+
+  .markdown-preview-panel-desktop {
+    display: none;
+  }
+
+  .markdown-preview-details {
+    display: grid;
+    gap: 0.48rem;
+  }
+
+  .markdown-preview-details summary {
+    min-height: 44px;
+    padding: 0.62rem 0.75rem;
+    border: 1px solid rgba(116, 226, 255, 0.16);
+    border-radius: 12px;
+    background: rgba(116, 226, 255, 0.06);
+    color: var(--text);
+    font-size: 0.86rem;
+    font-weight: 800;
+  }
+
+  .markdown-preview-details .markdown-preview-panel {
+    padding: 0.72rem 0.78rem;
+    border-radius: 12px;
   }
 
   .public-form-actions {
-    position: sticky;
-    bottom: max(0.45rem, env(safe-area-inset-bottom, 0px));
-    z-index: 4;
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 20;
     justify-content: stretch;
-    padding-top: 0.8rem;
-    margin-top: 0.35rem;
-    background: linear-gradient(180deg, rgba(6, 17, 28, 0), rgba(6, 17, 28, 0.94) 26%);
+    padding:
+      0.72rem max(0.78rem, env(safe-area-inset-right, 0px))
+      calc(0.72rem + env(safe-area-inset-bottom, 0px))
+      max(0.78rem, env(safe-area-inset-left, 0px));
+    margin: 0;
+    background:
+      linear-gradient(180deg, rgba(6, 17, 28, 0), rgba(6, 17, 28, 0.96) 25%),
+      rgba(6, 17, 28, 0.92);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
   }
 
   .public-form-actions .primary-button {
@@ -12251,12 +12498,6 @@ body.composer-mode .bg-orb {
     min-width: 0;
     min-height: 3.5rem;
     box-shadow: 0 18px 34px rgba(0, 0, 0, 0.3);
-  }
-
-  .star-button {
-    min-width: 3.1rem;
-    min-height: 3.1rem;
-    font-size: 1.28rem;
   }
 
   .signal-readout {

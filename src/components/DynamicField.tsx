@@ -23,39 +23,49 @@ type MarkdownToolbarAction = "bold" | "italic" | "bullet" | "link";
 const markdownToolbarActions: Array<{
   action: MarkdownToolbarAction;
   icon: string;
-  label: string;
+  labelKey: "markdownToolbarBold" | "markdownToolbarItalic" | "markdownToolbarBulletList" | "markdownToolbarLink";
 }> = [
-  { action: "bold", icon: "B", label: "Bold" },
-  { action: "italic", icon: "I", label: "Italic" },
-  { action: "bullet", icon: "List", label: "Bullet list" },
-  { action: "link", icon: "Link", label: "Link" },
+  { action: "bold", icon: "B", labelKey: "markdownToolbarBold" },
+  { action: "italic", icon: "I", labelKey: "markdownToolbarItalic" },
+  { action: "bullet", icon: "List", labelKey: "markdownToolbarBulletList" },
+  { action: "link", icon: "Link", labelKey: "markdownToolbarLink" },
 ];
 
-function getMarkdownInsertion(action: MarkdownToolbarAction, selectedText: string) {
+function getMarkdownInsertion(
+  action: MarkdownToolbarAction,
+  selectedText: string,
+  fallbackText: {
+    bold: string;
+    italic: string;
+    listItem: string;
+    linkText: string;
+    linkUrl: string;
+  },
+) {
   const hasSelection = selectedText.length > 0;
 
   if (action === "bold") {
-    const text = hasSelection ? selectedText : "bold text";
+    const text = hasSelection ? selectedText : fallbackText.bold;
     return { value: `**${text}**`, selectionStart: 2, selectionEnd: 2 + text.length };
   }
 
   if (action === "italic") {
-    const text = hasSelection ? selectedText : "italic text";
+    const text = hasSelection ? selectedText : fallbackText.italic;
     return { value: `_${text}_`, selectionStart: 1, selectionEnd: 1 + text.length };
   }
 
   if (action === "bullet") {
-    const text = hasSelection ? selectedText : "list item";
+    const text = hasSelection ? selectedText : fallbackText.listItem;
     const value = text
       .split(/\r?\n/)
-      .map((line) => `- ${line || "list item"}`)
+      .map((line) => `- ${line || fallbackText.listItem}`)
       .join("\n");
     return { value, selectionStart: 2, selectionEnd: value.length };
   }
 
-  const text = hasSelection ? selectedText : "link text";
+  const text = hasSelection ? selectedText : fallbackText.linkText;
   return {
-    value: `[${text}](https://example.com)`,
+    value: `[${text}](${fallbackText.linkUrl})`,
     selectionStart: 1,
     selectionEnd: 1 + text.length,
   };
@@ -92,7 +102,13 @@ export function DynamicField({
     const selectionStart = textarea?.selectionStart ?? currentValue.length;
     const selectionEnd = textarea?.selectionEnd ?? currentValue.length;
     const selectedText = currentValue.slice(selectionStart, selectionEnd);
-    const insertion = getMarkdownInsertion(action, selectedText);
+    const insertion = getMarkdownInsertion(action, selectedText, {
+      bold: t("markdownFallbackBoldText"),
+      italic: t("markdownFallbackItalicText"),
+      listItem: t("markdownFallbackListItem"),
+      linkText: t("markdownFallbackLinkText"),
+      linkUrl: t("markdownFallbackLinkUrl"),
+    });
     const nextValue = `${currentValue.slice(0, selectionStart)}${insertion.value}${currentValue.slice(selectionEnd)}`;
 
     onChange(nextValue);
@@ -119,7 +135,7 @@ export function DynamicField({
         {questionNumber ? <span className="field-question-index">Q{questionNumber}</span> : null}
         <span className="field-label-text">{field.label}</span>
         <span className={`field-required-chip ${isRequired ? "is-required" : "is-optional"}`}>
-          {isRequired ? "Required" : "Optional"}
+          {isRequired ? t("required") : t("optional")}
         </span>
       </span>
 
@@ -155,8 +171,8 @@ export function DynamicField({
                   type="button"
                   className={`markdown-toolbar-button markdown-toolbar-button-${item.action}`}
                   disabled={disabled}
-                  title={item.label}
-                  aria-label={item.label}
+                  title={t(item.labelKey)}
+                  aria-label={t(item.labelKey)}
                   onMouseDown={(event) => event.preventDefault()}
                   onClick={() => applyMarkdownAction(item.action)}
                 >
@@ -169,21 +185,33 @@ export function DynamicField({
             ref={field.type === "markdown" ? markdownTextareaRef : undefined}
             rows={field.type === "markdown" ? 8 : 5}
             value={String(value ?? "")}
-            placeholder={field.placeholder ?? (field.type === "markdown" ? "**Bold**, _italic_, links, and lists are supported." : "")}
+            placeholder={field.placeholder ?? (field.type === "markdown" ? t("markdownAnswerPlaceholder") : "")}
             disabled={disabled}
             aria-invalid={hasError}
             aria-describedby={hasError ? fieldErrorId : undefined}
             onChange={(event) => onChange(event.target.value)}
           />
           {field.type === "markdown" ? (
-            <div className="markdown-preview-panel" aria-live="polite">
-              <span className="markdown-preview-label">Preview</span>
+            <>
+            <div className="markdown-preview-panel markdown-preview-panel-desktop" aria-live="polite">
+              <span className="markdown-preview-label">{t("markdownPreviewLabel")}</span>
               <RichTextContent
                 value={String(value ?? "")}
                 className="rich-text-content"
-                fallback="Markdown preview appears here."
+                fallback={t("markdownPreviewFallback")}
               />
             </div>
+            <details className="markdown-preview-details">
+              <summary>{t("markdownPreviewLabel")}</summary>
+              <div className="markdown-preview-panel" aria-live="polite">
+                <RichTextContent
+                  value={String(value ?? "")}
+                  className="rich-text-content"
+                  fallback={t("markdownPreviewFallback")}
+                />
+              </div>
+            </details>
+            </>
           ) : null}
         </div>
       ) : null}
@@ -249,7 +277,7 @@ export function DynamicField({
               disabled={disabled}
               onChange={(event) => onChange(event.target.checked)}
             />
-            <span>{field.placeholder?.trim() || "I confirm"}</span>
+            <span>{field.placeholder?.trim() || t("confirmationDefaultFallback")}</span>
           </label>
         </div>
       ) : null}
@@ -288,7 +316,7 @@ export function DynamicField({
         <input
           type="url"
           inputMode="url"
-          placeholder={field.placeholder ?? "https://example.com"}
+          placeholder={field.placeholder ?? t("urlPlaceholder")}
           value={String(value ?? "")}
           disabled={disabled}
           aria-invalid={hasError}

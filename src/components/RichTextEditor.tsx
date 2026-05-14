@@ -1,9 +1,4 @@
-import Link from "@tiptap/extension-link";
-import Placeholder from "@tiptap/extension-placeholder";
-import StarterKit from "@tiptap/starter-kit";
-import Underline from "@tiptap/extension-underline";
-import { EditorContent, useEditor, type Editor } from "@tiptap/react";
-import { useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { normalizeRichText } from "../lib/richText";
 
 interface RichTextEditorProps {
@@ -15,108 +10,84 @@ interface RichTextEditorProps {
 type ToolbarAction = {
   label: string;
   title: string;
-  isActive: (editor: Editor | null) => boolean;
-  run: (editor: Editor) => void;
+  command: string;
+  value?: string;
 };
 
 const TOOLBAR_ACTIONS: ToolbarAction[] = [
-  {
-    label: "B",
-    title: "Bold",
-    isActive: (editor) => Boolean(editor?.isActive("bold")),
-    run: (editor) => editor.chain().focus().toggleBold().run(),
-  },
-  {
-    label: "I",
-    title: "Italic",
-    isActive: (editor) => Boolean(editor?.isActive("italic")),
-    run: (editor) => editor.chain().focus().toggleItalic().run(),
-  },
-  {
-    label: "U",
-    title: "Underline",
-    isActive: (editor) => Boolean(editor?.isActive("underline")),
-    run: (editor) => editor.chain().focus().toggleUnderline().run(),
-  },
-  {
-    label: "H",
-    title: "Heading",
-    isActive: (editor) => Boolean(editor?.isActive("heading", { level: 3 })),
-    run: (editor) => editor.chain().focus().toggleHeading({ level: 3 }).run(),
-  },
-  {
-    label: "List",
-    title: "Bullet List",
-    isActive: (editor) => Boolean(editor?.isActive("bulletList")),
-    run: (editor) => editor.chain().focus().toggleBulletList().run(),
-  },
-  {
-    label: "1. List",
-    title: "Numbered List",
-    isActive: (editor) => Boolean(editor?.isActive("orderedList")),
-    run: (editor) => editor.chain().focus().toggleOrderedList().run(),
-  },
-  {
-    label: "Quote",
-    title: "Quote",
-    isActive: (editor) => Boolean(editor?.isActive("blockquote")),
-    run: (editor) => editor.chain().focus().toggleBlockquote().run(),
-  },
+  { label: "B", title: "Bold", command: "bold" },
+  { label: "I", title: "Italic", command: "italic" },
+  { label: "U", title: "Underline", command: "underline" },
+  { label: "H", title: "Heading", command: "formatBlock", value: "h3" },
+  { label: "List", title: "Bullet List", command: "insertUnorderedList" },
+  { label: "1. List", title: "Numbered List", command: "insertOrderedList" },
+  { label: "Quote", title: "Quote", command: "formatBlock", value: "blockquote" },
 ];
 
 export function RichTextEditor({ value, onChange, placeholder }: RichTextEditorProps) {
-  const editor = useEditor({
-    extensions: [
-      StarterKit.configure({
-        code: false,
-        codeBlock: false,
-        horizontalRule: false,
-      }),
-      Underline,
-      Link.configure({
-        openOnClick: false,
-        autolink: true,
-        defaultProtocol: "https",
-      }),
-      Placeholder.configure({
-        placeholder,
-        emptyEditorClass: "is-editor-empty",
-      }),
-    ],
-    content: normalizeRichText(value),
-    immediatelyRender: false,
-    onUpdate: ({ editor: nextEditor }) => {
-      onChange(normalizeRichText(nextEditor.getHTML()));
-    },
-  });
+  const editorRef = useRef<HTMLDivElement | null>(null);
+  const lastEmittedValueRef = useRef("");
+  const [activeCommands, setActiveCommands] = useState<Set<string>>(() => new Set());
 
   useEffect(() => {
+    const editor = editorRef.current;
     if (!editor) {
       return;
     }
+
     const normalizedValue = normalizeRichText(value);
-    if (editor.getHTML() !== normalizedValue) {
-      editor.commands.setContent(normalizedValue || "<p></p>", { emitUpdate: false });
+    if (lastEmittedValueRef.current === normalizedValue) {
+      return;
     }
-  }, [editor, value]);
+    if (normalizeRichText(editor.innerHTML) !== normalizedValue) {
+      editor.innerHTML = normalizedValue || "";
+    }
+  }, [value]);
+
+  function syncValue() {
+    const editor = editorRef.current;
+    if (!editor) {
+      return;
+    }
+
+    const normalizedValue = normalizeRichText(editor.innerHTML);
+    lastEmittedValueRef.current = normalizedValue;
+    onChange(normalizedValue);
+    refreshActiveCommands();
+  }
+
+  function refreshActiveCommands() {
+    const nextActiveCommands = new Set<string>();
+    for (const command of ["bold", "italic", "underline", "insertUnorderedList", "insertOrderedList"]) {
+      if (document.queryCommandState(command)) {
+        nextActiveCommands.add(command);
+      }
+    }
+    setActiveCommands(nextActiveCommands);
+  }
+
+  function runCommand(action: ToolbarAction) {
+    editorRef.current?.focus();
+    document.execCommand(action.command, false, action.value);
+    syncValue();
+  }
 
   function handleSetLink() {
-    if (!editor) {
-      return;
-    }
-
-    const currentHref = editor.getAttributes("link").href as string | undefined;
-    const nextHref = window.prompt("Enter a URL", currentHref ?? "https://");
+    editorRef.current?.focus();
+    const nextHref = window.prompt("Enter a URL", "https://");
     if (nextHref === null) {
       return;
     }
 
-    if (!nextHref.trim()) {
-      editor.chain().focus().unsetLink().run();
+    const trimmedHref = nextHref.trim();
+    if (!trimmedHref) {
+      document.execCommand("unlink");
+      syncValue();
       return;
     }
 
-    editor.chain().focus().extendMarkRange("link").setLink({ href: nextHref.trim() }).run();
+    document.execCommand("createLink", false, trimmedHref);
+    syncValue();
   }
 
   return (
@@ -124,31 +95,40 @@ export function RichTextEditor({ value, onChange, placeholder }: RichTextEditorP
       <div className="rich-text-toolbar" role="toolbar" aria-label="Intro formatting">
         {TOOLBAR_ACTIONS.map((action) => (
           <button
-            key={action.label}
+            key={`${action.command}-${action.value ?? ""}`}
             type="button"
-            className={`ghost-button rich-text-tool ${action.isActive(editor) ? "is-active" : ""}`}
+            className={`ghost-button rich-text-tool ${activeCommands.has(action.command) ? "is-active" : ""}`}
             title={action.title}
-            onClick={() => {
-              if (!editor) {
-                return;
-              }
-              action.run(editor);
-            }}
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => runCommand(action)}
           >
             {action.label}
           </button>
         ))}
         <button
           type="button"
-          className={`ghost-button rich-text-tool ${editor?.isActive("link") ? "is-active" : ""}`}
+          className="ghost-button rich-text-tool"
           title="Link"
+          onMouseDown={(event) => event.preventDefault()}
           onClick={handleSetLink}
         >
           Link
         </button>
       </div>
       <div className="rich-text-surface" data-placeholder={placeholder}>
-        <EditorContent editor={editor} />
+        <div
+          ref={editorRef}
+          className="rich-text-input"
+          contentEditable
+          role="textbox"
+          aria-label={placeholder}
+          aria-multiline="true"
+          data-placeholder={placeholder}
+          onInput={syncValue}
+          onKeyUp={refreshActiveCommands}
+          onMouseUp={refreshActiveCommands}
+          suppressContentEditableWarning
+        />
       </div>
     </div>
   );
