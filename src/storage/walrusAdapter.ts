@@ -798,7 +798,7 @@ async function fetchTextBlob(blobId: string): Promise<string | null> {
 }
 
 function createManifest(
-  form: Pick<FormSchema, "id" | "createdAt">,
+  form: Pick<FormSchema, "id" | "createdAt" | "headerImage" | "headerLogo">,
   formBlobId: string,
   submissions: SignalManifest["submissions"],
   updatedAt: string,
@@ -809,6 +809,8 @@ function createManifest(
     createdAt: form.createdAt,
     updatedAt,
     formBlobId,
+    headerImage: form.headerImage,
+    headerLogo: form.headerLogo,
     submissions: submissions.sort((left, right) => right.createdAt.localeCompare(left.createdAt)),
   };
 }
@@ -1113,7 +1115,12 @@ export const walrusAdapter: StorageAdapter = {
       ...manifest.submissions.filter((item) => item.submissionId !== submission.id),
     ];
     const nextManifest = createManifest(
-      { id: manifest.formId, createdAt: manifest.createdAt },
+      {
+        id: manifest.formId,
+        createdAt: manifest.createdAt,
+        headerImage: form?.headerImage ?? manifest.headerImage,
+        headerLogo: form?.headerLogo ?? manifest.headerLogo,
+      },
       form ? bundledFormPointer : manifest.formBlobId,
       nextManifestEntries,
       new Date().toISOString(),
@@ -1212,7 +1219,12 @@ export const walrusAdapter: StorageAdapter = {
       ...manifest.submissions.filter((item) => item.submissionId !== submission.id),
     ];
     const nextManifest = createManifest(
-      { id: manifest.formId, createdAt: manifest.createdAt },
+      {
+        id: manifest.formId,
+        createdAt: manifest.createdAt,
+        headerImage: form?.headerImage ?? manifest.headerImage,
+        headerLogo: form?.headerLogo ?? manifest.headerLogo,
+      },
       form ? bundledFormPointer : manifest.formBlobId,
       nextManifestEntries,
       new Date().toISOString(),

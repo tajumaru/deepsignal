@@ -5,6 +5,9 @@ import { normalizeFormVisibility } from "../../lib/explore";
 import type {
   FieldType,
   FormField,
+  FormHeaderImage,
+  FormHeaderLogo,
+  FormHeaderImagePosition,
   FormIdentityPolicy,
   FormPurpose,
   FormSchema,
@@ -76,6 +79,19 @@ export function createSection(title = ""): FormSection {
 export function serializeDraft(
   title: string,
   description: string,
+  headerImage: {
+    url: string;
+    alt: string;
+    position: FormHeaderImagePosition;
+    source?: "url" | "upload";
+    fileName?: string;
+  },
+  headerLogo: {
+    url: string;
+    alt: string;
+    source?: "url" | "upload";
+    fileName?: string;
+  },
   fields: FormField[],
   purpose: FormPurpose,
   visibility: FormSchema["visibility"],
@@ -89,6 +105,8 @@ export function serializeDraft(
   return JSON.stringify({
     title,
     description,
+    headerImage,
+    headerLogo,
     purpose,
     visibility: normalizeFormVisibility(visibility),
     identityPolicy,
@@ -123,6 +141,19 @@ export function serializeDraft(
 export function buildFormSchema(args: {
   title: string;
   description: string;
+  headerImage: {
+    url: string;
+    alt: string;
+    position: FormHeaderImagePosition;
+    source?: "url" | "upload";
+    fileName?: string;
+  };
+  headerLogo: {
+    url: string;
+    alt: string;
+    source?: "url" | "upload";
+    fileName?: string;
+  };
   fields: FormField[];
   sections: FormSection[];
   purpose: FormPurpose;
@@ -136,10 +167,14 @@ export function buildFormSchema(args: {
   responseDeadline?: number | null;
   responseDeadlineMode?: "none" | "relative" | "custom";
 }): FormSchema {
+  const normalizedHeaderImage = normalizeHeaderImage(args.headerImage);
+  const normalizedHeaderLogo = normalizeHeaderLogo(args.headerLogo);
   return {
     id: makeId("form"),
     title: args.title.trim(),
     description: args.description.trim(),
+    headerImage: normalizedHeaderImage,
+    headerLogo: normalizedHeaderLogo,
     fields: sanitizeConditionalLogicFields(args.fields).map((field) => {
       const fieldType = normalizeFieldType(field.type);
       return {
@@ -174,5 +209,47 @@ export function buildFormSchema(args: {
     responseDeadline: args.responseDeadline ?? null,
     responseDeadlineMode: args.responseDeadlineMode ?? "none",
     registrationMode: "walrus",
+  };
+}
+
+export function normalizeHeaderImage(
+  headerImage?: {
+    url?: string;
+    alt?: string;
+    position?: FormHeaderImagePosition;
+    source?: "url" | "upload";
+    fileName?: string;
+  },
+): FormHeaderImage | undefined {
+  const url = headerImage?.url?.trim();
+  if (!url) {
+    return undefined;
+  }
+  return {
+    url,
+    alt: headerImage?.alt?.trim() || undefined,
+    position: headerImage?.position ?? "center",
+    source: headerImage?.source ?? "url",
+    fileName: headerImage?.fileName?.trim() || undefined,
+  };
+}
+
+export function normalizeHeaderLogo(
+  headerLogo?: {
+    url?: string;
+    alt?: string;
+    source?: "url" | "upload";
+    fileName?: string;
+  },
+): FormHeaderLogo | undefined {
+  const url = headerLogo?.url?.trim();
+  if (!url) {
+    return undefined;
+  }
+  return {
+    url,
+    alt: headerLogo?.alt?.trim() || undefined,
+    source: headerLogo?.source ?? "url",
+    fileName: headerLogo?.fileName?.trim() || undefined,
   };
 }

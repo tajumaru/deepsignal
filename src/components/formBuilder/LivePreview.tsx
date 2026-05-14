@@ -1,14 +1,28 @@
 import { useEffect, useMemo, useState } from "react";
 import { DynamicField } from "../DynamicField";
+import { FormHeaderImage } from "../FormHeaderImage";
 import { RichTextContent } from "../RichText";
 import { useI18n } from "../../i18n";
 import { createEmptyAnswer } from "../../lib/storage";
 import { getOrderedFields, getVisibleFieldIds, isFieldRequired } from "../../utils/formLogic";
-import type { FormField, FormSection } from "../../types";
+import type { FormField, FormHeaderImage as FormHeaderImageConfig, FormHeaderLogo, FormSection } from "../../types";
 
 interface LivePreviewProps {
   title: string;
   description: string;
+  headerImage?: FormHeaderImageConfig | {
+    url: string;
+    alt: string;
+    position: FormHeaderImageConfig["position"];
+    source?: "url" | "upload";
+    fileName?: string;
+  };
+  headerLogo?: FormHeaderLogo | {
+    url: string;
+    alt: string;
+    source?: "url" | "upload";
+    fileName?: string;
+  };
   fields: FormField[];
   sections: FormSection[];
 }
@@ -18,6 +32,8 @@ type PreviewAnswers = Record<string, unknown>;
 export function LivePreview({
   title,
   description,
+  headerImage,
+  headerLogo,
   fields,
   sections,
 }: LivePreviewProps) {
@@ -48,6 +64,12 @@ export function LivePreview({
 
   return (
     <section className="panel glow-panel composer-live-preview">
+      <FormHeaderImage
+        image={headerImage}
+        logo={headerLogo}
+        className="composer-preview-header-image"
+        fallbackTitle={title || t("untitledForm")}
+      />
       <div className="composer-live-preview-header">
         <div>
           <p className="eyebrow">{t("preview")}</p>

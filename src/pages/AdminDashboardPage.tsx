@@ -1,7 +1,7 @@
 ﻿import {
   useCurrentAccount,
 } from "@mysten/dapp-kit";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { CreateFormLink } from "../components/CreateFormLink";
 import { AdminAccessGate } from "../components/AdminAccessGate";
@@ -673,8 +673,11 @@ export function AdminDashboardPage() {
   const selectedForm = accessibleForms.find((form) => form.id === selectedFormId) ?? null;
   const selectedBeaconForm =
     accessibleForms.find((form) => form.id === beaconFormId) ?? null;
-  const canDeleteForm = (form: Pick<FormSchema, "ownerAddress">) =>
-    hasAdminAccess || !capabilityProfile.isConfigured || addressesMatch(form.ownerAddress, account?.address);
+  const canDeleteForm = useCallback(
+    (form: Pick<FormSchema, "ownerAddress">) =>
+      hasAdminAccess || !capabilityProfile.isConfigured || addressesMatch(form.ownerAddress, account?.address),
+    [account?.address, capabilityProfile.isConfigured, hasAdminAccess],
+  );
   const formById = useMemo(
     () =>
       Object.fromEntries(accessibleForms.map((form) => [form.id, form])) as Record<
@@ -756,10 +759,8 @@ export function AdminDashboardPage() {
     return [allFormsItem, ...formItems];
   }, [
     accessibleForms,
-    account?.address,
     allSignals.length,
-    capabilityProfile.isConfigured,
-    hasAdminAccess,
+    canDeleteForm,
     nodeSearch,
     signalIndex.counts.unread,
     t,

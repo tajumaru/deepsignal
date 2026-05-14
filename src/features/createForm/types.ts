@@ -4,6 +4,9 @@ import { createFormOnChain } from "../../lib/projectRegistry";
 import type {
   FieldType,
   FormField,
+  FormHeaderImage,
+  FormHeaderLogo,
+  FormHeaderImagePosition,
   FormIdentityPolicy,
   FormPurpose,
   FormSchema,
@@ -11,7 +14,18 @@ import type {
   FormVisibility,
 } from "../../types";
 
-export type { FieldType, FormField, FormIdentityPolicy, FormPurpose, FormSchema, FormSection, FormVisibility };
+export type {
+  FieldType,
+  FormField,
+  FormHeaderImage,
+  FormHeaderLogo,
+  FormHeaderImagePosition,
+  FormIdentityPolicy,
+  FormPurpose,
+  FormSchema,
+  FormSection,
+  FormVisibility,
+};
 
 export type PublishStageKey = "encoding" | "encrypting" | "sending" | "stored" | "registering" | "active";
 export type BuilderStepKey = "template" | "info" | "fields" | "publish";
@@ -46,6 +60,19 @@ export interface FormBuilderValues {
   selectedTemplateKey: string;
   title: string;
   description: string;
+  headerImage: {
+    url: string;
+    alt: string;
+    position: FormHeaderImagePosition;
+    source: "url" | "upload";
+    fileName: string;
+  };
+  headerLogo: {
+    url: string;
+    alt: string;
+    source: "url" | "upload";
+    fileName: string;
+  };
   fields: FormField[];
   sections: FormSection[];
   purpose: FormPurpose;

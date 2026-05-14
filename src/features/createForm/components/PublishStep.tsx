@@ -10,6 +10,8 @@ import { formatWalrusFailureStage, type WalrusFailureDetails } from "../../../st
 import type { EncryptionReadinessWarning } from "../encryptionReadiness";
 import type {
   FormField,
+  FormHeaderImage,
+  FormHeaderLogo,
   FormIdentityPolicy,
   FormSection,
   FormVisibility,
@@ -27,6 +29,19 @@ interface PublishStepProps {
   savedForm: PreparedPublishForm | null;
   title: string;
   description: string;
+  headerImage: FormHeaderImage | {
+    url: string;
+    alt: string;
+    position: FormHeaderImage["position"];
+    source?: "url" | "upload";
+    fileName?: string;
+  };
+  headerLogo: FormHeaderLogo | {
+    url: string;
+    alt: string;
+    source?: "url" | "upload";
+    fileName?: string;
+  };
   fields: FormField[];
   sections: FormSection[];
   visibility: FormVisibility;
@@ -70,6 +85,8 @@ export function PublishStep({
   savedForm,
   title,
   description,
+  headerImage,
+  headerLogo,
   fields,
   sections,
   visibility,
@@ -553,6 +570,8 @@ export function PublishStep({
           <LivePreview
             title={title}
             description={description}
+            headerImage={headerImage}
+            headerLogo={headerLogo}
             fields={fields}
             sections={sections}
           />

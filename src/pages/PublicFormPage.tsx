@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import { DynamicField } from "../components/DynamicField";
 import { EmptyState } from "../components/EmptyState";
+import { FormHeaderImage } from "../components/FormHeaderImage";
 import { RichTextContent } from "../components/RichText";
 import { PublicFormSuccess } from "../features/public-form/components/PublicFormSuccess";
 import { PublicIdentityCard } from "../features/public-form/components/PublicIdentityCard";
@@ -153,6 +154,12 @@ export function PublicFormPage() {
 
   return (
     <form className="panel glow-panel public-form" onSubmit={handleSubmit}>
+      <FormHeaderImage
+        image={form.headerImage}
+        logo={form.headerLogo}
+        className="public-form-header-image"
+        fallbackTitle={form.title}
+      />
       <p className="eyebrow">{t("publicEyebrow")}</p>
       <h1>{form.title}</h1>
       <RichTextContent value={form.description ?? ""} className="lede rich-text-content" fallback={t("publicDefaultBody")} />

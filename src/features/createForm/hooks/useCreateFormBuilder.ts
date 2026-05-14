@@ -66,6 +66,19 @@ export function useCreateFormBuilder({
   const [selectedTemplateKey, setSelectedTemplateKey] = useState(initialTemplate.key);
   const [title, setTitle] = useState(initialTemplate.title);
   const [description, setDescription] = useState(initialTemplate.description);
+  const [headerImage, setHeaderImage] = useState<FormBuilderValues["headerImage"]>({
+    url: "",
+    alt: "",
+    position: "center",
+    source: "url",
+    fileName: "",
+  });
+  const [headerLogo, setHeaderLogo] = useState<FormBuilderValues["headerLogo"]>({
+    url: "",
+    alt: "",
+    source: "url",
+    fileName: "",
+  });
   const [fields, setFields] = useState(initialFields);
   const [sections, setSections] = useState<FormSection[]>([]);
   const [purpose, setPurpose] = useState(initialTemplate.purpose);
@@ -93,6 +106,8 @@ export function useCreateFormBuilder({
       serializeDraft(
         title,
         description,
+        headerImage,
+        headerLogo,
         fields,
         purpose,
         visibility,
@@ -108,6 +123,8 @@ export function useCreateFormBuilder({
       description,
       encryptSubmissions,
       fields,
+      headerImage,
+      headerLogo,
       identityPolicy,
       purpose,
       responseDeadlineCustomAt,
@@ -129,6 +146,8 @@ export function useCreateFormBuilder({
     setSelectedTemplateKey(initialTemplate.key);
     setTitle(initialTemplate.title);
     setDescription(initialTemplate.description);
+    setHeaderImage({ url: "", alt: "", position: "center", source: "url", fileName: "" });
+    setHeaderLogo({ url: "", alt: "", source: "url", fileName: "" });
     setFields(nextFields);
     setSections([]);
     setPurpose(initialTemplate.purpose);
@@ -185,6 +204,8 @@ export function useCreateFormBuilder({
           setSelectedTemplateKey(template.key);
           setTitle(idea || template.title);
           setDescription(idea ? `A quick form for ${idea.toLowerCase()}.` : template.description);
+          setHeaderImage({ url: "", alt: "", position: "center", source: "url", fileName: "" });
+          setHeaderLogo({ url: "", alt: "", source: "url", fileName: "" });
           setFields(nextFields);
           setSections([]);
           setPurpose(normalizeFormPurpose(template.purpose));
@@ -205,6 +226,8 @@ export function useCreateFormBuilder({
         selectedTemplateKey?: string;
         title?: string;
         description?: string;
+        headerImage?: Partial<FormBuilderValues["headerImage"]>;
+        headerLogo?: Partial<FormBuilderValues["headerLogo"]>;
         fields?: FormField[];
         sections?: FormSection[];
         purpose?: FormBuilderValues["purpose"];
@@ -224,6 +247,22 @@ export function useCreateFormBuilder({
       setSelectedTemplateKey(parsedDraft.selectedTemplateKey ?? initialTemplate.key);
       setTitle(typeof parsedDraft.title === "string" ? parsedDraft.title : initialTemplate.title);
       setDescription(typeof parsedDraft.description === "string" ? parsedDraft.description : initialTemplate.description);
+      setHeaderImage({
+        url: typeof parsedDraft.headerImage?.url === "string" ? parsedDraft.headerImage.url : "",
+        alt: typeof parsedDraft.headerImage?.alt === "string" ? parsedDraft.headerImage.alt : "",
+        position:
+          parsedDraft.headerImage?.position === "top" || parsedDraft.headerImage?.position === "bottom"
+            ? parsedDraft.headerImage.position
+            : "center",
+        source: parsedDraft.headerImage?.source === "upload" ? "upload" : "url",
+        fileName: typeof parsedDraft.headerImage?.fileName === "string" ? parsedDraft.headerImage.fileName : "",
+      });
+      setHeaderLogo({
+        url: typeof parsedDraft.headerLogo?.url === "string" ? parsedDraft.headerLogo.url : "",
+        alt: typeof parsedDraft.headerLogo?.alt === "string" ? parsedDraft.headerLogo.alt : "",
+        source: parsedDraft.headerLogo?.source === "upload" ? "upload" : "url",
+        fileName: typeof parsedDraft.headerLogo?.fileName === "string" ? parsedDraft.headerLogo.fileName : "",
+      });
       setFields(
         sanitizeConditionalLogicFields(
           parsedDraft.fields.map((field) => ({
@@ -320,6 +359,8 @@ export function useCreateFormBuilder({
         selectedTemplateKey,
         title,
         description,
+        headerImage,
+        headerLogo,
         fields,
         sections,
         purpose,
@@ -344,6 +385,8 @@ export function useCreateFormBuilder({
     draftSnapshot,
     encryptSubmissions,
     fields,
+    headerImage,
+    headerLogo,
     identityPolicy,
     projectState,
     purpose,
@@ -384,6 +427,8 @@ export function useCreateFormBuilder({
       setPurpose(normalizeFormPurpose(template.purpose));
       setTitle(template.title);
       setDescription(template.description);
+      setHeaderImage({ url: "", alt: "", position: "center", source: "url", fileName: "" });
+      setHeaderLogo({ url: "", alt: "", source: "url", fileName: "" });
       setSections([]);
       setVisibility("unlisted");
       setIdentityPolicy("anonymous_allowed");
@@ -649,6 +694,8 @@ export function useCreateFormBuilder({
     selectedTemplateKey,
     title,
     description,
+    headerImage,
+    headerLogo,
     fields,
     sections,
     purpose,
@@ -680,6 +727,8 @@ export function useCreateFormBuilder({
     selectedProject,
     setTitle,
     setDescription,
+    setHeaderImage,
+    setHeaderLogo,
     setEncryptSubmissions,
     setIdentityPolicy,
     setResponseDeadlinePreset,

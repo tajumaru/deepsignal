@@ -13,7 +13,7 @@ function isModifiedEvent(event: MouseEvent<HTMLAnchorElement>) {
 
 function createFreshFormTarget() {
   return {
-    pathname: "/admin/forms/new",
+    pathname: "/create",
     search: `?fresh=${Date.now()}`,
   };
 }
@@ -31,14 +31,14 @@ export function CreateFormLink({ children, className, nav = false }: CreateFormL
 
   if (nav) {
     return (
-      <NavLink className={className} to="/admin/forms/new" onClick={handleClick}>
+      <NavLink className={className} to="/create" onClick={handleClick}>
         {children}
       </NavLink>
     );
   }
 
   return (
-    <Link className={className} to="/admin/forms/new" onClick={handleClick}>
+    <Link className={className} to="/create" onClick={handleClick}>
       {children}
     </Link>
   );

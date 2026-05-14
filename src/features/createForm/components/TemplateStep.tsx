@@ -6,10 +6,9 @@ interface TemplateStepProps {
   t: Translate;
   selectedTemplateKey: string;
   onSelectTemplate: (templateKey: string) => void;
-  onNavigateHome: () => void;
 }
 
-export function TemplateStep({ t, selectedTemplateKey, onSelectTemplate, onNavigateHome }: TemplateStepProps) {
+export function TemplateStep({ t, selectedTemplateKey, onSelectTemplate }: TemplateStepProps) {
   return (
     <section className="panel glow-panel composer-hero-card">
       <div className="composer-hero-copy">
@@ -22,11 +21,6 @@ export function TemplateStep({ t, selectedTemplateKey, onSelectTemplate, onNavig
         selectedTemplateKey={selectedTemplateKey}
         onSelect={onSelectTemplate}
       />
-      <div className="composer-step-actions">
-        <button type="button" className="ghost-button" onClick={onNavigateHome}>
-          {t("backToHome")}
-        </button>
-      </div>
     </section>
   );
 }

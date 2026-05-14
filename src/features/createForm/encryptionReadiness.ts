@@ -96,8 +96,9 @@ export function getCreateFormEncryptionReadiness({
   if (walrusWriteUnavailable) {
     warnings.push({
       kind: "walrus-write-unavailable",
-      message: "Walrus write access is unavailable. Publishing or receiving responses may fail.",
-      blocksPublish: false,
+      message:
+        "Encrypted submissions require Walrus write access. Configure Walrus write/upload relay before publishing an encrypted form.",
+      blocksPublish: true,
     });
   }
 

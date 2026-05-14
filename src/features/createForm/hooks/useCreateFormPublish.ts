@@ -13,6 +13,7 @@ import { getCreateFormEncryptionReadiness } from "../encryptionReadiness";
 import type {
   CreateFormTransaction,
   FormField,
+  FormHeaderImagePosition,
   FormIdentityPolicy,
   FormPurpose,
   FormSection,
@@ -32,6 +33,19 @@ interface UseCreateFormPublishArgs {
   creationMode: "admin" | "guest";
   title: string;
   description: string;
+  headerImage: {
+    url: string;
+    alt: string;
+    position: FormHeaderImagePosition;
+    source?: "url" | "upload";
+    fileName?: string;
+  };
+  headerLogo: {
+    url: string;
+    alt: string;
+    source?: "url" | "upload";
+    fileName?: string;
+  };
   fields: FormField[];
   sections: FormSection[];
   purpose: FormPurpose;
@@ -69,6 +83,8 @@ export function useCreateFormPublish({
   creationMode,
   title,
   description,
+  headerImage,
+  headerLogo,
   fields,
   sections,
   purpose,
@@ -245,6 +261,8 @@ export function useCreateFormPublish({
     const form = buildFormSchema({
       title,
       description,
+      headerImage,
+      headerLogo,
       fields,
       sections,
       purpose,

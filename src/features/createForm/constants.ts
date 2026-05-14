@@ -31,6 +31,8 @@ export const initialSections = [];
 export const INITIAL_DRAFT_SNAPSHOT = serializeDraft(
   initialTemplate.title,
   initialTemplate.description,
+  { url: "", alt: "", position: "center", source: "url", fileName: "" },
+  { url: "", alt: "", source: "url", fileName: "" },
   initialFields,
   initialTemplate.purpose,
   "unlisted",

@@ -13,7 +13,6 @@ interface BuilderToolbarProps {
   draftStateLabel?: string;
   savedFormId?: string;
   onSelectStep: (step: BuilderStepKey) => void;
-  onNavigateHome: () => void;
 }
 
 export function BuilderToolbar({
@@ -27,7 +26,6 @@ export function BuilderToolbar({
   draftStateLabel,
   savedFormId,
   onSelectStep,
-  onNavigateHome,
 }: BuilderToolbarProps) {
   const builderSteps = [
     { key: "template", title: "Step 1", description: t("stepTemplateDescription") },
@@ -62,9 +60,6 @@ export function BuilderToolbar({
       />
 
       <div className="composer-toolbar-actions">
-        <button type="button" className="ghost-button" onClick={onNavigateHome}>
-          {t("backToHome")}
-        </button>
         {savedFormId ? (
           <Link className="ghost-button" to={`/f/${savedFormId}`}>
             {t("openLiveForm")}

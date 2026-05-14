@@ -1,6 +1,6 @@
 import { useCurrentAccount, useCurrentWallet, useSignAndExecuteTransaction, useSuiClient } from "@mysten/dapp-kit";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useLocation } from "react-router-dom";
 import { AdminAccessGate } from "../components/AdminAccessGate";
 import { FieldTypePicker } from "../components/formBuilder/FieldTypePicker";
 import { useAccessControl } from "../hooks/useAccessControl";
@@ -38,7 +38,6 @@ function FormBuilderComposer({ mode, freshStartToken, draftSeed }: FormBuilderCo
   const { capabilityProfile, isLoadingAccess } = useAccessControl(account?.address);
   const { projects } = useProjectRegistry(account?.address);
   const createFormTx = useSignAndExecuteTransaction();
-  const navigate = useNavigate();
   const composerShellRef = useRef<HTMLElement | null>(null);
   const [isScrolled, setIsScrolled] = useState(false);
   const [storageRuntime, setStorageRuntime] = useState(() => getStorageRuntimeStatus());
@@ -60,6 +59,8 @@ function FormBuilderComposer({ mode, freshStartToken, draftSeed }: FormBuilderCo
     creationMode: isGuestDraftMode ? "guest" : "admin",
     title: builder.values.title,
     description: builder.values.description,
+    headerImage: builder.values.headerImage,
+    headerLogo: builder.values.headerLogo,
     fields: builder.values.fields,
     sections: builder.values.sections,
     purpose: builder.values.purpose,
@@ -163,13 +164,6 @@ function FormBuilderComposer({ mode, freshStartToken, draftSeed }: FormBuilderCo
     return () => window.cancelAnimationFrame(frameId);
   }, [freshStartToken]);
 
-  function handleNavigateHome() {
-    if (!builder.confirmDiscardChanges()) {
-      return;
-    }
-    navigate("/");
-  }
-
   function handleFieldsContinue() {
     publish.setError("");
     const validation = builder.validateFieldsStep();
@@ -231,7 +225,6 @@ function FormBuilderComposer({ mode, freshStartToken, draftSeed }: FormBuilderCo
           draftStateLabel={draftStateLabel || undefined}
           savedFormId={publish.savedForm?.id}
           onSelectStep={builder.goToStep}
-          onNavigateHome={handleNavigateHome}
         />
 
         {isGuestDraftMode ? (
@@ -247,7 +240,6 @@ function FormBuilderComposer({ mode, freshStartToken, draftSeed }: FormBuilderCo
               t={t}
               selectedTemplateKey={builder.values.selectedTemplateKey}
               onSelectTemplate={builder.applyTemplate}
-              onNavigateHome={handleNavigateHome}
             />
           ) : null}
 
@@ -256,10 +248,14 @@ function FormBuilderComposer({ mode, freshStartToken, draftSeed }: FormBuilderCo
               t={t}
               title={builder.values.title}
               description={builder.values.description}
+              headerImage={builder.values.headerImage}
+              headerLogo={builder.values.headerLogo}
               responseDeadlinePreset={builder.values.responseDeadlinePreset}
               responseDeadlineCustomAt={builder.values.responseDeadlineCustomAt}
               setTitle={builder.setTitle}
               setDescription={builder.setDescription}
+              setHeaderImage={builder.setHeaderImage}
+              setHeaderLogo={builder.setHeaderLogo}
               setResponseDeadlinePreset={builder.setResponseDeadlinePreset}
               setResponseDeadlineCustomAt={builder.setResponseDeadlineCustomAt}
               onBack={() => builder.moveStep(-1)}
@@ -307,6 +303,8 @@ function FormBuilderComposer({ mode, freshStartToken, draftSeed }: FormBuilderCo
               savedForm={publish.savedForm}
               title={builder.values.title}
               description={builder.values.description}
+              headerImage={builder.values.headerImage}
+              headerLogo={builder.values.headerLogo}
               fields={builder.values.fields}
               sections={builder.values.sections}
               visibility={builder.values.visibility}

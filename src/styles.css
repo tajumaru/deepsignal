@@ -1,3 +1,4 @@
+html,
 :root {
   color-scheme: dark;
   font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
@@ -16,6 +17,7 @@
   --danger: #ff7e8f;
   --text-soft: #99b7c9;
   --shadow: 0 22px 60px rgba(0, 0, 0, 0.38);
+  overflow-x: hidden;
 }
 
 * {
@@ -27,6 +29,8 @@ body {
   min-width: 320px;
   min-height: 100vh;
   min-height: 100dvh;
+  overflow-x: hidden;
+  -webkit-text-size-adjust: 100%;
 }
 
 a {
@@ -48,6 +52,7 @@ button {
 #root {
   min-height: 100vh;
   min-height: 100dvh;
+  overflow-x: hidden;
 }
 
 #boot-overlay {
@@ -5671,6 +5676,132 @@ body.composer-mode .bg-orb {
   gap: 1rem;
 }
 
+.composer-header-image-card {
+  display: grid;
+  gap: 0.85rem;
+  padding: 0.95rem;
+  border-radius: 12px;
+  border: 1px solid rgba(116, 226, 255, 0.14);
+  background: rgba(8, 21, 34, 0.72);
+}
+
+.composer-header-image-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(150px, 0.65fr);
+  gap: 0.8rem;
+  align-items: end;
+}
+
+.composer-header-logo-card {
+  display: grid;
+  gap: 0.85rem;
+  padding-top: 0.85rem;
+  border-top: 1px solid rgba(116, 226, 255, 0.12);
+}
+
+.composer-header-logo-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 0.8rem;
+  align-items: end;
+}
+
+.composer-header-upload-control {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.composer-header-upload-control input[type="file"] {
+  min-height: 0;
+  padding: 0.7rem;
+  border-style: dashed;
+  cursor: pointer;
+}
+
+.composer-header-image-clear {
+  justify-self: start;
+}
+
+.form-header-image {
+  position: relative;
+  width: 100%;
+  margin: 0 0 2.4rem;
+  overflow: visible;
+  border-radius: 18px;
+  border: 1px solid rgba(116, 226, 255, 0.16);
+  background: rgba(6, 20, 31, 0.72);
+  aspect-ratio: 16 / 7;
+}
+
+.form-header-default-art {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border-radius: inherit;
+  background: #6f2df4;
+}
+
+.form-header-shape {
+  display: none;
+}
+
+.form-header-avatar {
+  display: none;
+}
+
+.form-header-image > img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  object-fit: cover;
+  object-position: center;
+}
+
+.form-header-image-top > img {
+  object-position: top;
+}
+
+.form-header-image-bottom > img {
+  object-position: bottom;
+}
+
+.form-header-logo {
+  position: absolute;
+  left: 50%;
+  bottom: -2.35rem;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: min(31%, 8.5rem);
+  aspect-ratio: 1;
+  padding: 0.5rem;
+  border-radius: 24%;
+  background: #e9d0ff;
+  color: #6827c8;
+  transform: translateX(-50%);
+  box-shadow: 0 1.25rem 2.5rem rgba(12, 4, 30, 0.28);
+}
+
+.form-header-logo span {
+  font-size: 3rem;
+  font-weight: 850;
+  line-height: 1;
+}
+
+.form-header-logo img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  border-radius: 20%;
+}
+
+.composer-header-image-inline-preview {
+  min-height: 170px;
+  aspect-ratio: 16 / 6;
+}
+
 .composer-deadline-card {
   display: grid;
   gap: 0.75rem;
@@ -6632,6 +6763,11 @@ body.composer-mode .bg-orb {
   gap: 0.85rem;
 }
 
+.composer-preview-header-image {
+  aspect-ratio: 16 / 8;
+  border-radius: 22px;
+}
+
 .composer-preview-banner {
   margin: 0;
 }
@@ -7031,6 +7167,11 @@ body.composer-mode .bg-orb {
 
 .public-form-fields {
   gap: 1.25rem;
+}
+
+.public-form-header-image {
+  aspect-ratio: 16 / 7;
+  border-radius: 24px;
 }
 
 .public-form-summary-row {
@@ -12289,6 +12430,15 @@ body.composer-mode .bg-orb {
     border-radius: 18px;
   }
 
+  .form-header-image,
+  .public-form-header-image,
+  .composer-preview-header-image,
+  .composer-header-image-inline-preview {
+    min-height: 0;
+    aspect-ratio: 16 / 8.5;
+    border-radius: 16px;
+  }
+
   .public-form > .eyebrow {
     margin-bottom: -0.25rem;
   }
@@ -12592,6 +12742,14 @@ body.composer-mode .bg-orb {
 
   .composer-live-preview {
     position: static;
+  }
+
+  .composer-header-image-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .composer-header-logo-grid {
+    grid-template-columns: 1fr;
   }
 
   .composer-step-card,
@@ -13054,8 +13212,118 @@ body.composer-mode .bg-orb {
     grid-template-columns: 1fr;
   }
 
+  .composer-library-column {
+    position: static;
+    top: auto;
+  }
+
+  .composer-library-panel {
+    gap: 0.7rem;
+  }
+
+  .composer-library-panel .composer-pane-heading {
+    align-items: center;
+  }
+
+  .composer-library-panel .composer-pane-heading .muted {
+    display: none;
+  }
+
+  .composer-library-list {
+    display: flex;
+    gap: 0.55rem;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    padding-bottom: 0.2rem;
+    scroll-snap-type: x proximity;
+    scrollbar-width: none;
+    touch-action: pan-x;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .composer-library-list::-webkit-scrollbar {
+    display: none;
+  }
+
+  .composer-library-card {
+    flex: 0 0 min(10.5rem, 54vw);
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.58rem 0.65rem;
+    border-radius: 16px;
+    scroll-snap-align: start;
+  }
+
+  .composer-library-card-icon {
+    width: 2.25rem;
+    height: 2.25rem;
+    border-radius: 13px;
+    font-size: 0.9rem;
+  }
+
+  .composer-library-card-topline {
+    display: block;
+  }
+
+  .composer-library-card-topline strong {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .composer-library-chip,
+  .composer-library-footer {
+    display: none;
+  }
+
   .composer-template-grid {
-    grid-template-columns: 1fr;
+    display: flex;
+    grid-template-columns: none;
+    gap: 0.55rem;
+    margin-top: 0.65rem;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    padding-bottom: 0.2rem;
+    scroll-snap-type: x proximity;
+    scrollbar-width: none;
+    touch-action: pan-x;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .composer-template-grid::-webkit-scrollbar {
+    display: none;
+  }
+
+  .composer-template-card {
+    flex: 0 0 min(12.5rem, 64vw);
+    min-height: 5rem;
+    align-content: center;
+    gap: 0.22rem;
+    padding: 0.68rem 0.78rem;
+    border-radius: 16px;
+    scroll-snap-align: start;
+  }
+
+  .composer-template-emoji {
+    font-size: 1.05rem;
+  }
+
+  .composer-template-card strong {
+    overflow: hidden;
+    font-size: 0.92rem;
+    line-height: 1.15;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .composer-template-card .muted {
+    display: none;
+  }
+
+  .composer-template-meta {
+    font-size: 0.75rem;
   }
 
   .composer-live-preview {
@@ -13198,5 +13466,447 @@ body.composer-mode .bg-orb {
     opacity: 1;
     transform: none;
     transition: none;
+  }
+}
+
+/* Last-mile mobile guardrails. These intentionally live at EOF. */
+html,
+body,
+#root,
+.app-shell {
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+.app-shell,
+.page-wrap,
+.panel,
+.topbar,
+.topbar > *,
+.topbar-actions > *,
+main,
+section,
+article,
+form,
+fieldset {
+  min-width: 0;
+  max-width: 100%;
+}
+
+img,
+svg,
+canvas,
+video,
+iframe {
+  max-width: 100%;
+}
+
+button,
+input,
+textarea,
+select,
+.primary-button,
+.ghost-button,
+.danger-button {
+  min-width: 0;
+  max-width: 100%;
+}
+
+button,
+.primary-button,
+.ghost-button,
+.danger-button,
+input,
+select,
+textarea,
+.country-picker-trigger,
+.markdown-toolbar-button {
+  min-height: 44px;
+}
+
+code,
+pre,
+.build-indicator-button,
+.publish-blob-id,
+.signal-meta-tooltip-value,
+.signal-meta-row-value,
+.signal-meta-inline,
+.access-role-value,
+.workspace-meta-item,
+.wallet-sync-menu-header code,
+.wallet-sync-address,
+.metadata-row strong,
+.metadata-row span {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+pre {
+  white-space: pre-wrap;
+}
+
+@supports (min-height: 100svh) {
+  body,
+  #root,
+  .app-shell {
+    min-height: 100svh;
+  }
+}
+
+@media (max-width: 900px) {
+  .hero-layout,
+  .builder-layout,
+  .detail-layout,
+  .public-layout,
+  .composer-toolbar,
+  .composer-builder-grid,
+  .composer-builder-grid-composer,
+  .composer-template-grid,
+  .composer-field-type-grid,
+  .inbox-layout,
+  .signal-console-layout,
+  .review-primary-sections,
+  .review-field-grid,
+  .review-support-grid,
+  .publish-status-grid,
+  .public-identity-grid,
+  .public-form-summary-row,
+  .project-registry-grid,
+  .project-registry-grid-advanced,
+  .workspace-overview-shell,
+  .access-management-actions,
+  .access-role-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .composer-toolbar,
+  .composer-live-preview,
+  .signal-sidebar,
+  .signal-list-panel,
+  .workspace-action-dock,
+  .operations-status-rail {
+    position: static;
+    top: auto;
+    max-height: none;
+  }
+
+  .composer-shell,
+  .inbox-layout,
+  .signal-console-layout,
+  .public-layout,
+  .detail-layout {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+
+  .inbox-header-actions,
+  .workspace-hero-controls,
+  .workspace-action-dock {
+    width: 100%;
+    min-width: 0;
+    justify-items: stretch;
+    align-items: stretch;
+  }
+
+  .workspace-hero-compact .workspace-dock-actions,
+  .workspace-dock-actions,
+  .project-active-stats,
+  .inbox-overview-grid,
+  .contest-flow-steps,
+  .roadmap-metadata-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .workspace-hero-main,
+  .workspace-overview-shell,
+  .workspace-primary-action,
+  .workspace-primary-actions,
+  .signal-workbench-header,
+  .signal-workbench-summary,
+  .signal-column-tools,
+  .signal-detail-heading,
+  .review-toolbar,
+  .public-form-actions,
+  .builder-bottom-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
+@media (max-width: 640px) {
+  html,
+  body,
+  #root,
+  .app-shell {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+
+  .topbar {
+    position: sticky;
+    top: env(safe-area-inset-top, 0px);
+    width: auto;
+    margin:
+      max(0.5rem, env(safe-area-inset-top, 0px))
+      max(0.5rem, env(safe-area-inset-right, 0px))
+      0
+      max(0.5rem, env(safe-area-inset-left, 0px));
+    overflow: visible;
+  }
+
+  .brand-copy,
+  .brand-copy strong,
+  .brand-copy p,
+  .wallet-sync-copy,
+  .wallet-sync-copy strong,
+  .wallet-sync-copy span,
+  .wallet-sync-address {
+    min-width: 0;
+  }
+
+  .topnav {
+    flex-wrap: wrap;
+    overflow-x: hidden;
+    padding-bottom: 0;
+  }
+
+  .topnav a {
+    flex: 1 1 calc(50% - 0.4rem);
+    min-width: 0;
+    min-height: 44px;
+    white-space: normal;
+  }
+
+  .topbar-actions {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .wallet-sync-button {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .wallet-sync-address {
+    grid-column: 1 / -1;
+    padding-left: 1.55rem;
+    white-space: normal;
+  }
+
+  .wallet-sync-menu {
+    left: max(0.5rem, env(safe-area-inset-left, 0px));
+    right: max(0.5rem, env(safe-area-inset-right, 0px));
+    width: auto;
+    max-width: none;
+  }
+
+  .language-switch select,
+  .wallet-connect-direct [data-dapp-kit] button,
+  .wallet-connect-direct button[data-dapp-kit] {
+    min-height: 44px;
+  }
+
+  .composer-flow-steps,
+  .explore-tab-row,
+  .explore-filter-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    overflow-x: hidden;
+  }
+
+  .composer-flow-steps {
+    display: flex;
+    gap: 0.5rem;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    padding-bottom: 0.12rem;
+    scroll-snap-type: x proximity;
+    scrollbar-width: none;
+    touch-action: pan-x;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .composer-flow-steps::-webkit-scrollbar {
+    display: none;
+  }
+
+  .composer-flow-step {
+    flex: 0 0 min(11.25rem, 58vw);
+    width: auto;
+    min-height: 4.15rem;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.52rem 0.62rem;
+    border-radius: 16px;
+    scroll-snap-align: start;
+  }
+
+  .composer-flow-step::before {
+    height: 2px;
+  }
+
+  .composer-flow-step-state {
+    grid-column: 2;
+    grid-row: 2;
+    min-height: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    font-size: 0.62rem;
+    line-height: 1;
+  }
+
+  .composer-flow-step-index {
+    grid-row: 1 / span 2;
+    width: 1.45rem;
+    height: 1.45rem;
+    font-size: 0.76rem;
+  }
+
+  .composer-flow-step-copy {
+    grid-column: 2;
+    gap: 0;
+  }
+
+  .composer-flow-step-copy strong {
+    overflow: hidden;
+    font-size: 0.9rem;
+    line-height: 1.12;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .composer-flow-step-copy small {
+    display: none;
+  }
+
+  .composer-toolbar-actions,
+  .question-card-actions,
+  .composer-section-preset-row,
+  .composer-smart-template-row,
+  .composer-add-bar-main,
+  .composer-add-bar-secondary,
+  .composer-canvas-header-actions,
+  .composer-canvas-quick-actions,
+  .form-sticky-actions,
+  .inline-actions,
+  .cta-row,
+  .filter-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: stretch;
+  }
+
+  .form-sticky-bar {
+    padding-inline:
+      max(0.5rem, env(safe-area-inset-left, 0px))
+      max(0.5rem, env(safe-area-inset-right, 0px));
+  }
+
+  .form-sticky-inner {
+    width: 100%;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.55rem;
+  }
+
+  .form-sticky-brand {
+    display: none;
+  }
+
+  .public-form {
+    max-width: 100%;
+    padding-bottom: calc(6.4rem + env(safe-area-inset-bottom, 0px));
+  }
+
+  .public-form-actions {
+    padding-bottom: calc(0.8rem + env(safe-area-inset-bottom, 0px));
+  }
+
+  .metadata-row,
+  .signal-meta-row,
+  .proof-row,
+  .distribution-row {
+    grid-template-columns: minmax(0, 1fr);
+    align-items: stretch;
+  }
+
+  .access-role-grid,
+  .table-shell,
+  .node-directory-panel,
+  .publish-overlay-panel {
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+
+  .publish-overlay,
+  .node-directory-overlay,
+  .composer-modal {
+    padding-left: max(0.5rem, env(safe-area-inset-left, 0px));
+    padding-right: max(0.5rem, env(safe-area-inset-right, 0px));
+  }
+
+  .build-indicator-button {
+    white-space: normal;
+    text-align: left;
+  }
+
+  .markdown-editor-toolbar {
+    display: flex;
+    flex-flow: row wrap;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 0.32rem;
+    padding: 0.34rem;
+  }
+
+  .markdown-toolbar-button {
+    flex: 0 0 auto;
+    width: auto !important;
+    min-width: 44px;
+    max-width: 64px;
+    min-height: 44px;
+    padding: 0 0.48rem;
+    border-radius: 12px;
+    font-size: 0.78rem;
+  }
+
+  .markdown-toolbar-button-bullet,
+  .markdown-toolbar-button-link {
+    min-width: 48px;
+    max-width: 58px;
+    font-size: 0.7rem;
+  }
+
+  .rich-text-toolbar {
+    flex-wrap: nowrap;
+    gap: 0.35rem;
+    overflow-x: auto;
+    padding: 0.42rem;
+    scrollbar-width: none;
+  }
+
+  .rich-text-toolbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .rich-text-tool {
+    flex: 0 0 auto;
+    min-width: 42px;
+    min-height: 38px;
+    padding: 0 0.64rem;
+    border-radius: 14px;
+    font-size: 0.82rem;
+    white-space: nowrap;
+  }
+
+  .rich-text-surface,
+  .rich-text-input {
+    min-height: 6.75rem;
+  }
+
+  .rich-text-input {
+    padding: 0.8rem 0.85rem 0.95rem;
   }
 }

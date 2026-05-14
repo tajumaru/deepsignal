@@ -15,6 +15,7 @@ export type FieldType =
 export type FormPurpose = "bug" | "feature" | "survey" | "custom";
 export type FormVisibility = "private" | "unlisted" | "public";
 export type FormIdentityPolicy = "anonymous_allowed" | "wallet_required";
+export type FormHeaderImagePosition = "center" | "top" | "bottom";
 export type SubmissionCategory = "bug" | "feature" | "survey" | "general";
 export type SubmissionPriority = "low" | "medium" | "high";
 export type SignalSeverity = "low" | "medium" | "high";
@@ -71,10 +72,27 @@ export interface FormSection {
   description?: string;
 }
 
+export interface FormHeaderImage {
+  url: string;
+  alt?: string;
+  position?: FormHeaderImagePosition;
+  source?: "url" | "upload";
+  fileName?: string;
+}
+
+export interface FormHeaderLogo {
+  url: string;
+  alt?: string;
+  source?: "url" | "upload";
+  fileName?: string;
+}
+
 export interface FormSchema {
   id: string;
   title: string;
   description: string;
+  headerImage?: FormHeaderImage;
+  headerLogo?: FormHeaderLogo;
   fields: FormField[];
   sections?: FormSection[];
   purpose?: FormPurpose;
@@ -104,6 +122,8 @@ export interface SignalManifest {
   createdAt: string;
   updatedAt: string;
   formBlobId: string;
+  headerImage?: FormHeaderImage;
+  headerLogo?: FormHeaderLogo;
   submissions: Array<{
     submissionId: string;
     blobId: string;
