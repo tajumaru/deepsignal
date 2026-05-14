@@ -118,6 +118,16 @@ function extractCapIds(
     .filter(Boolean);
 }
 
+function inferOwnedCapRegistryId(entries: OwnedObjectEntry[], preferredRegistryId: string) {
+  const registryIds = [
+    ...new Set(entries.map((entry) => extractRegistryId(entry)).filter(Boolean)),
+  ];
+  if (preferredRegistryId && registryIds.includes(preferredRegistryId)) {
+    return preferredRegistryId;
+  }
+  return registryIds[0] ?? "";
+}
+
 async function fetchOwnedObjectsByType(
   suiClient: ReturnType<typeof useSuiClient>,
   owner: string,
@@ -191,24 +201,32 @@ export function useAccessControl(address?: string | null) {
   });
 
   const capabilityProfile = useMemo<CapabilityProfile>(() => {
+    const ownedCapEntries = ownedObjectsQuery.data ?? [];
+    const inferredRegistryId = inferOwnedCapRegistryId(ownedCapEntries, registryId);
+    const effectiveRegistryId = inferredRegistryId || registryId;
+    const canValidateAgainstRegistry =
+      Boolean(registryId) &&
+      effectiveRegistryId === registryId &&
+      Boolean(registry.owner || registry.admins.length > 0 || registry.reviewers.length > 0);
+
     const ownedOwnerCapIds = extractCapIds(
-      ownedObjectsQuery.data ?? [],
+      ownedCapEntries,
       ACCESS_CONTROL_OWNER_CAP_TYPE,
-      registryId,
+      effectiveRegistryId,
     );
     const ownedAdminCapIds = extractCapIds(
-      ownedObjectsQuery.data ?? [],
+      ownedCapEntries,
       ACCESS_CONTROL_ADMIN_CAP_TYPE,
-      registryId,
+      effectiveRegistryId,
     );
     const ownedReviewerCapIds = extractCapIds(
-      ownedObjectsQuery.data ?? [],
+      ownedCapEntries,
       ACCESS_CONTROL_REVIEWER_CAP_TYPE,
-      registryId,
+      effectiveRegistryId,
     );
 
     const ownerCapIds =
-      registryId && address
+      canValidateAgainstRegistry && address
         ? ownedOwnerCapIds.filter(
             (capId) =>
               registry.owner?.capId === capId &&
@@ -216,7 +234,7 @@ export function useAccessControl(address?: string | null) {
           )
         : ownedOwnerCapIds;
     const adminCapIds =
-      registryId && address
+      canValidateAgainstRegistry && address
         ? ownedAdminCapIds.filter((capId) =>
             findRoleEntriesForAddress(registry, "admin", address).some(
               (entry) => entry.capId === capId,
@@ -224,7 +242,7 @@ export function useAccessControl(address?: string | null) {
           )
         : ownedAdminCapIds;
     const reviewerCapIds =
-      registryId && address
+      canValidateAgainstRegistry && address
         ? ownedReviewerCapIds.filter((capId) =>
             findRoleEntriesForAddress(registry, "reviewer", address).some(
               (entry) => entry.capId === capId,
@@ -235,7 +253,7 @@ export function useAccessControl(address?: string | null) {
     return {
       isConfigured: Boolean(packageId),
       packageId,
-      registryId,
+      registryId: effectiveRegistryId,
       hasOwnerCap: ownerCapIds.length > 0,
       hasAdminCap: adminCapIds.length > 0,
       hasReviewerCap: reviewerCapIds.length > 0,

@@ -1,5 +1,6 @@
 import { useI18n } from "../../../i18n";
 import { formatResponseDeadline, type ResponseDeadlineLabels } from "../../../lib/responseDeadline";
+import { shortAddress } from "../../../lib/sui";
 import type { FormWithCount, StreamId } from "../hooks/useSignalInboxData";
 
 interface StreamItem {
@@ -106,6 +107,13 @@ export function SignalStreamsNav({
                       count: form.submissionCount,
                       inboxType: form.encryptSubmissions ? t("protectedInboxLabel") : t("openInboxLabel"),
                     })}
+                  </p>
+                  <p
+                    className="muted form-stream-owner"
+                    title={form.ownerAddress ? `${t("formOwnerShortLabel")}: ${form.ownerAddress}` : undefined}
+                  >
+                    {t("formOwnerShortLabel")}:{" "}
+                    {form.ownerAddress ? shortAddress(form.ownerAddress) : t("legacyDemoForm")}
                   </p>
                   <p className="muted">
                     {responseDeadlineLabel}: {formatResponseDeadline(form.responseDeadline, responseDeadlineLabels)}

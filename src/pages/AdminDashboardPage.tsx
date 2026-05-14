@@ -2,7 +2,7 @@
   useCurrentAccount,
 } from "@mysten/dapp-kit";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link, Navigate, useLocation } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { CreateFormLink } from "../components/CreateFormLink";
 import { AdminAccessGate } from "../components/AdminAccessGate";
 import { BlobLink } from "../components/BlobLink";
@@ -71,7 +71,6 @@ function formatAccessLabel(roleLabel: string) {
 
 export function AdminDashboardPage() {
   const { t } = useI18n();
-  const location = useLocation();
   const account = useCurrentAccount();
   const {
     capabilityProfile,
@@ -674,6 +673,8 @@ export function AdminDashboardPage() {
   const selectedForm = accessibleForms.find((form) => form.id === selectedFormId) ?? null;
   const selectedBeaconForm =
     accessibleForms.find((form) => form.id === beaconFormId) ?? null;
+  const canDeleteForm = (form: Pick<FormSchema, "ownerAddress">) =>
+    hasAdminAccess || !capabilityProfile.isConfigured || addressesMatch(form.ownerAddress, account?.address);
   const formById = useMemo(
     () =>
       Object.fromEntries(accessibleForms.map((form) => [form.id, form])) as Record<
@@ -732,6 +733,7 @@ export function AdminDashboardPage() {
       submissionCount: allSignals.length,
       unreadCount: signalIndex.counts.unread,
       isLegacyDemo: false,
+      canDelete: false,
     };
     const formItems = accessibleForms
       .filter((form) => {
@@ -749,12 +751,23 @@ export function AdminDashboardPage() {
         submissionCount: form.submissionCount,
         unreadCount: unreadCountByFormId[form.id] ?? 0,
         isLegacyDemo: !form.ownerAddress,
+        canDelete: canDeleteForm(form),
       }));
     return [allFormsItem, ...formItems];
-  }, [accessibleForms, allSignals.length, nodeSearch, signalIndex.counts.unread, t, unreadCountByFormId]);
+  }, [
+    accessibleForms,
+    account?.address,
+    allSignals.length,
+    capabilityProfile.isConfigured,
+    hasAdminAccess,
+    nodeSearch,
+    signalIndex.counts.unread,
+    t,
+    unreadCountByFormId,
+  ]);
 
   const deletableNodeIds = useMemo(
-    () => nodeDirectoryItems.filter((item) => item.id !== "all").map((item) => item.id),
+    () => nodeDirectoryItems.filter((item) => item.id !== "all" && item.canDelete).map((item) => item.id),
     [nodeDirectoryItems],
   );
 
@@ -780,10 +793,6 @@ export function AdminDashboardPage() {
 
   if (isLoadingAccess) {
     return <div className="panel">{t("checkingWalletCapabilities")}</div>;
-  }
-
-  if (account?.address && !hasAdminAccess && location.pathname.startsWith("/admin")) {
-    return <Navigate to={location.pathname.replace(/^\/admin/, "/dashboard")} replace />;
   }
 
   return (
@@ -2025,7 +2034,7 @@ export function AdminDashboardPage() {
                     {t("signalsCount", { count: allSignals.length })}
                   </span>
                 </div>
-                {hasAdminAccess || !capabilityProfile.isConfigured ? (
+                {deletableNodeIds.length > 0 ? (
                   <button
                     type="button"
                     className="ghost-button node-directory-delete"
@@ -2078,7 +2087,7 @@ export function AdminDashboardPage() {
                         >
                           {t("openSignalBeacon")}
                         </button>
-                        {hasAdminAccess || !capabilityProfile.isConfigured ? (
+                        {item.canDelete ? (
                           <button
                             type="button"
                             className="ghost-button node-directory-delete"

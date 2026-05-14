@@ -202,6 +202,7 @@ export function useProjectWorkspace({
         name: projectCreateName.trim(),
         capId,
         role,
+        registryId: capabilityProfile.registryId,
         recipientAddress: accountAddress ?? "",
       });
       const result = await createProjectTx.mutateAsync({ transaction: tx });

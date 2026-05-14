@@ -36,6 +36,7 @@ const messages = {
     connectWalletFirst: "Connect your Sui Wallet first.",
     walletOptionalHint: "Responders can still submit without connecting a wallet.",
     formOwnerLabel: "Owner address",
+    formOwnerShortLabel: "Owner",
     formOnchainReady: "Prepared for onchain publishing",
     suiCreateEyebrow: "Sui wallet bridge",
     enabled: "Enabled",
@@ -1144,6 +1145,7 @@ const messages = {
     walletOptionalHint:
       "\u56de\u7b54\u8005\u306f\u30a6\u30a9\u30ec\u30c3\u30c8\u63a5\u7d9a\u306a\u3057\u3067\u3082\u9001\u4fe1\u3067\u304d\u307e\u3059\u3002",
     formOwnerLabel: "\u6240\u6709\u8005\u30a2\u30c9\u30ec\u30b9",
+    formOwnerShortLabel: "Owner",
     formOnchainReady: "\u30aa\u30f3\u30c1\u30a7\u30fc\u30f3\u516c\u958b\u306e\u6e96\u5099\u6e08\u307f",
     suiCreateEyebrow: "Sui Wallet \u9023\u643a",
     enabled: "\u6709\u52b9",
