@@ -33,6 +33,7 @@ import {
   WALRUS_UPLOAD_RELAY_URL,
 } from "../lib/sui";
 import {
+  EMBEDDED_ENCRYPTED_PAYLOAD_BLOB_ID,
   assertEncryptedSubmissionLeakGuard,
   sanitizeSubmissionForStorage,
 } from "./submissionSanitizer";
@@ -98,6 +99,8 @@ let runtimeContext: WalrusRuntimeContext = {
   supportedIntents: [],
   client: null,
 };
+const runtimeListeners = new Set<() => void>();
+const WALRUS_RUNTIME_READY_TIMEOUT_MS = 5000;
 
 export class WalrusBlobReadError extends Error {
   code: WalrusBlobReadErrorCode;
@@ -113,6 +116,14 @@ export class WalrusBlobReadError extends Error {
 
 export function setWalrusRuntimeContext(next: WalrusRuntimeContext) {
   runtimeContext = next;
+  runtimeListeners.forEach((listener) => listener());
+}
+
+export function subscribeWalrusRuntime(listener: () => void) {
+  runtimeListeners.add(listener);
+  return () => {
+    runtimeListeners.delete(listener);
+  };
 }
 
 export function getWalrusMutationRuntimeStatus() {
@@ -164,6 +175,55 @@ function getRuntimeWalrusClient() {
 function getWalrusClient() {
   assertUploadRelayEnv();
   return getRuntimeWalrusClient();
+}
+
+function isWalrusMutationRuntimeReady(requireWallet: boolean) {
+  if (!runtimeContext.client) {
+    return false;
+  }
+  if (requireWallet && (!runtimeContext.account || !runtimeContext.wallet)) {
+    return false;
+  }
+  return true;
+}
+
+export async function waitForWalrusMutationRuntimeReady({
+  requireWallet = true,
+  timeoutMs = WALRUS_RUNTIME_READY_TIMEOUT_MS,
+}: {
+  requireWallet?: boolean;
+  timeoutMs?: number;
+} = {}) {
+  if (walrusStorageMode === "publisher") {
+    return;
+  }
+  assertUploadRelayEnv();
+  if (isWalrusMutationRuntimeReady(requireWallet)) {
+    return;
+  }
+
+  console.info("[walrus runtime] waiting for mutation runtime", {
+    requireWallet,
+    timeoutMs,
+    hasClient: Boolean(runtimeContext.client),
+    hasWallet: Boolean(runtimeContext.account && runtimeContext.wallet),
+  });
+
+  await new Promise<void>((resolve, reject) => {
+    let unsubscribe = () => {};
+    const timeout = window.setTimeout(() => {
+      unsubscribe();
+      reject(new Error("Walrus client is not ready yet. Refresh the page and reconnect your wallet."));
+    }, timeoutMs);
+    unsubscribe = subscribeWalrusRuntime(() => {
+      if (!isWalrusMutationRuntimeReady(requireWallet)) {
+        return;
+      }
+      window.clearTimeout(timeout);
+      unsubscribe();
+      resolve();
+    });
+  });
 }
 
 async function withWalrusReadTimeout<T>(blobId: string, task: Promise<T>): Promise<T> {
@@ -455,6 +515,7 @@ async function uploadBodyWithSdk(body: Blob | File, kind: UploadKind): Promise<U
         bytes: blob.byteLength,
         mimeType: body.type || "application/octet-stream",
       });
+      await waitForWalrusMutationRuntimeReady({ requireWallet: true });
       const client = getWalrusClient();
       const signer = createWalletSigner();
       const owner = runtimeContext.account?.address;
@@ -916,9 +977,10 @@ export function serializeSubmissionBundle(
   submission: Submission | EncryptedSubmissionRecord,
   manifest: SignalManifest,
   form?: FormSchema | null,
+  options: { allowEncryptedPayload?: boolean } = {},
 ) {
   if (submission.isEncrypted) {
-    assertEncryptedSubmissionLeakGuard(submission);
+    assertEncryptedSubmissionLeakGuard(submission, options);
   }
   return JSON.stringify(createSubmissionBundle(submission, manifest, form));
 }
@@ -936,12 +998,13 @@ async function writeSubmissionBundle(
   submission: Submission | EncryptedSubmissionRecord,
   manifest: SignalManifest,
   form?: FormSchema | null,
+  options: { allowEncryptedPayload?: boolean } = {},
 ) {
   if (submission.isEncrypted) {
-    assertEncryptedSubmissionLeakGuard(submission);
+    assertEncryptedSubmissionLeakGuard(submission, options);
   }
   return uploadBody(
-    new Blob([serializeSubmissionBundle(submission, manifest, form)], {
+    new Blob([serializeSubmissionBundle(submission, manifest, form, options)], {
       type: "application/json",
     }),
     "submission-bundle",
@@ -954,10 +1017,35 @@ async function readSubmissionRecord(blobId: string): Promise<Submission | null> 
     return null;
   }
   if (isSubmissionBundle(payload)) {
+    if (
+      payload.submission.isEncrypted &&
+      payload.submission.encryptedPayload &&
+      (!payload.submission.encryptedBlobId ||
+        payload.submission.encryptedBlobId === EMBEDDED_ENCRYPTED_PAYLOAD_BLOB_ID)
+    ) {
+      return {
+        ...payload.submission,
+        encryptedBlobId: blobId,
+      };
+    }
     return payload.submission;
   }
   if (isFormBundle(payload)) {
     return null;
+  }
+  if (
+    typeof payload === "object" &&
+    payload !== null &&
+    "isEncrypted" in payload &&
+    payload.isEncrypted === true &&
+    "encryptedPayload" in payload &&
+    typeof payload.encryptedPayload === "string" &&
+    (!("encryptedBlobId" in payload) || payload.encryptedBlobId === EMBEDDED_ENCRYPTED_PAYLOAD_BLOB_ID)
+  ) {
+    return {
+      ...(payload as Submission),
+      encryptedBlobId: blobId,
+    };
   }
   return payload as Submission;
 }
@@ -1133,20 +1221,29 @@ export const walrusAdapter: StorageAdapter = {
   },
 
   async saveSubmission(submission: Submission) {
-    const sanitizedSubmission = sanitizeSubmissionForStorage(submission);
+    const allowEmbeddedEncryptedPayload =
+      submission.isEncrypted === true &&
+      typeof submission.encryptedPayload === "string" &&
+      submission.encryptedPayload.trim().length > 0;
+    const encryptedSubmissionOptions = { allowEncryptedPayload: allowEmbeddedEncryptedPayload };
+    const sanitizedSubmission = sanitizeSubmissionForStorage(submission, encryptedSubmissionOptions);
     if (sanitizedSubmission.isEncrypted) {
-      assertEncryptedSubmissionLeakGuard(sanitizedSubmission);
+      assertEncryptedSubmissionLeakGuard(sanitizedSubmission, encryptedSubmissionOptions);
     }
     const { entry, manifest, form } = await loadManifestOrThrow(submission.formId);
     if (!entry?.manifestBlobId || !manifest) {
       if (sanitizedSubmission.isEncrypted) {
-        assertEncryptedSubmissionLeakGuard(sanitizedSubmission);
+        assertEncryptedSubmissionLeakGuard(sanitizedSubmission, encryptedSubmissionOptions);
       }
       const { blobId, blobObjectId } = await uploadBody(
         new Blob([JSON.stringify(sanitizedSubmission)], { type: "application/json" }),
         "submission-bundle",
       );
-      await localStorageAdapter.saveSubmission({ ...sanitizedSubmission, blobId });
+      await localStorageAdapter.saveSubmission({
+        ...sanitizedSubmission,
+        blobId,
+        ...(allowEmbeddedEncryptedPayload ? { encryptedBlobId: blobId } : {}),
+      });
       upsertSubmissionBlobIndex({
         submissionId: sanitizedSubmission.id,
         formId: sanitizedSubmission.formId,
@@ -1175,7 +1272,7 @@ export const walrusAdapter: StorageAdapter = {
       nextManifestEntries,
       new Date().toISOString(),
     );
-    const bundle = await writeSubmissionBundle(sanitizedSubmission, nextManifest, form);
+    const bundle = await writeSubmissionBundle(sanitizedSubmission, nextManifest, form, encryptedSubmissionOptions);
     nextManifest.submissions[0].blobId = bundle.blobId;
 
     upsertFormBlobIndex({
@@ -1199,11 +1296,17 @@ export const walrusAdapter: StorageAdapter = {
         createdAt: manifestEntry.createdAt,
       })),
     );
-    await localStorageAdapter.saveSubmission({ ...sanitizedSubmission, blobId: bundle.blobId });
-    await cleanupSupersededWalrusObjects([
-      entry.manifestBlobObjectId,
-      form ? entry.formBlobObjectId : undefined,
-    ], `saving submission ${sanitizedSubmission.id}`);
+    await localStorageAdapter.saveSubmission({
+      ...sanitizedSubmission,
+      blobId: bundle.blobId,
+      ...(allowEmbeddedEncryptedPayload ? { encryptedBlobId: bundle.blobId } : {}),
+    });
+    if (!allowEmbeddedEncryptedPayload) {
+      await cleanupSupersededWalrusObjects([
+        entry.manifestBlobObjectId,
+        form ? entry.formBlobObjectId : undefined,
+      ], `saving submission ${sanitizedSubmission.id}`);
+    }
     return { id: sanitizedSubmission.id, blobId: bundle.blobId };
   },
 

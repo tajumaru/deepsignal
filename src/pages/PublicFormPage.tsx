@@ -9,6 +9,7 @@ import { RecoverableDraftBanner } from "../components/RecoverableDraftBanner";
 import { PublicFormSuccess } from "../features/public-form/components/PublicFormSuccess";
 import { PublicIdentityCard } from "../features/public-form/components/PublicIdentityCard";
 import { PublicSubmitReadiness } from "../features/public-form/components/PublicSubmitReadiness";
+import { SignalMetaChip } from "../components/SignalMetaChip";
 import { SignalSubmissionPipeline } from "../features/public-form/components/SignalSubmissionPipeline";
 import { usePublicFormLoader } from "../features/public-form/hooks/usePublicFormLoader";
 import { usePublicSubmission } from "../features/public-form/hooks/usePublicSubmission";
@@ -75,6 +76,7 @@ export function PublicFormPage() {
     diagnosticsCopied,
     hasRecoverableDraft,
     submitPipeline,
+    storageConnectionPreparing,
     visibleFieldIds,
     updateAnswer,
     handleSubmit,
@@ -180,6 +182,8 @@ export function PublicFormPage() {
   );
   const submitReadinessLabel = deadlinePassed
     ? t("publicSubmitBarClosed")
+    : storageConnectionPreparing
+      ? "Storage connection is still preparing."
     : visibleErrorCount > 0
       ? t("publicSubmitBarErrors", { count: visibleErrorCount })
       : requiredProgress.missing > 0
@@ -253,13 +257,13 @@ export function PublicFormPage() {
             {loadErrorDetail.manifestBlobId ? (
               <div className="metadata-row">
                 <span>{t("manifestBlobId")}</span>
-                <strong>{loadErrorDetail.manifestBlobId}</strong>
+                <SignalMetaChip type="manifest" value={loadErrorDetail.manifestBlobId} />
               </div>
             ) : null}
             {loadErrorDetail.formBlobId ? (
               <div className="metadata-row">
                 <span>{t("formBlobId")}</span>
-                <strong>{loadErrorDetail.formBlobId}</strong>
+                <SignalMetaChip type="blob" value={loadErrorDetail.formBlobId} />
               </div>
             ) : null}
             <div className="metadata-row">
@@ -291,18 +295,18 @@ export function PublicFormPage() {
     walletButton?.focus();
   }
 
-  function focusSubmitButton() {
-    const submitButton = document.querySelector<HTMLButtonElement>(".public-form-actions button[type='submit']");
-    submitButton?.focus();
+  function retrySubmit() {
+    const formElement = document.querySelector<HTMLFormElement>("form.public-form");
+    formElement?.requestSubmit();
   }
 
   const failureActions =
     failure?.kind === "wallet_disconnected"
       ? [{ key: "reconnect", label: t("reconnectWallet"), onClick: triggerWalletReconnect }]
       : failure?.kind === "registry_failed"
-        ? [{ key: "retry", label: t("retryLabel"), onClick: focusSubmitButton }]
+        ? [{ key: "retry", label: t("retryLabel"), onClick: retrySubmit, disabled: storageConnectionPreparing }]
         : failure?.retryable
-          ? [{ key: "retry", label: t("retryLabel"), onClick: focusSubmitButton }]
+          ? [{ key: "retry", label: t("retryLabel"), onClick: retrySubmit, disabled: storageConnectionPreparing }]
           : [];
 
   return (
@@ -317,25 +321,48 @@ export function PublicFormPage() {
       <h1>{form.title}</h1>
       <RichTextContent value={form.description ?? ""} className="lede rich-text-content" fallback={t("publicDefaultBody")} />
       <div className={`public-form-status-strip ${deadlinePassed ? "is-expired" : ""}`}>
-        <div className="public-form-status-badges" aria-label={t("publicFormStatusSummary")}>
-          <span className={`public-form-status-badge ${deadlinePassed ? "is-expired" : "is-live"}`}>
-            <span>{t("publicResponseWindow")}</span>
-            <strong>{deadlinePassed ? t("publicDeadlineClosedBadge") : deadlineLabel}</strong>
-          </span>
-          {form.encryptSubmissions ? (
-            <span className="public-form-status-badge is-private">
-              <span>{t("publicEncryptedInboxEyebrow")}</span>
-              <strong>{t("publicPrivateSignalBadge")}</strong>
+        <div className="public-form-status-main">
+          <div className="public-form-status-badges" aria-label={t("publicFormStatusSummary")}>
+            <span className={`public-form-status-badge ${deadlinePassed ? "is-expired" : "is-live"}`}>
+              <span>{t("publicResponseWindow")}</span>
+              <strong>{deadlinePassed ? t("publicDeadlineClosedBadge") : deadlineLabel}</strong>
             </span>
-          ) : null}
+            {form.encryptSubmissions ? (
+              <span className="public-form-status-badge is-private">
+                <span>{t("publicEncryptedInboxEyebrow")}</span>
+                <strong>{t("publicPrivateSignalBadge")}</strong>
+              </span>
+            ) : null}
+          </div>
+          <p className="muted">
+            {deadlinePassed
+              ? t("publicDeadlineClosedHelp")
+              : form.encryptSubmissions
+                ? t("publicPrivateSignalBadgeHelp")
+                : t("publicDeadlineActiveHelp")}
+          </p>
         </div>
-        <p className="muted">
-          {deadlinePassed
-            ? t("publicDeadlineClosedHelp")
-            : form.encryptSubmissions
-              ? t("publicPrivateSignalBadgeHelp")
-              : t("publicDeadlineActiveHelp")}
-        </p>
+        <PublicSubmitReadiness
+          className="public-submit-readiness-inline"
+          identityMode={walletRequired || (attachWallet && walletAccountAddress) ? "wallet" : "anonymous"}
+          sealEnabled={Boolean(form.encryptSubmissions)}
+          submitModeLabel={submitModeLabel}
+          storageModeLabel={storageModeLabel}
+          labels={{
+            summary: t("publicReadinessSummary"),
+            deliveryMode: t("publicReadinessDeliveryMode"),
+            anonymous: t("publicReadinessAnonymous"),
+            suiWallet: t("publicReadinessSuiWallet"),
+            storageTarget: t("publicReadinessStorageTarget"),
+            walrus: t("publicReadinessWalrus"),
+            walrusIcon: t("publicReadinessWalrusIcon"),
+            seal: t("publicReadinessSeal"),
+            sealOn: t("publicReadinessSealOn"),
+            sealOff: t("publicReadinessSealOff"),
+            attachments: t("publicReadinessAttachments"),
+            attachmentsHelp: t("publicReadinessAttachmentsHelp"),
+          }}
+        />
       </div>
 
       <PublicIdentityCard
@@ -429,27 +456,6 @@ export function PublicFormPage() {
         ))}
       </div>
 
-      <PublicSubmitReadiness
-        identityMode={walletRequired || (attachWallet && walletAccountAddress) ? "wallet" : "anonymous"}
-        sealEnabled={Boolean(form.encryptSubmissions)}
-        submitModeLabel={submitModeLabel}
-        storageModeLabel={storageModeLabel}
-        labels={{
-          summary: t("publicReadinessSummary"),
-          deliveryMode: t("publicReadinessDeliveryMode"),
-          anonymous: t("publicReadinessAnonymous"),
-          suiWallet: t("publicReadinessSuiWallet"),
-          storageTarget: t("publicReadinessStorageTarget"),
-          walrus: t("publicReadinessWalrus"),
-          walrusIcon: t("publicReadinessWalrusIcon"),
-          seal: t("publicReadinessSeal"),
-          sealOn: t("publicReadinessSealOn"),
-          sealOff: t("publicReadinessSealOff"),
-          attachments: t("publicReadinessAttachments"),
-          attachmentsHelp: t("publicReadinessAttachmentsHelp"),
-        }}
-      />
-
       <SignalSubmissionPipeline pipeline={submitPipeline} visible={submitting || submitPipeline.status === "failed"} />
 
       {failure ? (
@@ -469,7 +475,7 @@ export function PublicFormPage() {
           <span>{submitReadinessLabel}</span>
           <strong>{submitModeLabel}</strong>
         </div>
-        <button type="submit" className="primary-button" disabled={submitting || deadlinePassed}>
+        <button type="submit" className="primary-button" disabled={submitting || deadlinePassed || storageConnectionPreparing}>
           {submitButtonLabel}
         </button>
       </div>

@@ -236,7 +236,7 @@ export interface EncryptedSubmissionRecord extends Omit<
   };
   metadata?: Record<string, never>;
   encryptedBlobId: string;
-  encryptedPayload?: undefined;
+  encryptedPayload?: string;
   aiSummary?: undefined;
   keywords?: undefined;
   embedding?: undefined;

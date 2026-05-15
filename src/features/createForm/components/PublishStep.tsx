@@ -10,6 +10,7 @@ import { isLocalFallbackBlob } from "../../../lib/proof";
 import { shortAddress, SUI_NETWORK } from "../../../lib/sui";
 import { formatWalrusFailureStage, type WalrusFailureDetails } from "../../../storage/walrusDiagnostics";
 import type { EncryptionReadinessWarning } from "../encryptionReadiness";
+import { StepNavigationActions } from "./StepNavigationActions";
 import type {
   FormField,
   FormHeaderImage,
@@ -759,11 +760,7 @@ export function PublishStep({
           )}
 
           {!showFocusedSuccessCard ? (
-            <div className="composer-step-actions">
-              <button type="button" className="ghost-button" onClick={onBack}>
-                {t("back")}
-              </button>
-            </div>
+            <StepNavigationActions t={t} onBack={onBack} />
           ) : null}
         </section>
       </div>

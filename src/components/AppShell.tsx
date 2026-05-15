@@ -1,5 +1,5 @@
 import { lazy, Suspense, useState, type PropsWithChildren } from "react";
-import { Link, NavLink } from "react-router-dom";
+import { Link, NavLink, useLocation } from "react-router-dom";
 import { CreateFormLink } from "./CreateFormLink";
 import { WalletSurface } from "./WalletSurface";
 import { BuildIndicator } from "./system/BuildIndicator";
@@ -78,13 +78,43 @@ function useWalletChrome(walletAvailable: boolean) {
   };
 }
 
+function MobileAppBottomNav() {
+  const location = useLocation();
+  const inboxActive =
+    location.pathname.startsWith("/admin") ||
+    location.pathname.startsWith("/dashboard");
+
+  return (
+    <nav className="mobile-inbox-bottom-nav" aria-label="Mobile workspace navigation">
+      <Link className={inboxActive ? "is-active" : undefined} to="/dashboard">
+        <span aria-hidden="true">In</span>
+        <span>Inbox</span>
+      </Link>
+      <NavLink to="/explore">
+        <span aria-hidden="true">Ex</span>
+        <span>Explore</span>
+      </NavLink>
+      <CreateFormLink>
+        <span aria-hidden="true">+</span>
+        <span>Create</span>
+      </CreateFormLink>
+      <NavLink to="/admin/access">
+        <span aria-hidden="true">Set</span>
+        <span>Settings</span>
+      </NavLink>
+    </nav>
+  );
+}
+
 export function AppShell({ children, walletAvailable = false, chrome = "full" }: AppShellProps) {
   const { language, setLanguage, t } = useI18n();
+  const location = useLocation();
   const walletChrome = useWalletChrome(walletAvailable);
   const publicChrome = chrome === "public";
+  const showMobileBottomNav = !publicChrome && location.pathname !== "/";
 
   const shell = (
-    <div className="app-shell">
+    <div className={`app-shell ${showMobileBottomNav ? "has-mobile-bottom-nav" : ""}`}>
       <div className="bg-orb bg-orb-a" />
       <div className="bg-orb bg-orb-b" />
       <header className={`topbar panel ${publicChrome ? "topbar-public" : ""}`}>
@@ -120,6 +150,7 @@ export function AppShell({ children, walletAvailable = false, chrome = "full" }:
         </div>
       </header>
       <main className="page-wrap">{children}</main>
+      {showMobileBottomNav ? <MobileAppBottomNav /> : null}
       <BuildIndicator />
     </div>
   );

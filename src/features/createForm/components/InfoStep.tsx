@@ -2,6 +2,7 @@ import { lazy, Suspense, useState, type DragEvent } from "react";
 import { FormHeaderImage } from "../../../components/FormHeaderImage";
 import { toDateTimeLocalValue } from "../../../lib/responseDeadline";
 import type { FormHeaderImagePosition, ResponseDeadlinePreset, Translate } from "../types";
+import { StepNavigationActions } from "./StepNavigationActions";
 
 const MAX_HEADER_IMAGE_BYTES = 2 * 1024 * 1024;
 type HeaderAssetSource = "upload" | "url";
@@ -428,14 +429,7 @@ export function InfoStep({
         </section>
       </div>
 
-      <div className="composer-step-actions">
-        <button type="button" className="ghost-button" onClick={onBack}>
-          {t("back")}
-        </button>
-        <button type="button" className="primary-button" onClick={onContinue}>
-          {t("continue")}
-        </button>
-      </div>
+      <StepNavigationActions t={t} onBack={onBack} onContinue={onContinue} />
     </section>
   );
 }

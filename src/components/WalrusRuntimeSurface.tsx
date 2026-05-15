@@ -1,4 +1,4 @@
-import { lazy, Suspense, type PropsWithChildren } from "react";
+import { lazy, Suspense, type PropsWithChildren, type ReactNode } from "react";
 import { retryLazyImport } from "../lib/lazyRetry";
 
 const WalrusRuntimeProvider = lazy(() =>
@@ -7,9 +7,13 @@ const WalrusRuntimeProvider = lazy(() =>
   })),
 );
 
-export function WalrusRuntimeSurface({ children }: PropsWithChildren) {
+interface WalrusRuntimeSurfaceProps extends PropsWithChildren {
+  fallback?: ReactNode;
+}
+
+export function WalrusRuntimeSurface({ children, fallback }: WalrusRuntimeSurfaceProps) {
   return (
-    <Suspense fallback={<div className="panel">Loading Walrus runtime...</div>}>
+    <Suspense fallback={fallback ?? <div className="panel">Loading Walrus runtime...</div>}>
       <WalrusRuntimeProvider>{children}</WalrusRuntimeProvider>
     </Suspense>
   );

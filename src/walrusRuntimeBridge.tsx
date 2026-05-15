@@ -44,9 +44,16 @@ function buildWaitForTransactionTimeoutError(digest: string, timeoutMs: number, 
 function WalrusRuntimeBridgeInner() {
   const account = useCurrentAccount();
   const { currentWallet, supportedIntents } = useCurrentWallet();
-  const { client } = useSuiClientContext();
+  const { client, config, network } = useSuiClientContext();
+  const supportedIntentKey = useMemo(() => supportedIntents.join("|"), [supportedIntents]);
   const walrusClient = useMemo(
     () => {
+      console.info("[walrus runtime] creating client", {
+        account: account?.address,
+        wallet: currentWallet?.name,
+        network,
+        rpcUrl: config?.url,
+      });
       const walrusEnabledClient = client.$extend(
         walrus({
           wasmUrl: walrusWasmUrl,
@@ -129,7 +136,7 @@ function WalrusRuntimeBridgeInner() {
       };
       return walrusEnabledClient;
     },
-    [client],
+    [account?.address, client, config?.url, currentWallet?.name, network, supportedIntentKey],
   );
 
   useEffect(() => {

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { RichTextContent } from "../../../components/RichText";
+import { formatSignalMetaValue } from "../../../components/SignalMetaChip";
 import { publishPhases } from "../constants";
 import type { PublishOverlayState, Translate } from "../types";
 
@@ -51,6 +52,12 @@ export function PublishOverlay({
   };
 
   const absolutePublicUrl = useMemo(() => publicUrl, [publicUrl]);
+  const typedBlobValue = overlay.typedBlobId.startsWith("BLOB://")
+    ? overlay.typedBlobId.slice("BLOB://".length)
+    : overlay.typedBlobId;
+  const displayedBlobId = overlay.blobId
+    ? formatSignalMetaValue("blob", typedBlobValue || overlay.blobId)
+    : t("blobPlaceholder");
 
   useEffect(() => {
     if (!open || !isCrossDeviceShareReady || !publicPath) {
@@ -183,7 +190,17 @@ export function PublishOverlay({
         <div className="publish-status-grid">
           <div className={`publish-blob-panel ${overlay.stageIndex >= 3 ? "is-visible" : ""}`}>
             <p className="eyebrow">{t("blobAddress")}</p>
-            <code className="publish-blob-id">{overlay.typedBlobId || t("blobPlaceholder")}</code>
+            <button
+              type="button"
+              className="publish-blob-id"
+              onClick={() => void onCopyBlobId()}
+              disabled={overlay.stageIndex < 3 || !overlay.blobId}
+              title={overlay.blobId}
+              aria-label={overlay.blobCopied ? t("copied") : t("copyBlobId")}
+            >
+              <code>{displayedBlobId}</code>
+              <span>{overlay.blobCopied ? t("copied") : t("copyBlobId")}</span>
+            </button>
             <div className="publish-blob-actions">
               <button
                 type="button"

@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect, useState } from "react";
 import { WalletSurface } from "../../../components/WalletSurface";
+import { WalrusRuntimeSurface } from "../../../components/WalrusRuntimeSurface";
 import { retryLazyImport } from "../../../lib/lazyRetry";
 
 const PublicWalletAccountPanel = lazy(() =>
@@ -66,9 +67,11 @@ export function PublicIdentityCard({
         <div className="public-identity-wallet">
           {walletRequested ? (
             <WalletSurface fallback={walletFallback}>
-              <Suspense fallback={walletFallback}>
-                <PublicWalletAccountPanel onAccountAddressChange={onAccountAddressChange} />
-              </Suspense>
+              <WalrusRuntimeSurface fallback={walletFallback}>
+                <Suspense fallback={walletFallback}>
+                  <PublicWalletAccountPanel onAccountAddressChange={onAccountAddressChange} />
+                </Suspense>
+              </WalrusRuntimeSurface>
             </WalletSurface>
           ) : (
             <div className="wallet-connect-shell wallet-connect-shell-compact">

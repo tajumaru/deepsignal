@@ -3,6 +3,7 @@ interface PublicSubmitReadinessProps {
   sealEnabled: boolean;
   submitModeLabel: string;
   storageModeLabel: string;
+  className?: string;
   labels: {
     summary: string;
     deliveryMode: string;
@@ -24,11 +25,12 @@ export function PublicSubmitReadiness({
   sealEnabled,
   submitModeLabel,
   storageModeLabel,
+  className = "",
   labels,
 }: PublicSubmitReadinessProps) {
   return (
     <section
-      className="answer-card public-submit-readiness"
+      className={`answer-card public-submit-readiness ${className}`.trim()}
       aria-label={labels.summary}
       title={`${labels.deliveryMode}: ${submitModeLabel}. ${labels.storageTarget}: ${storageModeLabel}. ${labels.attachments}: ${labels.attachmentsHelp}`}
     >

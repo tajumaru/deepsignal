@@ -1,6 +1,7 @@
 ﻿import {
   useCurrentAccount,
 } from "@mysten/dapp-kit";
+import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { CreateFormLink } from "../components/CreateFormLink";
@@ -26,6 +27,7 @@ import { usePrivateSignalDecrypt } from "../features/admin/hooks/usePrivateSigna
 import { useProjectWorkspace } from "../features/admin/hooks/useProjectWorkspace";
 import {
   useSignalInboxData,
+  type SignalRecord,
   type StreamId,
 } from "../features/admin/hooks/useSignalInboxData";
 import { useAttachmentPreviews } from "../hooks/useAttachmentPreviews";
@@ -67,6 +69,235 @@ function formatWorkspaceCount(count: number, singular: string, plural = `${singu
 
 function formatAccessLabel(roleLabel: string) {
   return `${roleLabel} access`;
+}
+
+type TranslationFn = ReturnType<typeof useI18n>["t"];
+
+interface MobileInboxHeaderProps {
+  title: string;
+  activeScopeLabel: string;
+  visibleCountLabel: string;
+  unreadCountLabel: string;
+  search: string;
+  onSearchChange: (value: string) => void;
+  streamItems: Array<{ id: StreamId; label: string; count: number }>;
+  selectedStreamId: StreamId;
+  onSelectStream: (streamId: StreamId) => void;
+  searchPlaceholder: string;
+}
+
+function MobileInboxHeader({
+  title,
+  activeScopeLabel,
+  visibleCountLabel,
+  unreadCountLabel,
+  search,
+  onSearchChange,
+  streamItems,
+  selectedStreamId,
+  onSelectStream,
+  searchPlaceholder,
+}: MobileInboxHeaderProps) {
+  return (
+    <header className="mobile-inbox-header">
+      <div className="mobile-inbox-header-bar">
+        <button
+          type="button"
+          className="mobile-inbox-icon-button"
+          aria-label="Back"
+          onClick={() => window.history.back()}
+        >
+          <span aria-hidden="true">&lt;</span>
+        </button>
+        <div className="mobile-inbox-title">
+          <strong>{title}</strong>
+          <span>{activeScopeLabel}</span>
+        </div>
+        <span className="mobile-inbox-count-pill">{unreadCountLabel}</span>
+      </div>
+
+      <div className="mobile-inbox-search-row">
+        <label className="mobile-inbox-search">
+          <span className="sr-only">{searchPlaceholder}</span>
+          <span aria-hidden="true">S</span>
+          <input
+            value={search}
+            onChange={(event) => onSearchChange(event.target.value)}
+            placeholder={searchPlaceholder}
+          />
+        </label>
+        <label className="mobile-inbox-filter">
+          <span className="sr-only">Filter inbox</span>
+          <select value={selectedStreamId} onChange={(event) => onSelectStream(event.target.value as StreamId)}>
+            {streamItems.map((stream) => (
+              <option key={stream.id} value={stream.id}>
+                {stream.label} ({stream.count})
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+
+      <div className="mobile-inbox-summary-row">
+        <span>{visibleCountLabel}</span>
+        <span>Encrypted intelligence queue</span>
+      </div>
+    </header>
+  );
+}
+
+interface MobileSignalRowProps {
+  record: SignalRecord;
+  isSelected: boolean;
+  isSelectedForSui: boolean;
+  onSelect: () => void;
+  t: TranslationFn;
+}
+
+function getSignalInitials(title: string) {
+  const words = title.trim().split(/\s+/).filter(Boolean);
+  const [first, second] = words;
+  return `${first?.[0] ?? "S"}${second?.[0] ?? ""}`.toUpperCase();
+}
+
+function MobileSignalRow({
+  record,
+  isSelected,
+  isSelectedForSui,
+  onSelect,
+  t,
+}: MobileSignalRowProps) {
+  const { form, submission, category } = record;
+  const title = getSignalSubject(submission);
+  const respondentMeta = getSubmissionRespondentMeta(submission);
+  const storageLabel = getStorageBadgeLabel(submission.encryptedBlobId ?? submission.blobId);
+  const isLocalOnlySignal = storageLabel === "Stored locally only";
+  const rowHref = `/dashboard/forms/${form.id}/submissions/${submission.id}`;
+  const priorityLabel = submission.priority === "high" ? "Priority" : submission.priority;
+  const preview = submission.isEncrypted ? t("encryptedPrivateSignalUnlockHint") : getSignalPreview(submission);
+
+  return (
+    <Link
+      to={rowHref}
+      className={`mobile-signal-row ${isSelected ? "is-active" : ""} ${submission.status === "unread" ? "is-unread" : "is-read"}`}
+      aria-current={isSelected ? "true" : undefined}
+      onClick={onSelect}
+    >
+      <span className="mobile-signal-avatar" aria-hidden="true">
+        {getSignalInitials(title)}
+        <span className={`mobile-signal-status-dot status-${submission.status}`} />
+      </span>
+
+      <span className="mobile-signal-main">
+        <span className="mobile-signal-title-line">
+          <strong>{title}</strong>
+        </span>
+        <span className={`mobile-signal-preview ${submission.isEncrypted ? "is-locked" : ""}`}>
+          {preview}
+        </span>
+        <span className="mobile-signal-source-line">
+          <span>{form.title}</span>
+          <span>{category}</span>
+          {respondentMeta.isAnonymous ? <span>{t("anonymousRespondent")}</span> : null}
+        </span>
+        <span className="mobile-signal-meta-row">
+          {submission.isEncrypted ? <span className="mobile-signal-mini-badge">Encrypted</span> : null}
+          {submission.responderSignature ? <span className="mobile-signal-mini-badge">Verified</span> : null}
+          {submission.pendingOnchainRegistration ? (
+            <span className={`mobile-signal-mini-badge ${isSelectedForSui ? "is-selected" : ""}`}>Sui proof</span>
+          ) : null}
+          {isLocalOnlySignal ? <span className="mobile-signal-mini-badge">Local</span> : null}
+        </span>
+      </span>
+
+      <span className="mobile-signal-side">
+        <time>{formatDate(submission.createdAt)}</time>
+        {submission.status === "unread" ? <span className="mobile-unread-dot" aria-label="Unread signal" /> : null}
+        <span className={`mobile-priority-badge priority-${submission.priority}`}>{priorityLabel}</span>
+      </span>
+    </Link>
+  );
+}
+
+function MobileComposeSignalButton() {
+  return (
+    <CreateFormLink className="mobile-compose-signal-button">
+      <span aria-hidden="true">+</span>
+      <span className="sr-only">Create signal inbox</span>
+    </CreateFormLink>
+  );
+}
+
+interface MobileSignalInboxProps {
+  title: string;
+  activeScopeLabel: string;
+  visibleCountLabel: string;
+  unreadCountLabel: string;
+  emptyContent: ReactNode;
+  search: string;
+  onSearchChange: (value: string) => void;
+  streamItems: Array<{ id: StreamId; label: string; count: number }>;
+  selectedStreamId: StreamId;
+  onSelectStream: (streamId: StreamId) => void;
+  visibleSignals: SignalRecord[];
+  selectedRecord: SignalRecord | null;
+  selectedPendingSignalIds: string[];
+  onSelectSignal: (signalId: string) => void;
+  searchPlaceholder: string;
+  t: TranslationFn;
+}
+
+function MobileSignalInbox({
+  title,
+  activeScopeLabel,
+  visibleCountLabel,
+  unreadCountLabel,
+  emptyContent,
+  search,
+  onSearchChange,
+  streamItems,
+  selectedStreamId,
+  onSelectStream,
+  visibleSignals,
+  selectedRecord,
+  selectedPendingSignalIds,
+  onSelectSignal,
+  searchPlaceholder,
+  t,
+}: MobileSignalInboxProps) {
+  return (
+    <section className="mobile-signal-inbox" aria-label={title}>
+      <MobileInboxHeader
+        title={title}
+        activeScopeLabel={activeScopeLabel}
+        visibleCountLabel={visibleCountLabel}
+        unreadCountLabel={unreadCountLabel}
+        search={search}
+        onSearchChange={onSearchChange}
+        streamItems={streamItems}
+        selectedStreamId={selectedStreamId}
+        onSelectStream={onSelectStream}
+        searchPlaceholder={searchPlaceholder}
+      />
+
+      <div className="mobile-signal-list" aria-live="polite">
+        {visibleSignals.length === 0
+          ? emptyContent
+          : visibleSignals.map((record) => (
+              <MobileSignalRow
+                key={record.submission.id}
+                record={record}
+                isSelected={selectedRecord?.submission.id === record.submission.id}
+                isSelectedForSui={selectedPendingSignalIds.includes(record.submission.id)}
+                onSelect={() => onSelectSignal(record.submission.id)}
+                t={t}
+              />
+            ))}
+      </div>
+
+      <MobileComposeSignalButton />
+    </section>
+  );
 }
 
 export function AdminDashboardPage() {
@@ -822,7 +1053,7 @@ export function AdminDashboardPage() {
       <section className="stack">
         <AdminToast toast={toast} />
 
-        <section className="panel glow-panel workspace-hero workspace-hero-compact">
+        <section className="panel glow-panel workspace-hero workspace-hero-compact desktop-signal-inbox-hero">
           <div className="workspace-hero-main workspace-overview-shell">
             <div className="workspace-hero-copy">
               <p className="eyebrow">{t("signalInboxTitle")}</p>
@@ -896,7 +1127,48 @@ export function AdminDashboardPage() {
             </CreateFormLink>
           </EmptyState>
         ) : (
-          <section ref={reviewInboxRef} className="panel signal-inbox-workbench">
+          <>
+          <MobileSignalInbox
+            title={t("signalInboxTitle")}
+            activeScopeLabel={activeScopeLabel}
+            visibleCountLabel={t("visibleSignalsLabel", { count: visibleSignals.length })}
+            unreadCountLabel={t("unreadBadge", { count: visibleUnreadCount })}
+            emptyContent={(
+              <EmptyState variant="abyss">
+                <p className="eyebrow">{t("inboxEmptyEyebrow")}</p>
+                <h2>
+                  {!hasAdminAccess
+                    ? t("sendTestSignalToStartReviewTitle")
+                    : !selectedProject
+                    ? t("chooseProjectFirstTitle")
+                    : selectedProjectForms.length === 0
+                      ? t("createFirstSignalFormTitle")
+                      : t("sendTestSignalToStartReviewTitle")}
+                </h2>
+                <p>
+                  {!hasAdminAccess
+                    ? t("sendTestSignalToStartReviewBody")
+                    : !selectedProject
+                    ? t("chooseProjectFirstBody")
+                    : selectedProjectForms.length === 0
+                      ? t("createFirstSignalFormBody")
+                      : t("sendTestSignalToStartReviewBody")}
+                </p>
+              </EmptyState>
+            )}
+            search={search}
+            onSearchChange={setSearch}
+            streamItems={streamItems}
+            selectedStreamId={selectedStreamId}
+            onSelectStream={setSelectedStreamId}
+            visibleSignals={visibleSignals}
+            selectedRecord={selectedRecord}
+            selectedPendingSignalIds={selectedPendingSignalIds}
+            onSelectSignal={setSelectedSignalId}
+            searchPlaceholder={t("searchSignalsPlaceholder")}
+            t={t}
+          />
+          <section ref={reviewInboxRef} className="panel signal-inbox-workbench desktop-signal-inbox">
             <div className="signal-workbench-header">
               <div className="signal-workbench-copy">
                 <p className="eyebrow">{t("signalInboxTitle")}</p>
@@ -1867,6 +2139,7 @@ export function AdminDashboardPage() {
             </article>
           </div>
           </section>
+          </>
         )}
 
         <AdminOperationsStatus

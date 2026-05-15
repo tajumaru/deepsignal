@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type DragEvent } from "react";
 import { FormFieldEditor } from "../../../components/FormFieldEditor";
 import { getConditionalChildFields, getOrderedFields } from "../../../utils/formLogic";
 import type { FieldType, FormBuilderRefs, FormField, FormSection, Translate } from "../types";
+import { StepNavigationActions } from "./StepNavigationActions";
 
 interface FieldsStepProps {
   t: Translate;
@@ -358,14 +359,7 @@ export function FieldsStep({
             </section>
           ) : null}
 
-          <div className="composer-step-actions">
-            <button type="button" className="ghost-button" onClick={onBack}>
-              {t("back")}
-            </button>
-            <button type="button" className="primary-button" onClick={onContinue}>
-              {t("continue")}
-            </button>
-          </div>
+          <StepNavigationActions t={t} onBack={onBack} onContinue={onContinue} />
         </section>
       </div>
     </section>

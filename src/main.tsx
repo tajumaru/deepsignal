@@ -3,6 +3,7 @@ import ReactDOM from "react-dom/client";
 import { HashRouter } from "react-router-dom";
 import App from "./App";
 import { I18nProvider } from "./i18n";
+import { startBuildUpdateCheck } from "./lib/buildUpdate";
 import "./styles.css";
 
 function redirectLegacyPublicPathToHashRoute() {
@@ -18,6 +19,7 @@ function redirectLegacyPublicPathToHashRoute() {
 }
 
 redirectLegacyPublicPathToHashRoute();
+startBuildUpdateCheck();
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>

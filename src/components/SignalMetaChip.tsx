@@ -37,7 +37,7 @@ function formatContributorValue(value: string) {
   if (value.startsWith("anonymous-")) {
     return `anon...${value.slice(-4)}`;
   }
-  if (value.length <= 12) {
+  if (value.length <= 14) {
     return value;
   }
   return `${value.slice(0, 4)}...${value.slice(-4)}`;
@@ -48,13 +48,13 @@ export function formatSignalMetaValue(type: SignalMetaType, rawValue: string) {
   if (!value) {
     return "";
   }
-  if (value.length <= 12) {
+  if (value.length <= 14) {
     return value;
   }
   if (type === "contributor") {
     return formatContributorValue(value);
   }
-  return `${TYPE_PREFIX[type]}...${value.slice(-4)}`;
+  return `${TYPE_PREFIX[type]}:${value.slice(0, 6)}...${value.slice(-6)}`;
 }
 
 export function SignalMetaChip({ type, value, className = "" }: SignalMetaChipProps) {
@@ -103,7 +103,7 @@ export function SignalMetaChip({ type, value, className = "" }: SignalMetaChipPr
       >
         <span className="signal-meta-chip-label">{label}</span>
         <span className="signal-meta-chip-copy" aria-hidden="true">
-          ⧉
+          {copied ? "Copied" : "Copy"}
         </span>
       </button>
       {isVisible ? (

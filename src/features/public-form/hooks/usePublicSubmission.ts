@@ -20,12 +20,19 @@ import {
 } from "../../../lib/storage";
 import { isLocalFallbackBlob } from "../../../lib/signalInbox";
 import { makeId } from "../../../lib/utils";
+import {
+  getWalrusMutationRuntimeStatus,
+  subscribeWalrusRuntime,
+  waitForWalrusMutationRuntimeReady,
+} from "../../../storage/walrusAdapter";
 import type { FormSchema, Submission, SubmissionAttachment } from "../../../types";
 import { getOrderedFields, getVisibleFieldIds, isFieldRequired } from "../../../utils/formLogic";
 import type { PublicAnswers, ValidationErrors } from "../types";
 
 const REAL_SEAL_PROJECT_REQUIRED_MESSAGE =
   "Real Seal encrypted submissions require a project or form owner wallet. Connect the creator wallet or turn off Encrypt submissions.";
+const STORAGE_CONNECTION_PREPARING_MESSAGE =
+  "Storage connection is still preparing. Please wait a moment and try again.";
 
 export const SIGNAL_PIPELINE_STAGES = [
   "preparing_signal",
@@ -121,12 +128,25 @@ function createPseudoProgress(onTick: (progress: number) => void) {
 }
 
 function formatUploadFailure(fieldLabel: string, error: unknown) {
-  const detail = error instanceof Error ? error.message : "Upload failed.";
+  const detail = getUserFacingSubmissionError(error, "Upload failed.");
   return `${fieldLabel}: ${detail} Remove the failed file or retry before sending your signal.`;
 }
 
 function pausePipelineStep(durationMs = 220) {
   return new Promise((resolve) => window.setTimeout(resolve, durationMs));
+}
+
+function isWalrusRuntimePreparingError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error ?? "");
+  const lower = message.toLowerCase();
+  return lower.includes("walrus client is not ready yet") || lower.includes("wallet is not ready");
+}
+
+function getUserFacingSubmissionError(error: unknown, fallback: string) {
+  if (isWalrusRuntimePreparingError(error)) {
+    return STORAGE_CONNECTION_PREPARING_MESSAGE;
+  }
+  return error instanceof Error ? error.message : fallback;
 }
 
 interface UsePublicSubmissionArgs {
@@ -167,10 +187,13 @@ export function usePublicSubmission({
   const [failure, setFailure] = useState<CriticalFailure | null>(null);
   const [diagnosticsCopied, setDiagnosticsCopied] = useState(false);
   const [hasRecoverableDraft, setHasRecoverableDraft] = useState(false);
+  const [walrusRuntime, setWalrusRuntime] = useState(() => getWalrusMutationRuntimeStatus());
   const [submitPipeline, setSubmitPipeline] = useState<SignalPipelineState>({
     stage: "preparing_signal",
     status: "idle",
   });
+
+  useEffect(() => subscribeWalrusRuntime(() => setWalrusRuntime(getWalrusMutationRuntimeStatus())), []);
 
   useEffect(() => {
     setAnswers(initialAnswers);
@@ -417,6 +440,9 @@ export function usePublicSubmission({
     setDiagnosticsCopied(false);
     activatePipeline("preparing_signal", "Preparing your message for secure delivery.");
     try {
+      if (accountAddress && (walletRequired || attachWallet)) {
+        await waitForWalrusMutationRuntimeReady({ requireWallet: true, timeoutMs: 7000 });
+      }
       const signedAt = new Date().toISOString();
       const isAnonymous = walletRequired ? false : !attachWallet || !accountAddress;
       const session = await ensureRespondentSession({
@@ -632,13 +658,23 @@ export function usePublicSubmission({
       setFailure(null);
       setSubmitPipeline({ stage: "signal_secured", status: "complete", message: "Signal secured." });
     } catch (error) {
-      const message = error instanceof Error ? error.message : submitFailedLabel;
+      if (isWalrusRuntimePreparingError(error)) {
+        console.warn("[public submission] Walrus runtime was not ready for submission.", {
+          error,
+          walrusRuntime: getWalrusMutationRuntimeStatus(),
+          formId: form.id,
+          walletRequired,
+          attachWallet,
+          accountAddress,
+        });
+      }
+      const message = getUserFacingSubmissionError(error, submitFailedLabel);
       setSubmitError(message);
       failPipeline(message);
       persistDraft(answers);
       setFailure(
         createCriticalFailure({
-          error: error instanceof Error ? error : new Error(message),
+          error: new Error(message),
           surface:
             message.toLowerCase().includes("encrypt") || message.toLowerCase().includes("seal")
               ? "seal"
@@ -651,6 +687,8 @@ export function usePublicSubmission({
             manifestBlobId,
             walletRequired,
             attachWallet,
+            walrusRuntime: getWalrusMutationRuntimeStatus(),
+            rawError: error instanceof Error ? error.message : String(error),
           },
         }),
       );
@@ -670,6 +708,11 @@ export function usePublicSubmission({
     diagnosticsCopied,
     hasRecoverableDraft,
     submitPipeline,
+    storageConnectionPreparing:
+      Boolean(accountAddress && (walletRequired || attachWallet)) &&
+      walrusRuntime.storageMode === "uploadRelay" &&
+      walrusRuntime.writeConfigured &&
+      (!walrusRuntime.hasClient || !walrusRuntime.hasWallet),
     visibleFieldIds,
     updateAnswer,
     handleSubmit,

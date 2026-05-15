@@ -23,7 +23,8 @@ import { useI18n } from "../i18n";
 import { formatAnswerText } from "../lib/answerFormatting";
 import { isAttachmentFieldType, isLongTextLikeField } from "../lib/fieldTypes";
 import { getReviewAccessState } from "../lib/adminAccess";
-import { exportSubmissionJson, exportSubmissionsCsv, exportSummaryJson } from "../lib/export";
+import { exportSubmissionJson, exportSummaryJson } from "../lib/export";
+import { exportResponsesToCsv } from "../lib/exportResponses";
 import { getPublicFormPath, getPublicRoadmapPath } from "../lib/publicLinks";
 import { formatResponseDeadline, type ResponseDeadlineLabels } from "../lib/responseDeadline";
 import { getRespondentDisplayLabel, getSubmissionRespondentMeta } from "../lib/respondentMeta";
@@ -697,6 +698,24 @@ export function FormSubmissionsPage() {
     );
   }
 
+  function handleExportResponsesCsv() {
+    if (!form) {
+      return;
+    }
+    exportResponsesToCsv(form, submissions, {
+      language,
+      responseOverrides:
+        selectedSubmission && detailAnswers
+          ? {
+              [selectedSubmission.id]: {
+                answers: detailAnswers,
+                attachments: detailAttachments,
+              },
+            }
+          : undefined,
+    });
+  }
+
   if (loading) {
     return <div className="panel">{t("loadingSubmissions")}</div>;
   }
@@ -965,7 +984,7 @@ export function FormSubmissionsPage() {
             <button
               type="button"
               className="ghost-button"
-              onClick={() => exportSubmissionsCsv(form, submissions)}
+              onClick={handleExportResponsesCsv}
               disabled={submissions.length === 0}
             >
               {t("exportCsv")}
@@ -1185,7 +1204,7 @@ export function FormSubmissionsPage() {
               <button
                 type="button"
                 className="ghost-button"
-                onClick={() => exportSubmissionsCsv(form, submissions)}
+                onClick={handleExportResponsesCsv}
                 disabled={submissions.length === 0}
               >
                 {t("exportCsv")}

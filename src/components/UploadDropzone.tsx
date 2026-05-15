@@ -7,6 +7,7 @@ import {
   type DragEvent,
   type KeyboardEvent,
 } from "react";
+import { SignalMetaChip } from "./SignalMetaChip";
 import type { UploadedAttachment } from "../types";
 
 const DEFAULT_MAX_FILE_BYTES = 50 * 1024 * 1024;
@@ -346,7 +347,7 @@ export function UploadDropzone({
                     <span>{formatBytes(attachment.fileSize)}</span>
                     <span>{getStatusLabel(attachment.status)}</span>
                     {attachment.error ? <span className="upload-attachment-status-pill is-error">Needs retry</span> : null}
-                    {attachment.walrusBlobId ? <span>{attachment.walrusBlobId}</span> : null}
+                    {attachment.walrusBlobId ? <SignalMetaChip type="blob" value={attachment.walrusBlobId} /> : null}
                   </div>
 
                   <div className="upload-attachment-progress">

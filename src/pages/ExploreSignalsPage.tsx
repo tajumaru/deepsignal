@@ -1,5 +1,5 @@
 import { useCurrentAccount } from "@mysten/dapp-kit";
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { CreateFormLink } from "../components/CreateFormLink";
 import { buildExploreAiPreview, getExploreCategory, getPurposeLabel, isFormPubliclyExplorable, type ExploreCategory } from "../lib/explore";
@@ -381,7 +381,38 @@ export function ExploreSignalsPage() {
               const isOwnForm = canDeleteForm(card.form);
 
               return (
-                <article key={card.form.id} className="panel glow-panel explore-card explore-feed-card">
+                <Fragment key={card.form.id}>
+                  <Link className="mobile-explore-row" to={publicPath}>
+                    <span className="mobile-signal-avatar" aria-hidden="true">
+                      {getPurposeLabel(card.form.purpose).slice(0, 2).toUpperCase()}
+                      <span className={`mobile-signal-status-dot status-${card.signalCount > 0 ? "unread" : "archived"}`} />
+                    </span>
+                    <span className="mobile-signal-main">
+                      <span className="mobile-signal-title-line">
+                        <strong>{card.form.title}</strong>
+                      </span>
+                      <span className="mobile-signal-preview">
+                        {card.form.description || "Public signal stream open for new feedback."}
+                      </span>
+                      <span className="mobile-signal-source-line">
+                        <span>{creatorLabel}</span>
+                        <span>{getPurposeLabel(card.form.purpose)}</span>
+                      </span>
+                      <span className="mobile-signal-meta-row">
+                        <span className="mobile-signal-mini-badge">
+                          {card.form.visibility === "public" ? "Listed" : "Unlisted"}
+                        </span>
+                        {card.form.encryptSubmissions ? <span className="mobile-signal-mini-badge">Encrypted</span> : null}
+                        <span className="mobile-signal-mini-badge">{getDeadlineLabel(card.form)}</span>
+                      </span>
+                    </span>
+                    <span className="mobile-signal-side">
+                      <time>{formatDate(card.updatedAt)}</time>
+                      <span className="mobile-priority-badge">{card.signalCount} resp</span>
+                    </span>
+                  </Link>
+
+                  <article className="panel glow-panel explore-card explore-feed-card">
                   <div className="explore-card-ambient" aria-hidden="true" />
 
                   <div className="explore-feed-card-top">
@@ -451,7 +482,8 @@ export function ExploreSignalsPage() {
                       </button>
                     ) : null}
                   </div>
-                </article>
+                  </article>
+                </Fragment>
               );
             })}
           </section>

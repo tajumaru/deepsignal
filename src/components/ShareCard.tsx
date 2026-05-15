@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useI18n } from "../i18n";
 import { getAbsolutePublicFormUrl, getPublicFormHashPath } from "../lib/publicLinks";
 import { formatDate } from "../lib/utils";
+import { formatSignalMetaValue } from "./SignalMetaChip";
 
 interface ShareCardProps {
   formId: string;
@@ -57,6 +58,7 @@ interface CopyableBeaconValueProps {
   disabled?: boolean;
   headLength?: number;
   tailLength?: number;
+  metaType?: "blob" | "manifest";
 }
 
 function CopyableBeaconValue({
@@ -67,7 +69,10 @@ function CopyableBeaconValue({
   disabled = false,
   headLength,
   tailLength,
+  metaType,
 }: CopyableBeaconValueProps) {
+  const displayValue = metaType ? formatSignalMetaValue(metaType, value) : formatBeaconValue(value, headLength, tailLength);
+
   return (
     <button
       type="button"
@@ -77,7 +82,7 @@ function CopyableBeaconValue({
       title={value}
       aria-label={`${copied ? "Copied" : label}: ${value}`}
     >
-      <code>{formatBeaconValue(value, headLength, tailLength)}</code>
+      <code>{displayValue}</code>
       <span className="beacon-copy-value-status">{copied ? "Copied" : label}</span>
     </button>
   );
@@ -307,6 +312,7 @@ export function ShareCard({ formId, blobId, createdAt, manifestBlobId }: ShareCa
                 label={t("copyBlobId")}
                 copied={blobCopied}
                 onCopy={() => void handleCopyBlobId()}
+                metaType="blob"
               />
             ) : (
               <strong>{blobLabel}</strong>

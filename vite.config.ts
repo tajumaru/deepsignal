@@ -3,7 +3,7 @@ import react from "@vitejs/plugin-react";
 import { visualizer } from "rollup-plugin-visualizer";
 import { execSync } from "node:child_process";
 import { readFileSync } from "node:fs";
-import { loadEnv } from "vite";
+import { loadEnv, type Plugin } from "vite";
 
 type PackageMetadata = {
   version?: string;
@@ -24,6 +24,30 @@ function getGitHash() {
   } catch {
     return "local";
   }
+}
+
+function buildManifestPlugin(args: {
+  appVersion: string;
+  buildTime: string;
+  gitHash: string;
+  appEnvironment: string;
+}): Plugin {
+  return {
+    name: "deepsignal-build-manifest",
+    generateBundle(_, bundle) {
+      const assets = Object.values(bundle)
+        .map((entry) => entry.fileName)
+        .filter((fileName) => fileName.endsWith(".js") || fileName.endsWith(".css"))
+        .map((fileName) => `./${fileName}`)
+        .sort();
+
+      this.emitFile({
+        type: "asset",
+        fileName: "build.json",
+        source: `${JSON.stringify({ ...args, assets }, null, 2)}\n`,
+      });
+    },
+  };
 }
 
 const packageMetadata = JSON.parse(readFileSync(new URL("./package.json", import.meta.url), "utf8")) as PackageMetadata;
@@ -47,6 +71,12 @@ export default defineConfig(({ mode }) => {
     },
     plugins: [
       react(),
+      buildManifestPlugin({
+        appVersion,
+        buildTime,
+        gitHash,
+        appEnvironment,
+      }),
       process.env.ANALYZE === "true"
         ? visualizer({
             emitFile: true,
