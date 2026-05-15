@@ -17,30 +17,69 @@ import type { SignalRecord } from "./useSignalInboxData";
 
 type ToastSetter = (toast: { tone: "success" | "error"; message: string } | null) => void;
 
+export type PrivateSignalDecryptUiState =
+  | "locked"
+  | "checking_access"
+  | "waiting_wallet_approval"
+  | "decrypting"
+  | "decrypted"
+  | "unauthorized"
+  | "failed";
+
 function getDecryptStatusMessage(
-  status: "waiting_wallet_approval" | "decrypting_private_signal" | "finishing",
+  status:
+    | "loading_seal_runtime"
+    | "validating_access_policy"
+    | "waiting_wallet_approval"
+    | "decrypting_encrypted_payload"
+    | "signal_unlocked",
 ) {
   switch (status) {
+    case "loading_seal_runtime":
+      return "Loading Seal runtime";
+    case "validating_access_policy":
+      return "Validating access policy";
     case "waiting_wallet_approval":
-      return "Waiting for wallet approval...";
-    case "decrypting_private_signal":
-      return "Decrypting private signal...";
-    case "finishing":
-      return "Finishing...";
+      return "Requesting wallet approval";
+    case "decrypting_encrypted_payload":
+      return "Decrypting encrypted payload";
+    case "signal_unlocked":
+      return "Signal unlocked";
   }
 }
 
-function getFriendlyDecryptError(message: string) {
-  if (message === SEAL_ADMIN_WALLET_REQUIRED_MESSAGE) {
-    return "Connect an authorized reviewer wallet to decrypt this private signal.";
+function getFriendlyDecryptError(reasonCode: string, fallbackMessage: string) {
+  switch (reasonCode) {
+    case "WALLET_NOT_CONNECTED":
+      return "Connect wallet to unlock this signal.";
+    case "UNAUTHORIZED_WALLET":
+      return "This wallet is not authorized to decrypt this response.";
+    case "SEAL_SESSION_EXPIRED":
+      return "Seal session expired. Please re-approve.";
+    case "SEAL_APPROVAL_REQUIRED":
+      return "Wallet approval is required to decrypt this response.";
+    case "POLICY_MISMATCH":
+      return "Encryption policy mismatch.";
+    case "MANIFEST_MISMATCH":
+      return "Manifest mismatch detected.";
+    case "BLOB_FETCH_FAILED":
+      return "Failed to fetch encrypted payload from Walrus.";
+    case "ENCRYPTED_PAYLOAD_MISSING":
+      return "Encrypted payload is missing.";
+    case "SEAL_RUNTIME_UNAVAILABLE":
+      return "Seal runtime unavailable.";
+    default:
+      if (fallbackMessage === SEAL_ADMIN_WALLET_REQUIRED_MESSAGE) {
+        return "Connect wallet to unlock this signal.";
+      }
+      if (fallbackMessage === SEAL_PERMISSION_DENIED_MESSAGE) {
+        return "This wallet is not authorized to decrypt this response.";
+      }
+      if (fallbackMessage === SEAL_WALLET_CANCELLED_MESSAGE) {
+        return "Wallet approval is required to decrypt this response.";
+      }
+      return fallbackMessage;
   }
-  if (message === SEAL_PERMISSION_DENIED_MESSAGE) {
-    return "This wallet is not authorized for this project.";
-  }
-  if (message === SEAL_WALLET_CANCELLED_MESSAGE) {
-    return "Wallet approval was cancelled.";
-  }
-  return message;
 }
 
 interface UsePrivateSignalDecryptArgs {
@@ -68,6 +107,7 @@ export function usePrivateSignalDecrypt({
   const [decrypting, setDecrypting] = useState(false);
   const [decryptStatusMessage, setDecryptStatusMessage] = useState("");
   const [decryptError, setDecryptError] = useState("");
+  const [decryptState, setDecryptState] = useState<PrivateSignalDecryptUiState>("locked");
   const decryptInFlightRef = useRef(false);
   const decryptRequestIdRef = useRef(0);
   const activeDecryptRequestRef = useRef<{ requestId: number; submissionId: string } | null>(null);
@@ -102,6 +142,7 @@ export function usePrivateSignalDecrypt({
       setDetailAttachments([]);
       setDetailLegacyUnencrypted(false);
       setDecryptError("");
+      setDecryptState("locked");
       if (!decryptInFlightRef.current) {
         setDecryptStatusMessage("");
       }
@@ -118,6 +159,7 @@ export function usePrivateSignalDecrypt({
       setDetailAttachments(selectedRecord.submission.attachments ?? []);
       setDetailLegacyUnencrypted(false);
       setDecryptError("");
+      setDecryptState(selectedRecord.submission.isEncrypted ? "locked" : "decrypted");
       if (!decryptInFlightRef.current) {
         setDecryptStatusMessage("");
       }
@@ -134,7 +176,8 @@ export function usePrivateSignalDecrypt({
     decryptInFlightRef.current = true;
     activeDecryptRequestRef.current = { requestId, submissionId };
     setDecrypting(true);
-    setDecryptStatusMessage("Waiting for wallet approval...");
+    setDecryptState("checking_access");
+    setDecryptStatusMessage("Loading Seal runtime");
     setDecryptError("");
     try {
       const resolved = await resolveSubmissionAnswers(
@@ -152,6 +195,13 @@ export function usePrivateSignalDecrypt({
               return;
             }
             setDecryptStatusMessage(getDecryptStatusMessage(status));
+            setDecryptState(
+              status === "waiting_wallet_approval"
+                ? "waiting_wallet_approval"
+                : status === "signal_unlocked"
+                  ? "decrypted"
+                  : "decrypting",
+            );
           },
         },
       );
@@ -168,6 +218,8 @@ export function usePrivateSignalDecrypt({
         setDetailAnswers(resolved.answers);
         setDetailAttachments(resolved.attachments);
         setDetailLegacyUnencrypted(Boolean(resolved.legacyUnencrypted));
+        setDecryptState("decrypted");
+        setDecryptStatusMessage("Signal unlocked");
         setToast({ tone: "success", message: "Wallet verified. Private signal unlocked." });
       }
     } catch (error) {
@@ -175,11 +227,19 @@ export function usePrivateSignalDecrypt({
         activeDecryptRequestRef.current?.requestId === requestId &&
         activeDecryptRequestRef.current?.submissionId === submissionId;
       if (isLatestRequest && selectedSignalIdRef.current === submissionId) {
+        const reasonCode = isDecryptDiagnosticError(error)
+          ? error.reasonCode
+          : error instanceof Error && error.message === SEAL_PERMISSION_DENIED_MESSAGE
+            ? "UNAUTHORIZED_WALLET"
+            : "UNKNOWN_DECRYPT_ERROR";
+        setDecryptState(
+          reasonCode === "UNAUTHORIZED_WALLET" ? "unauthorized" : "failed",
+        );
         setDecryptError(
           isDecryptDiagnosticError(error)
-            ? `Decrypt failed: ${error.reasonCode}`
+            ? getFriendlyDecryptError(error.reasonCode, error.message)
             : error instanceof Error
-              ? getFriendlyDecryptError(error.message)
+              ? getFriendlyDecryptError(reasonCode, error.message)
               : decryptFailedLabel,
         );
       }
@@ -192,7 +252,9 @@ export function usePrivateSignalDecrypt({
       }
       decryptInFlightRef.current = false;
       setDecrypting(false);
-      setDecryptStatusMessage("");
+      if (activeDecryptRequestRef.current === null && decryptState !== "decrypted") {
+        setDecryptStatusMessage("");
+      }
     }
   }
 
@@ -203,6 +265,7 @@ export function usePrivateSignalDecrypt({
     setDetailAttachments,
     detailLegacyUnencrypted,
     decrypting,
+    decryptState,
     decryptStatusMessage,
     decryptError,
     setDecryptError,

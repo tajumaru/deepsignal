@@ -1,27 +1,32 @@
 import { SUI_NETWORK, WALRUS_AGGREGATOR_URL } from "../lib/sui";
 import type { FormSchema, SealDecryptContext, Submission } from "../types";
 import {
-  REAL_SEAL_ENVELOPE_KIND,
   REAL_SEAL_ENVELOPE_VERSION,
+  REAL_SEAL_ENVELOPE_KIND,
+  REAL_SEAL_SCHEMA_VERSION,
   SEAL_ADMIN_WALLET_REQUIRED_MESSAGE,
   SEAL_NOT_CONFIGURED_MESSAGE,
   SEAL_PERMISSION_DENIED_MESSAGE,
   SEAL_PROJECT_CONTEXT_REQUIRED_MESSAGE,
+  SEAL_RUNTIME_UNAVAILABLE_MESSAGE,
+  SEAL_SESSION_EXPIRED_MESSAGE,
   SEAL_SUI_CLIENT_REQUIRED_MESSAGE,
+  SEAL_WALLET_CANCELLED_MESSAGE,
   parseRealSealEnvelope,
   type RealSealEnvelope,
 } from "./sealPayload";
 
 export type DecryptFailureReasonCode =
-  | "WALRUS_BLOB_FETCH_FAILED"
-  | "MANIFEST_NOT_FOUND"
-  | "INVALID_ENCRYPTED_PAYLOAD"
   | "WALLET_NOT_CONNECTED"
-  | "WRONG_NETWORK"
-  | "ACCESS_POLICY_MISMATCH"
-  | "SEAL_CLIENT_ERROR"
-  | "DECRYPTION_KEY_UNAVAILABLE"
-  | "DECRYPTION_FAILED_UNKNOWN";
+  | "UNAUTHORIZED_WALLET"
+  | "SEAL_SESSION_EXPIRED"
+  | "SEAL_APPROVAL_REQUIRED"
+  | "POLICY_MISMATCH"
+  | "MANIFEST_MISMATCH"
+  | "BLOB_FETCH_FAILED"
+  | "ENCRYPTED_PAYLOAD_MISSING"
+  | "SEAL_RUNTIME_UNAVAILABLE"
+  | "UNKNOWN_DECRYPT_ERROR";
 
 export interface DecryptDiagnosticContext {
   formId?: string;
@@ -125,12 +130,17 @@ export function describeEncryptedPayloadShape(value: string): Record<string, unk
       json: true,
       kind: parsed.kind,
       version: parsed.version,
+      schemaVersion: parsed.schemaVersion,
+      envelopeVersion: parsed.envelopeVersion,
       algorithm: parsed.algorithm,
       encoding: parsed.encoding,
+      network: parsed.network,
       hasPackageId: typeof parsed.packageId === "string" && parsed.packageId.length > 0,
       hasObjectId: typeof parsed.objectId === "string" && parsed.objectId.length > 0,
       hasEncryptedObject: typeof parsed.encryptedObject === "string" && parsed.encryptedObject.length > 0,
       hasServerObjectIds: Array.isArray(parsed.serverObjectIds) && parsed.serverObjectIds.length > 0,
+      policyId: parsed.policyId,
+      hasPolicyObjectId: typeof parsed.policyObjectId === "string" && parsed.policyObjectId.length > 0,
       approvalPolicy: parsed.approvalPolicy,
       projectScoped: typeof parsed.projectId === "string" && parsed.projectId.length > 0,
       keys: Object.keys(parsed).sort(),
@@ -153,7 +163,7 @@ export function validateEncryptedPayloadOrThrow(
     parsed = JSON.parse(value);
   } catch (error) {
     throw new DecryptDiagnosticError(
-      "INVALID_ENCRYPTED_PAYLOAD",
+      "MANIFEST_MISMATCH",
       "Encrypted payload is not valid JSON.",
       {
         ...diagnostics,
@@ -166,7 +176,7 @@ export function validateEncryptedPayloadOrThrow(
 
   if (!parsed || typeof parsed !== "object") {
     throw new DecryptDiagnosticError(
-      "INVALID_ENCRYPTED_PAYLOAD",
+      "MANIFEST_MISMATCH",
       "Encrypted payload is not a JSON object.",
       {
         ...diagnostics,
@@ -177,11 +187,42 @@ export function validateEncryptedPayloadOrThrow(
   }
 
   const candidate = parsed as Record<string, unknown>;
+  const normalizedSchemaVersion =
+    typeof candidate.schemaVersion === "number"
+      ? candidate.schemaVersion
+      : typeof candidate.version === "number"
+        ? candidate.version
+        : null;
+  const normalizedEnvelopeVersion =
+    typeof candidate.envelopeVersion === "number"
+      ? candidate.envelopeVersion
+      : typeof candidate.version === "number"
+        ? candidate.version
+        : null;
+  const normalizedPolicyId =
+    typeof candidate.policyId === "string"
+      ? candidate.policyId
+      : typeof candidate.approvalPolicy === "string"
+        ? candidate.approvalPolicy
+        : null;
+  const normalizedPolicyObjectId =
+    typeof candidate.policyObjectId === "string"
+      ? candidate.policyObjectId
+      : typeof candidate.projectId === "string"
+        ? candidate.projectId
+        : typeof candidate.ownerAddress === "string"
+          ? candidate.ownerAddress
+          : typeof candidate.objectId === "string"
+            ? candidate.objectId
+            : null;
   const hasRequiredEnvelopeFields =
     candidate.kind === REAL_SEAL_ENVELOPE_KIND &&
-    candidate.version === REAL_SEAL_ENVELOPE_VERSION &&
+    normalizedSchemaVersion === REAL_SEAL_SCHEMA_VERSION &&
+    normalizedEnvelopeVersion === REAL_SEAL_ENVELOPE_VERSION &&
     candidate.algorithm === "@mysten/seal" &&
     candidate.encoding === "base64" &&
+    typeof candidate.network === "string" &&
+    candidate.network.length > 0 &&
     typeof candidate.packageId === "string" &&
     candidate.packageId.length > 0 &&
     typeof candidate.objectId === "string" &&
@@ -189,12 +230,16 @@ export function validateEncryptedPayloadOrThrow(
     typeof candidate.encryptedObject === "string" &&
     candidate.encryptedObject.length > 0 &&
     Array.isArray(candidate.serverObjectIds) &&
-    candidate.serverObjectIds.length > 0;
+    candidate.serverObjectIds.length > 0 &&
+    typeof normalizedPolicyId === "string" &&
+    normalizedPolicyId.length > 0 &&
+    typeof normalizedPolicyObjectId === "string" &&
+    normalizedPolicyObjectId.length > 0;
 
   const envelope = parseRealSealEnvelope(value);
   if (!hasRequiredEnvelopeFields || !envelope) {
     throw new DecryptDiagnosticError(
-      "INVALID_ENCRYPTED_PAYLOAD",
+      typeof normalizedPolicyId === "string" && normalizedPolicyId.length > 0 ? "MANIFEST_MISMATCH" : "POLICY_MISMATCH",
       "Encrypted payload envelope is missing required Seal fields or uses an unsupported version.",
       {
         ...diagnostics,
@@ -214,20 +259,27 @@ export function classifyDecryptError(error: unknown): DecryptFailureReasonCode {
   if (message === SEAL_ADMIN_WALLET_REQUIRED_MESSAGE) {
     return "WALLET_NOT_CONNECTED";
   }
-  if (message === SEAL_PERMISSION_DENIED_MESSAGE || /noaccess|permission|unauthori[sz]ed|access/i.test(message)) {
-    return "ACCESS_POLICY_MISMATCH";
+  if (message === SEAL_PERMISSION_DENIED_MESSAGE || /noaccess|permission|unauthori[sz]ed/i.test(message)) {
+    return "UNAUTHORIZED_WALLET";
   }
-  if (message === SEAL_NOT_CONFIGURED_MESSAGE || message === SEAL_SUI_CLIENT_REQUIRED_MESSAGE) {
-    return "SEAL_CLIENT_ERROR";
+  if (
+    message === SEAL_RUNTIME_UNAVAILABLE_MESSAGE ||
+    message === SEAL_NOT_CONFIGURED_MESSAGE ||
+    message === SEAL_SUI_CLIENT_REQUIRED_MESSAGE
+  ) {
+    return "SEAL_RUNTIME_UNAVAILABLE";
   }
   if (message === SEAL_PROJECT_CONTEXT_REQUIRED_MESSAGE) {
-    return "ACCESS_POLICY_MISMATCH";
+    return "POLICY_MISMATCH";
   }
-  if (/network|chain|mainnet|testnet/i.test(message)) {
-    return "WRONG_NETWORK";
+  if (message === SEAL_SESSION_EXPIRED_MESSAGE || /session.*expired|expired.*session/i.test(message)) {
+    return "SEAL_SESSION_EXPIRED";
   }
-  if (/key|session|signature|approval|decrypt/i.test(message)) {
-    return "DECRYPTION_KEY_UNAVAILABLE";
+  if (message === SEAL_WALLET_CANCELLED_MESSAGE || /approval|required|signature|wallet approval|cancel/i.test(message)) {
+    return "SEAL_APPROVAL_REQUIRED";
   }
-  return "DECRYPTION_FAILED_UNKNOWN";
+  if (/network|chain|mainnet|testnet|policy|manifest|envelope/i.test(message)) {
+    return "POLICY_MISMATCH";
+  }
+  return "UNKNOWN_DECRYPT_ERROR";
 }

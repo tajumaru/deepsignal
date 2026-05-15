@@ -24,6 +24,7 @@ interface UploadDropzoneProps {
   disabled?: boolean;
   hint?: string;
   maxSizeBytes?: number;
+  maxSizeErrorMessage?: (maxSizeBytes: number) => string;
   multiple?: boolean;
   capture?: "user" | "environment";
   onFilesSelected?: (files: File[]) => void;
@@ -75,7 +76,11 @@ function isSupportedFile(file: File) {
   return category !== "other";
 }
 
-function createAttachmentRecord(file: File, maxSizeBytes: number): UploadDropzoneItem {
+function createAttachmentRecord(
+  file: File,
+  maxSizeBytes: number,
+  maxSizeErrorMessage?: (maxSizeBytes: number) => string,
+): UploadDropzoneItem {
   const mimeType = file.type || "application/octet-stream";
   const category = getFileCategory(mimeType, file.name);
   const canPreview = category === "image" || category === "video";
@@ -90,7 +95,9 @@ function createAttachmentRecord(file: File, maxSizeBytes: number): UploadDropzon
     previewUrl: canPreview ? URL.createObjectURL(file) : undefined,
     status: tooLarge ? "failed" : "pending",
     progress: tooLarge ? 0 : 0,
-    error: tooLarge ? `Max file size is ${formatBytes(maxSizeBytes)}.` : undefined,
+    error: tooLarge
+      ? maxSizeErrorMessage?.(maxSizeBytes) ?? `Max file size is ${formatBytes(maxSizeBytes)}.`
+      : undefined,
   };
 }
 
@@ -132,6 +139,7 @@ export function UploadDropzone({
   disabled = false,
   hint,
   maxSizeBytes = DEFAULT_MAX_FILE_BYTES,
+  maxSizeErrorMessage,
   multiple = true,
   capture,
   onFilesSelected,
@@ -202,7 +210,7 @@ export function UploadDropzone({
       return;
     }
 
-    const next = supportedFiles.map((file) => createAttachmentRecord(file, maxSizeBytes));
+    const next = supportedFiles.map((file) => createAttachmentRecord(file, maxSizeBytes, maxSizeErrorMessage));
     onChange(multiple ? [...attachments, ...next] : next.slice(0, 1));
     onFilesSelected?.(supportedFiles);
   }

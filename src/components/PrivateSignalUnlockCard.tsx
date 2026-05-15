@@ -1,12 +1,22 @@
 import { useId, type ReactNode } from "react";
 import { useI18n } from "../i18n";
 
-type UnlockState = "idle" | "loading" | "success" | "error";
+type UnlockState =
+  | "locked"
+  | "checking_access"
+  | "waiting_wallet_approval"
+  | "decrypting"
+  | "decrypted"
+  | "unauthorized"
+  | "failed";
 
 interface PrivateSignalUnlockCardProps {
   onUnlock: () => void;
+  onCancel?: () => void;
   isDecrypting: boolean;
   isUnlocked: boolean;
+  unlockState?: UnlockState;
+  statusMessage?: string;
   errorMessage?: string;
   disabledReason?: string;
   actionDisabled?: boolean;
@@ -110,23 +120,13 @@ function WarningIcon() {
   );
 }
 
-function getUnlockState(isDecrypting: boolean, isUnlocked: boolean, errorMessage?: string): UnlockState {
-  if (isDecrypting) {
-    return "loading";
-  }
-  if (isUnlocked) {
-    return "success";
-  }
-  if (errorMessage) {
-    return "error";
-  }
-  return "idle";
-}
-
 export function PrivateSignalUnlockCard({
   onUnlock,
+  onCancel,
   isDecrypting,
   isUnlocked,
+  unlockState,
+  statusMessage,
   errorMessage,
   disabledReason,
   actionDisabled = false,
@@ -134,21 +134,34 @@ export function PrivateSignalUnlockCard({
 }: PrivateSignalUnlockCardProps) {
   const { t } = useI18n();
   const statusId = useId();
-  const state = getUnlockState(isDecrypting, isUnlocked, errorMessage);
-  const buttonDisabled = actionDisabled || state === "loading" || state === "success";
+  const state =
+    unlockState ??
+    (isDecrypting ? "decrypting" : isUnlocked ? "decrypted" : errorMessage ? "failed" : "locked");
+  const buttonDisabled = actionDisabled || isDecrypting || state === "decrypted";
   const helperText = isUnlocked
     ? t("privateSignalUnlockSuccessDetail")
-    : t("privateSignalUnlockHelper");
-  const statusMessage =
-    state === "error"
-      ? t("privateSignalUnlockError")
-      : disabledReason;
+    : state === "unauthorized"
+      ? "This wallet can see the signal exists, but it is not authorized to decrypt it."
+      : t("privateSignalUnlockHelper");
+  const resolvedStatusMessage =
+    errorMessage ||
+    statusMessage ||
+    disabledReason ||
+    (state === "locked" ? "Signal remains locked." : undefined);
+  const cardTone =
+    state === "unauthorized" || state === "failed"
+      ? "error"
+      : state === "decrypted"
+        ? "success"
+        : state === "waiting_wallet_approval" || state === "decrypting" || state === "checking_access"
+          ? "loading"
+          : state;
 
   return (
-    <section className={`private-signal-unlock-card is-${state}`} aria-live="polite">
+    <section className={`private-signal-unlock-card is-${cardTone}`} aria-live="polite">
       <div className="private-signal-vault-visual" aria-hidden="true">
         <div className="private-signal-vault-lock">
-          {state === "success" ? <OpenLockIcon /> : <LockIcon />}
+          {state === "decrypted" ? <OpenLockIcon /> : <LockIcon />}
         </div>
         <div className="private-signal-vault-grid">
           {Array.from({ length: 18 }).map((_, index) => (
@@ -157,7 +170,7 @@ export function PrivateSignalUnlockCard({
         </div>
       </div>
       <div className="private-signal-unlock-header">
-        {state === "success" ? null : (
+        {state === "decrypted" ? null : (
           <div className="private-signal-unlock-badge">
             <LockIcon />
           </div>
@@ -175,33 +188,44 @@ export function PrivateSignalUnlockCard({
           className="private-signal-unlock-button"
           onClick={onUnlock}
           disabled={buttonDisabled}
-          aria-describedby={statusMessage ? statusId : undefined}
+          aria-describedby={resolvedStatusMessage ? statusId : undefined}
         >
-          {state === "loading" ? <SpinnerIcon /> : null}
-          {state === "error" || state === "idle" ? <LockIcon /> : null}
+          {isDecrypting ? <SpinnerIcon /> : null}
+          {!isDecrypting && state !== "decrypted" ? <LockIcon /> : null}
           <span>
-            {state === "loading"
+            {isDecrypting
               ? t("privateSignalUnlockLoading")
-              : state === "success"
+              : state === "decrypted"
                 ? t("privateSignalUnlockSuccess")
+                : state === "unauthorized"
+                  ? "Access denied"
                 : t("privateSignalUnlockAction")}
           </span>
         </button>
+        {isDecrypting && onCancel ? (
+          <button
+            type="button"
+            className="ghost-button private-signal-cancel-button"
+            onClick={onCancel}
+          >
+            Cancel
+          </button>
+        ) : null}
         {children ? <div className="private-signal-unlock-side-action">{children}</div> : null}
       </div>
 
-      {statusMessage ? (
+      {resolvedStatusMessage ? (
         <div
           id={statusId}
-          className={`private-signal-unlock-status is-${state === "error" ? "error" : "muted"}`}
-          role={state === "error" ? "alert" : "status"}
+          className={`private-signal-unlock-status is-${state === "unauthorized" || state === "failed" ? "error" : "muted"}`}
+          role={state === "unauthorized" || state === "failed" ? "alert" : "status"}
         >
-          {state === "error" ? <WarningIcon /> : null}
-          <span>{statusMessage}</span>
+          {state === "unauthorized" || state === "failed" ? <WarningIcon /> : null}
+          <span>{resolvedStatusMessage}</span>
         </div>
       ) : null}
 
-      {state === "error" && errorMessage && errorMessage !== t("privateSignalUnlockError") ? (
+      {state === "failed" && errorMessage && errorMessage !== t("privateSignalUnlockError") ? (
         <p className="private-signal-unlock-detail">{errorMessage}</p>
       ) : null}
     </section>

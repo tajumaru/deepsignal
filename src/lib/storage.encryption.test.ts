@@ -8,11 +8,14 @@ import { serializeSubmissionBundle } from "../storage/walrusAdapter";
 function createSealEnvelope() {
   return JSON.stringify(
     createRealSealEnvelope({
+      network: "testnet",
       packageId: "0xpackage",
       objectId: "0xobject",
       threshold: 1,
       serverObjectIds: ["0xserver"],
       encryptedObject: "ciphertext",
+      policyId: "project_signal_v1",
+      policyObjectId: "project-1",
       approvalPolicy: "project_signal_v1",
       projectId: "project-1",
     }),
@@ -191,6 +194,38 @@ describe("saveSubmissionWithEncryption", () => {
     await expect(
       saveSubmissionWithEncryption(form, submission, fakeSealAdapter, targetStorage),
     ).rejects.toThrow(ENCRYPTED_ATTACHMENT_REQUIRED_MESSAGE);
+    expect(targetStorage.saveEncryptedPayload).not.toHaveBeenCalled();
+    expect(targetStorage.saveSubmission).not.toHaveBeenCalled();
+  });
+
+  it("fails when encryption cannot produce an encrypted payload and never falls back to plaintext save", async () => {
+    const failingSealAdapter: SealAdapter = {
+      encrypt: vi.fn(async () => {
+        throw new Error("seal exploded");
+      }),
+      decrypt: vi.fn(async () => "decrypted"),
+    };
+    const targetStorage: StorageAdapter = {
+      saveForm: vi.fn(),
+      getForm: vi.fn(),
+      listForms: vi.fn(),
+      deleteForm: vi.fn(),
+      deleteForms: vi.fn(),
+      saveSubmission: vi.fn(),
+      listSubmissions: vi.fn(),
+      updateSubmission: vi.fn(),
+      saveEncryptedPayload: vi.fn(),
+      readEncryptedPayload: vi.fn(),
+      uploadFile: vi.fn(),
+      readFileBlob: vi.fn(),
+      readFileText: vi.fn(),
+    };
+
+    await expect(
+      saveSubmissionWithEncryption(form, createEncryptedSubmission(), failingSealAdapter, targetStorage),
+    ).rejects.toMatchObject({
+      code: "ENCRYPTION_FAILED",
+    });
     expect(targetStorage.saveEncryptedPayload).not.toHaveBeenCalled();
     expect(targetStorage.saveSubmission).not.toHaveBeenCalled();
   });

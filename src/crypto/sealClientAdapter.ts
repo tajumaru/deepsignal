@@ -26,6 +26,8 @@ import {
   SEAL_NOT_CONFIGURED_MESSAGE,
   SEAL_PERMISSION_DENIED_MESSAGE,
   SEAL_PROJECT_CONTEXT_REQUIRED_MESSAGE,
+  SEAL_RUNTIME_UNAVAILABLE_MESSAGE,
+  SEAL_SESSION_EXPIRED_MESSAGE,
   SEAL_SUI_CLIENT_REQUIRED_MESSAGE,
   SEAL_WALLET_CANCELLED_MESSAGE,
   toBase64,
@@ -107,6 +109,7 @@ export const sealClientAdapter: SealAdapter = {
 
     return JSON.stringify(
       createRealSealEnvelope({
+        network: SUI_NETWORK,
         packageId: import.meta.env.VITE_SEAL_PACKAGE_ID ?? "",
         objectId,
         threshold: 1,
@@ -114,7 +117,9 @@ export const sealClientAdapter: SealAdapter = {
         encryptedObject: toBase64(encryptedObject),
         projectId,
         ownerAddress: projectId ? undefined : ownerAddress,
-        approvalPolicy: projectId ? "project_admin_v0" : ownerAddress ? "owner_wallet_v1" : undefined,
+        policyId: projectId ? "project_admin_v0" : "owner_wallet_v1",
+        policyObjectId: projectId ?? ownerAddress ?? objectId,
+        approvalPolicy: projectId ? "project_admin_v0" : "owner_wallet_v1",
       }),
     );
   },
@@ -129,9 +134,10 @@ export const sealClientAdapter: SealAdapter = {
       throw new Error(SEAL_ADMIN_WALLET_REQUIRED_MESSAGE);
     }
     if (!context.suiClient) {
-      throw new Error(SEAL_SUI_CLIENT_REQUIRED_MESSAGE);
+      throw new Error(SEAL_RUNTIME_UNAVAILABLE_MESSAGE);
     }
 
+    context.onStatusChange?.("validating_access_policy");
     const projectId = envelope.projectId ?? context.projectId?.trim();
     const ownerAddress = envelope.ownerAddress ?? context.ownerAddress?.trim();
     if (!projectId && !ownerAddress) {
@@ -152,7 +158,7 @@ export const sealClientAdapter: SealAdapter = {
         signPersonalMessage: context.signPersonalMessage,
         onStatusChange: context.onStatusChange,
       });
-      context.onStatusChange?.("decrypting_private_signal");
+      context.onStatusChange?.("decrypting_encrypted_payload");
       const txBytes = await buildSealApproveTransactionBytes({
         objectId: envelope.objectId,
         approvalPolicy: "owner_wallet_v1",
@@ -164,7 +170,7 @@ export const sealClientAdapter: SealAdapter = {
         sessionKey,
         txBytes,
       });
-      context.onStatusChange?.("finishing");
+      context.onStatusChange?.("signal_unlocked");
       return new TextDecoder().decode(plaintext);
     }
     if (!projectId) {
@@ -193,7 +199,7 @@ export const sealClientAdapter: SealAdapter = {
 
       let plaintext: Uint8Array;
       try {
-        context.onStatusChange?.("decrypting_private_signal");
+        context.onStatusChange?.("decrypting_encrypted_payload");
         const txBytes = await buildSealApproveTransactionBytes({
           objectId: envelope.objectId,
           projectId,
@@ -254,7 +260,7 @@ export const sealClientAdapter: SealAdapter = {
           packageId: envelope.packageId,
         });
 
-        context.onStatusChange?.("decrypting_private_signal");
+        context.onStatusChange?.("decrypting_encrypted_payload");
         plaintext = await sealClient.decrypt({
           data: fromBase64(envelope.encryptedObject),
           sessionKey,
@@ -262,7 +268,7 @@ export const sealClientAdapter: SealAdapter = {
         });
       }
 
-      context.onStatusChange?.("finishing");
+      context.onStatusChange?.("signal_unlocked");
       return new TextDecoder().decode(plaintext);
     } catch (error) {
       debugSealClientError(
@@ -282,8 +288,14 @@ export const sealClientAdapter: SealAdapter = {
       if (error instanceof NoAccessError) {
         throw createErrorWithCause(SEAL_PERMISSION_DENIED_MESSAGE, error);
       }
+      if (error instanceof Error && /session|expired|ttl/i.test(error.message)) {
+        throw createErrorWithCause(SEAL_SESSION_EXPIRED_MESSAGE, error);
+      }
       if (error instanceof Error && error.message === SEAL_DECRYPT_APPROVAL_REQUIRED_MESSAGE) {
         throw error;
+      }
+      if (error instanceof Error && error.message === SEAL_NOT_CONFIGURED_MESSAGE) {
+        throw createErrorWithCause(SEAL_RUNTIME_UNAVAILABLE_MESSAGE, error);
       }
       throw error instanceof Error ? error : createErrorWithCause(SEAL_DECRYPT_APPROVAL_REQUIRED_MESSAGE, error);
     }

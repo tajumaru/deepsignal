@@ -4049,6 +4049,10 @@ h2 {
   width: 100%;
 }
 
+.private-signal-cancel-button {
+  min-height: 3rem;
+}
+
 .private-signal-unlock-status {
   display: inline-flex;
   align-items: center;
@@ -9072,6 +9076,29 @@ body.composer-mode .bg-orb {
   gap: 0.35rem;
 }
 
+.signal-list-lock-note {
+  display: grid;
+  gap: 0.2rem;
+  margin-bottom: 0.75rem;
+  padding: 0.8rem 0.9rem;
+  border-radius: 14px;
+  border: 1px solid rgba(125, 245, 255, 0.2);
+  background:
+    linear-gradient(180deg, rgba(12, 39, 61, 0.92), rgba(7, 27, 43, 0.9));
+  color: #e6fbff;
+}
+
+.signal-list-lock-note.is-passive {
+  border-color: rgba(116, 226, 255, 0.12);
+  background: rgba(8, 27, 42, 0.62);
+  color: #b7d3e1;
+}
+
+.signal-list-lock-note span {
+  color: #b7d3e1;
+  font-size: 0.9rem;
+}
+
 .signal-card {
   padding: 0.9rem 0.95rem;
   display: grid;
@@ -9098,6 +9125,18 @@ body.composer-mode .bg-orb {
 
 .signal-card.is-read {
   opacity: 0.9;
+}
+
+.signal-card.is-locked {
+  cursor: wait;
+}
+
+.signal-card.is-unlocking {
+  border-color: rgba(135, 244, 255, 0.34);
+  box-shadow:
+    inset 0 1px 0 rgba(178, 245, 255, 0.08),
+    0 0 0 1px rgba(149, 242, 255, 0.08),
+    0 0 20px rgba(102, 227, 255, 0.08);
 }
 
 .signal-card.is-active {
@@ -11102,6 +11141,10 @@ body.composer-mode .bg-orb {
   max-width: 42rem;
 }
 
+.explore-hero-note {
+  max-width: 44rem;
+}
+
 .explore-hero-copy h1 {
   margin: 0;
   max-width: none;
@@ -11603,6 +11646,12 @@ body.composer-mode .bg-orb {
   margin: 0;
 }
 
+.explore-empty-copy {
+  display: grid;
+  gap: 0.45rem;
+  max-width: 46rem;
+}
+
 .explore-hidden-inline {
   display: grid;
   gap: 0.7rem;
@@ -11773,7 +11822,11 @@ body.composer-mode .bg-orb {
   z-index: 80;
   display: grid;
   place-items: start center;
-  padding: 1.5rem;
+  padding:
+    max(1rem, env(safe-area-inset-top, 0px))
+    max(1rem, env(safe-area-inset-right, 0px))
+    max(1rem, env(safe-area-inset-bottom, 0px))
+    max(1rem, env(safe-area-inset-left, 0px));
   overflow-y: auto;
   overscroll-behavior: contain;
 }
@@ -11793,10 +11846,14 @@ body.composer-mode .bg-orb {
   display: grid;
   gap: 1.2rem;
   width: min(100%, 980px);
+  max-width: 100%;
+  max-height: calc(100svh - 3rem - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
   max-height: calc(100dvh - 3rem);
+  max-height: calc(100dvh - 3rem - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
   padding: 1.4rem;
   overflow-x: hidden;
   overflow-y: auto;
+  box-sizing: border-box;
   border-radius: 32px;
   border: 1px solid rgba(110, 201, 255, 0.16);
   background:
@@ -12178,6 +12235,7 @@ body.composer-mode .bg-orb {
   width: 100%;
   max-width: min(100%, 208px);
   min-width: 0;
+  overflow-x: hidden;
 }
 
 .publish-beacon-panel .eyebrow {
@@ -12191,8 +12249,11 @@ body.composer-mode .bg-orb {
 .publish-beacon-qr-shell {
   width: 100%;
   max-width: min(100%, 172px);
+  min-width: 0;
   padding: clamp(0.55rem, 1.8vw, 0.7rem);
   border-radius: 20px;
+  box-sizing: border-box;
+  overflow: hidden;
   box-shadow:
     inset 0 0 0 1px rgba(2, 15, 24, 0.08),
     0 0 24px rgba(120, 231, 255, 0.08);
@@ -12206,11 +12267,39 @@ body.composer-mode .bg-orb {
   transform: none;
 }
 
+.publish-beacon-qr-markup svg,
+.publish-beacon-qr-markup img {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
 .publish-beacon-note {
   max-width: 24ch;
   margin-bottom: 0;
   font-size: 0.82rem;
   text-align: center;
+}
+
+.publish-beacon-link-row {
+  display: grid;
+  gap: 0.45rem;
+  width: 100%;
+  max-width: min(100%, 208px);
+  justify-items: center;
+}
+
+.publish-beacon-link-hint {
+  margin: 0;
+  font-size: 0.74rem;
+  line-height: 1.4;
+  text-align: center;
+}
+
+.publish-beacon-link-button {
+  width: 100%;
+  min-width: 0;
+  justify-content: center;
 }
 
 @keyframes landingStatusPulse {
@@ -13641,14 +13730,23 @@ body.composer-mode .bg-orb {
   }
 
   .publish-overlay {
-    padding: 0.4rem;
+    padding:
+      max(0.45rem, env(safe-area-inset-top, 0px))
+      max(0.45rem, env(safe-area-inset-right, 0px))
+      max(0.45rem, env(safe-area-inset-bottom, 0px))
+      max(0.45rem, env(safe-area-inset-left, 0px));
     overflow-y: auto;
   }
 
   .publish-overlay-panel {
     gap: 0.65rem;
-    max-height: calc(100svh - 0.8rem);
-    padding: 0.78rem 0.82rem calc(0.78rem + env(safe-area-inset-bottom, 0px));
+    max-height: calc(100svh - 0.9rem - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+    max-height: calc(100dvh - 0.9rem - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+    padding:
+      0.78rem
+      0.82rem
+      calc(0.78rem + env(safe-area-inset-bottom, 0px))
+      0.82rem;
     border-radius: 20px;
     overflow-y: auto;
   }
@@ -13907,7 +14005,7 @@ body.composer-mode .bg-orb {
 
   .publish-beacon-panel {
     gap: 0.25rem;
-    min-width: min(100%, 148px);
+    min-width: 0;
   }
 
   .publish-beacon-qr-shell {
@@ -14782,6 +14880,57 @@ pre {
 
   .publish-blob-id {
     font-size: 0.84rem;
+  }
+}
+
+@media (max-width: 600px) {
+  .publish-overlay {
+    padding:
+      max(0.35rem, env(safe-area-inset-top, 0px))
+      max(0.35rem, env(safe-area-inset-right, 0px))
+      max(0.5rem, env(safe-area-inset-bottom, 0px))
+      max(0.35rem, env(safe-area-inset-left, 0px));
+  }
+
+  .publish-overlay-panel {
+    gap: 0.56rem;
+    max-height: calc(100svh - 0.7rem - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+    max-height: calc(100dvh - 0.7rem - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+    padding:
+      0.72rem
+      0.72rem
+      calc(0.82rem + env(safe-area-inset-bottom, 0px))
+      0.72rem;
+  }
+
+  .publish-overlay-hero {
+    gap: 0.38rem;
+  }
+
+  .publish-beacon-panel {
+    max-width: min(100%, 100%);
+    gap: 0.34rem;
+  }
+
+  .publish-beacon-qr-shell {
+    width: min(100%, clamp(132px, 39vw, 168px));
+    max-width: min(100%, 168px);
+    padding: clamp(0.44rem, 1.8vw, 0.56rem);
+    border-radius: 18px;
+  }
+
+  .publish-beacon-note {
+    max-width: 28ch;
+    font-size: 0.74rem;
+  }
+
+  .publish-beacon-link-row {
+    gap: 0.38rem;
+    max-width: min(100%, 220px);
+  }
+
+  .publish-beacon-link-hint {
+    font-size: 0.72rem;
   }
 }
 

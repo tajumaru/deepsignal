@@ -1,6 +1,7 @@
 export const REAL_SEAL_ENVELOPE_KIND = "deepsignal.real-seal";
 export const REAL_SEAL_ENVELOPE_VERSION = 1;
 export const REAL_SEAL_SESSION_TTL_MIN = 10;
+export const REAL_SEAL_SCHEMA_VERSION = 1;
 
 export const SEAL_DECRYPT_APPROVAL_REQUIRED_MESSAGE =
   "Seal decryption requires wallet approval.";
@@ -14,8 +15,14 @@ export const SEAL_ADMIN_WALLET_REQUIRED_MESSAGE =
 export const SEAL_NOT_CONFIGURED_MESSAGE =
   "Seal mode is not configured.";
 
+export const SEAL_RUNTIME_UNAVAILABLE_MESSAGE =
+  "Seal runtime unavailable.";
+
 export const SEAL_WALLET_CANCELLED_MESSAGE =
   "Wallet approval was cancelled.";
+
+export const SEAL_SESSION_EXPIRED_MESSAGE =
+  "Seal session expired.";
 
 export const SEAL_PERMISSION_DENIED_MESSAGE =
   "You do not have permission to decrypt this signal.";
@@ -34,13 +41,18 @@ export type RealSealApprovalPolicy =
 export interface RealSealEnvelope {
   kind: typeof REAL_SEAL_ENVELOPE_KIND;
   version: typeof REAL_SEAL_ENVELOPE_VERSION;
+  schemaVersion: typeof REAL_SEAL_SCHEMA_VERSION;
+  envelopeVersion: typeof REAL_SEAL_ENVELOPE_VERSION;
   algorithm: "@mysten/seal";
   encoding: "base64";
+  network: string;
   packageId: string;
   objectId: string;
   threshold: number;
   serverObjectIds: string[];
   encryptedObject: string;
+  policyId: RealSealApprovalPolicy;
+  policyObjectId: string;
   projectId?: string;
   ownerAddress?: string;
   approvalPolicy?: RealSealApprovalPolicy;
@@ -48,11 +60,13 @@ export interface RealSealEnvelope {
 }
 
 export function createRealSealEnvelope(
-  input: Omit<RealSealEnvelope, "kind" | "version" | "algorithm" | "encoding" | "createdAt">,
+  input: Omit<RealSealEnvelope, "kind" | "version" | "schemaVersion" | "envelopeVersion" | "algorithm" | "encoding" | "createdAt">,
 ) {
   return {
     kind: REAL_SEAL_ENVELOPE_KIND,
     version: REAL_SEAL_ENVELOPE_VERSION,
+    schemaVersion: REAL_SEAL_SCHEMA_VERSION,
+    envelopeVersion: REAL_SEAL_ENVELOPE_VERSION,
     algorithm: "@mysten/seal",
     encoding: "base64" as const,
     createdAt: new Date().toISOString(),
@@ -66,14 +80,22 @@ export function parseRealSealEnvelope(value: string): RealSealEnvelope | null {
     if (
       parsed.kind !== REAL_SEAL_ENVELOPE_KIND ||
       parsed.version !== REAL_SEAL_ENVELOPE_VERSION ||
+      (parsed.schemaVersion !== undefined && parsed.schemaVersion !== REAL_SEAL_SCHEMA_VERSION) ||
+      (parsed.envelopeVersion !== undefined && parsed.envelopeVersion !== REAL_SEAL_ENVELOPE_VERSION) ||
       parsed.algorithm !== "@mysten/seal" ||
       parsed.encoding !== "base64" ||
+      (parsed.network !== undefined && typeof parsed.network !== "string") ||
       typeof parsed.packageId !== "string" ||
       typeof parsed.objectId !== "string" ||
       typeof parsed.threshold !== "number" ||
       !Array.isArray(parsed.serverObjectIds) ||
       parsed.serverObjectIds.some((item) => typeof item !== "string") ||
       typeof parsed.encryptedObject !== "string" ||
+      (parsed.policyId !== undefined &&
+        parsed.policyId !== "project_signal_v1" &&
+        parsed.policyId !== "project_admin_v0" &&
+        parsed.policyId !== "owner_wallet_v1") ||
+      (parsed.policyObjectId !== undefined && typeof parsed.policyObjectId !== "string") ||
       (parsed.projectId !== undefined && typeof parsed.projectId !== "string") ||
       (parsed.ownerAddress !== undefined && typeof parsed.ownerAddress !== "string") ||
       (parsed.approvalPolicy !== undefined &&
@@ -84,7 +106,33 @@ export function parseRealSealEnvelope(value: string): RealSealEnvelope | null {
     ) {
       return null;
     }
-    return parsed as RealSealEnvelope;
+    const normalizedPolicyId = parsed.policyId ?? parsed.approvalPolicy;
+    const normalizedPolicyObjectId =
+      parsed.policyObjectId ??
+      parsed.projectId ??
+      parsed.ownerAddress ??
+      parsed.objectId;
+    const normalizedNetwork = parsed.network ?? "";
+    const normalizedSchemaVersion = parsed.schemaVersion ?? parsed.version;
+    const normalizedEnvelopeVersion = parsed.envelopeVersion ?? parsed.version;
+    if (
+      !normalizedPolicyId ||
+      !normalizedPolicyObjectId ||
+      !normalizedNetwork ||
+      typeof normalizedSchemaVersion !== "number" ||
+      typeof normalizedEnvelopeVersion !== "number"
+    ) {
+      return null;
+    }
+    return {
+      ...parsed,
+      schemaVersion: normalizedSchemaVersion,
+      envelopeVersion: normalizedEnvelopeVersion,
+      network: normalizedNetwork,
+      policyId: normalizedPolicyId,
+      policyObjectId: normalizedPolicyObjectId,
+      approvalPolicy: parsed.approvalPolicy ?? normalizedPolicyId,
+    } as RealSealEnvelope;
   } catch {
     return null;
   }

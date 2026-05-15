@@ -239,7 +239,9 @@ export function ExploreSignalsPage() {
     return sorted;
   }, [activeTab, cards]);
 
-  const heroCountLabel = loading ? "Scanning public streams..." : `${filteredCards.length} signals in view`;
+  const hiddenPrivateCount = hiddenForms.filter((form) => form.visibility === "private").length;
+  const hiddenDirectLinkCount = hiddenForms.filter((form) => form.visibility !== "private").length;
+  const heroCountLabel = loading ? "Scanning workspace streams..." : `${filteredCards.length} signals in view`;
 
   return (
     <section className="explore-shell">
@@ -261,14 +263,18 @@ export function ExploreSignalsPage() {
 
         <div className="explore-hero-bar">
           <div className="explore-hero-copy">
-            <p className="eyebrow">Signal Directory</p>
+            <p className="eyebrow">Workspace Signal Directory</p>
             <h1>Explore Signals</h1>
-            <p className="lede">Public feedback streams on Walrus.</p>
+            <p className="lede">Public and restored signal streams available in this workspace.</p>
+            <p className="muted explore-hero-note">
+              This view reflects signals currently available through this storage runtime and browser, including restored direct-link streams.
+            </p>
           </div>
           <div className="explore-hero-summary">
             <span className="signal-chip signal-chip-accent">{heroCountLabel}</span>
-            <span className="signal-chip">{cards.length} listed</span>
-            {hiddenForms.length > 0 ? <span className="signal-chip">{hiddenForms.length} hidden local</span> : null}
+            <span className="signal-chip">{cards.length} listed here</span>
+            {hiddenDirectLinkCount > 0 ? <span className="signal-chip">{hiddenDirectLinkCount} direct-link only</span> : null}
+            {hiddenPrivateCount > 0 ? <span className="signal-chip">{hiddenPrivateCount} local restored</span> : null}
           </div>
         </div>
       </section>
@@ -296,12 +302,20 @@ export function ExploreSignalsPage() {
 
         {filteredCards.length === 0 ? (
           <section className="explore-empty-minimal">
-            <h2>No public signals yet.</h2>
-            <p className="muted">
-              {hiddenForms.length > 0
-                ? `${hiddenForms.length} local signal${hiddenForms.length === 1 ? "" : "s"} found, but not listed in Public Explore.`
-                : "Publish your first signal stream."}
-            </p>
+            <h2>No listed signals in this workspace yet.</h2>
+            <div className="explore-empty-copy">
+              <p className="muted">
+                Signal streams opened via direct link will reappear here once they are restored in this browser workspace.
+              </p>
+              <p className="muted">
+                Streams published to Explore will also show up here when they are available through the current storage runtime.
+              </p>
+              {hiddenForms.length > 0 ? (
+                <p className="muted">
+                  {hiddenForms.length} restored signal{hiddenForms.length === 1 ? "" : "s"} found, but they remain outside the listed Explore feed.
+                </p>
+              ) : null}
+            </div>
             {hiddenForms.length > 0 ? (
               <div className="explore-hidden-inline">
                 {hiddenForms.slice(0, 2).map((form) => (
@@ -309,11 +323,13 @@ export function ExploreSignalsPage() {
                     <div className="explore-hidden-inline-main">
                       <div className="pill-row">
                         <span className="signal-chip signal-chip-accent">Detected</span>
-                        <span className="signal-chip">{form.visibility === "private" ? "Private" : "Unlisted"}</span>
+                        <span className="signal-chip">{form.visibility === "private" ? "Local restored" : "Direct-link only"}</span>
                       </div>
                       <strong>{form.title}</strong>
                       <p className="muted">
-                        {form.visibility === "private" ? "Private: admin only" : "Unlisted: direct link only"}
+                        {form.visibility === "private"
+                          ? "Restored in this browser workspace for admin access."
+                          : "Available from a shared link, but not listed in Explore."}
                       </p>
                     </div>
                     <div className="explore-hidden-inline-stats">

@@ -14,12 +14,16 @@ const fakeSealAdapter: SealAdapter = {
 function makeSealEnvelope() {
   return JSON.stringify(
     createRealSealEnvelope({
+      network: "testnet",
       packageId: "0xpackage",
       objectId: "0xobject",
       threshold: 1,
       serverObjectIds: ["0xserver"],
       encryptedObject: "ciphertext",
+      policyId: "project_signal_v1",
+      policyObjectId: "project-1",
       approvalPolicy: "project_signal_v1",
+      projectId: "project-1",
     }),
   );
 }
@@ -29,7 +33,7 @@ describe("decryptSensitiveResponse fail-closed behavior", () => {
     await expect(
       decryptSensitiveResponse("plain response", {}, fakeSealAdapter),
     ).rejects.toMatchObject({
-      reasonCode: "INVALID_ENCRYPTED_PAYLOAD",
+      reasonCode: "MANIFEST_MISMATCH",
     });
   });
 
@@ -40,7 +44,7 @@ describe("decryptSensitiveResponse fail-closed behavior", () => {
         encryptedMarker: true,
       }),
     ).rejects.toMatchObject({
-      reasonCode: "INVALID_ENCRYPTED_PAYLOAD",
+      reasonCode: "MANIFEST_MISMATCH",
     });
   });
 

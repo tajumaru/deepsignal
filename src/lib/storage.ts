@@ -1,5 +1,9 @@
 import {
+  createEncryptionGuardError,
   decryptSensitiveResponse,
+  ENCRYPTION_FAILED_CODE,
+  ENCRYPTION_FAILED_MESSAGE,
+  ENCRYPTION_REQUIRED_CODE,
   encryptSensitiveResponse,
   sealServiceAdapter,
 } from "../crypto/sealService";
@@ -23,7 +27,9 @@ import { formatAnswerText } from "./answerFormatting";
 import { normalizeFormVisibility } from "./explore";
 import { isResponseDeadlinePassed } from "./responseDeadline";
 import { enrichSubmissionWithTriage } from "./signalTriage";
+import { SUI_NETWORK } from "./sui";
 import { storage } from "../storage/storageFactory";
+import { getStorageRuntimeStatus } from "../storage/storageFactory";
 import {
   assertEncryptedSubmissionAttachments,
   sanitizeSubmissionForStorage,
@@ -43,6 +49,10 @@ import type {
 
 export const storageAdapter: StorageAdapter = storage;
 export const activeSealAdapter: SealAdapter = sealServiceAdapter;
+export const ENCRYPTION_REQUIRED_MESSAGE =
+  "Protected submissions require encrypted Walrus storage in production. Response was not submitted.";
+export const DEFAULT_ATTACHMENT_MAX_BYTES = 50 * 1024 * 1024;
+export const ENCRYPTED_INLINE_ATTACHMENT_MAX_BYTES = 10 * 1024 * 1024;
 
 export interface SaveSubmissionWithEncryptionResult {
   id: string;
@@ -153,7 +163,14 @@ export async function createEncryptedAttachmentUpload(
 // This does not Seal-encrypt the file by itself. The attachment bytes are embedded
 // into the private submission payload, and the full payload is Seal-encrypted in
 // saveSubmissionWithEncryption().
-export async function createInlinePrivateAttachment(file: File) {
+export async function createInlinePrivateAttachment(
+  file: File,
+  maxSizeBytes: number = ENCRYPTED_INLINE_ATTACHMENT_MAX_BYTES,
+) {
+  if (file.size > maxSizeBytes) {
+    const maxSizeMb = Math.round(maxSizeBytes / (1024 * 1024));
+    throw new Error(`Encrypted attachments are limited to ${maxSizeMb}MB. Please choose a smaller file.`);
+  }
   const bytes = new Uint8Array(await file.arrayBuffer());
   return {
     fieldId: "",
@@ -284,6 +301,64 @@ export function createEmptyAnswer(field: FormField) {
 }
 
 export { getStorageRuntimeStatus } from "../storage/storageFactory";
+
+function isProductionProtectedStorageUnavailable(targetStorage: StorageAdapter) {
+  if (!import.meta.env.PROD || targetStorage !== storageAdapter) {
+    return false;
+  }
+  return getStorageRuntimeStatus().mode !== "walrus";
+}
+
+function createMissingEncryptedPayloadError(message: string, diagnostics: ReturnType<typeof buildDecryptDiagnosticContext>) {
+  return new DecryptDiagnosticError(
+    "ENCRYPTED_PAYLOAD_MISSING",
+    message,
+    diagnostics,
+  );
+}
+
+function assertEnvelopePolicyMatchesForm(
+  form: FormSchema,
+  envelope: ReturnType<typeof validateEncryptedPayloadOrThrow>,
+  diagnostics: ReturnType<typeof buildDecryptDiagnosticContext>,
+) {
+  const formProjectId = form.projectId?.trim();
+  const formOwnerAddress = form.ownerAddress?.trim()?.toLowerCase();
+  const envelopeProjectId = envelope.projectId?.trim();
+  const envelopeOwnerAddress = envelope.ownerAddress?.trim()?.toLowerCase();
+
+  if (envelope.network !== SUI_NETWORK) {
+    throw new DecryptDiagnosticError(
+      "POLICY_MISMATCH",
+      "Encryption policy mismatch.",
+      diagnostics,
+    );
+  }
+
+  if (formProjectId && envelopeProjectId && formProjectId !== envelopeProjectId) {
+    throw new DecryptDiagnosticError(
+      "POLICY_MISMATCH",
+      "Encryption policy mismatch.",
+      diagnostics,
+    );
+  }
+
+  if (formOwnerAddress && envelopeOwnerAddress && formOwnerAddress !== envelopeOwnerAddress) {
+    throw new DecryptDiagnosticError(
+      "POLICY_MISMATCH",
+      "Encryption policy mismatch.",
+      diagnostics,
+    );
+  }
+
+  if (!envelope.policyId || !envelope.policyObjectId) {
+    throw new DecryptDiagnosticError(
+      "POLICY_MISMATCH",
+      "Encryption policy mismatch.",
+      diagnostics,
+    );
+  }
+}
 
 function coerceStatus(status: unknown): Submission["status"] {
   if (status === "read" || status === "archived" || status === "unread") {
@@ -534,7 +609,11 @@ export async function resolveSubmissionAnswers(
   if (submission.isEncrypted && (submission.encryptedPayload || submission.encryptedBlobId)) {
     try {
       const baseDiagnostics = buildDecryptDiagnosticContext(form, submission, context);
+      context.onStatusChange?.("loading_seal_runtime");
       logDecryptDiagnostic("start", baseDiagnostics);
+      if (!submission.encryptedPayload && !submission.encryptedBlobId) {
+        throw createMissingEncryptedPayloadError("Encrypted payload is missing.", baseDiagnostics);
+      }
       const payload =
         submission.encryptedPayload ??
         (submission.encryptedBlobId
@@ -542,23 +621,25 @@ export async function resolveSubmissionAnswers(
           : null);
       if (!payload) {
         throw new DecryptDiagnosticError(
-          submission.encryptedBlobId ? "WALRUS_BLOB_FETCH_FAILED" : "MANIFEST_NOT_FOUND",
+          submission.encryptedBlobId ? "BLOB_FETCH_FAILED" : "ENCRYPTED_PAYLOAD_MISSING",
           submission.encryptedBlobId
-            ? "Encrypted payload blob could not be fetched."
-            : "Encrypted payload manifest reference is missing.",
+            ? "Failed to fetch encrypted payload from Walrus."
+            : "Encrypted payload is missing.",
           baseDiagnostics,
         );
       }
       const envelope = validateEncryptedPayloadOrThrow(payload, baseDiagnostics);
+      context.onStatusChange?.("validating_access_policy");
       const diagnostics = {
         ...baseDiagnostics,
         packageId: envelope.packageId,
-        policyId: envelope.approvalPolicy,
+        policyId: envelope.policyId,
         accessObjectId: envelope.objectId,
-        approvalPolicy: envelope.approvalPolicy,
+        approvalPolicy: envelope.policyId,
         encryptedPayloadShape: describeEncryptedPayloadShape(payload),
         ciphertextSize: envelope.encryptedObject.length,
       };
+      assertEnvelopePolicyMatchesForm(form, envelope, diagnostics);
       logDecryptDiagnostic("payload_validated", diagnostics);
       const decryptedResult = await decryptSensitiveResponse(payload, context, seal, {
         encryptedMarker: true,
@@ -576,7 +657,7 @@ export async function resolveSubmissionAnswers(
         };
       } catch (error) {
         throw new DecryptDiagnosticError(
-          "INVALID_ENCRYPTED_PAYLOAD",
+          "MANIFEST_MISMATCH",
           error instanceof Error
             ? `Failed to parse decrypted submission payload: ${error.message}`
             : "Failed to parse decrypted submission payload.",
@@ -584,6 +665,7 @@ export async function resolveSubmissionAnswers(
           error,
         );
       }
+      context.onStatusChange?.("signal_unlocked");
       logDecryptDiagnostic("success", diagnostics);
       return {
         answers: parsed.answers ?? {},
@@ -610,6 +692,11 @@ export async function resolveSubmissionAnswers(
         error,
       );
     }
+  }
+
+  if (submission.isEncrypted) {
+    const diagnostics = buildDecryptDiagnosticContext(form, submission, context);
+    throw createMissingEncryptedPayloadError("Encrypted payload is missing.", diagnostics);
   }
 
   const decryptedAnswers = await decryptSensitiveAnswers(form, submission.answers, seal, context);
@@ -680,6 +767,9 @@ export async function saveSubmissionWithEncryption(
   const triagedSubmission = enrichSubmissionWithTriage(form, triageInput);
 
   if (form.encryptSubmissions) {
+    if (isProductionProtectedStorageUnavailable(targetStorage)) {
+      throw createEncryptionGuardError(ENCRYPTION_REQUIRED_CODE, ENCRYPTION_REQUIRED_MESSAGE);
+    }
     if (!form.projectId?.trim() && !form.ownerAddress?.trim()) {
       throw new Error(REAL_SEAL_PROJECT_REQUIRED_MESSAGE);
     }
@@ -688,41 +778,52 @@ export async function saveSubmissionWithEncryption(
 
     let encryptedBlobId = submission.encryptedBlobId;
     let encryptedPayload = submission.encryptedPayload;
-    if (!encryptedPayload) {
-      const payload = JSON.stringify({
-        answers: submission.answers,
-        attachments: submission.attachments,
+    try {
+      if (!encryptedPayload) {
+        const payload = JSON.stringify({
+          answers: submission.answers,
+          attachments: submission.attachments,
+        });
+        messages?.onPipelineStage?.("encrypting");
+        encryptedPayload = await encryptSensitiveResponse(
+          payload,
+          { projectId: form.projectId, ownerAddress: form.ownerAddress },
+          seal,
+        );
+      }
+      if (!encryptedBlobId) {
+        messages?.onPipelineStage?.("uploading_to_walrus");
+        const savedEncryptedPayload = await targetStorage.saveEncryptedPayload(encryptedPayload);
+        encryptedBlobId = savedEncryptedPayload.blobId;
+      }
+      const parsedEnvelope = parseRealSealEnvelope(encryptedPayload);
+      if (!parsedEnvelope) {
+        throw createEncryptionGuardError(ENCRYPTION_FAILED_CODE, ENCRYPTION_FAILED_MESSAGE);
+      }
+      const sealIdentity = `seal:${parsedEnvelope.packageId}:${parsedEnvelope.objectId}`;
+      const metadataSubmission = sanitizeSubmissionForStorage({
+        ...triagedSubmission,
+        isEncrypted: true,
+        encryptedBlobId,
+        sealIdentity,
       });
-      messages?.onPipelineStage?.("encrypting");
-      encryptedPayload = await encryptSensitiveResponse(
-        payload,
-        { projectId: form.projectId, ownerAddress: form.ownerAddress },
-        seal,
+      messages?.onPipelineStage?.("uploading_to_walrus");
+      const saved = await targetStorage.saveSubmission(metadataSubmission);
+      return {
+        ...saved,
+        encryptedBlobId,
+        encryptedPayload,
+        sealIdentity,
+      };
+    } catch (error) {
+      if (error instanceof Error && (error as Error & { code?: string }).code) {
+        throw error;
+      }
+      throw createEncryptionGuardError(
+        ENCRYPTION_FAILED_CODE,
+        error instanceof Error ? error.message : ENCRYPTION_FAILED_MESSAGE,
       );
     }
-    if (!encryptedBlobId) {
-      messages?.onPipelineStage?.("uploading_to_walrus");
-      const savedEncryptedPayload = await targetStorage.saveEncryptedPayload(encryptedPayload);
-      encryptedBlobId = savedEncryptedPayload.blobId;
-    }
-    const parsedEnvelope = parseRealSealEnvelope(encryptedPayload);
-    const sealIdentity = parsedEnvelope
-      ? `seal:${parsedEnvelope.packageId}:${parsedEnvelope.objectId}`
-      : submission.sealIdentity;
-    const metadataSubmission = sanitizeSubmissionForStorage({
-      ...triagedSubmission,
-      isEncrypted: true,
-      encryptedBlobId,
-      sealIdentity,
-    });
-    messages?.onPipelineStage?.("uploading_to_walrus");
-    const saved = await targetStorage.saveSubmission(metadataSubmission);
-    return {
-      ...saved,
-      encryptedBlobId,
-      encryptedPayload,
-      sealIdentity,
-    };
   }
 
   const answers = await encryptSensitiveAnswers(form, submission.answers, seal, {

@@ -12,6 +12,8 @@ interface DynamicFieldProps {
   value: unknown;
   error?: string;
   hint?: string;
+  attachmentMaxSizeBytes?: number;
+  attachmentMaxSizeErrorMessage?: (maxSizeBytes: number) => string;
   questionNumber?: number;
   required?: boolean;
   disabled?: boolean;
@@ -80,6 +82,8 @@ export function DynamicField({
   value,
   error,
   hint,
+  attachmentMaxSizeBytes,
+  attachmentMaxSizeErrorMessage,
   questionNumber,
   required,
   disabled,
@@ -437,6 +441,8 @@ export function DynamicField({
             attachments={selectedAttachments}
             disabled={disabled}
             hint={hint ?? (field.type === "screenshot" ? t("screenshotHint") : t("videoHint"))}
+            maxSizeBytes={attachmentMaxSizeBytes}
+            maxSizeErrorMessage={attachmentMaxSizeErrorMessage}
             capture={field.type === "screenshot" ? "environment" : undefined}
             onChange={onChange}
           />

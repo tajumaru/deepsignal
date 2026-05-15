@@ -22,6 +22,8 @@ interface SealRuntimeStatus {
 export const ENCRYPTION_FAILED_MESSAGE = "Encryption failed. Response was not submitted.";
 export const SEAL_UNAVAILABLE_MESSAGE = "Seal encryption is unavailable. Submission was not uploaded.";
 export const LEGACY_UNENCRYPTED_RESPONSE_LABEL = "Legacy unencrypted response";
+export const ENCRYPTION_REQUIRED_CODE = "ENCRYPTION_REQUIRED";
+export const ENCRYPTION_FAILED_CODE = "ENCRYPTION_FAILED";
 
 const requestedSealMode = String(import.meta.env.VITE_SEAL_MODE || "seal").toLowerCase();
 const isProductionRuntime = import.meta.env.MODE === "production";
@@ -77,6 +79,15 @@ function assertSealEncryptionAvailable() {
   }
 }
 
+export function createEncryptionGuardError(
+  code: typeof ENCRYPTION_REQUIRED_CODE | typeof ENCRYPTION_FAILED_CODE,
+  message: string,
+) {
+  const error = new Error(message) as Error & { code?: string };
+  error.code = code;
+  return error;
+}
+
 export async function encryptSensitiveResponse(
   value: string,
   context: SealEncryptContext = {},
@@ -94,7 +105,7 @@ export async function encryptSensitiveResponse(
     if (error instanceof Error && error.message === SEAL_UNAVAILABLE_MESSAGE) {
       throw error;
     }
-    throw new Error(ENCRYPTION_FAILED_MESSAGE);
+    throw createEncryptionGuardError(ENCRYPTION_FAILED_CODE, ENCRYPTION_FAILED_MESSAGE);
   }
 }
 
@@ -115,8 +126,8 @@ export async function decryptSensitiveResponse(
     }
     validateEncryptedPayloadOrThrow(value, options.diagnostics);
     throw new DecryptDiagnosticError(
-      "INVALID_ENCRYPTED_PAYLOAD",
-      "Decrypt failed: INVALID_ENCRYPTED_PAYLOAD",
+      "MANIFEST_MISMATCH",
+      "Decrypt failed: MANIFEST_MISMATCH",
       options.diagnostics,
     );
   }

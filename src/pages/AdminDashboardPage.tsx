@@ -172,6 +172,7 @@ export function AdminDashboardPage() {
     detailAttachments,
     detailLegacyUnencrypted,
     decrypting,
+    decryptState,
     decryptStatusMessage,
     decryptError,
     setDecryptError,
@@ -1271,6 +1272,8 @@ export function AdminDashboardPage() {
                         onUnlock={() => void handleDecrypt()}
                         isDecrypting={decrypting || decryptInFlightRef.current}
                         isUnlocked={Boolean(detailAnswers)}
+                        unlockState={decryptState}
+                        statusMessage={decryptStatusMessage}
                         errorMessage={decryptError}
                         disabledReason={selectedRecordUnlockDisabledReason}
                       >
@@ -1299,6 +1302,7 @@ export function AdminDashboardPage() {
                       <div className="contest-inline-success" role="status" aria-live="polite">
                         <strong>Wallet verified</strong>
                         <span>Private signal unlocked</span>
+                        <span className="signal-chip signal-chip-accent">Decrypted</span>
                       </div>
                     ) : null}
 

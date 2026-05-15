@@ -532,6 +532,10 @@ const messages = {
       "Upload a short video clip that shows the issue or feedback context. Max 25MB per signal.",
     uploadTooLarge: (params) =>
       `${params?.fieldLabel ?? "Attachment"} exceeds the secure intake limit of ${params?.maxSize ?? ""}. Compress it and try again.`,
+    encryptedAttachmentLimitHint: (params) => `Encrypted attachments are limited to ${params?.size ?? ""}MB.`,
+    recoverableDraftAttachmentsNotice:
+      "Attachments are not restored for safety. Please reselect any files before submitting.",
+    attachmentLabel: "Attachment",
     signalReceived: "Signal received",
     submissionCaptured: "Submission captured",
     submissionStored:
@@ -722,6 +726,11 @@ const messages = {
     privateSignalUnlockError: "Unable to decrypt. Check wallet permissions.",
     privateSignalUnlockDisabled: "Connect an authorized reviewer wallet to continue.",
     privateSignalUnlockUnavailable: "Select an encrypted private signal to unlock it.",
+    cancelUnlock: "Cancel unlock",
+    unlockInProgressStatus: "Unlock in progress...",
+    walletApprovalPendingStatus: "Wallet approval pending...",
+    finishOrCancelCurrentUnlock: "Finish or cancel the current unlock first.",
+    unlockCancelledStatus: "Unlock cancelled. You can select another signal.",
     demoDecryptAvailable: "Demo decrypt available.",
     policyGatedDecryption: "Policy-gated Decryption. Wallet approval required.",
     answersTitle: "Answers",
@@ -1160,6 +1169,7 @@ const messages = {
     publishOverlayIntro: "The payload is being reduced, submerged, and fixed into the Walrus observation layer.",
     publishBeaconAria: "BEACON QR",
     publishBeaconNote: "Scan to open the public responder flow on another device.",
+    publishBeaconCopyHint: "If the QR feels tight on mobile, copy the link instead.",
     publishTerminalHeader: "OBSERVATION // WALRUS UPLINK",
     publishTerminalPassiveWatch: "PASSIVE WATCH",
     publishTerminalTransit: "TRANSIT",
@@ -1731,6 +1741,10 @@ const messages = {
       "\u554f\u984c\u3084\u30d5\u30a3\u30fc\u30c9\u30d0\u30c3\u30af\u306e\u69d8\u5b50\u304c\u5206\u304b\u308b\u77ed\u3044\u52d5\u753b\u3092\u30a2\u30c3\u30d7\u30ed\u30fc\u30c9\u3057\u3066\u304f\u3060\u3055\u3044\u30021\u4ef6\u3042\u305f\u308a 25MB \u307e\u3067\u3067\u3059\u3002",
     uploadTooLarge: (params) =>
       `${params?.fieldLabel ?? "\u6dfb\u4ed8\u30d5\u30a1\u30a4\u30eb"}\u306f intake \u4e0a\u9650\u306e ${params?.maxSize ?? ""} \u3092\u8d85\u3048\u3066\u3044\u307e\u3059\u3002\u5727\u7e2e\u3057\u3066\u518d\u5ea6\u9001\u4fe1\u3057\u3066\u304f\u3060\u3055\u3044\u3002`,
+    encryptedAttachmentLimitHint: (params) => `\u6697\u53f7\u5316\u3055\u308c\u305f\u6dfb\u4ed8\u306f\u6700\u5927${params?.size ?? ""}MB\u307e\u3067\u3067\u3059\u3002`,
+    recoverableDraftAttachmentsNotice:
+      "\u6dfb\u4ed8\u30d5\u30a1\u30a4\u30eb\u306f\u5b89\u5168\u306e\u305f\u3081\u5fa9\u5143\u3055\u308c\u307e\u305b\u3093\u3002\u9001\u4fe1\u524d\u306b\u3082\u3046\u4e00\u5ea6\u9078\u629e\u3057\u3066\u304f\u3060\u3055\u3044\u3002",
+    attachmentLabel: "\u6dfb\u4ed8\u30d5\u30a1\u30a4\u30eb",
     signalReceived: "\u30b7\u30b0\u30ca\u30eb\u3092\u53d7\u4fe1\u3057\u307e\u3057\u305f",
     submissionCaptured: "\u6295\u7a3f\u3092\u4fdd\u5b58\u3057\u307e\u3057\u305f",
     submissionStored:
@@ -1946,6 +1960,13 @@ const messages = {
       "\u7d99\u7d9a\u3059\u308b\u306b\u306f\u8a8d\u53ef\u6e08\u307f\u306e reviewer wallet \u304c\u5fc5\u8981\u3067\u3059\u3002",
     privateSignalUnlockUnavailable:
       "\u6697\u53f7\u5316\u3055\u308c\u305f private signal \u3092\u9078\u3093\u3067\u5fa9\u53f7\u3057\u3066\u304f\u3060\u3055\u3044\u3002",
+    cancelUnlock: "\u5fa9\u53f7\u3092\u30ad\u30e3\u30f3\u30bb\u30eb",
+    unlockInProgressStatus: "\u5fa9\u53f7\u3092\u9032\u884c\u4e2d...",
+    walletApprovalPendingStatus: "Wallet \u627f\u8a8d\u3092\u5f85\u6a5f\u4e2d...",
+    finishOrCancelCurrentUnlock:
+      "\u73fe\u5728\u306e\u5fa9\u53f7\u3092\u5b8c\u4e86\u3059\u308b\u304b\u3001\u30ad\u30e3\u30f3\u30bb\u30eb\u3057\u3066\u304f\u3060\u3055\u3044\u3002",
+    unlockCancelledStatus:
+      "\u5fa9\u53f7\u3092\u30ad\u30e3\u30f3\u30bb\u30eb\u3057\u307e\u3057\u305f\u3002\u5225\u306e signal \u3092\u9078\u629e\u3067\u304d\u307e\u3059\u3002",
     demoDecryptAvailable: "Demo decrypt available.",
     policyGatedDecryption:
       "Policy-gated decryption. Wallet approval is required.",
@@ -2412,6 +2433,7 @@ const messages = {
     publishOverlayIntro: "payload \u3092 Walrus \u306e\u89b3\u6e2c\u30ec\u30a4\u30e4\u30fc\u306b\u56fa\u5b9a\u3057\u3066\u3044\u307e\u3059\u3002",
     publishBeaconAria: "BEACON QR",
     publishBeaconNote: "\u30b9\u30ad\u30e3\u30f3\u3059\u308b\u3068\u5225\u7aef\u672b\u3067\u516c\u958b\u56de\u7b54\u30d5\u30ed\u30fc\u3092\u958b\u3051\u307e\u3059\u3002",
+    publishBeaconCopyHint: "\u30e2\u30d0\u30a4\u30eb\u3067 QR \u304c\u7aae\u5c48\u306a\u3068\u304d\u306f\u3001\u4e0b\u306e\u30ea\u30f3\u30af\u30b3\u30d4\u30fc\u3082\u4f7f\u3048\u307e\u3059\u3002",
     publishTerminalHeader: "\u89b3\u6e2c // WALRUS UPLINK",
     publishTerminalPassiveWatch: "\u89b3\u6e2c\u4e2d",
     publishTerminalTransit: "\u9001\u4fe1\u4e2d",

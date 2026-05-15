@@ -5,7 +5,7 @@ export function shortAddress(address: string) {
 const requestedNetwork = String(
   import.meta.env.VITE_WALRUS_NETWORK ||
     import.meta.env.VITE_SUI_NETWORK ||
-    "testnet",
+    "mainnet",
 ).toLowerCase();
 export const SUI_NETWORK = requestedNetwork === "mainnet" ? "mainnet" : "testnet";
 export const SUI_FULLNODE_URL =

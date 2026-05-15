@@ -270,7 +270,14 @@ export interface SealDecryptContext {
   ownerAddress?: string;
   suiClient?: unknown;
   reviewerCapId?: string;
-  onStatusChange?: (status: "waiting_wallet_approval" | "decrypting_private_signal" | "finishing") => void;
+  onStatusChange?: (
+    status:
+      | "loading_seal_runtime"
+      | "validating_access_policy"
+      | "waiting_wallet_approval"
+      | "decrypting_encrypted_payload"
+      | "signal_unlocked",
+  ) => void;
 }
 
 export interface SealAdapter {

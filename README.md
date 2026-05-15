@@ -1,28 +1,227 @@
 # DeepSignal
 
-DeepSignal is an encrypted feedback inbox built for Walrus-native forms.
+**Encrypted signal infrastructure built on Walrus.**
 
-It is designed around one contest-ready flow:
+DeepSignal is a Walrus-native feedback and forms MVP for teams that need to collect high-value product signals without turning private user context into another centralized database liability.
 
-`Create form -> Share link -> Submit signal -> Store on Walrus -> Optional Seal encryption -> Admin inbox -> Review -> AI summary -> CSV export`
+It looks like a simple signal form from the outside: share a link or QR code, let anyone respond without a wallet, and keep the response flow fast. Under the hood, DeepSignal stores forms, submissions, manifests, and recovery indexes through Walrus; protects private submissions with Seal; and uses Sui/Move access control for creator, admin, and reviewer workflows.
 
-Public responders can submit without connecting a wallet. Walrus, Seal, and Sui features enhance the flow when configured, but the app still works in local demo mode through the existing `localStorage` fallback.
+The result is not a generic form builder. DeepSignal is an **Encrypted Signal Inbox**: a review surface where private feedback can be submitted, recovered, decrypted by authorized wallets, triaged into roadmap work, and exported when the team is ready to act.
 
-## What is DeepSignal?
+## Why DeepSignal Exists
 
-- A form builder for collecting product feedback, bug reports, and roadmap signals
-- A wallet-aware admin inbox for encrypted review and prioritization
-- A Walrus-first storage flow with local fallback for demos and recovery
-- A contest-focused MVP that keeps Signal / Inbox / Review / Encryption as the core product language
+Product teams ask users for their most useful context: bugs, pain points, screenshots, roadmap requests, deal blockers, complaints, and sometimes sensitive operational details. The current feedback stack usually forces a bad tradeoff:
 
-## Quick start
+- keep response friction low, but centralize private data in a SaaS database;
+- require wallets or accounts, but lose the people whose feedback matters most;
+- publish public roadmaps, but blur the line between safe metadata and private payloads.
+
+DeepSignal keeps those concerns separate.
+
+Responders stay wallet-optional. Creators and reviewers use wallets only where authority matters: publishing, reviewing, decrypting, and managing access. Walrus carries the data layer, Seal protects private payloads, and Sui makes review rights explicit enough to become future protocol tooling instead of an app-only permission table.
+
+## Core Flow
+
+```mermaid
+flowchart LR
+  A["Creator drafts a signal form"] --> B["Publish to Walrus"]
+  B --> C["Share public link or QR"]
+  C --> D["Responder submits without wallet"]
+  D --> E["Submission stored on Walrus"]
+  E --> F["Seal-encrypted private payload"]
+  F --> G["Encrypted Signal Inbox"]
+  G --> H["Authorized wallet unlocks"]
+  H --> I["Triage, roadmap, export"]
+```
+
+1. A creator starts with a **guest draft**, so form design does not require immediate wallet setup.
+2. Publishing writes the form through the storage adapter and produces shareable links, QR sharing, and a Walrus manifest/recovery path.
+3. Responders open `/f/:formId` and submit signals without connecting a wallet.
+4. Sensitive or full private submissions are Seal-encrypted before they become reviewable payloads.
+5. Creators/admins open the **Encrypted Signal Inbox**, unlock private signals with an authorized wallet, triage them, and choose which safe metadata can appear on the public roadmap.
+
+## What Makes DeepSignal Different
+
+**Wallet-optional where it matters.**  
+Public response routes, roadmap viewers, and restore flows stay accessible without a wallet. DeepSignal does not turn feedback collection into an onboarding tax.
+
+**Walrus is the storage layer, not a badge.**  
+Forms, submissions, attachments, encrypted payload references, blob indexes, and manifest recovery are modeled around Walrus blob storage. The UI surfaces blob IDs, manifest links, and verification paths so judges and operators can see the data path.
+
+**Private feedback is reviewable without becoming public.**  
+Seal protects sensitive submissions, while the inbox still supports triage status, priority, tags, notes, signal value, GitHub links, roadmap stage, JSON export, and CSV export.
+
+**Manifests are recovery indexes, not secret stores.**  
+Walrus manifests let an operator recover the form/submission graph from blob references. They intentionally avoid private answer bodies, attachment names, owner addresses, tags, notes, and encrypted payload contents.
+
+**Roadmaps are derived from review decisions.**  
+The public roadmap only exposes selected `planned`, `in_progress`, and `fixed` signals, and encrypted roadmap entries show safe metadata only.
+
+## Demo Flow
+
+This is the fastest judging path through the current UX.
+
+1. Run the app and open the landing page.
+2. Choose **Create signal** and build a form as a guest draft.
+3. Enable private/encrypted collection if the demo environment has Seal configured.
+4. Publish the form. The publish overlay shows the public link, QR code, Walrus status, and manifest/recovery link.
+5. Open the public link or scan the QR code. Submit a response from `/f/:formId` without connecting a wallet.
+6. Return to `/admin` or `/dashboard` and open the **Encrypted Signal Inbox**.
+7. Inspect Walrus metadata and Seal status in the review flow.
+8. If the submission is private, connect an authorized creator/admin/reviewer wallet and unlock it through Seal.
+9. Triage the signal, set priority/tags/notes, assign roadmap stage, and export JSON or CSV.
+10. Open `/explore` or `/roadmap/:formId` and confirm that public views contain only selected roadmap-safe metadata.
+
+## Why Walrus / Seal / Sui
+
+| Layer | Why DeepSignal Uses It |
+| --- | --- |
+| **Walrus** | Feedback data needs durable, addressable storage that can be verified outside the app. Walrus stores forms, submissions, encrypted payload blobs, attachments, blob indexes, and manifests. |
+| **Seal** | Private submissions should fail closed when encryption is required. Seal lets DeepSignal encrypt sensitive payloads and require wallet/session approval before review. |
+| **Sui** | Creator/admin/reviewer authority should be portable and extensible. The Move package models owner, admin, reviewer, project, form, and signal approval paths for future protocol-grade access policy. |
+
+DeepSignal still preserves local/demo fallback behavior. If Walrus is not configured, the app can run in `localStorage` mode for demos and development. If a runtime Walrus write fails, the app saves locally and tells the user. Encryption is stricter: when protected submissions require Seal and encryption is unavailable, DeepSignal does not silently save plaintext private data.
+
+## Contest Fit / Why Walrus
+
+DeepSignal is designed for the Walrus track because the product only makes sense when storage is content-addressed, recoverable, and inspectable.
+
+Walrus is used for:
+
+- form definition blobs;
+- submission blobs;
+- encrypted payload blob references;
+- attachment storage;
+- blob-index behavior for app lookup;
+- manifest blobs for recovery;
+- aggregator links and blob IDs surfaced in the product flow.
+
+The Walrus manifest design is especially important. A manifest is a recovery map that lets an operator rebuild the local admin cache from Walrus references, while keeping sensitive payload data out of the public recovery index. That makes DeepSignal feel less like a Web2 form app with a storage plugin and more like early infrastructure for encrypted, recoverable feedback networks.
+
+## Product Surface
+
+### Create
+
+- Guest draft form builder at `/admin/forms/new`.
+- Field types for ratings, screenshots, videos, and sensitive answers.
+- Publish overlay with public link, QR sharing, Walrus status, and manifest recovery link.
+- Visibility modes: private, unlisted, and Public Explore.
+
+### Respond
+
+- Public form route at `/f/:formId`.
+- Wallet-optional response by default.
+- Optional respondent wallet context without wallet-gating the route.
+- Recoverable public draft behavior for interrupted responses.
+
+### Review
+
+- Admin inbox at `/admin` and dashboard alias at `/dashboard`.
+- Submission list/detail routes for each form and signal.
+- Desktop-first **Encrypted Signal Inbox** with stream navigation, list view, detail panel, metadata, Walrus proof, and Seal state.
+- Triage status, priority, tags, notes, signal value, and GitHub issue/PR fields.
+
+### Publish Roadmap
+
+- Explore page at `/explore`.
+- Public roadmap route at `/roadmap/:formId`.
+- Selected roadmap signals can be exposed as planned, in progress, or fixed.
+- Encrypted entries expose safe metadata only.
+
+### Export
+
+- JSON export for individual signals and summaries.
+- CSV export for inbox workflows.
+- CSV begins with operational metadata such as submission ID, encryption status, status, triage state, priority, contributor ID, tags, notes, and GitHub links before form-answer columns.
+
+## Architecture
+
+DeepSignal keeps storage, crypto, wallet, and UI concerns separated so Walrus and Seal remain progressive capabilities rather than scattered conditionals.
+
+```mermaid
+flowchart TB
+  UI["React routes and UX flows"]
+  Storage["src/storage adapters"]
+  Crypto["src/crypto adapters"]
+  Wallet["Mysten dApp Kit wallet provider"]
+  Move["move/deepsignal_access"]
+  Walrus["Walrus blobs, manifests, aggregator"]
+  Seal["Seal encryption and decrypt approval"]
+  Local["localStorage fallback"]
+
+  UI --> Storage
+  UI --> Crypto
+  UI --> Wallet
+  Wallet --> Move
+  Storage --> Walrus
+  Storage --> Local
+  Crypto --> Seal
+  Seal --> Move
+```
+
+Key implementation boundaries:
+
+- Walrus storage code lives in `src/storage`.
+- Seal encryption code lives in `src/crypto`.
+- Wallet provider setup lives in `src/providers.tsx`.
+- Shared Sui helpers live in `src/lib/sui.ts`.
+- Move access control lives in `move/deepsignal_access`.
+- Public responder routes remain wallet-optional even when creator/admin routes use wallet context.
+
+### Walrus Storage Model
+
+The active Walrus path is adapter-driven:
+
+- form definitions and submissions are serialized through the storage adapter;
+- upload-relay mode uses the connected wallet for Walrus registration/certification while the relay forwards blob data;
+- successful writes store `blobId` values back into form, submission, encrypted-payload, and attachment models;
+- each form can maintain a separate manifest blob for recovery;
+- legacy publisher mode remains available with `VITE_WALRUS_STORAGE_MODE=publisher`.
+
+Manifest blobs store only recovery references:
+
+- `formId`
+- `submissionId`
+- `formBlobId`
+- submission blob IDs
+- `createdAt`
+- `updatedAt`
+
+Opening `/m/:manifestBlobId` reads the manifest from Walrus, reloads referenced form/submission blobs, rebuilds browser cache, and redirects back into the recovered admin flow.
+
+### Seal Encryption Model
+
+Current behavior:
+
+- fields marked `sensitive: true` can be encrypted before submission save;
+- full private submissions use `@mysten/seal` when `VITE_SEAL_PACKAGE_ID` and `VITE_SEAL_KEY_SERVER_OBJECT_ID` are configured;
+- production runtime rejects mock/no-op Seal behavior;
+- decryption happens only in admin detail/review flows;
+- legacy unencrypted payloads remain readable for backward compatibility and are labeled as legacy;
+- exports include encryption status metadata such as `seal_encrypted`, `legacy_unencrypted`, or `public`.
+
+Real Seal decrypt currently targets project-backed signals reviewed by a wallet that is the project owner, a project admin, or an authorized reviewer.
+
+### Sui / Move Access Control
+
+The Move package includes:
+
+- `deepsignal::access_control` for global owner/admin/reviewer capability management;
+- `deepsignal::project_registry` for projects, forms, signal receipts, and Seal approval hooks;
+- shared `Registry` object for active owner/admin/reviewer entries;
+- `OwnerCap`, `AdminCap`, and `ReviewerCap` based gating for creator/reviewer surfaces;
+- project-backed `seal_approve_project_signal`, `seal_approve_project_admin`, and reviewer approval routes.
+
+When `VITE_PACKAGE_ID` is not configured, the app falls back to owner-address and local/demo behavior so older forms and demos remain usable.
+
+## Quick Start
 
 ```bash
 npm install
 npm run dev
 ```
 
-## Verification
+Validation:
 
 ```bash
 npm run typecheck
@@ -30,11 +229,70 @@ npm run lint
 npm run build
 ```
 
-`npm run build` runs `npm run typecheck` first so broken TypeScript fails early.
+## Environment
 
-## Dev code index
+Copy `.env.example` and configure the pieces needed for your demo.
 
-DeepSignal includes a lightweight local code index for development and bug investigation. It scans `src`, writes JSON to `.codex/code-index.json`, and does not affect the app's runtime behavior.
+```bash
+VITE_STORAGE_MODE=walrus
+VITE_WALRUS_STORAGE_MODE=uploadRelay
+VITE_WALRUS_NETWORK=mainnet
+VITE_WALRUS_UPLOAD_RELAY_URL=https://upload-relay.mainnet.walrus.space
+VITE_WALRUS_AGGREGATOR_URL=https://aggregator.walrus-mainnet.walrus.space
+VITE_WALRUS_UPLOAD_RELAY_TIMEOUT_MS=90000
+VITE_WALRUS_UPLOAD_RELAY_TIP_MAX=1000000
+VITE_WALRUS_STORAGE_EPOCHS=5
+
+VITE_SEAL_PACKAGE_ID=
+VITE_SEAL_KEY_SERVER_OBJECT_ID=
+VITE_SEAL_SERVER_TYPE=independent
+VITE_SEAL_AGGREGATOR_URL=
+
+VITE_SUI_NETWORK=mainnet
+VITE_SUI_FULLNODE_URL=https://fullnode.mainnet.sui.io:443
+VITE_RPC_URL=https://fullnode.mainnet.sui.io:443
+VITE_PACKAGE_ID=
+VITE_REGISTRY_ID=
+VITE_ADMIN_CAP_ID=
+VITE_OWNER_CAP_ID=
+```
+
+Notes:
+
+- `VITE_WALRUS_NETWORK` accepts `testnet` or `mainnet`; keep Walrus and Sui URLs aligned with the selected network.
+- `VITE_ADMIN_CAP_ID` and `VITE_OWNER_CAP_ID` are optional helper envs for operator tooling and manual transaction flows.
+- Normal app access discovers active cap objects from the connected wallet.
+- `VITE_SEAL_AGGREGATOR_URL` is needed when the configured Seal key server is a committee server.
+- Vite client env vars must use the `VITE_` prefix.
+
+## Move Setup On Sui Mainnet
+
+1. Install a Sui CLI version aligned with mainnet and fund the deployer wallet.
+2. Publish the Move package:
+
+```bash
+cd move/deepsignal_access
+sui client publish --gas-budget 50000000
+```
+
+3. Save the published package ID as `VITE_PACKAGE_ID`.
+4. Find the newly shared `Registry` object ID and save it as `VITE_REGISTRY_ID`.
+5. Set `VITE_SUI_NETWORK` and, if needed, `VITE_RPC_URL`.
+6. Restart Vite so the new env values are loaded.
+7. Connect the publisher wallet; it should hold the initial `OwnerCap`.
+8. Open `/admin` and use **Access Management** to review owner/admin/reviewer entries.
+9. Add or remove admins and reviewers from the same panel.
+10. Connect an admin wallet to verify reviewer management without owner-only admin removal.
+
+Notes:
+
+- `Move.toml` currently pins the `Sui` framework to `mainnet`; align the dependency revision if publishing against another network or CLI snapshot.
+- Public responder routes such as `/f/:formId`, roadmap pages, and manifest restore remain wallet-optional.
+- Storage and Seal behavior stay adapter-driven; access control gates creator/reviewer surfaces.
+
+## Development Index
+
+DeepSignal includes a lightweight local code index for development and bug investigation. It scans `src`, writes JSON to `.codex/code-index.json`, and does not affect runtime behavior.
 
 ```bash
 npm run code:index
@@ -43,505 +301,24 @@ npm run code:search -- walrus upload
 npm run code:search -- seal decrypt
 ```
 
-- `npm run code:index` rebuilds the local search index from source files
-- `npm run code:search -- <terms>` searches the generated JSON with local keyword matching only
-- this is a developer support utility only and does not change shipped UI, UX, storage, crypto, or routing behavior
+## Future Vision
 
-## Demo flow
+DeepSignal points toward protocol-native customer intelligence:
 
-1. Connect an admin wallet.
-2. Open `/admin/forms/new` and create a form.
-3. Keep `Encrypt submissions` enabled.
-4. Publish the form and open the public link.
-5. Submit one signal, ideally with a screenshot or video attachment.
-6. Open `/admin` to review the signal inside the Encrypted Feedback Inbox.
-7. Unlock the private signal when Seal / reviewer access is enabled.
-8. Set status, priority, tags, notes, and roadmap stage.
-9. Export JSON or CSV from the inbox.
+- encrypted signal networks where responders do not need wallets but reviewers have explicit authority;
+- portable review permissions built from Sui/Move capabilities instead of SaaS-only roles;
+- Walrus-backed recovery paths for forms, submissions, and public roadmap evidence;
+- private-to-public promotion flows where teams can prove what changed without exposing raw user context;
+- integrations that turn reviewed signals into issues, grants, roadmap decisions, support escalations, or governance inputs.
 
-## Future CI notes
+The MVP is intentionally narrow: collect private signals, store them on Walrus, protect them with Seal, review them through an encrypted inbox, and publish only the roadmap metadata that should become public.
 
-- `npm run typecheck` is isolated so it can be dropped directly into GitHub Actions or other CI jobs as an explicit quality gate.
-- `npm run lint` uses the flat ESLint config for TypeScript, React hooks, and React refresh safety.
-- `npm run check` combines the submission-safe static checks in one command.
-- `npm run build` depends on `npm run typecheck`, which keeps local builds and CI builds aligned.
+## Known Limitations
 
-## .env example
-
-Copy `.env.example` and fill in the Walrus endpoints if you want live blob storage:
-
-```bash
-VITE_STORAGE_MODE=walrus
-VITE_WALRUS_STORAGE_MODE=uploadRelay
-VITE_WALRUS_NETWORK=testnet
-VITE_WALRUS_UPLOAD_RELAY_URL=https://upload-relay.testnet.walrus.space
-VITE_WALRUS_AGGREGATOR_URL=https://aggregator.walrus-testnet.walrus.space
-VITE_WALRUS_UPLOAD_RELAY_TIMEOUT_MS=90000
-VITE_WALRUS_UPLOAD_RELAY_TIP_MAX=1000000
-VITE_WALRUS_STORAGE_EPOCHS=5
-VITE_SEAL_PACKAGE_ID=
-VITE_SEAL_KEY_SERVER_OBJECT_ID=
-VITE_SEAL_AGGREGATOR_URL=
-VITE_SUI_FULLNODE_URL=https://fullnode.testnet.sui.io:443
-VITE_WALFORM_PACKAGE_ID=
-VITE_PACKAGE_ID=
-VITE_REGISTRY_ID=
-VITE_ADMIN_CAP_ID=
-VITE_OWNER_CAP_ID=
-```
-
-If `VITE_STORAGE_MODE` is not `walrus`, or the required Walrus URLs are missing, the app runs entirely on `localStorage`.
-
-`VITE_WALRUS_NETWORK` accepts `testnet` or `mainnet`. Switch `VITE_WALRUS_UPLOAD_RELAY_URL`, `VITE_WALRUS_AGGREGATOR_URL`, and `VITE_SUI_FULLNODE_URL` to the matching network when you promote from testnet to mainnet.
-
-Seal encryption is fail-closed in runtime code. If `VITE_SEAL_PACKAGE_ID` or `VITE_SEAL_KEY_SERVER_OBJECT_ID` is missing, encrypted submissions are not saved and responders see an encryption failure instead of a plaintext fallback.
-
-## Current MVP features
-
-- Landing page at `/`
-- Form builder at `/admin/forms/new`
-- Public form route at `/f/:formId`
-- Explore Signals route at `/explore`
-- Public roadmap route at `/roadmap/:formId`
-- Manifest restore route at `/m/:manifestBlobId`
-- Admin Signal Inbox at `/admin`
-- Dashboard alias at `/dashboard`
-- Submission list at `/admin/forms/:formId`
-- Submission detail at `/admin/forms/:formId/submissions/:submissionId`
-- Alias detail route at `/admin/submissions/:submissionId`
-- Rich inputs for rating, screenshot, and video
-- URL sharing and QR code generation
-- Sui Wallet connect for form creators via Mysten dApp Kit
-- JSON and CSV export
-- Signal triage workflow: `new`, `investigating`, `planned`, `in_progress`, `fixed`, `closed`
-- Admin-side priority, tags, internal notes, signal value, and GitHub URL editing
-- Summary cards for total signals, new signals, planned, fixed, high-value, and average signal value
-- Contributor identity capture using wallet address or anonymous fallback id
-- Public roadmap publishing for `planned`, `in_progress`, and `fixed` signals
-- Form-level visibility modes: `private`, `unlisted`, and `public`
-- Sensitive-field encryption through a swappable crypto adapter
-- Walrus blob ids surfaced in the UI
-- Desktop-first creator review console with mobile-friendly public forms
-
-## Sui Wallet integration
-
-This Vite app exposes wallet connect through Mysten's React dApp Kit.
-
-- Provider setup lives in [src/providers.tsx](./src/providers.tsx)
-- Header wallet UI lives in [src/components/WalletConnect.tsx](./src/components/WalletConnect.tsx)
-- Shared Sui helpers live in [src/lib/sui.ts](./src/lib/sui.ts)
-
-Current behavior:
-
-- creators can connect a Wallet Standard compatible Sui wallet
-- the connected address is shown in the header and dashboard
-- new form creation now requires a connected wallet
-- every newly created form stores `ownerAddress` from the connected wallet
-- public respondents do not need a wallet to submit
-- public forms can be opened without connecting a wallet, and wallet connect stays optional on the responder flow
-- only forms marked `public` / `Public Explore` appear in `/explore`; private payloads remain excluded from that directory surface
-- anonymous send is now the default responder path, even when a wallet is connected
-- when a public respondent chooses wallet-backed submit, DeepSignal attaches wallet context without requesting a personal-message signature on submit
-- public form submit no longer registers a `SignalReceipt` onchain during responder submission
-- responder identity is stored separately as `respondentMeta`, with optional wallet address, chain, session id, and anonymous flag
-- when a respondent chooses anonymous mode, operator views hide the wallet address and show `Anonymous respondent`
-
-## Sui Move access control
-
-DeepSignal now includes a Move package for capability-based wallet access control on Sui.
-
-- Move package lives in [move/deepsignal_access](./move/deepsignal_access)
-- module name is `deepsignal::access_control`
-- package publish creates and shares one `Registry` object
-- package publish also mints the initial `OwnerCap` to the publishing wallet during `init`
-- `Registry` stores the active owner, admin list, and reviewer list, including wallet address plus cap object id
-- `OwnerCap` holders can add and remove `AdminCap`
-- `OwnerCap` holders can add and remove `ReviewerCap`
-- `AdminCap` holders can add and remove `ReviewerCap`
-- revocation is enforced against the `Registry`, so an old cap object left in a wallet is no longer active after removal
-- `OwnerCap` and `AdminCap` holders can use admin surfaces
-- `ReviewerCap` holders can use review surfaces, but cannot use admin-only creation or destructive controls
-
-## Sui Project Registry extension
-
-The Move package now also includes `deepsignal::project_registry` so DeepSignal can manage Signals per project without placing sensitive payloads onchain.
-
-- `Project` is a shared object with `project_id`, `name`, `owner`, `admins`, `forms_count`, `signals_count`, and `created_at`
-- `ProjectOwnerCap` is minted per project creator and gates project-level admin management
-- `Form` lives under a project and stores only lightweight metadata such as `title`, `metadata_digest`, `created_at`, and `active`
-- `SignalReceipt` stores `project_id`, `form_id`, `walrus_blob_id`, `metadata_digest`, `encrypted`, optional `seal_identity`, `created_at`, optional submitter identity, and compact status
-- form config, submission body, screenshots, and attachments remain off-chain in Walrus / local fallback storage
-- the onchain receipt exists for authorization, existence proofs, and future Seal policy expansion
-
-### Project registry permissions
-
-- project creation is not public: it requires an active global `OwnerCap` or `AdminCap` from `deepsignal::access_control`
-- project owners can add and remove project admins through `ProjectOwnerCap`
-- project owners can delete a project through `ProjectOwnerCap`, but this UI currently only exposes deletion for empty projects so stored forms and fallback data are not orphaned
-- project owners and project admins can create forms and update signal status
-- signal registration is public, but only succeeds while the target form is active
-- this keeps `/f/:formId`, roadmap views, and restore flows wallet-optional at the product layer while preserving an onchain policy anchor when a submitter does use Sui
-
-### Frontend registry flow
-
-- `/admin` now includes a project selector plus project creation UI for owner/admin wallets
-- `/admin` also exposes a guarded delete action for the selected project when the connected wallet owns that project and it has no linked forms or signals
-- `/admin/forms/new` can target a selected project, but now publishes through Walrus / local first and defers `create_form` to an explicit `Register on Sui` action
-- DeepSignal saves the form and submission payloads through the storage adapter first, then leaves Sui registration as an optional admin-side step
-- if `create_project`, `create_form`, `register_signal`, or `update_signal_status` fails, the existing Walrus / local fallback flow remains the source of truth for app continuity
-
-### Project registry events
-
-- `ProjectCreated`
-- `ProjectDeleted`
-- `AdminAdded`
-- `AdminRemoved`
-- `FormCreated`
-- `FormStatusChanged`
-- `SignalRegistered`
-- `SignalStatusUpdated`
-
-### Frontend env
-
-Set these client env vars after publish:
-
-```bash
-VITE_SUI_NETWORK=testnet
-VITE_RPC_URL=https://fullnode.testnet.sui.io:443
-VITE_PACKAGE_ID=0x...
-VITE_REGISTRY_ID=0x...
-VITE_ADMIN_CAP_ID=
-VITE_OWNER_CAP_ID=
-```
-
-`VITE_ADMIN_CAP_ID` and `VITE_OWNER_CAP_ID` are optional helper envs for operator tooling and manual transaction flows. The normal app path still discovers active cap objects from the connected wallet.
-
-When `VITE_PACKAGE_ID` is configured, the frontend checks the connected wallet's owned objects and matches them against the shared `Registry` for:
-
-- `OwnerCap`
-- `AdminCap`
-- `ReviewerCap`
-
-Behavior is:
-
-- `OwnerCap`: admin UI and review UI enabled, can add/remove `AdminCap`, and can add/remove `ReviewerCap`
-- `AdminCap`: admin UI and review UI enabled, and can add/remove `ReviewerCap`
-- `ReviewerCap` only: review UI enabled, admin-only actions disabled
-- no cap: `Access Denied`
-
-If `VITE_PACKAGE_ID` is not configured, the app falls back to the older wallet/owner-address behavior so local and demo flows keep working.
-
-### Publish and setup on Sui testnet
-
-1. Install a Sui CLI version aligned with testnet and fund the deployer wallet.
-2. From [move/deepsignal_access](./move/deepsignal_access), publish the package:
-
-```bash
-cd move/deepsignal_access
-sui client publish --gas-budget 50000000
-```
-
-3. Save the published package ID as `VITE_PACKAGE_ID`.
-4. In the publish output, find the newly shared `Registry` object ID and save it as `VITE_REGISTRY_ID`.
-5. Set `VITE_SUI_NETWORK` and, if needed, `VITE_RPC_URL` for the target fullnode.
-6. Restart the Vite app so the new env values are loaded.
-7. Connect the publisher wallet. It should immediately have the initial `OwnerCap`.
-8. Open `/admin` and use the `Access Management` panel to review active Owner/Admin/Reviewer entries.
-9. From the same panel, an owner wallet can add/remove admins and add/remove reviewers.
-10. Connect an admin wallet to verify that it can add/remove reviewers, but cannot remove admins.
-
-Notes:
-
-- `Move.toml` currently pins the `Sui` framework to `testnet`; if you publish against a different network or CLI snapshot, align the dependency revision first.
-- `deepsignal::project_registry` builds on the same package and global access registry, so the older access-control-only deployment flow stays compatible.
-- public responder routes such as `/f/:formId`, roadmap pages, and manifest restore remain wallet-optional.
-- storage and Seal behavior are unchanged; access control only gates creator/reviewer surfaces.
-
-Because this project uses Vite rather than Next.js, the wallet env vars use the `VITE_` prefix.
-
-## Demo flow
-
-1. Connect wallet
-2. Create form
-3. Open public link
-4. Submit feedback with screenshot
-5. Open Admin Dashboard
-6. Triage signals in the Signal Inbox
-7. Add priority, tags, internal notes, signal value, and optional GitHub links
-8. Open the public roadmap for planned / in-progress / fixed signals
-9. Inspect Walrus / Seal / Wallet metadata in the right-side detail panel
-
-## Inbox UI
-
-- The admin console is designed as an `Encrypted Signal Inbox`, not a form CRUD panel.
-- Admin and dashboard routes use a desktop-first 3-column layout: `Signal Streams`, `Signal Inbox`, and `Signal Detail / Metadata`.
-- The detail pane acts as a lightweight `Feedback Operations Platform` control surface.
-- Admins can update `triageStatus`, `priority`, `tags`, `notes`, `signalValue`, and draft GitHub links from the detail pane.
-- A save-state indicator shows whether signal operations are ready, saving, saved, or failed.
-- Header actions include `Open Public Roadmap` for the currently selected form.
-- Public forms remain mobile-friendly for responders.
-- Admin review console is desktop-first, and below `768px` it falls back to a single-column review stack with a notice.
-- Walrus / Seal metadata is integrated directly into the normal review UI through badges, metadata rows, and the Seal Status card.
-
-## Feedback operations model
-
-Each submission now supports an operations layer in addition to form answers:
-
-- `triageStatus`: `new`, `investigating`, `planned`, `in_progress`, `fixed`, `closed`
-- `priority`: `low`, `medium`, `high`
-- `tags`: string array for grouping and filtering
-- `notes`: internal notes for operators
-- `contributorId`: wallet address when available, otherwise anonymous fallback id
-- `signalValue`: optional score from `1` to `5`
-- `githubIssueUrl`: optional prep field for future GitHub integration
-- `githubPrUrl`: optional prep field for future GitHub integration
-
-Backward compatibility is handled in `normalizeSubmission`, so older submissions without these fields still load safely.
-
-## Public roadmap
-
-DeepSignal can expose a public roadmap per form at `/roadmap/:formId`.
-
-- Only submissions with `triageStatus` of `planned`, `in_progress`, or `fixed` are shown
-- Signals are grouped into `Planned Signals`, `In Progress`, and `Fixed Signals`
-- Cards can show subject/title preview, category, priority, createdAt, tags, contributor label, signal value, and GitHub links
-- If a submission is encrypted, the roadmap never shows the answer body and only exposes metadata such as `subjectPreview`
-
-## Admin protection
-
-- `/admin` and `/dashboard` views require a connected wallet
-- when `VITE_PACKAGE_ID` is configured, creator/reviewer access is gated by owned `OwnerCap` / `AdminCap` / `ReviewerCap` objects that are still active in the configured Move `Registry`
-- `OwnerCap` holders can access admin creation flows and review flows
-- `OwnerCap` holders can add/remove `AdminCap`
-- `OwnerCap` holders can add/remove `ReviewerCap`
-- `AdminCap` holders can add/remove `ReviewerCap`
-- `AdminCap` holders can access admin creation flows and review flows
-- `ReviewerCap` holders can access review flows only
-- when no matching cap is found, the UI shows `Access denied`
-- if Move access control env is not configured, creator inbox pages fall back to the older `form.ownerAddress` match behavior
-- older forms without `ownerAddress` are still treated as legacy demo forms in fallback mode and remain visible with a warning
-- `/f/:formId` stays public and does not require a wallet
-- new form creation requires a connected wallet and always stores `ownerAddress`
-
-## Walrus integration
-
-Walrus storage lives in:
-
-- [src/storage/walrusAdapter.ts](./src/storage/walrusAdapter.ts)
-- [src/storage/storageFactory.ts](./src/storage/storageFactory.ts)
-- [src/storage/blobIndex.ts](./src/storage/blobIndex.ts)
-
-### How it works
-
-- Form definitions are serialized with `JSON.stringify(...)` and stored through the Walrus TypeScript SDK.
-- In the default `uploadRelay` mode, the browser uses the connected wallet to register and certify storage transactions while the upload relay forwards blob data to storage nodes.
-- Submissions are serialized and stored the same way.
-- Attachments are uploaded as raw files through the same SDK flow.
-- Each form also gets a separate manifest blob that acts as a recoverable index.
-- `blobId` values from successful SDK writes are stored back into the existing form, submission, encrypted-payload, and attachment models.
-- If you need the old publisher HTTP flow for compatibility, set `VITE_WALRUS_STORAGE_MODE=publisher` and keep `VITE_WALRUS_PUBLISHER_URL` configured.
-
-### Upload relay notes
-
-- `VITE_WALRUS_UPLOAD_RELAY_URL` is not a publisher endpoint replacement. The app no longer writes to `PUT /v1/blobs` when `uploadRelay` mode is active.
-- The relay only forwards encoded data to Walrus storage nodes. Onchain blob registration and certification still happen through the SDK and the end-user wallet.
-- Mainnet uploads require the connected wallet to hold enough balance for Walrus storage cost, relay tip, and Sui gas.
-- Public responder routes remain wallet-optional because failed Walrus writes still fall back to the local adapter when Walrus is not strictly required.
-
-### Manifest Blob architecture
-
-The manifest blob is a public recovery index, not an access-control layer.
-
-Each manifest stores only:
-
-- `formId`
-- `submissionId`
-- `formBlobId`
-- `submission blobId`
-- `createdAt`
-- `updatedAt`
-
-It intentionally does not store:
-
-- answers
-- attachments or attachment metadata
-- notes
-- tags
-- triage status indexes
-- contributor ids
-- signal value
-- GitHub links
-- ownerAddress
-- encryptedBlobId
-- file names
-
-The actual form and submission payloads stay in Walrus blobs, and sensitive payloads should use Seal encryption.
-
-### Recovery flow
-
-- On form creation, the app stores the form blob, writes an initial manifest blob, and caches the latest `manifestBlobId` locally.
-- On each submission save or submission update, the app writes a new immutable submission bundle blob that carries the latest manifest plus the changed submission, then updates the local latest-manifest pointer.
-- Opening `/m/:manifestBlobId` reads the manifest from Walrus, reloads the form blob plus referenced submission blobs or submission bundles, rebuilds the browser cache, and redirects to `/dashboard/forms/:formId`.
-
-### localStorage is cache only
-
-Walrus is blob storage, so the browser keeps a small local cache for UX and a latest-manifest pointer for each known form.
-
-Local cache is used for:
-
-- cached form payloads
-- cached submission payloads
-- latest `manifestBlobId` lookup
-- legacy local blob index compatibility
-
-Older forms that do not have a manifest pointer are treated as legacy local-index forms so existing `/f/:formId`, `/dashboard`, and `/admin/forms/:formId` flows keep working.
-
-## CSV export behavior
-
-CSV export remains compatible and now includes operational metadata columns before form-answer columns:
-
-- `submissionId`
-- `encryptionStatus`
-- `createdAt`
-- `status`
-- `triageStatus`
-- `priority`
-- `signalValue`
-- `contributorId`
-- `tags`
-- `notes`
-- `githubIssueUrl`
-- `githubPrUrl`
-
-## Local fallback behavior
-
-The app chooses storage like this:
-
-- `Walrus` when `VITE_STORAGE_MODE=walrus` and both Walrus URLs are configured
-- `Local fallback` otherwise
-
-If a Walrus write fails at runtime:
-
-- the error is logged with `console.error(...)`
-- the write falls back to `localStorage`
-- the UI shows `Walrus upload failed. Saved locally instead.`
-
-This means the MVP still works even without Walrus configuration or during transient Walrus failures.
-
-## Blob ids and blob viewer URLs
-
-Blob ids are shown in the Signal Inbox list and detail flows.
-
-When the blob is a real Walrus blob and an aggregator URL is configured, the UI also shows a `Verify on Walrus` link that points to:
-
-```text
-{VITE_WALRUS_AGGREGATOR_URL}/v1/blobs/{blobId}
-```
-
-## Seal / crypto service structure
-
-The production encryption entrypoint is intentionally narrow:
-
-- [src/crypto/sealService.ts](./src/crypto/sealService.ts)
-- [src/crypto/sealClientAdapter.ts](./src/crypto/sealClientAdapter.ts)
-- [src/crypto/cryptoFactory.ts](./src/crypto/cryptoFactory.ts)
-
-Current behavior:
-
-- fields marked `sensitive: true` are encrypted through the Seal service before submission save
-- full private submissions use `@mysten/seal` for new encryptions when `VITE_SEAL_PACKAGE_ID` and `VITE_SEAL_KEY_SERVER_OBJECT_ID` are configured
-- production runtime does not import mock, fake, or no-op Seal adapters
-- encryption failures stop the submission; DeepSignal does not save a plaintext fallback
-- `VITE_SEAL_AGGREGATOR_URL` is only needed when the configured Seal key server is a committee server
-- real Seal encryptions created from project-backed forms now scope the Seal identity to the `projectId` prefix and store the policy metadata needed for later admin decrypt
-- encrypted answers are stored as:
-
-```json
-{
-  "value": "encrypted_text",
-  "encrypted": true
-}
-```
-
-- decryption happens only in the admin detail view
-- legacy unencrypted payloads may be read for compatibility and are labeled `Legacy unencrypted response`
-- admin JSON and CSV exports include `encryptionStatus` metadata with `seal_encrypted`, `legacy_unencrypted`, or `public`
-
-In real Seal mode, payloads are saved as JSON envelopes that include the base64-encoded Seal ciphertext plus the metadata needed for a later wallet-backed decrypt flow. For project-backed forms, the envelope also records the `projectId` and approval policy used by the admin decrypt path.
-
-### Test mocks
-
-- Test-only mocks live outside production runtime under [tests/mocks/mockSealAdapter.ts](./tests/mocks/mockSealAdapter.ts).
-- Real Seal encrypts with `@mysten/seal` and depends on a real Sui package namespace plus one or more key server objects.
-- Real Seal decryption is policy-gated: you need a Sui wallet, a session key, and an approval transaction that calls a `seal_approve*` Move function for the target access policy.
-- DeepSignal now ships `deepsignal::project_registry::seal_approve_project_signal`, `seal_approve_project_admin`, and reviewer approval routes so project owners/admins/reviewers can decrypt private signals from the review UI.
-
-## Seal mode in the UI
-
-- the admin dashboard and submission detail surfaces a Seal Status Card
-- the card shows `requestedMode`, `activeMode`, warning state, Seal encrypted state, and decryption requirements
-- the card also shows encryption state, `encryptedBlobId`, and wallet access context
-- the detail panel also shows `Seal Runtime: SEAL`
-- encrypted forms highlight `Encrypted payload stored` plus the `encryptedBlobId`
-- real Seal mode shows creator/admin-only access plus a wallet-backed `Decrypt private signal` action
-- decrypt failures should explain the missing wallet or approval condition instead of ending with a generic error
-
-### Current limitations of real Seal mode
-
-- Real decrypt now works only for signals tied to a DeepSignal `Project` object and reviewed by a wallet that is the project owner, project admin, or an authorized reviewer.
-- New project-backed encryptions use a stricter `projectId + nonce` identity prefix and are approved by `seal_approve_project_signal`.
-- Older real Seal envelopes that predate project scoping can still be attempted through the looser `seal_approve_project_admin` path when the submission belongs to a project, but they are not bound to a per-signal namespace. This is a compatibility fallback for previously stored envelopes.
-- Older unencrypted legacy payloads are read-only compatibility data and are clearly labeled in the admin UI.
-
-## Seal demo checklist
-
-Set these env vars for a real Seal demo:
-
-```bash
-VITE_SEAL_PACKAGE_ID=0x...
-VITE_SEAL_KEY_SERVER_OBJECT_ID=0x...
-VITE_SEAL_SERVER_TYPE=independent
-```
-
-If your Seal key server is a committee server instead of an independent/V1 server, also set:
-
-```bash
-VITE_SEAL_SERVER_TYPE=committee
-VITE_SEAL_AGGREGATOR_URL=https://...
-```
-
-Recommended demo flow for contest review:
-
-1. Configure Walrus plus the Seal env vars above.
-2. Connect an admin wallet that can manage a DeepSignal project.
-3. Create or select a project-backed form with `Encrypt submissions` enabled.
-4. Open the public form and submit a private signal.
-5. Return to the admin inbox or form submission detail.
-6. Confirm the detail panel shows `Seal Runtime: SEAL`.
-7. Click `Decrypt private signal`.
-8. Approve the wallet personal-message prompt for the Seal session.
-9. Confirm the answers and attachments appear only after approval, and that subsequent decrypts reuse the session for the configured TTL window.
-
-Fail-closed comparison:
-
-- configured Seal stores a real Seal envelope and requires admin wallet approval before the private signal body is revealed
-- incomplete Seal env vars stop encrypted submission saves with `Encryption failed. Response was not submitted.`
-- localStorage remains available for non-sensitive app continuity, but sensitive response payloads do not fall back to plaintext
-
-Contest demo verification points:
-
-- public responders can still submit without connecting a wallet
-- Walrus / local save remains the default responder flow, with Sui registration deferred for later admin handling
-- private signal content stays hidden until an authorized admin wallet approves the decrypt session
-- unauthorized or missing-wallet review attempts show a natural error instead of exposing the payload
-
-## Known limitations
-
-- `manifestBlobId` holders can inspect the manifest index structure.
-- Attachment blob ids are intentionally not stored in manifests, so restore is limited to the submission blobs themselves.
-- Latest `manifestBlobId` tracking still depends on localStorage for the current browser.
+- `manifestBlobId` holders can inspect the public manifest index structure.
+- Attachment blob IDs are intentionally not stored in manifests, so restore focuses on form/submission blobs.
+- Latest `manifestBlobId` tracking still depends on local browser cache.
 - Local fallback data is browser-local and not shared across devices.
 - Walrus delete is currently index cleanup only; uploaded blobs are not garbage-collected by this MVP.
-- frontend wallet-gating is MVP protection
-- production should keep evolving around the Move Project / Form / SignalReceipt registry model
-- real Seal decrypt requires wallet/session approval
+- Frontend wallet-gating is MVP protection and should continue evolving around the Move Project / Form / SignalReceipt registry model.
+- Real Seal decrypt requires wallet/session approval.

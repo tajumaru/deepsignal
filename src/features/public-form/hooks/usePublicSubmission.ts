@@ -12,6 +12,7 @@ import { isResponseDeadlinePassed } from "../../../lib/responseDeadline";
 import { ensureRespondentSession } from "../../../lib/respondentSession";
 import {
   activeSealAdapter,
+  ENCRYPTED_INLINE_ATTACHMENT_MAX_BYTES,
   createEncryptedAttachmentUpload,
   createInlinePrivateAttachment,
   saveSubmissionWithEncryption,
@@ -140,6 +141,7 @@ interface UsePublicSubmissionArgs {
   localFallbackNotice: string;
   suiRegistrationDeferredNotice: string;
   submitFailedLabel: string;
+  attachmentTooLargeLabel: (fieldLabel: string, maxSizeBytes: number) => string;
 }
 
 export function usePublicSubmission({
@@ -154,6 +156,7 @@ export function usePublicSubmission({
   localFallbackNotice,
   suiRegistrationDeferredNotice,
   submitFailedLabel,
+  attachmentTooLargeLabel,
 }: UsePublicSubmissionArgs) {
   const [answers, setAnswers] = useState<PublicAnswers>(initialAnswers);
   const [errors, setErrors] = useState<ValidationErrors>({});
@@ -309,6 +312,13 @@ export function usePublicSubmission({
         nextErrors[field.id] = requiredFieldError;
         return;
       }
+      if (currentForm.encryptSubmissions && attachmentFields.has(field.id)) {
+        const oversizedAttachment = uploadItems.find((attachment) => attachment.fileSize > ENCRYPTED_INLINE_ATTACHMENT_MAX_BYTES);
+        if (oversizedAttachment) {
+          nextErrors[field.id] = attachmentTooLargeLabel(field.label || "Attachment", ENCRYPTED_INLINE_ATTACHMENT_MAX_BYTES);
+          return;
+        }
+      }
       if (field.type === "url" && value && !isValidUrlAnswer(value)) {
         nextErrors[field.id] = "Enter a valid URL starting with http:// or https://";
       }
@@ -460,8 +470,13 @@ export function usePublicSubmission({
 
             try {
               if (form.encryptSubmissions) {
+                if (file.size > ENCRYPTED_INLINE_ATTACHMENT_MAX_BYTES) {
+                  throw new Error(
+                    attachmentTooLargeLabel(field.label || file.name || "Attachment", ENCRYPTED_INLINE_ATTACHMENT_MAX_BYTES),
+                  );
+                }
                 activatePipeline("preparing_signal", `Packing ${file.name} into the protected signal.`);
-                const inlineAttachment = await createInlinePrivateAttachment(file);
+                const inlineAttachment = await createInlinePrivateAttachment(file, ENCRYPTED_INLINE_ATTACHMENT_MAX_BYTES);
                 window.clearInterval(progressTimer);
                 attachments.push({
                   ...inlineAttachment,

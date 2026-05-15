@@ -19,9 +19,8 @@ import {
   isResponseDeadlinePassed,
   type ResponseDeadlineLabels,
 } from "../lib/responseDeadline";
+import { DEFAULT_ATTACHMENT_MAX_BYTES, ENCRYPTED_INLINE_ATTACHMENT_MAX_BYTES } from "../lib/storage";
 import { getOrderedFields, getVisibleFieldIds, isFieldRequired } from "../utils/formLogic";
-
-const MAX_ATTACHMENT_BYTES = 50 * 1024 * 1024;
 
 export function PublicFormPage() {
   const { t } = useI18n();
@@ -66,6 +65,11 @@ export function PublicFormPage() {
     localFallbackNotice: t("signalStoredLocally"),
     suiRegistrationDeferredNotice: t("suiRegistrationDeferredNotice"),
     submitFailedLabel: t("submitFailed"),
+    attachmentTooLargeLabel: (fieldLabel, maxSizeBytes) =>
+      t("uploadTooLarge", {
+        fieldLabel,
+        maxSize: `${Math.round(maxSizeBytes / (1024 * 1024))}MB`,
+      }),
   });
 
   useEffect(() => {
@@ -124,8 +128,27 @@ export function PublicFormPage() {
           ? t("publicSubmitWithRequiredWallet")
           : t("publicConnectWalletToSubmit")
         : attachWallet && account?.address
-          ? t("publicSubmitWithWallet")
-          : t("publicSubmitAnonymously");
+        ? t("publicSubmitWithWallet")
+        : t("publicSubmitAnonymously");
+  const attachmentMaxBytes = form?.encryptSubmissions ? ENCRYPTED_INLINE_ATTACHMENT_MAX_BYTES : DEFAULT_ATTACHMENT_MAX_BYTES;
+  const attachmentLimitMb = Math.round(attachmentMaxBytes / (1024 * 1024));
+  const attachmentSizeErrorMessage = (maxSizeBytes: number) =>
+    t("uploadTooLarge", {
+      fieldLabel: "Attachment",
+      maxSize: `${Math.round(maxSizeBytes / (1024 * 1024))}MB`,
+    });
+
+  function getAttachmentHint(fieldType: "screenshot" | "video") {
+    const baseHint = fieldType === "screenshot" ? t("screenshotHint") : t("videoHint");
+    const maxSizeHint = t("attachmentMaxFileSize", {
+      hint: baseHint,
+      size: attachmentLimitMb,
+    });
+    if (!form?.encryptSubmissions) {
+      return maxSizeHint;
+    }
+    return `${maxSizeHint} Encrypted attachments are limited to ${attachmentLimitMb}MB.`;
+  }
 
   useEffect(() => {
     if (walletRequired) {
@@ -285,6 +308,11 @@ export function PublicFormPage() {
       {hasRecoverableDraft ? (
         <RecoverableDraftBanner
           title={t("recoverableDraftTitle")}
+          description={
+            form.fields.some((field) => field.type === "screenshot" || field.type === "video")
+              ? "Attachment drafts are not restored. Re-add screenshots or videos before sending."
+              : undefined
+          }
           restoreLabel={t("restore")}
           discardLabel={t("discard")}
           onRestore={restoreDraft}
@@ -307,20 +335,12 @@ export function PublicFormPage() {
                     field={field}
                     value={answers[field.id]}
                     error={errors[field.id]}
+                    attachmentMaxSizeBytes={attachmentMaxBytes}
+                    attachmentMaxSizeErrorMessage={attachmentSizeErrorMessage}
                     questionNumber={questionNumbers.get(field.id)}
                     required={isFieldRequired(field, form.fields, answers, true)}
                     hint={
-                      field.type === "screenshot"
-                        ? t("attachmentMaxFileSize", {
-                            hint: t("screenshotHint"),
-                            size: Math.round(MAX_ATTACHMENT_BYTES / (1024 * 1024)),
-                          })
-                        : field.type === "video"
-                          ? t("attachmentMaxFileSize", {
-                              hint: t("videoHint"),
-                              size: Math.round(MAX_ATTACHMENT_BYTES / (1024 * 1024)),
-                            })
-                          : undefined
+                      field.type === "screenshot" ? getAttachmentHint("screenshot") : field.type === "video" ? getAttachmentHint("video") : undefined
                     }
                     onChange={(value) => updateAnswer(field.id, value)}
                     disabled={deadlinePassed}
@@ -336,20 +356,12 @@ export function PublicFormPage() {
             field={field}
             value={answers[field.id]}
             error={errors[field.id]}
+            attachmentMaxSizeBytes={attachmentMaxBytes}
+            attachmentMaxSizeErrorMessage={attachmentSizeErrorMessage}
             questionNumber={questionNumbers.get(field.id)}
             required={isFieldRequired(field, form.fields, answers, true)}
             hint={
-              field.type === "screenshot"
-                ? t("attachmentMaxFileSize", {
-                    hint: t("screenshotHint"),
-                    size: Math.round(MAX_ATTACHMENT_BYTES / (1024 * 1024)),
-                  })
-                : field.type === "video"
-                  ? t("attachmentMaxFileSize", {
-                      hint: t("videoHint"),
-                      size: Math.round(MAX_ATTACHMENT_BYTES / (1024 * 1024)),
-                    })
-                  : undefined
+              field.type === "screenshot" ? getAttachmentHint("screenshot") : field.type === "video" ? getAttachmentHint("video") : undefined
             }
             onChange={(value) => updateAnswer(field.id, value)}
             disabled={deadlinePassed}

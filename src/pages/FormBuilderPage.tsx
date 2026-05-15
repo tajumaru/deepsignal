@@ -200,6 +200,7 @@ function FormBuilderComposer({ mode, freshStartToken, draftSeed }: FormBuilderCo
           purpose={builder.values.purpose}
           publicPath={publish.publicPath}
           isCrossDeviceShareReady={publish.isCrossDeviceShareReady}
+          onCopyLink={publish.handleCopyLink}
           onCopyBlobId={publish.handleCopyBlobId}
           onClose={() => {
             publish.setOverlay((current) => ({ ...current, open: false }));

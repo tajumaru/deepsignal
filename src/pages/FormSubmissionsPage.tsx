@@ -61,14 +61,34 @@ type StreamId =
   | "survey"
   | "archived";
 
+type DecryptUiState =
+  | "locked"
+  | "waiting_wallet_approval"
+  | "decrypting"
+  | "decrypted"
+  | "failed";
+
 function getDecryptStatusMessage(
-  status: "waiting_wallet_approval" | "decrypting_private_signal" | "finishing",
+  status:
+    | "loading_seal_runtime"
+    | "validating_access_policy"
+    | "waiting_wallet_approval"
+    | "decrypting_encrypted_payload"
+    | "signal_unlocked"
+    | "decrypting_private_signal"
+    | "finishing",
 ) {
   switch (status) {
+    case "loading_seal_runtime":
+      return "Loading Seal runtime...";
+    case "validating_access_policy":
+      return "Validating access policy...";
     case "waiting_wallet_approval":
       return "Waiting for wallet approval...";
+    case "decrypting_encrypted_payload":
     case "decrypting_private_signal":
       return "Decrypting private signal...";
+    case "signal_unlocked":
     case "finishing":
       return "Finishing...";
   }
@@ -136,8 +156,10 @@ export function FormSubmissionsPage() {
   const [detailAttachments, setDetailAttachments] = useState<Submission["attachments"]>([]);
   const [detailLegacyUnencrypted, setDetailLegacyUnencrypted] = useState(false);
   const [decrypting, setDecrypting] = useState(false);
+  const [decryptUiState, setDecryptUiState] = useState<DecryptUiState>("locked");
   const [decryptStatusMessage, setDecryptStatusMessage] = useState("");
   const [decryptError, setDecryptError] = useState("");
+  const [unlockInteractionNotice, setUnlockInteractionNotice] = useState("");
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [saveError, setSaveError] = useState("");
   const [statusDraft, setStatusDraft] = useState<Submission["status"]>("unread");
@@ -318,8 +340,10 @@ export function FormSubmissionsPage() {
       setDetailLegacyUnencrypted(false);
       setNotesDraft("");
       setDecryptError("");
+      setUnlockInteractionNotice("");
       setSaveError("");
       setSaveState("idle");
+      setDecryptUiState("locked");
       if (!decryptInFlightRef.current) {
         setDecryptStatusMessage("");
       }
@@ -343,6 +367,8 @@ export function FormSubmissionsPage() {
       setDetailAttachments(selectedSubmission.attachments ?? []);
       setDetailLegacyUnencrypted(false);
       setDecryptError("");
+      setUnlockInteractionNotice("");
+      setDecryptUiState(selectedSubmission.isEncrypted ? "locked" : "decrypted");
       if (!decryptInFlightRef.current) {
         setDecryptStatusMessage("");
       }
@@ -429,9 +455,28 @@ export function FormSubmissionsPage() {
 
   async function handleSelect(submission: Submission) {
     if (decryptInFlightRef.current) {
+      const message = t("finishOrCancelCurrentUnlock");
+      setUnlockInteractionNotice(message);
+      setToast({ tone: "error", message });
       return;
     }
+    setUnlockInteractionNotice("");
     setSelectedSignalId(submission.id);
+  }
+
+  function handleCancelDecrypt() {
+    const activeRequest = activeDecryptRequestRef.current;
+    if (!activeRequest) {
+      return;
+    }
+    decryptRequestIdRef.current = Math.max(decryptRequestIdRef.current, activeRequest.requestId) + 1;
+    activeDecryptRequestRef.current = null;
+    decryptInFlightRef.current = false;
+    setDecrypting(false);
+    setDecryptUiState(detailAnswers ? "decrypted" : "locked");
+    setDecryptError("");
+    setDecryptStatusMessage("");
+    setUnlockInteractionNotice(t("unlockCancelledStatus"));
   }
 
   async function handleDecrypt() {
@@ -444,8 +489,10 @@ export function FormSubmissionsPage() {
     decryptInFlightRef.current = true;
     activeDecryptRequestRef.current = { requestId, submissionId };
     setDecrypting(true);
+    setDecryptUiState("waiting_wallet_approval");
     setDecryptStatusMessage("Waiting for wallet approval...");
     setDecryptError("");
+    setUnlockInteractionNotice("");
     try {
       const resolved = await resolveSubmissionAnswers(form, selectedSubmission, undefined, {
         walletAddress: account?.address,
@@ -468,6 +515,9 @@ export function FormSubmissionsPage() {
           ) {
             return;
           }
+          setDecryptUiState(
+            status === "waiting_wallet_approval" ? "waiting_wallet_approval" : "decrypting",
+          );
           setDecryptStatusMessage(getDecryptStatusMessage(status));
         },
       });
@@ -478,12 +528,14 @@ export function FormSubmissionsPage() {
         setDetailAnswers(resolved.answers);
         setDetailAttachments(resolved.attachments);
         setDetailLegacyUnencrypted(Boolean(resolved.legacyUnencrypted));
+        setDecryptUiState("decrypted");
       }
     } catch (error) {
       const isLatestRequest =
         activeDecryptRequestRef.current?.requestId === requestId &&
         activeDecryptRequestRef.current?.submissionId === submissionId;
       if (isLatestRequest && selectedSignalIdRef.current === submissionId) {
+        setDecryptUiState("failed");
         setDecryptError(
           isDecryptDiagnosticError(error)
             ? `Decrypt failed: ${error.reasonCode}`
@@ -498,10 +550,12 @@ export function FormSubmissionsPage() {
         activeDecryptRequestRef.current?.submissionId === submissionId;
       if (isLatestRequest) {
         activeDecryptRequestRef.current = null;
+        decryptInFlightRef.current = false;
+        setDecrypting(false);
+        if (selectedSignalIdRef.current === submissionId && decryptUiState !== "decrypted") {
+          setDecryptStatusMessage("");
+        }
       }
-      decryptInFlightRef.current = false;
-      setDecrypting(false);
-      setDecryptStatusMessage("");
     }
   }
 
@@ -634,6 +688,7 @@ export function FormSubmissionsPage() {
   const activeForm = form as FormSchema;
   const resolvedDetailAnswers = detailAnswers ?? {};
   const isDecryptInteractionLocked = decrypting || decryptInFlightRef.current;
+  const activeUnlockSubmissionId = activeDecryptRequestRef.current?.submissionId ?? null;
   const previewAnswerFields = detailAnswers
     ? activeForm.fields.filter((field) => {
         if (isAttachmentFieldType(field.type)) {
@@ -652,6 +707,10 @@ export function FormSubmissionsPage() {
       : !account?.address
         ? t("privateSignalUnlockDisabled")
         : undefined;
+  const listLockTitle =
+    decryptUiState === "waiting_wallet_approval"
+      ? t("walletApprovalPendingStatus")
+      : t("unlockInProgressStatus");
 
   const renderUnlockGate = () => {
     if (!selectedSubmission?.isEncrypted) {
@@ -662,8 +721,11 @@ export function FormSubmissionsPage() {
       <div className="review-unlock-block">
         <PrivateSignalUnlockCard
           onUnlock={() => void handleDecrypt()}
+          onCancel={handleCancelDecrypt}
           isDecrypting={isDecryptInteractionLocked}
           isUnlocked={Boolean(detailAnswers)}
+          unlockState={decryptUiState}
+          statusMessage={decryptStatusMessage}
           errorMessage={decryptError}
           disabledReason={unlockDisabledReason}
         >
@@ -683,6 +745,9 @@ export function FormSubmissionsPage() {
             </p>
             {decryptStatusMessage ? (
               <p className="muted" role="status" aria-live="polite">{decryptStatusMessage}</p>
+            ) : null}
+            {unlockInteractionNotice ? (
+              <p className="warning-text" role="status" aria-live="polite">{unlockInteractionNotice}</p>
             ) : null}
           </div>
         ) : null}
@@ -1138,17 +1203,30 @@ export function FormSubmissionsPage() {
                 <p className="muted">{t("abyssNoSignalsHint")}</p>
               </EmptyState>
             ) : (
-              <div className="signal-list">
+              <>
+                {isDecryptInteractionLocked ? (
+                  <div className="signal-list-lock-note" role="status" aria-live="polite">
+                    <strong>{listLockTitle}</strong>
+                    <span>{decryptStatusMessage || t("finishOrCancelCurrentUnlock")}</span>
+                    <span>{t("finishOrCancelCurrentUnlock")}</span>
+                  </div>
+                ) : unlockInteractionNotice ? (
+                  <div className="signal-list-lock-note is-passive" role="status" aria-live="polite">
+                    <strong>{unlockInteractionNotice}</strong>
+                  </div>
+                ) : null}
+              <div className="signal-list" aria-busy={isDecryptInteractionLocked}>
                 {visibleSignals.map((submission) => {
                   const category = inferSignalCategory(submission);
                   const isSelected = selectedSubmission?.id === submission.id;
+                  const isActiveUnlockTarget = activeUnlockSubmissionId === submission.id;
                   return (
                     <button
                       key={submission.id}
                       type="button"
-                      className={`signal-card ${isSelected ? "is-active" : ""} ${submission.status === "unread" ? "is-unread" : "is-read"}`}
+                      className={`signal-card ${isSelected ? "is-active" : ""} ${submission.status === "unread" ? "is-unread" : "is-read"} ${isDecryptInteractionLocked ? "is-locked" : ""} ${isActiveUnlockTarget ? "is-unlocking" : ""}`}
                       onClick={() => void handleSelect(submission)}
-                      disabled={isDecryptInteractionLocked}
+                      aria-disabled={isDecryptInteractionLocked}
                     >
                       <div className="signal-card-topline">
                         <strong>{getSignalSubject(submission)}</strong>
@@ -1162,6 +1240,13 @@ export function FormSubmissionsPage() {
                           category={category}
                           showEncrypted
                         />
+                        {isActiveUnlockTarget ? (
+                          <span className="signal-chip signal-chip-soft">
+                            {decryptUiState === "waiting_wallet_approval"
+                              ? t("walletApprovalPendingStatus")
+                              : t("unlockInProgressStatus")}
+                          </span>
+                        ) : null}
                         <span className="signal-chip">{getTriageStatusLabel(submission.triageStatus)}</span>
                         {submission.severity ? (
                           <span className="signal-chip">Severity {submission.severity}</span>
@@ -1184,6 +1269,7 @@ export function FormSubmissionsPage() {
                   );
                 })}
               </div>
+              </>
             )}
           </section>
 

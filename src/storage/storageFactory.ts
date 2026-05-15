@@ -28,6 +28,7 @@ const listeners = new Set<() => void>();
 const WALRUS_READ_TIMEOUT_MS = 4000;
 const requireWalrus = String(import.meta.env.VITE_REQUIRE_WALRUS).toLowerCase() === "true";
 const walrusRequested = requireWalrus || import.meta.env.VITE_STORAGE_MODE === "walrus";
+const isProductionRuntime = import.meta.env.PROD;
 const walrusWriteMode = String(import.meta.env.VITE_WALRUS_STORAGE_MODE || "uploadRelay").toLowerCase();
 
 const walrusConfigured =
@@ -118,6 +119,25 @@ async function withWriteFallback<T>(walrusTask: () => Promise<T>, localTask: () 
   }
 }
 
+async function withProtectedWriteFallback<T>(walrusTask: () => Promise<T>) {
+  try {
+    const result = await walrusTask();
+    emitStatus({ mode: "walrus", notice: null, diagnostics: null });
+    return result;
+  } catch (error) {
+    console.error(error);
+    emitStatus({
+      mode: walrusRequested ? "walrus" : "local-fallback",
+      notice:
+        error instanceof Error
+          ? error.message
+          : "Protected encrypted storage is unavailable in this runtime.",
+      diagnostics: isWalrusDiagnosticError(error) ? error.details : null,
+    });
+    throw error;
+  }
+}
+
 const hybridWalrusStorage: StorageAdapter = {
   async saveForm(form) {
     return withWriteFallback(
@@ -177,6 +197,9 @@ const hybridWalrusStorage: StorageAdapter = {
     }
   },
   async saveSubmission(submission) {
+    if (submission.isEncrypted && isProductionRuntime) {
+      return withProtectedWriteFallback(() => walrusAdapter.saveSubmission(submission));
+    }
     return withWriteFallback(
       () => walrusAdapter.saveSubmission(submission),
       () => localStorageAdapter.saveSubmission(submission),
@@ -198,6 +221,9 @@ const hybridWalrusStorage: StorageAdapter = {
     );
   },
   async saveEncryptedPayload(payload) {
+    if (isProductionRuntime) {
+      return withProtectedWriteFallback(() => walrusAdapter.saveEncryptedPayload(payload));
+    }
     return withWriteFallback(
       () => walrusAdapter.saveEncryptedPayload(payload),
       () => localStorageAdapter.saveEncryptedPayload(payload),
@@ -207,6 +233,9 @@ const hybridWalrusStorage: StorageAdapter = {
     const walrusPayload = await swallow(() => walrusAdapter.readEncryptedPayload(blobId), null);
     if (walrusPayload) {
       return walrusPayload;
+    }
+    if (isProductionRuntime) {
+      return null;
     }
     return localStorageAdapter.readEncryptedPayload(blobId);
   },

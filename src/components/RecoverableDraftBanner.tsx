@@ -1,5 +1,6 @@
 interface RecoverableDraftBannerProps {
   title: string;
+  description?: string;
   restoreLabel: string;
   discardLabel: string;
   onRestore: () => void;
@@ -8,6 +9,7 @@ interface RecoverableDraftBannerProps {
 
 export function RecoverableDraftBanner({
   title,
+  description,
   restoreLabel,
   discardLabel,
   onRestore,
@@ -19,6 +21,7 @@ export function RecoverableDraftBanner({
         <div>
           <p className="eyebrow">Draft recovery</p>
           <h3>{title}</h3>
+          {description ? <p className="muted">{description}</p> : null}
         </div>
       </div>
       <div className="inline-actions">

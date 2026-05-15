@@ -88,4 +88,38 @@ describe("storageFactory encrypted fallback persistence", () => {
     expect(stored[0]?.answers).toEqual({});
     expect(stored[0]?.metadata).toEqual({});
   });
+
+  it("rejects production fallback for encrypted payload reads and writes", async () => {
+    vi.resetModules();
+    vi.stubEnv("PROD", true);
+    vi.doMock("./walrusAdapter", () => ({
+      walrusAdapter: {
+        saveForm: vi.fn(),
+        getForm: vi.fn(),
+        listForms: vi.fn(),
+        deleteForm: vi.fn(),
+        deleteForms: vi.fn(),
+        saveSubmission: vi.fn(async () => {
+          throw new Error("Walrus upload failed.");
+        }),
+        listSubmissions: vi.fn(),
+        updateSubmission: vi.fn(),
+        saveEncryptedPayload: vi.fn(async () => {
+          throw new Error("Walrus upload failed.");
+        }),
+        readEncryptedPayload: vi.fn(async () => null),
+        uploadFile: vi.fn(),
+        readFileBlob: vi.fn(),
+        readFileText: vi.fn(),
+      },
+      getWalrusBlobUrl: vi.fn(() => null),
+    }));
+
+    const { storage } = await import("./storageFactory");
+
+    await expect(storage.saveEncryptedPayload("ciphertext")).rejects.toThrow("Walrus upload failed.");
+    await expect(storage.saveSubmission(createEncryptedSubmission())).rejects.toThrow("Walrus upload failed.");
+    await expect(storage.readEncryptedPayload("walrus-blob-1")).resolves.toBeNull();
+    expect(window.localStorage.getItem(SUBMISSIONS_KEY)).toBeNull();
+  });
 });
