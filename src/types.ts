@@ -167,6 +167,8 @@ export interface UploadedAttachment {
 export interface SubmissionPublicPayload {
   answers?: Record<string, unknown>;
   attachments?: SubmissionAttachment[];
+  subjectPreview?: string;
+  ratingValue?: number;
 }
 
 export interface RespondentMeta {
@@ -218,6 +220,26 @@ export interface Submission {
   createdAt: string;
   updatedAt: string;
   blobId?: string;
+}
+
+export interface EncryptedSubmissionRecord extends Omit<
+  Submission,
+  "answers" | "attachments" | "publicPayload" | "metadata" | "encryptedPayload" | "aiSummary" | "keywords" | "embedding"
+> {
+  isEncrypted: true;
+  answers: Record<string, never>;
+  attachments: SubmissionAttachment[];
+  publicPayload?: {
+    attachments?: SubmissionAttachment[];
+    subjectPreview?: string;
+    ratingValue?: number;
+  };
+  metadata?: Record<string, never>;
+  encryptedBlobId: string;
+  encryptedPayload?: undefined;
+  aiSummary?: undefined;
+  keywords?: undefined;
+  embedding?: undefined;
 }
 
 export interface StorageAdapter {

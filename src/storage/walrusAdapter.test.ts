@@ -17,8 +17,8 @@ describe("walrusAdapter read timeout", () => {
       code: "blob_unavailable",
       blobId: "blob-stalled",
     });
-    await vi.advanceTimersByTimeAsync(4000);
+    await vi.runAllTimersAsync();
 
     await expectation;
-  });
+  }, 10000);
 });

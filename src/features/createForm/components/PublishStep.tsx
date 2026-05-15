@@ -1,8 +1,10 @@
 import { useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
 import { BlobLink } from "../../../components/BlobLink";
+import { CriticalFailurePanel } from "../../../components/CriticalFailurePanel";
 import { ShareCard } from "../../../components/ShareCard";
 import { SignalMetaRow } from "../../../components/SignalMetaChip";
+import type { CriticalFailure } from "../../../lib/criticalFailure";
 import { LivePreview } from "../../../components/formBuilder/LivePreview";
 import { isLocalFallbackBlob } from "../../../lib/proof";
 import { shortAddress, SUI_NETWORK } from "../../../lib/sui";
@@ -26,6 +28,8 @@ interface PublishStepProps {
   saving: boolean;
   registeringOnSui: boolean;
   error: string;
+  failure: CriticalFailure | null;
+  diagnosticsCopied: boolean;
   savedForm: PreparedPublishForm | null;
   title: string;
   description: string;
@@ -74,6 +78,7 @@ interface PublishStepProps {
   onChangeIdentityPolicy: (value: FormIdentityPolicy) => void;
   onToggleEncryptSubmissions: (value: boolean) => void;
   onRegisterOnSui: () => void;
+  onCopyDiagnostics: () => void;
   onBack: () => void;
 }
 
@@ -82,6 +87,8 @@ export function PublishStep({
   saving,
   registeringOnSui,
   error,
+  failure,
+  diagnosticsCopied,
   savedForm,
   title,
   description,
@@ -118,6 +125,7 @@ export function PublishStep({
   onChangeIdentityPolicy,
   onToggleEncryptSubmissions,
   onRegisterOnSui,
+  onCopyDiagnostics,
   onBack,
 }: PublishStepProps) {
   const isRegisteredOnSui = Boolean(savedForm?.isOnchain && typeof savedForm.onchainFormId === "number");
@@ -176,6 +184,26 @@ export function PublishStep({
     }, 120);
     return () => window.clearTimeout(timeoutId);
   }, [savedForm?.manifestBlobId, showFocusedSuccessCard]);
+
+  function triggerWalletReconnect() {
+    const walletButton = document.querySelector<HTMLButtonElement>(".wallet-connect-shell button");
+    walletButton?.click();
+    walletButton?.focus();
+  }
+
+  function focusPublishButton() {
+    const publishButton = document.querySelector<HTMLButtonElement>(".publish-cta-button");
+    publishButton?.focus();
+  }
+
+  const failureActions =
+    failure?.kind === "wallet_disconnected"
+      ? [{ key: "reconnect", label: t("reconnectWallet"), onClick: triggerWalletReconnect }]
+      : failure?.kind === "registry_failed"
+        ? [{ key: "retry-registry", label: t("retryRegistryStep"), onClick: onRegisterOnSui, disabled: registeringOnSui }]
+        : failure?.retryable
+          ? [{ key: "retry", label: t("retryLabel"), onClick: focusPublishButton }]
+          : [];
 
   return (
     <section
@@ -428,6 +456,17 @@ export function PublishStep({
           ) : null}
 
           {error ? <p className="error-text">{error}</p> : null}
+          {failure ? (
+            <CriticalFailurePanel
+              failure={failure}
+              title={t("publishRecoveryTitle")}
+              copyLabel={t("copyDiagnostics")}
+              copiedLabel={t("diagnosticsCopied")}
+              copied={diagnosticsCopied}
+              actions={failureActions}
+              onCopyDiagnostics={onCopyDiagnostics}
+            />
+          ) : null}
 
           {savedForm ? (
             <div className={`success-card composer-success-card ${showFocusedSuccessCard ? "is-focused-success" : ""}`}>

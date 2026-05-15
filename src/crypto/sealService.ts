@@ -20,11 +20,20 @@ interface SealRuntimeStatus {
 }
 
 export const ENCRYPTION_FAILED_MESSAGE = "Encryption failed. Response was not submitted.";
+export const SEAL_UNAVAILABLE_MESSAGE = "Seal encryption is unavailable. Submission was not uploaded.";
 export const LEGACY_UNENCRYPTED_RESPONSE_LABEL = "Legacy unencrypted response";
 
+const requestedSealMode = String(import.meta.env.VITE_SEAL_MODE || "seal").toLowerCase();
+const isProductionRuntime = import.meta.env.MODE === "production";
 const hasSealEnv =
   Boolean(import.meta.env.VITE_SEAL_PACKAGE_ID) &&
   Boolean(import.meta.env.VITE_SEAL_KEY_SERVER_OBJECT_ID);
+const sealUnavailableReason =
+  requestedSealMode === "mock" && isProductionRuntime
+    ? SEAL_UNAVAILABLE_MESSAGE
+    : !hasSealEnv
+      ? SEAL_UNAVAILABLE_MESSAGE
+      : null;
 
 export const sealServiceAdapter: SealAdapter = sealClientAdapter;
 
@@ -32,8 +41,10 @@ const runtimeStatus: SealRuntimeStatus = {
   requestedMode: "seal",
   activeMode: "seal",
   isFallback: false,
-  warning: hasSealEnv ? null : "Seal env is incomplete. Encryption will fail closed.",
-  canEncrypt: hasSealEnv,
+  warning:
+    sealUnavailableReason ??
+    (hasSealEnv ? null : "Seal env is incomplete. Encryption will fail closed."),
+  canEncrypt: !sealUnavailableReason,
 };
 
 export function getSealRuntimeStatus() {
@@ -55,8 +66,14 @@ export interface DecryptSensitiveResponseOptions {
 }
 
 function assertProductionSealAdapter(seal: SealAdapter) {
-  if (!import.meta.env.DEV && seal !== sealServiceAdapter) {
+  if (isProductionRuntime && seal !== sealServiceAdapter) {
     throw new Error("Production Seal runtime must use the real Seal adapter.");
+  }
+}
+
+function assertSealEncryptionAvailable() {
+  if (sealUnavailableReason) {
+    throw new Error(sealUnavailableReason);
   }
 }
 
@@ -66,16 +83,17 @@ export async function encryptSensitiveResponse(
   seal: SealAdapter = sealServiceAdapter,
 ) {
   assertProductionSealAdapter(seal);
-  if (!hasSealEnv) {
-    throw new Error(ENCRYPTION_FAILED_MESSAGE);
-  }
+  assertSealEncryptionAvailable();
   try {
     const encrypted = await seal.encrypt(value, context);
     if (!parseRealSealEnvelope(encrypted)) {
       throw new Error("Seal adapter returned a non-Seal payload.");
     }
     return encrypted;
-  } catch {
+  } catch (error) {
+    if (error instanceof Error && error.message === SEAL_UNAVAILABLE_MESSAGE) {
+      throw error;
+    }
     throw new Error(ENCRYPTION_FAILED_MESSAGE);
   }
 }

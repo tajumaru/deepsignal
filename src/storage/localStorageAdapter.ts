@@ -1,4 +1,5 @@
 import type { FormSchema, StorageAdapter, Submission } from "../types";
+import { assertEncryptedSubmissionLeakGuard, sanitizeSubmissionForStorage } from "./submissionSanitizer";
 
 const FORMS_KEY = "deepsignal.forms";
 const SUBMISSIONS_KEY = "deepsignal.submissions";
@@ -91,11 +92,15 @@ export const localStorageAdapter: StorageAdapter = {
 
   async saveSubmission(submission) {
     const submissions = readJson<Submission[]>(SUBMISSIONS_KEY, []);
-    const nextSubmissions = submissions.filter((item) => item.id !== submission.id);
-    const blobId = submission.blobId ?? `local-submission-${submission.id}`;
-    nextSubmissions.unshift({ ...submission, blobId });
+    const sanitizedSubmission = sanitizeSubmissionForStorage(submission);
+    if (sanitizedSubmission.isEncrypted) {
+      assertEncryptedSubmissionLeakGuard(sanitizedSubmission);
+    }
+    const nextSubmissions = submissions.filter((item) => item.id !== sanitizedSubmission.id);
+    const blobId = sanitizedSubmission.blobId ?? `local-submission-${sanitizedSubmission.id}`;
+    nextSubmissions.unshift({ ...sanitizedSubmission, blobId });
     writeJson(SUBMISSIONS_KEY, nextSubmissions);
-    return { id: submission.id, blobId };
+    return { id: sanitizedSubmission.id, blobId };
   },
 
   async listSubmissions(formId) {
@@ -107,8 +112,12 @@ export const localStorageAdapter: StorageAdapter = {
 
   async updateSubmission(submission) {
     const submissions = readJson<Submission[]>(SUBMISSIONS_KEY, []);
+    const sanitizedSubmission = sanitizeSubmissionForStorage(submission);
+    if (sanitizedSubmission.isEncrypted) {
+      assertEncryptedSubmissionLeakGuard(sanitizedSubmission);
+    }
     const nextSubmissions = submissions.map((item) =>
-      item.id === submission.id ? submission : item,
+      item.id === sanitizedSubmission.id ? sanitizedSubmission : item,
     );
     writeJson(SUBMISSIONS_KEY, nextSubmissions);
   },

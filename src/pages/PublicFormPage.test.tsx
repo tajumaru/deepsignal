@@ -71,6 +71,7 @@ describe("PublicFormPage shared manifest restore", () => {
 
   beforeEach(() => {
     Element.prototype.scrollIntoView = vi.fn();
+    window.localStorage.clear();
     mockUseCurrentAccount.mockReturnValue(null);
     mockReadJsonBlobOrThrow.mockReset();
     mockReadManifestWithForm.mockReset();
@@ -247,5 +248,65 @@ describe("PublicFormPage shared manifest restore", () => {
     expect(mockSaveSubmission).toHaveBeenCalledTimes(1);
     expect(screen.queryByText(/sending it requires/i)).not.toBeInTheDocument();
     expect(screen.getByText("signalStoredLocally")).toBeInTheDocument();
+  });
+
+  it("preserves failed public form input and offers draft recovery on return", async () => {
+    const form: FormSchema = {
+      id: "form-123",
+      title: "Shared Feedback Form",
+      description: "Restored from a Walrus manifest link.",
+      fields: [
+        {
+          id: "field-1",
+          type: "shortText",
+          label: "What happened?",
+          required: true,
+          sensitive: false,
+        },
+      ],
+      createdAt: "2026-05-14T00:00:00.000Z",
+    };
+
+    mockReadManifestWithForm.mockResolvedValue({
+      manifest: {
+        version: 1,
+        formId: "form-123",
+        createdAt: "2026-05-14T00:00:00.000Z",
+        updatedAt: "2026-05-14T00:00:00.000Z",
+        formBlobId: "__bundled_form__",
+        submissions: [],
+      },
+      form,
+    });
+    mockSaveSubmission.mockRejectedValue(new Error("Walrus upload failed."));
+
+    const view = render(
+      <MemoryRouter initialEntries={["/f/form-123?manifest=blob-abc"]}>
+        <Routes>
+          <Route path="/f/:formId" element={<PublicFormPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Shared Feedback Form" })).toBeInTheDocument());
+    fireEvent.input(screen.getByRole("textbox"), { target: { value: "Please keep this draft." } });
+    fireEvent.click(screen.getByRole("button", { name: "publicSubmitAnonymously" }));
+
+    await waitFor(() => expect(screen.getAllByText("Walrus upload failed.").length).toBeGreaterThan(0));
+    expect(window.localStorage.getItem("deepsignal:public-draft:form-123:blob-abc")).toContain("Please keep this draft.");
+
+    view.unmount();
+
+    render(
+      <MemoryRouter initialEntries={["/f/form-123?manifest=blob-abc"]}>
+        <Routes>
+          <Route path="/f/:formId" element={<PublicFormPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => expect(screen.getByText("recoverableDraftTitle")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "restore" }));
+    expect(screen.getByRole("textbox")).toHaveValue("Please keep this draft.");
   });
 });

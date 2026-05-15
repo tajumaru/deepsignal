@@ -24,6 +24,10 @@ import { normalizeFormVisibility } from "./explore";
 import { isResponseDeadlinePassed } from "./responseDeadline";
 import { enrichSubmissionWithTriage } from "./signalTriage";
 import { storage } from "../storage/storageFactory";
+import {
+  assertEncryptedSubmissionAttachments,
+  sanitizeSubmissionForStorage,
+} from "../storage/submissionSanitizer";
 import type {
   FormField,
   FormIdentityPolicy,
@@ -164,18 +168,6 @@ export async function createInlinePrivateAttachment(file: File) {
     encoding: "seal-base64-v1" as const,
     inlineData: toBase64(bytes),
   } satisfies SubmissionAttachment;
-}
-
-function stripInlineAttachmentData(attachments: SubmissionAttachment[]) {
-  return attachments.map((attachment) => {
-    if (attachment.storage !== "inline") {
-      return attachment;
-    }
-    return {
-      ...attachment,
-      inlineData: undefined,
-    } satisfies SubmissionAttachment;
-  });
 }
 
 export async function decryptAttachmentBlob(
@@ -692,7 +684,9 @@ export async function saveSubmissionWithEncryption(
       throw new Error(REAL_SEAL_PROJECT_REQUIRED_MESSAGE);
     }
 
-    const encryptedBlobId = submission.encryptedBlobId;
+    assertEncryptedSubmissionAttachments(submission.attachments);
+
+    let encryptedBlobId = submission.encryptedBlobId;
     let encryptedPayload = submission.encryptedPayload;
     if (!encryptedPayload) {
       const payload = JSON.stringify({
@@ -706,19 +700,21 @@ export async function saveSubmissionWithEncryption(
         seal,
       );
     }
+    if (!encryptedBlobId) {
+      messages?.onPipelineStage?.("uploading_to_walrus");
+      const savedEncryptedPayload = await targetStorage.saveEncryptedPayload(encryptedPayload);
+      encryptedBlobId = savedEncryptedPayload.blobId;
+    }
     const parsedEnvelope = parseRealSealEnvelope(encryptedPayload);
     const sealIdentity = parsedEnvelope
       ? `seal:${parsedEnvelope.packageId}:${parsedEnvelope.objectId}`
       : submission.sealIdentity;
-    const metadataSubmission: Submission = {
+    const metadataSubmission = sanitizeSubmissionForStorage({
       ...triagedSubmission,
-      attachments: stripInlineAttachmentData(submission.attachments),
-      answers: {},
       isEncrypted: true,
       encryptedBlobId,
-      encryptedPayload,
       sealIdentity,
-    };
+    });
     messages?.onPipelineStage?.("uploading_to_walrus");
     const saved = await targetStorage.saveSubmission(metadataSubmission);
     return {

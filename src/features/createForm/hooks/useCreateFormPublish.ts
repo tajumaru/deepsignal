@@ -1,4 +1,9 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import {
+  buildCriticalFailureDiagnostics,
+  createCriticalFailure,
+  type CriticalFailure,
+} from "../../../lib/criticalFailure";
 import { getPublicFormPath } from "../../../lib/publicLinks";
 import { createFormOnChain } from "../../../lib/projectRegistry";
 import {
@@ -106,6 +111,8 @@ export function useCreateFormPublish({
   const blobTypingTimerRef = useRef<number | null>(null);
   const [savedForm, setSavedForm] = useState<PreparedPublishForm | null>(null);
   const [error, setError] = useState("");
+  const [failure, setFailure] = useState<CriticalFailure | null>(null);
+  const [diagnosticsCopied, setDiagnosticsCopied] = useState(false);
   const [saving, setSaving] = useState(false);
   const [registeringOnSui, setRegisteringOnSui] = useState(false);
   const [overlay, setOverlay] = useState<PublishOverlayState>(initialOverlayState);
@@ -183,6 +190,19 @@ export function useCreateFormPublish({
     }
   }
 
+  async function copyDiagnostics() {
+    if (!failure) {
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(buildCriticalFailureDiagnostics(failure));
+      setDiagnosticsCopied(true);
+      window.setTimeout(() => setDiagnosticsCopied(false), 1800);
+    } catch (copyError) {
+      console.error(copyError);
+    }
+  }
+
   async function handleCopyLink() {
     await copyText(publicUrl, (copied) => updateOverlay({ linkCopied: copied }));
   }
@@ -197,6 +217,8 @@ export function useCreateFormPublish({
       return;
     }
     setError("");
+    setFailure(null);
+    setDiagnosticsCopied(false);
     setProjectState("");
 
     if (!title.trim()) {
@@ -213,7 +235,17 @@ export function useCreateFormPublish({
     }
 
     if (!accountAddress) {
-      setError(t("connectWalletFirst"));
+      const nextError = t("connectWalletFirst");
+      setError(nextError);
+      setFailure(
+        createCriticalFailure({
+          error: new Error(nextError),
+          surface: "wallet",
+          step: "publish",
+          noDataSubmitted: true,
+          diagnostics: { selectedProjectId: selectedProject?.objectId ?? "" },
+        }),
+      );
       goToStep("publish");
       return;
     }
@@ -225,6 +257,15 @@ export function useCreateFormPublish({
     }).find((warning) => warning.blocksPublish);
     if (blockingEncryptionWarning) {
       setError(blockingEncryptionWarning.message);
+      setFailure(
+        createCriticalFailure({
+          error: new Error(blockingEncryptionWarning.message),
+          surface: blockingEncryptionWarning.kind === "network-mismatch" ? "wallet" : "seal",
+          step: "publish",
+          noDataSubmitted: true,
+          diagnostics: { warningKind: blockingEncryptionWarning.kind },
+        }),
+      );
       goToStep("publish");
       return;
     }
@@ -299,9 +340,28 @@ export function useCreateFormPublish({
       setSavedForm(finalForm);
       onSaved(finalForm);
       setError("");
+      setFailure(null);
     } catch (submitError) {
       updateOverlay({ open: false });
-      setError(submitError instanceof Error ? submitError.message : t("saveFailed"));
+      const message = submitError instanceof Error ? submitError.message : t("saveFailed");
+      setError(message);
+      setFailure(
+        createCriticalFailure({
+          error: submitError instanceof Error ? submitError : new Error(message),
+          surface:
+            message.toLowerCase().includes("wallet")
+              ? "wallet"
+              : message.toLowerCase().includes("seal") || message.toLowerCase().includes("encrypt")
+                ? "seal"
+                : "walrus",
+          step: "publish",
+          noDataSubmitted: true,
+          diagnostics: {
+            selectedProjectId: selectedProject?.objectId ?? "",
+            encryptSubmissions,
+          },
+        }),
+      );
     } finally {
       setSaving(false);
     }
@@ -314,6 +374,8 @@ export function useCreateFormPublish({
 
     setRegisteringOnSui(true);
     setError("");
+    setFailure(null);
+    setDiagnosticsCopied(false);
     try {
       const tx = createFormOnChain({
         projectId: savedForm.projectId,
@@ -341,7 +403,23 @@ export function useCreateFormPublish({
       setSavedForm(registeredForm);
       onSaved(registeredForm);
     } catch (registerError) {
-      setError(registerError instanceof Error ? registerError.message : t("saveFailed"));
+      const message = registerError instanceof Error ? registerError.message : t("saveFailed");
+      setError(message);
+      setFailure(
+        createCriticalFailure({
+          error: registerError instanceof Error ? registerError : new Error(message),
+          surface: "registry",
+          step: "registry",
+          noDataSubmitted: false,
+          uploadSucceeded: true,
+          registryUpdated: false,
+          diagnostics: {
+            projectId: savedForm.projectId,
+            blobId: savedForm.blobId,
+            manifestBlobId: savedForm.manifestBlobId,
+          },
+        }),
+      );
     } finally {
       setRegisteringOnSui(false);
     }
@@ -350,6 +428,8 @@ export function useCreateFormPublish({
   return {
     savedForm,
     error,
+    failure,
+    diagnosticsCopied,
     saving,
     registeringOnSui,
     overlay,
@@ -363,5 +443,6 @@ export function useCreateFormPublish({
     handleRegisterOnSui,
     handleCopyLink,
     handleCopyBlobId,
+    copyDiagnostics,
   };
 }

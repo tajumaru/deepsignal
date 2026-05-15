@@ -4425,6 +4425,8 @@ select {
   gap: 0.45rem;
   text-align: center;
   justify-items: center;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .beacon-copy h4 {
@@ -4432,6 +4434,8 @@ select {
   font-size: clamp(1.6rem, 4vw, 2.35rem);
   letter-spacing: 0.08em;
   text-transform: uppercase;
+  max-width: 100%;
+  overflow-wrap: anywhere;
 }
 
 .beacon-copy .muted {
@@ -4444,6 +4448,9 @@ select {
   display: grid;
   place-items: center;
   isolation: isolate;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
 }
 
 .beacon-rings {
@@ -4494,6 +4501,10 @@ select {
 
 .beacon-frame {
   position: relative;
+  width: 100%;
+  max-width: min(100%, 360px);
+  margin-inline: auto;
+  min-width: 0;
   padding: clamp(1rem, 2vw, 1.35rem);
   border-radius: 36px;
   background:
@@ -4526,11 +4537,14 @@ select {
 
 .beacon-qr-shell {
   position: relative;
-  width: clamp(200px, min(30vw, 34vh), 320px);
+  width: 100%;
+  max-width: min(100%, 360px);
+  margin-inline: auto;
+  min-width: 0;
   aspect-ratio: 1;
   display: grid;
   place-items: center;
-  padding: clamp(0.9rem, 2vw, 1.1rem);
+  padding: clamp(0.75rem, 2.4vw, 1.1rem);
   border-radius: 28px;
   background: rgba(247, 254, 255, 0.98);
   box-shadow:
@@ -4539,13 +4553,20 @@ select {
 }
 
 .beacon-qr-markup,
-.beacon-qr-markup svg {
+.beacon-qr-markup svg,
+.beacon-qr-markup canvas,
+.beacon-qr-markup img {
   width: 100%;
-  height: 100%;
+  max-width: calc(100vw - 48px);
+  height: auto;
+  aspect-ratio: 1 / 1;
+  object-fit: contain;
   display: block;
 }
 
 .beacon-qr-markup {
+  width: 100%;
+  max-width: 100%;
   transform-origin: center;
   transition:
     filter 900ms ease,
@@ -4609,6 +4630,7 @@ select {
   display: grid;
   gap: 0.45rem;
   padding: 0.9rem 1rem;
+  min-width: 0;
 }
 
 .beacon-meta-row span,
@@ -4623,6 +4645,7 @@ select {
   font-size: clamp(1rem, 2vw, 1.1rem);
   color: #e4fbff;
   overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .beacon-meta-grid {
@@ -4635,10 +4658,12 @@ select {
   display: grid;
   gap: 0.45rem;
   padding: 0.9rem 1rem;
+  min-width: 0;
 }
 
 .beacon-meta-grid strong {
   overflow-wrap: anywhere;
+  word-break: break-word;
   color: #effdff;
   font-size: 0.98rem;
 }
@@ -11998,7 +12023,7 @@ body.composer-mode .bg-orb {
 
 .publish-overlay-hero {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) minmax(0, auto);
   gap: 1rem;
   align-items: start;
 }
@@ -12012,6 +12037,7 @@ body.composer-mode .bg-orb {
 .publish-overlay-intro {
   max-width: 60ch;
   margin-bottom: 0;
+  overflow-wrap: anywhere;
 }
 
 .publish-terminal {
@@ -12149,7 +12175,9 @@ body.composer-mode .bg-orb {
   display: grid;
   justify-items: center;
   gap: 0.45rem;
-  min-width: min(100%, 208px);
+  width: 100%;
+  max-width: min(100%, 208px);
+  min-width: 0;
 }
 
 .publish-beacon-panel .eyebrow {
@@ -12161,8 +12189,9 @@ body.composer-mode .bg-orb {
 }
 
 .publish-beacon-qr-shell {
-  width: clamp(132px, 18vw, 172px);
-  padding: 0.7rem;
+  width: 100%;
+  max-width: min(100%, 172px);
+  padding: clamp(0.55rem, 1.8vw, 0.7rem);
   border-radius: 20px;
   box-shadow:
     inset 0 0 0 1px rgba(2, 15, 24, 0.08),
@@ -12170,6 +12199,8 @@ body.composer-mode .bg-orb {
 }
 
 .publish-beacon-qr-markup {
+  width: 100%;
+  max-width: 100%;
   opacity: 1;
   filter: none;
   transform: none;
@@ -13629,12 +13660,14 @@ body.composer-mode .bg-orb {
 
   .publish-beacon-panel {
     width: 100%;
-    justify-items: start;
+    max-width: min(100%, 360px);
+    margin-inline: auto;
+    justify-items: center;
   }
 
   .publish-beacon-note {
     max-width: none;
-    text-align: left;
+    text-align: center;
   }
 
   .composer-modal {
@@ -13663,7 +13696,7 @@ body.composer-mode .bg-orb {
   }
 
   .beacon-qr-shell {
-    width: min(100%, 280px);
+    max-width: min(100%, 320px);
   }
 
   .publish-signal-card {
@@ -14697,6 +14730,61 @@ pre {
   }
 }
 
+@media (max-width: 480px) {
+  .beacon-card {
+    padding: 0.9rem;
+    border-radius: 22px;
+  }
+
+  .beacon-copy h4 {
+    font-size: clamp(1.3rem, 8vw, 1.7rem);
+    letter-spacing: 0.04em;
+  }
+
+  .beacon-copy .muted,
+  .publish-overlay-intro {
+    font-size: 0.92rem;
+    line-height: 1.45;
+  }
+
+  .beacon-frame {
+    max-width: min(100%, 360px);
+    padding: clamp(0.8rem, 3vw, 0.95rem);
+    border-radius: 26px;
+  }
+
+  .beacon-qr-shell {
+    max-width: min(100%, calc(100vw - 48px));
+    padding: clamp(0.65rem, 3vw, 0.85rem);
+    border-radius: 22px;
+  }
+
+  .beacon-meta-row,
+  .beacon-meta-grid > div,
+  .publish-blob-panel,
+  .publish-active-panel {
+    padding: 0.8rem 0.85rem;
+  }
+
+  .publish-overlay-copy h2 {
+    font-size: clamp(1.35rem, 7vw, 1.65rem);
+    letter-spacing: 0.04em;
+  }
+
+  .publish-beacon-panel {
+    max-width: min(100%, 360px);
+  }
+
+  .publish-beacon-qr-shell {
+    max-width: min(100%, 160px);
+    margin-inline: auto;
+  }
+
+  .publish-blob-id {
+    font-size: 0.84rem;
+  }
+}
+
 .matrix-question > .matrix-table-wrap,
 .matrix-question > .matrix-desktop-layout {
   display: block !important;
@@ -14717,4 +14805,16 @@ pre {
   .matrix-question > .matrix-mobile-layout {
     display: grid !important;
   }
+}
+.critical-failure-panel,
+.recoverable-draft-banner {
+  margin-top: 1rem;
+}
+
+.critical-failure-panel .inline-actions,
+.recoverable-draft-banner .inline-actions {
+  margin-top: 0.85rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
 }

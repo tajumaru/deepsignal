@@ -2,6 +2,7 @@ import { useCurrentAccount, useCurrentWallet, useSignAndExecuteTransaction, useS
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { AdminAccessGate } from "../components/AdminAccessGate";
+import { RecoverableDraftBanner } from "../components/RecoverableDraftBanner";
 import { FieldTypePicker } from "../components/formBuilder/FieldTypePicker";
 import { useAccessControl } from "../hooks/useAccessControl";
 import { useProjectRegistry } from "../hooks/useProjectRegistry";
@@ -227,6 +228,16 @@ function FormBuilderComposer({ mode, freshStartToken, draftSeed }: FormBuilderCo
           onSelectStep={builder.goToStep}
         />
 
+        {builder.hasRecoverableDraft ? (
+          <RecoverableDraftBanner
+            title={t("recoverableDraftTitle")}
+            restoreLabel={t("restore")}
+            discardLabel={t("discard")}
+            onRestore={builder.restoreRecoverableDraft}
+            onDiscard={builder.discardRecoverableDraft}
+          />
+        ) : null}
+
         {isGuestDraftMode ? (
           <section className="composer-guest-draft-banner">
             <strong>{t("guestDraftBannerTitle")}</strong>
@@ -300,6 +311,8 @@ function FormBuilderComposer({ mode, freshStartToken, draftSeed }: FormBuilderCo
               saving={publish.saving}
               registeringOnSui={publish.registeringOnSui}
               error={publish.error}
+              failure={publish.failure}
+              diagnosticsCopied={publish.diagnosticsCopied}
               savedForm={publish.savedForm}
               title={builder.values.title}
               description={builder.values.description}
@@ -337,6 +350,7 @@ function FormBuilderComposer({ mode, freshStartToken, draftSeed }: FormBuilderCo
               onChangeIdentityPolicy={builder.setIdentityPolicy}
               onToggleEncryptSubmissions={builder.setEncryptSubmissions}
               onRegisterOnSui={() => void publish.handleRegisterOnSui()}
+              onCopyDiagnostics={() => void publish.copyDiagnostics()}
               onBack={() => builder.moveStep(-1)}
             />
           ) : null}

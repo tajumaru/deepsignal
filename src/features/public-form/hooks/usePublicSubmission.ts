@@ -1,11 +1,18 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import type { UploadDropzoneItem } from "../../../components/UploadDropzone";
 import { getSealRuntimeStatus } from "../../../crypto/cryptoFactory";
+import {
+  buildCriticalFailureDiagnostics,
+  createCriticalFailure,
+  type CriticalFailure,
+} from "../../../lib/criticalFailure";
 import { isAttachmentFieldType, isConfirmationCheckboxField } from "../../../lib/fieldTypes";
 import { getSubmissionCategoryFromPurpose } from "../../../lib/formTemplates";
 import { isResponseDeadlinePassed } from "../../../lib/responseDeadline";
 import { ensureRespondentSession } from "../../../lib/respondentSession";
 import {
+  activeSealAdapter,
+  createEncryptedAttachmentUpload,
   createInlinePrivateAttachment,
   saveSubmissionWithEncryption,
   storageAdapter,
@@ -35,6 +42,36 @@ export interface SignalPipelineState {
   stage: SignalPipelineStage;
   status: SignalPipelineStatus;
   message?: string;
+}
+
+interface RecoverablePublicDraft {
+  answers: PublicAnswers;
+  savedAt: string;
+}
+
+function createDraftStorageKey(formId: string, manifestBlobId: string) {
+  return `deepsignal:public-draft:${formId}:${manifestBlobId || "direct"}`;
+}
+
+function hasRecoverableAnswers(answers: PublicAnswers) {
+  return Object.values(answers).some((value) => {
+    if (typeof value === "string") {
+      return value.trim().length > 0;
+    }
+    if (Array.isArray(value)) {
+      return value.length > 0;
+    }
+    if (value && typeof value === "object") {
+      return Object.keys(value).length > 0;
+    }
+    return value === true;
+  });
+}
+
+function sanitizeDraftAnswers(answers: PublicAnswers, attachmentFields: Set<string>) {
+  return Object.fromEntries(
+    Object.entries(answers).map(([fieldId, value]) => [fieldId, attachmentFields.has(fieldId) ? [] : value]),
+  ) satisfies PublicAnswers;
 }
 
 function getUploadAnswer(value: unknown) {
@@ -124,6 +161,9 @@ export function usePublicSubmission({
   const [submitted, setSubmitted] = useState<Submission | null>(null);
   const [submitError, setSubmitError] = useState("");
   const [submitNotice, setSubmitNotice] = useState("");
+  const [failure, setFailure] = useState<CriticalFailure | null>(null);
+  const [diagnosticsCopied, setDiagnosticsCopied] = useState(false);
+  const [hasRecoverableDraft, setHasRecoverableDraft] = useState(false);
   const [submitPipeline, setSubmitPipeline] = useState<SignalPipelineState>({
     stage: "preparing_signal",
     status: "idle",
@@ -135,6 +175,9 @@ export function usePublicSubmission({
     setSubmitted(null);
     setSubmitError("");
     setSubmitNotice("");
+    setFailure(null);
+    setDiagnosticsCopied(false);
+    setHasRecoverableDraft(false);
     setSubmitPipeline({ stage: "preparing_signal", status: "idle" });
   }, [initialAnswers]);
 
@@ -152,6 +195,23 @@ export function usePublicSubmission({
     () => (form ? getVisibleFieldIds(form.fields, answers) : new Set<string>()),
     [answers, form],
   );
+  const draftStorageKey = useMemo(
+    () => (form ? createDraftStorageKey(form.id, manifestBlobId) : ""),
+    [form, manifestBlobId],
+  );
+
+  useEffect(() => {
+    if (!draftStorageKey) {
+      setHasRecoverableDraft(false);
+      return;
+    }
+    try {
+      const rawDraft = window.localStorage.getItem(draftStorageKey);
+      setHasRecoverableDraft(Boolean(rawDraft));
+    } catch {
+      setHasRecoverableDraft(false);
+    }
+  }, [draftStorageKey]);
 
   useEffect(() => {
     setErrors((current) => {
@@ -163,6 +223,64 @@ export function usePublicSubmission({
   function updateAnswer(fieldId: string, value: unknown) {
     setAnswers((current) => ({ ...current, [fieldId]: value }));
     setErrors((current) => ({ ...current, [fieldId]: "" }));
+    setFailure(null);
+  }
+
+  function persistDraft(nextAnswers: PublicAnswers) {
+    if (!draftStorageKey || !hasRecoverableAnswers(nextAnswers)) {
+      return;
+    }
+    const payload: RecoverablePublicDraft = {
+      answers: sanitizeDraftAnswers(nextAnswers, attachmentFields),
+      savedAt: new Date().toISOString(),
+    };
+    window.localStorage.setItem(draftStorageKey, JSON.stringify(payload));
+    setHasRecoverableDraft(true);
+  }
+
+  function clearDraft() {
+    if (!draftStorageKey) {
+      return;
+    }
+    window.localStorage.removeItem(draftStorageKey);
+    setHasRecoverableDraft(false);
+  }
+
+  function restoreDraft() {
+    if (!draftStorageKey) {
+      return;
+    }
+    try {
+      const rawDraft = window.localStorage.getItem(draftStorageKey);
+      if (!rawDraft) {
+        setHasRecoverableDraft(false);
+        return;
+      }
+      const draft = JSON.parse(rawDraft) as RecoverablePublicDraft;
+      setAnswers((current) => ({ ...current, ...draft.answers }));
+      setErrors({});
+      setFailure(null);
+      setHasRecoverableDraft(false);
+    } catch {
+      clearDraft();
+    }
+  }
+
+  function discardDraft() {
+    clearDraft();
+  }
+
+  async function copyDiagnostics() {
+    if (!failure) {
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(buildCriticalFailureDiagnostics(failure));
+      setDiagnosticsCopied(true);
+      window.setTimeout(() => setDiagnosticsCopied(false), 1800);
+    } catch (error) {
+      console.error(error);
+    }
   }
 
   function validate(currentForm: FormSchema) {
@@ -234,6 +352,15 @@ export function usePublicSubmission({
     if (isResponseDeadlinePassed(form.responseDeadline)) {
       setSubmitError("This signal intake is closed because the response deadline has passed.");
       setSubmitNotice("");
+      setFailure(
+        createCriticalFailure({
+          error: new Error("This signal intake is closed because the response deadline has passed."),
+          surface: "form",
+          step: "validation",
+          noDataSubmitted: true,
+          diagnostics: { formId: form.id },
+        }),
+      );
       return;
     }
     const sealRuntime = getSealRuntimeStatus();
@@ -245,11 +372,29 @@ export function usePublicSubmission({
     ) {
       setSubmitError(REAL_SEAL_PROJECT_REQUIRED_MESSAGE);
       setSubmitNotice("");
+      setFailure(
+        createCriticalFailure({
+          error: new Error(REAL_SEAL_PROJECT_REQUIRED_MESSAGE),
+          surface: "seal",
+          step: "validation",
+          noDataSubmitted: true,
+          diagnostics: { formId: form.id },
+        }),
+      );
       return;
     }
     if (walletRequired && !accountAddress) {
       setSubmitError("This form requires a connected wallet before you can submit.");
       setSubmitNotice("");
+      setFailure(
+        createCriticalFailure({
+          error: new Error("This form requires a connected wallet before you can submit."),
+          surface: "wallet",
+          step: "validation",
+          noDataSubmitted: true,
+          diagnostics: { formId: form.id },
+        }),
+      );
       return;
     }
     if (!validate(form)) {
@@ -258,6 +403,8 @@ export function usePublicSubmission({
     setSubmitting(true);
     setSubmitError("");
     setSubmitNotice("");
+    setFailure(null);
+    setDiagnosticsCopied(false);
     activatePipeline("preparing_signal", "Preparing your message for secure delivery.");
     try {
       const signedAt = new Date().toISOString();
@@ -293,6 +440,7 @@ export function usePublicSubmission({
             if (!file) {
               continue;
             }
+            const requiresProtectedAttachment = form.encryptSubmissions || field.sensitive;
 
             setAnswers((current) => ({
               ...current,
@@ -324,6 +472,32 @@ export function usePublicSubmission({
                   ...current,
                   [field.id]: getUploadAnswer(current[field.id]).map((item) =>
                     item.id === attachment.id ? { ...item, status: "uploaded", progress: 100 } : item,
+                  ),
+                }));
+              } else if (requiresProtectedAttachment) {
+                activatePipeline("encrypting", `Encrypting ${file.name} before upload.`);
+                const encryptedUpload = await createEncryptedAttachmentUpload(file, activeSealAdapter, {
+                  projectId: form.projectId,
+                  ownerAddress: form.ownerAddress,
+                });
+                activatePipeline("uploading_to_walrus", `Uploading protected ${file.name} to Walrus.`);
+                const upload = await storageAdapter.uploadFile(encryptedUpload.file);
+                window.clearInterval(progressTimer);
+                attachments.push({
+                  fieldId: field.id,
+                  type: getAttachmentType(file),
+                  blobId: upload.blobId,
+                  name: file.name,
+                  size: file.size,
+                  storage: "blob",
+                  ...encryptedUpload.attachment,
+                });
+                setAnswers((current) => ({
+                  ...current,
+                  [field.id]: getUploadAnswer(current[field.id]).map((item) =>
+                    item.id === attachment.id
+                      ? { ...item, status: "uploaded", progress: 100, walrusBlobId: upload.blobId }
+                      : item,
                   ),
                 }));
               } else {
@@ -439,11 +613,32 @@ export function usePublicSubmission({
       }
       setSubmitted(savedSubmission);
       setSubmitNotice(notices.join(" "));
+      clearDraft();
+      setFailure(null);
       setSubmitPipeline({ stage: "signal_secured", status: "complete", message: "Signal secured." });
     } catch (error) {
       const message = error instanceof Error ? error.message : submitFailedLabel;
       setSubmitError(message);
       failPipeline(message);
+      persistDraft(answers);
+      setFailure(
+        createCriticalFailure({
+          error: error instanceof Error ? error : new Error(message),
+          surface:
+            message.toLowerCase().includes("encrypt") || message.toLowerCase().includes("seal")
+              ? "seal"
+              : message.toLowerCase().includes("wallet")
+                ? "wallet"
+                : "walrus",
+          step: submitPipeline.stage,
+          diagnostics: {
+            formId: form.id,
+            manifestBlobId,
+            walletRequired,
+            attachWallet,
+          },
+        }),
+      );
     } finally {
       setSubmitting(false);
     }
@@ -456,9 +651,15 @@ export function usePublicSubmission({
     submitted,
     submitError,
     submitNotice,
+    failure,
+    diagnosticsCopied,
+    hasRecoverableDraft,
     submitPipeline,
     visibleFieldIds,
     updateAnswer,
     handleSubmit,
+    restoreDraft,
+    discardDraft,
+    copyDiagnostics,
   };
 }

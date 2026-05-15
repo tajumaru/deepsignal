@@ -5,6 +5,8 @@ import { DynamicField } from "../components/DynamicField";
 import { EmptyState } from "../components/EmptyState";
 import { FormHeaderImage } from "../components/FormHeaderImage";
 import { RichTextContent } from "../components/RichText";
+import { CriticalFailurePanel } from "../components/CriticalFailurePanel";
+import { RecoverableDraftBanner } from "../components/RecoverableDraftBanner";
 import { PublicFormSuccess } from "../features/public-form/components/PublicFormSuccess";
 import { PublicIdentityCard } from "../features/public-form/components/PublicIdentityCard";
 import { PublicSubmitReadiness } from "../features/public-form/components/PublicSubmitReadiness";
@@ -42,10 +44,16 @@ export function PublicFormPage() {
     submitted,
     submitError,
     submitNotice,
+    failure,
+    diagnosticsCopied,
+    hasRecoverableDraft,
     submitPipeline,
     visibleFieldIds,
     updateAnswer,
     handleSubmit,
+    restoreDraft,
+    discardDraft,
+    copyDiagnostics,
   } = usePublicSubmission({
     form,
     initialAnswers,
@@ -198,6 +206,26 @@ export function PublicFormPage() {
     );
   }
 
+  function triggerWalletReconnect() {
+    const walletButton = document.querySelector<HTMLButtonElement>(".public-identity-wallet button");
+    walletButton?.click();
+    walletButton?.focus();
+  }
+
+  function focusSubmitButton() {
+    const submitButton = document.querySelector<HTMLButtonElement>(".public-form-actions button[type='submit']");
+    submitButton?.focus();
+  }
+
+  const failureActions =
+    failure?.kind === "wallet_disconnected"
+      ? [{ key: "reconnect", label: t("reconnectWallet"), onClick: triggerWalletReconnect }]
+      : failure?.kind === "registry_failed"
+        ? [{ key: "retry", label: t("retryLabel"), onClick: focusSubmitButton }]
+        : failure?.retryable
+          ? [{ key: "retry", label: t("retryLabel"), onClick: focusSubmitButton }]
+          : [];
+
   return (
     <form className="panel glow-panel public-form" onSubmit={handleSubmit}>
       <FormHeaderImage
@@ -253,6 +281,16 @@ export function PublicFormPage() {
           anonymousModeHelp: t("publicAnonymousModeHelp"),
         }}
       />
+
+      {hasRecoverableDraft ? (
+        <RecoverableDraftBanner
+          title={t("recoverableDraftTitle")}
+          restoreLabel={t("restore")}
+          discardLabel={t("discard")}
+          onRestore={restoreDraft}
+          onDiscard={discardDraft}
+        />
+      ) : null}
 
       <div className="stack public-form-fields">
         {groupedFields.sections.map((section) =>
@@ -332,6 +370,17 @@ export function PublicFormPage() {
 
       <SignalSubmissionPipeline pipeline={submitPipeline} visible={submitting || submitPipeline.status === "failed"} />
 
+      {failure ? (
+        <CriticalFailurePanel
+          failure={failure}
+          title={t("submitRecoveryTitle")}
+          copyLabel={t("copyDiagnostics")}
+          copiedLabel={t("diagnosticsCopied")}
+          copied={diagnosticsCopied}
+          actions={failureActions}
+          onCopyDiagnostics={copyDiagnostics}
+        />
+      ) : null}
       {submitError ? <p className="error-text">{submitError}</p> : null}
       <div className="public-form-actions">
         <button type="submit" className="primary-button" disabled={submitting || deadlinePassed}>

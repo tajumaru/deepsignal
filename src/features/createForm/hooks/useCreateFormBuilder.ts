@@ -1,4 +1,4 @@
-import { startTransition, useEffect, useMemo, useRef, useState } from "react";
+import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   canFieldHaveConditionalChildren,
   getConditionalLogicCycle,
@@ -94,6 +94,7 @@ export function useCreateFormBuilder({
   const [projectState, setProjectState] = useState("");
   const [lastSavedSnapshot, setLastSavedSnapshot] = useState(INITIAL_DRAFT_SNAPSHOT);
   const [draftSaveState, setDraftSaveState] = useState<DraftSaveState>("idle");
+  const [hasRecoverableDraft, setHasRecoverableDraft] = useState(false);
   const [activeFieldId, setActiveFieldId] = useState(initialFields[0]?.id ?? "");
   const [draggedFieldId, setDraggedFieldId] = useState<string | null>(null);
   const [dragOverFieldId, setDragOverFieldId] = useState<string | null>(null);
@@ -163,6 +164,7 @@ export function useCreateFormBuilder({
     setProjectState("");
     setLastSavedSnapshot(INITIAL_DRAFT_SNAPSHOT);
     setDraftSaveState("idle");
+    setHasRecoverableDraft(false);
     setActiveFieldId(nextFields[0]?.id ?? "");
     setDraggedFieldId(null);
     setDragOverFieldId(null);
@@ -184,7 +186,99 @@ export function useCreateFormBuilder({
     previousModeRef.current = mode;
     hasLoadedDraftRef.current = false;
     setDraftSaveState("idle");
+    setHasRecoverableDraft(false);
   }, [mode]);
+
+  const seedGuestDraftFromIntent = useCallback(() => {
+    const template = getTemplateDefinition(draftSeed?.templateKey ?? initialTemplate.key);
+    const nextFields = createTemplateFields(template);
+    const idea = draftSeed?.idea?.trim() ?? "";
+    setSelectedTemplateKey(template.key);
+    setTitle(idea || template.title);
+    setDescription(idea ? `A quick form for ${idea.toLowerCase()}.` : template.description);
+    setHeaderImage({ url: "", alt: "", position: "center", source: "url", fileName: "" });
+    setHeaderLogo({ url: "", alt: "", source: "url", fileName: "" });
+    setFields(nextFields);
+    setSections([]);
+    setPurpose(normalizeFormPurpose(template.purpose));
+    setVisibility("unlisted");
+    setIdentityPolicy("anonymous_allowed");
+    setEncryptSubmissions(false);
+    setResponseDeadlinePreset("none");
+    setResponseDeadlineCustomAt("");
+    setCurrentStep("fields");
+    setSelectedProjectIdState("");
+    setProjectState("");
+    setActiveFieldId(nextFields[0]?.id ?? "");
+    setPendingFocusFieldId(nextFields[0]?.id ?? "");
+  }, [draftSeed?.idea, draftSeed?.templateKey]);
+
+  function applyStoredDraft(rawDraft: string) {
+    const parsedDraft = JSON.parse(rawDraft) as {
+      selectedTemplateKey?: string;
+      title?: string;
+      description?: string;
+      headerImage?: Partial<FormBuilderValues["headerImage"]>;
+      headerLogo?: Partial<FormBuilderValues["headerLogo"]>;
+      fields?: FormField[];
+      sections?: FormSection[];
+      purpose?: FormBuilderValues["purpose"];
+      visibility?: FormBuilderValues["visibility"];
+      identityPolicy?: FormBuilderValues["identityPolicy"];
+      encryptSubmissions?: boolean;
+      responseDeadlinePreset?: ResponseDeadlinePreset;
+      responseDeadlineCustomAt?: string;
+      currentStep?: BuilderStepKey;
+      selectedProjectId?: string;
+      projectState?: string;
+    };
+    if (!Array.isArray(parsedDraft.fields) || parsedDraft.fields.length === 0) {
+      window.localStorage.removeItem(draftStorageKey);
+      setHasRecoverableDraft(false);
+      return;
+    }
+    setSelectedTemplateKey(parsedDraft.selectedTemplateKey ?? initialTemplate.key);
+    setTitle(typeof parsedDraft.title === "string" ? parsedDraft.title : initialTemplate.title);
+    setDescription(typeof parsedDraft.description === "string" ? parsedDraft.description : initialTemplate.description);
+    setHeaderImage({
+      url: typeof parsedDraft.headerImage?.url === "string" ? parsedDraft.headerImage.url : "",
+      alt: typeof parsedDraft.headerImage?.alt === "string" ? parsedDraft.headerImage.alt : "",
+      position:
+        parsedDraft.headerImage?.position === "top" || parsedDraft.headerImage?.position === "bottom"
+          ? parsedDraft.headerImage.position
+          : "center",
+      source: parsedDraft.headerImage?.source === "upload" ? "upload" : "url",
+      fileName: typeof parsedDraft.headerImage?.fileName === "string" ? parsedDraft.headerImage.fileName : "",
+    });
+    setHeaderLogo({
+      url: typeof parsedDraft.headerLogo?.url === "string" ? parsedDraft.headerLogo.url : "",
+      alt: typeof parsedDraft.headerLogo?.alt === "string" ? parsedDraft.headerLogo.alt : "",
+      source: parsedDraft.headerLogo?.source === "upload" ? "upload" : "url",
+      fileName: typeof parsedDraft.headerLogo?.fileName === "string" ? parsedDraft.headerLogo.fileName : "",
+    });
+    setFields(
+      sanitizeConditionalLogicFields(
+        parsedDraft.fields.map((field) => ({
+          ...field,
+          type: normalizeFieldType(field.type),
+        })),
+      ),
+    );
+    setSections(Array.isArray(parsedDraft.sections) ? parsedDraft.sections : []);
+    setPurpose(parsedDraft.purpose ?? initialTemplate.purpose);
+    setVisibility(parsedDraft.visibility ?? "unlisted");
+    setIdentityPolicy(parsedDraft.identityPolicy === "wallet_required" ? "wallet_required" : "anonymous_allowed");
+    setEncryptSubmissions(parsedDraft.encryptSubmissions ?? !isGuestDraftMode);
+    setResponseDeadlinePreset(parsedDraft.responseDeadlinePreset ?? "none");
+    setResponseDeadlineCustomAt(parsedDraft.responseDeadlineCustomAt ?? "");
+    setCurrentStep(parsedDraft.currentStep ?? "fields");
+    setSelectedProjectIdState(isGuestDraftMode ? "" : parsedDraft.selectedProjectId ?? "");
+    setProjectState(parsedDraft.projectState ?? "");
+    setActiveFieldId(parsedDraft.fields[0]?.id ?? "");
+    setPendingFocusFieldId(parsedDraft.fields[0]?.id ?? "");
+    setDraftSaveState("restored");
+    setHasRecoverableDraft(false);
+  }
 
   useEffect(() => {
     if (hasLoadedDraftRef.current) {
@@ -198,97 +292,16 @@ export function useCreateFormBuilder({
       const rawDraft = freshStartToken ? null : window.localStorage.getItem(draftStorageKey);
       if (!rawDraft) {
         if (isGuestDraftMode) {
-          const template = getTemplateDefinition(draftSeed?.templateKey ?? initialTemplate.key);
-          const nextFields = createTemplateFields(template);
-          const idea = draftSeed?.idea?.trim() ?? "";
-          setSelectedTemplateKey(template.key);
-          setTitle(idea || template.title);
-          setDescription(idea ? `A quick form for ${idea.toLowerCase()}.` : template.description);
-          setHeaderImage({ url: "", alt: "", position: "center", source: "url", fileName: "" });
-          setHeaderLogo({ url: "", alt: "", source: "url", fileName: "" });
-          setFields(nextFields);
-          setSections([]);
-          setPurpose(normalizeFormPurpose(template.purpose));
-          setVisibility("unlisted");
-          setIdentityPolicy("anonymous_allowed");
-          setEncryptSubmissions(false);
-          setResponseDeadlinePreset("none");
-          setResponseDeadlineCustomAt("");
-          setCurrentStep("fields");
-          setSelectedProjectIdState("");
-          setProjectState("");
-          setActiveFieldId(nextFields[0]?.id ?? "");
-          setPendingFocusFieldId(nextFields[0]?.id ?? "");
+          seedGuestDraftFromIntent();
         }
         return;
       }
-      const parsedDraft = JSON.parse(rawDraft) as {
-        selectedTemplateKey?: string;
-        title?: string;
-        description?: string;
-        headerImage?: Partial<FormBuilderValues["headerImage"]>;
-        headerLogo?: Partial<FormBuilderValues["headerLogo"]>;
-        fields?: FormField[];
-        sections?: FormSection[];
-        purpose?: FormBuilderValues["purpose"];
-        visibility?: FormBuilderValues["visibility"];
-        identityPolicy?: FormBuilderValues["identityPolicy"];
-        encryptSubmissions?: boolean;
-        responseDeadlinePreset?: ResponseDeadlinePreset;
-        responseDeadlineCustomAt?: string;
-        currentStep?: BuilderStepKey;
-        selectedProjectId?: string;
-        projectState?: string;
-      };
-      if (!Array.isArray(parsedDraft.fields) || parsedDraft.fields.length === 0) {
-        window.localStorage.removeItem(draftStorageKey);
-        return;
-      }
-      setSelectedTemplateKey(parsedDraft.selectedTemplateKey ?? initialTemplate.key);
-      setTitle(typeof parsedDraft.title === "string" ? parsedDraft.title : initialTemplate.title);
-      setDescription(typeof parsedDraft.description === "string" ? parsedDraft.description : initialTemplate.description);
-      setHeaderImage({
-        url: typeof parsedDraft.headerImage?.url === "string" ? parsedDraft.headerImage.url : "",
-        alt: typeof parsedDraft.headerImage?.alt === "string" ? parsedDraft.headerImage.alt : "",
-        position:
-          parsedDraft.headerImage?.position === "top" || parsedDraft.headerImage?.position === "bottom"
-            ? parsedDraft.headerImage.position
-            : "center",
-        source: parsedDraft.headerImage?.source === "upload" ? "upload" : "url",
-        fileName: typeof parsedDraft.headerImage?.fileName === "string" ? parsedDraft.headerImage.fileName : "",
-      });
-      setHeaderLogo({
-        url: typeof parsedDraft.headerLogo?.url === "string" ? parsedDraft.headerLogo.url : "",
-        alt: typeof parsedDraft.headerLogo?.alt === "string" ? parsedDraft.headerLogo.alt : "",
-        source: parsedDraft.headerLogo?.source === "upload" ? "upload" : "url",
-        fileName: typeof parsedDraft.headerLogo?.fileName === "string" ? parsedDraft.headerLogo.fileName : "",
-      });
-      setFields(
-        sanitizeConditionalLogicFields(
-          parsedDraft.fields.map((field) => ({
-            ...field,
-            type: normalizeFieldType(field.type),
-          })),
-        ),
-      );
-      setSections(Array.isArray(parsedDraft.sections) ? parsedDraft.sections : []);
-      setPurpose(parsedDraft.purpose ?? initialTemplate.purpose);
-      setVisibility(parsedDraft.visibility ?? "unlisted");
-      setIdentityPolicy(parsedDraft.identityPolicy === "wallet_required" ? "wallet_required" : "anonymous_allowed");
-      setEncryptSubmissions(parsedDraft.encryptSubmissions ?? !isGuestDraftMode);
-      setResponseDeadlinePreset(parsedDraft.responseDeadlinePreset ?? "none");
-      setResponseDeadlineCustomAt(parsedDraft.responseDeadlineCustomAt ?? "");
-      setCurrentStep(parsedDraft.currentStep ?? "fields");
-      setSelectedProjectIdState(isGuestDraftMode ? "" : parsedDraft.selectedProjectId ?? "");
-      setProjectState(parsedDraft.projectState ?? "");
-      setActiveFieldId(parsedDraft.fields[0]?.id ?? "");
-      setPendingFocusFieldId(parsedDraft.fields[0]?.id ?? "");
-      setDraftSaveState("restored");
+      setHasRecoverableDraft(true);
     } catch (error) {
       console.warn("Failed to restore create form draft.", error);
       window.localStorage.removeItem(draftStorageKey);
     }
-  }, [draftSeed?.idea, draftSeed?.templateKey, draftStorageKey, freshStartToken, isGuestDraftMode]);
+  }, [draftSeed?.idea, draftSeed?.templateKey, draftStorageKey, freshStartToken, isGuestDraftMode, seedGuestDraftFromIntent]);
 
   useEffect(() => {
     if (isGuestDraftMode || !hasLoadedDraftRef.current || !freshStartToken) {
@@ -699,6 +712,35 @@ export function useCreateFormBuilder({
     setLastSavedSnapshot(draftSnapshot);
     window.localStorage.removeItem(draftStorageKey);
     setDraftSaveState("idle");
+    setHasRecoverableDraft(false);
+  }
+
+  function restoreRecoverableDraft() {
+    const rawDraft = window.localStorage.getItem(draftStorageKey);
+    if (!rawDraft) {
+      setHasRecoverableDraft(false);
+      if (isGuestDraftMode) {
+        seedGuestDraftFromIntent();
+      }
+      return;
+    }
+    try {
+      applyStoredDraft(rawDraft);
+    } catch (error) {
+      console.warn("Failed to restore create form draft.", error);
+      window.localStorage.removeItem(draftStorageKey);
+      setHasRecoverableDraft(false);
+    }
+  }
+
+  function discardRecoverableDraft() {
+    window.localStorage.removeItem(draftStorageKey);
+    setHasRecoverableDraft(false);
+    if (isGuestDraftMode) {
+      seedGuestDraftFromIntent();
+    } else {
+      resetBuilderState();
+    }
   }
 
   const values: FormBuilderValues = {
@@ -731,6 +773,7 @@ export function useCreateFormBuilder({
     refs: { labelRefs, fieldCardRefs },
     draftSnapshot,
     draftSaveState,
+    hasRecoverableDraft,
     isDirty,
     hasValidTitle,
     hasQuestions,
@@ -769,5 +812,7 @@ export function useCreateFormBuilder({
     validateFieldsStep,
     confirmDiscardChanges,
     markSaved,
+    restoreRecoverableDraft,
+    discardRecoverableDraft,
   };
 }

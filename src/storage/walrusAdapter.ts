@@ -32,7 +32,11 @@ import {
   WALRUS_AGGREGATOR_URL,
   WALRUS_UPLOAD_RELAY_URL,
 } from "../lib/sui";
-import type { FormSchema, SignalManifest, StorageAdapter, Submission } from "../types";
+import {
+  assertEncryptedSubmissionLeakGuard,
+  sanitizeSubmissionForStorage,
+} from "./submissionSanitizer";
+import type { EncryptedSubmissionRecord, FormSchema, SignalManifest, StorageAdapter, Submission } from "../types";
 
 type WalrusEnabledClient = ClientWithCoreApi & { walrus: WalrusClient };
 type WalrusStorageMode = "publisher" | "uploadRelay";
@@ -45,7 +49,7 @@ type FormBundle = {
 type SubmissionBundle = {
   version: 1;
   kind: "submissionBundle";
-  submission: Submission;
+  submission: Submission | EncryptedSubmissionRecord;
   manifest: SignalManifest;
   form?: FormSchema;
 };
@@ -894,7 +898,7 @@ export async function readManifestWithForm(blobId: string): Promise<{
 }
 
 function createSubmissionBundle(
-  submission: Submission,
+  submission: Submission | EncryptedSubmissionRecord,
   manifest: SignalManifest,
   form?: FormSchema | null,
 ): SubmissionBundle {
@@ -907,6 +911,17 @@ function createSubmissionBundle(
   };
 }
 
+export function serializeSubmissionBundle(
+  submission: Submission | EncryptedSubmissionRecord,
+  manifest: SignalManifest,
+  form?: FormSchema | null,
+) {
+  if (submission.isEncrypted) {
+    assertEncryptedSubmissionLeakGuard(submission);
+  }
+  return JSON.stringify(createSubmissionBundle(submission, manifest, form));
+}
+
 async function writeFormBundle(form: FormSchema, manifest: SignalManifest) {
   return uploadBody(
     new Blob([JSON.stringify(createFormBundle(form, manifest))], {
@@ -917,12 +932,15 @@ async function writeFormBundle(form: FormSchema, manifest: SignalManifest) {
 }
 
 async function writeSubmissionBundle(
-  submission: Submission,
+  submission: Submission | EncryptedSubmissionRecord,
   manifest: SignalManifest,
   form?: FormSchema | null,
 ) {
+  if (submission.isEncrypted) {
+    assertEncryptedSubmissionLeakGuard(submission);
+  }
   return uploadBody(
-    new Blob([JSON.stringify(createSubmissionBundle(submission, manifest, form))], {
+    new Blob([serializeSubmissionBundle(submission, manifest, form)], {
       type: "application/json",
     }),
     "submission-bundle",
@@ -1090,29 +1108,36 @@ export const walrusAdapter: StorageAdapter = {
   },
 
   async saveSubmission(submission: Submission) {
+    const sanitizedSubmission = sanitizeSubmissionForStorage(submission);
+    if (sanitizedSubmission.isEncrypted) {
+      assertEncryptedSubmissionLeakGuard(sanitizedSubmission);
+    }
     const { entry, manifest, form } = await loadManifestOrThrow(submission.formId);
     if (!entry?.manifestBlobId || !manifest) {
+      if (sanitizedSubmission.isEncrypted) {
+        assertEncryptedSubmissionLeakGuard(sanitizedSubmission);
+      }
       const { blobId, blobObjectId } = await uploadBody(
-        new Blob([JSON.stringify(submission)], { type: "application/json" }),
+        new Blob([JSON.stringify(sanitizedSubmission)], { type: "application/json" }),
         "submission-bundle",
       );
-      await localStorageAdapter.saveSubmission({ ...submission, blobId });
+      await localStorageAdapter.saveSubmission({ ...sanitizedSubmission, blobId });
       upsertSubmissionBlobIndex({
-        submissionId: submission.id,
-        formId: submission.formId,
+        submissionId: sanitizedSubmission.id,
+        formId: sanitizedSubmission.formId,
         blobId,
         blobObjectId,
-        createdAt: submission.createdAt,
+        createdAt: sanitizedSubmission.createdAt,
       });
-      return { id: submission.id, blobId };
+      return { id: sanitizedSubmission.id, blobId };
     }
 
     const existingSubmissionObjectIds = Object.fromEntries(
-      listSubmissionBlobIndex(submission.formId).map((item) => [item.submissionId, item.blobObjectId]),
+      listSubmissionBlobIndex(sanitizedSubmission.formId).map((item) => [item.submissionId, item.blobObjectId]),
     );
     const nextManifestEntries = [
-      { submissionId: submission.id, blobId: "", createdAt: submission.createdAt },
-      ...manifest.submissions.filter((item) => item.submissionId !== submission.id),
+      { submissionId: sanitizedSubmission.id, blobId: "", createdAt: sanitizedSubmission.createdAt },
+      ...manifest.submissions.filter((item) => item.submissionId !== sanitizedSubmission.id),
     ];
     const nextManifest = createManifest(
       {
@@ -1125,11 +1150,11 @@ export const walrusAdapter: StorageAdapter = {
       nextManifestEntries,
       new Date().toISOString(),
     );
-    const bundle = await writeSubmissionBundle(submission, nextManifest, form);
+    const bundle = await writeSubmissionBundle(sanitizedSubmission, nextManifest, form);
     nextManifest.submissions[0].blobId = bundle.blobId;
 
     upsertFormBlobIndex({
-      formId: submission.formId,
+      formId: sanitizedSubmission.formId,
       formBlobId: form ? bundle.blobId : manifest.formBlobId,
       formBlobObjectId: form ? bundle.blobObjectId : entry.formBlobObjectId,
       manifestBlobId: bundle.blobId,
@@ -1137,24 +1162,24 @@ export const walrusAdapter: StorageAdapter = {
       createdAt: manifest.createdAt,
     });
     replaceSubmissionBlobIndex(
-      submission.formId,
+      sanitizedSubmission.formId,
       nextManifest.submissions.map((manifestEntry) => ({
         submissionId: manifestEntry.submissionId,
-        formId: submission.formId,
+        formId: sanitizedSubmission.formId,
         blobId: manifestEntry.blobId,
         blobObjectId:
-          manifestEntry.submissionId === submission.id
+          manifestEntry.submissionId === sanitizedSubmission.id
             ? bundle.blobObjectId
             : existingSubmissionObjectIds[manifestEntry.submissionId],
         createdAt: manifestEntry.createdAt,
       })),
     );
-    await localStorageAdapter.saveSubmission({ ...submission, blobId: bundle.blobId });
+    await localStorageAdapter.saveSubmission({ ...sanitizedSubmission, blobId: bundle.blobId });
     await cleanupSupersededWalrusObjects([
       entry.manifestBlobObjectId,
       form ? entry.formBlobObjectId : undefined,
-    ], `saving submission ${submission.id}`);
-    return { id: submission.id, blobId: bundle.blobId };
+    ], `saving submission ${sanitizedSubmission.id}`);
+    return { id: sanitizedSubmission.id, blobId: bundle.blobId };
   },
 
   async listSubmissions(formId) {
@@ -1190,33 +1215,40 @@ export const walrusAdapter: StorageAdapter = {
   },
 
   async updateSubmission(submission) {
+    const sanitizedSubmission = sanitizeSubmissionForStorage(submission);
+    if (sanitizedSubmission.isEncrypted) {
+      assertEncryptedSubmissionLeakGuard(sanitizedSubmission);
+    }
     const { entry, manifest, form } = await loadManifestOrThrow(submission.formId);
     if (!entry?.manifestBlobId || !manifest) {
+      if (sanitizedSubmission.isEncrypted) {
+        assertEncryptedSubmissionLeakGuard(sanitizedSubmission);
+      }
       const { blobId, blobObjectId } = await uploadBody(
-        new Blob([JSON.stringify(submission)], { type: "application/json" }),
+        new Blob([JSON.stringify(sanitizedSubmission)], { type: "application/json" }),
         "submission-bundle",
       );
-      await localStorageAdapter.updateSubmission({ ...submission, blobId });
+      await localStorageAdapter.updateSubmission({ ...sanitizedSubmission, blobId });
       upsertSubmissionBlobIndex({
-        submissionId: submission.id,
-        formId: submission.formId,
+        submissionId: sanitizedSubmission.id,
+        formId: sanitizedSubmission.formId,
         blobId,
         blobObjectId,
-        createdAt: submission.createdAt,
+        createdAt: sanitizedSubmission.createdAt,
       });
       return;
     }
 
-    const existingSubmissionEntries = listSubmissionBlobIndex(submission.formId);
+    const existingSubmissionEntries = listSubmissionBlobIndex(sanitizedSubmission.formId);
     const existingSubmissionObjectIds = Object.fromEntries(
       existingSubmissionEntries.map((item) => [item.submissionId, item.blobObjectId]),
     );
     const existingCreatedAt =
-      manifest.submissions.find((item) => item.submissionId === submission.id)?.createdAt ??
-      submission.createdAt;
+      manifest.submissions.find((item) => item.submissionId === sanitizedSubmission.id)?.createdAt ??
+      sanitizedSubmission.createdAt;
     const nextManifestEntries = [
-      { submissionId: submission.id, blobId: "", createdAt: existingCreatedAt },
-      ...manifest.submissions.filter((item) => item.submissionId !== submission.id),
+      { submissionId: sanitizedSubmission.id, blobId: "", createdAt: existingCreatedAt },
+      ...manifest.submissions.filter((item) => item.submissionId !== sanitizedSubmission.id),
     ];
     const nextManifest = createManifest(
       {
@@ -1229,11 +1261,11 @@ export const walrusAdapter: StorageAdapter = {
       nextManifestEntries,
       new Date().toISOString(),
     );
-    const bundle = await writeSubmissionBundle(submission, nextManifest, form);
+    const bundle = await writeSubmissionBundle(sanitizedSubmission, nextManifest, form);
     nextManifest.submissions[0].blobId = bundle.blobId;
 
     upsertFormBlobIndex({
-      formId: submission.formId,
+      formId: sanitizedSubmission.formId,
       formBlobId: form ? bundle.blobId : manifest.formBlobId,
       formBlobObjectId: form ? bundle.blobObjectId : entry.formBlobObjectId,
       manifestBlobId: bundle.blobId,
@@ -1241,23 +1273,23 @@ export const walrusAdapter: StorageAdapter = {
       createdAt: manifest.createdAt,
     });
     replaceSubmissionBlobIndex(
-      submission.formId,
+      sanitizedSubmission.formId,
       nextManifest.submissions.map((manifestEntry) => ({
         submissionId: manifestEntry.submissionId,
-        formId: submission.formId,
+        formId: sanitizedSubmission.formId,
         blobId: manifestEntry.blobId,
         blobObjectId:
-          manifestEntry.submissionId === submission.id
+          manifestEntry.submissionId === sanitizedSubmission.id
             ? bundle.blobObjectId
             : existingSubmissionObjectIds[manifestEntry.submissionId],
         createdAt: manifestEntry.createdAt,
       })),
     );
-    await localStorageAdapter.updateSubmission({ ...submission, blobId: bundle.blobId });
+    await localStorageAdapter.updateSubmission({ ...sanitizedSubmission, blobId: bundle.blobId });
     await cleanupSupersededWalrusObjects([
       entry.manifestBlobObjectId,
       form ? entry.formBlobObjectId : undefined,
-    ], `updating submission ${submission.id}`);
+    ], `updating submission ${sanitizedSubmission.id}`);
   },
 
   async saveEncryptedPayload(payload) {
