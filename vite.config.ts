@@ -2,9 +2,8 @@ import { defineConfig } from "vitest/config";
 import react from "@vitejs/plugin-react";
 import { visualizer } from "rollup-plugin-visualizer";
 import { execSync } from "node:child_process";
-import { readFileSync, rmSync } from "node:fs";
-import { resolve } from "node:path";
-import { loadEnv, type Plugin } from "vite";
+import { readFileSync } from "node:fs";
+import { loadEnv } from "vite";
 
 type PackageMetadata = {
   version?: string;
@@ -28,24 +27,6 @@ function getGitHash() {
 }
 
 const packageMetadata = JSON.parse(readFileSync(new URL("./package.json", import.meta.url), "utf8")) as PackageMetadata;
-const unusedPublicBuildAssets = ["deepsignal-icon.png", "favicon.png"];
-
-function pruneUnusedPublicBuildAssets(): Plugin {
-  let outDir = "dist";
-
-  return {
-    name: "deepsignal-prune-unused-public-build-assets",
-    apply: "build",
-    configResolved(config) {
-      outDir = resolve(config.root, config.build.outDir);
-    },
-    closeBundle() {
-      for (const filename of unusedPublicBuildAssets) {
-        rmSync(resolve(outDir, filename), { force: true });
-      }
-    },
-  };
-}
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
@@ -66,7 +47,6 @@ export default defineConfig(({ mode }) => {
     },
     plugins: [
       react(),
-      pruneUnusedPublicBuildAssets(),
       process.env.ANALYZE === "true"
         ? visualizer({
             emitFile: true,

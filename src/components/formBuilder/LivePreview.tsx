@@ -62,6 +62,11 @@ export function LivePreview({
     return { orderedSections, unsectionedFields };
   }, [fields, sections, visibleFieldIds]);
 
+  const questionNumbers = useMemo(() => {
+    const visibleFields = getOrderedFields(fields).filter((field) => visibleFieldIds.has(field.id));
+    return new Map(visibleFields.map((field, index) => [field.id, index + 1]));
+  }, [fields, visibleFieldIds]);
+
   return (
     <section className="panel glow-panel composer-live-preview">
       <FormHeaderImage
@@ -78,7 +83,7 @@ export function LivePreview({
         </div>
       </div>
 
-      <div className="stack">
+      <div className="stack composer-preview-fields-stack">
         {sectionedFields.orderedSections.map((section) =>
           section.fields.length ? (
             <section key={section.id} className="composer-preview-section">
@@ -86,12 +91,13 @@ export function LivePreview({
                 <h3>{section.title || t("untitledSection")}</h3>
                 {section.description ? <p className="muted">{section.description}</p> : null}
               </div>
-              <div className="stack">
+              <div className="stack composer-preview-fields-stack">
                 {section.fields.map((field) => (
                   <DynamicField
                     key={field.id}
                     field={field}
                     value={answers[field.id]}
+                    questionNumber={questionNumbers.get(field.id)}
                     required={isFieldRequired(field, fields, answers, true)}
                     onChange={(value) => setAnswers((current) => ({ ...current, [field.id]: value }))}
                   />
@@ -106,6 +112,7 @@ export function LivePreview({
             key={field.id}
             field={field}
             value={answers[field.id]}
+            questionNumber={questionNumbers.get(field.id)}
             required={isFieldRequired(field, fields, answers, true)}
             onChange={(value) => setAnswers((current) => ({ ...current, [field.id]: value }))}
           />

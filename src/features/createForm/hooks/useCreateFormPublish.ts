@@ -4,7 +4,7 @@ import {
   createCriticalFailure,
   type CriticalFailure,
 } from "../../../lib/criticalFailure";
-import { getPublicFormPath } from "../../../lib/publicLinks";
+import { getAbsolutePublicFormUrl, getPublicFormPath } from "../../../lib/publicLinks";
 import { createFormOnChain } from "../../../lib/projectRegistry";
 import {
   getResponseDeadlineFromPreset,
@@ -170,8 +170,11 @@ export function useCreateFormPublish({
   );
 
   const publicPath = savedForm ? getPublicFormPath(savedForm.id, savedForm.manifestBlobId) : "";
-  const publicUrl = savedForm && typeof window !== "undefined" ? `${window.location.origin}${publicPath}` : publicPath;
   const isCrossDeviceShareReady = Boolean(savedForm?.manifestBlobId);
+  const publicUrl =
+    savedForm && savedForm.manifestBlobId
+      ? getAbsolutePublicFormUrl(savedForm.id, savedForm.manifestBlobId)
+      : publicPath;
 
   function updateOverlay(patch: Partial<PublishOverlayState>) {
     setOverlay((current) => ({ ...current, ...patch }));

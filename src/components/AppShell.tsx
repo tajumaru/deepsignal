@@ -1,6 +1,7 @@
-import { lazy, Suspense, type PropsWithChildren } from "react";
+import { lazy, Suspense, useState, type PropsWithChildren } from "react";
 import { Link, NavLink } from "react-router-dom";
 import { CreateFormLink } from "./CreateFormLink";
+import { WalletSurface } from "./WalletSurface";
 import { BuildIndicator } from "./system/BuildIndicator";
 import { useI18n } from "../i18n";
 
@@ -11,14 +12,75 @@ const WalletNav = lazy(() =>
   import("./WalletNav").then((module) => ({ default: module.WalletNav })),
 );
 
-export function AppShell({ children }: PropsWithChildren) {
+interface AppShellProps extends PropsWithChildren {
+  walletAvailable?: boolean;
+  chrome?: "full" | "public";
+}
+
+function WalletConnectPlaceholder({ onActivate }: { onActivate: () => void }) {
+  return (
+    <div className="wallet-connect-shell wallet-connect-shell-compact">
+      <div className="wallet-connect-direct panel">
+        <div className="wallet-connect-direct-copy">
+          <strong>Sync Wallet</strong>
+          <span>Wallet-optional public mode</span>
+        </div>
+        <button type="button" className="wallet-sync-button" onClick={onActivate}>
+          Sync Wallet
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function useWalletChrome(walletAvailable: boolean) {
+  const [walletRequested, setWalletRequested] = useState(false);
+  const fallback = <div className="wallet-connect-shell wallet-connect-shell-compact" />;
+
+  if (!walletAvailable && !walletRequested) {
+    return {
+      nav: null,
+      connect: <WalletConnectPlaceholder onActivate={() => setWalletRequested(true)} />,
+    };
+  }
+
+  if (walletAvailable) {
+    return {
+      nav: (
+        <Suspense fallback={null}>
+          <WalletNav />
+        </Suspense>
+      ),
+      connect: (
+        <Suspense fallback={fallback}>
+          <WalletConnect compact />
+        </Suspense>
+      ),
+    };
+  }
+
+  return {
+    nav: null,
+    connect: (
+      <WalletSurface fallback={fallback}>
+        <Suspense fallback={fallback}>
+          <WalletConnect compact />
+        </Suspense>
+      </WalletSurface>
+    ),
+  };
+}
+
+export function AppShell({ children, walletAvailable = false, chrome = "full" }: AppShellProps) {
   const { language, setLanguage, t } = useI18n();
+  const walletChrome = useWalletChrome(walletAvailable);
+  const publicChrome = chrome === "public";
 
   const shell = (
     <div className="app-shell">
       <div className="bg-orb bg-orb-a" />
       <div className="bg-orb bg-orb-b" />
-      <header className="topbar panel">
+      <header className={`topbar panel ${publicChrome ? "topbar-public" : ""}`}>
         <Link className="brand" to="/">
           <span className="brand-mark" aria-hidden="true">
             <img src="/deepsignal-icon.webp" alt="" />
@@ -28,18 +90,16 @@ export function AppShell({ children }: PropsWithChildren) {
             <p>{t("brandTagline")}</p>
           </div>
         </Link>
-        <nav className="topnav">
-          <NavLink to="/">{t("navHome")}</NavLink>
-          <NavLink to="/explore">{t("navExplore")}</NavLink>
-          <Suspense fallback={null}>
-            <WalletNav />
-          </Suspense>
-          <CreateFormLink nav>{t("navCreateForm")}</CreateFormLink>
-        </nav>
+        {publicChrome ? null : (
+          <nav className="topnav">
+            <NavLink to="/">{t("navHome")}</NavLink>
+            <NavLink to="/explore">{t("navExplore")}</NavLink>
+            {walletChrome.nav}
+            <CreateFormLink nav>{t("navCreateForm")}</CreateFormLink>
+          </nav>
+        )}
         <div className="topbar-actions">
-          <Suspense fallback={<div className="wallet-connect-shell" />}>
-            <WalletConnect compact />
-          </Suspense>
+          {publicChrome ? null : walletChrome.connect}
           <label className="language-switch">
             <span>{t("languageLabel")}</span>
             <select

@@ -199,6 +199,7 @@ function FormBuilderComposer({ mode, freshStartToken, draftSeed }: FormBuilderCo
           encryptSubmissions={builder.values.encryptSubmissions}
           purpose={builder.values.purpose}
           publicPath={publish.publicPath}
+          publicUrl={publish.publicUrl}
           isCrossDeviceShareReady={publish.isCrossDeviceShareReady}
           onCopyLink={publish.handleCopyLink}
           onCopyBlobId={publish.handleCopyBlobId}
@@ -226,6 +227,7 @@ function FormBuilderComposer({ mode, freshStartToken, draftSeed }: FormBuilderCo
           adminCapLabel={!isGuestDraftMode && hasAdminAccess && capabilityProfile.adminCapIds[0] ? shortAddress(capabilityProfile.adminCapIds[0]) : undefined}
           draftStateLabel={draftStateLabel || undefined}
           savedFormId={publish.savedForm?.id}
+          savedManifestBlobId={publish.savedForm?.manifestBlobId}
           onSelectStep={builder.goToStep}
         />
 
@@ -327,6 +329,7 @@ function FormBuilderComposer({ mode, freshStartToken, draftSeed }: FormBuilderCo
               mobilePane={builder.values.mobilePane}
               isReadyToPublish={builder.isReadyToPublish}
               publicPath={publish.publicPath}
+              publicUrl={publish.publicUrl}
               publishChecks={publish.publishChecks}
               encryptionWarnings={encryptionWarnings}
               showPublishSuccessView={showPublishSuccessView}

@@ -1,5 +1,6 @@
 import type { MouseEvent, ReactNode } from "react";
 import { Link, NavLink, useNavigate } from "react-router-dom";
+import { preloadWalletProviders } from "./walletPreload";
 
 interface CreateFormLinkProps {
   children: ReactNode;
@@ -22,6 +23,7 @@ export function CreateFormLink({ children, className, nav = false }: CreateFormL
   const navigate = useNavigate();
 
   function handleClick(event: MouseEvent<HTMLAnchorElement>) {
+    preloadWalletProviders();
     if (event.defaultPrevented || event.button !== 0 || isModifiedEvent(event)) {
       return;
     }
@@ -31,14 +33,26 @@ export function CreateFormLink({ children, className, nav = false }: CreateFormL
 
   if (nav) {
     return (
-      <NavLink className={className} to="/create" onClick={handleClick}>
+      <NavLink
+        className={className}
+        to="/create"
+        onClick={handleClick}
+        onFocus={preloadWalletProviders}
+        onPointerEnter={preloadWalletProviders}
+      >
         {children}
       </NavLink>
     );
   }
 
   return (
-    <Link className={className} to="/create" onClick={handleClick}>
+    <Link
+      className={className}
+      to="/create"
+      onClick={handleClick}
+      onFocus={preloadWalletProviders}
+      onPointerEnter={preloadWalletProviders}
+    >
       {children}
     </Link>
   );

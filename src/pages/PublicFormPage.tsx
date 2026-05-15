@@ -1,4 +1,3 @@
-import { useCurrentAccount } from "@mysten/dapp-kit";
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import { DynamicField } from "../components/DynamicField";
@@ -21,12 +20,41 @@ import {
 } from "../lib/responseDeadline";
 import { DEFAULT_ATTACHMENT_MAX_BYTES, ENCRYPTED_INLINE_ATTACHMENT_MAX_BYTES } from "../lib/storage";
 import { getOrderedFields, getVisibleFieldIds, isFieldRequired } from "../utils/formLogic";
+import { isAttachmentFieldType, isConfirmationCheckboxField } from "../lib/fieldTypes";
+import type { FieldType } from "../types";
+
+function hasPublicAnswerValue(field: { type: string; rows?: string[] }, value: unknown) {
+  const fieldType = field.type as FieldType;
+  if (isConfirmationCheckboxField(fieldType)) {
+    return value === true;
+  }
+  if (field.type === "matrix") {
+    const answer = value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+    const rows = (field.rows ?? []).map((row) => row.trim()).filter(Boolean);
+    return rows.length > 0 && rows.every((row) => Boolean(answer[row]));
+  }
+  if (isAttachmentFieldType(fieldType)) {
+    return Array.isArray(value) && value.some((item) => {
+      if (!item || typeof item !== "object") {
+        return false;
+      }
+      return !("status" in item) || item.status !== "failed";
+    });
+  }
+  if (Array.isArray(value)) {
+    return value.length > 0;
+  }
+  if (typeof value === "string") {
+    return value.trim().length > 0;
+  }
+  return value !== null && value !== undefined;
+}
 
 export function PublicFormPage() {
   const { t } = useI18n();
-  const account = useCurrentAccount();
   const { formId = "" } = useParams();
   const [searchParams] = useSearchParams();
+  const [walletAccountAddress, setWalletAccountAddress] = useState<string | undefined>();
   const [attachWallet, setAttachWallet] = useState(false);
   const [attachWalletTouched, setAttachWalletTouched] = useState(false);
   const manifestBlobId = searchParams.get("manifest") ?? "";
@@ -56,7 +84,7 @@ export function PublicFormPage() {
   } = usePublicSubmission({
     form,
     initialAnswers,
-    accountAddress: account?.address,
+    accountAddress: walletAccountAddress,
     attachWallet,
     walletRequired,
     manifestBlobId,
@@ -73,7 +101,7 @@ export function PublicFormPage() {
   });
 
   useEffect(() => {
-    if (!account?.address) {
+    if (!walletAccountAddress) {
       if (attachWallet) {
         setAttachWallet(false);
       }
@@ -81,7 +109,7 @@ export function PublicFormPage() {
         setAttachWalletTouched(false);
       }
     }
-  }, [account?.address, attachWallet, attachWalletTouched]);
+  }, [walletAccountAddress, attachWallet, attachWalletTouched]);
 
   const groupedFields = useMemo(() => {
     if (!form) {
@@ -113,7 +141,7 @@ export function PublicFormPage() {
     return formatResponseDeadline(form?.responseDeadline, responseDeadlineLabels);
   }, [form?.responseDeadline, t]);
   const submitModeLabel =
-    walletRequired || (attachWallet && account?.address)
+    walletRequired || (attachWallet && walletAccountAddress)
       ? t("publicSubmitModeWalletAttached")
       : t("publicSubmitModeAnonymous");
   const storageModeLabel = form?.encryptSubmissions
@@ -123,15 +151,43 @@ export function PublicFormPage() {
     ? t("publicSubmissionClosed")
     : submitting
       ? t("publicSubmittingSecure")
-      : walletRequired
-        ? account?.address
+    : walletRequired
+        ? walletAccountAddress
           ? t("publicSubmitWithRequiredWallet")
           : t("publicConnectWalletToSubmit")
-        : attachWallet && account?.address
+        : attachWallet && walletAccountAddress
         ? t("publicSubmitWithWallet")
         : t("publicSubmitAnonymously");
   const attachmentMaxBytes = form?.encryptSubmissions ? ENCRYPTED_INLINE_ATTACHMENT_MAX_BYTES : DEFAULT_ATTACHMENT_MAX_BYTES;
   const attachmentLimitMb = Math.round(attachmentMaxBytes / (1024 * 1024));
+  const requiredProgress = useMemo(() => {
+    if (!form) {
+      return { completed: 0, missing: 0, total: 0 };
+    }
+    const requiredFields = getOrderedFields(form.fields).filter((field) =>
+      isFieldRequired(field, form.fields, answers, visibleFieldIds.has(field.id)),
+    );
+    const completed = requiredFields.filter((field) => hasPublicAnswerValue(field, answers[field.id])).length;
+    return {
+      completed,
+      missing: requiredFields.length - completed,
+      total: requiredFields.length,
+    };
+  }, [answers, form, visibleFieldIds]);
+  const visibleErrorCount = useMemo(
+    () => Object.entries(errors).filter(([fieldId, message]) => visibleFieldIds.has(fieldId) && Boolean(message)).length,
+    [errors, visibleFieldIds],
+  );
+  const submitReadinessLabel = deadlinePassed
+    ? t("publicSubmitBarClosed")
+    : visibleErrorCount > 0
+      ? t("publicSubmitBarErrors", { count: visibleErrorCount })
+      : requiredProgress.missing > 0
+        ? t("publicSubmitBarRequired", {
+            completed: requiredProgress.completed,
+            total: requiredProgress.total,
+          })
+        : t("publicSubmitBarReady");
   const attachmentSizeErrorMessage = (maxSizeBytes: number) =>
     t("uploadTooLarge", {
       fieldLabel: "Attachment",
@@ -152,10 +208,10 @@ export function PublicFormPage() {
 
   useEffect(() => {
     if (walletRequired) {
-      setAttachWallet(Boolean(account?.address));
-      setAttachWalletTouched(Boolean(account?.address));
+      setAttachWallet(Boolean(walletAccountAddress));
+      setAttachWalletTouched(Boolean(walletAccountAddress));
     }
-  }, [account?.address, walletRequired]);
+  }, [walletAccountAddress, walletRequired]);
 
   if (loading) {
     return <div className="panel">{t("loadingPublicForm")}</div>;
@@ -281,11 +337,12 @@ export function PublicFormPage() {
 
       <PublicIdentityCard
         walletRequired={walletRequired}
-        accountAddress={account?.address}
+        accountAddress={walletAccountAddress}
         attachWallet={attachWallet}
         deadlinePassed={deadlinePassed}
         onAttachWalletChange={setAttachWallet}
         onAttachWalletTouched={() => setAttachWalletTouched(true)}
+        onAccountAddressChange={setWalletAccountAddress}
         labels={{
           eyebrow: t("publicIdentityEyebrow"),
           title: t("publicIdentityTitle"),
@@ -395,6 +452,10 @@ export function PublicFormPage() {
       ) : null}
       {submitError ? <p className="error-text">{submitError}</p> : null}
       <div className="public-form-actions">
+        <div className="public-submit-bar-copy" aria-live="polite">
+          <span>{submitReadinessLabel}</span>
+          <strong>{submitModeLabel}</strong>
+        </div>
         <button type="submit" className="primary-button" disabled={submitting || deadlinePassed}>
           {submitButtonLabel}
         </button>

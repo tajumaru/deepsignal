@@ -14,6 +14,7 @@ interface PublishOverlayProps {
   encryptSubmissions: boolean;
   purpose?: string;
   publicPath: string;
+  publicUrl: string;
   isCrossDeviceShareReady: boolean;
   onCopyLink: () => Promise<void>;
   onCopyBlobId: () => Promise<void>;
@@ -31,6 +32,7 @@ export function PublishOverlay({
   encryptSubmissions,
   purpose,
   publicPath,
+  publicUrl,
   isCrossDeviceShareReady,
   onCopyLink,
   onCopyBlobId,
@@ -48,12 +50,7 @@ export function PublishOverlay({
     active: { label: t("publishPhaseActiveLabel"), detail: t("publishPhaseActiveDetail") },
   };
 
-  const absolutePublicUrl = useMemo(() => {
-    if (typeof window === "undefined") {
-      return publicPath;
-    }
-    return `${window.location.origin}${publicPath}`;
-  }, [publicPath]);
+  const absolutePublicUrl = useMemo(() => publicUrl, [publicUrl]);
 
   useEffect(() => {
     if (!open || !isCrossDeviceShareReady || !publicPath) {

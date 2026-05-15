@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useI18n } from "../i18n";
-import { getPublicFormPath } from "../lib/publicLinks";
+import { getAbsolutePublicFormUrl, getPublicFormHashPath } from "../lib/publicLinks";
 import { formatDate } from "../lib/utils";
 
 interface ShareCardProps {
@@ -14,6 +14,34 @@ function hashSeed(value: string) {
   return value.split("").reduce((accumulator, char) => accumulator + char.charCodeAt(0), 0);
 }
 
+function ShareActionIcon({ type }: { type: "copy" | "open" | "x" }) {
+  if (type === "copy") {
+    return (
+      <svg viewBox="0 0 24 24" role="img" aria-hidden="true" focusable="false">
+        <path d="M8 8h10v12H8z" />
+        <path d="M6 16H4V4h10v2" />
+      </svg>
+    );
+  }
+
+  if (type === "open") {
+    return (
+      <svg viewBox="0 0 24 24" role="img" aria-hidden="true" focusable="false">
+        <path d="M8 8h8v8" />
+        <path d="m8 16 8-8" />
+        <path d="M19 13v7H4V5h7" />
+      </svg>
+    );
+  }
+
+  return (
+    <svg viewBox="0 0 24 24" role="img" aria-hidden="true" focusable="false">
+      <path d="m5 5 14 14" />
+      <path d="M19 5 5 19" />
+    </svg>
+  );
+}
+
 export function ShareCard({ formId, blobId, createdAt, manifestBlobId }: ShareCardProps) {
   const { t } = useI18n();
   const [copied, setCopied] = useState(false);
@@ -22,13 +50,10 @@ export function ShareCard({ formId, blobId, createdAt, manifestBlobId }: ShareCa
   const [verifyingShareLink, setVerifyingShareLink] = useState(false);
   const [shareLinkError, setShareLinkError] = useState("");
 
-  const publicPath = getPublicFormPath(formId, manifestBlobId);
+  const publicPath = manifestBlobId ? getPublicFormHashPath(formId, manifestBlobId) : "";
   const absoluteUrl = useMemo(() => {
-    if (typeof window === "undefined") {
-      return publicPath;
-    }
-    return `${window.location.origin}${publicPath}`;
-  }, [publicPath]);
+    return manifestBlobId ? getAbsolutePublicFormUrl(formId, manifestBlobId) : "";
+  }, [formId, manifestBlobId]);
   const xShareUrl = useMemo(() => {
     const params = new URLSearchParams({
       text: t("xShareText"),
@@ -38,6 +63,10 @@ export function ShareCard({ formId, blobId, createdAt, manifestBlobId }: ShareCa
   }, [absoluteUrl, t]);
 
   useEffect(() => {
+    if (!absoluteUrl) {
+      setQrMarkup("");
+      return;
+    }
     let cancelled = false;
     void import("qrcode")
       .then(({ default: QRCode }) =>
@@ -95,6 +124,10 @@ export function ShareCard({ formId, blobId, createdAt, manifestBlobId }: ShareCa
   }
 
   async function handleCopy() {
+    if (!absoluteUrl) {
+      setShareLinkError(t("shareLinkMissingFormCopyBlocked"));
+      return;
+    }
     setShareLinkError("");
     setVerifyingShareLink(true);
     try {
@@ -183,17 +216,38 @@ export function ShareCard({ formId, blobId, createdAt, manifestBlobId }: ShareCa
         <div className="cta-row beacon-actions">
           <button
             type="button"
-            className="primary-button"
+            className="primary-button beacon-action-button"
             onClick={() => void handleCopy()}
             disabled={verifyingShareLink}
+            aria-label={verifyingShareLink ? t("verifyingManifest") : copied ? t("copied") : t("copyTransmissionLink")}
+            title={verifyingShareLink ? t("verifyingManifest") : copied ? t("copied") : t("copyTransmissionLink")}
           >
-            {verifyingShareLink ? t("verifyingManifest") : copied ? t("copied") : t("copyTransmissionLink")}
+            <ShareActionIcon type="copy" />
+            <span className="sr-only">
+              {verifyingShareLink ? t("verifyingManifest") : copied ? t("copied") : t("copyTransmissionLink")}
+            </span>
           </button>
-          <a className="ghost-button" href={absoluteUrl} target="_blank" rel="noreferrer">
-            {t("openTransmissionLink")}
+          <a
+            className="ghost-button beacon-action-button"
+            href={absoluteUrl}
+            target="_blank"
+            rel="noreferrer"
+            aria-label={t("openTransmissionLink")}
+            title={t("openTransmissionLink")}
+          >
+            <ShareActionIcon type="open" />
+            <span className="sr-only">{t("openTransmissionLink")}</span>
           </a>
-          <a className="ghost-button x-share-button" href={xShareUrl} target="_blank" rel="noreferrer">
-            {t("shareToX")}
+          <a
+            className="ghost-button beacon-action-button x-share-button"
+            href={xShareUrl}
+            target="_blank"
+            rel="noreferrer"
+            aria-label={t("shareToX")}
+            title={t("shareToX")}
+          >
+            <ShareActionIcon type="x" />
+            <span className="sr-only">{t("shareToX")}</span>
           </a>
         </div>
         {shareLinkError ? <p className="error-text">{shareLinkError}</p> : null}

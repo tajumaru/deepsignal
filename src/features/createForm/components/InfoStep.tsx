@@ -223,7 +223,20 @@ export function InfoStep({
             <div className="signal-identity-controls">
               <section className="signal-asset-panel">
                 <div className="signal-asset-heading">
-                  <strong>{t("signalCoverTitle")}</strong>
+                  <div className="signal-asset-heading-row">
+                    <strong>{t("signalCoverTitle")}</strong>
+                    {headerImage.url ? (
+                      <button
+                        type="button"
+                        className="ghost-button signal-asset-clear-button"
+                        onClick={() =>
+                          setHeaderImage({ url: "", alt: "", position: "center", source: "url", fileName: "" })
+                        }
+                      >
+                        {t("headerImageClear")}
+                      </button>
+                    ) : null}
+                  </div>
                   <small>{t("signalCoverHelp")}</small>
                 </div>
 
@@ -302,22 +315,21 @@ export function InfoStep({
             </div>
           </div>
 
-          {headerImage.url ? (
-            <button
-              type="button"
-              className="ghost-button composer-header-image-clear"
-              onClick={() =>
-                setHeaderImage({ url: "", alt: "", position: "center", source: "url", fileName: "" })
-              }
-            >
-              {t("headerImageUseDefault")}
-            </button>
-          ) : null}
-
           <section className="composer-header-logo-card signal-asset-panel signal-logo-panel">
             <div className="section-row">
               <div>
-                <strong>{t("headerLogoTitle")}</strong>
+                <div className="signal-asset-heading-row">
+                  <strong>{t("headerLogoTitle")}</strong>
+                  {headerLogo.url ? (
+                    <button
+                      type="button"
+                      className="ghost-button signal-asset-clear-button"
+                      onClick={() => setHeaderLogo({ url: "", alt: "", source: "url", fileName: "" })}
+                    >
+                      {t("headerLogoClear")}
+                    </button>
+                  ) : null}
+                </div>
                 <p className="muted">{t("headerLogoHelp")}</p>
               </div>
             </div>
@@ -370,15 +382,6 @@ export function InfoStep({
               </label>
             </div>
 
-            {headerLogo.url ? (
-              <button
-                type="button"
-                className="ghost-button composer-header-image-clear"
-                onClick={() => setHeaderLogo({ url: "", alt: "", source: "url", fileName: "" })}
-              >
-                {t("headerLogoUseDefault")}
-              </button>
-            ) : null}
           </section>
         </section>
 

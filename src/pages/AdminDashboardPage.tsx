@@ -96,6 +96,9 @@ export function AdminDashboardPage() {
   const { toast, setToast } = useAdminToast();
   const saveQueueRef = useRef(Promise.resolve());
   const reviewInboxRef = useRef<HTMLDivElement | null>(null);
+  const streamsPanelRef = useRef<HTMLDivElement | null>(null);
+  const signalListPanelRef = useRef<HTMLElement | null>(null);
+  const signalDetailPanelRef = useRef<HTMLElement | null>(null);
   const selectedRecordResetRef = useRef<string | null>(null);
   const hasAdminAccess = canAdmin(capabilityProfile);
   const {
@@ -237,6 +240,19 @@ export function AdminDashboardPage() {
     }
     return t("deleteVisibleNodesSuccess", { count: result.totalDeletedCount });
   }
+
+  const scrollToReviewPanel = useCallback((target: "streams" | "signals" | "detail") => {
+    if (!window.matchMedia("(max-width: 768px)").matches) {
+      return;
+    }
+    const panel =
+      target === "streams"
+        ? streamsPanelRef.current
+        : target === "signals"
+          ? signalListPanelRef.current
+          : signalDetailPanelRef.current;
+    panel?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, []);
 
   async function handleDelete(formId: string) {
     if (!window.confirm(t("deleteFormConfirm"))) {
@@ -894,27 +910,47 @@ export function AdminDashboardPage() {
               </div>
             </div>
 
-            <div className="signal-console-layout admin-console-layout signal-console-layout-priority">
-            <SignalStreamsNav
-              streamItems={streamItems}
-              selectedStreamId={selectedStreamId}
-              onSelectStream={setSelectedStreamId}
-              accessibleForms={accessibleForms}
-              selectedFormId={selectedFormId}
-              onSelectForm={setSelectedFormId}
-              unreadCountByFormId={unreadCountByFormId}
-              visibleUnreadCount={visibleUnreadCount}
-              allSignalsCount={allSignals.length}
-              activeScopeLabel={activeScopeLabel}
-              activeNodeSummary={t("activeNodeSummary", { count: accessibleForms.length })}
-              allSignalNodesLabel={t("allSignalNodes")}
-              responseDeadlineLabel={t("responseDeadlineLabel")}
-              responseDeadlineLabels={responseDeadlineLabels}
-              openNodeDirectoryLabel={t("openNodeDirectory")}
-              onOpenNodeDirectory={() => setNodeDirectoryOpen(true)}
-            />
+            <nav className="mobile-review-nav" aria-label={t("reviewWorkspaceTitle")}>
+              <button type="button" onClick={() => scrollToReviewPanel("streams")}>
+                {t("mobileReviewNavNodes")}
+              </button>
+              <button type="button" onClick={() => scrollToReviewPanel("signals")}>
+                {t("mobileReviewNavSignals")}
+              </button>
+              <button type="button" onClick={() => scrollToReviewPanel("detail")} disabled={!selectedRecord}>
+                {t("mobileReviewNavDetail")}
+              </button>
+            </nav>
 
-            <section className="panel signal-inbox-column">
+            <div className="signal-console-layout admin-console-layout signal-console-layout-priority">
+              <div ref={streamsPanelRef} className="signal-console-region signal-console-region-streams">
+                <SignalStreamsNav
+                  streamItems={streamItems}
+                  selectedStreamId={selectedStreamId}
+                  onSelectStream={(streamId) => {
+                    setSelectedStreamId(streamId);
+                    scrollToReviewPanel("signals");
+                  }}
+                  accessibleForms={accessibleForms}
+                  selectedFormId={selectedFormId}
+                  onSelectForm={(formId) => {
+                    setSelectedFormId(formId);
+                    scrollToReviewPanel("signals");
+                  }}
+                  unreadCountByFormId={unreadCountByFormId}
+                  visibleUnreadCount={visibleUnreadCount}
+                  allSignalsCount={allSignals.length}
+                  activeScopeLabel={activeScopeLabel}
+                  activeNodeSummary={t("activeNodeSummary", { count: accessibleForms.length })}
+                  allSignalNodesLabel={t("allSignalNodes")}
+                  responseDeadlineLabel={t("responseDeadlineLabel")}
+                  responseDeadlineLabels={responseDeadlineLabels}
+                  openNodeDirectoryLabel={t("openNodeDirectory")}
+                  onOpenNodeDirectory={() => setNodeDirectoryOpen(true)}
+                />
+              </div>
+
+            <section ref={signalListPanelRef} className="panel signal-inbox-column">
               <div className="signal-column-header">
                 <div className="signal-column-copy">
                   <p className="eyebrow">{t("signalInboxTitle")}</p>
@@ -1039,13 +1075,17 @@ export function AdminDashboardPage() {
                         role="button"
                         tabIndex={0}
                         aria-current={isSelectedSignal ? "true" : undefined}
-                        onClick={() => setSelectedSignalId(submission.id)}
+                        onClick={() => {
+                          setSelectedSignalId(submission.id);
+                          scrollToReviewPanel("detail");
+                        }}
                         onKeyDown={(event) => {
                           if (event.key !== "Enter" && event.key !== " ") {
                             return;
                           }
                           event.preventDefault();
                           setSelectedSignalId(submission.id);
+                          scrollToReviewPanel("detail");
                         }}
                       >
                         <div className="signal-card-topline">
@@ -1108,7 +1148,7 @@ export function AdminDashboardPage() {
               )}
             </section>
 
-            <article className="panel signal-detail-column">
+            <article ref={signalDetailPanelRef} className="panel signal-detail-column">
               {!selectedRecord ? (
                 <EmptyState variant="abyss" animated={false} showVisual={false}>
                   <p className="eyebrow">Signal detail</p>
@@ -2139,6 +2179,7 @@ export function AdminDashboardPage() {
               formId={selectedBeaconForm.id}
               blobId={selectedBeaconForm.blobId}
               createdAt={selectedBeaconForm.createdAt}
+              manifestBlobId={selectedBeaconForm.manifestBlobId}
             />
           </section>
         </div>

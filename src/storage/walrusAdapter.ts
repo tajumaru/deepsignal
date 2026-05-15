@@ -85,6 +85,7 @@ const storageEpochs = Math.max(1, Number(import.meta.env.VITE_WALRUS_STORAGE_EPO
 const bundledFormPointer = "__bundled_form__";
 const WALRUS_READ_TIMEOUT_MS = 4000;
 const WALRUS_READ_MAX_ATTEMPTS = 3;
+const WALRUS_BLOB_READ_CONCURRENCY = 6;
 const walrusStorageMode = (
   String(import.meta.env.VITE_WALRUS_STORAGE_MODE || "uploadRelay").toLowerCase() === "publisher"
     ? "publisher"
@@ -961,6 +962,28 @@ async function readSubmissionRecord(blobId: string): Promise<Submission | null> 
   return payload as Submission;
 }
 
+async function mapWithConcurrency<T, R>(
+  items: T[],
+  limit: number,
+  mapper: (item: T, index: number) => Promise<R>,
+) {
+  const results: R[] = new Array(items.length);
+  let nextIndex = 0;
+  const workerCount = Math.min(Math.max(1, limit), items.length);
+
+  await Promise.all(
+    Array.from({ length: workerCount }, async () => {
+      while (nextIndex < items.length) {
+        const index = nextIndex;
+        nextIndex += 1;
+        results[index] = await mapper(items[index], index);
+      }
+    }),
+  );
+
+  return results;
+}
+
 async function loadManifestOrThrow(formId: string) {
   const entry = getFormBlobIndex(formId);
   if (!entry?.manifestBlobId) {
@@ -1056,14 +1079,16 @@ export const walrusAdapter: StorageAdapter = {
 
   async listForms() {
     const entries = listFormBlobIndex();
-    const forms = await Promise.all(
-      entries.map(async (entry) => {
+    const forms = await mapWithConcurrency(
+      entries,
+      WALRUS_BLOB_READ_CONCURRENCY,
+      async (entry) => {
         if (entry.formBlobId === entry.manifestBlobId) {
           const carrier = await readManifestCarrier(entry.formBlobId);
           return carrier?.form ?? null;
         }
         return fetchJsonBlob<FormSchema>(entry.formBlobId);
-      }),
+      },
     );
     return forms.reduce<FormSchema[]>((accumulator, formRecord, index) => {
       if (formRecord) {
@@ -1187,8 +1212,10 @@ export const walrusAdapter: StorageAdapter = {
     if (manifestBlobId) {
       const manifest = (await readManifestCarrier(manifestBlobId))?.manifest ?? null;
       if (manifest) {
-        const submissions = await Promise.all(
-          manifest.submissions.map((entry) => readSubmissionRecord(entry.blobId)),
+        const submissions = await mapWithConcurrency(
+          manifest.submissions,
+          WALRUS_BLOB_READ_CONCURRENCY,
+          (entry) => readSubmissionRecord(entry.blobId),
         );
         return submissions.reduce<Submission[]>((accumulator, submission, index) => {
           if (submission) {
@@ -1203,8 +1230,10 @@ export const walrusAdapter: StorageAdapter = {
     }
 
     const entries = listSubmissionBlobIndex(formId);
-    const submissions = await Promise.all(
-      entries.map((entry) => readSubmissionRecord(entry.blobId)),
+    const submissions = await mapWithConcurrency(
+      entries,
+      WALRUS_BLOB_READ_CONCURRENCY,
+      (entry) => readSubmissionRecord(entry.blobId),
     );
     return submissions.reduce<Submission[]>((accumulator, submission, index) => {
       if (submission) {

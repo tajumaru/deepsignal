@@ -95,6 +95,8 @@ export function FormFieldEditor({
   const conditionalOptions = getConditionalValueOptions(conditionalParent);
   const canAddConditionalQuestion = canFieldHaveConditionalChildren(field);
   const hasConditionalValue = hasValidConditionalValue(field, fields);
+  const fieldVisibility = field.visibility ?? "public";
+  const visibilityLabel = fieldVisibility === "admin" ? t("visibleToAdmin") : t("visibleToEveryone");
   function update<K extends keyof FormField>(key: K, value: FormField[K]) {
     onChange({ ...field, [key]: value });
   }
@@ -330,6 +332,17 @@ export function FormFieldEditor({
               onClick={() => update("required", !field.required)}
             >
               {field.required ? t("required") : t("optional")}
+            </button>
+            <button
+              type="button"
+              className={`question-card-badge question-card-visibility-badge ${
+                fieldVisibility === "admin" ? "is-admin" : "is-public"
+              }`}
+              onClick={() => update("visibility", fieldVisibility === "admin" ? "public" : "admin")}
+              aria-label={`${t("visibility")}: ${visibilityLabel}`}
+              title={`${t("visibility")}: ${visibilityLabel}`}
+            >
+              {visibilityLabel}
             </button>
             {isConditionalChild ? <span className="question-card-type">{t("conditionalQuestionBadge")}</span> : null}
             {field.sectionId ? (

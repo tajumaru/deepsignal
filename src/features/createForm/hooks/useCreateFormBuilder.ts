@@ -82,7 +82,7 @@ export function useCreateFormBuilder({
   const [fields, setFields] = useState(initialFields);
   const [sections, setSections] = useState<FormSection[]>([]);
   const [purpose, setPurpose] = useState(initialTemplate.purpose);
-  const [visibility, setVisibility] = useState<"private" | "unlisted" | "public">("unlisted");
+  const [visibility, setVisibility] = useState<"private" | "unlisted" | "public">("public");
   const [identityPolicy, setIdentityPolicy] = useState<"anonymous_allowed" | "wallet_required">("anonymous_allowed");
   const [encryptSubmissions, setEncryptSubmissions] = useState(true);
   const [responseDeadlinePreset, setResponseDeadlinePreset] = useState<ResponseDeadlinePreset>("none");
@@ -152,7 +152,7 @@ export function useCreateFormBuilder({
     setFields(nextFields);
     setSections([]);
     setPurpose(initialTemplate.purpose);
-    setVisibility("unlisted");
+    setVisibility("public");
     setIdentityPolicy("anonymous_allowed");
     setEncryptSubmissions(!isGuestDraftMode);
     setResponseDeadlinePreset("none");
@@ -201,7 +201,7 @@ export function useCreateFormBuilder({
     setFields(nextFields);
     setSections([]);
     setPurpose(normalizeFormPurpose(template.purpose));
-    setVisibility("unlisted");
+    setVisibility("public");
     setIdentityPolicy("anonymous_allowed");
     setEncryptSubmissions(false);
     setResponseDeadlinePreset("none");
@@ -266,7 +266,7 @@ export function useCreateFormBuilder({
     );
     setSections(Array.isArray(parsedDraft.sections) ? parsedDraft.sections : []);
     setPurpose(parsedDraft.purpose ?? initialTemplate.purpose);
-    setVisibility(parsedDraft.visibility ?? "unlisted");
+    setVisibility(parsedDraft.visibility ?? "public");
     setIdentityPolicy(parsedDraft.identityPolicy === "wallet_required" ? "wallet_required" : "anonymous_allowed");
     setEncryptSubmissions(parsedDraft.encryptSubmissions ?? !isGuestDraftMode);
     setResponseDeadlinePreset(parsedDraft.responseDeadlinePreset ?? "none");
@@ -443,7 +443,7 @@ export function useCreateFormBuilder({
       setHeaderImage({ url: "", alt: "", position: "center", source: "url", fileName: "" });
       setHeaderLogo({ url: "", alt: "", source: "url", fileName: "" });
       setSections([]);
-      setVisibility("unlisted");
+      setVisibility("public");
       setIdentityPolicy("anonymous_allowed");
       setResponseDeadlinePreset("none");
       setResponseDeadlineCustomAt("");

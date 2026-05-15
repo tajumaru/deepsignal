@@ -236,32 +236,35 @@ export function FieldsStep({
             </button>
           </div>
 
-          <div className="composer-library-list">
-            {libraryBlocks.map((block) => (
-              <button
-                key={block.titleKey}
-                type="button"
-                className={`composer-library-card ${block.soon ? "is-soon" : ""}`}
-                onClick={() => {
-                  if (block.type) {
-                    onInsertField(block.type);
-                  }
-                }}
-                disabled={!block.type}
-              >
-                <span className="composer-library-card-icon" aria-hidden="true">
-                  {block.icon}
-                </span>
-                <span className="composer-library-card-copy">
-                  <span className="composer-library-card-topline">
-                    <strong>{t(block.titleKey)}</strong>
-                    <span className={`composer-library-chip ${block.soon ? "is-soon" : "is-ready"}`}>
-                      {block.soon ? t("librarySoon") : t("libraryReady")}
+          <div className="composer-library-scroll">
+            <div className="composer-library-list">
+              {libraryBlocks.map((block) => (
+                <button
+                  key={block.titleKey}
+                  type="button"
+                  className={`composer-library-card ${block.soon ? "is-soon" : ""}`}
+                  onClick={() => {
+                    if (block.type) {
+                      onInsertField(block.type);
+                    }
+                  }}
+                  disabled={!block.type}
+                >
+                  <span className="composer-library-card-icon" aria-hidden="true">
+                    {block.icon}
+                  </span>
+                  <span className="composer-library-card-copy">
+                    <span className="composer-library-card-topline">
+                      <strong>{t(block.titleKey)}</strong>
+                      <span className={`composer-library-chip ${block.soon ? "is-soon" : "is-ready"}`}>
+                        {block.soon ? t("librarySoon") : t("libraryReady")}
+                      </span>
                     </span>
                   </span>
-                </span>
-              </button>
-            ))}
+                </button>
+              ))}
+            </div>
+            <span className="composer-library-swipe-cue" aria-hidden="true" />
           </div>
 
           <div className="composer-library-footer">

@@ -1,9 +1,11 @@
 import { lazy, Suspense, useEffect, useState, type ReactNode } from "react";
-import { Navigate, Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { AppShell } from "./components/AppShell";
+import { WalletSurface } from "./components/WalletSurface";
 import { WalrusRuntimeSurface } from "./components/WalrusRuntimeSurface";
 import { REQUIRE_GLOBAL_WALRUS_RUNTIME } from "./lib/runtimeFlags";
 import { LandingPage } from "./pages/LandingPage";
+import { PublicFormPage } from "./pages/PublicFormPage";
 
 const AccessManagementPage = lazy(() =>
   import("./pages/AccessManagementPage").then((module) => ({
@@ -28,11 +30,6 @@ const ManifestRestorePage = lazy(() =>
 const FormSubmissionsPage = lazy(() =>
   import("./pages/FormSubmissionsPage").then((module) => ({
     default: module.FormSubmissionsPage,
-  })),
-);
-const PublicFormPage = lazy(() =>
-  import("./pages/PublicFormPage").then((module) => ({
-    default: module.PublicFormPage,
   })),
 );
 const PublicRoadmapPage = lazy(() =>
@@ -77,6 +74,11 @@ function InitialBootReady({ onReady, children }: { onReady: () => void; children
 }
 
 export default function App() {
+  const location = useLocation();
+  const routeUsesPublicChrome =
+    location.pathname.startsWith("/f/") ||
+    location.pathname.startsWith("/roadmap/") ||
+    location.pathname.startsWith("/m/");
   const [initialRouteReady, setInitialRouteReady] = useState(false);
   const [bootDismissed, setBootDismissed] = useState(false);
 
@@ -116,80 +118,124 @@ export default function App() {
   }, [bootDismissed, initialRouteReady]);
 
   return (
-    <AppShell>
+    <AppShell chrome={routeUsesPublicChrome ? "public" : "full"}>
       <Suspense fallback={bootDismissed ? <RouteFallback /> : null}>
         <InitialBootReady onReady={() => setInitialRouteReady(true)}>
           <Routes>
             <Route path="/" element={<LandingPage />} />
-            <Route path="/explore" element={<ExploreSignalsPage />} />
+            <Route
+              path="/explore"
+              element={
+                <WalletSurface>
+                  <ExploreSignalsPage />
+                </WalletSurface>
+              }
+            />
             <Route path="/signals" element={<Navigate to="/explore" replace />} />
             <Route
               path="/create"
               element={
-                <WithWalrusRuntime>
-                  <FormBuilderPage />
-                </WithWalrusRuntime>
+                <WalletSurface>
+                  <WithWalrusRuntime>
+                    <FormBuilderPage />
+                  </WithWalrusRuntime>
+                </WalletSurface>
               }
             />
             <Route
               path="/admin"
               element={
-                <WithWalrusRuntime>
-                  <AdminDashboardPage />
-                </WithWalrusRuntime>
+                <WalletSurface>
+                  <WithWalrusRuntime>
+                    <AdminDashboardPage />
+                  </WithWalrusRuntime>
+                </WalletSurface>
               }
             />
             <Route
               path="/dashboard"
               element={
-                <WithWalrusRuntime>
-                  <AdminDashboardPage />
-                </WithWalrusRuntime>
+                <WalletSurface>
+                  <WithWalrusRuntime>
+                    <AdminDashboardPage />
+                  </WithWalrusRuntime>
+                </WalletSurface>
               }
             />
-            <Route path="/admin/access" element={<AccessManagementPage />} />
-            <Route path="/dashboard/access" element={<AccessManagementPage />} />
+            <Route
+              path="/admin/access"
+              element={
+                <WalletSurface>
+                  <AccessManagementPage />
+                </WalletSurface>
+              }
+            />
+            <Route
+              path="/dashboard/access"
+              element={
+                <WalletSurface>
+                  <AccessManagementPage />
+                </WalletSurface>
+              }
+            />
             <Route
               path="/admin/forms/new"
               element={
-                <WithWalrusRuntime>
-                  <FormBuilderPage />
-                </WithWalrusRuntime>
+                <WalletSurface>
+                  <WithWalrusRuntime>
+                    <FormBuilderPage />
+                  </WithWalrusRuntime>
+                </WalletSurface>
               }
             />
             <Route
               path="/admin/forms/:formId"
               element={
-                <WithWalrusRuntime>
-                  <FormSubmissionsPage />
-                </WithWalrusRuntime>
+                <WalletSurface>
+                  <WithWalrusRuntime>
+                    <FormSubmissionsPage />
+                  </WithWalrusRuntime>
+                </WalletSurface>
               }
             />
             <Route
               path="/dashboard/forms/:formId"
               element={
-                <WithWalrusRuntime>
-                  <FormSubmissionsPage />
-                </WithWalrusRuntime>
+                <WalletSurface>
+                  <WithWalrusRuntime>
+                    <FormSubmissionsPage />
+                  </WithWalrusRuntime>
+                </WalletSurface>
               }
             />
             <Route
               path="/admin/forms/:formId/submissions/:submissionId"
               element={
-                <WithWalrusRuntime>
-                  <FormSubmissionsPage />
-                </WithWalrusRuntime>
+                <WalletSurface>
+                  <WithWalrusRuntime>
+                    <FormSubmissionsPage />
+                  </WithWalrusRuntime>
+                </WalletSurface>
               }
             />
             <Route
               path="/dashboard/forms/:formId/submissions/:submissionId"
               element={
-                <WithWalrusRuntime>
-                  <FormSubmissionsPage />
-                </WithWalrusRuntime>
+                <WalletSurface>
+                  <WithWalrusRuntime>
+                    <FormSubmissionsPage />
+                  </WithWalrusRuntime>
+                </WalletSurface>
               }
             />
-            <Route path="/admin/submissions/:submissionId" element={<SubmissionDetailPage />} />
+            <Route
+              path="/admin/submissions/:submissionId"
+              element={
+                <WalletSurface>
+                  <SubmissionDetailPage />
+                </WalletSurface>
+              }
+            />
             <Route path="/f/:formId" element={<PublicFormPage />} />
             <Route path="/roadmap/:formId" element={<PublicRoadmapPage />} />
             <Route path="/m/:manifestBlobId" element={<ManifestRestorePage />} />

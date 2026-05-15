@@ -259,6 +259,7 @@ const messages = {
     headerImageDefaultHelp: "No image selected. The default purple header will be used.",
     headerImageUploadedFile: (params) => `Selected: ${params?.name ?? ""}`,
     headerImageUseDefault: "Use default header",
+    headerImageClear: "Clear image",
     headerImageUploadImageOnly: "Choose an image file.",
     headerImageUploadTooLarge: "Header image must be 2 MB or smaller.",
     headerImageUrl: "Image URL",
@@ -274,6 +275,7 @@ const messages = {
     headerLogoAlt: "Describe image (optional)",
     headerLogoAltPlaceholder: "Describe the logo",
     headerLogoUseDefault: "Use default logo",
+    headerLogoClear: "Clear logo",
     imagePositionCenter: "Center",
     imagePositionTop: "Top",
     imagePositionBottom: "Bottom",
@@ -490,6 +492,11 @@ const messages = {
     publicSubmitAnonymously: "Submit anonymously",
     publicSubmissionClosed: "Submission closed",
     publicSubmittingSecure: "Securing signal...",
+    publicSubmitBarReady: "Ready to submit",
+    publicSubmitBarClosed: "Submission window closed",
+    publicSubmitBarRequired: (params) =>
+      `Required progress ${params?.completed ?? 0}/${params?.total ?? 0}`,
+    publicSubmitBarErrors: (params) => `${params?.count ?? 0} field needs attention`,
     publicSubmitModeWalletAttached: "Wallet attached, no extra personal-message signature",
     publicSubmitModeAnonymous: "Anonymous signal",
     publicStorageModeEncrypted: "Walrus storage + Seal-encrypted private payload",
@@ -657,6 +664,9 @@ const messages = {
     signalInboxDescription:
       "DeepSignal review console for encrypted creator feedback across every accessible signal form.",
     adminDesktopNotice: "DeepSignal review console is optimized for desktop.",
+    mobileReviewNavNodes: "Nodes",
+    mobileReviewNavSignals: "Signals",
+    mobileReviewNavDetail: "Detail",
     noCreatorInboxesTitle: "No creator-owned inboxes found",
     noCreatorInboxesBody:
       "Connect the creator wallet or create a new signal form to open your inbox.",
@@ -1449,6 +1459,7 @@ const messages = {
     headerImageDefaultHelp: "\u753b\u50cf\u672a\u9078\u629e\u3067\u3059\u3002\u30c7\u30d5\u30a9\u30eb\u30c8\u306e\u7d2b\u30d8\u30c3\u30c0\u30fc\u3092\u4f7f\u3044\u307e\u3059\u3002",
     headerImageUploadedFile: (params) => `\u9078\u629e\u4e2d: ${params?.name ?? ""}`,
     headerImageUseDefault: "\u30c7\u30d5\u30a9\u30eb\u30c8\u30d8\u30c3\u30c0\u30fc\u3092\u4f7f\u3046",
+    headerImageClear: "\u753b\u50cf\u3092\u30af\u30ea\u30a2",
     headerImageUploadImageOnly: "\u753b\u50cf\u30d5\u30a1\u30a4\u30eb\u3092\u9078\u3093\u3067\u304f\u3060\u3055\u3044\u3002",
     headerImageUploadTooLarge: "Header image \u306f 2 MB \u4ee5\u4e0b\u306b\u3057\u3066\u304f\u3060\u3055\u3044\u3002",
     headerImageUrl: "Image URL",
@@ -1464,6 +1475,7 @@ const messages = {
     headerLogoAlt: "\u753b\u50cf\u306e\u8aac\u660e\uff08\u4efb\u610f\uff09",
     headerLogoAltPlaceholder: "logo \u306e\u8aac\u660e",
     headerLogoUseDefault: "\u30c7\u30d5\u30a9\u30eb\u30c8 logo \u3092\u4f7f\u3046",
+    headerLogoClear: "Logo \u3092\u30af\u30ea\u30a2",
     imagePositionCenter: "\u4e2d\u592e",
     imagePositionTop: "\u4e0a",
     imagePositionBottom: "\u4e0b",
@@ -1697,6 +1709,11 @@ const messages = {
     publicSubmitAnonymously: "\u533f\u540d\u3067\u9001\u4fe1",
     publicSubmissionClosed: "\u9001\u4fe1\u53d7\u4ed8\u7d42\u4e86",
     publicSubmittingSecure: "signal \u3092\u4fdd\u8b77\u3057\u3066\u9001\u4fe1\u4e2d...",
+    publicSubmitBarReady: "\u9001\u4fe1\u3067\u304d\u307e\u3059",
+    publicSubmitBarClosed: "\u9001\u4fe1\u53d7\u4ed8\u306f\u7d42\u4e86\u3057\u3066\u3044\u307e\u3059",
+    publicSubmitBarRequired: (params) =>
+      `\u5fc5\u9808\u5165\u529b ${params?.completed ?? 0}/${params?.total ?? 0}`,
+    publicSubmitBarErrors: (params) => `${params?.count ?? 0} \u9805\u76ee\u306e\u78ba\u8a8d\u304c\u5fc5\u8981\u3067\u3059`,
     publicSubmitModeWalletAttached: "\u30a6\u30a9\u30ec\u30c3\u30c8\u4ed8\u304d\u3001personal message \u7f72\u540d\u306a\u3057",
     publicSubmitModeAnonymous: "\u533f\u540d signal",
     publicStorageModeEncrypted: "Walrus \u4fdd\u5b58 + Seal \u6697\u53f7\u5316\u975e\u516c\u958b payload",
@@ -1876,6 +1893,9 @@ const messages = {
       "\u30a2\u30af\u30bb\u30b9\u53ef\u80fd\u306a\u3059\u3079\u3066\u306e signal form \u3092\u6a2a\u65ad\u3057\u3066\u3001creator \u5411\u3051\u6697\u53f7\u5316 feedback \u3092\u78ba\u8a8d\u3059\u308b DeepSignal review console \u3067\u3059\u3002",
     adminDesktopNotice:
       "DeepSignal review console \u306f desktop \u8868\u793a\u3067\u306e\u5229\u7528\u3092\u63a8\u5968\u3057\u3066\u3044\u307e\u3059\u3002",
+    mobileReviewNavNodes: "\u30ce\u30fc\u30c9",
+    mobileReviewNavSignals: "Signals",
+    mobileReviewNavDetail: "\u8a73\u7d30",
     noCreatorInboxesTitle:
       "creator \u304c\u6240\u6709\u3059\u308b inbox \u304c\u307e\u3060\u3042\u308a\u307e\u305b\u3093",
     noCreatorInboxesBody:

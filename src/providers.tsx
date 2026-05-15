@@ -1,5 +1,5 @@
 import "@mysten/dapp-kit/dist/index.css";
-import { lazy, Suspense, useState, type PropsWithChildren } from "react";
+import { Component, useState, type PropsWithChildren, type ReactNode } from "react";
 import {
   createNetworkConfig,
   SuiClientProvider,
@@ -10,9 +10,32 @@ import { getJsonRpcFullnodeUrl } from "@mysten/sui/jsonRpc";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { REQUIRE_GLOBAL_WALRUS_RUNTIME } from "./lib/runtimeFlags";
 import { SUI_FULLNODE_URL, SUI_NETWORK } from "./lib/sui";
+import WalrusRuntimeBridge from "./walrusRuntimeBridge";
 
-const LazyWalrusRuntimeBridge = lazy(() => import("./walrusRuntimeBridge"));
 const PREFERRED_WALLETS = ["Sui Wallet", "Slush", "Phantom", "OKX Wallet"];
+
+class OptionalWalrusRuntimeBoundary extends Component<
+  PropsWithChildren<{ fallback?: ReactNode }>,
+  { failed: boolean }
+> {
+  state = { failed: false };
+
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+
+  componentDidCatch(error: unknown) {
+    console.warn("Walrus runtime failed to initialize; continuing with local fallback.", error);
+  }
+
+  render() {
+    if (this.state.failed) {
+      return this.props.fallback ?? null;
+    }
+
+    return this.props.children;
+  }
+}
 
 function walletFilter(wallet: WalletWithRequiredFeatures) {
   if (wallet.name.toLowerCase().includes("nightly")) {
@@ -42,9 +65,9 @@ const { networkConfig } = createNetworkConfig({
 
 export function WalrusRuntimeProvider({ children }: PropsWithChildren) {
   return (
-    <Suspense fallback={<div className="panel">Loading Walrus runtime...</div>}>
-      <LazyWalrusRuntimeBridge>{children}</LazyWalrusRuntimeBridge>
-    </Suspense>
+    <OptionalWalrusRuntimeBoundary fallback={children}>
+      <WalrusRuntimeBridge>{children}</WalrusRuntimeBridge>
+    </OptionalWalrusRuntimeBoundary>
   );
 }
 
@@ -60,9 +83,9 @@ export function WalletProviders({ children }: PropsWithChildren) {
           autoConnect
         >
           {REQUIRE_GLOBAL_WALRUS_RUNTIME ? (
-            <Suspense fallback={null}>
-              <LazyWalrusRuntimeBridge />
-            </Suspense>
+            <OptionalWalrusRuntimeBoundary>
+              <WalrusRuntimeBridge />
+            </OptionalWalrusRuntimeBoundary>
           ) : null}
           {children}
         </WalletProvider>

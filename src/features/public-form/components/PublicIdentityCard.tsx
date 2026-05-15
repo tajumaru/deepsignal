@@ -1,7 +1,10 @@
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
+import { WalletSurface } from "../../../components/WalletSurface";
 
-const WalletConnect = lazy(() =>
-  import("../../../components/WalletConnect").then((module) => ({ default: module.WalletConnect })),
+const PublicWalletAccountPanel = lazy(() =>
+  import("./PublicWalletAccountPanel").then((module) => ({
+    default: module.PublicWalletAccountPanel,
+  })),
 );
 
 interface PublicIdentityCardProps {
@@ -11,6 +14,7 @@ interface PublicIdentityCardProps {
   deadlinePassed: boolean;
   onAttachWalletChange: (attached: boolean) => void;
   onAttachWalletTouched: () => void;
+  onAccountAddressChange: (address?: string) => void;
   labels: {
     eyebrow: string;
     title: string;
@@ -37,8 +41,19 @@ export function PublicIdentityCard({
   deadlinePassed,
   onAttachWalletChange,
   onAttachWalletTouched,
+  onAccountAddressChange,
   labels,
 }: PublicIdentityCardProps) {
+  const [walletRequested, setWalletRequested] = useState(walletRequired);
+
+  useEffect(() => {
+    if (walletRequired) {
+      setWalletRequested(true);
+    }
+  }, [walletRequired]);
+
+  const walletFallback = <div className="wallet-connect-shell wallet-connect-shell-compact" />;
+
   return (
     <section className="answer-card public-identity-card">
       <div className="public-identity-topline">
@@ -48,9 +63,25 @@ export function PublicIdentityCard({
           <p className="muted">{labels.body}</p>
         </div>
         <div className="public-identity-wallet">
-          <Suspense fallback={<div className="wallet-connect-shell wallet-connect-shell-compact" />}>
-            <WalletConnect compact />
-          </Suspense>
+          {walletRequested ? (
+            <WalletSurface fallback={walletFallback}>
+              <Suspense fallback={walletFallback}>
+                <PublicWalletAccountPanel onAccountAddressChange={onAccountAddressChange} />
+              </Suspense>
+            </WalletSurface>
+          ) : (
+            <div className="wallet-connect-shell wallet-connect-shell-compact">
+              <div className="wallet-connect-direct panel">
+                <div className="wallet-connect-direct-copy">
+                  <strong>{labels.walletAttach}</strong>
+                  <span>{labels.walletConnectOptional}</span>
+                </div>
+                <button type="button" className="wallet-sync-button" onClick={() => setWalletRequested(true)}>
+                  {labels.walletAttach}
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 

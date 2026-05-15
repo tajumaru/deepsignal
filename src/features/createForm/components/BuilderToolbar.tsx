@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import { FormBuilderSteps } from "../../../components/formBuilder/FormBuilderSteps";
+import { getPublicFormPath } from "../../../lib/publicLinks";
 import type { BuilderStepKey, Translate } from "../types";
 
 interface BuilderToolbarProps {
@@ -12,6 +13,7 @@ interface BuilderToolbarProps {
   adminCapLabel?: string;
   draftStateLabel?: string;
   savedFormId?: string;
+  savedManifestBlobId?: string;
   onSelectStep: (step: BuilderStepKey) => void;
 }
 
@@ -25,6 +27,7 @@ export function BuilderToolbar({
   adminCapLabel,
   draftStateLabel,
   savedFormId,
+  savedManifestBlobId,
   onSelectStep,
 }: BuilderToolbarProps) {
   const builderSteps = [
@@ -61,7 +64,7 @@ export function BuilderToolbar({
 
       <div className="composer-toolbar-actions">
         {savedFormId ? (
-          <Link className="ghost-button" to={`/f/${savedFormId}`}>
+          <Link className="ghost-button" to={getPublicFormPath(savedFormId, savedManifestBlobId)}>
             {t("openLiveForm")}
           </Link>
         ) : null}

@@ -1,4 +1,5 @@
 {
+  "object_id": "0x2248ffb9f8786015cc9d391268e6a02689c043d9e7eda520ca8b053b9b83be1e",
   "routes": {
     "/*": "/index.html"
   },

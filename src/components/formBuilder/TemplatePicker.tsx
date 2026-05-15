@@ -57,27 +57,30 @@ export function TemplatePicker({ templates, selectedTemplateKey, onSelect }: Tem
   }
 
   return (
-    <div className="composer-template-grid">
-      {templates.map((template) => {
-        const active = selectedTemplateKey === template.key;
-        return (
-          <button
-            key={template.key}
-            type="button"
-            className={`composer-template-card ${active ? "is-active" : ""}`}
-            onClick={() => onSelect(template.key)}
-          >
-            <span className="composer-template-emoji" aria-hidden="true">
-              {template.emoji}
-            </span>
-            <strong>{getTemplateLabel(template)}</strong>
-            <span className="muted">{getTemplateDescription(template)}</span>
-            <small className="composer-template-meta">
-              {template.fields.length === 0 ? t("templateBlankCanvas") : t("templateStarterFields", { count: template.fields.length })}
-            </small>
-          </button>
-        );
-      })}
+    <div className="composer-template-scroll">
+      <div className="composer-template-grid">
+        {templates.map((template) => {
+          const active = selectedTemplateKey === template.key;
+          return (
+            <button
+              key={template.key}
+              type="button"
+              className={`composer-template-card ${active ? "is-active" : ""}`}
+              onClick={() => onSelect(template.key)}
+            >
+              <span className="composer-template-emoji" aria-hidden="true">
+                {template.emoji}
+              </span>
+              <strong>{getTemplateLabel(template)}</strong>
+              <span className="muted">{getTemplateDescription(template)}</span>
+              <small className="composer-template-meta">
+                {template.fields.length === 0 ? t("templateBlankCanvas") : t("templateStarterFields", { count: template.fields.length })}
+              </small>
+            </button>
+          );
+        })}
+      </div>
+      <span className="composer-template-swipe-cue" aria-hidden="true" />
     </div>
   );
 }

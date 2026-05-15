@@ -232,6 +232,127 @@ export function FormSubmissionsPage() {
     submissions.find((submission) => submission.id === selectedSignalId) ??
     visibleSignals[0] ??
     null;
+  const submissionMetrics = useMemo(() => {
+    const next = {
+      unread: 0,
+      encrypted: 0,
+      high: 0,
+      planned: 0,
+      inProgress: 0,
+      fixed: 0,
+      bug: 0,
+      feature: 0,
+      survey: 0,
+      archived: 0,
+      newSignals: 0,
+      clustered: 0,
+      highValue: 0,
+      signalValueTotal: 0,
+      signalValueCount: 0,
+      visibleUnread: 0,
+    };
+
+    for (const submission of submissions) {
+      const category = inferSignalCategory(submission);
+      if (submission.status === "unread") {
+        next.unread += 1;
+      }
+      if (submission.isEncrypted) {
+        next.encrypted += 1;
+      }
+      if (submission.priority === "high") {
+        next.high += 1;
+      }
+      if (submission.triageStatus === "new") {
+        next.newSignals += 1;
+      }
+      if (submission.triageStatus === "planned") {
+        next.planned += 1;
+      }
+      if (submission.triageStatus === "in_progress") {
+        next.inProgress += 1;
+      }
+      if (submission.triageStatus === "fixed") {
+        next.fixed += 1;
+      }
+      if (category === "Bug") {
+        next.bug += 1;
+      }
+      if (category === "Feature") {
+        next.feature += 1;
+      }
+      if (category === "Survey") {
+        next.survey += 1;
+      }
+      if (submission.status === "archived") {
+        next.archived += 1;
+      }
+      if (submission.clusterId) {
+        next.clustered += 1;
+      }
+      if ((submission.signalValue ?? 0) >= 4) {
+        next.highValue += 1;
+      }
+      if (typeof submission.signalValue === "number") {
+        next.signalValueTotal += submission.signalValue;
+        next.signalValueCount += 1;
+      }
+    }
+
+    for (const submission of visibleSignals) {
+      if (submission.status === "unread") {
+        next.visibleUnread += 1;
+      }
+    }
+
+    return next;
+  }, [submissions, visibleSignals]);
+
+  const streamItems = useMemo(
+    () =>
+      [
+        { id: "all", label: t("allSignals"), count: submissions.length },
+        { id: "unread", label: t("unreadSignals"), count: submissionMetrics.unread },
+        { id: "encrypted", label: t("encryptedSignals"), count: submissionMetrics.encrypted },
+        { id: "high", label: t("highPrioritySignals"), count: submissionMetrics.high },
+        { id: "planned", label: "Planned Signals", count: submissionMetrics.planned },
+        { id: "in_progress", label: "In Progress", count: submissionMetrics.inProgress },
+        { id: "fixed", label: "Fixed Signals", count: submissionMetrics.fixed },
+        { id: "bug", label: t("bugReports"), count: submissionMetrics.bug },
+        { id: "feature", label: t("featureRequests"), count: submissionMetrics.feature },
+        { id: "survey", label: t("surveys"), count: submissionMetrics.survey },
+        { id: "archived", label: t("archivedSignals"), count: submissionMetrics.archived },
+      ] satisfies Array<{ id: StreamId; label: string; count: number }>,
+    [submissionMetrics, submissions.length, t],
+  );
+
+  const summaryCards = useMemo(
+    () => [
+      { label: "Total signals", value: submissions.length },
+      { label: "New signals", value: submissionMetrics.newSignals },
+      { label: "Planned", value: submissionMetrics.planned },
+      { label: "Fixed", value: submissionMetrics.fixed },
+      { label: "Clustered", value: submissionMetrics.clustered },
+      { label: "High value signals", value: submissionMetrics.highValue },
+      {
+        label: "Average signal value",
+        value:
+          submissionMetrics.signalValueCount === 0
+            ? "N/A"
+            : (submissionMetrics.signalValueTotal / submissionMetrics.signalValueCount).toFixed(1),
+      },
+    ],
+    [submissionMetrics, submissions.length],
+  );
+
+  const surveySummary = useMemo(
+    () => (form ? buildSurveySummary(form, submissions) : null),
+    [form, submissions],
+  );
+  const showSurveySummary = useMemo(
+    () => Boolean(form && (form.purpose === "survey" || submissionMetrics.survey > 0)),
+    [form, submissionMetrics.survey],
+  );
   const selectedSubmissionEncryptedBlobId = selectedSubmission?.encryptedBlobId;
   const selectedSubmissionEncryptedBlobStoredOnWalrus = Boolean(
     selectedSubmissionEncryptedBlobId && !isLocalFallbackBlob(selectedSubmissionEncryptedBlobId),
@@ -576,94 +697,6 @@ export function FormSubmissionsPage() {
     );
   }
 
-  const streamItems = [
-    { id: "all", label: t("allSignals"), count: submissions.length },
-    {
-      id: "unread",
-      label: t("unreadSignals"),
-      count: submissions.filter((submission) => submission.status === "unread").length,
-    },
-    {
-      id: "encrypted",
-      label: t("encryptedSignals"),
-      count: submissions.filter((submission) => submission.isEncrypted).length,
-    },
-    {
-      id: "high",
-      label: t("highPrioritySignals"),
-      count: submissions.filter((submission) => submission.priority === "high").length,
-    },
-    {
-      id: "planned",
-      label: "Planned Signals",
-      count: submissions.filter((submission) => submission.triageStatus === "planned").length,
-    },
-    {
-      id: "in_progress",
-      label: "In Progress",
-      count: submissions.filter((submission) => submission.triageStatus === "in_progress").length,
-    },
-    {
-      id: "fixed",
-      label: "Fixed Signals",
-      count: submissions.filter((submission) => submission.triageStatus === "fixed").length,
-    },
-    {
-      id: "bug",
-      label: t("bugReports"),
-      count: submissions.filter((submission) => inferSignalCategory(submission) === "Bug").length,
-    },
-    {
-      id: "feature",
-      label: t("featureRequests"),
-      count: submissions.filter((submission) => inferSignalCategory(submission) === "Feature").length,
-    },
-    {
-      id: "survey",
-      label: t("surveys"),
-      count: submissions.filter((submission) => inferSignalCategory(submission) === "Survey").length,
-    },
-    {
-      id: "archived",
-      label: t("archivedSignals"),
-      count: submissions.filter((submission) => submission.status === "archived").length,
-    },
-  ] satisfies Array<{ id: StreamId; label: string; count: number }>;
-
-  const summaryCards = [
-    { label: "Total signals", value: submissions.length },
-    {
-      label: "New signals",
-      value: submissions.filter((submission) => submission.triageStatus === "new").length,
-    },
-    {
-      label: "Planned",
-      value: submissions.filter((submission) => submission.triageStatus === "planned").length,
-    },
-    {
-      label: "Fixed",
-      value: submissions.filter((submission) => submission.triageStatus === "fixed").length,
-    },
-    {
-      label: "Clustered",
-      value: submissions.filter((submission) => Boolean(submission.clusterId)).length,
-    },
-    {
-      label: "High value signals",
-      value: submissions.filter((submission) => (submission.signalValue ?? 0) >= 4).length,
-    },
-    {
-      label: "Average signal value",
-      value:
-        submissions.filter((submission) => typeof submission.signalValue === "number").length === 0
-          ? "N/A"
-          : (
-              submissions.reduce((sum, submission) => sum + (submission.signalValue ?? 0), 0) /
-              submissions.filter((submission) => typeof submission.signalValue === "number").length
-            ).toFixed(1),
-    },
-  ];
-
   if (loading) {
     return <div className="panel">{t("loadingSubmissions")}</div>;
   }
@@ -681,10 +714,6 @@ export function FormSubmissionsPage() {
   }
 
   const access = getReviewAccessState(form, account?.address, capabilityProfile);
-  const surveySummary = buildSurveySummary(form, submissions);
-  const showSurveySummary =
-    form.purpose === "survey" ||
-    submissions.some((submission) => inferSignalCategory(submission) === "Survey");
   const activeForm = form as FormSchema;
   const resolvedDetailAnswers = detailAnswers ?? {};
   const isDecryptInteractionLocked = decrypting || decryptInFlightRef.current;
@@ -1002,7 +1031,7 @@ export function FormSubmissionsPage() {
     return (
       <div className="signal-detail-sections review-secondary-sections">
         {renderMetadataExportCard()}
-        {showSurveySummary ? (
+        {showSurveySummary && surveySummary ? (
           <section className="answer-card review-secondary-card">
             <div className="section-row">
               <h3>{t("surveySummaryTitle")}</h3>
@@ -1164,7 +1193,7 @@ export function FormSubmissionsPage() {
               <p className="export-privacy-note">
                 Private exports should be shared only with authorized team members.
               </p>
-              {showSurveySummary ? (
+              {showSurveySummary && surveySummary ? (
                 <button
                   type="button"
                   className="ghost-button"
@@ -1183,7 +1212,7 @@ export function FormSubmissionsPage() {
                 <h2>{streamItems.find((stream) => stream.id === selectedStreamId)?.label}</h2>
                 <p className="muted">
                   {t("unreadCountSummary", {
-                    count: visibleSignals.filter((submission) => submission.status === "unread").length,
+                    count: submissionMetrics.visibleUnread,
                     scope: t("totalCountLabel", { count: submissions.length }),
                   })}
                 </p>

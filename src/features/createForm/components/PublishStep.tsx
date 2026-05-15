@@ -54,6 +54,7 @@ interface PublishStepProps {
   mobilePane: MobileBuilderPane;
   isReadyToPublish: boolean;
   publicPath: string;
+  publicUrl: string;
   publishChecks: string[];
   encryptionWarnings: EncryptionReadinessWarning[];
   showPublishSuccessView: boolean;
@@ -82,6 +83,79 @@ interface PublishStepProps {
   onBack: () => void;
 }
 
+function RoutingIcon({ type }: { type: "registry" | "visibility" | "identity" | "encryption" }) {
+  if (type === "registry") {
+    return (
+      <svg viewBox="0 0 48 48" role="img" aria-hidden="true" focusable="false">
+        <path d="M11 31.5 24 39l13-7.5V16.5L24 9l-13 7.5v15Z" />
+        <path d="m11 16.5 13 7.5 13-7.5M24 24v15" />
+        <path d="M16.5 29.2 24 33.5l7.5-4.3" />
+      </svg>
+    );
+  }
+
+  if (type === "visibility") {
+    return (
+      <svg viewBox="0 0 48 48" role="img" aria-hidden="true" focusable="false">
+        <path d="M7.5 24s6-10 16.5-10 16.5 10 16.5 10-6 10-16.5 10S7.5 24 7.5 24Z" />
+        <path d="M24 18.5a5.5 5.5 0 1 1 0 11 5.5 5.5 0 0 1 0-11Z" />
+        <path d="M35.5 12.5 39 9m-26.5 3.5L9 9" />
+      </svg>
+    );
+  }
+
+  if (type === "identity") {
+    return (
+      <svg viewBox="0 0 48 48" role="img" aria-hidden="true" focusable="false">
+        <path d="M24 25.5c5 0 9-4 9-9s-4-9-9-9-9 4-9 9 4 9 9 9Z" />
+        <path d="M10 41c1.7-7 7-11.5 14-11.5S36.3 34 38 41" />
+        <path d="M31 31.5 35 36l6-8" />
+      </svg>
+    );
+  }
+
+  return (
+    <svg viewBox="0 0 48 48" role="img" aria-hidden="true" focusable="false">
+      <path d="M15 21v-5a9 9 0 0 1 18 0v5" />
+      <path d="M12 21h24v18H12V21Z" />
+      <path d="M24 28v5" />
+      <path d="M19 38h10" />
+    </svg>
+  );
+}
+
+function SignalPrivacyIcon({ locked }: { locked: boolean }) {
+  if (!locked) {
+    return (
+      <svg viewBox="0 0 24 24" role="img" aria-hidden="true" focusable="false">
+        <path d="M7 10V7.8a5 5 0 0 1 9.2-2.7" />
+        <path d="M6 10h12v9H6v-9Z" />
+        <path d="M12 13.3v2.4" />
+      </svg>
+    );
+  }
+
+  return (
+    <svg viewBox="0 0 24 24" role="img" aria-hidden="true" focusable="false">
+      <path d="M8 10V7.5a4 4 0 0 1 8 0V10" />
+      <path d="M6 10h12v9H6v-9Z" />
+      <path d="M12 13.3v2.4" />
+    </svg>
+  );
+}
+
+function AnonymousRiskIcon() {
+  return (
+    <svg viewBox="0 0 24 24" role="img" aria-hidden="true" focusable="false">
+      <path d="M7 10.2c.8-3 2.4-4.5 5-4.5s4.2 1.5 5 4.5" />
+      <path d="M7.7 10.2h8.6l-1 3.2H8.7l-1-3.2Z" />
+      <path d="M9.2 13.4c.5 1.2 1.4 2 2.8 2s2.3-.8 2.8-2" />
+      <path d="M4.7 20c1.5-2.7 4-4.1 7.3-4.1s5.8 1.4 7.3 4.1" />
+      <path d="m17.7 4.7 1.8-1.8M6.3 4.7 4.5 2.9" />
+    </svg>
+  );
+}
+
 export function PublishStep({
   t,
   saving,
@@ -102,6 +176,7 @@ export function PublishStep({
   mobilePane,
   isReadyToPublish,
   publicPath,
+  publicUrl,
   encryptionWarnings,
   showPublishSuccessView,
   showWalrusDiagnostics,
@@ -242,6 +317,64 @@ export function PublishStep({
           <p className="wallet-inline-note">
             {t("formOwnerLabel")}: {accountAddress ? shortAddress(accountAddress) : t("walletPublishHint")}
           </p>
+          {!savedForm ? (
+            <div className="publish-quick-controls">
+              <div className="publish-visibility-quick-switch" aria-label={t("formVisibilityLabel")}>
+                <span className="publish-visibility-label">{t("visibilityTitle")}</span>
+                <div className="publish-visibility-options">
+                  {([
+                    ["private", t("visibilityPrivate")],
+                    ["unlisted", t("visibilityUnlisted")],
+                    ["public", t("visibilityPublicExplore")],
+                  ] as const).map(([value, label]) => (
+                    <button
+                      key={value}
+                      type="button"
+                      className={`publish-visibility-chip is-${value} ${visibility === value ? "is-active" : ""}`}
+                      onClick={() => onChangeVisibility(value)}
+                      aria-pressed={visibility === value}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="publish-seal-quick-switch" aria-label={t("encryptSubmissions")}>
+                <span className="publish-visibility-label">{t("privateSignalEyebrow")}</span>
+                <button
+                  type="button"
+                  className={`publish-seal-toggle ${encryptSubmissions ? "is-locked" : "is-open"}`}
+                  onClick={() => onToggleEncryptSubmissions(!encryptSubmissions)}
+                  aria-pressed={encryptSubmissions}
+                  title={encryptSubmissions ? t("encryptSubmissionsReviewHelp") : t("openFormEncryptionHelp")}
+                >
+                  <SignalPrivacyIcon locked={encryptSubmissions} />
+                  <span>{encryptSubmissions ? "Seal on" : "Open"}</span>
+                </button>
+              </div>
+              <div className="publish-identity-quick-switch" aria-label={t("submissionIdentityLabel")}>
+                <span className="publish-visibility-label">{t("identityPolicyTitle")}</span>
+                <button
+                  type="button"
+                  className={`publish-identity-toggle is-${identityPolicy}`}
+                  onClick={() =>
+                    onChangeIdentityPolicy(identityPolicy === "wallet_required" ? "anonymous_allowed" : "wallet_required")
+                  }
+                  aria-pressed={identityPolicy === "wallet_required"}
+                  title={t("identityPolicyHelp")}
+                >
+                  {identityPolicy === "wallet_required" ? (
+                    <span className="publish-identity-drop" aria-hidden="true">
+                      💧
+                    </span>
+                  ) : (
+                    <AnonymousRiskIcon />
+                  )}
+                  <span>{identityPolicy === "wallet_required" ? t("walletRequired") : t("anonymousAllowed")}</span>
+                </button>
+              </div>
+            </div>
+          ) : null}
           {isGuestDraftMode && !savedForm ? (
             <p className="wallet-inline-note">{t("guestDraftPublishWalletRequired")}</p>
           ) : null}
@@ -320,8 +453,11 @@ export function PublishStep({
             <details className="composer-advanced-settings">
               <summary>{t("advanced")}</summary>
               <div className="stack composer-advanced-grid">
-                <section className="panel composer-settings-card">
-                  <div className="section-row">
+                <section className="panel composer-settings-card composer-settings-card-visual">
+                  <div className="section-row composer-settings-visual-heading">
+                    <span className="composer-settings-visual-icon composer-settings-visual-icon-registry">
+                      <RoutingIcon type="registry" />
+                    </span>
                     <div>
                       <p className="eyebrow">{t("projectRoutingEyebrow")}</p>
                       <h3>{t("signalRegistryTitle")}</h3>
@@ -353,8 +489,11 @@ export function PublishStep({
                   {canManageProjects ? <p className="muted">{t("suiRegistrationDeferredNotice")}</p> : null}
                 </section>
 
-                <section className="panel composer-settings-card">
-                  <div className="section-row">
+                <section className="panel composer-settings-card composer-settings-card-visual">
+                  <div className="section-row composer-settings-visual-heading">
+                    <span className="composer-settings-visual-icon composer-settings-visual-icon-visibility">
+                      <RoutingIcon type="visibility" />
+                    </span>
                     <div>
                       <p className="eyebrow">{t("exploreRoutingEyebrow")}</p>
                       <h3>{t("visibilityTitle")}</h3>
@@ -373,30 +512,50 @@ export function PublishStep({
                   </p>
                 </section>
 
-                <section className="panel composer-settings-card">
-                  <div className="section-row">
+                <section className="panel composer-settings-card composer-settings-card-visual">
+                  <div className="section-row composer-settings-visual-heading">
+                    <span className="composer-settings-visual-icon composer-settings-visual-icon-identity">
+                      <RoutingIcon type="identity" />
+                    </span>
                     <div>
                       <p className="eyebrow">{t("responderIdentityEyebrow")}</p>
                       <h3>{t("identityPolicyTitle")}</h3>
                     </div>
                   </div>
-                  <label>
-                    <span>{t("submissionIdentityLabel")}</span>
-                    <select
-                      value={identityPolicy}
-                      onChange={(event) => onChangeIdentityPolicy(event.target.value as FormIdentityPolicy)}
-                    >
-                      <option value="anonymous_allowed">{t("anonymousAllowed")}</option>
-                      <option value="wallet_required">{t("walletRequired")}</option>
-                    </select>
-                  </label>
+                  <fieldset className="composer-radio-field">
+                    <legend>{t("submissionIdentityLabel")}</legend>
+                    <div className="composer-radio-options">
+                      {([
+                        ["anonymous_allowed", t("anonymousAllowed")],
+                        ["wallet_required", t("walletRequired")],
+                      ] as const).map(([value, label]) => (
+                        <label
+                          key={value}
+                          className={`composer-radio-option${identityPolicy === value ? " is-selected" : ""}`}
+                        >
+                          <input
+                            type="radio"
+                            name="submissionIdentity"
+                            value={value}
+                            checked={identityPolicy === value}
+                            onChange={() => onChangeIdentityPolicy(value)}
+                          />
+                          <span className="composer-radio-mark" aria-hidden="true" />
+                          <span>{label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </fieldset>
                   <p className="muted">
                     {t("identityPolicyHelp")}
                   </p>
                 </section>
 
-                <section className="panel composer-settings-card">
-                  <div className="section-row">
+                <section className="panel composer-settings-card composer-settings-card-visual">
+                  <div className="section-row composer-settings-visual-heading">
+                    <span className="composer-settings-visual-icon composer-settings-visual-icon-encryption">
+                      <RoutingIcon type="encryption" />
+                    </span>
                     <div>
                       <p className="eyebrow">{t("privateSignalEyebrow")}</p>
                       <h3>{t("encryptSubmissions")}</h3>
@@ -520,7 +679,12 @@ export function PublishStep({
                     {t("signalInboxTitle")}
                   </Link>
                   <p>
-                    {isLocalOnlyForm ? t("localResponderPreview") : t("publicShareLink")}: <Link to={publicPath}>{publicPath}</Link>
+                    {isLocalOnlyForm ? t("localResponderPreview") : t("publicShareLink")}:{" "}
+                    {savedForm.manifestBlobId ? (
+                      <a href={publicUrl} target="_blank" rel="noreferrer">{publicUrl}</a>
+                    ) : (
+                      <Link to={publicPath}>{publicPath}</Link>
+                    )}
                   </p>
                 </div>
                 {isLocalOnlyForm ? (

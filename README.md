@@ -225,9 +225,22 @@ Validation:
 
 ```bash
 npm run typecheck
+npm run test
 npm run lint
 npm run build
 ```
+
+### Automated Test Focus
+
+Automated tests should protect the product boundaries that make DeepSignal different from a generic form app:
+
+- **Wallet-optional responder routes**: `/f/:formId`, public roadmap views, and manifest restore paths must render and recover without a connected wallet unless the form explicitly requires respondent identity.
+- **Walrus plus local fallback**: adapter tests should cover successful Walrus references, read/write failures, timeout handling, and the localStorage fallback path so demo/local mode keeps working when remote storage is unavailable.
+- **Seal fail-closed behavior**: sensitive submissions and attachments must never be silently persisted as plaintext when encryption is required; production builds should reject mock/no-op Seal adapters, while legacy plaintext reads stay explicit.
+- **Manifest recovery safety**: manifest blobs should remain recovery indexes only, with tests for form mismatch, missing blobs, stale references, and restoration that avoids sensitive payload data in the manifest.
+- **Encrypted Signal Inbox access**: creator/admin/reviewer flows should verify authorized decrypt access, unauthorized wallet failures, reviewer role changes, and metadata-only triage states without leaking private answers.
+- **Public-to-admin split**: submission creation, roadmap publishing, exports, and admin review should be tested as separate flows so wallet gates added to admin surfaces do not regress public responders.
+- **Operational failure states**: wallet rejection, Walrus upload failure, Seal encryption/decrypt failure, and partial publish completion should produce resumable or clearly classified user-facing states.
 
 ## Environment
 
