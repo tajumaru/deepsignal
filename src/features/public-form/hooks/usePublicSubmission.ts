@@ -55,6 +55,14 @@ function isValidUrlAnswer(value: unknown) {
   }
 }
 
+function isCompleteMatrixAnswer(value: unknown, rows: string[]) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return false;
+  }
+  const answer = value as Record<string, unknown>;
+  return rows.every((row) => typeof answer[row] === "string" && String(answer[row]).trim().length > 0);
+}
+
 function getAttachmentType(file: File): SubmissionAttachment["type"] {
   if (file.type.startsWith("video/")) {
     return "video";
@@ -162,6 +170,7 @@ export function usePublicSubmission({
     currentForm.fields.forEach((field) => {
       const visible = visibleFieldIds.has(field.id);
       const value = answers[field.id];
+      const matrixRows = field.type === "matrix" ? (field.rows ?? []).map((row) => row.trim()).filter(Boolean) : [];
       const uploadItems = attachmentFields.has(field.id) ? getUploadAnswer(value) : [];
       if (!isFieldRequired(field, currentForm.fields, answers, visible)) {
         if (field.type === "url" && value && !isValidUrlAnswer(value)) {
@@ -174,6 +183,7 @@ export function usePublicSubmission({
         value === null ||
         value === undefined ||
         (isConfirmationCheckboxField(field.type) && value !== true) ||
+        (field.type === "matrix" && !isCompleteMatrixAnswer(value, matrixRows)) ||
         (Array.isArray(value) && value.length === 0) ||
         (attachmentFields.has(field.id) &&
           uploadItems.filter((attachment) => attachment.status !== "failed").length === 0);

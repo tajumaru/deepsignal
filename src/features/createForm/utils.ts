@@ -1,5 +1,5 @@
 import { sanitizeConditionalLogicFields } from "../../utils/formLogic";
-import { hasChoiceOptions, isConfirmationCheckboxField, normalizeFieldType } from "../../lib/fieldTypes";
+import { hasChoiceOptions, isConfirmationCheckboxField, isMatrixFieldType, normalizeFieldType } from "../../lib/fieldTypes";
 import { makeId } from "../../lib/utils";
 import { normalizeFormVisibility } from "../../lib/explore";
 import type {
@@ -28,6 +28,9 @@ interface CreateFieldLabels {
   options?: string[];
 }
 
+const DEFAULT_MATRIX_ROWS = ["UI", "UX", "Performance"];
+const DEFAULT_MATRIX_COLUMNS = ["Poor", "Okay", "Good"];
+
 export function createField(type: FieldType = "shortText", sectionId?: string, labels: CreateFieldLabels = {}): FormField {
   const normalizedType = normalizeFieldType(type);
   const isConfirmation = isConfirmationCheckboxField(normalizedType);
@@ -43,6 +46,9 @@ export function createField(type: FieldType = "shortText", sectionId?: string, l
     placeholder: isConfirmation ? labels.confirmationPlaceholder ?? "I confirm this information is accurate" : "",
     helpText: "",
     options: hasChoiceOptions(normalizedType) ? labels.options ?? ["Option 1", "Option 2"] : undefined,
+    rows: isMatrixFieldType(normalizedType) ? [...DEFAULT_MATRIX_ROWS] : undefined,
+    columns: isMatrixFieldType(normalizedType) ? [...DEFAULT_MATRIX_COLUMNS] : undefined,
+    selectionMode: isMatrixFieldType(normalizedType) ? "single" : undefined,
     conditionalParentId: undefined,
     conditionalValue: undefined,
   };
@@ -53,6 +59,8 @@ export function cloneField(field: FormField): FormField {
     ...field,
     id: makeId("field"),
     options: field.options ? [...field.options] : undefined,
+    rows: field.rows ? [...field.rows] : undefined,
+    columns: field.columns ? [...field.columns] : undefined,
     visibilityRules: field.visibilityRules
       ? {
           logic: field.visibilityRules.logic,
@@ -130,6 +138,9 @@ export function serializeDraft(
       visibility: field.visibility ?? "public",
       validationHint: field.validationHint ?? "",
       options: field.options ?? [],
+      rows: field.rows ?? [],
+      columns: field.columns ?? [],
+      selectionMode: field.selectionMode,
       conditionalParentId: field.conditionalParentId ?? "",
       conditionalValue: field.conditionalValue ?? "",
       visibilityRules: field.visibilityRules,
@@ -185,6 +196,13 @@ export function buildFormSchema(args: {
         helpText: field.helpText?.trim() || undefined,
         validationHint: field.validationHint?.trim() || undefined,
         options: hasChoiceOptions(fieldType) ? (field.options ?? []).map((option) => option.trim()).filter(Boolean) : undefined,
+        rows: isMatrixFieldType(fieldType)
+          ? (field.rows ?? DEFAULT_MATRIX_ROWS).map((row) => row.trim()).filter(Boolean)
+          : undefined,
+        columns: isMatrixFieldType(fieldType)
+          ? (field.columns ?? DEFAULT_MATRIX_COLUMNS).map((column) => column.trim()).filter(Boolean)
+          : undefined,
+        selectionMode: isMatrixFieldType(fieldType) ? "single" : undefined,
       };
     }),
     sections: args.sections

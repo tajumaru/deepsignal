@@ -62,7 +62,7 @@ function inferAttachmentType(mimeType: string | undefined) {
 }
 
 function stringifySensitiveValue(value: unknown) {
-  if (Array.isArray(value)) {
+  if (Array.isArray(value) || (value && typeof value === "object")) {
     return JSON.stringify(value);
   }
   return String(value);
@@ -71,11 +71,11 @@ function stringifySensitiveValue(value: unknown) {
 function parseSensitiveValue(form: FormSchema, fieldId: string, value: string) {
   const field = form.fields.find((item) => item.id === fieldId);
   const fieldType = field ? normalizeFieldType(field.type) : undefined;
-  if (fieldType === "checkbox") {
+  if (fieldType === "checkbox" || fieldType === "matrix") {
     try {
       return JSON.parse(value);
     } catch {
-      return [];
+      return fieldType === "matrix" ? {} : [];
     }
   }
   if (fieldType && isConfirmationCheckboxField(fieldType)) {
@@ -282,6 +282,9 @@ export function createEmptyAnswer(field: FormField) {
   if (fieldType === "checkbox" || isAttachmentFieldType(fieldType)) {
     return [] as string[];
   }
+  if (fieldType === "matrix") {
+    return {} as Record<string, string>;
+  }
   if (isConfirmationCheckboxField(fieldType)) {
     return false;
   }
@@ -444,6 +447,8 @@ export function normalizeSubmission(raw: Submission | (Record<string, unknown> &
 
 export function normalizeForm(raw: FormSchema | (Record<string, unknown> & { id: string })) {
   const rawFields = Array.isArray(raw.fields) ? (raw.fields as FormField[]) : [];
+  const defaultMatrixRows = ["UI", "UX", "Performance"];
+  const defaultMatrixColumns = ["Poor", "Okay", "Good"];
   return {
     ...raw,
     title: typeof raw.title === "string" ? raw.title : "",
@@ -459,6 +464,15 @@ export function normalizeForm(raw: FormSchema | (Record<string, unknown> & { id:
               ? field.options.map((option) => String(option))
               : []
             : undefined,
+          rows:
+            fieldType === "matrix"
+              ? (Array.isArray(field.rows) ? field.rows : defaultMatrixRows).map((row) => String(row).trim()).filter(Boolean)
+              : undefined,
+          columns:
+            fieldType === "matrix"
+              ? (Array.isArray(field.columns) ? field.columns : defaultMatrixColumns).map((column) => String(column).trim()).filter(Boolean)
+              : undefined,
+          selectionMode: fieldType === "matrix" ? "single" : undefined,
           visibilityRules: normalizeLogicGroup(field.visibilityRules),
           requiredRules: normalizeLogicGroup(field.requiredRules),
         };

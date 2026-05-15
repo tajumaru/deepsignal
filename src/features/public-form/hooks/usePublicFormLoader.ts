@@ -18,12 +18,39 @@ type SharedFormRestoreErrorCode =
 
 class SharedFormRestoreError extends Error {
   code: SharedFormRestoreErrorCode;
+  blobId?: string;
+  expectedFormId?: string;
+  actualFormId?: string;
+  stage?: "manifest" | "form";
 
-  constructor(code: SharedFormRestoreErrorCode, message: string) {
+  constructor(
+    code: SharedFormRestoreErrorCode,
+    message: string,
+    details: {
+      blobId?: string;
+      expectedFormId?: string;
+      actualFormId?: string;
+      stage?: "manifest" | "form";
+    } = {},
+  ) {
     super(message);
     this.name = "SharedFormRestoreError";
     this.code = code;
+    this.blobId = details.blobId;
+    this.expectedFormId = details.expectedFormId;
+    this.actualFormId = details.actualFormId;
+    this.stage = details.stage;
   }
+}
+
+export interface PublicFormLoadErrorDetail {
+  code: SharedFormRestoreErrorCode | "form_not_found";
+  reason: string;
+  guidance: string;
+  manifestBlobId?: string;
+  formBlobId?: string;
+  expectedFormId?: string;
+  actualFormId?: string;
 }
 
 function toSharedFormRestoreError(
@@ -44,6 +71,7 @@ function toSharedFormRestoreError(
       return new SharedFormRestoreError(
         "aggregator_unconfigured",
         "Walrus aggregator URL is not configured in this build.",
+        { blobId, stage },
       );
     }
     if (walrusError.code === "json_parse_failed") {
@@ -52,6 +80,7 @@ function toSharedFormRestoreError(
         stage === "manifest"
           ? `Manifest blob ${blobId} was downloaded but could not be parsed as JSON.`
           : `Linked form blob ${blobId} was downloaded but could not be parsed as JSON.`,
+        { blobId, stage },
       );
     }
     return new SharedFormRestoreError(
@@ -59,12 +88,14 @@ function toSharedFormRestoreError(
       stage === "manifest"
         ? `Manifest blob ${blobId} could not be fetched from Walrus.`
         : `Linked form blob ${blobId} could not be fetched from Walrus.`,
+      { blobId, stage },
     );
   }
 
   return new SharedFormRestoreError(
     stage === "manifest" ? "manifest_blob_unavailable" : "form_blob_unavailable",
     error instanceof Error ? error.message : "Walrus restore failed.",
+    { blobId, stage },
   );
 }
 
@@ -88,6 +119,48 @@ function formatSharedFormRestoreMessage(error: unknown) {
   return error instanceof Error ? error.message : "This shared form could not be restored from Walrus.";
 }
 
+function getSharedFormRestoreGuidance(error: SharedFormRestoreError) {
+  switch (error.code) {
+    case "form_id_mismatch":
+      return "This link points to a different form. Ask the creator for the matching public link.";
+    case "form_blob_unavailable":
+    case "manifest_blob_unavailable":
+    case "aggregator_unconfigured":
+      return "Ask the creator to republish until Walrus storage succeeds, then open the new shared link.";
+    case "json_parse_failed":
+      return "Ask the creator to republish the form so the Walrus JSON payload is regenerated.";
+    default:
+      return "Ask the creator to republish the form and share a fresh link.";
+  }
+}
+
+function createLoadErrorDetail(
+  error: unknown,
+  context: { formId: string; manifestBlobId: string },
+): PublicFormLoadErrorDetail {
+  if (error instanceof SharedFormRestoreError) {
+    const blobKey = error.stage === "form" ? "formBlobId" : "manifestBlobId";
+    return {
+      code: error.code,
+      reason: error.message || formatSharedFormRestoreMessage(error),
+      guidance: getSharedFormRestoreGuidance(error),
+      manifestBlobId: context.manifestBlobId,
+      expectedFormId: error.expectedFormId ?? context.formId,
+      actualFormId: error.actualFormId,
+      ...(error.blobId ? { [blobKey]: error.blobId } : {}),
+    };
+  }
+  return {
+    code: context.manifestBlobId ? "manifest_blob_unavailable" : "form_not_found",
+    reason: error instanceof Error ? error.message : "This shared form could not be restored.",
+    guidance: context.manifestBlobId
+      ? "Ask the creator to republish until Walrus storage succeeds, then open the new shared link."
+      : "Open a public link that includes a Walrus manifest, or ask the creator to publish this form again.",
+    manifestBlobId: context.manifestBlobId || undefined,
+    expectedFormId: context.formId,
+  };
+}
+
 interface UsePublicFormLoaderArgs {
   formId: string;
   manifestBlobId: string;
@@ -99,6 +172,7 @@ interface UsePublicFormLoaderResult {
   initialAnswers: PublicAnswers;
   loading: boolean;
   loadError: string;
+  loadErrorDetail: PublicFormLoadErrorDetail | null;
 }
 
 export function usePublicFormLoader({
@@ -110,11 +184,13 @@ export function usePublicFormLoader({
   const [initialAnswers, setInitialAnswers] = useState<PublicAnswers>({});
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
+  const [loadErrorDetail, setLoadErrorDetail] = useState<PublicFormLoadErrorDetail | null>(null);
 
   useEffect(() => {
     async function load() {
       setLoading(true);
       setLoadError("");
+      setLoadErrorDetail(null);
       try {
         let nextForm: FormSchema | null = null;
         let manifestRestoreError: unknown = null;
@@ -130,6 +206,7 @@ export function usePublicFormLoader({
               throw new SharedFormRestoreError(
                 "aggregator_unconfigured",
                 "Walrus aggregator URL is not configured in this build.",
+                { blobId: manifestBlobId, stage: "manifest" },
               );
             }
             const carrier = await readManifestWithForm(manifestBlobId).catch((error) => {
@@ -143,6 +220,12 @@ export function usePublicFormLoader({
               throw new SharedFormRestoreError(
                 "form_id_mismatch",
                 `This shared link points to form ${manifest.formId}, but the page expected ${formId}.`,
+                {
+                  blobId: manifestBlobId,
+                  expectedFormId: formId,
+                  actualFormId: manifest.formId,
+                  stage: "manifest",
+                },
               );
             }
             if (carrier.form) {
@@ -150,6 +233,12 @@ export function usePublicFormLoader({
                 throw new SharedFormRestoreError(
                   "form_id_mismatch",
                   `The bundled form inside manifest ${manifestBlobId} has id ${carrier.form.id}, which does not match ${formId}.`,
+                  {
+                    blobId: manifestBlobId,
+                    expectedFormId: formId,
+                    actualFormId: carrier.form.id,
+                    stage: "form",
+                  },
                 );
               }
               restoredForm = carrier.form;
@@ -163,12 +252,24 @@ export function usePublicFormLoader({
                 throw new SharedFormRestoreError(
                   "form_id_mismatch",
                   `The linked form blob ${manifest.formBlobId} has id ${restoredForm.id}, which does not match ${formId}.`,
+                  {
+                    blobId: manifest.formBlobId,
+                    expectedFormId: formId,
+                    actualFormId: restoredForm.id,
+                    stage: "form",
+                  },
                 );
               }
             } else {
               throw new SharedFormRestoreError(
-                "form_id_mismatch",
+                "form_blob_unavailable",
                 `Manifest ${manifestBlobId} does not contain a bundled form or a matching form blob for ${formId}.`,
+                {
+                  blobId: manifestBlobId,
+                  expectedFormId: formId,
+                  actualFormId: manifest.formId,
+                  stage: "form",
+                },
               );
             }
 
@@ -191,6 +292,10 @@ export function usePublicFormLoader({
           }
         }
 
+        if (manifestBlobId && manifestRestoreError) {
+          throw manifestRestoreError;
+        }
+
         if (!nextForm) {
           nextForm = await storageAdapter.getForm(formId);
         }
@@ -207,9 +312,11 @@ export function usePublicFormLoader({
       } catch (error) {
         setForm(null);
         setInitialAnswers({});
+        const detail = createLoadErrorDetail(error, { formId, manifestBlobId });
+        setLoadErrorDetail(detail);
         setLoadError(
           manifestBlobId
-            ? `${formatSharedFormRestoreMessage(error)} Ask the creator to republish until Walrus storage succeeds, then open the new shared link.`
+            ? `${detail.reason} ${detail.guidance}`
             : `This form is not available in this browser yet. ${
                 error instanceof Error ? error.message : missingFormMessage
               }`,
@@ -221,5 +328,5 @@ export function usePublicFormLoader({
     void load();
   }, [formId, manifestBlobId, missingFormMessage]);
 
-  return { form, initialAnswers, loading, loadError };
+  return { form, initialAnswers, loading, loadError, loadErrorDetail };
 }

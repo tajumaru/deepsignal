@@ -136,7 +136,7 @@ describe("PublicFormPage shared manifest restore", () => {
     expect(mockSaveForm).toHaveBeenCalledTimes(1);
   });
 
-  it("falls back to a cached form when the shared manifest cannot be restored", async () => {
+  it("shows a detailed restore error when the shared manifest cannot be restored", async () => {
     const cachedForm: FormSchema = {
       id: "form-123",
       title: "Cached Feedback Form",
@@ -165,10 +165,38 @@ describe("PublicFormPage shared manifest restore", () => {
       </MemoryRouter>,
     );
 
-    await waitFor(() => expect(screen.getByRole("heading", { name: "Cached Feedback Form" })).toBeInTheDocument());
-    expect(screen.getByText("What should we know?")).toBeInTheDocument();
-    expect(mockGetForm).toHaveBeenCalledWith("form-123");
+    await waitFor(() => expect(screen.getByRole("heading", { name: "sharedLinkUnavailableTitle" })).toBeInTheDocument());
+    expect(screen.getAllByText(/Walrus read timed out/).length).toBeGreaterThan(0);
+    expect(screen.getByText("blob-abc")).toBeInTheDocument();
+    expect(mockGetForm).not.toHaveBeenCalled();
     expect(mockSaveForm).not.toHaveBeenCalled();
+  });
+
+  it("shows a form mismatch error for links that point to a different manifest form", async () => {
+    mockReadManifestWithForm.mockResolvedValue({
+      manifest: {
+        version: 1,
+        formId: "form-other",
+        createdAt: "2026-05-14T00:00:00.000Z",
+        updatedAt: "2026-05-14T00:00:00.000Z",
+        formBlobId: "__bundled_form__",
+        submissions: [],
+      },
+      form: null,
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/f/form-123?manifest=blob-abc"]}>
+        <Routes>
+          <Route path="/f/:formId" element={<PublicFormPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => expect(screen.getByRole("heading", { name: "sharedLinkMismatchTitle" })).toBeInTheDocument());
+    expect(screen.getAllByText(/form-other/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText("form-123").length).toBeGreaterThan(0);
+    expect(mockGetForm).not.toHaveBeenCalled();
   });
 
   it("allows shared public form submission to use local fallback when Walrus write runtime is unavailable", async () => {
@@ -213,7 +241,7 @@ describe("PublicFormPage shared manifest restore", () => {
     const answerInput = screen.getByRole("textbox");
     fireEvent.input(answerInput, { target: { value: "The shared responder path works." } });
     expect(answerInput).toHaveValue("The shared responder path works.");
-    fireEvent.click(screen.getByRole("button", { name: "Submit anonymously" }));
+    fireEvent.click(screen.getByRole("button", { name: "publicSubmitAnonymously" }));
 
     await waitFor(() => expect(screen.getByRole("heading", { name: "Signal sent" })).toBeInTheDocument());
     expect(mockSaveSubmission).toHaveBeenCalledTimes(1);

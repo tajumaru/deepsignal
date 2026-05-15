@@ -634,6 +634,17 @@ export function useCreateFormBuilder({
       return { isValid: false, error: t("errorFieldNeedsOption"), fieldId: emptyOptionsField.id };
     }
 
+    const incompleteMatrixField = fields.find(
+      (field) =>
+        field.type === "matrix" &&
+        (!(field.rows ?? []).map((row) => row.trim()).filter(Boolean).length ||
+          !(field.columns ?? []).map((column) => column.trim()).filter(Boolean).length),
+    );
+    if (incompleteMatrixField) {
+      focusFieldError(incompleteMatrixField.id);
+      return { isValid: false, error: t("errorMatrixNeedsRowsAndColumns"), fieldId: incompleteMatrixField.id };
+    }
+
     const invalidConditionalField = fields.find((field) => !hasValidConditionalParent(field, fields) || !hasValidConditionalValue(field, fields));
     if (invalidConditionalField) {
       focusFieldError(invalidConditionalField.id);

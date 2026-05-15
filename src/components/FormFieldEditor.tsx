@@ -2,7 +2,7 @@ import type { ChangeEvent, DragEvent, KeyboardEvent } from "react";
 import { fieldTypeOptions } from "../lib/constants";
 import { useI18n } from "../i18n";
 import { getCountryFlag } from "../lib/countries";
-import { hasChoiceOptions, isConfirmationCheckboxField, isLongTextLikeField, normalizeFieldType } from "../lib/fieldTypes";
+import { hasChoiceOptions, isConfirmationCheckboxField, isLongTextLikeField, isMatrixFieldType, normalizeFieldType } from "../lib/fieldTypes";
 import type { FieldType, FormField } from "../types";
 import { DateInput } from "./DateInput";
 import {
@@ -41,6 +41,14 @@ function getDefaultOptions(t: ReturnType<typeof useI18n>["t"]) {
   return [t("optionDefault", { index: 1 }), t("optionDefault", { index: 2 })];
 }
 
+function getDefaultMatrixRows() {
+  return ["UI", "UX", "Performance"];
+}
+
+function getDefaultMatrixColumns() {
+  return ["Poor", "Okay", "Good"];
+}
+
 function normalizeFieldForType(field: FormField, type: FieldType, t: ReturnType<typeof useI18n>["t"]): FormField {
   const normalizedType = normalizeFieldType(type);
   const isConfirmation = isConfirmationCheckboxField(normalizedType);
@@ -53,6 +61,9 @@ function normalizeFieldForType(field: FormField, type: FieldType, t: ReturnType<
         ? t("confirmationDefaultPlaceholder")
         : field.placeholder,
     options: hasChoiceOptions(normalizedType) ? (field.options && field.options.length > 0 ? field.options : getDefaultOptions(t)) : undefined,
+    rows: isMatrixFieldType(normalizedType) ? (field.rows && field.rows.length > 0 ? field.rows : getDefaultMatrixRows()) : undefined,
+    columns: isMatrixFieldType(normalizedType) ? (field.columns && field.columns.length > 0 ? field.columns : getDefaultMatrixColumns()) : undefined,
+    selectionMode: isMatrixFieldType(normalizedType) ? "single" : undefined,
   };
 }
 
@@ -108,6 +119,32 @@ export function FormFieldEditor({
       "options",
       (field.options ?? []).filter((_, optionIndex) => optionIndex !== index),
     );
+  }
+
+  function handleMatrixListChange(key: "rows" | "columns", index: number, value: string) {
+    const fallback = key === "rows" ? getDefaultMatrixRows() : getDefaultMatrixColumns();
+    const currentItems = field[key] ?? fallback;
+    update(
+      key,
+      currentItems.map((item, itemIndex) => (itemIndex === index ? value : item)),
+    );
+  }
+
+  function handleAddMatrixItem(key: "rows" | "columns") {
+    const fallback = key === "rows" ? getDefaultMatrixRows() : getDefaultMatrixColumns();
+    const currentItems = field[key] ?? fallback;
+    const nextLabel =
+      key === "rows"
+        ? t("matrixRowDefault", { index: currentItems.length + 1 })
+        : t("matrixColumnDefault", { index: currentItems.length + 1 });
+    update(key, [...currentItems, nextLabel]);
+  }
+
+  function handleRemoveMatrixItem(key: "rows" | "columns", index: number) {
+    const fallback = key === "rows" ? getDefaultMatrixRows() : getDefaultMatrixColumns();
+    const currentItems = field[key] ?? fallback;
+    const nextItems = currentItems.filter((_, itemIndex) => itemIndex !== index);
+    update(key, nextItems.length ? nextItems : [key === "rows" ? t("matrixRowDefault", { index: 1 }) : t("matrixColumnDefault", { index: 1 })]);
   }
 
   function handlePromptKeyDown(event: KeyboardEvent<HTMLInputElement>) {
@@ -201,6 +238,29 @@ export function FormFieldEditor({
             <div key={option} className="composer-canvas-checkbox">
               <span className="composer-canvas-checkbox-mark" />
               <span>{option}</span>
+            </div>
+          ))}
+        </div>
+      );
+    }
+
+    if (field.type === "matrix") {
+      const rows = field.rows?.filter((row) => row.trim()) ?? getDefaultMatrixRows();
+      const columns = field.columns?.filter((column) => column.trim()) ?? getDefaultMatrixColumns();
+      return (
+        <div className="composer-matrix-preview" aria-hidden="true">
+          <div className="composer-matrix-preview-header">
+            <span />
+            {columns.map((column) => (
+              <strong key={column}>{column}</strong>
+            ))}
+          </div>
+          {rows.slice(0, 3).map((row) => (
+            <div key={row} className="composer-matrix-preview-row">
+              <span>{row}</span>
+              {columns.map((column) => (
+                <span key={column} className="composer-matrix-preview-dot" />
+              ))}
             </div>
           ))}
         </div>
@@ -441,6 +501,52 @@ export function FormFieldEditor({
               </button>
             </div>
           )}
+
+          {field.type === "matrix" ? (
+            <div className="composer-matrix-editor">
+              <div className="composer-matrix-editor-section">
+                <span>{t("matrixRows")}</span>
+                <div className="composer-option-stack">
+                  {(field.rows ?? getDefaultMatrixRows()).map((row, rowIndex) => (
+                    <div key={`${field.id}-row-${rowIndex}`} className="composer-option-row">
+                      <input
+                        value={row}
+                        onChange={(event) => handleMatrixListChange("rows", rowIndex, event.target.value)}
+                        placeholder={t("matrixRowDefault", { index: rowIndex + 1 })}
+                      />
+                      <button type="button" className="ghost-button" onClick={() => handleRemoveMatrixItem("rows", rowIndex)}>
+                        {t("remove")}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                <button type="button" className="ghost-button" onClick={() => handleAddMatrixItem("rows")}>
+                  + {t("addMatrixRow")}
+                </button>
+              </div>
+
+              <div className="composer-matrix-editor-section">
+                <span>{t("matrixColumns")}</span>
+                <div className="composer-option-stack">
+                  {(field.columns ?? getDefaultMatrixColumns()).map((column, columnIndex) => (
+                    <div key={`${field.id}-column-${columnIndex}`} className="composer-option-row">
+                      <input
+                        value={column}
+                        onChange={(event) => handleMatrixListChange("columns", columnIndex, event.target.value)}
+                        placeholder={t("matrixColumnDefault", { index: columnIndex + 1 })}
+                      />
+                      <button type="button" className="ghost-button" onClick={() => handleRemoveMatrixItem("columns", columnIndex)}>
+                        {t("remove")}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                <button type="button" className="ghost-button" onClick={() => handleAddMatrixItem("columns")}>
+                  + {t("addMatrixColumn")}
+                </button>
+              </div>
+            </div>
+          ) : null}
 
           <div className="composer-canvas-quick-actions">
             <button type="button" className="ghost-button" onClick={onAddBelow}>

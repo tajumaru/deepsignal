@@ -29,5 +29,10 @@ export function formatAnswerText(field: FormField | undefined, value: unknown, l
   if (fieldType && isConfirmationCheckboxField(fieldType)) {
     return value === true ? "Confirmed" : "Not confirmed";
   }
+  if (fieldType === "matrix" && value && typeof value === "object" && !Array.isArray(value)) {
+    return Object.entries(value as Record<string, unknown>)
+      .map(([row, column]) => `${row}: ${String(column ?? "")}`)
+      .join(" | ");
+  }
   return flattenAnswer(value);
 }

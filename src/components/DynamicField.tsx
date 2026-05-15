@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useRef, type CSSProperties } from "react";
 import { useI18n } from "../i18n";
 import { isAttachmentFieldType, isConfirmationCheckboxField, isLongTextLikeField } from "../lib/fieldTypes";
 import type { FormField } from "../types";
@@ -19,6 +19,10 @@ interface DynamicFieldProps {
 }
 
 type MarkdownToolbarAction = "bold" | "italic" | "bullet" | "link";
+
+function getMatrixAnswer(value: unknown) {
+  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+}
 
 const markdownToolbarActions: Array<{
   action: MarkdownToolbarAction;
@@ -94,6 +98,13 @@ export function DynamicField({
     const current = Array.isArray(value) ? value : [];
     const next = checked ? [...current, option] : current.filter((item) => item !== option);
     onChange(next);
+  }
+
+  function updateMatrixAnswer(row: string, column: string) {
+    onChange({
+      ...getMatrixAnswer(value),
+      [row]: column,
+    });
   }
 
   function applyMarkdownAction(action: MarkdownToolbarAction) {
@@ -261,6 +272,97 @@ export function DynamicField({
               <span>{option}</span>
             </label>
           ))}
+        </div>
+      ) : null}
+
+      {field.type === "matrix" ? (
+        <div
+          className={`matrix-question ${hasError ? "is-error" : ""}`}
+          aria-invalid={hasError}
+          aria-describedby={hasError ? fieldErrorId : undefined}
+        >
+          <div className="matrix-table-wrap matrix-desktop-layout">
+            <div
+              className="matrix-grid"
+              role="table"
+              style={{ "--matrix-columns": String(Math.max((field.columns ?? []).length, 1)) } as CSSProperties}
+            >
+              <div className="matrix-grid-header" role="row">
+                <div className="matrix-grid-corner" role="columnheader" />
+                {(field.columns ?? []).map((column) => (
+                  <div key={column} className="matrix-grid-column-header" role="columnheader">
+                    {column}
+                  </div>
+                ))}
+              </div>
+
+              {(field.rows ?? []).map((row, rowIndex) => {
+                const answer = getMatrixAnswer(value);
+                return (
+                  <div key={row} className={`matrix-grid-row ${answer[row] ? "is-selected" : ""}`} role="row">
+                    <div className="matrix-grid-row-label" role="rowheader">
+                      {row}
+                    </div>
+                    {(field.columns ?? []).map((column, columnIndex) => {
+                      const checked = answer[row] === column;
+                      const inputId = `${field.id}-matrix-${rowIndex}-${columnIndex}`;
+                      return (
+                        <label
+                          key={column}
+                          className={`matrix-grid-cell-choice ${checked ? "is-selected" : ""}`}
+                          htmlFor={inputId}
+                          role="cell"
+                        >
+                          <input
+                            id={inputId}
+                            type="radio"
+                            name={`${field.id}-${row}`}
+                            value={column}
+                            checked={checked}
+                            disabled={disabled}
+                            aria-label={`${row}: ${column}`}
+                            onChange={() => updateMatrixAnswer(row, column)}
+                          />
+                          <span className="matrix-radio-visual" aria-hidden="true" />
+                        </label>
+                      );
+                    })}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="matrix-card-stack matrix-mobile-layout">
+            {(field.rows ?? []).map((row, rowIndex) => (
+              <div key={row} className="matrix-row-card">
+                <div id={`${field.id}-matrix-row-${rowIndex}`} className="matrix-row-card-title">
+                  {row}
+                </div>
+                <div className="matrix-row-options" role="radiogroup" aria-labelledby={`${field.id}-matrix-row-${rowIndex}`}>
+                  {(field.columns ?? []).map((column, columnIndex) => {
+                    const checked = getMatrixAnswer(value)[row] === column;
+                    const inputId = `${field.id}-matrix-mobile-${rowIndex}-${columnIndex}`;
+                    return (
+                      <label key={column} className={`matrix-option-card ${checked ? "is-selected" : ""}`} htmlFor={inputId}>
+                        <input
+                          id={inputId}
+                          type="radio"
+                          name={`${field.id}-${row}-mobile`}
+                          value={column}
+                          checked={checked}
+                          disabled={disabled}
+                          onChange={() => updateMatrixAnswer(row, column)}
+                        />
+                        <span className="matrix-radio-visual" aria-hidden="true" />
+                        <span>{column}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       ) : null}
 

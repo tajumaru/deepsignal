@@ -17,6 +17,7 @@ const fieldTypeChoices: Array<{
     | "fieldTypeDescriptionDate"
     | "fieldTypeDescriptionDropdown"
     | "fieldTypeDescriptionCheckbox"
+    | "fieldTypeDescriptionMatrix"
     | "fieldTypeDescriptionCountrySelect"
     | "fieldTypeDescriptionConfirmation"
     | "fieldTypeDescriptionRating"
@@ -30,6 +31,7 @@ const fieldTypeChoices: Array<{
   { type: "date", icon: "CAL", descriptionKey: "fieldTypeDescriptionDate" },
   { type: "dropdown", icon: "v", descriptionKey: "fieldTypeDescriptionDropdown" },
   { type: "checkbox", icon: "[]", descriptionKey: "fieldTypeDescriptionCheckbox" },
+  { type: "matrix", icon: "GRID", descriptionKey: "fieldTypeDescriptionMatrix" },
   { type: "country_select", icon: "JP", descriptionKey: "fieldTypeDescriptionCountrySelect" },
   { type: "confirmation", icon: "OK", descriptionKey: "fieldTypeDescriptionConfirmation" },
   { type: "rating", icon: "*", descriptionKey: "fieldTypeDescriptionRating" },

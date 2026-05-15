@@ -7,6 +7,7 @@ const FIELD_TYPES: FieldType[] = [
   "date",
   "dropdown",
   "checkbox",
+  "matrix",
   "country_select",
   "confirmation",
   "rating",
@@ -28,6 +29,10 @@ export function normalizeFieldType(raw: unknown): FieldType {
       return "markdown";
     case "checkboxes":
       return "checkbox";
+    case "grid":
+    case "matrixGrid":
+    case "singleChoiceMatrix":
+      return "matrix";
     case "confirmationCheckbox":
     case "confirmation_checkbox":
     case "consent":
@@ -48,6 +53,10 @@ export function normalizeFieldType(raw: unknown): FieldType {
 
 export function hasChoiceOptions(type: FieldType) {
   return type === "dropdown" || type === "checkbox";
+}
+
+export function isMatrixFieldType(type: FieldType) {
+  return type === "matrix";
 }
 
 export function isLongTextLikeField(type: FieldType) {

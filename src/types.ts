@@ -5,6 +5,7 @@ export type FieldType =
   | "date"
   | "dropdown"
   | "checkbox"
+  | "matrix"
   | "country_select"
   | "confirmation"
   | "rating"
@@ -60,6 +61,9 @@ export interface FormField {
   visibility?: "public" | "admin";
   adminOnly?: boolean;
   options?: string[];
+  rows?: string[];
+  columns?: string[];
+  selectionMode?: "single";
   conditionalParentId?: string;
   conditionalValue?: string;
   visibilityRules?: ConditionalLogicGroup;

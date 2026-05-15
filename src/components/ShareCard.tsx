@@ -19,6 +19,8 @@ export function ShareCard({ formId, blobId, createdAt, manifestBlobId }: ShareCa
   const [copied, setCopied] = useState(false);
   const [qrMarkup, setQrMarkup] = useState("");
   const [beaconLocked, setBeaconLocked] = useState(false);
+  const [verifyingShareLink, setVerifyingShareLink] = useState(false);
+  const [shareLinkError, setShareLinkError] = useState("");
 
   const publicPath = getPublicFormPath(formId, manifestBlobId);
   const absoluteUrl = useMemo(() => {
@@ -68,13 +70,43 @@ export function ShareCard({ formId, blobId, createdAt, manifestBlobId }: ShareCa
     return () => window.clearTimeout(timeoutId);
   }, [qrMarkup]);
 
+  async function verifyManifestBeforeCopy() {
+    if (!manifestBlobId) {
+      return;
+    }
+    const { readJsonBlobOrThrow, readManifestWithForm } = await import("../storage/walrusAdapter");
+    const carrier = await readManifestWithForm(manifestBlobId);
+    if (carrier.manifest.formId !== formId) {
+      throw new Error(t("shareLinkMismatchCopyBlocked"));
+    }
+    if (carrier.form) {
+      if (carrier.form.id !== formId) {
+        throw new Error(t("shareLinkMismatchCopyBlocked"));
+      }
+      return;
+    }
+    if (!carrier.manifest.formBlobId || carrier.manifest.formBlobId === "__bundled_form__") {
+      throw new Error(t("shareLinkMissingFormCopyBlocked"));
+    }
+    const linkedForm = await readJsonBlobOrThrow<{ id?: string }>(carrier.manifest.formBlobId);
+    if (linkedForm.id !== formId) {
+      throw new Error(t("shareLinkMismatchCopyBlocked"));
+    }
+  }
+
   async function handleCopy() {
+    setShareLinkError("");
+    setVerifyingShareLink(true);
     try {
+      await verifyManifestBeforeCopy();
       await navigator.clipboard.writeText(absoluteUrl);
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1800);
     } catch (error) {
       console.error(error);
+      setShareLinkError(error instanceof Error ? error.message : t("shareLinkVerifyCopyBlocked"));
+    } finally {
+      setVerifyingShareLink(false);
     }
   }
 
@@ -149,8 +181,13 @@ export function ShareCard({ formId, blobId, createdAt, manifestBlobId }: ShareCa
           </div>
         </div>
         <div className="cta-row beacon-actions">
-          <button type="button" className="primary-button" onClick={() => void handleCopy()}>
-            {copied ? t("copied") : t("copyTransmissionLink")}
+          <button
+            type="button"
+            className="primary-button"
+            onClick={() => void handleCopy()}
+            disabled={verifyingShareLink}
+          >
+            {verifyingShareLink ? t("verifyingManifest") : copied ? t("copied") : t("copyTransmissionLink")}
           </button>
           <a className="ghost-button" href={absoluteUrl} target="_blank" rel="noreferrer">
             {t("openTransmissionLink")}
@@ -159,6 +196,7 @@ export function ShareCard({ formId, blobId, createdAt, manifestBlobId }: ShareCa
             {t("shareToX")}
           </a>
         </div>
+        {shareLinkError ? <p className="error-text">{shareLinkError}</p> : null}
       </div>
     </section>
   );

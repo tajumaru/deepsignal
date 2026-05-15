@@ -29,7 +29,7 @@ export function PublicFormPage() {
   const [attachWallet, setAttachWallet] = useState(false);
   const [attachWalletTouched, setAttachWalletTouched] = useState(false);
   const manifestBlobId = searchParams.get("manifest") ?? "";
-  const { form, initialAnswers, loading, loadError } = usePublicFormLoader({
+  const { form, initialAnswers, loading, loadError, loadErrorDetail } = usePublicFormLoader({
     formId,
     manifestBlobId,
     missingFormMessage: t("publicFormMissingBody"),
@@ -131,10 +131,56 @@ export function PublicFormPage() {
   }
 
   if (!form) {
+    const errorTitle =
+      loadErrorDetail?.code === "form_id_mismatch"
+        ? t("sharedLinkMismatchTitle")
+        : loadErrorDetail
+          ? t("sharedLinkUnavailableTitle")
+          : t("emptyFormNotFound");
+    const retryGuidance =
+      loadErrorDetail?.code === "form_id_mismatch"
+        ? t("sharedLinkMismatchGuidance")
+        : loadErrorDetail
+          ? t("sharedLinkRepublishGuidance")
+          : "";
     return (
       <EmptyState>
-        <h1>{t("emptyFormNotFound")}</h1>
+        <h1>{errorTitle}</h1>
         <p>{loadError || t("publicFormMissingBody")}</p>
+        {loadErrorDetail ? (
+          <div className="metadata-list">
+            <div className="metadata-row">
+              <span>{t("sharedLinkFailureReason")}</span>
+              <strong>{loadErrorDetail.reason}</strong>
+            </div>
+            <div className="metadata-row">
+              <span>{t("expectedFormId")}</span>
+              <strong>{loadErrorDetail.expectedFormId ?? formId}</strong>
+            </div>
+            {loadErrorDetail.actualFormId ? (
+              <div className="metadata-row">
+                <span>{t("actualFormId")}</span>
+                <strong>{loadErrorDetail.actualFormId}</strong>
+              </div>
+            ) : null}
+            {loadErrorDetail.manifestBlobId ? (
+              <div className="metadata-row">
+                <span>{t("manifestBlobId")}</span>
+                <strong>{loadErrorDetail.manifestBlobId}</strong>
+              </div>
+            ) : null}
+            {loadErrorDetail.formBlobId ? (
+              <div className="metadata-row">
+                <span>{t("formBlobId")}</span>
+                <strong>{loadErrorDetail.formBlobId}</strong>
+              </div>
+            ) : null}
+            <div className="metadata-row">
+              <span>{t("retryGuidance")}</span>
+              <strong>{retryGuidance || loadErrorDetail.guidance}</strong>
+            </div>
+          </div>
+        ) : null}
       </EmptyState>
     );
   }

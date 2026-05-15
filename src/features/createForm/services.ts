@@ -19,6 +19,30 @@ interface PublishFormArgs {
   shouldContinue: () => boolean;
 }
 
+async function verifyPublishedPublicLink(form: PreparedPublishForm) {
+  if (!form.manifestBlobId || isLocalFallbackBlob(form.manifestBlobId)) {
+    return;
+  }
+  const { readJsonBlobOrThrow, readManifestWithForm } = await import("../../storage/walrusAdapter");
+  const carrier = await readManifestWithForm(form.manifestBlobId);
+  if (carrier.manifest.formId !== form.id) {
+    throw new Error("Published manifest read-back failed: the manifest points to a different form.");
+  }
+  if (carrier.form) {
+    if (carrier.form.id !== form.id) {
+      throw new Error("Published manifest read-back failed: the bundled form points to a different form.");
+    }
+    return;
+  }
+  if (!carrier.manifest.formBlobId || carrier.manifest.formBlobId === "__bundled_form__") {
+    throw new Error("Published manifest read-back failed: the manifest does not include a bundled form or form blob.");
+  }
+  const linkedForm = await readJsonBlobOrThrow<{ id?: string }>(carrier.manifest.formBlobId);
+  if (linkedForm.id !== form.id) {
+    throw new Error("Published manifest read-back failed: the linked form blob points to a different form.");
+  }
+}
+
 export async function publishForm({
   t,
   form,
@@ -113,6 +137,15 @@ export async function publishForm({
   saveFormMetadataOverlay(finalPersistedForm);
   if (!shouldContinue()) {
     return null;
+  }
+
+  if (finalPersistedForm.manifestBlobId && !isLocalFallbackBlob(finalPersistedForm.manifestBlobId)) {
+    setPublishActiveStageStatus(t("verifyingManifest"));
+    setPublishActiveStageDetail(t("shareLinkVerifyCopyBlocked"));
+    await verifyPublishedPublicLink(finalPersistedForm);
+    if (!shouldContinue()) {
+      return null;
+    }
   }
 
   setPublishActiveStageStatus("");

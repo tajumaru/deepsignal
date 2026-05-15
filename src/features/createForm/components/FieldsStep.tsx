@@ -35,7 +35,7 @@ interface FieldsStepProps {
 const libraryBlocks: Array<{
   type?: FieldType;
   icon: string;
-  titleKey: "libraryShortText" | "libraryLongText" | "libraryRichText" | "libraryDate" | "libraryDropdown" | "libraryCheckboxes" | "libraryCountrySelect" | "libraryConfirmationCheckbox" | "libraryScreenshotUpload" | "libraryVideoUpload" | "libraryUrl" | "libraryStarRating" | "libraryWalletAddress" | "librarySignatureVerification" | "libraryEncryptedAnswer";
+  titleKey: "libraryShortText" | "libraryLongText" | "libraryRichText" | "libraryDate" | "libraryDropdown" | "libraryCheckboxes" | "libraryMatrix" | "libraryCountrySelect" | "libraryConfirmationCheckbox" | "libraryScreenshotUpload" | "libraryVideoUpload" | "libraryUrl" | "libraryStarRating" | "libraryWalletAddress" | "librarySignatureVerification" | "libraryEncryptedAnswer";
   soon?: boolean;
 }> = [
   { type: "shortText", icon: "Aa", titleKey: "libraryShortText" },
@@ -44,6 +44,7 @@ const libraryBlocks: Array<{
   { type: "date", icon: "CAL", titleKey: "libraryDate" },
   { type: "dropdown", icon: "v", titleKey: "libraryDropdown" },
   { type: "checkbox", icon: "[]", titleKey: "libraryCheckboxes" },
+  { type: "matrix", icon: "GRID", titleKey: "libraryMatrix" },
   { type: "country_select", icon: "JP", titleKey: "libraryCountrySelect" },
   { type: "confirmation", icon: "OK", titleKey: "libraryConfirmationCheckbox" },
   { type: "screenshot", icon: "UP", titleKey: "libraryScreenshotUpload" },
