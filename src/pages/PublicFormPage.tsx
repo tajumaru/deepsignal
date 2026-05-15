@@ -316,23 +316,26 @@ export function PublicFormPage() {
       <p className="eyebrow">{t("publicEyebrow")}</p>
       <h1>{form.title}</h1>
       <RichTextContent value={form.description ?? ""} className="lede rich-text-content" fallback={t("publicDefaultBody")} />
-      <div className="public-form-summary-row">
-        <section className={`answer-card public-deadline-card ${deadlinePassed ? "is-expired" : ""}`}>
-          <p className="eyebrow">{t("publicResponseWindow")}</p>
-          <h3>{deadlineLabel}</h3>
-          <p className="muted">
-            {deadlinePassed
-              ? t("publicDeadlineClosedHelp")
+      <div className={`public-form-status-strip ${deadlinePassed ? "is-expired" : ""}`}>
+        <div className="public-form-status-badges" aria-label={t("publicFormStatusSummary")}>
+          <span className={`public-form-status-badge ${deadlinePassed ? "is-expired" : "is-live"}`}>
+            <span>{t("publicResponseWindow")}</span>
+            <strong>{deadlinePassed ? t("publicDeadlineClosedBadge") : deadlineLabel}</strong>
+          </span>
+          {form.encryptSubmissions ? (
+            <span className="public-form-status-badge is-private">
+              <span>{t("publicEncryptedInboxEyebrow")}</span>
+              <strong>{t("publicPrivateSignalBadge")}</strong>
+            </span>
+          ) : null}
+        </div>
+        <p className="muted">
+          {deadlinePassed
+            ? t("publicDeadlineClosedHelp")
+            : form.encryptSubmissions
+              ? t("publicPrivateSignalBadgeHelp")
               : t("publicDeadlineActiveHelp")}
-          </p>
-        </section>
-        {form.encryptSubmissions ? (
-          <section className="answer-card public-private-signal-note">
-            <p className="eyebrow">{t("publicEncryptedInboxEyebrow")}</p>
-            <h3>{t("publicPrivateSignalEnabled")}</h3>
-            <p className="muted">{t("publicPrivateSignalHelp")}</p>
-          </section>
-        ) : null}
+        </p>
       </div>
 
       <PublicIdentityCard
@@ -427,11 +430,21 @@ export function PublicFormPage() {
       </div>
 
       <PublicSubmitReadiness
+        identityMode={walletRequired || (attachWallet && walletAccountAddress) ? "wallet" : "anonymous"}
+        sealEnabled={Boolean(form.encryptSubmissions)}
         submitModeLabel={submitModeLabel}
         storageModeLabel={storageModeLabel}
         labels={{
+          summary: t("publicReadinessSummary"),
           deliveryMode: t("publicReadinessDeliveryMode"),
+          anonymous: t("publicReadinessAnonymous"),
+          suiWallet: t("publicReadinessSuiWallet"),
           storageTarget: t("publicReadinessStorageTarget"),
+          walrus: t("publicReadinessWalrus"),
+          walrusIcon: t("publicReadinessWalrusIcon"),
+          seal: t("publicReadinessSeal"),
+          sealOn: t("publicReadinessSealOn"),
+          sealOff: t("publicReadinessSealOff"),
           attachments: t("publicReadinessAttachments"),
           attachmentsHelp: t("publicReadinessAttachmentsHelp"),
         }}

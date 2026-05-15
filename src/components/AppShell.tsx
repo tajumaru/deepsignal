@@ -4,12 +4,13 @@ import { CreateFormLink } from "./CreateFormLink";
 import { WalletSurface } from "./WalletSurface";
 import { BuildIndicator } from "./system/BuildIndicator";
 import { useI18n } from "../i18n";
+import { retryLazyImport } from "../lib/lazyRetry";
 
 const WalletConnect = lazy(() =>
-  import("./WalletConnect").then((module) => ({ default: module.WalletConnect })),
+  retryLazyImport(() => import("./WalletConnect")).then((module) => ({ default: module.WalletConnect })),
 );
 const WalletNav = lazy(() =>
-  import("./WalletNav").then((module) => ({ default: module.WalletNav })),
+  retryLazyImport(() => import("./WalletNav")).then((module) => ({ default: module.WalletNav })),
 );
 
 interface AppShellProps extends PropsWithChildren {
@@ -60,7 +61,13 @@ function useWalletChrome(walletAvailable: boolean) {
   }
 
   return {
-    nav: null,
+    nav: (
+      <WalletSurface fallback={null}>
+        <Suspense fallback={null}>
+          <WalletNav />
+        </Suspense>
+      </WalletSurface>
+    ),
     connect: (
       <WalletSurface fallback={fallback}>
         <Suspense fallback={fallback}>

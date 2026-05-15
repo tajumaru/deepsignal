@@ -3,47 +3,48 @@ import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { AppShell } from "./components/AppShell";
 import { WalletSurface } from "./components/WalletSurface";
 import { WalrusRuntimeSurface } from "./components/WalrusRuntimeSurface";
+import { retryLazyImport } from "./lib/lazyRetry";
 import { REQUIRE_GLOBAL_WALRUS_RUNTIME } from "./lib/runtimeFlags";
 import { LandingPage } from "./pages/LandingPage";
 import { PublicFormPage } from "./pages/PublicFormPage";
 
 const AccessManagementPage = lazy(() =>
-  import("./pages/AccessManagementPage").then((module) => ({
+  retryLazyImport(() => import("./pages/AccessManagementPage")).then((module) => ({
     default: module.AccessManagementPage,
   })),
 );
 const AdminDashboardPage = lazy(() =>
-  import("./pages/AdminDashboardPage").then((module) => ({
+  retryLazyImport(() => import("./pages/AdminDashboardPage")).then((module) => ({
     default: module.AdminDashboardPage,
   })),
 );
 const FormBuilderPage = lazy(() =>
-  import("./pages/FormBuilderPage").then((module) => ({
+  retryLazyImport(() => import("./pages/FormBuilderPage")).then((module) => ({
     default: module.FormBuilderPage,
   })),
 );
 const ManifestRestorePage = lazy(() =>
-  import("./pages/ManifestRestorePage").then((module) => ({
+  retryLazyImport(() => import("./pages/ManifestRestorePage")).then((module) => ({
     default: module.ManifestRestorePage,
   })),
 );
 const FormSubmissionsPage = lazy(() =>
-  import("./pages/FormSubmissionsPage").then((module) => ({
+  retryLazyImport(() => import("./pages/FormSubmissionsPage")).then((module) => ({
     default: module.FormSubmissionsPage,
   })),
 );
 const PublicRoadmapPage = lazy(() =>
-  import("./pages/PublicRoadmapPage").then((module) => ({
+  retryLazyImport(() => import("./pages/PublicRoadmapPage")).then((module) => ({
     default: module.PublicRoadmapPage,
   })),
 );
 const SubmissionDetailPage = lazy(() =>
-  import("./pages/SubmissionDetailPage").then((module) => ({
+  retryLazyImport(() => import("./pages/SubmissionDetailPage")).then((module) => ({
     default: module.SubmissionDetailPage,
   })),
 );
 const ExploreSignalsPage = lazy(() =>
-  import("./pages/ExploreSignalsPage").then((module) => ({
+  retryLazyImport(() => import("./pages/ExploreSignalsPage")).then((module) => ({
     default: module.ExploreSignalsPage,
   })),
 );

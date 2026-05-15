@@ -297,6 +297,39 @@
         }
       }
     </style>
+    <script>
+      (() => {
+        const maxAttempts = 6;
+        const baseDelayMs = 900;
+
+        function retryStylesheet(link) {
+          const attempts = Number(link.dataset.deepsignalCssRetries || "0");
+          if (attempts >= maxAttempts) {
+            return;
+          }
+
+          const nextAttempt = attempts + 1;
+          link.dataset.deepsignalCssRetries = String(nextAttempt);
+          const href = new URL(link.href, window.location.href);
+          href.searchParams.set("css-retry", String(Date.now()));
+
+          window.setTimeout(() => {
+            link.href = href.toString();
+          }, baseDelayMs * nextAttempt);
+        }
+
+        document.addEventListener(
+          "error",
+          (event) => {
+            const target = event.target;
+            if (target instanceof HTMLLinkElement && target.rel === "stylesheet") {
+              retryStylesheet(target);
+            }
+          },
+          true,
+        );
+      })();
+    </script>
   </head>
   <body class="booting">
     <div id="boot-overlay" aria-live="polite">

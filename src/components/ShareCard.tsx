@@ -14,6 +14,13 @@ function hashSeed(value: string) {
   return value.split("").reduce((accumulator, char) => accumulator + char.charCodeAt(0), 0);
 }
 
+function formatBeaconValue(value: string, headLength = 10, tailLength = 10) {
+  if (value.length <= headLength + tailLength + 3) {
+    return value;
+  }
+  return `${value.slice(0, headLength)}...${value.slice(-tailLength)}`;
+}
+
 function ShareActionIcon({ type }: { type: "copy" | "open" | "x" }) {
   if (type === "copy") {
     return (
@@ -42,9 +49,44 @@ function ShareActionIcon({ type }: { type: "copy" | "open" | "x" }) {
   );
 }
 
+interface CopyableBeaconValueProps {
+  value: string;
+  label: string;
+  copied: boolean;
+  onCopy: () => void;
+  disabled?: boolean;
+  headLength?: number;
+  tailLength?: number;
+}
+
+function CopyableBeaconValue({
+  value,
+  label,
+  copied,
+  onCopy,
+  disabled = false,
+  headLength,
+  tailLength,
+}: CopyableBeaconValueProps) {
+  return (
+    <button
+      type="button"
+      className="beacon-copy-value"
+      onClick={onCopy}
+      disabled={disabled}
+      title={value}
+      aria-label={`${copied ? "Copied" : label}: ${value}`}
+    >
+      <code>{formatBeaconValue(value, headLength, tailLength)}</code>
+      <span className="beacon-copy-value-status">{copied ? "Copied" : label}</span>
+    </button>
+  );
+}
+
 export function ShareCard({ formId, blobId, createdAt, manifestBlobId }: ShareCardProps) {
   const { t } = useI18n();
   const [copied, setCopied] = useState(false);
+  const [blobCopied, setBlobCopied] = useState(false);
   const [qrMarkup, setQrMarkup] = useState("");
   const [beaconLocked, setBeaconLocked] = useState(false);
   const [verifyingShareLink, setVerifyingShareLink] = useState(false);
@@ -143,6 +185,19 @@ export function ShareCard({ formId, blobId, createdAt, manifestBlobId }: ShareCa
     }
   }
 
+  async function handleCopyBlobId() {
+    if (!blobId) {
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(blobId);
+      setBlobCopied(true);
+      window.setTimeout(() => setBlobCopied(false), 1800);
+    } catch (error) {
+      console.error(error);
+    }
+  }
+
   const seed = hashSeed(`${formId}:${blobId ?? ""}`);
   const depthMeters = 3200 + (seed % 5400);
   const signalId = `SIG-${formId.slice(0, 8).toUpperCase()}`;
@@ -192,13 +247,70 @@ export function ShareCard({ formId, blobId, createdAt, manifestBlobId }: ShareCa
 
       <div className="beacon-meta">
         <div className="beacon-meta-row">
-          <span>{t("transmissionLinkLabel")}</span>
-          <code>{publicPath}</code>
+          <div className="beacon-meta-link-copy">
+            <span>{t("transmissionLinkLabel")}</span>
+            <CopyableBeaconValue
+              value={publicPath}
+              label={verifyingShareLink ? t("verifyingManifest") : t("copyTransmissionLink")}
+              copied={copied}
+              onCopy={() => void handleCopy()}
+              disabled={verifyingShareLink || !publicPath}
+              headLength={16}
+              tailLength={12}
+            />
+          </div>
+          <div className="cta-row beacon-actions">
+            <button
+              type="button"
+              className="primary-button beacon-action-button"
+              onClick={() => void handleCopy()}
+              disabled={verifyingShareLink}
+              aria-label={verifyingShareLink ? t("verifyingManifest") : copied ? t("copied") : t("copyTransmissionLink")}
+              title={verifyingShareLink ? t("verifyingManifest") : copied ? t("copied") : t("copyTransmissionLink")}
+            >
+              <ShareActionIcon type="copy" />
+              <span className="sr-only">
+                {verifyingShareLink ? t("verifyingManifest") : copied ? t("copied") : t("copyTransmissionLink")}
+              </span>
+            </button>
+            <a
+              className="ghost-button beacon-action-button"
+              href={absoluteUrl}
+              target="_blank"
+              rel="noreferrer"
+              aria-label={t("openTransmissionLink")}
+              title={t("openTransmissionLink")}
+            >
+              <ShareActionIcon type="open" />
+              <span className="sr-only">{t("openTransmissionLink")}</span>
+            </a>
+            <a
+              className="ghost-button beacon-action-button x-share-button"
+              href={xShareUrl}
+              target="_blank"
+              rel="noreferrer"
+              aria-label={t("shareToX")}
+              title={t("shareToX")}
+            >
+              <ShareActionIcon type="x" />
+              <span className="sr-only">{t("shareToX")}</span>
+            </a>
+          </div>
         </div>
+        {shareLinkError ? <p className="error-text">{shareLinkError}</p> : null}
         <div className="beacon-meta-grid">
           <div>
             <span>{t("blobIdLabel")}</span>
-            <strong>{blobLabel}</strong>
+            {blobId ? (
+              <CopyableBeaconValue
+                value={blobId}
+                label={t("copyBlobId")}
+                copied={blobCopied}
+                onCopy={() => void handleCopyBlobId()}
+              />
+            ) : (
+              <strong>{blobLabel}</strong>
+            )}
           </div>
           <div>
             <span>{t("signalIdLabel")}</span>
@@ -213,44 +325,6 @@ export function ShareCard({ formId, blobId, createdAt, manifestBlobId }: ShareCa
             <strong>{`DEPTH: ${depthMeters}m`}</strong>
           </div>
         </div>
-        <div className="cta-row beacon-actions">
-          <button
-            type="button"
-            className="primary-button beacon-action-button"
-            onClick={() => void handleCopy()}
-            disabled={verifyingShareLink}
-            aria-label={verifyingShareLink ? t("verifyingManifest") : copied ? t("copied") : t("copyTransmissionLink")}
-            title={verifyingShareLink ? t("verifyingManifest") : copied ? t("copied") : t("copyTransmissionLink")}
-          >
-            <ShareActionIcon type="copy" />
-            <span className="sr-only">
-              {verifyingShareLink ? t("verifyingManifest") : copied ? t("copied") : t("copyTransmissionLink")}
-            </span>
-          </button>
-          <a
-            className="ghost-button beacon-action-button"
-            href={absoluteUrl}
-            target="_blank"
-            rel="noreferrer"
-            aria-label={t("openTransmissionLink")}
-            title={t("openTransmissionLink")}
-          >
-            <ShareActionIcon type="open" />
-            <span className="sr-only">{t("openTransmissionLink")}</span>
-          </a>
-          <a
-            className="ghost-button beacon-action-button x-share-button"
-            href={xShareUrl}
-            target="_blank"
-            rel="noreferrer"
-            aria-label={t("shareToX")}
-            title={t("shareToX")}
-          >
-            <ShareActionIcon type="x" />
-            <span className="sr-only">{t("shareToX")}</span>
-          </a>
-        </div>
-        {shareLinkError ? <p className="error-text">{shareLinkError}</p> : null}
       </div>
     </section>
   );

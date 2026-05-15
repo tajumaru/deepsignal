@@ -12,11 +12,7 @@ export function WalletNav() {
     return null;
   }
 
-  if (isLoadingAccess) {
-    return null;
-  }
-
-  const hasAdminAccess = Boolean(capabilityProfile.hasOwnerCap || capabilityProfile.hasAdminCap);
+  const hasAdminAccess = !isLoadingAccess && Boolean(capabilityProfile.hasOwnerCap || capabilityProfile.hasAdminCap);
 
   return (
     <>

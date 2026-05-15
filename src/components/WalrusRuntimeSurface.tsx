@@ -1,7 +1,8 @@
 import { lazy, Suspense, type PropsWithChildren } from "react";
+import { retryLazyImport } from "../lib/lazyRetry";
 
 const WalrusRuntimeProvider = lazy(() =>
-  import("../providers").then((module) => ({
+  retryLazyImport(() => import("../providers")).then((module) => ({
     default: module.WalrusRuntimeProvider,
   })),
 );

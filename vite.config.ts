@@ -60,6 +60,15 @@ export default defineConfig(({ mode }) => {
     build: {
       rollupOptions: {
         output: {
+          entryFileNames: "assets/[name].js",
+          chunkFileNames: "assets/[name].js",
+          assetFileNames(assetInfo) {
+            const name = assetInfo.name ?? "";
+            if (name.endsWith(".css")) {
+              return "assets/[name][extname]";
+            }
+            return "assets/[name]-[hash][extname]";
+          },
           manualChunks(id) {
             const normalizedId = id.replace(/\\/g, "/");
             if (!normalizedId.includes("node_modules")) {

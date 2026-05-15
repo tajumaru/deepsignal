@@ -1,7 +1,8 @@
 import { lazy, Suspense, type PropsWithChildren, type ReactNode } from "react";
+import { retryLazyImport } from "../lib/lazyRetry";
 
 const WalletProviders = lazy(() =>
-  import("../providers").then((module) => ({
+  retryLazyImport(() => import("../providers")).then((module) => ({
     default: module.WalletProviders,
   })),
 );

@@ -1,8 +1,9 @@
 import { lazy, Suspense, useEffect, useState } from "react";
 import { WalletSurface } from "../../../components/WalletSurface";
+import { retryLazyImport } from "../../../lib/lazyRetry";
 
 const PublicWalletAccountPanel = lazy(() =>
-  import("./PublicWalletAccountPanel").then((module) => ({
+  retryLazyImport(() => import("./PublicWalletAccountPanel")).then((module) => ({
     default: module.PublicWalletAccountPanel,
   })),
 );

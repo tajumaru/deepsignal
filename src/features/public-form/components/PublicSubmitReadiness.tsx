@@ -1,34 +1,65 @@
 interface PublicSubmitReadinessProps {
+  identityMode: "anonymous" | "wallet";
+  sealEnabled: boolean;
   submitModeLabel: string;
   storageModeLabel: string;
   labels: {
+    summary: string;
     deliveryMode: string;
+    anonymous: string;
+    suiWallet: string;
     storageTarget: string;
+    walrus: string;
+    walrusIcon: string;
+    seal: string;
+    sealOn: string;
+    sealOff: string;
     attachments: string;
     attachmentsHelp: string;
   };
 }
 
 export function PublicSubmitReadiness({
+  identityMode,
+  sealEnabled,
   submitModeLabel,
   storageModeLabel,
   labels,
 }: PublicSubmitReadinessProps) {
   return (
-    <section className="answer-card public-submit-readiness">
-      <div className="metadata-list">
-        <div className="metadata-row">
-          <span>{labels.deliveryMode}</span>
-          <strong>{submitModeLabel}</strong>
-        </div>
-        <div className="metadata-row">
-          <span>{labels.storageTarget}</span>
-          <strong>{storageModeLabel}</strong>
-        </div>
-        <div className="metadata-row">
-          <span>{labels.attachments}</span>
-          <strong>{labels.attachmentsHelp}</strong>
-        </div>
+    <section
+      className="answer-card public-submit-readiness"
+      aria-label={labels.summary}
+      title={`${labels.deliveryMode}: ${submitModeLabel}. ${labels.storageTarget}: ${storageModeLabel}. ${labels.attachments}: ${labels.attachmentsHelp}`}
+    >
+      <div className="public-submit-badge-grid">
+        <span className={`public-submit-badge is-${identityMode}`}>
+          <span className="public-submit-badge-icon" aria-hidden="true">
+            {identityMode === "wallet" ? "Sui" : "Anon"}
+          </span>
+          <span>
+            <small>{labels.deliveryMode}</small>
+            <strong>{identityMode === "wallet" ? labels.suiWallet : labels.anonymous}</strong>
+          </span>
+        </span>
+        <span className="public-submit-badge is-walrus">
+          <span className="public-submit-badge-icon" aria-hidden="true">
+            {labels.walrusIcon}
+          </span>
+          <span>
+            <small>{labels.storageTarget}</small>
+            <strong>{labels.walrus}</strong>
+          </span>
+        </span>
+        <span className={`public-submit-badge ${sealEnabled ? "is-seal-on" : "is-seal-off"}`}>
+          <span className="public-submit-badge-icon" aria-hidden="true">
+            Seal
+          </span>
+          <span>
+            <small>{labels.seal}</small>
+            <strong>{sealEnabled ? labels.sealOn : labels.sealOff}</strong>
+          </span>
+        </span>
       </div>
     </section>
   );

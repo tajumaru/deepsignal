@@ -4452,8 +4452,16 @@ select {
 
 .beacon-meta-row {
   display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
   gap: 0.45rem;
   padding: 0.9rem 1rem;
+  min-width: 0;
+}
+
+.beacon-meta-link-copy {
+  display: grid;
+  gap: 0.45rem;
   min-width: 0;
 }
 
@@ -4468,13 +4476,52 @@ select {
   word-break: break-word;
 }
 
-.beacon-meta-row code {
+.beacon-meta-link-copy code,
+.beacon-copy-value code {
   display: block;
   max-width: 100%;
   font-size: clamp(1rem, 2vw, 1.1rem);
   color: #e4fbff;
   overflow-wrap: anywhere;
   word-break: break-word;
+}
+
+.beacon-copy-value {
+  display: grid;
+  width: 100%;
+  min-width: 0;
+  gap: 0.28rem;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.beacon-copy-value:disabled {
+  cursor: not-allowed;
+  opacity: 0.62;
+}
+
+.beacon-copy-value:not(:disabled):hover code,
+.beacon-copy-value:not(:disabled):focus-visible code {
+  color: #ffffff;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.22em;
+}
+
+.beacon-copy-value:focus-visible {
+  outline: 2px solid rgba(116, 226, 255, 0.72);
+  outline-offset: 4px;
+  border-radius: 6px;
+}
+
+.beacon-copy-value-status {
+  font-size: 0.68rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
 
 .beacon-meta-grid {
@@ -4498,7 +4545,9 @@ select {
 }
 
 .beacon-actions {
-  justify-content: center;
+  justify-content: flex-end;
+  align-self: center;
+  flex-wrap: nowrap;
 }
 
 .beacon-action-button {
@@ -8217,14 +8266,80 @@ body.composer-mode .bg-orb {
   border-radius: 24px;
 }
 
-.public-form-summary-row {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.85rem;
+.public-form-status-strip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.9rem;
+  padding: 0.68rem 0.78rem;
+  border: 1px solid rgba(116, 226, 255, 0.13);
+  border-radius: 16px;
+  background: rgba(5, 20, 34, 0.58);
 }
 
-.public-form-summary-row .answer-card {
+.public-form-status-strip.is-expired {
+  border-color: rgba(255, 139, 120, 0.35);
+  background: rgba(61, 19, 18, 0.3);
+}
+
+.public-form-status-badges {
+  display: flex;
+  flex: 0 1 auto;
+  flex-wrap: wrap;
+  gap: 0.48rem;
   min-width: 0;
+}
+
+.public-form-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-height: 2.15rem;
+  max-width: 100%;
+  padding: 0.34rem 0.65rem;
+  border: 1px solid rgba(116, 226, 255, 0.16);
+  border-radius: 999px;
+  background: rgba(116, 226, 255, 0.08);
+  color: var(--text);
+  line-height: 1.1;
+}
+
+.public-form-status-badge span {
+  color: var(--text-soft);
+  font-size: 0.66rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.public-form-status-badge strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: 0.86rem;
+}
+
+.public-form-status-badge.is-live {
+  border-color: rgba(90, 242, 185, 0.28);
+  background: rgba(38, 189, 140, 0.12);
+}
+
+.public-form-status-badge.is-private {
+  border-color: rgba(197, 161, 255, 0.28);
+  background: rgba(125, 86, 255, 0.14);
+}
+
+.public-form-status-badge.is-expired {
+  border-color: rgba(255, 139, 120, 0.4);
+  background: rgba(255, 139, 120, 0.12);
+}
+
+.public-form-status-strip .muted {
+  flex: 1 1 16rem;
+  min-width: 13rem;
+  max-width: 34rem;
+  margin: 0;
+  font-size: 0.88rem;
+  line-height: 1.45;
 }
 
 .public-form .composer-preview-section {
@@ -8371,12 +8486,96 @@ body.composer-mode .bg-orb {
 
 .public-submit-readiness {
   border: 0;
+  padding: 0;
+  background: transparent;
 }
 
-.public-submit-readiness .metadata-row strong {
+.public-submit-badge-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.55rem;
+}
+
+.public-submit-badge {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
   min-width: 0;
-  overflow-wrap: anywhere;
-  text-align: right;
+  min-height: 3rem;
+  padding: 0.55rem 0.68rem;
+  border: 1px solid rgba(116, 226, 255, 0.14);
+  border-radius: 14px;
+  background: rgba(5, 20, 34, 0.58);
+}
+
+.public-submit-badge-icon {
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 999px;
+  background: rgba(116, 226, 255, 0.12);
+  color: #eaffff;
+  font-size: 0.68rem;
+  font-weight: 800;
+}
+
+.public-submit-badge > span:last-child {
+  display: grid;
+  min-width: 0;
+  gap: 0.12rem;
+}
+
+.public-submit-badge small {
+  overflow: hidden;
+  color: var(--text-soft);
+  font-size: 0.64rem;
+  letter-spacing: 0.06em;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.public-submit-badge strong {
+  min-width: 0;
+  overflow: hidden;
+  color: #effcff;
+  font-size: 0.88rem;
+  line-height: 1.1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.public-submit-badge.is-wallet {
+  border-color: rgba(148, 190, 255, 0.25);
+  background: rgba(62, 111, 255, 0.12);
+}
+
+.public-submit-badge.is-anonymous {
+  border-color: rgba(116, 226, 255, 0.17);
+  background: rgba(116, 226, 255, 0.07);
+}
+
+.public-submit-badge.is-walrus {
+  border-color: rgba(82, 211, 255, 0.28);
+  background: rgba(34, 141, 190, 0.12);
+}
+
+.public-submit-badge.is-walrus .public-submit-badge-icon {
+  background: rgba(82, 211, 255, 0.16);
+  font-size: 1rem;
+}
+
+.public-submit-badge.is-seal-on {
+  border-color: rgba(197, 161, 255, 0.28);
+  background: rgba(125, 86, 255, 0.14);
+}
+
+.public-submit-badge.is-seal-off {
+  border-color: rgba(148, 163, 184, 0.18);
+  background: rgba(148, 163, 184, 0.08);
+  opacity: 0.82;
 }
 
 .signal-submission-pipeline {
@@ -8488,14 +8687,14 @@ body.composer-mode .bg-orb {
   }
 }
 
-.public-deadline-card.is-expired {
-  border-color: rgba(255, 139, 120, 0.45);
-  background: rgba(61, 19, 18, 0.42);
-}
-
 @media (max-width: 860px) {
-  .public-form-summary-row {
-    grid-template-columns: 1fr;
+  .public-form-status-strip {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .public-form-status-strip .muted {
+    min-width: 0;
   }
 
   .public-identity-topline,
@@ -8520,8 +8719,8 @@ body.composer-mode .bg-orb {
     width: 100%;
   }
 
-  .public-submit-readiness .metadata-row strong {
-    text-align: left;
+  .public-submit-badge-grid {
+    grid-template-columns: 1fr;
   }
 
   .signal-success-receipt,
@@ -10453,17 +10652,12 @@ body.composer-mode .bg-orb {
 .contest-roadmap-card,
 .contest-builder-quickstart,
 .contest-share-ready-card,
-.public-private-signal-note,
 .public-submit-details,
 .locked-signal-state,
 .contest-inline-success {
   background:
     radial-gradient(circle at top right, rgba(103, 232, 249, 0.08), transparent 28%),
     rgba(4, 18, 31, 0.7);
-}
-
-.public-private-signal-note {
-  border: 0;
 }
 
 .public-submit-details {
@@ -10654,7 +10848,6 @@ body.composer-mode .bg-orb {
   gap: 0.75rem;
 }
 
-.public-private-signal-note,
 .contest-builder-quickstart {
   margin-bottom: 1rem;
 }
@@ -13023,6 +13216,15 @@ body.composer-mode .bg-orb {
     grid-template-columns: 1fr;
   }
 
+  .beacon-meta-row {
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
+  }
+
+  .beacon-actions {
+    justify-content: flex-start;
+  }
+
   .composer-toolbar {
     position: static;
     grid-template-columns: 1fr;
@@ -13639,38 +13841,48 @@ body.composer-mode .bg-orb {
     line-height: 1.45;
   }
 
-  .public-form-summary-row {
+  .public-form-status-strip {
     gap: 0.55rem;
   }
 
-  .public-deadline-card,
-  .public-private-signal-note,
-  .public-identity-card,
-  .public-submit-readiness {
+  .public-identity-card {
     padding: 0.72rem 0.78rem;
     border-radius: 16px;
   }
 
-  .public-deadline-card .eyebrow,
-  .public-private-signal-note .eyebrow {
-    margin-bottom: 0.08rem;
-    font-size: 0.62rem;
+  .public-form-status-strip {
+    padding: 0.6rem;
   }
 
-  .public-deadline-card h3,
-  .public-private-signal-note h3,
-  .public-identity-copy h3 {
-    margin: 0;
-    font-size: 0.98rem;
-    line-height: 1.22;
+  .public-form-status-badges {
+    gap: 0.38rem;
   }
 
-  .public-deadline-card .muted,
-  .public-private-signal-note .muted,
+  .public-form-status-badge {
+    gap: 0.36rem;
+    min-height: 2rem;
+    padding: 0.3rem 0.54rem;
+  }
+
+  .public-form-status-badge span {
+    font-size: 0.58rem;
+  }
+
+  .public-form-status-badge strong {
+    font-size: 0.78rem;
+  }
+
+  .public-form-status-strip .muted,
   .public-identity-copy .muted {
     margin: 0.12rem 0 0;
     font-size: 0.82rem;
     line-height: 1.38;
+  }
+
+  .public-identity-copy h3 {
+    margin: 0;
+    font-size: 0.98rem;
+    line-height: 1.22;
   }
 
   .public-identity-card {
@@ -13704,19 +13916,32 @@ body.composer-mode .bg-orb {
     align-items: center;
   }
 
-  .public-submit-readiness .metadata-list {
+  .public-submit-badge-grid {
     gap: 0.45rem;
   }
 
-  .public-submit-readiness .metadata-row {
-    gap: 0.3rem;
-    padding: 0.45rem 0;
+  .public-submit-badge {
+    gap: 0.44rem;
+    min-height: 2.7rem;
+    padding: 0.48rem 0.58rem;
   }
 
-  .public-submit-readiness .metadata-row span,
-  .public-submit-readiness .metadata-row strong {
+  .public-submit-badge-icon {
+    width: 1.82rem;
+    height: 1.82rem;
+    font-size: 0.58rem;
+  }
+
+  .public-submit-badge.is-walrus .public-submit-badge-icon {
+    font-size: 0.9rem;
+  }
+
+  .public-submit-badge small {
+    font-size: 0.58rem;
+  }
+
+  .public-submit-badge strong {
     font-size: 0.78rem;
-    line-height: 1.35;
   }
 
   .public-form-fields {
@@ -14091,6 +14316,13 @@ body.composer-mode .bg-orb {
 
   .beacon-frame {
     padding: 0.9rem;
+  }
+
+  .beacon-action-button {
+    width: 2.45rem;
+    min-width: 2.45rem;
+    height: 2.45rem;
+    min-height: 2.45rem;
   }
 
   .beacon-qr-shell {
@@ -14862,7 +15094,6 @@ pre {
   .review-support-grid,
   .publish-status-grid,
   .public-identity-grid,
-  .public-form-summary-row,
   .project-registry-grid,
   .project-registry-grid-advanced,
   .workspace-overview-shell,
