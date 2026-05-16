@@ -1,3 +1,4 @@
+import { useAutoConnectWallet } from "@mysten/dapp-kit";
 import type { PropsWithChildren } from "react";
 import { useI18n } from "../i18n";
 import { WalletConnect } from "./WalletConnect";
@@ -19,6 +20,12 @@ export function AdminAccessGate({
   children,
 }: AdminAccessGateProps) {
   const { t } = useI18n();
+  const autoConnectStatus = useAutoConnectWallet();
+
+  if (!hasWallet && autoConnectStatus === "idle") {
+    return <div className="panel">{t("checkingWalletCapabilities")}</div>;
+  }
+
   if (!hasWallet) {
     return (
       <section className="panel glow-panel access-panel">

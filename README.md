@@ -72,6 +72,14 @@ This is the fastest judging path through the current UX.
 9. Triage the signal, set priority/tags/notes, assign roadmap stage, and export JSON or CSV.
 10. Open `/explore` or `/roadmap/:formId` and confirm that public views contain only selected roadmap-safe metadata.
 
+### Contest Demo Mode
+
+Open `/demo` or use `?demo=1` on the landing route for a desktop-first recording path. Demo Mode seeds a sample workspace, form, responses, and SignalInbox state in local storage, then walks through:
+
+Create Signal -> Add questions -> Publish -> Open public form -> Submit response -> View in SignalInbox -> Export CSV.
+
+Demo Mode is explicit only. It uses mock/fallback status surfaces so wallet prompts, Walrus writes, or Seal availability do not block a 60-90 second contest video, while normal create, public response, admin, and production data paths remain unchanged.
+
 ## Why Walrus / Seal / Sui
 
 | Layer | Why DeepSignal Uses It |
@@ -272,6 +280,7 @@ VITE_WALRUS_AGGREGATOR_URL=https://aggregator.walrus-mainnet.walrus.space
 VITE_WALRUS_UPLOAD_RELAY_TIMEOUT_MS=90000
 VITE_WALRUS_UPLOAD_RELAY_TIP_MAX=1000000
 VITE_WALRUS_STORAGE_EPOCHS=5
+VITE_RELEASE_STORAGE_RESET_TOKEN=
 
 VITE_SEAL_PACKAGE_ID=
 VITE_SEAL_KEY_SERVER_OBJECT_ID=
@@ -293,6 +302,7 @@ Notes:
 - `VITE_ADMIN_CAP_ID` and `VITE_OWNER_CAP_ID` are optional helper envs for operator tooling and manual transaction flows.
 - Normal app access discovers active cap objects from the connected wallet.
 - `VITE_SEAL_AGGREGATOR_URL` is needed when the configured Seal key server is a committee server.
+- Set `VITE_RELEASE_STORAGE_RESET_TOKEN` to a new release identifier when the next deployed build should clear browser-local forms, submissions, drafts, Walrus blob indexes, and related form caches once per browser. Leave it blank for normal releases.
 - Vite client env vars must use the `VITE_` prefix.
 
 ## Move Setup On Sui Mainnet

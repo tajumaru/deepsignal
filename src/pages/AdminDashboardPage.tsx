@@ -1487,6 +1487,9 @@ export function AdminDashboardPage() {
                 >
                   {t("navCreateForm")}
                 </CreateFormLink>
+                <Link className="ghost-button" to="/demo">
+                  Start demo
+                </Link>
                 <button
                   type="button"
                   className="ghost-button"

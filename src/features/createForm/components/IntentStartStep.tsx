@@ -11,7 +11,6 @@ const EXAMPLE_INTENTS = [
   "Governance signal",
 ];
 
-const INTENT_OPTIONS = ["Private feedback", "Bug report", "Feature request", "Governance signal"];
 const SIGNAL_POLICIES = ["Anonymous allowed", "Sealed responses", "Attachments on", "Priority included"];
 const LIFECYCLE_STEPS = ["Intent", "Opened", "Protected", "Stored", "Reviewed"];
 const SIGNAL_POLICY_ICON_CLASSES: Record<string, string> = {
@@ -49,6 +48,8 @@ const FLOW_SECTIONS = [
     description: "Keep attribution intentional and optional.",
   },
 ];
+
+const FIRST_QUESTION_FALLBACK = "What should we understand?";
 
 function toSignalTitle(intent: string) {
   const compactIntent = intent.trim().replace(/\s+/g, " ");
@@ -147,6 +148,28 @@ function composeIntentDraft(intent: string): IntentDraft {
   };
 }
 
+function composeFirstQuestionDraft(intent: string): IntentDraft {
+  const title = toSignalTitle(intent);
+  const question = intent.trim() ? `What should we understand about ${intent.trim()}?` : FIRST_QUESTION_FALLBACK;
+  return {
+    title,
+    description: intent.trim()
+      ? `A focused signal for collecting: ${intent.trim()}`
+      : "A new signal that starts with one clear question.",
+    sections: [FLOW_SECTIONS[1]],
+    blocks: [
+      {
+        type: "longText",
+        label: question,
+        helpText: "Start lightweight. You can add more once the first signal exists.",
+        placeholder: "One honest response is enough to begin.",
+        required: true,
+        sectionTitle: FLOW_SECTIONS[1].title,
+      },
+    ],
+  };
+}
+
 function getQuietSuggestions(intent: string, policies: string[]) {
   const lowerIntent = intent.toLowerCase();
   const suggestions = new Set<string>();
@@ -198,24 +221,37 @@ export function IntentStartStep({ onApplyDraft }: IntentStartStepProps) {
   const [draft, setDraft] = useState<IntentDraft | null>(null);
   const canApply = Boolean(draft?.blocks.length);
   const composedIntent = [intent, ...activePolicies].filter(Boolean).join(" / ");
-  const previewDraft = useMemo(() => draft ?? composeIntentDraft(composedIntent), [draft, composedIntent]);
+  const previewDraft = useMemo(
+    () =>
+      draft ?? {
+        title: intent.trim() ? toSignalTitle(intent) : "Untitled Signal",
+        description: intent.trim() ? `Ready to collect: ${intent.trim()}` : "Start with one question.",
+        sections: [],
+        blocks: [],
+      },
+    [draft, intent],
+  );
   const quietSuggestions = useMemo(() => getQuietSuggestions(composedIntent, activePolicies), [activePolicies, composedIntent]);
 
   function handleGenerateDraft() {
     setDraft(composeIntentDraft(composedIntent));
   }
 
+  function handleAddFirstQuestion() {
+    setDraft(composeFirstQuestionDraft(intent));
+  }
+
   function handleExampleIntent(example: string) {
     setIntent(example);
-    setDraft(composeIntentDraft([example, ...activePolicies].join(" / ")));
+    setDraft(composeFirstQuestionDraft(example));
   }
 
   return (
-    <section className="panel glow-panel composer-hero-card intent-start-card">
+    <section className="panel glow-panel composer-hero-card intent-start-card intent-start-card-creative">
       <div className="intent-start-grid">
         <div className="intent-prompt-panel">
           <p className="eyebrow">Intent to Signal</p>
-          <h2>Open a signal channel</h2>
+          <h2>Start with one question</h2>
 
           <label className="intent-textarea-wrap">
             <span>What do you want to collect?</span>
@@ -226,21 +262,25 @@ export function IntentStartStep({ onApplyDraft }: IntentStartStepProps) {
                 setIntent(event.target.value);
                 setDraft(null);
               }}
-              placeholder="Private feedback from early users..."
-              rows={5}
+              placeholder="Private feedback from early users"
+              rows={3}
             />
           </label>
 
-          <div className="intent-option-grid" aria-label="Signal intent options">
-            {INTENT_OPTIONS.map((option) => (
-              <button key={option} type="button" className={intent === option ? "is-active" : ""} onClick={() => handleExampleIntent(option)}>
-                {option}
+          <button type="button" className="primary-button intent-add-question-button" onClick={handleAddFirstQuestion}>
+            Add question
+          </button>
+
+          <div className="intent-example-grid" aria-label="Intent examples">
+            {EXAMPLE_INTENTS.map((example) => (
+              <button key={example} type="button" className="intent-example-chip" onClick={() => handleExampleIntent(example)}>
+                {example}
               </button>
             ))}
           </div>
 
-          <div className="intent-policy-grid" aria-label="Signal policy options">
-            {SIGNAL_POLICIES.map((policy) => {
+          <div className="intent-policy-grid intent-policy-grid-soft" aria-label="Signal policy options">
+            {SIGNAL_POLICIES.slice(0, 3).map((policy) => {
               const active = activePolicies.includes(policy);
               return (
                 <div key={policy} className="intent-policy-group">
@@ -268,20 +308,9 @@ export function IntentStartStep({ onApplyDraft }: IntentStartStepProps) {
             })}
           </div>
 
-          <div className="intent-example-grid" aria-label="Intent examples">
-            {EXAMPLE_INTENTS.map((example) => (
-              <button key={example} type="button" className="intent-example-chip" onClick={() => handleExampleIntent(example)}>
-                {example}
-              </button>
-            ))}
-          </div>
-
           <div className="intent-assist-actions">
-            <button type="button" className="primary-button intent-action-button" onClick={handleGenerateDraft}>
-              Generate Signal
-            </button>
             <button type="button" className="ghost-button intent-action-button" onClick={handleGenerateDraft}>
-              Refresh
+              Generate more
             </button>
           </div>
         </div>
@@ -293,7 +322,7 @@ export function IntentStartStep({ onApplyDraft }: IntentStartStepProps) {
               <h3>{previewDraft.title}</h3>
               <p className="muted">{previewDraft.description}</p>
             </div>
-            <span className="intent-ai-chip">Intent mapped</span>
+            <span className="intent-ai-chip">{previewDraft.blocks.length ? "Live" : "Blank"}</span>
           </div>
 
           <div className="intent-lifecycle-strip" aria-label="Signal lifecycle">
@@ -311,8 +340,13 @@ export function IntentStartStep({ onApplyDraft }: IntentStartStepProps) {
             ))}
           </div>
 
-          <div className="intent-draft-flow">
-            {previewDraft.blocks.map((block, index) => (
+          <div className={`intent-draft-flow ${previewDraft.blocks.length === 0 ? "is-empty" : ""}`}>
+            {previewDraft.blocks.length === 0 ? (
+              <article className="intent-draft-empty">
+                <strong>Your first question appears here.</strong>
+                <span>Type an intent, then press Add question.</span>
+              </article>
+            ) : previewDraft.blocks.map((block, index) => (
               <article key={`${block.type}-${block.label}-${index}`} className="intent-draft-block">
                 <span className="intent-draft-index">B{index + 1}</span>
                 <div>

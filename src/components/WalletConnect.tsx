@@ -1,5 +1,6 @@
 import {
   ConnectButton,
+  useAutoConnectWallet,
   useCurrentAccount,
   useCurrentWallet,
   useDisconnectWallet,
@@ -29,6 +30,7 @@ export function WalletConnect({ compact = false }: WalletConnectProps) {
     isConnected,
     isConnecting,
   } = useCurrentWallet();
+  const autoConnectStatus = useAutoConnectWallet();
   const disconnectWallet = useDisconnectWallet();
   const [menuOpen, setMenuOpen] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -88,7 +90,9 @@ export function WalletConnect({ compact = false }: WalletConnectProps) {
     }
   }
 
-  const buttonLabel = isConnecting
+  const isRestoringConnection = !isConnected && (isConnecting || autoConnectStatus === "idle");
+
+  const buttonLabel = isRestoringConnection
     ? "Syncing Signal..."
     : isConnected
       ? "Synced"
@@ -96,8 +100,8 @@ export function WalletConnect({ compact = false }: WalletConnectProps) {
 
   const statusCopy = isConnected
     ? "SIGNAL LINK ESTABLISHED"
-    : isConnecting
-      ? "Establishing wallet uplink"
+    : isRestoringConnection
+      ? "Restoring wallet uplink"
       : "Wallet-optional public mode";
 
   if (!isConnected) {
@@ -108,7 +112,14 @@ export function WalletConnect({ compact = false }: WalletConnectProps) {
             <strong>{buttonLabel}</strong>
             <span>{statusCopy}</span>
           </div>
-          <ConnectButton />
+          {isRestoringConnection ? (
+            <button type="button" className="wallet-sync-button is-syncing" disabled>
+              <span className="wallet-sync-indicator is-pending" />
+              <span>Restoring...</span>
+            </button>
+          ) : (
+            <ConnectButton />
+          )}
         </div>
       </div>
     );
