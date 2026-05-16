@@ -143,26 +143,26 @@ export function WalletConnect({ compact = false }: WalletConnectProps) {
           <div className="wallet-sync-menu-header">
             <span className="wallet-sync-menu-eyebrow">{t("connectedLabel")}</span>
             <strong>{currentWallet?.name ?? "Wallet"}</strong>
-            <code>{account?.address ?? "No address available"}</code>
+            <button
+              type="button"
+              className="wallet-sync-copy-chip"
+              onClick={() => void handleCopyAddress()}
+              role="menuitem"
+            >
+              <span>{copied ? "Copied" : "Copy"}</span>
+              <small>{formatWalletAddress(account?.address)}</small>
+            </button>
           </div>
           <button
             type="button"
-            className="wallet-sync-menu-item"
-            onClick={() => void handleCopyAddress()}
-            role="menuitem"
-          >
-            <span>{copied ? "Address Copied" : "Copy Address"}</span>
-            <small>{formatWalletAddress(account?.address)}</small>
-          </button>
-          <button
-            type="button"
-            className="wallet-sync-menu-item wallet-sync-menu-item-danger"
+            className="wallet-sync-disconnect-button"
             onClick={() => void handleDisconnect()}
             disabled={disconnectWallet.isPending}
             role="menuitem"
+            title="Disconnect"
           >
+            <span className="wallet-sync-disconnect-icon" aria-hidden="true" />
             <span>{disconnectWallet.isPending ? "Disconnecting..." : "Disconnect"}</span>
-            <small>Return to wallet-optional mode</small>
           </button>
         </div>
       ) : null}

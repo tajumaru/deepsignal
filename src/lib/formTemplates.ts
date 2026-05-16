@@ -48,15 +48,15 @@ export const formTemplates: FormTemplateDefinition[] = [
   {
     key: "bug",
     purpose: "bug",
-    emoji: "\uD83D\uDCE1",
-    label: "Signal Intake",
-    title: "Signal Intake",
+    emoji: "\uD83D\uDC1E",
+    label: "Bug Report",
+    title: "Bug Report",
     description: "Send a quick signal with screenshots, clips, and automatically attached device context.",
     fields: [
-      { type: "shortText", label: "何が起きた？", required: true, placeholder: "例: iPhoneで送信ボタンが押せない" },
-      { type: "longText", label: "何が起きたか教えてください", placeholder: "スクリーンショットだけでもOK" },
+      { type: "shortText", label: "What happened?", required: true, placeholder: "Example: I cannot tap Submit on iPhone" },
+      { type: "longText", label: "Tell us what happened", placeholder: "A screenshot alone is okay" },
       { type: "screenshot", label: "Screenshot / Video" },
-      { type: "longText", label: "どうすると起きる？", placeholder: "例: Form作成後、Submitを押した時" },
+      { type: "longText", label: "What triggers it?", placeholder: "Example: after creating a form, when I tap Submit" },
       {
         type: "dropdown",
         label: "Impact",
@@ -193,7 +193,7 @@ export function createTemplateFields(template: FormTemplateDefinition): FormFiel
 export const smartComposerTemplates: SmartTemplateDefinition[] = [
   {
     key: "bugReport",
-    label: "Signal Intake",
+    label: "Bug Report",
     description: "Collect a low-friction bug signal with media first and automatic context.",
     sections: [
       { key: "signal", title: "Signal" },
@@ -201,10 +201,10 @@ export const smartComposerTemplates: SmartTemplateDefinition[] = [
       { key: "context", title: "Context" },
     ],
     fields: [
-      { type: "shortText", label: "何が起きた？", required: true, sectionKey: "signal", placeholder: "例: iPhoneで送信ボタンが押せない" },
-      { type: "longText", label: "何が起きたか教えてください", sectionKey: "signal", placeholder: "スクリーンショットだけでもOK" },
+      { type: "shortText", label: "What happened?", required: true, sectionKey: "signal", placeholder: "Example: I cannot tap Submit on iPhone" },
+      { type: "longText", label: "Tell us what happened", sectionKey: "signal", placeholder: "A screenshot alone is okay" },
       { type: "screenshot", label: "Screenshot / Video", sectionKey: "media" },
-      { type: "longText", label: "どうすると起きる？", sectionKey: "context", placeholder: "例: Form作成後、Submitを押した時" },
+      { type: "longText", label: "What triggers it?", sectionKey: "context", placeholder: "Example: after creating a form, when I tap Submit" },
       { type: "dropdown", label: "Impact", required: true, sectionKey: "context", options: ["Minor", "Serious", "Blocking"] },
     ],
   },
