@@ -283,6 +283,11 @@ export function FieldsStep({
             </div>
           ) : null}
 
+          <div className="composer-library-legend" aria-label={t("libraryReadyLegend")}>
+            <span className="composer-library-status-dot" aria-hidden="true" />
+            <span>{t("libraryReadyLegend")}</span>
+          </div>
+
           <div className="composer-library-scroll">
             <div className="composer-library-list">
               {libraryBlocks.map((block) => (
@@ -305,8 +310,15 @@ export function FieldsStep({
                   <span className="composer-library-card-copy">
                     <span className="composer-library-card-topline">
                       <strong>{isMirrorPresentation ? block.mirrorTitle : t(block.titleKey)}</strong>
-                      <span className={`composer-library-chip ${block.soon ? "is-soon" : "is-ready"}`}>
-                        {block.soon ? t("librarySoon") : t("libraryReady")}
+                      <span className={`composer-library-chip ${block.soon ? "is-soon" : "is-ready"}`} title={block.soon ? undefined : t("libraryReady")}>
+                        {block.soon ? (
+                          t("librarySoon")
+                        ) : (
+                          <>
+                            <span className="composer-library-status-dot" aria-hidden="true" />
+                            <span className="sr-only">{t("libraryReady")}</span>
+                          </>
+                        )}
                       </span>
                     </span>
                     {isMirrorPresentation ? <small className="muted">{block.mirrorBody}</small> : null}

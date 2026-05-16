@@ -14,6 +14,18 @@ const EXAMPLE_INTENTS = [
 const INTENT_OPTIONS = ["Private feedback", "Bug report", "Feature request", "Governance signal"];
 const SIGNAL_POLICIES = ["Anonymous allowed", "Sealed responses", "Attachments on", "Priority included"];
 const LIFECYCLE_STEPS = ["Intent", "Opened", "Protected", "Stored", "Reviewed"];
+const SIGNAL_POLICY_ICON_CLASSES: Record<string, string> = {
+  "Anonymous allowed": "is-anonymous",
+  "Sealed responses": "is-sealed",
+  "Attachments on": "is-attachments",
+  "Priority included": "is-priority",
+};
+const SIGNAL_POLICY_GROUP_LABELS: Record<string, string> = {
+  "Anonymous allowed": "Identity policy",
+  "Sealed responses": "Private signal",
+  "Attachments on": "Evidence",
+  "Priority included": "Review cue",
+};
 
 const FLOW_SECTIONS = [
   {
@@ -231,21 +243,27 @@ export function IntentStartStep({ onApplyDraft }: IntentStartStepProps) {
             {SIGNAL_POLICIES.map((policy) => {
               const active = activePolicies.includes(policy);
               return (
-                <button
-                  key={policy}
-                  type="button"
-                  className={active ? "is-active" : ""}
-                  aria-pressed={active}
-                  onClick={() => {
-                    setActivePolicies((current) =>
-                      current.includes(policy) ? current.filter((item) => item !== policy) : [...current, policy],
-                    );
-                    setDraft(null);
-                  }}
-                >
-                  <span aria-hidden="true">{active ? "On" : "Off"}</span>
-                  {policy}
-                </button>
+                <div key={policy} className="intent-policy-group">
+                  <span className="intent-policy-group-label">{SIGNAL_POLICY_GROUP_LABELS[policy]}</span>
+                  <button
+                    type="button"
+                    className={active ? "is-active" : ""}
+                    aria-pressed={active}
+                    onClick={() => {
+                      setActivePolicies((current) =>
+                        current.includes(policy) ? current.filter((item) => item !== policy) : [...current, policy],
+                      );
+                      setDraft(null);
+                    }}
+                  >
+                    <span
+                      className={`intent-policy-icon ${SIGNAL_POLICY_ICON_CLASSES[policy]}`}
+                      aria-hidden="true"
+                    />
+                    <span className="intent-policy-state" aria-hidden="true">{active ? "On" : "Off"}</span>
+                    {policy}
+                  </button>
+                </div>
               );
             })}
           </div>

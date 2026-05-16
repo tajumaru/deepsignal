@@ -97,6 +97,10 @@ export function DynamicField({
   const selectedAttachments = Array.isArray(value)
     ? value.filter((item): item is UploadDropzoneItem => Boolean(item) && typeof item === "object" && "id" in item)
     : [];
+  const rendersChoiceChips =
+    field.type === "dropdown" &&
+    (field.options ?? []).length > 0 &&
+    (field.options ?? []).every((option) => ["Minor", "Serious", "Blocking"].includes(option));
 
   function updateCheckbox(option: string, checked: boolean) {
     const current = Array.isArray(value) ? value : [];
@@ -231,7 +235,33 @@ export function DynamicField({
         </div>
       ) : null}
 
-      {field.type === "dropdown" ? (
+      {field.type === "dropdown" && rendersChoiceChips ? (
+        <div
+          className={`choice-chip-group ${hasError ? "is-error" : ""}`}
+          role="radiogroup"
+          aria-label={field.label}
+          aria-invalid={hasError}
+          aria-describedby={hasError ? fieldErrorId : undefined}
+        >
+          {(field.options ?? []).map((option) => {
+            const active = String(value ?? "") === option;
+            return (
+              <button
+                key={option}
+                type="button"
+                className={`choice-chip ${active ? "is-active" : ""}`}
+                disabled={disabled}
+                aria-pressed={active}
+                onClick={() => onChange(option)}
+              >
+                {option}
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
+
+      {field.type === "dropdown" && !rendersChoiceChips ? (
         <select
           value={String(value ?? "")}
           disabled={disabled}

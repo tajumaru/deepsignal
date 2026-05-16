@@ -17,6 +17,7 @@ interface PublicIdentityCardProps {
   onAttachWalletChange: (attached: boolean) => void;
   onAttachWalletTouched: () => void;
   onAccountAddressChange: (address?: string) => void;
+  onWalletProviderChange?: (provider?: string) => void;
   labels: {
     eyebrow: string;
     title: string;
@@ -44,6 +45,7 @@ export function PublicIdentityCard({
   onAttachWalletChange,
   onAttachWalletTouched,
   onAccountAddressChange,
+  onWalletProviderChange,
   labels,
 }: PublicIdentityCardProps) {
   const [walletRequested, setWalletRequested] = useState(walletRequired);
@@ -69,7 +71,10 @@ export function PublicIdentityCard({
             <WalletSurface fallback={walletFallback}>
               <WalrusRuntimeSurface fallback={walletFallback}>
                 <Suspense fallback={walletFallback}>
-                  <PublicWalletAccountPanel onAccountAddressChange={onAccountAddressChange} />
+                  <PublicWalletAccountPanel
+                    onAccountAddressChange={onAccountAddressChange}
+                    onWalletProviderChange={onWalletProviderChange}
+                  />
                 </Suspense>
               </WalrusRuntimeSurface>
             </WalletSurface>

@@ -274,6 +274,144 @@ function LiveSystemStatusSection() {
   );
 }
 
+function UseCasesSection() {
+  const { sectionRef, isVisible } = useScrollReveal();
+  const { t } = useI18n();
+  const useCases = [
+    { title: t("landingUseCase1Title"), body: t("landingUseCase1Body"), tone: "feedback" },
+    { title: t("landingUseCase2Title"), body: t("landingUseCase2Body"), tone: "applications" },
+    { title: t("landingUseCase3Title"), body: t("landingUseCase3Body"), tone: "intelligence" },
+    { title: t("landingUseCase4Title"), body: t("landingUseCase4Body"), tone: "ai" },
+  ];
+
+  return (
+    <section
+      ref={sectionRef}
+      className={`landing-use-cases-section ${isVisible ? "is-visible" : ""}`}
+      aria-labelledby="landing-use-cases-title"
+    >
+      <div className="landing-signal-section-shell landing-use-cases-shell">
+        <div className="landing-section-kicker">
+          <span />
+          <p className="eyebrow">{t("landingUseCasesEyebrow")}</p>
+        </div>
+        <div className="landing-use-cases-header">
+          <h2 id="landing-use-cases-title">{t("landingUseCasesTitle")}</h2>
+        </div>
+
+        <div className="landing-use-case-field">
+          {useCases.map((useCase, index) => (
+            <article
+              key={useCase.title}
+              className={`landing-use-case landing-use-case-${useCase.tone}`}
+              style={{ "--reveal-index": index } as CSSProperties}
+            >
+              <span className="landing-use-case-index">0{index + 1}</span>
+              <div>
+                <h3>{useCase.title}</h3>
+                <p>{useCase.body}</p>
+              </div>
+            </article>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function CorePrinciplesSection() {
+  const { sectionRef, isVisible } = useScrollReveal();
+  const { t } = useI18n();
+  const principles = [
+    { title: t("landingPrinciplePrivateTitle"), body: t("landingPrinciplePrivateBody") },
+    { title: t("landingPrincipleEncryptedTitle"), body: t("landingPrincipleEncryptedBody") },
+    { title: t("landingPrinciplePermanentTitle"), body: t("landingPrinciplePermanentBody") },
+  ];
+
+  return (
+    <section
+      ref={sectionRef}
+      className={`landing-principles-section ${isVisible ? "is-visible" : ""}`}
+      aria-label={t("landingPrinciplesLabel")}
+    >
+      <div className="landing-signal-section-shell landing-principles-shell">
+        {principles.map((principle, index) => (
+          <article key={principle.title} className="landing-principle" style={{ "--reveal-index": index } as CSSProperties}>
+            <h2>{principle.title}</h2>
+            <p>{principle.body}</p>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function LiveSignalFlowSection() {
+  const { sectionRef, isVisible } = useScrollReveal();
+  const { t } = useI18n();
+  const flowRows = [
+    t("landingLiveFlowStep1"),
+    t("landingLiveFlowStep2"),
+    t("landingLiveFlowStep3"),
+    t("landingLiveFlowStep4"),
+  ];
+
+  return (
+    <section
+      ref={sectionRef}
+      className={`landing-live-flow-section ${isVisible ? "is-visible" : ""}`}
+      aria-labelledby="landing-live-flow-title"
+    >
+      <div className="landing-signal-section-shell landing-live-flow-shell">
+        <div className="landing-live-flow-copy">
+          <p className="eyebrow">{t("landingLiveFlowEyebrow")}</p>
+          <h2 id="landing-live-flow-title">{t("landingLiveFlowTitle")}</h2>
+        </div>
+
+        <div className="landing-live-terminal" role="status" aria-label={t("landingLiveFlowTitle")}>
+          <div className="landing-live-terminal-topline">
+            <span>{t("landingLiveFlowConsole")}</span>
+            <strong>{t("landingLiveFlowStatus")}</strong>
+          </div>
+          <div className="landing-live-flow-rail" aria-hidden="true">
+            <span />
+          </div>
+          <div className="landing-live-log">
+            {flowRows.map((row, index) => (
+              <div key={row} className="landing-live-log-row" style={{ "--reveal-index": index } as CSSProperties}>
+                <span className="landing-live-log-dot" />
+                <span>{row}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function FinalSignalCtaSection() {
+  const { sectionRef, isVisible } = useScrollReveal();
+  const { t } = useI18n();
+
+  return (
+    <section
+      ref={sectionRef}
+      className={`landing-final-cta-section ${isVisible ? "is-visible" : ""}`}
+      aria-labelledby="landing-final-cta-title"
+    >
+      <div className="landing-signal-section-shell landing-final-cta-shell">
+        <span className="landing-final-cta-orbit" aria-hidden="true" />
+        <p className="eyebrow">{t("landingFinalCtaEyebrow")}</p>
+        <h2 id="landing-final-cta-title">{t("landingFinalCtaTitle")}</h2>
+        <CreateFormLink className="primary-button landing-cta-primary landing-final-cta-button">
+          {t("landingHeroContestCreate")}
+        </CreateFormLink>
+      </div>
+    </section>
+  );
+}
+
 export function LandingPage() {
   const { t } = useI18n();
   const heroSignalBars = [0.46, 0.72, 0.38, 0.92, 0.58, 0.81, 0.5, 0.68, 0.42, 0.86];
@@ -459,10 +597,10 @@ export function LandingPage() {
         </div>
       </section>
 
-      <SignalFlowSection />
-      <ExploreIntroSection />
-      <SignalInboxIntroSection />
-      <LiveSystemStatusSection />
+      <UseCasesSection />
+      <CorePrinciplesSection />
+      <LiveSignalFlowSection />
+      <FinalSignalCtaSection />
     </section>
   );
 }

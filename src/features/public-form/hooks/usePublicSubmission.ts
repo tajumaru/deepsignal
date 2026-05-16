@@ -10,6 +10,7 @@ import { isAttachmentFieldType, isConfirmationCheckboxField } from "../../../lib
 import { getSubmissionCategoryFromPurpose } from "../../../lib/formTemplates";
 import { isResponseDeadlinePassed } from "../../../lib/responseDeadline";
 import { ensureRespondentSession } from "../../../lib/respondentSession";
+import { collectSignalContext, installSignalContextCapture } from "../../../lib/signalContext";
 import {
   activeSealAdapter,
   ENCRYPTED_INLINE_ATTACHMENT_MAX_BYTES,
@@ -153,6 +154,7 @@ interface UsePublicSubmissionArgs {
   form: FormSchema | null;
   initialAnswers: PublicAnswers;
   accountAddress?: string;
+  walletProvider?: string | null;
   attachWallet: boolean;
   walletRequired: boolean;
   manifestBlobId: string;
@@ -168,6 +170,7 @@ export function usePublicSubmission({
   form,
   initialAnswers,
   accountAddress,
+  walletProvider,
   attachWallet,
   walletRequired,
   manifestBlobId,
@@ -192,6 +195,8 @@ export function usePublicSubmission({
     stage: "preparing_signal",
     status: "idle",
   });
+
+  useEffect(() => installSignalContextCapture(), []);
 
   useEffect(() => subscribeWalrusRuntime(() => setWalrusRuntime(getWalrusMutationRuntimeStatus())), []);
 
@@ -456,6 +461,12 @@ export function usePublicSubmission({
         submittedAt: signedAt,
         isAnonymous,
       };
+      const signalContext = collectSignalContext({
+        form,
+        manifestBlobId,
+        walletAddress: accountAddress,
+        walletProvider,
+      });
       const attachments: SubmissionAttachment[] = [];
       const plainAnswers: PublicAnswers = {};
       const visibleFields = getOrderedFields(form.fields).filter((field) => visibleFieldIds.has(field.id));
@@ -598,6 +609,9 @@ export function usePublicSubmission({
               attachments,
             },
         respondentMeta,
+        metadata: {
+          context: signalContext,
+        },
         category: getSubmissionCategoryFromPurpose(form.purpose),
         status: "unread",
         priority: "medium",

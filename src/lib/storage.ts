@@ -676,11 +676,13 @@ export async function resolveSubmissionAnswers(
       let parsed: {
         answers?: Record<string, unknown>;
         attachments?: Submission["attachments"];
+        metadata?: Submission["metadata"];
       };
       try {
         parsed = JSON.parse(decrypted) as {
           answers?: Record<string, unknown>;
           attachments?: Submission["attachments"];
+          metadata?: Submission["metadata"];
         };
       } catch (error) {
         throw new DecryptDiagnosticError(
@@ -700,6 +702,7 @@ export async function resolveSubmissionAnswers(
           parsed.attachments === undefined
             ? submission.attachments
             : normalizeSubmissionAttachments(parsed.attachments),
+        metadata: parsed.metadata,
         legacyUnencrypted: decryptedResult.legacyUnencrypted,
       };
     } catch (error) {
@@ -811,6 +814,7 @@ export async function saveSubmissionWithEncryption(
         const payload = JSON.stringify({
           answers: submission.answers,
           attachments: submission.attachments,
+          metadata: submission.metadata,
         });
         messages?.onPipelineStage?.("encrypting");
         encryptedPayload = await encryptSensitiveResponse(

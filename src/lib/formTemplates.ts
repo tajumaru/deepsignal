@@ -48,21 +48,21 @@ export const formTemplates: FormTemplateDefinition[] = [
   {
     key: "bug",
     purpose: "bug",
-    emoji: "\uD83D\uDC1E",
-    label: "Bug Report",
-    title: "Bug Report",
-    description: "Share the issue, how to reproduce it, and any proof that helps us fix it fast.",
+    emoji: "\uD83D\uDCE1",
+    label: "Signal Intake",
+    title: "Signal Intake",
+    description: "Send a quick signal with screenshots, clips, and automatically attached device context.",
     fields: [
-      { type: "shortText", label: "Bug title", required: true },
-      { type: "longText", label: "What happened?", required: true, placeholder: "What did you expect, and what happened instead?" },
-      { type: "longText", label: "How can we reproduce it?", required: true, placeholder: "List the steps one by one." },
+      { type: "shortText", label: "何が起きた？", required: true, placeholder: "例: iPhoneで送信ボタンが押せない" },
+      { type: "longText", label: "何が起きたか教えてください", placeholder: "スクリーンショットだけでもOK" },
+      { type: "screenshot", label: "Screenshot / Video" },
+      { type: "longText", label: "どうすると起きる？", placeholder: "例: Form作成後、Submitを押した時" },
       {
         type: "dropdown",
-        label: "Severity",
+        label: "Impact",
         required: true,
-        options: ["Low", "Medium", "High", "Critical"],
+        options: ["Minor", "Serious", "Blocking"],
       },
-      { type: "screenshot", label: "Screenshot" },
     ],
   },
   {
@@ -193,21 +193,19 @@ export function createTemplateFields(template: FormTemplateDefinition): FormFiel
 export const smartComposerTemplates: SmartTemplateDefinition[] = [
   {
     key: "bugReport",
-    label: "Bug Report",
-    description: "Add a clean repro-first report with environment and media sections.",
+    label: "Signal Intake",
+    description: "Collect a low-friction bug signal with media first and automatic context.",
     sections: [
-      { key: "repro", title: "Reproduction" },
-      { key: "environment", title: "Environment" },
-      { key: "media", title: "Media" },
+      { key: "signal", title: "Signal" },
+      { key: "media", title: "Evidence" },
+      { key: "context", title: "Context" },
     ],
     fields: [
-      { type: "shortText", label: "Bug title", required: true, sectionKey: "repro" },
-      { type: "longText", label: "What happened?", required: true, sectionKey: "repro" },
-      { type: "longText", label: "Steps to reproduce", required: true, sectionKey: "repro", validationHint: "Include at least 3 concrete steps." },
-      { type: "shortText", label: "Device / OS / Browser", sectionKey: "environment", placeholder: "iPhone 15 / iOS 18 / Safari" },
-      { type: "dropdown", label: "Severity", required: true, sectionKey: "environment", options: ["Low", "Medium", "High", "Critical"] },
-      { type: "screenshot", label: "Screenshot", sectionKey: "media" },
-      { type: "url", label: "Relevant URL", sectionKey: "media", placeholder: "https://..." },
+      { type: "shortText", label: "何が起きた？", required: true, sectionKey: "signal", placeholder: "例: iPhoneで送信ボタンが押せない" },
+      { type: "longText", label: "何が起きたか教えてください", sectionKey: "signal", placeholder: "スクリーンショットだけでもOK" },
+      { type: "screenshot", label: "Screenshot / Video", sectionKey: "media" },
+      { type: "longText", label: "どうすると起きる？", sectionKey: "context", placeholder: "例: Form作成後、Submitを押した時" },
+      { type: "dropdown", label: "Impact", required: true, sectionKey: "context", options: ["Minor", "Serious", "Blocking"] },
     ],
   },
   {
@@ -346,7 +344,7 @@ export function inferPriorityFromTemplateAnswers(
     if (severity === "critical" || severity === "high" || severity === "blocking") {
       return "high";
     }
-    if (severity === "medium" || severity === "annoying") {
+    if (severity === "medium" || severity === "annoying" || severity === "serious") {
       return "medium";
     }
     if (severity === "low" || severity === "minor") {

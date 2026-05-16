@@ -22,6 +22,7 @@ import {
 import { DEFAULT_ATTACHMENT_MAX_BYTES, ENCRYPTED_INLINE_ATTACHMENT_MAX_BYTES } from "../lib/storage";
 import { getOrderedFields, getVisibleFieldIds, isFieldRequired } from "../utils/formLogic";
 import { isAttachmentFieldType, isConfirmationCheckboxField } from "../lib/fieldTypes";
+import { collectSignalContext, type AttachedSignalContext } from "../lib/signalContext";
 import type { FieldType } from "../types";
 
 function hasPublicAnswerValue(field: { type: string; rows?: string[] }, value: unknown) {
@@ -56,6 +57,7 @@ export function PublicFormPage() {
   const { formId = "" } = useParams();
   const [searchParams] = useSearchParams();
   const [walletAccountAddress, setWalletAccountAddress] = useState<string | undefined>();
+  const [walletProvider, setWalletProvider] = useState<string | undefined>();
   const [attachWallet, setAttachWallet] = useState(false);
   const [attachWalletTouched, setAttachWalletTouched] = useState(false);
   const [submissionOverlayDismissed, setSubmissionOverlayDismissed] = useState(false);
@@ -88,6 +90,7 @@ export function PublicFormPage() {
     form,
     initialAnswers,
     accountAddress: walletAccountAddress,
+    walletProvider,
     attachWallet,
     walletRequired,
     manifestBlobId,
@@ -225,6 +228,18 @@ export function PublicFormPage() {
       fieldLabel: "Attachment",
       maxSize: `${Math.round(maxSizeBytes / (1024 * 1024))}MB`,
     });
+  const [attachedContext, setAttachedContext] = useState<AttachedSignalContext>(() =>
+    collectSignalContext({ form: null, manifestBlobId, walletAddress: walletAccountAddress, walletProvider }),
+  );
+
+  useEffect(() => {
+    function updateAttachedContext() {
+      setAttachedContext(collectSignalContext({ form, manifestBlobId, walletAddress: walletAccountAddress, walletProvider }));
+    }
+    updateAttachedContext();
+    window.addEventListener("resize", updateAttachedContext);
+    return () => window.removeEventListener("resize", updateAttachedContext);
+  }, [form, manifestBlobId, walletAccountAddress, walletProvider]);
 
   function getAttachmentHint(fieldType: "screenshot" | "video") {
     const baseHint = fieldType === "screenshot" ? t("screenshotHint") : t("videoHint");
@@ -401,6 +416,7 @@ export function PublicFormPage() {
         onAttachWalletChange={setAttachWallet}
         onAttachWalletTouched={() => setAttachWalletTouched(true)}
         onAccountAddressChange={setWalletAccountAddress}
+        onWalletProviderChange={setWalletProvider}
         labels={{
           eyebrow: t("publicIdentityEyebrow"),
           title: t("publicIdentityTitle"),
@@ -484,6 +500,8 @@ export function PublicFormPage() {
         ))}
       </div>
 
+      <AttachedSignalContextPanel context={attachedContext} />
+
       <SignalSubmissionPipeline
         pipeline={submitPipeline}
         visible={submitting || (submitPipeline.status === "failed" && !submissionOverlayDismissed)}
@@ -513,5 +531,54 @@ export function PublicFormPage() {
         </button>
       </div>
     </form>
+  );
+}
+
+function AttachedSignalContextPanel({ context }: { context: AttachedSignalContext }) {
+  const compactRows = [
+    ["Device", `${context.device.type} / ${context.os}`],
+    ["Browser", `${context.browser} ${context.browserVersion}`],
+    ["Viewport", `${context.viewport.width} x ${context.viewport.height} @${context.dpr}x`],
+    ["Page", context.pageName],
+    ["Wallet", context.wallet.connected ? `${context.wallet.provider ?? "Wallet"} ${context.wallet.address ?? ""}` : "Not connected"],
+    ["Network", context.chain],
+    ["Locale", `${context.locale} / ${context.timezone}`],
+  ];
+  const capturedIssueCount = context.consoleErrors.length + context.networkErrors.length;
+
+  return (
+    <details className="attached-signal-context">
+      <summary>
+        <span>
+          <strong>Attached Signal Context</strong>
+          <small>Device, page, wallet mode, and recent errors are attached automatically.</small>
+        </span>
+        <span className="attached-signal-context-count">
+          {capturedIssueCount > 0 ? `${capturedIssueCount} recent issue${capturedIssueCount === 1 ? "" : "s"}` : "Auto-attached"}
+        </span>
+      </summary>
+      <div className="attached-signal-context-grid">
+        {compactRows.map(([label, value]) => (
+          <div key={label} className="metadata-row">
+            <span>{label}</span>
+            <strong>{value || "unknown"}</strong>
+          </div>
+        ))}
+        <div className="metadata-row">
+          <span>URL</span>
+          <strong>{context.url || "unknown"}</strong>
+        </div>
+        <div className="metadata-row">
+          <span>IDs</span>
+          <strong>
+            {[
+              context.ids.formId ? `form ${context.ids.formId}` : "",
+              context.ids.projectId ? `project ${context.ids.projectId}` : "",
+              context.ids.manifestBlobId ? `manifest ${context.ids.manifestBlobId}` : "",
+            ].filter(Boolean).join(" / ") || "none"}
+          </strong>
+        </div>
+      </div>
+    </details>
   );
 }
