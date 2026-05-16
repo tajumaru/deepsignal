@@ -14,6 +14,7 @@ import {
   isWalrusDiagnosticError,
   type WalrusFailureDetails,
 } from "./walrusDiagnostics";
+import { isLikelyWalletCancelError } from "../crypto/sealPayload";
 import type { FormSchema, StorageAdapter, Submission } from "../types";
 import { WALRUS_AGGREGATOR_URL, WALRUS_UPLOAD_RELAY_URL } from "../lib/sui";
 
@@ -100,6 +101,15 @@ async function withWriteFallback<T>(walrusTask: () => Promise<T>, localTask: () 
     emitStatus({ mode: "walrus", notice: null, diagnostics: null });
     return result;
   } catch (error) {
+    if (isLikelyWalletCancelError(error)) {
+      console.info("Walrus write cancelled in wallet; skipping local fallback.");
+      emitStatus({
+        mode: "walrus",
+        notice: error instanceof Error ? error.message : "Wallet approval was cancelled.",
+        diagnostics: isWalrusDiagnosticError(error) ? error.details : null,
+      });
+      throw error;
+    }
     if (requireWalrus) {
       console.error(error);
       emitStatus({

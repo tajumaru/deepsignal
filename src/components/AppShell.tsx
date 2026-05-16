@@ -112,7 +112,12 @@ export function AppShell({ children, walletAvailable = false, chrome = "full" }:
   const walletChrome = useWalletChrome(walletAvailable);
   const publicChrome = chrome === "public";
   const showMobileBottomNav =
-    !publicChrome && ["/dashboard", "/admin", "/explore"].includes(location.pathname);
+    !publicChrome &&
+    (location.pathname === "/explore" ||
+      location.pathname === "/admin" ||
+      location.pathname.startsWith("/admin/") ||
+      location.pathname === "/dashboard" ||
+      location.pathname.startsWith("/dashboard/"));
 
   const shell = (
     <div className={`app-shell ${showMobileBottomNav ? "has-mobile-bottom-nav" : ""}`}>
@@ -121,7 +126,7 @@ export function AppShell({ children, walletAvailable = false, chrome = "full" }:
       <header className={`topbar panel ${publicChrome ? "topbar-public" : ""}`}>
         <Link className="brand" to="/">
           <span className="brand-mark" aria-hidden="true">
-            <img src="/deepsignal-icon.webp" alt="" />
+            <img src="/deepsignal-mark.svg" alt="" />
           </span>
           <div className="brand-copy">
             <strong>DeepSignal</strong>

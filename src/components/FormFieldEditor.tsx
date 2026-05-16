@@ -20,6 +20,7 @@ interface FormFieldEditorProps {
   index: number;
   isDragging: boolean;
   isExpanded: boolean;
+  presentation?: "classic" | "mirror";
   dropIndicator?: "before" | "after" | null;
   sections?: Array<{ id: string; title: string }>;
   rootRef?: (node: HTMLElement | null) => void;
@@ -73,6 +74,7 @@ export function FormFieldEditor({
   index,
   isDragging,
   isExpanded,
+  presentation = "classic",
   dropIndicator,
   sections = [],
   rootRef,
@@ -97,6 +99,10 @@ export function FormFieldEditor({
   const hasConditionalValue = hasValidConditionalValue(field, fields);
   const fieldVisibility = field.visibility ?? "public";
   const visibilityLabel = fieldVisibility === "admin" ? t("visibleToAdmin") : t("visibleToEveryone");
+  const isMirrorPresentation = presentation === "mirror";
+  const nodeLabel = isMirrorPresentation ? `B${index + 1}` : t("fieldLabel", { index: index + 1 });
+  const addBelowLabel = isMirrorPresentation ? "Add block" : t("addQuestion");
+  const addConditionalLabel = isMirrorPresentation ? "Branch signal node" : t("addConditionalQuestion");
   function update<K extends keyof FormField>(key: K, value: FormField[K]) {
     onChange({ ...field, [key]: value });
   }
@@ -302,7 +308,9 @@ export function FormFieldEditor({
   return (
     <section
       ref={rootRef}
-      className={`panel question-card composer-canvas-card ${isConditionalChild ? "is-conditional-child" : ""} ${
+      className={`panel question-card composer-canvas-card ${isMirrorPresentation ? "signal-composition-node" : ""} ${
+        isConditionalChild ? "is-conditional-child" : ""
+      } ${
         isDragging ? "is-dragging" : ""
       } ${isExpanded ? "is-expanded" : ""} ${dropIndicator ? `is-drop-${dropIndicator}` : ""}`}
       onFocusCapture={onFocus}
@@ -324,8 +332,9 @@ export function FormFieldEditor({
 
         <div className="question-card-main">
           <div className="question-card-topline">
-            <span className="question-card-index">{t("fieldLabel", { index: index + 1 })}</span>
+            <span className="question-card-index">{nodeLabel}</span>
             <span className="question-card-type">{fieldTypeLabel(field.type)}</span>
+            {isMirrorPresentation ? <span className="question-card-type">Signal Block</span> : null}
             <button
               type="button"
               className={`question-card-badge ${field.required ? "is-active" : ""}`}
@@ -400,11 +409,11 @@ export function FormFieldEditor({
             </summary>
             <div className="question-card-menu-panel">
               <button type="button" className="ghost-button" onClick={onAddBelow}>
-                + {t("addQuestion")}
+                + {addBelowLabel}
               </button>
               {canAddConditionalQuestion ? (
                 <button type="button" className="ghost-button" onClick={onAddConditionalQuestion}>
-                  + {t("addConditionalQuestion")}
+                  + {addConditionalLabel}
                 </button>
               ) : null}
               <button type="button" className="ghost-button" onClick={onDuplicate}>
@@ -563,11 +572,11 @@ export function FormFieldEditor({
 
           <div className="composer-canvas-quick-actions">
             <button type="button" className="ghost-button" onClick={onAddBelow}>
-              + {t("addQuestion")}
+              + {addBelowLabel}
             </button>
             {canAddConditionalQuestion ? (
               <button type="button" className="ghost-button" onClick={onAddConditionalQuestion}>
-                + {t("addConditionalQuestion")}
+                + {addConditionalLabel}
               </button>
             ) : null}
           </div>

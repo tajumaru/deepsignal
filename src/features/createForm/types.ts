@@ -106,6 +106,26 @@ export interface FormBuilderRefs {
   fieldCardRefs: MutableRefObject<Record<string, HTMLElement | null>>;
 }
 
+export interface IntentDraftBlock {
+  type: FieldType;
+  label: string;
+  helpText?: string;
+  placeholder?: string;
+  required?: boolean;
+  sectionTitle?: string;
+  options?: string[];
+}
+
+export interface IntentDraft {
+  title: string;
+  description: string;
+  sections: Array<{
+    title: string;
+    description?: string;
+  }>;
+  blocks: IntentDraftBlock[];
+}
+
 export interface PublishOverlayState {
   open: boolean;
   stageIndex: number;

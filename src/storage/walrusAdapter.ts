@@ -37,7 +37,14 @@ import {
   assertEncryptedSubmissionLeakGuard,
   sanitizeSubmissionForStorage,
 } from "./submissionSanitizer";
-import type { EncryptedSubmissionRecord, FormSchema, SignalManifest, StorageAdapter, Submission } from "../types";
+import type {
+  EncryptedSubmissionRecord,
+  FormSchema,
+  SignalManifest,
+  StorageAdapter,
+  Submission,
+  WalrusActualCost,
+} from "../types";
 
 type WalrusEnabledClient = ClientWithCoreApi & { walrus: WalrusClient };
 type WalrusStorageMode = "publisher" | "uploadRelay";
@@ -57,6 +64,7 @@ type SubmissionBundle = {
 type UploadResult = {
   blobId: string;
   blobObjectId?: string;
+  walrusActualCost?: WalrusActualCost;
 };
 type UploadKind =
   | "form-bundle"
@@ -359,6 +367,60 @@ function extractBlobObjectId(payload: unknown): string | undefined {
   );
 }
 
+function parseCostNumber(value: unknown): number | null {
+  const parsed = typeof value === "string" ? Number(value) : typeof value === "number" ? value : Number.NaN;
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function normalizeWalAmount(value: number | null) {
+  if (value === null) {
+    return undefined;
+  }
+  return value > 1_000_000 ? value / 1_000_000_000 : value;
+}
+
+function extractPublisherWalrusCost(payload: unknown): WalrusActualCost | undefined {
+  if (!payload || typeof payload !== "object") {
+    return undefined;
+  }
+  const response = payload as {
+    cost?: unknown;
+    newlyCreated?: { cost?: unknown };
+    result?: {
+      cost?: unknown;
+      newlyCreated?: { cost?: unknown };
+    };
+  };
+  const rawCost =
+    response.result?.newlyCreated?.cost ??
+    response.result?.cost ??
+    response.newlyCreated?.cost ??
+    response.cost;
+  const wal = normalizeWalAmount(parseCostNumber(rawCost));
+  return typeof wal === "number" ? { wal, source: "publisher" } : undefined;
+}
+
+function formatWalrusStorageCost(cost: Awaited<ReturnType<WalrusClient["storageCost"]>>): WalrusActualCost {
+  return {
+    wal: Number(cost.totalCost) / 1_000_000_000,
+    storageWal: Number(cost.storageCost) / 1_000_000_000,
+    writeWal: Number(cost.writeCost) / 1_000_000_000,
+    source: "sdk-storage-cost",
+  };
+}
+
+function formatSuiGasFromEffects(effects: { gasUsed?: { computationCost: string; storageCost: string; storageRebate: string } } | null | undefined) {
+  const gas = effects?.gasUsed;
+  if (!gas) {
+    return undefined;
+  }
+  const mist =
+    BigInt(gas.computationCost ?? "0") +
+    BigInt(gas.storageCost ?? "0") -
+    BigInt(gas.storageRebate ?? "0");
+  return Number(mist) / 1_000_000_000;
+}
+
 function normalizeWalrusWriteError(error: unknown) {
   if (isWalrusDiagnosticError(error)) {
     if (error.details.stage === "rpc-visibility") {
@@ -498,6 +560,7 @@ async function uploadBodyWithPublisher(body: Blob | File, kind: UploadKind): Pro
   return {
     blobId: extractBlobId(payload),
     blobObjectId: extractBlobObjectId(payload),
+    walrusActualCost: extractPublisherWalrusCost(payload),
   };
 }
 
@@ -519,6 +582,8 @@ async function uploadBodyWithSdk(body: Blob | File, kind: UploadKind): Promise<U
       const client = getWalrusClient();
       const signer = createWalletSigner();
       const owner = runtimeContext.account?.address;
+      const walrusCost = await client.walrus.storageCost(blob.byteLength, storageEpochs);
+      let registerTxDigest = "";
       const result = await client.walrus.writeBlob({
         blob,
         signer,
@@ -526,7 +591,37 @@ async function uploadBodyWithSdk(body: Blob | File, kind: UploadKind): Promise<U
         epochs: storageEpochs,
         deletable: true,
         attributes: body.type ? { "content-type": body.type } : undefined,
+        onStep: (step) => {
+          if (step.step === "registered") {
+            registerTxDigest = step.txDigest;
+          }
+        },
       });
+      let walrusActualCost = formatWalrusStorageCost(walrusCost);
+      if (registerTxDigest) {
+        try {
+          const tx = await client.core.waitForTransaction({
+            digest: registerTxDigest,
+            include: { effects: true },
+          });
+          const effects = (tx as {
+            effects?: { gasUsed?: { computationCost: string; storageCost: string; storageRebate: string } };
+            Transaction?: { effects?: { gasUsed?: { computationCost: string; storageCost: string; storageRebate: string } } };
+          }).effects ?? (tx as {
+            Transaction?: { effects?: { gasUsed?: { computationCost: string; storageCost: string; storageRebate: string } } };
+          }).Transaction?.effects;
+          const sui = formatSuiGasFromEffects(effects);
+          if (typeof sui === "number") {
+            walrusActualCost = {
+              ...walrusActualCost,
+              sui,
+              source: "sdk-storage-cost-and-register-gas",
+            };
+          }
+        } catch (gasError) {
+          console.warn("[walrus upload] register gas lookup failed", gasError);
+        }
+      }
       const durationMs = Math.round(performance.now() - startedAt);
       console.info("[walrus upload] attempt:success", {
         kind,
@@ -539,6 +634,7 @@ async function uploadBodyWithSdk(body: Blob | File, kind: UploadKind): Promise<U
       return {
         blobId: result.blobId,
         blobObjectId: result.blobObject.id,
+        walrusActualCost,
       };
     } catch (error) {
       const durationMs = Math.round(performance.now() - startedAt);
@@ -1127,7 +1223,7 @@ export async function readManifest(blobId: string): Promise<SignalManifest | nul
 export const walrusAdapter: StorageAdapter = {
   async saveForm(form: FormSchema) {
     const manifest = createManifest(form, bundledFormPointer, [], form.createdAt);
-    const { blobId, blobObjectId } = await writeFormBundle(form, manifest);
+    const { blobId, blobObjectId, walrusActualCost } = await writeFormBundle(form, manifest);
     upsertFormBlobIndex({
       formId: form.id,
       formBlobId: blobId,
@@ -1136,8 +1232,8 @@ export const walrusAdapter: StorageAdapter = {
       manifestBlobObjectId: blobObjectId,
       createdAt: form.createdAt,
     });
-    await localStorageAdapter.saveForm({ ...form, blobId, manifestBlobId: blobId });
-    return { id: form.id, blobId, manifestBlobId: blobId };
+    await localStorageAdapter.saveForm({ ...form, blobId, manifestBlobId: blobId, walrusActualCost });
+    return { id: form.id, blobId, manifestBlobId: blobId, walrusActualCost };
   },
 
   async getForm(id) {

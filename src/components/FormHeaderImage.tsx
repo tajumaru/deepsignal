@@ -47,7 +47,7 @@ export function FormHeaderImage({ image, logo, className = "" }: FormHeaderImage
             onError={() => setFailedLogoUrl(logoUrl ?? "")}
           />
         ) : (
-          <span>W</span>
+          <span>DS</span>
         )}
       </div>
     </figure>

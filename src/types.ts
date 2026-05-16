@@ -118,6 +118,15 @@ export interface FormSchema {
   registrationMode?: "walrus" | "sui";
   blobId?: string;
   manifestBlobId?: string;
+  walrusActualCost?: WalrusActualCost;
+}
+
+export interface WalrusActualCost {
+  wal?: number;
+  storageWal?: number;
+  writeWal?: number;
+  sui?: number;
+  source: "publisher" | "sdk-storage-cost" | "sdk-storage-cost-and-register-gas";
 }
 
 export interface SignalManifest {
@@ -243,7 +252,7 @@ export interface EncryptedSubmissionRecord extends Omit<
 }
 
 export interface StorageAdapter {
-  saveForm(form: FormSchema): Promise<{ id: string; blobId?: string; manifestBlobId?: string }>;
+  saveForm(form: FormSchema): Promise<{ id: string; blobId?: string; manifestBlobId?: string; walrusActualCost?: WalrusActualCost }>;
   getForm(id: string): Promise<FormSchema | null>;
   listForms(): Promise<FormSchema[]>;
   deleteForm(id: string): Promise<void>;

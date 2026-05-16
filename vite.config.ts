@@ -161,6 +161,7 @@ export default defineConfig(({ mode }) => {
     },
     test: {
       environment: "jsdom",
+      exclude: ["**/node_modules/**", "**/dist/**", "**/.tmp-test/**", "**/move/**"],
       setupFiles: "./src/test/setup.ts",
     },
   };

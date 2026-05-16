@@ -202,9 +202,9 @@ export function PrivateSignalUnlockCard({
 }: PrivateSignalUnlockCardProps) {
   const { t } = useI18n();
   const statusId = useId();
-  const state =
-    unlockState ??
-    (isDecrypting ? "decrypting" : isUnlocked ? "decrypted" : errorMessage ? "failed" : "locked");
+  const state = isUnlocked
+    ? "decrypted"
+    : (unlockState ?? (isDecrypting ? "decrypting" : errorMessage ? "failed" : "locked"));
   const buttonDisabled = actionDisabled || isDecrypting || state === "decrypted";
   const helperText = isUnlocked
     ? t("privateSignalUnlockSuccessDetail")

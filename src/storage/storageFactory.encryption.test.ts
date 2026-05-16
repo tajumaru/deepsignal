@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Submission } from "../types";
 
 const SUBMISSIONS_KEY = "deepsignal.submissions";
+const FORMS_KEY = "deepsignal.forms";
 
 function createEncryptedSubmission(): Submission {
   return {
@@ -121,5 +122,51 @@ describe("storageFactory encrypted fallback persistence", () => {
     await expect(storage.saveSubmission(createEncryptedSubmission())).rejects.toThrow("Walrus upload failed.");
     await expect(storage.readEncryptedPayload("walrus-blob-1")).resolves.toBeNull();
     expect(window.localStorage.getItem(SUBMISSIONS_KEY)).toBeNull();
+  });
+
+  it("does not persist a form locally when wallet approval is rejected", async () => {
+    vi.resetModules();
+    vi.doMock("./walrusAdapter", () => ({
+      walrusAdapter: {
+        saveForm: vi.fn(async () => {
+          throw new Error("Wallet approval rejected by user.");
+        }),
+        getForm: vi.fn(),
+        listForms: vi.fn(),
+        deleteForm: vi.fn(),
+        deleteForms: vi.fn(),
+        saveSubmission: vi.fn(),
+        listSubmissions: vi.fn(),
+        updateSubmission: vi.fn(),
+        saveEncryptedPayload: vi.fn(),
+        readEncryptedPayload: vi.fn(),
+        uploadFile: vi.fn(),
+        readFileBlob: vi.fn(),
+        readFileText: vi.fn(),
+      },
+      getWalrusBlobUrl: vi.fn(() => null),
+    }));
+
+    const { storage } = await import("./storageFactory");
+
+    await expect(
+      storage.saveForm({
+        id: "form-wallet-rejected",
+        title: "Rejected form",
+        description: "",
+        ownerAddress: "0xabc",
+        fields: [],
+        sections: [],
+        purpose: "custom",
+        createdAt: new Date(0).toISOString(),
+        updatedAt: new Date(0).toISOString(),
+        visibility: "private",
+        publicExplore: false,
+        identityPolicy: "anonymous_allowed",
+        encryptSubmissions: false,
+        responseDeadlineMode: "none",
+      }),
+    ).rejects.toThrow("Wallet approval rejected by user.");
+    expect(window.localStorage.getItem(FORMS_KEY)).toBeNull();
   });
 });

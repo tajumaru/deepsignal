@@ -8,6 +8,7 @@ import type { CriticalFailure } from "../../../lib/criticalFailure";
 import { LivePreview } from "../../../components/formBuilder/LivePreview";
 import { isLocalFallbackBlob } from "../../../lib/proof";
 import { shortAddress, SUI_NETWORK } from "../../../lib/sui";
+import type { WalrusCostEstimate } from "../../../storage/walrusCostEstimate";
 import { formatWalrusFailureStage, type WalrusFailureDetails } from "../../../storage/walrusDiagnostics";
 import type { EncryptionReadinessWarning } from "../encryptionReadiness";
 import { StepNavigationActions } from "./StepNavigationActions";
@@ -69,6 +70,8 @@ interface PublishStepProps {
   storageRuntimeMode: string;
   storageRuntimeNotice?: string;
   storageRuntimeDiagnostics?: WalrusFailureDetails | null;
+  walrusCostEstimate: WalrusCostEstimate | null;
+  hideLivePreview?: boolean;
   canManageProjects: boolean;
   selectedProjectId: string;
   selectedProject: ProjectOption | null;
@@ -190,6 +193,8 @@ export function PublishStep({
   storageRuntimeMode,
   storageRuntimeNotice,
   storageRuntimeDiagnostics,
+  walrusCostEstimate,
+  hideLivePreview = false,
   canManageProjects,
   selectedProjectId,
   selectedProject,
@@ -229,6 +234,51 @@ export function PublishStep({
       ? t("projectEncryptedFormPersonalContrast")
       : t("personalEncryptedFormProjectContrast")
     : "";
+
+  function formatBytes(bytes: number) {
+    if (bytes < 1024) {
+      return `${bytes} B`;
+    }
+    if (bytes < 1024 * 1024) {
+      return `${(bytes / 1024).toFixed(1)} KB`;
+    }
+    return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+  }
+
+  function formatTokenAmount(value: number | null, symbol: "WAL" | "SUI") {
+    if (value === null) {
+      return t("walrusCostUnavailable");
+    }
+    const decimals = value < 0.1 ? 3 : value < 10 ? 2 : 1;
+    return `~${value.toFixed(decimals)} ${symbol}`;
+  }
+
+  function formatActualTokenAmount(value: number, symbol: "WAL" | "SUI") {
+    const decimals = value < 0.1 ? 3 : value < 10 ? 2 : 1;
+    return `${value.toFixed(decimals)} ${symbol}`;
+  }
+
+  function getWalrusCostEstimateNote(estimate: WalrusCostEstimate) {
+    if (estimate.status === "local-fallback") {
+      return t("walrusCostLocalFallbackNote");
+    }
+    if (estimate.status === "relay-unavailable") {
+      return t("walrusCostRelayUnavailableNote");
+    }
+    return estimate.storageMode === "publisher"
+      ? t("walrusCostPublisherNote")
+      : t("walrusCostRelayNote");
+  }
+
+  function getWalrusCostEstimateStatusLabel(estimate: WalrusCostEstimate) {
+    if (estimate.status === "ready") {
+      return t("walrusCostEstimateReady");
+    }
+    if (estimate.status === "local-fallback") {
+      return t("storageLocalFallback");
+    }
+    return t("walrusCostEstimatePartial");
+  }
   function getEncryptionWarningMessage(warning: EncryptionReadinessWarning) {
     switch (warning.kind) {
       case "project-missing":
@@ -283,9 +333,11 @@ export function PublishStep({
 
   return (
     <section
-      className={`composer-builder-grid composer-builder-grid-preview ${showFocusedSuccessCard ? "is-focused-success" : ""}`}
+      className={`composer-builder-grid composer-builder-grid-preview ${hideLivePreview ? "is-mirror-publish" : ""} ${
+        showFocusedSuccessCard ? "is-focused-success" : ""
+      }`}
     >
-      {!showFocusedSuccessCard ? (
+      {!showFocusedSuccessCard && !hideLivePreview ? (
         <div className="composer-mobile-tabs" role="tablist" aria-label="Builder view">
           <button type="button" className={`composer-mobile-tab ${mobilePane === "editor" ? "is-active" : ""}`} onClick={() => onSetMobilePane("editor")}>
             {t("editorTab")}
@@ -296,7 +348,7 @@ export function PublishStep({
         </div>
       ) : null}
 
-      <div className={`composer-builder-column composer-editor-column ${mobilePane === "preview" ? "is-hidden-mobile" : ""}`}>
+      <div className={`composer-builder-column composer-editor-column ${!hideLivePreview && mobilePane === "preview" ? "is-hidden-mobile" : ""}`}>
         <section className="panel composer-section-card composer-publish-panel composer-step-card">
           <div className="section-row">
             <div>
@@ -305,13 +357,27 @@ export function PublishStep({
               <p className="muted">{savedForm ? t("publishSavedModeBody") : publishReadyBody}</p>
             </div>
             {!savedForm ? (
-              <button
-                type="submit"
-                className="primary-button publish-cta-button"
-                disabled={saving || !isReadyToPublish}
-              >
-                {saving ? t("builderSaving") : t("builderSave")}
-              </button>
+              <div className="publish-action-stack">
+                {walrusCostEstimate ? (
+                  <div
+                    className={`publish-cost-inline is-${walrusCostEstimate.status}`}
+                    title={getWalrusCostEstimateNote(walrusCostEstimate)}
+                    aria-label={`${t("walrusCostEstimateTitle")}: ${getWalrusCostEstimateStatusLabel(walrusCostEstimate)}`}
+                  >
+                    <span>{t("walrusCostEstimateEyebrow")}</span>
+                    <strong>{formatTokenAmount(walrusCostEstimate.estimatedWal, "WAL")}</strong>
+                    <small>{formatTokenAmount(walrusCostEstimate.estimatedSui, "SUI")}</small>
+                    <small>{formatBytes(walrusCostEstimate.payloadBytes)}</small>
+                  </div>
+                ) : null}
+                <button
+                  type="submit"
+                  className="primary-button publish-cta-button"
+                  disabled={saving || !isReadyToPublish}
+                >
+                  {saving ? t("builderSaving") : t("builderSave")}
+                </button>
+              </div>
             ) : null}
           </div>
 
@@ -616,7 +682,7 @@ export function PublishStep({
           ) : null}
 
           {error ? <p className="error-text">{error}</p> : null}
-          {failure ? (
+          {failure && failure.kind !== "wallet_rejected" ? (
             <CriticalFailurePanel
               failure={failure}
               title={t("publishRecoveryTitle")}
@@ -703,6 +769,18 @@ export function PublishStep({
                         <span>{t("formStorageModeLabel")}</span>
                         <strong>{storageModeLabel}</strong>
                       </div>
+                      {savedForm.walrusActualCost?.wal ? (
+                        <div className="metadata-row">
+                          <span>{t("walrusCostActualWalLabel")}</span>
+                          <strong>{formatActualTokenAmount(savedForm.walrusActualCost.wal, "WAL")}</strong>
+                        </div>
+                      ) : null}
+                      {savedForm.walrusActualCost?.sui ? (
+                        <div className="metadata-row">
+                          <span>{t("walrusCostActualSuiLabel")}</span>
+                          <strong>{formatActualTokenAmount(savedForm.walrusActualCost.sui, "SUI")}</strong>
+                        </div>
+                      ) : null}
                       <div className="metadata-row">
                         <span>{t("suiRegistrationStateLabel")}</span>
                         <strong>{isRegisteredOnSui ? t("suiRegistrationStateRegistered") : t("suiRegistrationStateOptional")}</strong>
@@ -765,7 +843,7 @@ export function PublishStep({
         </section>
       </div>
 
-      {!showFocusedSuccessCard ? (
+      {!showFocusedSuccessCard && !hideLivePreview ? (
         <div className={`composer-builder-column composer-preview-column ${mobilePane === "editor" ? "is-hidden-mobile" : ""}`}>
           <LivePreview
             title={title}

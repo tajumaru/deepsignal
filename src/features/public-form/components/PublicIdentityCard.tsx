@@ -89,7 +89,7 @@ export function PublicIdentityCard({
         </div>
       </div>
 
-      <div className="public-identity-grid">
+      <div className={`public-identity-grid ${walletRequired ? "is-wallet-required" : ""}`}>
         <div className="public-identity-mode">
           <span className="public-identity-label">{labels.sendMode}</span>
           <label className="public-identity-toggle">
@@ -117,19 +117,13 @@ export function PublicIdentityCard({
           </label>
         </div>
 
-        <div className="public-identity-note">
-          <span className="public-identity-label">{labels.currentMode}</span>
-          <strong>{walletRequired || (attachWallet && accountAddress) ? labels.modeWallet : labels.modeAnonymous}</strong>
-          <p className="muted">
-            {walletRequired
-              ? accountAddress
-                ? labels.walletRequiredConnectedHelp
-                : labels.walletRequiredHelp
-              : attachWallet && accountAddress
-                ? labels.walletModeHelpNoSignature
-                : labels.anonymousModeHelp}
-          </p>
-        </div>
+        {!walletRequired ? (
+          <div className="public-identity-note">
+            <span className="public-identity-label">{labels.currentMode}</span>
+            <strong>{attachWallet && accountAddress ? labels.modeWallet : labels.modeAnonymous}</strong>
+            <p className="muted">{attachWallet && accountAddress ? labels.walletModeHelpNoSignature : labels.anonymousModeHelp}</p>
+          </div>
+        ) : null}
       </div>
     </section>
   );

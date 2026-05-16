@@ -31,6 +31,7 @@ interface FieldsStepProps {
   onOpenFieldTypePicker: () => void;
   onBack: () => void;
   onContinue: () => void;
+  presentation?: "classic" | "mirror";
 }
 
 const libraryBlocks: Array<{
@@ -38,24 +39,29 @@ const libraryBlocks: Array<{
   icon: string;
   titleKey: "libraryShortText" | "libraryLongText" | "libraryRichText" | "libraryDate" | "libraryDropdown" | "libraryCheckboxes" | "libraryMatrix" | "libraryCountrySelect" | "libraryConfirmationCheckbox" | "libraryScreenshotUpload" | "libraryVideoUpload" | "libraryUrl" | "libraryStarRating" | "libraryWalletAddress" | "librarySignatureVerification" | "libraryEncryptedAnswer";
   soon?: boolean;
+  mirrorTitle: string;
+  mirrorBody: string;
+  mirrorKind: "question" | "media" | "identity" | "markdown" | "choice" | "attachment";
 }> = [
-  { type: "shortText", icon: "Aa", titleKey: "libraryShortText" },
-  { type: "longText", icon: "LT", titleKey: "libraryLongText" },
-  { type: "markdown", icon: "MD", titleKey: "libraryRichText" },
-  { type: "date", icon: "CAL", titleKey: "libraryDate" },
-  { type: "dropdown", icon: "v", titleKey: "libraryDropdown" },
-  { type: "checkbox", icon: "[]", titleKey: "libraryCheckboxes" },
-  { type: "matrix", icon: "GRID", titleKey: "libraryMatrix" },
-  { type: "country_select", icon: "JP", titleKey: "libraryCountrySelect" },
-  { type: "confirmation", icon: "OK", titleKey: "libraryConfirmationCheckbox" },
-  { type: "screenshot", icon: "UP", titleKey: "libraryScreenshotUpload" },
-  { type: "video", icon: "VID", titleKey: "libraryVideoUpload" },
-  { type: "url", icon: "->", titleKey: "libraryUrl" },
-  { type: "rating", icon: "*", titleKey: "libraryStarRating" },
-  { icon: "ID", titleKey: "libraryWalletAddress", soon: true },
-  { icon: "OK", titleKey: "librarySignatureVerification", soon: true },
-  { icon: "PX", titleKey: "libraryEncryptedAnswer", soon: true },
+  { type: "shortText", icon: "Aa", titleKey: "libraryShortText", mirrorTitle: "Question Block", mirrorBody: "Single signal prompt", mirrorKind: "question" },
+  { type: "longText", icon: "LT", titleKey: "libraryLongText", mirrorTitle: "Reflection Block", mirrorBody: "Long-form signal context", mirrorKind: "question" },
+  { type: "markdown", icon: "MD", titleKey: "libraryRichText", mirrorTitle: "Markdown Block", mirrorBody: "Formatted narrative copy", mirrorKind: "markdown" },
+  { type: "date", icon: "CAL", titleKey: "libraryDate", mirrorTitle: "Timeline Block", mirrorBody: "Capture a date marker", mirrorKind: "question" },
+  { type: "dropdown", icon: "v", titleKey: "libraryDropdown", mirrorTitle: "Choice Block", mirrorBody: "Single-select branch", mirrorKind: "choice" },
+  { type: "checkbox", icon: "[]", titleKey: "libraryCheckboxes", mirrorTitle: "Multi Choice Block", mirrorBody: "Multi-select signal", mirrorKind: "choice" },
+  { type: "matrix", icon: "GRID", titleKey: "libraryMatrix", mirrorTitle: "Matrix Block", mirrorBody: "Structured comparison", mirrorKind: "choice" },
+  { type: "country_select", icon: "JP", titleKey: "libraryCountrySelect", mirrorTitle: "Identity Block", mirrorBody: "Location signal", mirrorKind: "identity" },
+  { type: "confirmation", icon: "OK", titleKey: "libraryConfirmationCheckbox", mirrorTitle: "Consent Block", mirrorBody: "Explicit confirmation", mirrorKind: "identity" },
+  { type: "screenshot", icon: "UP", titleKey: "libraryScreenshotUpload", mirrorTitle: "Media Block", mirrorBody: "Image evidence upload", mirrorKind: "media" },
+  { type: "video", icon: "VID", titleKey: "libraryVideoUpload", mirrorTitle: "Video Block", mirrorBody: "Motion evidence upload", mirrorKind: "media" },
+  { type: "url", icon: "->", titleKey: "libraryUrl", mirrorTitle: "Reference Block", mirrorBody: "Link external context", mirrorKind: "attachment" },
+  { type: "rating", icon: "*", titleKey: "libraryStarRating", mirrorTitle: "Sentiment Block", mirrorBody: "Quick intensity rating", mirrorKind: "question" },
+  { icon: "ID", titleKey: "libraryWalletAddress", soon: true, mirrorTitle: "Wallet Block", mirrorBody: "Wallet identity signal", mirrorKind: "identity" },
+  { icon: "OK", titleKey: "librarySignatureVerification", soon: true, mirrorTitle: "Signature Block", mirrorBody: "Proof-of-author block", mirrorKind: "identity" },
+  { icon: "PX", titleKey: "libraryEncryptedAnswer", soon: true, mirrorTitle: "Sealed Block", mirrorBody: "Encrypted answer node", mirrorKind: "attachment" },
 ];
+
+const signalFlowPresets = ["Introduction", "Context", "Experience", "Reflection", "Identity"];
 
 export function FieldsStep({
   t,
@@ -84,8 +90,10 @@ export function FieldsStep({
   onOpenFieldTypePicker,
   onBack,
   onContinue,
+  presentation = "classic",
 }: FieldsStepProps) {
   const [expandedFieldId, setExpandedFieldId] = useState(fields[0]?.id ?? "");
+  const isMirrorPresentation = presentation === "mirror";
 
   useEffect(() => {
     if (!fields.length) {
@@ -168,6 +176,7 @@ export function FieldsStep({
           sections={sections}
           isDragging={draggedFieldId === field.id}
           isExpanded={expandedFieldId === field.id}
+          presentation={presentation}
           dropIndicator={dragOverFieldId === field.id ? dragOverPlacement : null}
           onChange={(nextField) => onUpdateField(index, nextField)}
           onRemove={() => onRemoveField(field.id)}
@@ -200,6 +209,7 @@ export function FieldsStep({
                 sections={sections}
                 isDragging={draggedFieldId === child.id}
                 isExpanded={expandedFieldId === child.id}
+                presentation={presentation}
                 dropIndicator={dragOverFieldId === child.id ? dragOverPlacement : null}
                 onChange={(nextField) => onUpdateField(childIndex, nextField)}
                 onRemove={() => onRemoveField(child.id)}
@@ -223,19 +233,31 @@ export function FieldsStep({
   }
 
   return (
-    <section className="composer-builder-grid composer-builder-grid-composer">
+    <section className={`composer-builder-grid composer-builder-grid-composer ${isMirrorPresentation ? "signal-composition-studio" : ""}`}>
       <aside className="composer-builder-column composer-library-column">
         <section className="panel composer-section-card composer-library-panel">
           <div className="composer-pane-heading">
             <div>
-              <p className="eyebrow">Step 3</p>
-              <h2>{t("blockLibraryTitle")}</h2>
-              <p className="muted">{t("blockLibraryBody")}</p>
+              <p className="eyebrow">{isMirrorPresentation ? "Signal Components" : "Step 3"}</p>
+              <h2>{isMirrorPresentation ? "Block Palette" : t("blockLibraryTitle")}</h2>
+              <p className="muted">
+                {isMirrorPresentation ? "Compose the signal from reusable narrative nodes." : t("blockLibraryBody")}
+              </p>
             </div>
             <button type="button" className="ghost-button" onClick={() => onAddSection()}>
-              {t("addSection")}
+              {isMirrorPresentation ? "Add Flow" : t("addSection")}
             </button>
           </div>
+
+          {isMirrorPresentation ? (
+            <div className="signal-flow-presets" aria-label="Narrative flow presets">
+              {signalFlowPresets.map((preset) => (
+                <button key={preset} type="button" className="signal-flow-preset" onClick={() => onAddSection(preset)}>
+                  {preset}
+                </button>
+              ))}
+            </div>
+          ) : null}
 
           <div className="composer-library-scroll">
             <div className="composer-library-list">
@@ -243,7 +265,9 @@ export function FieldsStep({
                 <button
                   key={block.titleKey}
                   type="button"
-                  className={`composer-library-card ${block.soon ? "is-soon" : ""}`}
+                  className={`composer-library-card ${isMirrorPresentation ? `signal-block-palette-card is-${block.mirrorKind}` : ""} ${
+                    block.soon ? "is-soon" : ""
+                  }`}
                   onClick={() => {
                     if (block.type) {
                       onInsertField(block.type);
@@ -256,11 +280,12 @@ export function FieldsStep({
                   </span>
                   <span className="composer-library-card-copy">
                     <span className="composer-library-card-topline">
-                      <strong>{t(block.titleKey)}</strong>
+                      <strong>{isMirrorPresentation ? block.mirrorTitle : t(block.titleKey)}</strong>
                       <span className={`composer-library-chip ${block.soon ? "is-soon" : "is-ready"}`}>
                         {block.soon ? t("librarySoon") : t("libraryReady")}
                       </span>
                     </span>
+                    {isMirrorPresentation ? <small className="muted">{block.mirrorBody}</small> : null}
                   </span>
                 </button>
               ))}
@@ -269,9 +294,9 @@ export function FieldsStep({
           </div>
 
           <div className="composer-library-footer">
-            <p className="muted">{t("conditionalShortcutHint")}</p>
+            <p className="muted">{isMirrorPresentation ? "Drag, branch, and layer blocks into a signal object." : t("conditionalShortcutHint")}</p>
             <button type="button" className="ghost-button" onClick={onOpenFieldTypePicker}>
-              {t("moreTypes")}
+              {isMirrorPresentation ? "More Blocks" : t("moreTypes")}
             </button>
           </div>
         </section>
@@ -281,25 +306,32 @@ export function FieldsStep({
         <section className="panel composer-section-card composer-step-card composer-canvas-panel">
           <div className="composer-pane-heading composer-question-header">
             <div>
-              <p className="eyebrow">{t("liveCanvas")}</p>
-              <h2>{t("fields")}</h2>
+              <p className="eyebrow">{isMirrorPresentation ? "Composition Canvas" : t("liveCanvas")}</p>
+              <h2>{isMirrorPresentation ? "Signal Flow" : t("fields")}</h2>
               <p className="muted">
-                {t("questionCount", { count: fields.length })} / {encryptSubmissions ? t("signalModePrivate") : t("signalModeOpen")}
+                {isMirrorPresentation
+                  ? `${fields.length} block${fields.length === 1 ? "" : "s"} / ${encryptSubmissions ? "sealed signal" : "open signal"}`
+                  : `${t("questionCount", { count: fields.length })} / ${encryptSubmissions ? t("signalModePrivate") : t("signalModeOpen")}`}
               </p>
             </div>
             <div className="composer-canvas-header-actions">
               <button type="button" className="ghost-button" onClick={() => onAddSection()}>
-                {t("addSection")}
+                {isMirrorPresentation ? "Add Flow" : t("addSection")}
               </button>
               <button type="button" className="primary-button composer-add-question-button" onClick={onOpenFieldTypePicker}>
-                + {t("addQuestion")}
+                + {isMirrorPresentation ? "Compose Block" : t("addQuestion")}
               </button>
             </div>
           </div>
 
           <div className="composer-canvas-intro">
             <strong>{title.trim() || t("untitledForm")}</strong>
-            <p className="muted">{description.trim() || t("liveCanvasBody")}</p>
+            <p className="muted">{description.trim() || (isMirrorPresentation ? "Currently shaping signal node." : t("liveCanvasBody"))}</p>
+            {isMirrorPresentation ? (
+              <span className="signal-node-status">
+                Currently shaping signal node: {expandedFieldId ? `B${fields.findIndex((field) => field.id === expandedFieldId) + 1}` : "none selected"}
+              </span>
+            ) : null}
           </div>
 
           <div className="stack composer-question-stack">
@@ -316,7 +348,9 @@ export function FieldsStep({
                       onChange={(event) => onUpdateSection(section.id, { title: event.target.value })}
                       placeholder={t("untitledSection")}
                     />
-                    <span className="question-card-type">{t("questionCount", { count: section.fields.length })}</span>
+                    <span className="question-card-type">
+                      {isMirrorPresentation ? `${section.fields.length} block${section.fields.length === 1 ? "" : "s"}` : t("questionCount", { count: section.fields.length })}
+                    </span>
                   </div>
                   <button type="button" className="danger-button" onClick={() => onRemoveSection(section.id)}>
                     {t("remove")}
@@ -342,7 +376,7 @@ export function FieldsStep({
                       className="ghost-button"
                       onClick={() => onInsertField("shortText", undefined, section.id)}
                     >
-                      + {t("addQuestion")}
+                      + {isMirrorPresentation ? "Compose Block" : t("addQuestion")}
                     </button>
                   </div>
                 )}
@@ -354,7 +388,7 @@ export function FieldsStep({
             <section className="composer-empty-canvas">
               <p className="muted">{t("fieldEmptyState")}</p>
               <button type="button" className="primary-button" onClick={() => onInsertField("shortText")}>
-                + {t("shortTextLabel")}
+                + {isMirrorPresentation ? "Start Signal Block" : t("shortTextLabel")}
               </button>
             </section>
           ) : null}

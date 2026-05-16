@@ -24,6 +24,7 @@ import type {
   FormBuilderValues,
   FormField,
   FormSection,
+  IntentDraft,
   MobileBuilderPane,
   ProjectOption,
   ResponseDeadlinePreset,
@@ -44,6 +45,7 @@ interface UseCreateFormBuilderArgs {
   projects: ProjectOption[];
   freshStartToken?: string;
   mode?: "admin" | "guestDraft";
+  startExperience?: "classic" | "mirror";
   draftSeed?: {
     templateKey?: string;
     idea?: string;
@@ -55,6 +57,7 @@ export function useCreateFormBuilder({
   projects,
   freshStartToken = "",
   mode = "admin",
+  startExperience = "classic",
   draftSeed,
 }: UseCreateFormBuilderArgs) {
   const hasLoadedDraftRef = useRef(false);
@@ -291,7 +294,7 @@ export function useCreateFormBuilder({
       }
       const rawDraft = freshStartToken ? null : window.localStorage.getItem(draftStorageKey);
       if (!rawDraft) {
-        if (isGuestDraftMode) {
+        if (isGuestDraftMode && startExperience !== "mirror") {
           seedGuestDraftFromIntent();
         }
         return;
@@ -301,7 +304,7 @@ export function useCreateFormBuilder({
       console.warn("Failed to restore create form draft.", error);
       window.localStorage.removeItem(draftStorageKey);
     }
-  }, [draftSeed?.idea, draftSeed?.templateKey, draftStorageKey, freshStartToken, isGuestDraftMode, seedGuestDraftFromIntent]);
+  }, [draftSeed?.idea, draftSeed?.templateKey, draftStorageKey, freshStartToken, isGuestDraftMode, seedGuestDraftFromIntent, startExperience]);
 
   useEffect(() => {
     if (isGuestDraftMode || !hasLoadedDraftRef.current || !freshStartToken) {
@@ -448,6 +451,45 @@ export function useCreateFormBuilder({
       setResponseDeadlinePreset("none");
       setResponseDeadlineCustomAt("");
       replaceFields(nextFields);
+      goToStep("info");
+    });
+  }
+
+  function applyIntentDraft(draft: IntentDraft) {
+    const sectionMap = new Map<string, FormSection>();
+    const nextSections = draft.sections.map((section) => {
+      const nextSection = createSection(section.title);
+      nextSection.description = section.description ?? "";
+      sectionMap.set(section.title, nextSection);
+      return nextSection;
+    });
+    const labels = {
+      confirmationLabel: t("confirmationDefaultLabel"),
+      confirmationPlaceholder: t("confirmationDefaultPlaceholder"),
+      options: [t("optionDefault", { index: 1 }), t("optionDefault", { index: 2 })],
+    };
+    const nextFields = draft.blocks.map((block) => {
+      const sectionId = block.sectionTitle ? sectionMap.get(block.sectionTitle)?.id : undefined;
+      const nextField = createField(block.type, sectionId, labels);
+      nextField.label = block.label;
+      nextField.helpText = block.helpText ?? "";
+      nextField.placeholder = block.placeholder ?? "";
+      nextField.required = Boolean(block.required);
+      nextField.options = block.options ?? nextField.options;
+      return nextField;
+    });
+
+    startTransition(() => {
+      setSelectedTemplateKey("intent-draft");
+      setTitle(draft.title.trim() || initialTemplate.title);
+      setDescription(draft.description.trim() || initialTemplate.description);
+      setSections(nextSections);
+      replaceFields(nextFields.length ? nextFields : createTemplateFields(initialTemplate));
+      setPurpose("custom");
+      setVisibility("public");
+      setIdentityPolicy("anonymous_allowed");
+      setResponseDeadlinePreset("none");
+      setResponseDeadlineCustomAt("");
       goToStep("info");
     });
   }
@@ -799,6 +841,7 @@ export function useCreateFormBuilder({
     goToStep,
     moveStep,
     applyTemplate,
+    applyIntentDraft,
     updateField,
     insertField,
     duplicateFieldAt,

@@ -92,7 +92,7 @@ export async function publishForm({
   setPublishActiveStageStatus(t("walletApprovalStatus"));
   setPublishActiveStageDetail(t("walletApprovalDetail"));
 
-  const { blobId, manifestBlobId } = await saveFormPromise;
+  const { blobId, manifestBlobId, walrusActualCost } = await saveFormPromise;
   if (!shouldContinue()) {
     return null;
   }
@@ -124,6 +124,7 @@ export async function publishForm({
     ...form,
     blobId,
     manifestBlobId,
+    walrusActualCost,
     formMetadataDigest,
     isOnchain: false,
     registrationMode: "walrus",

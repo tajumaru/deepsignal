@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="DeepSignal">
+  <defs>
+    <linearGradient id="a" x1="8" y1="6" x2="54" y2="58" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#f8feff"/>
+      <stop offset="0.48" stop-color="#8ff1ff"/>
+      <stop offset="1" stop-color="#1fb8ed"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="14" fill="#03070d"/>
+  <rect x="4" y="4" width="56" height="56" rx="12" fill="#091522" stroke="#2a5265" stroke-width="1"/>
+  <path d="M13 16H27C36 16 42 22 42 32C42 42 36 48 27 48H13V16ZM21 23V41H27C31 41 34 38 34 32C34 26 31 23 27 23H21Z" fill="url(#a)"/>
+  <path d="M48 16H35C30 16 27 18 27 22C27 26 30 28 36 29L40 30C48 31 52 35 52 42C52 48 47 52 39 52H24V44H39C42 44 44 43 44 41C44 39 42 38 37 37L34 37C24 35 19 30 19 23C19 14 26 9 36 9H48V16Z" fill="none" stroke="url(#a)" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M31 22H50M27 42H44" fill="none" stroke="#07111d" stroke-width="5" stroke-linecap="round"/>
+  <path d="M32 22H49M28 42H43" fill="none" stroke="#9ff3ff" stroke-width="1.5" stroke-linecap="round"/>
+</svg>

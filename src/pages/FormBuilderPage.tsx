@@ -14,6 +14,8 @@ import { showWalrusDiagnostics } from "../features/createForm/constants";
 import { BuilderToolbar } from "../features/createForm/components/BuilderToolbar";
 import { FieldsStep } from "../features/createForm/components/FieldsStep";
 import { InfoStep } from "../features/createForm/components/InfoStep";
+import { IntentStartStep } from "../features/createForm/components/IntentStartStep";
+import { MirrorPreviewPanel } from "../features/createForm/components/MirrorPreviewPanel";
 import { PublishOverlay } from "../features/createForm/components/PublishOverlay";
 import { PublishStep } from "../features/createForm/components/PublishStep";
 import { TemplateStep } from "../features/createForm/components/TemplateStep";
@@ -25,13 +27,14 @@ import { getStorageRuntimeStatus, subscribeStorageRuntime } from "../storage/sto
 interface FormBuilderComposerProps {
   mode: "admin" | "guestDraft";
   freshStartToken: string;
+  initialPreviewMode?: "classic" | "mirror";
   draftSeed: {
     templateKey?: string;
     idea?: string;
   };
 }
 
-function FormBuilderComposer({ mode, freshStartToken, draftSeed }: FormBuilderComposerProps) {
+function FormBuilderComposer({ mode, freshStartToken, initialPreviewMode = "classic", draftSeed }: FormBuilderComposerProps) {
   const { t } = useI18n();
   const account = useCurrentAccount();
   const { currentWallet, isConnected } = useCurrentWallet();
@@ -43,6 +46,7 @@ function FormBuilderComposer({ mode, freshStartToken, draftSeed }: FormBuilderCo
   const [isScrolled, setIsScrolled] = useState(false);
   const [storageRuntime, setStorageRuntime] = useState(() => getStorageRuntimeStatus());
   const [showPublishSuccessView, setShowPublishSuccessView] = useState(false);
+  const [previewMode, setPreviewMode] = useState<"classic" | "mirror">(initialPreviewMode);
   const hasAdminAccess = canAdmin(capabilityProfile);
   const isGuestDraftMode = mode === "guestDraft";
 
@@ -51,6 +55,7 @@ function FormBuilderComposer({ mode, freshStartToken, draftSeed }: FormBuilderCo
     projects,
     freshStartToken,
     mode: isGuestDraftMode ? "guestDraft" : "admin",
+    startExperience: initialPreviewMode,
     draftSeed,
   });
   const selectedProjectForPublish = hasAdminAccess ? builder.selectedProject : null;
@@ -186,6 +191,127 @@ function FormBuilderComposer({ mode, freshStartToken, draftSeed }: FormBuilderCo
     return <div className="panel">{t("checkingWalletCapabilities")}</div>;
   }
 
+  const builderForm = (
+    <form id="create-form" className="composer-stage composer-step-stage" onSubmit={publish.handleSubmit}>
+      {builder.values.currentStep === "template" ? (
+        previewMode === "mirror" ? (
+          <IntentStartStep onApplyDraft={builder.applyIntentDraft} />
+        ) : (
+          <TemplateStep
+            t={t}
+            selectedTemplateKey={builder.values.selectedTemplateKey}
+            onSelectTemplate={builder.applyTemplate}
+          />
+        )
+      ) : null}
+
+      {builder.values.currentStep === "info" ? (
+        <InfoStep
+          t={t}
+          title={builder.values.title}
+          description={builder.values.description}
+          headerImage={builder.values.headerImage}
+          headerLogo={builder.values.headerLogo}
+          responseDeadlinePreset={builder.values.responseDeadlinePreset}
+          responseDeadlineCustomAt={builder.values.responseDeadlineCustomAt}
+          setTitle={builder.setTitle}
+          setDescription={builder.setDescription}
+          setHeaderImage={builder.setHeaderImage}
+          setHeaderLogo={builder.setHeaderLogo}
+          setResponseDeadlinePreset={builder.setResponseDeadlinePreset}
+          setResponseDeadlineCustomAt={builder.setResponseDeadlineCustomAt}
+          onBack={() => builder.moveStep(-1)}
+          onContinue={() => builder.moveStep(1)}
+        />
+      ) : null}
+
+      {builder.values.currentStep === "fields" ? (
+        <FieldsStep
+          t={t}
+          title={builder.values.title}
+          description={builder.values.description}
+          fields={builder.values.fields}
+          sections={builder.values.sections}
+          encryptSubmissions={builder.values.encryptSubmissions}
+          draggedFieldId={builder.values.draggedFieldId}
+          dragOverFieldId={builder.values.dragOverFieldId}
+          dragOverPlacement={builder.values.dragOverPlacement}
+          refs={builder.refs}
+          setActiveFieldId={builder.setActiveFieldId}
+          setDraggedFieldId={builder.setDraggedFieldId}
+          setDragOverFieldId={builder.setDragOverFieldId}
+          setDragOverPlacement={builder.setDragOverPlacement}
+          onAddSection={builder.addSection}
+          onUpdateSection={builder.updateSection}
+          onRemoveSection={builder.removeSection}
+          onUpdateField={builder.updateField}
+          onRemoveField={builder.removeField}
+          onDuplicateField={builder.duplicateFieldAt}
+          onInsertConditionalField={builder.insertConditionalField}
+          onInsertField={builder.insertField}
+          onReorderFields={builder.reorderFields}
+          onOpenFieldTypePicker={() => builder.setFieldTypePickerOpen(true)}
+          onBack={() => builder.moveStep(-1)}
+          onContinue={handleFieldsContinue}
+          presentation={previewMode === "mirror" ? "mirror" : "classic"}
+        />
+      ) : null}
+
+      {builder.values.currentStep === "publish" ? (
+        <PublishStep
+          t={t}
+          saving={publish.saving}
+          registeringOnSui={publish.registeringOnSui}
+          error={publish.error}
+          failure={publish.failure}
+          diagnosticsCopied={publish.diagnosticsCopied}
+          savedForm={publish.savedForm}
+          title={builder.values.title}
+          description={builder.values.description}
+          headerImage={builder.values.headerImage}
+          headerLogo={builder.values.headerLogo}
+          fields={builder.values.fields}
+          sections={builder.values.sections}
+          visibility={builder.values.visibility}
+          identityPolicy={builder.values.identityPolicy}
+          encryptSubmissions={builder.values.encryptSubmissions}
+          mobilePane={builder.values.mobilePane}
+          isReadyToPublish={builder.isReadyToPublish}
+          publicPath={publish.publicPath}
+          publicUrl={publish.publicUrl}
+          publishChecks={publish.publishChecks}
+          encryptionWarnings={encryptionWarnings}
+          showPublishSuccessView={showPublishSuccessView}
+          showWalrusDiagnostics={showWalrusDiagnostics}
+          isGuestDraftMode={isGuestDraftMode}
+          isConnected={isConnected}
+          currentWalletName={currentWallet?.name ?? undefined}
+          accountAddress={account?.address}
+          storageMode={import.meta.env.VITE_WALRUS_STORAGE_MODE || "uploadRelay"}
+          uploadRelayUrl={WALRUS_UPLOAD_RELAY_URL || t("notConfigured")}
+          storageRuntimeMode={storageRuntime.mode}
+          storageRuntimeNotice={storageRuntime.notice ?? undefined}
+          storageRuntimeDiagnostics={storageRuntime.diagnostics}
+          walrusCostEstimate={publish.walrusCostEstimate}
+          hideLivePreview={previewMode === "mirror"}
+          canManageProjects={hasAdminAccess}
+          selectedProjectId={builder.values.selectedProjectId}
+          selectedProject={hasAdminAccess ? builder.selectedProject : null}
+          projects={hasAdminAccess ? projects : []}
+          projectState={builder.values.projectState}
+          onSetMobilePane={builder.setMobilePane}
+          onSelectProject={handleSelectProject}
+          onChangeVisibility={builder.setVisibility}
+          onChangeIdentityPolicy={builder.setIdentityPolicy}
+          onToggleEncryptSubmissions={builder.setEncryptSubmissions}
+          onRegisterOnSui={() => void publish.handleRegisterOnSui()}
+          onCopyDiagnostics={() => void publish.copyDiagnostics()}
+          onBack={() => builder.moveStep(-1)}
+        />
+      ) : null}
+    </form>
+  );
+
   const composer = (
       <section ref={composerShellRef} className="composer-shell">
         <PublishOverlay
@@ -231,6 +357,29 @@ function FormBuilderComposer({ mode, freshStartToken, draftSeed }: FormBuilderCo
           onSelectStep={builder.goToStep}
         />
 
+        <section className="panel composer-view-mode-panel" aria-label="Create Form display mode">
+          <div>
+            <p className="eyebrow">Display Mode</p>
+            <strong>{previewMode === "mirror" ? "Mirror Preview Mode" : "Classic Builder"}</strong>
+          </div>
+          <div className="composer-view-mode-toggle" role="group" aria-label="Switch Create Form display mode">
+            <button
+              type="button"
+              className={previewMode === "classic" ? "is-active" : ""}
+              onClick={() => setPreviewMode("classic")}
+            >
+              Classic
+            </button>
+            <button
+              type="button"
+              className={previewMode === "mirror" ? "is-active" : ""}
+              onClick={() => setPreviewMode("mirror")}
+            >
+              Mirror
+            </button>
+          </div>
+        </section>
+
         {builder.hasRecoverableDraft ? (
           <RecoverableDraftBanner
             title={t("recoverableDraftTitle")}
@@ -248,117 +397,19 @@ function FormBuilderComposer({ mode, freshStartToken, draftSeed }: FormBuilderCo
           </section>
         ) : null}
 
-        <form id="create-form" className="composer-stage composer-step-stage" onSubmit={publish.handleSubmit}>
-          {builder.values.currentStep === "template" ? (
-            <TemplateStep
-              t={t}
-              selectedTemplateKey={builder.values.selectedTemplateKey}
-              onSelectTemplate={builder.applyTemplate}
-            />
-          ) : null}
-
-          {builder.values.currentStep === "info" ? (
-            <InfoStep
-              t={t}
-              title={builder.values.title}
-              description={builder.values.description}
-              headerImage={builder.values.headerImage}
-              headerLogo={builder.values.headerLogo}
-              responseDeadlinePreset={builder.values.responseDeadlinePreset}
-              responseDeadlineCustomAt={builder.values.responseDeadlineCustomAt}
-              setTitle={builder.setTitle}
-              setDescription={builder.setDescription}
-              setHeaderImage={builder.setHeaderImage}
-              setHeaderLogo={builder.setHeaderLogo}
-              setResponseDeadlinePreset={builder.setResponseDeadlinePreset}
-              setResponseDeadlineCustomAt={builder.setResponseDeadlineCustomAt}
-              onBack={() => builder.moveStep(-1)}
-              onContinue={() => builder.moveStep(1)}
-            />
-          ) : null}
-
-          {builder.values.currentStep === "fields" ? (
-            <FieldsStep
-              t={t}
-              title={builder.values.title}
-              description={builder.values.description}
-              fields={builder.values.fields}
-              sections={builder.values.sections}
-              encryptSubmissions={builder.values.encryptSubmissions}
-              draggedFieldId={builder.values.draggedFieldId}
-              dragOverFieldId={builder.values.dragOverFieldId}
-              dragOverPlacement={builder.values.dragOverPlacement}
-              refs={builder.refs}
-              setActiveFieldId={builder.setActiveFieldId}
-              setDraggedFieldId={builder.setDraggedFieldId}
-              setDragOverFieldId={builder.setDragOverFieldId}
-              setDragOverPlacement={builder.setDragOverPlacement}
-              onAddSection={builder.addSection}
-              onUpdateSection={builder.updateSection}
-              onRemoveSection={builder.removeSection}
-              onUpdateField={builder.updateField}
-              onRemoveField={builder.removeField}
-              onDuplicateField={builder.duplicateFieldAt}
-              onInsertConditionalField={builder.insertConditionalField}
-              onInsertField={builder.insertField}
-              onReorderFields={builder.reorderFields}
-              onOpenFieldTypePicker={() => builder.setFieldTypePickerOpen(true)}
-              onBack={() => builder.moveStep(-1)}
-              onContinue={handleFieldsContinue}
-            />
-          ) : null}
-
-          {builder.values.currentStep === "publish" ? (
-            <PublishStep
-              t={t}
-              saving={publish.saving}
-              registeringOnSui={publish.registeringOnSui}
-              error={publish.error}
-              failure={publish.failure}
-              diagnosticsCopied={publish.diagnosticsCopied}
-              savedForm={publish.savedForm}
-              title={builder.values.title}
-              description={builder.values.description}
-              headerImage={builder.values.headerImage}
-              headerLogo={builder.values.headerLogo}
-              fields={builder.values.fields}
-              sections={builder.values.sections}
-              visibility={builder.values.visibility}
-              identityPolicy={builder.values.identityPolicy}
-              encryptSubmissions={builder.values.encryptSubmissions}
-              mobilePane={builder.values.mobilePane}
+        {previewMode === "mirror" ? (
+          <div className="composer-mirror-layout">
+            <div className="composer-mirror-builder">{builderForm}</div>
+            <MirrorPreviewPanel
+              values={builder.values}
               isReadyToPublish={builder.isReadyToPublish}
-              publicPath={publish.publicPath}
-              publicUrl={publish.publicUrl}
-              publishChecks={publish.publishChecks}
-              encryptionWarnings={encryptionWarnings}
-              showPublishSuccessView={showPublishSuccessView}
-              showWalrusDiagnostics={showWalrusDiagnostics}
-              isGuestDraftMode={isGuestDraftMode}
-              isConnected={isConnected}
-              currentWalletName={currentWallet?.name ?? undefined}
-              accountAddress={account?.address}
-              storageMode={import.meta.env.VITE_WALRUS_STORAGE_MODE || "uploadRelay"}
-              uploadRelayUrl={WALRUS_UPLOAD_RELAY_URL || t("notConfigured")}
-              storageRuntimeMode={storageRuntime.mode}
-              storageRuntimeNotice={storageRuntime.notice ?? undefined}
-              storageRuntimeDiagnostics={storageRuntime.diagnostics}
-              canManageProjects={hasAdminAccess}
-              selectedProjectId={builder.values.selectedProjectId}
-              selectedProject={hasAdminAccess ? builder.selectedProject : null}
-              projects={hasAdminAccess ? projects : []}
-              projectState={builder.values.projectState}
-              onSetMobilePane={builder.setMobilePane}
-              onSelectProject={handleSelectProject}
-              onChangeVisibility={builder.setVisibility}
-              onChangeIdentityPolicy={builder.setIdentityPolicy}
-              onToggleEncryptSubmissions={builder.setEncryptSubmissions}
-              onRegisterOnSui={() => void publish.handleRegisterOnSui()}
-              onCopyDiagnostics={() => void publish.copyDiagnostics()}
-              onBack={() => builder.moveStep(-1)}
+              publishedStatus={publish.savedForm ? "published" : "preview"}
+              surface={builder.values.currentStep === "publish" ? "publish" : "builder"}
             />
-          ) : null}
-        </form>
+          </div>
+        ) : (
+          builderForm
+        )}
       </section>
   );
 
@@ -389,6 +440,7 @@ export function FormBuilderPage() {
   const searchParams = new URLSearchParams(location.search);
   const requestedGuestDraftMode = searchParams.get("mode") === "guestDraft";
   const freshStartToken = searchParams.get("fresh") ?? "";
+  const initialPreviewMode = searchParams.get("preview") === "mirror" ? "mirror" : "classic";
   const draftSeed = {
     templateKey: searchParams.get("template") ?? undefined,
     idea: searchParams.get("idea") ?? undefined,
@@ -411,6 +463,7 @@ export function FormBuilderPage() {
       key={`${mode}:${freshStartToken || "restored"}`}
       mode={mode}
       freshStartToken={freshStartToken}
+      initialPreviewMode={initialPreviewMode}
       draftSeed={draftSeed}
     />
   );

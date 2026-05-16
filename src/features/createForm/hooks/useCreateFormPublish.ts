@@ -14,6 +14,10 @@ import { isLocalFallbackBlob } from "../../../lib/proof";
 import { publishForm } from "../services";
 import { localStorageAdapter } from "../../../storage/localStorageAdapter";
 import { saveFormMetadataOverlay } from "../../../storage/formMetadataOverlay";
+import {
+  createWalrusCostEstimate,
+  type WalrusCostEstimate,
+} from "../../../storage/walrusCostEstimate";
 import { getCreateFormEncryptionReadiness } from "../encryptionReadiness";
 import type {
   CreateFormTransaction,
@@ -116,6 +120,7 @@ export function useCreateFormPublish({
   const [saving, setSaving] = useState(false);
   const [registeringOnSui, setRegisteringOnSui] = useState(false);
   const [overlay, setOverlay] = useState<PublishOverlayState>(initialOverlayState);
+  const [walrusCostEstimate, setWalrusCostEstimate] = useState<WalrusCostEstimate | null>(null);
 
   useEffect(() => {
     if (savedForm && isDirty) {
@@ -155,6 +160,70 @@ export function useCreateFormPublish({
       }
     };
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    const timeoutId = window.setTimeout(() => {
+      const responseDeadline =
+        responseDeadlinePreset === "custom"
+          ? parseCustomResponseDeadline(responseDeadlineCustomAt)
+          : getResponseDeadlineFromPreset(responseDeadlinePreset);
+      const responseDeadlineMode =
+        responseDeadlinePreset === "none"
+          ? "none"
+          : responseDeadlinePreset === "custom"
+            ? "custom"
+            : "relative";
+      const estimateForm = buildFormSchema({
+        title,
+        description,
+        headerImage,
+        headerLogo,
+        fields,
+        sections,
+        purpose,
+        visibility,
+        identityPolicy,
+        ownerAddress: accountAddress ?? "",
+        creationMode,
+        projectId: selectedProject?.objectId,
+        projectName: selectedProject?.name,
+        encryptSubmissions,
+        responseDeadline,
+        responseDeadlineMode,
+      });
+      void createWalrusCostEstimate({
+        ...estimateForm,
+        formMetadataDigest: "estimate",
+      }).then((estimate) => {
+        if (!cancelled) {
+          setWalrusCostEstimate(estimate);
+        }
+      });
+    }, 250);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeoutId);
+    };
+  }, [
+    accountAddress,
+    creationMode,
+    description,
+    encryptSubmissions,
+    fields,
+    headerImage,
+    headerLogo,
+    identityPolicy,
+    purpose,
+    responseDeadlineCustomAt,
+    responseDeadlinePreset,
+    sections,
+    selectedProject?.name,
+    selectedProject?.objectId,
+    title,
+    visibility,
+  ]);
 
   const publishChecks = useMemo(
     () =>
@@ -348,23 +417,25 @@ export function useCreateFormPublish({
       updateOverlay({ open: false });
       const message = submitError instanceof Error ? submitError.message : t("saveFailed");
       setError(message);
-      setFailure(
-        createCriticalFailure({
-          error: submitError instanceof Error ? submitError : new Error(message),
-          surface:
-            message.toLowerCase().includes("wallet")
-              ? "wallet"
-              : message.toLowerCase().includes("seal") || message.toLowerCase().includes("encrypt")
-                ? "seal"
-                : "walrus",
-          step: "publish",
-          noDataSubmitted: true,
-          diagnostics: {
-            selectedProjectId: selectedProject?.objectId ?? "",
-            encryptSubmissions,
-          },
-        }),
-      );
+      const nextFailure = createCriticalFailure({
+        error: submitError instanceof Error ? submitError : new Error(message),
+        surface:
+          message.toLowerCase().includes("wallet")
+            ? "wallet"
+            : message.toLowerCase().includes("seal") || message.toLowerCase().includes("encrypt")
+              ? "seal"
+              : "walrus",
+        step: "publish",
+        noDataSubmitted: true,
+        diagnostics: {
+          selectedProjectId: selectedProject?.objectId ?? "",
+          encryptSubmissions,
+        },
+      });
+      setFailure(nextFailure);
+      if (nextFailure.kind === "wallet_rejected") {
+        goToStep("fields");
+      }
     } finally {
       setSaving(false);
     }
@@ -436,6 +507,7 @@ export function useCreateFormPublish({
     saving,
     registeringOnSui,
     overlay,
+    walrusCostEstimate,
     publishChecks,
     publicPath,
     publicUrl,
