@@ -1094,20 +1094,18 @@ export function AdminDashboardPage() {
     return saved;
   }, [applySubmissionUpdate, setSelectedSignalId, setToast]);
 
-  useEffect(() => {
+  async function handleSaveReviewDraft() {
     if (!selectedRecord || !activeReviewDraft || !hasReviewDraftChanges) {
       return;
     }
-
-    const autosaveTimer = window.setTimeout(() => {
-      void updateSubmission({
+    await updateSubmission(
+      {
         ...selectedRecord.submission,
         ...activeReviewDraft,
-      });
-    }, 900);
-
-    return () => window.clearTimeout(autosaveTimer);
-  }, [activeReviewDraft, hasReviewDraftChanges, selectedRecord, updateSubmission]);
+      },
+      { announce: true },
+    );
+  }
 
   async function handleMoveToRoadmap() {
     if (!selectedRecord) {
@@ -1230,14 +1228,14 @@ export function AdminDashboardPage() {
         : t("allExportShort");
   const csvExportIncludesDecryptedData = Boolean(detailAnswers && csvExportCount > 0);
   const reviewSaveStatusLabel: Record<ReviewSaveStatus, string> = {
-    idle: "Autosave ready",
+    idle: "Ready to save",
     saving: t("reviewSaveSaving"),
-    saved: "Autosaved",
+    saved: "Saved",
     skipped: t("reviewSaveSkipped"),
     error: t("reviewSaveError"),
   };
   const reviewStatusPillState = hasReviewDraftChanges ? "editing" : reviewSaveStatus;
-  const reviewStatusPillLabel = hasReviewDraftChanges ? "Autosave queued" : reviewSaveStatusLabel[reviewSaveStatus];
+  const reviewStatusPillLabel = hasReviewDraftChanges ? "Unsaved draft" : reviewSaveStatusLabel[reviewSaveStatus];
 
   function getCsvFilterSnapshot() {
     return {
@@ -1947,7 +1945,11 @@ export function AdminDashboardPage() {
                     </section>
                   ) : null}
 
-                  <div className="signal-detail-sections review-primary-sections">
+                  <div
+                    className={`signal-detail-sections review-primary-sections ${
+                      selectedRecordNeedsDecrypt ? "" : "is-review-ready"
+                    }`}
+                  >
                     <section className="answer-card original-signal-section">
                       <div className="signal-detail-group-header signal-detail-group-header-original">
                         <p className="eyebrow">{t("originalSignalTitle")}</p>
@@ -1981,8 +1983,8 @@ export function AdminDashboardPage() {
                           )}
                           {selectedRecord.form.fields
                             .filter((field) => !isAttachmentFieldType(field.type))
-                            .map((field) => (
-                              <div key={field.id} className="answer-line">
+                            .map((field, index) => (
+                              <div key={field.id} className="answer-line" data-question-index={`Q${index + 1}`}>
                                 <strong>{field.label}</strong>
                                 {renderAnswerValue(field, detailAnswers[field.id])}
                               </div>
@@ -2073,9 +2075,19 @@ export function AdminDashboardPage() {
                           <h3>{currentReviewPhaseLabel}</h3>
                           <p className="review-helper-copy">{nextReviewActionLabel}</p>
                         </div>
-                        <span className={`save-state-pill is-${reviewStatusPillState}`}>
-                          {reviewStatusPillLabel}
-                        </span>
+                        <div className="review-save-actions">
+                          <span className={`save-state-pill is-${reviewStatusPillState}`}>
+                            {reviewStatusPillLabel}
+                          </span>
+                          <button
+                            type="button"
+                            className="primary-button review-save-button"
+                            disabled={saving || !hasReviewDraftChanges}
+                            onClick={() => void handleSaveReviewDraft()}
+                          >
+                            {saving ? t("reviewSaveSaving") : "Save review"}
+                          </button>
+                        </div>
                       </div>
                       <div className="review-progress-rail" aria-label="Review progress">
                         {reviewProgressSteps.map((step) => (
@@ -2258,7 +2270,7 @@ export function AdminDashboardPage() {
                         />
                       </label>
                       <p className="review-action-helper">
-                        Changes autosave as you review. Public visibility is decided separately below.
+                        Changes stay as an unsaved draft until you save. Public visibility is decided separately below.
                       </p>
                       <div className="review-roadmap-strip">
                         <div>

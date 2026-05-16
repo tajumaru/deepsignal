@@ -959,6 +959,28 @@ async function fetchTextBlob(blobId: string): Promise<string | null> {
   return fetchBlobTextFromWalrus(blobId, "Walrus text blob read failed");
 }
 
+function extractEmbeddedEncryptedPayload(value: string) {
+  try {
+    const payload = JSON.parse(value) as unknown;
+    if (isSubmissionBundle(payload)) {
+      return typeof payload.submission.encryptedPayload === "string"
+        ? payload.submission.encryptedPayload
+        : null;
+    }
+    if (
+      payload &&
+      typeof payload === "object" &&
+      "encryptedPayload" in payload &&
+      typeof payload.encryptedPayload === "string"
+    ) {
+      return payload.encryptedPayload;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 function createManifest(
   form: Pick<FormSchema, "id" | "createdAt" | "headerImage" | "headerLogo">,
   formBlobId: string,
@@ -1526,7 +1548,11 @@ export const walrusAdapter: StorageAdapter = {
   },
 
   async readEncryptedPayload(blobId) {
-    return fetchTextBlob(blobId);
+    const payload = await fetchTextBlob(blobId);
+    if (!payload) {
+      return null;
+    }
+    return extractEmbeddedEncryptedPayload(payload) ?? payload;
   },
 
   async uploadFile(file) {

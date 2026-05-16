@@ -82,9 +82,16 @@ function assertSealEncryptionAvailable() {
 export function createEncryptionGuardError(
   code: typeof ENCRYPTION_REQUIRED_CODE | typeof ENCRYPTION_FAILED_CODE,
   message: string,
+  options: { cause?: unknown; diagnosticMessage?: string } = {},
 ) {
-  const error = new Error(message) as Error & { code?: string };
+  const error = new Error(message) as Error & {
+    code?: string;
+    cause?: unknown;
+    diagnosticMessage?: string;
+  };
   error.code = code;
+  error.cause = options.cause;
+  error.diagnosticMessage = options.diagnosticMessage;
   return error;
 }
 
@@ -105,7 +112,10 @@ export async function encryptSensitiveResponse(
     if (error instanceof Error && error.message === SEAL_UNAVAILABLE_MESSAGE) {
       throw error;
     }
-    throw createEncryptionGuardError(ENCRYPTION_FAILED_CODE, ENCRYPTION_FAILED_MESSAGE);
+    throw createEncryptionGuardError(ENCRYPTION_FAILED_CODE, ENCRYPTION_FAILED_MESSAGE, {
+      cause: error,
+      diagnosticMessage: error instanceof Error ? error.message : String(error),
+    });
   }
 }
 

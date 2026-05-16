@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { FormSchema, SealAdapter, StorageAdapter, Submission } from "../types";
 import { saveSubmissionWithEncryption } from "./storage";
-import { createRealSealEnvelope } from "../crypto/sealPayload";
+import { createRealSealEnvelope, parseRealSealEnvelope } from "../crypto/sealPayload";
+import { localStorageAdapter } from "../storage/localStorageAdapter";
 import { ENCRYPTED_ATTACHMENT_REQUIRED_MESSAGE } from "../storage/submissionSanitizer";
 import { serializeSubmissionBundle } from "../storage/walrusAdapter";
 
@@ -106,6 +107,7 @@ const fakeSealAdapter: SealAdapter = {
 describe("saveSubmissionWithEncryption", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    window.localStorage.clear();
   });
 
   it("redacts plaintext answers before persisting encrypted submissions", async () => {
@@ -228,5 +230,26 @@ describe("saveSubmissionWithEncryption", () => {
     });
     expect(targetStorage.saveEncryptedPayload).not.toHaveBeenCalled();
     expect(targetStorage.saveSubmission).not.toHaveBeenCalled();
+  });
+
+  it("preserves embedded encrypted payloads in local fallback storage", async () => {
+    await localStorageAdapter.saveSubmission({
+      ...createEncryptedSubmission(),
+      encryptedPayload: createSealEnvelope(),
+      encryptedBlobId: undefined,
+    });
+
+    const [storedSubmission] = await localStorageAdapter.listSubmissions(form.id);
+
+    expect(storedSubmission).toMatchObject({
+      isEncrypted: true,
+      answers: {},
+    });
+    expect(parseRealSealEnvelope(storedSubmission.encryptedPayload ?? "")).toMatchObject({
+      policyId: "project_signal_v1",
+      projectId: "project-1",
+    });
+    expect(storedSubmission.encryptedBlobId).toBeTruthy();
+    expect(JSON.stringify(storedSubmission.answers)).not.toContain("private answer");
   });
 });

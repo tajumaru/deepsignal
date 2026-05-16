@@ -529,7 +529,7 @@ export function FormBuilderPage() {
   const searchParams = new URLSearchParams(location.search);
   const requestedGuestDraftMode = searchParams.get("mode") === "guestDraft";
   const freshStartToken = searchParams.get("fresh") ?? "";
-  const initialDisplayMode: DisplayMode = searchParams.get("preview") === "classic" ? "classic" : "mirror";
+  const initialDisplayMode: DisplayMode = searchParams.get("preview") === "mirror" ? "mirror" : "classic";
   const draftSeed = {
     templateKey: searchParams.get("template") ?? undefined,
     idea: searchParams.get("idea") ?? undefined,

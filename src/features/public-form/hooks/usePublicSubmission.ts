@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import type { UploadDropzoneItem } from "../../../components/UploadDropzone";
 import { getSealRuntimeStatus } from "../../../crypto/cryptoFactory";
+import { SEAL_UNAVAILABLE_MESSAGE } from "../../../crypto/sealService";
 import {
   buildCriticalFailureDiagnostics,
   createCriticalFailure,
@@ -148,6 +149,21 @@ function getUserFacingSubmissionError(error: unknown, fallback: string) {
     return STORAGE_CONNECTION_PREPARING_MESSAGE;
   }
   return error instanceof Error ? error.message : fallback;
+}
+
+function getDiagnosticErrorMessage(error: unknown): string {
+  if (!(error instanceof Error)) {
+    return String(error);
+  }
+  const diagnosticMessage = (error as Error & { diagnosticMessage?: unknown }).diagnosticMessage;
+  if (typeof diagnosticMessage === "string" && diagnosticMessage.trim()) {
+    return diagnosticMessage;
+  }
+  const cause = (error as Error & { cause?: unknown }).cause;
+  if (cause) {
+    return getDiagnosticErrorMessage(cause);
+  }
+  return error.message;
 }
 
 interface UsePublicSubmissionArgs {
@@ -402,6 +418,24 @@ export function usePublicSubmission({
       return;
     }
     const sealRuntime = getSealRuntimeStatus();
+    if (form.encryptSubmissions && !sealRuntime.canEncrypt) {
+      const message = sealRuntime.warning ?? SEAL_UNAVAILABLE_MESSAGE;
+      setSubmitError(message);
+      setSubmitNotice("");
+      setFailure(
+        createCriticalFailure({
+          error: new Error(message),
+          surface: "seal",
+          step: "validation",
+          noDataSubmitted: true,
+          diagnostics: {
+            formId: form.id,
+            sealRuntime,
+          },
+        }),
+      );
+      return;
+    }
     if (
       form.encryptSubmissions &&
       sealRuntime.activeMode === "seal" &&
@@ -702,7 +736,7 @@ export function usePublicSubmission({
             walletRequired,
             attachWallet,
             walrusRuntime: getWalrusMutationRuntimeStatus(),
-            rawError: error instanceof Error ? error.message : String(error),
+            rawError: getDiagnosticErrorMessage(error),
           },
         }),
       );

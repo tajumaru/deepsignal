@@ -90,12 +90,12 @@ export default defineConfig(({ mode }) => {
     build: {
       rollupOptions: {
         output: {
-          entryFileNames: "assets/[name].js",
-          chunkFileNames: "assets/[name].js",
+          entryFileNames: "assets/[name]-[hash].js",
+          chunkFileNames: "assets/[name]-[hash].js",
           assetFileNames(assetInfo) {
             const name = assetInfo.name ?? "";
             if (name.endsWith(".css")) {
-              return "assets/[name][extname]";
+              return "assets/[name]-[hash][extname]";
             }
             return "assets/[name]-[hash][extname]";
           },

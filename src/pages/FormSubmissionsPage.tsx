@@ -958,8 +958,8 @@ export function FormSubmissionsPage() {
                 ) : null}
               </div>
             ) : null}
-            {previewAnswerFields.map((field) => (
-              <div key={field.id} className="answer-line">
+            {previewAnswerFields.map((field, index) => (
+              <div key={field.id} className="answer-line" data-question-index={`Q${index + 1}`}>
                 <strong>{field.label}</strong>
                 {renderAnswerValue(field, resolvedDetailAnswers[field.id])}
               </div>

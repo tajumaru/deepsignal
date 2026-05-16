@@ -50,6 +50,15 @@ function writeJson<T>(key: string, value: T) {
   window.localStorage.setItem(key, JSON.stringify(value));
 }
 
+function getEncryptedSubmissionOptions(submission: Submission) {
+  return {
+    allowEncryptedPayload:
+      submission.isEncrypted === true &&
+      typeof submission.encryptedPayload === "string" &&
+      submission.encryptedPayload.trim().length > 0,
+  };
+}
+
 export const localStorageAdapter: StorageAdapter = {
   async saveForm(form) {
     const forms = readJson<FormSchema[]>(FORMS_KEY, []);
@@ -92,9 +101,10 @@ export const localStorageAdapter: StorageAdapter = {
 
   async saveSubmission(submission) {
     const submissions = readJson<Submission[]>(SUBMISSIONS_KEY, []);
-    const sanitizedSubmission = sanitizeSubmissionForStorage(submission);
+    const encryptedSubmissionOptions = getEncryptedSubmissionOptions(submission);
+    const sanitizedSubmission = sanitizeSubmissionForStorage(submission, encryptedSubmissionOptions);
     if (sanitizedSubmission.isEncrypted) {
-      assertEncryptedSubmissionLeakGuard(sanitizedSubmission);
+      assertEncryptedSubmissionLeakGuard(sanitizedSubmission, encryptedSubmissionOptions);
     }
     const nextSubmissions = submissions.filter((item) => item.id !== sanitizedSubmission.id);
     const blobId = sanitizedSubmission.blobId ?? `local-submission-${sanitizedSubmission.id}`;
@@ -112,9 +122,10 @@ export const localStorageAdapter: StorageAdapter = {
 
   async updateSubmission(submission) {
     const submissions = readJson<Submission[]>(SUBMISSIONS_KEY, []);
-    const sanitizedSubmission = sanitizeSubmissionForStorage(submission);
+    const encryptedSubmissionOptions = getEncryptedSubmissionOptions(submission);
+    const sanitizedSubmission = sanitizeSubmissionForStorage(submission, encryptedSubmissionOptions);
     if (sanitizedSubmission.isEncrypted) {
-      assertEncryptedSubmissionLeakGuard(sanitizedSubmission);
+      assertEncryptedSubmissionLeakGuard(sanitizedSubmission, encryptedSubmissionOptions);
     }
     const nextSubmissions = submissions.map((item) =>
       item.id === sanitizedSubmission.id ? sanitizedSubmission : item,

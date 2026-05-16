@@ -1051,7 +1051,7 @@ const messages = {
     retryLabel: "Retry",
     reconnectWallet: "Reconnect wallet",
     retryRegistryStep: "Retry registry step",
-    recoverableDraftTitle: "前回の未送信データがあります",
+    recoverableDraftTitle: "You have an unsent draft",
     restore: "Restore",
     discard: "Discard",
     submitRecoveryTitle: "Submission recovery",

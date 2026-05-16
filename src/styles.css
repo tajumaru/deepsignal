@@ -14930,6 +14930,19 @@ body.composer-mode .bg-orb {
   gap: 0.8rem;
 }
 
+.review-save-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.55rem;
+}
+
+.review-save-button {
+  min-height: 2.1rem;
+  padding-block: 0.35rem;
+  white-space: nowrap;
+}
+
 .review-action-bar {
   display: flex;
   flex-wrap: wrap;
@@ -15226,9 +15239,9 @@ body.composer-mode .bg-orb {
 }
 
 .review-roadmap-strip {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
   gap: 1rem;
   margin-top: 0.25rem;
   padding: 0.9rem 0 0;
@@ -15247,6 +15260,7 @@ body.composer-mode .bg-orb {
 
 .review-roadmap-actions {
   justify-content: flex-end;
+  min-width: max-content;
 }
 
 .secondary-inspector {
@@ -16313,6 +16327,45 @@ body.composer-mode .bg-orb {
   grid-area: triage;
 }
 
+.review-primary-sections.is-review-ready {
+  grid-template-columns: 1fr;
+  grid-template-areas:
+    "original"
+    "triage";
+  gap: 1.2rem;
+}
+
+.review-primary-sections.is-review-ready .original-signal-section {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.14),
+    inset 0 0 0 1px rgba(195, 242, 250, 0.1),
+    0 18px 40px rgba(0, 0, 0, 0.28),
+    0 0 0 1px rgba(178, 244, 255, 0.16);
+}
+
+.review-primary-sections.is-review-ready .review-triage-card {
+  position: relative;
+  margin-top: 0.2rem;
+  padding-top: 1.2rem;
+  border-top: 1px solid rgba(125, 211, 252, 0.34);
+  background:
+    radial-gradient(circle at 92% 0%, rgba(14, 165, 233, 0.12), transparent 24%),
+    linear-gradient(180deg, #05121f, #030d18);
+  box-shadow:
+    inset 0 1px 0 rgba(125, 211, 252, 0.08),
+    inset 0 0 0 1px rgba(116, 226, 255, 0.12);
+}
+
+.review-primary-sections.is-review-ready .review-triage-card::before {
+  content: "";
+  position: absolute;
+  top: -0.7rem;
+  left: 0.05rem;
+  right: 0.05rem;
+  height: 1px;
+  background: linear-gradient(90deg, rgba(178, 244, 255, 0), rgba(178, 244, 255, 0.6), rgba(56, 189, 248, 0));
+}
+
 .review-triage-card {
   display: grid;
   gap: 0.85rem;
@@ -16587,7 +16640,7 @@ body.composer-mode .bg-orb {
 }
 
 .review-secondary-sections {
-  margin-top: 0;
+  margin-top: 1rem;
 }
 
 .review-secondary-card {
@@ -16597,8 +16650,10 @@ body.composer-mode .bg-orb {
 .answer-line {
   position: relative;
   display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
   gap: 0.35rem;
-  padding: 1rem 1.05rem 1rem 1.18rem;
+  column-gap: 0.8rem;
+  padding: 1rem 1.05rem 1rem 0.95rem;
   overflow: hidden;
   background:
     linear-gradient(180deg, rgba(239, 252, 255, 0.065), rgba(239, 252, 255, 0.025)),
@@ -16619,10 +16674,35 @@ body.composer-mode .bg-orb {
   background: linear-gradient(180deg, rgba(178, 244, 255, 0.9), rgba(110, 231, 183, 0.55));
 }
 
+.answer-line::after {
+  content: attr(data-question-index);
+  grid-column: 1;
+  grid-row: 1 / span 2;
+  align-self: start;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2.25rem;
+  min-height: 1.75rem;
+  padding: 0.2rem 0.42rem;
+  border: 1px solid rgba(178, 244, 255, 0.22);
+  border-radius: 999px;
+  background: rgba(116, 226, 255, 0.1);
+  color: #bff8ff;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0;
+}
+
 .answer-line strong {
+  grid-column: 2;
   color: #ffffff;
   font-size: 0.88rem;
   line-height: 1.25;
+}
+
+.answer-line > :not(strong) {
+  grid-column: 2;
 }
 
 .answer-line p,
@@ -18656,6 +18736,16 @@ body.composer-mode .bg-orb {
     grid-template-columns: 1fr;
   }
 
+  .review-primary-sections {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "original"
+      "unlock"
+      "context"
+      "triage"
+      "success";
+  }
+
   .signal-sidebar {
     position: static;
   }
@@ -20521,6 +20611,10 @@ body.composer-mode .bg-orb {
   display: none;
 }
 
+.mobile-inbox-bottom-nav {
+  display: none;
+}
+
 @media (max-width: 640px) {
   .desktop-signal-inbox {
     display: none;
@@ -21325,6 +21419,15 @@ pre {
   .access-management-actions,
   .access-role-row {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .review-roadmap-strip {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .review-roadmap-actions {
+    justify-content: flex-start;
+    min-width: 0;
   }
 
   .composer-toolbar,
