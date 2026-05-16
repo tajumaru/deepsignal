@@ -926,15 +926,19 @@ export function AdminDashboardPage() {
                     cta: selectedRoadmapUrl ? <Link className="primary-button" to={selectedRoadmapUrl}>Open Public Roadmap</Link> : null,
                   };
 
-  const activeReviewDraft: ReviewDraft | null = selectedRecord
-    ? reviewDraft ?? {
-        status: selectedRecord.submission.status,
-        triageStatus: selectedRecord.submission.triageStatus,
-        priority: selectedRecord.submission.priority,
-        signalValue: selectedRecord.submission.signalValue,
-        notes: selectedRecord.submission.notes,
-      }
-    : null;
+  const activeReviewDraft: ReviewDraft | null = useMemo(
+    () =>
+      selectedRecord
+        ? reviewDraft ?? {
+            status: selectedRecord.submission.status,
+            triageStatus: selectedRecord.submission.triageStatus,
+            priority: selectedRecord.submission.priority,
+            signalValue: selectedRecord.submission.signalValue,
+            notes: selectedRecord.submission.notes,
+          }
+        : null,
+    [reviewDraft, selectedRecord],
+  );
   const hasReviewDraftChanges = Boolean(
     selectedRecord &&
       activeReviewDraft &&
@@ -944,6 +948,56 @@ export function AdminDashboardPage() {
         activeReviewDraft.signalValue !== selectedRecord.submission.signalValue ||
         activeReviewDraft.notes !== selectedRecord.submission.notes),
   );
+  const draftReviewStatus = activeReviewDraft?.status ?? selectedRecord?.submission.status ?? "unread";
+  const draftTriageStatus = activeReviewDraft?.triageStatus ?? selectedRecord?.submission.triageStatus ?? "new";
+  const draftSignalValue = activeReviewDraft?.signalValue ?? selectedRecord?.submission.signalValue;
+  const draftNotes = activeReviewDraft?.notes ?? selectedRecord?.submission.notes ?? "";
+  const isDraftRead = draftReviewStatus !== "unread";
+  const isDraftClassified = draftTriageStatus !== "new" || draftSignalValue !== undefined;
+  const hasDraftNotes = draftNotes.trim().length > 0;
+  const isDraftOnRoadmap = ROADMAP_READY_STATUSES.has(draftTriageStatus);
+  const reviewProgressBaseSteps = [
+    {
+      id: "read",
+      label: "Read signal",
+      detail: "Inspect the original feedback and mark it read.",
+      complete: isDraftRead,
+    },
+    {
+      id: "classify",
+      label: "Review & classify",
+      detail: "Set review state, triage status, priority, and signal value.",
+      complete: isDraftClassified,
+    },
+    {
+      id: "notes",
+      label: "Add reviewer notes",
+      detail: "Capture the internal context needed for follow-up.",
+      complete: hasDraftNotes,
+    },
+    {
+      id: "roadmap",
+      label: "Decide roadmap visibility",
+      detail: "Choose whether safe metadata should appear on the public roadmap.",
+      complete: isDraftOnRoadmap,
+    },
+  ] satisfies Array<{ id: string; label: string; detail: string; complete: boolean }>;
+  let hasCurrentReviewStep = false;
+  const reviewProgressSteps = reviewProgressBaseSteps.map((step) => {
+    const state = step.complete ? "complete" : hasCurrentReviewStep ? "upcoming" : "current";
+    if (!step.complete && !hasCurrentReviewStep) {
+      hasCurrentReviewStep = true;
+    }
+    return {
+      ...step,
+      state,
+    };
+  });
+  const currentReviewStep =
+    reviewProgressSteps.find((step) => step.state === "current") ?? reviewProgressSteps[reviewProgressSteps.length - 1];
+  const currentReviewPhaseLabel = currentReviewStep?.label ?? "Review complete";
+  const nextReviewActionLabel = currentReviewStep?.state === "current" ? currentReviewStep.detail : "Review workflow is complete.";
+
   function patchReviewDraft(patch: Partial<ReviewDraft>) {
     if (!selectedRecord) {
       return;
@@ -985,7 +1039,7 @@ export function AdminDashboardPage() {
     setDecryptError("");
   }, [selectedRecord, setDecryptError]);
 
-  async function updateSubmission(nextSubmission: Submission, options: { announce?: boolean } = {}) {
+  const updateSubmission = useCallback(async (nextSubmission: Submission, options: { announce?: boolean } = {}) => {
     const normalized = normalizeSubmission({
       ...nextSubmission,
       updatedAt: new Date().toISOString(),
@@ -1023,17 +1077,34 @@ export function AdminDashboardPage() {
     saveQueueRef.current = saveQueueRef.current.then(runSave, runSave);
     await saveQueueRef.current;
     return saved;
-  }
+  }, [applySubmissionUpdate, setSelectedSignalId, setToast]);
+
+  useEffect(() => {
+    if (!selectedRecord || !activeReviewDraft || !hasReviewDraftChanges) {
+      return;
+    }
+
+    const autosaveTimer = window.setTimeout(() => {
+      void updateSubmission({
+        ...selectedRecord.submission,
+        ...activeReviewDraft,
+      });
+    }, 900);
+
+    return () => window.clearTimeout(autosaveTimer);
+  }, [activeReviewDraft, hasReviewDraftChanges, selectedRecord, updateSubmission]);
 
   async function handleMoveToRoadmap() {
     if (!selectedRecord) {
       return;
     }
-    const nextStatus = ROADMAP_READY_STATUSES.has(selectedRecord.submission.triageStatus)
-      ? selectedRecord.submission.triageStatus
+    const currentTriageStatus = activeReviewDraft?.triageStatus ?? selectedRecord.submission.triageStatus;
+    const nextStatus = ROADMAP_READY_STATUSES.has(currentTriageStatus)
+      ? currentTriageStatus
       : "planned";
     const saved = await updateSubmission({
       ...selectedRecord.submission,
+      ...(activeReviewDraft ?? {}),
       triageStatus: nextStatus,
     });
     if (!saved) {
@@ -1144,14 +1215,14 @@ export function AdminDashboardPage() {
         : t("allExportShort");
   const csvExportIncludesDecryptedData = Boolean(detailAnswers && csvExportCount > 0);
   const reviewSaveStatusLabel: Record<ReviewSaveStatus, string> = {
-    idle: t("reviewSaveReady"),
+    idle: "Autosave ready",
     saving: t("reviewSaveSaving"),
-    saved: t("reviewSaveSaved"),
+    saved: "Autosaved",
     skipped: t("reviewSaveSkipped"),
     error: t("reviewSaveError"),
   };
   const reviewStatusPillState = hasReviewDraftChanges ? "editing" : reviewSaveStatus;
-  const reviewStatusPillLabel = hasReviewDraftChanges ? "Editing" : reviewSaveStatusLabel[reviewSaveStatus];
+  const reviewStatusPillLabel = hasReviewDraftChanges ? "Autosave queued" : reviewSaveStatusLabel[reviewSaveStatus];
 
   function getCsvFilterSnapshot() {
     return {
@@ -1972,12 +2043,63 @@ export function AdminDashboardPage() {
                       <div className="review-controls-header">
                         <div>
                           <p className="eyebrow">Review Workbench</p>
-                          <h3>Review Workbench</h3>
-                          <p className="review-helper-copy">Turn this raw feedback into an actionable signal.</p>
+                          <h3>{currentReviewPhaseLabel}</h3>
+                          <p className="review-helper-copy">{nextReviewActionLabel}</p>
                         </div>
                         <span className={`save-state-pill is-${reviewStatusPillState}`}>
                           {reviewStatusPillLabel}
                         </span>
+                      </div>
+                      <div className="review-progress-rail" aria-label="Review progress">
+                        {reviewProgressSteps.map((step) => (
+                          <div key={step.id} className={`review-progress-step is-${step.state}`}>
+                            <span className="review-progress-marker" aria-hidden="true">
+                              {step.state === "complete" ? "✓" : step.state === "current" ? "●" : "○"}
+                            </span>
+                            <span>{step.label}</span>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="review-stage-card">
+                        <div className="review-stage-header">
+                          <p className="eyebrow">Step 1</p>
+                          <strong>Read signal</strong>
+                        </div>
+                        <div className="review-action-bar">
+                          <button
+                            type="button"
+                            className="ghost-button review-secondary-button"
+                            disabled={saving || draftReviewStatus === "read"}
+                            onClick={() =>
+                              void updateSubmission({
+                                ...selectedRecord.submission,
+                                ...(activeReviewDraft ?? {}),
+                                status: "read",
+                              })
+                            }
+                          >
+                            Mark as read
+                          </button>
+                          <button
+                            type="button"
+                            className="ghost-button review-secondary-button"
+                            disabled={saving}
+                            onClick={() =>
+                              void updateSubmission({
+                                ...selectedRecord.submission,
+                                ...(activeReviewDraft ?? {}),
+                                status: "archived",
+                                triageStatus: "closed",
+                              })
+                            }
+                          >
+                            Mark as handled
+                          </button>
+                        </div>
+                      </div>
+                      <div className="review-stage-header">
+                        <p className="eyebrow">Step 2</p>
+                        <strong>Review & classify</strong>
                       </div>
                       <div className="review-field-grid">
                         <div className="review-badge-field">
@@ -1996,7 +2118,7 @@ export function AdminDashboardPage() {
                                   type="button"
                                   className={`review-state-badge is-status-${option.value} ${isSelected ? "is-active" : ""}`}
                                   aria-pressed={isSelected}
-                                  disabled={saving || isSelected}
+                                  disabled={isSelected}
                                   onClick={() => patchReviewDraft({ status: option.value as Submission["status"] })}
                                 >
                                   {option.label}
@@ -2017,7 +2139,7 @@ export function AdminDashboardPage() {
                                   type="button"
                                   className={`review-state-badge is-triage-${option.value} ${isSelected ? "is-active" : ""}`}
                                   aria-pressed={isSelected}
-                                  disabled={saving || isSelected}
+                                  disabled={isSelected}
                                   onClick={() => patchReviewDraft({ triageStatus: option.value })}
                                 >
                                   {option.label}
@@ -2042,7 +2164,7 @@ export function AdminDashboardPage() {
                                   type="button"
                                   className={`review-state-badge is-priority-${option.value} ${isSelected ? "is-active" : ""}`}
                                   aria-pressed={isSelected}
-                                  disabled={saving || isSelected}
+                                  disabled={isSelected}
                                   onClick={() => patchReviewDraft({ priority: option.value as Submission["priority"] })}
                                 >
                                   {option.label}
@@ -2058,7 +2180,7 @@ export function AdminDashboardPage() {
                               type="button"
                               className={`review-state-badge is-value-none ${activeReviewDraft?.signalValue === undefined ? "is-active" : ""}`}
                               aria-pressed={activeReviewDraft?.signalValue === undefined}
-                              disabled={saving || activeReviewDraft?.signalValue === undefined}
+                              disabled={activeReviewDraft?.signalValue === undefined}
                               onClick={() => patchReviewDraft({ signalValue: undefined })}
                             >
                               Not scored
@@ -2076,7 +2198,7 @@ export function AdminDashboardPage() {
                                     className={`review-star-button ${isFilled ? "is-filled" : ""} ${isSelected ? "is-selected" : ""}`}
                                     aria-label={`Signal Value ${value}`}
                                     aria-pressed={isSelected}
-                                    disabled={saving || isSelected}
+                                    disabled={isSelected}
                                     onClick={() => patchReviewDraft({ signalValue: value })}
                                   >
                                     ★
@@ -2087,6 +2209,10 @@ export function AdminDashboardPage() {
                           </div>
                         </div>
                       </div>
+                      <div className="review-stage-header">
+                        <p className="eyebrow">Step 3</p>
+                        <strong>Add reviewer notes</strong>
+                      </div>
                       <label className="review-select">
                         <span>Internal note</span>
                         <textarea
@@ -2096,57 +2222,15 @@ export function AdminDashboardPage() {
                           placeholder={t("captureReviewNotes")}
                         />
                       </label>
-                      <div className="review-action-bar">
-                        <button
-                          type="button"
-                          className="ghost-button review-secondary-button"
-                          disabled={saving || selectedRecord.submission.status === "read"}
-                          onClick={() =>
-                            void updateSubmission({
-                              ...selectedRecord.submission,
-                              status: "read",
-                            })
-                          }
-                        >
-                          Mark as read
-                        </button>
-                        <button
-                          type="button"
-                          className="primary-button review-primary-button"
-                          disabled={saving}
-                          onClick={() =>
-                            void updateSubmission({
-                              ...selectedRecord.submission,
-                              status: "archived",
-                              triageStatus: "closed",
-                            })
-                          }
-                        >
-                          Close as resolved
-                        </button>
-                        <button
-                          type="button"
-                          className="primary-button review-primary-button"
-                          disabled={saving || !hasReviewDraftChanges}
-                          onClick={() =>
-                            void updateSubmission({
-                              ...selectedRecord.submission,
-                              ...(activeReviewDraft ?? {}),
-                            }, { announce: true })
-                          }
-                        >
-                          Save review changes
-                        </button>
-                      </div>
                       <p className="review-action-helper">
-                        These actions update the private inbox review. They do not publish the signal.
+                        Changes autosave as you review. Public visibility is decided separately below.
                       </p>
                       <div className="review-roadmap-strip">
                         <div>
-                          <p className="eyebrow">Public roadmap decision</p>
+                          <p className="eyebrow">Step 4 · Public roadmap decision</p>
                           <strong>
                             Roadmap status:{" "}
-                            {getTriageStatusLabel(activeReviewDraft?.triageStatus ?? selectedRecord.submission.triageStatus)}
+                            {getTriageStatusLabel(draftTriageStatus)}
                           </strong>
                           <p className="muted">
                             Only signals set to Planned, In Progress, or Fixed appear publicly, with safe metadata only.
@@ -2155,11 +2239,11 @@ export function AdminDashboardPage() {
                         <div className="review-action-bar review-roadmap-actions">
                           <button
                             type="button"
-                            className="ghost-button"
-                            disabled={saving}
+                            className="primary-button review-primary-button"
+                            disabled={saving || isDraftOnRoadmap}
                             onClick={() => void handleMoveToRoadmap()}
                           >
-                            {isSelectedRecordOnRoadmap ? t("keepOnPublicRoadmap") : t("moveToPublicRoadmap")}
+                            {isDraftOnRoadmap ? "Visible on roadmap" : "Publish safe metadata"}
                           </button>
                           {isSelectedRecordOnRoadmap ? (
                             <Link className="ghost-button" to={selectedRoadmapUrl}>

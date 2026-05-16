@@ -12,7 +12,7 @@ import { PublicSubmitReadiness } from "../features/public-form/components/Public
 import { SignalMetaChip } from "../components/SignalMetaChip";
 import { SignalSubmissionPipeline } from "../features/public-form/components/SignalSubmissionPipeline";
 import { usePublicFormLoader } from "../features/public-form/hooks/usePublicFormLoader";
-import { usePublicSubmission } from "../features/public-form/hooks/usePublicSubmission";
+import { usePublicSubmission, type SignalPipelineStage } from "../features/public-form/hooks/usePublicSubmission";
 import { useI18n } from "../i18n";
 import {
   formatResponseDeadline,
@@ -58,6 +58,7 @@ export function PublicFormPage() {
   const [walletAccountAddress, setWalletAccountAddress] = useState<string | undefined>();
   const [attachWallet, setAttachWallet] = useState(false);
   const [attachWalletTouched, setAttachWalletTouched] = useState(false);
+  const [submissionOverlayDismissed, setSubmissionOverlayDismissed] = useState(false);
   const manifestBlobId = searchParams.get("manifest") ?? "";
   const { form, initialAnswers, loading, loadError, loadErrorDetail } = usePublicFormLoader({
     formId,
@@ -113,6 +114,12 @@ export function PublicFormPage() {
     }
   }, [walletAccountAddress, attachWallet, attachWalletTouched]);
 
+  useEffect(() => {
+    if (submitting || submitPipeline.status !== "failed") {
+      setSubmissionOverlayDismissed(false);
+    }
+  }, [submitting, submitPipeline.status]);
+
   const groupedFields = useMemo(() => {
     if (!form) {
       return { sections: [], unsectionedFields: [] };
@@ -160,6 +167,27 @@ export function PublicFormPage() {
         : attachWallet && walletAccountAddress
         ? t("publicSubmitWithWallet")
         : t("publicSubmitAnonymously");
+  const submissionPipelineLabels = {
+    eyebrow: t("publicSubmissionOverlayEyebrow"),
+    title: t("publicSubmissionOverlayTitle"),
+    intro: t("publicSubmissionOverlayIntro"),
+    terminalHeader: t("publicSubmissionTerminalHeader"),
+    terminalActive: t("publicSubmissionTerminalActive"),
+    terminalFailed: t("publicSubmissionTerminalFailed"),
+    statusComplete: t("publicSubmissionStatusComplete"),
+    statusInProgress: t("publicSubmissionStatusInProgress"),
+    statusQueued: t("publicSubmissionStatusQueued"),
+    statusNeedsAttention: t("publicSubmissionStatusNeedsAttention"),
+    done: t("publicSubmissionOverlayDone"),
+    stages: {
+      preparing_signal: t("publicSubmissionStagePreparing"),
+      encrypting: t("publicSubmissionStageEncrypting"),
+      uploading_to_walrus: t("publicSubmissionStageUploading"),
+      confirming_blob: t("publicSubmissionStageConfirming"),
+      generating_manifest: t("publicSubmissionStageManifest"),
+      signal_secured: t("publicSubmissionStageSecured"),
+    } satisfies Record<SignalPipelineStage, string>,
+  };
   const attachmentMaxBytes = form?.encryptSubmissions ? ENCRYPTED_INLINE_ATTACHMENT_MAX_BYTES : DEFAULT_ATTACHMENT_MAX_BYTES;
   const attachmentLimitMb = Math.round(attachmentMaxBytes / (1024 * 1024));
   const requiredProgress = useMemo(() => {
@@ -456,7 +484,12 @@ export function PublicFormPage() {
         ))}
       </div>
 
-      <SignalSubmissionPipeline pipeline={submitPipeline} visible={submitting || submitPipeline.status === "failed"} />
+      <SignalSubmissionPipeline
+        pipeline={submitPipeline}
+        visible={submitting || (submitPipeline.status === "failed" && !submissionOverlayDismissed)}
+        labels={submissionPipelineLabels}
+        onClose={() => setSubmissionOverlayDismissed(true)}
+      />
 
       {failure ? (
         <CriticalFailurePanel

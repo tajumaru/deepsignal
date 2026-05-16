@@ -482,6 +482,18 @@ function FormBuilderComposer({ mode, freshStartToken, initialDisplayMode = "clas
               isReadyToPublish={builder.isReadyToPublish}
               publishedStatus={publish.savedForm ? "published" : "preview"}
               surface={builder.values.currentStep === "publish" ? "publish" : "builder"}
+              savedForm={publish.savedForm}
+              publicUrl={publish.publicUrl}
+              publicPath={publish.publicPath}
+              storageRuntimeMode={storageRuntime.mode}
+              storageRuntimeNotice={storageRuntime.notice ?? undefined}
+              storageRuntimeDiagnostics={storageRuntime.diagnostics}
+              walrusCostEstimate={publish.walrusCostEstimate}
+              saving={publish.saving}
+              registeringOnSui={publish.registeringOnSui}
+              publishError={publish.error}
+              publishFailure={publish.failure}
+              onCopyLink={publish.handleCopyLink}
             />
           </div>
         ) : (

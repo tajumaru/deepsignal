@@ -1,8 +1,11 @@
 import { useMemo } from "react";
 import { useI18n } from "../../../i18n";
+import type { CriticalFailure } from "../../../lib/criticalFailure";
 import { isLongTextLikeField } from "../../../lib/fieldTypes";
+import type { WalrusCostEstimate } from "../../../storage/walrusCostEstimate";
+import type { WalrusFailureDetails } from "../../../storage/walrusDiagnostics";
 import { getOrderedFields } from "../../../utils/formLogic";
-import type { FieldType, FormBuilderValues, FormField, FormSection } from "../types";
+import type { FieldType, FormBuilderValues, FormField, FormSection, PreparedPublishForm } from "../types";
 
 interface MirrorPreviewPanelProps {
   values: FormBuilderValues;
@@ -10,6 +13,18 @@ interface MirrorPreviewPanelProps {
   isReadyToPublish?: boolean;
   publishedStatus?: "preview" | "published";
   surface?: "builder" | "publish";
+  savedForm?: PreparedPublishForm | null;
+  publicUrl?: string;
+  publicPath?: string;
+  storageRuntimeMode?: string;
+  storageRuntimeNotice?: string;
+  storageRuntimeDiagnostics?: WalrusFailureDetails | null;
+  walrusCostEstimate?: WalrusCostEstimate | null;
+  saving?: boolean;
+  registeringOnSui?: boolean;
+  publishError?: string;
+  publishFailure?: CriticalFailure | null;
+  onCopyLink?: () => void;
 }
 
 interface MirrorPreviewState {
@@ -39,7 +54,51 @@ interface MirrorBadge {
   tone?: "default" | "active" | "private" | "media" | "warning";
 }
 
+type SignalObjectStatus = "draft" | "ready" | "publishing" | "published" | "failed";
+
+interface MirrorRuntimeState {
+  savedForm?: PreparedPublishForm | null;
+  publicUrl?: string;
+  publicPath?: string;
+  storageRuntimeMode?: string;
+  storageRuntimeNotice?: string;
+  storageRuntimeDiagnostics?: WalrusFailureDetails | null;
+  walrusCostEstimate?: WalrusCostEstimate | null;
+  saving: boolean;
+  registeringOnSui: boolean;
+  publishError?: string;
+  publishFailure?: CriticalFailure | null;
+  onCopyLink?: () => void;
+}
+
+interface TimelineStep {
+  label: string;
+  complete: boolean;
+  active?: boolean;
+}
+
 const mediaFieldTypes: FieldType[] = ["screenshot", "video"];
+
+function displayValue(value: string | number | null | undefined, fallback: string) {
+  if (value === null || value === undefined) {
+    return fallback;
+  }
+  const text = String(value).trim();
+  return text || fallback;
+}
+
+function formatBytesCompact(value: number | undefined) {
+  if (!value || value <= 0) {
+    return "";
+  }
+  if (value < 1024) {
+    return `${value} B`;
+  }
+  if (value < 1024 * 1024) {
+    return `${(value / 1024).toFixed(1)} KB`;
+  }
+  return `${(value / (1024 * 1024)).toFixed(2)} MB`;
+}
 
 function getSectionName(field: FormField | undefined, sections: FormSection[] | undefined, fallback: string) {
   if (!field?.sectionId) {
@@ -131,6 +190,67 @@ function createPreviewState(
   };
 }
 
+function getSignalObjectStatus(
+  state: MirrorPreviewState,
+  runtime: Pick<MirrorRuntimeState, "savedForm" | "saving" | "registeringOnSui" | "publishError" | "publishFailure">,
+): SignalObjectStatus {
+  if (runtime.publishFailure || runtime.publishError?.trim()) {
+    return "failed";
+  }
+  if (runtime.saving || runtime.registeringOnSui) {
+    return "publishing";
+  }
+  if (runtime.savedForm) {
+    return "published";
+  }
+  if (state.isReadyToPublish) {
+    return "ready";
+  }
+  return "draft";
+}
+
+function getStatusCopy(status: SignalObjectStatus, t: ReturnType<typeof useI18n>["t"]) {
+  switch (status) {
+    case "ready":
+      return { label: t("mirrorStatusReady"), body: t("mirrorStatusReadyBody") };
+    case "publishing":
+      return { label: t("mirrorStatusPublishing"), body: t("mirrorStatusPublishingBody") };
+    case "published":
+      return { label: t("mirrorStatusPublished"), body: t("mirrorStatusPublishedBody") };
+    case "failed":
+      return { label: t("mirrorStatusFailed"), body: t("mirrorStatusFailedBody") };
+    default:
+      return { label: t("mirrorStatusDraft"), body: t("mirrorStatusDraftBody") };
+  }
+}
+
+function createTimelineSteps(
+  state: MirrorPreviewState,
+  values: FormBuilderValues,
+  runtime: MirrorRuntimeState,
+  t: ReturnType<typeof useI18n>["t"],
+): TimelineStep[] {
+  const hasDraft = Boolean(values.title?.trim() && state.fieldCount > 0);
+  const privacyConfigured =
+    Boolean(values.visibility) &&
+    Boolean(values.identityPolicy) &&
+    typeof values.encryptSubmissions === "boolean";
+  const walrusReady =
+    Boolean(runtime.savedForm?.blobId) ||
+    runtime.storageRuntimeMode === "walrus" ||
+    runtime.storageRuntimeMode === "remote" ||
+    runtime.walrusCostEstimate?.status === "ready";
+  const published = Boolean(runtime.savedForm);
+
+  return [
+    { label: t("mirrorTimelineDraftComposed"), complete: hasDraft },
+    { label: t("mirrorTimelineSchemaValidated"), complete: state.isReadyToPublish, active: hasDraft && !state.isReadyToPublish },
+    { label: t("mirrorTimelinePrivacyConfigured"), complete: privacyConfigured },
+    { label: t("mirrorTimelineWalrusReady"), complete: walrusReady, active: state.isReadyToPublish && !walrusReady },
+    { label: t("mirrorTimelineSignalPublished"), complete: published, active: (runtime.saving || runtime.registeringOnSui) && !published },
+  ];
+}
+
 function MirrorMetadataBadges({ state }: { state: MirrorPreviewState }) {
   const badges: MirrorBadge[] = [
     { label: state.publishedStatus === "published" ? "Published Signal" : "Preview only", tone: state.publishedStatus === "published" ? "active" : "warning" },
@@ -155,7 +275,7 @@ function MirrorMetadataBadges({ state }: { state: MirrorPreviewState }) {
   );
 }
 
-function MirrorObjectCard({ state }: { state: MirrorPreviewState }) {
+function MirrorObjectCard({ state, runtime }: { state: MirrorPreviewState; runtime: MirrorRuntimeState }) {
   return (
     <section className="mirror-object-card-v2" aria-label="Signal object preview">
       <div className="mirror-object-ambient" aria-hidden="true" />
@@ -172,21 +292,36 @@ function MirrorObjectCard({ state }: { state: MirrorPreviewState }) {
       </div>
       <div className="mirror-object-ledger">
         <span>Storage</span>
-        <strong>Local preview</strong>
+        <strong>{runtime.savedForm?.blobId ? "Walrus object" : runtime.storageRuntimeMode || "Local preview"}</strong>
       </div>
     </section>
   );
 }
 
-function MirrorSignalMetadata({ state }: { state: MirrorPreviewState }) {
+function MirrorSignalMetadata({ state, runtime }: { state: MirrorPreviewState; runtime: MirrorRuntimeState }) {
+  const { t } = useI18n();
   const sealedLabel = state.isPrivate ? "Encrypted responses" : "Response privacy";
   const rows = [
     ["Status", state.publishedStatus === "published" ? "Published Signal" : "Preview only"],
-    ["Walrus ref", "preview.local"],
+    ["Walrus ref", displayValue(runtime.savedForm?.blobId, "preview.local")],
     ["Schema v1", `${state.fieldCount} blocks`],
     ["Visibility", state.visibilityLabel],
-    [sealedLabel, state.isPrivate ? "Seal enabled" : "Standard intake"],
+    [sealedLabel, state.isPrivate ? t("mirrorSealEnabled") : t("mirrorOpenIntake")],
     ["Responder access", state.identityPolicyLabel],
+    [t("mirrorRuntimeMode"), displayValue(runtime.storageRuntimeMode, t("notConfigured"))],
+    [t("mirrorStorageMode"), runtime.walrusCostEstimate?.storageMode ?? runtime.storageRuntimeMode ?? "local"],
+    [t("mirrorRuntimeNotice"), displayValue(runtime.storageRuntimeNotice, t("none"))],
+    [t("mirrorBlobId"), displayValue(runtime.savedForm?.blobId, t("notCreatedYet"))],
+    [t("mirrorManifestBlobId"), displayValue(runtime.savedForm?.manifestBlobId, t("notCreatedYet"))],
+    [t("mirrorOnchainFormId"), displayValue(runtime.savedForm?.onchainFormId, t("notRegisteredYet"))],
+    [t("mirrorSealState"), state.isPrivate ? t("mirrorSealEnabled") : t("mirrorOpenIntake")],
+    [t("mirrorIdentityPolicy"), state.identityPolicyLabel],
+    runtime.walrusCostEstimate
+      ? [t("mirrorCostEstimate"), `${formatBytesCompact(runtime.walrusCostEstimate.payloadBytes)} ${runtime.walrusCostEstimate.status}`.trim()]
+      : [t("mirrorCostEstimate"), t("notConfigured")],
+    runtime.storageRuntimeDiagnostics
+      ? [t("mirrorStorageDiagnostics"), runtime.storageRuntimeDiagnostics.lastRpcError || runtime.storageRuntimeDiagnostics.stage]
+      : [t("mirrorStorageDiagnostics"), t("none")],
     ["Publish readiness", state.isReadyToPublish ? "Ready" : "Needs review"],
   ];
 
@@ -230,6 +365,111 @@ function MirrorPublishReadiness({ state }: { state: MirrorPreviewState }) {
           </span>
         ))}
       </div>
+    </section>
+  );
+}
+
+function MirrorSignalObjectStatus({
+  state,
+  runtime,
+  timelineSteps,
+}: {
+  state: MirrorPreviewState;
+  runtime: MirrorRuntimeState;
+  timelineSteps: TimelineStep[];
+}) {
+  const { t } = useI18n();
+  const status = getSignalObjectStatus(state, runtime);
+  const statusCopy = getStatusCopy(status, t);
+  const completedCount = timelineSteps.filter((step) => step.complete).length;
+  const progress = Math.max(8, Math.round((completedCount / timelineSteps.length) * 100));
+  const failureMessage = runtime.publishFailure?.message || runtime.publishError?.trim();
+
+  return (
+    <section className={`mirror-object-status-card is-${status}`} aria-label={t("mirrorSignalObjectStatus")}>
+      <div className="mirror-object-status-header">
+        <div>
+          <p className="eyebrow">{t("mirrorSignalObjectStatus")}</p>
+          <h3>{statusCopy.label}</h3>
+        </div>
+        <span className={`mirror-object-status-pill is-${status}`}>{statusCopy.label}</span>
+      </div>
+      <p className="muted">{failureMessage || statusCopy.body}</p>
+      <div className="mirror-object-status-progress" aria-hidden="true">
+        <span style={{ width: `${progress}%` }} />
+      </div>
+      <small className="mirror-object-status-fallback">
+        {runtime.savedForm ? t("mirrorStatusPublishedFallback") : t("mirrorStatusDraftFallback")}
+      </small>
+    </section>
+  );
+}
+
+function MirrorPublishTimeline({ steps }: { steps: TimelineStep[] }) {
+  const { t } = useI18n();
+
+  return (
+    <section className="mirror-publish-timeline" aria-label={t("mirrorTimelineTitle")}>
+      <div>
+        <p className="eyebrow">{t("mirrorTimelineTitle")}</p>
+        <h3>{t("mirrorTimelineHeading")}</h3>
+      </div>
+      <div className="mirror-timeline-list">
+        {steps.map((step, index) => (
+          <span
+            key={step.label}
+            className={step.complete ? "is-complete" : step.active ? "is-active" : "is-pending"}
+          >
+            <i aria-hidden="true">{step.complete ? "OK" : index + 1}</i>
+            <strong>{step.label}</strong>
+          </span>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function MirrorPublishedSignalCard({ runtime }: { runtime: MirrorRuntimeState }) {
+  const { t } = useI18n();
+  const savedForm = runtime.savedForm;
+  if (!savedForm) {
+    return null;
+  }
+  const signalLink = runtime.publicUrl || runtime.publicPath || "";
+  const rows = [
+    [t("mirrorPublicLink"), displayValue(signalLink, t("notCreatedYet"))],
+    [t("mirrorFormId"), displayValue(savedForm.id, t("notCreatedYet"))],
+    [t("mirrorBlobId"), displayValue(savedForm.blobId, t("notCreatedYet"))],
+    [t("mirrorManifestBlobId"), displayValue(savedForm.manifestBlobId, t("notCreatedYet"))],
+    [t("mirrorOnchainFormId"), displayValue(savedForm.onchainFormId, t("notRegisteredYet"))],
+  ];
+
+  return (
+    <section className="mirror-published-card" aria-label={t("mirrorPublishedSignal")}>
+      <div className="mirror-published-card-header">
+        <div>
+          <p className="eyebrow">{t("mirrorPublishedSignal")}</p>
+          <h3>{savedForm.title || t("untitledForm")}</h3>
+        </div>
+        {signalLink ? (
+          <a className="ghost-button mirror-open-signal-link" href={signalLink} target="_blank" rel="noreferrer">
+            {t("mirrorOpenSignal")}
+          </a>
+        ) : null}
+      </div>
+      <div className="mirror-published-grid">
+        {rows.map(([label, value]) => (
+          <span key={label}>
+            <small>{label}</small>
+            <strong>{value}</strong>
+          </span>
+        ))}
+      </div>
+      {signalLink && runtime.onCopyLink ? (
+        <button type="button" className="secondary-button mirror-copy-link-button" onClick={() => void runtime.onCopyLink?.()}>
+          {t("mirrorCopyLink")}
+        </button>
+      ) : null}
     </section>
   );
 }
@@ -370,11 +610,57 @@ export function MirrorPreviewPanel({
   isReadyToPublish = false,
   publishedStatus = "preview",
   surface = "builder",
+  savedForm = null,
+  publicUrl = "",
+  publicPath = "",
+  storageRuntimeMode,
+  storageRuntimeNotice,
+  storageRuntimeDiagnostics = null,
+  walrusCostEstimate = null,
+  saving = false,
+  registeringOnSui = false,
+  publishError = "",
+  publishFailure = null,
+  onCopyLink,
 }: MirrorPreviewPanelProps) {
   const { t } = useI18n();
   const state = useMemo(
     () => createPreviewState(values, activeFieldId, t("untitledForm"), t("publicDefaultBody"), isReadyToPublish, publishedStatus),
     [activeFieldId, isReadyToPublish, publishedStatus, t, values],
+  );
+  const runtime = useMemo<MirrorRuntimeState>(
+    () => ({
+      savedForm,
+      publicUrl,
+      publicPath,
+      storageRuntimeMode,
+      storageRuntimeNotice,
+      storageRuntimeDiagnostics,
+      walrusCostEstimate,
+      saving,
+      registeringOnSui,
+      publishError,
+      publishFailure,
+      onCopyLink,
+    }),
+    [
+      onCopyLink,
+      publicPath,
+      publicUrl,
+      publishError,
+      publishFailure,
+      registeringOnSui,
+      savedForm,
+      saving,
+      storageRuntimeDiagnostics,
+      storageRuntimeMode,
+      storageRuntimeNotice,
+      walrusCostEstimate,
+    ],
+  );
+  const timelineSteps = useMemo(
+    () => createTimelineSteps(state, values, runtime, t),
+    [runtime, state, t, values],
   );
 
   return (
@@ -389,21 +675,26 @@ export function MirrorPreviewPanel({
 
       <p className="mirror-description">{state.description}</p>
 
-      <MirrorObjectCard state={state} />
+      <MirrorObjectCard state={state} runtime={runtime} />
       <MirrorCurrentSignalNode state={state} />
+      <MirrorSignalObjectStatus state={state} runtime={runtime} timelineSteps={timelineSteps} />
       <div className="mirror-desktop-detail-stack">
         <MirrorMetadataBadges state={state} />
-        <MirrorSignalMetadata state={state} />
+        <MirrorSignalMetadata state={state} runtime={runtime} />
+        <MirrorPublishTimeline steps={timelineSteps} />
+        <MirrorPublishedSignalCard runtime={runtime} />
         <MirrorPublishReadiness state={state} />
       </div>
       <div className="mirror-mobile-detail-stack">
         <details className="mirror-mobile-detail">
           <summary>{t("mirrorSignalDetails")}</summary>
           <MirrorMetadataBadges state={state} />
-          <MirrorSignalMetadata state={state} />
+          <MirrorSignalMetadata state={state} runtime={runtime} />
         </details>
         <details className="mirror-mobile-detail">
           <summary>{t("mirrorPublishReadiness")}</summary>
+          <MirrorPublishTimeline steps={timelineSteps} />
+          <MirrorPublishedSignalCard runtime={runtime} />
           <MirrorPublishReadiness state={state} />
         </details>
       </div>
