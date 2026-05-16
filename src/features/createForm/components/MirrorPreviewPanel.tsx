@@ -398,12 +398,12 @@ export function MirrorPreviewPanel({
       </div>
       <div className="mirror-mobile-detail-stack">
         <details className="mirror-mobile-detail">
-          <summary>Signal details</summary>
+          <summary>{t("mirrorSignalDetails")}</summary>
           <MirrorMetadataBadges state={state} />
           <MirrorSignalMetadata state={state} />
         </details>
         <details className="mirror-mobile-detail">
-          <summary>Publish readiness</summary>
+          <summary>{t("mirrorPublishReadiness")}</summary>
           <MirrorPublishReadiness state={state} />
         </details>
       </div>

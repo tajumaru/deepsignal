@@ -1542,7 +1542,6 @@ export function AdminDashboardPage() {
                   activeScopeLabel={activeScopeLabel}
                   activeNodeSummary={t("activeNodeSummary", { count: accessibleForms.length })}
                   allSignalNodesLabel={t("allSignalNodes")}
-                  responseDeadlineLabel={t("responseDeadlineLabel")}
                   responseDeadlineLabels={responseDeadlineLabels}
                   openNodeDirectoryLabel={t("openNodeDirectory")}
                   onOpenNodeDirectory={() => setNodeDirectoryOpen(true)}
@@ -2109,7 +2108,7 @@ export function AdminDashboardPage() {
                             })
                           }
                         >
-                          Mark reviewed
+                          Mark as read
                         </button>
                         <button
                           type="button"
@@ -2123,7 +2122,7 @@ export function AdminDashboardPage() {
                             })
                           }
                         >
-                          Mark resolved
+                          Close as resolved
                         </button>
                         <button
                           type="button"
@@ -2136,14 +2135,22 @@ export function AdminDashboardPage() {
                             }, { announce: true })
                           }
                         >
-                          Save Review & Triage
+                          Save review changes
                         </button>
                       </div>
+                      <p className="review-action-helper">
+                        These actions update the private inbox review. They do not publish the signal.
+                      </p>
                       <div className="review-roadmap-strip">
                         <div>
-                          <p className="eyebrow">Roadmap handoff</p>
-                          <strong>{getTriageStatusLabel(activeReviewDraft?.triageStatus ?? selectedRecord.submission.triageStatus)}</strong>
-                          <p className="muted">Planned, In Progress, and Fixed signals appear on the public roadmap.</p>
+                          <p className="eyebrow">Public roadmap decision</p>
+                          <strong>
+                            Roadmap status:{" "}
+                            {getTriageStatusLabel(activeReviewDraft?.triageStatus ?? selectedRecord.submission.triageStatus)}
+                          </strong>
+                          <p className="muted">
+                            Only signals set to Planned, In Progress, or Fixed appear publicly, with safe metadata only.
+                          </p>
                         </div>
                         <div className="review-action-bar review-roadmap-actions">
                           <button

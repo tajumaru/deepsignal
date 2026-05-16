@@ -22,7 +22,6 @@ interface SignalStreamsNavProps {
   activeScopeLabel: string;
   activeNodeSummary: string;
   allSignalNodesLabel: string;
-  responseDeadlineLabel: string;
   responseDeadlineLabels: ResponseDeadlineLabels;
   openNodeDirectoryLabel: string;
   onOpenNodeDirectory: () => void;
@@ -41,7 +40,6 @@ export function SignalStreamsNav({
   activeScopeLabel,
   activeNodeSummary,
   allSignalNodesLabel,
-  responseDeadlineLabel,
   responseDeadlineLabels,
   openNodeDirectoryLabel,
   onOpenNodeDirectory,
@@ -82,17 +80,21 @@ export function SignalStreamsNav({
             onClick={() => onSelectForm("all")}
           >
             <div className="form-stream-select">
-              <strong>{allSignalNodesLabel}</strong>
+              <span className="form-stream-heading">
+                <strong>{allSignalNodesLabel}</strong>
+                <span className="form-stream-count">{allSignalsCount}</span>
+              </span>
               <p className="muted">{t("signalsAcrossEveryFormInbox", { count: allSignalsCount })}</p>
             </div>
             <div className="form-stream-actions">
               <span className="signal-chip">{t("unreadBadge", { count: visibleUnreadCount })}</span>
-              <span className="signal-chip signal-chip-soft">{t("totalCountLabel", { count: allSignalsCount })}</span>
             </div>
           </button>
           {accessibleForms.map((form) => {
             const isSelected = selectedFormId === form.id;
             const unreadCount = unreadCountByFormId[form.id] ?? 0;
+            const ownerLabel = form.ownerAddress ? shortAddress(form.ownerAddress) : t("legacyDemoForm");
+            const deadlineValue = formatResponseDeadline(form.responseDeadline, responseDeadlineLabels);
             return (
               <button
                 key={form.id}
@@ -101,22 +103,19 @@ export function SignalStreamsNav({
                 onClick={() => onSelectForm(form.id)}
               >
                 <div className="form-stream-select">
-                  <strong>{form.title}</strong>
+                  <span className="form-stream-heading">
+                    <strong>{form.title}</strong>
+                    <span className="form-stream-count">{form.submissionCount}</span>
+                  </span>
                   <p className="muted">
                     {t("formSignalsSummary", {
                       count: form.submissionCount,
                       inboxType: form.encryptSubmissions ? t("protectedInboxLabel") : t("openInboxLabel"),
                     })}
                   </p>
-                  <p
-                    className="muted form-stream-owner"
-                    title={form.ownerAddress ? `${t("formOwnerShortLabel")}: ${form.ownerAddress}` : undefined}
-                  >
-                    {t("formOwnerShortLabel")}:{" "}
-                    {form.ownerAddress ? shortAddress(form.ownerAddress) : t("legacyDemoForm")}
-                  </p>
-                  <p className="muted">
-                    {responseDeadlineLabel}: {formatResponseDeadline(form.responseDeadline, responseDeadlineLabels)}
+                  <p className="muted form-stream-meta" title={form.ownerAddress ?? undefined}>
+                    <span>{ownerLabel}</span>
+                    <span>{deadlineValue}</span>
                   </p>
                 </div>
                 <div className="form-stream-actions">
