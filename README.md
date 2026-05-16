@@ -237,6 +237,16 @@ npm run lint
 npm run build
 ```
 
+### CI
+
+Basic GitHub Actions CI is configured in `.github/workflows/ci.yml` for `push` and `pull_request`. It installs dependencies with `npm ci`, then runs:
+
+```bash
+npm run test
+npm run check
+npm run build
+```
+
 ### Automated Test Focus
 
 Automated tests should protect the product boundaries that make DeepSignal different from a generic form app:
