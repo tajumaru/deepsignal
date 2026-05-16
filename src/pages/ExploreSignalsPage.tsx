@@ -18,15 +18,6 @@ type ExploreCard = {
   roadmapCount: number;
 };
 
-type HiddenFormSummary = {
-  id: string;
-  title: string;
-  visibility: FormSchema["visibility"];
-  publicPath: string;
-  responseDeadline?: FormSchema["responseDeadline"];
-  ownerAddress?: string;
-};
-
 type DiscoverTab = "trending" | "new" | "active" | "ai" | "governance" | "anonymous" | "encrypted";
 
 const EXPLORE_DELETED_FORMS_KEY = "deepsignal.exploreDeletedForms";
@@ -116,7 +107,6 @@ export function ExploreSignalsPage() {
   const account = useCurrentAccount();
   const [loading, setLoading] = useState(true);
   const [cards, setCards] = useState<ExploreCard[]>([]);
-  const [hiddenForms, setHiddenForms] = useState<HiddenFormSummary[]>([]);
   const [activeTab, setActiveTab] = useState<DiscoverTab>("trending");
   const [deletingFormId, setDeletingFormId] = useState("");
 
@@ -128,16 +118,6 @@ export function ExploreSignalsPage() {
       .filter((form) => !deletedFormIds.has(form.id))
       .map((form) => normalizeForm(form));
     const forms = allForms.filter((form) => isFormPubliclyExplorable(form));
-    const nextHiddenForms = allForms
-      .filter((form) => !isFormPubliclyExplorable(form))
-      .map((form) => ({
-        id: form.id,
-        title: form.title || "Untitled form",
-        visibility: form.visibility,
-        publicPath: getPublicFormPath(form.id, form.manifestBlobId),
-        responseDeadline: form.responseDeadline,
-        ownerAddress: form.ownerAddress,
-      }));
 
     const nextCards = await Promise.all(
       forms.map(async (form) => {
@@ -166,7 +146,6 @@ export function ExploreSignalsPage() {
     );
 
     setCards(nextCards);
-    setHiddenForms(nextHiddenForms);
     setLoading(false);
   }
 
@@ -179,10 +158,6 @@ export function ExploreSignalsPage() {
       form.creationMode === "guest" &&
       Boolean(account?.address && form.ownerAddress && form.ownerAddress.toLowerCase() === account.address.toLowerCase())
     );
-  }
-
-  function canOpenFormDashboard(form: Pick<FormSchema, "ownerAddress">) {
-    return Boolean(account?.address && form.ownerAddress && form.ownerAddress.toLowerCase() === account.address.toLowerCase());
   }
 
   async function handleDeleteForm(formId: string, title: string) {
@@ -239,8 +214,6 @@ export function ExploreSignalsPage() {
     return sorted;
   }, [activeTab, cards]);
 
-  const hiddenPrivateCount = hiddenForms.filter((form) => form.visibility === "private").length;
-  const hiddenDirectLinkCount = hiddenForms.filter((form) => form.visibility !== "private").length;
   const heroCountLabel = loading ? "Scanning workspace streams..." : `${filteredCards.length} signals in view`;
 
   return (
@@ -265,16 +238,14 @@ export function ExploreSignalsPage() {
           <div className="explore-hero-copy">
             <p className="eyebrow">Workspace Signal Directory</p>
             <h1>Explore Signals</h1>
-            <p className="lede">Public and restored signal streams available in this workspace.</p>
+            <p className="lede">Public signal streams available in this workspace.</p>
             <p className="muted explore-hero-note">
-              This view reflects signals currently available through this storage runtime and browser, including restored direct-link streams.
+              This view lists only forms intentionally published to Explore through the current storage runtime.
             </p>
           </div>
           <div className="explore-hero-summary">
             <span className="signal-chip signal-chip-accent">{heroCountLabel}</span>
             <span className="signal-chip">{cards.length} listed here</span>
-            {hiddenDirectLinkCount > 0 ? <span className="signal-chip">{hiddenDirectLinkCount} direct-link only</span> : null}
-            {hiddenPrivateCount > 0 ? <span className="signal-chip">{hiddenPrivateCount} local restored</span> : null}
           </div>
         </div>
       </section>
@@ -305,72 +276,16 @@ export function ExploreSignalsPage() {
             <h2>No listed signals in this workspace yet.</h2>
             <div className="explore-empty-copy">
               <p className="muted">
-                Signal streams opened via direct link will reappear here once they are restored in this browser workspace.
+                Private and direct-link forms stay outside Explore unless their visibility is changed to Public Explore.
               </p>
               <p className="muted">
                 Streams published to Explore will also show up here when they are available through the current storage runtime.
               </p>
-              {hiddenForms.length > 0 ? (
-                <p className="muted">
-                  {hiddenForms.length} restored signal{hiddenForms.length === 1 ? "" : "s"} found, but they remain outside the listed Explore feed.
-                </p>
-              ) : null}
             </div>
-            {hiddenForms.length > 0 ? (
-              <div className="explore-hidden-inline">
-                {hiddenForms.slice(0, 2).map((form) => (
-                  <div key={form.id} className="explore-hidden-inline-card">
-                    <div className="explore-hidden-inline-main">
-                      <div className="pill-row">
-                        <span className="signal-chip signal-chip-accent">Detected</span>
-                        <span className="signal-chip">{form.visibility === "private" ? "Local restored" : "Direct-link only"}</span>
-                      </div>
-                      <strong>{form.title}</strong>
-                      <p className="muted">
-                        {form.visibility === "private"
-                          ? "Restored in this browser workspace for admin access."
-                          : "Available from a shared link, but not listed in Explore."}
-                      </p>
-                    </div>
-                    <div className="explore-hidden-inline-stats">
-                      <div className={`explore-deadline-pill is-${getDeadlineTone(form)}`}>
-                        <span>Deadline</span>
-                        <strong>{getDeadlineLabel(form)}</strong>
-                      </div>
-                    </div>
-                    <div className="inline-actions">
-                      <Link className="ghost-button" to={form.publicPath}>
-                        Open direct
-                      </Link>
-                      {canOpenFormDashboard(form) ? (
-                        <Link className="ghost-button" to={`/dashboard/forms/${form.id}`}>
-                          Open dashboard
-                        </Link>
-                      ) : null}
-                      {canDeleteForm(form) ? (
-                        <button
-                          type="button"
-                          className="danger-button"
-                          onClick={() => void handleDeleteForm(form.id, form.title)}
-                          disabled={deletingFormId === form.id}
-                        >
-                          {deletingFormId === form.id ? "Deleting..." : "Delete"}
-                        </button>
-                      ) : null}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : null}
             <div className="inline-actions">
               <CreateFormLink className="primary-button">
                 Create signal
               </CreateFormLink>
-              {hiddenForms.length > 0 ? (
-                <Link className="ghost-button" to="/admin/forms/new">
-                  Change visibility
-                </Link>
-              ) : null}
             </div>
           </section>
         ) : (
