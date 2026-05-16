@@ -36,7 +36,7 @@ export function StepNavigationActions({ t, onBack, onContinue }: StepNavigationA
         title={backLabel}
       >
         <StepBackIcon />
-        <span className="sr-only">{backLabel}</span>
+        <span>{backLabel}</span>
       </button>
       {onContinue ? (
         <button
@@ -46,8 +46,8 @@ export function StepNavigationActions({ t, onBack, onContinue }: StepNavigationA
           aria-label={continueLabel}
           title={continueLabel}
         >
+          <span>{continueLabel}</span>
           <StepContinueIcon />
-          <span className="sr-only">{continueLabel}</span>
         </button>
       ) : null}
     </div>

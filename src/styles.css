@@ -3751,6 +3751,70 @@ h2 {
   margin-bottom: 0;
 }
 
+.private-signal-unlock-steps {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.35rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.private-signal-unlock-steps li {
+  display: grid;
+  min-width: 0;
+  gap: 0.28rem;
+  padding: 0.45rem;
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  border-radius: 8px;
+  background: rgba(2, 11, 21, 0.32);
+  color: #8fb0c2;
+}
+
+.private-signal-unlock-steps li > span {
+  width: 0.52rem;
+  height: 0.52rem;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.5);
+}
+
+.private-signal-unlock-steps strong {
+  min-width: 0;
+  font-size: 0.68rem;
+  line-height: 1.15;
+}
+
+.private-signal-unlock-steps li.is-active {
+  border-color: rgba(102, 227, 255, 0.34);
+  background: rgba(102, 227, 255, 0.09);
+  color: #e8fdff;
+}
+
+.private-signal-unlock-steps li.is-active > span {
+  background: #66e3ff;
+  box-shadow: 0 0 12px rgba(102, 227, 255, 0.5);
+}
+
+.private-signal-unlock-steps li.is-complete {
+  border-color: rgba(82, 208, 141, 0.32);
+  background: rgba(82, 208, 141, 0.1);
+  color: #c8ffdf;
+}
+
+.private-signal-unlock-steps li.is-complete > span {
+  background: #52d08d;
+}
+
+.private-signal-unlock-steps li.is-error {
+  border-color: rgba(248, 113, 113, 0.34);
+  background: rgba(248, 113, 113, 0.11);
+  color: #fecaca;
+}
+
+.private-signal-unlock-steps li.is-error > span {
+  background: #fb7185;
+}
+
 .private-signal-unlock-actions {
   display: flex;
   gap: 0.75rem;
@@ -7732,10 +7796,15 @@ body.composer-mode .bg-orb {
 }
 
 .step-nav-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   flex: 1 1 9rem;
   min-width: 8rem;
   min-height: 3.8rem;
   padding: 0.75rem 1rem;
+  gap: 0.55rem;
+  white-space: nowrap;
 }
 
 .step-nav-icon {
@@ -9799,6 +9868,35 @@ body.composer-mode .bg-orb {
   align-items: flex-start;
 }
 
+.signal-card-topline {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+.signal-card-topline strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.signal-card-read-dot {
+  width: 0.56rem;
+  height: 0.56rem;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.45);
+}
+
+.signal-card-read-dot.status-unread {
+  background: #66e3ff;
+  box-shadow: 0 0 12px rgba(102, 227, 255, 0.46);
+}
+
+.signal-card-read-dot.status-archived {
+  background: #52d08d;
+}
+
 .signal-card-form {
   color: #93bdd0;
   font-size: 0.82rem;
@@ -9826,6 +9924,59 @@ body.composer-mode .bg-orb {
 .signal-badge-row-compact {
   justify-content: flex-start;
   gap: 0.45rem;
+}
+
+.signal-card-mailbox-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.38rem;
+  min-width: 0;
+}
+
+.mailbox-meta-chip {
+  min-width: 0;
+  max-width: 100%;
+  padding: 0.18rem 0.45rem;
+  border: 1px solid rgba(116, 226, 255, 0.11);
+  border-radius: 7px;
+  background: rgba(116, 226, 255, 0.055);
+  color: #bfeef8;
+  font-size: 0.72rem;
+  font-weight: 800;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mailbox-meta-chip.priority-high {
+  border-color: rgba(248, 113, 113, 0.28);
+  background: rgba(248, 113, 113, 0.12);
+  color: #fecaca;
+}
+
+.mailbox-meta-chip.priority-medium {
+  border-color: rgba(116, 226, 255, 0.18);
+  color: #d5fbff;
+}
+
+.mailbox-meta-chip.is-locked {
+  border-color: rgba(250, 204, 21, 0.24);
+  background: rgba(250, 204, 21, 0.1);
+  color: #fde68a;
+}
+
+.mailbox-meta-chip.is-unlocked,
+.mailbox-meta-chip.status-read {
+  border-color: rgba(82, 208, 141, 0.28);
+  background: rgba(82, 208, 141, 0.1);
+  color: #c8ffdf;
+}
+
+.mailbox-meta-chip.status-unread {
+  border-color: rgba(102, 227, 255, 0.26);
+  background: rgba(102, 227, 255, 0.1);
+  color: #d9fcff;
 }
 
 .signal-badge-row-compact .signal-chip,
@@ -10307,8 +10458,14 @@ body.composer-mode .bg-orb {
   background: rgba(52, 211, 153, 0.18);
 }
 
+.save-state-pill.is-skipped {
+  background: rgba(250, 204, 21, 0.16);
+  color: #fde68a;
+}
+
 .save-state-pill.is-error {
   background: rgba(248, 113, 113, 0.18);
+  color: #fecaca;
 }
 
 .signal-detail-column {
@@ -10390,6 +10547,10 @@ body.composer-mode .bg-orb {
   gap: 0.55rem;
 }
 
+.mobile-detail-back-button {
+  display: none;
+}
+
 .signal-detail-utility-actions > * {
   min-width: 0;
 }
@@ -10400,6 +10561,25 @@ body.composer-mode .bg-orb {
   color: var(--text-soft);
   font-size: 0.78rem;
   line-height: 1.35;
+}
+
+.export-quick-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: 0.45rem;
+}
+
+.export-quick-summary span {
+  min-width: 0;
+  padding: 0.18rem 0.45rem;
+  border: 1px solid rgba(116, 226, 255, 0.12);
+  border-radius: 7px;
+  background: rgba(116, 226, 255, 0.06);
+  color: #bfeef8;
+  font-size: 0.72rem;
+  font-weight: 800;
+  line-height: 1.2;
 }
 
 .private-access-card {
@@ -11436,8 +11616,8 @@ body.composer-mode .bg-orb {
 .review-primary-sections {
   grid-template-columns: minmax(0, 1.05fr) minmax(280px, 0.95fr);
   grid-template-areas:
-    "unlock unlock"
-    "original triage"
+    "original original"
+    "unlock triage"
     "context triage"
     "success triage";
   align-items: start;
@@ -13479,8 +13659,8 @@ body.composer-mode .bg-orb {
 
   .review-primary-sections {
     grid-template-areas:
-      "unlock"
       "original"
+      "unlock"
       "context"
       "success"
       "triage";
@@ -13622,6 +13802,10 @@ body.composer-mode .bg-orb {
   .private-signal-unlock-actions,
   .private-signal-unlock-side-action {
     display: grid;
+  }
+
+  .private-signal-unlock-steps {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .private-signal-vault-visual {
@@ -15222,6 +15406,48 @@ body.composer-mode .bg-orb {
     display: none;
   }
 
+  .desktop-signal-inbox.has-selected-signal {
+    display: grid;
+    width: 100%;
+    max-width: 100vw;
+    margin: -0.75rem auto calc(-2rem - env(safe-area-inset-bottom, 0px));
+    padding:
+      calc(0.65rem + env(safe-area-inset-top, 0px))
+      max(0.65rem, env(safe-area-inset-right, 0px))
+      calc(7.8rem + env(safe-area-inset-bottom, 0px))
+      max(0.65rem, env(safe-area-inset-left, 0px));
+    border: 0;
+    border-radius: 0;
+    overflow-x: hidden;
+    background:
+      linear-gradient(180deg, rgba(6, 17, 29, 0.98), rgba(5, 14, 24, 0.96) 42%, rgba(4, 12, 21, 0.98));
+  }
+
+  .desktop-signal-inbox.has-selected-signal .signal-workbench-header,
+  .desktop-signal-inbox.has-selected-signal .mobile-review-nav,
+  .desktop-signal-inbox.has-selected-signal .signal-console-region-streams,
+  .desktop-signal-inbox.has-selected-signal .signal-inbox-column {
+    display: none;
+  }
+
+  .desktop-signal-inbox.has-selected-signal .signal-console-layout {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .desktop-signal-inbox.has-selected-signal .signal-detail-column.panel {
+    padding: 0;
+    border: 0;
+    box-shadow: none;
+    background: transparent;
+  }
+
+  .mobile-detail-back-button {
+    display: inline-flex;
+    margin-bottom: 0.75rem;
+  }
+
   .desktop-signal-inbox-hero {
     display: none;
   }
@@ -15276,6 +15502,10 @@ body.composer-mode .bg-orb {
     overflow-x: hidden;
     background:
       linear-gradient(180deg, rgba(6, 17, 29, 0.98), rgba(5, 14, 24, 0.96) 42%, rgba(4, 12, 21, 0.98));
+  }
+
+  .mobile-signal-inbox.is-detail-open {
+    display: none;
   }
 
   .mobile-inbox-header {
@@ -15468,7 +15698,13 @@ body.composer-mode .bg-orb {
     width: 100%;
     padding: 0.78rem 0.15rem 0.78rem 0;
     border-bottom: 1px solid rgba(148, 163, 184, 0.11);
+    border-top: 0;
+    border-right: 0;
+    border-left: 0;
+    background: transparent;
     color: inherit;
+    font: inherit;
+    text-align: left;
     text-decoration: none;
     overflow: hidden;
   }
@@ -15577,6 +15813,7 @@ body.composer-mode .bg-orb {
 
   .mobile-signal-meta-row {
     display: flex;
+    flex-wrap: wrap;
     gap: 0.3rem;
     padding-top: 0.14rem;
     overflow: hidden;

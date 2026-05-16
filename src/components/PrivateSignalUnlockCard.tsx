@@ -179,6 +179,14 @@ function SealPolicyDebugPanel({ diagnostics }: { diagnostics: DecryptDiagnosticC
   );
 }
 
+const unlockSteps: Array<{ key: "locked" | "waiting_wallet_approval" | "decrypting" | "decrypted" | "failed"; label: string }> = [
+  { key: "locked", label: "Locked" },
+  { key: "waiting_wallet_approval", label: "Waiting wallet approval" },
+  { key: "decrypting", label: "Decrypting" },
+  { key: "decrypted", label: "Unlocked" },
+  { key: "failed", label: "Failed" },
+];
+
 export function PrivateSignalUnlockCard({
   onUnlock,
   onCancel,
@@ -216,6 +224,12 @@ export function PrivateSignalUnlockCard({
         : state === "waiting_wallet_approval" || state === "decrypting" || state === "checking_access"
           ? "loading"
           : state;
+  const activeStep =
+    state === "checking_access"
+      ? "waiting_wallet_approval"
+      : state === "unauthorized"
+        ? "failed"
+        : state;
 
   return (
     <section className={`private-signal-unlock-card is-${cardTone}`} aria-live="polite">
@@ -241,6 +255,20 @@ export function PrivateSignalUnlockCard({
           <p className="muted">{helperText}</p>
         </div>
       </div>
+
+      <ol className="private-signal-unlock-steps" aria-label="Private signal unlock status">
+        {unlockSteps.map((step) => (
+          <li
+            key={step.key}
+            className={`${activeStep === step.key ? "is-active" : ""} ${
+              step.key === "decrypted" && state === "decrypted" ? "is-complete" : ""
+            } ${step.key === "failed" && (state === "failed" || state === "unauthorized") ? "is-error" : ""}`}
+          >
+            <span aria-hidden="true" />
+            <strong>{step.label}</strong>
+          </li>
+        ))}
+      </ol>
 
       <div className="private-signal-unlock-actions">
         <button

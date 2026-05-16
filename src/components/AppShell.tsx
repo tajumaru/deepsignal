@@ -111,7 +111,8 @@ export function AppShell({ children, walletAvailable = false, chrome = "full" }:
   const location = useLocation();
   const walletChrome = useWalletChrome(walletAvailable);
   const publicChrome = chrome === "public";
-  const showMobileBottomNav = !publicChrome && location.pathname !== "/";
+  const showMobileBottomNav =
+    !publicChrome && ["/dashboard", "/admin", "/explore"].includes(location.pathname);
 
   const shell = (
     <div className={`app-shell ${showMobileBottomNav ? "has-mobile-bottom-nav" : ""}`}>

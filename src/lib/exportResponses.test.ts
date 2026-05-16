@@ -62,7 +62,7 @@ describe("responses CSV export", () => {
 
     const [header, row] = csv.split("\r\n");
     expect(header).toBe(
-      '"formTitle","exportedAt","responseCount","responseId","submittedAt","createdAt","walletAddress","isAnonymous","walrusBlobId","storageBlobId","attachments","tags","priority","triageStatus","status","notes","Comment","Score","Comment (2)"',
+      '"formTitle","exportedAt","responseCount","responseId","submittedAt","createdAt","respondentAddress","isAnonymous","walrusBlobId","storageBlobId","attachments","tags","priority","triageStatus","status","notes","Comment","Score","Comment (2)"',
     );
     expect(row).toContain(
       '"Feedback","2026-05-16T12:00:00.000Z","1","response-1","2026-05-16T01:02:03.000Z","2026-05-16T01:02:03.000Z","0xabc","false","walrus-blob-1","walrus-blob-1"',
@@ -190,11 +190,12 @@ describe("responses CSV export", () => {
           },
         }),
       ],
-      { excludedPiiFields: ["walletAddress", "notes", "attachments"] },
+      { excludedPiiFields: ["respondentAddress", "notes", "attachments"] },
     );
 
     const [header, row] = csv.split("\r\n");
     expect(header).not.toContain("walletAddress");
+    expect(header).not.toContain("respondentAddress");
     expect(header).not.toContain("notes");
     expect(header).not.toContain("attachments");
     expect(row).not.toContain("0xabc");

@@ -72,6 +72,7 @@ import { deleteFormsFromLocalCache, getStorageRuntimeStatus } from "../storage/s
 import type { FormSchema, Submission } from "../types";
 
 const ROADMAP_READY_STATUSES = new Set<Submission["triageStatus"]>(["planned", "in_progress", "fixed"]);
+type ReviewSaveStatus = "idle" | "saving" | "saved" | "skipped" | "error";
 
 function formatWorkspaceCount(count: number, singular: string, plural = `${singular}s`) {
   return `${count} ${count === 1 ? singular : plural}`;
@@ -160,6 +161,7 @@ interface MobileSignalRowProps {
   record: SignalRecord;
   isSelected: boolean;
   isSelectedForSui: boolean;
+  isUnlocked: boolean;
   onSelect: () => void;
   t: TranslationFn;
 }
@@ -174,6 +176,7 @@ function MobileSignalRow({
   record,
   isSelected,
   isSelectedForSui,
+  isUnlocked,
   onSelect,
   t,
 }: MobileSignalRowProps) {
@@ -182,13 +185,12 @@ function MobileSignalRow({
   const respondentMeta = getSubmissionRespondentMeta(submission);
   const storageLabel = getStorageBadgeLabel(submission.encryptedBlobId ?? submission.blobId);
   const isLocalOnlySignal = storageLabel === "Stored locally only";
-  const rowHref = `/dashboard/forms/${form.id}/submissions/${submission.id}`;
   const priorityLabel = submission.priority === "high" ? "Priority" : submission.priority;
   const preview = submission.isEncrypted ? t("encryptedPrivateSignalUnlockHint") : getSignalPreview(submission);
 
   return (
-    <Link
-      to={rowHref}
+    <button
+      type="button"
       className={`mobile-signal-row ${isSelected ? "is-active" : ""} ${submission.status === "unread" ? "is-unread" : "is-read"}`}
       aria-current={isSelected ? "true" : undefined}
       onClick={onSelect}
@@ -211,7 +213,16 @@ function MobileSignalRow({
           {respondentMeta.isAnonymous ? <span>{t("anonymousRespondent")}</span> : null}
         </span>
         <span className="mobile-signal-meta-row">
-          {submission.isEncrypted ? <span className="mobile-signal-mini-badge">Encrypted</span> : null}
+          <span className={`mobile-signal-mini-badge triage-${submission.triageStatus}`}>
+            {getTriageStatusLabel(submission.triageStatus)}
+          </span>
+          {submission.isEncrypted ? (
+            <span className={`mobile-signal-mini-badge ${isUnlocked ? "is-selected" : ""}`}>
+              {isUnlocked ? "Unlocked" : "Locked"}
+            </span>
+          ) : (
+            <span className="mobile-signal-mini-badge">Open</span>
+          )}
           {submission.responderSignature ? <span className="mobile-signal-mini-badge">Verified</span> : null}
           {submission.pendingOnchainRegistration ? (
             <span className={`mobile-signal-mini-badge ${isSelectedForSui ? "is-selected" : ""}`}>Sui proof</span>
@@ -225,7 +236,7 @@ function MobileSignalRow({
         {submission.status === "unread" ? <span className="mobile-unread-dot" aria-label="Unread signal" /> : null}
         <span className={`mobile-priority-badge priority-${submission.priority}`}>{priorityLabel}</span>
       </span>
-    </Link>
+    </button>
   );
 }
 
@@ -251,6 +262,7 @@ interface MobileSignalInboxProps {
   onSelectStream: (streamId: StreamId) => void;
   visibleSignals: SignalRecord[];
   selectedRecord: SignalRecord | null;
+  unlockedSignalId?: string | null;
   selectedPendingSignalIds: string[];
   onSelectSignal: (signalId: string) => void;
   searchPlaceholder: string;
@@ -270,13 +282,14 @@ function MobileSignalInbox({
   onSelectStream,
   visibleSignals,
   selectedRecord,
+  unlockedSignalId,
   selectedPendingSignalIds,
   onSelectSignal,
   searchPlaceholder,
   t,
 }: MobileSignalInboxProps) {
   return (
-    <section className="mobile-signal-inbox" aria-label={title}>
+    <section className={`mobile-signal-inbox ${selectedRecord ? "is-detail-open" : ""}`} aria-label={title}>
       <MobileInboxHeader
         title={title}
         activeScopeLabel={activeScopeLabel}
@@ -299,6 +312,7 @@ function MobileSignalInbox({
                 record={record}
                 isSelected={selectedRecord?.submission.id === record.submission.id}
                 isSelectedForSui={selectedPendingSignalIds.includes(record.submission.id)}
+                isUnlocked={unlockedSignalId === record.submission.id}
                 onSelect={() => onSelectSignal(record.submission.id)}
                 t={t}
               />
@@ -327,6 +341,7 @@ export function AdminDashboardPage() {
     daysLeft: (days) => t("responseDeadlineDaysLeft", { count: days }),
   };
   const [saving, setSaving] = useState(false);
+  const [reviewSaveStatus, setReviewSaveStatus] = useState<ReviewSaveStatus>("idle");
   const [notesDraft, setNotesDraft] = useState("");
   const [deletingFormId, setDeletingFormId] = useState<string | null>(null);
   const [deletingVisibleNodes, setDeletingVisibleNodes] = useState(false);
@@ -875,23 +890,44 @@ export function AdminDashboardPage() {
     setShowEncryptedSignal(false);
   }, [selectedRecord, setDecryptError]);
 
-  async function updateSubmission(nextSubmission: Submission) {
+  async function updateSubmission(nextSubmission: Submission, options: { announce?: boolean } = {}) {
     const normalized = normalizeSubmission({
       ...nextSubmission,
       updatedAt: new Date().toISOString(),
     });
     applySubmissionUpdate(normalized);
     setSelectedSignalId(normalized.id);
+    let saved = false;
     const runSave = async () => {
       setSaving(true);
+      setReviewSaveStatus("saving");
       try {
         await storageAdapter.updateSubmission(normalized);
+        const nextStatus = normalized.pendingOnchainRegistration ? "skipped" : "saved";
+        setReviewSaveStatus(nextStatus);
+        if (options.announce) {
+          setToast({
+            tone: "success",
+            message:
+              nextStatus === "skipped"
+                ? "Review saved. On-chain sync skipped until proof registration."
+                : "Review & Triage saved.",
+          });
+        }
+        saved = true;
+      } catch (error) {
+        setReviewSaveStatus("error");
+        setToast({
+          tone: "error",
+          message: error instanceof Error ? error.message : "Review save failed.",
+        });
       } finally {
         setSaving(false);
       }
     };
     saveQueueRef.current = saveQueueRef.current.then(runSave, runSave);
     await saveQueueRef.current;
+    return saved;
   }
 
   async function handleMoveToRoadmap() {
@@ -901,10 +937,13 @@ export function AdminDashboardPage() {
     const nextStatus = ROADMAP_READY_STATUSES.has(selectedRecord.submission.triageStatus)
       ? selectedRecord.submission.triageStatus
       : "planned";
-    await updateSubmission({
+    const saved = await updateSubmission({
       ...selectedRecord.submission,
       triageStatus: nextStatus,
     });
+    if (!saved) {
+      return;
+    }
     setToast({ tone: "success", message: t("signalAddedToPublicRoadmap") });
   }
 
@@ -1002,6 +1041,16 @@ export function AdminDashboardPage() {
       : csvExportScope === "selected"
         ? t("selectedResponsesCount", { count: selectedFormSelectedExportCount })
       : t("allResponsesCount", { count: selectedFormSubmissionCount });
+  const csvExportShortScopeLabel =
+    csvExportScope === "filtered" ? "Filtered" : csvExportScope === "selected" ? "Selected" : "All";
+  const csvExportIncludesDecryptedData = Boolean(detailAnswers && csvExportCount > 0);
+  const reviewSaveStatusLabel: Record<ReviewSaveStatus, string> = {
+    idle: "Ready",
+    saving: "Saving...",
+    saved: "Saved",
+    skipped: "Saved / on-chain skipped",
+    error: "Save failed",
+  };
 
   function getCsvFilterSnapshot() {
     return {
@@ -1336,12 +1385,21 @@ export function AdminDashboardPage() {
             onSelectStream={setSelectedStreamId}
             visibleSignals={visibleSignals}
             selectedRecord={selectedRecord}
+            unlockedSignalId={detailAnswers && selectedRecord ? selectedRecord.submission.id : null}
             selectedPendingSignalIds={selectedPendingSignalIds}
-            onSelectSignal={setSelectedSignalId}
+            onSelectSignal={(signalId) => {
+              setSelectedSignalId(signalId);
+              window.requestAnimationFrame(() => {
+                reviewInboxRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+              });
+            }}
             searchPlaceholder={t("searchSignalsPlaceholder")}
             t={t}
           />
-          <section ref={reviewInboxRef} className="panel signal-inbox-workbench desktop-signal-inbox">
+          <section
+            ref={reviewInboxRef}
+            className={`panel signal-inbox-workbench desktop-signal-inbox ${selectedRecord ? "has-selected-signal" : ""}`}
+          >
             <div className="signal-workbench-header">
               <div className="signal-workbench-copy">
                 <p className="eyebrow">{t("signalInboxTitle")}</p>
@@ -1513,6 +1571,7 @@ export function AdminDashboardPage() {
                     const isSelectedForSui = selectedPendingSignalIds.includes(submission.id);
                     const isLocalOnlySignal = storageLabel === "Stored locally only";
                     const isSelectedSignal = selectedRecord?.submission.id === submission.id;
+                    const isUnlockedSignal = isSelectedSignal && Boolean(detailAnswers);
                     return (
                       <div
                         key={submission.id}
@@ -1534,6 +1593,7 @@ export function AdminDashboardPage() {
                         }}
                       >
                         <div className="signal-card-topline">
+                          <span className={`signal-card-read-dot status-${submission.status}`} aria-hidden="true" />
                           <strong>{getSignalSubject(submission)}</strong>
                           <span className="signal-card-time">{formatDate(submission.createdAt)}</span>
                         </div>
@@ -1549,6 +1609,20 @@ export function AdminDashboardPage() {
                           ) : submission.contributorId ? (
                             <SignalMetaChip type="contributor" value={getRespondentDisplayLabel(submission)} />
                           ) : null}
+                        </div>
+                        <div className="signal-card-mailbox-meta" aria-label="Signal review state">
+                          <span className={`mailbox-meta-chip priority-${submission.priority}`}>
+                            {submission.priority}
+                          </span>
+                          <span className={`mailbox-meta-chip triage-${submission.triageStatus}`}>
+                            {getTriageStatusLabel(submission.triageStatus)}
+                          </span>
+                          <span className={`mailbox-meta-chip ${submission.isEncrypted ? "is-locked" : "is-open"} ${isUnlockedSignal ? "is-unlocked" : ""}`}>
+                            {submission.isEncrypted ? (isUnlockedSignal ? "Unlocked" : "Locked") : "Open"}
+                          </span>
+                          <span className={`mailbox-meta-chip status-${submission.status}`}>
+                            {submission.status === "unread" ? "Unread" : submission.status === "read" ? "Read" : "Archived"}
+                          </span>
                         </div>
                         <div className="signal-badge-row signal-badge-row-compact">
                           <SignalStatusBadges
@@ -1603,6 +1677,18 @@ export function AdminDashboardPage() {
               ) : (
                 <>
                   <section className="answer-card signal-detail-hero">
+                    <button
+                      type="button"
+                      className="ghost-button mobile-detail-back-button"
+                      onClick={() => {
+                        setSelectedSignalId("");
+                        window.requestAnimationFrame(() => {
+                          window.scrollTo({ top: 0, behavior: "smooth" });
+                        });
+                      }}
+                    >
+                      Back to signals
+                    </button>
                     <div className="signal-detail-heading">
                     <div>
                       <p className="eyebrow">{t("signalDetailTitle")}</p>
@@ -1799,8 +1885,8 @@ export function AdminDashboardPage() {
                           <h3>Review & Triage</h3>
                           <p className="review-helper-copy">Turn this raw feedback into an actionable signal.</p>
                         </div>
-                        <span className={`save-state-pill ${saving ? "is-saving" : ""}`}>
-                          {saving ? "Saving..." : "Ready"}
+                        <span className={`save-state-pill is-${reviewSaveStatus}`}>
+                          {reviewSaveStatusLabel[reviewSaveStatus]}
                         </span>
                       </div>
                       <div className="review-field-grid">
@@ -1919,7 +2005,7 @@ export function AdminDashboardPage() {
                             void updateSubmission({
                               ...selectedRecord.submission,
                               notes: notesDraft,
-                            })
+                            }, { announce: true })
                           }
                         >
                           Save Review & Triage
@@ -2002,6 +2088,11 @@ export function AdminDashboardPage() {
                           <div>
                             <p className="eyebrow">Export</p>
                             <h3>JSON / CSV</h3>
+                            <div className="export-quick-summary" aria-label="Current export summary">
+                              <span>{csvExportShortScopeLabel}</span>
+                              <span>{csvExportCount} responses</span>
+                              <span>{csvExportIncludesDecryptedData ? "decrypted data included" : "decrypted data not included"}</span>
+                            </div>
                           </div>
                           <div className="inline-actions">
                             <button
@@ -2324,7 +2415,9 @@ export function AdminDashboardPage() {
                             }
                             setSelectedSignalId(submissionId);
                           }}
-                          onSaveSubmission={updateSubmission}
+                          onSaveSubmission={async (submission) => {
+                            await updateSubmission(submission);
+                          }}
                         />
                       </details>
                     </section>

@@ -32,7 +32,7 @@ interface CsvExportConfirmationModalProps {
 }
 
 const PII_OPTIONS: Array<{ field: ExportPiiField; labelKey: keyof CsvExportConfirmationModalLabels }> = [
-  { field: "walletAddress", labelKey: "omitWalletAddress" },
+  { field: "respondentAddress", labelKey: "omitWalletAddress" },
   { field: "notes", labelKey: "omitNotes" },
   { field: "attachments", labelKey: "omitAttachments" },
   { field: "decryptedAnswers", labelKey: "omitDecryptedAnswers" },

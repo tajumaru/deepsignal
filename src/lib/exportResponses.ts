@@ -16,7 +16,7 @@ interface ResponseExportOverride {
 
 export type ResponsesCsvSortOrder = "createdAtDesc" | "createdAtAsc";
 export type ResponsesCsvExportScope = "filtered" | "all" | "selected";
-export type ExportPiiField = "walletAddress" | "notes" | "attachments" | "decryptedAnswers";
+export type ExportPiiField = "respondentAddress" | "walletAddress" | "notes" | "attachments" | "decryptedAnswers";
 
 export interface ExportFilterSnapshot {
   searchQuery?: string;
@@ -142,6 +142,10 @@ function isExcluded(excludedFields: ExportPiiField[] | undefined, field: ExportP
   return excludedFields?.includes(field) ?? false;
 }
 
+function isRespondentAddressExcluded(excludedFields: ExportPiiField[] | undefined) {
+  return isExcluded(excludedFields, "respondentAddress") || isExcluded(excludedFields, "walletAddress");
+}
+
 function formatAttachmentsForCsv(attachments: Submission["attachments"]) {
   return attachments
     .map((attachment) => {
@@ -184,8 +188,8 @@ export function buildColumns(form: FormSchema, options: ExportResponsesToCsvOpti
     "createdAt",
   ];
 
-  if (!isExcluded(options.excludedPiiFields, "walletAddress")) {
-    columns.push("walletAddress");
+  if (!isRespondentAddressExcluded(options.excludedPiiFields)) {
+    columns.push("respondentAddress");
   }
 
   columns.push("isAnonymous", "walrusBlobId", "storageBlobId");
@@ -235,7 +239,7 @@ export function buildRows(
 ) {
   const language = options.language ?? "en";
   const sortedResponses = sortResponsesByCreatedAt(responses, options.sortOrder ?? "createdAtDesc");
-  const omitWalletAddress = isExcluded(options.excludedPiiFields, "walletAddress");
+  const omitRespondentAddress = isRespondentAddressExcluded(options.excludedPiiFields);
   const omitAttachments = isExcluded(options.excludedPiiFields, "attachments");
   const omitNotes = isExcluded(options.excludedPiiFields, "notes");
   const omitDecryptedAnswers = isExcluded(options.excludedPiiFields, "decryptedAnswers");
@@ -245,7 +249,7 @@ export function buildRows(
     const answers = omitDecryptedAnswers ? submission.answers ?? {} : override?.answers ?? submission.answers ?? {};
     const attachments = override?.attachments ?? submission.attachments ?? [];
     const respondentMeta = getSubmissionRespondentMeta(submission);
-    const walletAddress = respondentMeta.isAnonymous ? "" : respondentMeta.walletAddress ?? "";
+    const respondentAddress = respondentMeta.isAnonymous ? "" : respondentMeta.walletAddress ?? "";
     const storageBlobId = submission.blobId ?? submission.encryptedBlobId ?? submission.receiptBlobId ?? "";
     const walrusBlobId = submission.blobId ?? submission.encryptedBlobId ?? "";
     const row = [
@@ -257,8 +261,8 @@ export function buildRows(
       submission.createdAt,
     ];
 
-    if (!omitWalletAddress) {
-      row.push(walletAddress);
+    if (!omitRespondentAddress) {
+      row.push(respondentAddress);
     }
 
     row.push(respondentMeta.isAnonymous ? "true" : "false", walrusBlobId, storageBlobId);
