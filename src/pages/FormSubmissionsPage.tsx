@@ -870,7 +870,7 @@ export function FormSubmissionsPage() {
       : t("unlockInProgressStatus");
 
   const renderUnlockGate = () => {
-    if (!selectedSubmission?.isEncrypted) {
+    if (!selectedSubmission?.isEncrypted || detailAnswers) {
       return null;
     }
 
@@ -894,21 +894,19 @@ export function FormSubmissionsPage() {
             />
           ) : null}
         </PrivateSignalUnlockCard>
-        {!detailAnswers ? (
-          <div className="review-unlock-context">
-            <strong>Unlock private signal to review and triage.</strong>
-            <p className="muted">Seal Runtime: {sealRuntimeLabel}</p>
-            <p className="muted">
-              {t("walletApprovalReuseNotice", { minutes: REAL_SEAL_SESSION_TTL_MIN })}
-            </p>
-            {decryptStatusMessage ? (
-              <p className="muted" role="status" aria-live="polite">{decryptStatusMessage}</p>
-            ) : null}
-            {unlockInteractionNotice ? (
-              <p className="warning-text" role="status" aria-live="polite">{unlockInteractionNotice}</p>
-            ) : null}
-          </div>
-        ) : null}
+        <div className="review-unlock-context">
+          <strong>Unlock private signal to review and triage.</strong>
+          <p className="muted">Seal Runtime: {sealRuntimeLabel}</p>
+          <p className="muted">
+            {t("walletApprovalReuseNotice", { minutes: REAL_SEAL_SESSION_TTL_MIN })}
+          </p>
+          {decryptStatusMessage ? (
+            <p className="muted" role="status" aria-live="polite">{decryptStatusMessage}</p>
+          ) : null}
+          {unlockInteractionNotice ? (
+            <p className="warning-text" role="status" aria-live="polite">{unlockInteractionNotice}</p>
+          ) : null}
+        </div>
       </div>
     );
   };

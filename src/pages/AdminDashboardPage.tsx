@@ -73,47 +73,7 @@ import type { FormSchema, Submission } from "../types";
 
 const ROADMAP_READY_STATUSES = new Set<Submission["triageStatus"]>(["planned", "in_progress", "fixed"]);
 type ReviewSaveStatus = "idle" | "saving" | "saved" | "skipped" | "error";
-const REVIEW_BATCH_PRESETS = [
-  {
-    id: "new",
-    label: "New signal",
-    status: "unread",
-    triageStatus: "new",
-    priority: "medium",
-    signalValue: undefined,
-  },
-  {
-    id: "investigate",
-    label: "Investigate",
-    status: "read",
-    triageStatus: "investigating",
-    priority: "high",
-    signalValue: 4,
-  },
-  {
-    id: "roadmap",
-    label: "Roadmap",
-    status: "read",
-    triageStatus: "planned",
-    priority: "high",
-    signalValue: 5,
-  },
-  {
-    id: "resolved",
-    label: "Resolved",
-    status: "archived",
-    triageStatus: "closed",
-    priority: "low",
-    signalValue: 2,
-  },
-] satisfies Array<{
-  id: string;
-  label: string;
-  status: Submission["status"];
-  triageStatus: Submission["triageStatus"];
-  priority: Submission["priority"];
-  signalValue?: Submission["signalValue"];
-}>;
+type ReviewDraft = Pick<Submission, "status" | "triageStatus" | "priority" | "signalValue" | "notes">;
 
 function formatWorkspaceCount(count: number, singular: string, plural = `${singular}s`) {
   return `${count} ${count === 1 ? singular : plural}`;
@@ -408,7 +368,7 @@ export function AdminDashboardPage() {
   };
   const [saving, setSaving] = useState(false);
   const [reviewSaveStatus, setReviewSaveStatus] = useState<ReviewSaveStatus>("idle");
-  const [notesDraft, setNotesDraft] = useState("");
+  const [reviewDraft, setReviewDraft] = useState<ReviewDraft | null>(null);
   const [deletingFormId, setDeletingFormId] = useState<string | null>(null);
   const [deletingVisibleNodes, setDeletingVisibleNodes] = useState(false);
   const [nodeDirectoryOpen, setNodeDirectoryOpen] = useState(false);
@@ -966,6 +926,43 @@ export function AdminDashboardPage() {
                     cta: selectedRoadmapUrl ? <Link className="primary-button" to={selectedRoadmapUrl}>Open Public Roadmap</Link> : null,
                   };
 
+  const activeReviewDraft: ReviewDraft | null = selectedRecord
+    ? reviewDraft ?? {
+        status: selectedRecord.submission.status,
+        triageStatus: selectedRecord.submission.triageStatus,
+        priority: selectedRecord.submission.priority,
+        signalValue: selectedRecord.submission.signalValue,
+        notes: selectedRecord.submission.notes,
+      }
+    : null;
+  const hasReviewDraftChanges = Boolean(
+    selectedRecord &&
+      activeReviewDraft &&
+      (activeReviewDraft.status !== selectedRecord.submission.status ||
+        activeReviewDraft.triageStatus !== selectedRecord.submission.triageStatus ||
+        activeReviewDraft.priority !== selectedRecord.submission.priority ||
+        activeReviewDraft.signalValue !== selectedRecord.submission.signalValue ||
+        activeReviewDraft.notes !== selectedRecord.submission.notes),
+  );
+  function patchReviewDraft(patch: Partial<ReviewDraft>) {
+    if (!selectedRecord) {
+      return;
+    }
+    setReviewDraft((current) => {
+      const base = current ?? {
+        status: selectedRecord.submission.status,
+        triageStatus: selectedRecord.submission.triageStatus,
+        priority: selectedRecord.submission.priority,
+        signalValue: selectedRecord.submission.signalValue,
+        notes: selectedRecord.submission.notes,
+      };
+      return {
+        ...base,
+        ...patch,
+      };
+    });
+  }
+
   useEffect(() => {
     const selectedRecordId = selectedRecord?.submission.id ?? null;
     if (selectedRecordId === selectedRecordResetRef.current) {
@@ -974,11 +971,17 @@ export function AdminDashboardPage() {
     selectedRecordResetRef.current = selectedRecordId;
 
     if (!selectedRecord) {
-      setNotesDraft("");
+      setReviewDraft(null);
       setDecryptError("");
       return;
     }
-    setNotesDraft(selectedRecord.submission.notes);
+    setReviewDraft({
+      status: selectedRecord.submission.status,
+      triageStatus: selectedRecord.submission.triageStatus,
+      priority: selectedRecord.submission.priority,
+      signalValue: selectedRecord.submission.signalValue,
+      notes: selectedRecord.submission.notes,
+    });
     setDecryptError("");
   }, [selectedRecord, setDecryptError]);
 
@@ -1147,6 +1150,8 @@ export function AdminDashboardPage() {
     skipped: t("reviewSaveSkipped"),
     error: t("reviewSaveError"),
   };
+  const reviewStatusPillState = hasReviewDraftChanges ? "editing" : reviewSaveStatus;
+  const reviewStatusPillLabel = hasReviewDraftChanges ? "Editing" : reviewSaveStatusLabel[reviewSaveStatus];
 
   function getCsvFilterSnapshot() {
     return {
@@ -1853,7 +1858,7 @@ export function AdminDashboardPage() {
                         <h3>{t("originalSignalTitle")}</h3>
                         <p className="muted">{t("originalSignalBody")}</p>
                       </div>
-                      <div className="original-signal-block">
+                      <div className="original-signal-block original-signal-body-block">
                         <div className="section-row">
                           <div>
                             <p className="eyebrow">{t("feedbackBodyLabel")}</p>
@@ -1932,7 +1937,7 @@ export function AdminDashboardPage() {
                       </div>
                     </section>
 
-                    {selectedRecord.submission.isEncrypted ? (
+                    {selectedRecordNeedsDecrypt ? (
                       <PrivateSignalUnlockCard
                         onUnlock={() => void handleDecrypt()}
                         isDecrypting={decrypting || decryptInFlightRef.current}
@@ -1971,117 +1976,124 @@ export function AdminDashboardPage() {
                           <h3>Review Workbench</h3>
                           <p className="review-helper-copy">Turn this raw feedback into an actionable signal.</p>
                         </div>
-                        <span className={`save-state-pill is-${reviewSaveStatus}`}>
-                          {reviewSaveStatusLabel[reviewSaveStatus]}
+                        <span className={`save-state-pill is-${reviewStatusPillState}`}>
+                          {reviewStatusPillLabel}
                         </span>
                       </div>
-                      <div className="review-batch-switcher" aria-label="Review batch presets">
-                        {REVIEW_BATCH_PRESETS.map((preset) => {
-                          const isActive =
-                            selectedRecord.submission.status === preset.status &&
-                            selectedRecord.submission.triageStatus === preset.triageStatus &&
-                            selectedRecord.submission.priority === preset.priority &&
-                            (selectedRecord.submission.signalValue ?? undefined) === preset.signalValue;
-
-                          return (
-                            <button
-                              key={preset.id}
-                              type="button"
-                              className={`review-batch-button ${isActive ? "is-active" : ""}`}
-                              disabled={saving || isActive}
-                              aria-pressed={isActive}
-                              onClick={() =>
-                                void updateSubmission({
-                                  ...selectedRecord.submission,
-                                  status: preset.status,
-                                  triageStatus: preset.triageStatus,
-                                  priority: preset.priority,
-                                  signalValue: preset.signalValue,
-                                })
-                              }
-                            >
-                              {preset.label}
-                            </button>
-                          );
-                        })}
-                      </div>
                       <div className="review-field-grid">
-                        <label className="review-select">
+                        <div className="review-badge-field">
                           <span>Review State</span>
-                          <select
-                            value={selectedRecord.submission.status}
-                            onChange={(event) =>
-                              void updateSubmission({
-                                ...selectedRecord.submission,
-                                status: event.target.value as Submission["status"],
-                              })
-                            }
-                          >
-                            <option value="unread">{t("statusUnread")}</option>
-                            <option value="read">{t("statusRead")}</option>
-                            <option value="archived">{t("statusArchived")}</option>
-                          </select>
-                        </label>
-                        <label className="review-select">
+                          <div className="review-badge-options" role="group" aria-label="Review State">
+                            {[
+                              { value: "unread", label: t("statusUnread") },
+                              { value: "read", label: t("statusRead") },
+                              { value: "archived", label: t("statusArchived") },
+                            ].map((option) => {
+                              const isSelected = activeReviewDraft?.status === option.value;
+
+                              return (
+                                <button
+                                  key={option.value}
+                                  type="button"
+                                  className={`review-state-badge is-status-${option.value} ${isSelected ? "is-active" : ""}`}
+                                  aria-pressed={isSelected}
+                                  disabled={saving || isSelected}
+                                  onClick={() => patchReviewDraft({ status: option.value as Submission["status"] })}
+                                >
+                                  {option.label}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                        <div className="review-badge-field">
                           <span>Triage Status</span>
-                          <select
-                            value={selectedRecord.submission.triageStatus}
-                            onChange={(event) =>
-                              void updateSubmission({
-                                ...selectedRecord.submission,
-                                triageStatus: event.target.value as Submission["triageStatus"],
-                              })
-                            }
-                          >
-                            {TRIAGE_STATUS_OPTIONS.map((option) => (
-                              <option key={option.value} value={option.value}>
-                                {option.label}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
-                        <label className="review-select">
+                          <div className="review-badge-options" role="group" aria-label="Triage Status">
+                            {TRIAGE_STATUS_OPTIONS.map((option) => {
+                              const isSelected = activeReviewDraft?.triageStatus === option.value;
+
+                              return (
+                                <button
+                                  key={option.value}
+                                  type="button"
+                                  className={`review-state-badge is-triage-${option.value} ${isSelected ? "is-active" : ""}`}
+                                  aria-pressed={isSelected}
+                                  disabled={saving || isSelected}
+                                  onClick={() => patchReviewDraft({ triageStatus: option.value })}
+                                >
+                                  {option.label}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                        <div className="review-badge-field">
                           <span>{t("priority")}</span>
-                          <select
-                            value={selectedRecord.submission.priority}
-                            onChange={(event) =>
-                              void updateSubmission({
-                                ...selectedRecord.submission,
-                                priority: event.target.value as Submission["priority"],
-                              })
-                            }
-                          >
-                            <option value="low">{t("priorityLow")}</option>
-                            <option value="medium">{t("priorityMedium")}</option>
-                            <option value="high">{t("priorityHigh")}</option>
-                          </select>
-                        </label>
-                        <label className="review-select">
+                          <div className="review-badge-options" role="group" aria-label={t("priority")}>
+                            {[
+                              { value: "low", label: t("priorityLow") },
+                              { value: "medium", label: t("priorityMedium") },
+                              { value: "high", label: t("priorityHigh") },
+                            ].map((option) => {
+                              const isSelected = activeReviewDraft?.priority === option.value;
+
+                              return (
+                                <button
+                                  key={option.value}
+                                  type="button"
+                                  className={`review-state-badge is-priority-${option.value} ${isSelected ? "is-active" : ""}`}
+                                  aria-pressed={isSelected}
+                                  disabled={saving || isSelected}
+                                  onClick={() => patchReviewDraft({ priority: option.value as Submission["priority"] })}
+                                >
+                                  {option.label}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                        <div className="review-badge-field">
                           <span>Signal Value</span>
-                          <select
-                            value={selectedRecord.submission.signalValue?.toString() ?? ""}
-                            onChange={(event) =>
-                              void updateSubmission({
-                                ...selectedRecord.submission,
-                                signalValue: event.target.value ? Number(event.target.value) : undefined,
-                              })
-                            }
-                          >
-                            <option value="">Not scored</option>
-                            {[1, 2, 3, 4, 5].map((value) => (
-                              <option key={value} value={value}>
-                                {value}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
+                          <div className="review-badge-options" role="group" aria-label="Signal Value">
+                            <button
+                              type="button"
+                              className={`review-state-badge is-value-none ${activeReviewDraft?.signalValue === undefined ? "is-active" : ""}`}
+                              aria-pressed={activeReviewDraft?.signalValue === undefined}
+                              disabled={saving || activeReviewDraft?.signalValue === undefined}
+                              onClick={() => patchReviewDraft({ signalValue: undefined })}
+                            >
+                              Not scored
+                            </button>
+                            <div className="review-star-rating" aria-label="Signal Value rating">
+                              {[1, 2, 3, 4, 5].map((value) => {
+                                const currentValue = activeReviewDraft?.signalValue ?? 0;
+                                const isSelected = activeReviewDraft?.signalValue === value;
+                                const isFilled = currentValue >= value;
+
+                                return (
+                                  <button
+                                    key={value}
+                                    type="button"
+                                    className={`review-star-button ${isFilled ? "is-filled" : ""} ${isSelected ? "is-selected" : ""}`}
+                                    aria-label={`Signal Value ${value}`}
+                                    aria-pressed={isSelected}
+                                    disabled={saving || isSelected}
+                                    onClick={() => patchReviewDraft({ signalValue: value })}
+                                  >
+                                    ★
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        </div>
                       </div>
                       <label className="review-select">
                         <span>Internal note</span>
                         <textarea
                           rows={5}
-                          value={notesDraft}
-                          onChange={(event) => setNotesDraft(event.target.value)}
+                          value={activeReviewDraft?.notes ?? ""}
+                          onChange={(event) => patchReviewDraft({ notes: event.target.value })}
                           placeholder={t("captureReviewNotes")}
                         />
                       </label>
@@ -2116,11 +2128,11 @@ export function AdminDashboardPage() {
                         <button
                           type="button"
                           className="primary-button review-primary-button"
-                          disabled={saving}
+                          disabled={saving || !hasReviewDraftChanges}
                           onClick={() =>
                             void updateSubmission({
                               ...selectedRecord.submission,
-                              notes: notesDraft,
+                              ...(activeReviewDraft ?? {}),
                             }, { announce: true })
                           }
                         >
@@ -2130,7 +2142,7 @@ export function AdminDashboardPage() {
                       <div className="review-roadmap-strip">
                         <div>
                           <p className="eyebrow">Roadmap handoff</p>
-                          <strong>{getTriageStatusLabel(selectedRecord.submission.triageStatus)}</strong>
+                          <strong>{getTriageStatusLabel(activeReviewDraft?.triageStatus ?? selectedRecord.submission.triageStatus)}</strong>
                           <p className="muted">Planned, In Progress, and Fixed signals appear on the public roadmap.</p>
                         </div>
                         <div className="review-action-bar review-roadmap-actions">

@@ -2,10 +2,11 @@ import { useMemo } from "react";
 import { useI18n } from "../../../i18n";
 import { isLongTextLikeField } from "../../../lib/fieldTypes";
 import { getOrderedFields } from "../../../utils/formLogic";
-import type { FieldType, FormBuilderValues, FormField } from "../types";
+import type { FieldType, FormBuilderValues, FormField, FormSection } from "../types";
 
 interface MirrorPreviewPanelProps {
   values: FormBuilderValues;
+  activeFieldId?: string;
   isReadyToPublish?: boolean;
   publishedStatus?: "preview" | "published";
   surface?: "builder" | "publish";
@@ -13,6 +14,9 @@ interface MirrorPreviewPanelProps {
 
 interface MirrorPreviewState {
   activeField?: FormField;
+  activeFieldIndex: number;
+  activeSectionName: string;
+  activeBranchInfo: string;
   fieldCount: number;
   requiredCount: number;
   title: string;
@@ -36,6 +40,25 @@ interface MirrorBadge {
 }
 
 const mediaFieldTypes: FieldType[] = ["screenshot", "video"];
+
+function getSectionName(field: FormField | undefined, sections: FormSection[] | undefined, fallback: string) {
+  if (!field?.sectionId) {
+    return fallback;
+  }
+  const section = sections?.find((candidate) => candidate.id === field.sectionId);
+  return section?.title?.trim() || fallback;
+}
+
+function getBranchInfo(field: FormField | undefined, fields: FormField[], fallback: string) {
+  if (!field?.conditionalParentId) {
+    return fallback;
+  }
+  const parent = fields.find((candidate) => candidate.id === field.conditionalParentId);
+  const parentLabel = parent?.label?.trim() || "parent signal node";
+  return field.conditionalValue
+    ? `Branch from "${parentLabel}" when answer is "${field.conditionalValue}"`
+    : `Branch from "${parentLabel}"`;
+}
 
 function supportsMarkdown(field?: FormField) {
   return field?.type === "markdown" || field?.type === "longText";
@@ -69,21 +92,27 @@ function getFieldPreviewHint(field: FormField | undefined, fallback: string) {
 
 function createPreviewState(
   values: FormBuilderValues,
+  activeFieldId: string | undefined,
   titleFallback: string,
   descriptionFallback: string,
   isReadyToPublish: boolean,
   publishedStatus: "preview" | "published",
 ): MirrorPreviewState {
   const orderedFields = getOrderedFields(values.fields ?? []);
+  const resolvedActiveFieldId = activeFieldId || values.activeFieldId;
   const activeField =
-    orderedFields.find((field) => field.id === values.activeFieldId) ??
+    orderedFields.find((field) => field.id === resolvedActiveFieldId) ??
     orderedFields[0];
+  const activeFieldIndex = activeField ? orderedFields.findIndex((field) => field.id === activeField.id) : -1;
   const isPrivate = Boolean(values.encryptSubmissions);
   const visibilityLabel = values.visibility === "public" ? "Public Signal" : values.visibility === "unlisted" ? "Link-only Signal" : "Private draft";
   const identityPolicyLabel = values.identityPolicy === "wallet_required" ? "Wallet required" : "No wallet required";
 
   return {
     activeField,
+    activeFieldIndex,
+    activeSectionName: getSectionName(activeField, values.sections, "Unsectioned Signal Flow"),
+    activeBranchInfo: getBranchInfo(activeField, orderedFields, "Primary signal path"),
     fieldCount: orderedFields.length,
     requiredCount: orderedFields.filter((field) => field.required).length,
     title: values.title?.trim() || titleFallback,
@@ -205,7 +234,7 @@ function MirrorPublishReadiness({ state }: { state: MirrorPreviewState }) {
   );
 }
 
-function MirrorQuestionPreview({ state }: { state: MirrorPreviewState }) {
+function MirrorCurrentSignalNode({ state }: { state: MirrorPreviewState }) {
   const { fieldTypeLabel, t } = useI18n();
   const field = state.activeField;
   const label = field?.label?.trim() || t("askPlaceholder");
@@ -216,7 +245,7 @@ function MirrorQuestionPreview({ state }: { state: MirrorPreviewState }) {
 
   if (!field) {
     return (
-      <section className="mirror-question-card-v2 is-empty">
+      <section className="mirror-current-node-card is-empty">
         <div className="mirror-empty-constellation" aria-hidden="true">
           <span />
           <span />
@@ -232,14 +261,51 @@ function MirrorQuestionPreview({ state }: { state: MirrorPreviewState }) {
   }
 
   return (
-    <section key={field.id} className="mirror-question-card-v2 is-editing">
+    <section key={field.id} className="mirror-current-node-card is-reflecting">
+      <div className="mirror-current-node-header">
+        <div>
+          <p className="eyebrow">Current Signal Node</p>
+          <h3>{label}</h3>
+        </div>
+        <span className="mirror-reflecting-pill">Reflecting now</span>
+      </div>
+
+      <div className="mirror-current-node-grid">
+        <span>
+          <small>Node</small>
+          <strong>B{state.activeFieldIndex + 1}</strong>
+        </span>
+        <span>
+          <small>Block type</small>
+          <strong>{fieldTypeLabel(field.type)}</strong>
+        </span>
+        <span>
+          <small>Requirement</small>
+          <strong>{field.required ? t("required") : t("optional")}</strong>
+        </span>
+        <span>
+          <small>Section</small>
+          <strong>{state.activeSectionName}</strong>
+        </span>
+      </div>
+
+      <div className="mirror-current-node-body">
+        <div>
+          <small>Placeholder / helper text</small>
+          <p>{hint}</p>
+        </div>
+        <div>
+          <small>Branch path</small>
+          <p>{state.activeBranchInfo}</p>
+        </div>
+      </div>
+
       <div className="mirror-question-frame">
         <div className="mirror-question-frame-topline">
-          <span>{fieldTypeLabel(field.type)}</span>
-          <span>{field.required ? t("required") : t("optional")}</span>
-          {state.hasConditionalLogic ? <span>Adaptive path</span> : null}
+          <span>{state.markdownSupported ? "Markdown supported" : "Plain input"}</span>
+          <span>{state.mediaSupported ? "Media supported" : "No media"}</span>
+          {state.hasConditionalLogic ? <span>Adaptive path</span> : <span>Linear node</span>}
         </div>
-        <h3>{label}</h3>
         {field.helpText?.trim() ? <p className="muted">{field.helpText.trim()}</p> : null}
 
         {field.type === "dropdown" || field.type === "checkbox" ? (
@@ -300,18 +366,19 @@ function MirrorQuestionPreview({ state }: { state: MirrorPreviewState }) {
 
 export function MirrorPreviewPanel({
   values,
+  activeFieldId,
   isReadyToPublish = false,
   publishedStatus = "preview",
   surface = "builder",
 }: MirrorPreviewPanelProps) {
   const { t } = useI18n();
   const state = useMemo(
-    () => createPreviewState(values, t("untitledForm"), t("publicDefaultBody"), isReadyToPublish, publishedStatus),
-    [isReadyToPublish, publishedStatus, t, values],
+    () => createPreviewState(values, activeFieldId, t("untitledForm"), t("publicDefaultBody"), isReadyToPublish, publishedStatus),
+    [activeFieldId, isReadyToPublish, publishedStatus, t, values],
   );
 
   return (
-    <aside className="panel glow-panel mirror-preview-panel mirror-theme-surface" aria-label="Signal Mirror Panel">
+    <aside className="panel glow-panel mirror-preview-panel mirror-theme-surface" data-surface={surface} aria-label="Signal Mirror Panel">
       <div className="mirror-panel-header">
         <div>
           <p className="eyebrow">Signal Mirror</p>
@@ -323,9 +390,10 @@ export function MirrorPreviewPanel({
       <p className="mirror-description">{state.description}</p>
 
       <MirrorObjectCard state={state} />
+      <MirrorCurrentSignalNode state={state} />
       <MirrorMetadataBadges state={state} />
-      {surface === "publish" ? <MirrorPublishReadiness state={state} /> : <MirrorQuestionPreview state={state} />}
       <MirrorSignalMetadata state={state} />
+      <MirrorPublishReadiness state={state} />
     </aside>
   );
 }

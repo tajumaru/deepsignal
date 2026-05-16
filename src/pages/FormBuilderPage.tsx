@@ -10,7 +10,7 @@ import { useI18n } from "../i18n";
 import { canAdmin, getAdminSurfaceAccessState, getRoleLabel } from "../lib/adminAccess";
 import { setSelectedProjectId } from "../lib/projectRegistry";
 import { shortAddress, WALRUS_UPLOAD_RELAY_URL } from "../lib/sui";
-import { showWalrusDiagnostics } from "../features/createForm/constants";
+import { initialFields, initialTemplate, showWalrusDiagnostics } from "../features/createForm/constants";
 import { BuilderToolbar } from "../features/createForm/components/BuilderToolbar";
 import { FieldsStep } from "../features/createForm/components/FieldsStep";
 import { InfoStep } from "../features/createForm/components/InfoStep";
@@ -24,6 +24,19 @@ import { useCreateFormBuilder } from "../features/createForm/hooks/useCreateForm
 import { useCreateFormPublish } from "../features/createForm/hooks/useCreateFormPublish";
 import type { DisplayMode } from "../features/createForm/types";
 import { getStorageRuntimeStatus, subscribeStorageRuntime } from "../storage/storageFactory";
+
+function normalizeFieldsForModeSwitch(fields: typeof initialFields) {
+  return fields.map((field) => ({
+    type: field.type,
+    label: field.label.trim(),
+    description: field.helpText?.trim() ?? "",
+    placeholder: field.placeholder?.trim() ?? "",
+    required: field.required,
+    options: field.options?.map((option) => option.trim()).filter(Boolean) ?? [],
+    rows: field.rows?.map((row) => row.trim()).filter(Boolean) ?? [],
+    columns: field.columns?.map((column) => column.trim()).filter(Boolean) ?? [],
+  }));
+}
 
 interface FormBuilderComposerProps {
   mode: "admin" | "guestDraft";
@@ -48,6 +61,7 @@ function FormBuilderComposer({ mode, freshStartToken, initialDisplayMode = "clas
   const [storageRuntime, setStorageRuntime] = useState(() => getStorageRuntimeStatus());
   const [showPublishSuccessView, setShowPublishSuccessView] = useState(false);
   const [displayMode, setDisplayMode] = useState<DisplayMode>(initialDisplayMode);
+  const [showMirrorStartChoice, setShowMirrorStartChoice] = useState(false);
   const isMirrorMode = displayMode === "mirror";
   const hasAdminAccess = canAdmin(capabilityProfile);
   const isGuestDraftMode = mode === "guestDraft";
@@ -123,6 +137,14 @@ function FormBuilderComposer({ mode, freshStartToken, initialDisplayMode = "clas
         return builder.isDirty ? t("draftUnsaved") : "";
     }
   }, [builder.draftSaveState, builder.isDirty, publish.savedForm, t]);
+  const hasEditedCoreSignal = useMemo(() => {
+    const titleChanged = builder.values.title.trim() !== initialTemplate.title.trim();
+    const descriptionChanged = builder.values.description.trim() !== initialTemplate.description.trim();
+    const fieldsChanged =
+      JSON.stringify(normalizeFieldsForModeSwitch(builder.values.fields)) !==
+      JSON.stringify(normalizeFieldsForModeSwitch(initialFields));
+    return titleChanged || descriptionChanged || fieldsChanged;
+  }, [builder.values.description, builder.values.fields, builder.values.title]);
 
   useEffect(() => {
     const unsubscribe = subscribeStorageRuntime(() => setStorageRuntime(getStorageRuntimeStatus()));
@@ -189,6 +211,37 @@ function FormBuilderComposer({ mode, freshStartToken, initialDisplayMode = "clas
     }
   }
 
+  function handleApplyIntentDraft(draft: Parameters<typeof builder.applyIntentDraft>[0]) {
+    setShowMirrorStartChoice(false);
+    builder.applyIntentDraft(draft);
+  }
+
+  function switchDisplayMode(nextMode: DisplayMode) {
+    if (nextMode === "classic") {
+      setDisplayMode("classic");
+      setShowMirrorStartChoice(false);
+      return;
+    }
+
+    setDisplayMode("mirror");
+    if (hasEditedCoreSignal) {
+      setShowMirrorStartChoice(true);
+      return;
+    }
+
+    setShowMirrorStartChoice(false);
+    builder.goToStep("template");
+  }
+
+  function handleStartMirrorFromIntent() {
+    setShowMirrorStartChoice(false);
+    builder.goToStep("template");
+  }
+
+  function handleContinueCurrentSignal() {
+    setShowMirrorStartChoice(false);
+  }
+
   if (!isGuestDraftMode && account?.address && isLoadingAccess) {
     return <div className="panel">{t("checkingWalletCapabilities")}</div>;
   }
@@ -197,7 +250,7 @@ function FormBuilderComposer({ mode, freshStartToken, initialDisplayMode = "clas
     <form id="create-form" className="composer-stage composer-step-stage" onSubmit={publish.handleSubmit}>
       {builder.values.currentStep === "template" ? (
         isMirrorMode ? (
-          <IntentStartStep onApplyDraft={builder.applyIntentDraft} />
+          <IntentStartStep onApplyDraft={handleApplyIntentDraft} />
         ) : (
           <TemplateStep
             t={t}
@@ -368,19 +421,40 @@ function FormBuilderComposer({ mode, freshStartToken, initialDisplayMode = "clas
             <button
               type="button"
               className={displayMode === "classic" ? "is-active" : ""}
-              onClick={() => setDisplayMode("classic")}
+              onClick={() => switchDisplayMode("classic")}
             >
               Classic
             </button>
             <button
               type="button"
               className={displayMode === "mirror" ? "is-active" : ""}
-              onClick={() => setDisplayMode("mirror")}
+              onClick={() => switchDisplayMode("mirror")}
             >
               Mirror
             </button>
           </div>
         </section>
+
+        {isMirrorMode && showMirrorStartChoice ? (
+          <section className="panel mirror-start-choice-panel" aria-live="polite">
+            <div>
+              <p className="eyebrow">Mirror Start</p>
+              <strong>Continue with current signal or start from intent?</strong>
+              <span>
+                We found existing title, description, or block edits. Mirror Mode will not reset them unless you choose
+                the intent start.
+              </span>
+            </div>
+            <div className="mirror-start-choice-actions">
+              <button type="button" className="primary-button" onClick={handleContinueCurrentSignal}>
+                Continue with current signal
+              </button>
+              <button type="button" className="ghost-button" onClick={handleStartMirrorFromIntent}>
+                Start from intent
+              </button>
+            </div>
+          </section>
+        ) : null}
 
         {builder.hasRecoverableDraft ? (
           <RecoverableDraftBanner
@@ -404,6 +478,7 @@ function FormBuilderComposer({ mode, freshStartToken, initialDisplayMode = "clas
             <div className="composer-mirror-builder">{builderForm}</div>
             <MirrorPreviewPanel
               values={builder.values}
+              activeFieldId={builder.values.activeFieldId}
               isReadyToPublish={builder.isReadyToPublish}
               publishedStatus={publish.savedForm ? "published" : "preview"}
               surface={builder.values.currentStep === "publish" ? "publish" : "builder"}
