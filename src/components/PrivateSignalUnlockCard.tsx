@@ -1,4 +1,5 @@
 import { useId, type ReactNode } from "react";
+import type { DecryptDiagnosticContext } from "../crypto/decryptDiagnostics";
 import { useI18n } from "../i18n";
 
 type UnlockState =
@@ -18,6 +19,7 @@ interface PrivateSignalUnlockCardProps {
   unlockState?: UnlockState;
   statusMessage?: string;
   errorMessage?: string;
+  diagnostics?: DecryptDiagnosticContext | null;
   disabledReason?: string;
   actionDisabled?: boolean;
   children?: ReactNode;
@@ -120,6 +122,63 @@ function WarningIcon() {
   );
 }
 
+function formatDebugValue(value: unknown) {
+  if (value === undefined || value === null || value === "") {
+    return "n/a";
+  }
+  if (typeof value === "string") {
+    return value;
+  }
+  return JSON.stringify(value, null, 2);
+}
+
+function SealPolicyDebugPanel({ diagnostics }: { diagnostics: DecryptDiagnosticContext }) {
+  const rows = [
+    ["Policy hash", diagnostics.policyHash ?? diagnostics.decryptPolicySnapshot?.policyHash],
+    ["Package ID", diagnostics.packageId ?? diagnostics.decryptPolicySnapshot?.packageId],
+    ["Capability type", diagnostics.capabilityType ?? diagnostics.decryptPolicySnapshot?.capabilityType],
+    ["Object ID", diagnostics.accessObjectId ?? diagnostics.decryptPolicySnapshot?.objectId],
+    ["Policy object ID", diagnostics.policyObjectId ?? diagnostics.decryptPolicySnapshot?.policyObjectId],
+    ["Wallet address", diagnostics.walletAddress ?? diagnostics.decryptPolicySnapshot?.walletAddress],
+    ["Policy match", diagnostics.policySnapshotComparison?.matches],
+    ["Policy diff", diagnostics.policySnapshotComparison?.differingKeys.join(", ")],
+  ] as const;
+
+  return (
+    <details className="seal-policy-debug-panel" open={Boolean(diagnostics.policySnapshotComparison && !diagnostics.policySnapshotComparison.matches)}>
+      <summary>Seal policy debug</summary>
+      <dl>
+        {rows.map(([label, value]) => (
+          <div key={label}>
+            <dt>{label}</dt>
+            <dd>{formatDebugValue(value)}</dd>
+          </div>
+        ))}
+      </dl>
+      <div className="seal-policy-debug-grid">
+        <div>
+          <strong>Required capability objects</strong>
+          <pre>{formatDebugValue(diagnostics.requiredCapabilityObjects)}</pre>
+        </div>
+        <div>
+          <strong>Owned capability objects</strong>
+          <pre>{formatDebugValue(diagnostics.ownedCapabilityObjects)}</pre>
+        </div>
+      </div>
+      <div className="seal-policy-debug-grid">
+        <div>
+          <strong>Encrypt policy JSON</strong>
+          <pre>{formatDebugValue(diagnostics.encryptPolicySnapshot?.normalizedPolicyJson)}</pre>
+        </div>
+        <div>
+          <strong>Decrypt policy JSON</strong>
+          <pre>{formatDebugValue(diagnostics.normalizedPolicyJson ?? diagnostics.decryptPolicySnapshot?.normalizedPolicyJson)}</pre>
+        </div>
+      </div>
+    </details>
+  );
+}
+
 export function PrivateSignalUnlockCard({
   onUnlock,
   onCancel,
@@ -128,6 +187,7 @@ export function PrivateSignalUnlockCard({
   unlockState,
   statusMessage,
   errorMessage,
+  diagnostics,
   disabledReason,
   actionDisabled = false,
   children,
@@ -228,6 +288,8 @@ export function PrivateSignalUnlockCard({
       {state === "failed" && errorMessage && errorMessage !== t("privateSignalUnlockError") ? (
         <p className="private-signal-unlock-detail">{errorMessage}</p>
       ) : null}
+
+      {diagnostics ? <SealPolicyDebugPanel diagnostics={diagnostics} /> : null}
     </section>
   );
 }

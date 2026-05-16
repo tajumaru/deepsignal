@@ -14,17 +14,25 @@ import { PrivateSignalUnlockCard } from "../components/PrivateSignalUnlockCard";
 import { RichTextContent } from "../components/RichText";
 import { SignalStatusBadges } from "../components/SignalStatusBadges";
 import { SignalMetaChip } from "../components/SignalMetaChip";
+import { CsvExportConfirmationModal } from "../features/admin/components/CsvExportConfirmationModal";
 import { useAccessControl } from "../hooks/useAccessControl";
 import { getAttachmentDownloadHref, useAttachmentPreviews } from "../hooks/useAttachmentPreviews";
 import { getSealRuntimeStatus } from "../crypto/cryptoFactory";
-import { isDecryptDiagnosticError } from "../crypto/decryptDiagnostics";
+import { isDecryptDiagnosticError, type DecryptDiagnosticContext } from "../crypto/decryptDiagnostics";
 import { REAL_SEAL_SESSION_TTL_MIN } from "../crypto/sealPayload";
 import { useI18n } from "../i18n";
 import { formatAnswerText } from "../lib/answerFormatting";
 import { isAttachmentFieldType, isLongTextLikeField } from "../lib/fieldTypes";
 import { getReviewAccessState } from "../lib/adminAccess";
 import { exportSubmissionJson, exportSummaryJson } from "../lib/export";
-import { exportResponsesToCsv } from "../lib/exportResponses";
+import {
+  buildExportMetadata,
+  exportResponsesToCsv,
+  type ExportMetadata,
+  type ExportPiiField,
+  type ResponsesCsvExportScope,
+  type ResponsesCsvSortOrder,
+} from "../lib/exportResponses";
 import { getPublicFormPath, getPublicRoadmapPath } from "../lib/publicLinks";
 import { formatResponseDeadline, type ResponseDeadlineLabels } from "../lib/responseDeadline";
 import { getRespondentDisplayLabel, getSubmissionRespondentMeta } from "../lib/respondentMeta";
@@ -129,7 +137,7 @@ export function FormSubmissionsPage() {
   const suiClient = useSuiClient();
   const signPersonalMessage = useSignPersonalMessage();
   const updateSignalStatusTx = useSignAndExecuteTransaction();
-  const { capabilityProfile, isLoadingAccess } = useAccessControl(account?.address);
+  const { capabilityProfile, isLoadingAccess, ownedObjects } = useAccessControl(account?.address);
   const reviewDeniedBody = capabilityProfile.isConfigured ? t("reviewAccessRequiresCapability") : undefined;
   const { formId = "", submissionId = "" } = useParams();
   const sealRuntime = getSealRuntimeStatus();
@@ -160,6 +168,7 @@ export function FormSubmissionsPage() {
   const [decryptUiState, setDecryptUiState] = useState<DecryptUiState>("locked");
   const [decryptStatusMessage, setDecryptStatusMessage] = useState("");
   const [decryptError, setDecryptError] = useState("");
+  const [decryptDiagnostics, setDecryptDiagnostics] = useState<DecryptDiagnosticContext | null>(null);
   const [unlockInteractionNotice, setUnlockInteractionNotice] = useState("");
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [saveError, setSaveError] = useState("");
@@ -168,6 +177,10 @@ export function FormSubmissionsPage() {
   const [priorityDraft, setPriorityDraft] = useState<Submission["priority"]>("medium");
   const [signalValueDraft, setSignalValueDraft] = useState("");
   const [notesDraft, setNotesDraft] = useState("");
+  const [csvExportScope, setCsvExportScope] = useState<ResponsesCsvExportScope>("filtered");
+  const [csvSortOrder, setCsvSortOrder] = useState<ResponsesCsvSortOrder>("createdAtDesc");
+  const [excludedCsvPiiFields, setExcludedCsvPiiFields] = useState<ExportPiiField[]>([]);
+  const [pendingCsvExportMetadata, setPendingCsvExportMetadata] = useState<ExportMetadata | null>(null);
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState<{ tone: "success" | "error"; message: string } | null>(null);
   const saveQueueRef = useRef(Promise.resolve());
@@ -227,12 +240,25 @@ export function FormSubmissionsPage() {
       return searchable.includes(normalizedSearch);
     });
   }, [search, selectedStreamId, submissions]);
-
   const selectedSubmission =
     visibleSignals.find((submission) => submission.id === selectedSignalId) ??
     submissions.find((submission) => submission.id === selectedSignalId) ??
     visibleSignals[0] ??
     null;
+  const csvExportCount =
+    csvExportScope === "filtered"
+      ? visibleSignals.length
+      : csvExportScope === "selected"
+        ? selectedSubmission
+          ? 1
+          : 0
+        : submissions.length;
+  const csvExportScopeLabel =
+    csvExportScope === "filtered"
+      ? t("filteredExportCount", { count: visibleSignals.length })
+      : csvExportScope === "selected"
+        ? t("selectedResponsesCount", { count: selectedSubmission ? 1 : 0 })
+      : t("allResponsesCount", { count: submissions.length });
   const submissionMetrics = useMemo(() => {
     const next = {
       unread: 0,
@@ -462,6 +488,7 @@ export function FormSubmissionsPage() {
       setDetailLegacyUnencrypted(false);
       setNotesDraft("");
       setDecryptError("");
+      setDecryptDiagnostics(null);
       setUnlockInteractionNotice("");
       setSaveError("");
       setSaveState("idle");
@@ -489,6 +516,7 @@ export function FormSubmissionsPage() {
       setDetailAttachments(selectedSubmission.attachments ?? []);
       setDetailLegacyUnencrypted(false);
       setDecryptError("");
+      setDecryptDiagnostics(null);
       setUnlockInteractionNotice("");
       setDecryptUiState(selectedSubmission.isEncrypted ? "locked" : "decrypted");
       if (!decryptInFlightRef.current) {
@@ -597,6 +625,7 @@ export function FormSubmissionsPage() {
     setDecrypting(false);
     setDecryptUiState(detailAnswers ? "decrypted" : "locked");
     setDecryptError("");
+    setDecryptDiagnostics(null);
     setDecryptStatusMessage("");
     setUnlockInteractionNotice(t("unlockCancelledStatus"));
   }
@@ -624,6 +653,7 @@ export function FormSubmissionsPage() {
           capabilityProfile.hasOwnerCap || capabilityProfile.hasAdminCap
             ? undefined
             : capabilityProfile.reviewerCapIds[0],
+        ownedCapabilityObjects: ownedObjects,
         suiClient,
         signPersonalMessage: async (message) => {
           const result = await signPersonalMessage.mutateAsync({ message });
@@ -665,6 +695,7 @@ export function FormSubmissionsPage() {
               ? error.message
               : t("decryptFailed"),
         );
+        setDecryptDiagnostics(isDecryptDiagnosticError(error) ? error.diagnostics : null);
       }
     } finally {
       const isLatestRequest =
@@ -698,22 +729,89 @@ export function FormSubmissionsPage() {
     );
   }
 
-  function handleExportResponsesCsv() {
+  function getCsvFilterSnapshot() {
+    return {
+      searchQuery: search,
+      status: selectedStreamId === "all" ? undefined : `stream:${selectedStreamId}`,
+      priority: selectedStreamId === "high" ? "high" : undefined,
+      tags: search.trim() ? [search.trim()] : [],
+      triageStatus:
+        selectedStreamId === "planned" || selectedStreamId === "in_progress" || selectedStreamId === "fixed"
+          ? selectedStreamId
+          : undefined,
+      dateRange: {},
+    };
+  }
+
+  function getCsvExportResponses() {
+    if (csvExportScope === "selected") {
+      return selectedSubmission ? [selectedSubmission] : [];
+    }
+    return csvExportScope === "filtered" ? visibleSignals : submissions;
+  }
+
+  function getCsvResponseOverrides() {
+    return selectedSubmission && detailAnswers
+      ? {
+          [selectedSubmission.id]: {
+            answers: detailAnswers,
+            attachments: detailAttachments,
+          },
+        }
+      : undefined;
+  }
+
+  function handleOpenCsvExportReview() {
     if (!form) {
       return;
     }
-    exportResponsesToCsv(form, submissions, {
-      language,
-      responseOverrides:
-        selectedSubmission && detailAnswers
-          ? {
-              [selectedSubmission.id]: {
-                answers: detailAnswers,
-                attachments: detailAttachments,
-              },
-            }
-          : undefined,
-    });
+    const responses = getCsvExportResponses();
+    if (responses.length === 0) {
+      setToast({ tone: "error", message: t("noResponsesMatchCurrentFilters") });
+      return;
+    }
+    setPendingCsvExportMetadata(
+      buildExportMetadata(form, responses, {
+        language,
+        scope: csvExportScope,
+        sortOrder: csvSortOrder,
+        excludedPiiFields: excludedCsvPiiFields,
+        exportedBy: account?.address ?? "",
+        filterSnapshot: getCsvFilterSnapshot(),
+        responseOverrides: getCsvResponseOverrides(),
+      }),
+    );
+  }
+
+  function handleToggleCsvPiiField(field: ExportPiiField) {
+    setExcludedCsvPiiFields((current) =>
+      current.includes(field) ? current.filter((item) => item !== field) : [...current, field],
+    );
+  }
+
+  function handleConfirmCsvExport() {
+    if (!form) {
+      return;
+    }
+    try {
+      const responses = getCsvExportResponses();
+      const result = exportResponsesToCsv(form, responses, {
+        language,
+        scope: csvExportScope,
+        sortOrder: csvSortOrder,
+        excludedPiiFields: excludedCsvPiiFields,
+        exportedBy: account?.address ?? "",
+        filterSnapshot: getCsvFilterSnapshot(),
+        responseOverrides: getCsvResponseOverrides(),
+      });
+      if (result?.exported) {
+        setPendingCsvExportMetadata(null);
+        setToast({ tone: "success", message: t("csvExported") });
+      }
+    } catch (error) {
+      console.error("CSV export failed", error);
+      setToast({ tone: "error", message: t("csvExportFailed") });
+    }
   }
 
   if (loading) {
@@ -775,6 +873,7 @@ export function FormSubmissionsPage() {
           unlockState={decryptUiState}
           statusMessage={decryptStatusMessage}
           errorMessage={decryptError}
+          diagnostics={decryptDiagnostics}
           disabledReason={unlockDisabledReason}
         >
           {!isLocalFallbackBlob(selectedSubmission.encryptedBlobId) ? (
@@ -981,18 +1080,43 @@ export function FormSubmissionsPage() {
             >
               {t("exportJson")}
             </button>
+            <label className="review-select export-select">
+              <span>{t("exportScope")}</span>
+              <select
+                value={csvExportScope}
+                onChange={(event) => setCsvExportScope(event.target.value as ResponsesCsvExportScope)}
+              >
+                <option value="filtered">{t("exportVisibleFilteredResponses")}</option>
+                <option value="all">{t("exportAllResponses")}</option>
+                <option value="selected">{t("exportSelectedResponses")}</option>
+              </select>
+            </label>
+            <label className="review-select export-select">
+              <span>{t("csvSortOrder")}</span>
+              <select
+                value={csvSortOrder}
+                onChange={(event) => setCsvSortOrder(event.target.value as ResponsesCsvSortOrder)}
+              >
+                <option value="createdAtDesc">{t("createdAtDesc")}</option>
+                <option value="createdAtAsc">{t("createdAtAsc")}</option>
+              </select>
+            </label>
             <button
               type="button"
               className="ghost-button"
-              onClick={handleExportResponsesCsv}
-              disabled={submissions.length === 0}
+              onClick={handleOpenCsvExportReview}
+              disabled={csvExportCount === 0}
             >
               {t("exportCsv")}
             </button>
+            <span className="signal-chip signal-chip-soft">{csvExportScopeLabel}</span>
           </div>
         </div>
+        {csvExportCount === 0 ? (
+          <p className="export-zero-note">{t("noResponsesMatchCurrentFilters")}</p>
+        ) : null}
         <p className="export-privacy-note">
-          Private exports should be shared only with authorized team members.
+          {t("exportCsvPrivacyNote")}
         </p>
         <div className="metadata-list">
           <div className="metadata-row">
@@ -1091,6 +1215,44 @@ export function FormSubmissionsPage() {
           <div className={`signal-toast is-${toast.tone}`} role="status" aria-live="polite">
             {toast.message}
           </div>
+        ) : null}
+        {pendingCsvExportMetadata && form ? (
+          <CsvExportConfirmationModal
+            metadata={buildExportMetadata(form, getCsvExportResponses(), {
+              language,
+              scope: csvExportScope,
+              sortOrder: csvSortOrder,
+              excludedPiiFields: excludedCsvPiiFields,
+              exportedBy: account?.address ?? "",
+              filterSnapshot: getCsvFilterSnapshot(),
+              responseOverrides: getCsvResponseOverrides(),
+            })}
+            excludedPiiFields={excludedCsvPiiFields}
+            labels={{
+              title: t("exportReviewTitle"),
+              body: t("exportReviewBody"),
+              targetForm: t("targetForm"),
+              targetCount: t("targetCount"),
+              includedColumns: t("includedColumns"),
+              includesDecryptedData: t("includesDecryptedData"),
+              includesAttachmentInfo: t("includesAttachmentInfo"),
+              exportedBy: t("exportedBy"),
+              filterSnapshot: t("exportFilterSnapshot"),
+              personalInfoOptions: t("personalInfoOptions"),
+              omitWalletAddress: t("omitWalletAddress"),
+              omitRespondentAddress: t("omitRespondentAddress"),
+              omitNotes: t("omitNotes"),
+              omitAttachments: t("omitAttachments"),
+              omitDecryptedAnswers: t("omitDecryptedAnswers"),
+              yes: t("yes"),
+              no: t("no"),
+              cancel: t("cancel"),
+              confirm: t("confirmExport"),
+            }}
+            onTogglePiiField={handleToggleCsvPiiField}
+            onCancel={() => setPendingCsvExportMetadata(null)}
+            onConfirm={handleConfirmCsvExport}
+          />
         ) : null}
         {isDetailOnly ? (
           <article className="panel signal-detail-column">
@@ -1198,19 +1360,44 @@ export function FormSubmissionsPage() {
                 {form.blobId ? <SignalMetaChip type="blob" value={form.blobId} /> : <strong>{t("notAvailable")}</strong>}
                 {!isLocalFallbackBlob(form.blobId) ? (
                   <BlobLink blobId={form.blobId} label={t("verifyOnWalrus")} />
-                ) : null}
+              ) : null}
               </div>
 
+              <label className="review-select export-select">
+                <span>{t("exportScope")}</span>
+                <select
+                  value={csvExportScope}
+                  onChange={(event) => setCsvExportScope(event.target.value as ResponsesCsvExportScope)}
+                >
+                  <option value="filtered">{t("exportVisibleFilteredResponses")}</option>
+                  <option value="all">{t("exportAllResponses")}</option>
+                  <option value="selected">{t("exportSelectedResponses")}</option>
+                </select>
+              </label>
+              <label className="review-select export-select">
+                <span>{t("csvSortOrder")}</span>
+                <select
+                  value={csvSortOrder}
+                  onChange={(event) => setCsvSortOrder(event.target.value as ResponsesCsvSortOrder)}
+                >
+                  <option value="createdAtDesc">{t("createdAtDesc")}</option>
+                  <option value="createdAtAsc">{t("createdAtAsc")}</option>
+                </select>
+              </label>
               <button
                 type="button"
                 className="ghost-button"
-                onClick={handleExportResponsesCsv}
-                disabled={submissions.length === 0}
+                onClick={handleOpenCsvExportReview}
+                disabled={csvExportCount === 0}
               >
                 {t("exportCsv")}
               </button>
+              <span className="signal-chip signal-chip-soft">{csvExportScopeLabel}</span>
+              {csvExportCount === 0 ? (
+                <p className="export-zero-note">{t("noResponsesMatchCurrentFilters")}</p>
+              ) : null}
               <p className="export-privacy-note">
-                Private exports should be shared only with authorized team members.
+                {t("exportCsvPrivacyNote")}
               </p>
               {showSurveySummary && surveySummary ? (
                 <button

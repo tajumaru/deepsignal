@@ -10,7 +10,9 @@ import {
 import {
   DecryptDiagnosticError,
   buildDecryptDiagnosticContext,
+  buildSealDecryptPolicySnapshot,
   classifyDecryptError,
+  compareSealPolicySnapshots,
   describeEncryptedPayloadShape,
   logDecryptDiagnostic,
   validateEncryptedPayloadOrThrow,
@@ -322,9 +324,9 @@ function assertEnvelopePolicyMatchesForm(
   envelope: ReturnType<typeof validateEncryptedPayloadOrThrow>,
   diagnostics: ReturnType<typeof buildDecryptDiagnosticContext>,
 ) {
-  const formProjectId = form.projectId?.trim();
+  const formProjectId = form.projectId?.trim().toLowerCase();
   const formOwnerAddress = form.ownerAddress?.trim()?.toLowerCase();
-  const envelopeProjectId = envelope.projectId?.trim();
+  const envelopeProjectId = envelope.projectId?.trim().toLowerCase();
   const envelopeOwnerAddress = envelope.ownerAddress?.trim()?.toLowerCase();
 
   if (envelope.network !== SUI_NETWORK) {
@@ -607,8 +609,10 @@ export async function resolveSubmissionAnswers(
   context: SealDecryptContext = {},
 ) {
   if (submission.isEncrypted && (submission.encryptedPayload || submission.encryptedBlobId)) {
+    let activeDiagnostics: ReturnType<typeof buildDecryptDiagnosticContext> | undefined;
     try {
       const baseDiagnostics = buildDecryptDiagnosticContext(form, submission, context);
+      activeDiagnostics = baseDiagnostics;
       context.onStatusChange?.("loading_seal_runtime");
       logDecryptDiagnostic("start", baseDiagnostics);
       if (!submission.encryptedPayload && !submission.encryptedBlobId) {
@@ -630,15 +634,39 @@ export async function resolveSubmissionAnswers(
       }
       const envelope = validateEncryptedPayloadOrThrow(payload, baseDiagnostics);
       context.onStatusChange?.("validating_access_policy");
+      const decryptPolicySnapshot = buildSealDecryptPolicySnapshot({
+        envelope,
+        context,
+        approvalPolicy: envelope.approvalPolicy ?? envelope.policyId,
+      });
+      const policySnapshotComparison = compareSealPolicySnapshots(
+        envelope.encryptPolicySnapshot,
+        decryptPolicySnapshot,
+      );
       const diagnostics = {
         ...baseDiagnostics,
         packageId: envelope.packageId,
+        policyHash: decryptPolicySnapshot.policyHash,
         policyId: envelope.policyId,
+        capabilityType: decryptPolicySnapshot.capabilityType,
         accessObjectId: envelope.objectId,
+        policyObjectId: envelope.policyObjectId,
         approvalPolicy: envelope.policyId,
+        encryptPolicySnapshot: envelope.encryptPolicySnapshot,
+        decryptPolicySnapshot,
+        normalizedPolicyJson: decryptPolicySnapshot.normalizedPolicyJson,
+        policySerializationOutput: decryptPolicySnapshot.normalizedPolicyJson,
+        policySnapshotComparison,
+        requiredCapabilityObjects: [
+          {
+            type: decryptPolicySnapshot.capabilityType,
+            objectId: decryptPolicySnapshot.policyObjectId,
+          },
+        ],
         encryptedPayloadShape: describeEncryptedPayloadShape(payload),
         ciphertextSize: envelope.encryptedObject.length,
       };
+      activeDiagnostics = diagnostics;
       assertEnvelopePolicyMatchesForm(form, envelope, diagnostics);
       logDecryptDiagnostic("payload_validated", diagnostics);
       const decryptedResult = await decryptSensitiveResponse(payload, context, seal, {
@@ -680,7 +708,7 @@ export async function resolveSubmissionAnswers(
       const diagnostics =
         error instanceof DecryptDiagnosticError
           ? error.diagnostics
-          : buildDecryptDiagnosticContext(form, submission, context);
+          : activeDiagnostics ?? buildDecryptDiagnosticContext(form, submission, context);
       logDecryptDiagnostic("failure", diagnostics, error);
       if (error instanceof DecryptDiagnosticError) {
         throw error;

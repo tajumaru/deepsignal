@@ -132,7 +132,14 @@ The Walrus manifest design is especially important. A manifest is a recovery map
 
 - JSON export for individual signals and summaries.
 - CSV export for inbox workflows.
-- CSV begins with operational metadata such as submission ID, encryption status, status, triage state, priority, contributor ID, tags, notes, and GitHub links before form-answer columns.
+- Response CSV includes form title, export timestamp, response count, response ID, submitted/created timestamps, respondent address, anonymity status, Walrus/storage blob IDs, attachments, tags, priority, triage status, status, notes, and then form-answer columns.
+- CSV filenames include a safe slug from the form title plus a timestamp, for example `deepsignal-feedback-20260516-1200.csv`.
+- Admins can export the current filtered inbox slice or all responses, and can order rows newest-first or oldest-first by `createdAt`.
+- Attachment cells summarize each file as `fileName`, `blobId`, `mimeType`, and `size` so operators can audit file-backed responses from the CSV.
+- CSV export opens a confirmation review before download. It shows the target form, response count, included columns, whether decrypted answers or attachment info are included, and lets operators omit `walletAddress`, `respondentAddress`, `notes`, `attachments`, or decrypted answer overrides.
+- Successful CSV exports append a local audit log entry with `exportedAt`, `formId`, `responseCount`, `filterMode`, `exportedBy`, `includedDecryptedData`, and a filter snapshot. The CSV itself keeps a single header row for spreadsheet and analytics-tool compatibility instead of prepending metadata rows.
+- CSV cells that start with Excel formula triggers (`=`, `+`, `-`, or `@`) are prefixed safely before quoting, and downloads include UTF-8 BOM plus CRLF line endings for Excel-friendly Japanese and multiline content.
+- Locked encrypted answers are exported as `[encrypted]`; plaintext appears only when the admin has already decrypted that response in the review UI and the export path receives those decrypted values.
 
 ## Architecture
 

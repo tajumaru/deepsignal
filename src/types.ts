@@ -270,6 +270,11 @@ export interface SealDecryptContext {
   ownerAddress?: string;
   suiClient?: unknown;
   reviewerCapId?: string;
+  ownedCapabilityObjects?: Array<{
+    type: string;
+    objectId: string;
+    registryId?: string;
+  }>;
   onStatusChange?: (
     status:
       | "loading_seal_runtime"

@@ -3885,6 +3885,60 @@ h2 {
   font-size: 0.84rem;
 }
 
+.seal-policy-debug-panel {
+  border: 1px solid rgba(120, 214, 255, 0.2);
+  border-radius: 8px;
+  background: rgba(2, 12, 22, 0.72);
+  color: #cfe8f4;
+  font-size: 0.78rem;
+  overflow: hidden;
+}
+
+.seal-policy-debug-panel summary {
+  cursor: pointer;
+  padding: 0.7rem 0.85rem;
+  color: #7ad8ff;
+  font-weight: 700;
+}
+
+.seal-policy-debug-panel dl,
+.seal-policy-debug-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.55rem;
+  margin: 0;
+  padding: 0 0.85rem 0.85rem;
+}
+
+.seal-policy-debug-panel dl div,
+.seal-policy-debug-grid > div {
+  min-width: 0;
+  border: 1px solid rgba(169, 216, 237, 0.13);
+  border-radius: 6px;
+  padding: 0.55rem;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.seal-policy-debug-panel dt,
+.seal-policy-debug-grid strong {
+  display: block;
+  margin: 0 0 0.35rem;
+  color: #8caabb;
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.seal-policy-debug-panel dd,
+.seal-policy-debug-panel pre {
+  margin: 0;
+  color: #e6f6ff;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  line-height: 1.45;
+}
+
 @keyframes privateSignalSpin {
   to {
     transform: rotate(360deg);
@@ -10472,6 +10526,65 @@ body.composer-mode .bg-orb {
 .review-select select {
   min-width: 0;
   width: 100%;
+}
+
+.inline-actions .export-select {
+  width: auto;
+  min-width: 10rem;
+}
+
+.signal-sidebar .export-select {
+  width: 100%;
+}
+
+.export-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  overflow-y: auto;
+  background: rgba(2, 11, 18, 0.76);
+}
+
+.export-confirmation-modal {
+  width: min(100%, 760px);
+  max-height: calc(100vh - 2rem);
+  overflow-y: auto;
+  background: rgba(7, 21, 34, 0.98);
+}
+
+.export-confirmation-block {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.export-confirmation-block p,
+.export-confirmation-block pre {
+  margin: 0;
+  color: var(--text-soft);
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.export-pii-options {
+  display: grid;
+  gap: 0.5rem;
+  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+}
+
+.export-pii-option {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--text-soft);
+}
+
+.export-zero-note {
+  margin: 0.35rem 0 0;
+  color: #facc15;
+  font-size: 0.86rem;
 }
 
 .signal-detail-heading > div:first-child,

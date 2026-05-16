@@ -39,6 +39,8 @@ vi.mock("../storage/walrusAdapter", () => ({
   readManifestWithForm: (...args: unknown[]) => mockReadManifestWithForm(...args),
   readJsonBlobOrThrow: (...args: unknown[]) => mockReadJsonBlobOrThrow(...args),
   getWalrusMutationRuntimeStatus: () => mockGetWalrusMutationRuntimeStatus(),
+  subscribeWalrusRuntime: () => vi.fn(),
+  waitForWalrusMutationRuntimeReady: vi.fn(async () => false),
 }));
 
 vi.mock("../lib/storage", async () => {

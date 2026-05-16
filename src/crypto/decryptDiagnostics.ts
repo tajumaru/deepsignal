@@ -13,6 +13,11 @@ import {
   SEAL_SUI_CLIENT_REQUIRED_MESSAGE,
   SEAL_WALLET_CANCELLED_MESSAGE,
   parseRealSealEnvelope,
+  createSealPolicySnapshot,
+  getSealPolicyCapabilityType,
+  normalizeOptionalSealIdentifier,
+  normalizeSealIdentifier,
+  type SealPolicySnapshot,
   type RealSealEnvelope,
 } from "./sealPayload";
 
@@ -38,8 +43,28 @@ export interface DecryptDiagnosticContext {
   walletAddress?: string;
   packageId?: string;
   policyId?: string;
+  policyHash?: string;
+  capabilityType?: string;
   accessObjectId?: string;
+  policyObjectId?: string;
   approvalPolicy?: string;
+  encryptPolicySnapshot?: SealPolicySnapshot;
+  decryptPolicySnapshot?: SealPolicySnapshot;
+  normalizedPolicyJson?: string;
+  policySerializationOutput?: string;
+  policySnapshotComparison?: {
+    matches: boolean;
+    differingKeys: string[];
+  };
+  requiredCapabilityObjects?: Array<{
+    type: string;
+    objectId?: string;
+  }>;
+  ownedCapabilityObjects?: Array<{
+    type: string;
+    objectId: string;
+    registryId?: string;
+  }>;
   encryptedPayloadShape?: Record<string, unknown>;
   ciphertextSize?: number;
   timestamp?: string;
@@ -83,11 +108,74 @@ export function buildDecryptDiagnosticContext(
     submissionBlobId: submission.blobId,
     encryptedBlobId: submission.encryptedBlobId,
     network: SUI_NETWORK,
-    walletAddress: context.walletAddress,
+    walletAddress: normalizeOptionalSealIdentifier(context.walletAddress),
     timestamp: new Date().toISOString(),
     gateway: WALRUS_AGGREGATOR_URL,
     source: submission.encryptedPayload ? "submission.inlineEncryptedPayload" : "storage.readEncryptedPayload",
+    ownedCapabilityObjects: context.ownedCapabilityObjects,
     ...overrides,
+  };
+}
+
+export function buildSealDecryptPolicySnapshot(input: {
+  envelope: RealSealEnvelope;
+  context?: SealDecryptContext;
+  approvalPolicy?: string;
+  reviewerCapId?: string;
+}) {
+  const projectId = normalizeOptionalSealIdentifier(input.envelope.projectId ?? input.context?.projectId);
+  const ownerAddress = normalizeOptionalSealIdentifier(input.envelope.ownerAddress ?? input.context?.ownerAddress);
+  const policyId = input.approvalPolicy ?? input.envelope.approvalPolicy ?? input.envelope.policyId;
+  const policyObjectId =
+    policyId === "project_signal_reviewer_v1" || policyId === "project_reviewer_v0"
+      ? normalizeSealIdentifier(input.reviewerCapId ?? input.context?.reviewerCapId)
+      : normalizeSealIdentifier(input.envelope.policyObjectId ?? projectId ?? ownerAddress ?? input.envelope.objectId);
+  return createSealPolicySnapshot({
+    network: SUI_NETWORK,
+    packageId: input.envelope.packageId,
+    objectId: input.envelope.objectId,
+    policyId,
+    policyObjectId,
+    projectId,
+    ownerAddress,
+    walletAddress: input.context?.walletAddress,
+    serverObjectIds: input.envelope.serverObjectIds,
+    capabilityType: getSealPolicyCapabilityType(policyId),
+  });
+}
+
+export function compareSealPolicySnapshots(
+  encryptPolicySnapshot?: SealPolicySnapshot,
+  decryptPolicySnapshot?: SealPolicySnapshot,
+) {
+  if (!encryptPolicySnapshot || !decryptPolicySnapshot) {
+    return undefined;
+  }
+  const keys = [
+    "policyHash",
+    "packageId",
+    "network",
+    "capabilityType",
+    "objectId",
+    "policyId",
+    "policyObjectId",
+    "projectId",
+    "ownerAddress",
+    "normalizedPolicyJson",
+  ] as const;
+  const differingKeys: string[] = keys.filter((key) => encryptPolicySnapshot[key] !== decryptPolicySnapshot[key]);
+  if (
+    encryptPolicySnapshot.walletAddress &&
+    encryptPolicySnapshot.walletAddress !== decryptPolicySnapshot.walletAddress
+  ) {
+    differingKeys.push("walletAddress");
+  }
+  if (encryptPolicySnapshot.serverObjectIds.join("\n") !== decryptPolicySnapshot.serverObjectIds.join("\n")) {
+    differingKeys.push("serverObjectIds");
+  }
+  return {
+    matches: differingKeys.length === 0,
+    differingKeys,
   };
 }
 

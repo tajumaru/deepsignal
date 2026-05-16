@@ -15,10 +15,13 @@ import {
   createOwnerScopedSealId,
   createProjectScopedSealId,
   createRealSealEnvelope,
+  createSealPolicySnapshot,
   doesSealIdMatchOwner,
   doesSealIdMatchProject,
   fromBase64,
   isLikelyWalletCancelError,
+  normalizeOptionalSealIdentifier,
+  normalizeSealIdentifier,
   parseRealSealEnvelope,
   REAL_SEAL_SESSION_TTL_MIN,
   SEAL_ADMIN_WALLET_REQUIRED_MESSAGE,
@@ -91,8 +94,10 @@ export const sealClientAdapter: SealAdapter = {
     if (!import.meta.env.VITE_SEAL_PACKAGE_ID || !serverConfig.objectId) {
       throw new Error(SEAL_NOT_CONFIGURED_MESSAGE);
     }
-    const projectId = context?.projectId?.trim() || undefined;
-    const ownerAddress = context?.ownerAddress?.trim() || undefined;
+    const projectId = normalizeOptionalSealIdentifier(context?.projectId);
+    const ownerAddress = normalizeOptionalSealIdentifier(context?.ownerAddress);
+    const packageId = normalizeSealIdentifier(import.meta.env.VITE_SEAL_PACKAGE_ID ?? "");
+    const serverObjectId = normalizeSealIdentifier(serverConfig.objectId);
     const objectId = projectId
       ? createProjectScopedSealId(projectId)
       : ownerAddress
@@ -101,24 +106,38 @@ export const sealClientAdapter: SealAdapter = {
     const data = new TextEncoder().encode(value);
     const { encryptedObject } = await sealClient.encrypt({
       threshold: 1,
-      packageId: import.meta.env.VITE_SEAL_PACKAGE_ID ?? "",
+      packageId,
       id: objectId,
       data,
+    });
+    const policyId = projectId ? "project_admin_v0" : "owner_wallet_v1";
+    const policyObjectId = projectId ?? ownerAddress ?? objectId;
+    const encryptPolicySnapshot = createSealPolicySnapshot({
+      network: SUI_NETWORK,
+      packageId,
+      objectId,
+      policyId,
+      policyObjectId,
+      projectId,
+      ownerAddress: projectId ? undefined : ownerAddress,
+      walletAddress: projectId ? undefined : ownerAddress,
+      serverObjectIds: [serverObjectId],
     });
 
     return JSON.stringify(
       createRealSealEnvelope({
         network: SUI_NETWORK,
-        packageId: import.meta.env.VITE_SEAL_PACKAGE_ID ?? "",
+        packageId,
         objectId,
         threshold: 1,
-        serverObjectIds: [serverConfig.objectId],
+        serverObjectIds: [serverObjectId],
         encryptedObject: toBase64(encryptedObject),
         projectId,
         ownerAddress: projectId ? undefined : ownerAddress,
-        policyId: projectId ? "project_admin_v0" : "owner_wallet_v1",
-        policyObjectId: projectId ?? ownerAddress ?? objectId,
-        approvalPolicy: projectId ? "project_admin_v0" : "owner_wallet_v1",
+        policyId,
+        policyObjectId,
+        approvalPolicy: policyId,
+        encryptPolicySnapshot,
       }),
     );
   },
@@ -137,21 +156,22 @@ export const sealClientAdapter: SealAdapter = {
     }
 
     context.onStatusChange?.("validating_access_policy");
-    const projectId = envelope.projectId ?? context.projectId?.trim();
-    const ownerAddress = envelope.ownerAddress ?? context.ownerAddress?.trim();
+    const projectId = normalizeOptionalSealIdentifier(envelope.projectId ?? context.projectId);
+    const ownerAddress = normalizeOptionalSealIdentifier(envelope.ownerAddress ?? context.ownerAddress);
+    const walletAddress = normalizeSealIdentifier(context.walletAddress);
     if (!projectId && !ownerAddress) {
       throw new Error(SEAL_PROJECT_CONTEXT_REQUIRED_MESSAGE);
     }
     if (!projectId && ownerAddress) {
       if (
-        context.walletAddress.toLowerCase() !== ownerAddress.toLowerCase() ||
+        walletAddress !== ownerAddress ||
         !doesSealIdMatchOwner(envelope.objectId, ownerAddress)
       ) {
         throw new Error(SEAL_PERMISSION_DENIED_MESSAGE);
       }
 
       const sessionKey = await getOrCreateSessionKey({
-        walletAddress: context.walletAddress,
+        walletAddress,
         packageId: envelope.packageId,
         suiClient: context.suiClient as SealCompatibleClient,
         signPersonalMessage: context.signPersonalMessage,
@@ -178,14 +198,14 @@ export const sealClientAdapter: SealAdapter = {
 
     try {
       const sessionKey = await getOrCreateSessionKey({
-        walletAddress: context.walletAddress,
+        walletAddress,
         packageId: envelope.packageId,
         suiClient: context.suiClient as SealCompatibleClient,
         signPersonalMessage: context.signPersonalMessage,
         onStatusChange: context.onStatusChange,
       });
 
-      const reviewerCapId = context.reviewerCapId?.trim() || undefined;
+      const reviewerCapId = normalizeOptionalSealIdentifier(context.reviewerCapId);
       const primaryApprovalPolicy =
         envelope.approvalPolicy ??
         (doesSealIdMatchProject(envelope.objectId, projectId)
@@ -224,7 +244,7 @@ export const sealClientAdapter: SealAdapter = {
           debugSealClientError(
             "primary_decrypt_failed",
             {
-              walletAddress: context.walletAddress,
+              walletAddress,
               packageId: envelope.packageId,
               objectId: envelope.objectId,
               projectId,
@@ -240,7 +260,7 @@ export const sealClientAdapter: SealAdapter = {
         debugSealClientError(
           "primary_decrypt_retrying_admin_policy",
           {
-            walletAddress: context.walletAddress,
+            walletAddress,
             packageId: envelope.packageId,
             objectId: envelope.objectId,
             projectId,
@@ -273,7 +293,7 @@ export const sealClientAdapter: SealAdapter = {
       debugSealClientError(
         "decrypt_failed",
         {
-          walletAddress: context.walletAddress,
+          walletAddress,
           packageId: envelope.packageId,
           objectId: envelope.objectId,
           projectId,
@@ -368,7 +388,7 @@ async function buildSealApproveTransactionBytes({
 }
 
 function createSessionCacheKey(walletAddress: string, packageId: string) {
-  return `${SESSION_KEY_STORAGE_PREFIX}:${walletAddress.toLowerCase()}:${packageId.toLowerCase()}`;
+  return `${SESSION_KEY_STORAGE_PREFIX}:${normalizeSealIdentifier(walletAddress)}:${normalizeSealIdentifier(packageId)}`;
 }
 
 async function getOrCreateSessionKey({
@@ -384,7 +404,9 @@ async function getOrCreateSessionKey({
   signPersonalMessage?: (message: Uint8Array) => Promise<string>;
   onStatusChange?: SealDecryptContext["onStatusChange"];
 }) {
-  const cacheKey = createSessionCacheKey(walletAddress, packageId);
+  const normalizedWalletAddress = normalizeSealIdentifier(walletAddress);
+  const normalizedPackageId = normalizeSealIdentifier(packageId);
+  const cacheKey = createSessionCacheKey(normalizedWalletAddress, normalizedPackageId);
   const cachedSessionKey = loadCachedSessionKey(cacheKey, activeSuiClient);
   if (cachedSessionKey) {
     return cachedSessionKey;
@@ -392,8 +414,8 @@ async function getOrCreateSessionKey({
   const pendingSessionKey = pendingSessionKeyPromises.get(cacheKey);
   if (pendingSessionKey) {
     debugSessionKeyCache("pending_reuse", {
-      walletAddress,
-      packageId,
+      walletAddress: normalizedWalletAddress,
+      packageId: normalizedPackageId,
     });
     return pendingSessionKey;
   }
@@ -404,8 +426,8 @@ async function getOrCreateSessionKey({
   const pendingPromise = (async () => {
     onStatusChange?.("waiting_wallet_approval");
     const sessionKey = await SessionKey.create({
-      address: walletAddress,
-      packageId,
+      address: normalizedWalletAddress,
+      packageId: normalizedPackageId,
       ttlMin: REAL_SEAL_SESSION_TTL_MIN,
       suiClient: activeSuiClient,
     });

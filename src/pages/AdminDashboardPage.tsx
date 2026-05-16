@@ -19,6 +19,7 @@ import { SignalStatusBadges } from "../components/SignalStatusBadges";
 import { SignalMetaChip, SignalMetaRow } from "../components/SignalMetaChip";
 import { AdminOperationsStatus } from "../features/admin/components/AdminOperationsStatus";
 import { AdminToast } from "../features/admin/components/AdminToast";
+import { CsvExportConfirmationModal } from "../features/admin/components/CsvExportConfirmationModal";
 import { SignalAttachmentList } from "../features/admin/components/SignalAttachmentList";
 import { SignalStreamsNav } from "../features/admin/components/SignalStreamsNav";
 import { useAdminToast } from "../features/admin/hooks/useAdminToast";
@@ -41,7 +42,15 @@ import {
   getRoleLabel,
 } from "../lib/adminAccess";
 import { getTriageStatusLabel, TRIAGE_STATUS_OPTIONS } from "../lib/signalOps";
-import { exportSubmissionJson, exportSubmissionsCsv } from "../lib/export";
+import { exportSubmissionJson } from "../lib/export";
+import {
+  buildExportMetadata,
+  exportResponsesToCsv,
+  type ExportMetadata,
+  type ExportPiiField,
+  type ResponsesCsvExportScope,
+  type ResponsesCsvSortOrder,
+} from "../lib/exportResponses";
 import { getEncryptedPayloadAvailabilityLabel, hasDedicatedEncryptedPayloadBlob } from "../lib/encryptionDisplay";
 import { getPublicFormPath, getPublicRoadmapPath } from "../lib/publicLinks";
 import { formatResponseDeadline, type ResponseDeadlineLabels } from "../lib/responseDeadline";
@@ -301,12 +310,13 @@ function MobileSignalInbox({
 }
 
 export function AdminDashboardPage() {
-  const { t } = useI18n();
+  const { language, t } = useI18n();
   const account = useCurrentAccount();
   const {
     capabilityProfile,
     isPending: isLoadingCapabilities,
     isLoadingAccess,
+    ownedObjects,
   } = useAccessControl(account?.address);
   const storageRuntime = getStorageRuntimeStatus();
   const responseDeadlineLabels: ResponseDeadlineLabels = {
@@ -324,6 +334,10 @@ export function AdminDashboardPage() {
   const [nodeDirectoryOpen, setNodeDirectoryOpen] = useState(false);
   const [beaconFormId, setBeaconFormId] = useState<string | null>(null);
   const [nodeSearch, setNodeSearch] = useState("");
+  const [csvExportScope, setCsvExportScope] = useState<ResponsesCsvExportScope>("filtered");
+  const [csvSortOrder, setCsvSortOrder] = useState<ResponsesCsvSortOrder>("createdAtDesc");
+  const [excludedCsvPiiFields, setExcludedCsvPiiFields] = useState<ExportPiiField[]>([]);
+  const [pendingCsvExportMetadata, setPendingCsvExportMetadata] = useState<ExportMetadata | null>(null);
   const { toast, setToast } = useAdminToast();
   const saveQueueRef = useRef(Promise.resolve());
   const reviewInboxRef = useRef<HTMLDivElement | null>(null);
@@ -409,6 +423,7 @@ export function AdminDashboardPage() {
     decryptState,
     decryptStatusMessage,
     decryptError,
+    decryptDiagnostics,
     setDecryptError,
     decryptInFlightRef,
     decryptContext: attachmentDecryptContext,
@@ -417,6 +432,7 @@ export function AdminDashboardPage() {
   } = usePrivateSignalDecrypt({
     accountAddress: account?.address,
     capabilityProfile,
+    ownedCapabilityObjects: ownedObjects,
     selectedRecord,
     selectedSignalId,
     setToast,
@@ -966,6 +982,115 @@ export function AdminDashboardPage() {
         "Owner wallet",
       ];
   const selectedFormSubmissionCount = selectedRecord ? (submissionsByFormId[selectedRecord.form.id] ?? []).length : 0;
+  const selectedFormFilteredExportCount = selectedRecord
+    ? visibleSignals.filter((record) => record.form.id === selectedRecord.form.id).length
+    : 0;
+  const selectedFormSelectedExportCount = selectedRecord ? 1 : 0;
+  const csvExportCount =
+    csvExportScope === "filtered"
+      ? selectedFormFilteredExportCount
+      : csvExportScope === "selected"
+        ? selectedFormSelectedExportCount
+        : selectedFormSubmissionCount;
+  const csvExportScopeLabel =
+    csvExportScope === "filtered"
+      ? t("filteredExportCount", { count: selectedFormFilteredExportCount })
+      : csvExportScope === "selected"
+        ? t("selectedResponsesCount", { count: selectedFormSelectedExportCount })
+      : t("allResponsesCount", { count: selectedFormSubmissionCount });
+
+  function getCsvFilterSnapshot() {
+    return {
+      searchQuery: search,
+      status: selectedStreamId === "all" ? undefined : `stream:${selectedStreamId}`,
+      priority: selectedStreamId === "high" ? "high" : undefined,
+      tags: search.trim() ? [search.trim()] : [],
+      triageStatus: undefined,
+      dateRange: {},
+    };
+  }
+
+  function getCsvExportResponses() {
+    if (!selectedRecord) {
+      return [];
+    }
+    const allFormResponses = (submissionsByFormId[selectedRecord.form.id] ?? []).map((submission) =>
+      normalizeSubmission(submission),
+    );
+    if (csvExportScope === "selected") {
+      return allFormResponses.filter((submission) => submission.id === selectedRecord.submission.id);
+    }
+    if (csvExportScope === "filtered") {
+      const filteredResponseIds = new Set(
+        visibleSignals
+          .filter((record) => record.form.id === selectedRecord.form.id)
+          .map((record) => record.submission.id),
+      );
+      return allFormResponses.filter((submission) => filteredResponseIds.has(submission.id));
+    }
+    return allFormResponses;
+  }
+
+  function getCsvResponseOverrides() {
+    return detailAnswers && selectedRecord
+      ? {
+          [selectedRecord.submission.id]: {
+            answers: detailAnswers,
+            attachments: detailAttachments,
+          },
+        }
+      : undefined;
+  }
+
+  function handleOpenCsvExportReview() {
+    if (!selectedRecord || csvExportCount === 0) {
+      setToast({ tone: "error", message: t("noResponsesMatchCurrentFilters") });
+      return;
+    }
+    const responses = getCsvExportResponses();
+    setPendingCsvExportMetadata(
+      buildExportMetadata(selectedRecord.form, responses, {
+        language,
+        scope: csvExportScope,
+        sortOrder: csvSortOrder,
+        excludedPiiFields: excludedCsvPiiFields,
+        exportedBy: account?.address ?? "",
+        filterSnapshot: getCsvFilterSnapshot(),
+        responseOverrides: getCsvResponseOverrides(),
+      }),
+    );
+  }
+
+  function handleToggleCsvPiiField(field: ExportPiiField) {
+    setExcludedCsvPiiFields((current) =>
+      current.includes(field) ? current.filter((item) => item !== field) : [...current, field],
+    );
+  }
+
+  function handleConfirmCsvExport() {
+    if (!selectedRecord) {
+      return;
+    }
+    const responses = getCsvExportResponses();
+    try {
+      const result = exportResponsesToCsv(selectedRecord.form, responses, {
+        language,
+        scope: csvExportScope,
+        sortOrder: csvSortOrder,
+        excludedPiiFields: excludedCsvPiiFields,
+        exportedBy: account?.address ?? "",
+        filterSnapshot: getCsvFilterSnapshot(),
+        responseOverrides: getCsvResponseOverrides(),
+      });
+      if (result?.exported) {
+        setPendingCsvExportMetadata(null);
+        setToast({ tone: "success", message: t("csvExported") });
+      }
+    } catch (error) {
+      console.error("CSV export failed", error);
+      setToast({ tone: "error", message: t("csvExportFailed") });
+    }
+  }
   const activeScopeLabel =
     selectedFormId === "all" ? t("allSignalNodes") : selectedForm?.title ?? t("selectedNode");
   const activeStreamLabel =
@@ -1052,6 +1177,44 @@ export function AdminDashboardPage() {
     >
       <section className="stack">
         <AdminToast toast={toast} />
+        {pendingCsvExportMetadata && selectedRecord ? (
+          <CsvExportConfirmationModal
+            metadata={buildExportMetadata(selectedRecord.form, getCsvExportResponses(), {
+              language,
+              scope: csvExportScope,
+              sortOrder: csvSortOrder,
+              excludedPiiFields: excludedCsvPiiFields,
+              exportedBy: account?.address ?? "",
+              filterSnapshot: getCsvFilterSnapshot(),
+              responseOverrides: getCsvResponseOverrides(),
+            })}
+            excludedPiiFields={excludedCsvPiiFields}
+            labels={{
+              title: t("exportReviewTitle"),
+              body: t("exportReviewBody"),
+              targetForm: t("targetForm"),
+              targetCount: t("targetCount"),
+              includedColumns: t("includedColumns"),
+              includesDecryptedData: t("includesDecryptedData"),
+              includesAttachmentInfo: t("includesAttachmentInfo"),
+              exportedBy: t("exportedBy"),
+              filterSnapshot: t("exportFilterSnapshot"),
+              personalInfoOptions: t("personalInfoOptions"),
+              omitWalletAddress: t("omitWalletAddress"),
+              omitRespondentAddress: t("omitRespondentAddress"),
+              omitNotes: t("omitNotes"),
+              omitAttachments: t("omitAttachments"),
+              omitDecryptedAnswers: t("omitDecryptedAnswers"),
+              yes: t("yes"),
+              no: t("no"),
+              cancel: t("cancel"),
+              confirm: t("confirmExport"),
+            }}
+            onTogglePiiField={handleToggleCsvPiiField}
+            onCancel={() => setPendingCsvExportMetadata(null)}
+            onConfirm={handleConfirmCsvExport}
+          />
+        ) : null}
 
         <section className="panel glow-panel workspace-hero workspace-hero-compact desktop-signal-inbox-hero">
           <div className="workspace-hero-main workspace-overview-shell">
@@ -1587,6 +1750,7 @@ export function AdminDashboardPage() {
                         unlockState={decryptState}
                         statusMessage={decryptStatusMessage}
                         errorMessage={decryptError}
+                        diagnostics={decryptDiagnostics}
                         disabledReason={selectedRecordUnlockDisabledReason}
                       >
                         {!isLocalFallbackBlob(selectedRecord.submission.encryptedBlobId) ? (
@@ -1839,22 +2003,43 @@ export function AdminDashboardPage() {
                             >
                               {t("exportJson")}
                             </button>
+                            <label className="review-select export-select">
+                              <span>{t("exportScope")}</span>
+                              <select
+                                value={csvExportScope}
+                                onChange={(event) => setCsvExportScope(event.target.value as ResponsesCsvExportScope)}
+                              >
+                                <option value="filtered">{t("exportVisibleFilteredResponses")}</option>
+                                <option value="all">{t("exportAllResponses")}</option>
+                                <option value="selected">{t("exportSelectedResponses")}</option>
+                              </select>
+                            </label>
+                            <label className="review-select export-select">
+                              <span>{t("csvSortOrder")}</span>
+                              <select
+                                value={csvSortOrder}
+                                onChange={(event) => setCsvSortOrder(event.target.value as ResponsesCsvSortOrder)}
+                              >
+                                <option value="createdAtDesc">{t("createdAtDesc")}</option>
+                                <option value="createdAtAsc">{t("createdAtAsc")}</option>
+                              </select>
+                            </label>
                             <button
                               type="button"
                               className="ghost-button"
-                              onClick={() =>
-                                exportSubmissionsCsv(
-                                  selectedRecord.form,
-                                  (submissionsByFormId[selectedRecord.form.id] ?? []).map((submission) => normalizeSubmission(submission)),
-                                )
-                              }
+                              onClick={handleOpenCsvExportReview}
+                              disabled={csvExportCount === 0}
                             >
                               {t("exportCsv")}
                             </button>
+                            <span className="signal-chip signal-chip-soft">{csvExportScopeLabel}</span>
                           </div>
                         </div>
+                        {csvExportCount === 0 ? (
+                          <p className="export-zero-note">{t("noResponsesMatchCurrentFilters")}</p>
+                        ) : null}
                         <p className="export-privacy-note">
-                          Private exports should be shared only with authorized team members.
+                          {t("exportCsvPrivacyNote")}
                         </p>
                       </section>
 

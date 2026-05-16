@@ -9,7 +9,7 @@ import {
   SEAL_PERMISSION_DENIED_MESSAGE,
   SEAL_WALLET_CANCELLED_MESSAGE,
 } from "../../../crypto/sealPayload";
-import { isDecryptDiagnosticError } from "../../../crypto/decryptDiagnostics";
+import { isDecryptDiagnosticError, type DecryptDiagnosticContext } from "../../../crypto/decryptDiagnostics";
 import type { CapabilityProfile } from "../../../hooks/useAccessControl";
 import { resolveSubmissionAnswers } from "../../../lib/storage";
 import type { Submission } from "../../../types";
@@ -85,6 +85,7 @@ function getFriendlyDecryptError(reasonCode: string, fallbackMessage: string) {
 interface UsePrivateSignalDecryptArgs {
   accountAddress?: string | null;
   capabilityProfile: CapabilityProfile;
+  ownedCapabilityObjects?: DecryptDiagnosticContext["ownedCapabilityObjects"];
   selectedRecord: SignalRecord | null;
   selectedSignalId: string;
   setToast: ToastSetter;
@@ -94,6 +95,7 @@ interface UsePrivateSignalDecryptArgs {
 export function usePrivateSignalDecrypt({
   accountAddress,
   capabilityProfile,
+  ownedCapabilityObjects,
   selectedRecord,
   selectedSignalId,
   setToast,
@@ -107,6 +109,7 @@ export function usePrivateSignalDecrypt({
   const [decrypting, setDecrypting] = useState(false);
   const [decryptStatusMessage, setDecryptStatusMessage] = useState("");
   const [decryptError, setDecryptError] = useState("");
+  const [decryptDiagnostics, setDecryptDiagnostics] = useState<DecryptDiagnosticContext | null>(null);
   const [decryptState, setDecryptState] = useState<PrivateSignalDecryptUiState>("locked");
   const decryptInFlightRef = useRef(false);
   const decryptRequestIdRef = useRef(0);
@@ -127,13 +130,14 @@ export function usePrivateSignalDecrypt({
         capabilityProfile.hasOwnerCap || capabilityProfile.hasAdminCap
           ? undefined
           : capabilityProfile.reviewerCapIds[0],
+      ownedCapabilityObjects,
       suiClient,
       signPersonalMessage: async (message: Uint8Array) => {
         const result = await signPersonalMessage.mutateAsync({ message });
         return result.signature;
       },
     }),
-    [accountAddress, capabilityProfile, selectedRecord?.form.ownerAddress, selectedRecord?.form.projectId, signPersonalMessage, suiClient],
+    [accountAddress, capabilityProfile, ownedCapabilityObjects, selectedRecord?.form.ownerAddress, selectedRecord?.form.projectId, signPersonalMessage, suiClient],
   );
 
   useEffect(() => {
@@ -142,6 +146,7 @@ export function usePrivateSignalDecrypt({
       setDetailAttachments([]);
       setDetailLegacyUnencrypted(false);
       setDecryptError("");
+      setDecryptDiagnostics(null);
       setDecryptState("locked");
       if (!decryptInFlightRef.current) {
         setDecryptStatusMessage("");
@@ -159,6 +164,7 @@ export function usePrivateSignalDecrypt({
       setDetailAttachments(selectedRecord.submission.attachments ?? []);
       setDetailLegacyUnencrypted(false);
       setDecryptError("");
+      setDecryptDiagnostics(null);
       setDecryptState(selectedRecord.submission.isEncrypted ? "locked" : "decrypted");
       if (!decryptInFlightRef.current) {
         setDecryptStatusMessage("");
@@ -179,6 +185,7 @@ export function usePrivateSignalDecrypt({
     setDecryptState("checking_access");
     setDecryptStatusMessage("Loading Seal runtime");
     setDecryptError("");
+    setDecryptDiagnostics(null);
     try {
       const resolved = await resolveSubmissionAnswers(
         selectedRecord.form,
@@ -242,6 +249,7 @@ export function usePrivateSignalDecrypt({
               ? getFriendlyDecryptError(reasonCode, error.message)
               : decryptFailedLabel,
         );
+        setDecryptDiagnostics(isDecryptDiagnosticError(error) ? error.diagnostics : null);
       }
     } finally {
       const isLatestRequest =
@@ -268,6 +276,7 @@ export function usePrivateSignalDecrypt({
     decryptState,
     decryptStatusMessage,
     decryptError,
+    decryptDiagnostics,
     setDecryptError,
     decryptInFlightRef,
     decryptContext,

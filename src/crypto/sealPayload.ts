@@ -38,6 +38,21 @@ export type RealSealApprovalPolicy =
   | "project_admin_v0"
   | "owner_wallet_v1";
 
+export interface SealPolicySnapshot {
+  policyHash: string;
+  packageId: string;
+  network: string;
+  capabilityType: string;
+  objectId: string;
+  policyId: RealSealApprovalPolicy | string;
+  policyObjectId: string;
+  projectId?: string;
+  ownerAddress?: string;
+  walletAddress?: string;
+  serverObjectIds: string[];
+  normalizedPolicyJson: string;
+}
+
 export interface RealSealEnvelope {
   kind: typeof REAL_SEAL_ENVELOPE_KIND;
   version: typeof REAL_SEAL_ENVELOPE_VERSION;
@@ -56,6 +71,7 @@ export interface RealSealEnvelope {
   projectId?: string;
   ownerAddress?: string;
   approvalPolicy?: RealSealApprovalPolicy;
+  encryptPolicySnapshot?: SealPolicySnapshot;
   createdAt: string;
 }
 
@@ -102,6 +118,8 @@ export function parseRealSealEnvelope(value: string): RealSealEnvelope | null {
         parsed.approvalPolicy !== "project_signal_v1" &&
         parsed.approvalPolicy !== "project_admin_v0" &&
         parsed.approvalPolicy !== "owner_wallet_v1") ||
+      (parsed.encryptPolicySnapshot !== undefined &&
+        (typeof parsed.encryptPolicySnapshot !== "object" || parsed.encryptPolicySnapshot === null)) ||
       typeof parsed.createdAt !== "string"
     ) {
       return null;
@@ -136,6 +154,101 @@ export function parseRealSealEnvelope(value: string): RealSealEnvelope | null {
   } catch {
     return null;
   }
+}
+
+export function normalizeSealIdentifier(value?: string | null) {
+  const trimmed = value?.trim().toLowerCase() ?? "";
+  if (!trimmed) {
+    return "";
+  }
+  return trimmed.startsWith("0x") ? trimmed : `0x${trimmed}`;
+}
+
+export function normalizeOptionalSealIdentifier(value?: string | null) {
+  const normalized = normalizeSealIdentifier(value);
+  return normalized || undefined;
+}
+
+export function getSealPolicyCapabilityType(policyId?: string) {
+  switch (policyId) {
+    case "owner_wallet_v1":
+      return "Owner wallet";
+    case "project_signal_reviewer_v1":
+    case "project_reviewer_v0":
+      return "ReviewerCap";
+    case "project_signal_v1":
+    case "project_admin_v0":
+      return "OwnerCap/AdminCap";
+    default:
+      return "Unknown";
+  }
+}
+
+export function stableSerializePolicy(value: Record<string, unknown>): string {
+  return JSON.stringify(sortPolicyValue(value));
+}
+
+export function hashSealPolicyJson(value: string) {
+  let hash = 0x811c9dc5;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return `fnv1a32:${(hash >>> 0).toString(16).padStart(8, "0")}`;
+}
+
+export function createSealPolicySnapshot(input: {
+  packageId: string;
+  network: string;
+  objectId: string;
+  policyId: RealSealApprovalPolicy | string;
+  policyObjectId: string;
+  projectId?: string;
+  ownerAddress?: string;
+  walletAddress?: string;
+  serverObjectIds?: string[];
+  capabilityType?: string;
+}) {
+  const packageId = normalizeSealIdentifier(input.packageId);
+  const objectId = normalizeSealIdentifier(input.objectId);
+  const policyObjectId = normalizeSealIdentifier(input.policyObjectId);
+  const projectId = normalizeOptionalSealIdentifier(input.projectId);
+  const ownerAddress = normalizeOptionalSealIdentifier(input.ownerAddress);
+  const walletAddress = normalizeOptionalSealIdentifier(input.walletAddress);
+  const serverObjectIds = (input.serverObjectIds ?? []).map(normalizeSealIdentifier).filter(Boolean);
+  const snapshotInput = {
+    packageId,
+    network: input.network,
+    objectId,
+    policyId: input.policyId,
+    policyObjectId,
+    projectId,
+    ownerAddress,
+    serverObjectIds,
+    capabilityType: input.capabilityType ?? getSealPolicyCapabilityType(input.policyId),
+  };
+  const normalizedPolicyJson = stableSerializePolicy(snapshotInput);
+  return {
+    ...snapshotInput,
+    walletAddress,
+    policyHash: hashSealPolicyJson(normalizedPolicyJson),
+    normalizedPolicyJson,
+  } satisfies SealPolicySnapshot;
+}
+
+function sortPolicyValue(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map(sortPolicyValue);
+  }
+  if (!value || typeof value !== "object") {
+    return value;
+  }
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>)
+      .filter(([, item]) => item !== undefined)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, item]) => [key, sortPolicyValue(item)]),
+  );
 }
 
 export function toBase64(value: Uint8Array) {
