@@ -19,6 +19,7 @@ import type {
   FormIdentityPolicy,
   FormSection,
   FormVisibility,
+  DisplayMode,
   MobileBuilderPane,
   PreparedPublishForm,
   ProjectOption,
@@ -71,7 +72,7 @@ interface PublishStepProps {
   storageRuntimeNotice?: string;
   storageRuntimeDiagnostics?: WalrusFailureDetails | null;
   walrusCostEstimate: WalrusCostEstimate | null;
-  hideLivePreview?: boolean;
+  displayMode?: DisplayMode;
   canManageProjects: boolean;
   selectedProjectId: string;
   selectedProject: ProjectOption | null;
@@ -194,7 +195,7 @@ export function PublishStep({
   storageRuntimeNotice,
   storageRuntimeDiagnostics,
   walrusCostEstimate,
-  hideLivePreview = false,
+  displayMode = "classic",
   canManageProjects,
   selectedProjectId,
   selectedProject,
@@ -210,6 +211,8 @@ export function PublishStep({
   onBack,
 }: PublishStepProps) {
   const isRegisteredOnSui = Boolean(savedForm?.isOnchain && typeof savedForm.onchainFormId === "number");
+  const isMirrorMode = displayMode === "mirror";
+  const hideLivePreview = isMirrorMode;
   const isLocalOnlyForm = Boolean(savedForm?.blobId && isLocalFallbackBlob(savedForm.blobId));
   const showFocusedSuccessCard = Boolean(savedForm && showPublishSuccessView);
   const beaconScrollRef = useRef<HTMLDivElement | null>(null);

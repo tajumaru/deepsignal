@@ -79,7 +79,7 @@ function createPreviewState(
     orderedFields.find((field) => field.id === values.activeFieldId) ??
     orderedFields[0];
   const isPrivate = Boolean(values.encryptSubmissions);
-  const visibilityLabel = values.visibility === "public" ? "Public form" : values.visibility === "unlisted" ? "Link-only form" : "Private draft";
+  const visibilityLabel = values.visibility === "public" ? "Public Signal" : values.visibility === "unlisted" ? "Link-only Signal" : "Private draft";
   const identityPolicyLabel = values.identityPolicy === "wallet_required" ? "Wallet required" : "No wallet required";
 
   return {
@@ -104,19 +104,19 @@ function createPreviewState(
 
 function MirrorMetadataBadges({ state }: { state: MirrorPreviewState }) {
   const badges: MirrorBadge[] = [
-    { label: state.publishedStatus === "published" ? "Live form" : "Demo preview", tone: state.publishedStatus === "published" ? "active" : "warning" },
+    { label: state.publishedStatus === "published" ? "Published Signal" : "Preview only", tone: state.publishedStatus === "published" ? "active" : "warning" },
     { label: state.signalModeLabel, tone: state.isPrivate ? "private" : "active" },
     { label: state.identityPolicyLabel },
-    { label: state.isReadyToPublish ? "Ready for judges" : "Review in progress", tone: state.isReadyToPublish ? "active" : "warning" },
-    { label: state.activeField ? "Question preview" : "No question yet", tone: state.activeField ? "active" : "warning" },
+    { label: state.isReadyToPublish ? "Ready to publish" : "Review in progress", tone: state.isReadyToPublish ? "active" : "warning" },
+    { label: state.activeField ? "Block mirror" : "No block yet", tone: state.activeField ? "active" : "warning" },
     { label: state.activeField?.required ? "Response required" : "Optional response" },
     { label: state.markdownSupported ? "Rich text enabled" : "Simple text input" },
-    { label: state.mediaSupported ? "Media upload enabled" : "Text-only form" , tone: state.mediaSupported ? "media" : "default" },
+    { label: state.mediaSupported ? "Media upload enabled" : "Text-only block" , tone: state.mediaSupported ? "media" : "default" },
     { label: state.hasConditionalLogic ? "Adaptive path" : "Step-by-step flow" },
   ];
 
   return (
-    <div className="mirror-metadata-badges" aria-label="Mirror question metadata">
+    <div className="mirror-metadata-badges" aria-label="Mirror block metadata">
       {badges.map((badge) => (
         <span key={badge.label} className={`mirror-metadata-badge is-${badge.tone ?? "default"}`}>
           {badge.label}
@@ -137,9 +137,9 @@ function MirrorObjectCard({ state }: { state: MirrorPreviewState }) {
         <span className="mirror-object-core-tusk mirror-object-core-tusk-right" />
       </div>
       <div className="mirror-object-copy">
-        <span className="mirror-object-kicker">Walrus-native signal form</span>
+        <span className="mirror-object-kicker">object::signal_form</span>
         <strong>{state.title}</strong>
-        <small>{state.fieldCount} field{state.fieldCount === 1 ? "" : "s"} available in this preview</small>
+        <small>{state.fieldCount} block{state.fieldCount === 1 ? "" : "s"} reflected in this signal object</small>
       </div>
       <div className="mirror-object-ledger">
         <span>Storage</span>
@@ -152,13 +152,13 @@ function MirrorObjectCard({ state }: { state: MirrorPreviewState }) {
 function MirrorSignalMetadata({ state }: { state: MirrorPreviewState }) {
   const sealedLabel = state.isPrivate ? "Encrypted responses" : "Response privacy";
   const rows = [
-    ["Status", state.publishedStatus === "published" ? "Live form" : "Demo preview"],
-    ["Storage mode", "Local preview"],
-    ["Schema v1", `${state.fieldCount} fields`],
+    ["Status", state.publishedStatus === "published" ? "Published Signal" : "Preview only"],
+    ["Walrus ref", "preview.local"],
+    ["Schema v1", `${state.fieldCount} blocks`],
     ["Visibility", state.visibilityLabel],
     [sealedLabel, state.isPrivate ? "Seal enabled" : "Standard intake"],
     ["Responder access", state.identityPolicyLabel],
-    ["Review status", state.isReadyToPublish ? "Ready" : "Needs review"],
+    ["Publish readiness", state.isReadyToPublish ? "Ready" : "Needs review"],
   ];
 
   return (
@@ -176,10 +176,10 @@ function MirrorSignalMetadata({ state }: { state: MirrorPreviewState }) {
 function MirrorPublishReadiness({ state }: { state: MirrorPreviewState }) {
   const checks: Array<[string, boolean]> = [
     ["Title is set", state.title !== state.titleFallback],
-    ["At least 1 question", state.fieldCount > 0],
-    ["Required fields reviewed", true],
+    ["At least 1 block", state.fieldCount > 0],
+    ["Required blocks reviewed", true],
     ["Privacy mode selected", Boolean(state.signalModeLabel)],
-    ["Ready for judges", state.isReadyToPublish],
+    ["Ready to publish", state.isReadyToPublish],
   ];
 
   return (
@@ -224,8 +224,8 @@ function MirrorQuestionPreview({ state }: { state: MirrorPreviewState }) {
         </div>
         <div>
           <p className="eyebrow">Empty Signal</p>
-          <h3>No questions in this preview yet</h3>
-          <p className="muted">Add a question on the left to show how responders will experience this form.</p>
+          <h3>No blocks in this mirror yet</h3>
+          <p className="muted">Compose a block on the left to start shaping the signal object.</p>
         </div>
       </section>
     );
@@ -311,13 +311,13 @@ export function MirrorPreviewPanel({
   );
 
   return (
-    <aside className="panel glow-panel mirror-preview-panel mirror-theme-surface" aria-label="Mirror Preview Panel">
+    <aside className="panel glow-panel mirror-preview-panel mirror-theme-surface" aria-label="Signal Mirror Panel">
       <div className="mirror-panel-header">
         <div>
-          <p className="eyebrow">Judge Preview</p>
+          <p className="eyebrow">Signal Mirror</p>
           <h2>{state.title}</h2>
         </div>
-        <span className="mirror-preview-only-pill">{state.publishedStatus === "published" ? "Live form" : "Demo preview"}</span>
+        <span className="mirror-preview-only-pill">{state.publishedStatus === "published" ? "Published" : "Preview only"}</span>
       </div>
 
       <p className="mirror-description">{state.description}</p>

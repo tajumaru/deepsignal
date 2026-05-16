@@ -29,6 +29,7 @@ export type {
 
 export type PublishStageKey = "encoding" | "encrypting" | "sending" | "stored" | "registering" | "active";
 export type BuilderStepKey = "template" | "info" | "fields" | "publish";
+export type DisplayMode = "classic" | "mirror";
 export type MobileBuilderPane = "editor" | "preview";
 export type ResponseDeadlinePreset = "none" | "1h" | "24h" | "7d" | "30d" | "custom";
 

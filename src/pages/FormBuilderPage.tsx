@@ -22,19 +22,20 @@ import { TemplateStep } from "../features/createForm/components/TemplateStep";
 import { getCreateFormEncryptionReadiness } from "../features/createForm/encryptionReadiness";
 import { useCreateFormBuilder } from "../features/createForm/hooks/useCreateFormBuilder";
 import { useCreateFormPublish } from "../features/createForm/hooks/useCreateFormPublish";
+import type { DisplayMode } from "../features/createForm/types";
 import { getStorageRuntimeStatus, subscribeStorageRuntime } from "../storage/storageFactory";
 
 interface FormBuilderComposerProps {
   mode: "admin" | "guestDraft";
   freshStartToken: string;
-  initialPreviewMode?: "classic" | "mirror";
+  initialDisplayMode?: DisplayMode;
   draftSeed: {
     templateKey?: string;
     idea?: string;
   };
 }
 
-function FormBuilderComposer({ mode, freshStartToken, initialPreviewMode = "classic", draftSeed }: FormBuilderComposerProps) {
+function FormBuilderComposer({ mode, freshStartToken, initialDisplayMode = "classic", draftSeed }: FormBuilderComposerProps) {
   const { t } = useI18n();
   const account = useCurrentAccount();
   const { currentWallet, isConnected } = useCurrentWallet();
@@ -46,7 +47,8 @@ function FormBuilderComposer({ mode, freshStartToken, initialPreviewMode = "clas
   const [isScrolled, setIsScrolled] = useState(false);
   const [storageRuntime, setStorageRuntime] = useState(() => getStorageRuntimeStatus());
   const [showPublishSuccessView, setShowPublishSuccessView] = useState(false);
-  const [previewMode, setPreviewMode] = useState<"classic" | "mirror">(initialPreviewMode);
+  const [displayMode, setDisplayMode] = useState<DisplayMode>(initialDisplayMode);
+  const isMirrorMode = displayMode === "mirror";
   const hasAdminAccess = canAdmin(capabilityProfile);
   const isGuestDraftMode = mode === "guestDraft";
 
@@ -55,7 +57,7 @@ function FormBuilderComposer({ mode, freshStartToken, initialPreviewMode = "clas
     projects,
     freshStartToken,
     mode: isGuestDraftMode ? "guestDraft" : "admin",
-    startExperience: initialPreviewMode,
+    startExperience: initialDisplayMode,
     draftSeed,
   });
   const selectedProjectForPublish = hasAdminAccess ? builder.selectedProject : null;
@@ -194,7 +196,7 @@ function FormBuilderComposer({ mode, freshStartToken, initialPreviewMode = "clas
   const builderForm = (
     <form id="create-form" className="composer-stage composer-step-stage" onSubmit={publish.handleSubmit}>
       {builder.values.currentStep === "template" ? (
-        previewMode === "mirror" ? (
+        isMirrorMode ? (
           <IntentStartStep onApplyDraft={builder.applyIntentDraft} />
         ) : (
           <TemplateStep
@@ -253,7 +255,7 @@ function FormBuilderComposer({ mode, freshStartToken, initialPreviewMode = "clas
           onOpenFieldTypePicker={() => builder.setFieldTypePickerOpen(true)}
           onBack={() => builder.moveStep(-1)}
           onContinue={handleFieldsContinue}
-          presentation={previewMode === "mirror" ? "mirror" : "classic"}
+          displayMode={displayMode}
         />
       ) : null}
 
@@ -293,7 +295,7 @@ function FormBuilderComposer({ mode, freshStartToken, initialPreviewMode = "clas
           storageRuntimeNotice={storageRuntime.notice ?? undefined}
           storageRuntimeDiagnostics={storageRuntime.diagnostics}
           walrusCostEstimate={publish.walrusCostEstimate}
-          hideLivePreview={previewMode === "mirror"}
+          displayMode={displayMode}
           canManageProjects={hasAdminAccess}
           selectedProjectId={builder.values.selectedProjectId}
           selectedProject={hasAdminAccess ? builder.selectedProject : null}
@@ -360,20 +362,20 @@ function FormBuilderComposer({ mode, freshStartToken, initialPreviewMode = "clas
         <section className="panel composer-view-mode-panel" aria-label="Create Form display mode">
           <div>
             <p className="eyebrow">Display Mode</p>
-            <strong>{previewMode === "mirror" ? "Mirror Preview Mode" : "Classic Builder"}</strong>
+            <strong>{isMirrorMode ? "Mirror Preview Mode" : "Classic Builder"}</strong>
           </div>
           <div className="composer-view-mode-toggle" role="group" aria-label="Switch Create Form display mode">
             <button
               type="button"
-              className={previewMode === "classic" ? "is-active" : ""}
-              onClick={() => setPreviewMode("classic")}
+              className={displayMode === "classic" ? "is-active" : ""}
+              onClick={() => setDisplayMode("classic")}
             >
               Classic
             </button>
             <button
               type="button"
-              className={previewMode === "mirror" ? "is-active" : ""}
-              onClick={() => setPreviewMode("mirror")}
+              className={displayMode === "mirror" ? "is-active" : ""}
+              onClick={() => setDisplayMode("mirror")}
             >
               Mirror
             </button>
@@ -397,7 +399,7 @@ function FormBuilderComposer({ mode, freshStartToken, initialPreviewMode = "clas
           </section>
         ) : null}
 
-        {previewMode === "mirror" ? (
+        {isMirrorMode ? (
           <div className="composer-mirror-layout">
             <div className="composer-mirror-builder">{builderForm}</div>
             <MirrorPreviewPanel
@@ -440,7 +442,7 @@ export function FormBuilderPage() {
   const searchParams = new URLSearchParams(location.search);
   const requestedGuestDraftMode = searchParams.get("mode") === "guestDraft";
   const freshStartToken = searchParams.get("fresh") ?? "";
-  const initialPreviewMode = searchParams.get("preview") === "mirror" ? "mirror" : "classic";
+  const initialDisplayMode: DisplayMode = searchParams.get("preview") === "mirror" ? "mirror" : "classic";
   const draftSeed = {
     templateKey: searchParams.get("template") ?? undefined,
     idea: searchParams.get("idea") ?? undefined,
@@ -463,7 +465,7 @@ export function FormBuilderPage() {
       key={`${mode}:${freshStartToken || "restored"}`}
       mode={mode}
       freshStartToken={freshStartToken}
-      initialPreviewMode={initialPreviewMode}
+      initialDisplayMode={initialDisplayMode}
       draftSeed={draftSeed}
     />
   );

@@ -19,6 +19,7 @@ import { getSelectedProjectId, setSelectedProjectId } from "../../../lib/project
 import { INITIAL_DRAFT_SNAPSHOT, initialFields, initialTemplate } from "../constants";
 import type {
   BuilderStepKey,
+  DisplayMode,
   FieldType,
   FieldsStepValidationResult,
   FormBuilderValues,
@@ -45,7 +46,7 @@ interface UseCreateFormBuilderArgs {
   projects: ProjectOption[];
   freshStartToken?: string;
   mode?: "admin" | "guestDraft";
-  startExperience?: "classic" | "mirror";
+  startExperience?: DisplayMode;
   draftSeed?: {
     templateKey?: string;
     idea?: string;

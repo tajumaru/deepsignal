@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type DragEvent } from "react";
 import { FormFieldEditor } from "../../../components/FormFieldEditor";
 import { getConditionalChildFields, getOrderedFields } from "../../../utils/formLogic";
-import type { FieldType, FormBuilderRefs, FormField, FormSection, Translate } from "../types";
+import type { DisplayMode, FieldType, FormBuilderRefs, FormField, FormSection, Translate } from "../types";
 import { StepNavigationActions } from "./StepNavigationActions";
 
 interface FieldsStepProps {
@@ -31,7 +31,7 @@ interface FieldsStepProps {
   onOpenFieldTypePicker: () => void;
   onBack: () => void;
   onContinue: () => void;
-  presentation?: "classic" | "mirror";
+  displayMode?: DisplayMode;
 }
 
 const libraryBlocks: Array<{
@@ -90,10 +90,10 @@ export function FieldsStep({
   onOpenFieldTypePicker,
   onBack,
   onContinue,
-  presentation = "classic",
+  displayMode = "classic",
 }: FieldsStepProps) {
   const [expandedFieldId, setExpandedFieldId] = useState(fields[0]?.id ?? "");
-  const isMirrorPresentation = presentation === "mirror";
+  const isMirrorPresentation = displayMode === "mirror";
 
   useEffect(() => {
     if (!fields.length) {
@@ -176,7 +176,7 @@ export function FieldsStep({
           sections={sections}
           isDragging={draggedFieldId === field.id}
           isExpanded={expandedFieldId === field.id}
-          presentation={presentation}
+          presentation={displayMode}
           dropIndicator={dragOverFieldId === field.id ? dragOverPlacement : null}
           onChange={(nextField) => onUpdateField(index, nextField)}
           onRemove={() => onRemoveField(field.id)}
@@ -209,7 +209,7 @@ export function FieldsStep({
                 sections={sections}
                 isDragging={draggedFieldId === child.id}
                 isExpanded={expandedFieldId === child.id}
-                presentation={presentation}
+                presentation={displayMode}
                 dropIndicator={dragOverFieldId === child.id ? dragOverPlacement : null}
                 onChange={(nextField) => onUpdateField(childIndex, nextField)}
                 onRemove={() => onRemoveField(child.id)}
@@ -370,7 +370,9 @@ export function FieldsStep({
                   </div>
                 ) : (
                   <div className="composer-section-empty">
-                    <p className="muted composer-inline-empty">{t("sectionEmptyQuestions")}</p>
+                    <p className="muted composer-inline-empty">
+                      {isMirrorPresentation ? "This flow is ready for a composed block." : t("sectionEmptyQuestions")}
+                    </p>
                     <button
                       type="button"
                       className="ghost-button"
