@@ -38,6 +38,12 @@ export type RealSealApprovalPolicy =
   | "project_admin_v0"
   | "owner_wallet_v1";
 
+export type ProjectSealApprovalPolicy =
+  | "project_signal_v1"
+  | "project_admin_v0"
+  | "project_signal_reviewer_v1"
+  | "project_reviewer_v0";
+
 export interface SealPolicySnapshot {
   policyHash: string;
   packageId: string;
@@ -181,6 +187,40 @@ export function getSealPolicyCapabilityType(policyId?: string) {
       return "OwnerCap/AdminCap";
     default:
       return "Unknown";
+  }
+}
+
+export function selectProjectSealApprovalPolicy({
+  envelopeApprovalPolicy,
+  objectId,
+  projectId,
+  reviewerCapId,
+}: {
+  envelopeApprovalPolicy?: ProjectSealApprovalPolicy | string;
+  objectId: string;
+  projectId: string;
+  reviewerCapId?: string;
+}): ProjectSealApprovalPolicy {
+  const isProjectScopedSignal = safelyDoesSealIdMatchProject(objectId, projectId);
+  if (reviewerCapId) {
+    return isProjectScopedSignal ? "project_signal_reviewer_v1" : "project_reviewer_v0";
+  }
+  if (
+    envelopeApprovalPolicy === "project_signal_v1" ||
+    envelopeApprovalPolicy === "project_admin_v0" ||
+    envelopeApprovalPolicy === "project_signal_reviewer_v1" ||
+    envelopeApprovalPolicy === "project_reviewer_v0"
+  ) {
+    return envelopeApprovalPolicy;
+  }
+  return isProjectScopedSignal ? "project_signal_v1" : "project_admin_v0";
+}
+
+function safelyDoesSealIdMatchProject(objectId: string, projectId: string) {
+  try {
+    return doesSealIdMatchProject(objectId, projectId);
+  } catch {
+    return false;
   }
 }
 

@@ -637,7 +637,6 @@ export async function resolveSubmissionAnswers(
       const decryptPolicySnapshot = buildSealDecryptPolicySnapshot({
         envelope,
         context,
-        approvalPolicy: envelope.approvalPolicy ?? envelope.policyId,
       });
       const policySnapshotComparison = compareSealPolicySnapshots(
         envelope.encryptPolicySnapshot,

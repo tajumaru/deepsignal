@@ -17,7 +17,6 @@ import {
   createRealSealEnvelope,
   createSealPolicySnapshot,
   doesSealIdMatchOwner,
-  doesSealIdMatchProject,
   fromBase64,
   isLikelyWalletCancelError,
   normalizeOptionalSealIdentifier,
@@ -32,6 +31,7 @@ import {
   SEAL_RUNTIME_UNAVAILABLE_MESSAGE,
   SEAL_SESSION_EXPIRED_MESSAGE,
   SEAL_WALLET_CANCELLED_MESSAGE,
+  selectProjectSealApprovalPolicy,
   toBase64,
 } from "./sealPayload";
 
@@ -206,15 +206,12 @@ export const sealClientAdapter: SealAdapter = {
       });
 
       const reviewerCapId = normalizeOptionalSealIdentifier(context.reviewerCapId);
-      const primaryApprovalPolicy =
-        envelope.approvalPolicy ??
-        (doesSealIdMatchProject(envelope.objectId, projectId)
-          ? reviewerCapId
-            ? "project_signal_reviewer_v1"
-            : "project_signal_v1"
-          : reviewerCapId
-            ? "project_reviewer_v0"
-            : "project_admin_v0");
+      const primaryApprovalPolicy = selectProjectSealApprovalPolicy({
+        envelopeApprovalPolicy: envelope.approvalPolicy,
+        objectId: envelope.objectId,
+        projectId,
+        reviewerCapId,
+      });
 
       let plaintext: Uint8Array;
       try {

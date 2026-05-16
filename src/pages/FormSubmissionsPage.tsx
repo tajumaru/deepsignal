@@ -29,6 +29,7 @@ import {
   buildExportMetadata,
   exportResponsesToCsv,
   type ExportMetadata,
+  type ExportResponsesToCsvOptions,
   type ExportPiiField,
   type ResponsesCsvExportScope,
   type ResponsesCsvSortOrder,
@@ -181,6 +182,8 @@ export function FormSubmissionsPage() {
   const [csvSortOrder, setCsvSortOrder] = useState<ResponsesCsvSortOrder>("createdAtDesc");
   const [excludedCsvPiiFields, setExcludedCsvPiiFields] = useState<ExportPiiField[]>([]);
   const [pendingCsvExportMetadata, setPendingCsvExportMetadata] = useState<ExportMetadata | null>(null);
+  const [pendingCsvExportResponses, setPendingCsvExportResponses] = useState<Submission[]>([]);
+  const [pendingCsvExportOptions, setPendingCsvExportOptions] = useState<ExportResponsesToCsvOptions | null>(null);
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState<{ tone: "success" | "error"; message: string } | null>(null);
   const saveQueueRef = useRef(Promise.resolve());
@@ -770,42 +773,50 @@ export function FormSubmissionsPage() {
       setToast({ tone: "error", message: t("noResponsesMatchCurrentFilters") });
       return;
     }
-    setPendingCsvExportMetadata(
-      buildExportMetadata(form, responses, {
-        language,
-        scope: csvExportScope,
-        sortOrder: csvSortOrder,
-        excludedPiiFields: excludedCsvPiiFields,
-        exportedBy: account?.address ?? "",
-        filterSnapshot: getCsvFilterSnapshot(),
-        responseOverrides: getCsvResponseOverrides(),
-      }),
-    );
+    const options: ExportResponsesToCsvOptions = {
+      language,
+      now: new Date(),
+      scope: csvExportScope,
+      sortOrder: csvSortOrder,
+      excludedPiiFields: excludedCsvPiiFields,
+      exportedBy: account?.address ?? "",
+      filterSnapshot: getCsvFilterSnapshot(),
+      responseOverrides: getCsvResponseOverrides(),
+    };
+    const metadata = buildExportMetadata(form, responses, options);
+    setPendingCsvExportResponses(responses);
+    setPendingCsvExportMetadata(metadata);
+    setPendingCsvExportOptions({ ...options, metadata });
   }
 
   function handleToggleCsvPiiField(field: ExportPiiField) {
-    setExcludedCsvPiiFields((current) =>
-      current.includes(field) ? current.filter((item) => item !== field) : [...current, field],
-    );
+    setExcludedCsvPiiFields((current) => {
+      const next = current.includes(field) ? current.filter((item) => item !== field) : [...current, field];
+      if (form && pendingCsvExportMetadata && pendingCsvExportOptions) {
+        const nextOptions: ExportResponsesToCsvOptions = {
+          ...pendingCsvExportOptions,
+          excludedPiiFields: next,
+          now: new Date(pendingCsvExportMetadata.exportedAt),
+          metadata: undefined,
+        };
+        const nextMetadata = buildExportMetadata(form, pendingCsvExportResponses, nextOptions);
+        setPendingCsvExportMetadata(nextMetadata);
+        setPendingCsvExportOptions({ ...nextOptions, metadata: nextMetadata });
+      }
+      return next;
+    });
   }
 
   function handleConfirmCsvExport() {
-    if (!form) {
+    if (!form || !pendingCsvExportOptions) {
       return;
     }
     try {
-      const responses = getCsvExportResponses();
-      const result = exportResponsesToCsv(form, responses, {
-        language,
-        scope: csvExportScope,
-        sortOrder: csvSortOrder,
-        excludedPiiFields: excludedCsvPiiFields,
-        exportedBy: account?.address ?? "",
-        filterSnapshot: getCsvFilterSnapshot(),
-        responseOverrides: getCsvResponseOverrides(),
-      });
+      const result = exportResponsesToCsv(form, pendingCsvExportResponses, pendingCsvExportOptions);
       if (result?.exported) {
         setPendingCsvExportMetadata(null);
+        setPendingCsvExportResponses([]);
+        setPendingCsvExportOptions(null);
         setToast({ tone: "success", message: t("csvExported") });
       }
     } catch (error) {
@@ -1218,15 +1229,7 @@ export function FormSubmissionsPage() {
         ) : null}
         {pendingCsvExportMetadata && form ? (
           <CsvExportConfirmationModal
-            metadata={buildExportMetadata(form, getCsvExportResponses(), {
-              language,
-              scope: csvExportScope,
-              sortOrder: csvSortOrder,
-              excludedPiiFields: excludedCsvPiiFields,
-              exportedBy: account?.address ?? "",
-              filterSnapshot: getCsvFilterSnapshot(),
-              responseOverrides: getCsvResponseOverrides(),
-            })}
+            metadata={pendingCsvExportMetadata}
             excludedPiiFields={excludedCsvPiiFields}
             labels={{
               title: t("exportReviewTitle"),
@@ -1240,7 +1243,6 @@ export function FormSubmissionsPage() {
               filterSnapshot: t("exportFilterSnapshot"),
               personalInfoOptions: t("personalInfoOptions"),
               omitWalletAddress: t("omitWalletAddress"),
-              omitRespondentAddress: t("omitRespondentAddress"),
               omitNotes: t("omitNotes"),
               omitAttachments: t("omitAttachments"),
               omitDecryptedAnswers: t("omitDecryptedAnswers"),
@@ -1250,7 +1252,11 @@ export function FormSubmissionsPage() {
               confirm: t("confirmExport"),
             }}
             onTogglePiiField={handleToggleCsvPiiField}
-            onCancel={() => setPendingCsvExportMetadata(null)}
+            onCancel={() => {
+              setPendingCsvExportMetadata(null);
+              setPendingCsvExportResponses([]);
+              setPendingCsvExportOptions(null);
+            }}
             onConfirm={handleConfirmCsvExport}
           />
         ) : null}

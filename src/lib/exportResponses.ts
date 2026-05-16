@@ -16,7 +16,7 @@ interface ResponseExportOverride {
 
 export type ResponsesCsvSortOrder = "createdAtDesc" | "createdAtAsc";
 export type ResponsesCsvExportScope = "filtered" | "all" | "selected";
-export type ExportPiiField = "walletAddress" | "respondentAddress" | "notes" | "attachments" | "decryptedAnswers";
+export type ExportPiiField = "walletAddress" | "notes" | "attachments" | "decryptedAnswers";
 
 export interface ExportFilterSnapshot {
   searchQuery?: string;
@@ -39,6 +39,7 @@ export interface ExportResponsesToCsvOptions {
   excludedPiiFields?: ExportPiiField[];
   exportedBy?: string;
   filterSnapshot?: ExportFilterSnapshot;
+  metadata?: ExportMetadata;
 }
 
 export interface ExportMetadata {
@@ -186,9 +187,6 @@ export function buildColumns(form: FormSchema, options: ExportResponsesToCsvOpti
   if (!isExcluded(options.excludedPiiFields, "walletAddress")) {
     columns.push("walletAddress");
   }
-  if (!isExcluded(options.excludedPiiFields, "respondentAddress")) {
-    columns.push("respondentAddress");
-  }
 
   columns.push("isAnonymous", "walrusBlobId", "storageBlobId");
 
@@ -238,7 +236,6 @@ export function buildRows(
   const language = options.language ?? "en";
   const sortedResponses = sortResponsesByCreatedAt(responses, options.sortOrder ?? "createdAtDesc");
   const omitWalletAddress = isExcluded(options.excludedPiiFields, "walletAddress");
-  const omitRespondentAddress = isExcluded(options.excludedPiiFields, "respondentAddress");
   const omitAttachments = isExcluded(options.excludedPiiFields, "attachments");
   const omitNotes = isExcluded(options.excludedPiiFields, "notes");
   const omitDecryptedAnswers = isExcluded(options.excludedPiiFields, "decryptedAnswers");
@@ -249,7 +246,6 @@ export function buildRows(
     const attachments = override?.attachments ?? submission.attachments ?? [];
     const respondentMeta = getSubmissionRespondentMeta(submission);
     const walletAddress = respondentMeta.isAnonymous ? "" : respondentMeta.walletAddress ?? "";
-    const respondentAddress = respondentMeta.isAnonymous ? "" : respondentMeta.walletAddress ?? "";
     const storageBlobId = submission.blobId ?? submission.encryptedBlobId ?? submission.receiptBlobId ?? "";
     const walrusBlobId = submission.blobId ?? submission.encryptedBlobId ?? "";
     const row = [
@@ -263,9 +259,6 @@ export function buildRows(
 
     if (!omitWalletAddress) {
       row.push(walletAddress);
-    }
-    if (!omitRespondentAddress) {
-      row.push(respondentAddress);
     }
 
     row.push(respondentMeta.isAnonymous ? "true" : "false", walrusBlobId, storageBlobId);
@@ -290,7 +283,7 @@ export function buildResponsesCsv(
   responses: Submission[],
   options: ExportResponsesToCsvOptions = {},
 ) {
-  const metadata = buildExportMetadata(form, responses, options);
+  const metadata = options.metadata ?? buildExportMetadata(form, responses, options);
   const rows = buildRows(form, responses, metadata, options);
   return [metadata.columns, ...rows]
     .map((row) => row.map(sanitizeCsvCell).join(","))
@@ -332,6 +325,8 @@ export function recordExportAuditLog(metadata: ExportMetadata) {
   } catch (error) {
     console.warn("Failed to persist export audit log", error);
   }
+  // This is intentionally a local audit sink for the MVP. Future production
+  // operators can mirror this entry to on-chain, Walrus, or server audit trails.
   return entry;
 }
 
@@ -353,8 +348,8 @@ export function exportResponsesToCsv(
   responses: Submission[],
   options: ExportResponsesToCsvOptions = {},
 ) {
-  const metadata = buildExportMetadata(form, responses, options);
-  const csv = buildCsvFile(form, responses, options);
+  const metadata = options.metadata ?? buildExportMetadata(form, responses, options);
+  const csv = buildCsvFile(form, responses, { ...options, metadata });
   const filename = getResponsesCsvFilename(form.title || form.id, options.now);
   downloadCsv(filename, csv);
   const auditEntry = recordExportAuditLog(metadata);

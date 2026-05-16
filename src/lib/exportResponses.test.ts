@@ -62,10 +62,10 @@ describe("responses CSV export", () => {
 
     const [header, row] = csv.split("\r\n");
     expect(header).toBe(
-      '"formTitle","exportedAt","responseCount","responseId","submittedAt","createdAt","walletAddress","respondentAddress","isAnonymous","walrusBlobId","storageBlobId","attachments","tags","priority","triageStatus","status","notes","Comment","Score","Comment (2)"',
+      '"formTitle","exportedAt","responseCount","responseId","submittedAt","createdAt","walletAddress","isAnonymous","walrusBlobId","storageBlobId","attachments","tags","priority","triageStatus","status","notes","Comment","Score","Comment (2)"',
     );
     expect(row).toContain(
-      '"Feedback","2026-05-16T12:00:00.000Z","1","response-1","2026-05-16T01:02:03.000Z","2026-05-16T01:02:03.000Z","0xabc","0xabc","false","walrus-blob-1","walrus-blob-1"',
+      '"Feedback","2026-05-16T12:00:00.000Z","1","response-1","2026-05-16T01:02:03.000Z","2026-05-16T01:02:03.000Z","0xabc","false","walrus-blob-1","walrus-blob-1"',
     );
     expect(row).toContain('"日本語, comma, and ""quotes""\nsecond line"');
     expect(row.endsWith(',"5",""')).toBe(true);
@@ -87,7 +87,7 @@ describe("responses CSV export", () => {
     ]);
 
     expect(csv).toContain(
-      '"response-locked","2026-05-16T02:00:00.000Z","2026-05-16T01:02:03.000Z","","","true","encrypted-blob-1","encrypted-blob-1"',
+      '"response-locked","2026-05-16T02:00:00.000Z","2026-05-16T01:02:03.000Z","","true","encrypted-blob-1","encrypted-blob-1"',
     );
     expect(csv).toContain('"[encrypted]","[encrypted]","[encrypted]"');
   });
@@ -190,12 +190,11 @@ describe("responses CSV export", () => {
           },
         }),
       ],
-      { excludedPiiFields: ["walletAddress", "respondentAddress", "notes", "attachments"] },
+      { excludedPiiFields: ["walletAddress", "notes", "attachments"] },
     );
 
     const [header, row] = csv.split("\r\n");
     expect(header).not.toContain("walletAddress");
-    expect(header).not.toContain("respondentAddress");
     expect(header).not.toContain("notes");
     expect(header).not.toContain("attachments");
     expect(row).not.toContain("0xabc");

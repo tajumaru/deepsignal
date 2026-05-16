@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import type { ExportMetadata, ExportPiiField } from "../../../lib/exportResponses";
 
 interface CsvExportConfirmationModalLabels {
@@ -12,7 +13,6 @@ interface CsvExportConfirmationModalLabels {
   filterSnapshot: string;
   personalInfoOptions: string;
   omitWalletAddress: string;
-  omitRespondentAddress: string;
   omitNotes: string;
   omitAttachments: string;
   omitDecryptedAnswers: string;
@@ -33,11 +33,19 @@ interface CsvExportConfirmationModalProps {
 
 const PII_OPTIONS: Array<{ field: ExportPiiField; labelKey: keyof CsvExportConfirmationModalLabels }> = [
   { field: "walletAddress", labelKey: "omitWalletAddress" },
-  { field: "respondentAddress", labelKey: "omitRespondentAddress" },
   { field: "notes", labelKey: "omitNotes" },
   { field: "attachments", labelKey: "omitAttachments" },
   { field: "decryptedAnswers", labelKey: "omitDecryptedAnswers" },
 ];
+
+const FOCUSABLE_SELECTOR = [
+  "button:not([disabled])",
+  "input:not([disabled])",
+  "select:not([disabled])",
+  "textarea:not([disabled])",
+  "a[href]",
+  "[tabindex]:not([tabindex='-1'])",
+].join(",");
 
 export function CsvExportConfirmationModal({
   metadata,
@@ -47,9 +55,60 @@ export function CsvExportConfirmationModal({
   onCancel,
   onConfirm,
 }: CsvExportConfirmationModalProps) {
+  const dialogRef = useRef<HTMLElement | null>(null);
+  const confirmButtonRef = useRef<HTMLButtonElement | null>(null);
+
+  useEffect(() => {
+    const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    confirmButtonRef.current?.focus();
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onCancel();
+        return;
+      }
+
+      if (event.key !== "Tab" || !dialogRef.current) {
+        return;
+      }
+
+      const focusable = Array.from(dialogRef.current.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)).filter(
+        (element) => element.offsetParent !== null,
+      );
+      if (focusable.length === 0) {
+        event.preventDefault();
+        return;
+      }
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    }
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      previouslyFocused?.focus();
+    };
+  }, [onCancel]);
+
   return (
-    <div className="modal-backdrop export-modal-backdrop" role="presentation">
-      <section className="answer-card export-confirmation-modal" role="dialog" aria-modal="true" aria-labelledby="csv-export-title">
+    <div className="modal-backdrop export-modal-backdrop" role="presentation" onMouseDown={onCancel}>
+      <section
+        ref={dialogRef}
+        className="answer-card export-confirmation-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="csv-export-title"
+        aria-describedby="csv-export-description"
+        onMouseDown={(event) => event.stopPropagation()}
+      >
         <div className="section-row">
           <div>
             <p className="eyebrow">{metadata.title}</p>
@@ -57,7 +116,7 @@ export function CsvExportConfirmationModal({
           </div>
           <span className="signal-chip signal-chip-soft">{metadata.filterMode}</span>
         </div>
-        <p className="muted">{labels.body}</p>
+        <p id="csv-export-description" className="muted">{labels.body}</p>
 
         <div className="metadata-list">
           <div className="metadata-row">
@@ -112,7 +171,7 @@ export function CsvExportConfirmationModal({
           <button type="button" className="ghost-button" onClick={onCancel}>
             {labels.cancel}
           </button>
-          <button type="button" className="primary-button" onClick={onConfirm}>
+          <button ref={confirmButtonRef} type="button" className="primary-button" onClick={onConfirm}>
             {labels.confirm}
           </button>
         </div>
