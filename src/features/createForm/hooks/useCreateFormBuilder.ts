@@ -145,7 +145,7 @@ export function useCreateFormBuilder({
   const isReadyToPublish = hasValidTitle && hasQuestions;
   const selectedProject = projects.find((project) => project.objectId === selectedProjectId) ?? null;
 
-  function resetBuilderState() {
+  const resetBuilderState = useCallback(() => {
     const nextFields = createTemplateFields(initialTemplate);
     const nextSelectedProjectId = isGuestDraftMode ? "" : getSelectedProjectId();
     setSelectedTemplateKey(initialTemplate.key);
@@ -174,7 +174,7 @@ export function useCreateFormBuilder({
     setDragOverFieldId(null);
     setDragOverPlacement(null);
     setPendingFocusFieldId(nextFields[0]?.id ?? "");
-  }
+  }, [isGuestDraftMode]);
 
   useEffect(() => {
     if (isGuestDraftMode) {
@@ -292,8 +292,10 @@ export function useCreateFormBuilder({
     try {
       if (freshStartToken) {
         window.localStorage.removeItem(draftStorageKey);
+        resetBuilderState();
+        return;
       }
-      const rawDraft = freshStartToken ? null : window.localStorage.getItem(draftStorageKey);
+      const rawDraft = window.localStorage.getItem(draftStorageKey);
       if (!rawDraft) {
         if (isGuestDraftMode && startExperience !== "mirror") {
           seedGuestDraftFromIntent();
@@ -305,7 +307,7 @@ export function useCreateFormBuilder({
       console.warn("Failed to restore create form draft.", error);
       window.localStorage.removeItem(draftStorageKey);
     }
-  }, [draftSeed?.idea, draftSeed?.templateKey, draftStorageKey, freshStartToken, isGuestDraftMode, seedGuestDraftFromIntent, startExperience]);
+  }, [draftSeed?.idea, draftSeed?.templateKey, draftStorageKey, freshStartToken, isGuestDraftMode, resetBuilderState, seedGuestDraftFromIntent, startExperience]);
 
   useEffect(() => {
     if (isGuestDraftMode || !hasLoadedDraftRef.current || !freshStartToken) {
@@ -639,6 +641,7 @@ export function useCreateFormBuilder({
   function addSection(preset?: string) {
     const nextSection = createSection(preset ?? "");
     setSections((current) => [...current, nextSection]);
+    return nextSection;
   }
 
   function updateSection(sectionId: string, patch: Partial<FormSection>) {

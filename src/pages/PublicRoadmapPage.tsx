@@ -94,7 +94,7 @@ export function PublicRoadmapPage() {
         summary="Signals marked Planned, In Progress, or Fixed appear here on the public roadmap."
         steps={[
           { label: "Select Project", status: "complete" },
-          { label: "Create Form", status: "complete" },
+          { label: "Create Signal", status: "complete" },
           { label: "Share Public Link", status: "complete" },
           { label: "Submit Private Signal", status: "complete" },
           { label: "Review Inbox", status: "complete" },

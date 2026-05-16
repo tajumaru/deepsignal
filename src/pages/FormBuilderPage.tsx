@@ -412,12 +412,12 @@ function FormBuilderComposer({ mode, freshStartToken, initialDisplayMode = "clas
           onSelectStep={builder.goToStep}
         />
 
-        <section className="panel composer-view-mode-panel" aria-label="Create Form display mode">
+        <section className="panel composer-view-mode-panel" aria-label="Create Signal display mode">
           <div>
             <p className="eyebrow">Display Mode</p>
             <strong>{isMirrorMode ? "Mirror Preview Mode" : "Classic Builder"}</strong>
           </div>
-          <div className="composer-view-mode-toggle" role="group" aria-label="Switch Create Form display mode">
+          <div className="composer-view-mode-toggle" role="group" aria-label="Switch Create Signal display mode">
             <button
               type="button"
               className={displayMode === "classic" ? "is-active" : ""}

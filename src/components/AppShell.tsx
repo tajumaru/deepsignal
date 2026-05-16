@@ -96,7 +96,7 @@ function MobileAppBottomNav() {
       </NavLink>
       <CreateFormLink>
         <span aria-hidden="true">+</span>
-        <span>Create</span>
+        <span>Signal</span>
       </CreateFormLink>
       <NavLink to="/admin/access">
         <span aria-hidden="true">Set</span>

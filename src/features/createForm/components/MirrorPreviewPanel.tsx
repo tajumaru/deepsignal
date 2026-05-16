@@ -5,6 +5,7 @@ import { isLongTextLikeField } from "../../../lib/fieldTypes";
 import type { WalrusCostEstimate } from "../../../storage/walrusCostEstimate";
 import type { WalrusFailureDetails } from "../../../storage/walrusDiagnostics";
 import { getOrderedFields } from "../../../utils/formLogic";
+import { analyzeSignalDraft, type SignalDraftAnalysis, type SignalIntelligenceItem } from "../signalIntelligence";
 import type { FieldType, FormBuilderValues, FormField, FormSection, PreparedPublishForm } from "../types";
 
 interface MirrorPreviewPanelProps {
@@ -228,7 +229,6 @@ function createTimelineSteps(
   state: MirrorPreviewState,
   values: FormBuilderValues,
   runtime: MirrorRuntimeState,
-  t: ReturnType<typeof useI18n>["t"],
 ): TimelineStep[] {
   const hasDraft = Boolean(values.title?.trim() && state.fieldCount > 0);
   const privacyConfigured =
@@ -243,18 +243,18 @@ function createTimelineSteps(
   const published = Boolean(runtime.savedForm);
 
   return [
-    { label: t("mirrorTimelineDraftComposed"), complete: hasDraft },
-    { label: t("mirrorTimelineSchemaValidated"), complete: state.isReadyToPublish, active: hasDraft && !state.isReadyToPublish },
-    { label: t("mirrorTimelinePrivacyConfigured"), complete: privacyConfigured },
-    { label: t("mirrorTimelineWalrusReady"), complete: walrusReady, active: state.isReadyToPublish && !walrusReady },
-    { label: t("mirrorTimelineSignalPublished"), complete: published, active: (runtime.saving || runtime.registeringOnSui) && !published },
+    { label: "Intent", complete: hasDraft },
+    { label: "Signal opened", complete: state.isReadyToPublish, active: hasDraft && !state.isReadyToPublish },
+    { label: "Private by default", complete: privacyConfigured },
+    { label: "Stored safely", complete: walrusReady, active: state.isReadyToPublish && !walrusReady },
+    { label: "Review queue", complete: published, active: (runtime.saving || runtime.registeringOnSui) && !published },
   ];
 }
 
 function MirrorMetadataBadges({ state }: { state: MirrorPreviewState }) {
   const badges: MirrorBadge[] = [
     { label: state.publishedStatus === "published" ? "Published Signal" : "Preview only", tone: state.publishedStatus === "published" ? "active" : "warning" },
-    { label: state.signalModeLabel, tone: state.isPrivate ? "private" : "active" },
+    { label: state.isPrivate ? "Protected signal" : state.signalModeLabel, tone: state.isPrivate ? "private" : "active" },
     { label: state.identityPolicyLabel },
     { label: state.isReadyToPublish ? "Ready to publish" : "Review in progress", tone: state.isReadyToPublish ? "active" : "warning" },
     { label: state.activeField ? "Block mirror" : "No block yet", tone: state.activeField ? "active" : "warning" },
@@ -286,13 +286,13 @@ function MirrorObjectCard({ state, runtime }: { state: MirrorPreviewState; runti
         <span className="mirror-object-core-tusk mirror-object-core-tusk-right" />
       </div>
       <div className="mirror-object-copy">
-        <span className="mirror-object-kicker">object::signal_form</span>
+        <span className="mirror-object-kicker">signal lifecycle</span>
         <strong>{state.title}</strong>
         <small>{state.fieldCount} block{state.fieldCount === 1 ? "" : "s"} reflected in this signal object</small>
       </div>
       <div className="mirror-object-ledger">
-        <span>Storage</span>
-        <strong>{runtime.savedForm?.blobId ? "Walrus object" : runtime.storageRuntimeMode || "Local preview"}</strong>
+        <span>State</span>
+        <strong>{runtime.savedForm?.blobId ? "Stored safely" : runtime.storageRuntimeMode || "Local preview"}</strong>
       </div>
     </section>
   );
@@ -300,13 +300,13 @@ function MirrorObjectCard({ state, runtime }: { state: MirrorPreviewState; runti
 
 function MirrorSignalMetadata({ state, runtime }: { state: MirrorPreviewState; runtime: MirrorRuntimeState }) {
   const { t } = useI18n();
-  const sealedLabel = state.isPrivate ? "Encrypted responses" : "Response privacy";
+  const sealedLabel = state.isPrivate ? "Protection" : "Response privacy";
   const rows = [
     ["Status", state.publishedStatus === "published" ? "Published Signal" : "Preview only"],
-    ["Walrus ref", displayValue(runtime.savedForm?.blobId, "preview.local")],
-    ["Schema v1", `${state.fieldCount} blocks`],
+    ["Storage", runtime.savedForm?.blobId ? "Stored safely" : "Local preview"],
+    ["Signal shape", `${state.fieldCount} blocks`],
     ["Visibility", state.visibilityLabel],
-    [sealedLabel, state.isPrivate ? t("mirrorSealEnabled") : t("mirrorOpenIntake")],
+    [sealedLabel, state.isPrivate ? "Sealed before storage" : "Open intake"],
     ["Responder access", state.identityPolicyLabel],
     [t("mirrorRuntimeMode"), displayValue(runtime.storageRuntimeMode, t("notConfigured"))],
     [t("mirrorStorageMode"), runtime.walrusCostEstimate?.storageMode ?? runtime.storageRuntimeMode ?? "local"],
@@ -339,22 +339,22 @@ function MirrorSignalMetadata({ state, runtime }: { state: MirrorPreviewState; r
 
 function MirrorPublishReadiness({ state }: { state: MirrorPreviewState }) {
   const checks: Array<[string, boolean]> = [
-    ["Title is set", state.title !== state.titleFallback],
-    ["At least 1 block", state.fieldCount > 0],
-    ["Required blocks reviewed", true],
-    ["Privacy mode selected", Boolean(state.signalModeLabel)],
-    ["Ready to publish", state.isReadyToPublish],
+    ["Intent named", state.title !== state.titleFallback],
+    ["Signal path open", state.fieldCount > 0],
+    ["Review fields shaped", true],
+    ["Access posture set", Boolean(state.signalModeLabel)],
+    ["Ready for intake", state.isReadyToPublish],
   ];
 
   return (
     <section className="mirror-readiness-card" aria-label="Publish readiness">
       <div>
         <p className="eyebrow">Publish Readiness</p>
-        <h3>{state.isReadyToPublish ? "Signal is ready" : "Review before publishing"}</h3>
+        <h3>{state.isReadyToPublish ? "Signal channel ready" : "Review before opening"}</h3>
         <p className="muted">
           {state.publishedStatus === "published"
-            ? "This signal object has been published."
-            : "Nothing is published yet. This is a live mirror of local draft state."}
+            ? "This signal is open and ready to collect protected responses."
+            : "Nothing is open yet. This mirror is reading the local signal draft."}
         </p>
       </div>
       <div className="mirror-readiness-list">
@@ -470,6 +470,86 @@ function MirrorPublishedSignalCard({ runtime }: { runtime: MirrorRuntimeState })
           {t("mirrorCopyLink")}
         </button>
       ) : null}
+    </section>
+  );
+}
+
+function MirrorIntelligenceList({
+  title,
+  emptyLabel,
+  items,
+}: {
+  title: string;
+  emptyLabel: string;
+  items: SignalIntelligenceItem[];
+}) {
+  const { t } = useI18n();
+  const messageById: Record<SignalIntelligenceItem["id"], string> = {
+    responseFatigueManyBlocks: t("mirrorIntelligenceItem_responseFatigueManyBlocks"),
+    responseFatigueRequiredRatio: t("mirrorIntelligenceItem_responseFatigueRequiredRatio"),
+    reflectionGap: t("mirrorIntelligenceItem_reflectionGap"),
+    privacySealSuggestion: t("mirrorIntelligenceItem_privacySealSuggestion"),
+    identityFriction: t("mirrorIntelligenceItem_identityFriction"),
+    narrativeShortText: t("mirrorIntelligenceItem_narrativeShortText"),
+    narrativeShallowChoice: t("mirrorIntelligenceItem_narrativeShallowChoice"),
+    publishReadinessStrong: t("mirrorIntelligenceItem_publishReadinessStrong"),
+    privacyPostureStrong: t("mirrorIntelligenceItem_privacyPostureStrong"),
+    reflectionDepthStrong: t("mirrorIntelligenceItem_reflectionDepthStrong"),
+  };
+
+  return (
+    <div className="mirror-intelligence-list">
+      <strong>{title}</strong>
+      {items.length > 0 ? (
+        items.map((item) => (
+          <span key={item.id} className={`is-${item.tone}`}>
+            <i aria-hidden="true" />
+            <small>{messageById[item.id]}</small>
+          </span>
+        ))
+      ) : (
+        <span className="is-empty">
+          <i aria-hidden="true" />
+          <small>{emptyLabel}</small>
+        </span>
+      )}
+    </div>
+  );
+}
+
+function MirrorSignalIntelligence({ analysis }: { analysis: SignalDraftAnalysis }) {
+  const { t } = useI18n();
+
+  return (
+    <section className="mirror-intelligence-card" aria-label={t("mirrorSignalIntelligenceTitle")}>
+      <div className="mirror-intelligence-header">
+        <div>
+          <p className="eyebrow">{t("mirrorSignalIntelligenceTitle")}</p>
+          <h3>{t("mirrorSignalIntelligenceHeading")}</h3>
+        </div>
+        <span className="mirror-intelligence-score">
+          <small>{t("mirrorSignalIntelligenceScore")}</small>
+          <strong>{analysis.score}</strong>
+        </span>
+      </div>
+      <p className="muted">{t("mirrorSignalIntelligenceBody")}</p>
+      <div className="mirror-intelligence-grid">
+        <MirrorIntelligenceList
+          title={t("mirrorSignalStrengths")}
+          emptyLabel={t("mirrorSignalNoStrengths")}
+          items={analysis.strengths}
+        />
+        <MirrorIntelligenceList
+          title={t("mirrorSignalWarnings")}
+          emptyLabel={t("mirrorSignalNoWarnings")}
+          items={analysis.warnings}
+        />
+        <MirrorIntelligenceList
+          title={t("mirrorSignalSuggestions")}
+          emptyLabel={t("mirrorSignalNoSuggestions")}
+          items={analysis.suggestions}
+        />
+      </div>
     </section>
   );
 }
@@ -659,9 +739,10 @@ export function MirrorPreviewPanel({
     ],
   );
   const timelineSteps = useMemo(
-    () => createTimelineSteps(state, values, runtime, t),
-    [runtime, state, t, values],
+    () => createTimelineSteps(state, values, runtime),
+    [runtime, state, values],
   );
+  const intelligence = useMemo(() => analyzeSignalDraft(values), [values]);
 
   return (
     <aside className="panel glow-panel mirror-preview-panel mirror-theme-surface" data-surface={surface} aria-label="Signal Mirror Panel">
@@ -681,6 +762,7 @@ export function MirrorPreviewPanel({
       <div className="mirror-desktop-detail-stack">
         <MirrorMetadataBadges state={state} />
         <MirrorSignalMetadata state={state} runtime={runtime} />
+        <MirrorSignalIntelligence analysis={intelligence} />
         <MirrorPublishTimeline steps={timelineSteps} />
         <MirrorPublishedSignalCard runtime={runtime} />
         <MirrorPublishReadiness state={state} />
@@ -693,6 +775,7 @@ export function MirrorPreviewPanel({
         </details>
         <details className="mirror-mobile-detail">
           <summary>{t("mirrorPublishReadiness")}</summary>
+          <MirrorSignalIntelligence analysis={intelligence} />
           <MirrorPublishTimeline steps={timelineSteps} />
           <MirrorPublishedSignalCard runtime={runtime} />
           <MirrorPublishReadiness state={state} />

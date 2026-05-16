@@ -6,10 +6,14 @@ interface IntentStartStepProps {
 }
 
 const EXAMPLE_INTENTS = [
-  "Collect anonymous hackathon feedback",
-  "Capture user frustrations during onboarding",
-  "Create a sealed reflection flow",
+  "Private feedback",
+  "Bug report with evidence",
+  "Governance signal",
 ];
+
+const INTENT_OPTIONS = ["Private feedback", "Bug report", "Feature request", "Governance signal"];
+const SIGNAL_POLICIES = ["Anonymous allowed", "Sealed responses", "Attachments on", "Priority included"];
+const LIFECYCLE_STEPS = ["Intent", "Opened", "Protected", "Stored", "Reviewed"];
 
 const FLOW_SECTIONS = [
   {
@@ -131,6 +135,32 @@ function composeIntentDraft(intent: string): IntentDraft {
   };
 }
 
+function getQuietSuggestions(intent: string, policies: string[]) {
+  const lowerIntent = intent.toLowerCase();
+  const suggestions = new Set<string>();
+
+  if (!policies.includes("Anonymous allowed")) {
+    suggestions.add("Recommend anonymous response path");
+  }
+  if (!policies.includes("Sealed responses")) {
+    suggestions.add("Private by default would fit this signal");
+  }
+  if (lowerIntent.includes("bug") || lowerIntent.includes("evidence") || lowerIntent.includes("blocked")) {
+    suggestions.add("Attachment intake may help review");
+  }
+  if (!policies.includes("Priority included")) {
+    suggestions.add("Add priority classification for review");
+  }
+  if (lowerIntent.includes("governance") || lowerIntent.includes("roadmap") || lowerIntent.includes("feature")) {
+    suggestions.add("Generate review categories");
+  }
+  if (suggestions.size === 0) {
+    suggestions.add("Signal is ready for a protected review queue");
+  }
+
+  return [...suggestions].slice(0, 3);
+}
+
 function getBlockKind(type: FieldType) {
   const labels: Record<FieldType, string> = {
     shortText: "Question Block",
@@ -152,32 +182,31 @@ function getBlockKind(type: FieldType) {
 
 export function IntentStartStep({ onApplyDraft }: IntentStartStepProps) {
   const [intent, setIntent] = useState("");
+  const [activePolicies, setActivePolicies] = useState<string[]>(["Anonymous allowed", "Sealed responses", "Priority included"]);
   const [draft, setDraft] = useState<IntentDraft | null>(null);
   const canApply = Boolean(draft?.blocks.length);
-  const previewDraft = useMemo(() => draft ?? composeIntentDraft(intent), [draft, intent]);
+  const composedIntent = [intent, ...activePolicies].filter(Boolean).join(" / ");
+  const previewDraft = useMemo(() => draft ?? composeIntentDraft(composedIntent), [draft, composedIntent]);
+  const quietSuggestions = useMemo(() => getQuietSuggestions(composedIntent, activePolicies), [activePolicies, composedIntent]);
 
   function handleGenerateDraft() {
-    setDraft(composeIntentDraft(intent));
+    setDraft(composeIntentDraft(composedIntent));
   }
 
   function handleExampleIntent(example: string) {
     setIntent(example);
-    setDraft(composeIntentDraft(example));
+    setDraft(composeIntentDraft([example, ...activePolicies].join(" / ")));
   }
 
   return (
     <section className="panel glow-panel composer-hero-card intent-start-card">
       <div className="intent-start-grid">
         <div className="intent-prompt-panel">
-          <p className="eyebrow">Signal Intent</p>
-          <h2>What are you trying to capture?</h2>
-          <p className="muted">
-            Describe the signal you want to compose. Mirror Mode will suggest a narrative flow, but nothing is applied
-            until you approve the draft.
-          </p>
+          <p className="eyebrow">Intent to Signal</p>
+          <h2>Open a signal channel</h2>
 
           <label className="intent-textarea-wrap">
-            <span>Describe the signal</span>
+            <span>What do you want to collect?</span>
             <textarea
               className="intent-textarea"
               value={intent}
@@ -185,10 +214,41 @@ export function IntentStartStep({ onApplyDraft }: IntentStartStepProps) {
                 setIntent(event.target.value);
                 setDraft(null);
               }}
-              placeholder="Capture user frustrations during onboarding..."
-              rows={7}
+              placeholder="Private feedback from early users..."
+              rows={5}
             />
           </label>
+
+          <div className="intent-option-grid" aria-label="Signal intent options">
+            {INTENT_OPTIONS.map((option) => (
+              <button key={option} type="button" className={intent === option ? "is-active" : ""} onClick={() => handleExampleIntent(option)}>
+                {option}
+              </button>
+            ))}
+          </div>
+
+          <div className="intent-policy-grid" aria-label="Signal policy options">
+            {SIGNAL_POLICIES.map((policy) => {
+              const active = activePolicies.includes(policy);
+              return (
+                <button
+                  key={policy}
+                  type="button"
+                  className={active ? "is-active" : ""}
+                  aria-pressed={active}
+                  onClick={() => {
+                    setActivePolicies((current) =>
+                      current.includes(policy) ? current.filter((item) => item !== policy) : [...current, policy],
+                    );
+                    setDraft(null);
+                  }}
+                >
+                  <span aria-hidden="true">{active ? "On" : "Off"}</span>
+                  {policy}
+                </button>
+              );
+            })}
+          </div>
 
           <div className="intent-example-grid" aria-label="Intent examples">
             {EXAMPLE_INTENTS.map((example) => (
@@ -199,11 +259,11 @@ export function IntentStartStep({ onApplyDraft }: IntentStartStepProps) {
           </div>
 
           <div className="intent-assist-actions">
-            <button type="button" className="button primary" onClick={handleGenerateDraft}>
-              Generate Signal Flow
+            <button type="button" className="primary-button intent-action-button" onClick={handleGenerateDraft}>
+              Generate Signal
             </button>
-            <button type="button" className="button ghost" onClick={handleGenerateDraft}>
-              Suggest Blocks
+            <button type="button" className="ghost-button intent-action-button" onClick={handleGenerateDraft}>
+              Refresh
             </button>
           </div>
         </div>
@@ -211,11 +271,26 @@ export function IntentStartStep({ onApplyDraft }: IntentStartStepProps) {
         <aside className="intent-draft-panel" aria-label="AI draft assist preview">
           <div className="intent-draft-header">
             <div>
-              <p className="eyebrow">AI Draft Assist</p>
+              <p className="eyebrow">Mirror Draft</p>
               <h3>{previewDraft.title}</h3>
               <p className="muted">{previewDraft.description}</p>
             </div>
-            <span className="intent-ai-chip">Local mock</span>
+            <span className="intent-ai-chip">Intent mapped</span>
+          </div>
+
+          <div className="intent-lifecycle-strip" aria-label="Signal lifecycle">
+            {LIFECYCLE_STEPS.map((step, index) => (
+              <span key={step} className={index < 3 ? "is-active" : ""}>
+                <i aria-hidden="true" />
+                {step}
+              </span>
+            ))}
+          </div>
+
+          <div className="intent-suggestion-rail" aria-label="Suggested signal refinements">
+            {quietSuggestions.map((suggestion) => (
+              <span key={suggestion}>{suggestion}</span>
+            ))}
           </div>
 
           <div className="intent-draft-flow">
@@ -233,11 +308,16 @@ export function IntentStartStep({ onApplyDraft }: IntentStartStepProps) {
 
           <div className="intent-draft-apply-bar">
             <div>
-              <strong>Preview only</strong>
-              <span>No form state changes until Apply Draft.</span>
+              <strong>Channel preview</strong>
+              <span>Protected signal {"->"} Stored safely {"->"} Review OS</span>
             </div>
-            <button type="button" className="button primary" disabled={!canApply} onClick={() => draft && onApplyDraft(draft)}>
-              Apply Draft
+            <button
+              type="button"
+              className="primary-button intent-action-button"
+              disabled={!canApply}
+              onClick={() => draft && onApplyDraft(draft)}
+            >
+              Apply Signal
             </button>
           </div>
         </aside>

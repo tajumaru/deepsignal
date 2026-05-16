@@ -19,7 +19,7 @@ interface FieldsStepProps {
   setDraggedFieldId: (fieldId: string | null) => void;
   setDragOverFieldId: (fieldId: string | null) => void;
   setDragOverPlacement: (placement: "before" | "after" | null) => void;
-  onAddSection: (preset?: string) => void;
+  onAddSection: (preset?: string) => FormSection;
   onUpdateSection: (sectionId: string, patch: Partial<FormSection>) => void;
   onRemoveSection: (sectionId: string) => void;
   onUpdateField: (index: number, field: FormField) => void;
@@ -62,6 +62,12 @@ const libraryBlocks: Array<{
 ];
 
 const signalFlowPresets = ["Introduction", "Context", "Experience", "Reflection", "Identity"];
+const mirrorIntentActions: Array<{ label: string; detail: string; type: FieldType; section?: string }> = [
+  { label: "Collect intent", detail: "Core private signal", type: "longText", section: "Signal" },
+  { label: "Allow evidence", detail: "Attachment lane", type: "screenshot", section: "Evidence" },
+  { label: "Add priority", detail: "Review triage", type: "dropdown", section: "Triage" },
+  { label: "Optional identity", detail: "Responder context", type: "country_select", section: "Identity" },
+];
 
 export function FieldsStep({
   t,
@@ -232,22 +238,40 @@ export function FieldsStep({
     );
   }
 
+  function addMirrorIntentAction(action: (typeof mirrorIntentActions)[number]) {
+    const section = action.section
+      ? sections.find((item) => item.title === action.section) ?? onAddSection(action.section)
+      : undefined;
+    onInsertField(action.type, undefined, section?.id);
+  }
+
   return (
     <section className={`composer-builder-grid composer-builder-grid-composer ${isMirrorPresentation ? "signal-composition-studio" : ""}`}>
       <aside className="composer-builder-column composer-library-column">
         <section className="panel composer-section-card composer-library-panel">
           <div className="composer-pane-heading">
             <div>
-              <p className="eyebrow">{isMirrorPresentation ? "Signal Components" : "Step 3"}</p>
-              <h2>{isMirrorPresentation ? "Block Palette" : t("blockLibraryTitle")}</h2>
+              <p className="eyebrow">{isMirrorPresentation ? "Intent Controls" : "Step 3"}</p>
+              <h2>{isMirrorPresentation ? "Signal Shape" : t("blockLibraryTitle")}</h2>
               <p className="muted">
-                {isMirrorPresentation ? "Compose the signal from reusable narrative nodes." : t("blockLibraryBody")}
+                {isMirrorPresentation ? "Choose the channel behavior before editing individual blocks." : t("blockLibraryBody")}
               </p>
             </div>
             <button type="button" className="ghost-button" onClick={() => onAddSection()}>
               {isMirrorPresentation ? "Add Flow" : t("addSection")}
             </button>
           </div>
+
+          {isMirrorPresentation ? (
+            <div className="mirror-intent-action-grid" aria-label="Intent controls">
+              {mirrorIntentActions.map((action) => (
+                <button key={action.label} type="button" className="mirror-intent-action" onClick={() => addMirrorIntentAction(action)}>
+                  <strong>{action.label}</strong>
+                  <span>{action.detail}</span>
+                </button>
+              ))}
+            </div>
+          ) : null}
 
           {isMirrorPresentation ? (
             <div className="signal-flow-presets" aria-label="Narrative flow presets">
@@ -294,7 +318,7 @@ export function FieldsStep({
           </div>
 
           <div className="composer-library-footer">
-            <p className="muted">{isMirrorPresentation ? "Drag, branch, and layer blocks into a signal object." : t("conditionalShortcutHint")}</p>
+            <p className="muted">{isMirrorPresentation ? "Private signal received -> ready for review." : t("conditionalShortcutHint")}</p>
             <button type="button" className="ghost-button" onClick={onOpenFieldTypePicker}>
               {isMirrorPresentation ? "More Blocks" : t("moreTypes")}
             </button>

@@ -132,6 +132,21 @@ function matchesStream(submission: Submission, streamId: StreamId) {
   }
 }
 
+function getReviewLifecycleSteps(submission?: Submission | null, unlocked = false) {
+  const hasSubmission = Boolean(submission);
+  const isReviewed = submission?.status === "read" || submission?.status === "archived";
+  const isTriaged = Boolean(submission?.triageStatus && submission.triageStatus !== "new");
+  const isResolved = submission?.status === "archived" || submission?.triageStatus === "fixed";
+
+  return [
+    { label: "Incoming", active: hasSubmission, complete: hasSubmission },
+    { label: "Protected", active: Boolean(submission?.isEncrypted), complete: Boolean(submission && (!submission.isEncrypted || unlocked)) },
+    { label: "Needs review", active: submission?.status === "unread", complete: isReviewed },
+    { label: "Triaged", active: isTriaged, complete: isTriaged },
+    { label: "Resolved", active: isResolved, complete: isResolved },
+  ];
+}
+
 export function FormSubmissionsPage() {
   const { language, t } = useI18n();
   const account = useCurrentAccount();
@@ -886,6 +901,7 @@ export function FormSubmissionsPage() {
           errorMessage={decryptError}
           diagnostics={decryptDiagnostics}
           disabledReason={unlockDisabledReason}
+          actionDisabled={Boolean(unlockDisabledReason)}
         >
           {!isLocalFallbackBlob(selectedSubmission.encryptedBlobId) ? (
             <BlobLink
@@ -1294,6 +1310,14 @@ export function FormSubmissionsPage() {
                   <span className="pill">Severity {selectedSubmission.severity ?? "medium"}</span>
                   <span className="pill">Signal Value {selectedSubmission.signalValue ?? "N/A"}</span>
                 </div>
+                <div className="review-lifecycle-strip" aria-label="Signal lifecycle">
+                  {getReviewLifecycleSteps(selectedSubmission, Boolean(detailAnswers)).map((step) => (
+                    <span key={step.label} className={step.complete ? "is-complete" : step.active ? "is-active" : ""}>
+                      <i aria-hidden="true" />
+                      {step.label}
+                    </span>
+                  ))}
+                </div>
 
                 {renderUnlockGate()}
 
@@ -1310,7 +1334,7 @@ export function FormSubmissionsPage() {
           <>
         <div className="panel glow-panel inbox-shell-header">
           <div>
-            <p className="eyebrow">Signal Triage</p>
+            <p className="eyebrow">Review OS</p>
             <h1>{form.title}</h1>
             <p className="lede">{form.description || t("encryptedSignalReviewForForm")}</p>
             <p className="muted">{t("responseDeadlineLabel")}: {formatResponseDeadline(form.responseDeadline, responseDeadlineLabels)}</p>
@@ -1326,6 +1350,14 @@ export function FormSubmissionsPage() {
               {t("openPublicForm")}
             </Link>
           </div>
+        </div>
+        <div className="review-lifecycle-strip review-lifecycle-strip-header" aria-label="Signal lifecycle">
+          {["Incoming", "Protected", "Needs review", "Triaged", "Resolved"].map((step, index) => (
+            <span key={step} className={index < 3 ? "is-active" : ""}>
+              <i aria-hidden="true" />
+              {step}
+            </span>
+          ))}
         </div>
 
         <div className="summary-grid">
@@ -1504,6 +1536,14 @@ export function FormSubmissionsPage() {
                           </span>
                         ) : null}
                       </div>
+                      <div className="signal-card-lifecycle" aria-label="Signal lifecycle">
+                        {getReviewLifecycleSteps(submission, selectedSubmission?.id === submission.id && Boolean(detailAnswers)).map((step) => (
+                          <span key={step.label} className={step.complete ? "is-complete" : step.active ? "is-active" : ""}>
+                            <i aria-hidden="true" />
+                            {step.label}
+                          </span>
+                        ))}
+                      </div>
                     </button>
                   );
                 })}
@@ -1543,6 +1583,14 @@ export function FormSubmissionsPage() {
                   <span className="pill">{inferSignalCategory(selectedSubmission)}</span>
                   <span className="pill">Severity {selectedSubmission.severity ?? "medium"}</span>
                   <span className="pill">Signal Value {selectedSubmission.signalValue ?? "N/A"}</span>
+                </div>
+                <div className="review-lifecycle-strip" aria-label="Signal lifecycle">
+                  {getReviewLifecycleSteps(selectedSubmission, Boolean(detailAnswers)).map((step) => (
+                    <span key={step.label} className={step.complete ? "is-complete" : step.active ? "is-active" : ""}>
+                      <i aria-hidden="true" />
+                      {step.label}
+                    </span>
+                  ))}
                 </div>
 
                 {renderUnlockGate()}

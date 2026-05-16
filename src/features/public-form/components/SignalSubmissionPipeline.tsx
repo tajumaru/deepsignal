@@ -1,3 +1,4 @@
+import { createPortal } from "react-dom";
 import {
   SIGNAL_PIPELINE_STAGES,
   type SignalPipelineState,
@@ -41,7 +42,7 @@ export function SignalSubmissionPipeline({ pipeline, visible, onClose, labels }:
   const activeIndex = SIGNAL_PIPELINE_STAGES.indexOf(pipeline.stage);
   const failed = pipeline.status === "failed";
 
-  return (
+  const dialog = (
     <div className="publish-overlay signal-submission-overlay" role="dialog" aria-modal="true" aria-labelledby="signal-submission-title">
       <div className="publish-overlay-backdrop" onClick={failed ? onClose : undefined} />
       <section className={`publish-overlay-panel signal-submission-overlay-panel ${failed ? "is-failed" : ""}`} aria-live="polite">
@@ -109,4 +110,6 @@ export function SignalSubmissionPipeline({ pipeline, visible, onClose, labels }:
       </section>
     </div>
   );
+
+  return createPortal(dialog, document.body);
 }

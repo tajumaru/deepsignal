@@ -278,6 +278,7 @@ export function LandingPage() {
   const { t } = useI18n();
   const heroSignalBars = [0.46, 0.72, 0.38, 0.92, 0.58, 0.81, 0.5, 0.68, 0.42, 0.86];
   const heroFeedRows = [t("landingHeroLiveFeed1"), t("landingHeroLiveFeed2"), t("landingHeroLiveFeed3")];
+  const heroLifecycle = ["Intent", "Signal opened", "Sealed", "Stored", "Reviewed", "Resolved"];
 
   return (
     <section className="landing-shell">
@@ -304,10 +305,10 @@ export function LandingPage() {
             <p className="landing-tagline">{t("landingHeroContestTagline")}</p>
 
             <div className="cta-row landing-hero-actions">
-              <Link className="primary-button landing-cta-primary" to="/dashboard">
+              <CreateFormLink className="primary-button landing-cta-primary">
                 {t("landingHeroContestCreate")}
-              </Link>
-              <Link className="ghost-button landing-cta-secondary" to="/explore">
+              </CreateFormLink>
+              <Link className="landing-hero-text-link" to="/explore">
                 {t("landingHeroDemo")}
               </Link>
             </div>
@@ -329,6 +330,15 @@ export function LandingPage() {
                   <span aria-hidden="true" />
                   {t("landingHeroSystemStatus")}
                 </span>
+              </div>
+
+              <div className="landing-hero-lifecycle" aria-label="Signal lifecycle">
+                {heroLifecycle.map((step, index) => (
+                  <span key={step} className={index < 4 ? "is-active" : ""}>
+                    <i aria-hidden="true" />
+                    {step}
+                  </span>
+                ))}
               </div>
 
               <div className="landing-hero-system-links" aria-hidden="true">
@@ -372,7 +382,12 @@ export function LandingPage() {
                     {heroSignalBars.map((height, index) => (
                       <span
                         key={index}
-                        style={{ "--bar-height": `${height * 100}%`, "--bar-index": index } as CSSProperties}
+                        style={
+                          {
+                            "--bar-height": `${height * 100}%`,
+                            "--bar-delay": `${index * -0.16}s`,
+                          } as CSSProperties
+                        }
                       />
                     ))}
                   </div>
@@ -437,10 +452,6 @@ export function LandingPage() {
                   </div>
                 </section>
               </div>
-
-              <CreateFormLink className="primary-button landing-hero-form-preview-cta">
-                {t("landingHeroContestCreate")}
-              </CreateFormLink>
 
               <p className="landing-hero-powered-by">{t("landingHeroPreviewPoweredBy")}</p>
             </article>

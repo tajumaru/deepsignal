@@ -83,6 +83,21 @@ function formatAccessLabel(roleLabel: string) {
   return `${roleLabel} access`;
 }
 
+function getReviewLifecycleSteps(submission?: Submission | null, unlocked = false) {
+  const hasSubmission = Boolean(submission);
+  const isReviewed = submission?.status === "read" || submission?.status === "archived";
+  const isTriaged = Boolean(submission?.triageStatus && submission.triageStatus !== "new");
+  const isResolved = submission?.status === "archived" || submission?.triageStatus === "fixed";
+
+  return [
+    { label: "Incoming", active: hasSubmission, complete: hasSubmission },
+    { label: "Protected", active: Boolean(submission?.isEncrypted), complete: Boolean(submission && (!submission.isEncrypted || unlocked)) },
+    { label: "Needs review", active: submission?.status === "unread", complete: isReviewed },
+    { label: "Triaged", active: isTriaged, complete: isTriaged },
+    { label: "Resolved", active: isResolved, complete: isResolved },
+  ];
+}
+
 type TranslationFn = ReturnType<typeof useI18n>["t"];
 
 interface MobileInboxHeaderProps {
@@ -820,7 +835,7 @@ export function AdminDashboardPage() {
         ? {
             label: "Create your first signal inbox",
             detail: "Create a wallet-owned form. Project controls stay hidden until this wallet has AdminCap or OwnerCap.",
-            cta: <CreateFormLink className="primary-button">Create Signal Form</CreateFormLink>,
+            cta: <CreateFormLink className="primary-button">Create Signal</CreateFormLink>,
           }
         : allSignals.length === 0
           ? {
@@ -862,7 +877,7 @@ export function AdminDashboardPage() {
         ? {
             label: "Create your first signal inbox",
             detail: "Publish one protected form for this project so reviewers have signals to read.",
-            cta: <CreateFormLink className="primary-button">Create Signal Form</CreateFormLink>,
+            cta: <CreateFormLink className="primary-button">Create Signal</CreateFormLink>,
           }
         : selectedProjectSignals.length === 0
           ? {
@@ -1798,6 +1813,14 @@ export function AdminDashboardPage() {
                                 : t("statusArchived")}
                           </span>
                         </div>
+                        <div className="signal-card-lifecycle" aria-label="Signal lifecycle">
+                          {getReviewLifecycleSteps(submission, isUnlockedSignal).map((step) => (
+                            <span key={step.label} className={step.complete ? "is-complete" : step.active ? "is-active" : ""}>
+                              <i aria-hidden="true" />
+                              {step.label}
+                            </span>
+                          ))}
+                        </div>
                         <div className="signal-badge-row signal-badge-row-compact">
                           <SignalStatusBadges
                             submission={submission}
@@ -2017,6 +2040,7 @@ export function AdminDashboardPage() {
                         errorMessage={decryptError}
                         diagnostics={decryptDiagnostics}
                         disabledReason={selectedRecordUnlockDisabledReason}
+                        actionDisabled={Boolean(selectedRecordUnlockDisabledReason)}
                       >
                         {!isLocalFallbackBlob(selectedRecord.submission.encryptedBlobId) ? (
                           <BlobLink
@@ -2058,6 +2082,14 @@ export function AdminDashboardPage() {
                             </span>
                             <span>{step.label}</span>
                           </div>
+                        ))}
+                      </div>
+                      <div className="review-lifecycle-strip" aria-label="Signal lifecycle">
+                        {getReviewLifecycleSteps(selectedRecord.submission, Boolean(detailAnswers)).map((step) => (
+                          <span key={step.label} className={step.complete ? "is-complete" : step.active ? "is-active" : ""}>
+                            <i aria-hidden="true" />
+                            {step.label}
+                          </span>
                         ))}
                       </div>
                       <div className="review-stage-card">
@@ -2556,15 +2588,15 @@ export function AdminDashboardPage() {
                           <summary>
                             <span>
                               <p className="eyebrow">{t("reviewSupportEyebrow")}</p>
-                              <strong>AI Assist</strong>
+                              <strong>Review cues</strong>
                             </span>
-                            <span className="inspector-summary">{t("aiSummaryTitle")}</span>
+                            <span className="inspector-summary">Quiet intelligence</span>
                           </summary>
                           <div className="inspector-panel-body">
                             <div className="inspector-subsection ai-summary-section">
                               <div>
-                                <p className="eyebrow">{t("aiSummaryEyebrow")}</p>
-                                <h3>{t("aiSummaryTitle")}</h3>
+                                <p className="eyebrow">Inferred context</p>
+                                <h3>Suggested review frame</h3>
                               </div>
                               <p>{selectedRecord.submission.aiSummary || getSignalPreview(selectedRecord.submission)}</p>
                               <div className="signal-badge-row signal-badge-row-compact">

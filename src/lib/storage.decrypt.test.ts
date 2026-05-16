@@ -100,6 +100,36 @@ describe("decryptSensitiveAnswers", () => {
 });
 
 describe("resolveSubmissionAnswers decrypt classification", () => {
+  it.each(["private", "unlisted", "public"] as const)(
+    "decrypts encrypted submissions for %s forms",
+    async (visibility) => {
+      const decryptingAdapter: SealAdapter = {
+        encrypt: vi.fn(async (value) => value),
+        decrypt: vi.fn(async () =>
+          JSON.stringify({
+            answers: {
+              "sensitive-field": `${visibility} answer`,
+            },
+            attachments: [],
+          }),
+        ),
+      };
+
+      await expect(
+        resolveSubmissionAnswers(
+          { ...form, visibility, publicExplore: visibility === "public" },
+          createEncryptedSubmission(),
+          decryptingAdapter,
+          { walletAddress: "0xowner" },
+        ),
+      ).resolves.toMatchObject({
+        answers: {
+          "sensitive-field": `${visibility} answer`,
+        },
+      });
+    },
+  );
+
   it("returns WALLET_NOT_CONNECTED when no wallet is connected", async () => {
     const walletAwareAdapter: SealAdapter = {
       encrypt: vi.fn(async (value) => value),
