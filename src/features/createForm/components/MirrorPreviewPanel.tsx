@@ -391,9 +391,22 @@ export function MirrorPreviewPanel({
 
       <MirrorObjectCard state={state} />
       <MirrorCurrentSignalNode state={state} />
-      <MirrorMetadataBadges state={state} />
-      <MirrorSignalMetadata state={state} />
-      <MirrorPublishReadiness state={state} />
+      <div className="mirror-desktop-detail-stack">
+        <MirrorMetadataBadges state={state} />
+        <MirrorSignalMetadata state={state} />
+        <MirrorPublishReadiness state={state} />
+      </div>
+      <div className="mirror-mobile-detail-stack">
+        <details className="mirror-mobile-detail">
+          <summary>Signal details</summary>
+          <MirrorMetadataBadges state={state} />
+          <MirrorSignalMetadata state={state} />
+        </details>
+        <details className="mirror-mobile-detail">
+          <summary>Publish readiness</summary>
+          <MirrorPublishReadiness state={state} />
+        </details>
+      </div>
     </aside>
   );
 }
