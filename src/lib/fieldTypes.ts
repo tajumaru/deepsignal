@@ -12,6 +12,7 @@ const FIELD_TYPES: FieldType[] = [
   "confirmation",
   "rating",
   "url",
+  "walletAddress",
   "screenshot",
   "video",
 ];
@@ -42,6 +43,10 @@ export function normalizeFieldType(raw: unknown): FieldType {
       return "country_select";
     case "starRating":
       return "rating";
+    case "suiAddress":
+    case "wallet":
+    case "wallet_address":
+      return "walletAddress";
     case "screenshotUpload":
       return "screenshot";
     case "videoUpload":
@@ -69,4 +74,8 @@ export function isAttachmentFieldType(type: FieldType) {
 
 export function isConfirmationCheckboxField(type: FieldType) {
   return type === "confirmation";
+}
+
+export function isSuiAddressFieldType(type: FieldType) {
+  return type === "walletAddress";
 }

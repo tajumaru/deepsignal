@@ -1,7 +1,8 @@
 import { useCurrentAccount } from "@mysten/dapp-kit";
-import { NavLink } from "react-router-dom";
+import { Link, NavLink, useLocation } from "react-router-dom";
 import { useAccessControl } from "../hooks/useAccessControl";
 import { useI18n } from "../i18n";
+import { isSignalInboxPath } from "../lib/navigation";
 
 interface WalletNavProps {
   section?: "all" | "inbox" | "access";
@@ -9,6 +10,7 @@ interface WalletNavProps {
 
 export function WalletNav({ section = "all" }: WalletNavProps) {
   const { t } = useI18n();
+  const location = useLocation();
   const account = useCurrentAccount();
   const { capabilityProfile, isLoadingAccess } = useAccessControl(account?.address);
 
@@ -17,9 +19,15 @@ export function WalletNav({ section = "all" }: WalletNavProps) {
   }
 
   const hasAdminAccess = !isLoadingAccess && Boolean(capabilityProfile.hasOwnerCap || capabilityProfile.hasAdminCap);
+  const inboxActive = isSignalInboxPath(location.pathname);
+  const inboxNav = (
+    <Link className={inboxActive ? "active" : undefined} aria-current={inboxActive ? "page" : undefined} to="/admin">
+      {t("navLab")}
+    </Link>
+  );
 
   if (section === "inbox") {
-    return <NavLink to="/admin">{t("navLab")}</NavLink>;
+    return inboxNav;
   }
 
   if (section === "access") {
@@ -28,7 +36,7 @@ export function WalletNav({ section = "all" }: WalletNavProps) {
 
   return (
     <>
-      <NavLink to="/admin">{t("navLab")}</NavLink>
+      {inboxNav}
       {hasAdminAccess ? <NavLink to="/admin/access">{t("navAccess")}</NavLink> : null}
     </>
   );

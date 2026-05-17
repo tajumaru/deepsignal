@@ -12,6 +12,7 @@ export const fieldTypeLabels: Record<FieldType, string> = {
   confirmation: "Confirmation checkbox",
   rating: "Star rating",
   url: "URL",
+  walletAddress: "SUI address",
   screenshot: "Screenshot upload",
   video: "Video upload",
 };
@@ -28,6 +29,7 @@ export const fieldTypeOptions: FieldType[] = [
   "confirmation",
   "rating",
   "url",
+  "walletAddress",
   "screenshot",
   "video",
 ];

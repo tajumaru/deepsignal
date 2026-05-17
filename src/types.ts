@@ -10,6 +10,7 @@ export type FieldType =
   | "confirmation"
   | "rating"
   | "url"
+  | "walletAddress"
   | "screenshot"
   | "video";
 

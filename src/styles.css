@@ -2257,6 +2257,34 @@ button {
   line-height: 1.4;
 }
 
+.sui-address-input-shell {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.sui-address-input-shell.is-valid input {
+  border-color: rgba(86, 255, 190, 0.48);
+  box-shadow: 0 0 0 1px rgba(86, 255, 190, 0.12);
+}
+
+.sui-address-input-shell.is-invalid input {
+  border-color: rgba(255, 125, 143, 0.62);
+  box-shadow: 0 0 0 1px rgba(255, 125, 143, 0.16);
+}
+
+.sui-address-validation {
+  color: rgba(214, 248, 255, 0.68);
+  font-size: 0.82rem;
+}
+
+.sui-address-validation.is-valid {
+  color: #7fffd0;
+}
+
+.sui-address-validation.is-invalid {
+  color: #ffb4c0;
+}
+
 .landing-hero-backdrop-card-1 {
   top: 0;
   right: 1.5rem;
@@ -10405,6 +10433,11 @@ body.composer-mode .bg-orb {
   box-shadow: inset 0 1px 0 rgba(204, 248, 255, 0.06);
 }
 
+.composer-library-card-icon.is-drop,
+.composer-field-type-icon.is-drop {
+  color: #7fffd0;
+}
+
 .composer-library-card-copy {
   display: grid;
   gap: 0.32rem;
@@ -16262,6 +16295,37 @@ body.composer-mode .bg-orb {
   white-space: nowrap;
 }
 
+.review-save-button.is-draft-ready:not(:disabled) {
+  border-color: rgba(255, 245, 157, 0.72);
+  background:
+    linear-gradient(135deg, #f8b84e 0%, #fb7185 48%, #3b82f6 100%),
+    #f8b84e;
+  color: #06121f;
+  font-weight: 850;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.42),
+    0 14px 30px rgba(251, 113, 133, 0.28),
+    0 0 28px rgba(248, 184, 78, 0.3);
+  animation: reviewSaveReadyPulse 2.2s ease-in-out infinite;
+}
+
+.review-save-button.is-draft-ready:not(:disabled):hover {
+  filter: saturate(1.08) brightness(1.06);
+  transform: translateY(-1px);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.5),
+    0 18px 36px rgba(251, 113, 133, 0.34),
+    0 0 34px rgba(248, 184, 78, 0.36);
+}
+
+.review-save-button.is-draft-ready:not(:disabled):focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 2px rgba(6, 17, 29, 0.95),
+    0 0 0 5px rgba(255, 214, 102, 0.62),
+    0 18px 36px rgba(251, 113, 133, 0.34);
+}
+
 .review-action-bar {
   display: flex;
   flex-wrap: wrap;
@@ -16300,6 +16364,24 @@ body.composer-mode .bg-orb {
 
 .signal-sidebar .export-select {
   width: 100%;
+}
+
+@keyframes reviewSaveReadyPulse {
+  0%,
+  100% {
+    transform: translateY(0);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.42),
+      0 14px 30px rgba(251, 113, 133, 0.28),
+      0 0 28px rgba(248, 184, 78, 0.3);
+  }
+  50% {
+    transform: translateY(-1px);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.5),
+      0 18px 36px rgba(251, 113, 133, 0.34),
+      0 0 38px rgba(248, 184, 78, 0.38);
+  }
 }
 
 .export-modal-backdrop {
@@ -17688,6 +17770,32 @@ body.composer-mode .bg-orb {
 
 .storage-proof-compact .storage-proof-meta {
   grid-column: 1 / -1;
+}
+
+.storage-proof-verification-status {
+  grid-column: 1 / -1;
+  justify-self: start;
+  padding: 0.18rem 0.46rem;
+  border-radius: 999px;
+  border: 1px solid rgba(116, 226, 255, 0.16);
+  background: rgba(116, 226, 255, 0.08);
+  color: #cdeefa;
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.storage-proof-verification-status.is-verified {
+  border-color: rgba(93, 255, 179, 0.32);
+  background: rgba(45, 212, 142, 0.12);
+  color: #bfffe4;
+}
+
+.storage-proof-verification-status.is-failed,
+.storage-proof-verification-status.is-not-found {
+  border-color: rgba(255, 171, 105, 0.32);
+  background: rgba(74, 30, 13, 0.24);
+  color: #ffd6b7;
 }
 
 .storage-proof-compact .storage-proof-button {

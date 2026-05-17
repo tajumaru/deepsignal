@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { SignalMetaChip } from "./SignalMetaChip";
+import { useI18n } from "../i18n";
 import {
   getCurrentWalrusNetwork,
   getWalrusExplorerUrl,
@@ -31,19 +32,22 @@ function formatBytes(value?: number) {
   return `${(value / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-function getVerificationLabel(status: WalrusVerificationStatus) {
+function getVerificationLabel(
+  status: WalrusVerificationStatus,
+  t: ReturnType<typeof useI18n>["t"],
+) {
   switch (status) {
     case "verifying":
-      return "Verifying...";
+      return t("storageProofVerifying");
     case "verified":
-      return "Verified on Walrus";
+      return t("storageProofVerified");
     case "not-found":
-      return "Not found";
+      return t("storageProofNotFound");
     case "failed":
-      return "Verification failed";
+      return t("storageProofFailed");
     case "idle":
     default:
-      return "Verify upload";
+      return t("storageProofVerifyUpload");
   }
 }
 
@@ -162,13 +166,14 @@ export function StorageProof({
   fallbackSize,
   compact = false,
 }: StorageProofProps) {
+  const { t } = useI18n();
   const resolvedBlobId = proof?.blobId ?? blobId ?? "";
   const [verificationStatus, setVerificationStatus] = useState<WalrusVerificationStatus>("idle");
   const network = proof?.network ?? getCurrentWalrusNetwork();
   const explorerUrl = getWalrusExplorerUrl(resolvedBlobId, network);
   const sizeLabel = formatBytes(proof?.size ?? fallbackSize);
   const isWalrusBlob = Boolean(resolvedBlobId && !isLocalFallbackBlob(resolvedBlobId));
-  const verificationLabel = getVerificationLabel(verificationStatus);
+  const verificationLabel = getVerificationLabel(verificationStatus, t);
 
   const metadata = useMemo(
     () =>
@@ -215,11 +220,11 @@ export function StorageProof({
             href={explorerUrl}
             target="_blank"
             rel="noreferrer"
-            aria-label="Open Explorer"
-            title="Open Explorer"
+            aria-label={t("storageProofOpenExplorer")}
+            title={t("storageProofOpenExplorer")}
           >
             <ExplorerIcon />
-            <span className="sr-only">Open Explorer</span>
+            <span className="sr-only">{t("storageProofOpenExplorer")}</span>
           </a>
         ) : null}
         <button
@@ -234,6 +239,11 @@ export function StorageProof({
           <span className="sr-only">{verificationLabel}</span>
         </button>
       </div>
+      {verificationStatus !== "idle" ? (
+        <span className={`storage-proof-verification-status is-${verificationStatus}`} aria-live="polite">
+          {verificationLabel}
+        </span>
+      ) : null}
     </section>
   );
 }

@@ -29,7 +29,7 @@ export function AccessManagementPage() {
       access={accessState}
       deniedBody={
         capabilityProfile.isConfigured
-          ? "OwnerCap / AdminCap / ReviewerCap required to access member management."
+          ? "メンバー管理にアクセスするには OwnerCap / AdminCap / ReviewerCap が必要です。"
           : undefined
       }
     >

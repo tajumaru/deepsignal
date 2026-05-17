@@ -29,11 +29,11 @@ interface ResetAction {
 function statusLabel(status: ResetOperationResult["status"]) {
   switch (status) {
     case "success":
-      return "Success";
+      return "成功";
     case "failed":
-      return "Failed";
+      return "失敗";
     case "skipped":
-      return "Skipped";
+      return "スキップ";
   }
 }
 
@@ -78,26 +78,26 @@ export function ResetEnvironmentPanel() {
   const actions: ResetAction[] = [
     {
       key: "localCache",
-      title: "Clear Local Cache",
-      body: "Clears DeepSignal localStorage/sessionStorage keys and the in-memory Seal decrypt session cache on this device.",
+      title: "ローカルキャッシュを削除",
+      body: "このデバイス上の DeepSignal localStorage/sessionStorage キーと、メモリ内の Seal 復号セッションキャッシュを削除します。",
       run: async () => [await clearLocalCache()],
     },
     {
       key: "indexedDb",
-      title: "Clear IndexedDB",
-      body: "Deletes DeepSignal-named browser databases when indexedDB.databases() is supported. Older Safari builds are safely skipped.",
+      title: "IndexedDB を削除",
+      body: "indexedDB.databases() に対応している場合、DeepSignal 名義のブラウザデータベースを削除します。古い Safari では安全にスキップされます。",
       run: async () => [await clearIndexedDb()],
     },
     {
       key: "cacheStorage",
-      title: "Clear Service Worker Cache",
-      body: "Deletes DeepSignal-named Cache Storage entries that can keep stale PWA assets alive after upgrades.",
+      title: "Service Worker キャッシュを削除",
+      body: "アップグレード後も古い PWA アセットを保持する可能性がある、DeepSignal 名義の Cache Storage エントリを削除します。",
       run: async () => [await clearServiceWorkerCache()],
     },
     {
       key: "serviceWorkers",
-      title: "Unregister Service Worker",
-      body: "Removes DeepSignal-named service worker registrations. Reload DeepSignal after this so Safari or the PWA shell starts fresh.",
+      title: "Service Worker 登録を解除",
+      body: "DeepSignal 名義の Service Worker 登録を解除します。実行後に DeepSignal を再読み込みすると、Safari または PWA シェルが新しい状態で起動します。",
       run: async () => [await unregisterServiceWorkers()],
       danger: true,
     },
@@ -113,16 +113,14 @@ export function ResetEnvironmentPanel() {
 
       <div className="reset-environment-hero panel">
         <div>
-          <p className="eyebrow">Troubleshooting / Reset</p>
-          <h1>Reset DeepSignal Environment</h1>
+          <p className="eyebrow">トラブルシューティング / リセット</p>
+          <h1>DeepSignal 環境をリセット</h1>
           <p className="lede">
-            Use this when iPhone Safari, Slush Wallet, or the installed PWA keeps stale local state and Seal decrypt
-            requests fail after reconnecting.
+            iPhone Safari、Slush Wallet、インストール済み PWA に古いローカル状態が残り、再接続後も Seal の復号リクエストが失敗する場合に使用します。
           </p>
         </div>
         <div className="reset-environment-warning" role="note">
-          DeepSignal can clear local app state, encryption cache, and browser storage. It cannot delete your wallet's
-          private keys or internal Slush Wallet data.
+          DeepSignal はローカルのアプリ状態、暗号化キャッシュ、ブラウザストレージを削除できます。ウォレットの秘密鍵や Slush Wallet 内部データは削除できません。
         </div>
       </div>
 
@@ -139,7 +137,7 @@ export function ResetEnvironmentPanel() {
               disabled={Boolean(runningAction)}
               onClick={() => void runConfirmedReset(action.key, action.run)}
             >
-              {runningAction === action.key ? "Clearing..." : action.title}
+              {runningAction === action.key ? "削除中..." : action.title}
             </button>
           </article>
         ))}
@@ -149,8 +147,8 @@ export function ResetEnvironmentPanel() {
         <section className="panel reset-results-panel" aria-live="polite">
           <div className="section-row">
             <div>
-              <p className="eyebrow">Last Run</p>
-              <h2>Reset results</h2>
+              <p className="eyebrow">直近の実行</p>
+              <h2>リセット結果</h2>
             </div>
           </div>
           <div className="reset-results-list">
@@ -167,22 +165,20 @@ export function ResetEnvironmentPanel() {
 
       <section className="panel reset-ios-note">
         <p className="eyebrow">iPhone Safari / PWA</p>
-        <h2>When stale data still remains</h2>
+        <h2>古いデータがまだ残る場合</h2>
         <p>
-          iOS can keep website data, wallet handoff state, or an installed PWA shell outside DeepSignal's control. If
-          reset cannot clear everything, remove the PWA from the Home Screen or clear website data for DeepSignal in iOS
-          Settings, then reconnect your wallet.
+          iOS は Web サイトデータ、ウォレット連携状態、インストール済み PWA シェルを DeepSignal の制御外に保持することがあります。リセットで消し切れない場合は、
+          ホーム画面から PWA を削除するか、iOS 設定で DeepSignal の Web サイトデータを削除してからウォレットを再接続してください。
         </p>
       </section>
 
       <section className="panel reset-all-zone">
         <div>
-          <p className="eyebrow">Danger Zone</p>
-          <h2>Reset All</h2>
+          <p className="eyebrow">危険ゾーン</p>
+          <h2>すべてリセット</h2>
           <p>
-            Disconnects the current wallet session, clears DeepSignal browser storage, deletes DeepSignal IndexedDB and
-            Cache Storage entries, unregisters DeepSignal service workers, then returns to the DeepSignal home screen.
-            On-chain forms, Walrus blobs, and submitted signals are not deleted.
+            現在のウォレットセッションを切断し、DeepSignal のブラウザストレージ、IndexedDB、Cache Storage エントリを削除し、
+            DeepSignal の Service Worker 登録を解除してから DeepSignal のホーム画面へ戻ります。オンチェーンフォーム、Walrus blob、送信済みシグナルは削除されません。
           </p>
         </div>
         <button
@@ -201,7 +197,7 @@ export function ResetEnvironmentPanel() {
             )
           }
         >
-          {runningAction === "resetAll" ? "Resetting..." : "Reset All"}
+          {runningAction === "resetAll" ? "リセット中..." : "すべてリセット"}
         </button>
       </section>
     </section>

@@ -99,17 +99,17 @@ export function SignalMetaChip({ type, value, className = "" }: SignalMetaChipPr
         onFocus={() => setIsVisible(true)}
         onBlur={() => !copied && setIsVisible(false)}
         title={value}
-        aria-label={`Copy metadata value ${value}`}
+        aria-label={`メタデータ値をコピー ${value}`}
       >
         <span className="signal-meta-chip-label">{label}</span>
         <span className="signal-meta-chip-copy" aria-hidden="true">
-          {copied ? "Copied" : "Copy"}
+          {copied ? "コピー済み" : "コピー"}
         </span>
       </button>
       {isVisible ? (
         <span className="signal-meta-tooltip" role="status" aria-live="polite">
           <span className="signal-meta-tooltip-value">{value}</span>
-          {copied ? <span className="signal-meta-tooltip-copy">Copied</span> : null}
+          {copied ? <span className="signal-meta-tooltip-copy">コピーしました</span> : null}
         </span>
       ) : null}
     </span>
@@ -120,7 +120,7 @@ export function SignalMetaRow({
   label,
   type,
   value,
-  emptyLabel = "Not available",
+  emptyLabel = "利用できません",
   children,
 }: SignalMetaRowProps) {
   return (

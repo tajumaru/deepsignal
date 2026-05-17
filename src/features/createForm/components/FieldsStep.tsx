@@ -56,7 +56,7 @@ const libraryBlocks: Array<{
   { type: "video", icon: "VID", titleKey: "libraryVideoUpload", mirrorTitle: "Video Block", mirrorBody: "Motion evidence upload", mirrorKind: "media" },
   { type: "url", icon: "->", titleKey: "libraryUrl", mirrorTitle: "Reference Block", mirrorBody: "Link external context", mirrorKind: "attachment" },
   { type: "rating", icon: "*", titleKey: "libraryStarRating", mirrorTitle: "Sentiment Block", mirrorBody: "Quick intensity rating", mirrorKind: "question" },
-  { icon: "ID", titleKey: "libraryWalletAddress", soon: true, mirrorTitle: "Wallet Block", mirrorBody: "Wallet identity signal", mirrorKind: "identity" },
+  { type: "walletAddress", icon: "💧", titleKey: "libraryWalletAddress", mirrorTitle: "Wallet Block", mirrorBody: "Validated SUI address", mirrorKind: "identity" },
   { icon: "OK", titleKey: "librarySignatureVerification", soon: true, mirrorTitle: "Signature Block", mirrorBody: "Proof-of-author block", mirrorKind: "identity" },
   { icon: "PX", titleKey: "libraryEncryptedAnswer", soon: true, mirrorTitle: "Sealed Block", mirrorBody: "Encrypted answer node", mirrorKind: "attachment" },
 ];
@@ -304,7 +304,7 @@ export function FieldsStep({
                   }}
                   disabled={!block.type}
                 >
-                  <span className="composer-library-card-icon" aria-hidden="true">
+                  <span className={`composer-library-card-icon ${block.icon === "💧" ? "is-drop" : ""}`} aria-hidden="true">
                     {block.icon}
                   </span>
                   <span className="composer-library-card-copy">

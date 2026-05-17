@@ -8,6 +8,7 @@ import {
   type CriticalFailure,
 } from "../../../lib/criticalFailure";
 import { isAttachmentFieldType, isConfirmationCheckboxField } from "../../../lib/fieldTypes";
+import { getSuiAddressValidationState, normalizeValidSuiAddress } from "../../../lib/suiAddress";
 import { getSubmissionCategoryFromPurpose } from "../../../lib/formTemplates";
 import { isResponseDeadlinePassed } from "../../../lib/responseDeadline";
 import { ensureRespondentSession } from "../../../lib/respondentSession";
@@ -675,6 +676,9 @@ export function usePublicSubmission({
         if (field.type === "url" && value && !isValidUrlAnswer(value)) {
           nextErrors[field.id] = "Enter a valid URL starting with http:// or https://";
         }
+        if (field.type === "walletAddress" && value && getSuiAddressValidationState(value) === "invalid") {
+          nextErrors[field.id] = "Enter a valid SUI address.";
+        }
         return;
       }
       const missing =
@@ -694,6 +698,9 @@ export function usePublicSubmission({
       }
       if (field.type === "url" && value && !isValidUrlAnswer(value)) {
         nextErrors[field.id] = "Enter a valid URL starting with http:// or https://";
+      }
+      if (field.type === "walletAddress" && value && getSuiAddressValidationState(value) === "invalid") {
+        nextErrors[field.id] = "Enter a valid SUI address.";
       }
     });
     setErrors(nextErrors);
@@ -929,13 +936,19 @@ export function usePublicSubmission({
         }
       }
 
+      const normalizedAnswers = Object.fromEntries(
+        Object.entries(plainAnswers).map(([fieldId, value]) => {
+          const field = form.fields.find((candidate) => candidate.id === fieldId);
+          return [fieldId, field?.type === "walletAddress" ? normalizeValidSuiAddress(value) : value];
+        }),
+      );
       const publicPayloadAnswers = Object.fromEntries(
-        visibleFields.filter((field) => !field.sensitive).map((field) => [field.id, plainAnswers[field.id]]),
+        visibleFields.filter((field) => !field.sensitive).map((field) => [field.id, normalizedAnswers[field.id]]),
       );
       const submission: Submission = {
         id: makeId("submission"),
         formId: form.id,
-        answers: plainAnswers,
+        answers: normalizedAnswers,
         attachments,
         publicPayload: form.encryptSubmissions
           ? undefined

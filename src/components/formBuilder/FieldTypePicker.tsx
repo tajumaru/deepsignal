@@ -19,6 +19,7 @@ type FieldTypeDescriptionKey =
   | "fieldTypeDescriptionConfirmation"
   | "fieldTypeDescriptionRating"
   | "fieldTypeDescriptionUrl"
+  | "fieldTypeDescriptionWalletAddress"
   | "fieldTypeDescriptionScreenshot"
   | "fieldTypeDescriptionVideo";
 
@@ -52,7 +53,10 @@ const fieldTypeCategories: Array<{
   },
   {
     title: "Validation / Agreement",
-    choices: [{ type: "confirmation", icon: "OK", descriptionKey: "fieldTypeDescriptionConfirmation" }],
+    choices: [
+      { type: "confirmation", icon: "OK", descriptionKey: "fieldTypeDescriptionConfirmation" },
+      { type: "walletAddress", icon: "💧", descriptionKey: "fieldTypeDescriptionWalletAddress" },
+    ],
   },
   {
     title: "Metadata",
@@ -112,7 +116,7 @@ export function FieldTypePicker({ open, onClose, onPick }: FieldTypePickerProps)
                         onClose();
                       }}
                     >
-                      <span className="composer-field-type-icon" aria-hidden="true">
+                      <span className={`composer-field-type-icon ${choice.icon === "💧" ? "is-drop" : ""}`} aria-hidden="true">
                         {choice.icon}
                       </span>
                       <span className="composer-field-type-copy">

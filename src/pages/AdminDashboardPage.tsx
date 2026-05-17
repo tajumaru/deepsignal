@@ -2427,7 +2427,7 @@ export function AdminDashboardPage() {
                           </span>
                           <button
                             type="button"
-                            className="primary-button review-save-button"
+                            className={`primary-button review-save-button ${hasReviewDraftChanges ? "is-draft-ready" : ""}`}
                             disabled={isReviewWorkbenchLocked || saving || !hasReviewDraftChanges}
                             onClick={() => void handleSaveReviewDraft()}
                           >
@@ -2458,37 +2458,29 @@ export function AdminDashboardPage() {
                           <p className="eyebrow">{t("stepLabel", { count: 1 })}</p>
                           <strong>{t("reviewReadSignalTitle")}</strong>
                         </div>
-                        <div className="review-action-bar">
-                          <button
-                            type="button"
-                            className="ghost-button review-secondary-button"
-                            disabled={isReviewWorkbenchLocked || saving || draftReviewStatus === "read"}
-                            onClick={() =>
-                              void updateSubmission({
-                                ...selectedRecord.submission,
-                                ...(activeReviewDraft ?? {}),
-                                status: "read",
-                              })
-                            }
-                          >
-                            {t("markAsRead")}
-                          </button>
-                          <button
-                            type="button"
-                            className="ghost-button review-secondary-button"
+                        <label className="review-select review-step-select">
+                          <span>{t("reviewStateLabel")}</span>
+                          <select
+                            value={draftReviewStatus}
                             disabled={isReviewWorkbenchLocked || saving}
-                            onClick={() =>
+                            onChange={(event) => {
+                              const nextStatus = event.target.value as Submission["status"];
                               void updateSubmission({
                                 ...selectedRecord.submission,
                                 ...(activeReviewDraft ?? {}),
-                                status: "archived",
-                                triageStatus: "closed",
-                              })
-                            }
+                                status: nextStatus,
+                                triageStatus:
+                                  nextStatus === "archived"
+                                    ? "closed"
+                                    : (activeReviewDraft?.triageStatus ?? selectedRecord.submission.triageStatus),
+                              });
+                            }}
                           >
-                            {t("markAsHandled")}
-                          </button>
-                        </div>
+                            <option value="unread">{t("statusUnread")}</option>
+                            <option value="read">{t("statusRead")}</option>
+                            <option value="archived">{t("statusArchived")}</option>
+                          </select>
+                        </label>
                       </div>
                       <div className="review-stage-card">
                         <div className="review-stage-header">

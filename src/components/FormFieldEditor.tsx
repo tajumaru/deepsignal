@@ -187,7 +187,7 @@ export function FormFieldEditor({
       return <DateInput value="" language={language} disabled readOnly />;
     }
 
-    if (field.type === "shortText" || field.type === "url") {
+    if (field.type === "shortText" || field.type === "url" || field.type === "walletAddress") {
       return (
         <input
           type={field.type === "url" ? "url" : "text"}
@@ -195,7 +195,7 @@ export function FormFieldEditor({
           value=""
           placeholder={
             field.placeholder ??
-            (field.type === "url" ? "https://example.com" : t("placeholderExample"))
+            (field.type === "url" ? "https://example.com" : field.type === "walletAddress" ? t("suiAddressPlaceholder") : t("placeholderExample"))
           }
           readOnly
         />

@@ -18,24 +18,24 @@ export interface ResetOperationResult {
 }
 
 const RESET_LABELS: Record<ResetOperation, string> = {
-  walletDisconnect: "Wallet disconnect",
-  localCache: "Local and session storage",
+  walletDisconnect: "ウォレット切断",
+  localCache: "ローカル / セッションストレージ",
   indexedDb: "IndexedDB",
-  cacheStorage: "Service Worker cache",
-  serviceWorkers: "Service Worker registrations",
+  cacheStorage: "Service Worker キャッシュ",
+  serviceWorkers: "Service Worker 登録",
 };
 
 const DEEPSIGNAL_STORAGE_PREFIXES = ["deepsignal.", "deepsignal:"];
 const DEEPSIGNAL_NAME_MARKERS = ["deepsignal", "deep-signal", "walrus-feedback-lab"];
 
 export const RESET_CONFIRMATION_MESSAGE =
-  "Reset local DeepSignal data on this device? Your on-chain forms and submissions will not be deleted, but cached sessions and local encryption state will be cleared.";
+  "このデバイス上の DeepSignal ローカルデータをリセットしますか？オンチェーンフォームと送信内容は削除されませんが、キャッシュ済みセッションとローカルの暗号化状態は削除されます。";
 
 export const RESET_SUCCESS_MESSAGE =
-  "Local DeepSignal state has been reset. Please reconnect your wallet.";
+  "DeepSignal のローカル状態をリセットしました。ウォレットを再接続してください。";
 
 export const RESET_FAILURE_MESSAGE =
-  "Some local data could not be cleared. You may need to remove the PWA or clear website data from iOS Settings.";
+  "一部のローカルデータを削除できませんでした。PWA を削除するか、iOS 設定から Web サイトデータを削除する必要があるかもしれません。";
 
 function createResult(
   operation: ResetOperation,
@@ -85,7 +85,7 @@ function deleteDatabase(name: string) {
 export async function clearLocalCache(): Promise<ResetOperationResult> {
   try {
     if (typeof window === "undefined") {
-      return createResult("localCache", "skipped", "Browser storage is not available in this environment.");
+      return createResult("localCache", "skipped", "この環境ではブラウザストレージを利用できません。");
     }
     clearSealSessionCache();
     const removedLocalKeys = window.localStorage ? removeMatchingStorageKeys(window.localStorage) : [];
@@ -94,20 +94,20 @@ export async function clearLocalCache(): Promise<ResetOperationResult> {
     return createResult(
       "localCache",
       "success",
-      `${removedCount} DeepSignal storage key${removedCount === 1 ? "" : "s"} and in-memory Seal session cache cleared.`,
+      `${removedCount} 件の DeepSignal ストレージキーと、メモリ内の Seal セッションキャッシュを削除しました。`,
     );
   } catch (error) {
-    return createResult("localCache", "failed", "Could not clear browser local cache.", error);
+    return createResult("localCache", "failed", "ブラウザのローカルキャッシュを削除できませんでした。", error);
   }
 }
 
 export async function clearIndexedDb(): Promise<ResetOperationResult> {
   try {
     if (typeof indexedDB === "undefined") {
-      return createResult("indexedDb", "skipped", "IndexedDB is not available in this browser.");
+      return createResult("indexedDb", "skipped", "このブラウザでは IndexedDB を利用できません。");
     }
     if (typeof indexedDB.databases !== "function") {
-      return createResult("indexedDb", "skipped", "This browser does not expose indexedDB.databases().");
+      return createResult("indexedDb", "skipped", "このブラウザでは indexedDB.databases() が公開されていません。");
     }
 
     const databases = await indexedDB.databases();
@@ -116,38 +116,38 @@ export async function clearIndexedDb(): Promise<ResetOperationResult> {
       .filter((name): name is string => Boolean(name && isDeepSignalNamedResource(name)));
 
     if (names.length === 0) {
-      return createResult("indexedDb", "success", "No DeepSignal IndexedDB databases found.");
+      return createResult("indexedDb", "success", "DeepSignal の IndexedDB データベースは見つかりませんでした。");
     }
 
     const statuses = await Promise.all(names.map((name) => deleteDatabase(name)));
     const failedCount = statuses.filter((status) => status === "failed").length;
     if (failedCount > 0) {
-      return createResult("indexedDb", "failed", `${names.length - failedCount}/${names.length} DeepSignal IndexedDB databases deleted.`);
+      return createResult("indexedDb", "failed", `${names.length} 件中 ${names.length - failedCount} 件の DeepSignal IndexedDB データベースを削除しました。`);
     }
-    return createResult("indexedDb", "success", `${names.length} DeepSignal IndexedDB database${names.length === 1 ? "" : "s"} deleted.`);
+    return createResult("indexedDb", "success", `${names.length} 件の DeepSignal IndexedDB データベースを削除しました。`);
   } catch (error) {
-    return createResult("indexedDb", "failed", "Could not enumerate or delete IndexedDB databases.", error);
+    return createResult("indexedDb", "failed", "IndexedDB データベースの列挙または削除ができませんでした。", error);
   }
 }
 
 export async function clearServiceWorkerCache(): Promise<ResetOperationResult> {
   try {
     if (typeof caches === "undefined") {
-      return createResult("cacheStorage", "skipped", "Cache Storage is not available in this browser.");
+      return createResult("cacheStorage", "skipped", "このブラウザでは Cache Storage を利用できません。");
     }
     const keys = await caches.keys();
     const deepSignalKeys = keys.filter(isDeepSignalNamedResource);
     await Promise.all(deepSignalKeys.map((key) => caches.delete(key)));
-    return createResult("cacheStorage", "success", `${deepSignalKeys.length} DeepSignal cache${deepSignalKeys.length === 1 ? "" : "s"} deleted.`);
+    return createResult("cacheStorage", "success", `${deepSignalKeys.length} 件の DeepSignal キャッシュを削除しました。`);
   } catch (error) {
-    return createResult("cacheStorage", "failed", "Could not clear Cache Storage.", error);
+    return createResult("cacheStorage", "failed", "Cache Storage を削除できませんでした。", error);
   }
 }
 
 export async function unregisterServiceWorkers(): Promise<ResetOperationResult> {
   try {
     if (typeof navigator === "undefined" || !("serviceWorker" in navigator)) {
-      return createResult("serviceWorkers", "skipped", "Service workers are not available in this browser.");
+      return createResult("serviceWorkers", "skipped", "このブラウザでは Service Worker を利用できません。");
     }
     const registrations = await navigator.serviceWorker.getRegistrations();
     const deepSignalRegistrations = registrations.filter(
@@ -161,10 +161,10 @@ export async function unregisterServiceWorkers(): Promise<ResetOperationResult> 
     return createResult(
       "serviceWorkers",
       "success",
-      `${deepSignalRegistrations.length} DeepSignal service worker registration${deepSignalRegistrations.length === 1 ? "" : "s"} unregistered. Reload the page to finish.`,
+      `${deepSignalRegistrations.length} 件の DeepSignal Service Worker 登録を解除しました。完了するにはページを再読み込みしてください。`,
     );
   } catch (error) {
-    return createResult("serviceWorkers", "failed", "Could not unregister service workers.", error);
+    return createResult("serviceWorkers", "failed", "Service Worker 登録を解除できませんでした。", error);
   }
 }
 
@@ -172,13 +172,13 @@ export async function disconnectWalletForReset(
   disconnectWallet?: () => Promise<void>,
 ): Promise<ResetOperationResult> {
   if (!disconnectWallet) {
-    return createResult("walletDisconnect", "skipped", "No wallet disconnect handler was provided.");
+    return createResult("walletDisconnect", "skipped", "ウォレット切断ハンドラーが指定されていません。");
   }
   try {
     await disconnectWallet();
-    return createResult("walletDisconnect", "success", "Wallet session disconnected.");
+    return createResult("walletDisconnect", "success", "ウォレットセッションを切断しました。");
   } catch (error) {
-    return createResult("walletDisconnect", "failed", "Could not disconnect wallet session.", error);
+    return createResult("walletDisconnect", "failed", "ウォレットセッションを切断できませんでした。", error);
   }
 }
 

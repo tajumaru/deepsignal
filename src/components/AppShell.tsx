@@ -5,6 +5,7 @@ import { WalletSurface } from "./WalletSurface";
 import { BuildIndicator } from "./system/BuildIndicator";
 import { useI18n } from "../i18n";
 import { retryLazyImport } from "../lib/lazyRetry";
+import { isSignalInboxPath } from "../lib/navigation";
 
 const WalletConnect = lazy(() =>
   retryLazyImport(() => import("./WalletConnect")).then((module) => ({ default: module.WalletConnect })),
@@ -94,9 +95,7 @@ function useWalletChrome(walletAvailable: boolean) {
 function MobileAppBottomNav() {
   const location = useLocation();
   const { t } = useI18n();
-  const inboxActive =
-    location.pathname.startsWith("/admin") ||
-    location.pathname.startsWith("/dashboard");
+  const inboxActive = isSignalInboxPath(location.pathname);
 
   return (
     <nav className="mobile-inbox-bottom-nav" aria-label="Mobile workspace navigation">

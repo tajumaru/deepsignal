@@ -1,6 +1,7 @@
 import { useRef, type CSSProperties } from "react";
 import { useI18n } from "../i18n";
 import { isAttachmentFieldType, isConfirmationCheckboxField, isLongTextLikeField } from "../lib/fieldTypes";
+import { getSuiAddressValidationState, normalizeValidSuiAddress } from "../lib/suiAddress";
 import type { FormField } from "../types";
 import { CountrySelectQuestion } from "./CountrySelectQuestion";
 import { DateInput } from "./DateInput";
@@ -93,6 +94,7 @@ export function DynamicField({
   const markdownTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const isRequired = required ?? field.required;
   const fieldErrorId = `${field.id}-error`;
+  const fieldStatusId = `${field.id}-status`;
   const hasError = Boolean(error);
   const selectedAttachments = Array.isArray(value)
     ? value.filter((item): item is UploadDropzoneItem => Boolean(item) && typeof item === "object" && "id" in item)
@@ -108,6 +110,13 @@ export function DynamicField({
       : field.type === "video"
         ? "Attach evidence"
         : "Attach supporting file");
+  const suiAddressStatus = field.type === "walletAddress" ? getSuiAddressValidationState(value) : "empty";
+  const suiAddressStatusLabel =
+    suiAddressStatus === "valid"
+      ? t("suiAddressValid")
+      : suiAddressStatus === "invalid"
+        ? t("suiAddressInvalid")
+        : t("suiAddressHint");
 
   function updateCheckbox(option: string, checked: boolean) {
     const current = Array.isArray(value) ? value : [];
@@ -466,6 +475,27 @@ export function DynamicField({
           aria-describedby={hasError ? fieldErrorId : undefined}
           onChange={(event) => onChange(event.target.value)}
         />
+      ) : null}
+
+      {field.type === "walletAddress" ? (
+        <div className={`sui-address-input-shell is-${suiAddressStatus}`}>
+          <input
+            type="text"
+            inputMode="text"
+            autoCapitalize="none"
+            spellCheck={false}
+            placeholder={field.placeholder ?? t("suiAddressPlaceholder")}
+            value={String(value ?? "")}
+            disabled={disabled}
+            aria-invalid={hasError || suiAddressStatus === "invalid"}
+            aria-describedby={hasError ? fieldErrorId : suiAddressStatus !== "empty" ? fieldStatusId : undefined}
+            onChange={(event) => onChange(event.target.value)}
+            onBlur={() => onChange(normalizeValidSuiAddress(value))}
+          />
+          <small id={fieldStatusId} className={`sui-address-validation is-${suiAddressStatus}`} aria-live="polite">
+            {suiAddressStatusLabel}
+          </small>
+        </div>
       ) : null}
 
       {isAttachmentFieldType(field.type) ? (
