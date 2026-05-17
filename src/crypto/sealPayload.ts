@@ -56,6 +56,7 @@ export interface SealPolicySnapshot {
   ownerAddress?: string;
   walletAddress?: string;
   serverObjectIds: string[];
+  rawPolicyJson: string;
   normalizedPolicyJson: string;
 }
 
@@ -267,10 +268,12 @@ export function createSealPolicySnapshot(input: {
     serverObjectIds,
     capabilityType: input.capabilityType ?? getSealPolicyCapabilityType(input.policyId),
   };
+  const rawPolicyJson = JSON.stringify(sortPolicyValue(snapshotInput), null, 2);
   const normalizedPolicyJson = stableSerializePolicy(snapshotInput);
   return {
     ...snapshotInput,
     walletAddress,
+    rawPolicyJson,
     policyHash: hashSealPolicyJson(normalizedPolicyJson),
     normalizedPolicyJson,
   } satisfies SealPolicySnapshot;

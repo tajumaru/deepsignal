@@ -35,6 +35,7 @@ import {
   type ResponsesCsvSortOrder,
 } from "../lib/exportResponses";
 import { getPublicFormPath, getPublicRoadmapPath } from "../lib/publicLinks";
+import { clearDeepSignalPolicyCapabilityCache } from "../lib/debugCache";
 import { formatResponseDeadline, type ResponseDeadlineLabels } from "../lib/responseDeadline";
 import { getRespondentDisplayLabel, getSubmissionRespondentMeta } from "../lib/respondentMeta";
 import {
@@ -153,7 +154,12 @@ export function FormSubmissionsPage() {
   const suiClient = useSuiClient();
   const signPersonalMessage = useSignPersonalMessage();
   const updateSignalStatusTx = useSignAndExecuteTransaction();
-  const { capabilityProfile, isLoadingAccess, ownedObjects } = useAccessControl(account?.address);
+  const {
+    capabilityProfile,
+    isLoadingAccess,
+    ownedObjects,
+    refetch: refetchAccessControl,
+  } = useAccessControl(account?.address);
   const reviewDeniedBody = capabilityProfile.isConfigured ? t("reviewAccessRequiresCapability") : undefined;
   const { formId = "", submissionId = "" } = useParams();
   const sealRuntime = getSealRuntimeStatus();
@@ -164,6 +170,14 @@ export function FormSubmissionsPage() {
     daysLeft: (days) => t("responseDeadlineDaysLeft", { count: days }),
   };
   const sealRuntimeLabel = sealRuntime.activeMode.toUpperCase();
+
+  async function handleClearDebugPolicyCache() {
+    await clearDeepSignalPolicyCapabilityCache();
+    await refetchAccessControl();
+    setDecryptDiagnostics(null);
+    setDecryptError("");
+    setDecryptStatusMessage("Cached policy data cleared. Unlock again to refetch wallet objects.");
+  }
 
   function renderAnswerValue(field: FormSchema["fields"][number], value: unknown) {
     if (isLongTextLikeField(field.type)) {
@@ -893,6 +907,7 @@ export function FormSubmissionsPage() {
       <div className="review-unlock-block">
         <PrivateSignalUnlockCard
           onUnlock={() => void handleDecrypt()}
+          onClearDebugCache={() => void handleClearDebugPolicyCache()}
           onCancel={handleCancelDecrypt}
           isDecrypting={isDecryptInteractionLocked}
           isUnlocked={Boolean(detailAnswers)}

@@ -56,10 +56,21 @@ export interface DecryptDiagnosticContext {
   policySnapshotComparison?: {
     matches: boolean;
     differingKeys: string[];
+    diffs: Array<{
+      key: string;
+      encryptValue: unknown;
+      decryptValue: unknown;
+    }>;
   };
   requiredCapabilityObjects?: Array<{
     type: string;
     objectId?: string;
+  }>;
+  objectIdSources?: Array<{
+    label: string;
+    objectId?: string;
+    source: string;
+    type?: string;
   }>;
   ownedCapabilityObjects?: Array<{
     type: string;
@@ -114,8 +125,39 @@ export function buildDecryptDiagnosticContext(
     gateway: WALRUS_AGGREGATOR_URL,
     source: submission.encryptedPayload ? "submission.inlineEncryptedPayload" : "storage.readEncryptedPayload",
     ownedCapabilityObjects: context.ownedCapabilityObjects,
+    objectIdSources: [
+      ...((context.ownedCapabilityObjects ?? []).map((object) => ({
+        label: "wallet owned capability",
+        objectId: object.objectId,
+        source: "wallet owned objects",
+        type: object.type,
+      }))),
+      {
+        label: "form project ID",
+        objectId: form.projectId,
+        source: "form metadata",
+        type: "Project",
+      },
+      {
+        label: "form owner address",
+        objectId: form.ownerAddress,
+        source: "form metadata",
+        type: "Owner wallet",
+      },
+      {
+        label: "submission Seal identity",
+        objectId: parseRealSealIdentityObjectId(submission.sealIdentity),
+        source: submission.encryptedPayload ? "local cache" : "form metadata",
+        type: "Seal encrypted object",
+      },
+    ].filter((entry) => entry.objectId),
     ...overrides,
   };
+}
+
+function parseRealSealIdentityObjectId(value?: string) {
+  const [, , objectId] = value?.split(":") ?? [];
+  return objectId;
 }
 
 export function buildSealDecryptPolicySnapshot(input: {
@@ -154,6 +196,41 @@ export function buildSealDecryptPolicySnapshot(input: {
   });
 }
 
+export function buildSealEncryptPolicySnapshotFromEnvelope(envelope: RealSealEnvelope) {
+  return createSealPolicySnapshot({
+    network: envelope.network,
+    packageId: envelope.packageId,
+    objectId: envelope.objectId,
+    policyId: envelope.policyId,
+    policyObjectId: envelope.policyObjectId,
+    projectId: envelope.projectId,
+    ownerAddress: envelope.ownerAddress,
+    walletAddress: envelope.ownerAddress,
+    serverObjectIds: envelope.serverObjectIds,
+    capabilityType: getSealPolicyCapabilityType(envelope.policyId),
+  });
+}
+
+export function normalizeStoredSealPolicySnapshot(
+  snapshot: SealPolicySnapshot | undefined,
+): SealPolicySnapshot | undefined {
+  if (!snapshot) {
+    return undefined;
+  }
+  return createSealPolicySnapshot({
+    network: snapshot.network,
+    packageId: snapshot.packageId,
+    objectId: snapshot.objectId,
+    policyId: snapshot.policyId,
+    policyObjectId: snapshot.policyObjectId,
+    projectId: snapshot.projectId,
+    ownerAddress: snapshot.ownerAddress,
+    walletAddress: snapshot.walletAddress,
+    serverObjectIds: snapshot.serverObjectIds,
+    capabilityType: snapshot.capabilityType,
+  });
+}
+
 export function compareSealPolicySnapshots(
   encryptPolicySnapshot?: SealPolicySnapshot,
   decryptPolicySnapshot?: SealPolicySnapshot,
@@ -173,19 +250,38 @@ export function compareSealPolicySnapshots(
     "ownerAddress",
     "normalizedPolicyJson",
   ] as const;
-  const differingKeys: string[] = keys.filter((key) => encryptPolicySnapshot[key] !== decryptPolicySnapshot[key]);
+  const diffs: Array<{ key: string; encryptValue: unknown; decryptValue: unknown }> = [];
+  keys.forEach((key) => {
+    if (encryptPolicySnapshot[key] !== decryptPolicySnapshot[key]) {
+      diffs.push({
+        key,
+        encryptValue: encryptPolicySnapshot[key],
+        decryptValue: decryptPolicySnapshot[key],
+      });
+    }
+  });
   if (
     encryptPolicySnapshot.walletAddress &&
     encryptPolicySnapshot.walletAddress !== decryptPolicySnapshot.walletAddress
   ) {
-    differingKeys.push("walletAddress");
+    diffs.push({
+      key: "walletAddress",
+      encryptValue: encryptPolicySnapshot.walletAddress,
+      decryptValue: decryptPolicySnapshot.walletAddress,
+    });
   }
   if (encryptPolicySnapshot.serverObjectIds.join("\n") !== decryptPolicySnapshot.serverObjectIds.join("\n")) {
-    differingKeys.push("serverObjectIds");
+    diffs.push({
+      key: "serverObjectIds",
+      encryptValue: encryptPolicySnapshot.serverObjectIds,
+      decryptValue: decryptPolicySnapshot.serverObjectIds,
+    });
   }
+  const differingKeys = diffs.map((diff) => diff.key);
   return {
     matches: differingKeys.length === 0,
     differingKeys,
+    diffs,
   };
 }
 

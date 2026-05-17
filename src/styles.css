@@ -5950,6 +5950,16 @@ h2 {
   font-weight: 700;
 }
 
+.seal-policy-debug-alert {
+  margin: 0 0.85rem 0.85rem;
+  border: 1px solid rgba(255, 171, 105, 0.42);
+  border-radius: 6px;
+  padding: 0.6rem 0.7rem;
+  background: rgba(74, 30, 13, 0.42);
+  color: #ffd6b7;
+  line-height: 1.45;
+}
+
 .seal-policy-debug-panel dl,
 .seal-policy-debug-grid {
   display: grid;
@@ -5966,6 +5976,10 @@ h2 {
   border-radius: 6px;
   padding: 0.55rem;
   background: rgba(255, 255, 255, 0.035);
+}
+
+.seal-policy-debug-grid-wide {
+  grid-template-columns: 1fr;
 }
 
 .seal-policy-debug-panel dt,
@@ -5986,6 +6000,36 @@ h2 {
   overflow-wrap: anywhere;
   font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
   line-height: 1.45;
+}
+
+.seal-policy-diff-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  color: #e6f6ff;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  line-height: 1.45;
+}
+
+.seal-policy-diff-table th,
+.seal-policy-diff-table td {
+  border-top: 1px solid rgba(169, 216, 237, 0.12);
+  padding: 0.45rem 0.35rem;
+  text-align: left;
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+
+.seal-policy-diff-table th {
+  color: #8caabb;
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.seal-policy-diff-table tr.is-critical td {
+  background: rgba(255, 171, 105, 0.08);
+  color: #ffe3cc;
 }
 
 @keyframes privateSignalSpin {

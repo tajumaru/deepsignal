@@ -5,7 +5,6 @@ import { WalletSurface } from "./components/WalletSurface";
 import { WalrusRuntimeSurface } from "./components/WalrusRuntimeSurface";
 import { retryLazyImport } from "./lib/lazyRetry";
 import { REQUIRE_GLOBAL_WALRUS_RUNTIME } from "./lib/runtimeFlags";
-import { DemoModePage } from "./pages/DemoModePage";
 import { LandingPage } from "./pages/LandingPage";
 import { PublicFormPage } from "./pages/PublicFormPage";
 
@@ -77,8 +76,6 @@ function InitialBootReady({ onReady, children }: { onReady: () => void; children
 
 export default function App() {
   const location = useLocation();
-  const demoModeEnabled = location.pathname === "/demo" || new URLSearchParams(location.search).get("demo") === "1";
-  const renderLanding = demoModeEnabled && location.pathname === "/" ? <DemoModePage /> : <LandingPage />;
   const routeUsesPublicChrome =
     location.pathname.startsWith("/f/") ||
     location.pathname.startsWith("/roadmap/") ||
@@ -127,8 +124,7 @@ export default function App() {
         <Suspense fallback={bootDismissed ? <RouteFallback /> : null}>
           <InitialBootReady onReady={() => setInitialRouteReady(true)}>
             <Routes>
-              <Route path="/" element={renderLanding} />
-              <Route path="/demo" element={<DemoModePage />} />
+              <Route path="/" element={<LandingPage />} />
               <Route
                 path="/explore"
                 element={
@@ -249,7 +245,6 @@ export default function App() {
             </Routes>
           </InitialBootReady>
         </Suspense>
-        {demoModeEnabled ? <div className="demo-mode-badge">Demo mode</div> : null}
       </AppShell>
     </WalletSurface>
   );

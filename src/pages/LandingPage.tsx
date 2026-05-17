@@ -446,9 +446,6 @@ export function LandingPage() {
               <CreateFormLink className="primary-button landing-cta-primary">
                 {t("landingHeroContestCreate")}
               </CreateFormLink>
-              <Link className="ghost-button landing-cta-secondary" to="/demo">
-                Start demo
-              </Link>
               <Link className="landing-hero-text-link" to="/explore">
                 {t("landingHeroDemo")}
               </Link>

@@ -54,6 +54,7 @@ import {
 } from "../lib/exportResponses";
 import { getEncryptedPayloadAvailabilityLabel, hasDedicatedEncryptedPayloadBlob } from "../lib/encryptionDisplay";
 import { getPublicFormPath, getPublicRoadmapPath } from "../lib/publicLinks";
+import { clearDeepSignalPolicyCapabilityCache } from "../lib/debugCache";
 import { formatResponseDeadline, type ResponseDeadlineLabels } from "../lib/responseDeadline";
 import { getRespondentDisplayLabel, getSubmissionRespondentMeta } from "../lib/respondentMeta";
 import {
@@ -373,6 +374,7 @@ export function AdminDashboardPage() {
     isPending: isLoadingCapabilities,
     isLoadingAccess,
     ownedObjects,
+    refetch: refetchAccessControl,
   } = useAccessControl(account?.address);
   const storageRuntime = getStorageRuntimeStatus();
   const responseDeadlineLabels: ResponseDeadlineLabels = {
@@ -499,6 +501,15 @@ export function AdminDashboardPage() {
   const roleLabel = getRoleLabel(capabilityProfile);
   const accessState = account?.address ? "allowed" : "denied";
   const privateReviewLabel = t("privateReviewEnabled");
+
+  async function handleClearDebugPolicyCache() {
+    const result = await clearDeepSignalPolicyCapabilityCache();
+    await refetchAccessControl();
+    setToast({
+      tone: "success",
+      message: `Cleared cached policy data (${result.removedLocalStorageKeys.length} local, ${result.removedSessionStorageKeys.length} session).`,
+    });
+  }
 
   function renderAnswerValue(field: { type: string }, value: unknown) {
     if (isLongTextLikeField(field.type as FormSchema["fields"][number]["type"])) {
@@ -1485,9 +1496,6 @@ export function AdminDashboardPage() {
                 >
                   {t("navCreateForm")}
                 </CreateFormLink>
-                <Link className="ghost-button" to="/demo">
-                  Start demo
-                </Link>
                 <button
                   type="button"
                   className="ghost-button"
@@ -2038,6 +2046,7 @@ export function AdminDashboardPage() {
                     {selectedRecordNeedsDecrypt ? (
                       <PrivateSignalUnlockCard
                         onUnlock={() => void handleDecrypt()}
+                        onClearDebugCache={() => void handleClearDebugPolicyCache()}
                         isDecrypting={decrypting || decryptInFlightRef.current}
                         isUnlocked={Boolean(detailAnswers)}
                         unlockState={decryptState}

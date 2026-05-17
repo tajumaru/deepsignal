@@ -57,9 +57,9 @@ Walrus manifests let an operator recover the form/submission graph from blob ref
 **Roadmaps are derived from review decisions.**  
 The public roadmap only exposes selected `planned`, `in_progress`, and `fixed` signals, and encrypted roadmap entries show safe metadata only.
 
-## Demo Flow
+## Review Flow
 
-This is the fastest judging path through the current UX.
+This is the fastest path through the current UX.
 
 1. Run the app and open the landing page.
 2. Choose **Create signal** and build a form as a guest draft.
@@ -72,14 +72,6 @@ This is the fastest judging path through the current UX.
 9. Triage the signal, set priority/tags/notes, assign roadmap stage, and export JSON or CSV.
 10. Open `/explore` or `/roadmap/:formId` and confirm that public views contain only selected roadmap-safe metadata.
 
-### Contest Demo Mode
-
-Open `/demo` or use `?demo=1` on the landing route for a desktop-first recording path. Demo Mode seeds a sample workspace, form, responses, and SignalInbox state in local storage, then walks through:
-
-Create Signal -> Add questions -> Publish -> Open public form -> Submit response -> View in SignalInbox -> Export CSV.
-
-Demo Mode is explicit only. It uses mock/fallback status surfaces so wallet prompts, Walrus writes, or Seal availability do not block a 60-90 second contest video, while normal create, public response, admin, and production data paths remain unchanged.
-
 ## Why Walrus / Seal / Sui
 
 | Layer | Why DeepSignal Uses It |
@@ -88,7 +80,7 @@ Demo Mode is explicit only. It uses mock/fallback status surfaces so wallet prom
 | **Seal** | Private submissions should fail closed when encryption is required. Seal lets DeepSignal encrypt sensitive payloads and require wallet/session approval before review. |
 | **Sui** | Creator/admin/reviewer authority should be portable and extensible. The Move package models owner, admin, reviewer, project, form, and signal approval paths for future protocol-grade access policy. |
 
-DeepSignal still preserves local/demo fallback behavior. If Walrus is not configured, the app can run in `localStorage` mode for demos and development. If a runtime Walrus write fails, the app saves locally and tells the user. Encryption is stricter: when protected submissions require Seal and encryption is unavailable, DeepSignal does not silently save plaintext private data.
+DeepSignal still preserves local fallback behavior. If Walrus is not configured, the app can run in `localStorage` mode for development and recovery scenarios. If a runtime Walrus write fails, the app saves locally and tells the user. Encryption is stricter: when protected submissions require Seal and encryption is unavailable, DeepSignal does not silently save plaintext private data.
 
 ## Contest Fit / Why Walrus
 
@@ -227,7 +219,7 @@ The Move package includes:
 - `OwnerCap`, `AdminCap`, and `ReviewerCap` based gating for creator/reviewer surfaces;
 - project-backed `seal_approve_project_signal`, `seal_approve_project_admin`, and reviewer approval routes.
 
-When `VITE_PACKAGE_ID` is not configured, the app falls back to owner-address and local/demo behavior so older forms and demos remain usable.
+When `VITE_PACKAGE_ID` is not configured, the app falls back to owner-address and local compatibility behavior so older forms remain usable.
 
 ## Quick Start
 

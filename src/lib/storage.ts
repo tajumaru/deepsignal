@@ -11,10 +11,12 @@ import {
   DecryptDiagnosticError,
   buildDecryptDiagnosticContext,
   buildSealDecryptPolicySnapshot,
+  buildSealEncryptPolicySnapshotFromEnvelope,
   classifyDecryptError,
   compareSealPolicySnapshots,
   describeEncryptedPayloadShape,
   logDecryptDiagnostic,
+  normalizeStoredSealPolicySnapshot,
   validateEncryptedPayloadOrThrow,
 } from "../crypto/decryptDiagnostics";
 import { fromBase64, parseRealSealEnvelope, toBase64 } from "../crypto/sealPayload";
@@ -638,8 +640,11 @@ export async function resolveSubmissionAnswers(
         envelope,
         context,
       });
+      const encryptPolicySnapshot =
+        normalizeStoredSealPolicySnapshot(envelope.encryptPolicySnapshot) ??
+        buildSealEncryptPolicySnapshotFromEnvelope(envelope);
       const policySnapshotComparison = compareSealPolicySnapshots(
-        envelope.encryptPolicySnapshot,
+        encryptPolicySnapshot,
         decryptPolicySnapshot,
       );
       const diagnostics = {
@@ -651,7 +656,7 @@ export async function resolveSubmissionAnswers(
         accessObjectId: envelope.objectId,
         policyObjectId: envelope.policyObjectId,
         approvalPolicy: envelope.policyId,
-        encryptPolicySnapshot: envelope.encryptPolicySnapshot,
+        encryptPolicySnapshot,
         decryptPolicySnapshot,
         normalizedPolicyJson: decryptPolicySnapshot.normalizedPolicyJson,
         policySerializationOutput: decryptPolicySnapshot.normalizedPolicyJson,
@@ -662,6 +667,45 @@ export async function resolveSubmissionAnswers(
             objectId: decryptPolicySnapshot.policyObjectId,
           },
         ],
+        objectIdSources: [
+          ...(baseDiagnostics.objectIdSources ?? []),
+          {
+            label: "encrypted payload object ID",
+            objectId: envelope.objectId,
+            source: submission.encryptedPayload ? "local cache" : "encrypted payload envelope",
+            type: "Seal encrypted object",
+          },
+          {
+            label: "envelope policy object ID",
+            objectId: envelope.policyObjectId,
+            source: submission.encryptedPayload ? "local cache" : "encrypted payload envelope",
+            type: "Seal policy object",
+          },
+          {
+            label: "encrypt policy object ID",
+            objectId: envelope.encryptPolicySnapshot?.objectId,
+            source: "encrypt policy",
+            type: "Seal encrypted object",
+          },
+          {
+            label: "encrypt policy policy object ID",
+            objectId: envelope.encryptPolicySnapshot?.policyObjectId,
+            source: "encrypt policy",
+            type: envelope.encryptPolicySnapshot?.capabilityType,
+          },
+          {
+            label: "decrypt policy object ID",
+            objectId: decryptPolicySnapshot.objectId,
+            source: "decrypt policy",
+            type: "Seal encrypted object",
+          },
+          {
+            label: "decrypt policy policy object ID",
+            objectId: decryptPolicySnapshot.policyObjectId,
+            source: "decrypt policy",
+            type: decryptPolicySnapshot.capabilityType,
+          },
+        ].filter((entry) => entry.objectId),
         encryptedPayloadShape: describeEncryptedPayloadShape(payload),
         ciphertextSize: envelope.encryptedObject.length,
       };

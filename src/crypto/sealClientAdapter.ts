@@ -61,6 +61,11 @@ const SESSION_KEY_STORAGE_PREFIX = "deepsignal.seal.sessionKey";
 const sessionKeyCache = new Map<string, SessionKey>();
 const pendingSessionKeyPromises = new Map<string, Promise<SessionKey>>();
 
+export function clearSealSessionCache() {
+  sessionKeyCache.clear();
+  pendingSessionKeyPromises.clear();
+}
+
 function debugSealClientError(event: string, details: Record<string, unknown>, error: unknown) {
   console.debug("[seal-client]", event, {
     ...details,
