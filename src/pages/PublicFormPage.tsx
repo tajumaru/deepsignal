@@ -78,6 +78,8 @@ export function PublicFormPage() {
     failure,
     diagnosticsCopied,
     hasRecoverableDraft,
+    recoveryGuidance,
+    recoveryCorrupted,
     submitPipeline,
     storageConnectionPreparing,
     visibleFieldIds,
@@ -85,6 +87,7 @@ export function PublicFormPage() {
     handleSubmit,
     restoreDraft,
     discardDraft,
+    discardRecovery,
     copyDiagnostics,
   } = usePublicSubmission({
     form,
@@ -344,7 +347,9 @@ export function PublicFormPage() {
   }
 
   const failureActions =
-    failure?.kind === "wallet_disconnected"
+    recoveryCorrupted
+      ? [{ key: "discard", label: t("discardRecovery"), onClick: discardRecovery }]
+      : failure?.kind === "wallet_disconnected"
       ? [{ key: "reconnect", label: t("reconnectWallet"), onClick: triggerWalletReconnect }]
       : failure?.kind === "registry_failed"
         ? [{ key: "retry", label: t("retryLabel"), onClick: retrySubmit, disabled: storageConnectionPreparing }]
@@ -515,12 +520,13 @@ export function PublicFormPage() {
           title={t("submitRecoveryTitle")}
           copyLabel={t("copyDiagnostics")}
           copiedLabel={t("diagnosticsCopied")}
+          guidance={recoveryGuidance}
           copied={diagnosticsCopied}
           actions={failureActions}
           onCopyDiagnostics={copyDiagnostics}
         />
       ) : null}
-      {submitError ? <p className="error-text">{submitError}</p> : null}
+      {submitError && !failure ? <p className="error-text">{submitError}</p> : null}
       <div className="public-form-actions">
         <div className="public-submit-bar-copy" aria-live="polite">
           <span>{submitReadinessLabel}</span>

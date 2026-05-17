@@ -27,6 +27,7 @@ import {
   subscribeWalrusRuntime,
   waitForWalrusMutationRuntimeReady,
 } from "../../../storage/walrusAdapter";
+import { isQuotaExceededError, isRateLimitError } from "../../../storage/walrusDiagnostics";
 import type { FormSchema, Submission, SubmissionAttachment } from "../../../types";
 import { getOrderedFields, getVisibleFieldIds, isFieldRequired } from "../../../utils/formLogic";
 import type { PublicAnswers, ValidationErrors } from "../types";
@@ -35,6 +36,9 @@ const REAL_SEAL_PROJECT_REQUIRED_MESSAGE =
   "Real Seal encrypted submissions require a project or form owner wallet. Connect the creator wallet or turn off Encrypt submissions.";
 const STORAGE_CONNECTION_PREPARING_MESSAGE =
   "Storage connection is still preparing. Please wait a moment and try again.";
+const RECOVERY_CORRUPTED_MESSAGE = "Stored recovery data could not be restored.";
+const MAX_RECOVERY_RETRIES = 3;
+const PENDING_ENCRYPTED_PAYLOADS_KEY = "deepsignal.encryptedPayloads";
 
 export const SIGNAL_PIPELINE_STAGES = [
   "preparing_signal",
@@ -61,6 +65,14 @@ interface RecoverablePublicDraft {
 
 function createDraftStorageKey(formId: string, manifestBlobId: string) {
   return `deepsignal:public-draft:${formId}:${manifestBlobId || "direct"}`;
+}
+
+function createRecoveryRetryStorageKey(formId: string, manifestBlobId: string) {
+  return `deepsignal:public-recovery-retries:${formId}:${manifestBlobId || "direct"}`;
+}
+
+function createCorruptedRecoveryStorageKey(formId: string, manifestBlobId: string) {
+  return `deepsignal:public-recovery-corrupted:${formId}:${manifestBlobId || "direct"}`;
 }
 
 function hasRecoverableAnswers(answers: PublicAnswers) {
@@ -166,6 +178,47 @@ function getDiagnosticErrorMessage(error: unknown): string {
   return error.message;
 }
 
+function getStoredRecoveryRetryCount(key: string) {
+  if (!key) {
+    return 0;
+  }
+  try {
+    return Math.max(0, Number(window.localStorage.getItem(key) ?? "0") || 0);
+  } catch {
+    return 0;
+  }
+}
+
+function classifyRecoveryStorageError(error: unknown, message: string) {
+  const diagnosticMessage = getDiagnosticErrorMessage(error);
+  const lower = `${message} ${diagnosticMessage}`.toLowerCase();
+  if (isQuotaExceededError(error) || lower.includes("quota")) {
+    return {
+      category: "quota_exceeded",
+      guidance:
+        "The storage quota has been exceeded. Free up browser storage or Walrus capacity, then discard this recovery before starting again.",
+    };
+  }
+  if (isRateLimitError(error)) {
+    return {
+      category: "rate_limited",
+      guidance: "The storage service is rate limiting requests. Wait a few minutes before trying again.",
+    };
+  }
+  if (
+    lower.includes("walrus") ||
+    lower.includes("storage") ||
+    lower.includes("upload") ||
+    lower.includes("blob")
+  ) {
+    return {
+      category: "storage_unavailable",
+      guidance: "The storage service could not accept the recovery upload. Check connectivity and storage configuration.",
+    };
+  }
+  return null;
+}
+
 interface UsePublicSubmissionArgs {
   form: FormSchema | null;
   initialAnswers: PublicAnswers;
@@ -206,6 +259,8 @@ export function usePublicSubmission({
   const [failure, setFailure] = useState<CriticalFailure | null>(null);
   const [diagnosticsCopied, setDiagnosticsCopied] = useState(false);
   const [hasRecoverableDraft, setHasRecoverableDraft] = useState(false);
+  const [recoveryGuidance, setRecoveryGuidance] = useState("");
+  const [recoveryCorrupted, setRecoveryCorrupted] = useState(false);
   const [walrusRuntime, setWalrusRuntime] = useState(() => getWalrusMutationRuntimeStatus());
   const [submitPipeline, setSubmitPipeline] = useState<SignalPipelineState>({
     stage: "preparing_signal",
@@ -225,6 +280,8 @@ export function usePublicSubmission({
     setFailure(null);
     setDiagnosticsCopied(false);
     setHasRecoverableDraft(false);
+    setRecoveryGuidance("");
+    setRecoveryCorrupted(false);
     setSubmitPipeline({ stage: "preparing_signal", status: "idle" });
   }, [initialAnswers]);
 
@@ -246,19 +303,54 @@ export function usePublicSubmission({
     () => (form ? createDraftStorageKey(form.id, manifestBlobId) : ""),
     [form, manifestBlobId],
   );
+  const recoveryRetryStorageKey = useMemo(
+    () => (form ? createRecoveryRetryStorageKey(form.id, manifestBlobId) : ""),
+    [form, manifestBlobId],
+  );
+  const corruptedRecoveryStorageKey = useMemo(
+    () => (form ? createCorruptedRecoveryStorageKey(form.id, manifestBlobId) : ""),
+    [form, manifestBlobId],
+  );
 
   useEffect(() => {
     if (!draftStorageKey) {
       setHasRecoverableDraft(false);
+      setRecoveryCorrupted(false);
       return;
     }
     try {
       const rawDraft = window.localStorage.getItem(draftStorageKey);
-      setHasRecoverableDraft(Boolean(rawDraft));
+      const rawCorrupted = corruptedRecoveryStorageKey
+        ? window.localStorage.getItem(corruptedRecoveryStorageKey)
+        : null;
+      const corrupted = Boolean(rawDraft && rawCorrupted);
+      setRecoveryCorrupted(corrupted);
+      setHasRecoverableDraft(Boolean(rawDraft) && !corrupted);
+      if (corrupted) {
+        const parsed = rawCorrupted ? JSON.parse(rawCorrupted) as { guidance?: string; category?: string; retries?: number } : {};
+        setRecoveryGuidance(parsed.guidance ?? "");
+        setSubmitError(parsed.guidance ?? "");
+        setFailure(
+          createCriticalFailure({
+            error: new Error(RECOVERY_CORRUPTED_MESSAGE),
+            surface: "walrus",
+            step: "recovery",
+            retryable: false,
+            diagnostics: {
+              formId: form?.id,
+              manifestBlobId,
+              recoveryCorrupted: true,
+              recoveryCategory: parsed.category,
+              recoveryRetries: parsed.retries,
+            },
+          }),
+        );
+      }
     } catch {
       setHasRecoverableDraft(false);
+      setRecoveryCorrupted(false);
     }
-  }, [draftStorageKey]);
+  }, [corruptedRecoveryStorageKey, draftStorageKey, form?.id, manifestBlobId]);
 
   useEffect(() => {
     setErrors((current) => {
@@ -270,7 +362,10 @@ export function usePublicSubmission({
   function updateAnswer(fieldId: string, value: unknown) {
     setAnswers((current) => ({ ...current, [fieldId]: value }));
     setErrors((current) => ({ ...current, [fieldId]: "" }));
-    setFailure(null);
+    if (!recoveryCorrupted) {
+      setFailure(null);
+      setRecoveryGuidance("");
+    }
   }
 
   function persistDraft(nextAnswers: PublicAnswers) {
@@ -281,8 +376,12 @@ export function usePublicSubmission({
       answers: sanitizeDraftAnswers(nextAnswers, attachmentFields),
       savedAt: new Date().toISOString(),
     };
-    window.localStorage.setItem(draftStorageKey, JSON.stringify(payload));
-    setHasRecoverableDraft(true);
+    try {
+      window.localStorage.setItem(draftStorageKey, JSON.stringify(payload));
+      setHasRecoverableDraft(true);
+    } catch {
+      setHasRecoverableDraft(false);
+    }
   }
 
   function clearDraft() {
@@ -291,6 +390,61 @@ export function usePublicSubmission({
     }
     window.localStorage.removeItem(draftStorageKey);
     setHasRecoverableDraft(false);
+  }
+
+  function clearRecoveryRetryState() {
+    if (recoveryRetryStorageKey) {
+      window.localStorage.removeItem(recoveryRetryStorageKey);
+    }
+    if (corruptedRecoveryStorageKey) {
+      window.localStorage.removeItem(corruptedRecoveryStorageKey);
+    }
+    setRecoveryCorrupted(false);
+    setRecoveryGuidance("");
+  }
+
+  function markRecoveryCorrupted(details: { category?: string; guidance?: string; retries: number; rawError?: string }) {
+    if (corruptedRecoveryStorageKey) {
+      try {
+        window.localStorage.setItem(
+          corruptedRecoveryStorageKey,
+          JSON.stringify({
+            ...details,
+            corruptedAt: new Date().toISOString(),
+          }),
+        );
+      } catch {
+        // The in-memory corrupted state still stops retries when local storage is full.
+      }
+    }
+    setRecoveryCorrupted(true);
+    setRecoveryGuidance(details.guidance ?? "");
+    setHasRecoverableDraft(false);
+  }
+
+  function recordRecoveryFailure(error: unknown, message: string) {
+    const classification = classifyRecoveryStorageError(error, message);
+    if (!classification || !recoveryRetryStorageKey) {
+      return { corrupted: false, retries: 0, classification };
+    }
+    const retries = getStoredRecoveryRetryCount(recoveryRetryStorageKey) + 1;
+    try {
+      window.localStorage.setItem(recoveryRetryStorageKey, String(retries));
+    } catch {
+      // Keep going; quota failures are still represented in the visible failure state.
+    }
+    const corrupted = retries >= MAX_RECOVERY_RETRIES;
+    if (corrupted) {
+      markRecoveryCorrupted({
+        category: classification.category,
+        guidance: classification.guidance,
+        retries,
+        rawError: getDiagnosticErrorMessage(error),
+      });
+    } else {
+      setRecoveryGuidance(classification.guidance);
+    }
+    return { corrupted, retries, classification };
   }
 
   function restoreDraft() {
@@ -307,6 +461,7 @@ export function usePublicSubmission({
       setAnswers((current) => ({ ...current, ...draft.answers }));
       setErrors({});
       setFailure(null);
+      clearRecoveryRetryState();
       setHasRecoverableDraft(false);
     } catch {
       clearDraft();
@@ -315,6 +470,24 @@ export function usePublicSubmission({
 
   function discardDraft() {
     clearDraft();
+  }
+
+  function discardRecovery() {
+    clearDraft();
+    clearRecoveryRetryState();
+    try {
+      window.localStorage.removeItem(PENDING_ENCRYPTED_PAYLOADS_KEY);
+    } catch {
+      // Best-effort cleanup; the UI state reset below still gives the responder a clean page.
+    }
+    setAnswers(initialAnswers);
+    setErrors({});
+    setSubmitted(null);
+    setSubmitError("");
+    setSubmitNotice("");
+    setFailure(null);
+    setDiagnosticsCopied(false);
+    setSubmitPipeline({ stage: "preparing_signal", status: "idle" });
   }
 
   async function copyDiagnostics() {
@@ -401,6 +574,23 @@ export function usePublicSubmission({
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
     if (!form || submitting) {
+      return;
+    }
+    if (recoveryCorrupted) {
+      setSubmitError(recoveryGuidance);
+      setFailure(
+        createCriticalFailure({
+          error: new Error(RECOVERY_CORRUPTED_MESSAGE),
+          surface: "walrus",
+          step: "recovery",
+          retryable: false,
+          diagnostics: {
+            formId: form.id,
+            manifestBlobId,
+            recoveryCorrupted: true,
+          },
+        }),
+      );
       return;
     }
     if (isResponseDeadlinePassed(form.responseDeadline)) {
@@ -703,6 +893,7 @@ export function usePublicSubmission({
       setSubmitted(savedSubmission);
       setSubmitNotice(notices.join(" "));
       clearDraft();
+      clearRecoveryRetryState();
       setFailure(null);
       setSubmitPipeline({ stage: "signal_secured", status: "complete", message: "Signal secured." });
     } catch (error) {
@@ -717,12 +908,20 @@ export function usePublicSubmission({
         });
       }
       const message = getUserFacingSubmissionError(error, submitFailedLabel);
+      const recoveryFailure = recordRecoveryFailure(error, message);
+      const displayMessage = recoveryFailure.corrupted ? RECOVERY_CORRUPTED_MESSAGE : message;
+      const retryable =
+        recoveryFailure.corrupted || recoveryFailure.classification?.category === "quota_exceeded"
+          ? false
+          : undefined;
       setSubmitError(message);
-      failPipeline(message);
-      persistDraft(answers);
+      failPipeline(displayMessage);
+      if (!recoveryFailure.corrupted) {
+        persistDraft(answers);
+      }
       setFailure(
         createCriticalFailure({
-          error: new Error(message),
+          error: new Error(displayMessage),
           surface:
             message.toLowerCase().includes("encrypt") || message.toLowerCase().includes("seal")
               ? "seal"
@@ -730,6 +929,7 @@ export function usePublicSubmission({
                 ? "wallet"
                 : "walrus",
           step: submitPipeline.stage,
+          retryable,
           diagnostics: {
             formId: form.id,
             manifestBlobId,
@@ -737,6 +937,10 @@ export function usePublicSubmission({
             attachWallet,
             walrusRuntime: getWalrusMutationRuntimeStatus(),
             rawError: getDiagnosticErrorMessage(error),
+            recoveryCategory: recoveryFailure.classification?.category,
+            recoveryRetries: recoveryFailure.retries,
+            recoveryRetryLimit: MAX_RECOVERY_RETRIES,
+            recoveryCorrupted: recoveryFailure.corrupted,
           },
         }),
       );
@@ -755,6 +959,8 @@ export function usePublicSubmission({
     failure,
     diagnosticsCopied,
     hasRecoverableDraft,
+    recoveryGuidance,
+    recoveryCorrupted,
     submitPipeline,
     storageConnectionPreparing:
       Boolean(accountAddress && (walletRequired || attachWallet)) &&
@@ -766,6 +972,7 @@ export function usePublicSubmission({
     handleSubmit,
     restoreDraft,
     discardDraft,
+    discardRecovery,
     copyDiagnostics,
   };
 }

@@ -25,6 +25,8 @@ import { localStorageAdapter } from "./localStorageAdapter";
 import {
   WalrusDiagnosticError,
   getWalrusErrorMessage,
+  isQuotaExceededError,
+  isRateLimitError,
   isWalrusDiagnosticError,
 } from "./walrusDiagnostics";
 import {
@@ -436,6 +438,22 @@ function normalizeWalrusWriteError(error: unknown) {
   if (error instanceof Error) {
     const message = error.message;
     const lower = message.toLowerCase();
+
+    if (isQuotaExceededError(error)) {
+      return new WalrusDiagnosticError(
+        "Walrus upload failed: storage quota exceeded.",
+        { stage: "upload-relay", category: "quota_exceeded" },
+        error,
+      );
+    }
+
+    if (isRateLimitError(error)) {
+      return new WalrusDiagnosticError(
+        "Walrus upload failed: the storage service is rate limiting requests.",
+        { stage: "upload-relay", category: "rate_limited" },
+        error,
+      );
+    }
 
     if (error.name === "TimeoutError" || lower.includes("signal timed out")) {
       return new WalrusDiagnosticError(

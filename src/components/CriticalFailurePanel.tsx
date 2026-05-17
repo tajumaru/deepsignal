@@ -12,6 +12,7 @@ interface CriticalFailurePanelProps {
   title: string;
   copyLabel: string;
   copiedLabel: string;
+  guidance?: string;
   actions?: CriticalFailureAction[];
   copied?: boolean;
   onCopyDiagnostics: () => void | Promise<void>;
@@ -22,6 +23,7 @@ export function CriticalFailurePanel({
   title,
   copyLabel,
   copiedLabel,
+  guidance,
   actions = [],
   copied = false,
   onCopyDiagnostics,
@@ -36,6 +38,7 @@ export function CriticalFailurePanel({
         <span className="signal-chip signal-chip-warn">{failure.id}</span>
       </div>
       <p className="error-text">{failure.message}</p>
+      {guidance ? <p className="muted">{guidance}</p> : null}
       {failure.uploadSucceeded && !failure.registryUpdated ? (
         <div className="metadata-list">
           <div className="metadata-row">

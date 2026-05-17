@@ -11,6 +11,7 @@ export interface WalrusFailureDetails {
   digest?: string;
   lastRpcError?: string;
   timeoutMs?: number;
+  category?: "quota_exceeded" | "rate_limited" | "storage_unavailable";
 }
 
 export class WalrusDiagnosticError extends Error {
@@ -40,6 +41,24 @@ export function getWalrusErrorMessage(error: unknown) {
     return error.message.trim() || error.name;
   }
   return String(error);
+}
+
+export function isQuotaExceededError(error: unknown) {
+  if (error instanceof Error && error.name === "QuotaExceededError") {
+    return true;
+  }
+  const message = getWalrusErrorMessage(error).toLowerCase();
+  return (
+    message.includes("quota exceeded") ||
+    message.includes("quota has been exceeded") ||
+    message.includes("storage quota") ||
+    message.includes("exceeded the quota")
+  );
+}
+
+export function isRateLimitError(error: unknown) {
+  const message = getWalrusErrorMessage(error).toLowerCase();
+  return message.includes("rate limit") || message.includes("too many requests") || message.includes("status 429");
 }
 
 export function formatWalrusFailureStage(stage: WalrusFailureStage) {

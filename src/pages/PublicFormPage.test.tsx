@@ -311,4 +311,63 @@ describe("PublicFormPage shared manifest restore", () => {
     fireEvent.click(screen.getByRole("button", { name: "restore" }));
     expect(screen.getByRole("textbox")).toHaveValue("Please keep this draft.");
   });
+
+  it("marks repeated quota recovery failures as corrupted and discards local recovery state", async () => {
+    const form: FormSchema = {
+      id: "form-123",
+      title: "Shared Feedback Form",
+      description: "Restored from a Walrus manifest link.",
+      fields: [
+        {
+          id: "field-1",
+          type: "shortText",
+          label: "What happened?",
+          required: true,
+          sensitive: false,
+        },
+      ],
+      createdAt: "2026-05-14T00:00:00.000Z",
+    };
+
+    mockReadManifestWithForm.mockResolvedValue({
+      manifest: {
+        version: 1,
+        formId: "form-123",
+        createdAt: "2026-05-14T00:00:00.000Z",
+        updatedAt: "2026-05-14T00:00:00.000Z",
+        formBlobId: "__bundled_form__",
+        submissions: [],
+      },
+      form,
+    });
+    mockSaveSubmission.mockRejectedValue(new Error("The quota has been exceeded."));
+    window.localStorage.setItem("deepsignal.encryptedPayloads", JSON.stringify([{ blobId: "pending", payload: "sealed" }]));
+
+    render(
+      <MemoryRouter initialEntries={["/f/form-123?manifest=blob-abc"]}>
+        <Routes>
+          <Route path="/f/:formId" element={<PublicFormPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Shared Feedback Form" })).toBeInTheDocument());
+    fireEvent.input(screen.getByRole("textbox"), { target: { value: "Please keep this draft." } });
+
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      fireEvent.click(screen.getByRole("button", { name: "publicSubmitAnonymously" }));
+      await waitFor(() => expect(mockSaveSubmission).toHaveBeenCalledTimes(attempt + 1));
+    }
+
+    await waitFor(() => expect(screen.getAllByText("Stored recovery data could not be restored.").length).toBeGreaterThan(0));
+    expect(screen.queryByRole("button", { name: "retryLabel" })).not.toBeInTheDocument();
+    expect(window.localStorage.getItem("deepsignal:public-recovery-retries:form-123:blob-abc")).toBe("3");
+
+    fireEvent.click(screen.getByRole("button", { name: "discardRecovery" }));
+
+    expect(window.localStorage.getItem("deepsignal:public-draft:form-123:blob-abc")).toBeNull();
+    expect(window.localStorage.getItem("deepsignal.encryptedPayloads")).toBeNull();
+    expect(window.localStorage.getItem("deepsignal:public-recovery-retries:form-123:blob-abc")).toBeNull();
+    expect(screen.getByRole("textbox")).toHaveValue("");
+  });
 });
