@@ -76,7 +76,7 @@ export function SuiAddressDisplay({
       </button>
       {showTooltip && isVisible ? (
         <span className="signal-meta-tooltip" role="status" aria-live="polite">
-          <span className="signal-meta-tooltip-value">{address}</span>
+          <span className="signal-meta-tooltip-value">{shortAddress(address)}</span>
           {copied ? <span className="signal-meta-tooltip-copy">{copiedLabel}</span> : null}
         </span>
       ) : null}

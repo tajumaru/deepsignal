@@ -14675,6 +14675,157 @@ body.composer-mode .bg-orb {
   font-weight: 800;
 }
 
+.workspace-insights-panel {
+  display: grid;
+  gap: 1rem;
+  background:
+    radial-gradient(circle at top right, rgba(116, 226, 255, 0.1), transparent 28%),
+    linear-gradient(180deg, rgba(6, 21, 35, 0.9), rgba(4, 16, 29, 0.94));
+}
+
+.workspace-insights-header {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 0.9rem;
+}
+
+.workspace-insights-header h2,
+.workspace-insights-header .eyebrow {
+  margin-bottom: 0;
+}
+
+.workspace-insights-intro {
+  max-width: 31rem;
+  margin: 0.28rem 0 0;
+  color: #93bdd0;
+  font-size: 0.92rem;
+}
+
+.workspace-insights-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.85rem;
+}
+
+.workspace-insight-card {
+  display: grid;
+  min-width: 0;
+  gap: 0.45rem;
+  padding: 1rem;
+  border: 1px solid rgba(116, 226, 255, 0.14);
+  border-radius: 8px;
+  background:
+    linear-gradient(180deg, rgba(9, 31, 48, 0.84), rgba(4, 18, 31, 0.72));
+  box-shadow:
+    inset 0 1px 0 rgba(191, 247, 255, 0.07),
+    0 12px 28px rgba(2, 10, 18, 0.18);
+}
+
+.workspace-insight-card span {
+  color: #9fd1e3;
+  font-size: 0.78rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0;
+}
+
+.workspace-insight-card strong {
+  color: #eefcff;
+  font-size: clamp(1.55rem, 2.6vw, 2.35rem);
+  line-height: 1;
+}
+
+.workspace-insight-card p {
+  margin-bottom: 0;
+  color: #93bdd0;
+}
+
+.workspace-signal-summary-card {
+  display: grid;
+  gap: 0.8rem;
+  padding: 1rem;
+  border: 1px solid rgba(116, 226, 255, 0.13);
+  border-radius: 8px;
+  background:
+    radial-gradient(circle at 96% 0%, rgba(82, 208, 141, 0.1), transparent 28%),
+    linear-gradient(180deg, rgba(7, 27, 44, 0.76), rgba(4, 18, 31, 0.74));
+  box-shadow:
+    inset 0 1px 0 rgba(191, 247, 255, 0.06),
+    0 12px 28px rgba(2, 10, 18, 0.14);
+}
+
+.workspace-signal-summary-header {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 0.9rem;
+}
+
+.workspace-signal-summary-header h3,
+.workspace-signal-summary-header .eyebrow {
+  margin-bottom: 0;
+}
+
+.workspace-signal-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(24rem, 28rem));
+  gap: 0.85rem;
+  justify-content: start;
+}
+
+.workspace-signal-answer-card {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 1rem;
+  min-width: 0;
+  min-height: 7.9rem;
+  padding: 1rem;
+  border: 1px solid rgba(116, 226, 255, 0.12);
+  border-radius: 8px;
+  background:
+    linear-gradient(180deg, rgba(9, 31, 48, 0.74), rgba(3, 15, 26, 0.58));
+}
+
+.workspace-signal-answer-card > div {
+  display: grid;
+  gap: 0.7rem;
+  min-width: 0;
+}
+
+.workspace-signal-answer-card span {
+  color: #9fd1e3;
+  font-size: 0.84rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0;
+}
+
+.workspace-signal-answer-card strong {
+  color: #eefcff;
+  font-size: clamp(1.15rem, 1.8vw, 1.65rem);
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.workspace-signal-answer-card em {
+  flex: 0 0 auto;
+  padding: 0.34rem 0.7rem;
+  border: 1px solid rgba(102, 227, 255, 0.15);
+  border-radius: 999px;
+  background: rgba(102, 227, 255, 0.08);
+  color: #dffaff;
+  font-size: 0.9rem;
+  font-style: normal;
+  font-weight: 800;
+}
+
+.workspace-signal-summary-empty {
+  margin-bottom: 0;
+  color: #93bdd0;
+}
+
 .activity-badge {
   padding: 0.18rem 0.46rem;
   border: 1px solid rgba(102, 227, 255, 0.16);
@@ -14703,6 +14854,31 @@ body.composer-mode .bg-orb {
 
 .admin-console-layout {
   grid-template-columns: minmax(280px, 320px) minmax(0, 0.9fr) minmax(0, 1.1fr);
+}
+
+@media (min-width: 1201px) {
+  .admin-console-layout {
+    align-items: stretch;
+  }
+
+  .admin-console-layout > .signal-console-region,
+  .admin-console-layout > .signal-inbox-column,
+  .admin-console-layout > .signal-detail-column,
+  .admin-console-layout .signal-sidebar {
+    height: 100%;
+  }
+
+  .signal-console-layout.admin-console-layout .signal-inbox-column,
+  .signal-console-layout.admin-console-layout .signal-detail-column {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .admin-console-layout .signal-inbox-empty-state,
+  .admin-console-layout .signal-detail-empty-state {
+    flex: 1 1 auto;
+    min-height: 0;
+  }
 }
 
 .admin-console-layout .signal-detail-column {
@@ -15422,6 +15598,70 @@ body.composer-mode .bg-orb {
 
 .signal-column-tools input {
   width: min(100%, 320px);
+}
+
+.bulk-decrypt-toolbar {
+  display: grid;
+  justify-items: end;
+  gap: 0.28rem;
+  max-width: min(100%, 320px);
+  color: #9fd1e3;
+  font-size: 0.75rem;
+  line-height: 1.35;
+  text-align: right;
+}
+
+.bulk-decrypt-toolbar .bulk-decrypt-button {
+  width: fit-content;
+  min-width: 0;
+  min-height: 2rem;
+  padding: 0.42rem 0.72rem;
+  font-size: 0.76rem;
+  font-weight: 850;
+}
+
+.bulk-decrypt-toolbar .bulk-decrypt-button:not(:disabled) {
+  border-color: rgba(255, 226, 122, 0.72);
+  background:
+    linear-gradient(135deg, #ffe27a 0%, #fb7185 58%, #38bdf8 100%),
+    #ffe27a;
+  color: #06121f;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.45),
+    0 12px 26px rgba(251, 113, 133, 0.28),
+    0 0 22px rgba(255, 226, 122, 0.22);
+}
+
+.bulk-decrypt-toolbar .bulk-decrypt-button:not(:disabled):hover,
+.bulk-decrypt-toolbar .bulk-decrypt-button:not(:disabled):focus-visible {
+  filter: saturate(1.08) brightness(1.06);
+  transform: translateY(-1px);
+}
+
+.bulk-decrypt-toolbar .bulk-decrypt-button.is-complete:disabled {
+  opacity: 1;
+  border-color: rgba(52, 211, 153, 0.38);
+  background: rgba(52, 211, 153, 0.14);
+  color: #9ff4d5;
+  cursor: default;
+}
+
+.bulk-decrypt-toolbar span,
+.bulk-decrypt-toolbar small {
+  overflow-wrap: anywhere;
+}
+
+.bulk-decrypt-toolbar .is-error {
+  color: #ffc7b8;
+}
+
+.sui-register-button:not(:disabled) {
+  border-color: rgba(52, 211, 153, 0.36);
+  background:
+    linear-gradient(135deg, rgba(52, 211, 153, 0.2), rgba(14, 165, 198, 0.12)),
+    rgba(7, 31, 36, 0.72);
+  color: #d8fff3;
+  box-shadow: 0 10px 22px rgba(52, 211, 153, 0.12);
 }
 
 .signal-list {
@@ -20492,6 +20732,7 @@ body.composer-mode .bg-orb {
   .operations-rail-header,
   .operations-rail,
   .operations-rail-pill-row,
+  .workspace-insights-grid,
   .workspace-dock-actions,
   .project-registry-grid-advanced {
     grid-template-columns: 1fr;

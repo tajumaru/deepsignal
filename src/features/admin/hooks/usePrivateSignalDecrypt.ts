@@ -2,7 +2,7 @@ import {
   useSignPersonalMessage,
   useSuiClient,
 } from "@mysten/dapp-kit";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   REAL_SEAL_SESSION_TTL_MIN,
   SEAL_ADMIN_WALLET_REQUIRED_MESSAGE,
@@ -12,10 +12,15 @@ import {
 import { isDecryptDiagnosticError, type DecryptDiagnosticContext } from "../../../crypto/decryptDiagnostics";
 import type { CapabilityProfile } from "../../../hooks/useAccessControl";
 import { resolveSubmissionAnswers } from "../../../lib/storage";
-import type { Submission } from "../../../types";
+import type { SealDecryptContext, Submission } from "../../../types";
 import type { SignalRecord } from "./useSignalInboxData";
 
 type ToastSetter = (toast: { tone: "success" | "error"; message: string } | null) => void;
+type DecryptedSignalCacheEntry = {
+  answers: Record<string, unknown>;
+  attachments: Submission["attachments"];
+  legacyUnencrypted: boolean;
+};
 
 export type PrivateSignalDecryptUiState =
   | "locked"
@@ -66,6 +71,8 @@ interface DecryptMessages {
   sealRuntimeUnavailable: string;
   encryptedPayloadNotFound: string;
   walletVerifiedPrivateSignalUnlocked: string;
+  bulkDecryptSuccess: (unlockedCount: number) => string;
+  bulkDecryptPartialSuccess: (unlockedCount: number, failedCount: number) => string;
 }
 
 const defaultDecryptMessages: DecryptMessages = {
@@ -85,6 +92,9 @@ const defaultDecryptMessages: DecryptMessages = {
   sealRuntimeUnavailable: "Seal runtime unavailable.",
   encryptedPayloadNotFound: "Encrypted payload could not be found. Try refreshing the inbox, then unlock again.",
   walletVerifiedPrivateSignalUnlocked: "Wallet verified. Private signal unlocked.",
+  bulkDecryptSuccess: (unlockedCount) => `${unlockedCount} private signals unlocked.`,
+  bulkDecryptPartialSuccess: (unlockedCount, failedCount) =>
+    `${unlockedCount} private signals unlocked. ${failedCount} still locked.`,
 };
 
 function getFriendlyDecryptError(reasonCode: string, fallbackMessage: string, messages: DecryptMessages) {
@@ -153,7 +163,13 @@ export function usePrivateSignalDecrypt({
   const [decryptError, setDecryptError] = useState("");
   const [decryptDiagnostics, setDecryptDiagnostics] = useState<DecryptDiagnosticContext | null>(null);
   const [decryptState, setDecryptState] = useState<PrivateSignalDecryptUiState>("locked");
+  const [decryptedSignalsById, setDecryptedSignalsById] = useState<Record<string, DecryptedSignalCacheEntry>>({});
+  const [bulkDecrypting, setBulkDecrypting] = useState(false);
+  const [bulkDecryptStatusMessage, setBulkDecryptStatusMessage] = useState("");
+  const [bulkDecryptError, setBulkDecryptError] = useState("");
+  const [bulkDecryptProgress, setBulkDecryptProgress] = useState({ completed: 0, failed: 0, total: 0 });
   const decryptInFlightRef = useRef(false);
+  const bulkDecryptInFlightRef = useRef(false);
   const decryptRequestIdRef = useRef(0);
   const activeDecryptRequestRef = useRef<{ requestId: number; submissionId: string } | null>(null);
   const selectedSignalIdRef = useRef(selectedSignalId);
@@ -163,23 +179,47 @@ export function usePrivateSignalDecrypt({
     selectedSignalIdRef.current = selectedRecord?.submission.id ?? selectedSignalId;
   }, [selectedRecord?.submission.id, selectedSignalId]);
 
-  const decryptContext = useMemo(
-    () => ({
+  const createDecryptContextForRecord = useCallback(
+    (
+      record: SignalRecord,
+      onStatusChange?: SealDecryptContext["onStatusChange"],
+    ) => ({
       walletAddress: accountAddress ?? undefined,
-      projectId: selectedRecord?.form.projectId,
-      ownerAddress: selectedRecord?.form.ownerAddress,
+      projectId: record.form.projectId,
+      ownerAddress: record.form.ownerAddress,
       reviewerCapId:
         capabilityProfile.hasOwnerCap || capabilityProfile.hasAdminCap
           ? undefined
           : capabilityProfile.reviewerCapIds[0],
       ownedCapabilityObjects,
       suiClient,
+      onStatusChange,
       signPersonalMessage: async (message: Uint8Array) => {
         const result = await signPersonalMessage.mutateAsync({ message });
         return result.signature;
       },
     }),
-    [accountAddress, capabilityProfile, ownedCapabilityObjects, selectedRecord?.form.ownerAddress, selectedRecord?.form.projectId, signPersonalMessage, suiClient],
+    [accountAddress, capabilityProfile, ownedCapabilityObjects, signPersonalMessage, suiClient],
+  );
+
+  const decryptContext = useMemo(
+    () =>
+      selectedRecord
+        ? createDecryptContextForRecord(selectedRecord)
+        : {
+            walletAddress: accountAddress ?? undefined,
+            reviewerCapId:
+              capabilityProfile.hasOwnerCap || capabilityProfile.hasAdminCap
+                ? undefined
+                : capabilityProfile.reviewerCapIds[0],
+            ownedCapabilityObjects,
+            suiClient,
+            signPersonalMessage: async (message: Uint8Array) => {
+              const result = await signPersonalMessage.mutateAsync({ message });
+              return result.signature;
+            },
+          },
+    [accountAddress, capabilityProfile, createDecryptContextForRecord, ownedCapabilityObjects, selectedRecord, signPersonalMessage, suiClient],
   );
 
   useEffect(() => {
@@ -200,19 +240,24 @@ export function usePrivateSignalDecrypt({
     const didSelectionChange = previousSelectedRecordId !== selectedRecord.submission.id;
     previousSelectedRecordIdRef.current = selectedRecord.submission.id;
     if (didSelectionChange) {
+      const cachedSignal = decryptedSignalsById[selectedRecord.submission.id];
       setDetailAnswers(
-        selectedRecord.submission.isEncrypted ? null : selectedRecord.submission.answers,
+        cachedSignal
+          ? cachedSignal.answers
+          : selectedRecord.submission.isEncrypted
+            ? null
+            : selectedRecord.submission.answers,
       );
-      setDetailAttachments(selectedRecord.submission.attachments ?? []);
-      setDetailLegacyUnencrypted(false);
+      setDetailAttachments(cachedSignal ? cachedSignal.attachments : selectedRecord.submission.attachments ?? []);
+      setDetailLegacyUnencrypted(Boolean(cachedSignal?.legacyUnencrypted));
       setDecryptError("");
       setDecryptDiagnostics(null);
-      setDecryptState(selectedRecord.submission.isEncrypted ? "locked" : "decrypted");
+      setDecryptState(selectedRecord.submission.isEncrypted && !cachedSignal ? "locked" : "decrypted");
       if (!decryptInFlightRef.current) {
         setDecryptStatusMessage("");
       }
     }
-  }, [selectedRecord]);
+  }, [decryptedSignalsById, selectedRecord]);
 
   function handleCancelDecrypt() {
     const activeRequest = activeDecryptRequestRef.current;
@@ -249,26 +294,23 @@ export function usePrivateSignalDecrypt({
         selectedRecord.form,
         selectedRecord.submission,
         undefined,
-        {
-          ...decryptContext,
-          onStatusChange: (status) => {
-            const activeRequest = activeDecryptRequestRef.current;
-            if (
-              activeRequest?.requestId !== requestId ||
-              activeRequest.submissionId !== submissionId
-            ) {
-              return;
-            }
-            setDecryptStatusMessage(getDecryptStatusMessage(status, messages));
-            setDecryptState(
-              status === "waiting_wallet_approval"
-                ? "waiting_wallet_approval"
-                : status === "signal_unlocked"
-                  ? "decrypted"
-                  : "decrypting",
-            );
-          },
-        },
+        createDecryptContextForRecord(selectedRecord, (status) => {
+          const activeRequest = activeDecryptRequestRef.current;
+          if (
+            activeRequest?.requestId !== requestId ||
+            activeRequest.submissionId !== submissionId
+          ) {
+            return;
+          }
+          setDecryptStatusMessage(getDecryptStatusMessage(status, messages));
+          setDecryptState(
+            status === "waiting_wallet_approval"
+              ? "waiting_wallet_approval"
+              : status === "signal_unlocked"
+                ? "decrypted"
+                : "decrypting",
+          );
+        }),
       );
       const isLatestRequest =
         activeDecryptRequestRef.current?.requestId === requestId &&
@@ -279,6 +321,14 @@ export function usePrivateSignalDecrypt({
         }
         return;
       }
+      setDecryptedSignalsById((current) => ({
+        ...current,
+        [submissionId]: {
+          answers: resolved.answers,
+          attachments: resolved.attachments,
+          legacyUnencrypted: Boolean(resolved.legacyUnencrypted),
+        },
+      }));
       if (resolved && isLatestRequest && selectedSignalIdRef.current === submissionId) {
         setDetailAnswers(resolved.answers);
         setDetailAttachments(resolved.attachments);
@@ -325,6 +375,112 @@ export function usePrivateSignalDecrypt({
     }
   }
 
+  async function handleDecryptRecords(records: SignalRecord[]) {
+    if (bulkDecryptInFlightRef.current || decryptInFlightRef.current) {
+      return { unlockedCount: 0, failedCount: 0, totalCount: 0 };
+    }
+
+    const targets = records.filter(
+      (record) => record.submission.isEncrypted && !decryptedSignalsById[record.submission.id],
+    );
+    if (targets.length === 0) {
+      setBulkDecryptStatusMessage("");
+      setBulkDecryptError("");
+      setBulkDecryptProgress({ completed: 0, failed: 0, total: 0 });
+      return { unlockedCount: 0, failedCount: 0, totalCount: 0 };
+    }
+
+    bulkDecryptInFlightRef.current = true;
+    setBulkDecrypting(true);
+    setBulkDecryptError("");
+    setBulkDecryptProgress({ completed: 0, failed: 0, total: targets.length });
+
+    let unlockedCount = 0;
+    let failedCount = 0;
+    let firstError = "";
+
+    try {
+      for (const [index, record] of targets.entries()) {
+        const position = index + 1;
+        setBulkDecryptStatusMessage(`${messages.decryptingEncryptedPayload} (${position}/${targets.length})`);
+        try {
+          const resolved = await resolveSubmissionAnswers(
+            record.form,
+            record.submission,
+            undefined,
+            createDecryptContextForRecord(record, (status) => {
+              setBulkDecryptStatusMessage(
+                `${getDecryptStatusMessage(status, messages)} (${position}/${targets.length})`,
+              );
+            }),
+          );
+          if (!resolved) {
+            failedCount += 1;
+            firstError = firstError || messages.encryptedPayloadNotFound;
+            setBulkDecryptProgress({ completed: unlockedCount, failed: failedCount, total: targets.length });
+            continue;
+          }
+          unlockedCount += 1;
+          const cacheEntry = {
+            answers: resolved.answers,
+            attachments: resolved.attachments,
+            legacyUnencrypted: Boolean(resolved.legacyUnencrypted),
+          };
+          setDecryptedSignalsById((current) => ({
+            ...current,
+            [record.submission.id]: cacheEntry,
+          }));
+          if (selectedSignalIdRef.current === record.submission.id) {
+            setDetailAnswers(cacheEntry.answers);
+            setDetailAttachments(cacheEntry.attachments);
+            setDetailLegacyUnencrypted(cacheEntry.legacyUnencrypted);
+            setDecryptState("decrypted");
+            setDecryptStatusMessage(messages.signalUnlocked);
+          }
+          setBulkDecryptProgress({ completed: unlockedCount, failed: failedCount, total: targets.length });
+        } catch (error) {
+          failedCount += 1;
+          const reasonCode = isDecryptDiagnosticError(error)
+            ? error.reasonCode
+            : error instanceof Error && error.message === SEAL_PERMISSION_DENIED_MESSAGE
+              ? "UNAUTHORIZED_WALLET"
+              : "UNKNOWN_DECRYPT_ERROR";
+          firstError =
+            firstError ||
+            (isDecryptDiagnosticError(error)
+              ? getFriendlyDecryptError(error.reasonCode, error.message, messages)
+              : error instanceof Error
+                ? getFriendlyDecryptError(reasonCode, error.message, messages)
+                : decryptFailedLabel);
+          setBulkDecryptProgress({ completed: unlockedCount, failed: failedCount, total: targets.length });
+        }
+      }
+    } finally {
+      bulkDecryptInFlightRef.current = false;
+      setBulkDecrypting(false);
+    }
+
+    if (failedCount > 0) {
+      setBulkDecryptError(firstError || decryptFailedLabel);
+      setToast({
+        tone: unlockedCount > 0 ? "success" : "error",
+        message:
+          unlockedCount > 0
+            ? messages.bulkDecryptPartialSuccess(unlockedCount, failedCount)
+            : firstError || decryptFailedLabel,
+      });
+    } else {
+      setBulkDecryptError("");
+      setToast({
+        tone: "success",
+        message: messages.bulkDecryptSuccess(unlockedCount),
+      });
+    }
+    setBulkDecryptStatusMessage("");
+
+    return { unlockedCount, failedCount, totalCount: targets.length };
+  }
+
   return {
     detailAnswers,
     setDetailAnswers,
@@ -339,10 +495,17 @@ export function usePrivateSignalDecrypt({
     setDecryptError,
     setDecryptDiagnostics,
     setDecryptStatusMessage,
+    decryptedSignalsById,
+    bulkDecrypting,
+    bulkDecryptStatusMessage,
+    bulkDecryptError,
+    bulkDecryptProgress,
     decryptInFlightRef,
+    bulkDecryptInFlightRef,
     activeDecryptSubmissionId: activeDecryptRequestRef.current?.submissionId ?? null,
     decryptContext,
     handleDecrypt,
+    handleDecryptRecords,
     handleCancelDecrypt,
     realSealSessionTtlMinutes: REAL_SEAL_SESSION_TTL_MIN,
   };

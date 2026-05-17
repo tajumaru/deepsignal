@@ -82,7 +82,7 @@ import {
   normalizeSubmission,
   storageAdapter,
 } from "../lib/storage";
-import { formatDate } from "../lib/utils";
+import { flattenAnswer, formatDate } from "../lib/utils";
 import { deleteFormsFromLocalCache, getStorageRuntimeStatus } from "../storage/storageFactory";
 import type { ActivityAction, ActivityEvent, FormSchema, Submission } from "../types";
 
@@ -90,7 +90,16 @@ const MOBILE_REVIEW_MEDIA_QUERY = "(max-width: 768px)";
 const ROADMAP_READY_STATUSES = new Set<Submission["triageStatus"]>(["planned", "in_progress", "fixed"]);
 type ReviewSaveStatus = "idle" | "saving" | "saved" | "skipped" | "error";
 type ReviewDraft = Pick<Submission, "status" | "triageStatus" | "priority" | "signalValue" | "notes">;
-type WorkspaceTab = "inbox" | "activity";
+type WorkspaceTab = "review" | "activity" | "insights";
+interface UnlockedSignalSummary {
+  answers: Record<string, unknown>;
+}
+interface SignalSummaryContentCount {
+  question: string;
+  answer: string;
+  count: number;
+  total: number;
+}
 
 function formatWorkspaceCount(count: number, singular: string, plural = `${singular}s`) {
   return `${count} ${count === 1 ? singular : plural}`;
@@ -128,6 +137,117 @@ function getActivityActionClass(action: ActivityAction) {
     default:
       return "updated";
   }
+}
+
+function shortenSummaryText(text: string, maxLength = 88) {
+  const normalized = text.replace(/\s+/g, " ").trim();
+  if (normalized.length <= maxLength) {
+    return normalized;
+  }
+  return `${normalized.slice(0, maxLength - 3).trim()}...`;
+}
+
+function normalizeReadableAnswer(value: unknown) {
+  const answer = flattenAnswer(value).trim().replace(/\s+/g, " ");
+  return answer && answer.toLowerCase() !== "no answer" ? answer : "";
+}
+
+function getReadableSummaryEntries(
+  record: SignalRecord,
+  t: TranslationFn,
+  unlockedSignalsById?: Record<string, UnlockedSignalSummary>,
+) {
+  const answers =
+    unlockedSignalsById?.[record.submission.id]
+      ? unlockedSignalsById[record.submission.id].answers
+      : record.submission.isEncrypted || record.submission.status === "archived"
+        ? null
+        : record.submission.answers;
+
+  if (!answers) {
+    return [];
+  }
+
+  const entries = record.form.fields
+    .map((field) => ({
+      question: field.label.trim() || field.id,
+      answer: normalizeReadableAnswer(answers[field.id]),
+    }))
+    .filter((entry) => entry.answer);
+
+  if (entries.length > 0) {
+    return entries;
+  }
+
+  const preview = normalizeReadableAnswer(getSignalPreview(record.submission));
+  return preview ? [{ question: t("workspaceSignalFallbackQuestion"), answer: preview }] : [];
+}
+
+function buildSignalSummary(
+  records: SignalRecord[],
+  t: TranslationFn,
+  unlockedSignalsById?: Record<string, UnlockedSignalSummary>,
+) {
+  const encryptedWaitingCount = records.filter(
+    (record) =>
+      record.submission.isEncrypted &&
+      record.submission.status !== "archived" &&
+      !unlockedSignalsById?.[record.submission.id],
+  ).length;
+  const contentCounts = new Map<string, SignalSummaryContentCount>();
+  const questionTotals = new Map<string, number>();
+
+  records.forEach((record) => {
+    const entries = getReadableSummaryEntries(record, t, unlockedSignalsById);
+    const countedQuestions = new Set<string>();
+    entries.forEach((entry) => {
+      const question = entry.question.trim();
+      const answer = entry.answer.trim();
+      if (!question || !answer) {
+        return;
+      }
+      const questionKey = question.toLowerCase();
+      if (!countedQuestions.has(questionKey)) {
+        countedQuestions.add(questionKey);
+        questionTotals.set(questionKey, (questionTotals.get(questionKey) ?? 0) + 1);
+      }
+      const key = `${question.toLowerCase()}::${answer.toLowerCase()}`;
+      const current = contentCounts.get(key);
+      contentCounts.set(key, {
+        question: current?.question ?? question,
+        answer: current?.answer ?? answer,
+        count: (current?.count ?? 0) + 1,
+        total: 0,
+      });
+    });
+  });
+
+  const items = [...contentCounts.values()]
+    .map((item) => ({
+      ...item,
+      total: questionTotals.get(item.question.toLowerCase()) ?? item.count,
+    }))
+    .sort(
+      (first, second) =>
+        second.count - first.count ||
+        first.question.localeCompare(second.question) ||
+        first.answer.localeCompare(second.answer),
+    )
+    .slice(0, 6);
+
+  if (items.length === 0) {
+    return {
+      items: [] as SignalSummaryContentCount[],
+      encryptedWaitingCount,
+      emptyText: t("workspaceSignalSummaryEmpty"),
+    };
+  }
+
+  return {
+    items,
+    encryptedWaitingCount,
+    emptyText: "",
+  };
 }
 
 function WorkspaceActivityLog({
@@ -193,6 +313,93 @@ function WorkspaceActivityLog({
           })}
         </div>
       )}
+    </section>
+  );
+}
+
+function WorkspaceInsights({
+  totalSignals,
+  unreadSignals,
+  needsReviewSignals,
+  encryptedSignals,
+  records,
+  unlockedSignalsById,
+}: {
+  totalSignals: number;
+  unreadSignals: number;
+  needsReviewSignals: number;
+  encryptedSignals: number;
+  records: SignalRecord[];
+  unlockedSignalsById?: Record<string, UnlockedSignalSummary>;
+}) {
+  const { t } = useI18n();
+  const encryptedPercent = totalSignals > 0 ? Math.round((encryptedSignals / totalSignals) * 100) : 0;
+  const signalSummary = buildSignalSummary(records, t, unlockedSignalsById);
+  const metrics = [
+    {
+      label: t("workspaceMetricTotalSignals"),
+      value: totalSignals.toLocaleString(),
+      detail: t("workspaceMetricTotalSignalsDetail"),
+    },
+    {
+      label: t("workspaceMetricNeedsReview"),
+      value: `${unreadSignals.toLocaleString()} / ${needsReviewSignals.toLocaleString()}`,
+      detail: t("workspaceMetricNeedsReviewDetail"),
+    },
+    {
+      label: t("workspaceMetricEncrypted"),
+      value: encryptedSignals.toLocaleString(),
+      detail: t("workspaceMetricEncryptedDetail", { percent: encryptedPercent }),
+    },
+  ];
+
+  return (
+    <section className="panel workspace-insights-panel" aria-labelledby="workspace-insights-title">
+      <div className="workspace-insights-header">
+        <div>
+          <p className="eyebrow">{t("workspaceInsightsEyebrow")}</p>
+          <h2 id="workspace-insights-title">{t("workspaceInsightsTitle")}</h2>
+          <p className="workspace-insights-intro">{t("workspaceInsightsIntro")}</p>
+        </div>
+        <span className="signal-chip signal-chip-soft">{t("workspaceSignalSnapshot")}</span>
+      </div>
+      <div className="workspace-insights-grid">
+        {metrics.map((metric) => (
+          <article key={metric.label} className="workspace-insight-card">
+            <span>{metric.label}</span>
+            <strong>{metric.value}</strong>
+            <p>{metric.detail}</p>
+          </article>
+        ))}
+      </div>
+      <article className="workspace-signal-summary-card">
+        <div className="workspace-signal-summary-header">
+          <div>
+            <p className="eyebrow">{t("workspaceReviewAssistEyebrow")}</p>
+            <h3>{t("workspaceSignalSummaryTitle")}</h3>
+          </div>
+        </div>
+        {signalSummary.items.length > 0 ? (
+          <div className="workspace-signal-summary-grid">
+            {signalSummary.items.map((item) => (
+              <article key={`${item.question}-${item.answer}`} className="workspace-signal-answer-card">
+                <div>
+                  <span>{shortenSummaryText(item.question, 96)}</span>
+                  <strong>{shortenSummaryText(item.answer, 120)}</strong>
+                </div>
+                <em>{item.count} / {t("workspaceSignalsCount", { count: item.total })}</em>
+              </article>
+            ))}
+          </div>
+        ) : (
+          <p className="workspace-signal-summary-empty">{signalSummary.emptyText}</p>
+        )}
+        {signalSummary.encryptedWaitingCount > 0 ? (
+          <p className="workspace-signal-summary-empty">
+            {t("workspaceEncryptedSignalsStillLocked", { count: signalSummary.encryptedWaitingCount })}
+          </p>
+        ) : null}
+      </article>
     </section>
   );
 }
@@ -524,7 +731,7 @@ export function AdminDashboardPage() {
   const [pendingCsvExportForm, setPendingCsvExportForm] = useState<FormSchema | null>(null);
   const [pendingCsvExportResponses, setPendingCsvExportResponses] = useState<Submission[]>([]);
   const [pendingCsvExportOptions, setPendingCsvExportOptions] = useState<ExportResponsesToCsvOptions | null>(null);
-  const [activeWorkspaceTab, setActiveWorkspaceTab] = useState<WorkspaceTab>("inbox");
+  const [activeWorkspaceTab, setActiveWorkspaceTab] = useState<WorkspaceTab>("review");
   const [localActivityEvents, setLocalActivityEvents] = useState<ActivityEvent[]>(() => listActivityEvents());
   const [suiActivityEvents, setSuiActivityEvents] = useState<ActivityEvent[]>([]);
   const { toast, setToast } = useAdminToast();
@@ -614,9 +821,16 @@ export function AdminDashboardPage() {
     decryptError,
     decryptDiagnostics,
     setDecryptError,
+    decryptedSignalsById,
+    bulkDecrypting,
+    bulkDecryptStatusMessage,
+    bulkDecryptError,
+    bulkDecryptProgress,
     decryptInFlightRef,
+    bulkDecryptInFlightRef,
     decryptContext: attachmentDecryptContext,
     handleDecrypt,
+    handleDecryptRecords,
     realSealSessionTtlMinutes,
   } = usePrivateSignalDecrypt({
     accountAddress: account?.address,
@@ -643,6 +857,8 @@ export function AdminDashboardPage() {
       sealRuntimeUnavailable: t("decryptErrorSealRuntimeUnavailable"),
       encryptedPayloadNotFound: t("decryptErrorEncryptedPayloadNotFound"),
       walletVerifiedPrivateSignalUnlocked: t("decryptToastWalletVerifiedPrivateSignalUnlocked"),
+      bulkDecryptSuccess: (count) => t("bulkDecryptToastSuccess", { count }),
+      bulkDecryptPartialSuccess: (count, failed) => t("bulkDecryptToastPartialSuccess", { count, failed }),
     },
   });
   const roleLabel = getRoleLabel(capabilityProfile);
@@ -1668,6 +1884,19 @@ export function AdminDashboardPage() {
   const selectedPendingVisibleCount = visibleSignals.filter((record) =>
     selectedPendingSignalIds.includes(record.submission.id),
   ).length;
+  const bulkDecryptableVisibleSignals = useMemo(
+    () =>
+      visibleSignals.filter(
+        (record) =>
+          record.submission.isEncrypted &&
+          !decryptedSignalsById[record.submission.id] &&
+          canAttemptPrivateSignalDecrypt(record.form, account?.address, capabilityProfile),
+      ),
+    [account?.address, capabilityProfile, decryptedSignalsById, visibleSignals],
+  );
+  const lockedVisibleSignalsCount = visibleSignals.filter(
+    (record) => record.submission.isEncrypted && !decryptedSignalsById[record.submission.id],
+  ).length;
   const nodeDirectoryItems = useMemo(() => {
     const normalizedSearch = nodeSearch.trim().toLowerCase();
     const allFormsItem = {
@@ -1808,6 +2037,7 @@ export function AdminDashboardPage() {
                   type="button"
                   className="ghost-button"
                   onClick={() => {
+                    setActiveWorkspaceTab("review");
                     setSelectedStreamId("all");
                     setSelectedFormId("all");
                     reviewInboxRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -1845,13 +2075,13 @@ export function AdminDashboardPage() {
         </section>
 
         {hasAdminAccess ? (
-          <nav className="workspace-tab-nav" aria-label="Admin workspace sections">
+          <nav className="workspace-tab-nav" aria-label={t("adminWorkspaceSectionsLabel")}>
             <button
               type="button"
-              className={activeWorkspaceTab === "inbox" ? "is-active" : ""}
-              onClick={() => setActiveWorkspaceTab("inbox")}
+              className={activeWorkspaceTab === "review" ? "is-active" : ""}
+              onClick={() => setActiveWorkspaceTab("review")}
             >
-              Signal Inbox
+              {t("adminTabReview")}
             </button>
             <button
               type="button"
@@ -1861,13 +2091,29 @@ export function AdminDashboardPage() {
                 setActiveWorkspaceTab("activity");
               }}
             >
-              Activity
+              {t("adminTabActivity")}
+            </button>
+            <button
+              type="button"
+              className={activeWorkspaceTab === "insights" ? "is-active" : ""}
+              onClick={() => setActiveWorkspaceTab("insights")}
+            >
+              {t("adminTabInsights")}
             </button>
           </nav>
         ) : null}
 
         {activeWorkspaceTab === "activity" && hasAdminAccess ? (
           <WorkspaceActivityLog events={activityEvents} />
+        ) : activeWorkspaceTab === "insights" && hasAdminAccess ? (
+          <WorkspaceInsights
+            totalSignals={allSignals.length}
+            unreadSignals={signalIndex.counts.unread}
+            needsReviewSignals={signalIndex.counts.needsReview}
+            encryptedSignals={signalIndex.counts.encrypted}
+            records={allSignals}
+            unlockedSignalsById={decryptedSignalsById}
+          />
         ) : accessibleForms.length === 0 ? (
           <EmptyState>
             <h2>{t("noCreatorInboxesTitle")}</h2>
@@ -1995,6 +2241,43 @@ export function AdminDashboardPage() {
                     onChange={(event) => setSearch(event.target.value)}
                     placeholder={t("searchSignalsPlaceholder")}
                   />
+                  {hasAdminAccess ? (
+                    <div className="bulk-decrypt-toolbar" aria-live="polite">
+                      <button
+                        type="button"
+                        className={`bulk-decrypt-button ${
+                          bulkDecryptableVisibleSignals.length > 0 ? "primary-button" : "ghost-button is-complete"
+                        }`}
+                        disabled={
+                          bulkDecryptableVisibleSignals.length === 0 ||
+                          bulkDecrypting ||
+                          decrypting ||
+                          decryptInFlightRef.current ||
+                          bulkDecryptInFlightRef.current
+                        }
+                        onClick={() => void handleDecryptRecords(bulkDecryptableVisibleSignals)}
+                      >
+                        {bulkDecrypting
+                          ? t("bulkDecryptingSignals")
+                          : bulkDecryptableVisibleSignals.length > 0
+                            ? t("bulkDecryptVisibleSignals", { count: bulkDecryptableVisibleSignals.length })
+                            : t("bulkDecryptVisibleSignalsComplete")}
+                      </button>
+                      <span>
+                        {bulkDecrypting || bulkDecryptProgress.total > 0
+                          ? t("bulkDecryptProgress", {
+                              completed: bulkDecryptProgress.completed,
+                              failed: bulkDecryptProgress.failed,
+                              total: bulkDecryptProgress.total,
+                            })
+                          : lockedVisibleSignalsCount > 0
+                            ? t("bulkDecryptLockedVisibleSignals", { count: lockedVisibleSignalsCount })
+                            : t("bulkDecryptNoLockedVisibleSignals")}
+                      </span>
+                      {bulkDecryptStatusMessage ? <small>{bulkDecryptStatusMessage}</small> : null}
+                      {bulkDecryptError ? <small className="is-error">{bulkDecryptError}</small> : null}
+                    </div>
+                  ) : null}
                 </div>
               </div>
               {hasAdminAccess ? (
@@ -2006,7 +2289,7 @@ export function AdminDashboardPage() {
                     </div>
                     <button
                       type="button"
-                      className="ghost-button"
+                      className="ghost-button sui-register-button"
                       disabled={selectedPendingSignalIds.length === 0 || registeringSignalIds.length > 0}
                       onClick={() => void handleRegisterPendingSignals()}
                     >
@@ -2020,7 +2303,7 @@ export function AdminDashboardPage() {
               ) : null}
 
               {visibleSignals.length === 0 ? (
-                <EmptyState variant="abyss">
+                <EmptyState className="signal-inbox-empty-state" variant="abyss">
                   <p className="eyebrow">{t("inboxEmptyEyebrow")}</p>
                   <h2>
                     {!hasAdminAccess
@@ -2093,7 +2376,7 @@ export function AdminDashboardPage() {
                     const isSelectedForSui = selectedPendingSignalIds.includes(submission.id);
                     const isLocalOnlySignal = storageLabel === "Stored locally only";
                     const isSelectedSignal = selectedRecord?.submission.id === submission.id;
-                    const isUnlockedSignal = isSelectedSignal && Boolean(detailAnswers);
+                    const isUnlockedSignal = Boolean(decryptedSignalsById[submission.id]) || (isSelectedSignal && Boolean(detailAnswers));
                     const hasNotableStatusBadge =
                       isPendingSui ||
                       isSelectedForSui ||
@@ -2208,7 +2491,12 @@ export function AdminDashboardPage() {
 
             <article ref={signalDetailPanelRef} className="panel signal-detail-column">
               {!selectedRecord ? (
-                <EmptyState variant="abyss" animated={false} showVisual={false}>
+                <EmptyState
+                  className="signal-detail-empty-state"
+                  variant="abyss"
+                  animated={false}
+                  showVisual={false}
+                >
                   <p className="eyebrow">{t("signalDetailTitle")}</p>
                   <h2>{t("noSignalSelectedTitle")}</h2>
                   <p>{t("noSignalSelectedBody")}</p>
@@ -3042,14 +3330,16 @@ export function AdminDashboardPage() {
           </>
         )}
 
-        <AdminOperationsStatus
-          items={operationsStatusItems}
-          nextActionLabel={nextRecommendedAction.label}
-          nextActionDetail={nextRecommendedAction.detail}
-          nextActionCta={nextRecommendedAction.cta}
-        />
+        {activeWorkspaceTab !== "insights" ? (
+          <AdminOperationsStatus
+            items={operationsStatusItems}
+            nextActionLabel={nextRecommendedAction.label}
+            nextActionDetail={nextRecommendedAction.detail}
+            nextActionCta={nextRecommendedAction.cta}
+          />
+        ) : null}
 
-        {hasAdminAccess ? (
+        {hasAdminAccess && activeWorkspaceTab !== "insights" ? (
         <details ref={advancedProjectSettingsRef} className="panel advanced-project-settings">
           <summary>
             <span>

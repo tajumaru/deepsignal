@@ -318,6 +318,45 @@ describe("usePrivateSignalDecrypt", () => {
     expect(result.current.detailAnswers).toBeNull();
   });
 
+  it("decrypts multiple records and reuses cached answers when a signal is selected", async () => {
+    mockedResolveSubmissionAnswers.mockImplementation(async (_form, item) => ({
+      answers: { answer: `answer-${item.id}` },
+      attachments: [],
+      legacyUnencrypted: false,
+    }));
+    const first = record(submission("submission-1"));
+    const second = record(submission("submission-2"));
+    const { result, rerender } = renderDecryptHook({
+      selectedRecord: first,
+      selectedSignalId: "submission-1",
+    });
+
+    await act(async () => {
+      await result.current.handleDecryptRecords([first, second]);
+    });
+
+    expect(mockedResolveSubmissionAnswers).toHaveBeenCalledTimes(2);
+    expect(result.current.decryptedSignalsById["submission-1"].answers).toEqual({
+      answer: "answer-submission-1",
+    });
+    expect(result.current.decryptedSignalsById["submission-2"].answers).toEqual({
+      answer: "answer-submission-2",
+    });
+    expect(result.current.bulkDecryptProgress).toEqual({ completed: 2, failed: 0, total: 2 });
+
+    rerender({
+      selectedRecord: second,
+      selectedSignalId: "submission-2",
+      profile: capabilityProfile(),
+      wallet: "0xreviewer",
+    });
+
+    await waitFor(() => {
+      expect(result.current.detailAnswers).toEqual({ answer: "answer-submission-2" });
+    });
+    expect(mockedResolveSubmissionAnswers).toHaveBeenCalledTimes(2);
+  });
+
   it("ignores an old decrypt result after selecting another signal", async () => {
     const pending = deferred<{
       answers: Record<string, unknown>;
