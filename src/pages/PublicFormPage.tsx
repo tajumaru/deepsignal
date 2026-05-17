@@ -19,7 +19,7 @@ import {
   isResponseDeadlinePassed,
   type ResponseDeadlineLabels,
 } from "../lib/responseDeadline";
-import { DEFAULT_ATTACHMENT_MAX_BYTES } from "../lib/storage";
+import { DEFAULT_ATTACHMENT_MAX_BYTES, ENCRYPTED_INLINE_ATTACHMENT_MAX_BYTES } from "../lib/storage";
 import { getOrderedFields, getVisibleFieldIds, isFieldRequired } from "../utils/formLogic";
 import { isAttachmentFieldType, isConfirmationCheckboxField } from "../lib/fieldTypes";
 import { collectSignalContext, type AttachedSignalContext } from "../lib/signalContext";
@@ -194,7 +194,9 @@ export function PublicFormPage() {
       signal_secured: t("publicSubmissionStageSecured"),
     } satisfies Record<SignalPipelineStage, string>,
   };
-  const attachmentMaxBytes = DEFAULT_ATTACHMENT_MAX_BYTES;
+  const attachmentMaxBytes = form?.encryptSubmissions
+    ? ENCRYPTED_INLINE_ATTACHMENT_MAX_BYTES
+    : DEFAULT_ATTACHMENT_MAX_BYTES;
   const attachmentLimitMb = Math.round(attachmentMaxBytes / (1024 * 1024));
   const requiredProgress = useMemo(() => {
     if (!form) {

@@ -15,6 +15,8 @@ import { collectSignalContext, installSignalContextCapture } from "../../../lib/
 import {
   activeSealAdapter,
   createEncryptedAttachmentUpload,
+  createInlinePrivateAttachment,
+  ENCRYPTED_INLINE_ATTACHMENT_MAX_BYTES,
   getStorageRuntimeStatus,
   saveSubmissionWithEncryption,
   storageAdapter,
@@ -146,6 +148,10 @@ function getAttachmentTypeFromMime(mimeType: string): SubmissionAttachment["type
     return "image";
   }
   return "document";
+}
+
+function canUseInlineEncryptedAttachment(form: FormSchema, fieldId: string) {
+  return Boolean(form.encryptSubmissions && form.fields.some((field) => field.id === fieldId));
 }
 
 function createPseudoProgress(onTick: (progress: number) => void) {
@@ -416,6 +422,9 @@ export function usePublicSubmission({
     if (!field || !attachmentFields.has(fieldId)) {
       return;
     }
+    if (form?.encryptSubmissions) {
+      return;
+    }
     getUploadAnswer(value).forEach((attachment) => {
       if (attachment.status !== "pending" || !attachment.file || attachment.error) {
         return;
@@ -648,7 +657,12 @@ export function usePublicSubmission({
       const value = answers[field.id];
       const matrixRows = field.type === "matrix" ? (field.rows ?? []).map((row) => row.trim()).filter(Boolean) : [];
       const uploadItems = attachmentFields.has(field.id) ? getUploadAnswer(value) : [];
-      if (attachmentFields.has(field.id) && uploadItems.some((attachment) => attachment.status === "pending" || attachment.status === "uploading")) {
+      const usesInlineEncryptedAttachments = canUseInlineEncryptedAttachment(currentForm, field.id);
+      if (
+        attachmentFields.has(field.id) &&
+        !usesInlineEncryptedAttachments &&
+        uploadItems.some((attachment) => attachment.status === "pending" || attachment.status === "uploading")
+      ) {
         nextErrors[field.id] = "Attachment upload is still in progress. Wait for the Walrus blob ID before sending.";
         return;
       }
@@ -670,7 +684,9 @@ export function usePublicSubmission({
         (field.type === "matrix" && !isCompleteMatrixAnswer(value, matrixRows)) ||
         (Array.isArray(value) && value.length === 0) ||
         (attachmentFields.has(field.id) &&
-          uploadItems.filter((attachment) => attachment.status === "uploaded" && attachment.walrusBlobId).length === 0);
+          (usesInlineEncryptedAttachments
+            ? uploadItems.filter((attachment) => attachment.status !== "failed" && (attachment.file || attachment.walrusBlobId)).length === 0
+            : uploadItems.filter((attachment) => attachment.status === "uploaded" && attachment.walrusBlobId).length === 0));
       if (missing) {
         nextErrors[field.id] = requiredFieldError;
         return;
@@ -839,32 +855,72 @@ export function usePublicSubmission({
         if (attachmentFields.has(field.id)) {
           const fieldUploads = getUploadAnswer(value);
           const validUploads = fieldUploads.filter((attachment) => attachment.status === "uploaded" && attachment.walrusBlobId);
+          const inlineUploads = fieldUploads.filter(
+            (attachment) => attachment.status !== "failed" && (attachment.file || attachment.walrusBlobId),
+          );
 
-          if (validUploads.length === 0) {
+          if ((form.encryptSubmissions ? inlineUploads : validUploads).length === 0) {
             plainAnswers[field.id] = "";
             continue;
           }
 
-          for (const attachment of validUploads) {
-            if (!attachment.walrusBlobId) {
-              continue;
+          if (form.encryptSubmissions) {
+            for (const attachment of inlineUploads) {
+              if (attachment.walrusBlobId) {
+                attachments.push({
+                  fieldId: field.id,
+                  type: getAttachmentTypeFromMime(attachment.mimeType || "application/octet-stream"),
+                  blobId: attachment.walrusBlobId,
+                  name: attachment.fileName,
+                  size: attachment.fileSize,
+                  storage: "blob",
+                  encrypted: true,
+                  originalName: attachment.fileName,
+                  originalType: attachment.mimeType || "application/octet-stream",
+                  encoding: "seal-base64-v1",
+                });
+                continue;
+              }
+              if (!attachment.file) {
+                continue;
+              }
+              if (attachment.file.size > ENCRYPTED_INLINE_ATTACHMENT_MAX_BYTES) {
+                throw new Error(attachmentTooLargeLabel(field.label || "Attachment", ENCRYPTED_INLINE_ATTACHMENT_MAX_BYTES));
+              }
+              const inlineAttachment = await createInlinePrivateAttachment(
+                attachment.file,
+                ENCRYPTED_INLINE_ATTACHMENT_MAX_BYTES,
+              );
+              attachments.push({
+                ...inlineAttachment,
+                fieldId: field.id,
+              });
             }
-            const requiresProtectedAttachment = form.encryptSubmissions || field.sensitive;
-            attachments.push({
-              fieldId: field.id,
-              type: getAttachmentTypeFromMime(attachment.mimeType || "application/octet-stream"),
-              blobId: attachment.walrusBlobId,
-              name: attachment.fileName,
-              size: attachment.fileSize,
-              storage: "blob",
-              encrypted: requiresProtectedAttachment ? true : undefined,
-              originalName: attachment.fileName,
-              originalType: attachment.mimeType || "application/octet-stream",
-              encoding: requiresProtectedAttachment ? "seal-base64-v1" : undefined,
-            });
+            plainAnswers[field.id] = fieldUploads
+              .filter((attachment) => attachment.status !== "failed")
+              .map((attachment) => attachment.fileName)
+              .join(", ");
+          } else {
+            for (const attachment of validUploads) {
+              if (!attachment.walrusBlobId) {
+                continue;
+              }
+              const requiresProtectedAttachment = field.sensitive;
+              attachments.push({
+                fieldId: field.id,
+                type: getAttachmentTypeFromMime(attachment.mimeType || "application/octet-stream"),
+                blobId: attachment.walrusBlobId,
+                name: attachment.fileName,
+                size: attachment.fileSize,
+                storage: "blob",
+                encrypted: requiresProtectedAttachment ? true : undefined,
+                originalName: attachment.fileName,
+                originalType: attachment.mimeType || "application/octet-stream",
+                encoding: requiresProtectedAttachment ? "seal-base64-v1" : undefined,
+              });
+            }
+            plainAnswers[field.id] = validUploads.map((attachment) => attachment.fileName).join(", ");
           }
-
-          plainAnswers[field.id] = validUploads.map((attachment) => attachment.fileName).join(", ");
         } else {
           plainAnswers[field.id] = value;
         }

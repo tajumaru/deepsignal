@@ -1054,36 +1054,24 @@ function createFormBundle(form: FormSchema, manifest: SignalManifest): FormBundl
   };
 }
 
-async function readFormBundle(blobId: string): Promise<FormBundle | null> {
-  const payload = await readJsonBlobOrThrow<unknown>(blobId);
-  return isFormBundle(payload) ? payload : null;
-}
-
-async function readSubmissionBundle(blobId: string): Promise<SubmissionBundle | null> {
-  const payload = await readJsonBlobOrThrow<unknown>(blobId);
-  return isSubmissionBundle(payload) ? payload : null;
-}
-
 async function readManifestCarrier(blobId: string) {
-  const formBundle = await readFormBundle(blobId);
-  if (formBundle) {
+  const payload = await readJsonBlobOrThrow<unknown>(blobId);
+  if (isFormBundle(payload)) {
     return {
-      manifest: formBundle.manifest,
-      form: formBundle.form,
+      manifest: payload.manifest,
+      form: payload.form,
     };
   }
 
-  const submissionBundle = await readSubmissionBundle(blobId);
-  if (submissionBundle) {
+  if (isSubmissionBundle(payload)) {
     return {
-      manifest: submissionBundle.manifest,
-      form: submissionBundle.form ?? null,
+      manifest: payload.manifest,
+      form: payload.form ?? null,
     };
   }
 
-  const manifest = await readJsonBlobOrThrow<SignalManifest>(blobId);
   return {
-    manifest,
+    manifest: payload as SignalManifest,
     form: null as FormSchema | null,
   };
 }
