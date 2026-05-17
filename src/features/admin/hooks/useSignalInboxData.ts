@@ -21,10 +21,12 @@ export interface FormWithCount extends FormSchema {
 
 export type StreamId =
   | "all"
+  | "needs_review"
   | "unread"
   | "encrypted"
   | "high"
   | "pending_sui"
+  | "registered_sui"
   | "bug"
   | "feature"
   | "archived";
@@ -40,6 +42,8 @@ const ADMIN_SUBMISSION_BATCH_SIZE = 4;
 
 export function matchesStream(record: SignalRecord, streamId: StreamId) {
   switch (streamId) {
+    case "needs_review":
+      return record.submission.status !== "archived";
     case "unread":
       return record.submission.status === "unread";
     case "encrypted":
@@ -48,6 +52,8 @@ export function matchesStream(record: SignalRecord, streamId: StreamId) {
       return record.submission.priority === "high";
     case "pending_sui":
       return Boolean(record.submission.pendingOnchainRegistration);
+    case "registered_sui":
+      return typeof record.submission.onchainSignalId === "number";
     case "bug":
       return record.category === "Bug";
     case "feature":
@@ -188,10 +194,12 @@ export function useSignalInboxData({
     const signals: SignalRecord[] = [];
     const signalById: Record<string, SignalRecord | undefined> = {};
     const counts = {
+      needsReview: 0,
       unread: 0,
       encrypted: 0,
       high: 0,
       pendingSui: 0,
+      registeredSui: 0,
       archived: 0,
     };
     const unreadCountByFormId: Record<string, number> = {};
@@ -227,6 +235,9 @@ export function useSignalInboxData({
           unreadCount += 1;
           counts.unread += 1;
         }
+        if (submission.status !== "archived") {
+          counts.needsReview += 1;
+        }
         if (submission.isEncrypted) {
           counts.encrypted += 1;
         }
@@ -236,6 +247,9 @@ export function useSignalInboxData({
         if (submission.pendingOnchainRegistration) {
           counts.pendingSui += 1;
           pendingSignalIdSet.add(submission.id);
+        }
+        if (typeof submission.onchainSignalId === "number") {
+          counts.registeredSui += 1;
         }
         if (submission.status === "archived") {
           counts.archived += 1;
@@ -279,11 +293,11 @@ export function useSignalInboxData({
     });
   }, [allSignals, search, selectedFormId, selectedStreamId]);
 
-  const selectedRecord =
-    visibleSignals.find((record) => record.submission.id === selectedSignalId) ??
-    signalIndex.signalById[selectedSignalId] ??
-    visibleSignals[0] ??
-    null;
+  const selectedRecord = selectedSignalId
+    ? visibleSignals.find((record) => record.submission.id === selectedSignalId) ??
+      signalIndex.signalById[selectedSignalId] ??
+      null
+    : visibleSignals[0] ?? null;
 
   function applySubmissionUpdate(nextSubmission: Submission) {
     setSubmissionsByFormId((current) => ({

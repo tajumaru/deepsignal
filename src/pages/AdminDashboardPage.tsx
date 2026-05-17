@@ -4,7 +4,7 @@
 } from "@mysten/dapp-kit";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { CreateFormLink } from "../components/CreateFormLink";
 import { AdminAccessGate } from "../components/AdminAccessGate";
 import { BlobLink } from "../components/BlobLink";
@@ -84,6 +84,7 @@ import { formatDate } from "../lib/utils";
 import { deleteFormsFromLocalCache, getStorageRuntimeStatus } from "../storage/storageFactory";
 import type { ActivityAction, ActivityEvent, FormSchema, Submission } from "../types";
 
+const MOBILE_REVIEW_MEDIA_QUERY = "(max-width: 768px)";
 const ROADMAP_READY_STATUSES = new Set<Submission["triageStatus"]>(["planned", "in_progress", "fixed"]);
 type ReviewSaveStatus = "idle" | "saving" | "saved" | "skipped" | "error";
 type ReviewDraft = Pick<Submission, "status" | "triageStatus" | "priority" | "signalValue" | "notes">;
@@ -455,6 +456,8 @@ function MobileSignalInbox({
 
 export function AdminDashboardPage() {
   const { language, t } = useI18n();
+  const location = useLocation();
+  const navigate = useNavigate();
   const account = useCurrentAccount();
   const suiClient = useSuiClient();
   const {
@@ -885,19 +888,45 @@ export function AdminDashboardPage() {
       : !canAttemptPrivateSignalDecrypt(selectedRecord.form, account?.address, capabilityProfile)
         ? t("privateSignalUnlockDisabled")
         : undefined;
-  const reviewBasePath =
-    typeof window !== "undefined" && window.location.pathname.startsWith("/admin") ? "/admin" : "/dashboard";
+  const reviewBasePath = location.pathname.startsWith("/admin") ? "/admin" : "/dashboard";
+  const selectedSignalIdFromUrl = useMemo(() => {
+    const params = new URLSearchParams(location.search);
+    return params.get("signal") ?? "";
+  }, [location.search]);
 
-  function syncMobileSignalUrl(record: SignalRecord | null) {
-    if (typeof window === "undefined" || !window.matchMedia?.("(max-width: 640px)").matches) {
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.matchMedia?.(MOBILE_REVIEW_MEDIA_QUERY).matches) {
       return;
     }
-    const nextPath = record
-      ? `${reviewBasePath}/forms/${record.form.id}/submissions/${record.submission.id}`
-      : reviewBasePath;
-    if (window.location.pathname !== nextPath) {
-      window.history.pushState(null, "", nextPath);
+    if (selectedSignalIdFromUrl) {
+      if (selectedSignalIdFromUrl !== selectedSignalId) {
+        setSelectedSignalId(selectedSignalIdFromUrl);
+      }
+      return;
     }
+    if (selectedSignalId) {
+      setSelectedSignalId("");
+    }
+  }, [selectedSignalId, selectedSignalIdFromUrl, setSelectedSignalId]);
+
+  function syncMobileSignalUrl(record: SignalRecord | null) {
+    if (typeof window === "undefined" || !window.matchMedia?.(MOBILE_REVIEW_MEDIA_QUERY).matches) {
+      return;
+    }
+    const params = new URLSearchParams(location.search);
+    if (record) {
+      params.set("signal", record.submission.id);
+    } else {
+      params.delete("signal");
+    }
+    const nextSearch = params.toString();
+    navigate(
+      {
+        pathname: reviewBasePath,
+        search: nextSearch ? `?${nextSearch}` : "",
+      },
+      { replace: !record },
+    );
   }
 
   function handleReturnToSignals() {
@@ -1282,16 +1311,15 @@ export function AdminDashboardPage() {
   }
 
   const streamItems = [
-    { id: "all", label: t("allSignals"), count: allSignals.length },
+    {
+      id: "needs_review",
+      label: t("needsReviewSignals"),
+      count: signalIndex.counts.needsReview,
+    },
     {
       id: "unread",
       label: t("unreadSignals"),
       count: signalIndex.counts.unread,
-    },
-    {
-      id: "encrypted",
-      label: t("protectedLabel"),
-      count: signalIndex.counts.encrypted,
     },
     {
       id: "high",
@@ -1299,14 +1327,29 @@ export function AdminDashboardPage() {
       count: signalIndex.counts.high,
     },
     {
-      id: "pending_sui",
-      label: t("pendingSuiShortLabel"),
-      count: signalIndex.counts.pendingSui,
+      id: "encrypted",
+      label: t("protectedLabel"),
+      count: signalIndex.counts.encrypted,
     },
     {
       id: "archived",
       label: t("resolvedLabel"),
       count: signalIndex.counts.archived,
+    },
+    {
+      id: "pending_sui",
+      label: t("pendingSuiShortLabel"),
+      count: signalIndex.counts.pendingSui,
+    },
+    {
+      id: "registered_sui",
+      label: t("registeredOnSuiLabel"),
+      count: signalIndex.counts.registeredSui,
+    },
+    {
+      id: "all",
+      label: t("allSignalsIndexLabel"),
+      count: allSignals.length,
     },
   ] satisfies Array<{ id: StreamId; label: string; count: number }>;
   const unreadCountByFormId = signalIndex.unreadCountByFormId;

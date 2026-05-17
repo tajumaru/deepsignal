@@ -9,6 +9,9 @@ interface StreamItem {
   count: number;
 }
 
+const FLOW_STREAM_IDS: StreamId[] = ["needs_review", "unread", "high", "encrypted", "archived"];
+const BLOCKCHAIN_STREAM_IDS: StreamId[] = ["pending_sui", "registered_sui"];
+
 function MailboxIcon({ hasUnread }: { hasUnread: boolean }) {
   return (
     <span className={`mailbox-icon ${hasUnread ? "has-unread" : ""}`} aria-hidden="true">
@@ -31,7 +34,12 @@ function StreamIcon({ streamId, hasUnread }: { streamId: StreamId; hasUnread: bo
   return (
     <span className={`stream-item-icon ${hasUnread ? "has-unread" : ""}`} aria-hidden="true">
       <svg viewBox="0 0 24 24" focusable="false">
-        {streamId === "unread" ? (
+        {streamId === "needs_review" ? (
+          <>
+            <path d="M3.8 12s3-5 8.2-5 8.2 5 8.2 5-3 5-8.2 5-8.2-5-8.2-5Z" />
+            <circle cx="12" cy="12" r="2.4" />
+          </>
+        ) : streamId === "unread" ? (
           <>
             <path d="M4.5 8.5 12 13.4l7.5-4.9" />
             <path d="M5 6.5h14v11H5z" />
@@ -50,14 +58,23 @@ function StreamIcon({ streamId, hasUnread }: { streamId: StreamId; hasUnread: bo
           </>
         ) : streamId === "pending_sui" ? (
           <>
-            <circle cx="12" cy="12" r="7.5" />
-            <path d="M12 7.8V12l2.8 1.8" />
+            <path d="M12 4.5v9" />
+            <path d="m8.4 8.1 3.6-3.6 3.6 3.6" />
+            <path d="M5.5 13.5v4.2h13v-4.2" />
+            <path d="M8 17.7h8" />
+          </>
+        ) : streamId === "registered_sui" ? (
+          <>
+            <path d="M9.2 12.8 11 14.6l4.1-5" />
+            <path d="M8.5 6.1a4.4 4.4 0 0 1 7 0" />
+            <path d="M15.5 17.9a4.4 4.4 0 0 1-7 0" />
+            <path d="m6.5 8.6-2 2a2 2 0 0 0 0 2.8l2 2" />
+            <path d="m17.5 8.6 2 2a2 2 0 0 1 0 2.8l-2 2" />
           </>
         ) : streamId === "archived" ? (
           <>
-            <path d="M5 8h14v10H5z" />
-            <path d="M4 6h16" />
-            <path d="m8.4 13 2.2 2.2 5-5" />
+            <circle cx="12" cy="12" r="7.5" />
+            <path d="m8.8 12.2 2.2 2.2 4.6-5" />
           </>
         ) : (
           <>
@@ -67,6 +84,87 @@ function StreamIcon({ streamId, hasUnread }: { streamId: StreamId; hasUnread: bo
         )}
       </svg>
     </span>
+  );
+}
+
+function getStreamHelper(streamId: StreamId, t: ReturnType<typeof useI18n>["t"]) {
+  switch (streamId) {
+    case "needs_review":
+      return t("needsReviewStreamHelper");
+    case "unread":
+      return t("unreadStreamHelper");
+    case "high":
+      return t("flaggedStreamHelper");
+    case "encrypted":
+      return t("protectedStreamHelper");
+    case "archived":
+      return t("resolvedStreamHelper");
+    case "pending_sui":
+      return t("pendingSuiStreamHelper");
+    case "registered_sui":
+      return t("registeredSuiStreamHelper");
+    case "all":
+      return t("allSignalsStreamHelper");
+    default:
+      return "";
+  }
+}
+
+function getStreamTone(streamId: StreamId) {
+  switch (streamId) {
+    case "needs_review":
+      return "tone-needs-review";
+    case "unread":
+      return "tone-unread";
+    case "high":
+      return "tone-flagged";
+    case "encrypted":
+      return "tone-protected";
+    case "archived":
+      return "tone-resolved";
+    case "pending_sui":
+      return "tone-pending-sui";
+    case "registered_sui":
+      return "tone-registered-sui";
+    default:
+      return "tone-secondary";
+  }
+}
+
+function StreamButton({
+  stream,
+  selectedStreamId,
+  onSelectStream,
+}: {
+  stream: StreamItem;
+  selectedStreamId: StreamId;
+  onSelectStream: (streamId: StreamId) => void;
+}) {
+  const { t } = useI18n();
+  const hasUnread = stream.id === "unread" && stream.count > 0;
+  const isPrimaryQueue = stream.id === "needs_review";
+  const isSecondary = stream.id === "all";
+  const isHistory = stream.id === "registered_sui";
+  const isEmpty = stream.count === 0;
+  return (
+    <button
+      type="button"
+      className={`stream-item ${selectedStreamId === stream.id ? "is-active" : ""} ${
+        hasUnread ? "has-new-signals" : ""
+      } ${getStreamTone(stream.id)} ${isPrimaryQueue ? "is-primary-queue" : ""} ${
+        isSecondary ? "is-secondary" : ""
+      } ${isHistory ? "is-history" : ""} ${isEmpty ? "is-empty" : ""}`}
+      onClick={() => onSelectStream(stream.id)}
+    >
+      <span className="stream-item-label">
+        <StreamIcon streamId={stream.id} hasUnread={hasUnread} />
+        <span className="stream-item-copy">
+          <span>{stream.label}</span>
+          <small>{getStreamHelper(stream.id, t)}</small>
+        </span>
+      </span>
+      <strong>{stream.count}</strong>
+    </button>
   );
 }
 
@@ -122,6 +220,13 @@ export function SignalStreamsNav({
 }: SignalStreamsNavProps) {
   const { t } = useI18n();
   const hasUnreadSignals = visibleUnreadCount > 0;
+  const flowStreams = FLOW_STREAM_IDS.map((streamId) => streamItems.find((stream) => stream.id === streamId)).filter(
+    (stream): stream is StreamItem => Boolean(stream),
+  );
+  const blockchainStreams = BLOCKCHAIN_STREAM_IDS.map((streamId) =>
+    streamItems.find((stream) => stream.id === streamId),
+  ).filter((stream): stream is StreamItem => Boolean(stream));
+  const allSignalsStream = streamItems.find((stream) => stream.id === "all") ?? null;
 
   return (
     <aside className={`panel signal-sidebar ${hasUnreadSignals ? "has-unread-signals" : ""}`}>
@@ -139,22 +244,34 @@ export function SignalStreamsNav({
           ) : null}
         </div>
         <div className="stream-list">
-          {streamItems.map((stream) => (
-            <button
+          {flowStreams.map((stream) => (
+            <StreamButton
               key={stream.id}
-              type="button"
-              className={`stream-item ${selectedStreamId === stream.id ? "is-active" : ""} ${
-                stream.id === "unread" && stream.count > 0 ? "has-new-signals" : ""
-              }`}
-              onClick={() => onSelectStream(stream.id)}
-            >
-              <span className="stream-item-label">
-                <StreamIcon streamId={stream.id} hasUnread={stream.id === "unread" && stream.count > 0} />
-                <span>{stream.label}</span>
-              </span>
-              <strong>{stream.count}</strong>
-            </button>
+              stream={stream}
+              selectedStreamId={selectedStreamId}
+              onSelectStream={onSelectStream}
+            />
           ))}
+          {allSignalsStream ? (
+            <StreamButton
+              stream={allSignalsStream}
+              selectedStreamId={selectedStreamId}
+              onSelectStream={onSelectStream}
+            />
+          ) : null}
+        </div>
+        <div className="stream-subsection">
+          <p className="eyebrow">{t("blockchainActionsTitle")}</p>
+          <div className="stream-list stream-list-compact">
+            {blockchainStreams.map((stream) => (
+              <StreamButton
+                key={stream.id}
+                stream={stream}
+                selectedStreamId={selectedStreamId}
+                onSelectStream={onSelectStream}
+              />
+            ))}
+          </div>
         </div>
       </div>
 
