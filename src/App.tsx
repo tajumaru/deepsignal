@@ -48,6 +48,11 @@ const ExploreSignalsPage = lazy(() =>
     default: module.ExploreSignalsPage,
   })),
 );
+const TroubleshootingPage = lazy(() =>
+  retryLazyImport(() => import("./pages/TroubleshootingPage")).then((module) => ({
+    default: module.TroubleshootingPage,
+  })),
+);
 
 function WithWalrusRuntime({ children }: { children: ReactNode }) {
   if (REQUIRE_GLOBAL_WALRUS_RUNTIME) {
@@ -177,6 +182,14 @@ export default function App() {
                 element={
                   <WalletSurface>
                     <AccessManagementPage />
+                  </WalletSurface>
+                }
+              />
+              <Route
+                path="/troubleshooting"
+                element={
+                  <WalletSurface>
+                    <TroubleshootingPage />
                   </WalletSurface>
                 }
               />

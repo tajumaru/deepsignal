@@ -102,6 +102,10 @@ function MobileAppBottomNav() {
         <span aria-hidden="true">Set</span>
         <span>Settings</span>
       </NavLink>
+      <NavLink to="/troubleshooting">
+        <span aria-hidden="true">Fix</span>
+        <span>Reset</span>
+      </NavLink>
     </nav>
   );
 }
@@ -139,6 +143,7 @@ export function AppShell({ children, walletAvailable = false, chrome = "full" }:
             <NavLink to="/explore">{t("navExplore")}</NavLink>
             {walletChrome.nav}
             <CreateFormLink nav>{t("navCreateForm")}</CreateFormLink>
+            <NavLink to="/troubleshooting">Troubleshooting</NavLink>
           </nav>
         )}
         <div className="topbar-actions">

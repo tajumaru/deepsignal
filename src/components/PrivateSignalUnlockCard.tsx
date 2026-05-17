@@ -1,6 +1,15 @@
-import { useId, type ReactNode } from "react";
+import { useDisconnectWallet } from "@mysten/dapp-kit";
+import { useId, useState, type ReactNode } from "react";
+import { Link } from "react-router-dom";
 import type { DecryptDiagnosticContext } from "../crypto/decryptDiagnostics";
 import { useI18n } from "../i18n";
+import {
+  didResetFullySucceed,
+  RESET_CONFIRMATION_MESSAGE,
+  RESET_FAILURE_MESSAGE,
+  RESET_SUCCESS_MESSAGE,
+  resetLocalEnvironment,
+} from "../lib/resetEnvironment";
 
 type UnlockState =
   | "locked"
@@ -274,7 +283,10 @@ export function PrivateSignalUnlockCard({
   children,
 }: PrivateSignalUnlockCardProps) {
   const { t } = useI18n();
+  const disconnectWallet = useDisconnectWallet();
   const statusId = useId();
+  const [recoveryToast, setRecoveryToast] = useState<{ tone: "success" | "error"; message: string } | null>(null);
+  const [recoveryAction, setRecoveryAction] = useState<"reset" | "reconnect" | null>(null);
   const state = isUnlocked
     ? "decrypted"
     : (unlockState ?? (isDecrypting ? "decrypting" : errorMessage ? "failed" : "locked"));
@@ -303,9 +315,56 @@ export function PrivateSignalUnlockCard({
       : state === "unauthorized"
         ? "failed"
         : state;
+  const showRecoveryActions = state === "failed" || state === "unauthorized";
+
+  async function handleResetLocalState() {
+    if (typeof window !== "undefined" && !window.confirm(RESET_CONFIRMATION_MESSAGE)) {
+      return;
+    }
+    setRecoveryAction("reset");
+    setRecoveryToast(null);
+    try {
+      const results = await resetLocalEnvironment({
+        includeWalletDisconnect: true,
+        disconnectWallet: () => disconnectWallet.mutateAsync(),
+      });
+      const succeeded = didResetFullySucceed(results);
+      setRecoveryToast({
+        tone: succeeded ? "success" : "error",
+        message: succeeded ? RESET_SUCCESS_MESSAGE : RESET_FAILURE_MESSAGE,
+      });
+      if (succeeded && typeof window !== "undefined") {
+        window.setTimeout(() => {
+          window.location.assign("/");
+        }, 900);
+      }
+    } catch {
+      setRecoveryToast({ tone: "error", message: RESET_FAILURE_MESSAGE });
+    } finally {
+      setRecoveryAction(null);
+    }
+  }
+
+  async function handleReconnectWallet() {
+    setRecoveryAction("reconnect");
+    setRecoveryToast(null);
+    try {
+      await disconnectWallet.mutateAsync();
+      setRecoveryToast({ tone: "success", message: "Wallet disconnected. Please reconnect your wallet." });
+    } catch {
+      setRecoveryToast({ tone: "error", message: "Could not disconnect wallet. Try reconnecting from the wallet menu." });
+    } finally {
+      setRecoveryAction(null);
+    }
+  }
 
   return (
     <section className={`private-signal-unlock-card is-${cardTone}`} aria-live="polite">
+      {recoveryToast ? (
+        <div className={`private-signal-recovery-toast is-${recoveryToast.tone}`} role="status" aria-live="polite">
+          {recoveryToast.message}
+        </div>
+      ) : null}
       <div className="private-signal-vault-visual" aria-hidden="true">
         <div className="private-signal-vault-lock">
           {state === "decrypted" ? <OpenLockIcon /> : <LockIcon />}
@@ -398,6 +457,30 @@ export function PrivateSignalUnlockCard({
 
       {state === "failed" && errorMessage && errorMessage !== t("privateSignalUnlockError") ? (
         <p className="private-signal-unlock-detail">{errorMessage}</p>
+      ) : null}
+
+      {showRecoveryActions ? (
+        <div className="private-signal-recovery-actions" aria-label="Decrypt recovery actions">
+          <button
+            type="button"
+            className="danger-button"
+            onClick={() => void handleResetLocalState()}
+            disabled={Boolean(recoveryAction) || isDecrypting}
+          >
+            {recoveryAction === "reset" ? "Resetting..." : "Reset Local State"}
+          </button>
+          <button
+            type="button"
+            className="ghost-button"
+            onClick={() => void handleReconnectWallet()}
+            disabled={Boolean(recoveryAction) || isDecrypting}
+          >
+            {recoveryAction === "reconnect" ? "Disconnecting..." : "Reconnect Wallet"}
+          </button>
+          <Link className="ghost-button" to="/troubleshooting">
+            Open Troubleshooting
+          </Link>
+        </div>
       ) : null}
 
       {diagnostics ? <SealPolicyDebugPanel diagnostics={diagnostics} /> : null}

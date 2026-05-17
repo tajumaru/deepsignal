@@ -33,6 +33,7 @@ function useScrollReveal() {
   return { sectionRef, isVisible };
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function ExploreIntroSection() {
   const { sectionRef, isVisible } = useScrollReveal();
   const { t } = useI18n();
@@ -84,6 +85,7 @@ function ExploreIntroSection() {
   );
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function SignalFlowSection() {
   const { sectionRef, isVisible } = useScrollReveal();
   const { t } = useI18n();
@@ -154,6 +156,7 @@ function SignalFlowSection() {
   );
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function SignalInboxIntroSection() {
   const { sectionRef, isVisible } = useScrollReveal();
   const { t } = useI18n();
@@ -230,6 +233,7 @@ function SignalInboxIntroSection() {
   );
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function LiveSystemStatusSection() {
   const { sectionRef, isVisible } = useScrollReveal();
   const { t } = useI18n();

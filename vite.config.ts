@@ -50,6 +50,69 @@ function buildManifestPlugin(args: {
   };
 }
 
+function moduleEntryRetryPlugin(): Plugin {
+  return {
+    name: "deepsignal-module-entry-retry",
+    apply: "build",
+    transformIndexHtml: {
+      order: "post",
+      handler(html) {
+        const entryScriptPattern = /<script\b(?=[^>]*\btype="module")(?=[^>]*\bsrc="([^"]+)")[^>]*>\s*<\/script>/;
+        const match = html.match(entryScriptPattern);
+        const entrySrc = match?.[1];
+        if (!match || !entrySrc) {
+          return html;
+        }
+
+        const retryLoader = `<script type="module">
+      (() => {
+        const entryPath = ${JSON.stringify(entrySrc)};
+        const maxAttempts = 8;
+        const baseDelayMs = 900;
+        const statusNode = document.querySelector("[data-boot-status]");
+
+        function setBootStatus(message) {
+          if (statusNode) {
+            statusNode.textContent = message;
+          }
+        }
+
+        function delay(ms) {
+          return new Promise((resolve) => window.setTimeout(resolve, ms));
+        }
+
+        async function loadEntry(attempt = 1) {
+          const url = new URL(entryPath, window.location.href);
+          if (attempt > 1) {
+            url.searchParams.set("module-retry", String(Date.now()));
+            setBootStatus("Retrying signal surface load...");
+          }
+
+          try {
+            await import(url.toString());
+          } catch (error) {
+            if (attempt >= maxAttempts) {
+              console.error("DeepSignal module entry failed to load", error);
+              setBootStatus("Signal surface load failed. Reloading...");
+              window.setTimeout(() => window.location.reload(), 1200);
+              return;
+            }
+
+            await delay(baseDelayMs * attempt);
+            await loadEntry(attempt + 1);
+          }
+        }
+
+        void loadEntry();
+      })();
+    </script>`;
+
+        return html.replace(match[0], retryLoader);
+      },
+    },
+  };
+}
+
 const packageMetadata = JSON.parse(readFileSync(new URL("./package.json", import.meta.url), "utf8")) as PackageMetadata;
 
 export default defineConfig(({ mode }) => {
@@ -77,6 +140,7 @@ export default defineConfig(({ mode }) => {
         gitHash,
         appEnvironment,
       }),
+      moduleEntryRetryPlugin(),
       process.env.ANALYZE === "true"
         ? visualizer({
             emitFile: true,
