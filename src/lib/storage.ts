@@ -852,7 +852,6 @@ export async function saveSubmissionWithEncryption(
 
     let encryptedBlobId = submission.encryptedBlobId;
     let encryptedPayload = submission.encryptedPayload;
-    const embedEncryptedPayloadInSubmission = targetStorage === storageAdapter && !encryptedBlobId;
     try {
       if (!encryptedPayload) {
         const payload = JSON.stringify({
@@ -867,7 +866,7 @@ export async function saveSubmissionWithEncryption(
           seal,
         );
       }
-      if (!encryptedBlobId && !embedEncryptedPayloadInSubmission) {
+      if (!encryptedBlobId) {
         messages?.onPipelineStage?.("uploading_to_walrus");
         const savedEncryptedPayload = await targetStorage.saveEncryptedPayload(encryptedPayload);
         encryptedBlobId = savedEncryptedPayload.blobId;
@@ -881,9 +880,9 @@ export async function saveSubmissionWithEncryption(
         ...triagedSubmission,
         isEncrypted: true,
         encryptedBlobId,
-        encryptedPayload: embedEncryptedPayloadInSubmission ? encryptedPayload : undefined,
+        encryptedPayload: undefined,
         sealIdentity,
-      }, { allowEncryptedPayload: embedEncryptedPayloadInSubmission });
+      });
       messages?.onPipelineStage?.("uploading_to_walrus");
       const saved = await targetStorage.saveSubmission(metadataSubmission);
       return {

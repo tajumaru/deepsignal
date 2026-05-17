@@ -1357,10 +1357,7 @@ export const walrusAdapter: StorageAdapter = {
   },
 
   async saveSubmission(submission: Submission) {
-    const allowEmbeddedEncryptedPayload =
-      submission.isEncrypted === true &&
-      typeof submission.encryptedPayload === "string" &&
-      submission.encryptedPayload.trim().length > 0;
+    const allowEmbeddedEncryptedPayload = false;
     const encryptedSubmissionOptions = { allowEncryptedPayload: allowEmbeddedEncryptedPayload };
     const sanitizedSubmission = sanitizeSubmissionForStorage(submission, encryptedSubmissionOptions);
     if (sanitizedSubmission.isEncrypted) {

@@ -3,38 +3,19 @@ import { assertEncryptedSubmissionLeakGuard, sanitizeSubmissionForStorage } from
 
 const FORMS_KEY = "deepsignal.forms";
 const SUBMISSIONS_KEY = "deepsignal.submissions";
-const FILES_KEY = "deepsignal.files";
-const ENCRYPTED_PAYLOADS_KEY = "deepsignal.encryptedPayloads";
 
 interface StoredFileRecord {
   blobId: string;
   name: string;
   size: number;
   type: string;
-  dataUrl: string;
 }
 
-interface StoredEncryptedPayload {
-  blobId: string;
-  payload: string;
-}
+const transientFiles = new Map<string, Blob>();
+const transientEncryptedPayloads = new Map<string, string>();
 
 function findStoredFile(blobId: string) {
-  const files = readJson<StoredFileRecord[]>(FILES_KEY, []);
-  return files.find((item) => item.blobId === blobId) ?? null;
-}
-
-function dataUrlToBlob(dataUrl: string) {
-  const [header, body] = dataUrl.split(",", 2);
-  if (!header || body === undefined) {
-    return null;
-  }
-  const mimeMatch = header.match(/^data:([^;,]+)?(?:;charset=[^;,]+)?(;base64)?$/i);
-  const mimeType = mimeMatch?.[1] ?? "application/octet-stream";
-  const isBase64 = Boolean(mimeMatch?.[2]);
-  const binary = isBase64 ? atob(body) : decodeURIComponent(body);
-  const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
-  return new Blob([bytes], { type: mimeType });
+  return transientFiles.get(blobId) ?? null;
 }
 
 function readJson<T>(key: string, fallback: T): T {
@@ -52,10 +33,7 @@ function writeJson<T>(key: string, value: T) {
 
 function getEncryptedSubmissionOptions(submission: Submission) {
   return {
-    allowEncryptedPayload:
-      submission.isEncrypted === true &&
-      typeof submission.encryptedPayload === "string" &&
-      submission.encryptedPayload.trim().length > 0,
+    allowEncryptedPayload: false,
   };
 }
 
@@ -134,45 +112,30 @@ export const localStorageAdapter: StorageAdapter = {
   },
 
   async saveEncryptedPayload(payload) {
-    const encryptedPayloads = readJson<StoredEncryptedPayload[]>(ENCRYPTED_PAYLOADS_KEY, []);
-    const blobId = `local-sealed-${crypto.randomUUID()}`;
-    encryptedPayloads.unshift({ blobId, payload });
-    writeJson(ENCRYPTED_PAYLOADS_KEY, encryptedPayloads);
+    const blobId = `local-sealed-transient-${crypto.randomUUID()}`;
+    transientEncryptedPayloads.set(blobId, payload);
     return { blobId };
   },
 
   async readEncryptedPayload(blobId) {
-    const encryptedPayloads = readJson<StoredEncryptedPayload[]>(ENCRYPTED_PAYLOADS_KEY, []);
-    return encryptedPayloads.find((item) => item.blobId === blobId)?.payload ?? null;
+    return transientEncryptedPayloads.get(blobId) ?? null;
   },
 
   async uploadFile(file) {
-    const dataUrl = await new Promise<string>((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(String(reader.result));
-      reader.onerror = () => reject(reader.error);
-      reader.readAsDataURL(file);
-    });
-
-    const files = readJson<StoredFileRecord[]>(FILES_KEY, []);
-    const blobId = `local-file-${crypto.randomUUID()}`;
-    files.unshift({
+    const blobId = `local-file-transient-${crypto.randomUUID()}`;
+    const record: StoredFileRecord = {
       blobId,
       name: file.name,
       size: file.size,
       type: file.type,
-      dataUrl,
-    });
-    writeJson(FILES_KEY, files);
-    return { blobId, url: dataUrl };
+    };
+    transientFiles.set(blobId, file);
+    console.info("[local storage adapter] attachment kept in memory only", record);
+    return { blobId };
   },
 
   async readFileBlob(blobId) {
-    const stored = findStoredFile(blobId);
-    if (!stored) {
-      return null;
-    }
-    return dataUrlToBlob(stored.dataUrl);
+    return findStoredFile(blobId);
   },
 
   async readFileText(blobId) {

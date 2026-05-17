@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import type { UploadDropzoneItem } from "../../../components/UploadDropzone";
 import { getSealRuntimeStatus } from "../../../crypto/cryptoFactory";
 import { SEAL_UNAVAILABLE_MESSAGE } from "../../../crypto/sealService";
@@ -14,9 +14,8 @@ import { ensureRespondentSession } from "../../../lib/respondentSession";
 import { collectSignalContext, installSignalContextCapture } from "../../../lib/signalContext";
 import {
   activeSealAdapter,
-  ENCRYPTED_INLINE_ATTACHMENT_MAX_BYTES,
   createEncryptedAttachmentUpload,
-  createInlinePrivateAttachment,
+  getStorageRuntimeStatus,
   saveSubmissionWithEncryption,
   storageAdapter,
 } from "../../../lib/storage";
@@ -39,6 +38,7 @@ const STORAGE_CONNECTION_PREPARING_MESSAGE =
 const RECOVERY_CORRUPTED_MESSAGE = "Stored recovery data could not be restored.";
 const MAX_RECOVERY_RETRIES = 3;
 const PENDING_ENCRYPTED_PAYLOADS_KEY = "deepsignal.encryptedPayloads";
+const PENDING_FILES_KEY = "deepsignal.files";
 
 export const SIGNAL_PIPELINE_STAGES = [
   "preparing_signal",
@@ -102,6 +102,22 @@ function getUploadAnswer(value: unknown) {
     : [];
 }
 
+function getAttachmentBlobIds(answers: PublicAnswers, attachmentFields: Set<string>) {
+  return Object.entries(answers).flatMap(([fieldId, value]) =>
+    attachmentFields.has(fieldId)
+      ? getUploadAnswer(value).map((attachment) => attachment.walrusBlobId).filter((blobId): blobId is string => Boolean(blobId))
+      : [],
+  );
+}
+
+function getApproxPayloadSize(value: unknown) {
+  try {
+    return new Blob([JSON.stringify(value)]).size;
+  } catch {
+    return 0;
+  }
+}
+
 function isValidUrlAnswer(value: unknown) {
   if (typeof value !== "string" || !value.trim()) {
     return true;
@@ -122,11 +138,11 @@ function isCompleteMatrixAnswer(value: unknown, rows: string[]) {
   return rows.every((row) => typeof answer[row] === "string" && String(answer[row]).trim().length > 0);
 }
 
-function getAttachmentType(file: File): SubmissionAttachment["type"] {
-  if (file.type.startsWith("video/")) {
+function getAttachmentTypeFromMime(mimeType: string): SubmissionAttachment["type"] {
+  if (mimeType.startsWith("video/")) {
     return "video";
   }
-  if (file.type.startsWith("image/")) {
+  if (mimeType.startsWith("image/")) {
     return "image";
   }
   return "document";
@@ -219,6 +235,35 @@ function classifyRecoveryStorageError(error: unknown, message: string) {
   return null;
 }
 
+function buildRecoveryDiagnostics({
+  formId,
+  manifestBlobId,
+  answers,
+  attachmentFields,
+  error,
+}: {
+  formId?: string;
+  manifestBlobId: string;
+  answers: PublicAnswers;
+  attachmentFields: Set<string>;
+  error?: unknown;
+}) {
+  const attachmentBlobIds = getAttachmentBlobIds(answers, attachmentFields);
+  const rawError = error ? getDiagnosticErrorMessage(error) : undefined;
+  return {
+    formId,
+    manifestBlobId,
+    storageBackend: getStorageRuntimeStatus(),
+    payloadSizeBytes: getApproxPayloadSize(sanitizeDraftAnswers(answers, attachmentFields)),
+    attachmentCount: attachmentBlobIds.length,
+    attachmentBlobIds,
+    browser: typeof navigator !== "undefined" ? navigator.userAgent : "unknown",
+    quotaExceptionName: error instanceof Error ? error.name : undefined,
+    quotaExceptionMessage: rawError,
+    quotaRelated: error ? isQuotaExceededError(error) : undefined,
+  };
+}
+
 interface UsePublicSubmissionArgs {
   form: FormSchema | null;
   initialAnswers: PublicAnswers;
@@ -266,6 +311,7 @@ export function usePublicSubmission({
     stage: "preparing_signal",
     status: "idle",
   });
+  const activeAttachmentUploadsRef = useRef(new Set<string>());
 
   useEffect(() => installSignalContextCapture(), []);
 
@@ -366,6 +412,76 @@ export function usePublicSubmission({
       setFailure(null);
       setRecoveryGuidance("");
     }
+    const field = form?.fields.find((item) => item.id === fieldId);
+    if (!field || !attachmentFields.has(fieldId)) {
+      return;
+    }
+    getUploadAnswer(value).forEach((attachment) => {
+      if (attachment.status !== "pending" || !attachment.file || attachment.error) {
+        return;
+      }
+      void uploadAttachmentImmediately(fieldId, field.label || "Attachment", Boolean(form?.encryptSubmissions || field.sensitive), attachment);
+    });
+  }
+
+  function updateAttachment(fieldId: string, attachmentId: string, updater: (attachment: UploadDropzoneItem) => UploadDropzoneItem) {
+    setAnswers((current) => ({
+      ...current,
+      [fieldId]: getUploadAnswer(current[fieldId]).map((attachment) =>
+        attachment.id === attachmentId ? updater(attachment) : attachment,
+      ),
+    }));
+  }
+
+  async function uploadAttachmentImmediately(
+    fieldId: string,
+    fieldLabel: string,
+    requiresProtectedAttachment: boolean,
+    attachment: UploadDropzoneItem,
+  ) {
+    if (!attachment.file || activeAttachmentUploadsRef.current.has(attachment.id)) {
+      return;
+    }
+    activeAttachmentUploadsRef.current.add(attachment.id);
+    const progressTimer = createPseudoProgress((progress) => {
+      updateAttachment(fieldId, attachment.id, (item) => ({
+        ...item,
+        progress,
+        status: "uploading",
+        error: undefined,
+      }));
+    });
+
+    try {
+      const uploadFile = requiresProtectedAttachment
+        ? (await createEncryptedAttachmentUpload(attachment.file, activeSealAdapter, {
+            projectId: form?.projectId,
+            ownerAddress: form?.ownerAddress,
+          })).file
+        : attachment.file;
+      const upload = await storageAdapter.uploadFile(uploadFile);
+      if (isLocalFallbackBlob(upload.blobId)) {
+        throw new Error("Attachment upload needs Walrus storage. Reconnect storage and select the file again.");
+      }
+      window.clearInterval(progressTimer);
+      updateAttachment(fieldId, attachment.id, (item) => ({
+        ...item,
+        status: "uploaded",
+        progress: 100,
+        walrusBlobId: upload.blobId,
+        error: undefined,
+      }));
+    } catch (error) {
+      window.clearInterval(progressTimer);
+      updateAttachment(fieldId, attachment.id, (item) => ({
+        ...item,
+        status: "failed",
+        progress: 0,
+        error: formatUploadFailure(fieldLabel, error),
+      }));
+    } finally {
+      activeAttachmentUploadsRef.current.delete(attachment.id);
+    }
   }
 
   function persistDraft(nextAnswers: PublicAnswers) {
@@ -463,8 +579,29 @@ export function usePublicSubmission({
       setFailure(null);
       clearRecoveryRetryState();
       setHasRecoverableDraft(false);
-    } catch {
-      clearDraft();
+    } catch (error) {
+      const retries = getStoredRecoveryRetryCount(recoveryRetryStorageKey) + 1;
+      markRecoveryCorrupted({
+        category: "storage_unavailable",
+        guidance: RECOVERY_CORRUPTED_MESSAGE,
+        retries,
+        rawError: getDiagnosticErrorMessage(error),
+      });
+      setFailure(
+        createCriticalFailure({
+          error: new Error(RECOVERY_CORRUPTED_MESSAGE),
+          surface: "walrus",
+          step: "recovery",
+          retryable: false,
+          diagnostics: buildRecoveryDiagnostics({
+            formId: form?.id,
+            manifestBlobId,
+            answers,
+            attachmentFields,
+            error,
+          }),
+        }),
+      );
     }
   }
 
@@ -477,6 +614,7 @@ export function usePublicSubmission({
     clearRecoveryRetryState();
     try {
       window.localStorage.removeItem(PENDING_ENCRYPTED_PAYLOADS_KEY);
+      window.localStorage.removeItem(PENDING_FILES_KEY);
     } catch {
       // Best-effort cleanup; the UI state reset below still gives the responder a clean page.
     }
@@ -510,6 +648,14 @@ export function usePublicSubmission({
       const value = answers[field.id];
       const matrixRows = field.type === "matrix" ? (field.rows ?? []).map((row) => row.trim()).filter(Boolean) : [];
       const uploadItems = attachmentFields.has(field.id) ? getUploadAnswer(value) : [];
+      if (attachmentFields.has(field.id) && uploadItems.some((attachment) => attachment.status === "pending" || attachment.status === "uploading")) {
+        nextErrors[field.id] = "Attachment upload is still in progress. Wait for the Walrus blob ID before sending.";
+        return;
+      }
+      if (attachmentFields.has(field.id) && uploadItems.some((attachment) => attachment.status === "failed")) {
+        nextErrors[field.id] = "Attachment upload failed. Remove the failed file or select it again.";
+        return;
+      }
       if (!isFieldRequired(field, currentForm.fields, answers, visible)) {
         if (field.type === "url" && value && !isValidUrlAnswer(value)) {
           nextErrors[field.id] = "Enter a valid URL starting with http:// or https://";
@@ -524,17 +670,10 @@ export function usePublicSubmission({
         (field.type === "matrix" && !isCompleteMatrixAnswer(value, matrixRows)) ||
         (Array.isArray(value) && value.length === 0) ||
         (attachmentFields.has(field.id) &&
-          uploadItems.filter((attachment) => attachment.status !== "failed").length === 0);
+          uploadItems.filter((attachment) => attachment.status === "uploaded" && attachment.walrusBlobId).length === 0);
       if (missing) {
         nextErrors[field.id] = requiredFieldError;
         return;
-      }
-      if (currentForm.encryptSubmissions && attachmentFields.has(field.id)) {
-        const oversizedAttachment = uploadItems.find((attachment) => attachment.fileSize > ENCRYPTED_INLINE_ATTACHMENT_MAX_BYTES);
-        if (oversizedAttachment) {
-          nextErrors[field.id] = attachmentTooLargeLabel(field.label || "Attachment", ENCRYPTED_INLINE_ATTACHMENT_MAX_BYTES);
-          return;
-        }
       }
       if (field.type === "url" && value && !isValidUrlAnswer(value)) {
         nextErrors[field.id] = "Enter a valid URL starting with http:// or https://";
@@ -698,8 +837,8 @@ export function usePublicSubmission({
       for (const field of visibleFields) {
         const value = answers[field.id];
         if (attachmentFields.has(field.id)) {
-          const fieldUploads = getUploadAnswer(value).filter((attachment) => attachment.file);
-          const validUploads = fieldUploads.filter((attachment) => attachment.status !== "failed");
+          const fieldUploads = getUploadAnswer(value);
+          const validUploads = fieldUploads.filter((attachment) => attachment.status === "uploaded" && attachment.walrusBlobId);
 
           if (validUploads.length === 0) {
             plainAnswers[field.id] = "";
@@ -707,109 +846,22 @@ export function usePublicSubmission({
           }
 
           for (const attachment of validUploads) {
-            const file = attachment.file;
-            if (!file) {
+            if (!attachment.walrusBlobId) {
               continue;
             }
             const requiresProtectedAttachment = form.encryptSubmissions || field.sensitive;
-
-            setAnswers((current) => ({
-              ...current,
-              [field.id]: getUploadAnswer(current[field.id]).map((item) =>
-                item.id === attachment.id ? { ...item, status: "uploading", progress: 0, error: undefined } : item,
-              ),
-            }));
-
-            const progressTimer = createPseudoProgress((progress) => {
-              setAnswers((current) => ({
-                ...current,
-                [field.id]: getUploadAnswer(current[field.id]).map((item) =>
-                  item.id === attachment.id ? { ...item, progress, status: "uploading" } : item,
-                ),
-              }));
+            attachments.push({
+              fieldId: field.id,
+              type: getAttachmentTypeFromMime(attachment.mimeType || "application/octet-stream"),
+              blobId: attachment.walrusBlobId,
+              name: attachment.fileName,
+              size: attachment.fileSize,
+              storage: "blob",
+              encrypted: requiresProtectedAttachment ? true : undefined,
+              originalName: attachment.fileName,
+              originalType: attachment.mimeType || "application/octet-stream",
+              encoding: requiresProtectedAttachment ? "seal-base64-v1" : undefined,
             });
-
-            try {
-              if (form.encryptSubmissions) {
-                if (file.size > ENCRYPTED_INLINE_ATTACHMENT_MAX_BYTES) {
-                  throw new Error(
-                    attachmentTooLargeLabel(field.label || file.name || "Attachment", ENCRYPTED_INLINE_ATTACHMENT_MAX_BYTES),
-                  );
-                }
-                activatePipeline("preparing_signal", `Packing ${file.name} into the protected signal.`);
-                const inlineAttachment = await createInlinePrivateAttachment(file, ENCRYPTED_INLINE_ATTACHMENT_MAX_BYTES);
-                window.clearInterval(progressTimer);
-                attachments.push({
-                  ...inlineAttachment,
-                  fieldId: field.id,
-                  type: getAttachmentType(file),
-                });
-                setAnswers((current) => ({
-                  ...current,
-                  [field.id]: getUploadAnswer(current[field.id]).map((item) =>
-                    item.id === attachment.id ? { ...item, status: "uploaded", progress: 100 } : item,
-                  ),
-                }));
-              } else if (requiresProtectedAttachment) {
-                activatePipeline("encrypting", `Encrypting ${file.name} before upload.`);
-                const encryptedUpload = await createEncryptedAttachmentUpload(file, activeSealAdapter, {
-                  projectId: form.projectId,
-                  ownerAddress: form.ownerAddress,
-                });
-                activatePipeline("uploading_to_walrus", `Uploading protected ${file.name} to Walrus.`);
-                const upload = await storageAdapter.uploadFile(encryptedUpload.file);
-                window.clearInterval(progressTimer);
-                attachments.push({
-                  fieldId: field.id,
-                  type: getAttachmentType(file),
-                  blobId: upload.blobId,
-                  name: file.name,
-                  size: file.size,
-                  storage: "blob",
-                  ...encryptedUpload.attachment,
-                });
-                setAnswers((current) => ({
-                  ...current,
-                  [field.id]: getUploadAnswer(current[field.id]).map((item) =>
-                    item.id === attachment.id
-                      ? { ...item, status: "uploaded", progress: 100, walrusBlobId: upload.blobId }
-                      : item,
-                  ),
-                }));
-              } else {
-                activatePipeline("uploading_to_walrus", `Uploading ${file.name} to Walrus.`);
-                const upload = await storageAdapter.uploadFile(file);
-                window.clearInterval(progressTimer);
-                attachments.push({
-                  fieldId: field.id,
-                  type: getAttachmentType(file),
-                  blobId: upload.blobId,
-                  name: file.name,
-                  size: file.size,
-                  storage: "blob",
-                  originalName: file.name,
-                  originalType: file.type || "application/octet-stream",
-                });
-                setAnswers((current) => ({
-                  ...current,
-                  [field.id]: getUploadAnswer(current[field.id]).map((item) =>
-                    item.id === attachment.id
-                      ? { ...item, status: "uploaded", progress: 100, walrusBlobId: upload.blobId }
-                      : item,
-                  ),
-                }));
-              }
-            } catch (error) {
-              window.clearInterval(progressTimer);
-              const message = formatUploadFailure(field.label || "Attachment", error);
-              setAnswers((current) => ({
-                ...current,
-                [field.id]: getUploadAnswer(current[field.id]).map((item) =>
-                  item.id === attachment.id ? { ...item, status: "failed", progress: 0, error: message } : item,
-                ),
-              }));
-              throw new Error(message);
-            }
           }
 
           plainAnswers[field.id] = validUploads.map((attachment) => attachment.fileName).join(", ");
@@ -879,7 +931,7 @@ export function usePublicSubmission({
         isEncrypted: Boolean(form.encryptSubmissions),
         blobId: result.blobId,
         encryptedBlobId: "encryptedBlobId" in result ? result.encryptedBlobId : undefined,
-        encryptedPayload: "encryptedPayload" in result ? result.encryptedPayload : undefined,
+        encryptedPayload: undefined,
         sealIdentity: "sealIdentity" in result ? result.sealIdentity : undefined,
         receiptBlobId: result.blobId ?? undefined,
       } satisfies Submission;
@@ -931,12 +983,17 @@ export function usePublicSubmission({
           step: submitPipeline.stage,
           retryable,
           diagnostics: {
-            formId: form.id,
-            manifestBlobId,
             walletRequired,
             attachWallet,
             walrusRuntime: getWalrusMutationRuntimeStatus(),
             rawError: getDiagnosticErrorMessage(error),
+            ...buildRecoveryDiagnostics({
+              formId: form.id,
+              manifestBlobId,
+              answers,
+              attachmentFields,
+              error,
+            }),
             recoveryCategory: recoveryFailure.classification?.category,
             recoveryRetries: recoveryFailure.retries,
             recoveryRetryLimit: MAX_RECOVERY_RETRIES,

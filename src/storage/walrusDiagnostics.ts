@@ -44,14 +44,21 @@ export function getWalrusErrorMessage(error: unknown) {
 }
 
 export function isQuotaExceededError(error: unknown) {
+  if (error instanceof DOMException && (error.name === "QuotaExceededError" || error.code === 22)) {
+    return true;
+  }
   if (error instanceof Error && error.name === "QuotaExceededError") {
     return true;
   }
   const message = getWalrusErrorMessage(error).toLowerCase();
   return (
+    message.includes("dom exception 22") ||
+    message.includes("domexception 22") ||
     message.includes("quota exceeded") ||
     message.includes("quota has been exceeded") ||
     message.includes("storage quota") ||
+    message.includes("webkit storage") ||
+    message.includes("safari storage") ||
     message.includes("exceeded the quota")
   );
 }

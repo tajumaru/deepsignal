@@ -54,6 +54,9 @@ Seal protects sensitive submissions, while the inbox still supports triage statu
 **Manifests are recovery indexes, not secret stores.**  
 Walrus manifests let an operator recover the form/submission graph from blob references. They intentionally avoid private answer bodies, attachment names, owner addresses, tags, notes, and encrypted payload contents.
 
+**Recovery state is mobile-safe metadata.**  
+Public draft recovery stores only lightweight answers, current recovery counters, timestamps, diagnostics, and remote Walrus attachment references. It must not persist `File`/`Blob` objects, Base64 attachment bodies, encrypted attachment payloads, or full encrypted submission envelopes in `localStorage` or IndexedDB. Attachments are uploaded to Walrus when selected; recovery keeps the returned blob reference.
+
 **Roadmaps are derived from review decisions.**  
 The public roadmap only exposes selected `planned`, `in_progress`, and `fixed` signals, and encrypted roadmap entries show safe metadata only.
 
