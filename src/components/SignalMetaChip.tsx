@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { isValidSuiAddress } from "@mysten/sui/utils";
+import { SuiAddressDisplay } from "./SuiAddressDisplay";
 
 export type SignalMetaType =
   | "contributor"
@@ -62,6 +64,7 @@ export function SignalMetaChip({ type, value, className = "" }: SignalMetaChipPr
   const [copied, setCopied] = useState(false);
   const timeoutRef = useRef<number | null>(null);
   const label = formatSignalMetaValue(type, value);
+  const isSuiAddress = type === "contributor" && isValidSuiAddress(value.trim());
 
   useEffect(() => {
     return () => {
@@ -86,6 +89,20 @@ export function SignalMetaChip({ type, value, className = "" }: SignalMetaChipPr
     } catch (error) {
       console.error(error);
     }
+  }
+
+  if (isSuiAddress) {
+    return (
+      <span className={`signal-meta-chip-shell ${className}`.trim()}>
+        <SuiAddressDisplay
+          address={value.trim()}
+          className="signal-meta-chip-sui-address"
+          labelClassName="signal-meta-chip-label"
+          copyClassName="signal-meta-chip-copy"
+          showTooltip
+        />
+      </span>
+    );
   }
 
   return (

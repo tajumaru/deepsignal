@@ -4,10 +4,11 @@ import { BlobLink } from "../../../components/BlobLink";
 import { CriticalFailurePanel } from "../../../components/CriticalFailurePanel";
 import { ShareCard } from "../../../components/ShareCard";
 import { SignalMetaRow } from "../../../components/SignalMetaChip";
+import { SuiAddressDisplay } from "../../../components/SuiAddressDisplay";
 import type { CriticalFailure } from "../../../lib/criticalFailure";
 import { LivePreview } from "../../../components/formBuilder/LivePreview";
 import { isLocalFallbackBlob } from "../../../lib/proof";
-import { shortAddress, SUI_NETWORK } from "../../../lib/sui";
+import { SUI_NETWORK } from "../../../lib/sui";
 import type { WalrusCostEstimate } from "../../../storage/walrusCostEstimate";
 import { formatWalrusFailureStage, type WalrusFailureDetails } from "../../../storage/walrusDiagnostics";
 import type { EncryptionReadinessWarning } from "../encryptionReadiness";
@@ -385,7 +386,12 @@ export function PublishStep({
           </div>
 
           <p className="wallet-inline-note">
-            {t("formOwnerLabel")}: {accountAddress ? shortAddress(accountAddress) : t("walletPublishHint")}
+            {t("formOwnerLabel")}:{" "}
+            {accountAddress ? (
+              <SuiAddressDisplay address={accountAddress} className="wallet-inline-address" showTooltip />
+            ) : (
+              t("walletPublishHint")
+            )}
           </p>
           {!savedForm ? (
             <div className="publish-quick-controls">
@@ -464,7 +470,11 @@ export function PublishStep({
                 </div>
                 <div className="metadata-row">
                   <span>{t("addressLabel")}</span>
-                  <strong>{accountAddress ? shortAddress(accountAddress) : t("notConnected")}</strong>
+                  {accountAddress ? (
+                    <SuiAddressDisplay address={accountAddress} className="wallet-inline-address" showTooltip />
+                  ) : (
+                    <strong>{t("notConnected")}</strong>
+                  )}
                 </div>
                 <div className="metadata-row">
                   <span>{t("networkLabel")}</span>

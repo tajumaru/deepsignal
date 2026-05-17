@@ -1082,7 +1082,11 @@ export function FormSubmissionsPage() {
           ) : null}
           <div className="metadata-row">
             <span>Respondent</span>
-            <strong>{getRespondentDisplayLabel(selectedSubmission)}</strong>
+            {getSubmissionRespondentMeta(selectedSubmission).isAnonymous ? (
+              <strong>{getRespondentDisplayLabel(selectedSubmission)}</strong>
+            ) : (
+              <SignalMetaChip type="contributor" value={getRespondentDisplayLabel(selectedSubmission)} />
+            )}
           </div>
           <div className="metadata-row">
             <span>{t("attachments")}</span>

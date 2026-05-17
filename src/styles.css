@@ -436,6 +436,15 @@ button {
     background 160ms ease;
 }
 
+.wallet-sync-toggle {
+  display: contents;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+}
+
 .wallet-connect-shell-compact .wallet-connect-direct {
   gap: 0.6rem;
   padding: 0.8rem 0.85rem;
@@ -465,7 +474,7 @@ button {
 }
 
 .wallet-sync-button:hover,
-.wallet-sync-button:focus-visible {
+.wallet-sync-button:focus-within {
   border-color: rgba(140, 232, 255, 0.38);
   box-shadow:
     inset 0 1px 0 rgba(186, 245, 255, 0.08),
@@ -539,6 +548,15 @@ button {
   color: #ccf7ff;
   font-size: 0.84rem;
   white-space: nowrap;
+}
+
+.wallet-sync-address-shell {
+  justify-self: end;
+}
+
+.wallet-sync-address-shell .sui-address-display {
+  min-height: 2.55rem;
+  padding: 0.4rem 0.56rem;
 }
 
 .wallet-sync-menu {
@@ -615,6 +633,58 @@ button {
 .wallet-sync-copy-chip:focus-visible {
   border-color: rgba(144, 230, 255, 0.28);
   background: rgba(10, 31, 50, 0.88);
+}
+
+.wallet-sync-copy-chip-shell {
+  justify-self: start;
+  max-width: 100%;
+}
+
+.wallet-sync-copy-chip-shell .sui-address-display {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  max-width: 100%;
+  min-height: 2.5rem;
+  padding: 0.4rem 0.58rem;
+  border: 1px solid rgba(118, 206, 255, 0.14);
+  border-radius: 999px;
+  background: rgba(8, 26, 43, 0.76);
+  color: #effcff;
+}
+
+.wallet-sync-copy-chip-shell .sui-address-display:hover,
+.wallet-sync-copy-chip-shell .sui-address-display:focus-visible {
+  border-color: rgba(144, 230, 255, 0.28);
+  background: rgba(10, 31, 50, 0.88);
+}
+
+.wallet-sync-copy-chip-copy,
+.wallet-sync-copy-chip-address {
+  font-size: 0.7rem;
+  line-height: 1.2;
+}
+
+.wallet-sync-copy-chip-copy {
+  font-weight: 700;
+}
+
+.wallet-sync-copy-chip-address {
+  color: #90b3c5;
+  font-family: "Consolas", "SFMono-Regular", "Roboto Mono", monospace;
+  white-space: nowrap;
+}
+
+.wallet-inline-address .sui-address-display,
+.workspace-activity-address .sui-address-display {
+  min-height: 2.25rem;
+  padding: 0.18rem 0.28rem;
+  color: inherit;
+  font-family: "Consolas", "SFMono-Regular", "Roboto Mono", monospace;
+}
+
+.workspace-activity-address .sui-address-display {
+  font-weight: 700;
 }
 
 .wallet-sync-wallets {
@@ -720,6 +790,36 @@ button {
   position: relative;
   display: inline-flex;
   max-width: 100%;
+}
+
+.sui-address-display-shell {
+  position: relative;
+  display: inline-flex;
+  max-width: 100%;
+}
+
+.sui-address-display {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-width: 0;
+  max-width: 100%;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  line-height: inherit;
+}
+
+.sui-address-display-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sui-address-display-copy {
+  flex-shrink: 0;
 }
 
 .signal-meta-chip {
@@ -14967,6 +15067,27 @@ body.composer-mode .bg-orb {
   padding: 0.28rem 0.55rem;
   font-size: 0.68rem;
   line-height: 1;
+}
+
+.signal-meta-chip-sui-address .sui-address-display {
+  --meta-bg: rgba(120, 160, 176, 0.15);
+  --meta-border: rgba(120, 160, 176, 0.24);
+  --meta-text: #d7edf5;
+  padding: 0.42rem 0.68rem;
+  border-radius: 999px;
+  border: 1px solid var(--meta-border);
+  background: var(--meta-bg);
+  color: var(--meta-text);
+  font-family: "Consolas", "SFMono-Regular", "Roboto Mono", monospace;
+  font-size: 0.82rem;
+  letter-spacing: 0.01em;
+  line-height: 1;
+}
+
+.signal-meta-chip-sui-address .sui-address-display:hover,
+.signal-meta-chip-sui-address .sui-address-display:focus-visible {
+  border-color: color-mix(in srgb, var(--meta-border) 72%, white);
+  transform: translateY(-1px);
 }
 
 .form-stream-export-button span {

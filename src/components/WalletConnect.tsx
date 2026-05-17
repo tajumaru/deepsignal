@@ -7,19 +7,10 @@ import {
 } from "@mysten/dapp-kit";
 import { useEffect, useRef, useState } from "react";
 import { useI18n } from "../i18n";
+import { SuiAddressDisplay } from "./SuiAddressDisplay";
 
 interface WalletConnectProps {
   compact?: boolean;
-}
-
-function formatWalletAddress(address?: string | null) {
-  if (!address) {
-    return "No address";
-  }
-  if (address.length <= 12) {
-    return address;
-  }
-  return `${address.slice(0, 6)}...${address.slice(-4)}`;
 }
 
 export function WalletConnect({ compact = false }: WalletConnectProps) {
@@ -33,7 +24,6 @@ export function WalletConnect({ compact = false }: WalletConnectProps) {
   const autoConnectStatus = useAutoConnectWallet();
   const disconnectWallet = useDisconnectWallet();
   const [menuOpen, setMenuOpen] = useState(false);
-  const [copied, setCopied] = useState(false);
   const shellRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -61,30 +51,10 @@ export function WalletConnect({ compact = false }: WalletConnectProps) {
     };
   }, [menuOpen]);
 
-  useEffect(() => {
-    if (!copied) {
-      return;
-    }
-    const timeoutId = window.setTimeout(() => setCopied(false), 1800);
-    return () => window.clearTimeout(timeoutId);
-  }, [copied]);
-
   async function handleDisconnect() {
     try {
       await disconnectWallet.mutateAsync();
       setMenuOpen(false);
-    } catch (error) {
-      console.error(error);
-    }
-  }
-
-  async function handleCopyAddress() {
-    if (!account?.address) {
-      return;
-    }
-    try {
-      await navigator.clipboard.writeText(account.address);
-      setCopied(true);
     } catch (error) {
       console.error(error);
     }
@@ -127,42 +97,52 @@ export function WalletConnect({ compact = false }: WalletConnectProps) {
 
   return (
     <div ref={shellRef} className={`wallet-connect-shell ${compact ? "wallet-connect-shell-compact" : ""}`.trim()}>
-      <button
-        type="button"
+      <div
         className={`wallet-sync-button ${isConnected ? "is-synced" : ""} ${isConnecting ? "is-syncing" : ""}`}
-        onClick={() => {
-          if (isConnecting) {
-            return;
-          }
-          setMenuOpen((current) => !current);
-        }}
-        aria-expanded={menuOpen}
-        aria-haspopup="menu"
       >
-        <span className={`wallet-sync-indicator ${isConnected ? "is-live" : isConnecting ? "is-pending" : "is-idle"}`} />
-        <span className="wallet-sync-copy">
-          <strong>{buttonLabel}</strong>
-          <span>{statusCopy}</span>
-        </span>
-        {isConnected ? (
-          <span className="wallet-sync-address">{formatWalletAddress(account?.address)}</span>
+        <button
+          type="button"
+          className="wallet-sync-toggle"
+          onClick={() => {
+            if (isConnecting) {
+              return;
+            }
+            setMenuOpen((current) => !current);
+          }}
+          aria-expanded={menuOpen}
+          aria-haspopup="menu"
+        >
+          <span className={`wallet-sync-indicator ${isConnected ? "is-live" : isConnecting ? "is-pending" : "is-idle"}`} />
+          <span className="wallet-sync-copy">
+            <strong>{buttonLabel}</strong>
+            <span>{statusCopy}</span>
+          </span>
+        </button>
+        {isConnected && account?.address ? (
+          <SuiAddressDisplay
+            address={account.address}
+            className="wallet-sync-address-shell"
+            labelClassName="wallet-sync-address"
+            showCopyLabel={false}
+            showTooltip
+          />
         ) : null}
-      </button>
+      </div>
 
       {menuOpen ? (
         <div className="wallet-sync-menu panel" role="menu">
           <div className="wallet-sync-menu-header">
             <span className="wallet-sync-menu-eyebrow">{t("connectedLabel")}</span>
             <strong>{currentWallet?.name ?? "Wallet"}</strong>
-            <button
-              type="button"
-              className="wallet-sync-copy-chip"
-              onClick={() => void handleCopyAddress()}
-              role="menuitem"
-            >
-              <span>{copied ? "Copied" : "Copy"}</span>
-              <small>{formatWalletAddress(account?.address)}</small>
-            </button>
+            {account?.address ? (
+              <SuiAddressDisplay
+                address={account.address}
+                className="wallet-sync-copy-chip-shell"
+                labelClassName="wallet-sync-copy-chip-address"
+                copyClassName="wallet-sync-copy-chip-copy"
+                showTooltip
+              />
+            ) : null}
           </div>
           <button
             type="button"

@@ -19,6 +19,7 @@ import { SignalClusterPanel } from "../components/SignalClusterPanel";
 import { SignalStatusBadges } from "../components/SignalStatusBadges";
 import { SignalMetaChip, SignalMetaRow } from "../components/SignalMetaChip";
 import { StorageProof } from "../components/StorageProof";
+import { SuiAddressDisplay } from "../components/SuiAddressDisplay";
 import { AdminOperationsStatus } from "../features/admin/components/AdminOperationsStatus";
 import { AdminToast } from "../features/admin/components/AdminToast";
 import { CsvExportConfirmationModal } from "../features/admin/components/CsvExportConfirmationModal";
@@ -164,9 +165,15 @@ function WorkspaceActivityLog({
                 <span className={`workspace-activity-dot is-${actionClass}`} aria-hidden="true" />
                 <div className="workspace-activity-main">
                   <div className="workspace-activity-line">
-                    <strong title={event.actorAddress || undefined}>
-                      {event.actorAddress ? shortAddress(event.actorAddress) : t("unknownActor")}
-                    </strong>
+                    {event.actorAddress ? (
+                      <SuiAddressDisplay
+                        address={event.actorAddress}
+                        className="workspace-activity-address"
+                        showTooltip
+                      />
+                    ) : (
+                      <strong>{t("unknownActor")}</strong>
+                    )}
                     <span className={`activity-badge is-${actionClass}`}>{actionLabel}</span>
                     <span>{event.formTitleSnapshot}</span>
                   </div>
@@ -2865,11 +2872,16 @@ export function AdminDashboardPage() {
                           </div>
                           <div className="metadata-row">
                             <span>{t("walletLabel")}</span>
-                            <strong>
-                              {getSubmissionRespondentMeta(selectedRecord.submission).isAnonymous
-                                ? t("anonymousRespondent")
-                                : getSubmissionRespondentMeta(selectedRecord.submission).walletAddress ?? t("notAvailable")}
-                            </strong>
+                            {getSubmissionRespondentMeta(selectedRecord.submission).isAnonymous ? (
+                              <strong>{t("anonymousRespondent")}</strong>
+                            ) : getSubmissionRespondentMeta(selectedRecord.submission).walletAddress ? (
+                              <SignalMetaChip
+                                type="contributor"
+                                value={getSubmissionRespondentMeta(selectedRecord.submission).walletAddress ?? ""}
+                              />
+                            ) : (
+                              <strong>{t("notAvailable")}</strong>
+                            )}
                           </div>
                           <div className="metadata-row">
                             <span>{t("anonymousLabel")}</span>
