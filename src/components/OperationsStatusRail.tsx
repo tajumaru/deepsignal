@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { useI18n } from "../i18n";
 
 export interface OperationsStatusItem {
   label: string;
@@ -15,21 +16,24 @@ interface OperationsStatusRailProps {
 }
 
 export function OperationsStatusRail({
-  title = "Review Queue",
+  title,
   items,
   nextActionLabel,
   nextActionDetail,
   nextActionCta,
 }: OperationsStatusRailProps) {
+  const { t } = useI18n();
+  const resolvedTitle = title ?? t("reviewQueueTitle");
+
   return (
     <section className="panel operations-rail-card">
       <div className="operations-rail-header">
         <div className="operations-rail-summary">
           <div>
-            <p className="eyebrow">Encrypted Signal Inbox</p>
-            <h2>{title}</h2>
+            <p className="eyebrow">{t("encryptedSignalInboxLabel")}</p>
+            <h2>{resolvedTitle}</h2>
           </div>
-          <div className="operations-rail-strip" role="list" aria-label="Review queue status">
+          <div className="operations-rail-strip" role="list" aria-label={t("reviewQueueStatusAria")}>
             {items.map((item) => (
               <article
                 key={item.label}
@@ -42,8 +46,8 @@ export function OperationsStatusRail({
             ))}
           </div>
         </div>
-        <section className="operations-next-action" aria-label="Next review action">
-          <span className="operations-next-action-label">Next review action</span>
+        <section className="operations-next-action" aria-label={t("nextReviewActionLabel")}>
+          <span className="operations-next-action-label">{t("nextReviewActionLabel")}</span>
           <strong>{nextActionLabel}</strong>
           <p>{nextActionDetail}</p>
           {nextActionCta ? <div className="operations-next-action-cta">{nextActionCta}</div> : null}
@@ -53,11 +57,11 @@ export function OperationsStatusRail({
       <details className="operations-system-details">
         <summary>
           <span>
-            <p className="eyebrow">System Details</p>
-            <h3>Open operational details</h3>
+            <p className="eyebrow">{t("systemDetailsLabel")}</p>
+            <h3>{t("openOperationalDetailsTitle")}</h3>
           </span>
         </summary>
-        <div className="operations-rail" role="list" aria-label="System details">
+        <div className="operations-rail" role="list" aria-label={t("systemDetailsLabel")}>
           {items.map((item) => (
             <article
               key={item.label}

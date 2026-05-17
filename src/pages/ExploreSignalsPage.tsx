@@ -2,7 +2,8 @@ import { useCurrentAccount } from "@mysten/dapp-kit";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { CreateFormLink } from "../components/CreateFormLink";
-import { buildExploreAiPreview, getExploreCategory, getPurposeLabel, isFormPubliclyExplorable, type ExploreCategory } from "../lib/explore";
+import { useI18n } from "../i18n";
+import { buildExploreAiPreview, getExploreCategory, isFormPubliclyExplorable, type ExploreCategory } from "../lib/explore";
 import { getPublicFormPath } from "../lib/publicLinks";
 import { isResponseDeadlinePassed } from "../lib/responseDeadline";
 import { normalizeForm, normalizeSubmission, storageAdapter } from "../lib/storage";
@@ -14,7 +15,6 @@ type ExploreCard = {
   category: ExploreCategory;
   signalCount: number;
   updatedAt: string;
-  aiPreview: string;
   roadmapCount: number;
 };
 
@@ -23,24 +23,16 @@ type DiscoverTab = "trending" | "new" | "active" | "ai" | "governance" | "anonym
 const EXPLORE_DELETED_FORMS_KEY = "deepsignal.exploreDeletedForms";
 const EXPLORE_SUBMISSION_LOAD_CONCURRENCY = 4;
 
-const DISCOVER_TABS: Array<{ key: DiscoverTab; label: string }> = [
-  { key: "trending", label: "Trending" },
-  { key: "new", label: "New" },
-  { key: "active", label: "Active" },
-  { key: "ai", label: "AI" },
-  { key: "governance", label: "Governance" },
-  { key: "anonymous", label: "Anonymous" },
-  { key: "encrypted", label: "Encrypted" },
-];
+const DISCOVER_TABS: DiscoverTab[] = ["trending", "new", "active", "ai", "governance", "anonymous", "encrypted"];
 
-function getCreatorLabel(form: FormSchema) {
+function getCreatorLabel(form: FormSchema, localCreatorLabel: string) {
   if (form.projectName?.trim()) {
     return form.projectName.trim();
   }
   if (form.ownerAddress) {
     return `${form.ownerAddress.slice(0, 6)}…${form.ownerAddress.slice(-4)}`;
   }
-  return "Local creator";
+  return localCreatorLabel;
 }
 
 function matchesKeyword(form: FormSchema, keywords: string[]) {
@@ -49,16 +41,6 @@ function matchesKeyword(form: FormSchema, keywords: string[]) {
     .join(" ")
     .toLowerCase();
   return keywords.some((keyword) => haystack.includes(keyword));
-}
-
-function getDeadlineLabel(form: Pick<FormSchema, "responseDeadline">) {
-  if (typeof form.responseDeadline !== "number" || !Number.isFinite(form.responseDeadline)) {
-    return "No deadline";
-  }
-  if (isResponseDeadlinePassed(form.responseDeadline)) {
-    return "Closed";
-  }
-  return formatDate(new Date(form.responseDeadline).toISOString());
 }
 
 function getDeadlineTone(form: Pick<FormSchema, "responseDeadline">) {
@@ -119,15 +101,11 @@ function buildExploreCard(form: FormSchema, submissions: Submission[] = []): Exp
     signalCount: submissions.length,
     updatedAt,
     roadmapCount,
-    aiPreview: buildExploreAiPreview({
-      category: exploreCategory,
-      signalCount: submissions.length,
-      updatedAt,
-    }),
   };
 }
 
 export function ExploreSignalsPage() {
+  const { t } = useI18n();
   const account = useCurrentAccount();
   const [loading, setLoading] = useState(true);
   const [cards, setCards] = useState<ExploreCard[]>([]);
@@ -185,7 +163,7 @@ export function ExploreSignalsPage() {
   }
 
   async function handleDeleteForm(formId: string, title: string) {
-    if (!window.confirm(`Delete "${title || "Untitled form"}" from this browser?`)) {
+    if (!window.confirm(t("exploreDeleteConfirm", { title: title || t("untitledForm") }))) {
       return;
     }
     setDeletingFormId(formId);
@@ -238,7 +216,86 @@ export function ExploreSignalsPage() {
     return sorted;
   }, [activeTab, cards]);
 
-  const heroCountLabel = loading ? "Scanning workspace streams..." : `${filteredCards.length} signals in view`;
+  const heroCountLabel = loading
+    ? t("exploreScanningWorkspace")
+    : t("exploreSignalsInView", { count: filteredCards.length });
+
+  function getDiscoverTabLabel(tab: DiscoverTab) {
+    switch (tab) {
+      case "trending":
+        return t("exploreTabTrending");
+      case "new":
+        return t("exploreTabNew");
+      case "active":
+        return t("exploreTabActive");
+      case "ai":
+        return t("exploreTabAi");
+      case "governance":
+        return t("exploreTabGovernance");
+      case "anonymous":
+        return t("exploreTabAnonymous");
+      case "encrypted":
+        return t("exploreTabEncrypted");
+    }
+  }
+
+  function getLocalizedPurposeLabel(form: FormSchema) {
+    switch (form.purpose) {
+      case "bug":
+        return t("explorePurposeBug");
+      case "feature":
+        return t("explorePurposeFeature");
+      case "survey":
+        return t("explorePurposeSurvey");
+      default:
+        return t("explorePurposeApplication");
+    }
+  }
+
+  function getLocalizedCategoryLabel(category: ExploreCategory) {
+    switch (category) {
+      case "Bug":
+        return t("exploreCategoryBug");
+      case "Feature":
+        return t("exploreCategoryFeature");
+      case "Survey":
+        return t("exploreCategorySurvey");
+      case "Application":
+        return t("exploreCategoryApplication");
+      default:
+        return t("exploreCategoryAll");
+    }
+  }
+
+  function getLocalizedDeadlineLabel(form: Pick<FormSchema, "responseDeadline">) {
+    if (typeof form.responseDeadline !== "number" || !Number.isFinite(form.responseDeadline)) {
+      return t("exploreNoDeadline");
+    }
+    if (isResponseDeadlinePassed(form.responseDeadline)) {
+      return t("exploreClosed");
+    }
+    return formatDate(new Date(form.responseDeadline).toISOString());
+  }
+
+  function getLocalizedAiPreview(card: ExploreCard) {
+    return buildExploreAiPreview({
+      category: card.category,
+      signalCount: card.signalCount,
+      updatedAt: card.updatedAt,
+      labels: {
+        category: getLocalizedCategoryLabel(card.category),
+        freshActivity: t("explorePreviewFreshActivity"),
+        activeFlow: t("explorePreviewActiveFlow"),
+        quietStream: t("explorePreviewQuietStream"),
+        highVolume: t("explorePreviewHighVolume"),
+        steadyTraffic: t("explorePreviewSteadyTraffic"),
+        earlyCluster: t("explorePreviewEarlyCluster"),
+        awaitingFirstSignal: t("explorePreviewAwaitingFirstSignal"),
+        prefix: t("explorePreviewPrefix"),
+        channelSuffix: t("explorePreviewChannelSuffix"),
+      },
+    });
+  }
 
   return (
     <section className="explore-shell">
@@ -260,55 +317,55 @@ export function ExploreSignalsPage() {
 
         <div className="explore-hero-bar">
           <div className="explore-hero-copy">
-            <p className="eyebrow">Workspace Signal Directory</p>
-            <h1>Explore Signals</h1>
-            <p className="lede">Public signal streams available in this workspace.</p>
+            <p className="eyebrow">{t("exploreEyebrow")}</p>
+            <h1>{t("exploreTitle")}</h1>
+            <p className="lede">{t("exploreLede")}</p>
             <p className="muted explore-hero-note">
-              This view lists only forms intentionally published to Explore through the current storage runtime.
+              {t("exploreHeroNote")}
             </p>
           </div>
           <div className="explore-hero-summary">
             <span className="signal-chip signal-chip-accent">{heroCountLabel}</span>
-            <span className="signal-chip">{cards.length} listed here</span>
+            <span className="signal-chip">{t("exploreListedHere", { count: cards.length })}</span>
           </div>
         </div>
       </section>
 
       <section className="panel glow-panel explore-discovery-panel">
         <div className="explore-discovery-bar">
-          <div className="explore-tab-row" role="tablist" aria-label="Signal discovery tabs">
+          <div className="explore-tab-row" role="tablist" aria-label={t("exploreTabsAria")}>
             {DISCOVER_TABS.map((tab) => (
               <button
-                key={tab.key}
+                key={tab}
                 type="button"
-                className={`explore-tab ${activeTab === tab.key ? "is-active" : ""}`}
+                className={`explore-tab ${activeTab === tab ? "is-active" : ""}`}
                 role="tab"
-                aria-selected={activeTab === tab.key}
-                onClick={() => setActiveTab(tab.key)}
+                aria-selected={activeTab === tab}
+                onClick={() => setActiveTab(tab)}
               >
-                {tab.label}
+                {getDiscoverTabLabel(tab)}
               </button>
             ))}
           </div>
           <div className="explore-feed-meta">
-            <span>{loading ? "Refreshing feed" : `${filteredCards.length} visible`}</span>
+            <span>{loading ? t("exploreRefreshingFeed") : t("exploreVisibleCount", { count: filteredCards.length })}</span>
           </div>
         </div>
 
         {filteredCards.length === 0 ? (
           <section className="explore-empty-minimal">
-            <h2>No listed signals in this workspace yet.</h2>
+            <h2>{t("exploreEmptyTitle")}</h2>
             <div className="explore-empty-copy">
               <p className="muted">
-                Private and direct-link forms stay outside Explore unless their visibility is changed to Public Explore.
+                {t("exploreEmptyPrivateCopy")}
               </p>
               <p className="muted">
-                Streams published to Explore will also show up here when they are available through the current storage runtime.
+                {t("exploreEmptyRuntimeCopy")}
               </p>
             </div>
             <div className="inline-actions">
               <CreateFormLink className="primary-button">
-                Create signal
+                {t("exploreCreateSignal")}
               </CreateFormLink>
             </div>
           </section>
@@ -316,14 +373,14 @@ export function ExploreSignalsPage() {
           <section className="explore-card-grid">
             {filteredCards.map((card) => {
               const publicPath = getPublicFormPath(card.form.id, card.form.manifestBlobId);
-              const creatorLabel = getCreatorLabel(card.form);
+              const creatorLabel = getCreatorLabel(card.form, t("exploreLocalCreator"));
               const isOwnForm = canDeleteForm(card.form);
 
               return (
                 <Fragment key={card.form.id}>
                   <Link className="mobile-explore-row" to={publicPath}>
                     <span className="mobile-signal-avatar" aria-hidden="true">
-                      {getPurposeLabel(card.form.purpose).slice(0, 2).toUpperCase()}
+                      {getLocalizedPurposeLabel(card.form).slice(0, 2).toUpperCase()}
                       <span className={`mobile-signal-status-dot status-${card.signalCount > 0 ? "unread" : "archived"}`} />
                     </span>
                     <span className="mobile-signal-main">
@@ -331,23 +388,23 @@ export function ExploreSignalsPage() {
                         <strong>{card.form.title}</strong>
                       </span>
                       <span className="mobile-signal-preview">
-                        {card.form.description || "Public signal stream open for new feedback."}
+                        {card.form.description || t("exploreDefaultDescription")}
                       </span>
                       <span className="mobile-signal-source-line">
                         <span>{creatorLabel}</span>
-                        <span>{getPurposeLabel(card.form.purpose)}</span>
+                        <span>{getLocalizedPurposeLabel(card.form)}</span>
                       </span>
                       <span className="mobile-signal-meta-row">
                         <span className="mobile-signal-mini-badge">
-                          {card.form.visibility === "public" ? "Listed" : "Unlisted"}
+                          {card.form.visibility === "public" ? t("exploreListed") : t("exploreUnlisted")}
                         </span>
-                        {card.form.encryptSubmissions ? <span className="mobile-signal-mini-badge">Encrypted</span> : null}
-                        <span className="mobile-signal-mini-badge">{getDeadlineLabel(card.form)}</span>
+                        {card.form.encryptSubmissions ? <span className="mobile-signal-mini-badge">{t("exploreEncrypted")}</span> : null}
+                        <span className="mobile-signal-mini-badge">{getLocalizedDeadlineLabel(card.form)}</span>
                       </span>
                     </span>
                     <span className="mobile-signal-side">
                       <time>{formatDate(card.updatedAt)}</time>
-                      <span className="mobile-priority-badge">{card.signalCount} resp</span>
+                      <span className="mobile-priority-badge">{t("exploreResponsesShort", { count: card.signalCount })}</span>
                     </span>
                   </Link>
 
@@ -357,58 +414,58 @@ export function ExploreSignalsPage() {
                   <div className="explore-feed-card-top">
                     <div>
                       <div className="pill-row">
-                        <span className="signal-chip signal-chip-accent">Public</span>
-                        <span className="signal-chip">{card.form.visibility === "public" ? "Listed" : "Unlisted"}</span>
-                        {card.form.encryptSubmissions ? <span className="signal-chip">Encrypted</span> : null}
+                        <span className="signal-chip signal-chip-accent">{t("explorePublic")}</span>
+                        <span className="signal-chip">{card.form.visibility === "public" ? t("exploreListed") : t("exploreUnlisted")}</span>
+                        {card.form.encryptSubmissions ? <span className="signal-chip">{t("exploreEncrypted")}</span> : null}
                       </div>
                       <h2>{card.form.title}</h2>
                     </div>
                     <div className="explore-feed-card-side">
                       <div className={`explore-deadline-pill is-${getDeadlineTone(card.form)}`}>
-                        <span>Deadline</span>
-                        <strong>{getDeadlineLabel(card.form)}</strong>
+                        <span>{t("exploreDeadline")}</span>
+                        <strong>{getLocalizedDeadlineLabel(card.form)}</strong>
                       </div>
                       <div className="explore-card-count">
                         <strong>{card.signalCount}</strong>
-                        <span>responses</span>
+                        <span>{t("exploreResponses")}</span>
                       </div>
                     </div>
                   </div>
 
                   <p className="explore-feed-description muted">
-                    {card.form.description || "Public signal stream open for new feedback."}
+                    {card.form.description || t("exploreDefaultDescription")}
                   </p>
 
                   <div className="explore-feed-stats">
                     <div className="explore-feed-stat">
-                      <span>Creator</span>
+                      <span>{t("exploreCreator")}</span>
                       <strong>{creatorLabel}</strong>
                     </div>
                     <div className="explore-feed-stat">
-                      <span>Latest</span>
+                      <span>{t("exploreLatest")}</span>
                       <strong>{formatDate(card.updatedAt)}</strong>
                     </div>
                     <div className="explore-feed-stat">
-                      <span>Category</span>
-                      <strong>{getPurposeLabel(card.form.purpose)}</strong>
+                      <span>{t("exploreCategory")}</span>
+                      <strong>{getLocalizedPurposeLabel(card.form)}</strong>
                     </div>
                     <div className="explore-feed-stat">
-                      <span>Activity</span>
-                      <strong>{card.roadmapCount} roadmap</strong>
+                      <span>{t("exploreActivity")}</span>
+                      <strong>{t("exploreRoadmapCount", { count: card.roadmapCount })}</strong>
                     </div>
                   </div>
 
                   <section className="explore-ai-preview explore-feed-preview">
                     <div className="section-row">
-                      <strong>Signal note</strong>
-                      <span className="signal-chip">Live</span>
+                      <strong>{t("exploreSignalNote")}</strong>
+                      <span className="signal-chip">{t("exploreLive")}</span>
                     </div>
-                    <p>{card.aiPreview}</p>
+                    <p>{getLocalizedAiPreview(card)}</p>
                   </section>
 
                   <div className="inline-actions">
                     <Link className="primary-button" to={publicPath}>
-                      Open signal
+                      {t("exploreOpenSignal")}
                     </Link>
                     {isOwnForm ? (
                       <button
@@ -417,7 +474,7 @@ export function ExploreSignalsPage() {
                         onClick={() => void handleDeleteForm(card.form.id, card.form.title)}
                         disabled={deletingFormId === card.form.id}
                       >
-                        {deletingFormId === card.form.id ? "Deleting..." : "Delete"}
+                        {deletingFormId === card.form.id ? t("deleting") : t("deleteForm")}
                       </button>
                     ) : null}
                   </div>

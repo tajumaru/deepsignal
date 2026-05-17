@@ -136,6 +136,16 @@ export interface WalrusActualCost {
   source: "publisher" | "sdk-storage-cost" | "sdk-storage-cost-and-register-gas";
 }
 
+export type WalrusNetwork = "testnet" | "mainnet";
+
+export interface WalrusBlobProof {
+  blobId: string;
+  objectId?: string;
+  size?: number;
+  epoch?: number;
+  network: WalrusNetwork;
+}
+
 export interface SignalManifest {
   version: number;
   formId: string;
@@ -177,6 +187,7 @@ export interface SubmissionAttachment {
   originalType?: string;
   encoding?: "seal-base64-v1";
   inlineData?: string;
+  walrusProof?: WalrusBlobProof;
 }
 
 export interface UploadedAttachment {
@@ -188,6 +199,7 @@ export interface UploadedAttachment {
   status: "pending" | "uploading" | "uploaded" | "failed";
   progress: number;
   walrusBlobId?: string;
+  walrusProof?: WalrusBlobProof;
   error?: string;
 }
 
@@ -235,6 +247,7 @@ export interface Submission {
   githubPrUrl?: string;
   isEncrypted: boolean;
   encryptedBlobId?: string;
+  encryptedWalrusProof?: WalrusBlobProof;
   encryptedPayload?: string;
   receiptBlobId?: string;
   sealIdentity?: string;
@@ -247,6 +260,7 @@ export interface Submission {
   createdAt: string;
   updatedAt: string;
   blobId?: string;
+  walrusProof?: WalrusBlobProof;
 }
 
 export interface EncryptedSubmissionRecord extends Omit<
@@ -275,13 +289,15 @@ export interface StorageAdapter {
   listForms(): Promise<FormSchema[]>;
   deleteForm(id: string): Promise<void>;
   deleteForms(ids: string[]): Promise<void>;
-  saveSubmission(submission: Submission): Promise<{ id: string; blobId?: string }>;
-  saveEncryptedSubmission?(submission: Submission): Promise<{ id: string; blobId?: string; encryptedBlobId?: string }>;
+  saveSubmission(submission: Submission): Promise<{ id: string; blobId?: string; walrusProof?: WalrusBlobProof }>;
+  saveEncryptedSubmission?(
+    submission: Submission,
+  ): Promise<{ id: string; blobId?: string; encryptedBlobId?: string; walrusProof?: WalrusBlobProof }>;
   listSubmissions(formId: string): Promise<Submission[]>;
   updateSubmission(submission: Submission): Promise<void>;
-  saveEncryptedPayload(payload: string): Promise<{ blobId: string }>;
+  saveEncryptedPayload(payload: string): Promise<{ blobId: string; walrusProof?: WalrusBlobProof }>;
   readEncryptedPayload(blobId: string): Promise<string | null>;
-  uploadFile(file: File): Promise<{ blobId: string; url?: string }>;
+  uploadFile(file: File): Promise<{ blobId: string; url?: string; walrusProof?: WalrusBlobProof }>;
   readFileBlob(blobId: string): Promise<Blob | null>;
   readFileText(blobId: string): Promise<string | null>;
 }

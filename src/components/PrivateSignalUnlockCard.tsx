@@ -3,6 +3,7 @@ import { useId, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import type { DecryptDiagnosticContext } from "../crypto/decryptDiagnostics";
 import { useI18n } from "../i18n";
+import { sanitizeCsvCell } from "../lib/exportResponses";
 import {
   didResetFullySucceed,
   RESET_CONFIRMATION_MESSAGE,
@@ -10,6 +11,7 @@ import {
   RESET_SUCCESS_MESSAGE,
   resetLocalEnvironment,
 } from "../lib/resetEnvironment";
+import { downloadTextFile } from "../lib/utils";
 
 type UnlockState =
   | "locked"
@@ -34,6 +36,7 @@ interface PrivateSignalUnlockCardProps {
   disabledReason?: string;
   actionDisabled?: boolean;
   children?: ReactNode;
+  supportContent?: ReactNode;
 }
 
 function LockIcon() {
@@ -143,20 +146,54 @@ function formatDebugValue(value: unknown) {
   return JSON.stringify(value, null, 2);
 }
 
+function formatCsvTimestamp(now = new Date()) {
+  const pad = (value: number) => String(value).padStart(2, "0");
+  return [
+    now.getFullYear(),
+    pad(now.getMonth() + 1),
+    pad(now.getDate()),
+    "-",
+    pad(now.getHours()),
+    pad(now.getMinutes()),
+  ].join("");
+}
+
+function getSealPolicyDebugErrorMessages(diagnostics: DecryptDiagnosticContext, errorMessage?: string) {
+  const messages = [errorMessage];
+  if (diagnostics.policySnapshotComparison && !diagnostics.policySnapshotComparison.matches) {
+    messages.push(
+      "Encrypt policy and decrypt policy differ. Decryption must use the same canonical package, capability, object, network, and policy JSON that were used at encryption time.",
+    );
+  }
+  return messages.filter((message): message is string => Boolean(message));
+}
+
+function downloadSealPolicyDebugCsv(diagnostics: DecryptDiagnosticContext, errorMessage?: string) {
+  const rows = [["error"], ...getSealPolicyDebugErrorMessages(diagnostics, errorMessage).map((message) => [message])];
+  const csv = `\uFEFF${rows.map((row) => row.map((cell) => sanitizeCsvCell(formatDebugValue(cell))).join(",")).join("\r\n")}`;
+  const responsePart = diagnostics.responseId ? `-${diagnostics.responseId}` : "";
+  downloadTextFile(
+    `deepsignal-seal-policy-debug${responsePart}-${formatCsvTimestamp()}.csv`,
+    csv,
+    "text/csv;charset=utf-8",
+  );
+}
+
 function PolicyMismatchNotice({ diagnostics }: { diagnostics: DecryptDiagnosticContext }) {
+  const { t } = useI18n();
   const comparison = diagnostics.policySnapshotComparison;
   if (!comparison || comparison.matches) {
     return null;
   }
   return (
     <div className="seal-policy-debug-alert" role="alert">
-      Encrypt policy and decrypt policy differ. Decryption must use the same canonical package, capability,
-      object, network, and policy JSON that were used at encryption time.
+      {t("sealPolicyMismatchNotice")}
     </div>
   );
 }
 
 function PolicyDiffRows({ diagnostics }: { diagnostics: DecryptDiagnosticContext }) {
+  const { t } = useI18n();
   const diffs = diagnostics.policySnapshotComparison?.diffs ?? [];
   if (diffs.length === 0) {
     return <pre>{formatDebugValue(diagnostics.policySnapshotComparison?.differingKeys.join(", "))}</pre>;
@@ -165,9 +202,9 @@ function PolicyDiffRows({ diagnostics }: { diagnostics: DecryptDiagnosticContext
     <table className="seal-policy-diff-table">
       <thead>
         <tr>
-          <th>Field</th>
-          <th>Encrypt</th>
-          <th>Decrypt</th>
+          <th>{t("sealPolicyDiffField")}</th>
+          <th>{t("sealPolicyDiffEncrypt")}</th>
+          <th>{t("sealPolicyDiffDecrypt")}</th>
         </tr>
       </thead>
       <tbody>
@@ -183,7 +220,14 @@ function PolicyDiffRows({ diagnostics }: { diagnostics: DecryptDiagnosticContext
   );
 }
 
-function SealPolicyDebugPanel({ diagnostics }: { diagnostics: DecryptDiagnosticContext }) {
+function SealPolicyDebugPanel({
+  diagnostics,
+  errorMessage,
+}: {
+  diagnostics: DecryptDiagnosticContext;
+  errorMessage?: string;
+}) {
+  const { t } = useI18n();
   const encryptRawPolicyJson =
     diagnostics.encryptPolicySnapshot?.rawPolicyJson ??
     (diagnostics.encryptPolicySnapshot ? JSON.stringify(diagnostics.encryptPolicySnapshot, null, 2) : undefined);
@@ -191,23 +235,36 @@ function SealPolicyDebugPanel({ diagnostics }: { diagnostics: DecryptDiagnosticC
     diagnostics.decryptPolicySnapshot?.rawPolicyJson ??
     (diagnostics.decryptPolicySnapshot ? JSON.stringify(diagnostics.decryptPolicySnapshot, null, 2) : undefined);
   const rows = [
-    ["Policy hash", diagnostics.policyHash ?? diagnostics.decryptPolicySnapshot?.policyHash],
-    ["Package ID", diagnostics.packageId ?? diagnostics.decryptPolicySnapshot?.packageId],
-    ["Capability type", diagnostics.capabilityType ?? diagnostics.decryptPolicySnapshot?.capabilityType],
-    ["Envelope object ID", diagnostics.accessObjectId],
-    ["Envelope policy object ID", diagnostics.policyObjectId],
-    ["Encrypt policy object ID", diagnostics.encryptPolicySnapshot?.objectId],
-    ["Encrypt policy policy object ID", diagnostics.encryptPolicySnapshot?.policyObjectId],
-    ["Decrypt policy object ID", diagnostics.decryptPolicySnapshot?.objectId],
-    ["Decrypt policy policy object ID", diagnostics.decryptPolicySnapshot?.policyObjectId],
-    ["Wallet address", diagnostics.walletAddress ?? diagnostics.decryptPolicySnapshot?.walletAddress],
-    ["Policy match", diagnostics.policySnapshotComparison?.matches],
-    ["Policy diff", diagnostics.policySnapshotComparison?.differingKeys.join(", ")],
+    [t("sealPolicyRowPolicyHash"), diagnostics.policyHash ?? diagnostics.decryptPolicySnapshot?.policyHash],
+    [t("sealPolicyRowPackageId"), diagnostics.packageId ?? diagnostics.decryptPolicySnapshot?.packageId],
+    [t("sealPolicyRowCapabilityType"), diagnostics.capabilityType ?? diagnostics.decryptPolicySnapshot?.capabilityType],
+    [t("sealPolicyRowEnvelopeObjectId"), diagnostics.accessObjectId],
+    [t("sealPolicyRowEnvelopePolicyObjectId"), diagnostics.policyObjectId],
+    [t("sealPolicyRowEncryptPolicyObjectId"), diagnostics.encryptPolicySnapshot?.objectId],
+    [t("sealPolicyRowEncryptPolicyPolicyObjectId"), diagnostics.encryptPolicySnapshot?.policyObjectId],
+    [t("sealPolicyRowDecryptPolicyObjectId"), diagnostics.decryptPolicySnapshot?.objectId],
+    [t("sealPolicyRowDecryptPolicyPolicyObjectId"), diagnostics.decryptPolicySnapshot?.policyObjectId],
+    [t("sealPolicyRowWalletAddress"), diagnostics.walletAddress ?? diagnostics.decryptPolicySnapshot?.walletAddress],
+    [t("sealPolicyRowPolicyMatch"), diagnostics.policySnapshotComparison?.matches],
+    [t("sealPolicyRowPolicyDiff"), diagnostics.policySnapshotComparison?.differingKeys.join(", ")],
   ] as const;
 
   return (
     <details className="seal-policy-debug-panel" open={Boolean(diagnostics.policySnapshotComparison && !diagnostics.policySnapshotComparison.matches)}>
-      <summary>Seal policy debug</summary>
+      <summary>
+        <span>{t("sealPolicyDebugTitle")}</span>
+        <button
+          type="button"
+          className="ghost-button seal-policy-debug-export-button"
+          onClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            downloadSealPolicyDebugCsv(diagnostics, errorMessage);
+          }}
+        >
+          {t("exportCsv")}
+        </button>
+      </summary>
       <PolicyMismatchNotice diagnostics={diagnostics} />
       <dl>
         {rows.map(([label, value]) => (
@@ -219,41 +276,41 @@ function SealPolicyDebugPanel({ diagnostics }: { diagnostics: DecryptDiagnosticC
       </dl>
       <div className="seal-policy-debug-grid">
         <div>
-          <strong>Object ID sources</strong>
+          <strong>{t("sealPolicyObjectIdSources")}</strong>
           <pre>{formatDebugValue(diagnostics.objectIdSources)}</pre>
         </div>
         <div>
-          <strong>Required capability objects</strong>
+          <strong>{t("sealPolicyRequiredCapabilityObjects")}</strong>
           <pre>{formatDebugValue(diagnostics.requiredCapabilityObjects)}</pre>
         </div>
         <div>
-          <strong>Owned capability objects</strong>
+          <strong>{t("sealPolicyOwnedCapabilityObjects")}</strong>
           <pre>{formatDebugValue(diagnostics.ownedCapabilityObjects)}</pre>
         </div>
       </div>
       <div className="seal-policy-debug-grid">
         <div>
-          <strong>Encrypt raw policy JSON</strong>
+          <strong>{t("sealPolicyEncryptRawJson")}</strong>
           <pre>{formatDebugValue(encryptRawPolicyJson)}</pre>
         </div>
         <div>
-          <strong>Decrypt raw policy JSON</strong>
+          <strong>{t("sealPolicyDecryptRawJson")}</strong>
           <pre>{formatDebugValue(decryptRawPolicyJson)}</pre>
         </div>
       </div>
       <div className="seal-policy-debug-grid">
         <div>
-          <strong>Encrypt canonical policy JSON</strong>
+          <strong>{t("sealPolicyEncryptCanonicalJson")}</strong>
           <pre>{formatDebugValue(diagnostics.encryptPolicySnapshot?.normalizedPolicyJson)}</pre>
         </div>
         <div>
-          <strong>Decrypt canonical policy JSON</strong>
+          <strong>{t("sealPolicyDecryptCanonicalJson")}</strong>
           <pre>{formatDebugValue(diagnostics.normalizedPolicyJson ?? diagnostics.decryptPolicySnapshot?.normalizedPolicyJson)}</pre>
         </div>
       </div>
       <div className="seal-policy-debug-grid seal-policy-debug-grid-wide">
         <div>
-          <strong>Policy field diff</strong>
+          <strong>{t("sealPolicyFieldDiff")}</strong>
           <PolicyDiffRows diagnostics={diagnostics} />
         </div>
       </div>
@@ -261,12 +318,12 @@ function SealPolicyDebugPanel({ diagnostics }: { diagnostics: DecryptDiagnosticC
   );
 }
 
-const unlockSteps: Array<{ key: "locked" | "waiting_wallet_approval" | "decrypting" | "decrypted" | "failed"; label: string }> = [
-  { key: "locked", label: "Locked" },
-  { key: "waiting_wallet_approval", label: "Waiting wallet approval" },
-  { key: "decrypting", label: "Decrypting" },
-  { key: "decrypted", label: "Unlocked" },
-  { key: "failed", label: "Failed" },
+const unlockSteps: Array<{ key: "locked" | "waiting_wallet_approval" | "decrypting" | "decrypted" | "failed"; labelKey: Parameters<ReturnType<typeof useI18n>["t"]>[0] }> = [
+  { key: "locked", labelKey: "privateSignalUnlockStepLocked" },
+  { key: "waiting_wallet_approval", labelKey: "privateSignalUnlockStepWaitingWalletApproval" },
+  { key: "decrypting", labelKey: "privateSignalUnlockStepDecrypting" },
+  { key: "decrypted", labelKey: "privateSignalUnlockStepUnlocked" },
+  { key: "failed", labelKey: "privateSignalUnlockStepFailed" },
 ];
 
 export function PrivateSignalUnlockCard({
@@ -283,6 +340,7 @@ export function PrivateSignalUnlockCard({
   disabledReason,
   actionDisabled = false,
   children,
+  supportContent,
 }: PrivateSignalUnlockCardProps) {
   const { t } = useI18n();
   const disconnectWallet = useDisconnectWallet();
@@ -296,13 +354,12 @@ export function PrivateSignalUnlockCard({
   const helperText = isUnlocked
     ? t("privateSignalUnlockSuccessDetail")
     : state === "unauthorized"
-      ? "This wallet can see the signal exists, but it is not authorized to decrypt it."
+      ? t("privateSignalUnauthorizedHelper")
       : t("privateSignalUnlockHelper");
   const resolvedStatusMessage =
     errorMessage ||
     statusMessage ||
-    disabledReason ||
-    (state === "locked" ? "Signal remains locked." : undefined);
+    disabledReason;
   const cardTone =
     state === "unauthorized" || state === "failed"
       ? "error"
@@ -352,9 +409,9 @@ export function PrivateSignalUnlockCard({
     setRecoveryToast(null);
     try {
       await disconnectWallet.mutateAsync();
-      setRecoveryToast({ tone: "success", message: "Wallet disconnected. Please reconnect your wallet." });
+      setRecoveryToast({ tone: "success", message: t("walletDisconnectedReconnect") });
     } catch {
-      setRecoveryToast({ tone: "error", message: "Could not disconnect wallet. Try reconnecting from the wallet menu." });
+      setRecoveryToast({ tone: "error", message: t("walletDisconnectFailedReconnect") });
     } finally {
       setRecoveryAction(null);
     }
@@ -390,7 +447,7 @@ export function PrivateSignalUnlockCard({
         </div>
       </div>
 
-      <ol className="private-signal-unlock-steps" aria-label="Private signal unlock status">
+      <ol className="private-signal-unlock-steps" aria-label={t("privateSignalUnlockStatusAriaLabel")}>
         {unlockSteps.map((step) => (
           <li
             key={step.key}
@@ -399,7 +456,7 @@ export function PrivateSignalUnlockCard({
             } ${step.key === "failed" && (state === "failed" || state === "unauthorized") ? "is-error" : ""}`}
           >
             <span aria-hidden="true" />
-            <strong>{step.label}</strong>
+            <strong>{t(step.labelKey)}</strong>
           </li>
         ))}
       </ol>
@@ -420,7 +477,7 @@ export function PrivateSignalUnlockCard({
               : state === "decrypted"
                 ? t("privateSignalUnlockSuccess")
                 : state === "unauthorized"
-                  ? "Access denied"
+                  ? t("accessDeniedButton")
                 : actionLabel ?? t("privateSignalUnlockAction")}
           </span>
         </button>
@@ -430,21 +487,13 @@ export function PrivateSignalUnlockCard({
             className="ghost-button private-signal-cancel-button"
             onClick={onCancel}
           >
-            Cancel
+            {t("cancel")}
           </button>
         ) : null}
         {children ? <div className="private-signal-unlock-side-action">{children}</div> : null}
-        {onClearDebugCache ? (
-          <button
-            type="button"
-            className="ghost-button private-signal-cache-button"
-            onClick={onClearDebugCache}
-            disabled={isDecrypting}
-          >
-            Clear cached policy data
-          </button>
-        ) : null}
       </div>
+
+      {supportContent ? <div className="private-signal-unlock-note">{supportContent}</div> : null}
 
       {resolvedStatusMessage ? (
         <div
@@ -462,14 +511,14 @@ export function PrivateSignalUnlockCard({
       ) : null}
 
       {showRecoveryActions ? (
-        <div className="private-signal-recovery-actions" aria-label="Decrypt recovery actions">
+        <div className="private-signal-recovery-actions" aria-label={t("decryptRecoveryActionsAriaLabel")}>
           <button
             type="button"
             className="danger-button"
             onClick={() => void handleResetLocalState()}
             disabled={Boolean(recoveryAction) || isDecrypting}
           >
-            {recoveryAction === "reset" ? "Resetting..." : "Reset Local State"}
+            {recoveryAction === "reset" ? t("resettingLocalState") : t("resetLocalState")}
           </button>
           <button
             type="button"
@@ -477,15 +526,15 @@ export function PrivateSignalUnlockCard({
             onClick={() => void handleReconnectWallet()}
             disabled={Boolean(recoveryAction) || isDecrypting}
           >
-            {recoveryAction === "reconnect" ? "Disconnecting..." : "Reconnect Wallet"}
+            {recoveryAction === "reconnect" ? t("disconnectingWallet") : t("reconnectWallet")}
           </button>
           <Link className="ghost-button" to="/troubleshooting">
-            Open Troubleshooting
+            {t("openTroubleshooting")}
           </Link>
         </div>
       ) : null}
 
-      {diagnostics ? <SealPolicyDebugPanel diagnostics={diagnostics} /> : null}
+      {diagnostics ? <SealPolicyDebugPanel diagnostics={diagnostics} errorMessage={errorMessage} /> : null}
     </section>
   );
 }

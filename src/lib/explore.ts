@@ -2,6 +2,18 @@ import type { FormPurpose, FormSchema, FormVisibility } from "../types";
 
 export type ExploreCategory = "All" | "Bug" | "Feature" | "Survey" | "Application";
 export type ExploreTabKey = "trending" | "recent" | "active" | "ai";
+export type ExplorePreviewLabels = {
+  category: string;
+  freshActivity: string;
+  activeFlow: string;
+  quietStream: string;
+  highVolume: string;
+  steadyTraffic: string;
+  earlyCluster: string;
+  awaitingFirstSignal: string;
+  prefix: string;
+  channelSuffix: string;
+};
 
 export function normalizeFormVisibility(value: unknown, publicExplore?: unknown): FormVisibility {
   if (value === "private" || value === "unlisted" || value === "public") {
@@ -48,22 +60,35 @@ export function buildExploreAiPreview(args: {
   category: ExploreCategory;
   signalCount: number;
   updatedAt: string;
+  labels?: ExplorePreviewLabels;
 }) {
   const ageMs = Date.now() - new Date(args.updatedAt).getTime();
   const hours = Number.isFinite(ageMs) ? ageMs / (1000 * 60 * 60) : Number.POSITIVE_INFINITY;
+  const labels = args.labels ?? {
+    category: args.category,
+    freshActivity: "Fresh activity detected.",
+    activeFlow: "Signal flow remains active.",
+    quietStream: "Quiet stream, ready for new input.",
+    highVolume: "High-volume relay.",
+    steadyTraffic: "Steady contributor traffic.",
+    earlyCluster: "Early signal cluster forming.",
+    awaitingFirstSignal: "Beacon is live and awaiting first signal.",
+    prefix: "AI Insight:",
+    channelSuffix: "channel.",
+  };
   const freshness =
-    hours < 12 ? "Fresh activity detected." : hours < 72 ? "Signal flow remains active." : "Quiet stream, ready for new input.";
+    hours < 12 ? labels.freshActivity : hours < 72 ? labels.activeFlow : labels.quietStream;
 
   const intensity =
     args.signalCount >= 25
-      ? "High-volume relay."
+      ? labels.highVolume
       : args.signalCount >= 10
-        ? "Steady contributor traffic."
+        ? labels.steadyTraffic
         : args.signalCount >= 1
-          ? "Early signal cluster forming."
-          : "Beacon is live and awaiting first signal.";
+          ? labels.earlyCluster
+          : labels.awaitingFirstSignal;
 
-  return `AI Insight: ${args.category} channel. ${intensity} ${freshness}`;
+  return `${labels.prefix} ${labels.category}${labels.channelSuffix ? ` ${labels.channelSuffix}` : ""} ${intensity} ${freshness}`;
 }
 
 export function getPurposeLabel(purpose?: FormPurpose) {

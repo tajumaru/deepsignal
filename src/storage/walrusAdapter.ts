@@ -34,6 +34,7 @@ import {
   WALRUS_AGGREGATOR_URL,
   WALRUS_UPLOAD_RELAY_URL,
 } from "../lib/sui";
+import { createWalrusBlobProof } from "../lib/walrusProof";
 import {
   EMBEDDED_ENCRYPTED_PAYLOAD_BLOB_ID,
   assertEncryptedSubmissionLeakGuard,
@@ -45,6 +46,7 @@ import type {
   SignalManifest,
   StorageAdapter,
   Submission,
+  WalrusBlobProof,
   WalrusActualCost,
 } from "../types";
 
@@ -66,6 +68,7 @@ type SubmissionBundle = {
 type UploadResult = {
   blobId: string;
   blobObjectId?: string;
+  walrusProof: WalrusBlobProof;
   walrusActualCost?: WalrusActualCost;
 };
 type UploadKind =
@@ -578,6 +581,13 @@ async function uploadBodyWithPublisher(body: Blob | File, kind: UploadKind): Pro
   return {
     blobId: extractBlobId(payload),
     blobObjectId: extractBlobObjectId(payload),
+    walrusProof: createWalrusBlobProof({
+      blobId: extractBlobId(payload),
+      objectId: extractBlobObjectId(payload),
+      size: body.size,
+      epoch: storageEpochs,
+      network: SUI_NETWORK,
+    }),
     walrusActualCost: extractPublisherWalrusCost(payload),
   };
 }
@@ -652,6 +662,13 @@ async function uploadBodyWithSdk(body: Blob | File, kind: UploadKind): Promise<U
       return {
         blobId: result.blobId,
         blobObjectId: result.blobObject.id,
+        walrusProof: createWalrusBlobProof({
+          blobId: result.blobId,
+          objectId: result.blobObject.id,
+          size: blob.byteLength,
+          epoch: storageEpochs,
+          network: SUI_NETWORK,
+        }),
         walrusActualCost,
       };
     } catch (error) {
@@ -1263,13 +1280,14 @@ async function saveSubmissionRecord(
     if (sanitizedSubmission.isEncrypted) {
       assertEncryptedSubmissionLeakGuard(sanitizedSubmission, encryptedSubmissionOptions);
     }
-    const { blobId, blobObjectId } = await uploadBody(
+    const { blobId, blobObjectId, walrusProof } = await uploadBody(
       new Blob([JSON.stringify(sanitizedSubmission)], { type: "application/json" }),
       "submission-bundle",
     );
     await localStorageAdapter.saveSubmission({
       ...sanitizedSubmission,
       blobId,
+      walrusProof,
       ...(allowEmbeddedEncryptedPayload ? { encryptedBlobId: blobId, encryptedPayload: undefined } : {}),
     });
     upsertSubmissionBlobIndex({
@@ -1282,6 +1300,7 @@ async function saveSubmissionRecord(
     return {
       id: sanitizedSubmission.id,
       blobId,
+      walrusProof,
       ...(allowEmbeddedEncryptedPayload ? { encryptedBlobId: blobId } : {}),
     };
   }
@@ -1331,6 +1350,7 @@ async function saveSubmissionRecord(
   await localStorageAdapter.saveSubmission({
     ...sanitizedSubmission,
     blobId: bundle.blobId,
+    walrusProof: bundle.walrusProof,
     ...(allowEmbeddedEncryptedPayload ? { encryptedBlobId: bundle.blobId, encryptedPayload: undefined } : {}),
   });
   if (!allowEmbeddedEncryptedPayload) {
@@ -1342,6 +1362,7 @@ async function saveSubmissionRecord(
   return {
     id: sanitizedSubmission.id,
     blobId: bundle.blobId,
+    walrusProof: bundle.walrusProof,
     ...(allowEmbeddedEncryptedPayload ? { encryptedBlobId: bundle.blobId } : {}),
   };
 }
@@ -1496,11 +1517,11 @@ export const walrusAdapter: StorageAdapter = {
       if (sanitizedSubmission.isEncrypted) {
         assertEncryptedSubmissionLeakGuard(sanitizedSubmission);
       }
-      const { blobId, blobObjectId } = await uploadBody(
+      const { blobId, blobObjectId, walrusProof } = await uploadBody(
         new Blob([JSON.stringify(sanitizedSubmission)], { type: "application/json" }),
         "submission-bundle",
       );
-      await localStorageAdapter.updateSubmission({ ...sanitizedSubmission, blobId });
+      await localStorageAdapter.updateSubmission({ ...sanitizedSubmission, blobId, walrusProof });
       upsertSubmissionBlobIndex({
         submissionId: sanitizedSubmission.id,
         formId: sanitizedSubmission.formId,
@@ -1557,7 +1578,11 @@ export const walrusAdapter: StorageAdapter = {
         createdAt: manifestEntry.createdAt,
       })),
     );
-    await localStorageAdapter.updateSubmission({ ...sanitizedSubmission, blobId: bundle.blobId });
+    await localStorageAdapter.updateSubmission({
+      ...sanitizedSubmission,
+      blobId: bundle.blobId,
+      walrusProof: bundle.walrusProof,
+    });
     await cleanupSupersededWalrusObjects([
       entry.manifestBlobObjectId,
       form ? entry.formBlobObjectId : undefined,
@@ -1565,8 +1590,8 @@ export const walrusAdapter: StorageAdapter = {
   },
 
   async saveEncryptedPayload(payload) {
-    const { blobId } = await uploadBody(new Blob([payload], { type: "text/plain" }), "encrypted-payload");
-    return { blobId };
+    const { blobId, walrusProof } = await uploadBody(new Blob([payload], { type: "text/plain" }), "encrypted-payload");
+    return { blobId, walrusProof };
   },
 
   async readEncryptedPayload(blobId) {
@@ -1578,9 +1603,10 @@ export const walrusAdapter: StorageAdapter = {
   },
 
   async uploadFile(file) {
-    const { blobId } = await uploadBody(file, "attachment");
+    const { blobId, walrusProof } = await uploadBody(file, "attachment");
     return {
       blobId,
+      walrusProof,
       url: getWalrusBlobUrl(blobId) ?? undefined,
     };
   },

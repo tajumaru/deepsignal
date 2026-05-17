@@ -33,6 +33,7 @@ import { normalizeActivityEvent } from "./activityLog";
 import { isResponseDeadlinePassed } from "./responseDeadline";
 import { enrichSubmissionWithTriage } from "./signalTriage";
 import { SUI_NETWORK } from "./sui";
+import { getWalrusNetwork } from "./walrusProof";
 import { storage } from "../storage/storageFactory";
 import { getStorageRuntimeStatus } from "../storage/storageFactory";
 import {
@@ -50,6 +51,7 @@ import type {
   StorageAdapter,
   Submission,
   SubmissionAttachment,
+  WalrusBlobProof,
 } from "../types";
 
 export const storageAdapter: StorageAdapter = storage;
@@ -65,6 +67,8 @@ export interface SaveSubmissionWithEncryptionResult {
   encryptedBlobId?: string;
   encryptedPayload?: string;
   sealIdentity?: string;
+  walrusProof?: WalrusBlobProof;
+  encryptedWalrusProof?: WalrusBlobProof;
 }
 
 const REAL_SEAL_PROJECT_REQUIRED_MESSAGE =
@@ -131,6 +135,27 @@ function normalizeSubmissionAttachment(raw: unknown): SubmissionAttachment | nul
     originalType: typeof attachment.originalType === "string" ? attachment.originalType : undefined,
     encoding: attachment.encoding === "seal-base64-v1" ? "seal-base64-v1" : undefined,
     inlineData: typeof attachment.inlineData === "string" ? attachment.inlineData : undefined,
+    walrusProof: normalizeWalrusProof(attachment.walrusProof, attachment.blobId),
+  };
+}
+
+function normalizeWalrusProof(raw: unknown, fallbackBlobId?: string): WalrusBlobProof | undefined {
+  if (!raw || typeof raw !== "object") {
+    return undefined;
+  }
+  const proof = raw as Partial<WalrusBlobProof> & Record<string, unknown>;
+  const blobId = typeof proof.blobId === "string" ? proof.blobId : fallbackBlobId;
+  if (!blobId) {
+    return undefined;
+  }
+  const size = typeof proof.size === "number" && Number.isFinite(proof.size) ? proof.size : undefined;
+  const epoch = typeof proof.epoch === "number" && Number.isFinite(proof.epoch) ? proof.epoch : undefined;
+  return {
+    blobId,
+    objectId: typeof proof.objectId === "string" ? proof.objectId : undefined,
+    size,
+    epoch,
+    network: getWalrusNetwork(typeof proof.network === "string" ? proof.network : SUI_NETWORK),
   };
 }
 
@@ -488,6 +513,10 @@ export function normalizeSubmission(raw: Submission | (Record<string, unknown> &
     githubPrUrl: typeof raw.githubPrUrl === "string" ? raw.githubPrUrl : undefined,
     isEncrypted: Boolean(raw.isEncrypted),
     encryptedBlobId: typeof raw.encryptedBlobId === "string" ? raw.encryptedBlobId : undefined,
+    encryptedWalrusProof: normalizeWalrusProof(
+      raw.encryptedWalrusProof,
+      typeof raw.encryptedBlobId === "string" ? raw.encryptedBlobId : undefined,
+    ),
     encryptedPayload: typeof raw.encryptedPayload === "string" ? raw.encryptedPayload : undefined,
     receiptBlobId: typeof raw.receiptBlobId === "string" ? raw.receiptBlobId : undefined,
     sealIdentity: typeof raw.sealIdentity === "string" ? raw.sealIdentity : undefined,
@@ -514,6 +543,7 @@ export function normalizeSubmission(raw: Submission | (Record<string, unknown> &
     createdAt: raw.createdAt,
     updatedAt: typeof raw.updatedAt === "string" ? raw.updatedAt : raw.createdAt,
     blobId: typeof raw.blobId === "string" ? raw.blobId : undefined,
+    walrusProof: normalizeWalrusProof(raw.walrusProof, typeof raw.blobId === "string" ? raw.blobId : undefined),
   } satisfies Submission;
 }
 
@@ -895,12 +925,36 @@ export async function saveSubmissionWithEncryption(
           encryptedBlobId: saved.encryptedBlobId ?? saved.blobId,
           encryptedPayload,
           sealIdentity,
+          encryptedWalrusProof: saved.walrusProof,
         };
       }
       if (!encryptedBlobId) {
         messages?.onPipelineStage?.("uploading_to_walrus");
         const savedEncryptedPayload = await targetStorage.saveEncryptedPayload(encryptedPayload);
         encryptedBlobId = savedEncryptedPayload.blobId;
+        const encryptedWalrusProof = savedEncryptedPayload.walrusProof;
+        const parsedEnvelope = parseRealSealEnvelope(encryptedPayload);
+        if (!parsedEnvelope) {
+          throw createEncryptionGuardError(ENCRYPTION_FAILED_CODE, ENCRYPTION_FAILED_MESSAGE);
+        }
+        const sealIdentity = `seal:${parsedEnvelope.packageId}:${parsedEnvelope.objectId}`;
+        const metadataSubmission = sanitizeSubmissionForStorage({
+          ...triagedSubmission,
+          isEncrypted: true,
+          encryptedBlobId,
+          encryptedWalrusProof,
+          encryptedPayload: undefined,
+          sealIdentity,
+        });
+        messages?.onPipelineStage?.("uploading_to_walrus");
+        const saved = await targetStorage.saveSubmission(metadataSubmission);
+        return {
+          ...saved,
+          encryptedBlobId: encryptedBlobId ?? saved.blobId,
+          encryptedPayload,
+          sealIdentity,
+          encryptedWalrusProof,
+        };
       }
       const parsedEnvelope = parseRealSealEnvelope(encryptedPayload);
       if (!parsedEnvelope) {

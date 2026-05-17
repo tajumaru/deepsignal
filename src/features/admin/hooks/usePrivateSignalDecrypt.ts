@@ -33,50 +33,89 @@ function getDecryptStatusMessage(
     | "waiting_wallet_approval"
     | "decrypting_encrypted_payload"
     | "signal_unlocked",
+  messages: DecryptMessages,
 ) {
   switch (status) {
     case "loading_seal_runtime":
-      return "Loading Seal runtime";
+      return messages.loadingSealRuntime;
     case "validating_access_policy":
-      return "Validating access policy";
+      return messages.validatingAccessPolicy;
     case "waiting_wallet_approval":
-      return "Requesting wallet approval";
+      return messages.requestingWalletApproval;
     case "decrypting_encrypted_payload":
-      return "Decrypting encrypted payload";
+      return messages.decryptingEncryptedPayload;
     case "signal_unlocked":
-      return "Signal unlocked";
+      return messages.signalUnlocked;
   }
 }
 
-function getFriendlyDecryptError(reasonCode: string, fallbackMessage: string) {
+interface DecryptMessages {
+  loadingSealRuntime: string;
+  validatingAccessPolicy: string;
+  requestingWalletApproval: string;
+  decryptingEncryptedPayload: string;
+  signalUnlocked: string;
+  connectWalletToUnlockSignal: string;
+  unauthorizedWalletDecrypt: string;
+  sealSessionExpired: string;
+  walletApprovalRequiredToDecrypt: string;
+  encryptionPolicyMismatch: string;
+  manifestMismatchDetected: string;
+  blobFetchFailed: string;
+  encryptedPayloadMissing: string;
+  sealRuntimeUnavailable: string;
+  encryptedPayloadNotFound: string;
+  walletVerifiedPrivateSignalUnlocked: string;
+}
+
+const defaultDecryptMessages: DecryptMessages = {
+  loadingSealRuntime: "Loading Seal runtime",
+  validatingAccessPolicy: "Validating access policy",
+  requestingWalletApproval: "Requesting wallet approval",
+  decryptingEncryptedPayload: "Decrypting encrypted payload",
+  signalUnlocked: "Signal unlocked",
+  connectWalletToUnlockSignal: "Connect wallet to unlock this signal.",
+  unauthorizedWalletDecrypt: "This wallet is not authorized to decrypt this response.",
+  sealSessionExpired: "Seal session expired. Please re-approve.",
+  walletApprovalRequiredToDecrypt: "Wallet approval is required to decrypt this response.",
+  encryptionPolicyMismatch: "Encryption policy mismatch.",
+  manifestMismatchDetected: "Manifest mismatch detected.",
+  blobFetchFailed: "Failed to fetch encrypted payload from Walrus.",
+  encryptedPayloadMissing: "Encrypted payload is missing.",
+  sealRuntimeUnavailable: "Seal runtime unavailable.",
+  encryptedPayloadNotFound: "Encrypted payload could not be found. Try refreshing the inbox, then unlock again.",
+  walletVerifiedPrivateSignalUnlocked: "Wallet verified. Private signal unlocked.",
+};
+
+function getFriendlyDecryptError(reasonCode: string, fallbackMessage: string, messages: DecryptMessages) {
   switch (reasonCode) {
     case "WALLET_NOT_CONNECTED":
-      return "Connect wallet to unlock this signal.";
+      return messages.connectWalletToUnlockSignal;
     case "UNAUTHORIZED_WALLET":
-      return "This wallet is not authorized to decrypt this response.";
+      return messages.unauthorizedWalletDecrypt;
     case "SEAL_SESSION_EXPIRED":
-      return "Seal session expired. Please re-approve.";
+      return messages.sealSessionExpired;
     case "SEAL_APPROVAL_REQUIRED":
-      return "Wallet approval is required to decrypt this response.";
+      return messages.walletApprovalRequiredToDecrypt;
     case "POLICY_MISMATCH":
-      return "Encryption policy mismatch.";
+      return messages.encryptionPolicyMismatch;
     case "MANIFEST_MISMATCH":
-      return "Manifest mismatch detected.";
+      return messages.manifestMismatchDetected;
     case "BLOB_FETCH_FAILED":
-      return "Failed to fetch encrypted payload from Walrus.";
+      return messages.blobFetchFailed;
     case "ENCRYPTED_PAYLOAD_MISSING":
-      return "Encrypted payload is missing.";
+      return messages.encryptedPayloadMissing;
     case "SEAL_RUNTIME_UNAVAILABLE":
-      return "Seal runtime unavailable.";
+      return messages.sealRuntimeUnavailable;
     default:
       if (fallbackMessage === SEAL_ADMIN_WALLET_REQUIRED_MESSAGE) {
-        return "Connect wallet to unlock this signal.";
+        return messages.connectWalletToUnlockSignal;
       }
       if (fallbackMessage === SEAL_PERMISSION_DENIED_MESSAGE) {
-        return "This wallet is not authorized to decrypt this response.";
+        return messages.unauthorizedWalletDecrypt;
       }
       if (fallbackMessage === SEAL_WALLET_CANCELLED_MESSAGE) {
-        return "Wallet approval is required to decrypt this response.";
+        return messages.walletApprovalRequiredToDecrypt;
       }
       return fallbackMessage;
   }
@@ -90,6 +129,7 @@ interface UsePrivateSignalDecryptArgs {
   selectedSignalId: string;
   setToast: ToastSetter;
   decryptFailedLabel: string;
+  decryptMessages?: Partial<DecryptMessages>;
 }
 
 export function usePrivateSignalDecrypt({
@@ -100,7 +140,9 @@ export function usePrivateSignalDecrypt({
   selectedSignalId,
   setToast,
   decryptFailedLabel,
+  decryptMessages,
 }: UsePrivateSignalDecryptArgs) {
+  const messages = { ...defaultDecryptMessages, ...decryptMessages };
   const suiClient = useSuiClient();
   const signPersonalMessage = useSignPersonalMessage();
   const [detailAnswers, setDetailAnswers] = useState<Record<string, unknown> | null>(null);
@@ -198,7 +240,7 @@ export function usePrivateSignalDecrypt({
     activeDecryptRequestRef.current = { requestId, submissionId };
     setDecrypting(true);
     setDecryptState("checking_access");
-    setDecryptStatusMessage("Loading Seal runtime");
+    setDecryptStatusMessage(messages.loadingSealRuntime);
     setDecryptError("");
     setDecryptDiagnostics(null);
     let unlocked = false;
@@ -217,7 +259,7 @@ export function usePrivateSignalDecrypt({
             ) {
               return;
             }
-            setDecryptStatusMessage(getDecryptStatusMessage(status));
+            setDecryptStatusMessage(getDecryptStatusMessage(status, messages));
             setDecryptState(
               status === "waiting_wallet_approval"
                 ? "waiting_wallet_approval"
@@ -233,7 +275,7 @@ export function usePrivateSignalDecrypt({
         activeDecryptRequestRef.current?.submissionId === submissionId;
       if (!resolved) {
         if (isLatestRequest && selectedSignalIdRef.current === submissionId) {
-          setDecryptError("Encrypted payload could not be found. Try refreshing the inbox, then unlock again.");
+          setDecryptError(messages.encryptedPayloadNotFound);
         }
         return;
       }
@@ -242,9 +284,9 @@ export function usePrivateSignalDecrypt({
         setDetailAttachments(resolved.attachments);
         setDetailLegacyUnencrypted(Boolean(resolved.legacyUnencrypted));
         setDecryptState("decrypted");
-        setDecryptStatusMessage("Signal unlocked");
+        setDecryptStatusMessage(messages.signalUnlocked);
         unlocked = true;
-        setToast({ tone: "success", message: "Wallet verified. Private signal unlocked." });
+        setToast({ tone: "success", message: messages.walletVerifiedPrivateSignalUnlocked });
       }
     } catch (error) {
       const isLatestRequest =
@@ -261,9 +303,9 @@ export function usePrivateSignalDecrypt({
         );
         setDecryptError(
           isDecryptDiagnosticError(error)
-            ? getFriendlyDecryptError(error.reasonCode, error.message)
+            ? getFriendlyDecryptError(error.reasonCode, error.message, messages)
             : error instanceof Error
-              ? getFriendlyDecryptError(reasonCode, error.message)
+              ? getFriendlyDecryptError(reasonCode, error.message, messages)
               : decryptFailedLabel,
         );
         setDecryptDiagnostics(isDecryptDiagnosticError(error) ? error.diagnostics : null);

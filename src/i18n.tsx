@@ -14,11 +14,33 @@ type Params = Record<string, string | number>;
 type TranslationValue = string | ((params?: Params) => string);
 
 const STORAGE_KEY = "deepsignal.language";
+const LANGUAGE_MANUAL_KEY = "deepsignal.language.manual";
+
+function getInitialLanguage(): Language {
+  if (typeof window === "undefined") {
+    return "en";
+  }
+
+  const stored = window.localStorage.getItem(STORAGE_KEY);
+  const hasManualLanguageChoice = window.localStorage.getItem(LANGUAGE_MANUAL_KEY) === "true";
+  if ((stored === "en" || stored === "ja") && hasManualLanguageChoice) {
+    return stored;
+  }
+  if (stored === "ja") {
+    return "ja";
+  }
+
+  return window.navigator.language.toLowerCase().startsWith("ja") ? "ja" : "en";
+}
 
 const messages = {
   en: {
     navHome: "Home",
     navExplore: "Explore",
+    navTroubleshooting: "Troubleshooting",
+    navMobileInbox: "Inbox",
+    navMobileNewSignal: "New Signal",
+    navMobileSettings: "Settings",
     backToHome: "Back to Home",
     discardChangesConfirm:
       "You have unsaved changes. Do you want to discard them and leave this page?",
@@ -726,6 +748,7 @@ const messages = {
       `Showing submissions for form id: ${params?.formId ?? ""}`,
     exportCsv: "Export CSV",
     exportAllFormCsv: "All CSV",
+    exportAllFormCsvAria: "Export all responses as CSV",
     exportCsvPrivacyNote: "CSV may include decrypted responses.",
     exportPrivateDataConfirm:
       "This export may include private or decrypted response data. Only export if you are authorized to handle this data.",
@@ -922,10 +945,55 @@ const messages = {
     selectedExportShort: "Selected",
     allExportShort: "All",
     reviewSaveReady: "Ready",
+    reviewSaveReadyToSave: "Ready to save",
     reviewSaveSaving: "Saving...",
     reviewSaveSaved: "Saved",
+    reviewSaveUnsavedDraft: "Unsaved draft",
     reviewSaveSkipped: "Saved / on-chain skipped",
     reviewSaveError: "Save failed",
+    saveReview: "Save review",
+    reviewWorkbenchEyebrow: "Review Workbench",
+    reviewComplete: "Review complete",
+    reviewWorkflowComplete: "Review workflow is complete.",
+    reviewProgressAriaLabel: "Review progress",
+    signalLifecycleAriaLabel: "Signal lifecycle",
+    reviewReadSignalTitle: "Read signal",
+    reviewReadSignalDetail: "Inspect the original feedback and mark it read.",
+    reviewClassifyTitle: "Review & classify",
+    reviewClassifyDetail: "Set review state, triage status, priority, and signal value.",
+    reviewNotesTitle: "Add reviewer notes",
+    reviewNotesDetail: "Capture the internal context needed for follow-up.",
+    reviewRoadmapTitle: "Decide roadmap visibility",
+    reviewRoadmapDetail: "Choose whether safe metadata should appear on the public roadmap.",
+    stepLabel: (params) => `Step ${params?.count ?? ""}`,
+    markAsRead: "Mark as read",
+    markAsHandled: "Mark as handled",
+    reviewStateLabel: "Review State",
+    triageStatusLabel: "Triage Status",
+    signalValueLabel: "Signal Value",
+    notScored: "Not scored",
+    signalValueRatingLabel: "Signal Value rating",
+    signalValueRatingOption: (params) => `Signal Value ${params?.value ?? ""}`,
+    internalNote: "Internal note",
+    reviewUnsavedDraftHelper:
+      "Changes stay as an unsaved draft until you save. Public visibility is decided separately below.",
+    publicRoadmapDecisionStep: "Step 4 \u00b7 Public roadmap decision",
+    roadmapStatusLabel: "Roadmap status",
+    roadmapVisibilityHelper:
+      "Only signals set to Planned, In Progress, or Fixed appear publicly, with safe metadata only.",
+    visibleOnRoadmap: "Visible on roadmap",
+    publishSafeMetadata: "Publish safe metadata",
+    triageStatusNew: "New",
+    triageStatusInvestigating: "Investigating",
+    triageStatusPlanned: "Planned",
+    triageStatusInProgress: "In Progress",
+    triageStatusFixed: "Fixed",
+    triageStatusClosed: "Closed",
+    lifecycleIncoming: "Incoming",
+    lifecycleProtected: "Protected",
+    lifecycleNeedsReview: "Needs review",
+    lifecycleTriaged: "Triaged",
+    lifecycleResolved: "Resolved",
     selectedLabel: "Selected",
     selectForSui: "Select for Sui",
     registeringStatus: "Registering...",
@@ -959,6 +1027,9 @@ const messages = {
     unreadCountSummary: (params) =>
       `${params?.count ?? 0} unread / ${params?.scope ?? ""}`,
     signalDetailTitle: "Signal Detail",
+    noSignalSelectedTitle: "No signal selected",
+    noSignalSelectedBody:
+      "Choose a signal from the inbox to review it, unlock the private message, and move it toward the Public Roadmap.",
     openFormInbox: "Open form inbox",
     decryptSignal: "Decrypt Signal",
     decryptingSignal: "Decrypting...",
@@ -973,13 +1044,69 @@ const messages = {
     privateSignalUnlockError: "Unable to decrypt. Check wallet permissions.",
     privateSignalUnlockDisabled: "Connect an authorized reviewer wallet to continue.",
     privateSignalUnlockUnavailable: "Select an encrypted private signal to unlock it.",
+    privateSignalUnlockReviewNote: "Unlock private signal to review.",
+    privateSignalUnlockReviewTriageNote: "Unlock private signal to review and triage.",
+    decryptStatusLoadingSealRuntime: "Loading Seal runtime",
+    decryptStatusValidatingAccessPolicy: "Validating access policy",
+    decryptStatusRequestingWalletApproval: "Requesting wallet approval",
+    decryptStatusDecryptingEncryptedPayload: "Decrypting encrypted payload",
+    decryptStatusSignalUnlocked: "Signal unlocked",
+    decryptErrorConnectWalletToUnlockSignal: "Connect wallet to unlock this signal.",
+    decryptErrorUnauthorizedWallet: "This wallet is not authorized to decrypt this response.",
+    decryptErrorSealSessionExpired: "Seal session expired. Please re-approve.",
+    decryptErrorWalletApprovalRequired: "Wallet approval is required to decrypt this response.",
+    decryptErrorEncryptionPolicyMismatch: "Encryption policy mismatch.",
+    decryptErrorManifestMismatch: "Manifest mismatch detected.",
+    decryptErrorBlobFetchFailed: "Failed to fetch encrypted payload from Walrus.",
+    decryptErrorEncryptedPayloadMissing: "Encrypted payload is missing.",
+    decryptErrorSealRuntimeUnavailable: "Seal runtime unavailable.",
+    decryptErrorEncryptedPayloadNotFound:
+      "Encrypted payload could not be found. Try refreshing the inbox, then unlock again.",
+    decryptToastWalletVerifiedPrivateSignalUnlocked: "Wallet verified. Private signal unlocked.",
     cancelUnlock: "Cancel unlock",
     unlockInProgressStatus: "Unlock in progress...",
     walletApprovalPendingStatus: "Wallet approval pending...",
     finishOrCancelCurrentUnlock: "Finish or cancel the current unlock first.",
     unlockCancelledStatus: "Unlock cancelled. You can select another signal.",
     demoDecryptAvailable: "Demo decrypt available.",
-    policyGatedDecryption: "Policy-gated Decryption. Wallet approval required.",
+    policyGatedDecryption: "Policy-gated decryption. Wallet approval required.",
+    privateSignalUnlockStatusAriaLabel: "Private signal unlock status",
+    privateSignalUnlockStepLocked: "Locked",
+    privateSignalUnlockStepWaitingWalletApproval: "Waiting wallet approval",
+    privateSignalUnlockStepDecrypting: "Decrypting",
+    privateSignalUnlockStepUnlocked: "Unlocked",
+    privateSignalUnlockStepFailed: "Failed",
+    privateSignalUnauthorizedHelper:
+      "This wallet can see the signal exists, but it is not authorized to decrypt it.",
+    signalRemainsLocked: "Signal remains locked.",
+    accessDeniedButton: "Access denied",
+    clearCachedPolicyData: "Clear cached policy data",
+    sealPolicyDebugTitle: "Seal policy debug",
+    sealPolicyMismatchNotice:
+      "Encrypt policy and decrypt policy differ. Decryption must use the same canonical package, capability, object, network, and policy JSON that were used at encryption time.",
+    sealPolicyDiffField: "Field",
+    sealPolicyDiffEncrypt: "Encrypt",
+    sealPolicyDiffDecrypt: "Decrypt",
+    sealPolicyRowPolicyHash: "Policy hash",
+    sealPolicyRowPackageId: "Package ID",
+    sealPolicyRowCapabilityType: "Capability type",
+    sealPolicyRowEnvelopeObjectId: "Envelope object ID",
+    sealPolicyRowEnvelopePolicyObjectId: "Envelope policy object ID",
+    sealPolicyRowEncryptPolicyObjectId: "Encrypt policy object ID",
+    sealPolicyRowEncryptPolicyPolicyObjectId: "Encrypt policy policy object ID",
+    sealPolicyRowDecryptPolicyObjectId: "Decrypt policy object ID",
+    sealPolicyRowDecryptPolicyPolicyObjectId: "Decrypt policy policy object ID",
+    sealPolicyRowWalletAddress: "Wallet address",
+    sealPolicyRowPolicyMatch: "Policy match",
+    sealPolicyRowPolicyDiff: "Policy diff",
+    sealPolicyObjectIdSources: "Object ID sources",
+    sealPolicyRequiredCapabilityObjects: "Required capability objects",
+    sealPolicyOwnedCapabilityObjects: "Owned capability objects",
+    sealPolicyEncryptRawJson: "Encrypt raw policy JSON",
+    sealPolicyDecryptRawJson: "Decrypt raw policy JSON",
+    sealPolicyEncryptCanonicalJson: "Encrypt canonical policy JSON",
+    sealPolicyDecryptCanonicalJson: "Decrypt canonical policy JSON",
+    sealPolicyFieldDiff: "Policy field diff",
     answersTitle: "Answers",
     noAttachments: "No attachments",
     reviewControlsTitle: "Review Controls",
@@ -1049,7 +1176,7 @@ const messages = {
     suiRegistrationHintLabel: "Next step",
     suiRegistrationHintBody: "You can register this form later.",
     signalsAcrossEveryFormInbox: (params) => `${params?.count ?? 0} signals across every form inbox.`,
-    formSignalsSummary: (params) => `${params?.count ?? 0} signals · ${params?.inboxType ?? ""}`,
+    formSignalsSummary: (params) => `${params?.count ?? 0} signals \u00b7 ${params?.inboxType ?? ""}`,
     protectedInboxLabel: "protected inbox",
     openInboxLabel: "open inbox",
     projectLinkedLabel: "Project linked",
@@ -1071,6 +1198,13 @@ const messages = {
     researchLabFailedToLoad: "Research Lab failed to load",
     retryLabel: "Retry",
     reconnectWallet: "Reconnect wallet",
+    resetLocalState: "Reset Local State",
+    resettingLocalState: "Resetting...",
+    disconnectingWallet: "Disconnecting...",
+    openTroubleshooting: "Open Troubleshooting",
+    decryptRecoveryActionsAriaLabel: "Decrypt recovery actions",
+    walletDisconnectedReconnect: "Wallet disconnected. Please reconnect your wallet.",
+    walletDisconnectFailedReconnect: "Could not disconnect wallet. Try reconnecting from the wallet menu.",
     retryRegistryStep: "Retry registry step",
     recoverableDraftTitle: "You have an unsent draft",
     restore: "Restore",
@@ -1116,8 +1250,7 @@ const messages = {
     encryptedPrivateSignalUnlockHint: "Encrypted private signal. Requires reviewer access to unlock.",
     anonymousRespondent: "Anonymous respondent",
     signalMetadataAndProofTitle: "Signal metadata and proof",
-    reviewStateLabel: "Review state",
-    legacyUnencryptedResponse: "Legacy unencrypted response · created before Seal enforcement",
+    legacyUnencryptedResponse: "Legacy unencrypted response \u00b7 created before Seal enforcement",
     privateSignalUnlockedStatus: "Private signal unlocked",
     encryptedPrivateSignalStatus: "Encrypted private signal",
     sealRuntimeLabel: "Seal runtime",
@@ -1161,6 +1294,19 @@ const messages = {
     currentProjectEyebrow: "Current Project",
     createOrSwitchProjectTitle: "Create or switch project",
     workspaceScopeLabel: "Workspace scope",
+    activityEyebrow: "Activity",
+    workspaceActivityTitle: "Workspace Activity",
+    workspaceActivityBody: "Owner/Admin audit trail for signal form operations.",
+    activityEventsCount: (params) => `${params?.count ?? 0} events`,
+    activityEmptyTitle: "No activity yet.",
+    activityEmptyBody: "No activity yet. Create or publish a signal to start the audit trail.",
+    activityActionCreated: "created",
+    activityActionPublished: "published",
+    activityActionUpdated: "updated",
+    activityActionArchived: "archived",
+    unknownActor: "Unknown actor",
+    activityFormId: (params) => `form ${params?.id ?? ""}`,
+    suiExplorerLabel: "Sui explorer",
     switchProjectBody: "Switch the active project for this inbox or create a fresh destination.",
     selectedProjectLabel: "Selected project",
     createProjectEyebrow: "Create project",
@@ -1211,6 +1357,52 @@ const messages = {
     signalsReadyForPublicRoadmap: (params) => `${params?.count ?? 0} signals ready for the Public Roadmap`,
     markSignalsForRoadmap: "Mark signals as Planned, In Progress, or Fixed",
     noRoadmapCandidatesYet: "No roadmap candidates yet",
+    reviewQueueTitle: "Review Queue",
+    encryptedSignalInboxLabel: "Encrypted Signal Inbox",
+    reviewQueueStatusAria: "Review queue status",
+    nextReviewActionLabel: "Next review action",
+    systemDetailsLabel: "System details",
+    openOperationalDetailsTitle: "Open operational details",
+    nextStepLabel: "Next step",
+    markSignalReviewedTitle: "Mark the signal as reviewed",
+    markSignalReviewedDetail:
+      "You can read the signal now. Change the status to Read, then decide whether it should move toward the public roadmap.",
+    markReviewed: "Mark reviewed",
+    optionalProofRegisterSuiTitle: "Optional proof: register on Sui",
+    optionalProofRegisterSuiDetail:
+      "Review is already possible. Use this only when you want the signal recorded as an onchain proof entry.",
+    decideRoadmapTitle: "Decide whether this belongs on the roadmap",
+    decideRoadmapDetail:
+      "If this signal is ready for external visibility, move it into a roadmap status such as Planned, In Progress, or Fixed.",
+    signalAlreadyInReviewFlowTitle: "This signal is already in review flow",
+    signalAlreadyInReviewFlowDetail:
+      "You can refine notes, tags, or roadmap status, but no urgent action is required right now.",
+    openPublicRoadmap: "Open Public Roadmap",
+    createFirstSignalInbox: "Create your first signal inbox",
+    createWalletOwnedInboxDetail:
+      "Create a wallet-owned form. Project controls stay hidden until this wallet has AdminCap or OwnerCap.",
+    sendTestSignalOwnFormDetail:
+      "Open your public form and submit one signal so this inbox has something to process.",
+    reviewSignalInbox: "Review signal inbox",
+    walletCanReviewOwnFormsDetail:
+      "This wallet can review its own forms. Project management requires AdminCap or OwnerCap.",
+    connectProject: "Connect a project",
+    connectProjectBeforeReviewDetail:
+      "Create a new project or connect an existing one before you create or review private signals.",
+    publishProtectedFormDetail:
+      "Publish one protected form for this project so reviewers have signals to read.",
+    sendTestSignalToInboxDetail:
+      "Open the public form and submit one signal so the review inbox has something to process.",
+    unlockPrivateSignal: "Unlock private signal",
+    unlockPrivateSignalDetail:
+      "Open the next protected signal, then decrypt it with reviewer wallet access.",
+    openProtectedSignal: "Open Protected Signal",
+    moveToPublicRoadmapDetail:
+      "Choose one reviewed signal and place it into a roadmap status such as Planned or In Progress.",
+    optionalProofCompleteDetail:
+      "Review is already complete. Use Sui only when you want to add optional proof records.",
+    queueHealthyDetail:
+      "The queue is healthy. Keep reviewing new signals and update roadmap entries as they change.",
     severityLabel: (params) => `Severity ${params?.value ?? ""}`,
     mediumLabel: "medium",
     openSubmissionLabel: "Open submission",
@@ -1219,7 +1411,7 @@ const messages = {
     originalSignalBody: "Read the submitted feedback first, then continue with triage and roadmap decisions.",
     feedbackBodyLabel: "Feedback body",
     submittedFeedbackTitle: "Submitted Feedback",
-    sealEncryptedCreatorAdminOnly: "Seal encrypted · creator/admin only",
+    sealEncryptedCreatorAdminOnly: "Seal encrypted \u00b7 creator/admin only",
     requiresReviewerAccessDecryptHint: "Requires reviewer access. Decrypt with wallet to reveal the message.",
     connectExistingShort: "Connect existing",
     stepStateCurrent: "Current",
@@ -1463,6 +1655,68 @@ const messages = {
     projectStateSavedRegisterLater: "Saved to Walrus/local. Register on Sui later when you want an onchain form record.",
     publishResultDeferredSui: "Walrus publish completed. Sui registration is deferred until you explicitly run it.",
     publishResultLiveLocalWalrus: "Walrus publish completed. The signal is live in local/Walrus mode.",
+    exploreEyebrow: "Workspace Signal Directory",
+    exploreTitle: "Explore Signals",
+    exploreLede: "Public signal streams available in this workspace.",
+    exploreHeroNote:
+      "This view lists only forms intentionally published to Explore through the current storage runtime.",
+    exploreScanningWorkspace: "Scanning workspace streams...",
+    exploreSignalsInView: (params) => `${params?.count ?? 0} signals in view`,
+    exploreListedHere: (params) => `${params?.count ?? 0} listed here`,
+    exploreTabsAria: "Signal discovery tabs",
+    exploreTabTrending: "Trending",
+    exploreTabNew: "New",
+    exploreTabActive: "Active",
+    exploreTabAi: "AI",
+    exploreTabGovernance: "Governance",
+    exploreTabAnonymous: "Anonymous",
+    exploreTabEncrypted: "Encrypted",
+    exploreRefreshingFeed: "Refreshing feed",
+    exploreVisibleCount: (params) => `${params?.count ?? 0} visible`,
+    exploreEmptyTitle: "No listed signals in this workspace yet.",
+    exploreEmptyPrivateCopy:
+      "Private and direct-link forms stay outside Explore unless their visibility is changed to Public Explore.",
+    exploreEmptyRuntimeCopy:
+      "Streams published to Explore will also show up here when they are available through the current storage runtime.",
+    exploreCreateSignal: "Create signal",
+    exploreDefaultDescription: "Public signal stream open for new feedback.",
+    explorePublic: "Public",
+    exploreListed: "Listed",
+    exploreUnlisted: "Unlisted",
+    exploreEncrypted: "Encrypted",
+    exploreNoDeadline: "No deadline",
+    exploreClosed: "Closed",
+    exploreDeadline: "Deadline",
+    exploreResponses: "responses",
+    exploreResponsesShort: (params) => `${params?.count ?? 0} resp`,
+    exploreCreator: "Creator",
+    exploreLatest: "Latest",
+    exploreCategory: "Category",
+    exploreActivity: "Activity",
+    exploreRoadmapCount: (params) => `${params?.count ?? 0} roadmap`,
+    exploreSignalNote: "Signal note",
+    exploreLive: "Live",
+    exploreOpenSignal: "Open signal",
+    exploreLocalCreator: "Local creator",
+    exploreDeleteConfirm: (params) => `Delete "${params?.title ?? "Untitled form"}" from this browser?`,
+    explorePurposeBug: "Bug Report",
+    explorePurposeFeature: "Feature Request",
+    explorePurposeSurvey: "Survey",
+    explorePurposeApplication: "Application",
+    exploreCategoryAll: "All",
+    exploreCategoryBug: "Bug",
+    exploreCategoryFeature: "Feature",
+    exploreCategorySurvey: "Survey",
+    exploreCategoryApplication: "Application",
+    explorePreviewPrefix: "AI Insight:",
+    explorePreviewChannelSuffix: "channel.",
+    explorePreviewFreshActivity: "Fresh activity detected.",
+    explorePreviewActiveFlow: "Signal flow remains active.",
+    explorePreviewQuietStream: "Quiet stream, ready for new input.",
+    explorePreviewHighVolume: "High-volume relay.",
+    explorePreviewSteadyTraffic: "Steady contributor traffic.",
+    explorePreviewEarlyCluster: "Early signal cluster forming.",
+    explorePreviewAwaitingFirstSignal: "Beacon is live and awaiting first signal.",
     encryptionProjectMissing:
       "Seal encryption is enabled, but this form is not linked to a project. Private submissions require a project-backed Seal policy.",
     encryptionSealIncomplete:
@@ -1474,13 +1728,17 @@ const messages = {
   },
   ja: {
     navHome: "\u30db\u30fc\u30e0",
-    navExplore: "Explore",
+    navExplore: "\u63a2\u7d22",
+    navTroubleshooting: "\u30c8\u30e9\u30d6\u30eb\u30b7\u30e5\u30fc\u30c8",
+    navMobileInbox: "\u53d7\u4fe1\u7bb1",
+    navMobileNewSignal: "\u65b0\u898f\u30b7\u30b0\u30ca\u30eb",
+    navMobileSettings: "\u8a2d\u5b9a",
     backToHome: "\u30db\u30fc\u30e0\u306b\u623b\u308b",
     discardChangesConfirm:
       "\u672a\u4fdd\u5b58\u306e\u5909\u66f4\u304c\u3042\u308a\u307e\u3059\u3002\u7834\u68c4\u3057\u3066\u3053\u306e\u30da\u30fc\u30b8\u3092\u96e2\u308c\u307e\u3059\u304b\uff1f",
-    navLab: "Signal Inbox",
-    navAccess: "Access Control",
-    navCreateForm: "Create Signal",
+    navLab: "\u30b7\u30b0\u30ca\u30eb\u53d7\u4fe1\u7bb1",
+    navAccess: "\u30a2\u30af\u30bb\u30b9\u7ba1\u7406",
+    navCreateForm: "\u30b7\u30b0\u30ca\u30eb\u4f5c\u6210",
     languageLabel: "\u8a00\u8a9e",
     languageEnglish: "English",
     languageJapanese: "\u65e5\u672c\u8a9e",
@@ -2212,7 +2470,8 @@ const messages = {
     showingSubmissionsFor: (params) =>
       `formId: ${params?.formId ?? ""} \u306e\u6295\u7a3f\u3092\u8868\u793a\u3057\u3066\u3044\u307e\u3059`,
     exportCsv: "CSV\u3092\u66f8\u304d\u51fa\u3059",
-    exportAllFormCsv: "\u5168\u4ef6CSV",
+    exportAllFormCsv: "CSV\u51fa\u529b",
+    exportAllFormCsvAria: "\u5168\u4ef6\u3092CSV\u3067\u66f8\u304d\u51fa\u3059",
     exportCsvPrivacyNote: "CSV\u306b\u306f\u5fa9\u53f7\u6e08\u307f\u56de\u7b54\u304c\u542b\u307e\u308c\u308b\u53ef\u80fd\u6027\u304c\u3042\u308a\u307e\u3059\u3002",
     exportPrivateDataConfirm:
       "\u3053\u306e\u30a8\u30af\u30b9\u30dd\u30fc\u30c8\u306b\u306f\u975e\u516c\u958b\u307e\u305f\u306f\u5fa9\u53f7\u6e08\u307f\u306e\u56de\u7b54\u30c7\u30fc\u30bf\u304c\u542b\u307e\u308c\u308b\u53ef\u80fd\u6027\u304c\u3042\u308a\u307e\u3059\u3002\u3053\u306e\u30c7\u30fc\u30bf\u3092\u6271\u3046\u6a29\u9650\u304c\u3042\u308b\u5834\u5408\u306e\u307f\u66f8\u304d\u51fa\u3057\u3066\u304f\u3060\u3055\u3044\u3002",
@@ -2290,17 +2549,17 @@ const messages = {
     noRatingsYet: "\u8a55\u4fa1\u306a\u3057",
     unreadOnly: "\u672a\u8aad\u306e\u307f",
     tagFilter: "\u30bf\u30b0\u30d5\u30a3\u30eb\u30bf",
-    encryptedPreview: "\u6697\u53f7\u5316\u6e08\u307f payload\u3002Decrypt \u3067\u8868\u793a\u3067\u304d\u307e\u3059\u3002",
-    decrypt: "Decrypt",
+    encryptedPreview: "\u6697\u53f7\u5316\u6e08\u307f payload\u3002\u5fa9\u53f7\u3059\u308b\u3068\u8868\u793a\u3067\u304d\u307e\u3059\u3002",
+    decrypt: "\u5fa9\u53f7",
     decrypting: "\u5fa9\u53f7\u4e2d...",
     decryptFailed: "\u5fa9\u53f7\u306b\u5931\u6557\u3057\u307e\u3057\u305f\u3002",
     sealDecryptWalletPrompt:
       "Seal \u3067\u5fa9\u53f7\u3059\u308b\u306b\u306f\u3001\u307e\u305a Wallet \u3092\u63a5\u7d9a\u3057\u3066\u304f\u3060\u3055\u3044\u3002",
     sealDecryptApprovalPrompt:
-      "Wallet \u63a5\u7d9a\u6e08\u307f\u3067\u3059\u3002\u8868\u793a\u3055\u308c\u305f\u3068\u304d\u306b decrypt session \u3092 approve \u3057\u3066\u304f\u3060\u3055\u3044\u3002",
+      "Wallet \u63a5\u7d9a\u6e08\u307f\u3067\u3059\u3002\u8868\u793a\u3055\u308c\u305f\u3068\u304d\u306b\u5fa9\u53f7\u30bb\u30c3\u30b7\u30e7\u30f3\u3092\u627f\u8a8d\u3057\u3066\u304f\u3060\u3055\u3044\u3002",
     messageContent: "\u672c\u6587",
     encryptedBodyHidden:
-      "\u672c\u6587\u306f\u6697\u53f7\u5316\u3055\u308c\u3066\u3044\u307e\u3059\u3002Decrypt \u3067\u5185\u5bb9\u3092\u8868\u793a\u3057\u307e\u3059\u3002",
+      "\u672c\u6587\u306f\u6697\u53f7\u5316\u3055\u308c\u3066\u3044\u307e\u3059\u3002\u5fa9\u53f7\u3059\u308b\u3068\u5185\u5bb9\u3092\u8868\u793a\u3067\u304d\u307e\u3059\u3002",
     workflowControls: "\u7ba1\u7406\u30ef\u30fc\u30af\u30d5\u30ed\u30fc",
     tags: "\u30bf\u30b0",
     internalNotes: "\u5185\u90e8\u30e1\u30e2",
@@ -2345,15 +2604,15 @@ const messages = {
     legacyDemoForm: "Legacy demo form",
     legacyDemoFormBody:
       "\u3053\u306e\u30d5\u30a9\u30fc\u30e0\u306b\u306f ownerAddress \u304c\u307e\u3060\u306a\u3044\u305f\u3081\u3001\u30ed\u30fc\u30ab\u30eb\u958b\u767a\u3067\u306f\u95b2\u89a7\u3092\u8a31\u53ef\u3057\u3066\u3044\u307e\u3059\u3002",
-    signalInboxTitle: "Signal Inbox",
-    signalStreamsTitle: "Signal Flow",
-    blockchainActionsTitle: "Blockchain Actions",
+    signalInboxTitle: "\u30b7\u30b0\u30ca\u30eb\u53d7\u4fe1\u7bb1",
+    signalStreamsTitle: "\u30b7\u30b0\u30ca\u30eb\u30d5\u30ed\u30fc",
+    blockchainActionsTitle: "\u30d6\u30ed\u30c3\u30af\u30c1\u30a7\u30fc\u30f3\u64cd\u4f5c",
     signalInboxDescription:
       "\u30a2\u30af\u30bb\u30b9\u53ef\u80fd\u306a\u3059\u3079\u3066\u306e signal form \u3092\u6a2a\u65ad\u3057\u3066\u3001creator \u5411\u3051\u6697\u53f7\u5316 feedback \u3092\u78ba\u8a8d\u3059\u308b DeepSignal review console \u3067\u3059\u3002",
     adminDesktopNotice:
       "DeepSignal review console \u306f desktop \u8868\u793a\u3067\u306e\u5229\u7528\u3092\u63a8\u5968\u3057\u3066\u3044\u307e\u3059\u3002",
     mobileReviewNavNodes: "\u30ce\u30fc\u30c9",
-    mobileReviewNavSignals: "Signals",
+    mobileReviewNavSignals: "\u30b7\u30b0\u30ca\u30eb",
     mobileReviewNavDetail: "\u8a73\u7d30",
     noCreatorInboxesTitle:
       "creator \u304c\u6240\u6709\u3059\u308b inbox \u304c\u307e\u3060\u3042\u308a\u307e\u305b\u3093",
@@ -2364,9 +2623,9 @@ const messages = {
     notConnected: "\u672a\u63a5\u7d9a",
     connectWalletToReview:
       "signal \u3092\u78ba\u8a8d\u3059\u308b\u306b\u306f wallet \u3092\u63a5\u7d9a\u3057\u3066\u304f\u3060\u3055\u3044\u3002",
-    allSignals: "All Signals",
-    allSignalsIndexLabel: "All signals index",
-    needsReviewSignals: "Needs Review",
+    allSignals: "\u3059\u3079\u3066\u306e\u30b7\u30b0\u30ca\u30eb",
+    allSignalsIndexLabel: "\u5168\u30b7\u30b0\u30ca\u30eb\u7d22\u5f15",
+    needsReviewSignals: "\u8981\u30ec\u30d3\u30e5\u30fc",
     unreadSignals: "\u672a\u8aad",
     encryptedSignals: "\u6697\u53f7\u5316",
     highPrioritySignals: "\u9ad8\u512a\u5148\u5ea6",
@@ -2377,34 +2636,34 @@ const messages = {
     exportSummaryJson: "Summary JSON \u3092\u66f8\u304d\u51fa\u3059",
     formsTitle: "\u30d5\u30a9\u30fc\u30e0",
     allForms: "\u3059\u3079\u3066\u306e\u30d5\u30a9\u30fc\u30e0",
-    signalNodesTitle: "Signal Nodes",
-    allSignalNodes: "\u3059\u3079\u3066\u306e Signal Nodes",
-    activeNodeSummary: (params) => `${params?.count ?? 0} \u4ef6\u306e active node`,
-    openNodeDirectory: "Open Node Directory",
-    nodeDirectoryTitle: "Node Directory",
+    signalNodesTitle: "\u30b7\u30b0\u30ca\u30eb\u30ce\u30fc\u30c9",
+    allSignalNodes: "\u3059\u3079\u3066\u306e\u30b7\u30b0\u30ca\u30eb\u30ce\u30fc\u30c9",
+    activeNodeSummary: (params) => `${params?.count ?? 0} \u4ef6\u306e\u30a2\u30af\u30c6\u30a3\u30d6\u30ce\u30fc\u30c9`,
+    openNodeDirectory: "\u30ce\u30fc\u30c9\u4e00\u89a7\u3092\u958b\u304f",
+    nodeDirectoryTitle: "\u30ce\u30fc\u30c9\u4e00\u89a7",
     nodeDirectoryDescription:
       "creator \u6240\u6709\u306e signal form \u3092\u30b3\u30f3\u30d1\u30af\u30c8\u306b\u7ba1\u7406\u3057\u3001\u672a\u8aad\u6570\u3068\u5207\u308a\u66ff\u3048\u3092\u307e\u3068\u3081\u3066\u78ba\u8a8d\u3067\u304d\u307e\u3059\u3002",
-    searchNodesPlaceholder: "node \u3092\u691c\u7d22",
-    selectedNode: "\u9078\u629e\u4e2d\u306e node",
-    nodeActions: "Node Actions",
-    nodeActionsMenu: "Node Menu",
-    openSignalBeacon: "Signal Beacon \u3092\u958b\u304f",
+    searchNodesPlaceholder: "\u30ce\u30fc\u30c9\u3092\u691c\u7d22",
+    selectedNode: "\u9078\u629e\u4e2d\u306e\u30ce\u30fc\u30c9",
+    nodeActions: "\u30ce\u30fc\u30c9\u64cd\u4f5c",
+    nodeActionsMenu: "\u30ce\u30fc\u30c9\u30e1\u30cb\u30e5\u30fc",
+    openSignalBeacon: "\u30b7\u30b0\u30ca\u30eb\u30d3\u30fc\u30b3\u30f3\u3092\u958b\u304f",
     signalBeaconFromNodeDescription:
-      "\u3053\u306e node \u7528\u306e scan-ready \u306a Signal Beacon \u3092\u8868\u793a\u3057\u307e\u3059\u3002",
-    deleteNode: "Node \u3092\u524a\u9664",
+      "\u3053\u306e\u30ce\u30fc\u30c9\u7528\u306e\u30b9\u30ad\u30e3\u30f3\u5bfe\u5fdc\u30b7\u30b0\u30ca\u30eb\u30d3\u30fc\u30b3\u30f3\u3092\u8868\u793a\u3057\u307e\u3059\u3002",
+    deleteNode: "\u30ce\u30fc\u30c9\u3092\u524a\u9664",
     unreadBadge: (params) => `\u672a\u8aad ${params?.count ?? 0} \u4ef6`,
-    noNodesFoundTitle: "\u4e00\u81f4\u3059\u308b node \u304c\u3042\u308a\u307e\u305b\u3093",
+    noNodesFoundTitle: "\u4e00\u81f4\u3059\u308b\u30ce\u30fc\u30c9\u304c\u3042\u308a\u307e\u305b\u3093",
     noNodesFoundBody:
-      "\u5225\u306e node \u540d\u3067\u691c\u7d22\u3059\u308b\u304b\u3001\u691c\u7d22\u6761\u4ef6\u3092\u30af\u30ea\u30a2\u3057\u3066\u304f\u3060\u3055\u3044\u3002",
+      "\u5225\u306e\u30ce\u30fc\u30c9\u540d\u3067\u691c\u7d22\u3059\u308b\u304b\u3001\u691c\u7d22\u6761\u4ef6\u3092\u30af\u30ea\u30a2\u3057\u3066\u304f\u3060\u3055\u3044\u3002",
     closeLabel: "\u9589\u3058\u308b",
     crossFormSignalInbox:
-      "\u8907\u6570\u30d5\u30a9\u30fc\u30e0\u3092\u6a2a\u65ad\u3059\u308b Signal Inbox",
-    signalsCount: (params) => `${params?.count ?? 0} \u4ef6\u306e signal`,
+      "\u8907\u6570\u30d5\u30a9\u30fc\u30e0\u3092\u6a2a\u65ad\u3059\u308b\u30b7\u30b0\u30ca\u30eb\u53d7\u4fe1\u7bb1",
+    signalsCount: (params) => `${params?.count ?? 0} \u4ef6\u306e\u30b7\u30b0\u30ca\u30eb`,
     searchSignalsPlaceholder:
-      "signal\u3001\u56de\u7b54\u3001\u30bf\u30b0\u3092\u691c\u7d22",
-    filterInboxLabel: "inbox \u3092\u7d5e\u308a\u8fbc\u3080",
-    encryptedQueueLabel: "\u6697\u53f7\u5316 intelligence queue",
-    backToSignals: "signal \u4e00\u89a7\u3078\u623b\u308b",
+      "\u30b7\u30b0\u30ca\u30eb\u3001\u56de\u7b54\u3001\u30bf\u30b0\u3092\u691c\u7d22",
+    filterInboxLabel: "\u53d7\u4fe1\u7bb1\u3092\u7d5e\u308a\u8fbc\u3080",
+    encryptedQueueLabel: "\u6697\u53f7\u5316\u30a4\u30f3\u30c6\u30ea\u30b8\u30a7\u30f3\u30b9\u30ad\u30e5\u30fc",
+    backToSignals: "\u30b7\u30b0\u30ca\u30eb\u4e00\u89a7\u3078\u623b\u308b",
     mobileSignalRowAriaLabel: (params) =>
       `${params?.subject ?? "Signal"}\u3002${params?.status ?? ""}\u3002\u512a\u5148\u5ea6 ${params?.priority ?? ""}\u3002\u5206\u985e ${params?.triage ?? ""}\u3002${params?.lockState ?? ""}\u3002`,
     lockedSignalState: "\u30ed\u30c3\u30af\u4e2d",
@@ -2420,10 +2679,55 @@ const messages = {
     selectedExportShort: "\u9078\u629e\u4e2d",
     allExportShort: "\u3059\u3079\u3066",
     reviewSaveReady: "\u6e96\u5099\u5b8c\u4e86",
+    reviewSaveReadyToSave: "\u4fdd\u5b58\u6e96\u5099\u5b8c\u4e86",
     reviewSaveSaving: "\u4fdd\u5b58\u4e2d...",
     reviewSaveSaved: "\u4fdd\u5b58\u6e08\u307f",
+    reviewSaveUnsavedDraft: "\u672a\u4fdd\u5b58\u306e\u4e0b\u66f8\u304d",
     reviewSaveSkipped: "\u4fdd\u5b58\u6e08\u307f / on-chain \u306f\u30b9\u30ad\u30c3\u30d7",
     reviewSaveError: "\u4fdd\u5b58\u5931\u6557",
+    saveReview: "\u30ec\u30d3\u30e5\u30fc\u3092\u4fdd\u5b58",
+    reviewWorkbenchEyebrow: "\u30ec\u30d3\u30e5\u30fc\u4f5c\u696d\u53f0",
+    reviewComplete: "\u30ec\u30d3\u30e5\u30fc\u5b8c\u4e86",
+    reviewWorkflowComplete: "\u30ec\u30d3\u30e5\u30fc\u30d5\u30ed\u30fc\u306f\u5b8c\u4e86\u3057\u3066\u3044\u307e\u3059\u3002",
+    reviewProgressAriaLabel: "\u30ec\u30d3\u30e5\u30fc\u9032\u6357",
+    signalLifecycleAriaLabel: "\u30b7\u30b0\u30ca\u30eb\u30e9\u30a4\u30d5\u30b5\u30a4\u30af\u30eb",
+    reviewReadSignalTitle: "\u30b7\u30b0\u30ca\u30eb\u3092\u8aad\u3080",
+    reviewReadSignalDetail: "\u5143\u306e\u30d5\u30a3\u30fc\u30c9\u30d0\u30c3\u30af\u3092\u78ba\u8a8d\u3057\u3001\u65e2\u8aad\u306b\u3057\u307e\u3059\u3002",
+    reviewClassifyTitle: "\u78ba\u8a8d\u30fb\u5206\u985e",
+    reviewClassifyDetail: "\u30ec\u30d3\u30e5\u30fc\u72b6\u614b\u3001\u5206\u985e\u72b6\u614b\u3001\u512a\u5148\u5ea6\u3001\u30b7\u30b0\u30ca\u30eb\u4fa1\u5024\u3092\u8a2d\u5b9a\u3057\u307e\u3059\u3002",
+    reviewNotesTitle: "\u30ec\u30d3\u30e5\u30fc\u30e1\u30e2\u3092\u8ffd\u52a0",
+    reviewNotesDetail: "\u30d5\u30a9\u30ed\u30fc\u30a2\u30c3\u30d7\u306b\u5fc5\u8981\u306a\u5185\u90e8\u30e1\u30e2\u3092\u6b8b\u3057\u307e\u3059\u3002",
+    reviewRoadmapTitle: "\u30ed\u30fc\u30c9\u30de\u30c3\u30d7\u8868\u793a\u3092\u5224\u65ad",
+    reviewRoadmapDetail: "\u516c\u958b\u30ed\u30fc\u30c9\u30de\u30c3\u30d7\u306b\u5b89\u5168\u306a\u30e1\u30bf\u30c7\u30fc\u30bf\u3092\u8868\u793a\u3059\u308b\u304b\u9078\u3073\u307e\u3059\u3002",
+    stepLabel: (params) => `\u30b9\u30c6\u30c3\u30d7 ${params?.count ?? ""}`,
+    markAsRead: "\u65e2\u8aad\u306b\u3059\u308b",
+    markAsHandled: "\u5bfe\u5fdc\u6e08\u307f\u306b\u3059\u308b",
+    reviewStateLabel: "\u30ec\u30d3\u30e5\u30fc\u72b6\u614b",
+    triageStatusLabel: "\u5206\u985e\u72b6\u614b",
+    signalValueLabel: "\u30b7\u30b0\u30ca\u30eb\u4fa1\u5024",
+    notScored: "\u672a\u8a55\u4fa1",
+    signalValueRatingLabel: "\u30b7\u30b0\u30ca\u30eb\u4fa1\u5024\u306e\u8a55\u4fa1",
+    signalValueRatingOption: (params) => `\u30b7\u30b0\u30ca\u30eb\u4fa1\u5024 ${params?.value ?? ""}`,
+    internalNote: "\u5185\u90e8\u30e1\u30e2",
+    reviewUnsavedDraftHelper:
+      "\u5909\u66f4\u306f\u4fdd\u5b58\u3059\u308b\u307e\u3067\u672a\u4fdd\u5b58\u306e\u4e0b\u66f8\u304d\u3067\u3059\u3002\u516c\u958b\u8868\u793a\u306f\u4e0b\u3067\u5225\u9014\u5224\u65ad\u3057\u307e\u3059\u3002",
+    publicRoadmapDecisionStep: "\u30b9\u30c6\u30c3\u30d7 4 \u30fb \u516c\u958b\u30ed\u30fc\u30c9\u30de\u30c3\u30d7\u5224\u65ad",
+    roadmapStatusLabel: "\u30ed\u30fc\u30c9\u30de\u30c3\u30d7\u72b6\u614b",
+    roadmapVisibilityHelper:
+      "\u516c\u958b\u3055\u308c\u308b\u306e\u306f Planned\u3001In Progress\u3001Fixed \u306b\u8a2d\u5b9a\u3055\u308c\u305f\u30b7\u30b0\u30ca\u30eb\u306e\u307f\u3067\u3001\u5b89\u5168\u306a\u30e1\u30bf\u30c7\u30fc\u30bf\u3060\u3051\u304c\u8868\u793a\u3055\u308c\u307e\u3059\u3002",
+    visibleOnRoadmap: "\u30ed\u30fc\u30c9\u30de\u30c3\u30d7\u306b\u8868\u793a\u4e2d",
+    publishSafeMetadata: "\u5b89\u5168\u306a\u30e1\u30bf\u30c7\u30fc\u30bf\u3092\u516c\u958b",
+    triageStatusNew: "\u65b0\u7740",
+    triageStatusInvestigating: "\u8abf\u67fb\u4e2d",
+    triageStatusPlanned: "\u8a08\u753b\u6e08\u307f",
+    triageStatusInProgress: "\u9032\u884c\u4e2d",
+    triageStatusFixed: "\u5bfe\u5fdc\u6e08\u307f",
+    triageStatusClosed: "\u30af\u30ed\u30fc\u30ba",
+    lifecycleIncoming: "\u53d7\u4fe1",
+    lifecycleProtected: "\u4fdd\u8b77\u4e2d",
+    lifecycleNeedsReview: "\u8981\u30ec\u30d3\u30e5\u30fc",
+    lifecycleTriaged: "\u5206\u985e\u6e08\u307f",
+    lifecycleResolved: "\u89e3\u6c7a\u6e08\u307f",
     selectedLabel: "\u9078\u629e\u4e2d",
     selectForSui: "Sui \u7528\u306b\u9078\u629e",
     registeringStatus: "\u767b\u9332\u4e2d...",
@@ -2463,36 +2767,108 @@ const messages = {
     selectedForm: "\u9078\u629e\u4e2d\u306e\u30d5\u30a9\u30fc\u30e0",
     unreadCountSummary: (params) =>
       `${params?.count ?? 0} \u4ef6\u306e\u672a\u8aad \u00b7 ${params?.scope ?? ""}`,
-    signalDetailTitle: "Signal Detail",
+    signalDetailTitle: "\u30b7\u30b0\u30ca\u30eb\u8a73\u7d30",
+    noSignalSelectedTitle: "\u30b7\u30b0\u30ca\u30eb\u304c\u9078\u629e\u3055\u308c\u3066\u3044\u307e\u305b\u3093",
+    noSignalSelectedBody:
+      "Inbox \u304b\u3089\u30b7\u30b0\u30ca\u30eb\u3092\u9078\u3093\u3067\u3001\u975e\u516c\u958b\u30e1\u30c3\u30bb\u30fc\u30b8\u3092\u5fa9\u53f7\u3057\u3001Public Roadmap \u3078\u9032\u3081\u3066\u304f\u3060\u3055\u3044\u3002",
     openFormInbox: "\u3053\u306e form inbox \u3092\u958b\u304f",
-    decryptSignal: "Decrypt Signal",
+    decryptSignal: "\u30b7\u30b0\u30ca\u30eb\u3092\u5fa9\u53f7",
     decryptingSignal: "\u5fa9\u53f7\u4e2d...",
-    privateSignalLockedEyebrow: "Private Signal",
-    privateSignalLockedTitle: "Private content locked",
-    privateSignalUnlockedTitle: "Private signal unlocked",
+    privateSignalLockedEyebrow: "\u30d7\u30e9\u30a4\u30d9\u30fc\u30c8\u30b7\u30b0\u30ca\u30eb",
+    privateSignalLockedTitle: "\u975e\u516c\u958b\u30b3\u30f3\u30c6\u30f3\u30c4\u306f\u30ed\u30c3\u30af\u4e2d\u3067\u3059",
+    privateSignalUnlockedTitle: "\u30d7\u30e9\u30a4\u30d9\u30fc\u30c8\u30b7\u30b0\u30ca\u30eb\u306e\u30ed\u30c3\u30af\u3092\u89e3\u9664\u3057\u307e\u3057\u305f",
     privateSignalUnlockHelper:
-      "\u3053\u306e signal \u306f\u6697\u53f7\u5316\u3055\u308c\u3066\u304a\u308a\u3001wallet \u306e\u8a8d\u53ef\u3067\u5fa9\u53f7\u3057\u307e\u3059\u3002",
+      "\u3053\u306e\u30b7\u30b0\u30ca\u30eb\u306f\u6697\u53f7\u5316\u3055\u308c\u3066\u304a\u308a\u3001\u30a6\u30a9\u30ec\u30c3\u30c8\u306e\u8a8d\u53ef\u3067\u5fa9\u53f7\u3057\u307e\u3059\u3002",
     privateSignalUnlockSuccessDetail:
-      "wallet \u8a8d\u53ef\u304c\u78ba\u8a8d\u3055\u308c\u3001\u6697\u53f7\u5316\u3055\u308c\u305f\u56de\u7b54\u3092\u8868\u793a\u3067\u304d\u308b\u72b6\u614b\u3067\u3059\u3002",
-    privateSignalUnlockAction: "Private signal\u3092\u5fa9\u53f7",
+      "\u30a6\u30a9\u30ec\u30c3\u30c8\u8a8d\u53ef\u304c\u78ba\u8a8d\u3055\u308c\u3001\u6697\u53f7\u5316\u3055\u308c\u305f\u56de\u7b54\u3092\u8868\u793a\u3067\u304d\u308b\u72b6\u614b\u3067\u3059\u3002",
+    privateSignalUnlockAction: "\u975e\u516c\u958b\u30b7\u30b0\u30ca\u30eb\u3092\u5fa9\u53f7",
     privateSignalUnlockLoading: "\u5fa9\u53f7\u4e2d...",
     privateSignalUnlockSuccess: "\u5fa9\u53f7\u6e08\u307f",
     privateSignalUnlockError:
-      "\u5fa9\u53f7\u3067\u304d\u307e\u305b\u3093\u3002Wallet \u306e\u6a29\u9650\u3092\u78ba\u8a8d\u3057\u3066\u304f\u3060\u3055\u3044\u3002",
+      "\u5fa9\u53f7\u3067\u304d\u307e\u305b\u3093\u3002\u30a6\u30a9\u30ec\u30c3\u30c8\u306e\u6a29\u9650\u3092\u78ba\u8a8d\u3057\u3066\u304f\u3060\u3055\u3044\u3002",
     privateSignalUnlockDisabled:
-      "\u7d99\u7d9a\u3059\u308b\u306b\u306f\u8a8d\u53ef\u6e08\u307f\u306e reviewer wallet \u304c\u5fc5\u8981\u3067\u3059\u3002",
+      "\u7d99\u7d9a\u3059\u308b\u306b\u306f\u8a8d\u53ef\u6e08\u307f\u306e\u30ec\u30d3\u30e5\u30a2\u30fc\u30a6\u30a9\u30ec\u30c3\u30c8\u304c\u5fc5\u8981\u3067\u3059\u3002",
     privateSignalUnlockUnavailable:
-      "\u6697\u53f7\u5316\u3055\u308c\u305f private signal \u3092\u9078\u3093\u3067\u5fa9\u53f7\u3057\u3066\u304f\u3060\u3055\u3044\u3002",
+      "\u6697\u53f7\u5316\u3055\u308c\u305f\u975e\u516c\u958b\u30b7\u30b0\u30ca\u30eb\u3092\u9078\u3093\u3067\u5fa9\u53f7\u3057\u3066\u304f\u3060\u3055\u3044\u3002",
+    privateSignalUnlockReviewNote:
+      "\u975e\u516c\u958b\u30b7\u30b0\u30ca\u30eb\u3092\u89e3\u9664\u3057\u3066\u30ec\u30d3\u30e5\u30fc\u3057\u307e\u3059\u3002",
+    privateSignalUnlockReviewTriageNote:
+      "\u975e\u516c\u958b\u30b7\u30b0\u30ca\u30eb\u3092\u89e3\u9664\u3057\u3066\u30ec\u30d3\u30e5\u30fc\u3068\u5206\u985e\u3092\u884c\u3044\u307e\u3059\u3002",
+    decryptStatusLoadingSealRuntime: "Seal \u30e9\u30f3\u30bf\u30a4\u30e0\u3092\u8aad\u307f\u8fbc\u307f\u4e2d",
+    decryptStatusValidatingAccessPolicy: "\u30a2\u30af\u30bb\u30b9\u30dd\u30ea\u30b7\u30fc\u3092\u78ba\u8a8d\u4e2d",
+    decryptStatusRequestingWalletApproval: "\u30a6\u30a9\u30ec\u30c3\u30c8\u627f\u8a8d\u3092\u8981\u6c42\u4e2d",
+    decryptStatusDecryptingEncryptedPayload: "\u6697\u53f7\u5316\u30da\u30a4\u30ed\u30fc\u30c9\u3092\u5fa9\u53f7\u4e2d",
+    decryptStatusSignalUnlocked: "\u30b7\u30b0\u30ca\u30eb\u3092\u89e3\u9664\u3057\u307e\u3057\u305f",
+    decryptErrorConnectWalletToUnlockSignal:
+      "\u3053\u306e\u30b7\u30b0\u30ca\u30eb\u3092\u89e3\u9664\u3059\u308b\u306b\u306f\u30a6\u30a9\u30ec\u30c3\u30c8\u3092\u63a5\u7d9a\u3057\u3066\u304f\u3060\u3055\u3044\u3002",
+    decryptErrorUnauthorizedWallet:
+      "\u3053\u306e\u30a6\u30a9\u30ec\u30c3\u30c8\u306b\u306f\u3053\u306e\u56de\u7b54\u3092\u5fa9\u53f7\u3059\u308b\u6a29\u9650\u304c\u3042\u308a\u307e\u305b\u3093\u3002",
+    decryptErrorSealSessionExpired:
+      "Seal \u30bb\u30c3\u30b7\u30e7\u30f3\u306e\u671f\u9650\u304c\u5207\u308c\u307e\u3057\u305f\u3002\u3082\u3046\u4e00\u5ea6\u627f\u8a8d\u3057\u3066\u304f\u3060\u3055\u3044\u3002",
+    decryptErrorWalletApprovalRequired:
+      "\u3053\u306e\u56de\u7b54\u3092\u5fa9\u53f7\u3059\u308b\u306b\u306f\u30a6\u30a9\u30ec\u30c3\u30c8\u627f\u8a8d\u304c\u5fc5\u8981\u3067\u3059\u3002",
+    decryptErrorEncryptionPolicyMismatch:
+      "\u6697\u53f7\u5316\u30dd\u30ea\u30b7\u30fc\u304c\u4e00\u81f4\u3057\u307e\u305b\u3093\u3002",
+    decryptErrorManifestMismatch:
+      "\u30de\u30cb\u30d5\u30a7\u30b9\u30c8\u306e\u4e0d\u4e00\u81f4\u3092\u691c\u51fa\u3057\u307e\u3057\u305f\u3002",
+    decryptErrorBlobFetchFailed:
+      "Walrus \u304b\u3089\u6697\u53f7\u5316\u30da\u30a4\u30ed\u30fc\u30c9\u3092\u53d6\u5f97\u3067\u304d\u307e\u305b\u3093\u3067\u3057\u305f\u3002",
+    decryptErrorEncryptedPayloadMissing:
+      "\u6697\u53f7\u5316\u30da\u30a4\u30ed\u30fc\u30c9\u304c\u898b\u3064\u304b\u308a\u307e\u305b\u3093\u3002",
+    decryptErrorSealRuntimeUnavailable:
+      "Seal \u30e9\u30f3\u30bf\u30a4\u30e0\u3092\u5229\u7528\u3067\u304d\u307e\u305b\u3093\u3002",
+    decryptErrorEncryptedPayloadNotFound:
+      "\u6697\u53f7\u5316\u30da\u30a4\u30ed\u30fc\u30c9\u3092\u898b\u3064\u3051\u3089\u308c\u307e\u305b\u3093\u3002Inbox \u3092\u66f4\u65b0\u3057\u3066\u304b\u3089\u3001\u3082\u3046\u4e00\u5ea6\u89e3\u9664\u3057\u3066\u304f\u3060\u3055\u3044\u3002",
+    decryptToastWalletVerifiedPrivateSignalUnlocked:
+      "\u30a6\u30a9\u30ec\u30c3\u30c8\u3092\u78ba\u8a8d\u3057\u307e\u3057\u305f\u3002\u975e\u516c\u958b\u30b7\u30b0\u30ca\u30eb\u3092\u89e3\u9664\u3057\u307e\u3057\u305f\u3002",
     cancelUnlock: "\u5fa9\u53f7\u3092\u30ad\u30e3\u30f3\u30bb\u30eb",
     unlockInProgressStatus: "\u5fa9\u53f7\u3092\u9032\u884c\u4e2d...",
-    walletApprovalPendingStatus: "Wallet \u627f\u8a8d\u3092\u5f85\u6a5f\u4e2d...",
+    walletApprovalPendingStatus: "\u30a6\u30a9\u30ec\u30c3\u30c8\u627f\u8a8d\u3092\u5f85\u6a5f\u4e2d...",
     finishOrCancelCurrentUnlock:
       "\u73fe\u5728\u306e\u5fa9\u53f7\u3092\u5b8c\u4e86\u3059\u308b\u304b\u3001\u30ad\u30e3\u30f3\u30bb\u30eb\u3057\u3066\u304f\u3060\u3055\u3044\u3002",
     unlockCancelledStatus:
       "\u5fa9\u53f7\u3092\u30ad\u30e3\u30f3\u30bb\u30eb\u3057\u307e\u3057\u305f\u3002\u5225\u306e signal \u3092\u9078\u629e\u3067\u304d\u307e\u3059\u3002",
-    demoDecryptAvailable: "Demo decrypt available.",
+    demoDecryptAvailable: "\u30c7\u30e2\u5fa9\u53f7\u3092\u5229\u7528\u3067\u304d\u307e\u3059\u3002",
     policyGatedDecryption:
-      "Policy-gated decryption. Wallet approval is required.",
+      "\u30dd\u30ea\u30b7\u30fc\u3067\u4fdd\u8b77\u3055\u308c\u305f\u5fa9\u53f7\u3067\u3059\u3002\u30a6\u30a9\u30ec\u30c3\u30c8\u627f\u8a8d\u304c\u5fc5\u8981\u3067\u3059\u3002",
+    privateSignalUnlockStatusAriaLabel:
+      "\u30d7\u30e9\u30a4\u30d9\u30fc\u30c8\u30b7\u30b0\u30ca\u30eb\u306e\u5fa9\u53f7\u72b6\u614b",
+    privateSignalUnlockStepLocked: "\u30ed\u30c3\u30af\u4e2d",
+    privateSignalUnlockStepWaitingWalletApproval: "\u30a6\u30a9\u30ec\u30c3\u30c8\u627f\u8a8d\u5f85\u3061",
+    privateSignalUnlockStepDecrypting: "\u5fa9\u53f7\u4e2d",
+    privateSignalUnlockStepUnlocked: "\u89e3\u9664\u6e08\u307f",
+    privateSignalUnlockStepFailed: "\u5931\u6557",
+    privateSignalUnauthorizedHelper:
+      "\u3053\u306e wallet \u306f signal \u306e\u5b58\u5728\u3092\u78ba\u8a8d\u3067\u304d\u307e\u3059\u304c\u3001\u5fa9\u53f7\u6a29\u9650\u304c\u3042\u308a\u307e\u305b\u3093\u3002",
+    signalRemainsLocked: "\u30b7\u30b0\u30ca\u30eb\u306f\u30ed\u30c3\u30af\u3055\u308c\u305f\u307e\u307e\u3067\u3059\u3002",
+    accessDeniedButton: "\u30a2\u30af\u30bb\u30b9\u62d2\u5426",
+    clearCachedPolicyData: "\u30ad\u30e3\u30c3\u30b7\u30e5\u6e08\u307f policy data \u3092\u30af\u30ea\u30a2",
+    sealPolicyDebugTitle: "Seal \u30dd\u30ea\u30b7\u30fc\u30c7\u30d0\u30c3\u30b0",
+    sealPolicyMismatchNotice:
+      "\u6697\u53f7\u5316\u6642\u306e\u30dd\u30ea\u30b7\u30fc\u3068\u5fa9\u53f7\u6642\u306e\u30dd\u30ea\u30b7\u30fc\u304c\u4e00\u81f4\u3057\u307e\u305b\u3093\u3002\u5fa9\u53f7\u306b\u306f\u3001\u6697\u53f7\u5316\u6642\u3068\u540c\u3058\u30d1\u30c3\u30b1\u30fc\u30b8\u3001\u6a29\u9650\u3001\u30aa\u30d6\u30b8\u30a7\u30af\u30c8\u3001\u30cd\u30c3\u30c8\u30ef\u30fc\u30af\u3001\u30dd\u30ea\u30b7\u30fc JSON \u304c\u5fc5\u8981\u3067\u3059\u3002",
+    sealPolicyDiffField: "\u9805\u76ee",
+    sealPolicyDiffEncrypt: "\u6697\u53f7\u5316",
+    sealPolicyDiffDecrypt: "\u5fa9\u53f7",
+    sealPolicyRowPolicyHash: "\u30dd\u30ea\u30b7\u30fc\u30cf\u30c3\u30b7\u30e5",
+    sealPolicyRowPackageId: "\u30d1\u30c3\u30b1\u30fc\u30b8 ID",
+    sealPolicyRowCapabilityType: "\u6a29\u9650\u30bf\u30a4\u30d7",
+    sealPolicyRowEnvelopeObjectId: "\u30a8\u30f3\u30d9\u30ed\u30fc\u30d7\u30aa\u30d6\u30b8\u30a7\u30af\u30c8 ID",
+    sealPolicyRowEnvelopePolicyObjectId: "\u30a8\u30f3\u30d9\u30ed\u30fc\u30d7\u30dd\u30ea\u30b7\u30fc\u30aa\u30d6\u30b8\u30a7\u30af\u30c8 ID",
+    sealPolicyRowEncryptPolicyObjectId: "\u6697\u53f7\u5316\u30dd\u30ea\u30b7\u30fc\u30aa\u30d6\u30b8\u30a7\u30af\u30c8 ID",
+    sealPolicyRowEncryptPolicyPolicyObjectId: "\u6697\u53f7\u5316\u30dd\u30ea\u30b7\u30fc\u306e\u30dd\u30ea\u30b7\u30fc\u30aa\u30d6\u30b8\u30a7\u30af\u30c8 ID",
+    sealPolicyRowDecryptPolicyObjectId: "\u5fa9\u53f7\u30dd\u30ea\u30b7\u30fc\u30aa\u30d6\u30b8\u30a7\u30af\u30c8 ID",
+    sealPolicyRowDecryptPolicyPolicyObjectId: "\u5fa9\u53f7\u30dd\u30ea\u30b7\u30fc\u306e\u30dd\u30ea\u30b7\u30fc\u30aa\u30d6\u30b8\u30a7\u30af\u30c8 ID",
+    sealPolicyRowWalletAddress: "\u30a6\u30a9\u30ec\u30c3\u30c8\u30a2\u30c9\u30ec\u30b9",
+    sealPolicyRowPolicyMatch: "\u30dd\u30ea\u30b7\u30fc\u4e00\u81f4",
+    sealPolicyRowPolicyDiff: "\u30dd\u30ea\u30b7\u30fc\u5dee\u5206",
+    sealPolicyObjectIdSources: "\u30aa\u30d6\u30b8\u30a7\u30af\u30c8 ID \u306e\u53c2\u7167\u5143",
+    sealPolicyRequiredCapabilityObjects: "\u5fc5\u8981\u306a\u6a29\u9650\u30aa\u30d6\u30b8\u30a7\u30af\u30c8",
+    sealPolicyOwnedCapabilityObjects: "\u6240\u6709\u3057\u3066\u3044\u308b\u6a29\u9650\u30aa\u30d6\u30b8\u30a7\u30af\u30c8",
+    sealPolicyEncryptRawJson: "\u6697\u53f7\u5316\u6642\u306e\u5143\u30dd\u30ea\u30b7\u30fc JSON",
+    sealPolicyDecryptRawJson: "\u5fa9\u53f7\u6642\u306e\u5143\u30dd\u30ea\u30b7\u30fc JSON",
+    sealPolicyEncryptCanonicalJson: "\u6697\u53f7\u5316\u6642\u306e\u6b63\u898f\u5316\u30dd\u30ea\u30b7\u30fc JSON",
+    sealPolicyDecryptCanonicalJson: "\u5fa9\u53f7\u6642\u306e\u6b63\u898f\u5316\u30dd\u30ea\u30b7\u30fc JSON",
+    sealPolicyFieldDiff: "\u30dd\u30ea\u30b7\u30fc\u9805\u76ee\u306e\u5dee\u5206",
     answersTitle: "Answers",
     noAttachments: "No attachments",
     reviewControlsTitle: "Review controls",
@@ -2518,17 +2894,17 @@ const messages = {
     totalCountLabel: (params) => `${params?.count ?? 0} \u4ef6`,
     ratingLabel: (params) => `\u8a55\u4fa1 ${params?.value ?? ""}`,
     attachmentCountLabel: (params) => `\u6dfb\u4ed8 ${params?.count ?? 0} \u4ef6`,
-    newSignalLabel: "New Signal",
-    encryptedSignalLabel: "Encrypted Signal",
-    storedOnWalrus: "Stored on Walrus",
-    localFallbackLabel: "Local fallback",
-    selectSignalToReview: "review \u3059\u308b signal \u3092\u9078\u629e",
+    newSignalLabel: "\u65b0\u7740\u30b7\u30b0\u30ca\u30eb",
+    encryptedSignalLabel: "\u6697\u53f7\u5316\u30b7\u30b0\u30ca\u30eb",
+    storedOnWalrus: "Walrus \u306b\u4fdd\u5b58\u6e08\u307f",
+    localFallbackLabel: "\u30ed\u30fc\u30ab\u30eb\u4ee3\u66ff",
+    selectSignalToReview: "\u30ec\u30d3\u30e5\u30fc\u3059\u308b\u30b7\u30b0\u30ca\u30eb\u3092\u9078\u629e",
     incomingEncryptedFeedback:
       "\u53d7\u4fe1\u3057\u305f\u6697\u53f7\u5316 feedback \u306f\u3053\u3053\u306b\u8868\u793a\u3055\u308c\u307e\u3059\u3002",
     encryptedFeedbackHidden:
       "\u6697\u53f7\u5316\u3055\u308c\u305f feedback \u672c\u6587\u306f\u5fa9\u53f7\u6210\u529f\u307e\u3067\u975e\u8868\u793a\u3067\u3059\u3002",
     noAnswerLabel: "\u56de\u7b54\u306a\u3057",
-    verifyOnWalrus: "Verify on Walrus",
+    verifyOnWalrus: "Walrus \u3067\u691c\u8a3c",
     notAvailable: "\u5229\u7528\u3067\u304d\u307e\u305b\u3093",
     deletingLabel: "\u524a\u9664\u4e2d...",
     attachmentUnitOne: "\u4ef6\u306e\u6dfb\u4ed8",
@@ -2540,14 +2916,14 @@ const messages = {
     warningLabel: "warning",
     encryptionLabel: "encryption",
     encryptedBlobIdLabel: "encryptedBlobId",
-    encryptedPayloadStored: "Encrypted payload stored",
+    encryptedPayloadStored: "\u6697\u53f7\u5316\u30da\u30a4\u30ed\u30fc\u30c9\u3092\u4fdd\u5b58\u6e08\u307f",
     encryptionDisabledForForm:
-      "\u3053\u306e signal form \u3067\u306f encryption \u304c\u7121\u52b9\u3067\u3059\u3002",
-    walletApprovalRequired: "Wallet approval required",
+      "\u3053\u306e\u30b7\u30b0\u30ca\u30eb\u30d5\u30a9\u30fc\u30e0\u3067\u306f\u6697\u53f7\u5316\u304c\u7121\u52b9\u3067\u3059\u3002",
+    walletApprovalRequired: "\u30a6\u30a9\u30ec\u30c3\u30c8\u627f\u8a8d\u304c\u5fc5\u8981",
     connectCreatorWalletForDecrypt:
-      "\u3053\u306e encrypted signal \u3092 review \u3059\u308b\u306b\u306f creator wallet \u3092\u63a5\u7d9a\u3057\u3066\u304f\u3060\u3055\u3044\u3002Seal \u304c\u6709\u52b9\u306a\u5834\u5408\u306f session approval \u3082\u5fc5\u8981\u3067\u3059\u3002",
+      "\u3053\u306e\u6697\u53f7\u5316\u30b7\u30b0\u30ca\u30eb\u3092\u30ec\u30d3\u30e5\u30fc\u3059\u308b\u306b\u306f\u3001\u4f5c\u6210\u8005\u306e\u30a6\u30a9\u30ec\u30c3\u30c8\u3092\u63a5\u7d9a\u3057\u3066\u304f\u3060\u3055\u3044\u3002Seal \u304c\u6709\u52b9\u306a\u5834\u5408\u306f\u30bb\u30c3\u30b7\u30e7\u30f3\u627f\u8a8d\u3082\u5fc5\u8981\u3067\u3059\u3002",
     walletApprovalReuseNotice: (params) =>
-      `Private Signal \u306e\u5fa9\u53f7\u627f\u8a8d\u306f\u3001\u6700\u521d\u306e1\u56de\u5f8c\u304b\u3089\u7d04 ${params?.minutes ?? 10} \u5206\u9593\u518d\u5229\u7528\u3055\u308c\u307e\u3059\u3002`,
+      `\u975e\u516c\u958b\u30b7\u30b0\u30ca\u30eb\u306e\u5fa9\u53f7\u627f\u8a8d\u306f\u3001\u6700\u521d\u306e1\u56de\u5f8c\u304b\u3089\u7d04 ${params?.minutes ?? 10} \u5206\u9593\u518d\u5229\u7528\u3055\u308c\u307e\u3059\u3002`,
     pendingSuiRegistration: "\u5f8c\u304b\u3089 Sui \u767b\u9332\u3067\u304d\u307e\u3059",
     suiRegistrationDeferredNotice:
       "Sui \u767b\u9332\u306f\u3042\u3068\u304b\u3089\u7ba1\u7406\u5074\u3067\u307e\u3068\u3081\u3066\u5b9f\u884c\u3067\u304d\u307e\u3059\u3002",
@@ -2571,24 +2947,33 @@ const messages = {
     protectedInboxLabel: "\u4fdd\u8b77\u3055\u308c\u305f\u53d7\u4fe1\u7bb1",
     openInboxLabel: "\u516c\u958b\u53d7\u4fe1\u7bb1",
     projectLinkedLabel: "\u30d7\u30ed\u30b8\u30a7\u30af\u30c8\u9023\u643a\u6e08\u307f",
-    protectedLabel: "Encrypted",
+    protectedLabel: "\u6697\u53f7\u5316",
     flaggedLabel: "\u8981\u78ba\u8a8d",
     pendingSuiShortLabel: "Sui \u4fdd\u7559",
     registeredOnSuiLabel: "Sui \u767b\u9332\u6e08\u307f",
     resolvedLabel: "\u89e3\u6c7a\u6e08\u307f",
-    needsReviewStreamHelper: "Waiting for decrypt",
-    unreadStreamHelper: "New submissions",
-    flaggedStreamHelper: "Marked important",
-    protectedStreamHelper: "Requires unlock",
-    resolvedStreamHelper: "Completed review",
-    pendingSuiStreamHelper: "Ready to register",
-    registeredSuiStreamHelper: "Published proofs",
-    allSignalsStreamHelper: "Full signal index",
+    needsReviewStreamHelper: "\u5fa9\u53f7\u5f85\u3061",
+    unreadStreamHelper: "\u65b0\u7740\u6295\u7a3f",
+    flaggedStreamHelper: "\u91cd\u8981\u30de\u30fc\u30af\u6e08\u307f",
+    protectedStreamHelper: "\u30ed\u30c3\u30af\u89e3\u9664\u304c\u5fc5\u8981",
+    resolvedStreamHelper: "\u30ec\u30d3\u30e5\u30fc\u5b8c\u4e86",
+    pendingSuiStreamHelper: "\u767b\u9332\u6e96\u5099\u5b8c\u4e86",
+    registeredSuiStreamHelper: "\u8a3c\u660e\u3092\u516c\u958b\u6e08\u307f",
+    allSignalsStreamHelper: "\u5168\u30b7\u30b0\u30ca\u30eb\u7d22\u5f15",
     privateReviewEnabled: "\u30d7\u30e9\u30a4\u30d9\u30fc\u30c8\u30ec\u30d3\u30e5\u30fc\u6709\u52b9",
     signalAddedToPublicRoadmap: "Signal \u3092 Public Roadmap \u306b\u8ffd\u52a0\u3057\u307e\u3057\u305f\u3002",
     researchLabFailedToLoad: "Research Lab \u306e\u8aad\u307f\u8fbc\u307f\u306b\u5931\u6557\u3057\u307e\u3057\u305f",
     retryLabel: "\u518d\u8a66\u884c",
     reconnectWallet: "\u30a6\u30a9\u30ec\u30c3\u30c8\u3092\u518d\u63a5\u7d9a",
+    resetLocalState: "\u30ed\u30fc\u30ab\u30eb\u72b6\u614b\u3092\u30ea\u30bb\u30c3\u30c8",
+    resettingLocalState: "\u30ea\u30bb\u30c3\u30c8\u4e2d...",
+    disconnectingWallet: "\u5207\u65ad\u4e2d...",
+    openTroubleshooting: "\u30c8\u30e9\u30d6\u30eb\u30b7\u30e5\u30fc\u30c8\u3092\u958b\u304f",
+    decryptRecoveryActionsAriaLabel: "\u5fa9\u53f7\u30ea\u30ab\u30d0\u30ea\u30fc\u64cd\u4f5c",
+    walletDisconnectedReconnect:
+      "\u30a6\u30a9\u30ec\u30c3\u30c8\u3092\u5207\u65ad\u3057\u307e\u3057\u305f\u3002\u518d\u63a5\u7d9a\u3057\u3066\u304f\u3060\u3055\u3044\u3002",
+    walletDisconnectFailedReconnect:
+      "\u30a6\u30a9\u30ec\u30c3\u30c8\u3092\u5207\u65ad\u3067\u304d\u307e\u305b\u3093\u3067\u3057\u305f\u3002\u30a6\u30a9\u30ec\u30c3\u30c8\u30e1\u30cb\u30e5\u30fc\u304b\u3089\u518d\u63a5\u7d9a\u3057\u3066\u304f\u3060\u3055\u3044\u3002",
     retryRegistryStep: "\u30ec\u30b8\u30b9\u30c8\u30ea\u624b\u9806\u3092\u518d\u8a66\u884c",
     recoverableDraftTitle: "\u524d\u56de\u306e\u672a\u9001\u4fe1\u30c7\u30fc\u30bf\u304c\u3042\u308a\u307e\u3059",
     restore: "\u5fa9\u5143",
@@ -2636,7 +3021,6 @@ const messages = {
       "\u6697\u53f7\u5316\u3055\u308c\u305f private signal \u3067\u3059\u3002\u89e3\u9664\u306b\u306f\u30ec\u30d3\u30e5\u30a2\u30fc\u6a29\u9650\u304c\u5fc5\u8981\u3067\u3059\u3002",
     anonymousRespondent: "\u533f\u540d\u306e\u56de\u7b54\u8005",
     signalMetadataAndProofTitle: "signal \u306e\u30e1\u30bf\u30c7\u30fc\u30bf\u3068\u8a3c\u660e",
-    reviewStateLabel: "\u30ec\u30d3\u30e5\u30fc\u72b6\u614b",
     legacyUnencryptedResponse:
       "\u904e\u53bb\u306e\u975e\u6697\u53f7\u5316\u30ec\u30b9\u30dd\u30f3\u30b9 \u00b7 Seal \u5f37\u5236\u524d\u306b\u4f5c\u6210",
     privateSignalUnlockedStatus: "private signal \u3092\u89e3\u9664\u6e08\u307f",
@@ -2686,6 +3070,21 @@ const messages = {
     currentProjectEyebrow: "\u73fe\u5728\u306e\u30d7\u30ed\u30b8\u30a7\u30af\u30c8",
     createOrSwitchProjectTitle: "\u30d7\u30ed\u30b8\u30a7\u30af\u30c8\u3092\u4f5c\u6210\u307e\u305f\u306f\u5207\u308a\u66ff\u3048",
     workspaceScopeLabel: "\u30ef\u30fc\u30af\u30b9\u30da\u30fc\u30b9\u7bc4\u56f2",
+    activityEyebrow: "\u30a2\u30af\u30c6\u30a3\u30d3\u30c6\u30a3",
+    workspaceActivityTitle: "\u30ef\u30fc\u30af\u30b9\u30da\u30fc\u30b9\u30a2\u30af\u30c6\u30a3\u30d3\u30c6\u30a3",
+    workspaceActivityBody:
+      "signal \u30d5\u30a9\u30fc\u30e0\u64cd\u4f5c\u306e\u30aa\u30fc\u30ca\u30fc / \u7ba1\u7406\u8005\u5411\u3051\u76e3\u67fb\u30ed\u30b0\u3067\u3059\u3002",
+    activityEventsCount: (params) => `${params?.count ?? 0} \u4ef6`,
+    activityEmptyTitle: "\u307e\u3060\u30a2\u30af\u30c6\u30a3\u30d3\u30c6\u30a3\u306f\u3042\u308a\u307e\u305b\u3093\u3002",
+    activityEmptyBody:
+      "signal \u3092\u4f5c\u6210\u307e\u305f\u306f\u516c\u958b\u3059\u308b\u3068\u3001\u76e3\u67fb\u30ed\u30b0\u304c\u59cb\u307e\u308a\u307e\u3059\u3002",
+    activityActionCreated: "\u4f5c\u6210",
+    activityActionPublished: "\u516c\u958b",
+    activityActionUpdated: "\u66f4\u65b0",
+    activityActionArchived: "\u30a2\u30fc\u30ab\u30a4\u30d6",
+    unknownActor: "\u4e0d\u660e\u306a\u5b9f\u884c\u8005",
+    activityFormId: (params) => `\u30d5\u30a9\u30fc\u30e0 ${params?.id ?? ""}`,
+    suiExplorerLabel: "Sui explorer",
     switchProjectBody:
       "\u3053\u306e\u53d7\u4fe1\u7bb1\u306e\u5bfe\u8c61\u30d7\u30ed\u30b8\u30a7\u30af\u30c8\u3092\u5207\u308a\u66ff\u3048\u308b\u304b\u3001\u65b0\u3057\u3044\u4fdd\u5b58\u5148\u3092\u4f5c\u6210\u3057\u307e\u3059\u3002",
     selectedProjectLabel: "\u9078\u629e\u4e2d\u306e\u30d7\u30ed\u30b8\u30a7\u30af\u30c8",
@@ -2723,7 +3122,7 @@ const messages = {
     deleteProjectButton: "\u30d7\u30ed\u30b8\u30a7\u30af\u30c8\u3092\u524a\u9664",
     projectConnectedStatusLabel: "\u30d7\u30ed\u30b8\u30a7\u30af\u30c8\u63a5\u7d9a",
     selectCreateOrConnectProject: "\u30d7\u30ed\u30b8\u30a7\u30af\u30c8\u3092\u9078\u629e\u3001\u4f5c\u6210\u3001\u307e\u305f\u306f\u63a5\u7d9a\u3057\u3066\u304f\u3060\u3055\u3044",
-    privateSignalsEnabledStatusLabel: "\u30d7\u30e9\u30a4\u30d9\u30fc\u30c8 signal \u6709\u52b9",
+    privateSignalsEnabledStatusLabel: "\u30d7\u30e9\u30a4\u30d9\u30fc\u30c8\u30b7\u30b0\u30ca\u30eb\u6709\u52b9",
     noFormPublishedYet: "\u307e\u3060\u30d5\u30a9\u30fc\u30e0\u304c\u516c\u958b\u3055\u308c\u3066\u3044\u307e\u305b\u3093",
     protectedFormsActive: (params) => `\u4fdd\u8b77\u4ed8\u304d\u30d5\u30a9\u30fc\u30e0 ${params?.count ?? 0} \u4ef6\u304c\u7a3c\u50cd\u4e2d`,
     privateSignalProtectionOff: "\u30d5\u30a9\u30fc\u30e0\u306f\u3042\u308a\u307e\u3059\u304c\u3001private signal \u4fdd\u8b77\u306f\u30aa\u30d5\u3067\u3059",
@@ -2737,11 +3136,57 @@ const messages = {
     pendingSuiVerificationStatusLabel: "Sui \u691c\u8a3c\u5f85\u3061",
     signalsWaitingForVerification: (params) => `\u691c\u8a3c\u5f85\u3061\u306e signal ${params?.count ?? 0} \u4ef6`,
     noPendingProofRegistrations: "\u4fdd\u7559\u4e2d\u306e\u8a3c\u660e\u767b\u9332\u306f\u3042\u308a\u307e\u305b\u3093",
-    awaitingProjectSignals: "\u30d7\u30ed\u30b8\u30a7\u30af\u30c8 signal \u3092\u5f85\u3063\u3066\u3044\u307e\u3059",
+    awaitingProjectSignals: "\u30d7\u30ed\u30b8\u30a7\u30af\u30c8\u30b7\u30b0\u30ca\u30eb\u3092\u5f85\u3063\u3066\u3044\u307e\u3059",
     roadmapPublishingReadyStatusLabel: "\u30ed\u30fc\u30c9\u30de\u30c3\u30d7\u516c\u958b\u6e96\u5099\u5b8c\u4e86",
-    signalsReadyForPublicRoadmap: (params) => `Public Roadmap \u306b\u51fa\u305b\u308b signal ${params?.count ?? 0} \u4ef6`,
-    markSignalsForRoadmap: "signal \u3092 Planned\u3001In Progress\u3001Fixed \u306b\u8a2d\u5b9a\u3057\u3066\u304f\u3060\u3055\u3044",
+    signalsReadyForPublicRoadmap: (params) => `\u516c\u958b\u30ed\u30fc\u30c9\u30de\u30c3\u30d7\u306b\u51fa\u305b\u308b\u30b7\u30b0\u30ca\u30eb ${params?.count ?? 0} \u4ef6`,
+    markSignalsForRoadmap: "\u30b7\u30b0\u30ca\u30eb\u3092\u4e88\u5b9a\u3001\u9032\u884c\u4e2d\u3001\u4fee\u6b63\u6e08\u307f\u306e\u3044\u305a\u308c\u304b\u306b\u8a2d\u5b9a\u3057\u3066\u304f\u3060\u3055\u3044",
     noRoadmapCandidatesYet: "\u307e\u3060\u30ed\u30fc\u30c9\u30de\u30c3\u30d7\u5019\u88dc\u306f\u3042\u308a\u307e\u305b\u3093",
+    reviewQueueTitle: "\u30ec\u30d3\u30e5\u30fc\u30ad\u30e5\u30fc",
+    encryptedSignalInboxLabel: "\u6697\u53f7\u5316\u30b7\u30b0\u30ca\u30eb\u53d7\u4fe1\u7bb1",
+    reviewQueueStatusAria: "\u30ec\u30d3\u30e5\u30fc\u30ad\u30e5\u30fc\u306e\u72b6\u614b",
+    nextReviewActionLabel: "\u6b21\u306e\u30ec\u30d3\u30e5\u30fc\u30a2\u30af\u30b7\u30e7\u30f3",
+    systemDetailsLabel: "\u30b7\u30b9\u30c6\u30e0\u8a73\u7d30",
+    openOperationalDetailsTitle: "\u904b\u7528\u8a73\u7d30\u3092\u958b\u304f",
+    nextStepLabel: "\u6b21\u306e\u30b9\u30c6\u30c3\u30d7",
+    markSignalReviewedTitle: "\u30b7\u30b0\u30ca\u30eb\u3092\u30ec\u30d3\u30e5\u30fc\u6e08\u307f\u306b\u3059\u308b",
+    markSignalReviewedDetail:
+      "\u3053\u306e\u30b7\u30b0\u30ca\u30eb\u306f\u78ba\u8a8d\u3067\u304d\u307e\u3059\u3002\u72b6\u614b\u3092\u65e2\u8aad\u306b\u3057\u3001\u516c\u958b\u30ed\u30fc\u30c9\u30de\u30c3\u30d7\u306b\u9032\u3081\u308b\u304b\u5224\u65ad\u3057\u3066\u304f\u3060\u3055\u3044\u3002",
+    markReviewed: "\u30ec\u30d3\u30e5\u30fc\u6e08\u307f\u306b\u3059\u308b",
+    optionalProofRegisterSuiTitle: "\u4efb\u610f\u306e\u8a3c\u660e: Sui \u306b\u767b\u9332",
+    optionalProofRegisterSuiDetail:
+      "\u30ec\u30d3\u30e5\u30fc\u306f\u3059\u3067\u306b\u53ef\u80fd\u3067\u3059\u3002\u30aa\u30f3\u30c1\u30a7\u30fc\u30f3\u8a3c\u660e\u3068\u3057\u3066\u8a18\u9332\u3057\u305f\u3044\u5834\u5408\u3060\u3051\u4f7f\u3063\u3066\u304f\u3060\u3055\u3044\u3002",
+    decideRoadmapTitle: "\u30ed\u30fc\u30c9\u30de\u30c3\u30d7\u306b\u8f09\u305b\u308b\u304b\u5224\u65ad",
+    decideRoadmapDetail:
+      "\u5916\u90e8\u306b\u898b\u305b\u3066\u3088\u3044\u30b7\u30b0\u30ca\u30eb\u306a\u3089\u3001\u4e88\u5b9a\u3001\u9032\u884c\u4e2d\u3001\u4fee\u6b63\u6e08\u307f\u306a\u3069\u306e\u30ed\u30fc\u30c9\u30de\u30c3\u30d7\u72b6\u614b\u306b\u79fb\u52d5\u3057\u3066\u304f\u3060\u3055\u3044\u3002",
+    signalAlreadyInReviewFlowTitle: "\u3053\u306e\u30b7\u30b0\u30ca\u30eb\u306f\u30ec\u30d3\u30e5\u30fc\u30d5\u30ed\u30fc\u4e0a\u306b\u3042\u308a\u307e\u3059",
+    signalAlreadyInReviewFlowDetail:
+      "\u30e1\u30e2\u3001\u30bf\u30b0\u3001\u30ed\u30fc\u30c9\u30de\u30c3\u30d7\u72b6\u614b\u306f\u8abf\u6574\u3067\u304d\u307e\u3059\u304c\u3001\u4eca\u3059\u3050\u5fc5\u8981\u306a\u64cd\u4f5c\u306f\u3042\u308a\u307e\u305b\u3093\u3002",
+    openPublicRoadmap: "\u516c\u958b\u30ed\u30fc\u30c9\u30de\u30c3\u30d7\u3092\u958b\u304f",
+    createFirstSignalInbox: "\u6700\u521d\u306e\u30b7\u30b0\u30ca\u30eb\u53d7\u4fe1\u7bb1\u3092\u4f5c\u6210",
+    createWalletOwnedInboxDetail:
+      "\u30a6\u30a9\u30ec\u30c3\u30c8\u6240\u6709\u306e\u30d5\u30a9\u30fc\u30e0\u3092\u4f5c\u6210\u3057\u307e\u3059\u3002\u3053\u306e\u30a6\u30a9\u30ec\u30c3\u30c8\u304c AdminCap \u307e\u305f\u306f OwnerCap \u3092\u6301\u3064\u307e\u3067\u3001\u30d7\u30ed\u30b8\u30a7\u30af\u30c8\u7ba1\u7406\u306f\u8868\u793a\u3055\u308c\u307e\u305b\u3093\u3002",
+    sendTestSignalOwnFormDetail:
+      "\u516c\u958b\u30d5\u30a9\u30fc\u30e0\u3092\u958b\u3044\u3066\u30b7\u30b0\u30ca\u30eb\u30921\u4ef6\u9001\u4fe1\u3057\u3001\u3053\u306e\u53d7\u4fe1\u7bb1\u3067\u51e6\u7406\u3067\u304d\u308b\u72b6\u614b\u306b\u3057\u307e\u3059\u3002",
+    reviewSignalInbox: "\u30b7\u30b0\u30ca\u30eb\u53d7\u4fe1\u7bb1\u3092\u30ec\u30d3\u30e5\u30fc",
+    walletCanReviewOwnFormsDetail:
+      "\u3053\u306e\u30a6\u30a9\u30ec\u30c3\u30c8\u306f\u81ea\u5206\u306e\u30d5\u30a9\u30fc\u30e0\u3092\u30ec\u30d3\u30e5\u30fc\u3067\u304d\u307e\u3059\u3002\u30d7\u30ed\u30b8\u30a7\u30af\u30c8\u7ba1\u7406\u306b\u306f AdminCap \u307e\u305f\u306f OwnerCap \u304c\u5fc5\u8981\u3067\u3059\u3002",
+    connectProject: "\u30d7\u30ed\u30b8\u30a7\u30af\u30c8\u3092\u63a5\u7d9a",
+    connectProjectBeforeReviewDetail:
+      "\u30d7\u30e9\u30a4\u30d9\u30fc\u30c8\u30b7\u30b0\u30ca\u30eb\u3092\u4f5c\u6210\u30fb\u30ec\u30d3\u30e5\u30fc\u3059\u308b\u524d\u306b\u3001\u65b0\u898f\u30d7\u30ed\u30b8\u30a7\u30af\u30c8\u3092\u4f5c\u6210\u3059\u308b\u304b\u65e2\u5b58\u306e\u3082\u306e\u3092\u63a5\u7d9a\u3057\u3066\u304f\u3060\u3055\u3044\u3002",
+    publishProtectedFormDetail:
+      "\u30ec\u30d3\u30e5\u30a2\u30fc\u304c\u8aad\u3081\u308b\u30b7\u30b0\u30ca\u30eb\u3092\u96c6\u3081\u308b\u305f\u3081\u3001\u3053\u306e\u30d7\u30ed\u30b8\u30a7\u30af\u30c8\u7528\u306e\u4fdd\u8b77\u4ed8\u304d\u30d5\u30a9\u30fc\u30e0\u30921\u3064\u516c\u958b\u3057\u3066\u304f\u3060\u3055\u3044\u3002",
+    sendTestSignalToInboxDetail:
+      "\u516c\u958b\u30d5\u30a9\u30fc\u30e0\u3092\u958b\u3044\u3066\u30b7\u30b0\u30ca\u30eb\u30921\u4ef6\u9001\u4fe1\u3057\u3001\u30ec\u30d3\u30e5\u30fc\u53d7\u4fe1\u7bb1\u3067\u51e6\u7406\u3067\u304d\u308b\u72b6\u614b\u306b\u3057\u307e\u3059\u3002",
+    unlockPrivateSignal: "\u30d7\u30e9\u30a4\u30d9\u30fc\u30c8\u30b7\u30b0\u30ca\u30eb\u3092\u89e3\u9664",
+    unlockPrivateSignalDetail:
+      "\u6b21\u306e\u4fdd\u8b77\u4ed8\u304d\u30b7\u30b0\u30ca\u30eb\u3092\u958b\u304d\u3001\u30ec\u30d3\u30e5\u30a2\u30fc\u30a6\u30a9\u30ec\u30c3\u30c8\u6a29\u9650\u3067\u5fa9\u53f7\u3057\u3066\u304f\u3060\u3055\u3044\u3002",
+    openProtectedSignal: "\u4fdd\u8b77\u4ed8\u304d\u30b7\u30b0\u30ca\u30eb\u3092\u958b\u304f",
+    moveToPublicRoadmapDetail:
+      "\u30ec\u30d3\u30e5\u30fc\u6e08\u307f\u306e\u30b7\u30b0\u30ca\u30eb\u30921\u3064\u9078\u3073\u3001\u4e88\u5b9a\u307e\u305f\u306f\u9032\u884c\u4e2d\u306a\u3069\u306e\u30ed\u30fc\u30c9\u30de\u30c3\u30d7\u72b6\u614b\u306b\u79fb\u52d5\u3057\u3066\u304f\u3060\u3055\u3044\u3002",
+    optionalProofCompleteDetail:
+      "\u30ec\u30d3\u30e5\u30fc\u306f\u5b8c\u4e86\u6e08\u307f\u3067\u3059\u3002\u4efb\u610f\u306e\u8a3c\u660e\u30ec\u30b3\u30fc\u30c9\u3092\u8ffd\u52a0\u3057\u305f\u3044\u5834\u5408\u3060\u3051 Sui \u3092\u4f7f\u3063\u3066\u304f\u3060\u3055\u3044\u3002",
+    queueHealthyDetail:
+      "\u30ad\u30e5\u30fc\u306f\u5065\u5168\u3067\u3059\u3002\u65b0\u7740\u30b7\u30b0\u30ca\u30eb\u3092\u30ec\u30d3\u30e5\u30fc\u3057\u3001\u30ed\u30fc\u30c9\u30de\u30c3\u30d7\u9805\u76ee\u3092\u968f\u6642\u66f4\u65b0\u3057\u3066\u304f\u3060\u3055\u3044\u3002",
     severityLabel: (params) => `\u91cd\u8981\u5ea6 ${params?.value ?? ""}`,
     mediumLabel: "medium",
     openSubmissionLabel: "\u901a\u5e38\u6295\u7a3f",
@@ -3003,6 +3448,68 @@ const messages = {
     projectStateSavedRegisterLater: "Walrus/local \u306b\u4fdd\u5b58\u3057\u307e\u3057\u305f\u3002onchain form record \u304c\u5fc5\u8981\u306a\u3068\u304d\u306b Sui \u3078\u767b\u9332\u3067\u304d\u307e\u3059\u3002",
     publishResultDeferredSui: "Walrus \u516c\u958b\u304c\u5b8c\u4e86\u3057\u307e\u3057\u305f\u3002Sui \u767b\u9332\u306f\u660e\u793a\u7684\u306b\u5b9f\u884c\u3059\u308b\u307e\u3067\u4efb\u610f\u3067\u3059\u3002",
     publishResultLiveLocalWalrus: "Walrus/local \u30e2\u30fc\u30c9\u3067 signal \u304c\u516c\u958b\u3055\u308c\u307e\u3057\u305f\u3002",
+    exploreEyebrow: "\u30ef\u30fc\u30af\u30b9\u30da\u30fc\u30b9\u30fb\u30b7\u30b0\u30ca\u30eb\u30c7\u30a3\u30ec\u30af\u30c8\u30ea",
+    exploreTitle: "\u30b7\u30b0\u30ca\u30eb\u3092\u63a2\u7d22",
+    exploreLede: "\u3053\u306e\u30ef\u30fc\u30af\u30b9\u30da\u30fc\u30b9\u3067\u516c\u958b\u3055\u308c\u3066\u3044\u308b signal stream \u3067\u3059\u3002",
+    exploreHeroNote:
+      "\u3053\u306e\u753b\u9762\u306b\u306f\u3001\u73fe\u5728\u306e\u30b9\u30c8\u30ec\u30fc\u30b8 runtime \u304b\u3089 Explore \u3078\u516c\u958b\u3055\u308c\u305f\u30d5\u30a9\u30fc\u30e0\u3060\u3051\u3092\u8868\u793a\u3057\u307e\u3059\u3002",
+    exploreScanningWorkspace: "\u30ef\u30fc\u30af\u30b9\u30da\u30fc\u30b9\u306e stream \u3092\u8aad\u307f\u8fbc\u307f\u4e2d...",
+    exploreSignalsInView: (params) => `\u8868\u793a\u4e2d\u306e signal: ${params?.count ?? 0}`,
+    exploreListedHere: (params) => `\u63b2\u8f09\u4e2d: ${params?.count ?? 0}`,
+    exploreTabsAria: "Signal \u63a2\u7d22\u30bf\u30d6",
+    exploreTabTrending: "\u30c8\u30ec\u30f3\u30c9",
+    exploreTabNew: "\u65b0\u7740",
+    exploreTabActive: "\u30a2\u30af\u30c6\u30a3\u30d6",
+    exploreTabAi: "AI",
+    exploreTabGovernance: "\u30ac\u30d0\u30ca\u30f3\u30b9",
+    exploreTabAnonymous: "\u533f\u540d",
+    exploreTabEncrypted: "\u6697\u53f7\u5316",
+    exploreRefreshingFeed: "\u30d5\u30a3\u30fc\u30c9\u3092\u66f4\u65b0\u4e2d",
+    exploreVisibleCount: (params) => `\u8868\u793a\u4e2d: ${params?.count ?? 0}`,
+    exploreEmptyTitle: "\u3053\u306e\u30ef\u30fc\u30af\u30b9\u30da\u30fc\u30b9\u306b\u63b2\u8f09\u4e2d\u306e signal \u306f\u307e\u3060\u3042\u308a\u307e\u305b\u3093\u3002",
+    exploreEmptyPrivateCopy:
+      "\u975e\u516c\u958b\u3084\u76f4\u63a5\u30ea\u30f3\u30af\u306e\u30d5\u30a9\u30fc\u30e0\u306f\u3001\u8868\u793a\u7bc4\u56f2\u3092 Public Explore \u306b\u5909\u66f4\u3059\u308b\u307e\u3067 Explore \u306b\u306f\u51fa\u307e\u305b\u3093\u3002",
+    exploreEmptyRuntimeCopy:
+      "Explore \u306b\u516c\u958b\u3057\u305f stream \u306f\u3001\u73fe\u5728\u306e storage runtime \u304b\u3089\u53d6\u5f97\u3067\u304d\u308b\u3068\u3053\u3053\u306b\u8868\u793a\u3055\u308c\u307e\u3059\u3002",
+    exploreCreateSignal: "\u30b7\u30b0\u30ca\u30eb\u3092\u4f5c\u6210",
+    exploreDefaultDescription: "\u65b0\u3057\u3044 feedback \u3092\u53d7\u3051\u4ed8\u3051\u4e2d\u306e\u516c\u958b signal stream \u3067\u3059\u3002",
+    explorePublic: "\u516c\u958b",
+    exploreListed: "\u63b2\u8f09\u4e2d",
+    exploreUnlisted: "\u672a\u63b2\u8f09",
+    exploreEncrypted: "\u6697\u53f7\u5316",
+    exploreNoDeadline: "\u671f\u9650\u306a\u3057",
+    exploreClosed: "\u53d7\u4ed8\u7d42\u4e86",
+    exploreDeadline: "\u671f\u9650",
+    exploreResponses: "\u56de\u7b54",
+    exploreResponsesShort: (params) => `${params?.count ?? 0} \u56de\u7b54`,
+    exploreCreator: "\u4f5c\u6210\u8005",
+    exploreLatest: "\u6700\u65b0",
+    exploreCategory: "\u30ab\u30c6\u30b4\u30ea",
+    exploreActivity: "\u30a2\u30af\u30c6\u30a3\u30d3\u30c6\u30a3",
+    exploreRoadmapCount: (params) => `${params?.count ?? 0} roadmap`,
+    exploreSignalNote: "Signal \u30e1\u30e2",
+    exploreLive: "\u30e9\u30a4\u30d6",
+    exploreOpenSignal: "Signal \u3092\u958b\u304f",
+    exploreLocalCreator: "\u30ed\u30fc\u30ab\u30eb\u4f5c\u6210\u8005",
+    exploreDeleteConfirm: (params) => `\u3053\u306e\u30d6\u30e9\u30a6\u30b6\u304b\u3089\u300c${params?.title ?? "\u7121\u984c\u306e\u30d5\u30a9\u30fc\u30e0"}\u300d\u3092\u524a\u9664\u3057\u307e\u3059\u304b\uff1f`,
+    explorePurposeBug: "\u30d0\u30b0\u5831\u544a",
+    explorePurposeFeature: "\u6a5f\u80fd\u8981\u671b",
+    explorePurposeSurvey: "\u30b5\u30fc\u30d9\u30a4",
+    explorePurposeApplication: "\u7533\u8acb",
+    exploreCategoryAll: "\u3059\u3079\u3066",
+    exploreCategoryBug: "\u30d0\u30b0",
+    exploreCategoryFeature: "\u6a5f\u80fd",
+    exploreCategorySurvey: "\u30b5\u30fc\u30d9\u30a4",
+    exploreCategoryApplication: "\u7533\u8acb",
+    explorePreviewPrefix: "AI \u30a4\u30f3\u30b5\u30a4\u30c8:",
+    explorePreviewChannelSuffix: "\u30c1\u30e3\u30f3\u30cd\u30eb\u3002",
+    explorePreviewFreshActivity: "\u65b0\u3057\u3044\u30a2\u30af\u30c6\u30a3\u30d3\u30c6\u30a3\u3092\u691c\u51fa\u3057\u307e\u3057\u305f\u3002",
+    explorePreviewActiveFlow: "Signal \u30d5\u30ed\u30fc\u306f\u7d99\u7d9a\u3057\u3066\u52d5\u3044\u3066\u3044\u307e\u3059\u3002",
+    explorePreviewQuietStream: "\u9759\u304b\u306a stream \u3067\u3059\u3002\u65b0\u3057\u3044\u5165\u529b\u3092\u53d7\u3051\u4ed8\u3051\u3066\u3044\u307e\u3059\u3002",
+    explorePreviewHighVolume: "\u9ad8\u30dc\u30ea\u30e5\u30fc\u30e0\u306e relay \u3067\u3059\u3002",
+    explorePreviewSteadyTraffic: "\u5b89\u5b9a\u3057\u305f\u6295\u7a3f\u304c\u7d9a\u3044\u3066\u3044\u307e\u3059\u3002",
+    explorePreviewEarlyCluster: "\u521d\u671f\u306e signal cluster \u304c\u5f62\u6210\u3055\u308c\u3066\u3044\u307e\u3059\u3002",
+    explorePreviewAwaitingFirstSignal: "\u516c\u958b\u4e2d\u3067\u3001\u6700\u521d\u306e signal \u3092\u5f85\u3063\u3066\u3044\u307e\u3059\u3002",
     encryptionProjectMissing:
       "Seal \u6697\u53f7\u5316\u304c\u6709\u52b9\u3067\u3059\u304c\u3001\u3053\u306e\u30d5\u30a9\u30fc\u30e0\u306f\u30d7\u30ed\u30b8\u30a7\u30af\u30c8\u306b\u7d10\u3065\u3044\u3066\u3044\u307e\u305b\u3093\u3002\u975e\u516c\u958b\u6295\u7a3f\u306b\u306f project-backed Seal policy \u304c\u5fc5\u8981\u3067\u3059\u3002",
     encryptionSealIncomplete:
@@ -3017,7 +3524,7 @@ const messages = {
 interface I18nContextValue {
   language: Language;
   setLanguage: (language: Language) => void;
-  t: (key: keyof (typeof messages)["en"], params?: Params) => string;
+  t: (key: string, params?: Params) => string;
   fieldTypeLabel: (type: FieldType) => string;
 }
 
@@ -3040,14 +3547,7 @@ const fieldTypeKeys: Record<FieldType, keyof (typeof messages)["en"]> = {
 };
 
 export function I18nProvider({ children }: PropsWithChildren) {
-  const [language, setLanguage] = useState<Language>("en");
-
-  useEffect(() => {
-    const stored = window.localStorage.getItem(STORAGE_KEY);
-    if (stored === "en" || stored === "ja") {
-      setLanguage(stored);
-    }
-  }, []);
+  const [language, setLanguage] = useState<Language>(getInitialLanguage);
 
   useEffect(() => {
     window.localStorage.setItem(STORAGE_KEY, language);
@@ -3055,14 +3555,21 @@ export function I18nProvider({ children }: PropsWithChildren) {
   }, [language]);
 
   const value = useMemo<I18nContextValue>(() => {
-    function t(key: keyof (typeof messages)["en"], params?: Params) {
-      const message = messages[language][key];
+    function updateLanguage(nextLanguage: Language) {
+      window.localStorage.setItem(LANGUAGE_MANUAL_KEY, "true");
+      setLanguage(nextLanguage);
+    }
+
+    function t(key: string, params?: Params) {
+      const catalog = messages[language] as Record<keyof (typeof messages)["en"], TranslationValue>;
+      const fallbackCatalog = messages.en as Record<string, TranslationValue>;
+      const message = catalog[key as keyof (typeof messages)["en"]] ?? fallbackCatalog[key] ?? key;
       return typeof message === "function" ? message(params) : message;
     }
 
     return {
       language,
-      setLanguage,
+      setLanguage: updateLanguage,
       t,
       fieldTypeLabel(type) {
         return t(fieldTypeKeys[type]);

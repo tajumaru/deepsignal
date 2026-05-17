@@ -41,6 +41,7 @@ interface SignalStatusBadgesProps {
   showEncrypted?: boolean;
   storageLabel?: string;
   className?: string;
+  density?: "full" | "notable";
 }
 
 function joinClassNames(...values: Array<string | false | null | undefined>) {
@@ -389,10 +390,12 @@ export function SignalStatusBadges({
   showEncrypted = false,
   storageLabel,
   className,
+  density = "full",
 }: SignalStatusBadgesProps) {
   const badges: BadgeDescriptor[] = [];
+  const showFullSet = density === "full";
 
-  if (submission.status === "unread") {
+  if (showFullSet && submission.status === "unread") {
     badges.push({
       key: "unread",
       tone: "unread",
@@ -402,8 +405,10 @@ export function SignalStatusBadges({
     });
   }
 
-  badges.push(getPriorityBadge(submission.priority));
-  badges.push(getCategoryBadge(category));
+  if (showFullSet) {
+    badges.push(getPriorityBadge(submission.priority));
+    badges.push(getCategoryBadge(category));
+  }
 
   if (pendingSui) {
     badges.push({
@@ -445,7 +450,7 @@ export function SignalStatusBadges({
     });
   }
 
-  if (showEncrypted && submission.isEncrypted) {
+  if (showFullSet && showEncrypted && submission.isEncrypted) {
     badges.push({
       key: "encrypted",
       tone: "encrypted",
@@ -455,7 +460,7 @@ export function SignalStatusBadges({
     });
   }
 
-  if (submission.status === "unread") {
+  if (showFullSet && submission.status === "unread") {
     badges.push({
       key: "new",
       tone: "new",
@@ -473,6 +478,10 @@ export function SignalStatusBadges({
       title: "Stored locally only",
       Icon: HardDriveIcon,
     });
+  }
+
+  if (badges.length === 0) {
+    return null;
   }
 
   return (

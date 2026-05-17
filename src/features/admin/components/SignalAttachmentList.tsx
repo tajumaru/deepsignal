@@ -1,5 +1,5 @@
-import { BlobLink } from "../../../components/BlobLink";
 import { SignalMetaChip } from "../../../components/SignalMetaChip";
+import { StorageProof } from "../../../components/StorageProof";
 import { getAttachmentDownloadHref, type AttachmentPreviewState } from "../../../hooks/useAttachmentPreviews";
 import { isLocalFallbackBlob } from "../../../lib/signalInbox";
 import type { Submission } from "../../../types";
@@ -7,13 +7,11 @@ import type { Submission } from "../../../types";
 interface SignalAttachmentListProps {
   attachments: Submission["attachments"];
   attachmentPreviews: Record<string, AttachmentPreviewState>;
-  verifyOnWalrusLabel: string;
 }
 
 export function SignalAttachmentList({
   attachments,
   attachmentPreviews,
-  verifyOnWalrusLabel,
 }: SignalAttachmentListProps) {
   if (attachments.length === 0) {
     return null;
@@ -57,9 +55,11 @@ export function SignalAttachmentList({
                 <SignalMetaChip type="blob" value={attachment.blobId} />
               )}
               {attachment.storage !== "inline" && !isLocalFallbackBlob(attachment.blobId) ? (
-                <BlobLink
+                <StorageProof
                   blobId={attachment.blobId}
-                  label={verifyOnWalrusLabel}
+                  proof={attachment.walrusProof}
+                  fallbackSize={attachment.size}
+                  compact
                 />
               ) : null}
               {downloadHref ? (

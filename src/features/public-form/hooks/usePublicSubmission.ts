@@ -478,6 +478,7 @@ export function usePublicSubmission({
         status: "uploaded",
         progress: 100,
         walrusBlobId: upload.blobId,
+        walrusProof: upload.walrusProof,
         error: undefined,
       }));
     } catch (error) {
@@ -878,6 +879,7 @@ export function usePublicSubmission({
                   originalName: attachment.fileName,
                   originalType: attachment.mimeType || "application/octet-stream",
                   encoding: "seal-base64-v1",
+                  walrusProof: attachment.walrusProof,
                 });
                 continue;
               }
@@ -917,6 +919,7 @@ export function usePublicSubmission({
                 originalName: attachment.fileName,
                 originalType: attachment.mimeType || "application/octet-stream",
                 encoding: requiresProtectedAttachment ? "seal-base64-v1" : undefined,
+                walrusProof: attachment.walrusProof,
               });
             }
             plainAnswers[field.id] = validUploads.map((attachment) => attachment.fileName).join(", ");
@@ -987,9 +990,11 @@ export function usePublicSubmission({
         isEncrypted: Boolean(form.encryptSubmissions),
         blobId: result.blobId,
         encryptedBlobId: "encryptedBlobId" in result ? result.encryptedBlobId : undefined,
+        encryptedWalrusProof: "encryptedWalrusProof" in result ? result.encryptedWalrusProof : undefined,
         encryptedPayload: undefined,
         sealIdentity: "sealIdentity" in result ? result.sealIdentity : undefined,
         receiptBlobId: result.blobId ?? undefined,
+        walrusProof: result.walrusProof,
       } satisfies Submission;
       const notices = [];
       if (manifestBlobId && isLocalFallbackBlob(savedSubmission.encryptedBlobId ?? savedSubmission.blobId)) {

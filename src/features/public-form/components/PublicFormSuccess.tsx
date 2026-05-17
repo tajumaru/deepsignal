@@ -1,5 +1,5 @@
-import { BlobLink } from "../../../components/BlobLink";
 import { SignalMetaChip, SignalMetaRow } from "../../../components/SignalMetaChip";
+import { StorageProof } from "../../../components/StorageProof";
 import { getEncryptedPayloadAvailabilityLabel, hasDedicatedEncryptedPayloadBlob } from "../../../lib/encryptionDisplay";
 import { getSubmissionRespondentMeta } from "../../../lib/respondentMeta";
 import { getStorageDetailLabels, isLocalFallbackBlob } from "../../../lib/signalInbox";
@@ -74,11 +74,15 @@ export function PublicFormSuccess({
               </div>
             ) : null}
             <SignalMetaRow label="Submission Blob ID" type="blob" value={submitted.blobId}>
-              <BlobLink blobId={submitted.blobId} label="Verify on Walrus" />
+              <StorageProof blobId={submitted.blobId} proof={submitted.walrusProof} compact />
             </SignalMetaRow>
             {hasDedicatedEncryptedPayloadBlob(submitted) ? (
               <SignalMetaRow label="Private Signal Blob" type="seal" value={submitted.encryptedBlobId}>
-                <BlobLink blobId={submitted.encryptedBlobId} label="Verify on Walrus" />
+                <StorageProof
+                  blobId={submitted.encryptedBlobId}
+                  proof={submitted.encryptedWalrusProof ?? submitted.walrusProof}
+                  compact
+                />
               </SignalMetaRow>
             ) : null}
             {submitted.isEncrypted && !hasDedicatedEncryptedPayloadBlob(submitted) ? (
@@ -113,7 +117,12 @@ export function PublicFormSuccess({
                         <>
                           <SignalMetaChip type="blob" value={attachment.blobId} />
                           <div className="signal-meta-row-value">
-                            <BlobLink blobId={attachment.blobId} label="Verify on Walrus" />
+                            <StorageProof
+                              blobId={attachment.blobId}
+                              proof={attachment.walrusProof}
+                              fallbackSize={attachment.size}
+                              compact
+                            />
                           </div>
                         </>
                       )}

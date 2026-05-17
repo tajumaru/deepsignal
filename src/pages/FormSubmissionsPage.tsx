@@ -13,6 +13,7 @@ import { PrivateSignalUnlockCard } from "../components/PrivateSignalUnlockCard";
 import { RichTextContent } from "../components/RichText";
 import { SignalStatusBadges } from "../components/SignalStatusBadges";
 import { SignalMetaChip } from "../components/SignalMetaChip";
+import { StorageProof } from "../components/StorageProof";
 import { CsvExportConfirmationModal } from "../features/admin/components/CsvExportConfirmationModal";
 import { usePrivateSignalDecrypt } from "../features/admin/hooks/usePrivateSignalDecrypt";
 import { useAccessControl } from "../hooks/useAccessControl";
@@ -265,6 +266,24 @@ export function FormSubmissionsPage() {
     selectedSignalId,
     setToast,
     decryptFailedLabel: t("decryptFailed"),
+    decryptMessages: {
+      loadingSealRuntime: t("decryptStatusLoadingSealRuntime"),
+      validatingAccessPolicy: t("decryptStatusValidatingAccessPolicy"),
+      requestingWalletApproval: t("decryptStatusRequestingWalletApproval"),
+      decryptingEncryptedPayload: t("decryptStatusDecryptingEncryptedPayload"),
+      signalUnlocked: t("decryptStatusSignalUnlocked"),
+      connectWalletToUnlockSignal: t("decryptErrorConnectWalletToUnlockSignal"),
+      unauthorizedWalletDecrypt: t("decryptErrorUnauthorizedWallet"),
+      sealSessionExpired: t("decryptErrorSealSessionExpired"),
+      walletApprovalRequiredToDecrypt: t("decryptErrorWalletApprovalRequired"),
+      encryptionPolicyMismatch: t("decryptErrorEncryptionPolicyMismatch"),
+      manifestMismatchDetected: t("decryptErrorManifestMismatch"),
+      blobFetchFailed: t("decryptErrorBlobFetchFailed"),
+      encryptedPayloadMissing: t("decryptErrorEncryptedPayloadMissing"),
+      sealRuntimeUnavailable: t("decryptErrorSealRuntimeUnavailable"),
+      encryptedPayloadNotFound: t("decryptErrorEncryptedPayloadNotFound"),
+      walletVerifiedPrivateSignalUnlocked: t("decryptToastWalletVerifiedPrivateSignalUnlocked"),
+    },
   });
   const csvExportCount =
     csvExportScope === "filtered"
@@ -455,7 +474,12 @@ export function FormSubmissionsPage() {
                       <SignalMetaChip type="blob" value={attachment.blobId} />
                     )}
                     {attachment.storage !== "inline" && !isLocalFallbackBlob(attachment.blobId) ? (
-                      <BlobLink blobId={attachment.blobId} label={t("verifyOnWalrus")} />
+                      <StorageProof
+                        blobId={attachment.blobId}
+                        proof={attachment.walrusProof}
+                        fallbackSize={attachment.size}
+                        compact
+                      />
                     ) : null}
                     {downloadHref ? (
                       <a
@@ -773,6 +797,18 @@ export function FormSubmissionsPage() {
           diagnostics={decryptDiagnostics}
           disabledReason={unlockDisabledReason}
           actionDisabled={Boolean(unlockDisabledReason)}
+          supportContent={
+            <>
+              <strong>{t("privateSignalUnlockReviewTriageNote")}</strong>
+              <p className="muted">Seal Runtime: {sealRuntimeLabel}</p>
+              <p className="muted">
+                {t("walletApprovalReuseNotice", { minutes: realSealSessionTtlMinutes })}
+              </p>
+              {unlockInteractionNotice ? (
+                <p className="warning-text" role="status" aria-live="polite">{unlockInteractionNotice}</p>
+              ) : null}
+            </>
+          }
         >
           {!isLocalFallbackBlob(selectedSubmission.encryptedBlobId) ? (
             <BlobLink
@@ -781,19 +817,6 @@ export function FormSubmissionsPage() {
             />
           ) : null}
         </PrivateSignalUnlockCard>
-        <div className="review-unlock-context">
-          <strong>Unlock private signal to review and triage.</strong>
-          <p className="muted">Seal Runtime: {sealRuntimeLabel}</p>
-          <p className="muted">
-            {t("walletApprovalReuseNotice", { minutes: realSealSessionTtlMinutes })}
-          </p>
-          {decryptStatusMessage ? (
-            <p className="muted" role="status" aria-live="polite">{decryptStatusMessage}</p>
-          ) : null}
-          {unlockInteractionNotice ? (
-            <p className="warning-text" role="status" aria-live="polite">{unlockInteractionNotice}</p>
-          ) : null}
-        </div>
       </div>
     );
   };
@@ -825,6 +848,11 @@ export function FormSubmissionsPage() {
                       <span className="signal-meta-inline-label">Blob ID</span>
                       <SignalMetaChip type="blob" value={selectedSubmissionEncryptedBlobId} />
                     </span>
+                    <StorageProof
+                      blobId={selectedSubmissionEncryptedBlobId}
+                      proof={selectedSubmission.encryptedWalrusProof ?? selectedSubmission.walrusProof}
+                      compact
+                    />
                   </>
                 ) : null}
               </div>
@@ -850,7 +878,7 @@ export function FormSubmissionsPage() {
               <span />
               <span />
             </div>
-            <strong>Unlock private signal to review and triage.</strong>
+            <strong>{t("privateSignalUnlockReviewTriageNote")}</strong>
             <p className="muted">{t("encryptedFeedbackHidden")}</p>
           </div>
         )}
@@ -1027,12 +1055,11 @@ export function FormSubmissionsPage() {
             <span>{t("submissionBlobIdLabel")}</span>
             <div className="signal-meta-row-value">
               {selectedSubmission.blobId ? (
-                <>
-                  <SignalMetaChip type="blob" value={selectedSubmission.blobId} />
-                  {!isLocalFallbackBlob(selectedSubmission.blobId) ? (
-                    <BlobLink blobId={selectedSubmission.blobId} label={t("verifyOnWalrus")} />
-                  ) : null}
-                </>
+                <StorageProof
+                  blobId={selectedSubmission.blobId}
+                  proof={selectedSubmission.walrusProof}
+                  compact
+                />
               ) : (
                 <strong>{t("notAvailable")}</strong>
               )}
@@ -1044,7 +1071,11 @@ export function FormSubmissionsPage() {
               <div className="signal-meta-row-value">
                 <SignalMetaChip type="blob" value={selectedSubmissionEncryptedBlobId} />
                 {selectedSubmissionEncryptedBlobStoredOnWalrus ? (
-                  <BlobLink blobId={selectedSubmissionEncryptedBlobId} label={t("verifyOnWalrus")} />
+                  <StorageProof
+                    blobId={selectedSubmissionEncryptedBlobId}
+                    proof={selectedSubmission.encryptedWalrusProof ?? selectedSubmission.walrusProof}
+                    compact
+                  />
                 ) : null}
               </div>
             </div>

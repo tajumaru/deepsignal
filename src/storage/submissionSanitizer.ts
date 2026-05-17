@@ -20,6 +20,7 @@ function createAttachmentMarker(attachment: SubmissionAttachment): SubmissionAtt
     storage: attachment.storage,
     encrypted: attachment.encrypted === true ? true : undefined,
     encoding: attachment.encoding,
+    walrusProof: attachment.walrusProof,
   };
 }
 

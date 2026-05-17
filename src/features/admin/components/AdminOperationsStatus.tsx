@@ -16,7 +16,6 @@ export function AdminOperationsStatus({
 }: AdminOperationsStatusProps) {
   return (
     <OperationsStatusRail
-      title="Review Queue"
       items={items}
       nextActionLabel={nextActionLabel}
       nextActionDetail={nextActionDetail}

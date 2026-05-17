@@ -40,16 +40,22 @@ function useWalletChrome(walletAvailable: boolean) {
 
   if (!walletAvailable && !walletRequested) {
     return {
-      nav: null,
+      inboxNav: null,
+      accessNav: null,
       connect: <WalletConnectPlaceholder onActivate={() => setWalletRequested(true)} />,
     };
   }
 
   if (walletAvailable) {
     return {
-      nav: (
+      inboxNav: (
         <Suspense fallback={null}>
-          <WalletNav />
+          <WalletNav section="inbox" />
+        </Suspense>
+      ),
+      accessNav: (
+        <Suspense fallback={null}>
+          <WalletNav section="access" />
         </Suspense>
       ),
       connect: (
@@ -61,10 +67,17 @@ function useWalletChrome(walletAvailable: boolean) {
   }
 
   return {
-    nav: (
+    inboxNav: (
       <WalletSurface fallback={null}>
         <Suspense fallback={null}>
-          <WalletNav />
+          <WalletNav section="inbox" />
+        </Suspense>
+      </WalletSurface>
+    ),
+    accessNav: (
+      <WalletSurface fallback={null}>
+        <Suspense fallback={null}>
+          <WalletNav section="access" />
         </Suspense>
       </WalletSurface>
     ),
@@ -80,6 +93,7 @@ function useWalletChrome(walletAvailable: boolean) {
 
 function MobileAppBottomNav() {
   const location = useLocation();
+  const { t } = useI18n();
   const inboxActive =
     location.pathname.startsWith("/admin") ||
     location.pathname.startsWith("/dashboard");
@@ -88,19 +102,19 @@ function MobileAppBottomNav() {
     <nav className="mobile-inbox-bottom-nav" aria-label="Mobile workspace navigation">
       <Link className={inboxActive ? "is-active" : undefined} to="/dashboard">
         <span aria-hidden="true">In</span>
-        <span>Inbox</span>
+        <span>{t("navMobileInbox")}</span>
       </Link>
       <NavLink to="/explore">
         <span aria-hidden="true">Ex</span>
-        <span>Explore</span>
+        <span>{t("navExplore")}</span>
       </NavLink>
       <CreateFormLink>
         <span aria-hidden="true">+</span>
-        <span>New Signal</span>
+        <span>{t("navMobileNewSignal")}</span>
       </CreateFormLink>
       <NavLink to="/admin/access">
         <span aria-hidden="true">Set</span>
-        <span>Settings</span>
+        <span>{t("navMobileSettings")}</span>
       </NavLink>
     </nav>
   );
@@ -136,10 +150,11 @@ export function AppShell({ children, walletAvailable = false, chrome = "full" }:
         {publicChrome ? null : (
           <nav className="topnav">
             <NavLink to="/">{t("navHome")}</NavLink>
-            <NavLink to="/explore">{t("navExplore")}</NavLink>
-            {walletChrome.nav}
             <CreateFormLink nav>{t("navCreateForm")}</CreateFormLink>
-            <NavLink to="/troubleshooting">Troubleshooting</NavLink>
+            {walletChrome.inboxNav}
+            <NavLink to="/explore">{t("navExplore")}</NavLink>
+            {walletChrome.accessNav}
+            <NavLink to="/troubleshooting">{t("navTroubleshooting")}</NavLink>
           </nav>
         )}
         <div className="topbar-actions">

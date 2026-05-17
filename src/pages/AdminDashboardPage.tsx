@@ -18,6 +18,7 @@ import { ShareCard } from "../components/ShareCard";
 import { SignalClusterPanel } from "../components/SignalClusterPanel";
 import { SignalStatusBadges } from "../components/SignalStatusBadges";
 import { SignalMetaChip, SignalMetaRow } from "../components/SignalMetaChip";
+import { StorageProof } from "../components/StorageProof";
 import { AdminOperationsStatus } from "../features/admin/components/AdminOperationsStatus";
 import { AdminToast } from "../features/admin/components/AdminToast";
 import { CsvExportConfirmationModal } from "../features/admin/components/CsvExportConfirmationModal";
@@ -98,7 +99,22 @@ function formatAccessLabel(roleLabel: string) {
   return `${roleLabel} access`;
 }
 
-function getActivityActionLabel(action: ActivityAction) {
+function getActivityActionLabel(action: ActivityAction, t: TranslationFn) {
+  switch (action) {
+    case "form_created":
+      return t("activityActionCreated");
+    case "form_published":
+      return t("activityActionPublished");
+    case "form_updated":
+      return t("activityActionUpdated");
+    case "form_archived":
+      return t("activityActionArchived");
+    default:
+      return t("activityActionUpdated");
+  }
+}
+
+function getActivityActionClass(action: ActivityAction) {
   switch (action) {
     case "form_created":
       return "created";
@@ -118,47 +134,49 @@ function WorkspaceActivityLog({
 }: {
   events: ActivityEvent[];
 }) {
+  const { t } = useI18n();
   return (
     <section className="panel workspace-activity-panel">
       <div className="signal-workbench-header">
         <div className="signal-workbench-copy">
-          <p className="eyebrow">Activity</p>
-          <h2>Workspace Activity</h2>
-          <p className="muted">Owner/Admin audit trail for signal form operations.</p>
+          <p className="eyebrow">{t("activityEyebrow")}</p>
+          <h2>{t("workspaceActivityTitle")}</h2>
+          <p className="muted">{t("workspaceActivityBody")}</p>
         </div>
         <div className="signal-workbench-summary">
-          <span className="signal-chip">{events.length} events</span>
+          <span className="signal-chip">{t("activityEventsCount", { count: events.length })}</span>
         </div>
       </div>
 
       {events.length === 0 ? (
         <EmptyState>
-          <h2>No activity yet.</h2>
-          <p>No activity yet. Create or publish a signal to start the audit trail.</p>
+          <h2>{t("activityEmptyTitle")}</h2>
+          <p>{t("activityEmptyBody")}</p>
         </EmptyState>
       ) : (
-        <div className="workspace-activity-timeline" aria-label="Workspace Activity">
+        <div className="workspace-activity-timeline" aria-label={t("workspaceActivityTitle")}>
           {events.map((event) => {
-            const actionLabel = getActivityActionLabel(event.action);
+            const actionClass = getActivityActionClass(event.action);
+            const actionLabel = getActivityActionLabel(event.action, t);
             const txUrl = getSuiTransactionUrl(event.txDigest);
             return (
               <article key={event.id} className="workspace-activity-row">
-                <span className={`workspace-activity-dot is-${actionLabel}`} aria-hidden="true" />
+                <span className={`workspace-activity-dot is-${actionClass}`} aria-hidden="true" />
                 <div className="workspace-activity-main">
                   <div className="workspace-activity-line">
                     <strong title={event.actorAddress || undefined}>
-                      {event.actorAddress ? shortAddress(event.actorAddress) : "Unknown actor"}
+                      {event.actorAddress ? shortAddress(event.actorAddress) : t("unknownActor")}
                     </strong>
-                    <span className={`activity-badge is-${actionLabel}`}>{actionLabel}</span>
+                    <span className={`activity-badge is-${actionClass}`}>{actionLabel}</span>
                     <span>{event.formTitleSnapshot}</span>
                   </div>
                   <div className="workspace-activity-meta">
                     <time dateTime={event.createdAt}>{formatDate(event.createdAt)}</time>
                     <span>{event.actorRole}</span>
-                    <span>form {shortAddress(event.formId)}</span>
+                    <span>{t("activityFormId", { id: shortAddress(event.formId) })}</span>
                     {txUrl ? (
                       <a href={txUrl} target="_blank" rel="noreferrer">
-                        Sui explorer
+                        {t("suiExplorerLabel")}
                       </a>
                     ) : null}
                   </div>
@@ -172,18 +190,40 @@ function WorkspaceActivityLog({
   );
 }
 
-function getReviewLifecycleSteps(submission?: Submission | null, unlocked = false) {
+function getTriageStatusTranslationKey(triageStatus: Submission["triageStatus"]): Parameters<TranslationFn>[0] {
+  switch (triageStatus) {
+    case "investigating":
+      return "triageStatusInvestigating";
+    case "planned":
+      return "triageStatusPlanned";
+    case "in_progress":
+      return "triageStatusInProgress";
+    case "fixed":
+      return "triageStatusFixed";
+    case "closed":
+      return "triageStatusClosed";
+    case "new":
+    default:
+      return "triageStatusNew";
+  }
+}
+
+function getLocalizedTriageStatusLabel(triageStatus: Submission["triageStatus"], t: TranslationFn) {
+  return t(getTriageStatusTranslationKey(triageStatus));
+}
+
+function getReviewLifecycleSteps(t: TranslationFn, submission?: Submission | null, unlocked = false) {
   const hasSubmission = Boolean(submission);
   const isReviewed = submission?.status === "read" || submission?.status === "archived";
   const isTriaged = Boolean(submission?.triageStatus && submission.triageStatus !== "new");
   const isResolved = submission?.status === "archived" || submission?.triageStatus === "fixed";
 
   return [
-    { label: "Incoming", active: hasSubmission, complete: hasSubmission },
-    { label: "Protected", active: Boolean(submission?.isEncrypted), complete: Boolean(submission && (!submission.isEncrypted || unlocked)) },
-    { label: "Needs review", active: submission?.status === "unread", complete: isReviewed },
-    { label: "Triaged", active: isTriaged, complete: isTriaged },
-    { label: "Resolved", active: isResolved, complete: isResolved },
+    { label: t("lifecycleIncoming"), active: hasSubmission, complete: hasSubmission },
+    { label: t("lifecycleProtected"), active: Boolean(submission?.isEncrypted), complete: Boolean(submission && (!submission.isEncrypted || unlocked)) },
+    { label: t("lifecycleNeedsReview"), active: submission?.status === "unread", complete: isReviewed },
+    { label: t("lifecycleTriaged"), active: isTriaged, complete: isTriaged },
+    { label: t("lifecycleResolved"), active: isResolved, complete: isResolved },
   ];
 }
 
@@ -579,6 +619,24 @@ export function AdminDashboardPage() {
     selectedSignalId,
     setToast,
     decryptFailedLabel: t("decryptFailed"),
+    decryptMessages: {
+      loadingSealRuntime: t("decryptStatusLoadingSealRuntime"),
+      validatingAccessPolicy: t("decryptStatusValidatingAccessPolicy"),
+      requestingWalletApproval: t("decryptStatusRequestingWalletApproval"),
+      decryptingEncryptedPayload: t("decryptStatusDecryptingEncryptedPayload"),
+      signalUnlocked: t("decryptStatusSignalUnlocked"),
+      connectWalletToUnlockSignal: t("decryptErrorConnectWalletToUnlockSignal"),
+      unauthorizedWalletDecrypt: t("decryptErrorUnauthorizedWallet"),
+      sealSessionExpired: t("decryptErrorSealSessionExpired"),
+      walletApprovalRequiredToDecrypt: t("decryptErrorWalletApprovalRequired"),
+      encryptionPolicyMismatch: t("decryptErrorEncryptionPolicyMismatch"),
+      manifestMismatchDetected: t("decryptErrorManifestMismatch"),
+      blobFetchFailed: t("decryptErrorBlobFetchFailed"),
+      encryptedPayloadMissing: t("decryptErrorEncryptedPayloadMissing"),
+      sealRuntimeUnavailable: t("decryptErrorSealRuntimeUnavailable"),
+      encryptedPayloadNotFound: t("decryptErrorEncryptedPayloadNotFound"),
+      walletVerifiedPrivateSignalUnlocked: t("decryptToastWalletVerifiedPrivateSignalUnlocked"),
+    },
   });
   const roleLabel = getRoleLabel(capabilityProfile);
   const activityActorRole = getActivityActorRole(capabilityProfile);
@@ -965,9 +1023,9 @@ export function AdminDashboardPage() {
       ? null
       : selectedRecord.submission.status === "unread"
         ? {
-            eyebrow: "Next step",
-            title: "Mark the signal as reviewed",
-            detail: "You can read the signal now. Change the status to Read, then decide whether it should move toward the public roadmap.",
+            eyebrow: t("nextStepLabel"),
+            title: t("markSignalReviewedTitle"),
+            detail: t("markSignalReviewedDetail"),
             cta: (
               <button
                 type="button"
@@ -980,15 +1038,15 @@ export function AdminDashboardPage() {
                   })
                 }
               >
-                Mark reviewed
+                {t("markReviewed")}
               </button>
             ),
           }
         : selectedRecord.submission.pendingOnchainRegistration
           ? {
-              eyebrow: "Next step",
-              title: "Optional proof: register on Sui",
-              detail: "Review is already possible. Use this only when you want the signal recorded as an onchain proof entry.",
+              eyebrow: t("nextStepLabel"),
+              title: t("optionalProofRegisterSuiTitle"),
+              detail: t("optionalProofRegisterSuiDetail"),
               cta: (
                 <button
                   type="button"
@@ -1002,9 +1060,9 @@ export function AdminDashboardPage() {
             }
           : !isSelectedRecordOnRoadmap
             ? {
-                eyebrow: "Next step",
-                title: "Decide whether this belongs on the roadmap",
-                detail: "If this signal is ready for external visibility, move it into a roadmap status such as Planned, In Progress, or Fixed.",
+                eyebrow: t("nextStepLabel"),
+                title: t("decideRoadmapTitle"),
+                detail: t("decideRoadmapDetail"),
                 cta: (
                   <button
                     type="button"
@@ -1012,15 +1070,15 @@ export function AdminDashboardPage() {
                     disabled={saving}
                     onClick={() => void handleMoveToRoadmap()}
                   >
-                    Move to Public Roadmap
+                    {t("moveToPublicRoadmap")}
                   </button>
                 ),
               }
             : {
-                eyebrow: "Next step",
-                title: "This signal is already in review flow",
-                detail: "You can refine notes, tags, or roadmap status, but no urgent action is required right now.",
-                cta: selectedRoadmapUrl ? <Link className="ghost-button" to={selectedRoadmapUrl}>Open Public Roadmap</Link> : null,
+                eyebrow: t("nextStepLabel"),
+                title: t("signalAlreadyInReviewFlowTitle"),
+                detail: t("signalAlreadyInReviewFlowDetail"),
+                cta: selectedRoadmapUrl ? <Link className="ghost-button" to={selectedRoadmapUrl}>{t("openPublicRoadmap")}</Link> : null,
               };
   const firstProjectForm = selectedProjectForms[0] ?? null;
   const firstVisibleForm = statusForms[0] ?? null;
@@ -1030,25 +1088,25 @@ export function AdminDashboardPage() {
     !hasAdminAccess
       ? accessibleForms.length === 0
         ? {
-            label: "Create your first signal inbox",
-            detail: "Create a wallet-owned form. Project controls stay hidden until this wallet has AdminCap or OwnerCap.",
-            cta: <CreateFormLink className="primary-button">Create Signal</CreateFormLink>,
+            label: t("createFirstSignalInbox"),
+            detail: t("createWalletOwnedInboxDetail"),
+            cta: <CreateFormLink className="primary-button">{t("navCreateForm")}</CreateFormLink>,
           }
         : allSignals.length === 0
           ? {
-              label: "Send a test signal",
-              detail: "Open your public form and submit one signal so this inbox has something to process.",
-              cta: firstVisibleForm ? <Link className="primary-button" to={getPublicFormPath(firstVisibleForm.id, firstVisibleForm.manifestBlobId)}>Open Public Link</Link> : null,
+              label: t("sendTestSignal"),
+              detail: t("sendTestSignalOwnFormDetail"),
+              cta: firstVisibleForm ? <Link className="primary-button" to={getPublicFormPath(firstVisibleForm.id, firstVisibleForm.manifestBlobId)}>{t("openPublicLink")}</Link> : null,
             }
           : {
-              label: "Review signal inbox",
-              detail: "This wallet can review its own forms. Project management requires AdminCap or OwnerCap.",
+              label: t("reviewSignalInbox"),
+              detail: t("walletCanReviewOwnFormsDetail"),
               cta: null,
             }
     : !selectedProject
       ? {
-          label: "Connect a project",
-          detail: "Create a new project or connect an existing one before you create or review private signals.",
+          label: t("connectProject"),
+          detail: t("connectProjectBeforeReviewDetail"),
           cta: (
             <div className="inline-actions">
               {hasAdminAccess ? (
@@ -1057,7 +1115,7 @@ export function AdminDashboardPage() {
                   className={`primary-button ${shouldHighlightCreateProjectCta ? "create-project-cta-highlight" : ""}`}
                   onClick={() => revealProjectTools("create")}
                 >
-                  Create project
+                  {t("createProjectButton")}
                 </button>
               ) : null}
               <button
@@ -1072,20 +1130,20 @@ export function AdminDashboardPage() {
         }
       : selectedProjectForms.length === 0
         ? {
-            label: "Create your first signal inbox",
-            detail: "Publish one protected form for this project so reviewers have signals to read.",
-            cta: <CreateFormLink className="primary-button">Create Signal</CreateFormLink>,
+            label: t("createFirstSignalInbox"),
+            detail: t("publishProtectedFormDetail"),
+            cta: <CreateFormLink className="primary-button">{t("navCreateForm")}</CreateFormLink>,
           }
         : selectedProjectSignals.length === 0
           ? {
-              label: "Send a test signal",
-              detail: "Open the public form and submit one signal so the review inbox has something to process.",
-              cta: firstProjectForm ? <Link className="primary-button" to={getPublicFormPath(firstProjectForm.id, firstProjectForm.manifestBlobId)}>Open Public Link</Link> : null,
+              label: t("sendTestSignal"),
+              detail: t("sendTestSignalToInboxDetail"),
+              cta: firstProjectForm ? <Link className="primary-button" to={getPublicFormPath(firstProjectForm.id, firstProjectForm.manifestBlobId)}>{t("openPublicLink")}</Link> : null,
             }
           : firstProtectedSignal && !detailAnswers
             ? {
-                label: "Unlock private signal",
-                detail: "Open the next protected signal, then decrypt it with reviewer wallet access.",
+                label: t("unlockPrivateSignal"),
+                detail: t("unlockPrivateSignalDetail"),
                 cta: firstProtectedSignal ? (
                 <button
                   type="button"
@@ -1098,14 +1156,14 @@ export function AdminDashboardPage() {
                     setSelectedSignalId(firstProtectedSignal.submission.id);
                   }}
                 >
-                    Open Protected Signal
+                    {t("openProtectedSignal")}
                   </button>
                 ) : null,
               }
             : roadmapReadySignals.length === 0
                 ? {
-                    label: "Move to Public Roadmap",
-                    detail: "Choose one reviewed signal and place it into a roadmap status such as Planned or In Progress.",
+                    label: t("moveToPublicRoadmap"),
+                    detail: t("moveToPublicRoadmapDetail"),
                     cta: selectedRecord ? (
                       <button
                         type="button"
@@ -1113,14 +1171,14 @@ export function AdminDashboardPage() {
                         disabled={saving}
                         onClick={() => void handleMoveToRoadmap()}
                       >
-                        Move to Public Roadmap
+                        {t("moveToPublicRoadmap")}
                       </button>
                     ) : null,
                   }
                 : pendingSignals.length > 0
                   ? {
                       label: t("registerProofOnSui"),
-                      detail: "Review is already complete. Use Sui only when you want to add optional proof records.",
+                      detail: t("optionalProofCompleteDetail"),
                       cta: (
                         <button
                           type="button"
@@ -1133,9 +1191,9 @@ export function AdminDashboardPage() {
                       ),
                     }
                 : {
-                    label: "Review signal inbox",
-                    detail: "The queue is healthy. Keep reviewing new signals and update roadmap entries as they change.",
-                    cta: selectedRoadmapUrl ? <Link className="primary-button" to={selectedRoadmapUrl}>Open Public Roadmap</Link> : null,
+                    label: t("reviewSignalInbox"),
+                    detail: t("queueHealthyDetail"),
+                    cta: selectedRoadmapUrl ? <Link className="primary-button" to={selectedRoadmapUrl}>{t("openPublicRoadmap")}</Link> : null,
                   };
 
   const activeReviewDraft: ReviewDraft | null = useMemo(
@@ -1172,26 +1230,26 @@ export function AdminDashboardPage() {
   const reviewProgressBaseSteps = [
     {
       id: "read",
-      label: "Read signal",
-      detail: "Inspect the original feedback and mark it read.",
+      label: t("reviewReadSignalTitle"),
+      detail: t("reviewReadSignalDetail"),
       complete: isDraftRead,
     },
     {
       id: "classify",
-      label: "Review & classify",
-      detail: "Set review state, triage status, priority, and signal value.",
+      label: t("reviewClassifyTitle"),
+      detail: t("reviewClassifyDetail"),
       complete: isDraftClassified,
     },
     {
       id: "notes",
-      label: "Add reviewer notes",
-      detail: "Capture the internal context needed for follow-up.",
+      label: t("reviewNotesTitle"),
+      detail: t("reviewNotesDetail"),
       complete: hasDraftNotes,
     },
     {
       id: "roadmap",
-      label: "Decide roadmap visibility",
-      detail: "Choose whether safe metadata should appear on the public roadmap.",
+      label: t("reviewRoadmapTitle"),
+      detail: t("reviewRoadmapDetail"),
       complete: isDraftOnRoadmap,
     },
   ] satisfies Array<{ id: string; label: string; detail: string; complete: boolean }>;
@@ -1208,8 +1266,8 @@ export function AdminDashboardPage() {
   });
   const currentReviewStep =
     reviewProgressSteps.find((step) => step.state === "current") ?? reviewProgressSteps[reviewProgressSteps.length - 1];
-  const currentReviewPhaseLabel = currentReviewStep?.label ?? "Review complete";
-  const nextReviewActionLabel = currentReviewStep?.state === "current" ? currentReviewStep.detail : "Review workflow is complete.";
+  const currentReviewPhaseLabel = currentReviewStep?.label ?? t("reviewComplete");
+  const nextReviewActionLabel = currentReviewStep?.state === "current" ? currentReviewStep.detail : t("reviewWorkflowComplete");
 
   function patchReviewDraft(patch: Partial<ReviewDraft>) {
     if (!selectedRecord || isReviewWorkbenchLocked) {
@@ -1449,14 +1507,14 @@ export function AdminDashboardPage() {
         : t("allExportShort");
   const csvExportIncludesDecryptedData = Boolean(detailAnswers && csvExportCount > 0);
   const reviewSaveStatusLabel: Record<ReviewSaveStatus, string> = {
-    idle: "Ready to save",
+    idle: t("reviewSaveReadyToSave"),
     saving: t("reviewSaveSaving"),
-    saved: "Saved",
+    saved: t("reviewSaveSaved"),
     skipped: t("reviewSaveSkipped"),
     error: t("reviewSaveError"),
   };
   const reviewStatusPillState = hasReviewDraftChanges ? "editing" : reviewSaveStatus;
-  const reviewStatusPillLabel = hasReviewDraftChanges ? "Unsaved draft" : reviewSaveStatusLabel[reviewSaveStatus];
+  const reviewStatusPillLabel = hasReviewDraftChanges ? t("reviewSaveUnsavedDraft") : reviewSaveStatusLabel[reviewSaveStatus];
 
   function getCsvFilterSnapshot() {
     return {
@@ -2029,6 +2087,12 @@ export function AdminDashboardPage() {
                     const isLocalOnlySignal = storageLabel === "Stored locally only";
                     const isSelectedSignal = selectedRecord?.submission.id === submission.id;
                     const isUnlockedSignal = isSelectedSignal && Boolean(detailAnswers);
+                    const hasNotableStatusBadge =
+                      isPendingSui ||
+                      isSelectedForSui ||
+                      isLocalOnlySignal ||
+                      Boolean(submission.clusterId) ||
+                      submission.attachments.length > 0;
                     return (
                       <div
                         key={submission.id}
@@ -2089,23 +2153,18 @@ export function AdminDashboardPage() {
                                 : t("statusArchived")}
                           </span>
                         </div>
-                        <div className="signal-card-lifecycle" aria-label="Signal lifecycle">
-                          {getReviewLifecycleSteps(submission, isUnlockedSignal).map((step) => (
-                            <span key={step.label} className={step.complete ? "is-complete" : step.active ? "is-active" : ""}>
-                              <i aria-hidden="true" />
-                              {step.label}
-                            </span>
-                          ))}
-                        </div>
-                        <div className="signal-badge-row signal-badge-row-compact">
-                          <SignalStatusBadges
-                            submission={submission}
-                            category={category}
-                            pendingSui={isPendingSui}
-                            selectedForSui={isSelectedForSui}
-                            storageLabel={isLocalOnlySignal ? storageLabel : undefined}
-                          />
-                        </div>
+                        {hasNotableStatusBadge ? (
+                          <div className="signal-badge-row signal-badge-row-compact">
+                            <SignalStatusBadges
+                              submission={submission}
+                              category={category}
+                              pendingSui={isPendingSui}
+                              selectedForSui={isSelectedForSui}
+                              storageLabel={isLocalOnlySignal ? storageLabel : undefined}
+                              density="notable"
+                            />
+                          </div>
+                        ) : null}
                         {isPendingSui ? (
                           <div className="signal-card-actions">
                             <button
@@ -2143,9 +2202,9 @@ export function AdminDashboardPage() {
             <article ref={signalDetailPanelRef} className="panel signal-detail-column">
               {!selectedRecord ? (
                 <EmptyState variant="abyss" animated={false} showVisual={false}>
-                  <p className="eyebrow">Signal detail</p>
-                  <h2>No signal selected</h2>
-                  <p>Choose a signal from the inbox to review it, unlock the private message, and move it toward the Public Roadmap.</p>
+                  <p className="eyebrow">{t("signalDetailTitle")}</p>
+                  <h2>{t("noSignalSelectedTitle")}</h2>
+                  <p>{t("noSignalSelectedBody")}</p>
                 </EmptyState>
               ) : (
                 <>
@@ -2255,11 +2314,14 @@ export function AdminDashboardPage() {
                               <span className="signal-chip signal-chip-accent">{t("sealEncryptedCreatorAdminOnly")}</span>
                               {selectedRecordEncryptedBlobStoredOnWalrus && selectedRecordEncryptedBlobId ? (
                                 <>
-                                  <span className="signal-chip signal-chip-soft">{t("storedOnWalrus")}</span>
-                                  <span className="signal-meta-inline">
-                                    <span className="signal-meta-inline-label">{t("blobIdLabel")}</span>
-                                    <SignalMetaChip type="blob" value={selectedRecordEncryptedBlobId} />
-                                  </span>
+                                  <StorageProof
+                                    blobId={selectedRecordEncryptedBlobId}
+                                    proof={
+                                      selectedRecord.submission.encryptedWalrusProof ??
+                                      selectedRecord.submission.walrusProof
+                                    }
+                                    compact
+                                  />
                                 </>
                               ) : null}
                             </div>
@@ -2312,7 +2374,6 @@ export function AdminDashboardPage() {
                         <SignalAttachmentList
                           attachments={detailAttachments}
                           attachmentPreviews={attachmentPreviews}
-                          verifyOnWalrusLabel={t("verifyOnWalrus")}
                         />
                       )}
                       </div>
@@ -2331,26 +2392,23 @@ export function AdminDashboardPage() {
                         diagnostics={decryptDiagnostics}
                         disabledReason={selectedRecordUnlockDisabledReason}
                         actionDisabled={Boolean(selectedRecordUnlockDisabledReason)}
+                        supportContent={
+                          <>
+                            <strong>{t("privateSignalUnlockReviewNote")}</strong>
+                            <p className="muted">
+                              {t("walletApprovalReuseNotice", { minutes: realSealSessionTtlMinutes })}
+                            </p>
+                          </>
+                        }
                       >
                         {!isLocalFallbackBlob(selectedRecord.submission.encryptedBlobId) ? (
-                          <BlobLink
+                          <StorageProof
                             blobId={selectedRecord.submission.encryptedBlobId}
-                            label={t("verifyOnWalrus")}
+                            proof={selectedRecord.submission.encryptedWalrusProof ?? selectedRecord.submission.walrusProof}
+                            compact
                           />
                         ) : null}
                       </PrivateSignalUnlockCard>
-                    ) : null}
-
-                    {selectedRecordNeedsDecrypt ? (
-                      <div className="review-unlock-context">
-                        <strong>Unlock private signal to review.</strong>
-                        <p className="muted">
-                          {t("walletApprovalReuseNotice", { minutes: realSealSessionTtlMinutes })}
-                        </p>
-                        {decryptStatusMessage ? (
-                          <p className="muted" role="status" aria-live="polite">{decryptStatusMessage}</p>
-                        ) : null}
-                      </div>
                     ) : null}
 
                     <section
@@ -2359,7 +2417,7 @@ export function AdminDashboardPage() {
                     >
                       <div className="review-controls-header">
                         <div>
-                          <p className="eyebrow">Review Workbench</p>
+                          <p className="eyebrow">{t("reviewWorkbenchEyebrow")}</p>
                           <h3>{currentReviewPhaseLabel}</h3>
                           <p className="review-helper-copy">{nextReviewActionLabel}</p>
                         </div>
@@ -2373,11 +2431,11 @@ export function AdminDashboardPage() {
                             disabled={isReviewWorkbenchLocked || saving || !hasReviewDraftChanges}
                             onClick={() => void handleSaveReviewDraft()}
                           >
-                            {saving ? t("reviewSaveSaving") : "Save review"}
+                            {saving ? t("reviewSaveSaving") : t("saveReview")}
                           </button>
                         </div>
                       </div>
-                      <div className="review-progress-rail" aria-label="Review progress">
+                      <div className="review-progress-rail" aria-label={t("reviewProgressAriaLabel")}>
                         {reviewProgressSteps.map((step) => (
                           <div key={step.id} className={`review-progress-step is-${step.state}`}>
                             <span className="review-progress-marker" aria-hidden="true">
@@ -2387,8 +2445,8 @@ export function AdminDashboardPage() {
                           </div>
                         ))}
                       </div>
-                      <div className="review-lifecycle-strip" aria-label="Signal lifecycle">
-                        {getReviewLifecycleSteps(selectedRecord.submission, Boolean(detailAnswers)).map((step) => (
+                      <div className="review-lifecycle-strip" aria-label={t("signalLifecycleAriaLabel")}>
+                        {getReviewLifecycleSteps(t, selectedRecord.submission, Boolean(detailAnswers)).map((step) => (
                           <span key={step.label} className={step.complete ? "is-complete" : step.active ? "is-active" : ""}>
                             <i aria-hidden="true" />
                             {step.label}
@@ -2397,8 +2455,8 @@ export function AdminDashboardPage() {
                       </div>
                       <div className="review-stage-card">
                         <div className="review-stage-header">
-                          <p className="eyebrow">Step 1</p>
-                          <strong>Read signal</strong>
+                          <p className="eyebrow">{t("stepLabel", { count: 1 })}</p>
+                          <strong>{t("reviewReadSignalTitle")}</strong>
                         </div>
                         <div className="review-action-bar">
                           <button
@@ -2413,7 +2471,7 @@ export function AdminDashboardPage() {
                               })
                             }
                           >
-                            Mark as read
+                            {t("markAsRead")}
                           </button>
                           <button
                             type="button"
@@ -2428,148 +2486,152 @@ export function AdminDashboardPage() {
                               })
                             }
                           >
-                            Mark as handled
+                            {t("markAsHandled")}
                           </button>
                         </div>
                       </div>
-                      <div className="review-stage-header">
-                        <p className="eyebrow">Step 2</p>
-                        <strong>Review & classify</strong>
-                      </div>
-                      <div className="review-field-grid">
-                        <div className="review-badge-field">
-                          <span>Review State</span>
-                          <div className="review-badge-options" role="group" aria-label="Review State">
-                            {[
-                              { value: "unread", label: t("statusUnread") },
-                              { value: "read", label: t("statusRead") },
-                              { value: "archived", label: t("statusArchived") },
-                            ].map((option) => {
-                              const isSelected = activeReviewDraft?.status === option.value;
-
-                              return (
-                                <button
-                                  key={option.value}
-                                  type="button"
-                                  className={`review-state-badge is-status-${option.value} ${isSelected ? "is-active" : ""}`}
-                                  aria-pressed={isSelected}
-                                  disabled={isReviewWorkbenchLocked || isSelected}
-                                  onClick={() => patchReviewDraft({ status: option.value as Submission["status"] })}
-                                >
-                                  {option.label}
-                                </button>
-                              );
-                            })}
-                          </div>
+                      <div className="review-stage-card">
+                        <div className="review-stage-header">
+                          <p className="eyebrow">{t("stepLabel", { count: 2 })}</p>
+                          <strong>{t("reviewClassifyTitle")}</strong>
                         </div>
-                        <div className="review-badge-field">
-                          <span>Triage Status</span>
-                          <div className="review-badge-options" role="group" aria-label="Triage Status">
-                            {TRIAGE_STATUS_OPTIONS.map((option) => {
-                              const isSelected = activeReviewDraft?.triageStatus === option.value;
-
-                              return (
-                                <button
-                                  key={option.value}
-                                  type="button"
-                                  className={`review-state-badge is-triage-${option.value} ${isSelected ? "is-active" : ""}`}
-                                  aria-pressed={isSelected}
-                                  disabled={isReviewWorkbenchLocked || isSelected}
-                                  onClick={() => patchReviewDraft({ triageStatus: option.value })}
-                                >
-                                  {option.label}
-                                </button>
-                              );
-                            })}
-                          </div>
-                        </div>
-                        <div className="review-badge-field">
-                          <span>{t("priority")}</span>
-                          <div className="review-badge-options" role="group" aria-label={t("priority")}>
-                            {[
-                              { value: "low", label: t("priorityLow") },
-                              { value: "medium", label: t("priorityMedium") },
-                              { value: "high", label: t("priorityHigh") },
-                            ].map((option) => {
-                              const isSelected = activeReviewDraft?.priority === option.value;
-
-                              return (
-                                <button
-                                  key={option.value}
-                                  type="button"
-                                  className={`review-state-badge is-priority-${option.value} ${isSelected ? "is-active" : ""}`}
-                                  aria-pressed={isSelected}
-                                  disabled={isReviewWorkbenchLocked || isSelected}
-                                  onClick={() => patchReviewDraft({ priority: option.value as Submission["priority"] })}
-                                >
-                                  {option.label}
-                                </button>
-                              );
-                            })}
-                          </div>
-                        </div>
-                        <div className="review-badge-field">
-                          <span>Signal Value</span>
-                          <div className="review-badge-options" role="group" aria-label="Signal Value">
-                            <button
-                              type="button"
-                              className={`review-state-badge is-value-none ${activeReviewDraft?.signalValue === undefined ? "is-active" : ""}`}
-                              aria-pressed={activeReviewDraft?.signalValue === undefined}
-                              disabled={isReviewWorkbenchLocked || activeReviewDraft?.signalValue === undefined}
-                              onClick={() => patchReviewDraft({ signalValue: undefined })}
-                            >
-                              Not scored
-                            </button>
-                            <div className="review-star-rating" aria-label="Signal Value rating">
-                              {[1, 2, 3, 4, 5].map((value) => {
-                                const currentValue = activeReviewDraft?.signalValue ?? 0;
-                                const isSelected = activeReviewDraft?.signalValue === value;
-                                const isFilled = currentValue >= value;
+                        <div className="review-field-grid">
+                          <div className="review-badge-field">
+                            <span>{t("reviewStateLabel")}</span>
+                            <div className="review-badge-options" role="group" aria-label={t("reviewStateLabel")}>
+                              {[
+                                { value: "unread", label: t("statusUnread") },
+                                { value: "read", label: t("statusRead") },
+                                { value: "archived", label: t("statusArchived") },
+                              ].map((option) => {
+                                const isSelected = activeReviewDraft?.status === option.value;
 
                                 return (
                                   <button
-                                    key={value}
+                                    key={option.value}
                                     type="button"
-                                    className={`review-star-button ${isFilled ? "is-filled" : ""} ${isSelected ? "is-selected" : ""}`}
-                                    aria-label={`Signal Value ${value}`}
+                                    className={`review-state-badge is-status-${option.value} ${isSelected ? "is-active" : ""}`}
                                     aria-pressed={isSelected}
                                     disabled={isReviewWorkbenchLocked || isSelected}
-                                    onClick={() => patchReviewDraft({ signalValue: value })}
+                                    onClick={() => patchReviewDraft({ status: option.value as Submission["status"] })}
                                   >
-                                    ★
+                                    {option.label}
                                   </button>
                                 );
                               })}
                             </div>
                           </div>
+                          <div className="review-badge-field">
+                            <span>{t("triageStatusLabel")}</span>
+                            <div className="review-badge-options" role="group" aria-label={t("triageStatusLabel")}>
+                              {TRIAGE_STATUS_OPTIONS.map((option) => {
+                                const isSelected = activeReviewDraft?.triageStatus === option.value;
+
+                                return (
+                                  <button
+                                    key={option.value}
+                                    type="button"
+                                    className={`review-state-badge is-triage-${option.value} ${isSelected ? "is-active" : ""}`}
+                                    aria-pressed={isSelected}
+                                    disabled={isReviewWorkbenchLocked || isSelected}
+                                    onClick={() => patchReviewDraft({ triageStatus: option.value })}
+                                  >
+                                    {getLocalizedTriageStatusLabel(option.value, t)}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                          <div className="review-badge-field">
+                            <span>{t("priority")}</span>
+                            <div className="review-badge-options" role="group" aria-label={t("priority")}>
+                              {[
+                                { value: "low", label: t("priorityLow") },
+                                { value: "medium", label: t("priorityMedium") },
+                                { value: "high", label: t("priorityHigh") },
+                              ].map((option) => {
+                                const isSelected = activeReviewDraft?.priority === option.value;
+
+                                return (
+                                  <button
+                                    key={option.value}
+                                    type="button"
+                                    className={`review-state-badge is-priority-${option.value} ${isSelected ? "is-active" : ""}`}
+                                    aria-pressed={isSelected}
+                                    disabled={isReviewWorkbenchLocked || isSelected}
+                                    onClick={() => patchReviewDraft({ priority: option.value as Submission["priority"] })}
+                                  >
+                                    {option.label}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                          <div className="review-badge-field">
+                            <span>{t("signalValueLabel")}</span>
+                            <div className="review-badge-options" role="group" aria-label={t("signalValueLabel")}>
+                              <button
+                                type="button"
+                                className={`review-state-badge is-value-none ${activeReviewDraft?.signalValue === undefined ? "is-active" : ""}`}
+                                aria-pressed={activeReviewDraft?.signalValue === undefined}
+                                disabled={isReviewWorkbenchLocked || activeReviewDraft?.signalValue === undefined}
+                                onClick={() => patchReviewDraft({ signalValue: undefined })}
+                              >
+                                {t("notScored")}
+                              </button>
+                              <div className="review-star-rating" aria-label={t("signalValueRatingLabel")}>
+                                {[1, 2, 3, 4, 5].map((value) => {
+                                  const currentValue = activeReviewDraft?.signalValue ?? 0;
+                                  const isSelected = activeReviewDraft?.signalValue === value;
+                                  const isFilled = currentValue >= value;
+
+                                  return (
+                                    <button
+                                      key={value}
+                                      type="button"
+                                      className={`review-star-button ${isFilled ? "is-filled" : ""} ${isSelected ? "is-selected" : ""}`}
+                                      aria-label={t("signalValueRatingOption", { value })}
+                                      aria-pressed={isSelected}
+                                      disabled={isReviewWorkbenchLocked || isSelected}
+                                      onClick={() => patchReviewDraft({ signalValue: value })}
+                                    >
+                                      ★
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          </div>
                         </div>
                       </div>
-                      <div className="review-stage-header">
-                        <p className="eyebrow">Step 3</p>
-                        <strong>Add reviewer notes</strong>
+                      <div className="review-stage-card">
+                        <div className="review-stage-header">
+                          <p className="eyebrow">{t("stepLabel", { count: 3 })}</p>
+                          <strong>{t("reviewNotesTitle")}</strong>
+                        </div>
+                        <label className="review-select">
+                          <span>{t("internalNote")}</span>
+                          <textarea
+                            rows={5}
+                            value={activeReviewDraft?.notes ?? ""}
+                            disabled={isReviewWorkbenchLocked}
+                            onChange={(event) => patchReviewDraft({ notes: event.target.value })}
+                            placeholder={t("captureReviewNotes")}
+                          />
+                        </label>
+                        <p className="review-action-helper">
+                          {t("reviewUnsavedDraftHelper")}
+                        </p>
                       </div>
-                      <label className="review-select">
-                        <span>Internal note</span>
-                        <textarea
-                          rows={5}
-                          value={activeReviewDraft?.notes ?? ""}
-                          disabled={isReviewWorkbenchLocked}
-                          onChange={(event) => patchReviewDraft({ notes: event.target.value })}
-                          placeholder={t("captureReviewNotes")}
-                        />
-                      </label>
-                      <p className="review-action-helper">
-                        Changes stay as an unsaved draft until you save. Public visibility is decided separately below.
-                      </p>
-                      <div className="review-roadmap-strip">
+                      <div className="review-stage-card review-roadmap-strip">
                         <div>
-                          <p className="eyebrow">Step 4 · Public roadmap decision</p>
+                          <p className="eyebrow">{t("publicRoadmapDecisionStep")}</p>
                           <strong>
-                            Roadmap status:{" "}
-                            {getTriageStatusLabel(draftTriageStatus)}
+                            {t("roadmapStatusLabel")}:{" "}
+                            {getLocalizedTriageStatusLabel(draftTriageStatus, t)}
                           </strong>
                           <p className="muted">
-                            Only signals set to Planned, In Progress, or Fixed appear publicly, with safe metadata only.
+                            {t("roadmapVisibilityHelper")}
                           </p>
                         </div>
                         <div className="review-action-bar review-roadmap-actions">
@@ -2579,7 +2641,7 @@ export function AdminDashboardPage() {
                             disabled={isReviewWorkbenchLocked || saving || isDraftOnRoadmap}
                             onClick={() => void handleMoveToRoadmap()}
                           >
-                            {isDraftOnRoadmap ? "Visible on roadmap" : "Publish safe metadata"}
+                            {isDraftOnRoadmap ? t("visibleOnRoadmap") : t("publishSafeMetadata")}
                           </button>
                           {isSelectedRecordOnRoadmap ? (
                             <Link className="ghost-button" to={selectedRoadmapUrl}>
@@ -2747,9 +2809,10 @@ export function AdminDashboardPage() {
                           </SignalMetaRow>
                           <SignalMetaRow label={t("submissionBlobIdLabel")} type="blob" value={selectedRecord.submission.blobId} emptyLabel={t("notAvailable")}>
                             {!isLocalFallbackBlob(selectedRecord.submission.blobId) ? (
-                              <BlobLink
+                              <StorageProof
                                 blobId={selectedRecord.submission.blobId}
-                                label={t("verifyOnWalrus")}
+                                proof={selectedRecord.submission.walrusProof}
+                                compact
                               />
                             ) : null}
                           </SignalMetaRow>
@@ -2760,9 +2823,10 @@ export function AdminDashboardPage() {
                               value={selectedRecord.submission.encryptedBlobId}
                             >
                               {!isLocalFallbackBlob(selectedRecord.submission.encryptedBlobId) ? (
-                                <BlobLink
+                                <StorageProof
                                   blobId={selectedRecord.submission.encryptedBlobId}
-                                  label={t("verifyOnWalrus")}
+                                  proof={selectedRecord.submission.encryptedWalrusProof ?? selectedRecord.submission.walrusProof}
+                                  compact
                                 />
                               ) : null}
                             </SignalMetaRow>
@@ -2795,9 +2859,11 @@ export function AdminDashboardPage() {
                                       <SignalMetaChip type="blob" value={attachment.blobId} />
                                     )}
                                     {attachment.storage !== "inline" && !isLocalFallbackBlob(attachment.blobId) ? (
-                                      <BlobLink
+                                      <StorageProof
                                         blobId={attachment.blobId}
-                                        label={t("verifyOnWalrus")}
+                                        proof={attachment.walrusProof}
+                                        fallbackSize={attachment.size}
+                                        compact
                                       />
                                     ) : null}
                                   </div>

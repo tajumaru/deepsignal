@@ -243,7 +243,7 @@ export function SignalStreamsNav({
             </span>
           ) : null}
         </div>
-        <div className="stream-list">
+        <div className="stream-list stream-group stream-group-flow">
           {flowStreams.map((stream) => (
             <StreamButton
               key={stream.id}
@@ -260,7 +260,7 @@ export function SignalStreamsNav({
             />
           ) : null}
         </div>
-        <div className="stream-subsection">
+        <div className="stream-subsection stream-group stream-group-chain">
           <p className="eyebrow">{t("blockchainActionsTitle")}</p>
           <div className="stream-list stream-list-compact">
             {blockchainStreams.map((stream) => (
@@ -331,9 +331,11 @@ export function SignalStreamsNav({
                     className="ghost-button form-stream-export-button"
                     onClick={() => onExportAllFormCsv(form.id)}
                     disabled={form.submissionCount === 0}
+                    aria-label={t("exportAllFormCsvAria")}
+                    title={t("exportAllFormCsvAria")}
                   >
                     <CsvFileIcon />
-                    {t("exportAllFormCsv")}
+                    <span>{t("exportAllFormCsv")}</span>
                   </button>
                 </div>
               </div>
