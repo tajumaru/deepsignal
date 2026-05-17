@@ -33,6 +33,20 @@ export function canReview(profile?: CapabilityProfile | null) {
   return Boolean(profile?.hasOwnerCap || profile?.hasAdminCap || profile?.hasReviewerCap);
 }
 
+export function canAttemptPrivateSignalDecrypt(
+  form: FormSchema | null,
+  currentAddress?: string | null,
+  profile?: CapabilityProfile | null,
+) {
+  if (!form || !currentAddress) {
+    return false;
+  }
+  if (profile?.isConfigured) {
+    return canReview(profile) || getFormAccessState(form, currentAddress) !== "denied";
+  }
+  return canAccessForm(form, currentAddress);
+}
+
 export function canIssueAdmin(profile?: CapabilityProfile | null) {
   return Boolean(profile?.hasOwnerCap);
 }

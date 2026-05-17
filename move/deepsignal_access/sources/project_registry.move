@@ -24,6 +24,7 @@ module deepsignal::project_registry {
         admins: vector<address>,
         forms_count: u64,
         signals_count: u64,
+        next_form_id: u64,
         created_at: u64,
         forms: vector<Form>,
         signals: vector<SignalReceipt>,
@@ -142,6 +143,7 @@ module deepsignal::project_registry {
                 admins: vector[],
                 forms_count: 0,
                 signals_count: 0,
+                next_form_id: 0,
                 created_at,
                 forms: vector[],
                 signals: vector[],
@@ -272,22 +274,6 @@ module deepsignal::project_registry {
         };
         assert!(false, E_SIGNAL_NOT_FOUND);
         0
-    }
-
-    fun next_form_id(forms: &vector<Form>): u64 {
-        let mut index = 0;
-        let total = vector::length(forms);
-        let mut next_id = 0;
-
-        while (index < total) {
-            let form = vector::borrow(forms, index);
-            if (form.form_id >= next_id) {
-                next_id = form.form_id + 1;
-            };
-            index = index + 1;
-        };
-
-        next_id
     }
 
     fun form_has_signals(signals: &vector<SignalReceipt>, form_id: u64): bool {
@@ -430,7 +416,8 @@ module deepsignal::project_registry {
         let sender = sui::tx_context::sender(ctx);
         assert_project_admin(project, sender);
 
-        let form_id = next_form_id(&project.forms);
+        let form_id = project.next_form_id;
+        project.next_form_id = form_id + 1;
         let created_at = sui::tx_context::epoch_timestamp_ms(ctx);
         let form = Form {
             form_id,
@@ -655,6 +642,7 @@ module deepsignal::project_registry {
             admins: _,
             forms_count: _,
             signals_count: _,
+            next_form_id: _,
             created_at: _,
             forms: _,
             signals: _,
@@ -679,12 +667,13 @@ module deepsignal::project_registry {
         let (registry, owner_cap) = access_control::new_test_registry(owner, owner_ctx);
         let outsider_ctx = &mut sui::tx_context::new_from_hint(non_admin, 2, 7, 1001, 0);
 
-        create_project_by_owner(
+        let forbidden_owner_cap = create_project_by_owner(
             &owner_cap,
             &registry,
             std::string::utf8(b"forbidden"),
             outsider_ctx,
         );
+        destroy_project_owner_cap(forbidden_owner_cap);
 
         access_control::destroy_test_owner_cap(owner_cap);
         access_control::destroy_test_registry(registry);
@@ -1023,7 +1012,8 @@ module deepsignal::project_registry {
             submitter_ctx,
         );
 
-        delete_form(&mut project, 0, owner_ctx);
+        let delete_ctx = &mut sui::tx_context::new_from_hint(owner, 24, 7, 2002, 0);
+        delete_form(&mut project, 0, delete_ctx);
 
         destroy_project_owner_cap(project_owner_cap);
         destroy_project(project);

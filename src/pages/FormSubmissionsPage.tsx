@@ -1,7 +1,6 @@
 import {
   useCurrentAccount,
   useSignAndExecuteTransaction,
-  useSignPersonalMessage,
   useSuiClient,
 } from "@mysten/dapp-kit";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -15,15 +14,14 @@ import { RichTextContent } from "../components/RichText";
 import { SignalStatusBadges } from "../components/SignalStatusBadges";
 import { SignalMetaChip } from "../components/SignalMetaChip";
 import { CsvExportConfirmationModal } from "../features/admin/components/CsvExportConfirmationModal";
+import { usePrivateSignalDecrypt } from "../features/admin/hooks/usePrivateSignalDecrypt";
 import { useAccessControl } from "../hooks/useAccessControl";
 import { getAttachmentDownloadHref, useAttachmentPreviews } from "../hooks/useAttachmentPreviews";
 import { getSealRuntimeStatus } from "../crypto/cryptoFactory";
-import { isDecryptDiagnosticError, type DecryptDiagnosticContext } from "../crypto/decryptDiagnostics";
-import { REAL_SEAL_SESSION_TTL_MIN } from "../crypto/sealPayload";
 import { useI18n } from "../i18n";
 import { formatAnswerText } from "../lib/answerFormatting";
 import { isAttachmentFieldType, isLongTextLikeField } from "../lib/fieldTypes";
-import { getReviewAccessState } from "../lib/adminAccess";
+import { canAttemptPrivateSignalDecrypt, getReviewAccessState } from "../lib/adminAccess";
 import { exportSubmissionJson, exportSummaryJson } from "../lib/export";
 import {
   buildExportMetadata,
@@ -52,7 +50,6 @@ import { getTriageStatusLabel, TRIAGE_STATUS_OPTIONS } from "../lib/signalOps";
 import {
   normalizeForm,
   normalizeSubmission,
-  resolveSubmissionAnswers,
   storageAdapter,
 } from "../lib/storage";
 import { buildSurveySummary } from "../lib/surveySummary";
@@ -71,39 +68,6 @@ type StreamId =
   | "feature"
   | "survey"
   | "archived";
-
-type DecryptUiState =
-  | "locked"
-  | "waiting_wallet_approval"
-  | "decrypting"
-  | "decrypted"
-  | "failed";
-
-function getDecryptStatusMessage(
-  status:
-    | "loading_seal_runtime"
-    | "validating_access_policy"
-    | "waiting_wallet_approval"
-    | "decrypting_encrypted_payload"
-    | "signal_unlocked"
-    | "decrypting_private_signal"
-    | "finishing",
-) {
-  switch (status) {
-    case "loading_seal_runtime":
-      return "Loading Seal runtime...";
-    case "validating_access_policy":
-      return "Validating access policy...";
-    case "waiting_wallet_approval":
-      return "Waiting for wallet approval...";
-    case "decrypting_encrypted_payload":
-    case "decrypting_private_signal":
-      return "Decrypting private signal...";
-    case "signal_unlocked":
-    case "finishing":
-      return "Finishing...";
-  }
-}
 
 function matchesStream(submission: Submission, streamId: StreamId) {
   const category = inferSignalCategory(submission);
@@ -152,7 +116,6 @@ export function FormSubmissionsPage() {
   const { language, t } = useI18n();
   const account = useCurrentAccount();
   const suiClient = useSuiClient();
-  const signPersonalMessage = useSignPersonalMessage();
   const updateSignalStatusTx = useSignAndExecuteTransaction();
   const {
     capabilityProfile,
@@ -191,14 +154,6 @@ export function FormSubmissionsPage() {
   const [selectedSignalId, setSelectedSignalId] = useState(submissionId);
   const [selectedStreamId, setSelectedStreamId] = useState<StreamId>("all");
   const [search, setSearch] = useState("");
-  const [detailAnswers, setDetailAnswers] = useState<Record<string, unknown> | null>(null);
-  const [detailAttachments, setDetailAttachments] = useState<Submission["attachments"]>([]);
-  const [detailLegacyUnencrypted, setDetailLegacyUnencrypted] = useState(false);
-  const [decrypting, setDecrypting] = useState(false);
-  const [decryptUiState, setDecryptUiState] = useState<DecryptUiState>("locked");
-  const [decryptStatusMessage, setDecryptStatusMessage] = useState("");
-  const [decryptError, setDecryptError] = useState("");
-  const [decryptDiagnostics, setDecryptDiagnostics] = useState<DecryptDiagnosticContext | null>(null);
   const [unlockInteractionNotice, setUnlockInteractionNotice] = useState("");
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [saveError, setSaveError] = useState("");
@@ -216,15 +171,7 @@ export function FormSubmissionsPage() {
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState<{ tone: "success" | "error"; message: string } | null>(null);
   const saveQueueRef = useRef(Promise.resolve());
-  const decryptInFlightRef = useRef(false);
-  const decryptRequestIdRef = useRef(0);
-  const activeDecryptRequestRef = useRef<{ requestId: number; submissionId: string } | null>(null);
-  const selectedSignalIdRef = useRef(selectedSignalId);
   const previousSelectedSubmissionIdRef = useRef<string | null>(null);
-
-  useEffect(() => {
-    selectedSignalIdRef.current = selectedSignalId;
-  }, [selectedSignalId]);
 
   useEffect(() => {
     async function loadInbox() {
@@ -277,6 +224,48 @@ export function FormSubmissionsPage() {
     submissions.find((submission) => submission.id === selectedSignalId) ??
     visibleSignals[0] ??
     null;
+  const selectedRecord = useMemo(
+    () =>
+      form && selectedSubmission
+        ? {
+            form: {
+              ...form,
+              submissionCount: submissions.length,
+            },
+            submission: selectedSubmission,
+            category: inferSignalCategory(selectedSubmission),
+            searchText: "",
+          }
+        : null,
+    [form, selectedSubmission, submissions.length],
+  );
+  const {
+    detailAnswers,
+    detailAttachments,
+    detailLegacyUnencrypted,
+    decrypting,
+    decryptState,
+    decryptStatusMessage,
+    decryptError,
+    decryptDiagnostics,
+    setDecryptError,
+    setDecryptDiagnostics,
+    setDecryptStatusMessage,
+    decryptInFlightRef,
+    activeDecryptSubmissionId,
+    decryptContext: attachmentDecryptContext,
+    handleDecrypt,
+    handleCancelDecrypt: cancelSharedDecrypt,
+    realSealSessionTtlMinutes,
+  } = usePrivateSignalDecrypt({
+    accountAddress: account?.address,
+    capabilityProfile,
+    ownedCapabilityObjects: ownedObjects,
+    selectedRecord,
+    selectedSignalId,
+    setToast,
+    decryptFailedLabel: t("decryptFailed"),
+  });
   const csvExportCount =
     csvExportScope === "filtered"
       ? visibleSignals.length
@@ -416,32 +405,6 @@ export function FormSubmissionsPage() {
   const selectedSubmissionEncryptedBlobStoredOnWalrus = Boolean(
     selectedSubmissionEncryptedBlobId && !isLocalFallbackBlob(selectedSubmissionEncryptedBlobId),
   );
-  const attachmentDecryptContext = useMemo(
-    () => ({
-      walletAddress: account?.address,
-      projectId: form?.projectId,
-      ownerAddress: form?.ownerAddress,
-      reviewerCapId:
-        capabilityProfile.hasOwnerCap || capabilityProfile.hasAdminCap
-          ? undefined
-          : capabilityProfile.reviewerCapIds[0],
-      suiClient,
-      signPersonalMessage: async (message: Uint8Array) => {
-        const result = await signPersonalMessage.mutateAsync({ message });
-        return result.signature;
-      },
-    }),
-    [
-      account?.address,
-      capabilityProfile.hasAdminCap,
-      capabilityProfile.hasOwnerCap,
-      capabilityProfile.reviewerCapIds,
-      form?.projectId,
-      form?.ownerAddress,
-      signPersonalMessage,
-      suiClient,
-    ],
-  );
   const attachmentPreviews = useAttachmentPreviews(detailAttachments, {
     enabled:
       detailAttachments.length > 0 &&
@@ -515,19 +478,12 @@ export function FormSubmissionsPage() {
 
   useEffect(() => {
     if (!selectedSubmission) {
-      setDetailAnswers(null);
-      setDetailAttachments([]);
-      setDetailLegacyUnencrypted(false);
       setNotesDraft("");
       setDecryptError("");
       setDecryptDiagnostics(null);
       setUnlockInteractionNotice("");
       setSaveError("");
       setSaveState("idle");
-      setDecryptUiState("locked");
-      if (!decryptInFlightRef.current) {
-        setDecryptStatusMessage("");
-      }
       previousSelectedSubmissionIdRef.current = null;
       return;
     }
@@ -544,19 +500,12 @@ export function FormSubmissionsPage() {
         : "",
     );
     if (didSelectionChange) {
-      setDetailAnswers(selectedSubmission.isEncrypted ? null : selectedSubmission.answers);
-      setDetailAttachments(selectedSubmission.attachments ?? []);
-      setDetailLegacyUnencrypted(false);
       setDecryptError("");
       setDecryptDiagnostics(null);
       setUnlockInteractionNotice("");
-      setDecryptUiState(selectedSubmission.isEncrypted ? "locked" : "decrypted");
-      if (!decryptInFlightRef.current) {
-        setDecryptStatusMessage("");
-      }
     }
     setSaveError("");
-  }, [selectedSubmission]);
+  }, [selectedSubmission, setDecryptDiagnostics, setDecryptError]);
 
   function applySubmissionUpdate(nextSubmission: Submission) {
     setSubmissions((current) =>
@@ -647,101 +596,8 @@ export function FormSubmissionsPage() {
   }
 
   function handleCancelDecrypt() {
-    const activeRequest = activeDecryptRequestRef.current;
-    if (!activeRequest) {
-      return;
-    }
-    decryptRequestIdRef.current = Math.max(decryptRequestIdRef.current, activeRequest.requestId) + 1;
-    activeDecryptRequestRef.current = null;
-    decryptInFlightRef.current = false;
-    setDecrypting(false);
-    setDecryptUiState(detailAnswers ? "decrypted" : "locked");
-    setDecryptError("");
-    setDecryptDiagnostics(null);
-    setDecryptStatusMessage("");
+    cancelSharedDecrypt();
     setUnlockInteractionNotice(t("unlockCancelledStatus"));
-  }
-
-  async function handleDecrypt() {
-    if (!form || !selectedSubmission || decryptInFlightRef.current) {
-      return;
-    }
-    const requestId = decryptRequestIdRef.current + 1;
-    decryptRequestIdRef.current = requestId;
-    const submissionId = selectedSubmission.id;
-    decryptInFlightRef.current = true;
-    activeDecryptRequestRef.current = { requestId, submissionId };
-    setDecrypting(true);
-    setDecryptUiState("waiting_wallet_approval");
-    setDecryptStatusMessage("Waiting for wallet approval...");
-    setDecryptError("");
-    setUnlockInteractionNotice("");
-    try {
-      const resolved = await resolveSubmissionAnswers(form, selectedSubmission, undefined, {
-        walletAddress: account?.address,
-        projectId: form.projectId,
-        ownerAddress: form.ownerAddress,
-        reviewerCapId:
-          capabilityProfile.hasOwnerCap || capabilityProfile.hasAdminCap
-            ? undefined
-            : capabilityProfile.reviewerCapIds[0],
-        ownedCapabilityObjects: ownedObjects,
-        suiClient,
-        signPersonalMessage: async (message) => {
-          const result = await signPersonalMessage.mutateAsync({ message });
-          return result.signature;
-        },
-        onStatusChange: (status) => {
-          const activeRequest = activeDecryptRequestRef.current;
-          if (
-            activeRequest?.requestId !== requestId ||
-            activeRequest.submissionId !== submissionId
-          ) {
-            return;
-          }
-          setDecryptUiState(
-            status === "waiting_wallet_approval" ? "waiting_wallet_approval" : "decrypting",
-          );
-          setDecryptStatusMessage(getDecryptStatusMessage(status));
-        },
-      });
-      const isLatestRequest =
-        activeDecryptRequestRef.current?.requestId === requestId &&
-        activeDecryptRequestRef.current?.submissionId === submissionId;
-      if (resolved && isLatestRequest && selectedSignalIdRef.current === submissionId) {
-        setDetailAnswers(resolved.answers);
-        setDetailAttachments(resolved.attachments);
-        setDetailLegacyUnencrypted(Boolean(resolved.legacyUnencrypted));
-        setDecryptUiState("decrypted");
-      }
-    } catch (error) {
-      const isLatestRequest =
-        activeDecryptRequestRef.current?.requestId === requestId &&
-        activeDecryptRequestRef.current?.submissionId === submissionId;
-      if (isLatestRequest && selectedSignalIdRef.current === submissionId) {
-        setDecryptUiState("failed");
-        setDecryptError(
-          isDecryptDiagnosticError(error)
-            ? `Decrypt failed: ${error.reasonCode}`
-            : error instanceof Error
-              ? error.message
-              : t("decryptFailed"),
-        );
-        setDecryptDiagnostics(isDecryptDiagnosticError(error) ? error.diagnostics : null);
-      }
-    } finally {
-      const isLatestRequest =
-        activeDecryptRequestRef.current?.requestId === requestId &&
-        activeDecryptRequestRef.current?.submissionId === submissionId;
-      if (isLatestRequest) {
-        activeDecryptRequestRef.current = null;
-        decryptInFlightRef.current = false;
-        setDecrypting(false);
-        if (selectedSignalIdRef.current === submissionId && decryptUiState !== "decrypted") {
-          setDecryptStatusMessage("");
-        }
-      }
-    }
   }
 
   async function handleSaveReviewControls() {
@@ -874,7 +730,7 @@ export function FormSubmissionsPage() {
   const activeForm = form as FormSchema;
   const resolvedDetailAnswers = detailAnswers ?? {};
   const isDecryptInteractionLocked = decrypting || decryptInFlightRef.current;
-  const activeUnlockSubmissionId = activeDecryptRequestRef.current?.submissionId ?? null;
+  const activeUnlockSubmissionId = activeDecryptSubmissionId;
   const previewAnswerFields = detailAnswers
     ? activeForm.fields.filter((field) => {
         if (isAttachmentFieldType(field.type)) {
@@ -890,11 +746,11 @@ export function FormSubmissionsPage() {
     ? undefined
     : !selectedSubmission?.isEncrypted
       ? t("privateSignalUnlockUnavailable")
-      : !account?.address
+      : !canAttemptPrivateSignalDecrypt(activeForm, account?.address, capabilityProfile)
         ? t("privateSignalUnlockDisabled")
         : undefined;
   const listLockTitle =
-    decryptUiState === "waiting_wallet_approval"
+    decryptState === "waiting_wallet_approval"
       ? t("walletApprovalPendingStatus")
       : t("unlockInProgressStatus");
 
@@ -911,7 +767,7 @@ export function FormSubmissionsPage() {
           onCancel={handleCancelDecrypt}
           isDecrypting={isDecryptInteractionLocked}
           isUnlocked={Boolean(detailAnswers)}
-          unlockState={decryptUiState}
+          unlockState={decryptState}
           statusMessage={decryptStatusMessage}
           errorMessage={decryptError}
           diagnostics={decryptDiagnostics}
@@ -929,7 +785,7 @@ export function FormSubmissionsPage() {
           <strong>Unlock private signal to review and triage.</strong>
           <p className="muted">Seal Runtime: {sealRuntimeLabel}</p>
           <p className="muted">
-            {t("walletApprovalReuseNotice", { minutes: REAL_SEAL_SESSION_TTL_MIN })}
+            {t("walletApprovalReuseNotice", { minutes: realSealSessionTtlMinutes })}
           </p>
           {decryptStatusMessage ? (
             <p className="muted" role="status" aria-live="polite">{decryptStatusMessage}</p>
@@ -1528,7 +1384,7 @@ export function FormSubmissionsPage() {
                         />
                         {isActiveUnlockTarget ? (
                           <span className="signal-chip signal-chip-soft">
-                            {decryptUiState === "waiting_wallet_approval"
+                            {decryptState === "waiting_wallet_approval"
                               ? t("walletApprovalPendingStatus")
                               : t("unlockInProgressStatus")}
                           </span>

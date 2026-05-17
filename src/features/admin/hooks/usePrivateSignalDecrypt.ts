@@ -172,6 +172,21 @@ export function usePrivateSignalDecrypt({
     }
   }, [selectedRecord]);
 
+  function handleCancelDecrypt() {
+    const activeRequest = activeDecryptRequestRef.current;
+    if (!activeRequest) {
+      return;
+    }
+    decryptRequestIdRef.current = Math.max(decryptRequestIdRef.current, activeRequest.requestId) + 1;
+    activeDecryptRequestRef.current = null;
+    decryptInFlightRef.current = false;
+    setDecrypting(false);
+    setDecryptState(detailAnswers ? "decrypted" : "locked");
+    setDecryptError("");
+    setDecryptDiagnostics(null);
+    setDecryptStatusMessage("");
+  }
+
   async function handleDecrypt() {
     if (!selectedRecord || decryptInFlightRef.current) {
       return;
@@ -186,6 +201,7 @@ export function usePrivateSignalDecrypt({
     setDecryptStatusMessage("Loading Seal runtime");
     setDecryptError("");
     setDecryptDiagnostics(null);
+    let unlocked = false;
     try {
       const resolved = await resolveSubmissionAnswers(
         selectedRecord.form,
@@ -227,6 +243,7 @@ export function usePrivateSignalDecrypt({
         setDetailLegacyUnencrypted(Boolean(resolved.legacyUnencrypted));
         setDecryptState("decrypted");
         setDecryptStatusMessage("Signal unlocked");
+        unlocked = true;
         setToast({ tone: "success", message: "Wallet verified. Private signal unlocked." });
       }
     } catch (error) {
@@ -260,7 +277,7 @@ export function usePrivateSignalDecrypt({
       }
       decryptInFlightRef.current = false;
       setDecrypting(false);
-      if (activeDecryptRequestRef.current === null && decryptState !== "decrypted") {
+      if (activeDecryptRequestRef.current === null && !unlocked) {
         setDecryptStatusMessage("");
       }
     }
@@ -278,9 +295,13 @@ export function usePrivateSignalDecrypt({
     decryptError,
     decryptDiagnostics,
     setDecryptError,
+    setDecryptDiagnostics,
+    setDecryptStatusMessage,
     decryptInFlightRef,
+    activeDecryptSubmissionId: activeDecryptRequestRef.current?.submissionId ?? null,
     decryptContext,
     handleDecrypt,
+    handleCancelDecrypt,
     realSealSessionTtlMinutes: REAL_SEAL_SESSION_TTL_MIN,
   };
 }

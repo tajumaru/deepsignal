@@ -38,6 +38,7 @@ import { isAttachmentFieldType, isLongTextLikeField } from "../lib/fieldTypes";
 import {
   addressesMatch,
   canAdmin,
+  canAttemptPrivateSignalDecrypt,
   canReview,
   getRoleLabel,
 } from "../lib/adminAccess";
@@ -739,7 +740,7 @@ export function AdminDashboardPage() {
     ? undefined
     : !selectedRecord?.submission.isEncrypted
       ? t("privateSignalUnlockUnavailable")
-      : !account?.address || (!canReview(capabilityProfile) && capabilityProfile.isConfigured)
+      : !canAttemptPrivateSignalDecrypt(selectedRecord.form, account?.address, capabilityProfile)
         ? t("privateSignalUnlockDisabled")
         : undefined;
   const reviewBasePath =

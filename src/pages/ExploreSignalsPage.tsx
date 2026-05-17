@@ -1,5 +1,5 @@
 import { useCurrentAccount } from "@mysten/dapp-kit";
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { CreateFormLink } from "../components/CreateFormLink";
 import { buildExploreAiPreview, getExploreCategory, getPurposeLabel, isFormPubliclyExplorable, type ExploreCategory } from "../lib/explore";
@@ -7,7 +7,7 @@ import { getPublicFormPath } from "../lib/publicLinks";
 import { isResponseDeadlinePassed } from "../lib/responseDeadline";
 import { normalizeForm, normalizeSubmission, storageAdapter } from "../lib/storage";
 import { formatDate } from "../lib/utils";
-import type { FormSchema } from "../types";
+import type { FormSchema, Submission } from "../types";
 
 type ExploreCard = {
   form: FormSchema;
@@ -21,6 +21,7 @@ type ExploreCard = {
 type DiscoverTab = "trending" | "new" | "active" | "ai" | "governance" | "anonymous" | "encrypted";
 
 const EXPLORE_DELETED_FORMS_KEY = "deepsignal.exploreDeletedForms";
+const EXPLORE_SUBMISSION_LOAD_CONCURRENCY = 4;
 
 const DISCOVER_TABS: Array<{ key: DiscoverTab; label: string }> = [
   { key: "trending", label: "Trending" },
@@ -103,55 +104,78 @@ function rememberExploreDeletedForm(formId: string) {
   saveExploreDeletedFormIds(ids);
 }
 
+function buildExploreCard(form: FormSchema, submissions: Submission[] = []): ExploreCard {
+  const updatedAt = submissions[0]?.updatedAt ?? form.updatedAt ?? form.createdAt;
+  const exploreCategory = getExploreCategory(form);
+  const roadmapCount = submissions.filter((submission) =>
+    submission.triageStatus === "planned" ||
+    submission.triageStatus === "in_progress" ||
+    submission.triageStatus === "fixed",
+  ).length;
+
+  return {
+    form,
+    category: exploreCategory,
+    signalCount: submissions.length,
+    updatedAt,
+    roadmapCount,
+    aiPreview: buildExploreAiPreview({
+      category: exploreCategory,
+      signalCount: submissions.length,
+      updatedAt,
+    }),
+  };
+}
+
 export function ExploreSignalsPage() {
   const account = useCurrentAccount();
   const [loading, setLoading] = useState(true);
   const [cards, setCards] = useState<ExploreCard[]>([]);
   const [activeTab, setActiveTab] = useState<DiscoverTab>("trending");
   const [deletingFormId, setDeletingFormId] = useState("");
+  const loadSequenceRef = useRef(0);
 
-  async function loadExplore() {
+  const loadExplore = useCallback(async () => {
+    const loadSequence = loadSequenceRef.current + 1;
+    loadSequenceRef.current = loadSequence;
     setLoading(true);
     const allStorageForms = await storageAdapter.listForms();
+    if (loadSequenceRef.current !== loadSequence) {
+      return;
+    }
+
     const deletedFormIds = readExploreDeletedFormIds();
     const allForms: FormSchema[] = allStorageForms
       .filter((form) => !deletedFormIds.has(form.id))
       .map((form) => normalizeForm(form));
     const forms = allForms.filter((form) => isFormPubliclyExplorable(form));
+    setCards(forms.map((form) => buildExploreCard(form)));
+    setLoading(false);
 
-    const nextCards = await Promise.all(
-      forms.map(async (form) => {
-        const submissions = (await storageAdapter.listSubmissions(form.id)).map((submission) => normalizeSubmission(submission));
-        const updatedAt = submissions[0]?.updatedAt ?? form.updatedAt ?? form.createdAt;
-        const exploreCategory = getExploreCategory(form);
-        const roadmapCount = submissions.filter((submission) =>
-          submission.triageStatus === "planned" ||
-          submission.triageStatus === "in_progress" ||
-          submission.triageStatus === "fixed",
-        ).length;
-
-        return {
-          form,
-          category: exploreCategory,
-          signalCount: submissions.length,
-          updatedAt,
-          roadmapCount,
-          aiPreview: buildExploreAiPreview({
-            category: exploreCategory,
-            signalCount: submissions.length,
-            updatedAt,
-          }),
-        } satisfies ExploreCard;
+    let nextFormIndex = 0;
+    const workerCount = Math.min(EXPLORE_SUBMISSION_LOAD_CONCURRENCY, forms.length);
+    await Promise.all(
+      Array.from({ length: workerCount }, async () => {
+        while (nextFormIndex < forms.length) {
+          const form = forms[nextFormIndex];
+          nextFormIndex += 1;
+          const submissions = (await storageAdapter.listSubmissions(form.id)).map((submission) => normalizeSubmission(submission));
+          if (loadSequenceRef.current !== loadSequence) {
+            return;
+          }
+          setCards((currentCards) =>
+            currentCards.map((card) =>
+              card.form.id === form.id ? buildExploreCard(form, submissions) : card,
+            ),
+          );
+        }
       }),
     );
-
-    setCards(nextCards);
-    setLoading(false);
-  }
+  }, []);
 
   useEffect(() => {
     void loadExplore();
-  }, []);
+  }, [loadExplore]);
 
   function canDeleteForm(form: Pick<FormSchema, "creationMode" | "ownerAddress">) {
     return (

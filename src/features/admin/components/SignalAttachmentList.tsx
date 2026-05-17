@@ -27,7 +27,7 @@ export function SignalAttachmentList({
         const downloadHref = getAttachmentDownloadHref(attachment, preview);
         return (
           <div key={attachment.blobId} className="attachment-row">
-            <div>
+            <div className="attachment-content">
               <strong>{label}</strong>
               <p className="muted">
                 {attachment.type} · {Math.round(attachment.size / 1024)} KB
@@ -50,7 +50,7 @@ export function SignalAttachmentList({
                 />
               ) : null}
             </div>
-            <div className="stack signal-meta-row-value">
+            <div className="attachment-actions signal-meta-row-value">
               {attachment.storage === "inline" ? (
                 <strong>Embedded in private signal</strong>
               ) : (

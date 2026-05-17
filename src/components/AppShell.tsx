@@ -96,15 +96,11 @@ function MobileAppBottomNav() {
       </NavLink>
       <CreateFormLink>
         <span aria-hidden="true">+</span>
-        <span>Signal</span>
+        <span>New Signal</span>
       </CreateFormLink>
       <NavLink to="/admin/access">
         <span aria-hidden="true">Set</span>
         <span>Settings</span>
-      </NavLink>
-      <NavLink to="/troubleshooting">
-        <span aria-hidden="true">Fix</span>
-        <span>Reset</span>
       </NavLink>
     </nav>
   );

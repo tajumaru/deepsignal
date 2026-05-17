@@ -183,4 +183,74 @@ describe("resolveSubmissionAnswers decrypt classification", () => {
       reasonCode: "ENCRYPTED_PAYLOAD_MISSING",
     });
   });
+
+  it("returns POLICY_MISMATCH before decrypting when envelope project differs from the form", async () => {
+    const decryptingAdapter: SealAdapter = {
+      encrypt: vi.fn(async (value) => value),
+      decrypt: vi.fn(async () => JSON.stringify({ answers: {}, attachments: [] })),
+    };
+    const mismatchedSubmission = createEncryptedSubmission({
+      encryptedPayload: JSON.stringify(
+        createRealSealEnvelope({
+          network: "mainnet",
+          packageId: "0xpackage",
+          objectId: "0xobject",
+          threshold: 1,
+          serverObjectIds: ["0xserver"],
+          encryptedObject: "ciphertext",
+          policyId: "project_signal_v1",
+          policyObjectId: "project-2",
+          approvalPolicy: "project_signal_v1",
+          projectId: "project-2",
+        }),
+      ),
+    });
+
+    await expect(
+      resolveSubmissionAnswers(
+        form,
+        mismatchedSubmission,
+        decryptingAdapter,
+        { walletAddress: "0xowner", projectId: "project-1" },
+      ),
+    ).rejects.toMatchObject({
+      reasonCode: "POLICY_MISMATCH",
+    });
+    expect(decryptingAdapter.decrypt).not.toHaveBeenCalled();
+  });
+
+  it("returns POLICY_MISMATCH before decrypting when envelope owner differs from the form", async () => {
+    const decryptingAdapter: SealAdapter = {
+      encrypt: vi.fn(async (value) => value),
+      decrypt: vi.fn(async () => JSON.stringify({ answers: {}, attachments: [] })),
+    };
+    const mismatchedSubmission = createEncryptedSubmission({
+      encryptedPayload: JSON.stringify(
+        createRealSealEnvelope({
+          network: "mainnet",
+          packageId: "0xpackage",
+          objectId: "0xobject",
+          threshold: 1,
+          serverObjectIds: ["0xserver"],
+          encryptedObject: "ciphertext",
+          policyId: "owner_wallet_v1",
+          policyObjectId: "0xother-owner",
+          approvalPolicy: "owner_wallet_v1",
+          ownerAddress: "0xother-owner",
+        }),
+      ),
+    });
+
+    await expect(
+      resolveSubmissionAnswers(
+        { ...form, projectId: undefined },
+        mismatchedSubmission,
+        decryptingAdapter,
+        { walletAddress: "0xowner", ownerAddress: "0xowner" },
+      ),
+    ).rejects.toMatchObject({
+      reasonCode: "POLICY_MISMATCH",
+    });
+    expect(decryptingAdapter.decrypt).not.toHaveBeenCalled();
+  });
 });
