@@ -4,6 +4,7 @@ import { HashRouter } from "react-router-dom";
 import App from "./App";
 import { I18nProvider } from "./i18n";
 import { startBuildUpdateCheck } from "./lib/buildUpdate";
+import { startChunkLoadRecovery } from "./lib/chunkLoadRecovery";
 import { applyReleaseStorageReset } from "./lib/releaseStorageReset";
 import "./styles.css";
 
@@ -21,6 +22,7 @@ function redirectLegacyPublicPathToHashRoute() {
 
 redirectLegacyPublicPathToHashRoute();
 applyReleaseStorageReset();
+startChunkLoadRecovery();
 startBuildUpdateCheck();
 
 ReactDOM.createRoot(document.getElementById("root")!).render(

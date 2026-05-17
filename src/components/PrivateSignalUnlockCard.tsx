@@ -26,6 +26,7 @@ interface PrivateSignalUnlockCardProps {
   onCancel?: () => void;
   isDecrypting: boolean;
   isUnlocked: boolean;
+  actionLabel?: string;
   unlockState?: UnlockState;
   statusMessage?: string;
   errorMessage?: string;
@@ -274,6 +275,7 @@ export function PrivateSignalUnlockCard({
   onCancel,
   isDecrypting,
   isUnlocked,
+  actionLabel,
   unlockState,
   statusMessage,
   errorMessage,
@@ -419,7 +421,7 @@ export function PrivateSignalUnlockCard({
                 ? t("privateSignalUnlockSuccess")
                 : state === "unauthorized"
                   ? "Access denied"
-                : t("privateSignalUnlockAction")}
+                : actionLabel ?? t("privateSignalUnlockAction")}
           </span>
         </button>
         {isDecrypting && onCancel ? (

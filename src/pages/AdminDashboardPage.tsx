@@ -269,7 +269,6 @@ function MobileInboxHeader({
 interface MobileSignalRowProps {
   record: SignalRecord;
   isSelected: boolean;
-  isSelectedForSui: boolean;
   isUnlocked: boolean;
   onSelect: () => void;
   t: TranslationFn;
@@ -284,23 +283,27 @@ function getSignalInitials(title: string) {
 function MobileSignalRow({
   record,
   isSelected,
-  isSelectedForSui,
   isUnlocked,
   onSelect,
   t,
 }: MobileSignalRowProps) {
-  const { form, submission, category } = record;
+  const { submission } = record;
   const title = getSignalSubject(submission);
-  const respondentMeta = getSubmissionRespondentMeta(submission);
-  const storageLabel = getStorageBadgeLabel(submission.encryptedBlobId ?? submission.blobId);
-  const isLocalOnlySignal = storageLabel === "Stored locally only";
-  const priorityLabel = submission.priority === "high" ? t("priority") : submission.priority;
-  const preview = submission.isEncrypted ? t("encryptedPrivateSignalUnlockHint") : getSignalPreview(submission);
+  const priorityLabel =
+    submission.priority === "high"
+      ? t("priorityHigh")
+      : submission.priority === "medium"
+        ? t("priorityMedium")
+        : t("priorityLow");
   const lockStateLabel = submission.isEncrypted
     ? isUnlocked
       ? t("unlockedSignalState")
       : t("lockedSignalState")
     : t("openSignalState");
+  const signalLevelLabel =
+    typeof submission.signalValue === "number"
+      ? `Signal ${submission.signalValue}/5`
+      : `Signal level ${submission.severity ?? submission.priority}`;
   const readStateLabel =
     submission.status === "unread"
       ? t("statusUnread")
@@ -332,18 +335,7 @@ function MobileSignalRow({
         <span className="mobile-signal-title-line">
           <strong>{title}</strong>
         </span>
-        <span className={`mobile-signal-preview ${submission.isEncrypted ? "is-locked" : ""}`}>
-          {preview}
-        </span>
-        <span className="mobile-signal-source-line">
-          <span>{form.title}</span>
-          <span>{category}</span>
-          {respondentMeta.isAnonymous ? <span>{t("anonymousRespondent")}</span> : null}
-        </span>
         <span className="mobile-signal-meta-row">
-          <span className={`mobile-signal-mini-badge triage-${submission.triageStatus}`}>
-            {getTriageStatusLabel(submission.triageStatus)}
-          </span>
           {submission.isEncrypted ? (
             <span className={`mobile-signal-mini-badge ${isUnlocked ? "is-selected" : ""}`}>
               {lockStateLabel}
@@ -351,11 +343,10 @@ function MobileSignalRow({
           ) : (
             <span className="mobile-signal-mini-badge">{lockStateLabel}</span>
           )}
-          {submission.responderSignature ? <span className="mobile-signal-mini-badge">{t("verifiedSignalState")}</span> : null}
-          {submission.pendingOnchainRegistration ? (
-            <span className={`mobile-signal-mini-badge ${isSelectedForSui ? "is-selected" : ""}`}>Sui proof</span>
-          ) : null}
-          {isLocalOnlySignal ? <span className="mobile-signal-mini-badge">{t("localSignalState")}</span> : null}
+          <span className={`mobile-signal-mini-badge status-${submission.status}`}>
+            {readStateLabel}
+          </span>
+          <span className="mobile-signal-mini-badge">{signalLevelLabel}</span>
         </span>
       </span>
 
@@ -391,7 +382,6 @@ interface MobileSignalInboxProps {
   visibleSignals: SignalRecord[];
   selectedRecord: SignalRecord | null;
   unlockedSignalId?: string | null;
-  selectedPendingSignalIds: string[];
   onSelectSignal: (record: SignalRecord) => void;
   searchPlaceholder: string;
   t: TranslationFn;
@@ -411,7 +401,6 @@ function MobileSignalInbox({
   visibleSignals,
   selectedRecord,
   unlockedSignalId,
-  selectedPendingSignalIds,
   onSelectSignal,
   searchPlaceholder,
   t,
@@ -441,7 +430,6 @@ function MobileSignalInbox({
                 key={record.submission.id}
                 record={record}
                 isSelected={selectedRecord?.submission.id === record.submission.id}
-                isSelectedForSui={selectedPendingSignalIds.includes(record.submission.id)}
                 isUnlocked={unlockedSignalId === record.submission.id}
                 onSelect={() => onSelectSignal(record)}
                 t={t}
@@ -881,6 +869,32 @@ export function AdminDashboardPage() {
   const selectedRecordEncryptedBlobStoredOnWalrus = Boolean(
     selectedRecordEncryptedBlobId && !isLocalFallbackBlob(selectedRecordEncryptedBlobId),
   );
+  const selectedRecordStoredOnWalrus = Boolean(
+    selectedRecord &&
+      !isLocalFallbackBlob(selectedRecord.submission.encryptedBlobId ?? selectedRecord.submission.blobId),
+  );
+  const selectedRecordProtectionFacts = selectedRecord
+    ? [
+        {
+          label: selectedRecordStoredOnWalrus ? "Stored on Walrus" : "Saved locally",
+          detail: selectedRecordStoredOnWalrus
+            ? "This signal is kept in durable Walrus storage."
+            : "This signal is available in this browser while Walrus is unavailable.",
+        },
+        {
+          label: selectedRecord.submission.isEncrypted ? "Encrypted" : "Not encrypted",
+          detail: selectedRecord.submission.isEncrypted
+            ? "The message body stays hidden until you decrypt it."
+            : "This signal was submitted as readable content.",
+        },
+        {
+          label: "Readable by Owner/Admin",
+          detail: selectedRecord.submission.isEncrypted
+            ? "Only authorized reviewers should be able to read the private message."
+            : "The inbox owner can review this signal now.",
+        },
+      ]
+    : [];
   const selectedRecordUnlockDisabledReason = detailAnswers
     ? undefined
     : !selectedRecord?.submission.isEncrypted
@@ -1835,7 +1849,6 @@ export function AdminDashboardPage() {
             visibleSignals={visibleSignals}
             selectedRecord={hasExplicitSelectedRecord ? selectedRecord : null}
             unlockedSignalId={detailAnswers && selectedRecord ? selectedRecord.submission.id : null}
-            selectedPendingSignalIds={selectedPendingSignalIds}
             onSelectSignal={handleSelectMobileSignal}
             searchPlaceholder={t("searchSignalsPlaceholder")}
             t={t}
@@ -2192,6 +2205,14 @@ export function AdminDashboardPage() {
                       ) : null}
                       <span className="signal-chip">{t("signalsInThisFormLabel", { count: selectedFormSubmissionCount })}</span>
                     </div>
+                    <div className="mobile-readable-trust-panel" aria-label="Signal storage and privacy">
+                      {selectedRecordProtectionFacts.map((fact) => (
+                        <div key={fact.label} className="mobile-readable-trust-item">
+                          <strong>{fact.label}</strong>
+                          <span>{fact.detail}</span>
+                        </div>
+                      ))}
+                    </div>
                   </section>
 
                   {selectedRecordFocusAction ? (
@@ -2303,6 +2324,7 @@ export function AdminDashboardPage() {
                         onClearDebugCache={() => void handleClearDebugPolicyCache()}
                         isDecrypting={decrypting || decryptInFlightRef.current}
                         isUnlocked={Boolean(detailAnswers)}
+                        actionLabel={t("decrypt")}
                         unlockState={decryptState}
                         statusMessage={decryptStatusMessage}
                         errorMessage={decryptError}

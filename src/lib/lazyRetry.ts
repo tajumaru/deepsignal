@@ -1,3 +1,5 @@
+import { recoverFromChunkLoadFailure } from "./chunkLoadRecovery";
+
 const lazyImportAttempts = 5;
 const lazyImportBaseDelayMs = 900;
 
@@ -20,5 +22,6 @@ export async function retryLazyImport<T>(loader: () => Promise<T>): Promise<T> {
     }
   }
 
+  recoverFromChunkLoadFailure(lastError);
   throw lastError;
 }
