@@ -18,6 +18,7 @@ type FormMetadataOverlay = Pick<
   | "responseDeadlineMode"
   | "blobId"
   | "manifestBlobId"
+  | "activityEvents"
 >;
 
 function readOverlays() {
@@ -56,6 +57,7 @@ export function saveFormMetadataOverlay(form: FormSchema) {
     responseDeadlineMode: form.responseDeadlineMode ?? "none",
     blobId: form.blobId,
     manifestBlobId: form.manifestBlobId,
+    activityEvents: form.activityEvents,
   };
   writeOverlays(overlays);
 }

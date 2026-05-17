@@ -327,9 +327,9 @@ function CorePrinciplesSection() {
   const { sectionRef, isVisible } = useScrollReveal();
   const { t } = useI18n();
   const principles = [
-    { title: t("landingPrinciplePrivateTitle"), body: t("landingPrinciplePrivateBody") },
-    { title: t("landingPrincipleEncryptedTitle"), body: t("landingPrincipleEncryptedBody") },
-    { title: t("landingPrinciplePermanentTitle"), body: t("landingPrinciplePermanentBody") },
+    { title: t("landingPrinciplePrivateTitle"), body: t("landingPrinciplePrivateBody"), tone: "private" },
+    { title: t("landingPrincipleEncryptedTitle"), body: t("landingPrincipleEncryptedBody"), tone: "encrypted" },
+    { title: t("landingPrinciplePermanentTitle"), body: t("landingPrinciplePermanentBody"), tone: "permanent" },
   ];
 
   return (
@@ -340,7 +340,11 @@ function CorePrinciplesSection() {
     >
       <div className="landing-signal-section-shell landing-principles-shell">
         {principles.map((principle, index) => (
-          <article key={principle.title} className="landing-principle" style={{ "--reveal-index": index } as CSSProperties}>
+          <article
+            key={principle.title}
+            className={`landing-principle landing-principle-${principle.tone}`}
+            style={{ "--reveal-index": index } as CSSProperties}
+          >
             <h2>{principle.title}</h2>
             <p>{principle.body}</p>
           </article>

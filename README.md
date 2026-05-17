@@ -122,6 +122,7 @@ The Walrus manifest design is especially important. A manifest is a recovery map
 - Admin inbox at `/admin` and dashboard alias at `/dashboard`.
 - Submission list/detail routes for each form and signal.
 - Desktop-first **Encrypted Signal Inbox** with stream navigation, list view, detail panel, metadata, Walrus proof, and Seal state.
+- Owner/Admin-only **Workspace Activity** tab records local audit events for form creation, publish, update, and archive actions, with actor wallet, role snapshot, timestamp, and optional Sui transaction digest.
 - Triage status, priority, tags, notes, signal value, and GitHub issue/PR fields.
 
 ### Publish Roadmap

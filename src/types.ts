@@ -36,6 +36,12 @@ export type SubmissionTriageStatus =
   | "in_progress"
   | "fixed"
   | "closed";
+export type ActivityActorRole = "owner" | "admin" | "unknown";
+export type ActivityAction =
+  | "form_created"
+  | "form_published"
+  | "form_updated"
+  | "form_archived";
 
 export interface ConditionalLogicCondition {
   fieldId: string;
@@ -119,6 +125,7 @@ export interface FormSchema {
   blobId?: string;
   manifestBlobId?: string;
   walrusActualCost?: WalrusActualCost;
+  activityEvents?: ActivityEvent[];
 }
 
 export interface WalrusActualCost {
@@ -142,6 +149,17 @@ export interface SignalManifest {
     blobId: string;
     createdAt: string;
   }>;
+}
+
+export interface ActivityEvent {
+  id: string;
+  formId: string;
+  formTitleSnapshot: string;
+  actorAddress: string;
+  actorRole: ActivityActorRole;
+  action: ActivityAction;
+  createdAt: string;
+  txDigest?: string;
 }
 
 export interface SubmissionAttachment {

@@ -7,6 +7,10 @@ import {
 import { getAbsolutePublicFormUrl, getPublicFormPath } from "../../../lib/publicLinks";
 import { createFormOnChain } from "../../../lib/projectRegistry";
 import {
+  appendActivityEvents,
+  createActivityEvent,
+} from "../../../lib/activityLog";
+import {
   getResponseDeadlineFromPreset,
   parseCustomResponseDeadline,
 } from "../../../lib/responseDeadline";
@@ -34,11 +38,13 @@ import type {
   TransactionConfirmation,
   Translate,
 } from "../types";
+import type { ActivityActorRole } from "../../../types";
 import { buildFormSchema } from "../utils";
 
 interface UseCreateFormPublishArgs {
   t: Translate;
   accountAddress?: string;
+  actorRole: ActivityActorRole;
   creationMode: "admin" | "guest";
   title: string;
   description: string;
@@ -89,6 +95,7 @@ const initialOverlayState: PublishOverlayState = {
 export function useCreateFormPublish({
   t,
   accountAddress,
+  actorRole,
   creationMode,
   title,
   description,
@@ -389,11 +396,31 @@ export function useCreateFormPublish({
       responseDeadline,
       responseDeadlineMode,
     });
+    const auditTimestamp = new Date().toISOString();
+    const publishActivityEvents = [
+      createActivityEvent({
+        form,
+        actorAddress: accountAddress,
+        actorRole,
+        action: "form_created",
+        createdAt: auditTimestamp,
+      }),
+      createActivityEvent({
+        form,
+        actorAddress: accountAddress,
+        actorRole,
+        action: "form_published",
+        createdAt: auditTimestamp,
+      }),
+    ];
 
     try {
       const finalForm = await publishForm({
         t,
-        form,
+        form: {
+          ...form,
+          activityEvents: publishActivityEvents,
+        },
         selectedProject,
         setPublishStageIndex: (stageIndex) => updateOverlay({ stageIndex }),
         setPublishBlobId: (blobId) => updateOverlay({ blobId }),
@@ -411,6 +438,7 @@ export function useCreateFormPublish({
 
       setSavedForm(finalForm);
       onSaved(finalForm);
+      appendActivityEvents(publishActivityEvents);
       setError("");
       setFailure(null);
     } catch (submitError) {
@@ -471,9 +499,20 @@ export function useCreateFormPublish({
         onchainFormId: parsedFormId,
         isOnchain: true,
         registrationMode: "sui",
+        activityEvents: [
+          ...(savedForm.activityEvents ?? []),
+          createActivityEvent({
+            form: savedForm,
+            actorAddress: accountAddress,
+            actorRole,
+            action: "form_updated",
+            txDigest: result.digest,
+          }),
+        ],
       } satisfies PreparedPublishForm;
       await localStorageAdapter.saveForm(registeredForm);
       saveFormMetadataOverlay(registeredForm);
+      appendActivityEvents(registeredForm.activityEvents.slice(-1));
       setSavedForm(registeredForm);
       onSaved(registeredForm);
     } catch (registerError) {

@@ -822,7 +822,7 @@ export function usePublicSubmission({
     setSubmitNotice("");
     setFailure(null);
     setDiagnosticsCopied(false);
-    activatePipeline("preparing_signal", "Preparing your message for secure delivery.");
+    activatePipeline("preparing_signal", "Preparing secure upload...");
     try {
       if (accountAddress && (walletRequired || attachWallet)) {
         await waitForWalrusMutationRuntimeReady({ requireWallet: true, timeoutMs: 7000 });
@@ -959,7 +959,7 @@ export function usePublicSubmission({
 
       activatePipeline(
         form.encryptSubmissions ? "encrypting" : "preparing_signal",
-        form.encryptSubmissions ? "Sealing the private payload for approved reviewers." : "Finalizing the signal envelope.",
+        form.encryptSubmissions ? "Encrypting response..." : "Preparing secure upload...",
       );
       const result = await saveSubmissionWithEncryption(form, submission, undefined, storageAdapter, {
         responseDeadlinePassed: responseDeadlinePassedLabel,
@@ -967,19 +967,19 @@ export function usePublicSubmission({
           activatePipeline(
             stage,
             stage === "encrypting"
-              ? "Sealing the private payload for approved reviewers."
-              : "Writing the secured signal to Walrus.",
+              ? "Encrypting response..."
+              : "Storing securely...",
           );
         },
       });
       activatePipeline(
         "confirming_blob",
-        isLocalFallbackBlob(result.blobId) ? "Local fallback accepted the signal." : "Walrus accepted the signal blob.",
+        isLocalFallbackBlob(result.blobId) ? "Signal saved in local recovery." : "Verifying secure storage...",
       );
       await pausePipelineStep();
       activatePipeline(
         "generating_manifest",
-        isLocalFallbackBlob(result.blobId) ? "Updating the local recovery index." : "Updating the recovery manifest.",
+        isLocalFallbackBlob(result.blobId) ? "Preparing local recovery path..." : "Preparing recovery path...",
       );
       await pausePipelineStep();
       const savedSubmission = {

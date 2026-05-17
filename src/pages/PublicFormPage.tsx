@@ -212,6 +212,16 @@ export function PublicFormPage() {
       total: requiredFields.length,
     };
   }, [answers, form, visibleFieldIds]);
+  const progressLabel =
+    requiredProgress.total > 0
+      ? `${requiredProgress.completed} of ${requiredProgress.total} completed`
+      : "Ready when you are";
+  const remainingEstimate =
+    requiredProgress.missing > 1
+      ? `~${Math.min(3, Math.max(1, Math.ceil(requiredProgress.missing / 2)))} min remaining`
+      : requiredProgress.missing === 1
+        ? "~1 min remaining"
+        : "Ready to send";
   const visibleErrorCount = useMemo(
     () => Object.entries(errors).filter(([fieldId, message]) => visibleFieldIds.has(fieldId) && Boolean(message)).length,
     [errors, visibleFieldIds],
@@ -367,22 +377,32 @@ export function PublicFormPage() {
         className="public-form-header-image"
         fallbackTitle={form.title}
       />
-      <p className="eyebrow">{t("publicEyebrow")}</p>
-      <h1>{form.title}</h1>
-      <RichTextContent value={form.description ?? ""} className="lede rich-text-content" fallback={t("publicDefaultBody")} />
-      <div className={`public-form-status-strip ${deadlinePassed ? "is-expired" : ""}`}>
-        <div className="public-form-status-main">
-          <div className="public-form-status-badges" aria-label={t("publicFormStatusSummary")}>
+      <section className={`public-trust-header ${deadlinePassed ? "is-expired" : ""}`} aria-label={t("publicFormStatusSummary")}>
+        <div className="public-trust-copy">
+          <p className="eyebrow">{t("publicEyebrow")}</p>
+          <h1>{form.title}</h1>
+          <RichTextContent value={form.description ?? ""} className="lede rich-text-content" fallback={t("publicDefaultBody")} />
+        </div>
+        <div className="public-trust-list" role="list">
+          <span role="listitem">{t("publicTrustPrivateDefault")}</span>
+          <span role="listitem">
+            {form.encryptSubmissions ? t("publicTrustEncryptedBeforeUpload") : t("publicTrustProtectedReview")}
+          </span>
+          <span role="listitem">
+            {form.encryptSubmissions ? t("publicTrustSelectedUnlock") : t("publicTrustSelectedReview")}
+          </span>
+          <span role="listitem">{walletRequired ? t("publicTrustWalletRequired") : t("publicTrustWalletOptional")}</span>
+        </div>
+        <div className="public-trust-footer">
+          <div className="public-form-status-badges">
             <span className={`public-form-status-badge ${deadlinePassed ? "is-expired" : "is-live"}`}>
               <span>{t("publicResponseWindow")}</span>
               <strong>{deadlinePassed ? t("publicDeadlineClosedBadge") : deadlineLabel}</strong>
             </span>
-            {form.encryptSubmissions ? (
-              <span className="public-form-status-badge is-private">
-                <span>{t("publicEncryptedInboxEyebrow")}</span>
-                <strong>{t("publicPrivateSignalBadge")}</strong>
-              </span>
-            ) : null}
+            <span className="public-form-status-badge is-private">
+              <span>{t("publicEncryptedInboxEyebrow")}</span>
+              <strong>{form.encryptSubmissions ? t("publicPrivateSignalBadge") : t("publicTrustProtectedBadge")}</strong>
+            </span>
           </div>
           <p className="muted">
             {deadlinePassed
@@ -392,6 +412,8 @@ export function PublicFormPage() {
                 : t("publicDeadlineActiveHelp")}
           </p>
         </div>
+      </section>
+      <div className="public-form-status-strip">
         <PublicSubmitReadiness
           className="public-submit-readiness-inline"
           identityMode={walletRequired || (attachWallet && walletAccountAddress) ? "wallet" : "anonymous"}
@@ -459,6 +481,10 @@ export function PublicFormPage() {
       ) : null}
 
       <div className="stack public-form-fields">
+        <div className="public-progress-row" aria-live="polite">
+          <span>{progressLabel}</span>
+          <small>{remainingEstimate}</small>
+        </div>
         {groupedFields.sections.map((section) =>
           section.fields.length ? (
             <section key={section.id} className="composer-preview-section">
@@ -575,16 +601,6 @@ function AttachedSignalContextPanel({ context }: { context: AttachedSignalContex
         <div className="metadata-row">
           <span>URL</span>
           <strong>{context.url || "unknown"}</strong>
-        </div>
-        <div className="metadata-row">
-          <span>IDs</span>
-          <strong>
-            {[
-              context.ids.formId ? `form ${context.ids.formId}` : "",
-              context.ids.projectId ? `project ${context.ids.projectId}` : "",
-              context.ids.manifestBlobId ? `manifest ${context.ids.manifestBlobId}` : "",
-            ].filter(Boolean).join(" / ") || "none"}
-          </strong>
         </div>
       </div>
     </details>

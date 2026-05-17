@@ -67,12 +67,12 @@ export function SignalSubmissionPipeline({ pipeline, visible, onClose, labels }:
                 : labels.statusInProgress}
           </span>
         </div>
-        <div className={`publish-terminal signal-submission-pipeline ${failed ? "is-failed" : ""}`}>
-          <div className="publish-terminal-header">
+        <div className={`signal-submission-pipeline ${failed ? "is-failed" : ""}`}>
+          <div className="signal-submission-pipeline-header">
             <span>{labels.terminalHeader}</span>
             <strong>{failed ? labels.terminalFailed : labels.terminalActive}</strong>
           </div>
-          <div className="publish-terminal-log" role="list">
+          <div className="signal-submission-steps" role="list">
             {SIGNAL_PIPELINE_STAGES.map((stage, index) => {
               const isDone = pipeline.status === "complete" || index < activeIndex;
               const isActive = !failed && index === activeIndex;
@@ -87,18 +87,19 @@ export function SignalSubmissionPipeline({ pipeline, visible, onClose, labels }:
               return (
                 <div
                   key={stage}
-                  className={`publish-terminal-row signal-submission-step ${isDone ? "is-done" : ""} ${
+                  className={`signal-submission-step ${isDone ? "is-done" : ""} ${
                     isActive ? "is-active" : ""
-                  } ${isFailed ? "is-failed is-error" : ""}`}
+                  } ${isFailed ? "is-failed" : ""}`}
                   role="listitem"
                 >
+                  <span className="signal-submission-step-dot" aria-hidden="true" />
                   <span>{labels.stages[stage] ?? PIPELINE_LABELS[stage]}</span>
                   <small>{statusText}</small>
                 </div>
               );
             })}
           </div>
-          {pipeline.message ? <p className="publish-terminal-detail">{pipeline.message}</p> : null}
+          {pipeline.message ? <p className="signal-submission-pipeline-message">{pipeline.message}</p> : null}
         </div>
         {failed && onClose ? (
           <div className="signal-submission-overlay-actions">

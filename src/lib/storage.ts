@@ -29,6 +29,7 @@ import {
 } from "./formTemplates";
 import { formatAnswerText } from "./answerFormatting";
 import { normalizeFormVisibility } from "./explore";
+import { normalizeActivityEvent } from "./activityLog";
 import { isResponseDeadlinePassed } from "./responseDeadline";
 import { enrichSubmissionWithTriage } from "./signalTriage";
 import { SUI_NETWORK } from "./sui";
@@ -580,6 +581,11 @@ export function normalizeForm(raw: FormSchema | (Record<string, unknown> & { id:
           : undefined,
     formMetadataDigest: typeof raw.formMetadataDigest === "string" ? raw.formMetadataDigest : undefined,
     registrationMode: raw.registrationMode === "sui" ? "sui" : "walrus",
+    activityEvents: Array.isArray(raw.activityEvents)
+      ? raw.activityEvents
+          .map((event) => normalizeActivityEvent(event as Record<string, unknown>))
+          .filter((event): event is NonNullable<ReturnType<typeof normalizeActivityEvent>> => Boolean(event))
+      : undefined,
   } satisfies FormSchema;
 }
 

@@ -8,6 +8,7 @@ import { useAccessControl } from "../hooks/useAccessControl";
 import { useProjectRegistry } from "../hooks/useProjectRegistry";
 import { useI18n } from "../i18n";
 import { canAdmin, getAdminSurfaceAccessState, getRoleLabel } from "../lib/adminAccess";
+import { getActivityActorRole } from "../lib/activityLog";
 import { setSelectedProjectId } from "../lib/projectRegistry";
 import { shortAddress, WALRUS_UPLOAD_RELAY_URL } from "../lib/sui";
 import { initialFields, initialTemplate, showWalrusDiagnostics } from "../features/createForm/constants";
@@ -78,6 +79,7 @@ function FormBuilderComposer({ mode, freshStartToken, initialDisplayMode = "clas
   const publish = useCreateFormPublish({
     t,
     accountAddress: account?.address,
+    actorRole: getActivityActorRole(capabilityProfile),
     creationMode: isGuestDraftMode ? "guest" : "admin",
     title: builder.values.title,
     description: builder.values.description,

@@ -1,5 +1,6 @@
 ﻿import {
   useCurrentAccount,
+  useSuiClient,
 } from "@mysten/dapp-kit";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -42,6 +43,15 @@ import {
   canReview,
   getRoleLabel,
 } from "../lib/adminAccess";
+import {
+  appendActivityEvents,
+  createActivityEvent,
+  getActivityActorRole,
+  getSuiTransactionUrl,
+  listSuiActivityEvents,
+  listActivityEvents,
+  mergeActivityEvents,
+} from "../lib/activityLog";
 import { getTriageStatusLabel, TRIAGE_STATUS_OPTIONS } from "../lib/signalOps";
 import { exportSubmissionJson } from "../lib/export";
 import {
@@ -55,6 +65,7 @@ import {
 } from "../lib/exportResponses";
 import { getEncryptedPayloadAvailabilityLabel, hasDedicatedEncryptedPayloadBlob } from "../lib/encryptionDisplay";
 import { getPublicFormPath, getPublicRoadmapPath } from "../lib/publicLinks";
+import { shortAddress } from "../lib/sui";
 import { clearDeepSignalPolicyCapabilityCache } from "../lib/debugCache";
 import { formatResponseDeadline, type ResponseDeadlineLabels } from "../lib/responseDeadline";
 import { getRespondentDisplayLabel, getSubmissionRespondentMeta } from "../lib/respondentMeta";
@@ -71,11 +82,12 @@ import {
 } from "../lib/storage";
 import { formatDate } from "../lib/utils";
 import { deleteFormsFromLocalCache, getStorageRuntimeStatus } from "../storage/storageFactory";
-import type { FormSchema, Submission } from "../types";
+import type { ActivityAction, ActivityEvent, FormSchema, Submission } from "../types";
 
 const ROADMAP_READY_STATUSES = new Set<Submission["triageStatus"]>(["planned", "in_progress", "fixed"]);
 type ReviewSaveStatus = "idle" | "saving" | "saved" | "skipped" | "error";
 type ReviewDraft = Pick<Submission, "status" | "triageStatus" | "priority" | "signalValue" | "notes">;
+type WorkspaceTab = "inbox" | "activity";
 
 function formatWorkspaceCount(count: number, singular: string, plural = `${singular}s`) {
   return `${count} ${count === 1 ? singular : plural}`;
@@ -83,6 +95,80 @@ function formatWorkspaceCount(count: number, singular: string, plural = `${singu
 
 function formatAccessLabel(roleLabel: string) {
   return `${roleLabel} access`;
+}
+
+function getActivityActionLabel(action: ActivityAction) {
+  switch (action) {
+    case "form_created":
+      return "created";
+    case "form_published":
+      return "published";
+    case "form_updated":
+      return "updated";
+    case "form_archived":
+      return "archived";
+    default:
+      return "updated";
+  }
+}
+
+function WorkspaceActivityLog({
+  events,
+}: {
+  events: ActivityEvent[];
+}) {
+  return (
+    <section className="panel workspace-activity-panel">
+      <div className="signal-workbench-header">
+        <div className="signal-workbench-copy">
+          <p className="eyebrow">Activity</p>
+          <h2>Workspace Activity</h2>
+          <p className="muted">Owner/Admin audit trail for signal form operations.</p>
+        </div>
+        <div className="signal-workbench-summary">
+          <span className="signal-chip">{events.length} events</span>
+        </div>
+      </div>
+
+      {events.length === 0 ? (
+        <EmptyState>
+          <h2>No activity yet.</h2>
+          <p>No activity yet. Create or publish a signal to start the audit trail.</p>
+        </EmptyState>
+      ) : (
+        <div className="workspace-activity-timeline" aria-label="Workspace Activity">
+          {events.map((event) => {
+            const actionLabel = getActivityActionLabel(event.action);
+            const txUrl = getSuiTransactionUrl(event.txDigest);
+            return (
+              <article key={event.id} className="workspace-activity-row">
+                <span className={`workspace-activity-dot is-${actionLabel}`} aria-hidden="true" />
+                <div className="workspace-activity-main">
+                  <div className="workspace-activity-line">
+                    <strong title={event.actorAddress || undefined}>
+                      {event.actorAddress ? shortAddress(event.actorAddress) : "Unknown actor"}
+                    </strong>
+                    <span className={`activity-badge is-${actionLabel}`}>{actionLabel}</span>
+                    <span>{event.formTitleSnapshot}</span>
+                  </div>
+                  <div className="workspace-activity-meta">
+                    <time dateTime={event.createdAt}>{formatDate(event.createdAt)}</time>
+                    <span>{event.actorRole}</span>
+                    <span>form {shortAddress(event.formId)}</span>
+                    {txUrl ? (
+                      <a href={txUrl} target="_blank" rel="noreferrer">
+                        Sui explorer
+                      </a>
+                    ) : null}
+                  </div>
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      )}
+    </section>
+  );
 }
 
 function getReviewLifecycleSteps(submission?: Submission | null, unlocked = false) {
@@ -370,6 +456,7 @@ function MobileSignalInbox({
 export function AdminDashboardPage() {
   const { language, t } = useI18n();
   const account = useCurrentAccount();
+  const suiClient = useSuiClient();
   const {
     capabilityProfile,
     isPending: isLoadingCapabilities,
@@ -399,6 +486,9 @@ export function AdminDashboardPage() {
   const [pendingCsvExportForm, setPendingCsvExportForm] = useState<FormSchema | null>(null);
   const [pendingCsvExportResponses, setPendingCsvExportResponses] = useState<Submission[]>([]);
   const [pendingCsvExportOptions, setPendingCsvExportOptions] = useState<ExportResponsesToCsvOptions | null>(null);
+  const [activeWorkspaceTab, setActiveWorkspaceTab] = useState<WorkspaceTab>("inbox");
+  const [localActivityEvents, setLocalActivityEvents] = useState<ActivityEvent[]>(() => listActivityEvents());
+  const [suiActivityEvents, setSuiActivityEvents] = useState<ActivityEvent[]>([]);
   const { toast, setToast } = useAdminToast();
   const saveQueueRef = useRef(Promise.resolve());
   const reviewInboxRef = useRef<HTMLDivElement | null>(null);
@@ -500,6 +590,7 @@ export function AdminDashboardPage() {
     decryptFailedLabel: t("decryptFailed"),
   });
   const roleLabel = getRoleLabel(capabilityProfile);
+  const activityActorRole = getActivityActorRole(capabilityProfile);
   const accessState = account?.address ? "allowed" : "denied";
   const privateReviewLabel = t("privateReviewEnabled");
 
@@ -522,8 +613,9 @@ export function AdminDashboardPage() {
 
   async function deleteNodes(formIds: string[]) {
     const uniqueIds = [...new Set(formIds)];
+    const formsById = new Map(forms.map((form) => [form.id, form]));
     const walletOwnedIds = uniqueIds.filter((formId) => {
-      const form = forms.find((item) => item.id === formId);
+      const form = formsById.get(formId);
       return addressesMatch(form?.ownerAddress, account?.address);
     });
     const localCacheOnlyIds = uniqueIds.filter((formId) => !walletOwnedIds.includes(formId));
@@ -534,6 +626,21 @@ export function AdminDashboardPage() {
     if (localCacheOnlyIds.length > 0) {
       await deleteFormsFromLocalCache(localCacheOnlyIds);
     }
+    const archivedEvents = uniqueIds.flatMap((formId) => {
+      const form = formsById.get(formId);
+      return form
+        ? [
+            createActivityEvent({
+              form,
+              actorAddress: account?.address,
+              actorRole: activityActorRole,
+              action: "form_archived",
+            }),
+          ]
+        : [];
+    });
+    appendActivityEvents(archivedEvents);
+    setLocalActivityEvents(listActivityEvents());
 
     return {
       walletDeletedCount: walletOwnedIds.length,
@@ -629,6 +736,41 @@ export function AdminDashboardPage() {
     window.addEventListener("keydown", handleEscape);
     return () => window.removeEventListener("keydown", handleEscape);
   }, [beaconFormId, nodeDirectoryOpen]);
+
+  useEffect(() => {
+    const refreshActivityEvents = () => setLocalActivityEvents(listActivityEvents());
+    window.addEventListener("focus", refreshActivityEvents);
+    window.addEventListener("storage", refreshActivityEvents);
+    return () => {
+      window.removeEventListener("focus", refreshActivityEvents);
+      window.removeEventListener("storage", refreshActivityEvents);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!hasAdminAccess || projects.length === 0) {
+      setSuiActivityEvents([]);
+      return;
+    }
+
+    let cancelled = false;
+    void listSuiActivityEvents(suiClient, projects).then(
+      (events) => {
+        if (!cancelled) {
+          setSuiActivityEvents(events);
+        }
+      },
+      (error) => {
+        console.warn("Failed to load Sui activity events", error);
+        if (!cancelled) {
+          setSuiActivityEvents([]);
+        }
+      },
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [hasAdminAccess, projects, suiClient]);
 
   const selectedProjectForms = useMemo(
     () =>
@@ -979,6 +1121,7 @@ export function AdminDashboardPage() {
   const draftTriageStatus = activeReviewDraft?.triageStatus ?? selectedRecord?.submission.triageStatus ?? "new";
   const draftSignalValue = activeReviewDraft?.signalValue ?? selectedRecord?.submission.signalValue;
   const draftNotes = activeReviewDraft?.notes ?? selectedRecord?.submission.notes ?? "";
+  const isReviewWorkbenchLocked = selectedRecordNeedsDecrypt;
   const isDraftRead = draftReviewStatus !== "unread";
   const isDraftClassified = draftTriageStatus !== "new" || draftSignalValue !== undefined;
   const hasDraftNotes = draftNotes.trim().length > 0;
@@ -1026,7 +1169,7 @@ export function AdminDashboardPage() {
   const nextReviewActionLabel = currentReviewStep?.state === "current" ? currentReviewStep.detail : "Review workflow is complete.";
 
   function patchReviewDraft(patch: Partial<ReviewDraft>) {
-    if (!selectedRecord) {
+    if (!selectedRecord || isReviewWorkbenchLocked) {
       return;
     }
     setReviewDraft((current) => {
@@ -1107,7 +1250,7 @@ export function AdminDashboardPage() {
   }, [applySubmissionUpdate, setSelectedSignalId, setToast]);
 
   async function handleSaveReviewDraft() {
-    if (!selectedRecord || !activeReviewDraft || !hasReviewDraftChanges) {
+    if (!selectedRecord || !activeReviewDraft || !hasReviewDraftChanges || isReviewWorkbenchLocked) {
       return;
     }
     await updateSubmission(
@@ -1120,7 +1263,7 @@ export function AdminDashboardPage() {
   }
 
   async function handleMoveToRoadmap() {
-    if (!selectedRecord) {
+    if (!selectedRecord || isReviewWorkbenchLocked) {
       return;
     }
     const currentTriageStatus = activeReviewDraft?.triageStatus ?? selectedRecord.submission.triageStatus;
@@ -1169,6 +1312,15 @@ export function AdminDashboardPage() {
   const unreadCountByFormId = signalIndex.unreadCountByFormId;
 
   const selectedForm = accessibleForms.find((form) => form.id === selectedFormId) ?? null;
+  const activityEvents = useMemo(
+    () =>
+      mergeActivityEvents(
+        localActivityEvents,
+        suiActivityEvents,
+        accessibleForms.flatMap((form) => form.activityEvents ?? []),
+      ),
+    [accessibleForms, localActivityEvents, suiActivityEvents],
+  );
   const selectedBeaconForm =
     accessibleForms.find((form) => form.id === beaconFormId) ?? null;
   const canDeleteForm = useCallback(
@@ -1310,6 +1462,39 @@ export function AdminDashboardPage() {
     };
     const metadata = buildExportMetadata(selectedRecord.form, responses, options);
     setPendingCsvExportForm(selectedRecord.form);
+    setPendingCsvExportResponses(responses);
+    setPendingCsvExportMetadata(metadata);
+    setPendingCsvExportOptions({ ...options, metadata });
+  }
+
+  function handleOpenFormAllCsvExportReview(formId: string) {
+    const form = accessibleForms.find((item) => item.id === formId);
+    if (!form) {
+      return;
+    }
+    const responses = (submissionsByFormId[formId] ?? []).map((submission) => normalizeSubmission(submission));
+    if (responses.length === 0) {
+      setToast({ tone: "error", message: t("noResponsesMatchCurrentFilters") });
+      return;
+    }
+    const options: ExportResponsesToCsvOptions = {
+      language,
+      now: new Date(),
+      scope: "all",
+      sortOrder: csvSortOrder,
+      excludedPiiFields: excludedCsvPiiFields,
+      exportedBy: account?.address ?? "",
+      filterSnapshot: {
+        searchQuery: "",
+        status: undefined,
+        priority: undefined,
+        tags: [],
+        triageStatus: undefined,
+        dateRange: {},
+      },
+    };
+    const metadata = buildExportMetadata(form, responses, options);
+    setPendingCsvExportForm(form);
     setPendingCsvExportResponses(responses);
     setPendingCsvExportMetadata(metadata);
     setPendingCsvExportOptions({ ...options, metadata });
@@ -1537,7 +1722,31 @@ export function AdminDashboardPage() {
           </div>
         </section>
 
-        {accessibleForms.length === 0 ? (
+        {hasAdminAccess ? (
+          <nav className="workspace-tab-nav" aria-label="Admin workspace sections">
+            <button
+              type="button"
+              className={activeWorkspaceTab === "inbox" ? "is-active" : ""}
+              onClick={() => setActiveWorkspaceTab("inbox")}
+            >
+              Signal Inbox
+            </button>
+            <button
+              type="button"
+              className={activeWorkspaceTab === "activity" ? "is-active" : ""}
+              onClick={() => {
+                setLocalActivityEvents(listActivityEvents());
+                setActiveWorkspaceTab("activity");
+              }}
+            >
+              Activity
+            </button>
+          </nav>
+        ) : null}
+
+        {activeWorkspaceTab === "activity" && hasAdminAccess ? (
+          <WorkspaceActivityLog events={activityEvents} />
+        ) : accessibleForms.length === 0 ? (
           <EmptyState>
             <h2>{t("noCreatorInboxesTitle")}</h2>
             <p>{t("noCreatorInboxesBody")}</p>
@@ -1641,6 +1850,7 @@ export function AdminDashboardPage() {
                   responseDeadlineLabels={responseDeadlineLabels}
                   openNodeDirectoryLabel={t("openNodeDirectory")}
                   onOpenNodeDirectory={() => setNodeDirectoryOpen(true)}
+                  onExportAllFormCsv={handleOpenFormAllCsvExportReview}
                 />
               </div>
 
@@ -2078,7 +2288,10 @@ export function AdminDashboardPage() {
                       </div>
                     ) : null}
 
-                    <section className="answer-card review-controls-section review-triage-card">
+                    <section
+                      className={`answer-card review-controls-section review-triage-card ${isReviewWorkbenchLocked ? "is-review-locked" : ""}`}
+                      aria-disabled={isReviewWorkbenchLocked}
+                    >
                       <div className="review-controls-header">
                         <div>
                           <p className="eyebrow">Review Workbench</p>
@@ -2092,7 +2305,7 @@ export function AdminDashboardPage() {
                           <button
                             type="button"
                             className="primary-button review-save-button"
-                            disabled={saving || !hasReviewDraftChanges}
+                            disabled={isReviewWorkbenchLocked || saving || !hasReviewDraftChanges}
                             onClick={() => void handleSaveReviewDraft()}
                           >
                             {saving ? t("reviewSaveSaving") : "Save review"}
@@ -2126,7 +2339,7 @@ export function AdminDashboardPage() {
                           <button
                             type="button"
                             className="ghost-button review-secondary-button"
-                            disabled={saving || draftReviewStatus === "read"}
+                            disabled={isReviewWorkbenchLocked || saving || draftReviewStatus === "read"}
                             onClick={() =>
                               void updateSubmission({
                                 ...selectedRecord.submission,
@@ -2140,7 +2353,7 @@ export function AdminDashboardPage() {
                           <button
                             type="button"
                             className="ghost-button review-secondary-button"
-                            disabled={saving}
+                            disabled={isReviewWorkbenchLocked || saving}
                             onClick={() =>
                               void updateSubmission({
                                 ...selectedRecord.submission,
@@ -2175,7 +2388,7 @@ export function AdminDashboardPage() {
                                   type="button"
                                   className={`review-state-badge is-status-${option.value} ${isSelected ? "is-active" : ""}`}
                                   aria-pressed={isSelected}
-                                  disabled={isSelected}
+                                  disabled={isReviewWorkbenchLocked || isSelected}
                                   onClick={() => patchReviewDraft({ status: option.value as Submission["status"] })}
                                 >
                                   {option.label}
@@ -2196,7 +2409,7 @@ export function AdminDashboardPage() {
                                   type="button"
                                   className={`review-state-badge is-triage-${option.value} ${isSelected ? "is-active" : ""}`}
                                   aria-pressed={isSelected}
-                                  disabled={isSelected}
+                                  disabled={isReviewWorkbenchLocked || isSelected}
                                   onClick={() => patchReviewDraft({ triageStatus: option.value })}
                                 >
                                   {option.label}
@@ -2221,7 +2434,7 @@ export function AdminDashboardPage() {
                                   type="button"
                                   className={`review-state-badge is-priority-${option.value} ${isSelected ? "is-active" : ""}`}
                                   aria-pressed={isSelected}
-                                  disabled={isSelected}
+                                  disabled={isReviewWorkbenchLocked || isSelected}
                                   onClick={() => patchReviewDraft({ priority: option.value as Submission["priority"] })}
                                 >
                                   {option.label}
@@ -2237,7 +2450,7 @@ export function AdminDashboardPage() {
                               type="button"
                               className={`review-state-badge is-value-none ${activeReviewDraft?.signalValue === undefined ? "is-active" : ""}`}
                               aria-pressed={activeReviewDraft?.signalValue === undefined}
-                              disabled={activeReviewDraft?.signalValue === undefined}
+                              disabled={isReviewWorkbenchLocked || activeReviewDraft?.signalValue === undefined}
                               onClick={() => patchReviewDraft({ signalValue: undefined })}
                             >
                               Not scored
@@ -2255,7 +2468,7 @@ export function AdminDashboardPage() {
                                     className={`review-star-button ${isFilled ? "is-filled" : ""} ${isSelected ? "is-selected" : ""}`}
                                     aria-label={`Signal Value ${value}`}
                                     aria-pressed={isSelected}
-                                    disabled={isSelected}
+                                    disabled={isReviewWorkbenchLocked || isSelected}
                                     onClick={() => patchReviewDraft({ signalValue: value })}
                                   >
                                     ★
@@ -2275,6 +2488,7 @@ export function AdminDashboardPage() {
                         <textarea
                           rows={5}
                           value={activeReviewDraft?.notes ?? ""}
+                          disabled={isReviewWorkbenchLocked}
                           onChange={(event) => patchReviewDraft({ notes: event.target.value })}
                           placeholder={t("captureReviewNotes")}
                         />
@@ -2297,7 +2511,7 @@ export function AdminDashboardPage() {
                           <button
                             type="button"
                             className="primary-button review-primary-button"
-                            disabled={saving || isDraftOnRoadmap}
+                            disabled={isReviewWorkbenchLocked || saving || isDraftOnRoadmap}
                             onClick={() => void handleMoveToRoadmap()}
                           >
                             {isDraftOnRoadmap ? "Visible on roadmap" : "Publish safe metadata"}

@@ -101,6 +101,13 @@ export function DynamicField({
     field.type === "dropdown" &&
     (field.options ?? []).length > 0 &&
     (field.options ?? []).every((option) => ["Minor", "Serious", "Blocking"].includes(option));
+  const attachmentActionLabel =
+    field.label?.trim() ||
+    (field.type === "screenshot"
+      ? "Attach screenshot"
+      : field.type === "video"
+        ? "Attach evidence"
+        : "Attach supporting file");
 
   function updateCheckbox(option: string, checked: boolean) {
     const current = Array.isArray(value) ? value : [];
@@ -470,6 +477,8 @@ export function DynamicField({
           <UploadDropzone
             attachments={selectedAttachments}
             disabled={disabled}
+            actionLabel={attachmentActionLabel}
+            emptyLabel="No supporting files attached yet"
             hint={hint ?? (field.type === "screenshot" ? t("screenshotHint") : t("videoHint"))}
             maxSizeBytes={attachmentMaxSizeBytes}
             maxSizeErrorMessage={attachmentMaxSizeErrorMessage}

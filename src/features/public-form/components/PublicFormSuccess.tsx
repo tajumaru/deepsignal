@@ -32,16 +32,16 @@ export function PublicFormSuccess({
     <section className="stack">
       <section className="panel glow-panel success-screen">
         <p className="eyebrow">{signalReceivedLabel}</p>
-        <h1>{isEncryptedSubmission ? "Signal protected" : "Signal sent"}</h1>
+        <h1>Signal Secured</h1>
         <p className="lede">
           {isEncryptedSubmission
-            ? "Your message is sealed for the encrypted signal inbox. Approved reviewers can unlock it when they review."
-            : "Your message is ready for reviewers in the signal inbox."}
+            ? "Your signal is sealed for the encrypted inbox. Approved reviewers can unlock it when they review."
+            : "Your signal is ready for selected reviewers in the signal inbox."}
         </p>
         <div className="signal-success-receipt" role="list" aria-label="Signal delivery receipt">
           <div className="signal-success-receipt-item is-complete" role="listitem">
             <span aria-hidden="true" />
-            <strong>{isEncryptedSubmission ? "Signal protected" : "Signal prepared"}</strong>
+            <strong>Signal secured</strong>
           </div>
           <div className={`signal-success-receipt-item ${storedOnWalrus ? "is-complete" : "is-local"}`} role="listitem">
             <span aria-hidden="true" />
@@ -63,7 +63,7 @@ export function PublicFormSuccess({
           <summary>
             <span>
               <p className="eyebrow">Trusted storage</p>
-              <h3>Submission details</h3>
+              <h3>Signal details</h3>
             </span>
           </summary>
           <div className="metadata-list">

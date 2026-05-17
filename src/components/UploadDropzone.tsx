@@ -24,6 +24,8 @@ interface UploadDropzoneProps {
   accept?: string;
   disabled?: boolean;
   hint?: string;
+  actionLabel?: string;
+  emptyLabel?: string;
   maxSizeBytes?: number;
   maxSizeErrorMessage?: (maxSizeBytes: number) => string;
   multiple?: boolean;
@@ -139,6 +141,8 @@ export function UploadDropzone({
   accept = DEFAULT_ACCEPT,
   disabled = false,
   hint,
+  actionLabel = "Attach supporting file",
+  emptyLabel = "No supporting files attached yet",
   maxSizeBytes = DEFAULT_MAX_FILE_BYTES,
   maxSizeErrorMessage,
   multiple = true,
@@ -190,7 +194,7 @@ export function UploadDropzone({
   const summaryLabel = useMemo(() => {
     const count = attachments.filter((attachment) => attachment.status !== "failed" || attachment.file).length;
     if (count === 0) {
-      return "No files selected yet";
+      return emptyLabel;
     }
     return count === 1 ? "1 file selected" : `${count} files selected`;
   }, [attachments]);
@@ -279,8 +283,8 @@ export function UploadDropzone({
           onChange={handleInputChange}
         />
         <div className="upload-dropzone-copy">
-          <strong>Drag &amp; drop evidence files here</strong>
-          <span>or click to upload</span>
+          <strong>{actionLabel}</strong>
+          <span>Drop files here or tap to attach</span>
           <small>{summaryLabel}</small>
           <small className="muted">Supports images, mp4/webm, PDF, text, and zip files.</small>
           {hint ? <small className="muted">{hint}</small> : null}
