@@ -282,10 +282,10 @@ function UseCasesSection() {
   const { sectionRef, isVisible } = useScrollReveal();
   const { t } = useI18n();
   const useCases = [
-    { title: t("landingUseCase1Title"), body: t("landingUseCase1Body"), tone: "feedback" },
-    { title: t("landingUseCase2Title"), body: t("landingUseCase2Body"), tone: "applications" },
-    { title: t("landingUseCase3Title"), body: t("landingUseCase3Body"), tone: "intelligence" },
-    { title: t("landingUseCase4Title"), body: t("landingUseCase4Body"), tone: "ai" },
+    { label: "SIG-01", title: t("landingUseCase1Title"), body: t("landingUseCase1Body"), tone: "feedback" },
+    { label: "NODE-02", title: t("landingUseCase2Title"), body: t("landingUseCase2Body"), tone: "applications" },
+    { label: "FLOW-03", title: t("landingUseCase3Title"), body: t("landingUseCase3Body"), tone: "intelligence" },
+    { label: "CH-04", title: t("landingUseCase4Title"), body: t("landingUseCase4Body"), tone: "ai" },
   ];
 
   return (
@@ -310,7 +310,7 @@ function UseCasesSection() {
               className={`landing-use-case landing-use-case-${useCase.tone}`}
               style={{ "--reveal-index": index } as CSSProperties}
             >
-              <span className="landing-use-case-index">0{index + 1}</span>
+              <span className="landing-use-case-index">{useCase.label}</span>
               <div>
                 <h3>{useCase.title}</h3>
                 <p>{useCase.body}</p>

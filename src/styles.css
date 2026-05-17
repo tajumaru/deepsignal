@@ -4046,32 +4046,108 @@ button {
   position: relative;
   z-index: 1;
   display: grid;
-  grid-template-columns: minmax(0, 1.18fr) minmax(0, 0.92fr) minmax(0, 1fr);
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   grid-template-areas:
-    "feedback feedback applications"
-    "intelligence ai ai";
+    "feedback feedback feedback applications applications"
+    "intelligence intelligence ai applications applications";
   gap: clamp(0.85rem, 1.7vw, 1.25rem);
+}
+
+.landing-use-case-field::before,
+.landing-use-case-field::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+}
+
+.landing-use-case-field::before {
+  inset: -1.2rem;
+  z-index: -1;
+  background:
+    linear-gradient(90deg, rgba(112, 232, 255, 0.045) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(112, 232, 255, 0.032) 1px, transparent 1px);
+  background-size: 48px 48px;
+  mask-image: radial-gradient(ellipse at 58% 45%, #000 0 34%, transparent 74%);
+  opacity: 0.28;
+  transition: opacity 220ms ease;
+}
+
+.landing-use-case-field::after {
+  left: 4%;
+  right: 7%;
+  top: 53%;
+  height: 3.6rem;
+  background: radial-gradient(ellipse at 50% 50%, rgba(132, 235, 255, 0.055), transparent 72%);
+  filter: blur(18px);
+  opacity: 0.18;
+  transform: translateY(-50%);
+  transition: opacity 240ms ease;
+}
+
+.landing-use-case-field:has(.landing-use-case:hover)::before {
+  opacity: 0.38;
+}
+
+.landing-use-case-field:has(.landing-use-case:hover)::after {
+  opacity: 0.3;
 }
 
 .landing-use-case {
   position: relative;
+  overflow: visible;
   min-height: 10.5rem;
   display: grid;
   align-content: end;
   gap: 1rem;
   padding: clamp(1rem, 2.2vw, 1.55rem);
-  border-radius: 24px;
+  border-radius: 18px;
   background:
-    radial-gradient(circle at 18% 18%, rgba(92, 232, 255, 0.12), transparent 28%),
-    rgba(5, 18, 30, 0.58);
-  box-shadow: inset 0 0 0 1px rgba(127, 230, 255, 0.055);
+    linear-gradient(180deg, rgba(10, 31, 47, 0.5), rgba(3, 14, 24, 0.64)),
+    rgba(5, 18, 30, 0.48);
+  box-shadow:
+    inset 0 0 0 1px rgba(127, 230, 255, 0.05),
+    inset 0 1px 0 rgba(219, 252, 255, 0.035);
   opacity: 0;
   transform: translateY(20px);
   transition:
     opacity 560ms ease calc(var(--reveal-index) * 90ms),
     transform 620ms ease calc(var(--reveal-index) * 90ms),
     background 220ms ease,
-    box-shadow 220ms ease;
+    box-shadow 220ms ease,
+    filter 220ms ease;
+}
+
+.landing-use-case::before,
+.landing-use-case::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+  opacity: 0;
+  transition:
+    opacity 220ms ease,
+    transform 260ms ease;
+}
+
+.landing-use-case::before {
+  inset: -1.65rem -2.1rem;
+  z-index: -1;
+  border-radius: 32px;
+  background:
+    radial-gradient(ellipse at 50% 60%, rgba(var(--use-case-accent), 0.105), transparent 72%),
+    linear-gradient(180deg, transparent 34%, rgba(var(--use-case-accent), 0.055) 50%, transparent 66%),
+    linear-gradient(90deg, transparent 49.5%, rgba(var(--use-case-accent), 0.028) 50%, transparent 50.5%);
+  filter: blur(12px);
+  transform: scale(0.99);
+}
+
+.landing-use-case::after {
+  inset: 0;
+  border-radius: inherit;
+  background:
+    linear-gradient(180deg, transparent 0 43%, rgba(183, 248, 255, 0.038) 49%, transparent 56%),
+    linear-gradient(90deg, transparent 8%, rgba(var(--use-case-accent), 0.06) 48%, transparent 92%);
+  mask-image: linear-gradient(180deg, transparent, #000 28% 72%, transparent);
+  transform: translateY(4px);
 }
 
 .landing-use-cases-section.is-visible .landing-use-case,
@@ -4083,52 +4159,92 @@ button {
 
 .landing-use-case:hover {
   background:
-    radial-gradient(circle at 18% 18%, rgba(92, 232, 255, 0.16), transparent 30%),
-    rgba(7, 23, 36, 0.68);
+    linear-gradient(180deg, rgba(11, 35, 53, 0.62), rgba(4, 15, 27, 0.72)),
+    rgba(7, 23, 36, 0.6);
   box-shadow:
-    inset 0 0 0 1px rgba(127, 230, 255, 0.09),
-    0 18px 48px rgba(0, 0, 0, 0.18);
+    inset 0 0 0 1px rgba(var(--use-case-accent), 0.11),
+    inset 0 1px 0 rgba(219, 252, 255, 0.06),
+    0 18px 48px rgba(0, 0, 0, 0.14);
+  filter: saturate(1.05);
+}
+
+.landing-use-case-field:has(.landing-use-case:hover) .landing-use-case:not(:hover) {
+  box-shadow:
+    inset 0 0 0 1px rgba(var(--use-case-accent), 0.065),
+    inset 0 1px 0 rgba(219, 252, 255, 0.04);
+  filter: saturate(1.015);
+}
+
+.landing-use-case:hover::before,
+.landing-use-case:hover::after {
+  opacity: 1;
+  transform: none;
 }
 
 .landing-use-case-feedback {
   grid-area: feedback;
-  min-height: 11.2rem;
+  min-height: 12.8rem;
+  --use-case-accent: 105, 232, 255;
+  --use-case-title-color: #d9f5fb;
+  --use-case-meta-color: rgba(150, 184, 197, 0.76);
 }
 
 .landing-use-case-applications {
   grid-area: applications;
-  margin-top: 1.2rem;
-  opacity: 0.82;
+  min-height: 18rem;
+  margin-top: 1.35rem;
+  --use-case-accent: 136, 241, 255;
+  --use-case-title-color: #dceff5;
+  --use-case-meta-color: rgba(154, 183, 194, 0.74);
 }
 
 .landing-use-case-intelligence {
   grid-area: intelligence;
   min-height: 8.8rem;
-  opacity: 0.76;
+  opacity: 0.8;
+  --use-case-accent: 88, 200, 244;
+  --use-case-title-color: #cce6f1;
+  --use-case-meta-color: rgba(142, 172, 188, 0.72);
 }
 
 .landing-use-case-ai {
   grid-area: ai;
-  margin-top: 0;
-  opacity: 0.88;
+  min-height: 8.8rem;
+  margin-top: 1.85rem;
+  opacity: 0.84;
+  --use-case-accent: 97, 218, 234;
+  --use-case-title-color: #d4ddee;
+  --use-case-meta-color: rgba(146, 170, 188, 0.72);
 }
 
 .landing-use-case-index {
-  color: rgba(120, 232, 255, 0.58);
+  width: fit-content;
+  padding: 0.28rem 0.42rem;
+  border: 1px solid rgba(var(--use-case-accent), 0.095);
+  border-radius: 6px;
+  background: rgba(5, 20, 32, 0.42);
+  color: rgba(174, 243, 255, 0.6);
   font-family: var(--font-mono);
-  font-size: 0.72rem;
+  font-size: 0.68rem;
+  line-height: 1;
+  letter-spacing: 0.085em;
+  box-shadow: inset 0 0 12px rgba(var(--use-case-accent), 0.028);
 }
 
 .landing-use-case h3 {
   margin: 0 0 0.45rem;
-  color: #d7f2fa;
+  color: var(--use-case-title-color, #d7f2fa);
   font-size: clamp(1.2rem, 2vw, 1.65rem);
+  font-weight: 650;
+  letter-spacing: 0;
 }
 
 .landing-use-case p {
   margin: 0;
-  color: #9ebdcc;
+  color: var(--use-case-meta-color, rgba(158, 189, 204, 0.74));
   font-size: 0.92rem;
+  line-height: 1.42;
+  letter-spacing: 0.018em;
 }
 
 .landing-principles-shell {
@@ -21296,6 +21412,11 @@ body.composer-mode .bg-orb {
   .landing-hero-live-feed span::before,
   .landing-hero-live-feed span:last-child::after,
   .landing-section-kicker span,
+  .landing-use-case-field::before,
+  .landing-use-case-field::after,
+  .landing-use-case,
+  .landing-use-case::before,
+  .landing-use-case::after,
   .landing-live-flow-rail span,
   .landing-live-log-row:last-child::after,
   .landing-final-cta-orbit,
@@ -21363,7 +21484,6 @@ body.composer-mode .bg-orb {
   .landing-principles-section,
   .landing-live-flow-section,
   .landing-final-cta-section,
-  .landing-use-case,
   .landing-principle,
   .landing-live-log-row {
     opacity: 1;
