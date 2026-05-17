@@ -866,6 +866,31 @@ export async function saveSubmissionWithEncryption(
           seal,
         );
       }
+      if (!encryptedBlobId && targetStorage.saveEncryptedSubmission) {
+        const parsedEnvelope = parseRealSealEnvelope(encryptedPayload);
+        if (!parsedEnvelope) {
+          throw createEncryptionGuardError(ENCRYPTION_FAILED_CODE, ENCRYPTION_FAILED_MESSAGE);
+        }
+        const sealIdentity = `seal:${parsedEnvelope.packageId}:${parsedEnvelope.objectId}`;
+        const metadataSubmission = sanitizeSubmissionForStorage(
+          {
+            ...triagedSubmission,
+            isEncrypted: true,
+            encryptedBlobId: undefined,
+            encryptedPayload,
+            sealIdentity,
+          },
+          { allowEncryptedPayload: true },
+        );
+        messages?.onPipelineStage?.("uploading_to_walrus");
+        const saved = await targetStorage.saveEncryptedSubmission(metadataSubmission);
+        return {
+          ...saved,
+          encryptedBlobId: saved.encryptedBlobId ?? saved.blobId,
+          encryptedPayload,
+          sealIdentity,
+        };
+      }
       if (!encryptedBlobId) {
         messages?.onPipelineStage?.("uploading_to_walrus");
         const savedEncryptedPayload = await targetStorage.saveEncryptedPayload(encryptedPayload);

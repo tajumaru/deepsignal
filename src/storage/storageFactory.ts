@@ -215,6 +215,27 @@ const hybridWalrusStorage: StorageAdapter = {
       () => localStorageAdapter.saveSubmission(submission),
     );
   },
+  async saveEncryptedSubmission(submission) {
+    const saveLocalEncryptedSubmission = async () => {
+      if (!submission.encryptedPayload) {
+        return localStorageAdapter.saveSubmission(submission);
+      }
+      const encryptedPayload = await localStorageAdapter.saveEncryptedPayload(submission.encryptedPayload);
+      const saved = await localStorageAdapter.saveSubmission({
+        ...submission,
+        encryptedBlobId: encryptedPayload.blobId,
+        encryptedPayload: undefined,
+      });
+      return { ...saved, encryptedBlobId: encryptedPayload.blobId };
+    };
+    if (isProductionRuntime) {
+      return withProtectedWriteFallback(() => walrusAdapter.saveEncryptedSubmission?.(submission) ?? walrusAdapter.saveSubmission(submission));
+    }
+    return withWriteFallback(
+      () => walrusAdapter.saveEncryptedSubmission?.(submission) ?? walrusAdapter.saveSubmission(submission),
+      saveLocalEncryptedSubmission,
+    );
+  },
   async listSubmissions(formId) {
     const [walrusSubmissions, localSubmissions] = await Promise.all([
       swallow(() => walrusAdapter.listSubmissions(formId), [] as Submission[]),

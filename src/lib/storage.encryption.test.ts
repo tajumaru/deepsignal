@@ -165,6 +165,40 @@ describe("saveSubmissionWithEncryption", () => {
     expect(JSON.parse(rawSubmissionJson).attachments[0]?.inlineData).toBeUndefined();
   });
 
+  it("uses single-call encrypted submission storage when the adapter supports it", async () => {
+    const persisted: Submission[] = [];
+    const targetStorage: StorageAdapter = {
+      saveForm: vi.fn(),
+      getForm: vi.fn(),
+      listForms: vi.fn(),
+      deleteForm: vi.fn(),
+      deleteForms: vi.fn(),
+      saveSubmission: vi.fn(),
+      saveEncryptedSubmission: vi.fn(async (submission: Submission) => {
+        persisted.push(submission);
+        return { id: submission.id, blobId: "submission-blob", encryptedBlobId: "submission-blob" };
+      }),
+      listSubmissions: vi.fn(),
+      updateSubmission: vi.fn(),
+      saveEncryptedPayload: vi.fn(),
+      readEncryptedPayload: vi.fn(),
+      uploadFile: vi.fn(),
+      readFileBlob: vi.fn(),
+      readFileText: vi.fn(),
+    };
+
+    await saveSubmissionWithEncryption(form, createEncryptedSubmission(), fakeSealAdapter, targetStorage);
+
+    expect(targetStorage.saveEncryptedPayload).not.toHaveBeenCalled();
+    expect(targetStorage.saveSubmission).not.toHaveBeenCalled();
+    expect(targetStorage.saveEncryptedSubmission).toHaveBeenCalledTimes(1);
+    expect(persisted[0]).toMatchObject({
+      isEncrypted: true,
+      answers: {},
+      encryptedPayload: expect.stringContaining("\"encryptedObject\":\"ciphertext\""),
+    });
+  });
+
   it("fails closed when an encrypted submission contains an unencrypted attachment", async () => {
     const targetStorage: StorageAdapter = {
       saveForm: vi.fn(),

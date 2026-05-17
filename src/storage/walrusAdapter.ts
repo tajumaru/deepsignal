@@ -1248,6 +1248,104 @@ export async function readManifest(blobId: string): Promise<SignalManifest | nul
   }
 }
 
+async function saveSubmissionRecord(
+  submission: Submission,
+  options: { allowEmbeddedEncryptedPayload?: boolean } = {},
+) {
+  const allowEmbeddedEncryptedPayload = options.allowEmbeddedEncryptedPayload === true;
+  const encryptedSubmissionOptions = { allowEncryptedPayload: allowEmbeddedEncryptedPayload };
+  const sanitizedSubmission = sanitizeSubmissionForStorage(submission, encryptedSubmissionOptions);
+  if (sanitizedSubmission.isEncrypted) {
+    assertEncryptedSubmissionLeakGuard(sanitizedSubmission, encryptedSubmissionOptions);
+  }
+  const { entry, manifest, form } = await loadManifestOrThrow(submission.formId);
+  if (!entry?.manifestBlobId || !manifest) {
+    if (sanitizedSubmission.isEncrypted) {
+      assertEncryptedSubmissionLeakGuard(sanitizedSubmission, encryptedSubmissionOptions);
+    }
+    const { blobId, blobObjectId } = await uploadBody(
+      new Blob([JSON.stringify(sanitizedSubmission)], { type: "application/json" }),
+      "submission-bundle",
+    );
+    await localStorageAdapter.saveSubmission({
+      ...sanitizedSubmission,
+      blobId,
+      ...(allowEmbeddedEncryptedPayload ? { encryptedBlobId: blobId, encryptedPayload: undefined } : {}),
+    });
+    upsertSubmissionBlobIndex({
+      submissionId: sanitizedSubmission.id,
+      formId: sanitizedSubmission.formId,
+      blobId,
+      blobObjectId,
+      createdAt: sanitizedSubmission.createdAt,
+    });
+    return {
+      id: sanitizedSubmission.id,
+      blobId,
+      ...(allowEmbeddedEncryptedPayload ? { encryptedBlobId: blobId } : {}),
+    };
+  }
+
+  const existingSubmissionObjectIds = Object.fromEntries(
+    listSubmissionBlobIndex(sanitizedSubmission.formId).map((item) => [item.submissionId, item.blobObjectId]),
+  );
+  const nextManifestEntries = [
+    { submissionId: sanitizedSubmission.id, blobId: "", createdAt: sanitizedSubmission.createdAt },
+    ...manifest.submissions.filter((item) => item.submissionId !== sanitizedSubmission.id),
+  ];
+  const nextManifest = createManifest(
+    {
+      id: manifest.formId,
+      createdAt: manifest.createdAt,
+      headerImage: form?.headerImage ?? manifest.headerImage,
+      headerLogo: form?.headerLogo ?? manifest.headerLogo,
+    },
+    form ? bundledFormPointer : manifest.formBlobId,
+    nextManifestEntries,
+    new Date().toISOString(),
+  );
+  const bundle = await writeSubmissionBundle(sanitizedSubmission, nextManifest, form, encryptedSubmissionOptions);
+  nextManifest.submissions[0].blobId = bundle.blobId;
+
+  upsertFormBlobIndex({
+    formId: sanitizedSubmission.formId,
+    formBlobId: form ? bundle.blobId : manifest.formBlobId,
+    formBlobObjectId: form ? bundle.blobObjectId : entry.formBlobObjectId,
+    manifestBlobId: bundle.blobId,
+    manifestBlobObjectId: bundle.blobObjectId,
+    createdAt: manifest.createdAt,
+  });
+  replaceSubmissionBlobIndex(
+    sanitizedSubmission.formId,
+    nextManifest.submissions.map((manifestEntry) => ({
+      submissionId: manifestEntry.submissionId,
+      formId: sanitizedSubmission.formId,
+      blobId: manifestEntry.blobId,
+      blobObjectId:
+        manifestEntry.submissionId === sanitizedSubmission.id
+          ? bundle.blobObjectId
+          : existingSubmissionObjectIds[manifestEntry.submissionId],
+      createdAt: manifestEntry.createdAt,
+    })),
+  );
+  await localStorageAdapter.saveSubmission({
+    ...sanitizedSubmission,
+    blobId: bundle.blobId,
+    ...(allowEmbeddedEncryptedPayload ? { encryptedBlobId: bundle.blobId, encryptedPayload: undefined } : {}),
+  });
+  if (!allowEmbeddedEncryptedPayload) {
+    await cleanupSupersededWalrusObjects([
+      entry.manifestBlobObjectId,
+      form ? entry.formBlobObjectId : undefined,
+    ], `saving submission ${sanitizedSubmission.id}`);
+  }
+  return {
+    id: sanitizedSubmission.id,
+    blobId: bundle.blobId,
+    ...(allowEmbeddedEncryptedPayload ? { encryptedBlobId: bundle.blobId } : {}),
+  };
+}
+
 export const walrusAdapter: StorageAdapter = {
   async saveForm(form: FormSchema) {
     const manifest = createManifest(form, bundledFormPointer, [], form.createdAt);
@@ -1345,90 +1443,11 @@ export const walrusAdapter: StorageAdapter = {
   },
 
   async saveSubmission(submission: Submission) {
-    const allowEmbeddedEncryptedPayload = false;
-    const encryptedSubmissionOptions = { allowEncryptedPayload: allowEmbeddedEncryptedPayload };
-    const sanitizedSubmission = sanitizeSubmissionForStorage(submission, encryptedSubmissionOptions);
-    if (sanitizedSubmission.isEncrypted) {
-      assertEncryptedSubmissionLeakGuard(sanitizedSubmission, encryptedSubmissionOptions);
-    }
-    const { entry, manifest, form } = await loadManifestOrThrow(submission.formId);
-    if (!entry?.manifestBlobId || !manifest) {
-      if (sanitizedSubmission.isEncrypted) {
-        assertEncryptedSubmissionLeakGuard(sanitizedSubmission, encryptedSubmissionOptions);
-      }
-      const { blobId, blobObjectId } = await uploadBody(
-        new Blob([JSON.stringify(sanitizedSubmission)], { type: "application/json" }),
-        "submission-bundle",
-      );
-      await localStorageAdapter.saveSubmission({
-        ...sanitizedSubmission,
-        blobId,
-        ...(allowEmbeddedEncryptedPayload ? { encryptedBlobId: blobId } : {}),
-      });
-      upsertSubmissionBlobIndex({
-        submissionId: sanitizedSubmission.id,
-        formId: sanitizedSubmission.formId,
-        blobId,
-        blobObjectId,
-        createdAt: sanitizedSubmission.createdAt,
-      });
-      return { id: sanitizedSubmission.id, blobId };
-    }
+    return saveSubmissionRecord(submission);
+  },
 
-    const existingSubmissionObjectIds = Object.fromEntries(
-      listSubmissionBlobIndex(sanitizedSubmission.formId).map((item) => [item.submissionId, item.blobObjectId]),
-    );
-    const nextManifestEntries = [
-      { submissionId: sanitizedSubmission.id, blobId: "", createdAt: sanitizedSubmission.createdAt },
-      ...manifest.submissions.filter((item) => item.submissionId !== sanitizedSubmission.id),
-    ];
-    const nextManifest = createManifest(
-      {
-        id: manifest.formId,
-        createdAt: manifest.createdAt,
-        headerImage: form?.headerImage ?? manifest.headerImage,
-        headerLogo: form?.headerLogo ?? manifest.headerLogo,
-      },
-      form ? bundledFormPointer : manifest.formBlobId,
-      nextManifestEntries,
-      new Date().toISOString(),
-    );
-    const bundle = await writeSubmissionBundle(sanitizedSubmission, nextManifest, form, encryptedSubmissionOptions);
-    nextManifest.submissions[0].blobId = bundle.blobId;
-
-    upsertFormBlobIndex({
-      formId: sanitizedSubmission.formId,
-      formBlobId: form ? bundle.blobId : manifest.formBlobId,
-      formBlobObjectId: form ? bundle.blobObjectId : entry.formBlobObjectId,
-      manifestBlobId: bundle.blobId,
-      manifestBlobObjectId: bundle.blobObjectId,
-      createdAt: manifest.createdAt,
-    });
-    replaceSubmissionBlobIndex(
-      sanitizedSubmission.formId,
-      nextManifest.submissions.map((manifestEntry) => ({
-        submissionId: manifestEntry.submissionId,
-        formId: sanitizedSubmission.formId,
-        blobId: manifestEntry.blobId,
-        blobObjectId:
-          manifestEntry.submissionId === sanitizedSubmission.id
-            ? bundle.blobObjectId
-            : existingSubmissionObjectIds[manifestEntry.submissionId],
-        createdAt: manifestEntry.createdAt,
-      })),
-    );
-    await localStorageAdapter.saveSubmission({
-      ...sanitizedSubmission,
-      blobId: bundle.blobId,
-      ...(allowEmbeddedEncryptedPayload ? { encryptedBlobId: bundle.blobId } : {}),
-    });
-    if (!allowEmbeddedEncryptedPayload) {
-      await cleanupSupersededWalrusObjects([
-        entry.manifestBlobObjectId,
-        form ? entry.formBlobObjectId : undefined,
-      ], `saving submission ${sanitizedSubmission.id}`);
-    }
-    return { id: sanitizedSubmission.id, blobId: bundle.blobId };
+  async saveEncryptedSubmission(submission: Submission) {
+    return saveSubmissionRecord(submission, { allowEmbeddedEncryptedPayload: true });
   },
 
   async listSubmissions(formId) {

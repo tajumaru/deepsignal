@@ -258,6 +258,7 @@ export interface StorageAdapter {
   deleteForm(id: string): Promise<void>;
   deleteForms(ids: string[]): Promise<void>;
   saveSubmission(submission: Submission): Promise<{ id: string; blobId?: string }>;
+  saveEncryptedSubmission?(submission: Submission): Promise<{ id: string; blobId?: string; encryptedBlobId?: string }>;
   listSubmissions(formId: string): Promise<Submission[]>;
   updateSubmission(submission: Submission): Promise<void>;
   saveEncryptedPayload(payload: string): Promise<{ blobId: string }>;
