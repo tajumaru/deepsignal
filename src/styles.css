@@ -4510,17 +4510,47 @@ button {
   padding: clamp(2rem, 5vw, 5rem);
   text-align: center;
   background:
-    radial-gradient(circle at 50% 48%, rgba(111, 234, 255, 0.14), transparent 32%),
+    radial-gradient(circle at 50% 53%, rgba(210, 252, 255, 0.105), transparent 13%),
+    radial-gradient(circle at 50% 53%, rgba(116, 239, 255, 0.035), transparent 34%),
+    radial-gradient(circle at 50% 53%, transparent 0 47%, rgba(168, 251, 255, 0.024) 47.3% 47.7%, transparent 48.1%),
     linear-gradient(180deg, rgba(3, 13, 23, 0.7), rgba(2, 8, 16, 0.92));
 }
 
 .landing-final-cta-orbit {
   position: absolute;
-  inset: 18% 28%;
-  border: 1px solid rgba(116, 239, 255, 0.12);
+  inset: 16% 21%;
+  border: 1px solid rgba(182, 248, 255, 0.07);
   border-radius: 50%;
   pointer-events: none;
-  animation: landing-hero-ring-breathe 5s ease-in-out infinite;
+  background: radial-gradient(ellipse at 50% 52%, rgba(116, 239, 255, 0.035), transparent 64%);
+  box-shadow:
+    inset 0 0 58px rgba(184, 251, 255, 0.022),
+    0 0 54px rgba(116, 239, 255, 0.024);
+  filter: blur(0.2px);
+  animation: landing-final-field-breathe 9.5s ease-in-out infinite;
+}
+
+.landing-final-cta-orbit::before,
+.landing-final-cta-orbit::after {
+  content: "";
+  position: absolute;
+  inset: 12%;
+  border-radius: inherit;
+  border: 0;
+}
+
+.landing-final-cta-orbit::before {
+  inset: 10% 14%;
+  background: radial-gradient(ellipse at 50% 52%, rgba(210, 252, 255, 0.045), transparent 58%);
+  opacity: 0.72;
+}
+
+.landing-final-cta-orbit::after {
+  inset: 28% 22%;
+  border-top: 1px solid rgba(210, 252, 255, 0.055);
+  border-bottom: 1px solid rgba(116, 239, 255, 0.035);
+  mask-image: linear-gradient(90deg, transparent, #000 28% 72%, transparent);
+  opacity: 0.68;
 }
 
 .landing-final-cta-shell .eyebrow,
@@ -4541,6 +4571,66 @@ button {
 .landing-final-cta-button {
   min-width: 12rem;
   justify-content: center;
+  overflow: visible;
+  border-color: rgba(217, 252, 255, 0.26);
+  background:
+    radial-gradient(circle at 50% 0%, rgba(240, 254, 255, 0.28), transparent 36%),
+    linear-gradient(135deg, #0c6575, #1c718d 52%, #234d79);
+  box-shadow:
+    0 0 0 1px rgba(217, 252, 255, 0.095),
+    0 0 0 0.65rem rgba(167, 238, 248, 0.03),
+    0 0 28px rgba(144, 229, 243, 0.095),
+    0 14px 32px rgba(5, 14, 28, 0.32);
+}
+
+.landing-final-cta-button::before {
+  inset: 0;
+  border-radius: inherit;
+}
+
+.landing-final-cta-button::after {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  inset: -0.68rem -1rem;
+  border: 1px solid rgba(217, 252, 255, 0.085);
+  border-radius: inherit;
+  background: radial-gradient(circle at 50% 50%, rgba(210, 252, 255, 0.055), transparent 66%);
+  pointer-events: none;
+  animation: landing-final-core-pulse 8.5s ease-in-out infinite;
+}
+
+.landing-final-cta-button:hover,
+.landing-final-cta-button:focus-visible {
+  box-shadow:
+    0 0 0 1px rgba(217, 252, 255, 0.18),
+    0 0 0 0.68rem rgba(167, 238, 248, 0.045),
+    0 0 34px rgba(144, 229, 243, 0.14),
+    0 16px 36px rgba(5, 14, 28, 0.36);
+}
+
+@keyframes landing-final-field-breathe {
+  0%,
+  100% {
+    opacity: 0.34;
+    scale: 0.992;
+  }
+  50% {
+    opacity: 0.48;
+    scale: 1.006;
+  }
+}
+
+@keyframes landing-final-core-pulse {
+  0%,
+  100% {
+    opacity: 0.32;
+    transform: scale(0.992);
+  }
+  50% {
+    opacity: 0.5;
+    transform: scale(1.015);
+  }
 }
 
 @keyframes landing-live-flow-dot {
@@ -21420,6 +21510,7 @@ body.composer-mode .bg-orb {
   .landing-live-flow-rail span,
   .landing-live-log-row:last-child::after,
   .landing-final-cta-orbit,
+  .landing-final-cta-button::after,
   .landing-flow-node-core,
   .landing-flow-particle,
   .landing-sync-dot,

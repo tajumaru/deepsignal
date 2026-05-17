@@ -195,7 +195,7 @@ const messages = {
     landingLiveFlowStep3: "Payload Encrypted",
     landingLiveFlowStep4: "Blob Synced to Walrus",
     landingFinalCtaEyebrow: "Begin transmission",
-    landingFinalCtaTitle: "Create Your First Signal",
+    landingFinalCtaTitle: "Initialize Signal",
     landingInboxEyebrow: "Private signal layer",
     landingInboxTitle: "Signal Inbox for encrypted feedback",
     landingInboxBody:
@@ -1645,7 +1645,7 @@ const messages = {
     landingLiveFlowStep3: "Payload Encrypted",
     landingLiveFlowStep4: "Blob Synced to Walrus",
     landingFinalCtaEyebrow: "Begin transmission",
-    landingFinalCtaTitle: "Create Your First Signal",
+    landingFinalCtaTitle: "Initialize Signal",
     landingInboxEyebrow: "\u975e\u516c\u958b signal layer",
     landingInboxTitle: "\u6697\u53f7\u5316\u30d5\u30a3\u30fc\u30c9\u30d0\u30c3\u30af\u306e\u305f\u3081\u306e Signal Inbox",
     landingInboxBody:
