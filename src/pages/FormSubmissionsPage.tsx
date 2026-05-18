@@ -9,6 +9,7 @@ import { BlobLink } from "../components/BlobLink";
 import { EmptyState } from "../components/EmptyState";
 import { FormattedAnswerValue } from "../components/FormattedAnswerValue";
 import { PrivateSignalUnlockCard } from "../components/PrivateSignalUnlockCard";
+import { ProofPanel } from "../components/ProofPanel";
 import { RichTextContent } from "../components/RichText";
 import { SignalStatusBadges } from "../components/SignalStatusBadges";
 import { SignalMetaChip } from "../components/SignalMetaChip";
@@ -55,6 +56,7 @@ import {
 } from "../lib/storage";
 import { buildSurveySummary } from "../lib/surveySummary";
 import { formatDate, flattenAnswer } from "../lib/utils";
+import { useRpcInfrastructure } from "../providers";
 import type { FormSchema, Submission } from "../types";
 
 type StreamId =
@@ -116,6 +118,7 @@ function getReviewLifecycleSteps(submission?: Submission | null, unlocked = fals
 export function FormSubmissionsPage() {
   const { language, t } = useI18n();
   const wallet = useSuiWallet();
+  const rpcInfrastructure = useRpcInfrastructure();
   const suiClient = useSuiClient();
   const updateSignalStatusTx = useSignAndExecuteTransaction();
   const {
@@ -1102,8 +1105,36 @@ export function FormSubmissionsPage() {
       return null;
     }
 
+    const proofItems = [
+      { label: "Walrus Blob ID", blobId: selectedSubmission.blobId },
+      { label: "Encrypted Payload Blob", blobId: selectedSubmission.encryptedBlobId },
+    ].filter((item) => item.blobId);
+    const submissionMetadata = selectedSubmission.metadata ?? {};
+    const transactionDigest =
+      typeof submissionMetadata.txDigest === "string" ? submissionMetadata.txDigest : undefined;
+    const storedNetwork =
+      typeof submissionMetadata.network === "string"
+        ? submissionMetadata.network
+        : rpcInfrastructure.connectedNetworkLabel;
+    const rpcProvider =
+      typeof submissionMetadata.rpcProvider === "string"
+        ? submissionMetadata.rpcProvider
+        : rpcInfrastructure.providerLabel;
+
     return (
       <div className="signal-detail-sections review-secondary-sections">
+        <ProofPanel
+          title="Submission Proof"
+          items={proofItems}
+          walletAddress={wallet.accountAddress}
+          ownerAddress={form?.ownerAddress}
+          sealMode={selectedSubmission.isEncrypted ? sealRuntimeLabel : "NOT ENCRYPTED"}
+          transactionDigest={transactionDigest}
+          networkLabel={storedNetwork}
+          encryptionStatus={selectedSubmission.isEncrypted ? "Seal protected" : "Standard submission"}
+          storedTimestamp={selectedSubmission.updatedAt || selectedSubmission.createdAt}
+          rpcProvider={rpcProvider}
+        />
         {renderMetadataExportCard()}
         {showSurveySummary && surveySummary ? (
           <section className="answer-card review-secondary-card">

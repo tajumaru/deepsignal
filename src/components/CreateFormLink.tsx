@@ -6,6 +6,7 @@ interface CreateFormLinkProps {
   children: ReactNode;
   className?: string;
   nav?: boolean;
+  onClick?: () => void;
 }
 
 function isModifiedEvent(event: MouseEvent<HTMLAnchorElement>) {
@@ -19,7 +20,7 @@ function createFreshFormTarget() {
   };
 }
 
-export function CreateFormLink({ children, className, nav = false }: CreateFormLinkProps) {
+export function CreateFormLink({ children, className, nav = false, onClick }: CreateFormLinkProps) {
   const navigate = useNavigate();
 
   function handleClick(event: MouseEvent<HTMLAnchorElement>) {
@@ -28,6 +29,7 @@ export function CreateFormLink({ children, className, nav = false }: CreateFormL
       return;
     }
     event.preventDefault();
+    onClick?.();
     navigate(createFreshFormTarget());
   }
 

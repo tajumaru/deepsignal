@@ -9,6 +9,8 @@ import {
   type ProjectSummary,
 } from "../lib/projectRegistry";
 import { PROJECT_OWNER_CAP_TYPE } from "../lib/sui";
+import { isSuiRateLimitError } from "../lib/sui";
+import { handleRateLimitedRpcFallback, useRpcInfrastructure } from "../providers";
 
 type OwnedObjectEntry = {
   data?: {
@@ -85,6 +87,7 @@ async function fetchOwnedProjectCaps(
 
 export function useProjectRegistry(address?: string | null) {
   const suiClient = useSuiClient();
+  const rpc = useRpcInfrastructure();
   const enabled = Boolean(address && PROJECT_OWNER_CAP_TYPE);
   const expectedType = normalizeType(PROJECT_OWNER_CAP_TYPE);
   const [recentProjects, setRecentProjects] = useState<ProjectSummary[]>(() => loadRecentProjects());
@@ -92,30 +95,45 @@ export function useProjectRegistry(address?: string | null) {
   const projectQuery = useQuery({
     queryKey: ["project-registry", address ?? "", expectedType],
     enabled,
-    retry: 1,
+    staleTime: 1000 * 60 * 5,
+    gcTime: 1000 * 60 * 30,
+    retry: false,
+    refetchOnMount: false,
+    refetchOnReconnect: false,
     refetchOnWindowFocus: false,
     queryFn: async () => {
-      const ownedCaps = await fetchOwnedProjectCaps(suiClient, address ?? "", PROJECT_OWNER_CAP_TYPE);
+      try {
+        const ownedCaps = await fetchOwnedProjectCaps(suiClient, address ?? "", PROJECT_OWNER_CAP_TYPE);
 
-      const caps = ownedCaps
-        .map((entry) => parseProjectOwnerCap(entry))
-        .filter((entry): entry is NonNullable<ReturnType<typeof parseProjectOwnerCap>> => Boolean(entry));
-      const projects = await Promise.all(
-        caps.map(async (cap) => {
-          const response = (await suiClient.getObject({
-            id: cap.projectId,
-            options: {
-              showContent: true,
-            },
-          })) as SuiObjectResponse;
-          return parseProjectSummary(cap.projectId, response.data?.content?.fields, cap.objectId);
-        }),
-      );
+        const caps = ownedCaps
+          .map((entry) => parseProjectOwnerCap(entry))
+          .filter((entry): entry is NonNullable<ReturnType<typeof parseProjectOwnerCap>> => Boolean(entry));
+        const projects = await Promise.all(
+          caps.map(async (cap) => {
+            const response = (await suiClient.getObject({
+              id: cap.projectId,
+              options: {
+                showContent: true,
+              },
+            })) as SuiObjectResponse;
+            return parseProjectSummary(cap.projectId, response.data?.content?.fields, cap.objectId);
+          }),
+        );
 
-      return {
-        caps,
-        projects: projects.filter((project): project is NonNullable<typeof project> => Boolean(project)),
-      };
+        return {
+          caps,
+          projects: projects.filter((project): project is NonNullable<typeof project> => Boolean(project)),
+        };
+      } catch (error) {
+        if (isSuiRateLimitError(error)) {
+          handleRateLimitedRpcFallback(rpc, error);
+          return {
+            caps: [],
+            projects: [],
+          };
+        }
+        throw error;
+      }
     },
   });
 

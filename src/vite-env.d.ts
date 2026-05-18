@@ -20,6 +20,10 @@ interface ImportMetaEnv {
   readonly VITE_SUI_NETWORK?: string;
   readonly VITE_RPC_URL?: string;
   readonly VITE_SUI_FULLNODE_URL?: string;
+  readonly NEXT_PUBLIC_SUI_RPC_URL?: string;
+  readonly NEXT_PUBLIC_TATUM_ENABLED?: string;
+  readonly VITE_TATUM_PROXY_ENABLED?: string;
+  readonly VITE_TATUM_PROXY_PATH?: string;
   readonly VITE_WALFORM_PACKAGE_ID?: string;
   readonly VITE_PACKAGE_ID?: string;
   readonly VITE_REGISTRY_ID?: string;

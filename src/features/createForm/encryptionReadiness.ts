@@ -34,7 +34,7 @@ function getNetworkMismatchWarnings(): EncryptionReadinessWarning[] {
   const endpoints = [
     { label: "Walrus aggregator", value: WALRUS_AGGREGATOR_URL },
     { label: "Walrus upload relay", value: WALRUS_UPLOAD_RELAY_URL },
-    { label: "Sui fullnode", value: SUI_FULLNODE_URL },
+    { label: "Sui RPC", value: SUI_FULLNODE_URL },
     { label: "Seal aggregator", value: import.meta.env.VITE_SEAL_AGGREGATOR_URL ?? "" },
   ];
 

@@ -284,8 +284,11 @@ VITE_SEAL_SERVER_TYPE=independent
 VITE_SEAL_AGGREGATOR_URL=
 
 VITE_SUI_NETWORK=mainnet
+NEXT_PUBLIC_SUI_RPC_URL=https://sui-mainnet.gateway.tatum.io
+NEXT_PUBLIC_TATUM_ENABLED=true
 VITE_SUI_FULLNODE_URL=https://fullnode.mainnet.sui.io:443
 VITE_RPC_URL=https://fullnode.mainnet.sui.io:443
+TATUM_API_KEY=
 VITE_PACKAGE_ID=
 VITE_REGISTRY_ID=
 VITE_ADMIN_CAP_ID=
@@ -295,11 +298,15 @@ VITE_OWNER_CAP_ID=
 Notes:
 
 - `VITE_WALRUS_NETWORK` accepts `testnet` or `mainnet`; keep Walrus and Sui URLs aligned with the selected network.
+- `NEXT_PUBLIC_SUI_RPC_URL` is the active client RPC target. Point it to Tatum for hackathon/demo infrastructure visibility, or leave the legacy `VITE_SUI_FULLNODE_URL` / `VITE_RPC_URL` values in place for the default Sui fullnode path.
+- `NEXT_PUBLIC_TATUM_ENABLED=true` turns on the Tatum RPC presentation and switchable client path.
+- `TATUM_API_KEY` is optional. When present during `vite dev` or `vite preview`, DeepSignal proxies RPC calls through a local `/api/tatum/sui-rpc` path so the secret does not need to be exposed in the browser bundle.
 - `VITE_ADMIN_CAP_ID` and `VITE_OWNER_CAP_ID` are optional helper envs for operator tooling and manual transaction flows.
 - Normal app access discovers active cap objects from the connected wallet.
 - `VITE_SEAL_AGGREGATOR_URL` is needed when the configured Seal key server is a committee server.
 - Set `VITE_RELEASE_STORAGE_RESET_TOKEN` to a new release identifier when the next deployed build should clear browser-local forms, submissions, drafts, Walrus blob indexes, and related form caches once per browser. Leave it blank for normal releases.
-- Vite client env vars must use the `VITE_` prefix.
+- Vite client env vars in this repo now accept both `VITE_` and `NEXT_PUBLIC_` prefixes.
+- Tatum setup details and troubleshooting live in [`docs/tatum-rpc.md`](./docs/tatum-rpc.md).
 
 ## Move Setup On Sui Mainnet
 

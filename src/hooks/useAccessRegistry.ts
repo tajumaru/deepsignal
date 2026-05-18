@@ -2,7 +2,12 @@ import { useSuiClient } from "@mysten/dapp-kit";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { parseRegistrySnapshot } from "../lib/accessRegistry";
-import { ACCESS_CONTROL_PACKAGE_ID, ACCESS_CONTROL_REGISTRY_ID } from "../lib/sui";
+import {
+  ACCESS_CONTROL_PACKAGE_ID,
+  ACCESS_CONTROL_REGISTRY_ID,
+  isSuiRateLimitError,
+} from "../lib/sui";
+import { handleRateLimitedRpcFallback, useRpcInfrastructure } from "../providers";
 
 type RegistryObjectResponse = {
   data?: {
@@ -26,6 +31,7 @@ function normalizeObjectId(value?: string | null) {
 
 export function useAccessRegistry() {
   const suiClient = useSuiClient();
+  const rpc = useRpcInfrastructure();
   const packageId = normalizeObjectId(ACCESS_CONTROL_PACKAGE_ID);
   const registryId = normalizeObjectId(ACCESS_CONTROL_REGISTRY_ID);
   const enabled = Boolean(packageId && registryId);
@@ -33,17 +39,29 @@ export function useAccessRegistry() {
   const registryQuery = useQuery({
     queryKey: ["access-control-registry", packageId, registryId],
     enabled,
-    retry: 1,
+    staleTime: 1000 * 60 * 5,
+    gcTime: 1000 * 60 * 30,
+    retry: false,
+    refetchOnMount: false,
+    refetchOnReconnect: false,
     refetchOnWindowFocus: false,
     queryFn: async () => {
-      const response = (await suiClient.getObject({
-        id: registryId,
-        options: {
-          showContent: true,
-        },
-      })) as RegistryObjectResponse;
+      try {
+        const response = (await suiClient.getObject({
+          id: registryId,
+          options: {
+            showContent: true,
+          },
+        })) as RegistryObjectResponse;
 
-      return response.data?.content?.fields ?? null;
+        return response.data?.content?.fields ?? null;
+      } catch (error) {
+        if (isSuiRateLimitError(error)) {
+          handleRateLimitedRpcFallback(rpc, error);
+          return null;
+        }
+        throw error;
+      }
     },
   });
 
@@ -59,4 +77,3 @@ export function useAccessRegistry() {
     isLoadingRegistry: enabled && registryQuery.isPending,
   };
 }
-

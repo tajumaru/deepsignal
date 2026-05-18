@@ -13,6 +13,7 @@ import { ensureRespondentSession } from "../../../lib/respondentSession";
 import { collectSignalContext, installSignalContextCapture } from "../../../lib/signalContext";
 import { ENCRYPTED_INLINE_ATTACHMENT_MAX_BYTES } from "../../../lib/attachmentLimits";
 import { makeId } from "../../../lib/utils";
+import { useRpcInfrastructure } from "../../../providers";
 import { isQuotaExceededError, isRateLimitError } from "../../../storage/walrusDiagnostics";
 import type { FormSchema, Submission, SubmissionAttachment } from "../../../types";
 import { getOrderedFields, getVisibleFieldIds, isFieldRequired } from "../../../utils/formLogic";
@@ -322,6 +323,7 @@ export function usePublicSubmission({
   submitFailedLabel,
   attachmentTooLargeLabel,
 }: UsePublicSubmissionArgs) {
+  const rpcInfrastructure = useRpcInfrastructure();
   const [answers, setAnswers] = useState<PublicAnswers>(initialAnswers);
   const [errors, setErrors] = useState<ValidationErrors>({});
   const [submitting, setSubmitting] = useState(false);
@@ -1018,6 +1020,9 @@ export function usePublicSubmission({
         respondentMeta,
         metadata: {
           context: signalContext,
+          rpcProvider: rpcInfrastructure.providerLabel,
+          rpcUrl: rpcInfrastructure.displayRpcUrl,
+          network: rpcInfrastructure.connectedNetworkLabel,
         },
         category: getSubmissionCategoryFromPurpose(form.purpose),
         status: "unread",

@@ -11,6 +11,7 @@ export function BuildIndicator() {
 
   return (
     <footer className="build-indicator" aria-label="Build information">
+      <span className="build-indicator-attribution">Powered by Walrus, Seal, Sui, and Tatum RPC</span>
       <button
         className="build-indicator-button"
         type="button"

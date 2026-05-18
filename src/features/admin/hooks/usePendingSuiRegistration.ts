@@ -13,6 +13,7 @@ import {
   storageAdapter,
 } from "../../../lib/storage";
 import { useI18n } from "../../../i18n";
+import { useRpcInfrastructure } from "../../../providers";
 import type { Submission } from "../../../types";
 import type { AdminToastState } from "./useAdminToast";
 import type { SignalRecord } from "./useSignalInboxData";
@@ -31,6 +32,7 @@ export function usePendingSuiRegistration({
   setToast,
 }: UsePendingSuiRegistrationArgs) {
   const suiClient = useSuiClient();
+  const rpcInfrastructure = useRpcInfrastructure();
   const { t } = useI18n();
   const registerSignalReceiptTx = useSignAndExecuteTransaction();
   const [selectedPendingSignalIds, setSelectedPendingSignalIds] = useState<string[]>([]);
@@ -98,6 +100,13 @@ export function usePendingSuiRegistration({
     const parsedSignalId = typeof rawSignalId === "number" ? rawSignalId : Number(rawSignalId ?? Number.NaN);
     const registeredSubmission = normalizeSubmission({
       ...submission,
+      metadata: {
+        ...(submission.metadata ?? {}),
+        txDigest: result.digest,
+        rpcProvider: rpcInfrastructure.providerLabel,
+        rpcUrl: rpcInfrastructure.displayRpcUrl,
+        network: rpcInfrastructure.connectedNetworkLabel,
+      },
       pendingOnchainRegistration: false,
       onchainSignalId: Number.isFinite(parsedSignalId) ? parsedSignalId : undefined,
       signalReceiptMetadataDigest,

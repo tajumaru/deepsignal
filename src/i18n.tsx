@@ -37,6 +37,7 @@ const messages = {
   en: {
     navHome: "Home",
     navExplore: "Explore",
+    navMore: "More",
     navTroubleshooting: "Troubleshooting",
     navMobileInbox: "Inbox",
     navMobileNewSignal: "New Signal",
@@ -1883,6 +1884,7 @@ const messages = {
   ja: {
     navHome: "\u30db\u30fc\u30e0",
     navExplore: "\u63a2\u7d22",
+    navMore: "\u305d\u306e\u4ed6",
     navTroubleshooting: "\u30c8\u30e9\u30d6\u30eb\u30b7\u30e5\u30fc\u30c8",
     navMobileInbox: "\u53d7\u4fe1\u7bb1",
     navMobileNewSignal: "\u65b0\u898f\u30b7\u30b0\u30ca\u30eb",

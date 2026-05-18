@@ -8,7 +8,9 @@ import {
   ACCESS_CONTROL_PACKAGE_ID,
   ACCESS_CONTROL_REGISTRY_ID,
   ACCESS_CONTROL_REVIEWER_CAP_TYPE,
+  isSuiRateLimitError,
 } from "../lib/sui";
+import { handleRateLimitedRpcFallback, useRpcInfrastructure } from "../providers";
 import { useAccessRegistry } from "./useAccessRegistry";
 
 export type CapabilityProfile = {
@@ -161,6 +163,7 @@ async function fetchOwnedObjectsByType(
 
 export function useAccessControl(address?: string | null) {
   const suiClient = useSuiClient();
+  const rpc = useRpcInfrastructure();
   const { registry, isLoadingRegistry, error: registryError } = useAccessRegistry();
   const packageId = normalizeObjectId(ACCESS_CONTROL_PACKAGE_ID);
   const registryId = normalizeObjectId(ACCESS_CONTROL_REGISTRY_ID);
@@ -182,21 +185,33 @@ export function useAccessControl(address?: string | null) {
   const ownedObjectsQuery = useQuery({
     queryKey: ["access-control-owned-objects", address ?? "", packageId, registryId],
     enabled,
-    retry: 1,
+    staleTime: 1000 * 60 * 5,
+    gcTime: 1000 * 60 * 30,
+    retry: false,
+    refetchOnMount: false,
+    refetchOnReconnect: false,
     refetchOnWindowFocus: false,
     queryFn: async () => {
-      const capTypes = [
-        ACCESS_CONTROL_OWNER_CAP_TYPE,
-        ACCESS_CONTROL_ADMIN_CAP_TYPE,
-        ACCESS_CONTROL_REVIEWER_CAP_TYPE,
-      ].filter(Boolean);
-      const pages = await Promise.all(
-        capTypes.map((capType) => fetchOwnedObjectsByType(suiClient, address ?? "", capType)),
-      );
+      try {
+        const capTypes = [
+          ACCESS_CONTROL_OWNER_CAP_TYPE,
+          ACCESS_CONTROL_ADMIN_CAP_TYPE,
+          ACCESS_CONTROL_REVIEWER_CAP_TYPE,
+        ].filter(Boolean);
+        const pages = await Promise.all(
+          capTypes.map((capType) => fetchOwnedObjectsByType(suiClient, address ?? "", capType)),
+        );
 
-      return pages
-        .flat()
-        .filter((entry) => targetTypes.has(normalizeType(entry.data?.type)));
+        return pages
+          .flat()
+          .filter((entry) => targetTypes.has(normalizeType(entry.data?.type)));
+      } catch (error) {
+        if (isSuiRateLimitError(error)) {
+          handleRateLimitedRpcFallback(rpc, error);
+          return [];
+        }
+        throw error;
+      }
     },
   });
 

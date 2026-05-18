@@ -3,12 +3,14 @@ import { useAccessControl } from "../hooks/useAccessControl";
 import { useSuiWallet } from "../hooks/useSuiWallet";
 import { useI18n } from "../i18n";
 import { isSignalInboxPath } from "../lib/navigation";
+import { AccessControlNavIcon, NavItemLabel, SignalInboxNavIcon } from "./NavIcons";
 
 interface WalletNavProps {
   section?: "all" | "inbox" | "access";
+  onNavigate?: () => void;
 }
 
-export function WalletNav({ section = "all" }: WalletNavProps) {
+export function WalletNav({ section = "all", onNavigate }: WalletNavProps) {
   const { t } = useI18n();
   const location = useLocation();
   const wallet = useSuiWallet();
@@ -21,8 +23,13 @@ export function WalletNav({ section = "all" }: WalletNavProps) {
   const hasAdminAccess = !isLoadingAccess && Boolean(capabilityProfile.hasOwnerCap || capabilityProfile.hasAdminCap);
   const inboxActive = isSignalInboxPath(location.pathname);
   const inboxNav = (
-    <Link className={inboxActive ? "active" : undefined} aria-current={inboxActive ? "page" : undefined} to="/admin">
-      {t("navLab")}
+    <Link
+      className={inboxActive ? "active" : undefined}
+      aria-current={inboxActive ? "page" : undefined}
+      to="/admin"
+      onClick={onNavigate}
+    >
+      <NavItemLabel icon={<SignalInboxNavIcon />}>{t("navLab")}</NavItemLabel>
     </Link>
   );
 
@@ -31,13 +38,21 @@ export function WalletNav({ section = "all" }: WalletNavProps) {
   }
 
   if (section === "access") {
-    return hasAdminAccess ? <NavLink to="/admin/access">{t("navAccess")}</NavLink> : null;
+    return hasAdminAccess ? (
+      <NavLink to="/admin/access" onClick={onNavigate}>
+        <NavItemLabel icon={<AccessControlNavIcon />}>{t("navAccess")}</NavItemLabel>
+      </NavLink>
+    ) : null;
   }
 
   return (
     <>
       {inboxNav}
-      {hasAdminAccess ? <NavLink to="/admin/access">{t("navAccess")}</NavLink> : null}
+      {hasAdminAccess ? (
+        <NavLink to="/admin/access" onClick={onNavigate}>
+          <NavItemLabel icon={<AccessControlNavIcon />}>{t("navAccess")}</NavItemLabel>
+        </NavLink>
+      ) : null}
     </>
   );
 }

@@ -122,15 +122,29 @@ export default defineConfig(({ mode }) => {
   const gitHash = process.env.VITE_GIT_HASH || env.VITE_GIT_HASH || getGitHash();
   const appEnvironment =
     process.env.VITE_APP_ENV || env.VITE_APP_ENV || process.env.VERCEL_ENV || process.env.NODE_ENV || mode || "dev";
+  const tatumApiKey = process.env.TATUM_API_KEY || env.TATUM_API_KEY || "";
+  const configuredRpcUrl =
+    env.NEXT_PUBLIC_SUI_RPC_URL || env.VITE_SUI_FULLNODE_URL || env.VITE_RPC_URL || "";
+  const tatumEnabled = String(env.NEXT_PUBLIC_TATUM_ENABLED || "").toLowerCase() === "true";
+  const tatumProxyEnabled = Boolean(
+    tatumEnabled &&
+      configuredRpcUrl &&
+      configuredRpcUrl.includes("gateway.tatum.io") &&
+      tatumApiKey,
+  );
+  const tatumProxyPath = "/api/tatum/sui-rpc";
 
   return {
     base: "./",
     assetsInclude: ["**/*.wasm"],
+    envPrefix: ["VITE_", "NEXT_PUBLIC_"],
     define: {
       "import.meta.env.VITE_APP_VERSION": JSON.stringify(appVersion),
       "import.meta.env.VITE_BUILD_TIME": JSON.stringify(buildTime),
       "import.meta.env.VITE_GIT_HASH": JSON.stringify(gitHash),
       "import.meta.env.VITE_APP_ENV": JSON.stringify(appEnvironment),
+      "import.meta.env.VITE_TATUM_PROXY_ENABLED": JSON.stringify(tatumProxyEnabled ? "true" : "false"),
+      "import.meta.env.VITE_TATUM_PROXY_PATH": JSON.stringify(tatumProxyPath),
     },
     plugins: [
       react(),
@@ -223,6 +237,34 @@ export default defineConfig(({ mode }) => {
         },
       },
     },
+    server: tatumProxyEnabled
+      ? {
+          proxy: {
+            [tatumProxyPath]: {
+              target: configuredRpcUrl,
+              changeOrigin: true,
+              rewrite: () => "",
+              headers: {
+                "x-api-key": tatumApiKey,
+              },
+            },
+          },
+        }
+      : undefined,
+    preview: tatumProxyEnabled
+      ? {
+          proxy: {
+            [tatumProxyPath]: {
+              target: configuredRpcUrl,
+              changeOrigin: true,
+              rewrite: () => "",
+              headers: {
+                "x-api-key": tatumApiKey,
+              },
+            },
+          },
+        }
+      : undefined,
     optimizeDeps: {
       include: [
         "@mysten/dapp-kit",

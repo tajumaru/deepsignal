@@ -1,6 +1,8 @@
 import { useSuiClient } from "@mysten/dapp-kit";
 import { isValidSuiAddress } from "@mysten/sui/utils";
 import { useQuery } from "@tanstack/react-query";
+import { isSuiRateLimitError } from "../lib/sui";
+import { handleRateLimitedRpcFallback, useRpcInfrastructure } from "../providers";
 
 function normalizeAddress(address?: string | null) {
   return address?.trim().toLowerCase() ?? "";
@@ -16,6 +18,7 @@ function normalizeSuiName(name?: string | null) {
 
 export function useSuiName(address?: string | null) {
   const suiClient = useSuiClient();
+  const rpc = useRpcInfrastructure();
   const normalizedAddress = normalizeAddress(address);
   const enabled = Boolean(normalizedAddress && isValidSuiAddress(normalizedAddress));
 
@@ -35,6 +38,9 @@ export function useSuiName(address?: string | null) {
         });
         return normalizeSuiName(response.data.name);
       } catch (error) {
+        if (isSuiRateLimitError(error)) {
+          handleRateLimitedRpcFallback(rpc, error);
+        }
         console.warn("SuiNS reverse lookup failed; falling back to short address.", error);
         return null;
       }

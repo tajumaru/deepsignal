@@ -1,3 +1,5 @@
+import { getJsonRpcFullnodeUrl } from "@mysten/sui/jsonRpc";
+
 export function shortAddress(address: string) {
   return `${address.slice(0, 6)}...${address.slice(-4)}`;
 }
@@ -8,11 +10,73 @@ const requestedNetwork = String(
     "mainnet",
 ).toLowerCase();
 export const SUI_NETWORK = requestedNetwork === "mainnet" ? "mainnet" : "testnet";
+export const SUI_DEFAULT_RPC_URL = getJsonRpcFullnodeUrl(SUI_NETWORK);
 export const SUI_FULLNODE_URL =
+  import.meta.env.NEXT_PUBLIC_SUI_RPC_URL ||
   import.meta.env.VITE_SUI_FULLNODE_URL ||
   import.meta.env.VITE_RPC_URL ||
   "";
-export const SUI_RPC_URL = SUI_FULLNODE_URL;
+export const SUI_RPC_URL = SUI_FULLNODE_URL || SUI_DEFAULT_RPC_URL;
+export const TATUM_ENABLED = String(import.meta.env.NEXT_PUBLIC_TATUM_ENABLED || "").toLowerCase() === "true";
+export const TATUM_PROXY_ENABLED = import.meta.env.VITE_TATUM_PROXY_ENABLED === "true";
+export const TATUM_PROXY_PATH = import.meta.env.VITE_TATUM_PROXY_PATH || "/api/tatum/sui-rpc";
+
+export function isTatumRpcUrl(url?: string | null) {
+  return Boolean(url && url.toLowerCase().includes("gateway.tatum.io"));
+}
+
+export function getRpcProviderLabel(url?: string | null) {
+  return isTatumRpcUrl(url) ? "Tatum RPC" : "Sui Fullnode";
+}
+
+export function getEffectiveTatumRpcUrl() {
+  if (!TATUM_ENABLED || !isTatumRpcUrl(SUI_FULLNODE_URL)) {
+    return null;
+  }
+  return TATUM_PROXY_ENABLED ? TATUM_PROXY_PATH : SUI_FULLNODE_URL;
+}
+
+export function getConnectedNetworkLabel(chainIdentifier?: string | null) {
+  const normalized = String(chainIdentifier || "").toLowerCase();
+  if (normalized.includes("mainnet")) {
+    return "mainnet";
+  }
+  if (normalized.includes("testnet")) {
+    return "testnet";
+  }
+  return SUI_NETWORK;
+}
+
+export function isSuiRateLimitError(error: unknown) {
+  if (!error) {
+    return false;
+  }
+
+  const status = typeof error === "object" && error !== null && "status" in error
+    ? (error as { status?: unknown }).status
+    : undefined;
+  if (status === 429) {
+    return true;
+  }
+
+  const cause = typeof error === "object" && error !== null && "cause" in error
+    ? (error as { cause?: unknown }).cause
+    : undefined;
+  if (cause && cause !== error && isSuiRateLimitError(cause)) {
+    return true;
+  }
+
+  const message =
+    error instanceof Error
+      ? `${error.name} ${error.message}`.toLowerCase()
+      : String(error).toLowerCase();
+  return (
+    message.includes("429") ||
+    message.includes("too many requests") ||
+    message.includes("rate limit") ||
+    message.includes("status code: 429")
+  );
+}
 export const WALRUS_AGGREGATOR_URL =
   import.meta.env.VITE_WALRUS_AGGREGATOR_URL ||
   (SUI_NETWORK === "mainnet"

@@ -1,4 +1,5 @@
 import { getProofBlobUrl, getProofStorageMode, isLocalFallbackBlob } from "../lib/proof";
+import { getSuiTransactionUrl } from "../lib/activityLog";
 import { SignalMetaChip } from "./SignalMetaChip";
 
 interface ProofItem {
@@ -12,6 +13,11 @@ interface ProofPanelProps {
   walletAddress?: string | null;
   ownerAddress?: string | null;
   sealMode: string;
+  transactionDigest?: string | null;
+  networkLabel?: string;
+  encryptionStatus?: string;
+  storedTimestamp?: string;
+  rpcProvider?: string;
 }
 
 function ProofBlobRow({ label, blobId }: ProofItem) {
@@ -42,8 +48,14 @@ export function ProofPanel({
   walletAddress,
   ownerAddress,
   sealMode,
+  transactionDigest,
+  networkLabel,
+  encryptionStatus,
+  storedTimestamp,
+  rpcProvider,
 }: ProofPanelProps) {
   const storageMode = getProofStorageMode(items.map((item) => item.blobId));
+  const txUrl = getSuiTransactionUrl(transactionDigest ?? undefined);
 
   return (
     <section className="panel proof-panel">
@@ -67,6 +79,43 @@ export function ProofPanel({
           <span>Seal mode</span>
           <strong>{sealMode}</strong>
         </div>
+        {transactionDigest ? (
+          <div className="proof-row">
+            <span>Transaction digest</span>
+            <div className="proof-row-value">
+              <SignalMetaChip type="blob" value={transactionDigest} />
+              {txUrl ? (
+                <a href={txUrl} target="_blank" rel="noreferrer">
+                  Open transaction
+                </a>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
+        {networkLabel ? (
+          <div className="proof-row">
+            <span>Network</span>
+            <strong>{networkLabel}</strong>
+          </div>
+        ) : null}
+        {encryptionStatus ? (
+          <div className="proof-row">
+            <span>Encryption status</span>
+            <strong>{encryptionStatus}</strong>
+          </div>
+        ) : null}
+        {storedTimestamp ? (
+          <div className="proof-row">
+            <span>Stored timestamp</span>
+            <strong>{storedTimestamp}</strong>
+          </div>
+        ) : null}
+        {rpcProvider ? (
+          <div className="proof-row">
+            <span>RPC provider</span>
+            <strong>{rpcProvider}</strong>
+          </div>
+        ) : null}
         <div className="proof-row">
           <span>Current wallet address</span>
           {walletAddress ? <SignalMetaChip type="contributor" value={walletAddress} /> : <strong>Not connected</strong>}
