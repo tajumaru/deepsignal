@@ -53,11 +53,17 @@
         inset: 0;
         z-index: 9999;
         display: grid;
+        min-height: 100dvh;
         place-items: center;
-        padding: clamp(1rem, 2vw, 1.5rem);
+        padding:
+          max(1.25rem, env(safe-area-inset-top))
+          max(1.25rem, env(safe-area-inset-right))
+          max(1.25rem, env(safe-area-inset-bottom))
+          max(1.25rem, env(safe-area-inset-left));
         background:
-          linear-gradient(180deg, rgba(7, 18, 30, 0.96), rgba(4, 12, 22, 0.98));
-        transition: opacity 620ms ease, visibility 620ms ease;
+          radial-gradient(circle at top, rgba(49, 130, 206, 0.2), transparent 36%),
+          linear-gradient(180deg, #06111d 0%, #04101b 100%);
+        transition: opacity 380ms ease, visibility 380ms ease;
       }
 
       #boot-overlay[data-state="exiting"] {
@@ -66,234 +72,64 @@
         pointer-events: none;
       }
 
-      .boot-grid {
-        position: absolute;
-        inset: 0;
-        background-image:
-          linear-gradient(rgba(123, 220, 255, 0.05) 1px, transparent 1px),
-          linear-gradient(90deg, rgba(123, 220, 255, 0.05) 1px, transparent 1px);
-        background-size: 72px 72px;
-        opacity: 0.16;
-      }
-
-      .boot-scan {
-        position: absolute;
-        left: 24px;
-        right: 24px;
-        top: calc(50% - 1px);
-        height: 2px;
-        background: linear-gradient(90deg, transparent, rgba(102, 227, 255, 0.6), transparent);
-        opacity: 0.55;
-        animation: bootScanPulse 1.8s ease-in-out infinite;
-      }
-
       .boot-shell {
-        position: relative;
         display: grid;
-        gap: 0.95rem;
-        width: min(100%, 860px);
-        padding: clamp(1.35rem, 2vw, 2rem);
-        border: 1px solid rgba(116, 226, 255, 0.34);
-        border-radius: 30px;
-        background: linear-gradient(180deg, rgba(9, 25, 39, 0.96), rgba(5, 16, 27, 0.98));
-        box-shadow:
-          inset 0 1px 0 rgba(189, 245, 255, 0.08),
-          0 0 0 1px rgba(116, 226, 255, 0.08),
-          0 18px 40px rgba(0, 0, 0, 0.34);
+        justify-items: center;
+        gap: 0.9rem;
+        width: min(100%, 22rem);
+        color: #ecfdff;
+        text-align: center;
       }
 
-      .boot-label,
-      .boot-meta,
-      .boot-status {
-        text-transform: uppercase;
-        letter-spacing: 0.18em;
+      .boot-mark {
+        display: grid;
+        width: 3rem;
+        height: 3rem;
+        place-items: center;
+        border: 1px solid rgba(116, 226, 255, 0.36);
+        border-radius: 16px;
+        background: rgba(10, 28, 43, 0.72);
+        box-shadow: 0 12px 32px rgba(0, 0, 0, 0.28);
       }
 
-      .boot-label {
-        color: #8adfff;
-        font-size: 0.78rem;
+      .boot-spinner {
+        width: 1.35rem;
+        height: 1.35rem;
+        border: 2px solid rgba(141, 226, 255, 0.22);
+        border-top-color: #8adfff;
+        border-radius: 999px;
+        animation: bootSpin 900ms linear infinite;
       }
 
       .boot-title {
         margin: 0;
-        font-size: clamp(2.35rem, 7vw, 4.9rem);
-        line-height: 0.92;
-        letter-spacing: -0.05em;
-      }
-
-      .boot-title span {
-        display: block;
-      }
-
-      .boot-title-accent {
-        background: linear-gradient(135deg, #f2fdff 8%, #87e8ff 45%, #5ab7ff 100%);
-        -webkit-background-clip: text;
-        background-clip: text;
-        color: transparent;
-        text-shadow: 0 0 14px rgba(88, 197, 255, 0.12);
-      }
-
-      .boot-copy {
-        max-width: 42rem;
-        margin: 0;
-        color: #e8f7ff;
-        font-size: 1rem;
-        line-height: 1.7;
-      }
-
-      .boot-pulse-shell {
-        position: relative;
-        min-height: 160px;
-        border-radius: 22px;
-        border: 1px solid rgba(116, 226, 255, 0.24);
-        background: linear-gradient(180deg, rgba(5, 17, 29, 0.92), rgba(6, 18, 29, 0.76));
-        overflow: hidden;
-      }
-
-      .boot-pulse-shell::before,
-      .boot-pulse-shell::after {
-        content: "";
-        position: absolute;
-      }
-
-      .boot-pulse-shell::before {
-        inset: auto 0 50%;
-        border-top: 1px solid rgba(116, 226, 255, 0.1);
-      }
-
-      .boot-pulse-shell::after {
-        top: 18px;
-        right: 18px;
-        width: 10px;
-        height: 10px;
-        border-radius: 999px;
-        background: #66e3ff;
-        box-shadow: 0 0 8px rgba(102, 227, 255, 0.4);
-        animation: bootBeacon 1.8s ease-in-out infinite;
-      }
-
-      .boot-pulse {
-        position: absolute;
-        inset: 0;
-        width: 100%;
-        height: 100%;
-      }
-
-      .boot-readout {
-        display: grid;
-        gap: 12px;
-      }
-
-      .boot-meta {
-        color: #8eaec0;
-        font-size: 0.72rem;
-      }
-
-      .boot-status-row {
-        display: grid;
-        grid-template-columns: minmax(0, 1fr) minmax(180px, 240px);
-        align-items: center;
-        justify-content: space-between;
-        gap: 0.85rem;
+        font-size: clamp(1.8rem, 10vw, 2.45rem);
+        line-height: 1;
+        letter-spacing: 0;
       }
 
       .boot-status {
-        color: #f2fdff;
-        font-size: 0.78rem;
-        min-width: 0;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
+        margin: 0;
+        color: #a8d3e4;
+        font-size: 0.95rem;
+        line-height: 1.5;
       }
 
-      .boot-failsafe {
-        margin-top: 0.15rem;
-        color: rgba(168, 211, 228, 0.82);
-        font-size: 0.78rem;
-      }
-
-      .boot-progress {
-        position: relative;
-        width: min(100%, 240px);
-        height: 10px;
-        border-radius: 999px;
-        background: rgba(113, 165, 188, 0.18);
-        overflow: hidden;
-      }
-
-      .boot-progress-bar {
-        position: absolute;
-        inset: 2px;
-        border-radius: inherit;
-        background: linear-gradient(90deg, rgba(102, 227, 255, 0.35), rgba(102, 227, 255, 0.72));
-        transform-origin: left center;
-        animation: bootProgress 1.6s ease-in-out infinite;
-      }
-
-      @keyframes bootScanPulse {
-        0%,
-        100% {
-          opacity: 0.24;
-        }
-
-        50% {
-          opacity: 0.7;
-        }
-      }
-
-      @keyframes bootBeacon {
-        0%,
-        100% {
-          opacity: 0.42;
-        }
-        50% {
-          opacity: 0.95;
-        }
-      }
-
-      @keyframes bootProgress {
-        0% {
-          transform: scaleX(0.22);
-        }
-        50% {
-          transform: scaleX(0.72);
-        }
-        100% {
-          transform: scaleX(0.38);
+      @keyframes bootSpin {
+        to {
+          transform: rotate(360deg);
         }
       }
 
       @media (prefers-reduced-motion: reduce) {
-        .boot-scan,
-        .boot-progress-bar,
-        .boot-pulse-shell::after {
+        #boot-overlay {
+          transition-duration: 1ms;
+        }
+
+        .boot-spinner {
           animation: none;
-        }
-      }
-
-      @media (max-width: 640px) {
-        .boot-shell {
-          gap: 0.8rem;
-          padding: 1rem;
-          border-radius: 22px;
-        }
-
-        .boot-copy {
-          font-size: 0.94rem;
-          line-height: 1.6;
-        }
-
-        .boot-pulse-shell {
-          min-height: 132px;
-        }
-
-        .boot-status-row {
-          align-items: stretch;
-          grid-template-columns: 1fr;
-        }
-
-        .boot-progress {
-          width: 100%;
+          border-color: rgba(141, 226, 255, 0.34);
+          box-shadow: 0 0 14px rgba(102, 227, 255, 0.24);
         }
       }
     </style>
@@ -333,86 +169,18 @@
   </head>
   <body class="booting">
     <div id="boot-overlay" aria-live="polite">
-      <div class="boot-grid" aria-hidden="true"></div>
-      <div class="boot-scan" aria-hidden="true"></div>
       <section class="boot-shell" role="status" aria-label="DeepSignal initialization">
-        <div class="boot-label">Encrypted Signal Inbox</div>
-        <h1 class="boot-title">
-          <span>DeepSignal</span>
-          <span class="boot-title-accent">Boot Sequence</span>
-        </h1>
-        <p class="boot-copy">
-          Establishing secure Walrus-native intake channels and restoring operator surfaces.
-        </p>
-        <div class="boot-pulse-shell" aria-hidden="true">
-          <svg class="boot-pulse" viewBox="0 0 1000 180" preserveAspectRatio="none">
-            <defs>
-              <linearGradient id="bootPulseStroke" x1="0%" y1="0%" x2="100%" y2="0%">
-                <stop offset="0%" stop-color="#66e3ff" stop-opacity="0.08" />
-                <stop offset="42%" stop-color="#66e3ff" stop-opacity="1" />
-                <stop offset="100%" stop-color="#d6faff" stop-opacity="0.82" />
-              </linearGradient>
-            </defs>
-            <path
-              d="M0 94 L115 94 L155 94 L190 60 L232 128 L270 94 L336 94 L395 32 L448 146 L502 74 L550 94 L638 94 L698 54 L746 126 L794 94 L1000 94"
-              fill="none"
-              stroke="url(#bootPulseStroke)"
-              stroke-width="4"
-              stroke-linejoin="round"
-              stroke-linecap="round"
-            />
-          </svg>
+        <div class="boot-mark" aria-hidden="true">
+          <div class="boot-spinner"></div>
         </div>
-        <div class="boot-readout">
-          <div class="boot-meta">Signal relay / seal adapters / recovery manifests</div>
-          <div class="boot-status-row">
-            <div class="boot-status" data-boot-status>Initializing encrypted signal channels...</div>
-            <div class="boot-progress" aria-hidden="true">
-              <div class="boot-progress-bar"></div>
-            </div>
-          </div>
-        </div>
-        <div class="boot-failsafe">If initialization stalls, the signal surface will open automatically.</div>
+        <h1 class="boot-title">DeepSignal</h1>
+        <p class="boot-status" data-boot-status>Loading encrypted signal workspace...</p>
       </section>
     </div>
     <div id="root"></div>
     <script>
       (() => {
-        const statusNode = document.querySelector("[data-boot-status]");
-        const overlay = document.getElementById("boot-overlay");
         window.__DEEPSIGNAL_BOOT_STARTED_AT__ = performance.now();
-        if (!statusNode || !overlay) {
-          return;
-        }
-
-        const messages = [
-          "Initializing encrypted signal channels...",
-          "Verifying responder-safe access pathways...",
-          "Restoring local fallback continuity...",
-          "Linking Walrus intelligence surfaces...",
-        ];
-
-        let index = 0;
-        const interval = window.setInterval(() => {
-          index = (index + 1) % messages.length;
-          statusNode.textContent = messages[index];
-        }, 780);
-
-        window.setTimeout(() => {
-          overlay.setAttribute("data-state", "exiting");
-          window.setTimeout(() => {
-            overlay.remove();
-            document.body.classList.remove("booting");
-          }, 700);
-        }, 5000);
-
-        overlay.addEventListener(
-          "transitionend",
-          () => {
-            window.clearInterval(interval);
-          },
-          { once: true },
-        );
       })();
     </script>
     <script type="module" src="/src/main.tsx"></script>

@@ -19,7 +19,7 @@ import {
   isResponseDeadlinePassed,
   type ResponseDeadlineLabels,
 } from "../lib/responseDeadline";
-import { DEFAULT_ATTACHMENT_MAX_BYTES, ENCRYPTED_INLINE_ATTACHMENT_MAX_BYTES } from "../lib/storage";
+import { DEFAULT_ATTACHMENT_MAX_BYTES, ENCRYPTED_INLINE_ATTACHMENT_MAX_BYTES } from "../lib/attachmentLimits";
 import { getOrderedFields, getVisibleFieldIds, isFieldRequired } from "../utils/formLogic";
 import { isAttachmentFieldType, isConfirmationCheckboxField } from "../lib/fieldTypes";
 import { collectSignalContext, type AttachedSignalContext } from "../lib/signalContext";

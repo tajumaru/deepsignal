@@ -22781,7 +22781,7 @@ body.composer-mode .bg-orb {
 
   .mobile-explore-row {
     display: grid;
-    grid-template-columns: 2.45rem minmax(0, 1fr) minmax(3.8rem, auto);
+    grid-template-columns: minmax(0, 1fr) minmax(3.8rem, auto);
     gap: 0.68rem;
     align-items: start;
     width: 100%;
@@ -23741,6 +23741,7 @@ pre {
   }
 
   .topbar:not(.topbar-public) .wallet-sync-button {
+    grid-template-columns: auto auto minmax(0, 1fr);
     min-height: 40px;
     border-radius: 13px;
     padding: 0.42rem 0.55rem;
@@ -23778,10 +23779,45 @@ pre {
     grid-template-columns: auto minmax(0, 1fr);
   }
 
+  .topbar:not(.topbar-public) .wallet-sync-copy {
+    display: block;
+  }
+
+  .topbar:not(.topbar-public) .wallet-sync-copy strong {
+    white-space: nowrap;
+  }
+
   .wallet-sync-address {
     grid-column: 1 / -1;
+    overflow: hidden;
+    padding-left: 0;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .wallet-sync-address-shell {
+    grid-column: 1 / -1;
+    justify-self: stretch;
+    min-width: 0;
     padding-left: 1.55rem;
-    white-space: normal;
+  }
+
+  .topbar:not(.topbar-public) .wallet-sync-address-shell {
+    grid-column: auto;
+    justify-self: end;
+    padding-left: 0;
+  }
+
+  .wallet-sync-address-shell .sui-address-display {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .topbar:not(.topbar-public) .wallet-sync-address-shell .sui-address-display {
+    width: auto;
+    min-height: 0;
+    padding: 0;
+    justify-content: flex-end;
   }
 
   .wallet-sync-menu {

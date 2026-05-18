@@ -11,6 +11,8 @@ interface SuiAddressDisplayProps {
   showTooltip?: boolean;
   copiedLabel?: string;
   copyLabel?: string;
+  copyOnClick?: boolean;
+  onPress?: () => void;
 }
 
 export function SuiAddressDisplay({
@@ -22,6 +24,8 @@ export function SuiAddressDisplay({
   showTooltip = false,
   copiedLabel = "Address copied",
   copyLabel = "Copy",
+  copyOnClick = true,
+  onPress,
 }: SuiAddressDisplayProps) {
   const { data: suinsName } = useSuiName(address);
   const [isVisible, setIsVisible] = useState(false);
@@ -38,6 +42,11 @@ export function SuiAddressDisplay({
   }, []);
 
   async function handleCopy() {
+    if (!copyOnClick) {
+      onPress?.();
+      return;
+    }
+
     try {
       await navigator.clipboard.writeText(address);
       setCopied(true);

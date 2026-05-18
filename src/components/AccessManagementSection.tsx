@@ -4,6 +4,7 @@ import { isValidSuiAddress, normalizeSuiAddress } from "@mysten/sui/utils";
 import { useMemo, useState } from "react";
 import type { CapabilityProfile } from "../hooks/useAccessControl";
 import { useAccessRegistry } from "../hooks/useAccessRegistry";
+import { useI18n } from "../i18n";
 import { canIssueAdmin, canIssueReviewer } from "../lib/adminAccess";
 import type { RegistryRoleEntry } from "../lib/accessRegistry";
 import {
@@ -22,31 +23,31 @@ interface AccessManagementSectionProps {
 function roleTitle(role: RegistryRoleEntry["role"]) {
   switch (role) {
     case "owner":
-      return "オーナー";
+      return "accessRoleOwner";
     case "admin":
-      return "管理者";
+      return "accessRoleAdmin";
     case "reviewer":
-      return "レビュアー";
+      return "accessRoleReviewer";
     default:
       return role;
   }
 }
 
-function profileRoleLabel(profile: CapabilityProfile) {
+function profileRoleLabel(profile: CapabilityProfile, t: (key: string) => string) {
   if (profile.hasOwnerCap) {
-    return "オーナー";
+    return t("accessRoleOwner");
   }
   if (profile.hasAdminCap) {
-    return "管理者";
+    return t("accessRoleAdmin");
   }
   if (profile.hasReviewerCap) {
-    return "レビュアー";
+    return t("accessRoleReviewer");
   }
-  return profile.isConfigured ? "アクセスなし" : "レガシーオーナー";
+  return profile.isConfigured ? t("accessRoleNone") : t("accessRoleLegacyOwner");
 }
 
-function statusLabel(status: RegistryRoleEntry["status"]) {
-  return status === "active" ? "有効" : status;
+function statusLabel(status: RegistryRoleEntry["status"], t: (key: string) => string) {
+  return status === "active" ? t("statusActive") : status;
 }
 
 export function AccessManagementSection({
@@ -54,6 +55,7 @@ export function AccessManagementSection({
   onToast,
   onRefreshCapabilities,
 }: AccessManagementSectionProps) {
+  const { t } = useI18n();
   const { registry, refetch: refetchRegistry, isLoadingRegistry } = useAccessRegistry();
   const [adminAddress, setAdminAddress] = useState("");
   const [reviewerAddress, setReviewerAddress] = useState("");
@@ -86,25 +88,25 @@ export function AccessManagementSection({
 
   async function handleAddAdmin() {
     if (!canManageAdmins) {
-      const message = "管理者を追加するには OwnerCap が必要です。";
+      const message = t("accessAddAdminRequiresOwner");
       setAdminIssueState(message);
       onToast({ tone: "error", message });
       return;
     }
     if (!ACCESS_CONTROL_PACKAGE_ID || !ACCESS_CONTROL_REGISTRY_ID) {
-      const message = "PACKAGE_ID または REGISTRY_ID が未設定です。";
+      const message = t("accessPackageRegistryMissing");
       setAdminIssueState(message);
       onToast({ tone: "error", message });
       return;
     }
     if (!capabilityProfile.ownerCapIds[0]) {
-      const message = "接続中のウォレットに有効な OwnerCap オブジェクトが見つかりません。";
+      const message = t("accessOwnerCapMissing");
       setAdminIssueState(message);
       onToast({ tone: "error", message });
       return;
     }
     if (!isValidSuiAddress(adminAddress)) {
-      const message = "有効な Sui ウォレットアドレスを入力してください。";
+      const message = t("validSuiAddressRequired");
       setAdminIssueState(message);
       onToast({ tone: "error", message });
       return;
@@ -121,14 +123,14 @@ export function AccessManagementSection({
     });
 
     try {
-      setAdminIssueState("ウォレット承認を待っています...");
+      setAdminIssueState(t("waitingForWalletApproval"));
       await addAdminTx.mutateAsync({ transaction: tx });
       setAdminAddress("");
-      setAdminIssueState("管理者アクセスを付与しました。");
-      onToast({ tone: "success", message: "管理者アクセスを付与しました。" });
+      setAdminIssueState(t("adminAccessGranted"));
+      onToast({ tone: "success", message: t("adminAccessGranted") });
       await refreshAll();
     } catch (error) {
-      const message = error instanceof Error ? error.message : "管理者の追加に失敗しました。";
+      const message = error instanceof Error ? error.message : t("addAdminFailed");
       setAdminIssueState(message);
       onToast({ tone: "error", message });
     }
@@ -136,19 +138,19 @@ export function AccessManagementSection({
 
   async function handleAddReviewer() {
     if (!canManageReviewers) {
-      const message = "レビュアーを追加するには OwnerCap または AdminCap が必要です。";
+      const message = t("accessAddReviewerRequiresAdmin");
       setReviewerIssueState(message);
       onToast({ tone: "error", message });
       return;
     }
     if (!ACCESS_CONTROL_PACKAGE_ID || !ACCESS_CONTROL_REGISTRY_ID) {
-      const message = "PACKAGE_ID または REGISTRY_ID が未設定です。";
+      const message = t("accessPackageRegistryMissing");
       setReviewerIssueState(message);
       onToast({ tone: "error", message });
       return;
     }
     if (!isValidSuiAddress(reviewerAddress)) {
-      const message = "有効な Sui ウォレットアドレスを入力してください。";
+      const message = t("validSuiAddressRequired");
       setReviewerIssueState(message);
       onToast({ tone: "error", message });
       return;
@@ -161,7 +163,7 @@ export function AccessManagementSection({
     const capId = capabilityProfile.ownerCapIds[0] ?? capabilityProfile.adminCapIds[0] ?? "";
 
     if (!capId) {
-      const message = "接続中のウォレットに有効な OwnerCap または AdminCap オブジェクトが見つかりません。";
+      const message = t("accessOwnerOrAdminCapMissing");
       setReviewerIssueState(message);
       onToast({ tone: "error", message });
       return;
@@ -177,14 +179,14 @@ export function AccessManagementSection({
     });
 
     try {
-      setReviewerIssueState("ウォレット承認を待っています...");
+      setReviewerIssueState(t("waitingForWalletApproval"));
       await addReviewerTx.mutateAsync({ transaction: tx });
       setReviewerAddress("");
-      setReviewerIssueState("レビュアーアクセスを付与しました。");
-      onToast({ tone: "success", message: "レビュアーアクセスを付与しました。" });
+      setReviewerIssueState(t("reviewerAccessGranted"));
+      onToast({ tone: "success", message: t("reviewerAccessGranted") });
       await refreshAll();
     } catch (error) {
-      const message = error instanceof Error ? error.message : "レビュアーの追加に失敗しました。";
+      const message = error instanceof Error ? error.message : t("addReviewerFailed");
       setReviewerIssueState(message);
       onToast({ tone: "error", message });
     }
@@ -192,20 +194,20 @@ export function AccessManagementSection({
 
   async function handleRemoveAdmin(entry: RegistryRoleEntry) {
     if (!canManageAdmins) {
-      const message = "管理者を削除するには OwnerCap が必要です。";
+      const message = t("accessRemoveAdminRequiresOwner");
       setRemoveState(message);
       onToast({ tone: "error", message });
       return;
     }
     if (!capabilityProfile.ownerCapIds[0]) {
-      const message = "接続中のウォレットに有効な OwnerCap オブジェクトが見つかりません。";
+      const message = t("accessOwnerCapMissing");
       setRemoveState(message);
       onToast({ tone: "error", message });
       return;
     }
     if (
       !window.confirm(
-        `${entry.address} の管理者アクセスを削除しますか？\n\nウォレットには古い Cap オブジェクトが残る場合がありますが、レジストリ上では無効になります。`,
+        t("confirmRemoveAdminAccess", { address: entry.address }),
       )
     ) {
       return;
@@ -222,13 +224,13 @@ export function AccessManagementSection({
     });
 
     try {
-      setRemoveState("ウォレット承認を待っています...");
+      setRemoveState(t("waitingForWalletApproval"));
       await removeAdminTx.mutateAsync({ transaction: tx });
-      setRemoveState(`${entry.address} の管理者アクセスを削除しました。`);
-      onToast({ tone: "success", message: `${entry.address} の管理者アクセスを削除しました。` });
+      setRemoveState(t("adminAccessRemoved", { address: entry.address }));
+      onToast({ tone: "success", message: t("adminAccessRemoved", { address: entry.address }) });
       await refreshAll();
     } catch (error) {
-      const message = error instanceof Error ? error.message : "管理者の削除に失敗しました。";
+      const message = error instanceof Error ? error.message : t("removeAdminFailed");
       setRemoveState(message);
       onToast({ tone: "error", message });
     }
@@ -236,7 +238,7 @@ export function AccessManagementSection({
 
   async function handleRemoveReviewer(entry: RegistryRoleEntry) {
     if (!canManageReviewers) {
-      const message = "レビュアーを削除するには OwnerCap または AdminCap が必要です。";
+      const message = t("accessRemoveReviewerRequiresAdmin");
       setRemoveState(message);
       onToast({ tone: "error", message });
       return;
@@ -248,14 +250,14 @@ export function AccessManagementSection({
     const capId = capabilityProfile.ownerCapIds[0] ?? capabilityProfile.adminCapIds[0] ?? "";
 
     if (!capId) {
-      const message = "接続中のウォレットに有効な OwnerCap または AdminCap オブジェクトが見つかりません。";
+      const message = t("accessOwnerOrAdminCapMissing");
       setRemoveState(message);
       onToast({ tone: "error", message });
       return;
     }
     if (
       !window.confirm(
-        `${entry.address} のレビュアーアクセスを削除しますか？\n\nウォレットには古い Cap オブジェクトが残る場合がありますが、レジストリ上では無効になります。`,
+        t("confirmRemoveReviewerAccess", { address: entry.address }),
       )
     ) {
       return;
@@ -272,13 +274,13 @@ export function AccessManagementSection({
     });
 
     try {
-      setRemoveState("ウォレット承認を待っています...");
+      setRemoveState(t("waitingForWalletApproval"));
       await removeReviewerTx.mutateAsync({ transaction: tx });
-      setRemoveState(`${entry.address} のレビュアーアクセスを削除しました。`);
-      onToast({ tone: "success", message: `${entry.address} のレビュアーアクセスを削除しました。` });
+      setRemoveState(t("reviewerAccessRemoved", { address: entry.address }));
+      onToast({ tone: "success", message: t("reviewerAccessRemoved", { address: entry.address }) });
       await refreshAll();
     } catch (error) {
-      const message = error instanceof Error ? error.message : "レビュアーの削除に失敗しました。";
+      const message = error instanceof Error ? error.message : t("removeReviewerFailed");
       setRemoveState(message);
       onToast({ tone: "error", message });
     }
@@ -288,8 +290,8 @@ export function AccessManagementSection({
     <section className="panel access-management-panel">
       <div className="section-row">
         <div>
-          <p className="eyebrow">アクセス管理</p>
-          <h2>Encrypted Signal Inbox 権限</h2>
+          <p className="eyebrow">{t("accessManagementEyebrow")}</p>
+          <h2>{t("accessOverviewTitle")}</h2>
         </div>
         <button
           type="button"
@@ -297,21 +299,23 @@ export function AccessManagementSection({
           onClick={() => void refreshAll()}
           disabled={isLoadingRegistry}
         >
-          {isLoadingRegistry ? "更新中..." : "レジストリを更新"}
+          {isLoadingRegistry ? t("refreshingLabel") : t("refreshRegistry")}
         </button>
       </div>
 
       <div className="access-management-summary">
-        <span className="signal-chip">接続中のロール: {profileRoleLabel(capabilityProfile)}</span>
-        <span className="signal-chip">オーナー {registry.owner ? 1 : 0}</span>
-        <span className="signal-chip">管理者 {registry.admins.length}</span>
-        <span className="signal-chip">レビュアー {registry.reviewers.length}</span>
+        <span className="signal-chip">
+          {t("connectedRoleLabel")}: {profileRoleLabel(capabilityProfile, t)}
+        </span>
+        <span className="signal-chip">{t("ownersCount", { count: registry.owner ? 1 : 0 })}</span>
+        <span className="signal-chip">{t("adminsCount", { count: registry.admins.length })}</span>
+        <span className="signal-chip">{t("reviewersCount", { count: registry.reviewers.length })}</span>
       </div>
 
       {canManageAdmins ? (
         <div className="access-management-actions">
           <label>
-            <span>管理者を追加</span>
+            <span>{t("addAdmin")}</span>
             <input
               value={adminAddress}
               onChange={(event) => setAdminAddress(event.target.value)}
@@ -324,7 +328,7 @@ export function AccessManagementSection({
             onClick={() => void handleAddAdmin()}
             disabled={addAdminTx.isPending}
           >
-            {addAdminTx.isPending ? "追加中..." : "管理者を追加"}
+            {addAdminTx.isPending ? t("addingLabel") : t("addAdmin")}
           </button>
         </div>
       ) : null}
@@ -332,7 +336,7 @@ export function AccessManagementSection({
       {canManageReviewers ? (
         <div className="access-management-actions">
           <label>
-            <span>レビュアーを追加</span>
+            <span>{t("addReviewer")}</span>
             <input
               value={reviewerAddress}
               onChange={(event) => setReviewerAddress(event.target.value)}
@@ -345,7 +349,7 @@ export function AccessManagementSection({
             onClick={() => void handleAddReviewer()}
             disabled={addReviewerTx.isPending}
           >
-            {addReviewerTx.isPending ? "追加中..." : "レビュアーを追加"}
+            {addReviewerTx.isPending ? t("addingLabel") : t("addReviewer")}
           </button>
         </div>
       ) : null}
@@ -356,17 +360,17 @@ export function AccessManagementSection({
 
       {!canManageAdmins && !canManageReviewers ? (
         <p className="muted">
-          レビュアーウォレットはここでレジストリを確認できますが、アクセス権を変更できるのはオーナー / 管理者ウォレットのみです。
+          {t("reviewerRegistryReadOnlyHint")}
         </p>
       ) : null}
 
-      <div className="access-role-grid" role="table" aria-label="アクセス管理レジストリ">
+      <div className="access-role-grid" role="table" aria-label={t("accessRegistryTableLabel")}>
         <div className="access-role-row access-role-row-header" role="row">
-          <span role="columnheader">アドレス</span>
-          <span role="columnheader">ロール</span>
-          <span role="columnheader">Cap オブジェクト ID</span>
-          <span role="columnheader">状態</span>
-          <span role="columnheader">操作</span>
+          <span role="columnheader">{t("addressLabel")}</span>
+          <span role="columnheader">{t("roleLabel")}</span>
+          <span role="columnheader">{t("capObjectIdLabel")}</span>
+          <span role="columnheader">{t("statusLabel")}</span>
+          <span role="columnheader">{t("actionsLabel")}</span>
         </div>
         {rows.map((entry) => {
           const canRemoveAdmin = entry.role === "admin" && canManageAdmins;
@@ -380,7 +384,7 @@ export function AccessManagementSection({
                 </span>
               </span>
               <span className="access-role-value" role="cell">
-                {roleTitle(entry.role)}
+                {t(roleTitle(entry.role))}
               </span>
               <span className="access-role-value" role="cell">
                 <span className="access-role-meta">
@@ -388,7 +392,7 @@ export function AccessManagementSection({
                 </span>
               </span>
               <span className="access-role-value" role="cell">
-                <span className="signal-chip signal-chip-accent">{statusLabel(entry.status)}</span>
+                <span className="signal-chip signal-chip-accent">{statusLabel(entry.status, t)}</span>
               </span>
               <span className="access-role-value" role="cell">
                 {canRemoveAdmin ? (
@@ -398,7 +402,7 @@ export function AccessManagementSection({
                     onClick={() => void handleRemoveAdmin(entry)}
                     disabled={removeAdminTx.isPending}
                   >
-                    {removeAdminTx.isPending ? "削除中..." : "管理者を削除"}
+                    {removeAdminTx.isPending ? t("removingLabel") : t("removeAdmin")}
                   </button>
                 ) : null}
                 {canRemoveReviewer ? (
@@ -408,11 +412,11 @@ export function AccessManagementSection({
                     onClick={() => void handleRemoveReviewer(entry)}
                     disabled={removeReviewerTx.isPending}
                   >
-                    {removeReviewerTx.isPending ? "削除中..." : "レビュアーを削除"}
+                    {removeReviewerTx.isPending ? t("removingLabel") : t("removeReviewer")}
                   </button>
                 ) : null}
                 {!canRemoveAdmin && !canRemoveReviewer ? (
-                  <span className="muted">読み取り専用</span>
+                  <span className="muted">{t("readOnlyLabel")}</span>
                 ) : null}
               </span>
             </div>

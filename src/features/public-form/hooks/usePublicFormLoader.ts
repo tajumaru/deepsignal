@@ -1,9 +1,5 @@
 import { useEffect, useState } from "react";
-import {
-  createEmptyAnswer,
-  normalizeForm,
-  storageAdapter,
-} from "../../../lib/storage";
+import { createEmptyAnswer, normalizeForm } from "../../../lib/formSchema";
 import { upsertFormBlobIndex } from "../../../storage/blobIndex";
 import { localStorageAdapter } from "../../../storage/localStorageAdapter";
 import type { FormSchema } from "../../../types";
@@ -297,7 +293,8 @@ export function usePublicFormLoader({
         }
 
         if (!nextForm) {
-          nextForm = await storageAdapter.getForm(formId);
+          const { storage } = await import("../../../storage/storageFactory");
+          nextForm = await storage.getForm(formId);
         }
 
         if (!nextForm && manifestRestoreError) {

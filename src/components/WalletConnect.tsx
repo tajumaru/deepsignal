@@ -60,6 +60,13 @@ export function WalletConnect({ compact = false }: WalletConnectProps) {
     }
   }
 
+  function handleToggleMenu() {
+    if (isConnecting) {
+      return;
+    }
+    setMenuOpen((current) => !current);
+  }
+
   const isRestoringConnection = !isConnected && (isConnecting || autoConnectStatus === "idle");
 
   const buttonLabel = isRestoringConnection
@@ -103,12 +110,7 @@ export function WalletConnect({ compact = false }: WalletConnectProps) {
         <button
           type="button"
           className="wallet-sync-toggle"
-          onClick={() => {
-            if (isConnecting) {
-              return;
-            }
-            setMenuOpen((current) => !current);
-          }}
+          onClick={handleToggleMenu}
           aria-expanded={menuOpen}
           aria-haspopup="menu"
         >
@@ -124,7 +126,9 @@ export function WalletConnect({ compact = false }: WalletConnectProps) {
             className="wallet-sync-address-shell"
             labelClassName="wallet-sync-address"
             showCopyLabel={false}
-            showTooltip
+            showTooltip={!compact}
+            copyOnClick={!compact}
+            onPress={handleToggleMenu}
           />
         ) : null}
       </div>

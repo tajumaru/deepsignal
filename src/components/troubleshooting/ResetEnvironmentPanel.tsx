@@ -1,17 +1,16 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useDisconnectWallet } from "@mysten/dapp-kit";
 import {
   clearIndexedDb,
   clearLocalCache,
   clearServiceWorkerCache,
   didResetFullySucceed,
-  RESET_CONFIRMATION_MESSAGE,
-  RESET_FAILURE_MESSAGE,
-  RESET_SUCCESS_MESSAGE,
   resetLocalEnvironment,
+  type ResetEnvironmentMessages,
   type ResetOperationResult,
   unregisterServiceWorkers,
 } from "../../lib/resetEnvironment";
+import { useI18n } from "../../i18n";
 
 type ResetToast = {
   tone: "success" | "error";
@@ -26,29 +25,64 @@ interface ResetAction {
   run: () => Promise<ResetOperationResult[]>;
 }
 
-function statusLabel(status: ResetOperationResult["status"]) {
+function statusLabel(status: ResetOperationResult["status"], t: (key: string) => string) {
   switch (status) {
     case "success":
-      return "成功";
+      return t("resetStatusSuccess");
     case "failed":
-      return "失敗";
+      return t("resetStatusFailed");
     case "skipped":
-      return "スキップ";
+      return t("resetStatusSkipped");
   }
 }
 
 export function ResetEnvironmentPanel() {
+  const { t } = useI18n();
   const disconnectWallet = useDisconnectWallet();
   const [results, setResults] = useState<ResetOperationResult[]>([]);
   const [runningAction, setRunningAction] = useState<string | null>(null);
   const [toast, setToast] = useState<ResetToast | null>(null);
+  const resetMessages = useMemo<ResetEnvironmentMessages>(
+    () => ({
+      confirmation: t("resetConfirmationMessage"),
+      success: t("resetSuccessMessage"),
+      failure: t("resetFailureMessage"),
+      operationLabels: {
+        walletDisconnect: t("resetOperationWalletDisconnect"),
+        localCache: t("resetOperationLocalCache"),
+        indexedDb: t("resetOperationIndexedDb"),
+        cacheStorage: t("resetOperationCacheStorage"),
+        serviceWorkers: t("resetOperationServiceWorkers"),
+      },
+      browserStorageUnavailable: t("resetBrowserStorageUnavailable"),
+      localCacheCleared: (removedCount) => t("resetLocalCacheCleared", { count: removedCount }),
+      localCacheFailed: t("resetLocalCacheFailed"),
+      indexedDbUnavailable: t("resetIndexedDbUnavailable"),
+      indexedDbDatabasesUnavailable: t("resetIndexedDbDatabasesUnavailable"),
+      indexedDbNotFound: t("resetIndexedDbNotFound"),
+      indexedDbPartialDelete: (totalCount, deletedCount) =>
+        t("resetIndexedDbPartialDelete", { total: totalCount, count: deletedCount }),
+      indexedDbDeleted: (count) => t("resetIndexedDbDeleted", { count }),
+      indexedDbFailed: t("resetIndexedDbFailed"),
+      cacheStorageUnavailable: t("resetCacheStorageUnavailable"),
+      cacheStorageDeleted: (count) => t("resetCacheStorageDeleted", { count }),
+      cacheStorageFailed: t("resetCacheStorageFailed"),
+      serviceWorkerUnavailable: t("resetServiceWorkerUnavailable"),
+      serviceWorkersUnregistered: (count) => t("resetServiceWorkersUnregistered", { count }),
+      serviceWorkersFailed: t("resetServiceWorkersFailed"),
+      walletDisconnectMissing: t("resetWalletDisconnectMissing"),
+      walletDisconnected: t("resetWalletDisconnected"),
+      walletDisconnectFailed: t("resetWalletDisconnectFailed"),
+    }),
+    [t],
+  );
 
   async function runConfirmedReset(
     actionKey: string,
     action: () => Promise<ResetOperationResult[]>,
     options: { reloadAfterSuccess?: boolean } = {},
   ) {
-    if (typeof window !== "undefined" && !window.confirm(RESET_CONFIRMATION_MESSAGE)) {
+    if (typeof window !== "undefined" && !window.confirm(resetMessages.confirmation)) {
       return;
     }
 
@@ -60,7 +94,7 @@ export function ResetEnvironmentPanel() {
       setResults(nextResults);
       setToast({
         tone: succeeded ? "success" : "error",
-        message: succeeded ? RESET_SUCCESS_MESSAGE : RESET_FAILURE_MESSAGE,
+        message: succeeded ? resetMessages.success : resetMessages.failure,
       });
 
       if (options.reloadAfterSuccess && succeeded && typeof window !== "undefined") {
@@ -69,7 +103,7 @@ export function ResetEnvironmentPanel() {
         }, 900);
       }
     } catch {
-      setToast({ tone: "error", message: RESET_FAILURE_MESSAGE });
+      setToast({ tone: "error", message: resetMessages.failure });
     } finally {
       setRunningAction(null);
     }
@@ -78,27 +112,27 @@ export function ResetEnvironmentPanel() {
   const actions: ResetAction[] = [
     {
       key: "localCache",
-      title: "ローカルキャッシュを削除",
-      body: "このデバイス上の DeepSignal localStorage/sessionStorage キーと、メモリ内の Seal 復号セッションキャッシュを削除します。",
-      run: async () => [await clearLocalCache()],
+      title: t("resetActionLocalCacheTitle"),
+      body: t("resetActionLocalCacheBody"),
+      run: async () => [await clearLocalCache(resetMessages)],
     },
     {
       key: "indexedDb",
-      title: "IndexedDB を削除",
-      body: "indexedDB.databases() に対応している場合、DeepSignal 名義のブラウザデータベースを削除します。古い Safari では安全にスキップされます。",
-      run: async () => [await clearIndexedDb()],
+      title: t("resetActionIndexedDbTitle"),
+      body: t("resetActionIndexedDbBody"),
+      run: async () => [await clearIndexedDb(resetMessages)],
     },
     {
       key: "cacheStorage",
-      title: "Service Worker キャッシュを削除",
-      body: "アップグレード後も古い PWA アセットを保持する可能性がある、DeepSignal 名義の Cache Storage エントリを削除します。",
-      run: async () => [await clearServiceWorkerCache()],
+      title: t("resetActionCacheStorageTitle"),
+      body: t("resetActionCacheStorageBody"),
+      run: async () => [await clearServiceWorkerCache(resetMessages)],
     },
     {
       key: "serviceWorkers",
-      title: "Service Worker 登録を解除",
-      body: "DeepSignal 名義の Service Worker 登録を解除します。実行後に DeepSignal を再読み込みすると、Safari または PWA シェルが新しい状態で起動します。",
-      run: async () => [await unregisterServiceWorkers()],
+      title: t("resetActionServiceWorkersTitle"),
+      body: t("resetActionServiceWorkersBody"),
+      run: async () => [await unregisterServiceWorkers(resetMessages)],
       danger: true,
     },
   ];
@@ -113,14 +147,14 @@ export function ResetEnvironmentPanel() {
 
       <div className="reset-environment-hero panel">
         <div>
-          <p className="eyebrow">トラブルシューティング / リセット</p>
-          <h1>DeepSignal 環境をリセット</h1>
+          <p className="eyebrow">{t("resetHeroEyebrow")}</p>
+          <h1>{t("resetHeroTitle")}</h1>
           <p className="lede">
-            iPhone Safari、Slush Wallet、インストール済み PWA に古いローカル状態が残り、再接続後も Seal の復号リクエストが失敗する場合に使用します。
+            {t("resetHeroBody")}
           </p>
         </div>
         <div className="reset-environment-warning" role="note">
-          DeepSignal はローカルのアプリ状態、暗号化キャッシュ、ブラウザストレージを削除できます。ウォレットの秘密鍵や Slush Wallet 内部データは削除できません。
+          {t("resetHeroWarning")}
         </div>
       </div>
 
@@ -137,7 +171,7 @@ export function ResetEnvironmentPanel() {
               disabled={Boolean(runningAction)}
               onClick={() => void runConfirmedReset(action.key, action.run)}
             >
-              {runningAction === action.key ? "削除中..." : action.title}
+              {runningAction === action.key ? t("resetDeletingLabel") : action.title}
             </button>
           </article>
         ))}
@@ -147,15 +181,15 @@ export function ResetEnvironmentPanel() {
         <section className="panel reset-results-panel" aria-live="polite">
           <div className="section-row">
             <div>
-              <p className="eyebrow">直近の実行</p>
-              <h2>リセット結果</h2>
+              <p className="eyebrow">{t("resetResultsEyebrow")}</p>
+              <h2>{t("resetResultsTitle")}</h2>
             </div>
           </div>
           <div className="reset-results-list">
             {results.map((result) => (
               <div key={result.operation} className={`reset-result-row is-${result.status}`}>
                 <span>{result.label}</span>
-                <strong>{statusLabel(result.status)}</strong>
+                <strong>{statusLabel(result.status, t)}</strong>
                 <p>{result.error ? `${result.detail} ${result.error}` : result.detail}</p>
               </div>
             ))}
@@ -165,20 +199,18 @@ export function ResetEnvironmentPanel() {
 
       <section className="panel reset-ios-note">
         <p className="eyebrow">iPhone Safari / PWA</p>
-        <h2>古いデータがまだ残る場合</h2>
+        <h2>{t("resetIosTitle")}</h2>
         <p>
-          iOS は Web サイトデータ、ウォレット連携状態、インストール済み PWA シェルを DeepSignal の制御外に保持することがあります。リセットで消し切れない場合は、
-          ホーム画面から PWA を削除するか、iOS 設定で DeepSignal の Web サイトデータを削除してからウォレットを再接続してください。
+          {t("resetIosBody")}
         </p>
       </section>
 
       <section className="panel reset-all-zone">
         <div>
-          <p className="eyebrow">危険ゾーン</p>
-          <h2>すべてリセット</h2>
+          <p className="eyebrow">{t("resetDangerEyebrow")}</p>
+          <h2>{t("resetAllTitle")}</h2>
           <p>
-            現在のウォレットセッションを切断し、DeepSignal のブラウザストレージ、IndexedDB、Cache Storage エントリを削除し、
-            DeepSignal の Service Worker 登録を解除してから DeepSignal のホーム画面へ戻ります。オンチェーンフォーム、Walrus blob、送信済みシグナルは削除されません。
+            {t("resetAllBody")}
           </p>
         </div>
         <button
@@ -192,12 +224,13 @@ export function ResetEnvironmentPanel() {
                 resetLocalEnvironment({
                   includeWalletDisconnect: true,
                   disconnectWallet: () => disconnectWallet.mutateAsync(),
+                  messages: resetMessages,
                 }),
               { reloadAfterSuccess: true },
             )
           }
         >
-          {runningAction === "resetAll" ? "リセット中..." : "すべてリセット"}
+          {runningAction === "resetAll" ? t("resettingLocalState") : t("resetAllButton")}
         </button>
       </section>
     </section>

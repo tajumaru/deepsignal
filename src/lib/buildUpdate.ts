@@ -113,6 +113,10 @@ export function startBuildUpdateCheck() {
         scheduleNextCheck(updateCheckRetryMs);
         return;
       }
+      if (!response.headers.get("content-type")?.includes("application/json")) {
+        scheduleNextCheck(updateCheckRetryMs);
+        return;
+      }
 
       const manifest = (await response.json()) as BuildManifest;
       if (sameBuild(manifest)) {

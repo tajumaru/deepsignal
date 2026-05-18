@@ -1,7 +1,6 @@
-import { lazy, Suspense, useState, type PropsWithChildren } from "react";
+import { lazy, Suspense, type PropsWithChildren } from "react";
 import { Link, NavLink, useLocation } from "react-router-dom";
 import { CreateFormLink } from "./CreateFormLink";
-import { WalletSurface } from "./WalletSurface";
 import { BuildIndicator } from "./system/BuildIndicator";
 import { useI18n } from "../i18n";
 import { retryLazyImport } from "../lib/lazyRetry";
@@ -16,6 +15,7 @@ const WalletNav = lazy(() =>
 
 interface AppShellProps extends PropsWithChildren {
   walletAvailable?: boolean;
+  onWalletActivate?: () => void;
   chrome?: "full" | "public";
 }
 
@@ -35,59 +35,32 @@ function WalletConnectPlaceholder({ onActivate }: { onActivate: () => void }) {
   );
 }
 
-function useWalletChrome(walletAvailable: boolean) {
-  const [walletRequested, setWalletRequested] = useState(false);
+function useWalletChrome(walletAvailable: boolean, onWalletActivate?: () => void) {
   const fallback = <div className="wallet-connect-shell wallet-connect-shell-compact" />;
 
-  if (!walletAvailable && !walletRequested) {
+  if (!walletAvailable) {
     return {
       inboxNav: null,
       accessNav: null,
-      connect: <WalletConnectPlaceholder onActivate={() => setWalletRequested(true)} />,
-    };
-  }
-
-  if (walletAvailable) {
-    return {
-      inboxNav: (
-        <Suspense fallback={null}>
-          <WalletNav section="inbox" />
-        </Suspense>
-      ),
-      accessNav: (
-        <Suspense fallback={null}>
-          <WalletNav section="access" />
-        </Suspense>
-      ),
-      connect: (
-        <Suspense fallback={fallback}>
-          <WalletConnect compact />
-        </Suspense>
-      ),
+      connect: <WalletConnectPlaceholder onActivate={() => onWalletActivate?.()} />,
     };
   }
 
   return {
     inboxNav: (
-      <WalletSurface fallback={null}>
-        <Suspense fallback={null}>
-          <WalletNav section="inbox" />
-        </Suspense>
-      </WalletSurface>
+      <Suspense fallback={null}>
+        <WalletNav section="inbox" />
+      </Suspense>
     ),
     accessNav: (
-      <WalletSurface fallback={null}>
-        <Suspense fallback={null}>
-          <WalletNav section="access" />
-        </Suspense>
-      </WalletSurface>
+      <Suspense fallback={null}>
+        <WalletNav section="access" />
+      </Suspense>
     ),
     connect: (
-      <WalletSurface fallback={fallback}>
-        <Suspense fallback={fallback}>
-          <WalletConnect compact />
-        </Suspense>
-      </WalletSurface>
+      <Suspense fallback={fallback}>
+        <WalletConnect compact />
+      </Suspense>
     ),
   };
 }
@@ -119,10 +92,15 @@ function MobileAppBottomNav() {
   );
 }
 
-export function AppShell({ children, walletAvailable = false, chrome = "full" }: AppShellProps) {
+export function AppShell({
+  children,
+  walletAvailable = false,
+  onWalletActivate,
+  chrome = "full",
+}: AppShellProps) {
   const { language, setLanguage, t } = useI18n();
   const location = useLocation();
-  const walletChrome = useWalletChrome(walletAvailable);
+  const walletChrome = useWalletChrome(walletAvailable, onWalletActivate);
   const publicChrome = chrome === "public";
   const showMobileBottomNav =
     !publicChrome &&

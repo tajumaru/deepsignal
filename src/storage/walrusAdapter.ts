@@ -128,6 +128,15 @@ export class WalrusBlobReadError extends Error {
 }
 
 export function setWalrusRuntimeContext(next: WalrusRuntimeContext) {
+  if (
+    runtimeContext.account?.address === next.account?.address &&
+    runtimeContext.wallet?.name === next.wallet?.name &&
+    runtimeContext.client === next.client &&
+    runtimeContext.supportedIntents.length === next.supportedIntents.length &&
+    runtimeContext.supportedIntents.every((intent, index) => intent === next.supportedIntents[index])
+  ) {
+    return;
+  }
   runtimeContext = next;
   runtimeListeners.forEach((listener) => listener());
 }

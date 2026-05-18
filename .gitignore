@@ -11,3 +11,11 @@ vite.config.js.timestamp-*.mjs
 /.temp-test
 /.tmp-test
 /move/deepsignal_access/Published.toml
+/.codex/vite-dev-live.log
+/.codex/vite-force-node.err.log
+/.codex/vite-force-node.log
+/.codex/vite-force.err.log
+/.codex/vite-force.log
+/.codex/vite-verify.combined.log
+/.codex/vite-verify.err.log
+/.codex/vite-verify.log

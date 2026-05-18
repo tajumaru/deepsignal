@@ -875,6 +875,51 @@ const messages = {
     ownersCount: (params) => `Owners ${params?.count ?? 0}`,
     adminsCount: (params) => `Admins ${params?.count ?? 0}`,
     reviewersCount: (params) => `Reviewers ${params?.count ?? 0}`,
+    accessRoleOwner: "Owner",
+    accessRoleAdmin: "Admin",
+    accessRoleReviewer: "Reviewer",
+    accessRoleNone: "No access",
+    accessRoleLegacyOwner: "Legacy owner",
+    statusActive: "Active",
+    addAdmin: "Add admin",
+    addReviewer: "Add reviewer",
+    removeAdmin: "Remove admin",
+    removeReviewer: "Remove reviewer",
+    addingLabel: "Adding...",
+    removingLabel: "Removing...",
+    roleLabel: "Role",
+    capObjectIdLabel: "Cap object ID",
+    statusLabel: "Status",
+    actionsLabel: "Actions",
+    readOnlyLabel: "Read only",
+    accessRegistryTableLabel: "Access management registry",
+    reviewerRegistryReadOnlyHint:
+      "Reviewer wallets can inspect the registry here, but only owner or admin wallets can change access.",
+    memberManagementCapabilityRequired:
+      "OwnerCap, AdminCap, or ReviewerCap is required to access member management.",
+    accessAddAdminRequiresOwner: "OwnerCap is required to add an admin.",
+    accessAddReviewerRequiresAdmin: "OwnerCap or AdminCap is required to add a reviewer.",
+    accessRemoveAdminRequiresOwner: "OwnerCap is required to remove an admin.",
+    accessRemoveReviewerRequiresAdmin: "OwnerCap or AdminCap is required to remove a reviewer.",
+    accessPackageRegistryMissing: "PACKAGE_ID or REGISTRY_ID is not configured.",
+    accessOwnerCapMissing: "No active OwnerCap object was found in the connected wallet.",
+    accessOwnerOrAdminCapMissing:
+      "No active OwnerCap or AdminCap object was found in the connected wallet.",
+    validSuiAddressRequired: "Enter a valid Sui wallet address.",
+    waitingForWalletApproval: "Waiting for wallet approval...",
+    adminAccessGranted: "Admin access granted.",
+    reviewerAccessGranted: "Reviewer access granted.",
+    addAdminFailed: "Failed to add admin.",
+    addReviewerFailed: "Failed to add reviewer.",
+    confirmRemoveAdminAccess: (params) =>
+      `Remove admin access for ${params?.address ?? "this wallet"}?\n\nOlder Cap objects may remain in the wallet, but they will be invalidated in the registry.`,
+    confirmRemoveReviewerAccess: (params) =>
+      `Remove reviewer access for ${params?.address ?? "this wallet"}?\n\nOlder Cap objects may remain in the wallet, but they will be invalidated in the registry.`,
+    adminAccessRemoved: (params) => `Removed admin access for ${params?.address ?? "this wallet"}.`,
+    reviewerAccessRemoved: (params) =>
+      `Removed reviewer access for ${params?.address ?? "this wallet"}.`,
+    removeAdminFailed: "Failed to remove admin.",
+    removeReviewerFailed: "Failed to remove reviewer.",
     connectWalletTitle: "Connect Wallet",
     walletVerifiedAccessRequired:
       "Wallet Verified access is required for admin and dashboard views.",
@@ -1230,6 +1275,69 @@ const messages = {
     reconnectWallet: "Reconnect wallet",
     resetLocalState: "Reset Local State",
     resettingLocalState: "Resetting...",
+    resetHeroEyebrow: "Troubleshooting / Reset",
+    resetHeroTitle: "Reset the DeepSignal environment",
+    resetHeroBody:
+      "Use this when stale local state in iPhone Safari, Slush Wallet, or an installed PWA keeps Seal decrypt requests failing after reconnecting.",
+    resetHeroWarning:
+      "DeepSignal can remove local app state, encryption caches, and browser storage. It cannot remove wallet private keys or internal Slush Wallet data.",
+    resetActionLocalCacheTitle: "Clear local cache",
+    resetActionLocalCacheBody:
+      "Remove DeepSignal localStorage/sessionStorage keys on this device and clear the in-memory Seal decrypt session cache.",
+    resetActionIndexedDbTitle: "Delete IndexedDB",
+    resetActionIndexedDbBody:
+      "Delete DeepSignal browser databases when indexedDB.databases() is supported. Older Safari versions are safely skipped.",
+    resetActionCacheStorageTitle: "Clear Service Worker cache",
+    resetActionCacheStorageBody:
+      "Delete DeepSignal Cache Storage entries that may keep stale PWA assets after an upgrade.",
+    resetActionServiceWorkersTitle: "Unregister Service Workers",
+    resetActionServiceWorkersBody:
+      "Unregister DeepSignal Service Workers. After this runs, reload DeepSignal so Safari or the PWA shell starts fresh.",
+    resetDeletingLabel: "Deleting...",
+    resetResultsEyebrow: "Latest run",
+    resetResultsTitle: "Reset results",
+    resetStatusSuccess: "Success",
+    resetStatusFailed: "Failed",
+    resetStatusSkipped: "Skipped",
+    resetIosTitle: "If stale data still remains",
+    resetIosBody:
+      "iOS can keep website data, wallet connection state, and installed PWA shells outside DeepSignal's control. If reset cannot clear everything, remove the PWA from the Home Screen or delete DeepSignal website data in iOS Settings, then reconnect the wallet.",
+    resetDangerEyebrow: "Danger zone",
+    resetAllTitle: "Reset everything",
+    resetAllBody:
+      "Disconnect the current wallet session, remove DeepSignal browser storage, IndexedDB, and Cache Storage entries, unregister DeepSignal Service Workers, then return to the DeepSignal home screen. On-chain forms, Walrus blobs, and submitted signals are not deleted.",
+    resetAllButton: "Reset everything",
+    resetConfirmationMessage:
+      "Reset DeepSignal local data on this device? On-chain forms and submitted signals will not be deleted, but cached sessions and local encryption state will be removed.",
+    resetSuccessMessage: "DeepSignal local state has been reset. Reconnect your wallet to continue.",
+    resetFailureMessage:
+      "Some local data could not be removed. You may need to delete the PWA or clear website data from iOS settings.",
+    resetOperationWalletDisconnect: "Wallet disconnect",
+    resetOperationLocalCache: "Local / session storage",
+    resetOperationIndexedDb: "IndexedDB",
+    resetOperationCacheStorage: "Service Worker cache",
+    resetOperationServiceWorkers: "Service Worker registration",
+    resetBrowserStorageUnavailable: "Browser storage is unavailable in this environment.",
+    resetLocalCacheCleared: (params) =>
+      `Removed ${params?.count ?? 0} DeepSignal storage key(s) and cleared the in-memory Seal session cache.`,
+    resetLocalCacheFailed: "Could not clear browser local cache.",
+    resetIndexedDbUnavailable: "IndexedDB is unavailable in this browser.",
+    resetIndexedDbDatabasesUnavailable: "indexedDB.databases() is not exposed in this browser.",
+    resetIndexedDbNotFound: "No DeepSignal IndexedDB databases were found.",
+    resetIndexedDbPartialDelete: (params) =>
+      `Deleted ${params?.count ?? 0} of ${params?.total ?? 0} DeepSignal IndexedDB database(s).`,
+    resetIndexedDbDeleted: (params) => `Deleted ${params?.count ?? 0} DeepSignal IndexedDB database(s).`,
+    resetIndexedDbFailed: "Could not enumerate or delete IndexedDB databases.",
+    resetCacheStorageUnavailable: "Cache Storage is unavailable in this browser.",
+    resetCacheStorageDeleted: (params) => `Deleted ${params?.count ?? 0} DeepSignal cache entry/entries.`,
+    resetCacheStorageFailed: "Could not clear Cache Storage.",
+    resetServiceWorkerUnavailable: "Service Workers are unavailable in this browser.",
+    resetServiceWorkersUnregistered: (params) =>
+      `Unregistered ${params?.count ?? 0} DeepSignal Service Worker registration(s). Reload the page to finish.`,
+    resetServiceWorkersFailed: "Could not unregister Service Worker registrations.",
+    resetWalletDisconnectMissing: "No wallet disconnect handler was provided.",
+    resetWalletDisconnected: "Wallet session disconnected.",
+    resetWalletDisconnectFailed: "Could not disconnect the wallet session.",
     disconnectingWallet: "Disconnecting...",
     openTroubleshooting: "Open Troubleshooting",
     decryptRecoveryActionsAriaLabel: "Decrypt recovery actions",
@@ -2648,6 +2756,55 @@ const messages = {
     ownersCount: (params) => `オーナー ${params?.count ?? 0}`,
     adminsCount: (params) => `管理者 ${params?.count ?? 0}`,
     reviewersCount: (params) => `レビュアー ${params?.count ?? 0}`,
+    accessRoleOwner: "オーナー",
+    accessRoleAdmin: "管理者",
+    accessRoleReviewer: "レビュアー",
+    accessRoleNone: "アクセスなし",
+    accessRoleLegacyOwner: "レガシーオーナー",
+    statusActive: "有効",
+    addAdmin: "管理者を追加",
+    addReviewer: "レビュアーを追加",
+    removeAdmin: "管理者を削除",
+    removeReviewer: "レビュアーを削除",
+    addingLabel: "追加中...",
+    removingLabel: "削除中...",
+    roleLabel: "ロール",
+    capObjectIdLabel: "Cap オブジェクト ID",
+    statusLabel: "状態",
+    actionsLabel: "操作",
+    readOnlyLabel: "読み取り専用",
+    accessRegistryTableLabel: "アクセス管理レジストリ",
+    reviewerRegistryReadOnlyHint:
+      "レビュアーウォレットはここでレジストリを確認できますが、アクセス権を変更できるのはオーナー / 管理者ウォレットのみです。",
+    memberManagementCapabilityRequired:
+      "メンバー管理にアクセスするには OwnerCap / AdminCap / ReviewerCap が必要です。",
+    accessAddAdminRequiresOwner: "管理者を追加するには OwnerCap が必要です。",
+    accessAddReviewerRequiresAdmin:
+      "レビュアーを追加するには OwnerCap または AdminCap が必要です。",
+    accessRemoveAdminRequiresOwner: "管理者を削除するには OwnerCap が必要です。",
+    accessRemoveReviewerRequiresAdmin:
+      "レビュアーを削除するには OwnerCap または AdminCap が必要です。",
+    accessPackageRegistryMissing: "PACKAGE_ID または REGISTRY_ID が未設定です。",
+    accessOwnerCapMissing:
+      "接続中のウォレットに有効な OwnerCap オブジェクトが見つかりません。",
+    accessOwnerOrAdminCapMissing:
+      "接続中のウォレットに有効な OwnerCap または AdminCap オブジェクトが見つかりません。",
+    validSuiAddressRequired: "有効な Sui ウォレットアドレスを入力してください。",
+    waitingForWalletApproval: "ウォレット承認を待っています...",
+    adminAccessGranted: "管理者アクセスを付与しました。",
+    reviewerAccessGranted: "レビュアーアクセスを付与しました。",
+    addAdminFailed: "管理者の追加に失敗しました。",
+    addReviewerFailed: "レビュアーの追加に失敗しました。",
+    confirmRemoveAdminAccess: (params) =>
+      `${params?.address ?? "このウォレット"} の管理者アクセスを削除しますか？\n\nウォレットには古い Cap オブジェクトが残る場合がありますが、レジストリ上では無効になります。`,
+    confirmRemoveReviewerAccess: (params) =>
+      `${params?.address ?? "このウォレット"} のレビュアーアクセスを削除しますか？\n\nウォレットには古い Cap オブジェクトが残る場合がありますが、レジストリ上では無効になります。`,
+    adminAccessRemoved: (params) =>
+      `${params?.address ?? "このウォレット"} の管理者アクセスを削除しました。`,
+    reviewerAccessRemoved: (params) =>
+      `${params?.address ?? "このウォレット"} のレビュアーアクセスを削除しました。`,
+    removeAdminFailed: "管理者の削除に失敗しました。",
+    removeReviewerFailed: "レビュアーの削除に失敗しました。",
     connectWalletTitle: "\u30a6\u30a9\u30ec\u30c3\u30c8\u3092\u63a5\u7d9a",
     walletVerifiedAccessRequired:
       "\u7ba1\u7406\u753b\u9762\u3068\u30c0\u30c3\u30b7\u30e5\u30dc\u30fc\u30c9\u306b\u306f Wallet Verified \u30a2\u30af\u30bb\u30b9\u304c\u5fc5\u8981\u3067\u3059\u3002",
@@ -3042,6 +3199,73 @@ const messages = {
     reconnectWallet: "\u30a6\u30a9\u30ec\u30c3\u30c8\u3092\u518d\u63a5\u7d9a",
     resetLocalState: "\u30ed\u30fc\u30ab\u30eb\u72b6\u614b\u3092\u30ea\u30bb\u30c3\u30c8",
     resettingLocalState: "\u30ea\u30bb\u30c3\u30c8\u4e2d...",
+    resetHeroEyebrow: "トラブルシューティング / リセット",
+    resetHeroTitle: "DeepSignal 環境をリセット",
+    resetHeroBody:
+      "iPhone Safari、Slush Wallet、インストール済み PWA に古いローカル状態が残り、再接続後も Seal の復号リクエストが失敗する場合に使用します。",
+    resetHeroWarning:
+      "DeepSignal はローカルのアプリ状態、暗号化キャッシュ、ブラウザストレージを削除できます。ウォレットの秘密鍵や Slush Wallet 内部データは削除できません。",
+    resetActionLocalCacheTitle: "ローカルキャッシュを削除",
+    resetActionLocalCacheBody:
+      "このデバイス上の DeepSignal localStorage/sessionStorage キーと、メモリ内の Seal 復号セッションキャッシュを削除します。",
+    resetActionIndexedDbTitle: "IndexedDB を削除",
+    resetActionIndexedDbBody:
+      "indexedDB.databases() に対応している場合、DeepSignal 名義のブラウザデータベースを削除します。古い Safari では安全にスキップされます。",
+    resetActionCacheStorageTitle: "Service Worker キャッシュを削除",
+    resetActionCacheStorageBody:
+      "アップグレード後も古い PWA アセットを保持する可能性がある、DeepSignal 名義の Cache Storage エントリを削除します。",
+    resetActionServiceWorkersTitle: "Service Worker 登録を解除",
+    resetActionServiceWorkersBody:
+      "DeepSignal 名義の Service Worker 登録を解除します。実行後に DeepSignal を再読み込みすると、Safari または PWA シェルが新しい状態で起動します。",
+    resetDeletingLabel: "削除中...",
+    resetResultsEyebrow: "直近の実行",
+    resetResultsTitle: "リセット結果",
+    resetStatusSuccess: "成功",
+    resetStatusFailed: "失敗",
+    resetStatusSkipped: "スキップ",
+    resetIosTitle: "古いデータがまだ残る場合",
+    resetIosBody:
+      "iOS は Web サイトデータ、ウォレット連携状態、インストール済み PWA シェルを DeepSignal の制御外に保持することがあります。リセットで消し切れない場合は、ホーム画面から PWA を削除するか、iOS 設定で DeepSignal の Web サイトデータを削除してからウォレットを再接続してください。",
+    resetDangerEyebrow: "危険ゾーン",
+    resetAllTitle: "すべてリセット",
+    resetAllBody:
+      "現在のウォレットセッションを切断し、DeepSignal のブラウザストレージ、IndexedDB、Cache Storage エントリを削除し、DeepSignal の Service Worker 登録を解除してから DeepSignal のホーム画面へ戻ります。オンチェーンフォーム、Walrus blob、送信済みシグナルは削除されません。",
+    resetAllButton: "すべてリセット",
+    resetConfirmationMessage:
+      "このデバイス上の DeepSignal ローカルデータをリセットしますか？オンチェーンフォームと送信内容は削除されませんが、キャッシュ済みセッションとローカルの暗号化状態は削除されます。",
+    resetSuccessMessage:
+      "DeepSignal のローカル状態をリセットしました。ウォレットを再接続してください。",
+    resetFailureMessage:
+      "一部のローカルデータを削除できませんでした。PWA を削除するか、iOS 設定から Web サイトデータを削除する必要があるかもしれません。",
+    resetOperationWalletDisconnect: "ウォレット切断",
+    resetOperationLocalCache: "ローカル / セッションストレージ",
+    resetOperationIndexedDb: "IndexedDB",
+    resetOperationCacheStorage: "Service Worker キャッシュ",
+    resetOperationServiceWorkers: "Service Worker 登録",
+    resetBrowserStorageUnavailable: "この環境ではブラウザストレージを利用できません。",
+    resetLocalCacheCleared: (params) =>
+      `${params?.count ?? 0} 件の DeepSignal ストレージキーと、メモリ内の Seal セッションキャッシュを削除しました。`,
+    resetLocalCacheFailed: "ブラウザのローカルキャッシュを削除できませんでした。",
+    resetIndexedDbUnavailable: "このブラウザでは IndexedDB を利用できません。",
+    resetIndexedDbDatabasesUnavailable:
+      "このブラウザでは indexedDB.databases() が公開されていません。",
+    resetIndexedDbNotFound: "DeepSignal の IndexedDB データベースは見つかりませんでした。",
+    resetIndexedDbPartialDelete: (params) =>
+      `${params?.total ?? 0} 件中 ${params?.count ?? 0} 件の DeepSignal IndexedDB データベースを削除しました。`,
+    resetIndexedDbDeleted: (params) =>
+      `${params?.count ?? 0} 件の DeepSignal IndexedDB データベースを削除しました。`,
+    resetIndexedDbFailed: "IndexedDB データベースの列挙または削除ができませんでした。",
+    resetCacheStorageUnavailable: "このブラウザでは Cache Storage を利用できません。",
+    resetCacheStorageDeleted: (params) =>
+      `${params?.count ?? 0} 件の DeepSignal キャッシュを削除しました。`,
+    resetCacheStorageFailed: "Cache Storage を削除できませんでした。",
+    resetServiceWorkerUnavailable: "このブラウザでは Service Worker を利用できません。",
+    resetServiceWorkersUnregistered: (params) =>
+      `${params?.count ?? 0} 件の DeepSignal Service Worker 登録を解除しました。完了するにはページを再読み込みしてください。`,
+    resetServiceWorkersFailed: "Service Worker 登録を解除できませんでした。",
+    resetWalletDisconnectMissing: "ウォレット切断ハンドラーが指定されていません。",
+    resetWalletDisconnected: "ウォレットセッションを切断しました。",
+    resetWalletDisconnectFailed: "ウォレットセッションを切断できませんでした。",
     disconnectingWallet: "\u5207\u65ad\u4e2d...",
     openTroubleshooting: "\u30c8\u30e9\u30d6\u30eb\u30b7\u30e5\u30fc\u30c8\u3092\u958b\u304f",
     decryptRecoveryActionsAriaLabel: "\u5fa9\u53f7\u30ea\u30ab\u30d0\u30ea\u30fc\u64cd\u4f5c",

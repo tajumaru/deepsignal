@@ -1240,6 +1240,14 @@ export function AdminDashboardPage() {
     });
   }
 
+  function handleOpenProtectedSignal(record: SignalRecord) {
+    setSelectedSignalId(record.submission.id);
+    syncMobileSignalUrl(record);
+    window.requestAnimationFrame(() => {
+      reviewInboxRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }
+
   const selectedRecordFocusAction = !selectedRecord
     ? null
     : selectedRecordNeedsDecrypt
@@ -1376,7 +1384,7 @@ export function AdminDashboardPage() {
                     if (decryptInFlightRef.current) {
                       return;
                     }
-                    setSelectedSignalId(firstProtectedSignal.submission.id);
+                    handleOpenProtectedSignal(firstProtectedSignal);
                   }}
                 >
                     {t("openProtectedSignal")}

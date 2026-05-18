@@ -1,4 +1,4 @@
-import { Component, lazy, Suspense, useEffect, useState, type ReactNode } from "react";
+import { Component, lazy, Suspense, useCallback, useEffect, useState, type ReactNode } from "react";
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { AppShell } from "./components/AppShell";
 import { WalletSurface } from "./components/WalletSurface";
@@ -108,6 +108,10 @@ declare global {
   }
 }
 
+const BOOT_MIN_VISIBLE_MS = 1250;
+const BOOT_EXIT_DURATION_MS = 380;
+const BOOT_FAILSAFE_MS = 2500;
+
 function InitialBootReady({ onReady, children }: { onReady: () => void; children: ReactNode }) {
   useEffect(() => {
     onReady();
@@ -116,24 +120,51 @@ function InitialBootReady({ onReady, children }: { onReady: () => void; children
   return <>{children}</>;
 }
 
+function isWalletRequiredRoute(pathname: string) {
+  return (
+    pathname === "/create" ||
+    pathname === "/admin" ||
+    pathname.startsWith("/admin/") ||
+    pathname === "/dashboard" ||
+    pathname.startsWith("/dashboard/") ||
+    pathname === "/troubleshooting"
+  );
+}
+
+function isWalletContextRoute(pathname: string) {
+  return pathname === "/" || pathname === "/explore";
+}
+
 export default function App() {
   const location = useLocation();
+  const routeRequiresWallet = isWalletRequiredRoute(location.pathname);
+  const routeUsesWalletContext = isWalletContextRoute(location.pathname);
   const routeUsesPublicChrome =
     location.pathname.startsWith("/f/") ||
     location.pathname.startsWith("/roadmap/") ||
     location.pathname.startsWith("/m/");
+  const [walletSurfaceActivated, setWalletSurfaceActivated] = useState(() => routeRequiresWallet);
   const [initialRouteReady, setInitialRouteReady] = useState(false);
   const [bootDismissed, setBootDismissed] = useState(false);
+  const walletSurfaceAvailable = walletSurfaceActivated || routeRequiresWallet || routeUsesWalletContext;
 
   useEffect(() => {
-    const failsafe = window.setTimeout(() => {
-      document.getElementById("boot-overlay")?.remove();
-      document.body.classList.remove("booting");
-      setBootDismissed(true);
-    }, 5200);
+    if (routeRequiresWallet) {
+      setWalletSurfaceActivated(true);
+    }
+  }, [routeRequiresWallet]);
+
+  const dismissBootOverlay = useCallback(() => {
+    document.getElementById("boot-overlay")?.remove();
+    document.body.classList.remove("booting");
+    setBootDismissed(true);
+  }, []);
+
+  useEffect(() => {
+    const failsafe = window.setTimeout(dismissBootOverlay, BOOT_FAILSAFE_MS);
 
     return () => window.clearTimeout(failsafe);
-  }, []);
+  }, [dismissBootOverlay]);
 
   useEffect(() => {
     if (!initialRouteReady || bootDismissed) {
@@ -143,177 +174,147 @@ export default function App() {
     const bootOverlay = document.getElementById("boot-overlay");
     const bootStatus = document.querySelector<HTMLElement>("[data-boot-status]");
     if (!bootOverlay) {
-      document.body.classList.remove("booting");
-      setBootDismissed(true);
+      dismissBootOverlay();
       return undefined;
     }
 
     const startedAt = window.__DEEPSIGNAL_BOOT_STARTED_AT__ ?? performance.now();
     const elapsed = performance.now() - startedAt;
-    const minVisibleMs = 1450;
-    const exitDurationMs = 620;
-    const delay = Math.max(0, minVisibleMs - elapsed);
+    const delay = Math.max(0, BOOT_MIN_VISIBLE_MS - elapsed);
     let exitTimer = 0;
 
     const finalize = window.setTimeout(() => {
       if (bootStatus) {
-        bootStatus.textContent = "Signal link established. Opening command surface...";
+        bootStatus.textContent = "Opening encrypted signal workspace...";
       }
-      if (bootOverlay) {
-        bootOverlay.setAttribute("data-state", "exiting");
-      }
+      bootOverlay.setAttribute("data-state", "exiting");
 
       exitTimer = window.setTimeout(() => {
-        bootOverlay?.remove();
-        document.body.classList.remove("booting");
-        setBootDismissed(true);
-      }, exitDurationMs);
+        dismissBootOverlay();
+      }, BOOT_EXIT_DURATION_MS);
     }, delay);
 
     return () => {
       window.clearTimeout(finalize);
       window.clearTimeout(exitTimer);
     };
-  }, [bootDismissed, initialRouteReady]);
+  }, [bootDismissed, dismissBootOverlay, initialRouteReady]);
+
+  const activateWalletSurface = useCallback(() => {
+    setWalletSurfaceActivated(true);
+  }, []);
+
+  const routeSurface = (
+    <AppShell
+      walletAvailable={walletSurfaceAvailable}
+      onWalletActivate={activateWalletSurface}
+      chrome={routeUsesPublicChrome ? "public" : "full"}
+    >
+      <RouteErrorBoundary>
+        <Suspense fallback={bootDismissed ? <RouteFallback /> : null}>
+          <InitialBootReady onReady={() => setInitialRouteReady(true)}>
+            <Routes>
+              <Route path="/" element={<LandingPage />} />
+              <Route path="/explore" element={<ExploreSignalsPage />} />
+              <Route path="/signals" element={<Navigate to="/explore" replace />} />
+              <Route
+                path="/create"
+                element={
+                  <WithWalrusRuntime>
+                    <FormBuilderPage />
+                  </WithWalrusRuntime>
+                }
+              />
+              <Route
+                path="/admin"
+                element={
+                  <WithWalrusRuntime>
+                    <AdminDashboardPage />
+                  </WithWalrusRuntime>
+                }
+              />
+              <Route
+                path="/dashboard"
+                element={
+                  <WithWalrusRuntime>
+                    <AdminDashboardPage />
+                  </WithWalrusRuntime>
+                }
+              />
+              <Route path="/admin/access" element={<AccessManagementPage />} />
+              <Route path="/dashboard/access" element={<AccessManagementPage />} />
+              <Route path="/troubleshooting" element={<TroubleshootingPage />} />
+              <Route
+                path="/admin/forms/new"
+                element={
+                  <WithWalrusRuntime>
+                    <FormBuilderPage />
+                  </WithWalrusRuntime>
+                }
+              />
+              <Route
+                path="/admin/forms/:formId"
+                element={
+                  <WithWalrusRuntime>
+                    <FormSubmissionsPage />
+                  </WithWalrusRuntime>
+                }
+              />
+              <Route
+                path="/dashboard/forms/:formId"
+                element={
+                  <WithWalrusRuntime>
+                    <FormSubmissionsPage />
+                  </WithWalrusRuntime>
+                }
+              />
+              <Route
+                path="/admin/forms/:formId/submissions/:submissionId"
+                element={
+                  <WithWalrusRuntime>
+                    <FormSubmissionsPage />
+                  </WithWalrusRuntime>
+                }
+              />
+              <Route
+                path="/dashboard/forms/:formId/submissions/:submissionId"
+                element={
+                  <WithWalrusRuntime>
+                    <FormSubmissionsPage />
+                  </WithWalrusRuntime>
+                }
+              />
+              <Route path="/admin/submissions/:submissionId" element={<SubmissionDetailPage />} />
+              <Route path="/f/:formId" element={<PublicFormPage />} />
+              <Route path="/roadmap/:formId" element={<PublicRoadmapPage />} />
+              <Route path="/m/:manifestBlobId" element={<ManifestRestorePage />} />
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          </InitialBootReady>
+        </Suspense>
+      </RouteErrorBoundary>
+    </AppShell>
+  );
+
+  if (!walletSurfaceAvailable) {
+    return routeSurface;
+  }
 
   return (
-    <WalletSurface fallback={<RouteFallback />}>
-      <AppShell walletAvailable chrome={routeUsesPublicChrome ? "public" : "full"}>
-        <RouteErrorBoundary>
-          <Suspense fallback={bootDismissed ? <RouteFallback /> : null}>
-            <InitialBootReady onReady={() => setInitialRouteReady(true)}>
-              <Routes>
-                <Route path="/" element={<LandingPage />} />
-                <Route
-                  path="/explore"
-                  element={
-                    <WalletSurface>
-                      <ExploreSignalsPage />
-                    </WalletSurface>
-                  }
-                />
-                <Route path="/signals" element={<Navigate to="/explore" replace />} />
-                <Route
-                  path="/create"
-                  element={
-                    <WalletSurface>
-                      <WithWalrusRuntime>
-                        <FormBuilderPage />
-                      </WithWalrusRuntime>
-                    </WalletSurface>
-                  }
-                />
-                <Route
-                  path="/admin"
-                  element={
-                    <WalletSurface>
-                      <WithWalrusRuntime>
-                        <AdminDashboardPage />
-                      </WithWalrusRuntime>
-                    </WalletSurface>
-                  }
-                />
-                <Route
-                  path="/dashboard"
-                  element={
-                    <WalletSurface>
-                      <WithWalrusRuntime>
-                        <AdminDashboardPage />
-                      </WithWalrusRuntime>
-                    </WalletSurface>
-                  }
-                />
-                <Route
-                  path="/admin/access"
-                  element={
-                    <WalletSurface>
-                      <AccessManagementPage />
-                    </WalletSurface>
-                  }
-                />
-                <Route
-                  path="/dashboard/access"
-                  element={
-                    <WalletSurface>
-                      <AccessManagementPage />
-                    </WalletSurface>
-                  }
-                />
-                <Route
-                  path="/troubleshooting"
-                  element={
-                    <WalletSurface>
-                      <TroubleshootingPage />
-                    </WalletSurface>
-                  }
-                />
-                <Route
-                  path="/admin/forms/new"
-                  element={
-                    <WalletSurface>
-                      <WithWalrusRuntime>
-                        <FormBuilderPage />
-                      </WithWalrusRuntime>
-                    </WalletSurface>
-                  }
-                />
-                <Route
-                  path="/admin/forms/:formId"
-                  element={
-                    <WalletSurface>
-                      <WithWalrusRuntime>
-                        <FormSubmissionsPage />
-                      </WithWalrusRuntime>
-                    </WalletSurface>
-                  }
-                />
-                <Route
-                  path="/dashboard/forms/:formId"
-                  element={
-                    <WalletSurface>
-                      <WithWalrusRuntime>
-                        <FormSubmissionsPage />
-                      </WithWalrusRuntime>
-                    </WalletSurface>
-                  }
-                />
-                <Route
-                  path="/admin/forms/:formId/submissions/:submissionId"
-                  element={
-                    <WalletSurface>
-                      <WithWalrusRuntime>
-                        <FormSubmissionsPage />
-                      </WithWalrusRuntime>
-                    </WalletSurface>
-                  }
-                />
-                <Route
-                  path="/dashboard/forms/:formId/submissions/:submissionId"
-                  element={
-                    <WalletSurface>
-                      <WithWalrusRuntime>
-                        <FormSubmissionsPage />
-                      </WithWalrusRuntime>
-                    </WalletSurface>
-                  }
-                />
-                <Route
-                  path="/admin/submissions/:submissionId"
-                  element={
-                    <WalletSurface>
-                      <SubmissionDetailPage />
-                    </WalletSurface>
-                  }
-                />
-                <Route path="/f/:formId" element={<PublicFormPage />} />
-                <Route path="/roadmap/:formId" element={<PublicRoadmapPage />} />
-                <Route path="/m/:manifestBlobId" element={<ManifestRestorePage />} />
-                <Route path="*" element={<Navigate to="/" replace />} />
-              </Routes>
-            </InitialBootReady>
-          </Suspense>
-        </RouteErrorBoundary>
-      </AppShell>
+    <WalletSurface
+      fallback={
+        <InitialBootReady onReady={() => setInitialRouteReady(true)}>
+          <AppShell
+            walletAvailable={false}
+            onWalletActivate={activateWalletSurface}
+            chrome={routeUsesPublicChrome ? "public" : "full"}
+          >
+            <RouteFallback />
+          </AppShell>
+        </InitialBootReady>
+      }
+    >
+      {routeSurface}
     </WalletSurface>
   );
 }

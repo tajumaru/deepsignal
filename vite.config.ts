@@ -223,6 +223,22 @@ export default defineConfig(({ mode }) => {
         },
       },
     },
+    optimizeDeps: {
+      include: [
+        "@mysten/dapp-kit",
+        "@vanilla-extract/css",
+        "@vanilla-extract/recipes",
+        "dataloader",
+        "deepmerge",
+        "picocolors",
+        "poseidon-lite",
+      ],
+      exclude: [
+        "@mysten/walrus",
+        "@mysten/seal",
+        "@mysten/suins",
+      ],
+    },
     test: {
       environment: "jsdom",
       exclude: ["**/node_modules/**", "**/dist/**", "**/.tmp-test/**", "**/move/**"],

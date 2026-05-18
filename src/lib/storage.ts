@@ -36,6 +36,7 @@ import { SUI_NETWORK } from "./sui";
 import { getWalrusNetwork } from "./walrusProof";
 import { storage } from "../storage/storageFactory";
 import { getStorageRuntimeStatus } from "../storage/storageFactory";
+import { DEFAULT_ATTACHMENT_MAX_BYTES, ENCRYPTED_INLINE_ATTACHMENT_MAX_BYTES } from "./attachmentLimits";
 import {
   assertEncryptedSubmissionAttachments,
   sanitizeSubmissionForStorage,
@@ -58,8 +59,7 @@ export const storageAdapter: StorageAdapter = storage;
 export const activeSealAdapter: SealAdapter = sealServiceAdapter;
 export const ENCRYPTION_REQUIRED_MESSAGE =
   "Protected submissions require encrypted Walrus storage in production. Response was not submitted.";
-export const DEFAULT_ATTACHMENT_MAX_BYTES = 50 * 1024 * 1024;
-export const ENCRYPTED_INLINE_ATTACHMENT_MAX_BYTES = 10 * 1024 * 1024;
+export { DEFAULT_ATTACHMENT_MAX_BYTES, ENCRYPTED_INLINE_ATTACHMENT_MAX_BYTES };
 
 export interface SaveSubmissionWithEncryptionResult {
   id: string;
