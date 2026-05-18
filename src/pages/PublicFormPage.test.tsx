@@ -35,7 +35,7 @@ vi.mock("../components/WalletConnect", () => ({
   WalletConnect: () => <div>Wallet Connect</div>,
 }));
 
-vi.mock("../storage/walrusAdapter", () => ({
+vi.mock("../lib/walrus", () => ({
   readManifestWithForm: (...args: unknown[]) => mockReadManifestWithForm(...args),
   readJsonBlobOrThrow: (...args: unknown[]) => mockReadJsonBlobOrThrow(...args),
   getWalrusMutationRuntimeStatus: () => mockGetWalrusMutationRuntimeStatus(),

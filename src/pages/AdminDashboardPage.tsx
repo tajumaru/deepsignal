@@ -1,5 +1,4 @@
 ﻿import {
-  useCurrentAccount,
   useSuiClient,
 } from "@mysten/dapp-kit";
 import type { ReactNode } from "react";
@@ -36,6 +35,7 @@ import {
 } from "../features/admin/hooks/useSignalInboxData";
 import { useAttachmentPreviews } from "../hooks/useAttachmentPreviews";
 import { useAccessControl } from "../hooks/useAccessControl";
+import { useSuiWallet } from "../hooks/useSuiWallet";
 import { useI18n } from "../i18n";
 import { isAttachmentFieldType, isLongTextLikeField } from "../lib/fieldTypes";
 import {
@@ -700,7 +700,7 @@ export function AdminDashboardPage() {
   const { language, t } = useI18n();
   const location = useLocation();
   const navigate = useNavigate();
-  const account = useCurrentAccount();
+  const wallet = useSuiWallet();
   const suiClient = useSuiClient();
   const {
     capabilityProfile,
@@ -708,7 +708,7 @@ export function AdminDashboardPage() {
     isLoadingAccess,
     ownedObjects,
     refetch: refetchAccessControl,
-  } = useAccessControl(account?.address);
+  } = useAccessControl(wallet.accountAddress);
   const storageRuntime = getStorageRuntimeStatus();
   const responseDeadlineLabels: ResponseDeadlineLabels = {
     noLimit: t("responseDeadlineNone"),
@@ -764,7 +764,7 @@ export function AdminDashboardPage() {
     selectedRecord,
     applySubmissionUpdate,
   } = useSignalInboxData({
-    accountAddress: account?.address,
+    accountAddress: wallet.accountAddress,
     capabilityProfile,
   });
   const {
@@ -806,7 +806,7 @@ export function AdminDashboardPage() {
     handleDeleteProject,
     handleDeleteOnchainForm,
   } = useProjectWorkspace({
-    accountAddress: account?.address,
+    accountAddress: wallet.accountAddress,
     capabilityProfile,
     forms,
     loadConsole,
@@ -833,7 +833,7 @@ export function AdminDashboardPage() {
     handleDecryptRecords,
     realSealSessionTtlMinutes,
   } = usePrivateSignalDecrypt({
-    accountAddress: account?.address,
+    accountAddress: wallet.accountAddress,
     capabilityProfile,
     ownedCapabilityObjects: ownedObjects,
     selectedRecord,
@@ -863,7 +863,7 @@ export function AdminDashboardPage() {
   });
   const roleLabel = getRoleLabel(capabilityProfile);
   const activityActorRole = getActivityActorRole(capabilityProfile);
-  const accessState = account?.address ? "allowed" : "denied";
+  const accessState = wallet.accountAddress ? "allowed" : "denied";
   const privateReviewLabel = t("privateReviewEnabled");
 
   async function handleClearDebugPolicyCache() {
@@ -888,7 +888,7 @@ export function AdminDashboardPage() {
     const formsById = new Map(forms.map((form) => [form.id, form]));
     const walletOwnedIds = uniqueIds.filter((formId) => {
       const form = formsById.get(formId);
-      return addressesMatch(form?.ownerAddress, account?.address);
+      return addressesMatch(form?.ownerAddress, wallet.accountAddress);
     });
     const localCacheOnlyIds = uniqueIds.filter((formId) => !walletOwnedIds.includes(formId));
 
@@ -904,7 +904,7 @@ export function AdminDashboardPage() {
         ? [
             createActivityEvent({
               form,
-              actorAddress: account?.address,
+              actorAddress: wallet.accountAddress,
               actorRole: activityActorRole,
               action: "form_archived",
             }),
@@ -1099,8 +1099,8 @@ export function AdminDashboardPage() {
     },
     {
       label: t("reviewerWalletReadyStatusLabel"),
-      tone: !account?.address ? "action" : canReview(capabilityProfile) || !capabilityProfile.isConfigured ? "ready" : "warning",
-      detail: !account?.address
+      tone: !wallet.accountAddress ? "action" : canReview(capabilityProfile) || !capabilityProfile.isConfigured ? "ready" : "warning",
+      detail: !wallet.accountAddress
         ? t("connectReviewerWallet")
         : canReview(capabilityProfile) || !capabilityProfile.isConfigured
           ? t("walletVerifiedWithRole", { role: getRoleLabel(capabilityProfile) })
@@ -1180,7 +1180,7 @@ export function AdminDashboardPage() {
     ? undefined
     : !selectedRecord?.submission.isEncrypted
       ? t("privateSignalUnlockUnavailable")
-      : !canAttemptPrivateSignalDecrypt(selectedRecord.form, account?.address, capabilityProfile)
+      : !canAttemptPrivateSignalDecrypt(selectedRecord.form, wallet.accountAddress, capabilityProfile)
         ? t("privateSignalUnlockDisabled")
         : undefined;
   const reviewBasePath = location.pathname.startsWith("/admin") ? "/admin" : "/dashboard";
@@ -1671,8 +1671,8 @@ export function AdminDashboardPage() {
     accessibleForms.find((form) => form.id === beaconFormId) ?? null;
   const canDeleteForm = useCallback(
     (form: Pick<FormSchema, "ownerAddress">) =>
-      hasAdminAccess || !capabilityProfile.isConfigured || addressesMatch(form.ownerAddress, account?.address),
-    [account?.address, capabilityProfile.isConfigured, hasAdminAccess],
+      hasAdminAccess || !capabilityProfile.isConfigured || addressesMatch(form.ownerAddress, wallet.accountAddress),
+    [wallet.accountAddress, capabilityProfile.isConfigured, hasAdminAccess],
   );
   const formById = useMemo(
     () =>
@@ -1802,7 +1802,7 @@ export function AdminDashboardPage() {
       scope: csvExportScope,
       sortOrder: csvSortOrder,
       excludedPiiFields: excludedCsvPiiFields,
-      exportedBy: account?.address ?? "",
+      exportedBy: wallet.accountAddress ?? "",
       filterSnapshot: getCsvFilterSnapshot(),
       responseOverrides: getCsvResponseOverrides(),
     };
@@ -1829,7 +1829,7 @@ export function AdminDashboardPage() {
       scope: "all",
       sortOrder: csvSortOrder,
       excludedPiiFields: excludedCsvPiiFields,
-      exportedBy: account?.address ?? "",
+      exportedBy: wallet.accountAddress ?? "",
       filterSnapshot: {
         searchQuery: "",
         status: undefined,
@@ -1898,9 +1898,9 @@ export function AdminDashboardPage() {
         (record) =>
           record.submission.isEncrypted &&
           !decryptedSignalsById[record.submission.id] &&
-          canAttemptPrivateSignalDecrypt(record.form, account?.address, capabilityProfile),
+          canAttemptPrivateSignalDecrypt(record.form, wallet.accountAddress, capabilityProfile),
       ),
-    [account?.address, capabilityProfile, decryptedSignalsById, visibleSignals],
+    [wallet.accountAddress, capabilityProfile, decryptedSignalsById, visibleSignals],
   );
   const lockedVisibleSignalsCount = visibleSignals.filter(
     (record) => record.submission.isEncrypted && !decryptedSignalsById[record.submission.id],
@@ -1975,7 +1975,7 @@ export function AdminDashboardPage() {
 
   return (
     <AdminAccessGate
-      hasWallet={Boolean(account?.address)}
+      hasWallet={Boolean(wallet.accountAddress)}
       access={accessState}
       deniedBody={capabilityProfile.isConfigured ? t("reviewConsoleCapabilityRequirement") : undefined}
     >
@@ -3038,7 +3038,7 @@ export function AdminDashboardPage() {
                           </div>
                         </details>
 
-                        <details className="inspector-panel">
+                        <details className="inspector-panel signal-proof-panel">
                           <summary>
                             <span>
                               <p className="eyebrow">Verification</p>
@@ -3064,7 +3064,7 @@ export function AdminDashboardPage() {
                                   </button>
                                 ) : null}
                               </div>
-                              <div className="metadata-list">
+                              <div className="metadata-list signal-proof-metadata-list">
                         <div className="metadata-row">
                           <span>{t("reviewStateLabel")}</span>
                             <strong>
@@ -3210,7 +3210,7 @@ export function AdminDashboardPage() {
                           <div className="metadata-row">
                             <span>{t("walletAccessStatus")}</span>
                             <strong>
-                              {getWalletAccessLabel(selectedRecord.form, account?.address)}
+                              {getWalletAccessLabel(selectedRecord.form, wallet.accountAddress)}
                             </strong>
                           </div>
                           <div className="metadata-row">
@@ -3231,13 +3231,7 @@ export function AdminDashboardPage() {
                               </div>
                               <SealStatusCard
                                 encryptSubmissions={selectedRecord.form.encryptSubmissions}
-                                encryptedBlobId={selectedRecord.submission.encryptedBlobId}
-                                encryptedPayloadEmbedded={
-                                  Boolean(selectedRecord.submission.encryptedPayload) &&
-                                  !selectedRecord.submission.encryptedBlobId
-                                }
-                                canDecrypt={Boolean(account?.address)}
-                                walletAccessStatus={getWalletAccessLabel(selectedRecord.form, account?.address)}
+                                canDecrypt={Boolean(wallet.accountAddress)}
                               />
                             </div>
                             <div className="review-secondary-links inspector-related-links">
@@ -3658,5 +3652,3 @@ export function AdminDashboardPage() {
     </AdminAccessGate>
   );
 }
-
-

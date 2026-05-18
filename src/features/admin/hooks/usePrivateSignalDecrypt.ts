@@ -8,7 +8,8 @@ import {
   SEAL_ADMIN_WALLET_REQUIRED_MESSAGE,
   SEAL_PERMISSION_DENIED_MESSAGE,
   SEAL_WALLET_CANCELLED_MESSAGE,
-} from "../../../crypto/sealPayload";
+  getReviewerCapIdForDecrypt,
+} from "../../../lib/seal";
 import { isDecryptDiagnosticError, type DecryptDiagnosticContext } from "../../../crypto/decryptDiagnostics";
 import type { CapabilityProfile } from "../../../hooks/useAccessControl";
 import { resolveSubmissionAnswers } from "../../../lib/storage";
@@ -187,10 +188,7 @@ export function usePrivateSignalDecrypt({
       walletAddress: accountAddress ?? undefined,
       projectId: record.form.projectId,
       ownerAddress: record.form.ownerAddress,
-      reviewerCapId:
-        capabilityProfile.hasOwnerCap || capabilityProfile.hasAdminCap
-          ? undefined
-          : capabilityProfile.reviewerCapIds[0],
+      reviewerCapId: getReviewerCapIdForDecrypt(capabilityProfile),
       ownedCapabilityObjects,
       suiClient,
       onStatusChange,
@@ -208,10 +206,7 @@ export function usePrivateSignalDecrypt({
         ? createDecryptContextForRecord(selectedRecord)
         : {
             walletAddress: accountAddress ?? undefined,
-            reviewerCapId:
-              capabilityProfile.hasOwnerCap || capabilityProfile.hasAdminCap
-                ? undefined
-                : capabilityProfile.reviewerCapIds[0],
+            reviewerCapId: getReviewerCapIdForDecrypt(capabilityProfile),
             ownedCapabilityObjects,
             suiClient,
             signPersonalMessage: async (message: Uint8Array) => {

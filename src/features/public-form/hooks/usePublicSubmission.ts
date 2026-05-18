@@ -351,7 +351,7 @@ export function usePublicSubmission({
 
     let unsubscribe: (() => void) | undefined;
     let cancelled = false;
-    void import("../../../storage/walrusAdapter").then(({ getWalrusMutationRuntimeStatus, subscribeWalrusRuntime }) => {
+    void import("../../../lib/walrus").then(({ getWalrusMutationRuntimeStatus, subscribeWalrusRuntime }) => {
       if (cancelled) {
         return;
       }
@@ -505,11 +505,11 @@ export function usePublicSubmission({
 
     try {
       const {
-        activeSealAdapter,
         createEncryptedAttachmentUpload,
         getStorageRuntimeStatus,
         storageAdapter,
       } = await import("../../../lib/storage");
+      const { activeSealAdapter } = await import("../../../lib/seal");
       setStorageRuntime(getStorageRuntimeStatus());
       const uploadFile = requiresProtectedAttachment
         ? (await createEncryptedAttachmentUpload(attachment.file, activeSealAdapter, {
@@ -884,7 +884,7 @@ export function usePublicSubmission({
     activatePipeline("preparing_signal", "Preparing secure upload...");
     try {
       if (accountAddress && (walletRequired || attachWallet)) {
-        const { waitForWalrusMutationRuntimeReady } = await import("../../../storage/walrusAdapter");
+        const { waitForWalrusMutationRuntimeReady } = await import("../../../lib/walrus");
         await waitForWalrusMutationRuntimeReady({ requireWallet: true, timeoutMs: 7000 });
       }
       const {
@@ -1082,7 +1082,7 @@ export function usePublicSubmission({
       setFailure(null);
       setSubmitPipeline({ stage: "signal_secured", status: "complete", message: "Signal secured." });
     } catch (error) {
-      const latestWalrusRuntime = await import("../../../storage/walrusAdapter")
+      const latestWalrusRuntime = await import("../../../lib/walrus")
         .then(({ getWalrusMutationRuntimeStatus }) => getWalrusMutationRuntimeStatus())
         .catch(() => walrusRuntime);
       if (isWalrusRuntimePreparingError(error)) {

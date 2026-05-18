@@ -17464,6 +17464,84 @@ body.composer-mode .bg-orb {
   background: transparent;
 }
 
+.public-submit-details .metadata-list {
+  gap: 0;
+}
+
+.public-submit-details .metadata-row,
+.public-submit-details .signal-meta-row {
+  padding: 1rem 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  border-top: 1px solid rgba(116, 226, 255, 0.12);
+}
+
+.public-submit-details .metadata-list > :first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.signal-proof-metadata-list {
+  gap: 0;
+}
+
+.signal-proof-metadata-list .metadata-row,
+.signal-proof-metadata-list .signal-meta-row {
+  padding: 1rem 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  border-top: 1px solid rgba(116, 226, 255, 0.12);
+}
+
+.signal-proof-metadata-list > :first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.signal-proof-panel {
+  background: transparent;
+  box-shadow: none;
+}
+
+.signal-proof-panel summary {
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.signal-proof-panel .inspector-panel-body {
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.seal-status-card {
+  border: 0;
+  box-shadow: none;
+  background: transparent;
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.seal-status-card .proof-grid {
+  gap: 0;
+}
+
+.seal-status-card .proof-row,
+.seal-status-card .metadata-row,
+.seal-status-card .signal-meta-row {
+  padding: 1rem 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  border-top: 1px solid rgba(116, 226, 255, 0.12);
+}
+
+.seal-status-card .proof-grid > :first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
 .public-submit-details summary {
   display: flex;
   align-items: flex-start;

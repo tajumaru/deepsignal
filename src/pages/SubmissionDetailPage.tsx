@@ -1,9 +1,9 @@
-import { useCurrentAccount } from "@mysten/dapp-kit";
 import { useEffect, useState } from "react";
 import { Navigate, useParams } from "react-router-dom";
 import { AdminAccessGate } from "../components/AdminAccessGate";
 import { EmptyState } from "../components/EmptyState";
 import { useAccessControl } from "../hooks/useAccessControl";
+import { useSuiWallet } from "../hooks/useSuiWallet";
 import { getReviewAccessState } from "../lib/adminAccess";
 import { useI18n } from "../i18n";
 import { normalizeSubmission, storageAdapter } from "../lib/storage";
@@ -11,8 +11,8 @@ import type { FormSchema } from "../types";
 
 export function SubmissionDetailPage() {
   const { t } = useI18n();
-  const account = useCurrentAccount();
-  const { capabilityProfile, isLoadingAccess } = useAccessControl(account?.address);
+  const wallet = useSuiWallet();
+  const { capabilityProfile, isLoadingAccess } = useAccessControl(wallet.accountAddress);
   const { formId = "", submissionId = "" } = useParams();
   const reviewDeniedBody = capabilityProfile.isConfigured ? t("reviewAccessRequiresCapability") : undefined;
   const [resolvedForm, setResolvedForm] = useState<FormSchema | null>(null);
@@ -58,8 +58,8 @@ export function SubmissionDetailPage() {
 
   return (
     <AdminAccessGate
-      hasWallet={Boolean(account?.address)}
-      access={getReviewAccessState(resolvedForm, account?.address, capabilityProfile)}
+      hasWallet={Boolean(wallet.accountAddress)}
+      access={getReviewAccessState(resolvedForm, wallet.accountAddress, capabilityProfile)}
       deniedBody={reviewDeniedBody ?? (
         capabilityProfile.isConfigured
           ? t("reviewAccessRequiresCapability")

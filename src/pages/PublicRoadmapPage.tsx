@@ -12,7 +12,7 @@ import { normalizeForm, normalizeSubmission, storageAdapter } from "../lib/stora
 import { formatDate } from "../lib/utils";
 import { upsertFormBlobIndex } from "../storage/blobIndex";
 import { localStorageAdapter } from "../storage/localStorageAdapter";
-import { fetchJsonBlob, readManifest } from "../storage/walrusAdapter";
+import { fetchJsonBlob, readManifest } from "../lib/walrus";
 import type { FormSchema, Submission } from "../types";
 
 const ROADMAP_GROUPS = [

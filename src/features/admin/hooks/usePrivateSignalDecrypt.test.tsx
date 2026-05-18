@@ -2,7 +2,7 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { DecryptDiagnosticError } from "../../../crypto/decryptDiagnostics";
 import type { CapabilityProfile } from "../../../hooks/useAccessControl";
-import { SEAL_PERMISSION_DENIED_MESSAGE } from "../../../crypto/sealPayload";
+import { SEAL_PERMISSION_DENIED_MESSAGE } from "../../../lib/seal";
 import type { FormSchema, Submission } from "../../../types";
 import type { SignalRecord } from "./useSignalInboxData";
 import { usePrivateSignalDecrypt } from "./usePrivateSignalDecrypt";

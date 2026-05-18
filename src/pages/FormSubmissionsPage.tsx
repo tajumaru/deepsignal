@@ -1,5 +1,4 @@
 import {
-  useCurrentAccount,
   useSignAndExecuteTransaction,
   useSuiClient,
 } from "@mysten/dapp-kit";
@@ -18,6 +17,7 @@ import { CsvExportConfirmationModal } from "../features/admin/components/CsvExpo
 import { usePrivateSignalDecrypt } from "../features/admin/hooks/usePrivateSignalDecrypt";
 import { useAccessControl } from "../hooks/useAccessControl";
 import { getAttachmentDownloadHref, useAttachmentPreviews } from "../hooks/useAttachmentPreviews";
+import { useSuiWallet } from "../hooks/useSuiWallet";
 import { getSealRuntimeStatus } from "../crypto/cryptoFactory";
 import { useI18n } from "../i18n";
 import { formatAnswerText } from "../lib/answerFormatting";
@@ -115,7 +115,7 @@ function getReviewLifecycleSteps(submission?: Submission | null, unlocked = fals
 
 export function FormSubmissionsPage() {
   const { language, t } = useI18n();
-  const account = useCurrentAccount();
+  const wallet = useSuiWallet();
   const suiClient = useSuiClient();
   const updateSignalStatusTx = useSignAndExecuteTransaction();
   const {
@@ -123,7 +123,7 @@ export function FormSubmissionsPage() {
     isLoadingAccess,
     ownedObjects,
     refetch: refetchAccessControl,
-  } = useAccessControl(account?.address);
+  } = useAccessControl(wallet.accountAddress);
   const reviewDeniedBody = capabilityProfile.isConfigured ? t("reviewAccessRequiresCapability") : undefined;
   const { formId = "", submissionId = "" } = useParams();
   const sealRuntime = getSealRuntimeStatus();
@@ -259,7 +259,7 @@ export function FormSubmissionsPage() {
     handleCancelDecrypt: cancelSharedDecrypt,
     realSealSessionTtlMinutes,
   } = usePrivateSignalDecrypt({
-    accountAddress: account?.address,
+    accountAddress: wallet.accountAddress,
     capabilityProfile,
     ownedCapabilityObjects: ownedObjects,
     selectedRecord,
@@ -688,7 +688,7 @@ export function FormSubmissionsPage() {
       scope: csvExportScope,
       sortOrder: csvSortOrder,
       excludedPiiFields: excludedCsvPiiFields,
-      exportedBy: account?.address ?? "",
+      exportedBy: wallet.accountAddress ?? "",
       filterSnapshot: getCsvFilterSnapshot(),
       responseOverrides: getCsvResponseOverrides(),
     };
@@ -750,7 +750,7 @@ export function FormSubmissionsPage() {
     return <div className="panel">Checking wallet capabilities...</div>;
   }
 
-  const access = getReviewAccessState(form, account?.address, capabilityProfile);
+  const access = getReviewAccessState(form, wallet.accountAddress, capabilityProfile);
   const activeForm = form as FormSchema;
   const resolvedDetailAnswers = detailAnswers ?? {};
   const isDecryptInteractionLocked = decrypting || decryptInFlightRef.current;
@@ -770,7 +770,7 @@ export function FormSubmissionsPage() {
     ? undefined
     : !selectedSubmission?.isEncrypted
       ? t("privateSignalUnlockUnavailable")
-      : !canAttemptPrivateSignalDecrypt(activeForm, account?.address, capabilityProfile)
+      : !canAttemptPrivateSignalDecrypt(activeForm, wallet.accountAddress, capabilityProfile)
         ? t("privateSignalUnlockDisabled")
         : undefined;
   const listLockTitle =
@@ -1132,7 +1132,7 @@ export function FormSubmissionsPage() {
 
   return (
     <AdminAccessGate
-      hasWallet={Boolean(account?.address)}
+      hasWallet={Boolean(wallet.accountAddress)}
       access={access}
       legacyMessage={t("legacyDemoFormBody")}
       deniedBody={reviewDeniedBody ?? (

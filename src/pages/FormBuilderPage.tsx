@@ -1,4 +1,4 @@
-import { useCurrentAccount, useCurrentWallet, useSignAndExecuteTransaction, useSuiClient } from "@mysten/dapp-kit";
+import { useSignAndExecuteTransaction, useSuiClient } from "@mysten/dapp-kit";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { AdminAccessGate } from "../components/AdminAccessGate";
@@ -6,6 +6,7 @@ import { RecoverableDraftBanner } from "../components/RecoverableDraftBanner";
 import { FieldTypePicker } from "../components/formBuilder/FieldTypePicker";
 import { useAccessControl } from "../hooks/useAccessControl";
 import { useProjectRegistry } from "../hooks/useProjectRegistry";
+import { useSuiWallet } from "../hooks/useSuiWallet";
 import { useI18n } from "../i18n";
 import { canAdmin, getAdminSurfaceAccessState, getRoleLabel } from "../lib/adminAccess";
 import { getActivityActorRole } from "../lib/activityLog";
@@ -51,11 +52,10 @@ interface FormBuilderComposerProps {
 
 function FormBuilderComposer({ mode, freshStartToken, initialDisplayMode = "classic", draftSeed }: FormBuilderComposerProps) {
   const { t } = useI18n();
-  const account = useCurrentAccount();
-  const { currentWallet, isConnected } = useCurrentWallet();
+  const wallet = useSuiWallet();
   const suiClient = useSuiClient();
-  const { capabilityProfile, isLoadingAccess } = useAccessControl(account?.address);
-  const { projects } = useProjectRegistry(account?.address);
+  const { capabilityProfile, isLoadingAccess } = useAccessControl(wallet.accountAddress);
+  const { projects } = useProjectRegistry(wallet.accountAddress);
   const createFormTx = useSignAndExecuteTransaction();
   const composerShellRef = useRef<HTMLElement | null>(null);
   const [isScrolled, setIsScrolled] = useState(false);
@@ -78,7 +78,7 @@ function FormBuilderComposer({ mode, freshStartToken, initialDisplayMode = "clas
   const selectedProjectForPublish = hasAdminAccess ? builder.selectedProject : null;
   const publish = useCreateFormPublish({
     t,
-    accountAddress: account?.address,
+    accountAddress: wallet.accountAddress,
     actorRole: getActivityActorRole(capabilityProfile),
     creationMode: isGuestDraftMode ? "guest" : "admin",
     title: builder.values.title,
@@ -107,7 +107,7 @@ function FormBuilderComposer({ mode, freshStartToken, initialDisplayMode = "clas
     onSaved: () => builder.markSaved(),
   });
 
-  const accessState = getAdminSurfaceAccessState("admin", account?.address, capabilityProfile);
+  const accessState = getAdminSurfaceAccessState("admin", wallet.accountAddress, capabilityProfile);
 
   const completedSteps = useMemo(
     () =>
@@ -122,7 +122,7 @@ function FormBuilderComposer({ mode, freshStartToken, initialDisplayMode = "clas
   const encryptionWarnings = getCreateFormEncryptionReadiness({
     encryptSubmissions: builder.values.encryptSubmissions,
     projectId: selectedProjectForPublish?.objectId,
-    ownerAddress: account?.address,
+    ownerAddress: wallet.accountAddress,
   });
   const draftStateLabel = useMemo(() => {
     if (!builder.isDirty && publish.savedForm) {
@@ -244,7 +244,7 @@ function FormBuilderComposer({ mode, freshStartToken, initialDisplayMode = "clas
     setShowMirrorStartChoice(false);
   }
 
-  if (!isGuestDraftMode && account?.address && isLoadingAccess) {
+  if (!isGuestDraftMode && wallet.accountAddress && isLoadingAccess) {
     return <div className="panel">{t("checkingWalletCapabilities")}</div>;
   }
 
@@ -341,9 +341,9 @@ function FormBuilderComposer({ mode, freshStartToken, initialDisplayMode = "clas
           showPublishSuccessView={showPublishSuccessView}
           showWalrusDiagnostics={showWalrusDiagnostics}
           isGuestDraftMode={isGuestDraftMode}
-          isConnected={isConnected}
-          currentWalletName={currentWallet?.name ?? undefined}
-          accountAddress={account?.address}
+          isConnected={wallet.isConnected}
+          currentWalletName={wallet.walletName}
+          accountAddress={wallet.accountAddress}
           storageMode={import.meta.env.VITE_WALRUS_STORAGE_MODE || "uploadRelay"}
           uploadRelayUrl={WALRUS_UPLOAD_RELAY_URL || t("notConfigured")}
           storageRuntimeMode={storageRuntime.mode}
@@ -510,7 +510,7 @@ function FormBuilderComposer({ mode, freshStartToken, initialDisplayMode = "clas
 
   return (
     <AdminAccessGate
-      hasWallet={Boolean(account?.address)}
+      hasWallet={Boolean(wallet.accountAddress)}
       access={accessState}
       deniedBody={
         capabilityProfile.isConfigured
@@ -524,10 +524,10 @@ function FormBuilderComposer({ mode, freshStartToken, initialDisplayMode = "clas
 }
 
 export function FormBuilderPage() {
-  const account = useCurrentAccount();
+  const wallet = useSuiWallet();
   const location = useLocation();
   const { t } = useI18n();
-  const { capabilityProfile, isLoadingAccess } = useAccessControl(account?.address);
+  const { capabilityProfile, isLoadingAccess } = useAccessControl(wallet.accountAddress);
   const searchParams = new URLSearchParams(location.search);
   const requestedGuestDraftMode = searchParams.get("mode") === "guestDraft";
   const freshStartToken = searchParams.get("fresh") ?? "";
@@ -538,13 +538,13 @@ export function FormBuilderPage() {
   };
   const hasAdminAccess = canAdmin(capabilityProfile);
 
-  if (!requestedGuestDraftMode && account?.address && isLoadingAccess) {
+  if (!requestedGuestDraftMode && wallet.accountAddress && isLoadingAccess) {
     return <div className="panel">{t("checkingWalletCapabilities")}</div>;
   }
 
   const mode =
     requestedGuestDraftMode ||
-    !account?.address ||
+    !wallet.accountAddress ||
     (capabilityProfile.isConfigured && !hasAdminAccess)
       ? "guestDraft"
       : "admin";

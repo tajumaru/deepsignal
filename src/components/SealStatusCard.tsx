@@ -1,31 +1,20 @@
 import { getSealRuntimeStatus } from "../crypto/cryptoFactory";
-import { REAL_SEAL_SESSION_TTL_MIN } from "../crypto/sealPayload";
+import { REAL_SEAL_SESSION_TTL_MIN } from "../lib/seal";
 import { useI18n } from "../i18n";
-import { SignalMetaChip, SignalMetaRow } from "./SignalMetaChip";
-
 interface SealStatusCardProps {
   encryptSubmissions?: boolean;
-  encryptedBlobId?: string | null;
-  encryptedPayloadEmbedded?: boolean;
   canDecrypt?: boolean;
-  walletAccessStatus?: string;
 }
 
 export function SealStatusCard({
   encryptSubmissions,
-  encryptedBlobId,
-  encryptedPayloadEmbedded = false,
   canDecrypt = false,
-  walletAccessStatus = "Wallet Verified",
 }: SealStatusCardProps) {
   const { t } = useI18n();
   const status = getSealRuntimeStatus();
-  const sealMode = status.activeMode.toUpperCase();
-  const encryptedPayloadStatus = encryptedBlobId
-    ? "Available as dedicated blob"
-    : encryptedPayloadEmbedded
-      ? "Encrypted payload stored in submission bundle"
-      : t("notAvailable");
+  const activeMode = status.activeMode.toUpperCase();
+  const requestedMode = status.requestedMode.toUpperCase();
+  const runtimeMode = requestedMode === activeMode ? activeMode : `${requestedMode} -> ${activeMode}`;
 
   return (
     <section className="panel seal-status-card">
@@ -36,20 +25,8 @@ export function SealStatusCard({
       </p>
       <div className="proof-grid">
         <div className="proof-row">
-          <span>{t("requestedModeLabel")}</span>
-          <strong>{status.requestedMode.toUpperCase()}</strong>
-        </div>
-        <div className="proof-row">
-          <span>{t("activeModeLabel")}</span>
-          <strong>{status.activeMode.toUpperCase()}</strong>
-        </div>
-        <div className="proof-row">
-          <span>{t("sealModeLabel")}</span>
-          <strong>{sealMode}</strong>
-        </div>
-        <div className="proof-row">
-          <span>Seal encrypted · creator/admin only</span>
-          <strong>{encryptSubmissions ? "required" : "sensitive fields only"}</strong>
+          <span>{t("sealRuntimeLabel")}</span>
+          <strong>{runtimeMode}</strong>
         </div>
         <div className="proof-row">
           <span>{t("warningLabel")}</span>
@@ -63,29 +40,12 @@ export function SealStatusCard({
           <span>{t("encryptionLabel")}</span>
           <strong>{encryptSubmissions ? t("enabled") : t("disabled")}</strong>
         </div>
-        {encryptedBlobId ? (
-          <SignalMetaRow
-            label={t("encryptedBlobIdLabel")}
-            type="seal"
-            value={encryptedBlobId}
-          />
-        ) : null}
-        <div className="proof-row">
-          <span>{t("walletAccessStatus")}</span>
-          <strong>{walletAccessStatus}</strong>
-        </div>
       </div>
 
-      {encryptSubmissions ? (
-        <p className="proof-callout">
-          <strong>{encryptedPayloadStatus}</strong>
-          {encryptedBlobId ? <span className="signal-meta-inline"><SignalMetaChip type="seal" value={encryptedBlobId} /></span> : null}
-        </p>
-      ) : (
+      {!encryptSubmissions ? (
         <p className="muted">{t("encryptionDisabledForForm")}</p>
-      )}
+      ) : null}
 
-      <p className="muted">Seal Runtime: {sealMode}</p>
       <p className="muted">Creator/admin only access. Reviewer wallet approval is required before private responses are revealed.</p>
       <p className="muted">{t("walletApprovalReuseNotice", { minutes: REAL_SEAL_SESSION_TTL_MIN })}</p>
 

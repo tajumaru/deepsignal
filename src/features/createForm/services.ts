@@ -23,7 +23,7 @@ async function verifyPublishedPublicLink(form: PreparedPublishForm) {
   if (!form.manifestBlobId || isLocalFallbackBlob(form.manifestBlobId)) {
     return;
   }
-  const { readJsonBlobOrThrow, readManifestWithForm } = await import("../../storage/walrusAdapter");
+  const { readJsonBlobOrThrow, readManifestWithForm } = await import("../../lib/walrus");
   const carrier = await readManifestWithForm(form.manifestBlobId);
   if (carrier.manifest.formId !== form.id) {
     throw new Error("Published manifest read-back failed: the manifest points to a different form.");

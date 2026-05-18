@@ -1,12 +1,7 @@
-import {
-  ConnectButton,
-  useAutoConnectWallet,
-  useCurrentAccount,
-  useCurrentWallet,
-  useDisconnectWallet,
-} from "@mysten/dapp-kit";
 import { useEffect, useRef, useState } from "react";
+import { useSuiWallet } from "../hooks/useSuiWallet";
 import { useI18n } from "../i18n";
+import { ConnectWalletButton } from "./wallet";
 import { SuiAddressDisplay } from "./SuiAddressDisplay";
 
 interface WalletConnectProps {
@@ -15,14 +10,7 @@ interface WalletConnectProps {
 
 export function WalletConnect({ compact = false }: WalletConnectProps) {
   const { t } = useI18n();
-  const account = useCurrentAccount();
-  const {
-    currentWallet,
-    isConnected,
-    isConnecting,
-  } = useCurrentWallet();
-  const autoConnectStatus = useAutoConnectWallet();
-  const disconnectWallet = useDisconnectWallet();
+  const wallet = useSuiWallet();
   const [menuOpen, setMenuOpen] = useState(false);
   const shellRef = useRef<HTMLDivElement | null>(null);
 
@@ -53,7 +41,7 @@ export function WalletConnect({ compact = false }: WalletConnectProps) {
 
   async function handleDisconnect() {
     try {
-      await disconnectWallet.mutateAsync();
+      await wallet.disconnect();
       setMenuOpen(false);
     } catch (error) {
       console.error(error);
@@ -61,42 +49,21 @@ export function WalletConnect({ compact = false }: WalletConnectProps) {
   }
 
   function handleToggleMenu() {
-    if (isConnecting) {
+    if (wallet.isConnecting) {
       return;
     }
     setMenuOpen((current) => !current);
   }
 
-  const isRestoringConnection = !isConnected && (isConnecting || autoConnectStatus === "idle");
-
-  const buttonLabel = isRestoringConnection
-    ? "Syncing Signal..."
-    : isConnected
-      ? "Synced"
-      : "Sync Wallet";
-
-  const statusCopy = isConnected
-    ? "SIGNAL LINK ESTABLISHED"
-    : isRestoringConnection
-      ? "Restoring wallet uplink"
-      : "Wallet-optional public mode";
-
-  if (!isConnected) {
+  if (!wallet.isConnected) {
     return (
       <div className={`wallet-connect-shell ${compact ? "wallet-connect-shell-compact" : ""}`.trim()}>
         <div className="wallet-connect-direct panel">
           <div className="wallet-connect-direct-copy">
-            <strong>{buttonLabel}</strong>
-            <span>{statusCopy}</span>
+            <strong>{wallet.isRestoringConnection ? "Syncing Signal..." : "Sync Wallet"}</strong>
+            <span>{wallet.isRestoringConnection ? "Restoring wallet uplink" : "Wallet-optional public mode"}</span>
           </div>
-          {isRestoringConnection ? (
-            <button type="button" className="wallet-sync-button is-syncing" disabled>
-              <span className="wallet-sync-indicator is-pending" />
-              <span>Restoring...</span>
-            </button>
-          ) : (
-            <ConnectButton />
-          )}
+          <ConnectWalletButton wallet={wallet} compact={compact} />
         </div>
       </div>
     );
@@ -105,24 +72,12 @@ export function WalletConnect({ compact = false }: WalletConnectProps) {
   return (
     <div ref={shellRef} className={`wallet-connect-shell ${compact ? "wallet-connect-shell-compact" : ""}`.trim()}>
       <div
-        className={`wallet-sync-button ${isConnected ? "is-synced" : ""} ${isConnecting ? "is-syncing" : ""}`}
+        className={`wallet-sync-button ${wallet.isConnected ? "is-synced" : ""} ${wallet.isConnecting ? "is-syncing" : ""}`}
       >
-        <button
-          type="button"
-          className="wallet-sync-toggle"
-          onClick={handleToggleMenu}
-          aria-expanded={menuOpen}
-          aria-haspopup="menu"
-        >
-          <span className={`wallet-sync-indicator ${isConnected ? "is-live" : isConnecting ? "is-pending" : "is-idle"}`} />
-          <span className="wallet-sync-copy">
-            <strong>{buttonLabel}</strong>
-            <span>{statusCopy}</span>
-          </span>
-        </button>
-        {isConnected && account?.address ? (
+        <ConnectWalletButton wallet={wallet} compact={compact} onConnectedPress={handleToggleMenu} />
+        {wallet.accountAddress ? (
           <SuiAddressDisplay
-            address={account.address}
+            address={wallet.accountAddress}
             className="wallet-sync-address-shell"
             labelClassName="wallet-sync-address"
             showCopyLabel={false}
@@ -137,10 +92,10 @@ export function WalletConnect({ compact = false }: WalletConnectProps) {
         <div className="wallet-sync-menu panel" role="menu">
           <div className="wallet-sync-menu-header">
             <span className="wallet-sync-menu-eyebrow">{t("connectedLabel")}</span>
-            <strong>{currentWallet?.name ?? "Wallet"}</strong>
-            {account?.address ? (
+            <strong>{wallet.walletName ?? "Wallet"}</strong>
+            {wallet.accountAddress ? (
               <SuiAddressDisplay
-                address={account.address}
+                address={wallet.accountAddress}
                 className="wallet-sync-copy-chip-shell"
                 labelClassName="wallet-sync-copy-chip-address"
                 copyClassName="wallet-sync-copy-chip-copy"
@@ -152,12 +107,12 @@ export function WalletConnect({ compact = false }: WalletConnectProps) {
             type="button"
             className="wallet-sync-disconnect-button"
             onClick={() => void handleDisconnect()}
-            disabled={disconnectWallet.isPending}
+            disabled={wallet.isDisconnecting}
             role="menuitem"
             title="Disconnect"
           >
             <span className="wallet-sync-disconnect-icon" aria-hidden="true" />
-            <span>{disconnectWallet.isPending ? "Disconnecting..." : "Disconnect"}</span>
+            <span>{wallet.isDisconnecting ? "Disconnecting..." : "Disconnect"}</span>
           </button>
         </div>
       ) : null}

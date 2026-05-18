@@ -1,21 +1,21 @@
-import { useCurrentAccount } from "@mysten/dapp-kit";
 import { AdminAccessGate } from "../components/AdminAccessGate";
 import { AccessManagementSection } from "../components/AccessManagementSection";
 import { useAccessControl } from "../hooks/useAccessControl";
+import { useSuiWallet } from "../hooks/useSuiWallet";
 import { useI18n } from "../i18n";
 import { getAdminSurfaceAccessState } from "../lib/adminAccess";
 
 export function AccessManagementPage() {
   const { t } = useI18n();
-  const account = useCurrentAccount();
+  const wallet = useSuiWallet();
   const {
     capabilityProfile,
     refetch: refetchCapabilities,
     isLoadingAccess,
-  } = useAccessControl(account?.address);
+  } = useAccessControl(wallet.accountAddress);
   const accessState = getAdminSurfaceAccessState(
     "reviewer",
-    account?.address,
+    wallet.accountAddress,
     capabilityProfile,
   );
 
@@ -25,7 +25,7 @@ export function AccessManagementPage() {
 
   return (
     <AdminAccessGate
-      hasWallet={Boolean(account?.address)}
+      hasWallet={Boolean(wallet.accountAddress)}
       access={accessState}
       deniedBody={
         capabilityProfile.isConfigured

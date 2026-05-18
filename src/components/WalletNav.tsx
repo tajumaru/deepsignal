@@ -1,6 +1,6 @@
-import { useCurrentAccount } from "@mysten/dapp-kit";
 import { Link, NavLink, useLocation } from "react-router-dom";
 import { useAccessControl } from "../hooks/useAccessControl";
+import { useSuiWallet } from "../hooks/useSuiWallet";
 import { useI18n } from "../i18n";
 import { isSignalInboxPath } from "../lib/navigation";
 
@@ -11,10 +11,10 @@ interface WalletNavProps {
 export function WalletNav({ section = "all" }: WalletNavProps) {
   const { t } = useI18n();
   const location = useLocation();
-  const account = useCurrentAccount();
-  const { capabilityProfile, isLoadingAccess } = useAccessControl(account?.address);
+  const wallet = useSuiWallet();
+  const { capabilityProfile, isLoadingAccess } = useAccessControl(wallet.accountAddress);
 
-  if (!account?.address) {
+  if (!wallet.accountAddress) {
     return null;
   }
 

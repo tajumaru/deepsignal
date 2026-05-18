@@ -1,0 +1,112 @@
+import {
+  useAutoConnectWallet,
+  useCurrentAccount,
+  useCurrentWallet,
+  useDisconnectWallet,
+} from "@mysten/dapp-kit";
+import { useCallback, useMemo, useState } from "react";
+import { shortAddress } from "../lib/sui";
+import { useSuiName } from "./useSuiName";
+
+export type SuiWalletConnectionStatus = "connecting" | "disconnected" | "connected" | "error";
+
+export interface SuiWalletState {
+  account: ReturnType<typeof useCurrentAccount>;
+  accountAddress?: string;
+  walletName?: string;
+  status: SuiWalletConnectionStatus;
+  isConnected: boolean;
+  isConnecting: boolean;
+  isDisconnecting: boolean;
+  isRestoringConnection: boolean;
+  displayName: string;
+  suinsName: string | null;
+  shortAddressLabel: string;
+  error: Error | null;
+  disconnect: () => Promise<void>;
+  copyAddress: () => Promise<void>;
+}
+
+export function useSuiWallet(): SuiWalletState {
+  const account = useCurrentAccount();
+  const { currentWallet, isConnected, isConnecting } = useCurrentWallet();
+  const autoConnectStatus = useAutoConnectWallet();
+  const disconnectWallet = useDisconnectWallet();
+  const { data: suinsName = null } = useSuiName(account?.address);
+  const [error, setError] = useState<Error | null>(null);
+
+  const accountAddress = account?.address;
+  const isRestoringConnection = !isConnected && (isConnecting || autoConnectStatus === "idle");
+  const shortAddressLabel = accountAddress ? shortAddress(accountAddress) : "";
+  const displayName = suinsName ?? shortAddressLabel;
+  const status: SuiWalletConnectionStatus = error
+    ? "error"
+    : isRestoringConnection
+      ? "connecting"
+      : isConnected && accountAddress
+        ? "connected"
+        : "disconnected";
+
+  const disconnect = useCallback(async () => {
+    try {
+      setError(null);
+      await disconnectWallet.mutateAsync();
+    } catch (disconnectError) {
+      const nextError =
+        disconnectError instanceof Error
+          ? disconnectError
+          : new Error("Wallet disconnect failed.");
+      setError(nextError);
+      throw nextError;
+    }
+  }, [disconnectWallet]);
+
+  const copyAddress = useCallback(async () => {
+    if (!accountAddress) {
+      return;
+    }
+    try {
+      setError(null);
+      await navigator.clipboard.writeText(accountAddress);
+    } catch (copyError) {
+      const nextError = copyError instanceof Error ? copyError : new Error("Wallet address copy failed.");
+      setError(nextError);
+      throw nextError;
+    }
+  }, [accountAddress]);
+
+  return useMemo(
+    () => ({
+      account,
+      accountAddress,
+      walletName: currentWallet?.name,
+      status,
+      isConnected,
+      isConnecting,
+      isDisconnecting: disconnectWallet.isPending,
+      isRestoringConnection,
+      displayName,
+      suinsName,
+      shortAddressLabel,
+      error,
+      disconnect,
+      copyAddress,
+    }),
+    [
+      account,
+      accountAddress,
+      currentWallet?.name,
+      status,
+      isConnected,
+      isConnecting,
+      disconnectWallet.isPending,
+      isRestoringConnection,
+      displayName,
+      suinsName,
+      shortAddressLabel,
+      error,
+      disconnect,
+      copyAddress,
+    ],
+  );
+}

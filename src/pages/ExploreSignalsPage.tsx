@@ -1,7 +1,7 @@
-import { useCurrentAccount } from "@mysten/dapp-kit";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { CreateFormLink } from "../components/CreateFormLink";
+import { useSuiWallet } from "../hooks/useSuiWallet";
 import { useI18n } from "../i18n";
 import { buildExploreAiPreview, getExploreCategory, isFormPubliclyExplorable, type ExploreCategory } from "../lib/explore";
 import { getPublicFormPath } from "../lib/publicLinks";
@@ -106,7 +106,7 @@ function buildExploreCard(form: FormSchema, submissions: Submission[] = []): Exp
 
 export function ExploreSignalsPage() {
   const { t } = useI18n();
-  const account = useCurrentAccount();
+  const wallet = useSuiWallet();
   const [loading, setLoading] = useState(true);
   const [cards, setCards] = useState<ExploreCard[]>([]);
   const [activeTab, setActiveTab] = useState<DiscoverTab>("trending");
@@ -158,7 +158,11 @@ export function ExploreSignalsPage() {
   function canDeleteForm(form: Pick<FormSchema, "creationMode" | "ownerAddress">) {
     return (
       form.creationMode === "guest" &&
-      Boolean(account?.address && form.ownerAddress && form.ownerAddress.toLowerCase() === account.address.toLowerCase())
+      Boolean(
+        wallet.accountAddress &&
+          form.ownerAddress &&
+          form.ownerAddress.toLowerCase() === wallet.accountAddress.toLowerCase(),
+      )
     );
   }
 

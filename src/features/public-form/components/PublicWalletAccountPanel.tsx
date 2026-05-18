@@ -1,6 +1,6 @@
-import { useCurrentAccount, useCurrentWallet } from "@mysten/dapp-kit";
 import { useEffect } from "react";
 import { WalletConnect } from "../../../components/WalletConnect";
+import { useSuiWallet } from "../../../hooks/useSuiWallet";
 
 interface PublicWalletAccountPanelProps {
   onAccountAddressChange: (address?: string) => void;
@@ -8,18 +8,17 @@ interface PublicWalletAccountPanelProps {
 }
 
 export function PublicWalletAccountPanel({ onAccountAddressChange, onWalletProviderChange }: PublicWalletAccountPanelProps) {
-  const account = useCurrentAccount();
-  const { currentWallet } = useCurrentWallet();
+  const wallet = useSuiWallet();
 
   useEffect(() => {
-    onAccountAddressChange(account?.address);
+    onAccountAddressChange(wallet.accountAddress);
     return () => onAccountAddressChange(undefined);
-  }, [account?.address, onAccountAddressChange]);
+  }, [wallet.accountAddress, onAccountAddressChange]);
 
   useEffect(() => {
-    onWalletProviderChange?.(currentWallet?.name);
+    onWalletProviderChange?.(wallet.walletName);
     return () => onWalletProviderChange?.(undefined);
-  }, [currentWallet?.name, onWalletProviderChange]);
+  }, [wallet.walletName, onWalletProviderChange]);
 
   return <WalletConnect compact />;
 }

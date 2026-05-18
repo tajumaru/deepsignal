@@ -3,7 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { EmptyState } from "../components/EmptyState";
 import { localStorageAdapter } from "../storage/localStorageAdapter";
 import { replaceSubmissionBlobIndex, upsertFormBlobIndex } from "../storage/blobIndex";
-import { fetchJsonBlob, readManifest } from "../storage/walrusAdapter";
+import { fetchJsonBlob, readManifest } from "../lib/walrus";
 import type { FormSchema, Submission } from "../types";
 
 export function ManifestRestorePage() {

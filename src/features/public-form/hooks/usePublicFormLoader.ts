@@ -196,7 +196,7 @@ export function usePublicFormLoader({
               getWalrusMutationRuntimeStatus,
               readJsonBlobOrThrow,
               readManifestWithForm,
-            } = await import("../../../storage/walrusAdapter");
+            } = await import("../../../lib/walrus");
             const walrusRuntime = getWalrusMutationRuntimeStatus();
             if (!walrusRuntime.aggregatorConfigured) {
               throw new SharedFormRestoreError(

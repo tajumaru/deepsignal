@@ -1,6 +1,6 @@
 import { getSealRuntimeStatus } from "../../crypto/cryptoFactory";
 import { SUI_FULLNODE_URL, SUI_NETWORK, WALRUS_AGGREGATOR_URL, WALRUS_UPLOAD_RELAY_URL } from "../../lib/sui";
-import { getWalrusMutationRuntimeStatus } from "../../storage/walrusAdapter";
+import { getWalrusMutationRuntimeStatus } from "../../lib/walrus";
 
 type NetworkName = "mainnet" | "testnet";
 
