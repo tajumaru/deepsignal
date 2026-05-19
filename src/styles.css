@@ -3897,6 +3897,7 @@ button {
   z-index: 1;
   min-height: 160px;
   align-self: center;
+  overflow: visible;
 }
 
 .landing-hero-core-ring,
@@ -3939,10 +3940,91 @@ button {
   animation: landing-hero-node-pulse 2.1s ease-in-out infinite;
 }
 
+.landing-hero-core-node-tatum {
+  width: 8rem;
+  height: 8rem;
+  display: grid;
+  place-items: center;
+  overflow: visible;
+  isolation: isolate;
+  z-index: 3;
+  background:
+    radial-gradient(circle, rgba(236, 255, 255, 0.9) 0 12%, rgba(79, 245, 240, 0.32) 32%, rgba(15, 148, 177, 0.08) 68%, transparent 100%),
+    radial-gradient(circle at 50% 48%, rgba(10, 26, 38, 0.96) 0 62%, rgba(7, 20, 31, 0.78) 66%, rgba(7, 20, 31, 0) 100%);
+  box-shadow: 0 0 28px rgba(78, 244, 239, 0.32), 0 0 46px rgba(56, 211, 233, 0.16);
+  animation: landing-hero-node-shell-pulse 2.1s ease-in-out infinite;
+}
+
+.landing-hero-core-node-tatum::before {
+  content: "";
+  position: absolute;
+  inset: 50% auto auto 50%;
+  width: 5.35rem;
+  height: 5.35rem;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 50% 44%, rgba(18, 35, 48, 0.98) 0 54%, rgba(8, 18, 30, 0.98) 72%, rgba(4, 12, 20, 0.94) 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(213, 251, 255, 0.08),
+    0 0 22px rgba(68, 230, 244, 0.18);
+  transform: translate(-50%, -50%);
+  z-index: 0;
+}
+
+.landing-hero-core-frog {
+  position: relative;
+  z-index: 4;
+  flex: 0 0 auto;
+  color: #8ffcff;
+  filter: drop-shadow(0 0 6px rgba(84, 244, 239, 0.28));
+  animation: landing-hero-frog-pulse 5.8s ease-in-out infinite;
+}
+
+.landing-hero-core-frog.network-select-icon-tatum {
+  color: #8ffcff;
+  width: 5rem;
+  min-width: 5rem;
+  height: 5rem;
+  min-height: 5rem;
+  max-width: none;
+  max-height: none;
+}
+
+.landing-hero-core-frog.network-select-icon-tatum svg {
+  width: 5rem;
+  height: 5rem;
+  max-width: none;
+  max-height: none;
+  overflow: visible;
+}
+
+.landing-hero-core-frog .network-frog-ring {
+  fill: rgba(7, 24, 40, 0.88);
+  stroke: rgba(176, 246, 255, 0.82);
+  stroke-width: 0.9;
+  filter: drop-shadow(0 0 3px rgba(74, 233, 255, 0.24));
+}
+
+.landing-hero-core-frog .network-frog-eye,
+.landing-hero-core-frog .network-frog-eye-core {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.landing-hero-core-frog .network-frog-eye,
+.landing-hero-core-frog .network-frog-eye-core {
+  animation: landing-hero-frog-blink 8.6s ease-in-out infinite;
+}
+
+.landing-hero-core-frog .network-frog-base {
+  display: none;
+}
+
 .landing-hero-core-scan {
-  inset: 10% 10%;
+  inset: -22% -22%;
   border-radius: 50%;
   background: conic-gradient(from 0deg, transparent 0 70%, rgba(118, 245, 255, 0.28) 78%, transparent 88% 100%);
+  z-index: 2;
   animation: landing-hero-radar-spin 6.2s linear infinite;
 }
 
@@ -3950,6 +4032,7 @@ button {
   height: 1px;
   background: linear-gradient(90deg, transparent, rgba(119, 238, 255, 0.66), transparent);
   transform-origin: left center;
+  z-index: 1;
 }
 
 .landing-hero-core-route-1 {
@@ -4398,6 +4481,49 @@ button {
   50% {
     opacity: 1;
     filter: brightness(1.22);
+  }
+}
+
+@keyframes landing-hero-node-shell-pulse {
+  0%,
+  100% {
+    opacity: 0.96;
+    box-shadow: 0 0 24px rgba(78, 244, 239, 0.26), 0 0 40px rgba(56, 211, 233, 0.14);
+  }
+  50% {
+    opacity: 1;
+    box-shadow: 0 0 32px rgba(92, 247, 241, 0.34), 0 0 52px rgba(64, 220, 239, 0.2);
+  }
+}
+
+@keyframes landing-hero-frog-pulse {
+  0%,
+  100% {
+    opacity: 0.86;
+    transform: scale(0.96);
+    filter: drop-shadow(0 0 4px rgba(84, 244, 239, 0.24));
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.03);
+    filter: drop-shadow(0 0 9px rgba(84, 244, 239, 0.36));
+  }
+}
+
+@keyframes landing-hero-frog-blink {
+  0%,
+  44%,
+  48%,
+  82%,
+  86%,
+  100% {
+    transform: scaleY(1);
+    opacity: 0.94;
+  }
+  46%,
+  84% {
+    transform: scaleY(0.12);
+    opacity: 0.78;
   }
 }
 

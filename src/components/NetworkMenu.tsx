@@ -16,9 +16,9 @@ function NetworkSignalIcon() {
   );
 }
 
-function TatumFrogIcon() {
+export function TatumFrogIcon({ className = "" }: { className?: string }) {
   return (
-    <span className="network-select-icon network-select-icon-tatum" aria-hidden="true">
+    <span className={`network-select-icon network-select-icon-tatum ${className}`.trim()} aria-hidden="true">
       <svg viewBox="0 0 24 24" focusable="false">
         <defs>
           <linearGradient id="network-frog-gradient" x1="7.25" y1="7.5" x2="16.9" y2="18.1" gradientUnits="userSpaceOnUse">

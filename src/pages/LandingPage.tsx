@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { Link } from "react-router-dom";
 import { CreateFormLink } from "../components/CreateFormLink";
+import { TatumFrogIcon } from "../components/NetworkMenu";
 import { useI18n } from "../i18n";
+import { useRpcInfrastructure } from "../providers";
 
 function useScrollReveal() {
   const sectionRef = useRef<HTMLElement | null>(null);
@@ -421,6 +423,7 @@ function FinalSignalCtaSection() {
 }
 
 export function LandingPage() {
+  const rpc = useRpcInfrastructure();
   const { t } = useI18n();
   const heroSignalBars = [0.46, 0.72, 0.38, 0.92, 0.58, 0.81, 0.5, 0.68, 0.42, 0.86];
   const heroFeedRows = [t("landingHeroLiveFeed1"), t("landingHeroLiveFeed2"), t("landingHeroLiveFeed3")];
@@ -504,7 +507,13 @@ export function LandingPage() {
                   <div className="landing-hero-core-visual" aria-hidden="true">
                     <span className="landing-hero-core-ring landing-hero-core-ring-1" />
                     <span className="landing-hero-core-ring landing-hero-core-ring-2" />
-                    <span className="landing-hero-core-node" />
+                    {rpc.usingTatum ? (
+                      <span className="landing-hero-core-node landing-hero-core-node-tatum">
+                        <TatumFrogIcon className="landing-hero-core-frog" />
+                      </span>
+                    ) : (
+                      <span className="landing-hero-core-node" />
+                    )}
                     <span className="landing-hero-core-scan" />
                     <span className="landing-hero-core-route landing-hero-core-route-1" />
                     <span className="landing-hero-core-route landing-hero-core-route-2" />
