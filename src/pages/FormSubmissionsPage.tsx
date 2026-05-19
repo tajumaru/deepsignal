@@ -56,7 +56,7 @@ import {
 } from "../lib/storage";
 import { buildSurveySummary } from "../lib/surveySummary";
 import { formatDate, flattenAnswer } from "../lib/utils";
-import { useRpcInfrastructure } from "../providers";
+import { useRpcInfrastructure } from "../rpcInfrastructure";
 import type { FormSchema, Submission } from "../types";
 
 type StreamId =

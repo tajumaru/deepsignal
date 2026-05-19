@@ -7,7 +7,7 @@ import {
   ACCESS_CONTROL_REGISTRY_ID,
   isSuiRateLimitError,
 } from "../lib/sui";
-import { handleRateLimitedRpcFallback, useRpcInfrastructure } from "../providers";
+import { handleRateLimitedRpcFallback, useRpcInfrastructure } from "../rpcInfrastructure";
 
 type RegistryObjectResponse = {
   data?: {
@@ -34,10 +34,16 @@ export function useAccessRegistry() {
   const rpc = useRpcInfrastructure();
   const packageId = normalizeObjectId(ACCESS_CONTROL_PACKAGE_ID);
   const registryId = normalizeObjectId(ACCESS_CONTROL_REGISTRY_ID);
-  const enabled = Boolean(packageId && registryId);
+  const enabled = Boolean(packageId && registryId && !rpc.isRateLimitedCooldownActive);
 
   const registryQuery = useQuery({
-    queryKey: ["access-control-registry", packageId, registryId],
+    queryKey: [
+      "access-control-registry",
+      packageId,
+      registryId,
+      rpc.mode,
+      rpc.currentRpcUrl,
+    ],
     enabled,
     staleTime: 1000 * 60 * 5,
     gcTime: 1000 * 60 * 30,

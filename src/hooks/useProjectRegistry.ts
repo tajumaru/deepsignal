@@ -10,7 +10,7 @@ import {
 } from "../lib/projectRegistry";
 import { PROJECT_OWNER_CAP_TYPE } from "../lib/sui";
 import { isSuiRateLimitError } from "../lib/sui";
-import { handleRateLimitedRpcFallback, useRpcInfrastructure } from "../providers";
+import { handleRateLimitedRpcFallback, useRpcInfrastructure } from "../rpcInfrastructure";
 
 type OwnedObjectEntry = {
   data?: {
@@ -88,12 +88,12 @@ async function fetchOwnedProjectCaps(
 export function useProjectRegistry(address?: string | null) {
   const suiClient = useSuiClient();
   const rpc = useRpcInfrastructure();
-  const enabled = Boolean(address && PROJECT_OWNER_CAP_TYPE);
+  const enabled = Boolean(address && PROJECT_OWNER_CAP_TYPE && !rpc.isRateLimitedCooldownActive);
   const expectedType = normalizeType(PROJECT_OWNER_CAP_TYPE);
   const [recentProjects, setRecentProjects] = useState<ProjectSummary[]>(() => loadRecentProjects());
 
   const projectQuery = useQuery({
-    queryKey: ["project-registry", address ?? "", expectedType],
+    queryKey: ["project-registry", address ?? "", expectedType, rpc.mode, rpc.currentRpcUrl],
     enabled,
     staleTime: 1000 * 60 * 5,
     gcTime: 1000 * 60 * 30,
@@ -108,21 +108,34 @@ export function useProjectRegistry(address?: string | null) {
         const caps = ownedCaps
           .map((entry) => parseProjectOwnerCap(entry))
           .filter((entry): entry is NonNullable<ReturnType<typeof parseProjectOwnerCap>> => Boolean(entry));
-        const projects = await Promise.all(
-          caps.map(async (cap) => {
+        const projects: ProjectSummary[] = [];
+
+        for (const cap of caps) {
+          try {
             const response = (await suiClient.getObject({
               id: cap.projectId,
               options: {
                 showContent: true,
               },
             })) as SuiObjectResponse;
-            return parseProjectSummary(cap.projectId, response.data?.content?.fields, cap.objectId);
-          }),
-        );
+            const project = parseProjectSummary(cap.projectId, response.data?.content?.fields, cap.objectId);
+            if (project) {
+              projects.push(project);
+            }
+          } catch (error) {
+            if (isSuiRateLimitError(error)) {
+              handleRateLimitedRpcFallback(rpc, error);
+            }
+            if (projects.length === 0) {
+              throw error;
+            }
+            break;
+          }
+        }
 
         return {
           caps,
-          projects: projects.filter((project): project is NonNullable<typeof project> => Boolean(project)),
+          projects,
         };
       } catch (error) {
         if (isSuiRateLimitError(error)) {

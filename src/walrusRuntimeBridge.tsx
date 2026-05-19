@@ -131,7 +131,7 @@ function WalrusRuntimeBridgeInner() {
       };
       return walrusEnabledClient;
     },
-    [client, config?.url],
+    [client, config?.url, network],
   );
   const runtimeContext = useMemo(
     () => ({
@@ -139,8 +139,10 @@ function WalrusRuntimeBridgeInner() {
       wallet: currentWallet,
       supportedIntents: stableSupportedIntents,
       client: walrusClient,
+      rpcUrl: config?.url ?? null,
+      network: network ?? null,
     }),
-    [account, currentWallet, stableSupportedIntents, walrusClient],
+    [account, config?.url, currentWallet, network, stableSupportedIntents, walrusClient],
   );
 
   useEffect(() => {
@@ -152,6 +154,8 @@ function WalrusRuntimeBridgeInner() {
         wallet: null,
         supportedIntents: [],
         client: null,
+        rpcUrl: null,
+        network: null,
       });
     };
   }, [runtimeContext]);

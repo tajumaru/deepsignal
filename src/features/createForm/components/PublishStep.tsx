@@ -217,6 +217,10 @@ export function PublishStep({
   const isLocalOnlyForm = Boolean(savedForm?.blobId && isLocalFallbackBlob(savedForm.blobId));
   const showFocusedSuccessCard = Boolean(savedForm && showPublishSuccessView);
   const beaconScrollRef = useRef<HTMLDivElement | null>(null);
+  const shouldShowWalrusDiagnostics =
+    showWalrusDiagnostics ||
+    Boolean(storageRuntimeNotice) ||
+    Boolean(storageRuntimeDiagnostics);
   const storageModeLabel = savedForm
     ? isLocalOnlyForm
       ? t("localMode")
@@ -455,15 +459,15 @@ export function PublishStep({
             <p className="wallet-inline-note">{t("guestDraftPublishWalletRequired")}</p>
           ) : null}
 
-          {showWalrusDiagnostics ? (
-            <section className="answer-card">
-              <div className="section-row">
+          {shouldShowWalrusDiagnostics ? (
+            <section className="answer-card answer-card-plain publish-diagnostics-card">
+              <div className="section-row publish-diagnostics-header">
                 <div>
                   <p className="eyebrow">Walrus Runtime</p>
                   <h3>{t("publishDiagnosticsTitle")}</h3>
                 </div>
               </div>
-              <div className="metadata-list">
+              <div className="metadata-list publish-diagnostics-list">
                 <div className="metadata-row">
                   <span>{t("walletLabel")}</span>
                   <strong>{isConnected ? currentWalletName ?? t("connected") : t("notConnected")}</strong>
@@ -516,11 +520,47 @@ export function PublishStep({
                     <strong>{storageRuntimeDiagnostics.lastRpcError}</strong>
                   </div>
                 ) : null}
+                {storageRuntimeDiagnostics?.source ? (
+                  <div className="metadata-row">
+                    <span>Failure source</span>
+                    <strong>{storageRuntimeDiagnostics.source}</strong>
+                  </div>
+                ) : null}
+                {typeof storageRuntimeDiagnostics?.status === "number" ? (
+                  <div className="metadata-row">
+                    <span>HTTP status</span>
+                    <strong>{storageRuntimeDiagnostics.status}</strong>
+                  </div>
+                ) : null}
+                {storageRuntimeDiagnostics?.errorName ? (
+                  <div className="metadata-row">
+                    <span>Error class</span>
+                    <strong>{storageRuntimeDiagnostics.errorName}</strong>
+                  </div>
+                ) : null}
+                {storageRuntimeDiagnostics?.causeMessage ? (
+                  <div className="metadata-row">
+                    <span>Cause</span>
+                    <strong>{storageRuntimeDiagnostics.causeMessage}</strong>
+                  </div>
+                ) : null}
+                {storageRuntimeDiagnostics?.url ? (
+                  <div className="metadata-row">
+                    <span>Request URL</span>
+                    <strong>{storageRuntimeDiagnostics.url}</strong>
+                  </div>
+                ) : null}
+                {storageRuntimeDiagnostics?.responseBody ? (
+                  <div className="metadata-row">
+                    <span>Response body</span>
+                    <strong>{storageRuntimeDiagnostics.responseBody}</strong>
+                  </div>
+                ) : null}
               </div>
             </section>
           ) : null}
 
-          {!showWalrusDiagnostics && storageRuntimeNotice ? (
+          {!shouldShowWalrusDiagnostics && storageRuntimeNotice ? (
             <section className="answer-card composer-friendly-storage-notice">
               <div className="metadata-row">
                 <span>{t("storageNoticeLabel")}</span>
@@ -676,7 +716,7 @@ export function PublishStep({
                   ) : null}
                 </section>
 
-                {showWalrusDiagnostics ? (
+                {shouldShowWalrusDiagnostics ? (
                   <section className="panel composer-settings-card">
                     <div className="section-row">
                       <div>

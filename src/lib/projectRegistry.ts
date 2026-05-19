@@ -23,6 +23,7 @@ export interface ProjectSummary {
   formsCount: number;
   signalsCount: number;
   onchainForms?: OnchainProjectFormSummary[];
+  onchainSignals?: OnchainProjectSignalSummary[];
   createdAt?: string;
   ownedOwnerCapId?: string;
 }
@@ -32,6 +33,18 @@ export interface OnchainProjectFormSummary {
   title: string;
   metadataDigest: string;
   active: boolean;
+  createdAt?: string;
+}
+
+export interface OnchainProjectSignalSummary {
+  signalId: number;
+  formId: number;
+  walrusBlobId: string;
+  metadataDigest: string;
+  encrypted: boolean;
+  sealIdentity?: string;
+  submitter?: string;
+  status: "new" | "triaged" | "archived";
   createdAt?: string;
 }
 
@@ -299,6 +312,52 @@ export function parseProjectForms(source: unknown) {
     .sort((left, right) => left.formId - right.formId);
 }
 
+function parseOnchainSignalStatus(source: unknown): OnchainProjectSignalSummary["status"] {
+  const value = readU64(source);
+  if (value === 1) {
+    return "triaged";
+  }
+  if (value === 2) {
+    return "archived";
+  }
+  return "new";
+}
+
+export function parseProjectSignals(source: unknown) {
+  return readVectorEntries(source)
+    .map((entry) => {
+      const fields =
+        entry.fields && typeof entry.fields === "object"
+          ? (entry.fields as Record<string, unknown>)
+          : entry;
+      const signalId = readU64(fields.signal_id);
+      const formId = readU64(fields.form_id);
+      const walrusBlobId = readString(fields.walrus_blob_id);
+      return {
+        signalId,
+        formId,
+        walrusBlobId,
+        metadataDigest: readString(fields.metadata_digest),
+        encrypted: readBool(fields.encrypted),
+        sealIdentity: readString(fields.seal_identity) || undefined,
+        submitter: readObjectId(fields.submitter) || undefined,
+        status: parseOnchainSignalStatus(fields.status),
+        createdAt: readU64(fields.created_at)
+          ? new Date(readU64(fields.created_at)).toISOString()
+          : undefined,
+      } satisfies OnchainProjectSignalSummary;
+    })
+    .filter((signal) => Boolean(signal.walrusBlobId) && Number.isFinite(signal.signalId))
+    .sort((left, right) => {
+      const leftTime = left.createdAt ?? "";
+      const rightTime = right.createdAt ?? "";
+      if (leftTime === rightTime) {
+        return right.signalId - left.signalId;
+      }
+      return rightTime.localeCompare(leftTime);
+    });
+}
+
 function stableSerialize(value: unknown): string {
   if (Array.isArray(value)) {
     return `[${value.map((item) => stableSerialize(item)).join(",")}]`;
@@ -355,6 +414,7 @@ export function parseProjectSummary(
     formsCount: readU64(fields.forms_count),
     signalsCount: readU64(fields.signals_count),
     onchainForms: parseProjectForms(fields.forms),
+    onchainSignals: parseProjectSignals(fields.signals),
     createdAt: createdAtMs ? new Date(createdAtMs).toISOString() : undefined,
     ownedOwnerCapId: normalizeObjectId(ownedOwnerCapId),
   } satisfies ProjectSummary;

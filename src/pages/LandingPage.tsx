@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { CreateFormLink } from "../components/CreateFormLink";
 import { TatumFrogIcon } from "../components/NetworkMenu";
 import { useI18n } from "../i18n";
-import { useRpcInfrastructure } from "../providers";
+import { useRpcInfrastructure } from "../rpcInfrastructure";
 
 function useScrollReveal() {
   const sectionRef = useRef<HTMLElement | null>(null);

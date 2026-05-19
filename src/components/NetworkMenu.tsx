@@ -1,7 +1,9 @@
 import { useSuiClient } from "@mysten/dapp-kit";
 import { useEffect, useRef, useState } from "react";
 import { getConnectedNetworkLabel } from "../lib/sui";
-import { useRpcInfrastructure } from "../providers";
+import { useRpcInfrastructure } from "../rpcInfrastructure";
+
+const NETWORK_DIAGNOSTIC_POLL_MS = 5_000;
 
 function NetworkSignalIcon() {
   return (
@@ -94,7 +96,6 @@ export function NetworkMenu() {
 
     async function runDiagnostics() {
       const startedAt = performance.now();
-      setHealthy(false);
 
       try {
         const chainIdentifier = await suiClient.getChainIdentifier();
@@ -114,10 +115,14 @@ export function NetworkMenu() {
     }
 
     void runDiagnostics();
+    const interval = window.setInterval(() => {
+      void runDiagnostics();
+    }, NETWORK_DIAGNOSTIC_POLL_MS);
     return () => {
       cancelled = true;
+      window.clearInterval(interval);
     };
-  }, [rpc.setConnectedNetworkLabel, suiClient, value]);
+  }, [rpc.currentRpcUrl, rpc.mode, rpc.setConnectedNetworkLabel, suiClient, value]);
 
   return (
     <div ref={shellRef} className="network-select-shell" title={rpc.displayRpcUrl}>

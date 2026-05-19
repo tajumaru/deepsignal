@@ -16649,6 +16649,22 @@ body.composer-mode .bg-orb {
   box-shadow: 0 10px 22px rgba(52, 211, 153, 0.12);
 }
 
+.pending-sui-actions {
+  display: flex;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.pending-sui-select-all-button.is-active:not(:disabled) {
+  border-color: rgba(126, 232, 255, 0.34);
+  background:
+    linear-gradient(135deg, rgba(102, 227, 255, 0.18), rgba(59, 130, 246, 0.12)),
+    rgba(8, 30, 47, 0.74);
+  color: #dffbff;
+  box-shadow: 0 10px 22px rgba(52, 171, 211, 0.12);
+}
+
 .signal-list {
   max-height: calc(100vh - 240px);
   overflow: auto;
@@ -16680,6 +16696,7 @@ body.composer-mode .bg-orb {
 }
 
 .signal-card {
+  position: relative;
   padding: 0.9rem 0.95rem;
   display: grid;
   gap: 0.42rem;
@@ -16696,6 +16713,10 @@ body.composer-mode .bg-orb {
     background 160ms ease,
     transform 160ms ease,
     box-shadow 160ms ease;
+}
+
+.signal-card.has-select-checkbox {
+  padding-left: 2.6rem;
 }
 
 .signal-card.is-unread strong,
@@ -16727,6 +16748,16 @@ body.composer-mode .bg-orb {
     inset 0 1px 0 rgba(178, 245, 255, 0.08),
     0 0 0 1px rgba(149, 242, 255, 0.1),
     0 0 24px rgba(102, 227, 255, 0.08);
+}
+
+.signal-card.is-selected-for-sui {
+  border-color: rgba(124, 238, 255, 0.34);
+  background:
+    linear-gradient(180deg, rgba(17, 49, 74, 0.96) 0%, rgba(10, 33, 53, 0.93) 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(190, 247, 255, 0.08),
+    0 0 0 1px rgba(126, 232, 255, 0.08),
+    0 14px 28px rgba(3, 16, 28, 0.22);
 }
 
 .signal-card-topline,
@@ -16896,6 +16927,24 @@ body.composer-mode .bg-orb {
 .signal-card-actions .ghost-button {
   min-width: 0;
   padding-inline: 0.85rem;
+}
+
+.signal-card-select-toggle {
+  position: absolute;
+  top: 1rem;
+  left: 0.95rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1;
+}
+
+.signal-card-select-toggle input {
+  width: 0.95rem;
+  height: 0.95rem;
+  margin: 0;
+  accent-color: #7de7ff;
+  cursor: pointer;
 }
 
 .signal-summary-card-meta,
@@ -18447,6 +18496,44 @@ body.composer-mode .bg-orb {
   border: 0;
   padding: 0;
   background: transparent;
+}
+
+.publish-diagnostics-card {
+  padding: 0.9rem 1rem;
+  background: rgba(4, 18, 31, 0.42);
+  border: 1px solid rgba(116, 226, 255, 0.12);
+  border-radius: 18px;
+  box-shadow: none;
+}
+
+.publish-diagnostics-header {
+  margin-bottom: 0.35rem;
+}
+
+.publish-diagnostics-header .eyebrow {
+  margin-bottom: 0.2rem;
+}
+
+.publish-diagnostics-header h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.publish-diagnostics-list {
+  gap: 0;
+}
+
+.publish-diagnostics-list .metadata-row {
+  padding: 0.65rem 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  border-top: 1px solid rgba(116, 226, 255, 0.1);
+}
+
+.publish-diagnostics-list > :first-child {
+  border-top: 0;
+  padding-top: 0;
 }
 
 .public-submit-details .metadata-list {

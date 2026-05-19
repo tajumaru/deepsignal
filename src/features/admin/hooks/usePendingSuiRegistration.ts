@@ -13,7 +13,7 @@ import {
   storageAdapter,
 } from "../../../lib/storage";
 import { useI18n } from "../../../i18n";
-import { useRpcInfrastructure } from "../../../providers";
+import { useRpcInfrastructure } from "../../../rpcInfrastructure";
 import type { Submission } from "../../../types";
 import type { AdminToastState } from "./useAdminToast";
 import type { SignalRecord } from "./useSignalInboxData";
@@ -55,6 +55,19 @@ export function usePendingSuiRegistration({
         ? current.filter((entry) => entry !== signalId)
         : [...current, signalId],
     );
+  }
+
+  function setPendingSelections(signalIds: string[], selected: boolean) {
+    const normalizedIds = signalIds.filter(Boolean);
+    if (normalizedIds.length === 0) {
+      return;
+    }
+    setSelectedPendingSignalIds((current) => {
+      if (selected) {
+        return [...new Set([...current, ...normalizedIds])];
+      }
+      return current.filter((signalId) => !normalizedIds.includes(signalId));
+    });
   }
 
   async function registerSubmissionRecordOnSui(record: SignalRecord) {
@@ -185,6 +198,7 @@ export function usePendingSuiRegistration({
     registeringSignalIds,
     isRegisteringSignal,
     togglePendingSelection,
+    setPendingSelections,
     handleRegisterPendingSignals,
   };
 }

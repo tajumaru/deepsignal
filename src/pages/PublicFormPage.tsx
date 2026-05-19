@@ -462,6 +462,9 @@ export function PublicFormPage() {
           modeAnonymous: t("publicModeAnonymous"),
           walletModeHelpNoSignature: t("publicWalletModeHelpNoSignature"),
           anonymousModeHelp: t("publicAnonymousModeHelp"),
+          walletUnavailable: t("publicWalletUnavailable"),
+          walletUnavailableRequired: t("publicWalletUnavailableRequired"),
+          walletRetry: t("publicWalletRetry"),
         }}
       />
 

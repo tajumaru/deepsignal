@@ -10,7 +10,7 @@ import {
   ACCESS_CONTROL_REVIEWER_CAP_TYPE,
   isSuiRateLimitError,
 } from "../lib/sui";
-import { handleRateLimitedRpcFallback, useRpcInfrastructure } from "../providers";
+import { handleRateLimitedRpcFallback, useRpcInfrastructure } from "../rpcInfrastructure";
 import { useAccessRegistry } from "./useAccessRegistry";
 
 export type CapabilityProfile = {
@@ -167,7 +167,7 @@ export function useAccessControl(address?: string | null) {
   const { registry, isLoadingRegistry, error: registryError } = useAccessRegistry();
   const packageId = normalizeObjectId(ACCESS_CONTROL_PACKAGE_ID);
   const registryId = normalizeObjectId(ACCESS_CONTROL_REGISTRY_ID);
-  const enabled = Boolean(address && packageId);
+  const enabled = Boolean(address && packageId && !rpc.isRateLimitedCooldownActive);
   const targetTypes = useMemo(
     () =>
       new Set(
@@ -183,7 +183,14 @@ export function useAccessControl(address?: string | null) {
   );
 
   const ownedObjectsQuery = useQuery({
-    queryKey: ["access-control-owned-objects", address ?? "", packageId, registryId],
+    queryKey: [
+      "access-control-owned-objects",
+      address ?? "",
+      packageId,
+      registryId,
+      rpc.mode,
+      rpc.currentRpcUrl,
+    ],
     enabled,
     staleTime: 1000 * 60 * 5,
     gcTime: 1000 * 60 * 30,
@@ -192,26 +199,38 @@ export function useAccessControl(address?: string | null) {
     refetchOnReconnect: false,
     refetchOnWindowFocus: false,
     queryFn: async () => {
-      try {
-        const capTypes = [
-          ACCESS_CONTROL_OWNER_CAP_TYPE,
-          ACCESS_CONTROL_ADMIN_CAP_TYPE,
-          ACCESS_CONTROL_REVIEWER_CAP_TYPE,
-        ].filter(Boolean);
-        const pages = await Promise.all(
-          capTypes.map((capType) => fetchOwnedObjectsByType(suiClient, address ?? "", capType)),
-        );
+      const capTypes = [
+        ACCESS_CONTROL_OWNER_CAP_TYPE,
+        ACCESS_CONTROL_ADMIN_CAP_TYPE,
+        ACCESS_CONTROL_REVIEWER_CAP_TYPE,
+      ].filter(Boolean);
+      const fulfilledEntries: OwnedObjectEntry[] = [];
+      const rejectedErrors: unknown[] = [];
 
-        return pages
-          .flat()
-          .filter((entry) => targetTypes.has(normalizeType(entry.data?.type)));
-      } catch (error) {
-        if (isSuiRateLimitError(error)) {
-          handleRateLimitedRpcFallback(rpc, error);
-          return [];
+      for (const capType of capTypes) {
+        try {
+          const entries = await fetchOwnedObjectsByType(suiClient, address ?? "", capType);
+          fulfilledEntries.push(
+            ...entries.filter((entry) => targetTypes.has(normalizeType(entry.data?.type))),
+          );
+        } catch (error) {
+          rejectedErrors.push(error);
+          if (isSuiRateLimitError(error)) {
+            handleRateLimitedRpcFallback(rpc, error);
+          }
         }
-        throw error;
       }
+
+      if (fulfilledEntries.length > 0) {
+        return fulfilledEntries;
+      }
+
+      const firstError = rejectedErrors[0];
+      if (firstError) {
+        throw firstError;
+      }
+
+      return [];
     },
   });
 

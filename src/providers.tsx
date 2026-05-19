@@ -2,9 +2,8 @@ import "@mysten/dapp-kit/dist/index.css";
 import { JsonRpcHTTPTransport, SuiJsonRpcClient } from "@mysten/sui/jsonRpc";
 import {
   Component,
-  createContext,
   useCallback,
-  useContext,
+  useEffect,
   useMemo,
   useState,
   type PropsWithChildren,
@@ -27,29 +26,17 @@ import {
   SUI_FULLNODE_URL,
   SUI_NETWORK,
 } from "./lib/sui";
+import {
+  RPC_RATE_LIMIT_COOLDOWN_MS,
+  resetRateLimitedRpcFallback,
+  RpcInfrastructureContext,
+  type RpcInfrastructureContextValue,
+} from "./rpcInfrastructure";
 import WalrusRuntimeBridge from "./walrusRuntimeBridge";
 
 const PREFERRED_WALLETS = ["Sui Wallet", "Slush", "Phantom", "OKX Wallet"];
 type RpcMode = "default" | "tatum";
-
-interface RpcInfrastructureContextValue {
-  mode: RpcMode;
-  network: "mainnet" | "testnet";
-  currentRpcUrl: string;
-  displayRpcUrl: string;
-  defaultRpcUrl: string;
-  tatumRpcUrl: string | null;
-  providerLabel: string;
-  usingTatum: boolean;
-  canUseTatum: boolean;
-  connectedNetworkLabel: string;
-  setConnectedNetworkLabel: (label: string) => void;
-  switchToDefault: () => void;
-  switchToTatum: () => void;
-}
-
-const RpcInfrastructureContext = createContext<RpcInfrastructureContextValue | null>(null);
-let tatumRateLimitFallbackTriggered = false;
+const TATUM_SELECTION_GRACE_MS = 4_000;
 
 class OptionalWalrusRuntimeBoundary extends Component<
   PropsWithChildren<{ fallback?: ReactNode }>,
@@ -83,27 +70,6 @@ function walletFilter(wallet: WalletWithRequiredFeatures) {
   );
 }
 
-export function useRpcInfrastructure() {
-  const context = useContext(RpcInfrastructureContext);
-  if (!context) {
-    throw new Error("useRpcInfrastructure must be used within WalletProviders.");
-  }
-  return context;
-}
-
-export function handleRateLimitedRpcFallback(
-  rpc: RpcInfrastructureContextValue,
-  error: unknown,
-) {
-  if (!rpc.usingTatum || tatumRateLimitFallbackTriggered) {
-    return false;
-  }
-  tatumRateLimitFallbackTriggered = true;
-  console.warn("Tatum RPC rate limited; switching to default Sui RPC.", error);
-  rpc.switchToDefault();
-  return true;
-}
-
 export function WalrusRuntimeProvider({ children }: PropsWithChildren) {
   return (
     <OptionalWalrusRuntimeBoundary fallback={children}>
@@ -116,8 +82,12 @@ export function WalletProviders({ children }: PropsWithChildren) {
   const [queryClient] = useState(() => new QueryClient());
   const tatumRpcUrl = getEffectiveTatumRpcUrl();
   const canUseTatum = Boolean(tatumRpcUrl);
-  const [rpcMode, setRpcMode] = useState<RpcMode>("default");
+  const [rpcMode, setRpcMode] = useState<RpcMode>(() => (canUseTatum ? "tatum" : "default"));
   const [connectedNetworkLabel, setConnectedNetworkLabel] = useState(() => getConnectedNetworkLabel());
+  const [rateLimitedUntil, setRateLimitedUntil] = useState(0);
+  const [manualTatumSelectionUntil, setManualTatumSelectionUntil] = useState(() =>
+    canUseTatum ? Date.now() + TATUM_SELECTION_GRACE_MS : 0,
+  );
   const currentRpcUrl = rpcMode === "tatum" && tatumRpcUrl ? tatumRpcUrl : SUI_DEFAULT_RPC_URL;
   const displayRpcUrl = rpcMode === "tatum" && SUI_FULLNODE_URL ? SUI_FULLNODE_URL : currentRpcUrl;
   const { networkConfig } = useMemo(
@@ -131,17 +101,46 @@ export function WalletProviders({ children }: PropsWithChildren) {
     [currentRpcUrl],
   );
   const switchToDefault = useCallback(() => {
+    setManualTatumSelectionUntil(0);
     setRpcMode("default");
+  }, []);
+  const clearRateLimitedState = useCallback(() => {
+    setRateLimitedUntil(0);
+  }, []);
+  const noteRateLimited = useCallback((cooldownMs = RPC_RATE_LIMIT_COOLDOWN_MS) => {
+    setRateLimitedUntil(Date.now() + Math.max(0, cooldownMs));
   }, []);
   const switchToTatum = useCallback(() => {
     if (canUseTatum) {
-      tatumRateLimitFallbackTriggered = false;
+      resetRateLimitedRpcFallback();
+      clearRateLimitedState();
+      setManualTatumSelectionUntil(Date.now() + TATUM_SELECTION_GRACE_MS);
       setRpcMode("tatum");
     }
-  }, [canUseTatum]);
+  }, [canUseTatum, clearRateLimitedState]);
   const setNetworkLabel = useCallback((label: string) => {
     setConnectedNetworkLabel((current) => (current === label ? current : label));
   }, []);
+  const isRateLimitedCooldownActive = rateLimitedUntil > Date.now();
+  const canAutoFallbackFromRateLimit = manualTatumSelectionUntil <= Date.now();
+  useEffect(() => {
+    if (!rateLimitedUntil || !isRateLimitedCooldownActive) {
+      return;
+    }
+    const timeout = window.setTimeout(() => {
+      setRateLimitedUntil((current) => (current <= Date.now() ? 0 : current));
+    }, Math.max(0, rateLimitedUntil - Date.now()));
+    return () => window.clearTimeout(timeout);
+  }, [isRateLimitedCooldownActive, rateLimitedUntil]);
+  useEffect(() => {
+    if (!manualTatumSelectionUntil || canAutoFallbackFromRateLimit) {
+      return;
+    }
+    const timeout = window.setTimeout(() => {
+      setManualTatumSelectionUntil((current) => (current <= Date.now() ? 0 : current));
+    }, Math.max(0, manualTatumSelectionUntil - Date.now()));
+    return () => window.clearTimeout(timeout);
+  }, [canAutoFallbackFromRateLimit, manualTatumSelectionUntil]);
   const createClient = useCallback(
     (
       _name: string | number,
@@ -170,12 +169,22 @@ export function WalletProviders({ children }: PropsWithChildren) {
       setConnectedNetworkLabel: setNetworkLabel,
       switchToDefault,
       switchToTatum,
+      noteRateLimited,
+      clearRateLimitedState,
+      rateLimitedUntil,
+      isRateLimitedCooldownActive,
+      canAutoFallbackFromRateLimit,
     }),
     [
+      canAutoFallbackFromRateLimit,
+      clearRateLimitedState,
       canUseTatum,
       connectedNetworkLabel,
       currentRpcUrl,
       displayRpcUrl,
+      isRateLimitedCooldownActive,
+      noteRateLimited,
+      rateLimitedUntil,
       rpcMode,
       setNetworkLabel,
       switchToDefault,

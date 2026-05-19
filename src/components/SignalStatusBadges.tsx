@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import type { SignalCategory } from "../lib/signalInbox";
+import type { SignalCategory, SignalPersistenceState } from "../lib/signalInbox";
 import type { Submission } from "../types";
 
 type BadgeTone =
@@ -19,7 +19,9 @@ type BadgeTone =
   | "new"
   | "encrypted"
   | "cluster"
-  | "local";
+  | "local"
+  | "walrus"
+  | "registered";
 
 interface BadgeIconProps {
   className?: string;
@@ -40,6 +42,7 @@ interface SignalStatusBadgesProps {
   selectedForSui?: boolean;
   showEncrypted?: boolean;
   storageLabel?: string;
+  persistenceState?: SignalPersistenceState;
   className?: string;
   density?: "full" | "notable";
 }
@@ -389,6 +392,7 @@ export function SignalStatusBadges({
   selectedForSui = false,
   showEncrypted = false,
   storageLabel,
+  persistenceState,
   className,
   density = "full",
 }: SignalStatusBadgesProps) {
@@ -477,6 +481,26 @@ export function SignalStatusBadges({
       label: "Local",
       title: "Stored locally only",
       Icon: HardDriveIcon,
+    });
+  }
+
+  if (storageLabel === "Stored on Walrus" || persistenceState === "walrus_synced") {
+    badges.push({
+      key: "walrus-synced",
+      tone: "walrus",
+      label: "Walrus",
+      title: "Stored on Walrus",
+      Icon: HardDriveIcon,
+    });
+  }
+
+  if (persistenceState === "onchain_registered") {
+    badges.push({
+      key: "onchain-registered",
+      tone: "registered",
+      label: "Sui",
+      title: "Registered on Sui",
+      Icon: CheckIcon,
     });
   }
 

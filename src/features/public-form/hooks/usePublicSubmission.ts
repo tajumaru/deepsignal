@@ -13,7 +13,7 @@ import { ensureRespondentSession } from "../../../lib/respondentSession";
 import { collectSignalContext, installSignalContextCapture } from "../../../lib/signalContext";
 import { ENCRYPTED_INLINE_ATTACHMENT_MAX_BYTES } from "../../../lib/attachmentLimits";
 import { makeId } from "../../../lib/utils";
-import { useRpcInfrastructure } from "../../../providers";
+import { useRpcInfrastructure } from "../../../rpcInfrastructure";
 import { isQuotaExceededError, isRateLimitError } from "../../../storage/walrusDiagnostics";
 import type { FormSchema, Submission, SubmissionAttachment } from "../../../types";
 import { getOrderedFields, getVisibleFieldIds, isFieldRequired } from "../../../utils/formLogic";
@@ -511,6 +511,15 @@ export function usePublicSubmission({
         getStorageRuntimeStatus,
         storageAdapter,
       } = await import("../../../lib/storage");
+      if (accountAddress && (walletRequired || attachWallet)) {
+        const { waitForWalrusMutationRuntimeReady } = await import("../../../lib/walrus");
+        await waitForWalrusMutationRuntimeReady({
+          requireWallet: true,
+          timeoutMs: 7000,
+          expectedRpcUrl: rpcInfrastructure.currentRpcUrl,
+          expectedNetwork: rpcInfrastructure.network,
+        });
+      }
       const { activeSealAdapter } = await import("../../../lib/seal");
       setStorageRuntime(getStorageRuntimeStatus());
       const uploadFile = requiresProtectedAttachment
@@ -887,7 +896,12 @@ export function usePublicSubmission({
     try {
       if (accountAddress && (walletRequired || attachWallet)) {
         const { waitForWalrusMutationRuntimeReady } = await import("../../../lib/walrus");
-        await waitForWalrusMutationRuntimeReady({ requireWallet: true, timeoutMs: 7000 });
+        await waitForWalrusMutationRuntimeReady({
+          requireWallet: true,
+          timeoutMs: 7000,
+          expectedRpcUrl: rpcInfrastructure.currentRpcUrl,
+          expectedNetwork: rpcInfrastructure.network,
+        });
       }
       const {
         createInlinePrivateAttachment,

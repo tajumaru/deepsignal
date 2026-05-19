@@ -6,6 +6,8 @@ import {
 } from "./sui";
 
 const ACTIVITY_EVENTS_KEY = "deepsignal.activityEvents.v1";
+const SUI_ACTIVITY_CACHE_KEY = "deepsignal.suiActivityEvents.v1";
+const SUI_ACTIVITY_CACHE_TTL_MS = 15_000;
 
 interface SuiEventPage {
   data?: SuiEventRecord[];
@@ -44,6 +46,14 @@ export interface ActivityProjectScope {
   admins?: string[];
 }
 
+interface CachedSuiActivityEvents {
+  events: ActivityEvent[];
+  cachedAt: number;
+}
+
+const suiActivityRequestCache = new Map<string, CachedSuiActivityEvents>();
+const suiActivityPendingRequests = new Map<string, Promise<ActivityEvent[]>>();
+
 function hasLocalStorage() {
   return typeof window !== "undefined" && Boolean(window.localStorage);
 }
@@ -65,6 +75,36 @@ function writeJson<T>(key: string, value: T) {
     return;
   }
   window.localStorage.setItem(key, JSON.stringify(value));
+}
+
+function readSuiActivityCache() {
+  const cached = readJson<Record<string, CachedSuiActivityEvents | undefined>>(SUI_ACTIVITY_CACHE_KEY, {});
+  const normalized: Record<string, CachedSuiActivityEvents> = {};
+
+  Object.entries(cached).forEach(([key, value]) => {
+    if (!value || typeof value !== "object") {
+      return;
+    }
+    const cachedAt = typeof value.cachedAt === "number" ? value.cachedAt : 0;
+    const events = Array.isArray(value.events)
+      ? value.events
+          .map((event) =>
+            normalizeActivityEvent(event as ActivityEvent | (Record<string, unknown> & { id?: string })),
+          )
+          .filter((event): event is ActivityEvent => Boolean(event))
+      : [];
+    if (cachedAt > 0) {
+      normalized[key] = { cachedAt, events };
+    }
+  });
+
+  return normalized;
+}
+
+function writeSuiActivityCacheEntry(cacheKey: string, value: CachedSuiActivityEvents) {
+  const nextCache = readSuiActivityCache();
+  nextCache[cacheKey] = value;
+  writeJson(SUI_ACTIVITY_CACHE_KEY, nextCache);
 }
 
 function isActivityAction(value: unknown): value is ActivityAction {
@@ -233,6 +273,43 @@ function makeOnchainActivityEvent(args: {
   } satisfies ActivityEvent;
 }
 
+function getActivityProjectsCacheKey(projects: ActivityProjectScope[]) {
+  return projects
+    .map((project) => ({
+      objectId: project.objectId.trim().toLowerCase(),
+      owner: project.owner?.trim().toLowerCase() ?? "",
+      admins: [...(project.admins ?? [])].map((admin) => admin.trim().toLowerCase()).sort(),
+    }))
+    .sort((left, right) => left.objectId.localeCompare(right.objectId))
+    .map((project) => `${project.objectId}:${project.owner}:${project.admins.join(",")}`)
+    .join("|");
+}
+
+function getFreshCachedSuiActivityEvents(cacheKey: string, now = Date.now()) {
+  const memoryEntry = suiActivityRequestCache.get(cacheKey);
+  if (memoryEntry && now - memoryEntry.cachedAt <= SUI_ACTIVITY_CACHE_TTL_MS) {
+    return memoryEntry.events;
+  }
+
+  const storedEntry = readSuiActivityCache()[cacheKey];
+  if (storedEntry && now - storedEntry.cachedAt <= SUI_ACTIVITY_CACHE_TTL_MS) {
+    suiActivityRequestCache.set(cacheKey, storedEntry);
+    return storedEntry.events;
+  }
+
+  return null;
+}
+
+function getAnyCachedSuiActivityEvents(cacheKey: string) {
+  return suiActivityRequestCache.get(cacheKey)?.events ?? readSuiActivityCache()[cacheKey]?.events ?? null;
+}
+
+function cacheSuiActivityEvents(cacheKey: string, events: ActivityEvent[]) {
+  const entry = { events, cachedAt: Date.now() };
+  suiActivityRequestCache.set(cacheKey, entry);
+  writeSuiActivityCacheEntry(cacheKey, entry);
+}
+
 async function queryMoveEvents(client: SuiEventClient, moveEventType: string) {
   const events: SuiEventRecord[] = [];
   let cursor: SuiEventCursor | null | undefined;
@@ -260,92 +337,120 @@ export async function listSuiActivityEvents(
   if (!ACCESS_CONTROL_PACKAGE_ID || projects.length === 0) {
     return [] as ActivityEvent[];
   }
+  const cacheKey = getActivityProjectsCacheKey(projects);
+  const freshCachedEvents = getFreshCachedSuiActivityEvents(cacheKey);
+  if (freshCachedEvents) {
+    return freshCachedEvents;
+  }
+
+  const pendingRequest = suiActivityPendingRequests.get(cacheKey);
+  if (pendingRequest) {
+    return pendingRequest;
+  }
+
   const projectById = new Map(projects.map((project) => [project.objectId.toLowerCase(), project]));
   const eventTypes = {
     formCreated: `${ACCESS_CONTROL_PACKAGE_ID}::${PROJECT_REGISTRY_MODULE}::FormCreated`,
     formDeleted: `${ACCESS_CONTROL_PACKAGE_ID}::${PROJECT_REGISTRY_MODULE}::FormDeleted`,
     formStatusChanged: `${ACCESS_CONTROL_PACKAGE_ID}::${PROJECT_REGISTRY_MODULE}::FormStatusChanged`,
   };
-  const [createdEvents, deletedEvents, statusEvents] = await Promise.all([
-    queryMoveEvents(client, eventTypes.formCreated),
-    queryMoveEvents(client, eventTypes.formDeleted),
-    queryMoveEvents(client, eventTypes.formStatusChanged),
-  ]);
+  const request = (async () => {
+    try {
+      const [createdEvents, deletedEvents, statusEvents] = await Promise.all([
+        queryMoveEvents(client, eventTypes.formCreated),
+        queryMoveEvents(client, eventTypes.formDeleted),
+        queryMoveEvents(client, eventTypes.formStatusChanged),
+      ]);
 
-  const mappedCreatedEvents = createdEvents.flatMap((event) => {
-    const fields = readEventFields(event);
-    if (!fields) {
-      return [];
-    }
-    const projectId = readStringField(fields, "project_id");
-    const project = projectById.get(projectId.toLowerCase());
-    if (!project) {
-      return [];
-    }
-    const actor = readStringField(fields, "actor");
-    const formId = readStringField(fields, "form_id");
-    return [
-      makeOnchainActivityEvent({
-        action: "form_updated",
-        actorAddress: actor,
-        actorRole: getOnchainActorRole(actor, project),
-        createdAt: getOnchainEventCreatedAt(event, fields),
-        formId: `onchain:${projectId}:${formId}`,
-        formTitleSnapshot: readStringField(fields, "title"),
-        txDigest: event.id?.txDigest,
-      }),
-    ];
-  });
+      const mappedCreatedEvents = createdEvents.flatMap((event) => {
+        const fields = readEventFields(event);
+        if (!fields) {
+          return [];
+        }
+        const projectId = readStringField(fields, "project_id");
+        const project = projectById.get(projectId.toLowerCase());
+        if (!project) {
+          return [];
+        }
+        const actor = readStringField(fields, "actor");
+        const formId = readStringField(fields, "form_id");
+        return [
+          makeOnchainActivityEvent({
+            action: "form_updated",
+            actorAddress: actor,
+            actorRole: getOnchainActorRole(actor, project),
+            createdAt: getOnchainEventCreatedAt(event, fields),
+            formId: `onchain:${projectId}:${formId}`,
+            formTitleSnapshot: readStringField(fields, "title"),
+            txDigest: event.id?.txDigest,
+          }),
+        ];
+      });
 
-  const mappedDeletedEvents = deletedEvents.flatMap((event) => {
-    const fields = readEventFields(event);
-    if (!fields) {
-      return [];
-    }
-    const projectId = readStringField(fields, "project_id");
-    const project = projectById.get(projectId.toLowerCase());
-    if (!project) {
-      return [];
-    }
-    const actor = readStringField(fields, "actor");
-    const formId = readStringField(fields, "form_id");
-    return [
-      makeOnchainActivityEvent({
-        action: "form_archived",
-        actorAddress: actor,
-        actorRole: getOnchainActorRole(actor, project),
-        createdAt: getOnchainEventCreatedAt(event, fields),
-        formId: `onchain:${projectId}:${formId}`,
-        formTitleSnapshot: readStringField(fields, "title"),
-        txDigest: event.id?.txDigest,
-      }),
-    ];
-  });
+      const mappedDeletedEvents = deletedEvents.flatMap((event) => {
+        const fields = readEventFields(event);
+        if (!fields) {
+          return [];
+        }
+        const projectId = readStringField(fields, "project_id");
+        const project = projectById.get(projectId.toLowerCase());
+        if (!project) {
+          return [];
+        }
+        const actor = readStringField(fields, "actor");
+        const formId = readStringField(fields, "form_id");
+        return [
+          makeOnchainActivityEvent({
+            action: "form_archived",
+            actorAddress: actor,
+            actorRole: getOnchainActorRole(actor, project),
+            createdAt: getOnchainEventCreatedAt(event, fields),
+            formId: `onchain:${projectId}:${formId}`,
+            formTitleSnapshot: readStringField(fields, "title"),
+            txDigest: event.id?.txDigest,
+          }),
+        ];
+      });
 
-  const mappedInactiveEvents = statusEvents.flatMap((event) => {
-    const fields = readEventFields(event);
-    if (!fields || readBooleanField(fields, "active")) {
-      return [];
-    }
-    const projectId = readStringField(fields, "project_id");
-    const project = projectById.get(projectId.toLowerCase());
-    if (!project) {
-      return [];
-    }
-    const actor = readStringField(fields, "actor");
-    const formId = readStringField(fields, "form_id");
-    return [
-      makeOnchainActivityEvent({
-        action: "form_archived",
-        actorAddress: actor,
-        actorRole: getOnchainActorRole(actor, project),
-        createdAt: getOnchainEventCreatedAt(event, fields),
-        formId: `onchain:${projectId}:${formId}`,
-        formTitleSnapshot: `On-chain form ${formId}`,
-        txDigest: event.id?.txDigest,
-      }),
-    ];
-  });
+      const mappedInactiveEvents = statusEvents.flatMap((event) => {
+        const fields = readEventFields(event);
+        if (!fields || readBooleanField(fields, "active")) {
+          return [];
+        }
+        const projectId = readStringField(fields, "project_id");
+        const project = projectById.get(projectId.toLowerCase());
+        if (!project) {
+          return [];
+        }
+        const actor = readStringField(fields, "actor");
+        const formId = readStringField(fields, "form_id");
+        return [
+          makeOnchainActivityEvent({
+            action: "form_archived",
+            actorAddress: actor,
+            actorRole: getOnchainActorRole(actor, project),
+            createdAt: getOnchainEventCreatedAt(event, fields),
+            formId: `onchain:${projectId}:${formId}`,
+            formTitleSnapshot: `On-chain form ${formId}`,
+            txDigest: event.id?.txDigest,
+          }),
+        ];
+      });
 
-  return mergeActivityEvents(mappedCreatedEvents, mappedDeletedEvents, mappedInactiveEvents);
+      const mergedEvents = mergeActivityEvents(mappedCreatedEvents, mappedDeletedEvents, mappedInactiveEvents);
+      cacheSuiActivityEvents(cacheKey, mergedEvents);
+      return mergedEvents;
+    } catch (error) {
+      const cachedEvents = getAnyCachedSuiActivityEvents(cacheKey);
+      if (cachedEvents) {
+        return cachedEvents;
+      }
+      throw error;
+    } finally {
+      suiActivityPendingRequests.delete(cacheKey);
+    }
+  })();
+
+  suiActivityPendingRequests.set(cacheKey, request);
+  return request;
 }

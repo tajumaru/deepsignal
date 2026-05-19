@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useState } from "react";
+import { Component, Fragment, lazy, Suspense, useEffect, useState, type ReactNode } from "react";
 import { WalletSurface } from "../../../components/WalletSurface";
 import { WalrusRuntimeSurface } from "../../../components/WalrusRuntimeSurface";
 import { retryLazyImport } from "../../../lib/lazyRetry";
@@ -34,7 +34,43 @@ interface PublicIdentityCardProps {
     modeAnonymous: string;
     walletModeHelpNoSignature: string;
     anonymousModeHelp: string;
+    walletUnavailable: string;
+    walletUnavailableRequired: string;
+    walletRetry: string;
   };
+}
+
+class PublicWalletSurfaceBoundary extends Component<
+  {
+    children: ReactNode;
+    fallback: (options: { retry: () => void }) => ReactNode;
+  },
+  { error: Error | null; retryNonce: number }
+> {
+  state = { error: null, retryNonce: 0 };
+
+  static getDerivedStateFromError(error: Error) {
+    return { error };
+  }
+
+  componentDidCatch(error: Error) {
+    console.error("DeepSignal public wallet surface failed to render.", error);
+  }
+
+  retry = () => {
+    this.setState((current) => ({
+      error: null,
+      retryNonce: current.retryNonce + 1,
+    }));
+  };
+
+  render() {
+    if (this.state.error) {
+      return this.props.fallback({ retry: this.retry });
+    }
+
+    return <Fragment key={this.state.retryNonce}>{this.props.children}</Fragment>;
+  }
 }
 
 export function PublicIdentityCard({
@@ -57,6 +93,7 @@ export function PublicIdentityCard({
   }, [walletRequired]);
 
   const walletFallback = <div className="wallet-connect-shell wallet-connect-shell-compact" />;
+  const walletUnavailableCopy = walletRequired ? labels.walletUnavailableRequired : labels.walletUnavailable;
 
   return (
     <section className="answer-card public-identity-card">
@@ -68,16 +105,32 @@ export function PublicIdentityCard({
         </div>
         <div className="public-identity-wallet">
           {walletRequested ? (
-            <WalletSurface fallback={walletFallback}>
-              <WalrusRuntimeSurface fallback={walletFallback}>
-                <Suspense fallback={walletFallback}>
-                  <PublicWalletAccountPanel
-                    onAccountAddressChange={onAccountAddressChange}
-                    onWalletProviderChange={onWalletProviderChange}
-                  />
-                </Suspense>
-              </WalrusRuntimeSurface>
-            </WalletSurface>
+            <PublicWalletSurfaceBoundary
+              fallback={({ retry }) => (
+                <div className="wallet-connect-shell wallet-connect-shell-compact">
+                  <div className="wallet-connect-direct panel">
+                    <div className="wallet-connect-direct-copy">
+                      <strong>{labels.walletRequired}</strong>
+                      <span>{walletUnavailableCopy}</span>
+                    </div>
+                    <button type="button" className="wallet-sync-button" onClick={retry}>
+                      {labels.walletRetry}
+                    </button>
+                  </div>
+                </div>
+              )}
+            >
+              <WalletSurface fallback={walletFallback}>
+                <WalrusRuntimeSurface fallback={walletFallback}>
+                  <Suspense fallback={walletFallback}>
+                    <PublicWalletAccountPanel
+                      onAccountAddressChange={onAccountAddressChange}
+                      onWalletProviderChange={onWalletProviderChange}
+                    />
+                  </Suspense>
+                </WalrusRuntimeSurface>
+              </WalletSurface>
+            </PublicWalletSurfaceBoundary>
           ) : (
             <div className="wallet-connect-shell wallet-connect-shell-compact">
               <div className="wallet-connect-direct panel">

@@ -645,6 +645,11 @@ const messages = {
     publicModeAnonymous: "Anonymous submit",
     publicModeWallet: "Wallet-backed submit",
     publicAnonymousModeHelp: "You can submit immediately without any wallet signature.",
+    publicWalletUnavailable:
+      "Wallet connect is temporarily unavailable. You can still continue without a wallet or refresh to retry.",
+    publicWalletUnavailableRequired:
+      "Wallet connect is temporarily unavailable. Refresh and retry wallet mode to submit this form.",
+    publicWalletRetry: "Retry wallet",
     publicConnectWalletToSubmit: "Connect wallet to submit",
     publicSubmitWithRequiredWallet: "Send Signal",
     publicSubmitWithWallet: "Send Signal",
@@ -1368,6 +1373,8 @@ const messages = {
     resultsLabel: (params) => `${params?.count ?? 0} results`,
     pendingSuiResultsLabel: (params) => `${params?.count ?? 0} pending Sui`,
     pendingSuiRegistrationEyebrow: "Pending Sui Registration",
+    selectAllLabel: "Select all",
+    clearSelectionLabel: "Clear selection",
     optionalProofQueueTitle: "Optional proof queue",
     registerSelectedOnSui: (params) =>
       `Register selected on Sui${Number(params?.count ?? 0) > 0 ? ` (${params?.count ?? 0})` : ""}`,
@@ -2517,6 +2524,11 @@ const messages = {
     publicModeWallet: "\u30a6\u30a9\u30ec\u30c3\u30c8\u9023\u643a\u3067\u9001\u4fe1",
     publicAnonymousModeHelp:
       "\u30a6\u30a9\u30ec\u30c3\u30c8\u7f72\u540d\u306a\u3057\u3067\u3059\u3050\u306b\u9001\u4fe1\u3067\u304d\u307e\u3059\u3002",
+    publicWalletUnavailable:
+      "\u30a6\u30a9\u30ec\u30c3\u30c8\u63a5\u7d9a\u304c\u4e00\u6642\u7684\u306b\u4f7f\u3048\u307e\u305b\u3093\u3002\u30a6\u30a9\u30ec\u30c3\u30c8\u306a\u3057\u3067\u305d\u306e\u307e\u307e\u7d9a\u3051\u308b\u304b\u3001\u30ea\u30ed\u30fc\u30c9\u3057\u3066\u518d\u8a66\u884c\u3057\u3066\u304f\u3060\u3055\u3044\u3002",
+    publicWalletUnavailableRequired:
+      "\u30a6\u30a9\u30ec\u30c3\u30c8\u63a5\u7d9a\u304c\u4e00\u6642\u7684\u306b\u4f7f\u3048\u307e\u305b\u3093\u3002\u3053\u306e\u30d5\u30a9\u30fc\u30e0\u306f\u9001\u4fe1\u306b\u30a6\u30a9\u30ec\u30c3\u30c8\u304c\u5fc5\u8981\u306a\u305f\u3081\u3001\u30ea\u30ed\u30fc\u30c9\u3057\u3066\u30a6\u30a9\u30ec\u30c3\u30c8\u63a5\u7d9a\u3092\u3084\u308a\u76f4\u3057\u3066\u304f\u3060\u3055\u3044\u3002",
+    publicWalletRetry: "\u30a6\u30a9\u30ec\u30c3\u30c8\u3092\u518d\u8a66\u884c",
     publicConnectWalletToSubmit: "\u9001\u4fe1\u306b\u306f\u30a6\u30a9\u30ec\u30c3\u30c8\u63a5\u7d9a\u304c\u5fc5\u8981",
     publicSubmitWithRequiredWallet: "Send Signal",
     publicSubmitWithWallet: "Send Signal",
@@ -3300,6 +3312,8 @@ const messages = {
     resultsLabel: (params) => `${params?.count ?? 0} \u4ef6`,
     pendingSuiResultsLabel: (params) => `Sui \u4fdd\u7559 ${params?.count ?? 0} \u4ef6`,
     pendingSuiRegistrationEyebrow: "Sui \u767b\u9332\u5f85\u3061",
+    selectAllLabel: "\u3059\u3079\u3066\u9078\u629e",
+    clearSelectionLabel: "\u9078\u629e\u89e3\u9664",
     optionalProofQueueTitle: "\u4efb\u610f\u306e\u8a3c\u660e\u30ad\u30e5\u30fc",
     registerSelectedOnSui: (params) =>
       `\u9078\u629e\u4e2d\u3092 Sui \u306b\u767b\u9332${Number(params?.count ?? 0) > 0 ? ` (${params?.count ?? 0})` : ""}`,

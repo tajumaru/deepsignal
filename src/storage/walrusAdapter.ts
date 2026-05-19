@@ -24,7 +24,11 @@ import {
 import { localStorageAdapter } from "./localStorageAdapter";
 import {
   WalrusDiagnosticError,
+  getWalrusCauseMessage,
   getWalrusErrorMessage,
+  getWalrusErrorResponseBody,
+  getWalrusErrorStatus,
+  getWalrusErrorUrl,
   isQuotaExceededError,
   isRateLimitError,
   isWalrusDiagnosticError,
@@ -82,6 +86,8 @@ type WalrusRuntimeContext = {
   wallet: WalletWithRequiredFeatures | null;
   supportedIntents: string[];
   client: WalrusEnabledClient | null;
+  rpcUrl: string | null;
+  network: string | null;
 };
 export type WalrusBlobReadErrorCode =
   | "aggregator_unconfigured"
@@ -111,6 +117,8 @@ let runtimeContext: WalrusRuntimeContext = {
   wallet: null,
   supportedIntents: [],
   client: null,
+  rpcUrl: null,
+  network: null,
 };
 const runtimeListeners = new Set<() => void>();
 const WALRUS_RUNTIME_READY_TIMEOUT_MS = 5000;
@@ -132,6 +140,8 @@ export function setWalrusRuntimeContext(next: WalrusRuntimeContext) {
     runtimeContext.account?.address === next.account?.address &&
     runtimeContext.wallet?.name === next.wallet?.name &&
     runtimeContext.client === next.client &&
+    runtimeContext.rpcUrl === next.rpcUrl &&
+    runtimeContext.network === next.network &&
     runtimeContext.supportedIntents.length === next.supportedIntents.length &&
     runtimeContext.supportedIntents.every((intent, index) => intent === next.supportedIntents[index])
   ) {
@@ -154,6 +164,8 @@ export function getWalrusMutationRuntimeStatus() {
     writeConfigured: walrusStorageMode === "publisher" ? Boolean(publisherUrl) : Boolean(uploadRelayUrl),
     hasClient: Boolean(runtimeContext.client),
     hasWallet: Boolean(runtimeContext.account && runtimeContext.wallet),
+    rpcUrl: runtimeContext.rpcUrl,
+    network: runtimeContext.network,
     canWrite: Boolean(
       aggregatorUrl &&
         (walrusStorageMode === "publisher" ? publisherUrl : uploadRelayUrl) &&
@@ -199,11 +211,21 @@ function getWalrusClient() {
   return getRuntimeWalrusClient();
 }
 
-function isWalrusMutationRuntimeReady(requireWallet: boolean) {
+function isWalrusMutationRuntimeReady(
+  requireWallet: boolean,
+  expectedRpcUrl?: string,
+  expectedNetwork?: string,
+) {
   if (!runtimeContext.client) {
     return false;
   }
   if (requireWallet && (!runtimeContext.account || !runtimeContext.wallet)) {
+    return false;
+  }
+  if (expectedRpcUrl && runtimeContext.rpcUrl !== expectedRpcUrl) {
+    return false;
+  }
+  if (expectedNetwork && runtimeContext.network !== expectedNetwork) {
     return false;
   }
   return true;
@@ -212,15 +234,19 @@ function isWalrusMutationRuntimeReady(requireWallet: boolean) {
 export async function waitForWalrusMutationRuntimeReady({
   requireWallet = true,
   timeoutMs = WALRUS_RUNTIME_READY_TIMEOUT_MS,
+  expectedRpcUrl,
+  expectedNetwork,
 }: {
   requireWallet?: boolean;
   timeoutMs?: number;
+  expectedRpcUrl?: string;
+  expectedNetwork?: string;
 } = {}) {
   if (walrusStorageMode === "publisher") {
     return;
   }
   assertUploadRelayEnv();
-  if (isWalrusMutationRuntimeReady(requireWallet)) {
+  if (isWalrusMutationRuntimeReady(requireWallet, expectedRpcUrl, expectedNetwork)) {
     return;
   }
 
@@ -229,6 +255,10 @@ export async function waitForWalrusMutationRuntimeReady({
     timeoutMs,
     hasClient: Boolean(runtimeContext.client),
     hasWallet: Boolean(runtimeContext.account && runtimeContext.wallet),
+    expectedRpcUrl: expectedRpcUrl ?? null,
+    currentRpcUrl: runtimeContext.rpcUrl,
+    expectedNetwork: expectedNetwork ?? null,
+    currentNetwork: runtimeContext.network,
   });
 
   await new Promise<void>((resolve, reject) => {
@@ -238,7 +268,7 @@ export async function waitForWalrusMutationRuntimeReady({
       reject(new Error("Walrus client is not ready yet. Refresh the page and reconnect your wallet."));
     }, timeoutMs);
     unsubscribe = subscribeWalrusRuntime(() => {
-      if (!isWalrusMutationRuntimeReady(requireWallet)) {
+      if (!isWalrusMutationRuntimeReady(requireWallet, expectedRpcUrl, expectedNetwork)) {
         return;
       }
       window.clearTimeout(timeout);
@@ -440,7 +470,13 @@ function normalizeWalrusWriteError(error: unknown) {
     if (error.details.stage === "rpc-visibility") {
       return new WalrusDiagnosticError(
         "Walrus transaction submitted, but RPC visibility timed out.",
-        error.details,
+        {
+          ...error.details,
+          source: error.details.source ?? "rpc",
+          errorName: error.details.errorName ?? error.name,
+          causeMessage: error.details.causeMessage ?? getWalrusCauseMessage(error),
+          responseBody: error.details.responseBody ?? getWalrusErrorResponseBody(error),
+        },
         error,
       );
     }
@@ -454,7 +490,16 @@ function normalizeWalrusWriteError(error: unknown) {
     if (isQuotaExceededError(error)) {
       return new WalrusDiagnosticError(
         "Walrus upload failed: storage quota exceeded.",
-        { stage: "upload-relay", category: "quota_exceeded" },
+        {
+          stage: "upload-relay",
+          category: "quota_exceeded",
+          source: "upload-relay",
+          status: getWalrusErrorStatus(error),
+          errorName: error.name,
+          causeMessage: getWalrusCauseMessage(error),
+          url: getWalrusErrorUrl(error),
+          responseBody: getWalrusErrorResponseBody(error),
+        },
         error,
       );
     }
@@ -462,7 +507,16 @@ function normalizeWalrusWriteError(error: unknown) {
     if (isRateLimitError(error)) {
       return new WalrusDiagnosticError(
         "Walrus upload failed: the storage service is rate limiting requests.",
-        { stage: "upload-relay", category: "rate_limited" },
+        {
+          stage: "upload-relay",
+          category: "rate_limited",
+          source: error instanceof StorageNodeAPIError ? "upload-relay" : "unknown",
+          status: getWalrusErrorStatus(error) ?? 429,
+          errorName: error.name,
+          causeMessage: getWalrusCauseMessage(error),
+          url: getWalrusErrorUrl(error),
+          responseBody: getWalrusErrorResponseBody(error),
+        },
         error,
       );
     }
@@ -474,6 +528,11 @@ function normalizeWalrusWriteError(error: unknown) {
           : "Walrus transaction visibility timed out before the write completed.",
         {
           stage: walrusStorageMode === "uploadRelay" ? "upload-relay" : "rpc-visibility",
+          source: walrusStorageMode === "uploadRelay" ? "upload-relay" : "rpc",
+          errorName: error.name,
+          causeMessage: getWalrusCauseMessage(error),
+          url: getWalrusErrorUrl(error),
+          responseBody: getWalrusErrorResponseBody(error),
         },
         error,
       );
@@ -486,7 +545,15 @@ function normalizeWalrusWriteError(error: unknown) {
     ) {
       return new WalrusDiagnosticError(
         "Walrus storage transaction failed: wallet balance is insufficient for storage cost or gas.",
-        { stage: "wallet-balance" },
+        {
+          stage: "wallet-balance",
+          source: "walrus-sdk",
+          status: getWalrusErrorStatus(error),
+          errorName: error.name,
+          causeMessage: getWalrusCauseMessage(error),
+          url: getWalrusErrorUrl(error),
+          responseBody: getWalrusErrorResponseBody(error),
+        },
         error,
       );
     }
@@ -495,40 +562,112 @@ function normalizeWalrusWriteError(error: unknown) {
       if (lower.includes("tip") && (lower.includes("max") || lower.includes("limit"))) {
         return new WalrusDiagnosticError(
           "Walrus upload relay failed: the required relay tip exceeded the configured tip max.",
-          { stage: "upload-relay" },
+          {
+            stage: "upload-relay",
+            source: "upload-relay",
+            status: getWalrusErrorStatus(error),
+            errorName: error.name,
+            causeMessage: getWalrusCauseMessage(error),
+            url: getWalrusErrorUrl(error),
+            responseBody: getWalrusErrorResponseBody(error),
+          },
           error,
         );
       }
-      return new WalrusDiagnosticError(`Walrus upload relay failed: ${message}`, { stage: "upload-relay" }, error);
+      return new WalrusDiagnosticError(
+        `Walrus upload relay failed: ${message}`,
+        {
+          stage: "upload-relay",
+          source: "upload-relay",
+          status: getWalrusErrorStatus(error),
+          errorName: error.name,
+          causeMessage: getWalrusCauseMessage(error),
+          url: getWalrusErrorUrl(error),
+          responseBody: getWalrusErrorResponseBody(error),
+        },
+        error,
+      );
     }
 
     if (lower.includes("failed to certify blob") || lower.includes("certify blob")) {
-      return new WalrusDiagnosticError(`Walrus certification failed: ${message}`, { stage: "certification" }, error);
+      return new WalrusDiagnosticError(
+        `Walrus certification failed: ${message}`,
+        {
+          stage: "certification",
+          source: "walrus-sdk",
+          status: getWalrusErrorStatus(error),
+          errorName: error.name,
+          causeMessage: getWalrusCauseMessage(error),
+          url: getWalrusErrorUrl(error),
+          responseBody: getWalrusErrorResponseBody(error),
+        },
+        error,
+      );
     }
 
     if (lower.includes("tip") && (lower.includes("max") || lower.includes("limit"))) {
       return new WalrusDiagnosticError(
         "Walrus upload relay failed: the required relay tip exceeded the configured tip max.",
-        { stage: "upload-relay" },
+        {
+          stage: "upload-relay",
+          source: "upload-relay",
+          status: getWalrusErrorStatus(error),
+          errorName: error.name,
+          causeMessage: getWalrusCauseMessage(error),
+          url: getWalrusErrorUrl(error),
+          responseBody: getWalrusErrorResponseBody(error),
+        },
         error,
       );
     }
 
     if (lower.includes("upload relay")) {
-      return new WalrusDiagnosticError(`Walrus upload relay failed: ${message}`, { stage: "upload-relay" }, error);
+      return new WalrusDiagnosticError(
+        `Walrus upload relay failed: ${message}`,
+        {
+          stage: "upload-relay",
+          source: "upload-relay",
+          status: getWalrusErrorStatus(error),
+          errorName: error.name,
+          causeMessage: getWalrusCauseMessage(error),
+          url: getWalrusErrorUrl(error),
+          responseBody: getWalrusErrorResponseBody(error),
+        },
+        error,
+      );
     }
 
     if (error instanceof WalrusClientError) {
       return new WalrusDiagnosticError(
         `Walrus storage transaction failed: ${message}`,
-        { stage: "transaction-execution" },
+        {
+          stage: "transaction-execution",
+          source: "walrus-sdk",
+          status: getWalrusErrorStatus(error),
+          errorName: error.name,
+          causeMessage: getWalrusCauseMessage(error),
+          url: getWalrusErrorUrl(error),
+          responseBody: getWalrusErrorResponseBody(error),
+        },
         error,
       );
     }
   }
 
   return error instanceof Error
-    ? new WalrusDiagnosticError(getWalrusErrorMessage(error), { stage: "unknown" }, error)
+    ? new WalrusDiagnosticError(
+        getWalrusErrorMessage(error),
+        {
+          stage: "unknown",
+          source: "unknown",
+          status: getWalrusErrorStatus(error),
+          errorName: error.name,
+          causeMessage: getWalrusCauseMessage(error),
+          url: getWalrusErrorUrl(error),
+          responseBody: getWalrusErrorResponseBody(error),
+        },
+        error,
+      )
     : new WalrusDiagnosticError("Walrus upload failed.", { stage: "unknown" }, error);
 }
 

@@ -67,15 +67,20 @@ import {
 } from "../lib/exportResponses";
 import { getEncryptedPayloadAvailabilityLabel, hasDedicatedEncryptedPayloadBlob } from "../lib/encryptionDisplay";
 import { getPublicFormPath, getPublicRoadmapPath } from "../lib/publicLinks";
-import { shortAddress } from "../lib/sui";
+import { isSuiRateLimitError, shortAddress } from "../lib/sui";
 import { clearDeepSignalPolicyCapabilityCache } from "../lib/debugCache";
 import { formatResponseDeadline, type ResponseDeadlineLabels } from "../lib/responseDeadline";
 import { getRespondentDisplayLabel, getSubmissionRespondentMeta } from "../lib/respondentMeta";
 import {
   getSignalPreview,
+  getSignalPersistenceLabel,
+  getSignalPersistenceState,
+  getSignalSyncSummary,
   getSignalSubject,
+  getSignalStorageState,
   getStorageBadgeLabel,
   getWalletAccessLabel,
+  getSignalStorageBlobId,
   isLocalFallbackBlob,
 } from "../lib/signalInbox";
 import {
@@ -83,6 +88,7 @@ import {
   storageAdapter,
 } from "../lib/storage";
 import { flattenAnswer, formatDate } from "../lib/utils";
+import { handleRateLimitedRpcFallback, useRpcInfrastructure } from "../rpcInfrastructure";
 import { deleteFormsFromLocalCache, getStorageRuntimeStatus } from "../storage/storageFactory";
 import type { ActivityAction, ActivityEvent, FormSchema, Submission } from "../types";
 
@@ -543,6 +549,8 @@ function MobileSignalRow({
 }: MobileSignalRowProps) {
   const { submission } = record;
   const title = getSignalSubject(submission);
+  const persistenceState = getSignalPersistenceState(submission);
+  const persistenceLabel = getSignalPersistenceLabel(persistenceState);
   const priorityLabel =
     submission.priority === "high"
       ? t("priorityHigh")
@@ -600,6 +608,9 @@ function MobileSignalRow({
           <span className={`mobile-signal-mini-badge status-${submission.status}`}>
             {readStateLabel}
           </span>
+          {persistenceState !== "not_available" ? (
+            <span className="mobile-signal-mini-badge">{persistenceLabel}</span>
+          ) : null}
           <span className="mobile-signal-mini-badge">{signalLevelLabel}</span>
         </span>
       </span>
@@ -702,6 +713,7 @@ export function AdminDashboardPage() {
   const navigate = useNavigate();
   const wallet = useSuiWallet();
   const suiClient = useSuiClient();
+  const rpc = useRpcInfrastructure();
   const {
     capabilityProfile,
     isPending: isLoadingCapabilities,
@@ -772,6 +784,7 @@ export function AdminDashboardPage() {
     registeringSignalIds,
     isRegisteringSignal,
     togglePendingSelection,
+    setPendingSelections,
     handleRegisterPendingSignals,
   } = usePendingSuiRegistration({
     allSignals,
@@ -1020,7 +1033,7 @@ export function AdminDashboardPage() {
   }, []);
 
   useEffect(() => {
-    if (!hasAdminAccess || projects.length === 0) {
+    if (!hasAdminAccess || activeWorkspaceTab !== "activity" || projects.length === 0) {
       setSuiActivityEvents([]);
       return;
     }
@@ -1034,6 +1047,9 @@ export function AdminDashboardPage() {
       },
       (error) => {
         console.warn("Failed to load Sui activity events", error);
+        if (isSuiRateLimitError(error)) {
+          handleRateLimitedRpcFallback(rpc, error);
+        }
         if (!cancelled) {
           setSuiActivityEvents([]);
         }
@@ -1042,7 +1058,7 @@ export function AdminDashboardPage() {
     return () => {
       cancelled = true;
     };
-  }, [hasAdminAccess, projects, suiClient]);
+  }, [activeWorkspaceTab, hasAdminAccess, projects, rpc, suiClient]);
 
   const selectedProjectForms = useMemo(
     () =>
@@ -1892,6 +1908,12 @@ export function AdminDashboardPage() {
   const selectedPendingVisibleCount = visibleSignals.filter((record) =>
     selectedPendingSignalIds.includes(record.submission.id),
   ).length;
+  const visiblePendingSignalIds = visibleSignals
+    .filter((record) => record.submission.pendingOnchainRegistration)
+    .map((record) => record.submission.id);
+  const allVisiblePendingSelected =
+    visiblePendingSignalIds.length > 0 &&
+    visiblePendingSignalIds.every((signalId) => selectedPendingSignalIds.includes(signalId));
   const bulkDecryptableVisibleSignals = useMemo(
     () =>
       visibleSignals.filter(
@@ -2295,16 +2317,28 @@ export function AdminDashboardPage() {
                       <p className="eyebrow">{t("pendingSuiRegistrationEyebrow")}</p>
                       <h3>{t("optionalProofQueueTitle")}</h3>
                     </div>
-                    <button
-                      type="button"
-                      className="ghost-button sui-register-button"
-                      disabled={selectedPendingSignalIds.length === 0 || registeringSignalIds.length > 0}
-                      onClick={() => void handleRegisterPendingSignals()}
-                    >
-                      {registeringSignalIds.length > 0
-                        ? t("registeringOnSui")
-                        : t("registerSelectedOnSui", { count: selectedPendingVisibleCount })}
-                    </button>
+                    <div className="pending-sui-actions">
+                      <button
+                        type="button"
+                        className={`ghost-button pending-sui-select-all-button ${allVisiblePendingSelected ? "is-active" : ""}`}
+                        disabled={visiblePendingSignalIds.length === 0 || registeringSignalIds.length > 0}
+                        onClick={() => {
+                          setPendingSelections(visiblePendingSignalIds, !allVisiblePendingSelected);
+                        }}
+                      >
+                        {allVisiblePendingSelected ? t("clearSelectionLabel") : t("selectAllLabel")}
+                      </button>
+                      <button
+                        type="button"
+                        className="ghost-button sui-register-button"
+                        disabled={selectedPendingSignalIds.length === 0 || registeringSignalIds.length > 0}
+                        onClick={() => void handleRegisterPendingSignals()}
+                      >
+                        {registeringSignalIds.length > 0
+                          ? t("registeringOnSui")
+                          : t("registerSelectedOnSui", { count: selectedPendingVisibleCount })}
+                      </button>
+                    </div>
                   </div>
                   <p className="muted">{t("optionalProofQueueBody")}</p>
                 </section>
@@ -2377,9 +2411,10 @@ export function AdminDashboardPage() {
                 <div className="signal-list">
                   {visibleSignals.map((record) => {
                     const { form, submission, category } = record;
-                    const storageLabel = getStorageBadgeLabel(
-                      submission.encryptedBlobId ?? submission.blobId,
-                    );
+                    const storageBlobId = getSignalStorageBlobId(submission);
+                    const storageLabel = getStorageBadgeLabel(storageBlobId);
+                    const persistenceState = getSignalPersistenceState(submission);
+                    const storageState = getSignalStorageState(submission);
                     const isPendingSui = submission.pendingOnchainRegistration;
                     const isSelectedForSui = selectedPendingSignalIds.includes(submission.id);
                     const isLocalOnlySignal = storageLabel === "Stored locally only";
@@ -2394,7 +2429,7 @@ export function AdminDashboardPage() {
                     return (
                       <div
                         key={submission.id}
-                        className={`signal-card ${isSelectedSignal ? "is-active" : ""} ${submission.status === "unread" ? "is-unread" : "is-read"}`}
+                        className={`signal-card ${isSelectedSignal ? "is-active" : ""} ${submission.status === "unread" ? "is-unread" : "is-read"} ${isPendingSui ? "has-select-checkbox" : ""} ${isSelectedForSui ? "is-selected-for-sui" : ""}`}
                         role="button"
                         tabIndex={0}
                         aria-current={isSelectedSignal ? "true" : undefined}
@@ -2411,6 +2446,26 @@ export function AdminDashboardPage() {
                           scrollToReviewPanel("detail");
                         }}
                       >
+                        {isPendingSui ? (
+                          <div
+                            className="signal-card-select-toggle"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                            }}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={isSelectedForSui}
+                              onChange={() => {
+                                togglePendingSelection(submission.id);
+                              }}
+                              onClick={(event) => {
+                                event.stopPropagation();
+                              }}
+                              aria-label={t("selectForSui")}
+                            />
+                          </div>
+                        ) : null}
                         <div className="signal-card-topline">
                           <span className={`signal-card-read-dot status-${submission.status}`} aria-hidden="true" />
                           <strong>{getSignalSubject(submission)}</strong>
@@ -2458,24 +2513,18 @@ export function AdminDashboardPage() {
                               category={category}
                               pendingSui={isPendingSui}
                               selectedForSui={isSelectedForSui}
-                              storageLabel={isLocalOnlySignal ? storageLabel : undefined}
+                              storageLabel={
+                                storageState === "local_only" || storageState === "walrus_synced"
+                                  ? storageLabel
+                                  : undefined
+                              }
+                              persistenceState={persistenceState}
                               density="notable"
                             />
                           </div>
                         ) : null}
                         {isPendingSui ? (
                           <div className="signal-card-actions">
-                            <button
-                              type="button"
-                              className="ghost-button"
-                              onClick={(event) => {
-                                event.preventDefault();
-                                event.stopPropagation();
-                                togglePendingSelection(submission.id);
-                              }}
-                            >
-                              {isSelectedForSui ? t("selectedLabel") : t("selectForSui")}
-                            </button>
                             <button
                               type="button"
                               className="ghost-button"
@@ -3212,6 +3261,10 @@ export function AdminDashboardPage() {
                             <strong>
                               {getWalletAccessLabel(selectedRecord.form, wallet.accountAddress)}
                             </strong>
+                          </div>
+                          <div className="metadata-row">
+                            <span>Signal sync</span>
+                            <strong>{getSignalSyncSummary(selectedRecord.submission)}</strong>
                           </div>
                           <div className="metadata-row">
                             <span>{t("pendingSuiRegistrationLabel")}</span>

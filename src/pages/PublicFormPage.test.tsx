@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { RpcInfrastructureContext, type RpcInfrastructureContextValue } from "../rpcInfrastructure";
 import { PublicFormPage } from "./PublicFormPage";
 import type { FormSchema } from "../types";
 
@@ -12,6 +13,26 @@ const mockGetForm = vi.fn();
 const mockSaveSubmission = vi.fn();
 const mockSaveForm = vi.fn();
 const mockUpsertFormBlobIndex = vi.fn();
+const mockRpcInfrastructure: RpcInfrastructureContextValue = {
+  mode: "default",
+  network: "mainnet",
+  currentRpcUrl: "https://fullnode.mainnet.sui.io",
+  displayRpcUrl: "https://fullnode.mainnet.sui.io",
+  defaultRpcUrl: "https://fullnode.mainnet.sui.io",
+  tatumRpcUrl: null,
+  providerLabel: "Sui Fullnode",
+  usingTatum: false,
+  canUseTatum: false,
+  connectedNetworkLabel: "mainnet",
+  setConnectedNetworkLabel: vi.fn(),
+  switchToDefault: vi.fn(),
+  switchToTatum: vi.fn(),
+  noteRateLimited: vi.fn(),
+  clearRateLimitedState: vi.fn(),
+  rateLimitedUntil: 0,
+  isRateLimitedCooldownActive: false,
+  canAutoFallbackFromRateLimit: true,
+};
 
 vi.mock("@mysten/dapp-kit", () => ({
   useCurrentAccount: () => mockUseCurrentAccount(),
@@ -65,6 +86,18 @@ vi.mock("../storage/localStorageAdapter", () => ({
 vi.mock("../storage/blobIndex", () => ({
   upsertFormBlobIndex: (...args: unknown[]) => mockUpsertFormBlobIndex(...args),
 }));
+
+function renderPublicFormPage() {
+  return render(
+    <RpcInfrastructureContext.Provider value={mockRpcInfrastructure}>
+      <MemoryRouter initialEntries={["/f/form-123?manifest=blob-abc"]}>
+        <Routes>
+          <Route path="/f/:formId" element={<PublicFormPage />} />
+        </Routes>
+      </MemoryRouter>
+    </RpcInfrastructureContext.Provider>,
+  );
+}
 
 describe("PublicFormPage shared manifest restore", () => {
   afterEach(() => {
@@ -124,13 +157,7 @@ describe("PublicFormPage shared manifest restore", () => {
       form,
     });
 
-    render(
-      <MemoryRouter initialEntries={["/f/form-123?manifest=blob-abc"]}>
-        <Routes>
-          <Route path="/f/:formId" element={<PublicFormPage />} />
-        </Routes>
-      </MemoryRouter>,
-    );
+    renderPublicFormPage();
 
     expect(screen.getByText("Loading public form...")).toBeInTheDocument();
     await waitFor(() => expect(screen.getByRole("heading", { name: "Shared Feedback Form" })).toBeInTheDocument());
@@ -160,13 +187,7 @@ describe("PublicFormPage shared manifest restore", () => {
     mockReadManifestWithForm.mockRejectedValue(new Error("Walrus read timed out."));
     mockGetForm.mockResolvedValue(cachedForm);
 
-    render(
-      <MemoryRouter initialEntries={["/f/form-123?manifest=blob-abc"]}>
-        <Routes>
-          <Route path="/f/:formId" element={<PublicFormPage />} />
-        </Routes>
-      </MemoryRouter>,
-    );
+    renderPublicFormPage();
 
     await waitFor(() => expect(screen.getByRole("heading", { name: "sharedLinkUnavailableTitle" })).toBeInTheDocument());
     expect(screen.getAllByText(/Walrus read timed out/).length).toBeGreaterThan(0);
@@ -188,13 +209,7 @@ describe("PublicFormPage shared manifest restore", () => {
       form: null,
     });
 
-    render(
-      <MemoryRouter initialEntries={["/f/form-123?manifest=blob-abc"]}>
-        <Routes>
-          <Route path="/f/:formId" element={<PublicFormPage />} />
-        </Routes>
-      </MemoryRouter>,
-    );
+    renderPublicFormPage();
 
     await waitFor(() => expect(screen.getByRole("heading", { name: "sharedLinkMismatchTitle" })).toBeInTheDocument());
     expect(screen.getAllByText(/form-other/).length).toBeGreaterThan(0);
@@ -231,13 +246,7 @@ describe("PublicFormPage shared manifest restore", () => {
       form,
     });
 
-    render(
-      <MemoryRouter initialEntries={["/f/form-123?manifest=blob-abc"]}>
-        <Routes>
-          <Route path="/f/:formId" element={<PublicFormPage />} />
-        </Routes>
-      </MemoryRouter>,
-    );
+    renderPublicFormPage();
 
     await waitFor(() => expect(screen.getByRole("heading", { name: "Shared Feedback Form" })).toBeInTheDocument());
     await waitFor(() => expect(mockSaveForm).toHaveBeenCalledTimes(1));
@@ -282,13 +291,7 @@ describe("PublicFormPage shared manifest restore", () => {
     });
     mockSaveSubmission.mockRejectedValue(new Error("Walrus upload failed."));
 
-    const view = render(
-      <MemoryRouter initialEntries={["/f/form-123?manifest=blob-abc"]}>
-        <Routes>
-          <Route path="/f/:formId" element={<PublicFormPage />} />
-        </Routes>
-      </MemoryRouter>,
-    );
+    const view = renderPublicFormPage();
 
     await waitFor(() => expect(screen.getByRole("heading", { name: "Shared Feedback Form" })).toBeInTheDocument());
     fireEvent.input(screen.getByRole("textbox"), { target: { value: "Please keep this draft." } });
@@ -299,13 +302,7 @@ describe("PublicFormPage shared manifest restore", () => {
 
     view.unmount();
 
-    render(
-      <MemoryRouter initialEntries={["/f/form-123?manifest=blob-abc"]}>
-        <Routes>
-          <Route path="/f/:formId" element={<PublicFormPage />} />
-        </Routes>
-      </MemoryRouter>,
-    );
+    renderPublicFormPage();
 
     await waitFor(() => expect(screen.getByText("recoverableDraftTitle")).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: "restore" }));
@@ -343,13 +340,7 @@ describe("PublicFormPage shared manifest restore", () => {
     mockSaveSubmission.mockRejectedValue(new Error("The quota has been exceeded."));
     window.localStorage.setItem("deepsignal.encryptedPayloads", JSON.stringify([{ blobId: "pending", payload: "sealed" }]));
 
-    render(
-      <MemoryRouter initialEntries={["/f/form-123?manifest=blob-abc"]}>
-        <Routes>
-          <Route path="/f/:formId" element={<PublicFormPage />} />
-        </Routes>
-      </MemoryRouter>,
-    );
+    renderPublicFormPage();
 
     await waitFor(() => expect(screen.getByRole("heading", { name: "Shared Feedback Form" })).toBeInTheDocument());
     fireEvent.input(screen.getByRole("textbox"), { target: { value: "Please keep this draft." } });

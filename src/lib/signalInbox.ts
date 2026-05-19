@@ -3,6 +3,13 @@ import { flattenAnswer } from "./utils";
 import type { FormSchema, Submission } from "../types";
 
 export type SignalCategory = "Bug" | "Feature" | "Survey" | "Praise" | "General" | "Unknown";
+export type SignalPersistenceState =
+  | "onchain_registered"
+  | "pending_onchain"
+  | "walrus_synced"
+  | "local_only"
+  | "not_available";
+export type SignalStorageState = "walrus_synced" | "local_only" | "not_available";
 
 export function getSignalSubject(submission: Submission) {
   return submission.subjectPreview?.trim() || `Signal ${submission.id.slice(0, 8)}`;
@@ -68,6 +75,71 @@ export function isLocalFallbackBlob(blobId?: string | null) {
     return false;
   }
   return !getBlobViewerUrl(blobId);
+}
+
+export function getSignalStorageBlobId(submission: Submission) {
+  return submission.encryptedBlobId ?? submission.receiptBlobId ?? submission.blobId ?? null;
+}
+
+export function getSignalStorageState(submission: Submission): SignalStorageState {
+  const blobId = getSignalStorageBlobId(submission);
+  if (blobId && !isLocalFallbackBlob(blobId)) {
+    return "walrus_synced";
+  }
+  if (blobId || submission.encryptedPayload) {
+    return "local_only";
+  }
+  return "not_available";
+}
+
+export function getSignalPersistenceState(submission: Submission): SignalPersistenceState {
+  if (typeof submission.onchainSignalId === "number") {
+    return "onchain_registered";
+  }
+  if (submission.pendingOnchainRegistration) {
+    return "pending_onchain";
+  }
+  return getSignalStorageState(submission);
+}
+
+export function getSignalPersistenceLabel(state: SignalPersistenceState) {
+  switch (state) {
+    case "onchain_registered":
+      return "Registered on Sui";
+    case "pending_onchain":
+      return "Pending Sui registration";
+    case "walrus_synced":
+      return "Stored on Walrus";
+    case "local_only":
+      return "Stored locally only";
+    default:
+      return "Not available";
+  }
+}
+
+export function getSignalSyncSummary(submission: Submission) {
+  const storageState = getSignalStorageState(submission);
+  const registrationState =
+    typeof submission.onchainSignalId === "number"
+      ? "onchain_registered"
+      : submission.pendingOnchainRegistration
+        ? "pending_onchain"
+        : "not_available";
+
+  const labels = [
+    storageState === "walrus_synced"
+      ? "Stored on Walrus"
+      : storageState === "local_only"
+        ? "Stored locally only"
+        : null,
+    registrationState === "onchain_registered"
+      ? "Registered on Sui"
+      : registrationState === "pending_onchain"
+        ? "Pending Sui registration"
+        : null,
+  ].filter(Boolean);
+
+  return labels.length > 0 ? labels.join(" / ") : "Not available";
 }
 
 export function getStorageBadgeLabel(blobId?: string | null) {
