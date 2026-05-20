@@ -27,12 +27,14 @@ export interface SuiWalletState {
   copyAddress: () => Promise<void>;
 }
 
-export function useSuiWallet(): SuiWalletState {
+export function useSuiWallet(options: { resolveName?: boolean } = {}): SuiWalletState {
   const account = useCurrentAccount();
   const { currentWallet, isConnected, isConnecting } = useCurrentWallet();
   const autoConnectStatus = useAutoConnectWallet();
   const disconnectWallet = useDisconnectWallet();
-  const { data: suinsName = null } = useSuiName(account?.address);
+  const { data: suinsName = null } = useSuiName(account?.address, {
+    enabled: options.resolveName ?? true,
+  });
   const [error, setError] = useState<Error | null>(null);
 
   const accountAddress = account?.address;

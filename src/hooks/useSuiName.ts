@@ -16,12 +16,14 @@ function normalizeSuiName(name?: string | null) {
   return value.endsWith(".sui") ? value : `${value}.sui`;
 }
 
-export function useSuiName(address?: string | null) {
+export function useSuiName(address?: string | null, options: { enabled?: boolean } = {}) {
   const suiClient = useSuiClient();
   const rpc = useRpcInfrastructure();
   const normalizedAddress = normalizeAddress(address);
+  const queryEnabled = options.enabled ?? true;
   const enabled = Boolean(
-    normalizedAddress &&
+    queryEnabled &&
+      normalizedAddress &&
       isValidSuiAddress(normalizedAddress) &&
       !rpc.isRateLimitedCooldownActive,
   );

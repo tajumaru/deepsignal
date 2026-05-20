@@ -29,12 +29,13 @@ function normalizeObjectId(value?: string | null) {
   return trimmed.startsWith("0x") ? trimmed : `0x${trimmed}`;
 }
 
-export function useAccessRegistry() {
+export function useAccessRegistry(options: { enabled?: boolean } = {}) {
   const suiClient = useSuiClient();
   const rpc = useRpcInfrastructure();
   const packageId = normalizeObjectId(ACCESS_CONTROL_PACKAGE_ID);
   const registryId = normalizeObjectId(ACCESS_CONTROL_REGISTRY_ID);
-  const enabled = Boolean(packageId && registryId && !rpc.isRateLimitedCooldownActive);
+  const queryEnabled = options.enabled ?? true;
+  const enabled = Boolean(queryEnabled && packageId && registryId && !rpc.isRateLimitedCooldownActive);
 
   const registryQuery = useQuery({
     queryKey: [

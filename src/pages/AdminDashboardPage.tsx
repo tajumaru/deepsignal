@@ -107,6 +107,24 @@ interface SignalSummaryContentCount {
   total: number;
 }
 
+function areActivityEventListsEqual(current: ActivityEvent[], next: ActivityEvent[]) {
+  if (current === next) {
+    return true;
+  }
+  if (current.length !== next.length) {
+    return false;
+  }
+  return current.every((event, index) => {
+    const candidate = next[index];
+    return (
+      candidate?.id === event.id &&
+      candidate?.createdAt === event.createdAt &&
+      candidate?.action === event.action &&
+      candidate?.txDigest === event.txDigest
+    );
+  });
+}
+
 function formatWorkspaceCount(count: number, singular: string, plural = `${singular}s`) {
   return `${count} ${count === 1 ? singular : plural}`;
 }
@@ -1034,7 +1052,7 @@ export function AdminDashboardPage() {
 
   useEffect(() => {
     if (!hasAdminAccess || activeWorkspaceTab !== "activity" || projects.length === 0) {
-      setSuiActivityEvents([]);
+      setSuiActivityEvents((current) => (current.length === 0 ? current : []));
       return;
     }
 
@@ -1042,7 +1060,9 @@ export function AdminDashboardPage() {
     void listSuiActivityEvents(suiClient, projects).then(
       (events) => {
         if (!cancelled) {
-          setSuiActivityEvents(events);
+          setSuiActivityEvents((current) =>
+            areActivityEventListsEqual(current, events) ? current : events,
+          );
         }
       },
       (error) => {
@@ -1051,7 +1071,7 @@ export function AdminDashboardPage() {
           handleRateLimitedRpcFallback(rpc, error);
         }
         if (!cancelled) {
-          setSuiActivityEvents([]);
+          setSuiActivityEvents((current) => (current.length === 0 ? current : []));
         }
       },
     );

@@ -10,7 +10,7 @@ interface WalletConnectProps {
 
 export function WalletConnect({ compact = false }: WalletConnectProps) {
   const { t } = useI18n();
-  const wallet = useSuiWallet();
+  const wallet = useSuiWallet({ resolveName: false });
   const [menuOpen, setMenuOpen] = useState(false);
   const shellRef = useRef<HTMLDivElement | null>(null);
 
@@ -83,6 +83,7 @@ export function WalletConnect({ compact = false }: WalletConnectProps) {
             showCopyLabel={false}
             showTooltip={!compact}
             copyOnClick={!compact}
+            resolveName={false}
             onPress={handleToggleMenu}
           />
         ) : null}
@@ -100,6 +101,7 @@ export function WalletConnect({ compact = false }: WalletConnectProps) {
                 labelClassName="wallet-sync-copy-chip-address"
                 copyClassName="wallet-sync-copy-chip-copy"
                 showTooltip
+                resolveName={false}
               />
             ) : null}
           </div>

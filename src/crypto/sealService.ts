@@ -79,6 +79,12 @@ function assertSealEncryptionAvailable() {
   }
 }
 
+function assertSealEncryptionAvailableForAdapter(seal: SealAdapter) {
+  if (seal === sealServiceAdapter) {
+    assertSealEncryptionAvailable();
+  }
+}
+
 export function createEncryptionGuardError(
   code: typeof ENCRYPTION_REQUIRED_CODE | typeof ENCRYPTION_FAILED_CODE,
   message: string,
@@ -101,7 +107,7 @@ export async function encryptSensitiveResponse(
   seal: SealAdapter = sealServiceAdapter,
 ) {
   assertProductionSealAdapter(seal);
-  assertSealEncryptionAvailable();
+  assertSealEncryptionAvailableForAdapter(seal);
   try {
     const encrypted = await seal.encrypt(value, context);
     if (!parseRealSealEnvelope(encrypted)) {

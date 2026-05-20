@@ -1,5 +1,4 @@
 import { Link, NavLink, useLocation } from "react-router-dom";
-import { useAccessControl } from "../hooks/useAccessControl";
 import { useSuiWallet } from "../hooks/useSuiWallet";
 import { useI18n } from "../i18n";
 import { isSignalInboxPath } from "../lib/navigation";
@@ -13,14 +12,12 @@ interface WalletNavProps {
 export function WalletNav({ section = "all", onNavigate }: WalletNavProps) {
   const { t } = useI18n();
   const location = useLocation();
-  const wallet = useSuiWallet();
-  const { capabilityProfile, isLoadingAccess } = useAccessControl(wallet.accountAddress);
+  const wallet = useSuiWallet({ resolveName: false });
 
   if (!wallet.accountAddress) {
     return null;
   }
 
-  const hasAdminAccess = !isLoadingAccess && Boolean(capabilityProfile.hasOwnerCap || capabilityProfile.hasAdminCap);
   const inboxActive = isSignalInboxPath(location.pathname);
   const inboxNav = (
     <Link
@@ -38,21 +35,19 @@ export function WalletNav({ section = "all", onNavigate }: WalletNavProps) {
   }
 
   if (section === "access") {
-    return hasAdminAccess ? (
+    return (
       <NavLink to="/admin/access" onClick={onNavigate}>
         <NavItemLabel icon={<AccessControlNavIcon />}>{t("navAccess")}</NavItemLabel>
       </NavLink>
-    ) : null;
+    );
   }
 
   return (
     <>
       {inboxNav}
-      {hasAdminAccess ? (
-        <NavLink to="/admin/access" onClick={onNavigate}>
-          <NavItemLabel icon={<AccessControlNavIcon />}>{t("navAccess")}</NavItemLabel>
-        </NavLink>
-      ) : null}
+      <NavLink to="/admin/access" onClick={onNavigate}>
+        <NavItemLabel icon={<AccessControlNavIcon />}>{t("navAccess")}</NavItemLabel>
+      </NavLink>
     </>
   );
 }

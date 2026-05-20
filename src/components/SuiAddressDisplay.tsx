@@ -13,6 +13,7 @@ interface SuiAddressDisplayProps {
   copyLabel?: string;
   copyOnClick?: boolean;
   onPress?: () => void;
+  resolveName?: boolean;
 }
 
 export function SuiAddressDisplay({
@@ -26,8 +27,9 @@ export function SuiAddressDisplay({
   copyLabel = "Copy",
   copyOnClick = true,
   onPress,
+  resolveName = true,
 }: SuiAddressDisplayProps) {
-  const { data: suinsName } = useSuiName(address);
+  const { data: suinsName } = useSuiName(address, { enabled: resolveName });
   const [isVisible, setIsVisible] = useState(false);
   const [copied, setCopied] = useState(false);
   const timeoutRef = useRef<number | null>(null);

@@ -1,9 +1,9 @@
 import { useSuiClient } from "@mysten/dapp-kit";
 import { useEffect, useRef, useState } from "react";
-import { getConnectedNetworkLabel } from "../lib/sui";
+import { getConnectedNetworkLabel, isSuiRateLimitError } from "../lib/sui";
 import { useRpcInfrastructure } from "../rpcInfrastructure";
 
-const NETWORK_DIAGNOSTIC_POLL_MS = 5_000;
+const INITIAL_DIAGNOSTIC_DELAY_MS = 2_500;
 
 function NetworkSignalIcon() {
   return (
@@ -56,6 +56,9 @@ export function NetworkMenu() {
   const [healthy, setHealthy] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const shellRef = useRef<HTMLDivElement | null>(null);
+  const hasMountedRef = useRef(false);
+  const previousRpcModeRef = useRef(rpc.mode);
+  const previousRpcUrlRef = useRef(rpc.currentRpcUrl);
 
   useEffect(() => {
     if (!menuOpen) {
@@ -92,6 +95,25 @@ export function NetworkMenu() {
   }
 
   useEffect(() => {
+    if (rpc.isRateLimitedCooldownActive) {
+      return;
+    }
+
+    const rpcChanged =
+      previousRpcModeRef.current !== rpc.mode ||
+      previousRpcUrlRef.current !== rpc.currentRpcUrl;
+    previousRpcModeRef.current = rpc.mode;
+    previousRpcUrlRef.current = rpc.currentRpcUrl;
+
+    if (!hasMountedRef.current) {
+      hasMountedRef.current = true;
+    }
+
+    const shouldRunDeferredInitialDiagnostic = !menuOpen && !rpcChanged && latencyMs == null;
+    if (!menuOpen && !rpcChanged && !shouldRunDeferredInitialDiagnostic) {
+      return;
+    }
+
     let cancelled = false;
 
     async function runDiagnostics() {
@@ -105,24 +127,43 @@ export function NetworkMenu() {
         setLatencyMs(Math.max(1, Math.round(performance.now() - startedAt)));
         setHealthy(true);
         rpc.setConnectedNetworkLabel(getConnectedNetworkLabel(chainIdentifier));
-      } catch {
+      } catch (error) {
         if (cancelled) {
           return;
+        }
+        if (isSuiRateLimitError(error)) {
+          rpc.noteRateLimited();
         }
         setLatencyMs(null);
         setHealthy(false);
       }
     }
 
+    if (shouldRunDeferredInitialDiagnostic) {
+      const timeout = window.setTimeout(() => {
+        void runDiagnostics();
+      }, INITIAL_DIAGNOSTIC_DELAY_MS);
+      return () => {
+        cancelled = true;
+        window.clearTimeout(timeout);
+      };
+    }
+
     void runDiagnostics();
-    const interval = window.setInterval(() => {
-      void runDiagnostics();
-    }, NETWORK_DIAGNOSTIC_POLL_MS);
     return () => {
       cancelled = true;
-      window.clearInterval(interval);
     };
-  }, [rpc.currentRpcUrl, rpc.mode, rpc.setConnectedNetworkLabel, suiClient, value]);
+  }, [
+    latencyMs,
+    menuOpen,
+    rpc.currentRpcUrl,
+    rpc.isRateLimitedCooldownActive,
+    rpc.mode,
+    rpc.noteRateLimited,
+    rpc.setConnectedNetworkLabel,
+    suiClient,
+    value,
+  ]);
 
   return (
     <div ref={shellRef} className="network-select-shell" title={rpc.displayRpcUrl}>

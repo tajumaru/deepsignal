@@ -161,13 +161,16 @@ async function fetchOwnedObjectsByType(
   return matches;
 }
 
-export function useAccessControl(address?: string | null) {
+export function useAccessControl(address?: string | null, options: { enabled?: boolean } = {}) {
   const suiClient = useSuiClient();
   const rpc = useRpcInfrastructure();
-  const { registry, isLoadingRegistry, error: registryError } = useAccessRegistry();
+  const queryEnabled = options.enabled ?? true;
+  const { registry, isLoadingRegistry, error: registryError } = useAccessRegistry({
+    enabled: queryEnabled,
+  });
   const packageId = normalizeObjectId(ACCESS_CONTROL_PACKAGE_ID);
   const registryId = normalizeObjectId(ACCESS_CONTROL_REGISTRY_ID);
-  const enabled = Boolean(address && packageId && !rpc.isRateLimitedCooldownActive);
+  const enabled = Boolean(queryEnabled && address && packageId && !rpc.isRateLimitedCooldownActive);
   const targetTypes = useMemo(
     () =>
       new Set(
@@ -217,6 +220,7 @@ export function useAccessControl(address?: string | null) {
           rejectedErrors.push(error);
           if (isSuiRateLimitError(error)) {
             handleRateLimitedRpcFallback(rpc, error);
+            break;
           }
         }
       }
