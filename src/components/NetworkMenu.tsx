@@ -69,7 +69,7 @@ export function NetworkMenu() {
   const [healthy, setHealthy] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const shellRef = useRef<HTMLDivElement | null>(null);
-  const hasMountedRef = useRef(false);
+  const hasRunInitialDiagnosticRef = useRef(false);
   const previousRpcModeRef = useRef(mode);
   const previousRpcUrlRef = useRef(currentRpcUrl);
 
@@ -109,6 +109,8 @@ export function NetworkMenu() {
 
   useEffect(() => {
     if (isRateLimitedCooldownActive) {
+      setHealthy(false);
+      setLatencyMs(null);
       return;
     }
 
@@ -117,13 +119,8 @@ export function NetworkMenu() {
       previousRpcUrlRef.current !== currentRpcUrl;
     previousRpcModeRef.current = mode;
     previousRpcUrlRef.current = currentRpcUrl;
-
-    if (!hasMountedRef.current) {
-      hasMountedRef.current = true;
-    }
-
-    const shouldRunDeferredInitialDiagnostic = !menuOpen && !rpcChanged && latencyMs == null;
-    if (!menuOpen && !rpcChanged && !shouldRunDeferredInitialDiagnostic) {
+    const shouldRunInitialDiagnostic = !hasRunInitialDiagnosticRef.current;
+    if (!menuOpen && !rpcChanged && !shouldRunInitialDiagnostic) {
       return;
     }
 
@@ -137,6 +134,7 @@ export function NetworkMenu() {
         if (cancelled) {
           return;
         }
+        hasRunInitialDiagnosticRef.current = true;
         setLatencyMs(Math.max(1, Math.round(performance.now() - startedAt)));
         setHealthy(true);
         setConnectedNetworkLabel(getConnectedNetworkLabel(chainIdentifier));
@@ -144,6 +142,7 @@ export function NetworkMenu() {
         if (cancelled) {
           return;
         }
+        hasRunInitialDiagnosticRef.current = true;
         if (isSuiRateLimitError(error)) {
           noteRateLimited();
         }
@@ -152,24 +151,16 @@ export function NetworkMenu() {
       }
     }
 
-    if (shouldRunDeferredInitialDiagnostic) {
-      const timeout = window.setTimeout(() => {
-        void runDiagnostics();
-      }, INITIAL_DIAGNOSTIC_DELAY_MS);
-      return () => {
-        cancelled = true;
-        window.clearTimeout(timeout);
-      };
-    }
-
-    void runDiagnostics();
+    const timeout = window.setTimeout(() => {
+      void runDiagnostics();
+    }, rpcChanged ? 0 : INITIAL_DIAGNOSTIC_DELAY_MS);
     return () => {
       cancelled = true;
+      window.clearTimeout(timeout);
     };
   }, [
     currentRpcUrl,
     isRateLimitedCooldownActive,
-    latencyMs,
     menuOpen,
     mode,
     noteRateLimited,

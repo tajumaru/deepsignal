@@ -1,5 +1,3 @@
-import { useSuiClient } from "@mysten/dapp-kit";
-import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { findRoleEntriesForAddress } from "../lib/accessRegistry";
 import {
@@ -8,10 +6,10 @@ import {
   ACCESS_CONTROL_PACKAGE_ID,
   ACCESS_CONTROL_REGISTRY_ID,
   ACCESS_CONTROL_REVIEWER_CAP_TYPE,
-  isSuiRateLimitError,
 } from "../lib/sui";
-import { handleRateLimitedRpcFallback, useRpcInfrastructure } from "../rpcInfrastructure";
+import { useRpcInfrastructure } from "../rpcInfrastructure";
 import { useAccessRegistry } from "./useAccessRegistry";
+import { useOwnedSuiObjects } from "./useOwnedSuiObjects";
 
 export type CapabilityProfile = {
   isConfigured: boolean;
@@ -32,27 +30,8 @@ type OwnedObjectEntry = {
     content?: {
       dataType?: string;
       fields?: Record<string, unknown>;
-    };
+    } | null;
   } | null;
-};
-
-type OwnedObjectsResponse = {
-  data?: OwnedObjectEntry[];
-  hasNextPage?: boolean;
-  nextCursor?: string | null;
-};
-
-type OwnedObjectsRequest = {
-  owner: string;
-  cursor?: string;
-  options?: {
-    showType?: boolean;
-    showContent?: boolean;
-  };
-  limit?: number;
-  filter?: {
-    StructType: string;
-  };
 };
 
 export type DebugOwnedObject = {
@@ -130,39 +109,7 @@ function inferOwnedCapRegistryId(entries: OwnedObjectEntry[], preferredRegistryI
   return registryIds[0] ?? "";
 }
 
-async function fetchOwnedObjectsByType(
-  suiClient: ReturnType<typeof useSuiClient>,
-  owner: string,
-  structType: string,
-) {
-  const matches: OwnedObjectEntry[] = [];
-  let cursor: string | null | undefined = null;
-  let pageCount = 0;
-
-  do {
-    const page = (await suiClient.getOwnedObjects({
-      owner,
-      cursor: cursor ?? undefined,
-      filter: {
-        StructType: structType,
-      },
-      options: {
-        showType: true,
-        showContent: true,
-      },
-      limit: 50,
-    } as OwnedObjectsRequest)) as OwnedObjectsResponse;
-
-    matches.push(...(page.data ?? []));
-    cursor = page.hasNextPage ? page.nextCursor : null;
-    pageCount += 1;
-  } while (cursor && pageCount < 20);
-
-  return matches;
-}
-
 export function useAccessControl(address?: string | null, options: { enabled?: boolean } = {}) {
-  const suiClient = useSuiClient();
   const rpc = useRpcInfrastructure();
   const queryEnabled = options.enabled ?? true;
   const { registry, isLoadingRegistry, error: registryError } = useAccessRegistry({
@@ -181,66 +128,17 @@ export function useAccessControl(address?: string | null, options: { enabled?: b
         ]
           .map((value) => normalizeType(value))
           .filter(Boolean),
-      ),
+    ),
     [],
   );
-
-  const ownedObjectsQuery = useQuery({
-    queryKey: [
-      "access-control-owned-objects",
-      address ?? "",
-      packageId,
-      registryId,
-      rpc.mode,
-      rpc.currentRpcUrl,
-    ],
-    enabled,
-    staleTime: 1000 * 60 * 5,
-    gcTime: 1000 * 60 * 30,
-    retry: false,
-    refetchOnMount: false,
-    refetchOnReconnect: false,
-    refetchOnWindowFocus: false,
-    queryFn: async () => {
-      const capTypes = [
-        ACCESS_CONTROL_OWNER_CAP_TYPE,
-        ACCESS_CONTROL_ADMIN_CAP_TYPE,
-        ACCESS_CONTROL_REVIEWER_CAP_TYPE,
-      ].filter(Boolean);
-      const fulfilledEntries: OwnedObjectEntry[] = [];
-      const rejectedErrors: unknown[] = [];
-
-      for (const capType of capTypes) {
-        try {
-          const entries = await fetchOwnedObjectsByType(suiClient, address ?? "", capType);
-          fulfilledEntries.push(
-            ...entries.filter((entry) => targetTypes.has(normalizeType(entry.data?.type))),
-          );
-        } catch (error) {
-          rejectedErrors.push(error);
-          if (isSuiRateLimitError(error)) {
-            handleRateLimitedRpcFallback(rpc, error);
-            break;
-          }
-        }
-      }
-
-      if (fulfilledEntries.length > 0) {
-        return fulfilledEntries;
-      }
-
-      const firstError = rejectedErrors[0];
-      if (firstError) {
-        throw firstError;
-      }
-
-      return [];
-    },
-  });
+  const ownedObjectsQuery = useOwnedSuiObjects(address, { enabled });
+  const ownedCapabilityEntries = useMemo(
+    () => (ownedObjectsQuery.data ?? []).filter((entry) => targetTypes.has(normalizeType(entry.data?.type))),
+    [ownedObjectsQuery.data, targetTypes],
+  );
 
   const capabilityProfile = useMemo<CapabilityProfile>(() => {
-    const ownedCapEntries = ownedObjectsQuery.data ?? [];
-    const inferredRegistryId = inferOwnedCapRegistryId(ownedCapEntries, registryId);
+    const inferredRegistryId = inferOwnedCapRegistryId(ownedCapabilityEntries, registryId);
     const effectiveRegistryId = inferredRegistryId || registryId;
     const canValidateAgainstRegistry =
       Boolean(registryId) &&
@@ -248,17 +146,17 @@ export function useAccessControl(address?: string | null, options: { enabled?: b
       Boolean(registry.owner || registry.admins.length > 0 || registry.reviewers.length > 0);
 
     const ownedOwnerCapIds = extractCapIds(
-      ownedCapEntries,
+      ownedCapabilityEntries,
       ACCESS_CONTROL_OWNER_CAP_TYPE,
       effectiveRegistryId,
     );
     const ownedAdminCapIds = extractCapIds(
-      ownedCapEntries,
+      ownedCapabilityEntries,
       ACCESS_CONTROL_ADMIN_CAP_TYPE,
       effectiveRegistryId,
     );
     const ownedReviewerCapIds = extractCapIds(
-      ownedCapEntries,
+      ownedCapabilityEntries,
       ACCESS_CONTROL_REVIEWER_CAP_TYPE,
       effectiveRegistryId,
     );
@@ -299,19 +197,19 @@ export function useAccessControl(address?: string | null, options: { enabled?: b
       adminCapIds,
       reviewerCapIds,
     };
-  }, [address, ownedObjectsQuery.data, packageId, registry, registryId]);
+  }, [address, ownedCapabilityEntries, packageId, registry, registryId]);
 
   const ownedObjects = useMemo<DebugOwnedObject[]>(() => {
-    return (ownedObjectsQuery.data ?? []).map((entry) => ({
+    return ownedCapabilityEntries.map((entry) => ({
       objectId: entry.data?.objectId ?? "",
       type: entry.data?.type ?? "",
       registryId: extractRegistryId(entry),
     }));
-  }, [ownedObjectsQuery.data]);
+  }, [ownedCapabilityEntries]);
 
   return {
     ...ownedObjectsQuery,
-    data: ownedObjectsQuery.data ?? [],
+    data: ownedCapabilityEntries,
     error: ownedObjectsQuery.error ?? null,
     isError: ownedObjectsQuery.isError,
     isPending: ownedObjectsQuery.isPending,

@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from "react";
 import { useI18n } from "../../../i18n";
 import { formatResponseDeadline, type ResponseDeadlineLabels } from "../../../lib/responseDeadline";
 import { shortAddress } from "../../../lib/sui";
@@ -9,7 +10,17 @@ interface StreamItem {
   count: number;
 }
 
-const FLOW_STREAM_IDS: StreamId[] = ["needs_review", "unread", "verified", "encrypted", "high", "archived"];
+const FLOW_STREAM_IDS: StreamId[] = [
+  "needs_review",
+  "unresolved",
+  "unread",
+  "verified",
+  "anonymous",
+  "published",
+  "encrypted",
+  "high",
+  "archived",
+];
 const BLOCKCHAIN_STREAM_IDS: StreamId[] = ["pending_sui", "registered_sui"];
 
 function MailboxIcon({ hasUnread }: { hasUnread: boolean }) {
@@ -39,6 +50,12 @@ function StreamIcon({ streamId, hasUnread }: { streamId: StreamId; hasUnread: bo
             <path d="M3.8 12s3-5 8.2-5 8.2 5 8.2 5-3 5-8.2 5-8.2-5-8.2-5Z" />
             <circle cx="12" cy="12" r="2.4" />
           </>
+        ) : streamId === "unresolved" ? (
+          <>
+            <circle cx="12" cy="12" r="7.2" />
+            <path d="M12 8v4.3" />
+            <circle cx="12" cy="15.6" r="0.9" />
+          </>
         ) : streamId === "unread" ? (
           <>
             <path d="M4.5 8.5 12 13.4l7.5-4.9" />
@@ -55,6 +72,17 @@ function StreamIcon({ streamId, hasUnread }: { streamId: StreamId; hasUnread: bo
           <>
             <path d="M12 4.5 18 7v4.6c0 3.7-2.4 6.6-6 7.9-3.6-1.3-6-4.2-6-7.9V7l6-2.5Z" />
             <path d="m9.4 12.2 1.8 1.8 3.4-3.8" />
+          </>
+        ) : streamId === "anonymous" ? (
+          <>
+            <circle cx="12" cy="8.2" r="2.8" />
+            <path d="M6.8 18c.8-2.8 3-4.4 5.2-4.4s4.4 1.6 5.2 4.4" />
+            <path d="M4.6 6.4 19.4 17.6" />
+          </>
+        ) : streamId === "published" ? (
+          <>
+            <path d="M6 17.5h12" />
+            <path d="M9 14.5 12 17.5l6-7" />
           </>
         ) : streamId === "high" ? (
           <>
@@ -96,10 +124,16 @@ function getStreamHelper(streamId: StreamId, t: ReturnType<typeof useI18n>["t"])
   switch (streamId) {
     case "needs_review":
       return t("needsReviewStreamHelper");
+    case "unresolved":
+      return "Open triage queue";
     case "unread":
       return t("unreadStreamHelper");
     case "verified":
       return t("verifiedStreamHelper");
+    case "anonymous":
+      return "Anonymous senders";
+    case "published":
+      return "Roadmap-ready signals";
     case "high":
       return t("flaggedStreamHelper");
     case "encrypted":
@@ -121,10 +155,16 @@ function getStreamTone(streamId: StreamId) {
   switch (streamId) {
     case "needs_review":
       return "tone-needs-review";
+    case "unresolved":
+      return "tone-secondary";
     case "unread":
       return "tone-unread";
     case "verified":
       return "tone-registered-sui";
+    case "anonymous":
+      return "tone-secondary";
+    case "published":
+      return "tone-resolved";
     case "high":
       return "tone-flagged";
     case "encrypted":
@@ -194,38 +234,259 @@ interface SignalStreamsNavProps {
   streamItems: StreamItem[];
   selectedStreamId: StreamId;
   onSelectStream: (streamId: StreamId) => void;
+  visibleUnreadCount: number;
+}
+
+interface SignalChannelSelectorProps {
   accessibleForms: FormWithCount[];
   selectedFormId: string;
   onSelectForm: (formId: string) => void;
   unreadCountByFormId: Record<string, number>;
-  visibleUnreadCount: number;
   allSignalsCount: number;
+  totalUnreadCount: number;
   activeScopeLabel: string;
-  activeNodeSummary: string;
   allSignalNodesLabel: string;
   responseDeadlineLabels: ResponseDeadlineLabels;
   openNodeDirectoryLabel: string;
   onOpenNodeDirectory: () => void;
+  activeNodeSummary: string;
   onExportAllFormCsv: (formId: string) => void;
+  className?: string;
+}
+
+function ChannelSelectorCaret() {
+  return (
+    <span className="signal-channel-caret" aria-hidden="true">
+      <svg viewBox="0 0 12 12" focusable="false">
+        <path d="M2.25 4.25 6 7.75l3.75-3.5" />
+      </svg>
+    </span>
+  );
+}
+
+function SignalChannelSelectorItem({
+  accessibleForms,
+  selectedFormId,
+  onSelectForm,
+  unreadCountByFormId,
+  allSignalsCount,
+  totalUnreadCount,
+  activeScopeLabel,
+  allSignalNodesLabel,
+  responseDeadlineLabels,
+  onExportAllFormCsv,
+  closeMenu,
+}: {
+  accessibleForms: FormWithCount[];
+  selectedFormId: string;
+  onSelectForm: (formId: string) => void;
+  unreadCountByFormId: Record<string, number>;
+  allSignalsCount: number;
+  totalUnreadCount: number;
+  activeScopeLabel: string;
+  allSignalNodesLabel: string;
+  responseDeadlineLabels: ResponseDeadlineLabels;
+  onExportAllFormCsv: (formId: string) => void;
+  closeMenu: () => void;
+}) {
+  const { t } = useI18n();
+  return (
+    <div className="form-stream-list">
+      <div className={`form-stream-item ${selectedFormId === "all" ? "is-active" : ""}`}>
+        <button
+          type="button"
+          className="form-stream-select"
+          onClick={() => {
+            onSelectForm("all");
+            closeMenu();
+          }}
+        >
+          <span className="form-stream-heading">
+            <strong>{allSignalNodesLabel}</strong>
+            <span className="form-stream-count">{allSignalsCount}</span>
+          </span>
+          <p className="muted">{t("signalsAcrossEveryFormInbox", { count: allSignalsCount })}</p>
+        </button>
+        <div className="form-stream-actions">
+          <span className="signal-chip">{t("unreadBadge", { count: totalUnreadCount })}</span>
+          <span className="signal-chip signal-chip-soft">{activeScopeLabel}</span>
+        </div>
+      </div>
+      {accessibleForms.map((form) => {
+        const isSelected = selectedFormId === form.id;
+        const unreadCount = unreadCountByFormId[form.id] ?? 0;
+        const ownerLabel = form.ownerAddress ? shortAddress(form.ownerAddress) : t("legacyDemoForm");
+        const deadlineValue = formatResponseDeadline(form.responseDeadline, responseDeadlineLabels);
+        return (
+          <div key={form.id} className={`form-stream-item ${isSelected ? "is-active" : ""}`}>
+            <button
+              type="button"
+              className="form-stream-select"
+              onClick={() => {
+                onSelectForm(form.id);
+                closeMenu();
+              }}
+            >
+              <span className="form-stream-heading">
+                <strong>{form.title}</strong>
+                <span className="form-stream-count">{form.submissionCount}</span>
+              </span>
+              <p className="muted">
+                {t("formSignalsSummary", {
+                  count: form.submissionCount,
+                  inboxType: form.encryptSubmissions ? t("protectedInboxLabel") : t("openInboxLabel"),
+                })}
+              </p>
+              <p className="muted form-stream-meta" title={form.ownerAddress ?? undefined}>
+                <span>{ownerLabel}</span>
+                <span>{deadlineValue}</span>
+              </p>
+            </button>
+            <div className="form-stream-actions">
+              <span className="signal-chip">{t("unreadBadge", { count: unreadCount })}</span>
+              {form.projectId ? <span className="signal-chip signal-chip-soft">{t("projectLinkedLabel")}</span> : null}
+              <button
+                type="button"
+                className="ghost-button form-stream-export-button"
+                onClick={() => onExportAllFormCsv(form.id)}
+                disabled={form.submissionCount === 0}
+                aria-label={t("exportAllFormCsvAria")}
+                title={t("exportAllFormCsvAria")}
+              >
+                <CsvFileIcon />
+                <span>{t("exportAllFormCsv")}</span>
+              </button>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+export function SignalChannelSelector({
+  accessibleForms,
+  selectedFormId,
+  onSelectForm,
+  unreadCountByFormId,
+  allSignalsCount,
+  totalUnreadCount,
+  activeScopeLabel,
+  allSignalNodesLabel,
+  responseDeadlineLabels,
+  openNodeDirectoryLabel,
+  onOpenNodeDirectory,
+  activeNodeSummary,
+  onExportAllFormCsv,
+  className = "",
+}: SignalChannelSelectorProps) {
+  const { t } = useI18n();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const shellRef = useRef<HTMLDivElement | null>(null);
+  const hasUnreadSignals = totalUnreadCount > 0;
+  const selectedForm = accessibleForms.find((form) => form.id === selectedFormId) ?? null;
+  const selectedCount = selectedFormId === "all" ? allSignalsCount : selectedForm?.submissionCount ?? 0;
+  const selectedUnreadCount = selectedFormId === "all" ? totalUnreadCount : unreadCountByFormId[selectedFormId] ?? 0;
+
+  useEffect(() => {
+    if (!menuOpen) {
+      return;
+    }
+
+    function handlePointerDown(event: MouseEvent) {
+      if (!shellRef.current?.contains(event.target as Node)) {
+        setMenuOpen(false);
+      }
+    }
+
+    function handleEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setMenuOpen(false);
+      }
+    }
+
+    window.addEventListener("mousedown", handlePointerDown);
+    window.addEventListener("keydown", handleEscape);
+    return () => {
+      window.removeEventListener("mousedown", handlePointerDown);
+      window.removeEventListener("keydown", handleEscape);
+    };
+  }, [menuOpen]);
+
+  return (
+    <div ref={shellRef} className={`signal-channel-selector ${className}`.trim()}>
+      <button
+        type="button"
+        className={`signal-channel-trigger ${menuOpen ? "is-open" : ""}`}
+        onClick={() => setMenuOpen((current) => !current)}
+        aria-haspopup="menu"
+        aria-expanded={menuOpen}
+      >
+        <span className="signal-channel-trigger-copy">
+          <span className="signal-channel-trigger-label">{t("formsTitle")}</span>
+          <strong>{activeScopeLabel}</strong>
+          <span className="signal-channel-trigger-meta">
+            <span>{t("resultsLabel", { count: selectedCount })}</span>
+            <span>{t("unreadBadge", { count: selectedUnreadCount })}</span>
+          </span>
+        </span>
+        <ChannelSelectorCaret />
+      </button>
+      {menuOpen ? (
+        <div className="signal-channel-menu panel" role="menu" aria-label={allSignalNodesLabel}>
+          <div className="signal-channel-menu-header">
+            <div>
+              <p className="eyebrow">{t("signalInboxTitle")}</p>
+              <h3>{t("formsTitle")}</h3>
+            </div>
+            {hasUnreadSignals ? (
+              <span className="signal-new-count" aria-label={t("unreadBadge", { count: totalUnreadCount })}>
+                {totalUnreadCount}
+              </span>
+            ) : null}
+          </div>
+          <SignalChannelSelectorItem
+            accessibleForms={accessibleForms}
+            selectedFormId={selectedFormId}
+            onSelectForm={onSelectForm}
+            unreadCountByFormId={unreadCountByFormId}
+            allSignalsCount={allSignalsCount}
+            totalUnreadCount={totalUnreadCount}
+            activeScopeLabel={activeScopeLabel}
+            allSignalNodesLabel={allSignalNodesLabel}
+            responseDeadlineLabels={responseDeadlineLabels}
+            onExportAllFormCsv={onExportAllFormCsv}
+            closeMenu={() => setMenuOpen(false)}
+          />
+          <div className="signal-channel-menu-footer">
+            <div className="signal-node-summary">
+              <div className="signal-node-summary-copy">
+                <strong>{activeScopeLabel}</strong>
+                <p className="muted">{activeNodeSummary}</p>
+              </div>
+              <button
+                type="button"
+                className="primary-button signal-node-directory-trigger"
+                onClick={() => {
+                  onOpenNodeDirectory();
+                  setMenuOpen(false);
+                }}
+              >
+                {openNodeDirectoryLabel}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
 }
 
 export function SignalStreamsNav({
   streamItems,
   selectedStreamId,
   onSelectStream,
-  accessibleForms,
-  selectedFormId,
-  onSelectForm,
-  unreadCountByFormId,
   visibleUnreadCount,
-  allSignalsCount,
-  activeScopeLabel,
-  activeNodeSummary,
-  allSignalNodesLabel,
-  responseDeadlineLabels,
-  openNodeDirectoryLabel,
-  onOpenNodeDirectory,
-  onExportAllFormCsv,
 }: SignalStreamsNavProps) {
   const { t } = useI18n();
   const hasUnreadSignals = visibleUnreadCount > 0;
@@ -281,88 +542,6 @@ export function SignalStreamsNav({
               />
             ))}
           </div>
-        </div>
-      </div>
-
-      <div className="signal-sidebar-section">
-        <div className="section-row">
-          <p className="eyebrow">{t("formsTitle")}</p>
-          <span className="muted">{accessibleForms.length}</span>
-        </div>
-        <div className="form-stream-list">
-          <div
-            className={`form-stream-item ${selectedFormId === "all" ? "is-active" : ""}`}
-          >
-            <button type="button" className="form-stream-select" onClick={() => onSelectForm("all")}>
-              <span className="form-stream-heading">
-                <strong>{allSignalNodesLabel}</strong>
-                <span className="form-stream-count">{allSignalsCount}</span>
-              </span>
-              <p className="muted">{t("signalsAcrossEveryFormInbox", { count: allSignalsCount })}</p>
-            </button>
-            <div className="form-stream-actions">
-              <span className="signal-chip">{t("unreadBadge", { count: visibleUnreadCount })}</span>
-            </div>
-          </div>
-          {accessibleForms.map((form) => {
-            const isSelected = selectedFormId === form.id;
-            const unreadCount = unreadCountByFormId[form.id] ?? 0;
-            const ownerLabel = form.ownerAddress ? shortAddress(form.ownerAddress) : t("legacyDemoForm");
-            const deadlineValue = formatResponseDeadline(form.responseDeadline, responseDeadlineLabels);
-            return (
-              <div
-                key={form.id}
-                className={`form-stream-item ${isSelected ? "is-active" : ""}`}
-              >
-                <button type="button" className="form-stream-select" onClick={() => onSelectForm(form.id)}>
-                  <span className="form-stream-heading">
-                    <strong>{form.title}</strong>
-                    <span className="form-stream-count">{form.submissionCount}</span>
-                  </span>
-                  <p className="muted">
-                    {t("formSignalsSummary", {
-                      count: form.submissionCount,
-                      inboxType: form.encryptSubmissions ? t("protectedInboxLabel") : t("openInboxLabel"),
-                    })}
-                  </p>
-                  <p className="muted form-stream-meta" title={form.ownerAddress ?? undefined}>
-                    <span>{ownerLabel}</span>
-                    <span>{deadlineValue}</span>
-                  </p>
-                </button>
-                <div className="form-stream-actions">
-                  <span className="signal-chip">{t("unreadBadge", { count: unreadCount })}</span>
-                  {form.projectId ? (
-                    <span className="signal-chip signal-chip-soft">{t("projectLinkedLabel")}</span>
-                  ) : null}
-                  <button
-                    type="button"
-                    className="ghost-button form-stream-export-button"
-                    onClick={() => onExportAllFormCsv(form.id)}
-                    disabled={form.submissionCount === 0}
-                    aria-label={t("exportAllFormCsvAria")}
-                    title={t("exportAllFormCsvAria")}
-                  >
-                    <CsvFileIcon />
-                    <span>{t("exportAllFormCsv")}</span>
-                  </button>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-        <div className="signal-node-summary">
-          <div className="signal-node-summary-copy">
-            <strong>{activeScopeLabel}</strong>
-            <p className="muted">{activeNodeSummary}</p>
-          </div>
-          <button
-            type="button"
-            className="primary-button signal-node-directory-trigger"
-            onClick={onOpenNodeDirectory}
-          >
-            {openNodeDirectoryLabel}
-          </button>
         </div>
       </div>
     </aside>

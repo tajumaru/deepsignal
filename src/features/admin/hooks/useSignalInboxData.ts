@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { canReviewForm } from "../../../lib/adminAccess";
 import { isVerifiedSignal } from "../../../lib/respondentMeta";
+import { getSubmissionRespondentMeta } from "../../../lib/respondentMeta";
 import { fetchJsonBlob } from "../../../lib/walrus";
 import { useProjectRegistry } from "../../../hooks/useProjectRegistry";
 import {
@@ -30,8 +31,11 @@ export interface FormWithCount extends FormSchema {
 export type StreamId =
   | "all"
   | "needs_review"
+  | "unresolved"
   | "unread"
   | "verified"
+  | "anonymous"
+  | "published"
   | "encrypted"
   | "high"
   | "pending_sui"
@@ -39,6 +43,8 @@ export type StreamId =
   | "bug"
   | "feature"
   | "archived";
+
+export type SignalSortOrder = "default" | "newest" | "oldest" | "priority" | "unread";
 
 export interface SignalRecord {
   form: FormWithCount;
@@ -205,14 +211,28 @@ export function matchesStream(record: SignalRecord, streamId: StreamId) {
   switch (streamId) {
     case "needs_review":
       return record.submission.status !== "archived";
+    case "unresolved":
+      return (
+        record.submission.status !== "archived" &&
+        record.submission.triageStatus !== "fixed" &&
+        record.submission.triageStatus !== "closed"
+      );
     case "unread":
       return record.submission.status === "unread";
     case "verified":
       return isVerifiedSignal(record.submission);
+    case "anonymous":
+      return getSubmissionRespondentMeta(record.submission).isAnonymous;
+    case "published":
+      return (
+        record.submission.triageStatus === "planned" ||
+        record.submission.triageStatus === "in_progress" ||
+        record.submission.triageStatus === "fixed"
+      );
     case "encrypted":
       return record.submission.isEncrypted;
     case "high":
-      return record.submission.priority === "high";
+      return record.submission.priority === "high" || record.submission.severity === "high";
     case "pending_sui":
       return Boolean(record.submission.pendingOnchainRegistration);
     case "registered_sui":
@@ -231,11 +251,13 @@ export function matchesStream(record: SignalRecord, streamId: StreamId) {
 interface UseSignalInboxDataArgs {
   accountAddress?: string | null;
   capabilityProfile: CapabilityProfile;
+  sortOrder?: SignalSortOrder;
 }
 
 export function useSignalInboxData({
   accountAddress,
   capabilityProfile,
+  sortOrder = "default",
 }: UseSignalInboxDataArgs) {
   const { projects, dataUpdatedAt: projectsUpdatedAt } = useProjectRegistry(accountAddress);
   const [forms, setForms] = useState<FormWithCount[]>([]);
@@ -494,8 +516,11 @@ export function useSignalInboxData({
     const signalById: Record<string, SignalRecord | undefined> = {};
     const counts = {
       needsReview: 0,
+      unresolved: 0,
       unread: 0,
       verified: 0,
+      anonymous: 0,
+      published: 0,
       encrypted: 0,
       high: 0,
       pendingSui: 0,
@@ -515,16 +540,33 @@ export function useSignalInboxData({
         unreadCountByFormId[record.form.id] = (unreadCountByFormId[record.form.id] ?? 0) + 1;
         counts.unread += 1;
       }
+      if (
+        record.submission.status !== "archived" &&
+        record.submission.triageStatus !== "fixed" &&
+        record.submission.triageStatus !== "closed"
+      ) {
+        counts.unresolved += 1;
+      }
       if (isVerifiedSignal(record.submission)) {
         counts.verified += 1;
+      }
+      if (getSubmissionRespondentMeta(record.submission).isAnonymous) {
+        counts.anonymous += 1;
       }
       if (record.submission.status !== "archived") {
         counts.needsReview += 1;
       }
+      if (
+        record.submission.triageStatus === "planned" ||
+        record.submission.triageStatus === "in_progress" ||
+        record.submission.triageStatus === "fixed"
+      ) {
+        counts.published += 1;
+      }
       if (record.submission.isEncrypted) {
         counts.encrypted += 1;
       }
-      if (record.submission.priority === "high") {
+      if (record.submission.priority === "high" || record.submission.severity === "high") {
         counts.high += 1;
       }
       if (record.submission.pendingOnchainRegistration) {
@@ -599,7 +641,7 @@ export function useSignalInboxData({
   );
   const visibleSignals = useMemo(() => {
     const normalizedSearch = search.trim().toLowerCase();
-    return allSignals.filter((record) => {
+    const filteredSignals = allSignals.filter((record) => {
       if (selectedFormId !== "all" && record.form.id !== selectedFormId) {
         return false;
       }
@@ -611,7 +653,45 @@ export function useSignalInboxData({
       }
       return record.searchText.includes(normalizedSearch);
     });
-  }, [allSignals, search, selectedFormId, selectedStreamId]);
+
+    if (sortOrder === "default") {
+      return filteredSignals;
+    }
+
+    const priorityRank: Record<Submission["priority"], number> = {
+      high: 0,
+      medium: 1,
+      low: 2,
+    };
+
+    return [...filteredSignals].sort((left, right) => {
+      if (sortOrder === "newest") {
+        return Date.parse(right.submission.createdAt) - Date.parse(left.submission.createdAt);
+      }
+      if (sortOrder === "oldest") {
+        return Date.parse(left.submission.createdAt) - Date.parse(right.submission.createdAt);
+      }
+      if (sortOrder === "priority") {
+        const priorityDelta = priorityRank[left.submission.priority] - priorityRank[right.submission.priority];
+        if (priorityDelta !== 0) {
+          return priorityDelta;
+        }
+        if (left.submission.status !== right.submission.status) {
+          return left.submission.status === "unread" ? -1 : 1;
+        }
+        return Date.parse(right.submission.createdAt) - Date.parse(left.submission.createdAt);
+      }
+      if (left.submission.status !== right.submission.status) {
+        return left.submission.status === "unread" ? -1 : 1;
+      }
+      const triageDelta =
+        (left.submission.triageStatus === "new" ? 0 : 1) - (right.submission.triageStatus === "new" ? 0 : 1);
+      if (triageDelta !== 0) {
+        return triageDelta;
+      }
+      return Date.parse(right.submission.createdAt) - Date.parse(left.submission.createdAt);
+    });
+  }, [allSignals, search, selectedFormId, selectedStreamId, sortOrder]);
 
   const selectedRecord = selectedSignalId
     ? visibleSignals.find((record) => record.submission.id === selectedSignalId) ??

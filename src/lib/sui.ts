@@ -11,11 +11,12 @@ const requestedNetwork = String(
 ).toLowerCase();
 export const SUI_NETWORK = requestedNetwork === "mainnet" ? "mainnet" : "testnet";
 export const SUI_DEFAULT_RPC_URL = getJsonRpcFullnodeUrl(SUI_NETWORK);
-export const SUI_FULLNODE_URL =
-  import.meta.env.NEXT_PUBLIC_SUI_RPC_URL ||
+export const SUI_TATUM_RPC_URL = import.meta.env.NEXT_PUBLIC_SUI_RPC_URL || "";
+export const SUI_FALLBACK_RPC_URL =
   import.meta.env.VITE_SUI_FULLNODE_URL ||
   import.meta.env.VITE_RPC_URL ||
-  "";
+  SUI_DEFAULT_RPC_URL;
+export const SUI_FULLNODE_URL = SUI_TATUM_RPC_URL || SUI_FALLBACK_RPC_URL;
 export const SUI_RPC_URL = SUI_FULLNODE_URL || SUI_DEFAULT_RPC_URL;
 export const TATUM_ENABLED = String(import.meta.env.NEXT_PUBLIC_TATUM_ENABLED || "").toLowerCase() === "true";
 export const TATUM_PROXY_ENABLED = import.meta.env.VITE_TATUM_PROXY_ENABLED === "true";
@@ -30,10 +31,10 @@ export function getRpcProviderLabel(url?: string | null) {
 }
 
 export function getEffectiveTatumRpcUrl() {
-  if (!TATUM_ENABLED || !isTatumRpcUrl(SUI_FULLNODE_URL)) {
+  if (!TATUM_ENABLED || !isTatumRpcUrl(SUI_TATUM_RPC_URL)) {
     return null;
   }
-  return TATUM_PROXY_ENABLED ? TATUM_PROXY_PATH : SUI_FULLNODE_URL;
+  return TATUM_PROXY_ENABLED ? TATUM_PROXY_PATH : SUI_TATUM_RPC_URL;
 }
 
 export function getConnectedNetworkLabel(chainIdentifier?: string | null) {

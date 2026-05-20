@@ -23,13 +23,15 @@ import { AdminOperationsStatus } from "../features/admin/components/AdminOperati
 import { AdminToast } from "../features/admin/components/AdminToast";
 import { CsvExportConfirmationModal } from "../features/admin/components/CsvExportConfirmationModal";
 import { SignalAttachmentList } from "../features/admin/components/SignalAttachmentList";
-import { SignalStreamsNav } from "../features/admin/components/SignalStreamsNav";
+import { SignalChannelSelector, SignalStreamsNav } from "../features/admin/components/SignalStreamsNav";
 import { useAdminToast } from "../features/admin/hooks/useAdminToast";
 import { usePendingSuiRegistration } from "../features/admin/hooks/usePendingSuiRegistration";
 import { usePrivateSignalDecrypt } from "../features/admin/hooks/usePrivateSignalDecrypt";
 import { useProjectWorkspace } from "../features/admin/hooks/useProjectWorkspace";
 import {
   useSignalInboxData,
+  type FormWithCount,
+  type SignalSortOrder,
   type SignalRecord,
   type StreamId,
 } from "../features/admin/hooks/useSignalInboxData";
@@ -97,6 +99,7 @@ const ROADMAP_READY_STATUSES = new Set<Submission["triageStatus"]>(["planned", "
 type ReviewSaveStatus = "idle" | "saving" | "saved" | "skipped" | "error";
 type ReviewDraft = Pick<Submission, "status" | "triageStatus" | "priority" | "signalValue" | "notes">;
 type WorkspaceTab = "review" | "activity" | "insights";
+type QuickActionId = "reviewing" | "resolve" | "publish" | "archive";
 interface UnlockedSignalSummary {
   answers: Record<string, unknown>;
 }
@@ -477,9 +480,30 @@ interface MobileInboxHeaderProps {
   streamItems: Array<{ id: StreamId; label: string; count: number }>;
   selectedStreamId: StreamId;
   onSelectStream: (streamId: StreamId) => void;
+  sortOrder: SignalSortOrder;
+  onSortOrderChange: (value: SignalSortOrder) => void;
   searchPlaceholder: string;
   filterLabel: string;
   queueLabel: string;
+  accessibleForms: FormWithCount[];
+  selectedFormId: string;
+  onSelectForm: (formId: string) => void;
+  unreadCountByFormId: Record<string, number>;
+  allSignalsCount: number;
+  totalUnreadCount: number;
+  allSignalNodesLabel: string;
+  responseDeadlineLabels: ResponseDeadlineLabels;
+  openNodeDirectoryLabel: string;
+  onOpenNodeDirectory: () => void;
+  activeNodeSummary: string;
+  onExportAllFormCsv: (formId: string) => void;
+  hasAdminAccess: boolean;
+  selectedProjectName: string | null;
+  highlightCreateFormCta: boolean;
+  onOpenProjectSettings: () => void;
+  onJumpToReview: () => void;
+  onRevealCreateProject: () => void;
+  onRevealConnectProject: () => void;
 }
 
 function MobileInboxHeader({
@@ -492,9 +516,30 @@ function MobileInboxHeader({
   streamItems,
   selectedStreamId,
   onSelectStream,
+  sortOrder,
+  onSortOrderChange,
   searchPlaceholder,
   filterLabel,
   queueLabel,
+  accessibleForms,
+  selectedFormId,
+  onSelectForm,
+  unreadCountByFormId,
+  allSignalsCount,
+  totalUnreadCount,
+  allSignalNodesLabel,
+  responseDeadlineLabels,
+  openNodeDirectoryLabel,
+  onOpenNodeDirectory,
+  activeNodeSummary,
+  onExportAllFormCsv,
+  hasAdminAccess,
+  selectedProjectName,
+  highlightCreateFormCta,
+  onOpenProjectSettings,
+  onJumpToReview,
+  onRevealCreateProject,
+  onRevealConnectProject,
 }: MobileInboxHeaderProps) {
   return (
     <header className="mobile-inbox-header">
@@ -512,6 +557,35 @@ function MobileInboxHeader({
           <span>{activeScopeLabel}</span>
         </div>
         <span className="mobile-inbox-count-pill">{unreadCountLabel}</span>
+      </div>
+
+      <div className="mobile-inbox-channel-row">
+        <WorkspaceShortcutBar
+          className="workspace-shortcut-bar-mobile"
+          hasAdminAccess={hasAdminAccess}
+          selectedProjectName={selectedProjectName}
+          highlightCreateFormCta={highlightCreateFormCta}
+          onOpenProjectSettings={onOpenProjectSettings}
+          onJumpToReview={onJumpToReview}
+          onRevealCreateProject={onRevealCreateProject}
+          onRevealConnectProject={onRevealConnectProject}
+        />
+        <SignalChannelSelector
+          className="signal-channel-selector-mobile"
+          accessibleForms={accessibleForms}
+          selectedFormId={selectedFormId}
+          onSelectForm={onSelectForm}
+          unreadCountByFormId={unreadCountByFormId}
+          allSignalsCount={allSignalsCount}
+          totalUnreadCount={totalUnreadCount}
+          activeScopeLabel={activeScopeLabel}
+          allSignalNodesLabel={allSignalNodesLabel}
+          responseDeadlineLabels={responseDeadlineLabels}
+          openNodeDirectoryLabel={openNodeDirectoryLabel}
+          onOpenNodeDirectory={onOpenNodeDirectory}
+          activeNodeSummary={activeNodeSummary}
+          onExportAllFormCsv={onExportAllFormCsv}
+        />
       </div>
 
       <div className="mobile-inbox-search-row">
@@ -534,6 +608,16 @@ function MobileInboxHeader({
             ))}
           </select>
         </label>
+        <label className="mobile-inbox-filter mobile-inbox-sort">
+          <span className="sr-only">Sort inbox</span>
+          <select value={sortOrder} onChange={(event) => onSortOrderChange(event.target.value as SignalSortOrder)}>
+            <option value="default">{getSortLabel("default")}</option>
+            <option value="newest">{getSortLabel("newest")}</option>
+            <option value="oldest">{getSortLabel("oldest")}</option>
+            <option value="priority">{getSortLabel("priority")}</option>
+            <option value="unread">{getSortLabel("unread")}</option>
+          </select>
+        </label>
       </div>
 
       <div className="mobile-inbox-summary-row">
@@ -544,11 +628,77 @@ function MobileInboxHeader({
   );
 }
 
+interface WorkspaceShortcutBarProps {
+  hasAdminAccess: boolean;
+  selectedProjectName: string | null;
+  highlightCreateFormCta: boolean;
+  onOpenProjectSettings: () => void;
+  onJumpToReview: () => void;
+  onRevealCreateProject: () => void;
+  onRevealConnectProject: () => void;
+  className?: string;
+}
+
+function WorkspaceShortcutBar({
+  hasAdminAccess,
+  selectedProjectName,
+  highlightCreateFormCta,
+  onOpenProjectSettings,
+  onJumpToReview,
+  onRevealCreateProject,
+  onRevealConnectProject,
+  className = "",
+}: WorkspaceShortcutBarProps) {
+  const { t } = useI18n();
+
+  return (
+    <div className={`workspace-shortcut-bar ${className}`.trim()}>
+      {hasAdminAccess ? (
+        <>
+          <button type="button" className="primary-button" onClick={onRevealCreateProject}>
+            {t("createProjectButton")}
+          </button>
+          {!selectedProjectName ? (
+            <button type="button" className="ghost-button" onClick={onRevealConnectProject}>
+              {t("connectExistingShort")}
+            </button>
+          ) : null}
+          {selectedProjectName ? (
+            <CreateFormLink className={`primary-button ${highlightCreateFormCta ? "create-form-cta-highlight" : ""}`}>
+              {t("navCreateForm")}
+            </CreateFormLink>
+          ) : null}
+        </>
+      ) : (
+        <CreateFormLink className={`primary-button ${highlightCreateFormCta ? "create-form-cta-highlight" : ""}`}>
+          {t("navCreateForm")}
+        </CreateFormLink>
+      )}
+      <button type="button" className="ghost-button" onClick={onJumpToReview}>
+        {t("reviewButton")}
+      </button>
+      {hasAdminAccess ? (
+        <>
+          {selectedProjectName ? (
+            <Link className="ghost-button" to="/admin/access">
+              {t("membersButton")}
+            </Link>
+          ) : null}
+          <button type="button" className="ghost-button workspace-project-trigger" onClick={onOpenProjectSettings}>
+            {selectedProjectName ? t("projectButtonLabel", { name: selectedProjectName }) : t("chooseProjectButton")}
+          </button>
+        </>
+      ) : null}
+    </div>
+  );
+}
+
 interface MobileSignalRowProps {
   record: SignalRecord;
   isSelected: boolean;
   isUnlocked: boolean;
   onSelect: () => void;
+  onQuickAction: (record: SignalRecord, action: QuickActionId) => void;
   t: TranslationFn;
 }
 
@@ -558,11 +708,103 @@ function getSignalInitials(title: string) {
   return `${first?.[0] ?? "S"}${second?.[0] ?? ""}`.toUpperCase();
 }
 
+function buildQuickActionSubmission(submission: Submission, action: QuickActionId): Submission {
+  switch (action) {
+    case "reviewing":
+      return { ...submission, status: "read", triageStatus: "investigating" };
+    case "resolve":
+      return { ...submission, status: "read", triageStatus: "fixed" };
+    case "publish":
+      return { ...submission, status: "read", triageStatus: "planned" };
+    case "archive":
+      return { ...submission, status: "archived", triageStatus: "closed" };
+    default:
+      return submission;
+  }
+}
+
+function isQuickActionActive(submission: Submission, action: QuickActionId) {
+  switch (action) {
+    case "reviewing":
+      return submission.status === "read" && submission.triageStatus === "investigating";
+    case "resolve":
+      return submission.status === "read" && (submission.triageStatus === "fixed" || submission.triageStatus === "closed");
+    case "publish":
+      return submission.triageStatus === "planned" || submission.triageStatus === "in_progress" || submission.triageStatus === "fixed";
+    case "archive":
+      return submission.status === "archived";
+    default:
+      return false;
+  }
+}
+
+function getSortLabel(sortOrder: SignalSortOrder) {
+  switch (sortOrder) {
+    case "newest":
+      return "Newest first";
+    case "oldest":
+      return "Oldest first";
+    case "priority":
+      return "Priority first";
+    case "unread":
+      return "Unread first";
+    default:
+      return "Default order";
+  }
+}
+
+function getQuickActionLabel(action: QuickActionId) {
+  switch (action) {
+    case "reviewing":
+      return "Mark Reviewing";
+    case "resolve":
+      return "Resolve";
+    case "publish":
+      return "Publish";
+    case "archive":
+      return "Archive";
+    default:
+      return action;
+  }
+}
+
+function QuickActionBar({
+  submission,
+  disabled,
+  onAction,
+}: {
+  submission: Submission;
+  disabled?: boolean;
+  onAction: (action: QuickActionId) => void;
+}) {
+  const actions: QuickActionId[] = ["reviewing", "resolve", "publish", "archive"];
+  return (
+    <div className="quick-action-bar" role="group" aria-label="Signal quick actions">
+      {actions.map((action) => {
+        const isActive = isQuickActionActive(submission, action);
+        return (
+          <button
+            key={action}
+            type="button"
+            className={`quick-action-button quick-action-${action} ${isActive ? "is-active" : ""}`}
+            disabled={disabled || isActive}
+            aria-pressed={isActive}
+            onClick={() => onAction(action)}
+          >
+            {getQuickActionLabel(action)}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 function MobileSignalRow({
   record,
   isSelected,
   isUnlocked,
   onSelect,
+  onQuickAction,
   t,
 }: MobileSignalRowProps) {
   const { submission } = record;
@@ -580,6 +822,10 @@ function MobileSignalRow({
       ? t("unlockedSignalState")
       : t("lockedSignalState")
     : t("openSignalState");
+  const preview = submission.isEncrypted ? t("encryptedPrivateSignalUnlockHint") : getSignalPreview(submission);
+  const sourceLabel = getSubmissionRespondentMeta(submission).isAnonymous
+    ? t("anonymousRespondent")
+    : record.form.title;
   const signalLevelLabel =
     typeof submission.signalValue === "number"
       ? `Signal ${submission.signalValue}/5`
@@ -599,46 +845,65 @@ function MobileSignalRow({
   });
 
   return (
-    <button
-      type="button"
+    <article
       className={`mobile-signal-row ${isSelected ? "is-active" : ""} ${submission.status === "unread" ? "is-unread" : "is-read"}`}
-      aria-current={isSelected ? "true" : undefined}
-      aria-label={ariaLabel}
-      onClick={onSelect}
     >
-      <span className="mobile-signal-avatar" aria-hidden="true">
-        {getSignalInitials(title)}
-        <span className={`mobile-signal-status-dot status-${submission.status}`} />
-      </span>
+      <button
+        type="button"
+        className="mobile-signal-row-main"
+        aria-current={isSelected ? "true" : undefined}
+        aria-label={ariaLabel}
+        onClick={onSelect}
+      >
+        <span className="mobile-signal-avatar" aria-hidden="true">
+          {getSignalInitials(title)}
+          <span className={`mobile-signal-status-dot status-${submission.status}`} />
+        </span>
 
-      <span className="mobile-signal-main">
-        <span className="mobile-signal-title-line">
-          <strong>{title}</strong>
-        </span>
-        <span className="mobile-signal-meta-row">
-          {submission.isEncrypted ? (
-            <span className={`mobile-signal-mini-badge ${isUnlocked ? "is-selected" : ""}`}>
-              {lockStateLabel}
-            </span>
-          ) : (
-            <span className="mobile-signal-mini-badge">{lockStateLabel}</span>
-          )}
-          <span className={`mobile-signal-mini-badge status-${submission.status}`}>
-            {readStateLabel}
+        <span className="mobile-signal-main">
+          <span className="mobile-signal-title-line">
+            {submission.status === "unread" ? <span className="mobile-unread-dot" aria-hidden="true" /> : null}
+            <strong>{title}</strong>
           </span>
-          {persistenceState !== "not_available" ? (
-            <span className="mobile-signal-mini-badge">{persistenceLabel}</span>
-          ) : null}
-          <span className="mobile-signal-mini-badge">{signalLevelLabel}</span>
+          <span className={`mobile-signal-preview ${submission.isEncrypted ? "is-locked" : ""}`}>{preview}</span>
+          <span className="mobile-signal-source-line">
+            <span>{sourceLabel}</span>
+            <span>{getTriageStatusLabel(submission.triageStatus)}</span>
+          </span>
+          <span className="mobile-signal-meta-row">
+            {submission.isEncrypted ? (
+              <span className={`mobile-signal-mini-badge ${isUnlocked ? "is-selected" : ""}`}>
+                {lockStateLabel}
+              </span>
+            ) : (
+              <span className="mobile-signal-mini-badge">{lockStateLabel}</span>
+            )}
+            <span className={`mobile-signal-mini-badge status-${submission.status}`}>
+              {readStateLabel}
+            </span>
+            {persistenceState !== "not_available" ? (
+              <span className="mobile-signal-mini-badge">{persistenceLabel}</span>
+            ) : null}
+            <span className="mobile-signal-mini-badge">{signalLevelLabel}</span>
+          </span>
         </span>
-      </span>
+      </button>
 
       <span className="mobile-signal-side">
         <time>{formatDate(submission.createdAt)}</time>
-        {submission.status === "unread" ? <span className="mobile-unread-dot" aria-label={t("unreadSignalState")} /> : null}
         <span className={`mobile-priority-badge priority-${submission.priority}`}>{priorityLabel}</span>
+        <button
+          type="button"
+          className="mobile-row-action-button"
+          onClick={(event) => {
+            event.stopPropagation();
+            onQuickAction(record, submission.status === "unread" ? "reviewing" : "resolve");
+          }}
+        >
+          {submission.status === "unread" ? "Review" : "Resolve"}
+        </button>
       </span>
-    </button>
+    </article>
   );
 }
 
@@ -662,12 +927,34 @@ interface MobileSignalInboxProps {
   streamItems: Array<{ id: StreamId; label: string; count: number }>;
   selectedStreamId: StreamId;
   onSelectStream: (streamId: StreamId) => void;
+  sortOrder: SignalSortOrder;
+  onSortOrderChange: (value: SignalSortOrder) => void;
   visibleSignals: SignalRecord[];
   selectedRecord: SignalRecord | null;
   unlockedSignalId?: string | null;
   onSelectSignal: (record: SignalRecord) => void;
+  onQuickAction: (record: SignalRecord, action: QuickActionId) => void;
   searchPlaceholder: string;
+  accessibleForms: FormWithCount[];
+  selectedFormId: string;
+  onSelectForm: (formId: string) => void;
+  unreadCountByFormId: Record<string, number>;
+  allSignalsCount: number;
+  totalUnreadCount: number;
+  allSignalNodesLabel: string;
+  responseDeadlineLabels: ResponseDeadlineLabels;
+  openNodeDirectoryLabel: string;
+  onOpenNodeDirectory: () => void;
+  activeNodeSummary: string;
+  onExportAllFormCsv: (formId: string) => void;
   t: TranslationFn;
+  hasAdminAccess: boolean;
+  selectedProjectName: string | null;
+  highlightCreateFormCta: boolean;
+  onOpenProjectSettings: () => void;
+  onJumpToReview: () => void;
+  onRevealCreateProject: () => void;
+  onRevealConnectProject: () => void;
 }
 
 function MobileSignalInbox({
@@ -681,12 +968,34 @@ function MobileSignalInbox({
   streamItems,
   selectedStreamId,
   onSelectStream,
+  sortOrder,
+  onSortOrderChange,
   visibleSignals,
   selectedRecord,
   unlockedSignalId,
   onSelectSignal,
+  onQuickAction,
   searchPlaceholder,
+  accessibleForms,
+  selectedFormId,
+  onSelectForm,
+  unreadCountByFormId,
+  allSignalsCount,
+  totalUnreadCount,
+  allSignalNodesLabel,
+  responseDeadlineLabels,
+  openNodeDirectoryLabel,
+  onOpenNodeDirectory,
+  activeNodeSummary,
+  onExportAllFormCsv,
   t,
+  hasAdminAccess,
+  selectedProjectName,
+  highlightCreateFormCta,
+  onOpenProjectSettings,
+  onJumpToReview,
+  onRevealCreateProject,
+  onRevealConnectProject,
 }: MobileSignalInboxProps) {
   return (
     <section className={`mobile-signal-inbox ${selectedRecord ? "is-detail-open" : ""}`} aria-label={title}>
@@ -700,9 +1009,30 @@ function MobileSignalInbox({
         streamItems={streamItems}
         selectedStreamId={selectedStreamId}
         onSelectStream={onSelectStream}
+        sortOrder={sortOrder}
+        onSortOrderChange={onSortOrderChange}
         searchPlaceholder={searchPlaceholder}
         filterLabel={t("filterInboxLabel")}
         queueLabel={t("encryptedQueueLabel")}
+        accessibleForms={accessibleForms}
+        selectedFormId={selectedFormId}
+        onSelectForm={onSelectForm}
+        unreadCountByFormId={unreadCountByFormId}
+        allSignalsCount={allSignalsCount}
+        totalUnreadCount={totalUnreadCount}
+        allSignalNodesLabel={allSignalNodesLabel}
+        responseDeadlineLabels={responseDeadlineLabels}
+        openNodeDirectoryLabel={openNodeDirectoryLabel}
+        onOpenNodeDirectory={onOpenNodeDirectory}
+        activeNodeSummary={activeNodeSummary}
+        onExportAllFormCsv={onExportAllFormCsv}
+        hasAdminAccess={hasAdminAccess}
+        selectedProjectName={selectedProjectName}
+        highlightCreateFormCta={highlightCreateFormCta}
+        onOpenProjectSettings={onOpenProjectSettings}
+        onJumpToReview={onJumpToReview}
+        onRevealCreateProject={onRevealCreateProject}
+        onRevealConnectProject={onRevealConnectProject}
       />
 
       <div className="mobile-signal-list" aria-live="polite">
@@ -715,6 +1045,7 @@ function MobileSignalInbox({
                 isSelected={selectedRecord?.submission.id === record.submission.id}
                 isUnlocked={unlockedSignalId === record.submission.id}
                 onSelect={() => onSelectSignal(record)}
+                onQuickAction={onQuickAction}
                 t={t}
               />
             ))}
@@ -756,6 +1087,7 @@ export function AdminDashboardPage() {
   const [nodeSearch, setNodeSearch] = useState("");
   const [csvExportScope, setCsvExportScope] = useState<ResponsesCsvExportScope>("filtered");
   const [csvSortOrder, setCsvSortOrder] = useState<ResponsesCsvSortOrder>("createdAtDesc");
+  const [signalSortOrder, setSignalSortOrder] = useState<SignalSortOrder>("default");
   const [excludedCsvPiiFields, setExcludedCsvPiiFields] = useState<ExportPiiField[]>([]);
   const [pendingCsvExportMetadata, setPendingCsvExportMetadata] = useState<ExportMetadata | null>(null);
   const [pendingCsvExportForm, setPendingCsvExportForm] = useState<FormSchema | null>(null);
@@ -796,6 +1128,7 @@ export function AdminDashboardPage() {
   } = useSignalInboxData({
     accountAddress: wallet.accountAddress,
     capabilityProfile,
+    sortOrder: signalSortOrder,
   });
   const {
     selectedPendingSignalIds,
@@ -842,6 +1175,17 @@ export function AdminDashboardPage() {
     forms,
     loadConsole,
   });
+  const hasOwnedAccessibleForms = accessibleForms.some((form) =>
+    addressesMatch(form.ownerAddress, wallet.accountAddress),
+  );
+  const hasProjectManagementAccess =
+    hasAdminAccess ||
+    hasOwnedAccessibleForms ||
+    projects.some(
+      (project) =>
+        addressesMatch(project.owner, wallet.accountAddress) ||
+        project.admins.some((adminAddress) => addressesMatch(adminAddress, wallet.accountAddress)),
+    );
   const {
     detailAnswers,
     detailAttachments,
@@ -1617,8 +1961,44 @@ export function AdminDashboardPage() {
     return saved;
   }, [applySubmissionUpdate, setSelectedSignalId, setToast]);
 
+  const handleQuickAction = useCallback(
+    async (record: SignalRecord, action: QuickActionId) => {
+      const nextSubmission = buildQuickActionSubmission(record.submission, action);
+      const saved = await updateSubmission(nextSubmission, { announce: true });
+      if (!saved) {
+        return;
+      }
+      if (selectedRecord?.submission.id === record.submission.id) {
+        setReviewDraft({
+          status: nextSubmission.status,
+          triageStatus: nextSubmission.triageStatus,
+          priority: nextSubmission.priority,
+          signalValue: nextSubmission.signalValue,
+          notes: nextSubmission.notes,
+        });
+      }
+    },
+    [selectedRecord, updateSubmission],
+  );
+
   async function handleSaveReviewDraft() {
     if (!selectedRecord || !activeReviewDraft || !hasReviewDraftChanges || isReviewWorkbenchLocked) {
+      return;
+    }
+    await updateSubmission(
+      {
+        ...selectedRecord.submission,
+        ...activeReviewDraft,
+      },
+      { announce: true },
+    );
+  }
+
+  async function handleSaveReviewerNotes() {
+    if (!selectedRecord || !activeReviewDraft || isReviewWorkbenchLocked) {
+      return;
+    }
+    if (activeReviewDraft.notes === selectedRecord.submission.notes) {
       return;
     }
     await updateSubmission(
@@ -1656,6 +2036,11 @@ export function AdminDashboardPage() {
       count: signalIndex.counts.needsReview,
     },
     {
+      id: "unresolved",
+      label: "Unresolved",
+      count: signalIndex.counts.unresolved,
+    },
+    {
       id: "unread",
       label: t("unreadSignals"),
       count: signalIndex.counts.unread,
@@ -1666,8 +2051,18 @@ export function AdminDashboardPage() {
       count: signalIndex.counts.verified,
     },
     {
+      id: "anonymous",
+      label: "Anonymous",
+      count: signalIndex.counts.anonymous,
+    },
+    {
+      id: "published",
+      label: "Published",
+      count: signalIndex.counts.published,
+    },
+    {
       id: "high",
-      label: t("flaggedLabel"),
+      label: "Critical / High",
       count: signalIndex.counts.high,
     },
     {
@@ -1923,6 +2318,37 @@ export function AdminDashboardPage() {
       setToast({ tone: "error", message: t("csvExportFailed") });
     }
   }
+
+  function openAdvancedProjectSettings() {
+    const details = advancedProjectSettingsRef.current;
+    if (!details) {
+      return;
+    }
+    details.open = true;
+    details.scrollIntoView({
+      behavior: "smooth",
+      block: "start",
+    });
+  }
+
+  function revealProjectSettingsTools(mode: "connect" | "create") {
+    openAdvancedProjectSettings();
+    window.setTimeout(() => {
+      if (mode === "create") {
+        projectCreateInputRef.current?.focus();
+        return;
+      }
+      manualProjectInputRef.current?.focus();
+    }, 160);
+  }
+
+  function jumpToReviewWorkspace() {
+    setActiveWorkspaceTab("review");
+    setSelectedStreamId("all");
+    setSelectedFormId("all");
+    reviewInboxRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
   const activeScopeLabel =
     selectedFormId === "all" ? t("allSignalNodes") : selectedForm?.title ?? t("selectedNode");
   const activeStreamLabel =
@@ -2082,49 +2508,16 @@ export function AdminDashboardPage() {
             </div>
 
             <aside className="workspace-action-dock">
-              <div className="workspace-dock-actions">
-                <CreateFormLink
-                  className={`primary-button ${highlightCreateFormCta ? "create-form-cta-highlight" : ""}`}
-                >
-                  {t("navCreateForm")}
-                </CreateFormLink>
-                <button
-                  type="button"
-                  className="ghost-button"
-                  onClick={() => {
-                    setActiveWorkspaceTab("review");
-                    setSelectedStreamId("all");
-                    setSelectedFormId("all");
-                    reviewInboxRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-                  }}
-                >
-                  {t("reviewButton")}
-                </button>
-                {hasAdminAccess ? (
-                  <>
-                    <Link className="ghost-button" to="/admin/access">
-                      {t("membersButton")}
-                    </Link>
-                    <button
-                      type="button"
-                      className="ghost-button workspace-project-trigger"
-                      onClick={() => {
-                        const details = advancedProjectSettingsRef.current;
-                        if (!details) {
-                          return;
-                        }
-                        details.open = true;
-                        details.scrollIntoView({
-                          behavior: "smooth",
-                          block: "start",
-                        });
-                      }}
-                    >
-                      {selectedProject ? t("projectButtonLabel", { name: selectedProject.name }) : t("chooseProjectButton")}
-                    </button>
-                  </>
-                ) : null}
-              </div>
+              <WorkspaceShortcutBar
+                className="workspace-dock-actions"
+                hasAdminAccess={hasProjectManagementAccess}
+                selectedProjectName={selectedProject?.name ?? null}
+                highlightCreateFormCta={highlightCreateFormCta}
+                onOpenProjectSettings={openAdvancedProjectSettings}
+                onJumpToReview={jumpToReviewWorkspace}
+                onRevealCreateProject={() => revealProjectSettingsTools("create")}
+                onRevealConnectProject={() => revealProjectSettingsTools("connect")}
+              />
             </aside>
           </div>
         </section>
@@ -2212,12 +2605,34 @@ export function AdminDashboardPage() {
             streamItems={streamItems}
             selectedStreamId={selectedStreamId}
             onSelectStream={setSelectedStreamId}
+            sortOrder={signalSortOrder}
+            onSortOrderChange={setSignalSortOrder}
             visibleSignals={visibleSignals}
             selectedRecord={hasExplicitSelectedRecord ? selectedRecord : null}
             unlockedSignalId={detailAnswers && selectedRecord ? selectedRecord.submission.id : null}
             onSelectSignal={handleSelectMobileSignal}
+            onQuickAction={handleQuickAction}
             searchPlaceholder={t("searchSignalsPlaceholder")}
+            accessibleForms={accessibleForms}
+            selectedFormId={selectedFormId}
+            onSelectForm={setSelectedFormId}
+            unreadCountByFormId={unreadCountByFormId}
+            allSignalsCount={allSignals.length}
+            totalUnreadCount={signalIndex.counts.unread}
+            allSignalNodesLabel={t("allSignalNodes")}
+            responseDeadlineLabels={responseDeadlineLabels}
+            openNodeDirectoryLabel={t("openNodeDirectory")}
+            onOpenNodeDirectory={() => setNodeDirectoryOpen(true)}
+            activeNodeSummary={t("activeNodeSummary", { count: accessibleForms.length })}
+            onExportAllFormCsv={handleOpenFormAllCsvExportReview}
             t={t}
+            hasAdminAccess={hasAdminAccess}
+            selectedProjectName={selectedProject?.name ?? null}
+            highlightCreateFormCta={highlightCreateFormCta}
+            onOpenProjectSettings={openAdvancedProjectSettings}
+            onJumpToReview={jumpToReviewWorkspace}
+            onRevealCreateProject={() => revealProjectSettingsTools("create")}
+            onRevealConnectProject={() => revealProjectSettingsTools("connect")}
           />
           <section
             ref={reviewInboxRef}
@@ -2230,9 +2645,44 @@ export function AdminDashboardPage() {
                 <p className="muted">{t("reviewWorkspaceBody")}</p>
               </div>
               <div className="signal-workbench-summary">
-                <span className="signal-chip">{t("visibleSignalsLabel", { count: visibleSignals.length })}</span>
-                <span className="signal-chip signal-chip-soft">{t("unreadBadge", { count: visibleUnreadCount })}</span>
-                <span className="signal-chip signal-chip-soft">{activeScopeLabel}</span>
+                <SignalChannelSelector
+                  accessibleForms={accessibleForms}
+                  selectedFormId={selectedFormId}
+                  onSelectForm={(formId) => {
+                    setSelectedFormId(formId);
+                    scrollToReviewPanel("signals");
+                  }}
+                  unreadCountByFormId={unreadCountByFormId}
+                  allSignalsCount={allSignals.length}
+                  totalUnreadCount={signalIndex.counts.unread}
+                  activeScopeLabel={activeScopeLabel}
+                  allSignalNodesLabel={t("allSignalNodes")}
+                  responseDeadlineLabels={responseDeadlineLabels}
+                  openNodeDirectoryLabel={t("openNodeDirectory")}
+                  onOpenNodeDirectory={() => setNodeDirectoryOpen(true)}
+                  activeNodeSummary={t("activeNodeSummary", { count: accessibleForms.length })}
+                  onExportAllFormCsv={handleOpenFormAllCsvExportReview}
+                />
+                <div className="signal-workbench-meta">
+                  <span className="signal-chip">{t("visibleSignalsLabel", { count: visibleSignals.length })}</span>
+                  <span className="signal-chip signal-chip-soft">{t("unreadBadge", { count: visibleUnreadCount })}</span>
+                </div>
+                <div className="signal-workbench-controls">
+                  <span className="signal-chip signal-chip-soft">{activeScopeLabel}</span>
+                  <label className="review-sort-control">
+                    <span className="sr-only">Sort inbox</span>
+                    <select
+                      value={signalSortOrder}
+                      onChange={(event) => setSignalSortOrder(event.target.value as SignalSortOrder)}
+                    >
+                      <option value="default">{getSortLabel("default")}</option>
+                      <option value="newest">{getSortLabel("newest")}</option>
+                      <option value="oldest">{getSortLabel("oldest")}</option>
+                      <option value="priority">{getSortLabel("priority")}</option>
+                      <option value="unread">{getSortLabel("unread")}</option>
+                    </select>
+                  </label>
+                </div>
               </div>
             </div>
 
@@ -2257,22 +2707,7 @@ export function AdminDashboardPage() {
                     setSelectedStreamId(streamId);
                     scrollToReviewPanel("signals");
                   }}
-                  accessibleForms={accessibleForms}
-                  selectedFormId={selectedFormId}
-                  onSelectForm={(formId) => {
-                    setSelectedFormId(formId);
-                    scrollToReviewPanel("signals");
-                  }}
-                  unreadCountByFormId={unreadCountByFormId}
                   visibleUnreadCount={visibleUnreadCount}
-                  allSignalsCount={allSignals.length}
-                  activeScopeLabel={activeScopeLabel}
-                  activeNodeSummary={t("activeNodeSummary", { count: accessibleForms.length })}
-                  allSignalNodesLabel={t("allSignalNodes")}
-                  responseDeadlineLabels={responseDeadlineLabels}
-                  openNodeDirectoryLabel={t("openNodeDirectory")}
-                  onOpenNodeDirectory={() => setNodeDirectoryOpen(true)}
-                  onExportAllFormCsv={handleOpenFormAllCsvExportReview}
                 />
               </div>
 
@@ -2454,7 +2889,9 @@ export function AdminDashboardPage() {
                     return (
                       <div
                         key={submission.id}
-                        className={`signal-card ${isSelectedSignal ? "is-active" : ""} ${submission.status === "unread" ? "is-unread" : "is-read"} ${isPendingSui ? "has-select-checkbox" : ""} ${isSelectedForSui ? "is-selected-for-sui" : ""}`}
+                        className={`signal-card ${isSelectedSignal ? "is-active" : ""} ${submission.status === "unread" ? "is-unread" : "is-read"} ${isPendingSui ? "has-select-checkbox" : ""} ${isSelectedForSui ? "is-selected-for-sui" : ""} ${
+                          getSubmissionRespondentMeta(submission).isAnonymous ? "is-anonymous" : ""
+                        }`}
                         role="button"
                         tabIndex={0}
                         aria-current={isSelectedSignal ? "true" : undefined}
@@ -2548,6 +2985,19 @@ export function AdminDashboardPage() {
                             />
                           </div>
                         ) : null}
+                        <div
+                          className="signal-card-actions signal-card-actions-quick"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                          }}
+                        >
+                          <QuickActionBar
+                            submission={submission}
+                            onAction={(action) => {
+                              void handleQuickAction(record, action);
+                            }}
+                          />
+                        </div>
                         {isPendingSui ? (
                           <div className="signal-card-actions">
                             <button
@@ -2641,6 +3091,13 @@ export function AdminDashboardPage() {
                       ) : null}
                       <span className="signal-chip">{t("signalsInThisFormLabel", { count: selectedFormSubmissionCount })}</span>
                     </div>
+                    <QuickActionBar
+                      submission={selectedRecord.submission}
+                      disabled={saving}
+                      onAction={(action) => {
+                        void handleQuickAction(selectedRecord, action);
+                      }}
+                    />
                     <div className="mobile-readable-trust-panel" aria-label="Signal storage and privacy">
                       {selectedRecordProtectionFacts.map((fact) => (
                         <div key={fact.label} className="mobile-readable-trust-item">
@@ -2976,7 +3433,7 @@ export function AdminDashboardPage() {
                       <div className="review-stage-card">
                         <div className="review-stage-header">
                           <p className="eyebrow">{t("stepLabel", { count: 3 })}</p>
-                          <strong>{t("reviewNotesTitle")}</strong>
+                          <strong>Reviewer Notes</strong>
                         </div>
                         <label className="review-select">
                           <span>{t("internalNote")}</span>
@@ -2988,6 +3445,20 @@ export function AdminDashboardPage() {
                             placeholder={t("captureReviewNotes")}
                           />
                         </label>
+                        <div className="review-notes-actions">
+                          <button
+                            type="button"
+                            className="ghost-button"
+                            disabled={
+                              isReviewWorkbenchLocked ||
+                              saving ||
+                              (activeReviewDraft?.notes ?? "") === selectedRecord.submission.notes
+                            }
+                            onClick={() => void handleSaveReviewerNotes()}
+                          >
+                            Save notes
+                          </button>
+                        </div>
                         <p className="review-action-helper">
                           {t("reviewUnsavedDraftHelper")}
                         </p>
@@ -3030,6 +3501,23 @@ export function AdminDashboardPage() {
                         </div>
                       </div>
                     </section>
+                    <div className="signal-detail-sticky-actions">
+                      <QuickActionBar
+                        submission={selectedRecord.submission}
+                        disabled={saving}
+                        onAction={(action) => {
+                          void handleQuickAction(selectedRecord, action);
+                        }}
+                      />
+                      <button
+                        type="button"
+                        className={`primary-button review-save-button ${hasReviewDraftChanges ? "is-draft-ready" : ""}`}
+                        disabled={isReviewWorkbenchLocked || saving || !hasReviewDraftChanges}
+                        onClick={() => void handleSaveReviewDraft()}
+                      >
+                        {saving ? t("reviewSaveSaving") : t("saveReview")}
+                      </button>
+                    </div>
                   </div>
 
                   <div className="signal-detail-sections review-secondary-sections">
@@ -3419,8 +3907,8 @@ export function AdminDashboardPage() {
           />
         ) : null}
 
-        {hasAdminAccess && activeWorkspaceTab !== "insights" ? (
-        <details ref={advancedProjectSettingsRef} className="panel advanced-project-settings">
+        {hasProjectManagementAccess && activeWorkspaceTab !== "insights" ? (
+        <details ref={advancedProjectSettingsRef} className="panel advanced-project-settings" open>
           <summary>
             <span>
               <strong>{t("advancedProjectSettingsTitle")}</strong>
@@ -3460,7 +3948,7 @@ export function AdminDashboardPage() {
                   ))}
                 </select>
               </label>
-              {hasAdminAccess ? (
+              {hasProjectManagementAccess ? (
                 <div className="workspace-create-project">
                   <div className="workspace-create-project-copy">
                     <span className="eyebrow">{t("createProjectEyebrow")}</span>

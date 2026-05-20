@@ -19,3 +19,5 @@ vite.config.js.timestamp-*.mjs
 /.codex/vite-verify.combined.log
 /.codex/vite-verify.err.log
 /.codex/vite-verify.log
+/.npm-cache
+/.move-cache

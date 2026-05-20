@@ -211,7 +211,7 @@ export default function App() {
       chrome={routeUsesPublicChrome ? "public" : "full"}
     >
       <RouteErrorBoundary>
-        <Suspense fallback={bootDismissed ? <RouteFallback /> : null}>
+        <Suspense fallback={<RouteFallback />}>
           <InitialBootReady onReady={() => setInitialRouteReady(true)}>
             <Routes>
               <Route path="/" element={<LandingPage />} />

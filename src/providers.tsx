@@ -23,8 +23,10 @@ import {
   getRpcProviderLabel,
   isTatumRpcUrl,
   SUI_DEFAULT_RPC_URL,
+  SUI_FALLBACK_RPC_URL,
   SUI_FULLNODE_URL,
   SUI_NETWORK,
+  SUI_TATUM_RPC_URL,
 } from "./lib/sui";
 import {
   RPC_RATE_LIMIT_COOLDOWN_MS,
@@ -88,8 +90,9 @@ export function WalletProviders({ children }: PropsWithChildren) {
   const [manualTatumSelectionUntil, setManualTatumSelectionUntil] = useState(() =>
     canUseTatum ? Date.now() + TATUM_SELECTION_GRACE_MS : 0,
   );
-  const currentRpcUrl = rpcMode === "tatum" && tatumRpcUrl ? tatumRpcUrl : SUI_DEFAULT_RPC_URL;
-  const displayRpcUrl = rpcMode === "tatum" && SUI_FULLNODE_URL ? SUI_FULLNODE_URL : currentRpcUrl;
+  const fallbackRpcUrl = SUI_FALLBACK_RPC_URL || SUI_DEFAULT_RPC_URL;
+  const currentRpcUrl = rpcMode === "tatum" && tatumRpcUrl ? tatumRpcUrl : fallbackRpcUrl;
+  const displayRpcUrl = rpcMode === "tatum" && SUI_TATUM_RPC_URL ? SUI_TATUM_RPC_URL : currentRpcUrl;
   const { networkConfig } = useMemo(
     () =>
       createNetworkConfig({
@@ -160,8 +163,8 @@ export function WalletProviders({ children }: PropsWithChildren) {
       network: SUI_NETWORK,
       currentRpcUrl,
       displayRpcUrl,
-      defaultRpcUrl: SUI_DEFAULT_RPC_URL,
-      tatumRpcUrl: SUI_FULLNODE_URL && isTatumRpcUrl(SUI_FULLNODE_URL) ? SUI_FULLNODE_URL : null,
+      defaultRpcUrl: fallbackRpcUrl,
+      tatumRpcUrl: SUI_TATUM_RPC_URL && isTatumRpcUrl(SUI_TATUM_RPC_URL) ? SUI_TATUM_RPC_URL : null,
       providerLabel: getRpcProviderLabel(displayRpcUrl),
       usingTatum: rpcMode === "tatum" && isTatumRpcUrl(displayRpcUrl),
       canUseTatum,
@@ -181,6 +184,7 @@ export function WalletProviders({ children }: PropsWithChildren) {
       canUseTatum,
       connectedNetworkLabel,
       currentRpcUrl,
+      fallbackRpcUrl,
       displayRpcUrl,
       isRateLimitedCooldownActive,
       noteRateLimited,
