@@ -125,15 +125,15 @@ function getStreamHelper(streamId: StreamId, t: ReturnType<typeof useI18n>["t"])
     case "needs_review":
       return t("needsReviewStreamHelper");
     case "unresolved":
-      return "Open triage queue";
+      return t("openTriageQueue");
     case "unread":
       return t("unreadStreamHelper");
     case "verified":
       return t("verifiedStreamHelper");
     case "anonymous":
-      return "Anonymous senders";
+      return t("anonymousSenders");
     case "published":
-      return "Roadmap-ready signals";
+      return t("roadmapReadySignals");
     case "high":
       return t("flaggedStreamHelper");
     case "encrypted":

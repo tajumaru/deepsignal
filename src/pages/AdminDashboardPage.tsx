@@ -2037,7 +2037,7 @@ export function AdminDashboardPage() {
     },
     {
       id: "unresolved",
-      label: "Unresolved",
+      label: t("unresolvedLabel"),
       count: signalIndex.counts.unresolved,
     },
     {
@@ -2052,17 +2052,17 @@ export function AdminDashboardPage() {
     },
     {
       id: "anonymous",
-      label: "Anonymous",
+      label: t("anonymousLabel"),
       count: signalIndex.counts.anonymous,
     },
     {
       id: "published",
-      label: "Published",
+      label: t("publishedLabel"),
       count: signalIndex.counts.published,
     },
     {
       id: "high",
-      label: "Critical / High",
+      label: t("criticalHighLabel"),
       count: signalIndex.counts.high,
     },
     {
