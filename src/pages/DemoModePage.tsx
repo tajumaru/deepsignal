@@ -18,7 +18,7 @@ const demoSteps: Array<{ id: DemoStepId; label: string; title: string }> = [
   { id: "create", label: "Create Signal", title: "Draft a Walrus-native signal channel" },
   { id: "questions", label: "Add questions", title: "Shape the form without slowing responders" },
   { id: "publish", label: "Publish", title: "Publish with local demo fallback ready" },
-  { id: "public", label: "Open public form", title: "Open a wallet-optional public route" },
+  { id: "public", label: "Open signal channel", title: "Open a wallet-optional public signal route" },
   { id: "submit", label: "Submit response", title: "Submit without waiting on wallet prompts" },
   { id: "inbox", label: "View in SignalInbox", title: "Review the encrypted signal queue" },
   { id: "export", label: "Export CSV", title: "Export operator-ready evidence" },
@@ -317,7 +317,7 @@ export function DemoModePage() {
               {activeStep === "export" ? "Demo ready" : `Next: ${demoSteps[Math.min(activeIndex + 1, demoSteps.length - 1)].label}`}
             </button>
             <Link className="ghost-button" to={`/f/${demoForm.id}?demo=1`}>
-              Open public form
+              Open signal channel
             </Link>
             <Link className="ghost-button" to="/dashboard?demo=1">
               Open SignalInbox

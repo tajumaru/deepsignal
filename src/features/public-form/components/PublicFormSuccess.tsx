@@ -73,7 +73,7 @@ export function PublicFormSuccess({
                 <strong>{submitted.onchainSignalId}</strong>
               </div>
             ) : null}
-            <SignalMetaRow label="Submission Blob ID" type="blob" value={submitted.blobId}>
+            <SignalMetaRow label="Signal Storage ID" type="blob" value={submitted.blobId}>
               <StorageProof blobId={submitted.blobId} proof={submitted.walrusProof} compact />
             </SignalMetaRow>
             {hasDedicatedEncryptedPayloadBlob(submitted) ? (

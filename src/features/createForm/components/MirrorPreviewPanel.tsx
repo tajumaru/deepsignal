@@ -166,7 +166,8 @@ function createPreviewState(
   const activeFieldIndex = activeField ? orderedFields.findIndex((field) => field.id === activeField.id) : -1;
   const isPrivate = Boolean(values.encryptSubmissions);
   const visibilityLabel = values.visibility === "public" ? "Public Signal" : values.visibility === "unlisted" ? "Link-only Signal" : "Private draft";
-  const identityPolicyLabel = values.identityPolicy === "wallet_required" ? "Wallet required" : "No wallet required";
+  const identityPolicyLabel =
+    values.identityPolicy === "wallet_required" ? "Verified identity required" : "Identity optional";
 
   return {
     activeField,
