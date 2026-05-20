@@ -429,7 +429,7 @@ export function LandingPage() {
   const { t } = useI18n();
   const heroSignalBars = [0.46, 0.72, 0.38, 0.92, 0.58, 0.81, 0.5, 0.68, 0.42, 0.86];
   const heroFeedRows = [t("landingHeroLiveFeed1"), t("landingHeroLiveFeed2"), t("landingHeroLiveFeed3")];
-  const heroLifecycle = ["Intent", "Signal opened", "Sealed", "Stored", "Reviewed", "Resolved"];
+  const heroLifecycle = ["Intent", "Signal opened", "Protected", "Stored", "Reviewed", "Resolved"];
 
   return (
     <section className="landing-shell">
@@ -581,8 +581,8 @@ export function LandingPage() {
                     <strong>{t("landingHeroWalrusMetric")}</strong>
                   </div>
                   <div className="landing-hero-hash-stack" aria-hidden="true">
-                    <span>0x7a91</span>
-                    <span>blob synced</span>
+                    <span>secure</span>
+                    <span>storage ready</span>
                   </div>
                 </section>
 

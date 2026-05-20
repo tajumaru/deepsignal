@@ -45,11 +45,11 @@ export function PublicFormSuccess({
           </div>
           <div className={`signal-success-receipt-item ${storedOnWalrus ? "is-complete" : "is-local"}`} role="listitem">
             <span aria-hidden="true" />
-            <strong>{storedOnWalrus ? "Stored on Walrus" : "Saved to local recovery"}</strong>
+            <strong>{storedOnWalrus ? "Permanent encrypted storage" : "Saved to local recovery"}</strong>
           </div>
           <div className={`signal-success-receipt-item ${storedOnWalrus ? "is-complete" : "is-local"}`} role="listitem">
             <span aria-hidden="true" />
-            <strong>{storedOnWalrus ? "Manifest generated" : "Local manifest fallback ready"}</strong>
+            <strong>{storedOnWalrus ? "Recovery path ready" : "Local recovery path ready"}</strong>
           </div>
         </div>
         <p className="muted">{thanksForFeedbackLabel}</p>
