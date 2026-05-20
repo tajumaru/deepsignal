@@ -17193,6 +17193,22 @@ body.composer-mode .bg-orb {
   --status-text: #d7ebff;
 }
 
+.signal-status-chip.is-verified,
+.signal-status-chip.is-published {
+  --status-tint: rgba(52, 211, 153, 0.28);
+  --status-fill: rgba(11, 48, 39, 0.9);
+  --status-glow: rgba(52, 211, 153, 0.14);
+  --status-text: #d9fff2;
+}
+
+.signal-status-chip.is-reviewing,
+.signal-status-chip.is-resolved {
+  --status-tint: rgba(250, 204, 21, 0.28);
+  --status-fill: rgba(54, 39, 8, 0.9);
+  --status-glow: rgba(250, 204, 21, 0.14);
+  --status-text: #fff3c4;
+}
+
 .signal-status-chip.is-new {
   --status-tint: rgba(168, 85, 247, 0.28);
   --status-fill: rgba(45, 18, 67, 0.9);

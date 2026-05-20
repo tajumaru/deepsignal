@@ -45,8 +45,9 @@ function WalrusRuntimeBridgeInner() {
   const account = useCurrentAccount();
   const { currentWallet, supportedIntents } = useCurrentWallet();
   const { client, config, network } = useSuiClientContext();
-  const supportedIntentsKey = supportedIntents.join("\u0000");
-  const stableSupportedIntents = useMemo(() => [...supportedIntents], [supportedIntentsKey]);
+  const rpcUrl = config?.url ?? null;
+  const currentNetwork = network ?? null;
+  const stableSupportedIntents = useMemo(() => [...supportedIntents], [supportedIntents]);
   const walrusClient = useMemo(
     () => {
       const walrusEnabledClient = client.$extend(
@@ -131,7 +132,7 @@ function WalrusRuntimeBridgeInner() {
       };
       return walrusEnabledClient;
     },
-    [client, config?.url, network],
+    [client],
   );
   const runtimeContext = useMemo(
     () => ({
@@ -139,10 +140,10 @@ function WalrusRuntimeBridgeInner() {
       wallet: currentWallet,
       supportedIntents: stableSupportedIntents,
       client: walrusClient,
-      rpcUrl: config?.url ?? null,
-      network: network ?? null,
+      rpcUrl,
+      network: currentNetwork,
     }),
-    [account, config?.url, currentWallet, network, stableSupportedIntents, walrusClient],
+    [account, currentNetwork, currentWallet, rpcUrl, stableSupportedIntents, walrusClient],
   );
 
   useEffect(() => {

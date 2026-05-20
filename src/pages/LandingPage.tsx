@@ -284,10 +284,12 @@ function UseCasesSection() {
   const { sectionRef, isVisible } = useScrollReveal();
   const { t } = useI18n();
   const useCases = [
-    { label: "SIG-01", title: t("landingUseCase1Title"), body: t("landingUseCase1Body"), tone: "feedback" },
-    { label: "NODE-02", title: t("landingUseCase2Title"), body: t("landingUseCase2Body"), tone: "applications" },
-    { label: "FLOW-03", title: t("landingUseCase3Title"), body: t("landingUseCase3Body"), tone: "intelligence" },
-    { label: "CH-04", title: t("landingUseCase4Title"), body: t("landingUseCase4Body"), tone: "ai" },
+    { label: "SEC-01", title: t("landingUseCase1Title"), body: t("landingUseCase1Body"), tone: "feedback" },
+    { label: "CON-02", title: t("landingUseCase2Title"), body: t("landingUseCase2Body"), tone: "applications" },
+    { label: "GOV-03", title: t("landingUseCase3Title"), body: t("landingUseCase3Body"), tone: "intelligence" },
+    { label: "TIP-04", title: t("landingUseCase4Title"), body: t("landingUseCase4Body"), tone: "ai" },
+    { label: "PRO-05", title: t("landingUseCase5Title"), body: t("landingUseCase5Body"), tone: "feedback" },
+    { label: "INT-06", title: t("landingUseCase6Title"), body: t("landingUseCase6Body"), tone: "applications" },
   ];
 
   return (

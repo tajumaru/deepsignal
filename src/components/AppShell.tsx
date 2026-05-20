@@ -2,7 +2,7 @@ import { lazy, Suspense, useEffect, useRef, useState, type PropsWithChildren } f
 import { Link, NavLink, useLocation } from "react-router-dom";
 import { CreateFormLink } from "./CreateFormLink";
 import { NetworkMenu } from "./NetworkMenu";
-import { AccessControlNavIcon, CreateSignalNavIcon, MoreNavIcon, NavItemLabel } from "./NavIcons";
+import { CreateSignalNavIcon, MoreNavIcon, NavItemLabel } from "./NavIcons";
 import { BuildIndicator } from "./system/BuildIndicator";
 import { useI18n } from "../i18n";
 import { retryLazyImport } from "../lib/lazyRetry";

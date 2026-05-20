@@ -439,6 +439,12 @@ export function PublicFormPage() {
 
       <PublicIdentityCard
         walletRequired={walletRequired}
+        allowedSenderTypesLabel={t("allowedSenderTypesLabel")}
+        allowedSenderTypesValue={
+          walletRequired ? t("allowedSenderTypesWalletOnly") : t("allowedSenderTypesAnonymousAndWallet")
+        }
+        requirementLabel={t("identityRequirementLabel")}
+        requirementValue={walletRequired ? t("verificationRequired") : t("verificationOptional")}
         accountAddress={walletAccountAddress}
         attachWallet={attachWallet}
         deadlinePassed={deadlinePassed}

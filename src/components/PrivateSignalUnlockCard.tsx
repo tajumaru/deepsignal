@@ -512,6 +512,16 @@ export function PrivateSignalUnlockCard({
 
       {showRecoveryActions ? (
         <div className="private-signal-recovery-actions" aria-label={t("decryptRecoveryActionsAriaLabel")}>
+          {onClearDebugCache ? (
+            <button
+              type="button"
+              className="ghost-button"
+              onClick={onClearDebugCache}
+              disabled={Boolean(recoveryAction) || isDecrypting}
+            >
+              {t("clearCachedPolicyData")}
+            </button>
+          ) : null}
           <button
             type="button"
             className="danger-button"

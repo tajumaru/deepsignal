@@ -32,11 +32,11 @@ export function PublicFormSuccess({
     <section className="stack">
       <section className="panel glow-panel success-screen">
         <p className="eyebrow">{signalReceivedLabel}</p>
-        <h1>Signal Secured</h1>
+        <h1>Your encrypted signal was securely delivered.</h1>
         <p className="lede">
           {isEncryptedSubmission
-            ? "Your signal is sealed for the encrypted inbox. Approved reviewers can unlock it when they review."
-            : "Your signal is ready for selected reviewers in the signal inbox."}
+            ? "Only authorized reviewers can decrypt it when they open the Signal Inbox."
+            : "Selected reviewers can now review it in the Signal Inbox."}
         </p>
         <div className="signal-success-receipt" role="list" aria-label="Signal delivery receipt">
           <div className="signal-success-receipt-item is-complete" role="listitem">
@@ -93,8 +93,8 @@ export function PublicFormSuccess({
             ) : null}
             <SignalMetaRow label="Seal Identity" type="seal" value={submitted.sealIdentity} emptyLabel={notAvailableLabel} />
             <div className="metadata-row">
-              <span>Respondent</span>
-              <strong>{submittedRespondentMeta.isAnonymous ? "Anonymous respondent" : "Wallet attached"}</strong>
+              <span>Sender identity</span>
+              <strong>{submittedRespondentMeta.isAnonymous ? "Anonymous" : "Wallet verified"}</strong>
             </div>
             {submitted.pendingOnchainRegistration ? (
               <div className="metadata-row">

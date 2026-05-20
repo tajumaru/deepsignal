@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { canReviewForm } from "../../../lib/adminAccess";
+import { isVerifiedSignal } from "../../../lib/respondentMeta";
 import { fetchJsonBlob } from "../../../lib/walrus";
 import { useProjectRegistry } from "../../../hooks/useProjectRegistry";
 import {
@@ -30,6 +31,7 @@ export type StreamId =
   | "all"
   | "needs_review"
   | "unread"
+  | "verified"
   | "encrypted"
   | "high"
   | "pending_sui"
@@ -205,6 +207,8 @@ export function matchesStream(record: SignalRecord, streamId: StreamId) {
       return record.submission.status !== "archived";
     case "unread":
       return record.submission.status === "unread";
+    case "verified":
+      return isVerifiedSignal(record.submission);
     case "encrypted":
       return record.submission.isEncrypted;
     case "high":
@@ -491,6 +495,7 @@ export function useSignalInboxData({
     const counts = {
       needsReview: 0,
       unread: 0,
+      verified: 0,
       encrypted: 0,
       high: 0,
       pendingSui: 0,
@@ -509,6 +514,9 @@ export function useSignalInboxData({
       if (record.submission.status === "unread") {
         unreadCountByFormId[record.form.id] = (unreadCountByFormId[record.form.id] ?? 0) + 1;
         counts.unread += 1;
+      }
+      if (isVerifiedSignal(record.submission)) {
+        counts.verified += 1;
       }
       if (record.submission.status !== "archived") {
         counts.needsReview += 1;

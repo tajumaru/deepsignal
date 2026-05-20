@@ -3,11 +3,14 @@ import react from "@vitejs/plugin-react";
 import { visualizer } from "rollup-plugin-visualizer";
 import { execSync } from "node:child_process";
 import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { loadEnv, type Plugin } from "vite";
 
 type PackageMetadata = {
   version?: string;
 };
+
+const testSetupFile = fileURLToPath(new URL("./src/test/setup.ts", import.meta.url));
 
 function formatBuildTime(date = new Date()) {
   const pad = (value: number) => String(value).padStart(2, "0");
@@ -284,7 +287,7 @@ export default defineConfig(({ mode }) => {
     test: {
       environment: "jsdom",
       exclude: ["**/node_modules/**", "**/dist/**", "**/.tmp-test/**", "**/move/**"],
-      setupFiles: "./src/test/setup.ts",
+      setupFiles: [testSetupFile],
     },
   };
 });

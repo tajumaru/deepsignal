@@ -2,10 +2,9 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import { HashRouter } from "react-router-dom";
 import App from "./App";
+import { startRuntimeBootstrap } from "./bootstrap/runtime";
 import { I18nProvider } from "./i18n";
-import { startBuildUpdateCheck } from "./lib/buildUpdate";
 import { startChunkLoadRecovery } from "./lib/chunkLoadRecovery";
-import { applyReleaseStorageReset } from "./lib/releaseStorageReset";
 import "./styles.css";
 
 function redirectLegacyPublicPathToHashRoute() {
@@ -21,9 +20,7 @@ function redirectLegacyPublicPathToHashRoute() {
 }
 
 redirectLegacyPublicPathToHashRoute();
-applyReleaseStorageReset();
 startChunkLoadRecovery();
-startBuildUpdateCheck();
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
@@ -34,3 +31,5 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
     </I18nProvider>
   </React.StrictMode>,
 );
+
+startRuntimeBootstrap();

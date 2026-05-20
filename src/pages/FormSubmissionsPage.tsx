@@ -1,7 +1,4 @@
-import {
-  useSignAndExecuteTransaction,
-  useSuiClient,
-} from "@mysten/dapp-kit";
+import { useSignAndExecuteTransaction } from "@mysten/dapp-kit";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { AdminAccessGate } from "../components/AdminAccessGate";
@@ -119,7 +116,6 @@ export function FormSubmissionsPage() {
   const { language, t } = useI18n();
   const wallet = useSuiWallet();
   const rpcInfrastructure = useRpcInfrastructure();
-  const suiClient = useSuiClient();
   const updateSignalStatusTx = useSignAndExecuteTransaction();
   const {
     capabilityProfile,

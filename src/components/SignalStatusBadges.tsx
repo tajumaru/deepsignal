@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import type { SignalCategory, SignalPersistenceState } from "../lib/signalInbox";
+import { isVerifiedSignal } from "../lib/respondentMeta";
 import type { Submission } from "../types";
 
 type BadgeTone =
@@ -21,7 +22,11 @@ type BadgeTone =
   | "cluster"
   | "local"
   | "walrus"
-  | "registered";
+  | "registered"
+  | "verified"
+  | "reviewing"
+  | "resolved"
+  | "published";
 
 interface BadgeIconProps {
   className?: string;
@@ -270,6 +275,28 @@ function CheckIcon({ className }: BadgeIconProps) {
   );
 }
 
+function ShieldIcon({ className }: BadgeIconProps) {
+  return (
+    <IconBase className={className}>
+      <path
+        d="M12 4.5 18 7v4.6c0 3.7-2.4 6.6-6 7.9-3.6-1.3-6-4.2-6-7.9V7l6-2.5Z"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinejoin="round"
+      />
+      <path
+        d="m9.4 12.2 1.8 1.8 3.4-3.8"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </IconBase>
+  );
+}
+
 function LockIcon({ className }: BadgeIconProps) {
   return (
     <IconBase className={className}>
@@ -458,10 +485,52 @@ export function SignalStatusBadges({
     badges.push({
       key: "encrypted",
       tone: "encrypted",
-      label: "Seal",
-      title: "Encrypted private signal",
+      label: "Encrypted",
+      title: "Encrypted signal",
       Icon: LockIcon,
     });
+  }
+
+  if (showFullSet && isVerifiedSignal(submission)) {
+    badges.push({
+      key: "verified",
+      tone: "verified",
+      label: "Verified",
+      title: "Verified signal",
+      Icon: ShieldIcon,
+    });
+  }
+
+  if (showFullSet) {
+    if (submission.status === "archived" || submission.triageStatus === "fixed" || submission.triageStatus === "closed") {
+      badges.push({
+        key: "resolved",
+        tone: "resolved",
+        label: "Resolved",
+        title: "Resolved signal",
+        Icon: CheckIcon,
+      });
+    } else if (submission.triageStatus === "planned") {
+      badges.push({
+        key: "published",
+        tone: "published",
+        label: "Published",
+        title: "Published signal",
+        Icon: RocketIcon,
+      });
+    } else if (
+      submission.status === "read" ||
+      submission.triageStatus === "investigating" ||
+      submission.triageStatus === "in_progress"
+    ) {
+      badges.push({
+        key: "reviewing",
+        tone: "reviewing",
+        label: "Reviewing",
+        title: "Reviewing signal",
+        Icon: ActivityIcon,
+      });
+    }
   }
 
   if (showFullSet && submission.status === "unread") {

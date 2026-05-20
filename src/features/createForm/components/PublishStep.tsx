@@ -450,7 +450,7 @@ export function PublishStep({
                   ) : (
                     <AnonymousRiskIcon />
                   )}
-                  <span>{identityPolicy === "wallet_required" ? t("walletRequired") : t("anonymousAllowed")}</span>
+                  <span>{identityPolicy === "wallet_required" ? t("verificationRequired") : t("verificationOptional")}</span>
                 </button>
               </div>
             </div>
@@ -644,10 +644,20 @@ export function PublishStep({
                   </div>
                   <fieldset className="composer-radio-field">
                     <legend>{t("submissionIdentityLabel")}</legend>
+                    <div className="metadata-list">
+                      <div className="metadata-row">
+                        <span>{t("allowedSenderTypesLabel")}</span>
+                        <strong>
+                          {identityPolicy === "wallet_required"
+                            ? t("allowedSenderTypesWalletOnly")
+                            : t("allowedSenderTypesAnonymousAndWallet")}
+                        </strong>
+                      </div>
+                    </div>
                     <div className="composer-radio-options">
                       {([
-                        ["anonymous_allowed", t("anonymousAllowed")],
-                        ["wallet_required", t("walletRequired")],
+                        ["anonymous_allowed", t("verificationOptional")],
+                        ["wallet_required", t("verificationRequired")],
                       ] as const).map(([value, label]) => (
                         <label
                           key={value}

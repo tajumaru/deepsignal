@@ -11,6 +11,10 @@ const PublicWalletAccountPanel = lazy(() =>
 
 interface PublicIdentityCardProps {
   walletRequired: boolean;
+  allowedSenderTypesLabel: string;
+  allowedSenderTypesValue: string;
+  requirementLabel: string;
+  requirementValue: string;
   accountAddress?: string;
   attachWallet: boolean;
   deadlinePassed: boolean;
@@ -75,6 +79,10 @@ class PublicWalletSurfaceBoundary extends Component<
 
 export function PublicIdentityCard({
   walletRequired,
+  allowedSenderTypesLabel,
+  allowedSenderTypesValue,
+  requirementLabel,
+  requirementValue,
   accountAddress,
   attachWallet,
   deadlinePassed,
@@ -148,6 +156,12 @@ export function PublicIdentityCard({
       </div>
 
       <div className={`public-identity-grid ${walletRequired ? "is-wallet-required" : ""}`}>
+        <div className="public-identity-note">
+          <span className="public-identity-label">{allowedSenderTypesLabel}</span>
+          <strong>{allowedSenderTypesValue}</strong>
+          <p className="muted">{requirementLabel}: {requirementValue}</p>
+        </div>
+
         <div className="public-identity-mode">
           <span className="public-identity-label">{labels.sendMode}</span>
           <label className="public-identity-toggle">

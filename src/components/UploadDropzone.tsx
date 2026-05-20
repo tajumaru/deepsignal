@@ -197,7 +197,7 @@ export function UploadDropzone({
       return emptyLabel;
     }
     return count === 1 ? "1 file selected" : `${count} files selected`;
-  }, [attachments]);
+  }, [attachments, emptyLabel]);
 
   function commitFiles(fileList: FileList | null) {
     if (!fileList || disabled) {

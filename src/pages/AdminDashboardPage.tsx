@@ -1661,6 +1661,11 @@ export function AdminDashboardPage() {
       count: signalIndex.counts.unread,
     },
     {
+      id: "verified",
+      label: t("verifiedSignalsLabel"),
+      count: signalIndex.counts.verified,
+    },
+    {
       id: "high",
       label: t("flaggedLabel"),
       count: signalIndex.counts.high,

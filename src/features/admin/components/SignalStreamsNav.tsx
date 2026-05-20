@@ -9,7 +9,7 @@ interface StreamItem {
   count: number;
 }
 
-const FLOW_STREAM_IDS: StreamId[] = ["needs_review", "unread", "high", "encrypted", "archived"];
+const FLOW_STREAM_IDS: StreamId[] = ["needs_review", "unread", "verified", "encrypted", "high", "archived"];
 const BLOCKCHAIN_STREAM_IDS: StreamId[] = ["pending_sui", "registered_sui"];
 
 function MailboxIcon({ hasUnread }: { hasUnread: boolean }) {
@@ -50,6 +50,11 @@ function StreamIcon({ streamId, hasUnread }: { streamId: StreamId; hasUnread: bo
             <path d="M7 10h10v8H7z" />
             <path d="M9 10V7.8a3 3 0 0 1 6 0V10" />
             <path d="M12 13.2v2.1" />
+          </>
+        ) : streamId === "verified" ? (
+          <>
+            <path d="M12 4.5 18 7v4.6c0 3.7-2.4 6.6-6 7.9-3.6-1.3-6-4.2-6-7.9V7l6-2.5Z" />
+            <path d="m9.4 12.2 1.8 1.8 3.4-3.8" />
           </>
         ) : streamId === "high" ? (
           <>
@@ -93,6 +98,8 @@ function getStreamHelper(streamId: StreamId, t: ReturnType<typeof useI18n>["t"])
       return t("needsReviewStreamHelper");
     case "unread":
       return t("unreadStreamHelper");
+    case "verified":
+      return t("verifiedStreamHelper");
     case "high":
       return t("flaggedStreamHelper");
     case "encrypted":
@@ -116,6 +123,8 @@ function getStreamTone(streamId: StreamId) {
       return "tone-needs-review";
     case "unread":
       return "tone-unread";
+    case "verified":
+      return "tone-registered-sui";
     case "high":
       return "tone-flagged";
     case "encrypted":
@@ -141,7 +150,7 @@ function StreamButton({
   onSelectStream: (streamId: StreamId) => void;
 }) {
   const { t } = useI18n();
-  const hasUnread = stream.id === "unread" && stream.count > 0;
+  const hasUnread = (stream.id === "unread" || stream.id === "verified") && stream.count > 0;
   const isPrimaryQueue = stream.id === "needs_review";
   const isSecondary = stream.id === "all";
   const isHistory = stream.id === "registered_sui";

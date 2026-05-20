@@ -21,3 +21,8 @@ export function getRespondentDisplayLabel(submission: Submission) {
   }
   return meta.walletAddress;
 }
+
+export function isVerifiedSignal(submission: Submission) {
+  const meta = getSubmissionRespondentMeta(submission);
+  return !meta.isAnonymous && Boolean(meta.walletAddress);
+}

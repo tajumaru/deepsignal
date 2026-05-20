@@ -255,7 +255,7 @@ describe("PublicFormPage shared manifest restore", () => {
     expect(answerInput).toHaveValue("The shared responder path works.");
     fireEvent.click(screen.getByRole("button", { name: "publicSubmitAnonymously" }));
 
-    await waitFor(() => expect(screen.getByRole("heading", { name: "Signal Secured" })).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("Signal secured")).toBeInTheDocument());
     expect(mockSaveSubmission).toHaveBeenCalledTimes(1);
     expect(screen.queryByText(/sending it requires/i)).not.toBeInTheDocument();
     expect(screen.getByText("signalStoredLocally")).toBeInTheDocument();

@@ -31,7 +31,7 @@ function writeJson<T>(key: string, value: T) {
   window.localStorage.setItem(key, JSON.stringify(value));
 }
 
-function getEncryptedSubmissionOptions(submission: Submission) {
+function getEncryptedSubmissionOptions() {
   return {
     allowEncryptedPayload: false,
   };
@@ -79,7 +79,7 @@ export const localStorageAdapter: StorageAdapter = {
 
   async saveSubmission(submission) {
     const submissions = readJson<Submission[]>(SUBMISSIONS_KEY, []);
-    const encryptedSubmissionOptions = getEncryptedSubmissionOptions(submission);
+    const encryptedSubmissionOptions = getEncryptedSubmissionOptions();
     const sanitizedSubmission = sanitizeSubmissionForStorage(submission, encryptedSubmissionOptions);
     if (sanitizedSubmission.isEncrypted) {
       assertEncryptedSubmissionLeakGuard(sanitizedSubmission, encryptedSubmissionOptions);
@@ -100,7 +100,7 @@ export const localStorageAdapter: StorageAdapter = {
 
   async updateSubmission(submission) {
     const submissions = readJson<Submission[]>(SUBMISSIONS_KEY, []);
-    const encryptedSubmissionOptions = getEncryptedSubmissionOptions(submission);
+    const encryptedSubmissionOptions = getEncryptedSubmissionOptions();
     const sanitizedSubmission = sanitizeSubmissionForStorage(submission, encryptedSubmissionOptions);
     if (sanitizedSubmission.isEncrypted) {
       assertEncryptedSubmissionLeakGuard(sanitizedSubmission, encryptedSubmissionOptions);

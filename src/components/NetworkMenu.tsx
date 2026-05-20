@@ -50,15 +50,28 @@ function formatLatency(latencyMs: number | null) {
 
 export function NetworkMenu() {
   const suiClient = useSuiClient();
-  const rpc = useRpcInfrastructure();
-  const value = rpc.usingTatum ? "tatum" : "default";
+  const {
+    canUseTatum,
+    connectedNetworkLabel,
+    currentRpcUrl,
+    displayRpcUrl,
+    isRateLimitedCooldownActive,
+    mode,
+    noteRateLimited,
+    providerLabel,
+    setConnectedNetworkLabel,
+    switchToDefault,
+    switchToTatum,
+    usingTatum,
+  } = useRpcInfrastructure();
+  const value = usingTatum ? "tatum" : "default";
   const [latencyMs, setLatencyMs] = useState<number | null>(null);
   const [healthy, setHealthy] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const shellRef = useRef<HTMLDivElement | null>(null);
   const hasMountedRef = useRef(false);
-  const previousRpcModeRef = useRef(rpc.mode);
-  const previousRpcUrlRef = useRef(rpc.currentRpcUrl);
+  const previousRpcModeRef = useRef(mode);
+  const previousRpcUrlRef = useRef(currentRpcUrl);
 
   useEffect(() => {
     if (!menuOpen) {
@@ -87,23 +100,23 @@ export function NetworkMenu() {
 
   function handleSelect(nextValue: "default" | "tatum") {
     if (nextValue === "tatum") {
-      rpc.switchToTatum();
+      switchToTatum();
     } else {
-      rpc.switchToDefault();
+      switchToDefault();
     }
     setMenuOpen(false);
   }
 
   useEffect(() => {
-    if (rpc.isRateLimitedCooldownActive) {
+    if (isRateLimitedCooldownActive) {
       return;
     }
 
     const rpcChanged =
-      previousRpcModeRef.current !== rpc.mode ||
-      previousRpcUrlRef.current !== rpc.currentRpcUrl;
-    previousRpcModeRef.current = rpc.mode;
-    previousRpcUrlRef.current = rpc.currentRpcUrl;
+      previousRpcModeRef.current !== mode ||
+      previousRpcUrlRef.current !== currentRpcUrl;
+    previousRpcModeRef.current = mode;
+    previousRpcUrlRef.current = currentRpcUrl;
 
     if (!hasMountedRef.current) {
       hasMountedRef.current = true;
@@ -126,13 +139,13 @@ export function NetworkMenu() {
         }
         setLatencyMs(Math.max(1, Math.round(performance.now() - startedAt)));
         setHealthy(true);
-        rpc.setConnectedNetworkLabel(getConnectedNetworkLabel(chainIdentifier));
+        setConnectedNetworkLabel(getConnectedNetworkLabel(chainIdentifier));
       } catch (error) {
         if (cancelled) {
           return;
         }
         if (isSuiRateLimitError(error)) {
-          rpc.noteRateLimited();
+          noteRateLimited();
         }
         setLatencyMs(null);
         setHealthy(false);
@@ -154,19 +167,19 @@ export function NetworkMenu() {
       cancelled = true;
     };
   }, [
+    currentRpcUrl,
+    isRateLimitedCooldownActive,
     latencyMs,
     menuOpen,
-    rpc.currentRpcUrl,
-    rpc.isRateLimitedCooldownActive,
-    rpc.mode,
-    rpc.noteRateLimited,
-    rpc.setConnectedNetworkLabel,
+    mode,
+    noteRateLimited,
+    setConnectedNetworkLabel,
     suiClient,
     value,
   ]);
 
   return (
-    <div ref={shellRef} className="network-select-shell" title={rpc.displayRpcUrl}>
+    <div ref={shellRef} className="network-select-shell" title={displayRpcUrl}>
       <button
         type="button"
         className={`network-select-trigger ${menuOpen ? "is-open" : ""}`}
@@ -175,11 +188,11 @@ export function NetworkMenu() {
         aria-expanded={menuOpen}
       >
         <span className="network-select-header">
-          {rpc.usingTatum ? <TatumFrogIcon /> : <NetworkSignalIcon />}
+          {usingTatum ? <TatumFrogIcon /> : <NetworkSignalIcon />}
           <span className="network-select-label">Network</span>
         </span>
         <span className="network-select-value-row">
-          <span className="network-select-value">{rpc.providerLabel}</span>
+          <span className="network-select-value">{providerLabel}</span>
           <span className="network-select-caret" aria-hidden="true">
             <svg viewBox="0 0 12 12" focusable="false">
               <path d="M2.25 4.25 6 7.75l3.75-3.5" />
@@ -190,7 +203,7 @@ export function NetworkMenu() {
       <small className="network-select-meta">
         <span className={`network-status-dot ${healthy ? "is-online" : ""}`} aria-hidden="true" />
         <span className="network-select-latency">{formatLatency(latencyMs)}</span>
-        <span className="network-select-network">{rpc.connectedNetworkLabel}</span>
+        <span className="network-select-network">{connectedNetworkLabel}</span>
       </small>
       {menuOpen ? (
         <div className="network-select-menu panel" role="menu" aria-label="Network RPC provider">
@@ -206,7 +219,7 @@ export function NetworkMenu() {
               {value === "default" ? "●" : ""}
             </span>
           </button>
-          {rpc.canUseTatum ? (
+          {canUseTatum ? (
             <button
               type="button"
               className={`network-select-option ${value === "tatum" ? "is-selected" : ""}`}
