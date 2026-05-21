@@ -110,14 +110,13 @@ function inferOwnedCapRegistryId(entries: OwnedObjectEntry[], preferredRegistryI
 }
 
 export function useAccessControl(address?: string | null, options: { enabled?: boolean } = {}) {
-  const rpc = useRpcInfrastructure();
   const queryEnabled = options.enabled ?? true;
   const { registry, isLoadingRegistry, error: registryError } = useAccessRegistry({
     enabled: queryEnabled,
   });
   const packageId = normalizeObjectId(ACCESS_CONTROL_PACKAGE_ID);
   const registryId = normalizeObjectId(ACCESS_CONTROL_REGISTRY_ID);
-  const enabled = Boolean(queryEnabled && address && packageId && !rpc.isRateLimitedCooldownActive);
+  const enabled = Boolean(queryEnabled && address && packageId);
   const targetTypes = useMemo(
     () =>
       new Set(

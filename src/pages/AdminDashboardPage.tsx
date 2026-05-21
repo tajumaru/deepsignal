@@ -7,6 +7,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { CreateFormLink } from "../components/CreateFormLink";
 import { AdminAccessGate } from "../components/AdminAccessGate";
+import { AdminWorkspaceTabs } from "../components/AdminWorkspaceTabs";
+import { MemberDirectorySection } from "../components/MemberDirectorySection";
 import { BlobLink } from "../components/BlobLink";
 import { EmptyState } from "../components/EmptyState";
 import { FormattedAnswerValue } from "../components/FormattedAnswerValue";
@@ -38,6 +40,7 @@ import {
 } from "../features/admin/hooks/useSignalInboxData";
 import { useAttachmentPreviews } from "../hooks/useAttachmentPreviews";
 import { useAccessControl } from "../hooks/useAccessControl";
+import { useReviewerDisplayLabel } from "../hooks/useReviewerDisplayLabel";
 import { useSuiWallet } from "../hooks/useSuiWallet";
 import { useI18n } from "../i18n";
 import { isAttachmentFieldType, isLongTextLikeField } from "../lib/fieldTypes";
@@ -117,7 +120,7 @@ type ReviewDraft = Pick<Submission, "status" | "triageStatus" | "priority" | "si
   notes: string;
   reviewer: string;
 };
-type WorkspaceTab = "review" | "activity" | "insights";
+type WorkspaceTab = "review" | "activity" | "insights" | "members";
 type QuickActionId = "reviewing" | "resolve" | "publish" | "archive";
 type KeyboardShortcutAction = QuickActionId | "next" | "previous" | "search" | "help";
 interface UnlockedSignalSummary {
@@ -128,6 +131,16 @@ interface SignalSummaryContentCount {
   answer: string;
   count: number;
   total: number;
+}
+
+interface DetailWorkspaceSectionsState {
+  originalSignalOpen: boolean;
+  attachmentsOpen: boolean;
+  reviewerNotesOpen: boolean;
+  relatedSignalsOpen: boolean;
+  storageProofOpen: boolean;
+  advancedMetadataOpen: boolean;
+  headerDetailsOpen: boolean;
 }
 
 function areActivityEventListsEqual(current: ActivityEvent[], next: ActivityEvent[]) {
@@ -714,11 +727,6 @@ function WorkspaceShortcutBar({
       </button>
       {hasAdminAccess ? (
         <>
-          {selectedProjectName ? (
-            <Link className="ghost-button" to="/admin/access">
-              {t("membersButton")}
-            </Link>
-          ) : null}
           <button type="button" className="ghost-button workspace-project-trigger" onClick={onOpenProjectSettings}>
             {selectedProjectName ? t("projectButtonLabel", { name: selectedProjectName }) : t("chooseProjectButton")}
           </button>
@@ -833,6 +841,43 @@ function QuickActionBar({
         );
       })}
     </div>
+  );
+}
+
+function WorkspaceSectionToggle({
+  eyebrow,
+  title,
+  detail,
+  open,
+  onToggle,
+  trailing,
+}: {
+  eyebrow?: string;
+  title: string;
+  detail?: string;
+  open: boolean;
+  onToggle: () => void;
+  trailing?: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      className={`workspace-section-toggle ${open ? "is-open" : ""}`}
+      aria-expanded={open}
+      onClick={onToggle}
+    >
+      <span className="workspace-section-toggle-copy">
+        {eyebrow ? <span className="eyebrow">{eyebrow}</span> : null}
+        <strong>{title}</strong>
+        {detail ? <span className="muted">{detail}</span> : null}
+      </span>
+      <span className="workspace-section-toggle-side">
+        {trailing}
+        <span className="workspace-section-toggle-icon" aria-hidden="true">
+          {open ? "−" : "+"}
+        </span>
+      </span>
+    </button>
   );
 }
 
@@ -1134,6 +1179,16 @@ export function AdminDashboardPage() {
   const [pendingCsvExportOptions, setPendingCsvExportOptions] = useState<ExportResponsesToCsvOptions | null>(null);
   const [activeWorkspaceTab, setActiveWorkspaceTab] = useState<WorkspaceTab>("review");
   const [showShortcutHelp, setShowShortcutHelp] = useState(false);
+  const [isReviewerFocusMode, setIsReviewerFocusMode] = useState(false);
+  const [detailSectionsState, setDetailSectionsState] = useState<DetailWorkspaceSectionsState>({
+    originalSignalOpen: true,
+    attachmentsOpen: false,
+    reviewerNotesOpen: false,
+    relatedSignalsOpen: false,
+    storageProofOpen: false,
+    advancedMetadataOpen: false,
+    headerDetailsOpen: false,
+  });
   const [localActivityEvents, setLocalActivityEvents] = useState<ActivityEvent[]>(() => listActivityEvents());
   const [suiActivityEvents, setSuiActivityEvents] = useState<ActivityEvent[]>([]);
   const { toast, setToast } = useAdminToast();
@@ -1148,6 +1203,16 @@ export function AdminDashboardPage() {
   const selectedRecordResetRef = useRef<string | null>(null);
   const keyboardNavigationRef = useRef(false);
   const hasAdminAccess = canAdmin(capabilityProfile);
+  const setWorkspaceTab = useCallback(
+    (tab: WorkspaceTab) => {
+      if (tab === "activity") {
+        setLocalActivityEvents(listActivityEvents());
+      }
+      setActiveWorkspaceTab(tab);
+      navigate({ pathname: location.pathname, search: `?tab=${tab}` }, { replace: true });
+    },
+    [location.pathname, navigate],
+  );
   const {
     forms,
     loading,
@@ -1219,6 +1284,18 @@ export function AdminDashboardPage() {
     forms,
     loadConsole,
   });
+
+  useEffect(() => {
+    const tab = new URLSearchParams(location.search).get("tab");
+    if (tab === "review" || tab === "activity" || tab === "insights" || tab === "members") {
+      setActiveWorkspaceTab((current) => (current === tab ? current : tab));
+      if (tab === "activity") {
+        setLocalActivityEvents(listActivityEvents());
+      }
+      return;
+    }
+    setActiveWorkspaceTab("review");
+  }, [location.search]);
   const hasOwnedAccessibleForms = accessibleForms.some((form) =>
     addressesMatch(form.ownerAddress, wallet.accountAddress),
   );
@@ -1646,6 +1723,35 @@ export function AdminDashboardPage() {
       : !canAttemptPrivateSignalDecrypt(selectedRecord.form, wallet.accountAddress, capabilityProfile)
         ? t("privateSignalUnlockDisabled")
         : undefined;
+  const hasDuplicateLikelyRelatedSignals = relatedSignals.some((signal) => signal.duplicateLikely);
+
+  useEffect(() => {
+    if (!selectedRecord) {
+      setDetailSectionsState({
+        originalSignalOpen: true,
+        attachmentsOpen: false,
+        reviewerNotesOpen: false,
+        relatedSignalsOpen: false,
+        storageProofOpen: false,
+        advancedMetadataOpen: false,
+        headerDetailsOpen: false,
+      });
+      setIsReviewerFocusMode(false);
+      return;
+    }
+
+    const hasVisibleNotes = getVisibleReviewerNotes(selectedRecord.submission).trim().length > 0;
+    setDetailSectionsState({
+      originalSignalOpen: true,
+      attachmentsOpen: detailAttachments.length > 0,
+      reviewerNotesOpen: hasVisibleNotes,
+      relatedSignalsOpen: hasDuplicateLikelyRelatedSignals,
+      storageProofOpen: false,
+      advancedMetadataOpen: false,
+      headerDetailsOpen: false,
+    });
+    setIsReviewerFocusMode(false);
+  }, [selectedRecord?.submission.id, detailAttachments.length, hasDuplicateLikelyRelatedSignals]);
   const reviewBasePath = location.pathname.startsWith("/admin") ? "/admin" : "/dashboard";
   const selectedSignalIdFromUrl = useMemo(() => {
     const params = new URLSearchParams(location.search);
@@ -2001,6 +2107,13 @@ export function AdminDashboardPage() {
         ...patch,
       };
     });
+  }
+
+  function setDetailSectionOpen(section: keyof DetailWorkspaceSectionsState, open: boolean) {
+    setDetailSectionsState((current) => ({
+      ...current,
+      [section]: open,
+    }));
   }
 
   useEffect(() => {
@@ -2482,11 +2595,24 @@ export function AdminDashboardPage() {
   const reviewStatusPillState = hasReviewDraftChanges ? "editing" : reviewSaveStatus;
   const reviewStatusPillLabel = hasReviewDraftChanges ? t("reviewSaveUnsavedDraft") : reviewSaveStatusLabel[reviewSaveStatus];
   const selectedReviewer = activeReviewDraft?.reviewer ?? (selectedRecord ? getAssignedReviewer(selectedRecord.submission) ?? "" : "");
+  const selectedReviewerDisplayLabel = useReviewerDisplayLabel(selectedReviewer);
   const selectedReviewerPresence = selectedRecord
     ? getReviewerPresenceText(selectedRecord.submission, wallet.accountAddress)
     : null;
   const selectedNeedsFollowUp = selectedRecord ? hasNeedsFollowUp(selectedRecord.submission) : false;
   const selectedReviewerNoteUpdatedAt = selectedRecord ? getReviewerNoteUpdatedAt(selectedRecord.submission) : undefined;
+  const selectedSecondaryMetaItems = selectedRecord
+    ? [
+        selectedRecord.submission.severity
+          ? t("severityLabel", { value: selectedRecord.submission.severity ?? t("mediumLabel") })
+          : null,
+        typeof selectedRecord.submission.ratingValue === "number"
+          ? t("ratingLabel", { value: selectedRecord.submission.ratingValue })
+          : null,
+        t("signalsInThisFormLabel", { count: selectedFormSubmissionCount }),
+        selectedRecordEncryptedBlobStoredOnWalrus ? t("storageWalrus") : null,
+      ].filter((item): item is string => Boolean(item))
+    : [];
   const reviewerNotesSaveLabel =
     hasReviewDraftChanges || !selectedRecord || !activeReviewDraft
       ? t("reviewSaveUnsavedDraft")
@@ -2840,32 +2966,7 @@ export function AdminDashboardPage() {
         </section>
 
         {hasAdminAccess ? (
-          <nav className="workspace-tab-nav" aria-label={t("adminWorkspaceSectionsLabel")}>
-            <button
-              type="button"
-              className={activeWorkspaceTab === "review" ? "is-active" : ""}
-              onClick={() => setActiveWorkspaceTab("review")}
-            >
-              {t("adminTabReview")}
-            </button>
-            <button
-              type="button"
-              className={activeWorkspaceTab === "activity" ? "is-active" : ""}
-              onClick={() => {
-                setLocalActivityEvents(listActivityEvents());
-                setActiveWorkspaceTab("activity");
-              }}
-            >
-              {t("adminTabActivity")}
-            </button>
-            <button
-              type="button"
-              className={activeWorkspaceTab === "insights" ? "is-active" : ""}
-              onClick={() => setActiveWorkspaceTab("insights")}
-            >
-              {t("adminTabInsights")}
-            </button>
-          </nav>
+          <AdminWorkspaceTabs activeTab={activeWorkspaceTab} onSelectTab={setWorkspaceTab} />
         ) : null}
 
         {activeWorkspaceTab === "activity" && hasAdminAccess ? (
@@ -2879,6 +2980,8 @@ export function AdminDashboardPage() {
             records={allSignals}
             unlockedSignalsById={decryptedSignalsById}
           />
+        ) : activeWorkspaceTab === "members" && hasAdminAccess ? (
+          <MemberDirectorySection capabilityProfile={capabilityProfile} readOnly />
         ) : accessibleForms.length === 0 ? (
           <EmptyState>
             <h2>{t("noCreatorInboxesTitle")}</h2>
@@ -3427,7 +3530,13 @@ export function AdminDashboardPage() {
                       >
                         {t("openFormInbox")}
                       </Link>
-                      <span className="signal-chip signal-chip-soft">{t("reviewFirstLabel")}</span>
+                      <button
+                        type="button"
+                        className={`ghost-button ${isReviewerFocusMode ? "is-active" : ""}`}
+                        onClick={() => setIsReviewerFocusMode((current) => !current)}
+                      >
+                        {isReviewerFocusMode ? t("showMoreToggle") : t("focusReviewToggle")}
+                      </button>
                     </div>
                     </div>
 
@@ -3439,10 +3548,6 @@ export function AdminDashboardPage() {
                       {selectedRecord.submission.priority}
                       </span>
                       <span className="pill">{getTriageStatusLabel(selectedRecord.submission.triageStatus)}</span>
-                      <span className="signal-chip">{selectedRecord.category}</span>
-                      <span className="signal-chip">
-                      {t("severityLabel", { value: selectedRecord.submission.severity ?? t("mediumLabel") })}
-                      </span>
                       <span className={`signal-chip ${detailAnswers ? "signal-chip-accent" : ""}`}>
                         {detailAnswers
                           ? t("privateSignalUnlockedStatus")
@@ -3457,37 +3562,47 @@ export function AdminDashboardPage() {
                       ) : null}
                       {selectedReviewerPresence ? (
                         <span className="signal-chip">
-                          {selectedReviewerPresence.fullLabel}
+                          {selectedReviewerDisplayLabel || selectedReviewerPresence.fullLabel}
                         </span>
                       ) : null}
                       {selectedNeedsFollowUp ? (
                         <span className="signal-chip signal-chip-accent">{t("needsFollowUpLabel")}</span>
                       ) : null}
-                      {typeof selectedRecord.submission.ratingValue === "number" ? (
-                        <span className="signal-chip">
-                          {t("ratingLabel", {
-                            value: selectedRecord.submission.ratingValue,
-                          })}
-                        </span>
-                      ) : null}
-                      <span className="signal-chip">{t("signalsInThisFormLabel", { count: selectedFormSubmissionCount })}</span>
                     </div>
-                    <QuickActionBar
-                      submission={selectedRecord.submission}
-                      disabled={saving}
-                      onAction={(action) => {
-                        void handleQuickAction(selectedRecord, action);
-                      }}
-                      t={t}
-                    />
-                    <div className="mobile-readable-trust-panel" aria-label="Signal storage and privacy">
-                      {selectedRecordProtectionFacts.map((fact) => (
-                        <div key={fact.label} className="mobile-readable-trust-item">
-                          <strong>{fact.label}</strong>
-                          <span>{fact.detail}</span>
+                    {selectedSecondaryMetaItems.length > 0 && !isReviewerFocusMode ? (
+                      <details
+                        className="inspector-panel signal-detail-header-details"
+                        open={detailSectionsState.headerDetailsOpen}
+                        onToggle={(event) => {
+                          setDetailSectionOpen("headerDetailsOpen", (event.currentTarget as HTMLDetailsElement).open);
+                        }}
+                      >
+                        <summary>
+                          <span>
+                            <p className="eyebrow">{t("moreDetailsLabel")}</p>
+                            <strong>{t("secondaryMetadataTitle")}</strong>
+                          </span>
+                          <span className="inspector-summary">{selectedSecondaryMetaItems.length}</span>
+                        </summary>
+                        <div className="inspector-panel-body">
+                          <div className="signal-badge-row signal-badge-row-compact">
+                            {selectedSecondaryMetaItems.map((item) => (
+                              <span key={item} className="signal-chip signal-chip-soft">{item}</span>
+                            ))}
+                          </div>
                         </div>
-                      ))}
-                    </div>
+                      </details>
+                    ) : null}
+                    {!isReviewerFocusMode ? (
+                      <div className="mobile-readable-trust-panel" aria-label="Signal storage and privacy">
+                        {selectedRecordProtectionFacts.map((fact) => (
+                          <div key={fact.label} className="mobile-readable-trust-item">
+                            <strong>{fact.label}</strong>
+                            <span>{fact.detail}</span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
                   </section>
 
                   {selectedRecordFocusAction ? (
@@ -3509,90 +3624,123 @@ export function AdminDashboardPage() {
                     }`}
                   >
                     <section className="answer-card original-signal-section">
-                      <div className="signal-detail-group-header signal-detail-group-header-original">
-                        <p className="eyebrow">{t("originalSignalTitle")}</p>
-                        <h3>{t("originalSignalTitle")}</h3>
-                        <p className="muted">{t("originalSignalBody")}</p>
-                      </div>
-                      <div className="original-signal-block original-signal-body-block">
-                        <div className="section-row">
-                          <div>
-                            <p className="eyebrow">{t("feedbackBodyLabel")}</p>
-                            <h4>{t("submittedFeedbackTitle")}</h4>
-                          </div>
-                        </div>
-                      {detailAnswers ? (
-                        <div className="stack">
-                          {detailLegacyUnencrypted ? (
-                            <p className="warning-text">{t("legacyUnencryptedResponse")}</p>
+                      <WorkspaceSectionToggle
+                        eyebrow={t("originalSignalTitle")}
+                        title={t("originalSignalTitle")}
+                        detail={t("originalSignalBody")}
+                        open={detailSectionsState.originalSignalOpen}
+                        onToggle={() =>
+                          setDetailSectionOpen("originalSignalOpen", !detailSectionsState.originalSignalOpen)
+                        }
+                        trailing={
+                          detailAnswers ? (
+                            <span className="signal-chip signal-chip-soft">{t("privateSignalUnlockedStatus")}</span>
+                          ) : selectedRecordNeedsDecrypt ? (
+                            <span className="signal-chip">{t("encryptedPrivateSignalStatus")}</span>
+                          ) : null
+                        }
+                      />
+                      {detailSectionsState.originalSignalOpen ? (
+                        <>
+                          <div className="original-signal-block original-signal-body-block">
+                            <div className="section-row">
+                              <div>
+                                <p className="eyebrow">{t("feedbackBodyLabel")}</p>
+                                <h4>{t("submittedFeedbackTitle")}</h4>
+                              </div>
+                            </div>
+                          {detailAnswers ? (
+                            <div className="stack">
+                              {detailLegacyUnencrypted ? (
+                                <p className="warning-text">{t("legacyUnencryptedResponse")}</p>
+                              ) : (
+                                <div className="signal-badge-row signal-badge-row-compact">
+                                  <span className="signal-chip signal-chip-accent">{t("sealEncryptedCreatorAdminOnly")}</span>
+                                  {selectedRecordEncryptedBlobStoredOnWalrus && selectedRecordEncryptedBlobId ? (
+                                    <>
+                                      <StorageProof
+                                        blobId={selectedRecordEncryptedBlobId}
+                                        proof={
+                                          selectedRecord.submission.encryptedWalrusProof ??
+                                          selectedRecord.submission.walrusProof
+                                        }
+                                        compact
+                                      />
+                                    </>
+                                  ) : null}
+                                </div>
+                              )}
+                              {selectedRecord.form.fields
+                                .filter((field) => !isAttachmentFieldType(field.type))
+                                .map((field, index) => (
+                                  <div key={field.id} className="answer-line" data-question-index={`Q${index + 1}`}>
+                                    <strong>{field.label}</strong>
+                                    {renderAnswerValue(field, detailAnswers[field.id])}
+                                  </div>
+                                ))}
+                            </div>
+                          ) : selectedRecordNeedsDecrypt ? (
+                            <div className="locked-signal-state">
+                              <div className="locked-signal-copy">
+                                <div className="classified-signal-redaction" aria-hidden="true">
+                                  <span />
+                                  <span />
+                                  <span />
+                                  <span />
+                                  <span />
+                                  <span />
+                                </div>
+                                <strong>{t("encryptedPrivateSignalStatus")}</strong>
+                                <p>{t("requiresReviewerAccessDecryptHint")}</p>
+                              </div>
+                              <div className="locked-signal-skeleton" aria-hidden="true">
+                                <span />
+                                <span />
+                                <span />
+                              </div>
+                            </div>
                           ) : (
-                            <div className="signal-badge-row signal-badge-row-compact">
-                              <span className="signal-chip signal-chip-accent">{t("sealEncryptedCreatorAdminOnly")}</span>
-                              {selectedRecordEncryptedBlobStoredOnWalrus && selectedRecordEncryptedBlobId ? (
-                                <>
-                                  <StorageProof
-                                    blobId={selectedRecordEncryptedBlobId}
-                                    proof={
-                                      selectedRecord.submission.encryptedWalrusProof ??
-                                      selectedRecord.submission.walrusProof
-                                    }
-                                    compact
+                            <p className="muted">No response content is available yet.</p>
+                          )}
+                          </div>
+                          {!isReviewerFocusMode ? (
+                            <div className="original-signal-block">
+                              <WorkspaceSectionToggle
+                                eyebrow={t("attachments")}
+                                title={t("attachments")}
+                                detail={
+                                  selectedRecordNeedsDecrypt
+                                    ? t("attachmentsHiddenUntilUnlocked")
+                                    : detailAttachments.length === 0
+                                      ? t("noAttachments")
+                                      : undefined
+                                }
+                                open={detailSectionsState.attachmentsOpen}
+                                onToggle={() =>
+                                  setDetailSectionOpen("attachmentsOpen", !detailSectionsState.attachmentsOpen)
+                                }
+                                trailing={
+                                  detailAttachments.length > 0 ? (
+                                    <span className="signal-chip signal-chip-soft">{detailAttachments.length}</span>
+                                  ) : null
+                                }
+                              />
+                              {detailSectionsState.attachmentsOpen ? (
+                                selectedRecordNeedsDecrypt ? (
+                                  <p className="muted">{t("attachmentsHiddenUntilUnlocked")}</p>
+                                ) : detailAttachments.length === 0 ? (
+                                  <p className="muted">{t("noAttachments")}</p>
+                                ) : (
+                                  <SignalAttachmentList
+                                    attachments={detailAttachments}
+                                    attachmentPreviews={attachmentPreviews}
                                   />
-                                </>
+                                )
                               ) : null}
                             </div>
-                          )}
-                          {selectedRecord.form.fields
-                            .filter((field) => !isAttachmentFieldType(field.type))
-                            .map((field, index) => (
-                              <div key={field.id} className="answer-line" data-question-index={`Q${index + 1}`}>
-                                <strong>{field.label}</strong>
-                                {renderAnswerValue(field, detailAnswers[field.id])}
-                              </div>
-                            ))}
-                        </div>
-                      ) : selectedRecordNeedsDecrypt ? (
-                        <div className="locked-signal-state">
-                          <div className="locked-signal-copy">
-                            <div className="classified-signal-redaction" aria-hidden="true">
-                              <span />
-                              <span />
-                              <span />
-                              <span />
-                              <span />
-                              <span />
-                            </div>
-                            <strong>{t("encryptedPrivateSignalStatus")}</strong>
-                            <p>{t("requiresReviewerAccessDecryptHint")}</p>
-                          </div>
-                          <div className="locked-signal-skeleton" aria-hidden="true">
-                            <span />
-                            <span />
-                            <span />
-                          </div>
-                        </div>
-                      ) : (
-                        <p className="muted">No response content is available yet.</p>
-                      )}
-                      </div>
-                      <div className="original-signal-block">
-                        <div className="section-row">
-                          <div>
-                            <p className="eyebrow">Attachments</p>
-                            <h4>{t("attachments")}</h4>
-                          </div>
-                        </div>
-                      {selectedRecordNeedsDecrypt ? (
-                        <p className="muted">{t("attachmentsHiddenUntilUnlocked")}</p>
-                      ) : detailAttachments.length === 0 ? (
-                        <p className="muted">{t("noAttachments")}</p>
-                      ) : (
-                        <SignalAttachmentList
-                          attachments={detailAttachments}
-                          attachmentPreviews={attachmentPreviews}
-                        />
-                      )}
-                      </div>
+                          ) : null}
+                        </>
+                      ) : null}
                     </section>
 
                     {selectedRecordNeedsDecrypt ? (
@@ -3822,84 +3970,107 @@ export function AdminDashboardPage() {
                           </div>
                         </div>
                       </div>
-                      <div className="review-stage-card">
-                        <div className="review-stage-header">
-                          <p className="eyebrow">{t("stepLabel", { count: 3 })}</p>
-                          <strong>Reviewer Notes</strong>
-                        </div>
-                        <label className="review-select">
-                          <span>{t("assignedReviewerLabel")}</span>
-                          <input
-                            type="text"
-                            value={activeReviewDraft?.reviewer ?? ""}
-                            disabled={isReviewWorkbenchLocked}
-                            onChange={(event) => patchReviewDraft({ reviewer: event.target.value })}
-                            placeholder={t("reviewerInputPlaceholder")}
-                          />
-                        </label>
-                        <div className="review-notes-actions">
-                          <span className="signal-chip signal-chip-soft">
-                            {selectedReviewer || t("unassignedLabel")}
-                          </span>
-                          {wallet.accountAddress ? (
-                            <button
-                              type="button"
-                              className="ghost-button"
-                              disabled={isReviewWorkbenchLocked || (activeReviewDraft?.reviewer ?? "") === wallet.accountAddress}
-                              onClick={() => patchReviewDraft({ reviewer: wallet.accountAddress })}
-                            >
-                              {t("assignToMe")}
-                            </button>
-                          ) : null}
-                          <button
-                            type="button"
-                            className={`ghost-button ${selectedNeedsFollowUp ? "is-active" : ""}`}
-                            disabled={isReviewWorkbenchLocked || saving}
-                            onClick={() => void handleToggleNeedsFollowUp()}
-                          >
-                            {selectedNeedsFollowUp ? t("followUpEnabledLabel") : t("needsFollowUpLabel")}
-                          </button>
-                        </div>
-                        <label className="review-select">
-                          <span>{t("internalNote")}</span>
-                          <textarea
-                            rows={5}
-                            value={activeReviewDraft?.notes ?? ""}
-                            disabled={isReviewWorkbenchLocked}
-                            onChange={(event) => patchReviewDraft({ notes: event.target.value })}
-                            placeholder={t("captureReviewNotes")}
-                          />
-                        </label>
-                        <div className="review-notes-actions">
-                          <span className={`save-state-pill is-${hasReviewDraftChanges ? "editing" : "saved"}`}>
-                            {reviewerNotesSaveLabel}
-                          </span>
-                          {selectedReviewerNoteUpdatedAt ? (
-                            <span className="muted">
-                              {t("lastUpdatedLabel")}: {formatDate(selectedReviewerNoteUpdatedAt)}
-                            </span>
-                          ) : (
-                            <span className="muted">{t("reviewerNoteLabel")}</span>
-                          )}
-                          <button
-                            type="button"
-                            className="ghost-button"
-                            disabled={
-                              isReviewWorkbenchLocked ||
-                              saving ||
-                              (
-                                (activeReviewDraft?.notes ?? "") === getVisibleReviewerNotes(selectedRecord.submission) &&
-                                (activeReviewDraft?.reviewer ?? "") === (getAssignedReviewer(selectedRecord.submission) ?? "")
-                              )
-                            }
-                            onClick={() => void handleSaveReviewerNotes()}
-                          >
-                            {t("saveNotesLabel")}
-                          </button>
-                        </div>
-                        <p className="review-action-helper">
-                          {t("reviewUnsavedDraftHelper")}
-                        </p>
+                      <div className="review-stage-card review-stage-card-collapsible">
+                        <WorkspaceSectionToggle
+                          eyebrow={t("stepLabel", { count: 3 })}
+                          title={t("reviewerNoteLabel")}
+                          detail={
+                            selectedReviewerNoteUpdatedAt
+                              ? `${t("lastUpdatedLabel")}: ${formatDate(selectedReviewerNoteUpdatedAt)}`
+                              : t("reviewUnsavedDraftHelper")
+                          }
+                          open={detailSectionsState.reviewerNotesOpen}
+                          onToggle={() =>
+                            setDetailSectionOpen("reviewerNotesOpen", !detailSectionsState.reviewerNotesOpen)
+                          }
+                          trailing={
+                            <>
+                              <span className={`save-state-pill is-${hasReviewDraftChanges ? "editing" : "saved"}`}>
+                                {reviewerNotesSaveLabel}
+                              </span>
+                              {selectedNeedsFollowUp ? (
+                                <span className="signal-chip signal-chip-accent">{t("needsFollowUpLabel")}</span>
+                              ) : null}
+                            </>
+                          }
+                        />
+                        {detailSectionsState.reviewerNotesOpen ? (
+                          <>
+                            <label className="review-select">
+                              <span>{t("assignedReviewerLabel")}</span>
+                              <input
+                                type="text"
+                                value={activeReviewDraft?.reviewer ?? ""}
+                                disabled={isReviewWorkbenchLocked}
+                                onChange={(event) => patchReviewDraft({ reviewer: event.target.value })}
+                                placeholder={t("reviewerInputPlaceholder")}
+                              />
+                            </label>
+                            <div className="review-notes-actions">
+                              <span className="signal-chip signal-chip-soft">
+                                {selectedReviewerDisplayLabel || t("unassignedLabel")}
+                              </span>
+                              {wallet.accountAddress ? (
+                                <button
+                                  type="button"
+                                  className="ghost-button"
+                                  disabled={isReviewWorkbenchLocked || (activeReviewDraft?.reviewer ?? "") === wallet.accountAddress}
+                                  onClick={() => patchReviewDraft({ reviewer: wallet.accountAddress })}
+                                >
+                                  {t("assignToMe")}
+                                </button>
+                              ) : null}
+                              <button
+                                type="button"
+                                className={`ghost-button ${selectedNeedsFollowUp ? "is-active" : ""}`}
+                                disabled={isReviewWorkbenchLocked || saving}
+                                onClick={() => void handleToggleNeedsFollowUp()}
+                              >
+                                {selectedNeedsFollowUp ? t("followUpEnabledLabel") : t("needsFollowUpLabel")}
+                              </button>
+                            </div>
+                            <label className="review-select">
+                              <span>{t("internalNote")}</span>
+                              <textarea
+                                rows={5}
+                                value={activeReviewDraft?.notes ?? ""}
+                                disabled={isReviewWorkbenchLocked}
+                                onChange={(event) => patchReviewDraft({ notes: event.target.value })}
+                                placeholder={t("captureReviewNotes")}
+                              />
+                            </label>
+                            <div className="review-notes-actions">
+                              <span className={`save-state-pill is-${hasReviewDraftChanges ? "editing" : "saved"}`}>
+                                {reviewerNotesSaveLabel}
+                              </span>
+                              {selectedReviewerNoteUpdatedAt ? (
+                                <span className="muted">
+                                  {t("lastUpdatedLabel")}: {formatDate(selectedReviewerNoteUpdatedAt)}
+                                </span>
+                              ) : (
+                                <span className="muted">{t("reviewerNoteLabel")}</span>
+                              )}
+                              <button
+                                type="button"
+                                className="ghost-button"
+                                disabled={
+                                  isReviewWorkbenchLocked ||
+                                  saving ||
+                                  (
+                                    (activeReviewDraft?.notes ?? "") === getVisibleReviewerNotes(selectedRecord.submission) &&
+                                    (activeReviewDraft?.reviewer ?? "") === (getAssignedReviewer(selectedRecord.submission) ?? "")
+                                  )
+                                }
+                                onClick={() => void handleSaveReviewerNotes()}
+                              >
+                                {t("saveNotesLabel")}
+                              </button>
+                            </div>
+                            <p className="review-action-helper">
+                              {t("reviewUnsavedDraftHelper")}
+                            </p>
+                          </>
+                        ) : null}
                       </div>
                       <div className="review-stage-card review-roadmap-strip">
                         <div>
@@ -3940,6 +4111,32 @@ export function AdminDashboardPage() {
                       </div>
                     </section>
                     <div className="signal-detail-sticky-actions">
+                      <div className="signal-detail-sticky-meta">
+                        <span className="signal-chip signal-chip-soft">
+                          {selectedReviewerDisplayLabel || t("unassignedLabel")}
+                        </span>
+                        {selectedNeedsFollowUp ? (
+                          <span className="signal-chip signal-chip-accent">{t("needsFollowUpLabel")}</span>
+                        ) : null}
+                        {wallet.accountAddress ? (
+                          <button
+                            type="button"
+                            className="ghost-button"
+                            disabled={isReviewWorkbenchLocked || (activeReviewDraft?.reviewer ?? "") === wallet.accountAddress}
+                            onClick={() => patchReviewDraft({ reviewer: wallet.accountAddress })}
+                          >
+                            {t("assignToMe")}
+                          </button>
+                        ) : null}
+                        <button
+                          type="button"
+                          className={`ghost-button ${selectedNeedsFollowUp ? "is-active" : ""}`}
+                          disabled={isReviewWorkbenchLocked || saving}
+                          onClick={() => void handleToggleNeedsFollowUp()}
+                        >
+                          {selectedNeedsFollowUp ? t("followUpEnabledLabel") : t("needsFollowUpLabel")}
+                        </button>
+                      </div>
                       <QuickActionBar
                         submission={selectedRecord.submission}
                         disabled={saving}
@@ -3959,6 +4156,7 @@ export function AdminDashboardPage() {
                     </div>
                   </div>
 
+                  {!isReviewerFocusMode ? (
                   <div className="signal-detail-sections review-secondary-sections">
                     <section className="secondary-inspector">
                       <div className="secondary-inspector-header">
@@ -4039,7 +4237,13 @@ export function AdminDashboardPage() {
                           </div>
                         </details>
 
-                        <details className="inspector-panel signal-proof-panel">
+                        <details
+                          className="inspector-panel signal-proof-panel"
+                          open={detailSectionsState.storageProofOpen}
+                          onToggle={(event) => {
+                            setDetailSectionOpen("storageProofOpen", (event.currentTarget as HTMLDetailsElement).open);
+                          }}
+                        >
                           <summary>
                             <span>
                               <p className="eyebrow">Verification</p>
@@ -4066,168 +4270,179 @@ export function AdminDashboardPage() {
                                 ) : null}
                               </div>
                               <div className="metadata-list signal-proof-metadata-list">
-                        <div className="metadata-row">
-                          <span>{t("reviewStateLabel")}</span>
-                            <strong>
-                              {detailLegacyUnencrypted
-                                ? t("legacyUnencryptedResponse")
-                                : detailAnswers
-                                  ? t("privateSignalUnlockedStatus")
-                                  : t("encryptedPrivateSignalStatus")}
-                            </strong>
-                        </div>
-                          <div className="metadata-row">
-                            <span>{t("sealRuntimeLabel")}</span>
-                            <strong>{hasAdminAccess ? t("projectReviewerAccess") : t("walletLabel")}</strong>
-                          </div>
-                          {hasAdminAccess ? (
-                            <SignalMetaRow label="Project" type="registry" value={selectedRecord.form.projectId} emptyLabel={t("notAvailable")} />
-                          ) : null}
-                          {typeof selectedRecord.form.onchainFormId === "number" ? (
-                            <div className="metadata-row">
-                              <span>{t("registryFormIdLabel")}</span>
-                              <strong>{selectedRecord.form.onchainFormId}</strong>
-                            </div>
-                          ) : null}
-                          {typeof selectedRecord.submission.onchainSignalId === "number" ? (
-                            <div className="metadata-row">
-                              <span>{t("signalReceiptLabel")}</span>
-                              <strong>{selectedRecord.submission.onchainSignalId}</strong>
-                            </div>
-                          ) : null}
-                          <SignalMetaRow label={t("formBlobId")} type="blob" value={selectedRecord.form.blobId} emptyLabel={t("notAvailable")}>
-                            {!isLocalFallbackBlob(selectedRecord.form.blobId) ? (
-                              <BlobLink
-                                blobId={selectedRecord.form.blobId}
-                                label={t("verifyOnWalrus")}
-                              />
-                            ) : null}
-                          </SignalMetaRow>
-                          <SignalMetaRow label={t("submissionBlobIdLabel")} type="blob" value={selectedRecord.submission.blobId} emptyLabel={t("notAvailable")}>
-                            {!isLocalFallbackBlob(selectedRecord.submission.blobId) ? (
-                              <StorageProof
-                                blobId={selectedRecord.submission.blobId}
-                                proof={selectedRecord.submission.walrusProof}
-                                compact
-                              />
-                            ) : null}
-                          </SignalMetaRow>
-                          {hasDedicatedEncryptedPayloadBlob(selectedRecord.submission) ? (
-                            <SignalMetaRow
-                              label={t("encryptedPayloadBlobId")}
-                              type="seal"
-                              value={selectedRecord.submission.encryptedBlobId}
-                            >
-                              {!isLocalFallbackBlob(selectedRecord.submission.encryptedBlobId) ? (
-                                <StorageProof
-                                  blobId={selectedRecord.submission.encryptedBlobId}
-                                  proof={selectedRecord.submission.encryptedWalrusProof ?? selectedRecord.submission.walrusProof}
-                                  compact
-                                />
-                              ) : null}
-                            </SignalMetaRow>
-                          ) : selectedRecord.submission.isEncrypted ? (
-                            <div className="metadata-row">
-                              <span>{t("encryptedPayloadLabel")}</span>
-                              <strong>{getEncryptedPayloadAvailabilityLabel(selectedRecord.submission)}</strong>
-                            </div>
-                          ) : null}
-                          <SignalMetaRow label={t("sealIdentityLabel")} type="seal" value={selectedRecord.submission.sealIdentity} emptyLabel={t("notAvailable")} />
-                          {selectedRecord.submission.signalReceiptMetadataDigest ? (
-                            <SignalMetaRow
-                              label={t("receiptMetadataDigestLabel")}
-                              type="registry"
-                              value={selectedRecord.submission.signalReceiptMetadataDigest}
-                              emptyLabel={t("notAvailable")}
-                            />
-                          ) : null}
-                          <div className="metadata-row signal-meta-row">
-                            <span>{t("attachmentBlobIds")}</span>
-                            <div className="stack signal-meta-row-value">
-                              {selectedRecord.submission.attachments.length === 0 ? (
-                                <strong>{t("notAvailable")}</strong>
-                              ) : (
-                                selectedRecord.submission.attachments.map((attachment) => (
-                                  <div key={attachment.blobId} className="signal-meta-row-value">
-                                    {attachment.storage === "inline" ? (
-                                      <strong>{t("embeddedInPrivateSignal")}</strong>
-                                    ) : (
-                                      <SignalMetaChip type="blob" value={attachment.blobId} />
-                                    )}
-                                    {attachment.storage !== "inline" && !isLocalFallbackBlob(attachment.blobId) ? (
+                                <div className="metadata-row">
+                                  <span>{t("reviewStateLabel")}</span>
+                                  <strong>
+                                    {detailLegacyUnencrypted
+                                      ? t("legacyUnencryptedResponse")
+                                      : detailAnswers
+                                        ? t("privateSignalUnlockedStatus")
+                                        : t("encryptedPrivateSignalStatus")}
+                                  </strong>
+                                </div>
+                                <div className="metadata-row">
+                                  <span>{t("sealRuntimeLabel")}</span>
+                                  <strong>{hasAdminAccess ? t("projectReviewerAccess") : t("walletLabel")}</strong>
+                                </div>
+                                <SignalMetaRow label={t("formBlobId")} type="blob" value={selectedRecord.form.blobId} emptyLabel={t("notAvailable")}>
+                                  {!isLocalFallbackBlob(selectedRecord.form.blobId) ? (
+                                    <BlobLink
+                                      blobId={selectedRecord.form.blobId}
+                                      label={t("verifyOnWalrus")}
+                                    />
+                                  ) : null}
+                                </SignalMetaRow>
+                                <SignalMetaRow label={t("submissionBlobIdLabel")} type="blob" value={selectedRecord.submission.blobId} emptyLabel={t("notAvailable")}>
+                                  {!isLocalFallbackBlob(selectedRecord.submission.blobId) ? (
+                                    <StorageProof
+                                      blobId={selectedRecord.submission.blobId}
+                                      proof={selectedRecord.submission.walrusProof}
+                                      compact
+                                    />
+                                  ) : null}
+                                </SignalMetaRow>
+                                {hasDedicatedEncryptedPayloadBlob(selectedRecord.submission) ? (
+                                  <SignalMetaRow
+                                    label={t("encryptedPayloadBlobId")}
+                                    type="seal"
+                                    value={selectedRecord.submission.encryptedBlobId}
+                                  >
+                                    {!isLocalFallbackBlob(selectedRecord.submission.encryptedBlobId) ? (
                                       <StorageProof
-                                        blobId={attachment.blobId}
-                                        proof={attachment.walrusProof}
-                                        fallbackSize={attachment.size}
+                                        blobId={selectedRecord.submission.encryptedBlobId}
+                                        proof={selectedRecord.submission.encryptedWalrusProof ?? selectedRecord.submission.walrusProof}
                                         compact
                                       />
                                     ) : null}
+                                  </SignalMetaRow>
+                                ) : selectedRecord.submission.isEncrypted ? (
+                                  <div className="metadata-row">
+                                    <span>{t("encryptedPayloadLabel")}</span>
+                                    <strong>{getEncryptedPayloadAvailabilityLabel(selectedRecord.submission)}</strong>
                                   </div>
-                                ))
-                              )}
-                            </div>
-                          </div>
-                          <div className="metadata-row">
-                            <span>{t("walletLabel")}</span>
-                            {getSubmissionRespondentMeta(selectedRecord.submission).isAnonymous ? (
-                              <strong>{t("anonymousRespondent")}</strong>
-                            ) : getSubmissionRespondentMeta(selectedRecord.submission).walletAddress ? (
-                              <SignalMetaChip
-                                type="contributor"
-                                value={getSubmissionRespondentMeta(selectedRecord.submission).walletAddress ?? ""}
-                              />
-                            ) : (
-                              <strong>{t("notAvailable")}</strong>
-                            )}
-                          </div>
-                          <div className="metadata-row">
-                            <span>{t("anonymousLabel")}</span>
-                            <strong>{getSubmissionRespondentMeta(selectedRecord.submission).isAnonymous ? t("yesLabel") : t("noLabel")}</strong>
-                          </div>
-                          <div className="metadata-row">
-                            <span>{t("submittedLabel")}</span>
-                            <strong>{formatDate(getSubmissionRespondentMeta(selectedRecord.submission).submittedAt)}</strong>
-                          </div>
-                          <div className="metadata-row">
-                            <span>{t("chainLabel")}</span>
-                            <strong>{getSubmissionRespondentMeta(selectedRecord.submission).chain}</strong>
-                          </div>
-                          <div className="metadata-row">
-                            <span>{t("storageMode")}</span>
-                            <strong>
-                              {storageRuntime.mode === "walrus"
-                                ? t("storageWalrus")
-                                : t("localFallbackLabel")}
-                            </strong>
-                          </div>
-                          <div className="metadata-row">
-                            <span>{t("reviewerAccessLabel")}</span>
-                            <strong>{privateReviewLabel}</strong>
-                          </div>
-                          <div className="metadata-row">
-                            <span>{t("responseDeadlineLabel")}</span>
-                            <strong>{formatResponseDeadline(selectedRecord.form.responseDeadline, responseDeadlineLabels)}</strong>
-                          </div>
-                          <div className="metadata-row">
-                            <span>{t("walletAccessStatus")}</span>
-                            <strong>
-                              {getWalletAccessLabel(selectedRecord.form, wallet.accountAddress)}
-                            </strong>
-                          </div>
-                          <div className="metadata-row">
-                            <span>Signal sync</span>
-                            <strong>{getSignalSyncSummary(selectedRecord.submission)}</strong>
-                          </div>
-                          <div className="metadata-row">
-                            <span>{t("pendingSuiRegistrationLabel")}</span>
-                            <strong>
-                              {selectedRecord.submission.onchainStatus ??
-                                (selectedRecord.submission.pendingOnchainRegistration
-                                  ? t("pendingSuiRegistration")
-                                  : t("offchainOnlyLabel"))}
-                            </strong>
-                          </div>
+                                ) : null}
+                                <div className="metadata-row">
+                                  <span>{t("reviewerAccessLabel")}</span>
+                                  <strong>{privateReviewLabel}</strong>
+                                </div>
                               </div>
+                              <details
+                                className="inspector-nested-detail"
+                                open={detailSectionsState.advancedMetadataOpen}
+                                onToggle={(event) => {
+                                  setDetailSectionOpen("advancedMetadataOpen", (event.currentTarget as HTMLDetailsElement).open);
+                                }}
+                              >
+                                <summary>{t("advancedMetadataTitle")}</summary>
+                                <div className="metadata-list signal-proof-metadata-list">
+                                  {hasAdminAccess ? (
+                                    <SignalMetaRow label="Project" type="registry" value={selectedRecord.form.projectId} emptyLabel={t("notAvailable")} />
+                                  ) : null}
+                                  {typeof selectedRecord.form.onchainFormId === "number" ? (
+                                    <div className="metadata-row">
+                                      <span>{t("registryFormIdLabel")}</span>
+                                      <strong>{selectedRecord.form.onchainFormId}</strong>
+                                    </div>
+                                  ) : null}
+                                  {typeof selectedRecord.submission.onchainSignalId === "number" ? (
+                                    <div className="metadata-row">
+                                      <span>{t("signalReceiptLabel")}</span>
+                                      <strong>{selectedRecord.submission.onchainSignalId}</strong>
+                                    </div>
+                                  ) : null}
+                                  <SignalMetaRow label={t("sealIdentityLabel")} type="seal" value={selectedRecord.submission.sealIdentity} emptyLabel={t("notAvailable")} />
+                                  {selectedRecord.submission.signalReceiptMetadataDigest ? (
+                                    <SignalMetaRow
+                                      label={t("receiptMetadataDigestLabel")}
+                                      type="registry"
+                                      value={selectedRecord.submission.signalReceiptMetadataDigest}
+                                      emptyLabel={t("notAvailable")}
+                                    />
+                                  ) : null}
+                                  <div className="metadata-row signal-meta-row">
+                                    <span>{t("attachmentBlobIds")}</span>
+                                    <div className="stack signal-meta-row-value">
+                                      {selectedRecord.submission.attachments.length === 0 ? (
+                                        <strong>{t("notAvailable")}</strong>
+                                      ) : (
+                                        selectedRecord.submission.attachments.map((attachment) => (
+                                          <div key={attachment.blobId} className="signal-meta-row-value">
+                                            {attachment.storage === "inline" ? (
+                                              <strong>{t("embeddedInPrivateSignal")}</strong>
+                                            ) : (
+                                              <SignalMetaChip type="blob" value={attachment.blobId} />
+                                            )}
+                                            {attachment.storage !== "inline" && !isLocalFallbackBlob(attachment.blobId) ? (
+                                              <StorageProof
+                                                blobId={attachment.blobId}
+                                                proof={attachment.walrusProof}
+                                                fallbackSize={attachment.size}
+                                                compact
+                                              />
+                                            ) : null}
+                                          </div>
+                                        ))
+                                      )}
+                                    </div>
+                                  </div>
+                                  <div className="metadata-row">
+                                    <span>{t("walletLabel")}</span>
+                                    {getSubmissionRespondentMeta(selectedRecord.submission).isAnonymous ? (
+                                      <strong>{t("anonymousRespondent")}</strong>
+                                    ) : getSubmissionRespondentMeta(selectedRecord.submission).walletAddress ? (
+                                      <SignalMetaChip
+                                        type="contributor"
+                                        value={getSubmissionRespondentMeta(selectedRecord.submission).walletAddress ?? ""}
+                                      />
+                                    ) : (
+                                      <strong>{t("notAvailable")}</strong>
+                                    )}
+                                  </div>
+                                  <div className="metadata-row">
+                                    <span>{t("anonymousLabel")}</span>
+                                    <strong>{getSubmissionRespondentMeta(selectedRecord.submission).isAnonymous ? t("yesLabel") : t("noLabel")}</strong>
+                                  </div>
+                                  <div className="metadata-row">
+                                    <span>{t("submittedLabel")}</span>
+                                    <strong>{formatDate(getSubmissionRespondentMeta(selectedRecord.submission).submittedAt)}</strong>
+                                  </div>
+                                  <div className="metadata-row">
+                                    <span>{t("chainLabel")}</span>
+                                    <strong>{getSubmissionRespondentMeta(selectedRecord.submission).chain}</strong>
+                                  </div>
+                                  <div className="metadata-row">
+                                    <span>{t("storageMode")}</span>
+                                    <strong>
+                                      {storageRuntime.mode === "walrus"
+                                        ? t("storageWalrus")
+                                        : t("localFallbackLabel")}
+                                    </strong>
+                                  </div>
+                                  <div className="metadata-row">
+                                    <span>{t("responseDeadlineLabel")}</span>
+                                    <strong>{formatResponseDeadline(selectedRecord.form.responseDeadline, responseDeadlineLabels)}</strong>
+                                  </div>
+                                  <div className="metadata-row">
+                                    <span>{t("walletAccessStatus")}</span>
+                                    <strong>
+                                      {getWalletAccessLabel(selectedRecord.form, wallet.accountAddress)}
+                                    </strong>
+                                  </div>
+                                  <div className="metadata-row">
+                                    <span>Signal sync</span>
+                                    <strong>{getSignalSyncSummary(selectedRecord.submission)}</strong>
+                                  </div>
+                                  <div className="metadata-row">
+                                    <span>{t("pendingSuiRegistrationLabel")}</span>
+                                    <strong>
+                                      {selectedRecord.submission.onchainStatus ??
+                                        (selectedRecord.submission.pendingOnchainRegistration
+                                          ? t("pendingSuiRegistration")
+                                          : t("offchainOnlyLabel"))}
+                                    </strong>
+                                  </div>
+                                </div>
+                              </details>
                             </div>
                             <div className="inspector-subsection inspector-seal-subsection">
                               <div>
@@ -4253,7 +4468,13 @@ export function AdminDashboardPage() {
                           </div>
                         </details>
 
-                        <details className="inspector-panel">
+                        <details
+                          className="inspector-panel"
+                          open={detailSectionsState.relatedSignalsOpen}
+                          onToggle={(event) => {
+                            setDetailSectionOpen("relatedSignalsOpen", (event.currentTarget as HTMLDetailsElement).open);
+                          }}
+                        >
                           <summary>
                             <span>
                               <p className="eyebrow">{t("reviewSupportEyebrow")}</p>
@@ -4284,6 +4505,7 @@ export function AdminDashboardPage() {
 
                     </section>
                   </div>
+                  ) : null}
                 </>
               )}
             </article>
@@ -4292,7 +4514,7 @@ export function AdminDashboardPage() {
           </>
         )}
 
-        {activeWorkspaceTab !== "insights" ? (
+        {activeWorkspaceTab !== "insights" && activeWorkspaceTab !== "members" ? (
           <AdminOperationsStatus
             items={operationsStatusItems}
             nextActionLabel={nextRecommendedAction.label}
@@ -4301,7 +4523,7 @@ export function AdminDashboardPage() {
           />
         ) : null}
 
-        {hasProjectManagementAccess && activeWorkspaceTab !== "insights" ? (
+        {hasProjectManagementAccess && activeWorkspaceTab !== "insights" && activeWorkspaceTab !== "members" ? (
         <details ref={advancedProjectSettingsRef} className="panel advanced-project-settings" open>
           <summary>
             <span>

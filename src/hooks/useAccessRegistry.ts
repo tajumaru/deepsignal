@@ -35,7 +35,7 @@ export function useAccessRegistry(options: { enabled?: boolean } = {}) {
   const packageId = normalizeObjectId(ACCESS_CONTROL_PACKAGE_ID);
   const registryId = normalizeObjectId(ACCESS_CONTROL_REGISTRY_ID);
   const queryEnabled = options.enabled ?? true;
-  const enabled = Boolean(queryEnabled && packageId && registryId && !rpc.isRateLimitedCooldownActive);
+  const enabled = Boolean(queryEnabled && packageId && registryId);
 
   const registryQuery = useQuery({
     queryKey: [

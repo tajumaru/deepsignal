@@ -62,7 +62,7 @@ export function useOwnedSuiObjects(address?: string | null, options: { enabled?:
   const suiClient = useSuiClient();
   const rpc = useRpcInfrastructure();
   const queryEnabled = options.enabled ?? true;
-  const enabled = Boolean(queryEnabled && address && !rpc.isRateLimitedCooldownActive);
+  const enabled = Boolean(queryEnabled && address);
   const [lastSuccessfulData, setLastSuccessfulData] = useState<OwnedObjectEntry[]>([]);
 
   const query = useQuery({

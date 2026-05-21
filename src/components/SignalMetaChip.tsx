@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
 import { isValidSuiAddress } from "@mysten/sui/utils";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { SuiAddressDisplay } from "./SuiAddressDisplay";
 
 export type SignalMetaType =
@@ -14,6 +14,7 @@ interface SignalMetaChipProps {
   type: SignalMetaType;
   value: string;
   className?: string;
+  interactive?: boolean;
 }
 
 interface SignalMetaRowProps {
@@ -59,7 +60,12 @@ export function formatSignalMetaValue(type: SignalMetaType, rawValue: string) {
   return `${TYPE_PREFIX[type]}:${value.slice(0, 6)}...${value.slice(-6)}`;
 }
 
-export function SignalMetaChip({ type, value, className = "" }: SignalMetaChipProps) {
+export function SignalMetaChip({
+  type,
+  value,
+  className = "",
+  interactive = true,
+}: SignalMetaChipProps) {
   const [isVisible, setIsVisible] = useState(false);
   const [copied, setCopied] = useState(false);
   const timeoutRef = useRef<number | null>(null);
@@ -99,34 +105,50 @@ export function SignalMetaChip({ type, value, className = "" }: SignalMetaChipPr
           className="signal-meta-chip-sui-address"
           labelClassName="signal-meta-chip-label"
           copyClassName="signal-meta-chip-copy"
-          showTooltip
+          showTooltip={interactive}
+          showCopyLabel={interactive}
+          interactive={interactive}
         />
       </span>
     );
   }
 
+  const content = (
+    <>
+      <span className="signal-meta-chip-label">{label}</span>
+      {interactive ? (
+        <span className="signal-meta-chip-copy" aria-hidden="true">
+          {copied ? "Copied" : "Copy"}
+        </span>
+      ) : null}
+    </>
+  );
+
   return (
     <span className={`signal-meta-chip-shell ${className}`.trim()}>
-      <button
-        type="button"
-        className={`signal-meta-chip signal-meta-chip-${type}`}
-        onClick={() => void handleCopy()}
-        onMouseEnter={() => setIsVisible(true)}
-        onMouseLeave={() => !copied && setIsVisible(false)}
-        onFocus={() => setIsVisible(true)}
-        onBlur={() => !copied && setIsVisible(false)}
-        title={value}
-        aria-label={`メタデータ値をコピー ${value}`}
-      >
-        <span className="signal-meta-chip-label">{label}</span>
-        <span className="signal-meta-chip-copy" aria-hidden="true">
-          {copied ? "コピー済み" : "コピー"}
+      {interactive ? (
+        <button
+          type="button"
+          className={`signal-meta-chip signal-meta-chip-${type}`}
+          onClick={() => void handleCopy()}
+          onMouseEnter={() => setIsVisible(true)}
+          onMouseLeave={() => !copied && setIsVisible(false)}
+          onFocus={() => setIsVisible(true)}
+          onBlur={() => !copied && setIsVisible(false)}
+          title={value}
+          aria-label={`Copy metadata value ${value}`}
+        >
+          {content}
+        </button>
+      ) : (
+        <span className={`signal-meta-chip signal-meta-chip-${type}`} title={value}>
+          {content}
         </span>
-      </button>
-      {isVisible ? (
+      )}
+      {interactive && isVisible ? (
         <span className="signal-meta-tooltip" role="status" aria-live="polite">
           <span className="signal-meta-tooltip-value">{value}</span>
-          {copied ? <span className="signal-meta-tooltip-copy">コピーしました</span> : null}
+          {copied ? <span className="signal-meta-tooltip-copy">Copied</span> : null}
         </span>
       ) : null}
     </span>
@@ -137,7 +159,7 @@ export function SignalMetaRow({
   label,
   type,
   value,
-  emptyLabel = "利用できません",
+  emptyLabel = "Not available",
   children,
 }: SignalMetaRowProps) {
   return (

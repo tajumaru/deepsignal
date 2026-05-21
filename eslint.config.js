@@ -6,7 +6,22 @@ import tseslint from "typescript-eslint";
 
 export default tseslint.config(
   {
-    ignores: ["dist", "move", "node_modules", "scripts", ".tmp-test", "**/*.d.ts"],
+    ignores: [
+      "dist",
+      "move",
+      "node_modules",
+      "scripts",
+      ".tmp-test",
+      ".ci-cache",
+      ".ci-run-verify",
+      ".ci-verify",
+      ".npm-cache",
+      ".npm-cache-clean",
+      ".npm-cache-rollup",
+      ".move-cache",
+      "ci-run-verify",
+      "**/*.d.ts",
+    ],
   },
   {
     files: ["**/*.{ts,tsx}"],

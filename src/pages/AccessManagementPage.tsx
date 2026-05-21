@@ -1,4 +1,5 @@
 import { AdminAccessGate } from "../components/AdminAccessGate";
+import { AdminWorkspaceTabs } from "../components/AdminWorkspaceTabs";
 import { AccessManagementSection } from "../components/AccessManagementSection";
 import { useAccessControl } from "../hooks/useAccessControl";
 import { useSuiWallet } from "../hooks/useSuiWallet";
@@ -41,6 +42,8 @@ export function AccessManagementPage() {
             <p className="lede">{t("accessManagementDescription")}</p>
           </div>
         </div>
+
+        <AdminWorkspaceTabs activeTab="members" />
 
         {capabilityProfile.isConfigured ? (
           <AccessManagementSection

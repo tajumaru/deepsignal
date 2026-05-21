@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { shortAddress } from "../lib/sui";
 import { useSuiName } from "../hooks/useSuiName";
+import { shortAddress } from "../lib/sui";
 
 interface SuiAddressDisplayProps {
   address: string;
@@ -14,6 +14,7 @@ interface SuiAddressDisplayProps {
   copyOnClick?: boolean;
   onPress?: () => void;
   resolveName?: boolean;
+  interactive?: boolean;
 }
 
 export function SuiAddressDisplay({
@@ -28,6 +29,7 @@ export function SuiAddressDisplay({
   copyOnClick = true,
   onPress,
   resolveName = true,
+  interactive = true,
 }: SuiAddressDisplayProps) {
   const { data: suinsName } = useSuiName(address, { enabled: resolveName });
   const [isVisible, setIsVisible] = useState(false);
@@ -65,26 +67,38 @@ export function SuiAddressDisplay({
     }
   }
 
+  const content = (
+    <>
+      <span className={`sui-address-display-label ${labelClassName}`.trim()}>{displayLabel}</span>
+      {showCopyLabel ? (
+        <span className={`sui-address-display-copy ${copyClassName}`.trim()} aria-hidden="true">
+          {copyLabel}
+        </span>
+      ) : null}
+    </>
+  );
+
   return (
     <span className={`sui-address-display-shell ${className}`.trim()}>
-      <button
-        type="button"
-        className="sui-address-display"
-        onClick={() => void handleCopy()}
-        onMouseEnter={() => showTooltip && setIsVisible(true)}
-        onMouseLeave={() => showTooltip && !copied && setIsVisible(false)}
-        onFocus={() => showTooltip && setIsVisible(true)}
-        onBlur={() => showTooltip && !copied && setIsVisible(false)}
-        title={address}
-        aria-label={`Copy wallet address ${address}`}
-      >
-        <span className={`sui-address-display-label ${labelClassName}`.trim()}>{displayLabel}</span>
-        {showCopyLabel ? (
-          <span className={`sui-address-display-copy ${copyClassName}`.trim()} aria-hidden="true">
-            {copyLabel}
-          </span>
-        ) : null}
-      </button>
+      {interactive ? (
+        <button
+          type="button"
+          className="sui-address-display"
+          onClick={() => void handleCopy()}
+          onMouseEnter={() => showTooltip && setIsVisible(true)}
+          onMouseLeave={() => showTooltip && !copied && setIsVisible(false)}
+          onFocus={() => showTooltip && setIsVisible(true)}
+          onBlur={() => showTooltip && !copied && setIsVisible(false)}
+          title={address}
+          aria-label={`Copy wallet address ${address}`}
+        >
+          {content}
+        </button>
+      ) : (
+        <span className="sui-address-display" title={address}>
+          {content}
+        </span>
+      )}
       {showTooltip && isVisible ? (
         <span className="signal-meta-tooltip" role="status" aria-live="polite">
           <span className="signal-meta-tooltip-value">{shortAddress(address)}</span>

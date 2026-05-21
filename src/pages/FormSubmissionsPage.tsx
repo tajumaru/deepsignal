@@ -15,6 +15,7 @@ import { CsvExportConfirmationModal } from "../features/admin/components/CsvExpo
 import { usePrivateSignalDecrypt } from "../features/admin/hooks/usePrivateSignalDecrypt";
 import { useAccessControl } from "../hooks/useAccessControl";
 import { getAttachmentDownloadHref, useAttachmentPreviews } from "../hooks/useAttachmentPreviews";
+import { useReviewerDisplayLabel } from "../hooks/useReviewerDisplayLabel";
 import { useSuiWallet } from "../hooks/useSuiWallet";
 import { getSealRuntimeStatus } from "../crypto/cryptoFactory";
 import { useI18n } from "../i18n";
@@ -448,6 +449,7 @@ export function FormSubmissionsPage() {
       (!detailAttachments.some((attachment) => attachment.encrypted) || Boolean(detailAnswers)),
     decryptContext: attachmentDecryptContext,
   });
+  const selectedReviewerDisplayLabel = useReviewerDisplayLabel(reviewerDraft);
   const renderAttachmentCards = (attachments: Submission["attachments"]) => {
     if (attachments.length === 0) {
       return null;
@@ -1006,7 +1008,9 @@ export function FormSubmissionsPage() {
         />
       </label>
       <div className="review-controls-actions">
-        <span className="signal-chip signal-chip-soft">{reviewerDraft || t("unassignedLabel")}</span>
+        <span className="signal-chip signal-chip-soft">
+          {selectedReviewerDisplayLabel || t("unassignedLabel")}
+        </span>
         {wallet.accountAddress ? (
           <button
             type="button"
@@ -1550,7 +1554,11 @@ export function FormSubmissionsPage() {
                         {getSubmissionRespondentMeta(submission).isAnonymous ? (
                           <span className="signal-chip">Anonymous respondent</span>
                         ) : (
-                          <SignalMetaChip type="contributor" value={getRespondentDisplayLabel(submission)} />
+                          <SignalMetaChip
+                            type="contributor"
+                            value={getRespondentDisplayLabel(submission)}
+                            interactive={false}
+                          />
                         )}
                         {typeof submission.signalValue === "number" ? (
                           <span className="signal-chip">Signal Value {submission.signalValue}/5</span>

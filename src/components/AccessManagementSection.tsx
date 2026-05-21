@@ -1,9 +1,10 @@
 import { useSignAndExecuteTransaction } from "@mysten/dapp-kit";
 import { Transaction } from "@mysten/sui/transactions";
 import { isValidSuiAddress, normalizeSuiAddress } from "@mysten/sui/utils";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import type { CapabilityProfile } from "../hooks/useAccessControl";
 import { useAccessRegistry } from "../hooks/useAccessRegistry";
+import { buildRegistryRows } from "./MemberDirectorySection";
 import { useI18n } from "../i18n";
 import { canIssueAdmin, canIssueReviewer } from "../lib/adminAccess";
 import type { RegistryRoleEntry } from "../lib/accessRegistry";
@@ -69,18 +70,7 @@ export function AccessManagementSection({
   const canManageAdmins = canIssueAdmin(capabilityProfile);
   const canManageReviewers = canIssueReviewer(capabilityProfile);
 
-  const rows = useMemo(
-    () =>
-      [
-        ...(registry.owner ? [registry.owner] : []),
-        ...registry.admins,
-        ...registry.reviewers,
-      ].map((entry) => ({
-        ...entry,
-        key: `${entry.role}:${entry.address}:${entry.capId}`,
-      })),
-    [registry.admins, registry.owner, registry.reviewers],
-  );
+  const rows = buildRegistryRows(registry);
 
   async function refreshAll() {
     await Promise.all([onRefreshCapabilities(), refetchRegistry()]);
