@@ -486,6 +486,7 @@ function getReviewLifecycleSteps(t: TranslationFn, submission?: Submission | nul
 type TranslationFn = ReturnType<typeof useI18n>["t"];
 
 interface MobileInboxHeaderProps {
+  t: TranslationFn;
   title: string;
   activeScopeLabel: string;
   visibleCountLabel: string;
@@ -522,6 +523,7 @@ interface MobileInboxHeaderProps {
 }
 
 function MobileInboxHeader({
+  t,
   title,
   activeScopeLabel,
   visibleCountLabel,
@@ -626,11 +628,11 @@ function MobileInboxHeader({
         <label className="mobile-inbox-filter mobile-inbox-sort">
           <span className="sr-only">Sort inbox</span>
           <select value={sortOrder} onChange={(event) => onSortOrderChange(event.target.value as SignalSortOrder)}>
-            <option value="default">{getSortLabel("default")}</option>
-            <option value="newest">{getSortLabel("newest")}</option>
-            <option value="oldest">{getSortLabel("oldest")}</option>
-            <option value="priority">{getSortLabel("priority")}</option>
-            <option value="unread">{getSortLabel("unread")}</option>
+            <option value="default">{getSortLabel("default", t)}</option>
+            <option value="newest">{getSortLabel("newest", t)}</option>
+            <option value="oldest">{getSortLabel("oldest", t)}</option>
+            <option value="priority">{getSortLabel("priority", t)}</option>
+            <option value="unread">{getSortLabel("unread", t)}</option>
           </select>
         </label>
       </div>
@@ -753,18 +755,18 @@ function isQuickActionActive(submission: Submission, action: QuickActionId) {
   }
 }
 
-function getSortLabel(sortOrder: SignalSortOrder) {
+function getSortLabel(sortOrder: SignalSortOrder, t: TranslationFn) {
   switch (sortOrder) {
     case "newest":
-      return "Newest first";
+      return t("sortOrderNewestFirst");
     case "oldest":
-      return "Oldest first";
+      return t("sortOrderOldestFirst");
     case "priority":
-      return "Priority first";
+      return t("sortOrderPriorityFirst");
     case "unread":
-      return "Unread first";
+      return t("sortOrderUnreadFirst");
     default:
-      return "Default order";
+      return t("sortOrderDefault");
   }
 }
 
@@ -1017,6 +1019,7 @@ function MobileSignalInbox({
   return (
     <section className={`mobile-signal-inbox ${selectedRecord ? "is-detail-open" : ""}`} aria-label={title}>
       <MobileInboxHeader
+        t={t}
         title={title}
         activeScopeLabel={activeScopeLabel}
         visibleCountLabel={visibleCountLabel}
@@ -2861,11 +2864,11 @@ export function AdminDashboardPage() {
                       value={signalSortOrder}
                       onChange={(event) => setSignalSortOrder(event.target.value as SignalSortOrder)}
                     >
-                      <option value="default">{getSortLabel("default")}</option>
-                      <option value="newest">{getSortLabel("newest")}</option>
-                      <option value="oldest">{getSortLabel("oldest")}</option>
-                      <option value="priority">{getSortLabel("priority")}</option>
-                      <option value="unread">{getSortLabel("unread")}</option>
+                      <option value="default">{getSortLabel("default", t)}</option>
+                      <option value="newest">{getSortLabel("newest", t)}</option>
+                      <option value="oldest">{getSortLabel("oldest", t)}</option>
+                      <option value="priority">{getSortLabel("priority", t)}</option>
+                      <option value="unread">{getSortLabel("unread", t)}</option>
                     </select>
                   </label>
                 </div>
