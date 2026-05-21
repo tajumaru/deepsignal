@@ -5,8 +5,8 @@ import {
   createCriticalFailure,
   type CriticalFailure,
 } from "../../../lib/criticalFailure";
-import { isAttachmentFieldType, isConfirmationCheckboxField } from "../../../lib/fieldTypes";
-import { getSuiAddressValidationState, normalizeValidSuiAddress } from "../../../lib/suiAddress";
+import { isAttachmentFieldType } from "../../../lib/fieldTypes";
+import { normalizeValidSuiAddress } from "../../../lib/suiAddress";
 import { getSubmissionCategoryFromPurpose } from "../../../lib/formTemplates";
 import { isResponseDeadlinePassed } from "../../../lib/responseDeadline";
 import { ensureRespondentSession } from "../../../lib/respondentSession";
@@ -16,8 +16,9 @@ import { makeId } from "../../../lib/utils";
 import { useRpcInfrastructure } from "../../../rpcInfrastructure";
 import { isQuotaExceededError, isRateLimitError } from "../../../storage/walrusDiagnostics";
 import type { FormSchema, Submission, SubmissionAttachment } from "../../../types";
-import { getOrderedFields, getVisibleFieldIds, isFieldRequired } from "../../../utils/formLogic";
+import { getOrderedFields, getVisibleFieldIds } from "../../../utils/formLogic";
 import type { PublicAnswers, ValidationErrors } from "../types";
+import { validatePublicSubmission } from "../utils/validatePublicSubmission";
 
 const REAL_SEAL_PROJECT_REQUIRED_MESSAGE =
   "Real Seal encrypted submissions require a project or form owner wallet. Connect the creator wallet or turn off Encrypt submissions.";
@@ -140,26 +141,6 @@ function getApproxPayloadSize(value: unknown) {
   }
 }
 
-function isValidUrlAnswer(value: unknown) {
-  if (typeof value !== "string" || !value.trim()) {
-    return true;
-  }
-  try {
-    const parsed = new URL(value.trim());
-    return parsed.protocol === "http:" || parsed.protocol === "https:";
-  } catch {
-    return false;
-  }
-}
-
-function isCompleteMatrixAnswer(value: unknown, rows: string[]) {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return false;
-  }
-  const answer = value as Record<string, unknown>;
-  return rows.every((row) => typeof answer[row] === "string" && String(answer[row]).trim().length > 0);
-}
-
 function getAttachmentTypeFromMime(mimeType: string): SubmissionAttachment["type"] {
   if (mimeType.startsWith("video/")) {
     return "video";
@@ -168,10 +149,6 @@ function getAttachmentTypeFromMime(mimeType: string): SubmissionAttachment["type
     return "image";
   }
   return "document";
-}
-
-function canUseInlineEncryptedAttachment(form: FormSchema, fieldId: string) {
-  return Boolean(form.encryptSubmissions && form.fields.some((field) => field.id === fieldId));
 }
 
 function createPseudoProgress(onTick: (progress: number) => void) {
@@ -713,55 +690,12 @@ export function usePublicSubmission({
   }
 
   function validate(currentForm: FormSchema) {
-    const nextErrors: ValidationErrors = {};
-    currentForm.fields.forEach((field) => {
-      const visible = visibleFieldIds.has(field.id);
-      const value = answers[field.id];
-      const matrixRows = field.type === "matrix" ? (field.rows ?? []).map((row) => row.trim()).filter(Boolean) : [];
-      const uploadItems = attachmentFields.has(field.id) ? getUploadAnswer(value) : [];
-      const usesInlineEncryptedAttachments = canUseInlineEncryptedAttachment(currentForm, field.id);
-      if (
-        attachmentFields.has(field.id) &&
-        !usesInlineEncryptedAttachments &&
-        uploadItems.some((attachment) => attachment.status === "pending" || attachment.status === "uploading")
-      ) {
-        nextErrors[field.id] = "Attachment upload is still in progress. Wait for the Walrus blob ID before sending.";
-        return;
-      }
-      if (attachmentFields.has(field.id) && uploadItems.some((attachment) => attachment.status === "failed")) {
-        nextErrors[field.id] = "Attachment upload failed. Remove the failed file or select it again.";
-        return;
-      }
-      if (!isFieldRequired(field, currentForm.fields, answers, visible)) {
-        if (field.type === "url" && value && !isValidUrlAnswer(value)) {
-          nextErrors[field.id] = "Enter a valid URL starting with http:// or https://";
-        }
-        if (field.type === "walletAddress" && value && getSuiAddressValidationState(value) === "invalid") {
-          nextErrors[field.id] = "Enter a valid SUI address.";
-        }
-        return;
-      }
-      const missing =
-        value === "" ||
-        value === null ||
-        value === undefined ||
-        (isConfirmationCheckboxField(field.type) && value !== true) ||
-        (field.type === "matrix" && !isCompleteMatrixAnswer(value, matrixRows)) ||
-        (Array.isArray(value) && value.length === 0) ||
-        (attachmentFields.has(field.id) &&
-          (usesInlineEncryptedAttachments
-            ? uploadItems.filter((attachment) => attachment.status !== "failed" && (attachment.file || attachment.walrusBlobId)).length === 0
-            : uploadItems.filter((attachment) => attachment.status === "uploaded" && attachment.walrusBlobId).length === 0));
-      if (missing) {
-        nextErrors[field.id] = requiredFieldError;
-        return;
-      }
-      if (field.type === "url" && value && !isValidUrlAnswer(value)) {
-        nextErrors[field.id] = "Enter a valid URL starting with http:// or https://";
-      }
-      if (field.type === "walletAddress" && value && getSuiAddressValidationState(value) === "invalid") {
-        nextErrors[field.id] = "Enter a valid SUI address.";
-      }
+    const nextErrors = validatePublicSubmission({
+      form: currentForm,
+      answers,
+      visibleFieldIds,
+      attachmentFields,
+      requiredFieldError,
     });
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length > 0) {
