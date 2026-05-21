@@ -57,6 +57,7 @@ import {
   mergeActivityEvents,
 } from "../lib/activityLog";
 import { getTriageStatusLabel, TRIAGE_STATUS_OPTIONS } from "../lib/signalOps";
+import { getRelatedSignals } from "../lib/relatedSignals";
 import { exportSubmissionJson } from "../lib/export";
 import {
   buildExportMetadata,
@@ -1545,6 +1546,15 @@ export function AdminDashboardPage() {
   const selectedRoadmapUrl = selectedRecord
     ? getPublicRoadmapPath(selectedRecord.form.id, selectedRecord.form.manifestBlobId)
     : "";
+  const relatedSignals = useMemo(
+    () =>
+      getRelatedSignals({
+        selectedRecord,
+        records: allSignals,
+        maxResults: 5,
+      }),
+    [allSignals, selectedRecord],
+  );
   const hasExplicitSelectedRecord = Boolean(selectedSignalId && selectedRecord);
   const isSelectedRecordOnRoadmap = selectedRecord
     ? ROADMAP_READY_STATUSES.has(selectedRecord.submission.triageStatus)
@@ -4030,15 +4040,13 @@ export function AdminDashboardPage() {
                           </summary>
                           <div className="inspector-panel-body">
                             <RelatedSignalsPanel
-                              selectedRecord={selectedRecord}
-                              visibleSignals={visibleSignals}
-                              allSignals={allSignals}
-                              signalById={signalIndex.signalById}
-                              onSelectSignal={(submissionId) => {
+                              relatedSignals={relatedSignals}
+                              selectedSignalId={selectedSignalId}
+                              onSelectRecord={(record) => {
                                 if (decryptInFlightRef.current) {
                                   return;
                                 }
-                                setSelectedSignalId(submissionId);
+                                handleSelectDesktopSignal(record.submission.id, { scrollIntoView: true });
                               }}
                             />
                           </div>

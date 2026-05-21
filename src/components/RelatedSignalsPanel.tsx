@@ -1,18 +1,14 @@
-import { useMemo } from "react";
 import { useI18n } from "../i18n";
 import { getSubmissionRespondentMeta } from "../lib/respondentMeta";
-import { getTriageStatusLabel } from "../lib/signalOps";
 import { getSignalPreview, getSignalSubject } from "../lib/signalInbox";
+import { type RelatedSignalReason, type RelatedSignalResult } from "../lib/relatedSignals";
 import { formatDate } from "../lib/utils";
-import { findRelatedSignals, type RelatedSignalReason } from "../features/admin/lib/relatedSignals";
 import type { SignalRecord } from "../features/admin/hooks/useSignalInboxData";
 
 interface RelatedSignalsPanelProps {
-  selectedRecord: SignalRecord;
-  visibleSignals: SignalRecord[];
-  allSignals: SignalRecord[];
-  signalById?: Record<string, SignalRecord | undefined>;
-  onSelectSignal: (submissionId: string) => void;
+  relatedSignals: RelatedSignalResult[];
+  selectedSignalId?: string;
+  onSelectRecord: (record: SignalRecord) => void;
 }
 
 function getPriorityLabel(priority: SignalRecord["submission"]["priority"], t: ReturnType<typeof useI18n>["t"]) {
@@ -27,6 +23,24 @@ function getPriorityLabel(priority: SignalRecord["submission"]["priority"], t: R
   }
 }
 
+function getTriageStatusLabel(triageStatus: SignalRecord["submission"]["triageStatus"], t: ReturnType<typeof useI18n>["t"]) {
+  switch (triageStatus) {
+    case "investigating":
+      return t("triageStatusInvestigating");
+    case "planned":
+      return t("triageStatusPlanned");
+    case "in_progress":
+      return t("triageStatusInProgress");
+    case "fixed":
+      return t("triageStatusFixed");
+    case "closed":
+      return t("triageStatusClosed");
+    case "new":
+    default:
+      return t("triageStatusNew");
+  }
+}
+
 function getReasonLabel(reason: RelatedSignalReason, t: ReturnType<typeof useI18n>["t"]) {
   switch (reason) {
     case "same_channel":
@@ -37,86 +51,62 @@ function getReasonLabel(reason: RelatedSignalReason, t: ReturnType<typeof useI18
       return t("relatedReasonSameTriage");
     case "same_priority":
       return t("relatedReasonSamePriority");
-    case "same_severity":
-      return t("relatedReasonSameSeverity");
     case "same_sender_type":
       return t("relatedReasonSameSenderType");
-    case "shared_keywords":
-      return t("relatedReasonSharedKeywords");
     case "shared_tags":
       return t("relatedReasonSharedTags");
-    case "exact_subject":
-      return t("relatedReasonExactSubject");
-    case "similar_text":
+    case "similar_subject":
+      return t("relatedReasonSimilarSubject");
+    case "similar_preview":
     default:
-      return t("relatedReasonKeywordOverlap");
+      return t("relatedReasonSimilarPreview");
   }
 }
 
-export function RelatedSignalsPanel({
-  selectedRecord,
-  visibleSignals,
-  allSignals,
-  signalById,
-  onSelectSignal,
-}: RelatedSignalsPanelProps) {
-  const { t } = useI18n();
-  const { matches, duplicateHint } = useMemo(
-    () =>
-      findRelatedSignals({
-        selectedRecord,
-        visibleSignals,
-        allSignals,
-        signalById,
-        maxResults: 5,
-      }),
-    [allSignals, selectedRecord, signalById, visibleSignals],
-  );
+function getSafePreview(record: SignalRecord, t: ReturnType<typeof useI18n>["t"]) {
+  if (record.submission.isEncrypted) {
+    return record.submission.subjectPreview?.trim() || t("relatedSignalsEncryptedState");
+  }
+  return getSignalPreview(record.submission);
+}
 
-  const hintLabel =
-    duplicateHint === "possible_duplicate"
-      ? t("relatedSignalsHintPossibleDuplicate")
-      : duplicateHint === "count"
-        ? t("relatedSignalsHintCount", { count: matches.length })
-        : duplicateHint === "similar"
-          ? t("relatedSignalsHintSimilar")
-          : null;
+export function RelatedSignalsPanel({ relatedSignals, selectedSignalId, onSelectRecord }: RelatedSignalsPanelProps) {
+  const { t } = useI18n();
+  const duplicateDetected = relatedSignals.some((signal) => signal.duplicateLikely);
 
   return (
     <section className="related-signals-panel" aria-label={t("relatedSignalsTitle")}>
       <div className="related-signals-header">
         <div>
-          <p className="eyebrow">{t("reviewSupportEyebrow")}</p>
           <h3>{t("relatedSignalsTitle")}</h3>
-          <p className="muted">{t("relatedSignalsBody")}</p>
+          <p className="muted">{t("relatedSignalsSubtitle")}</p>
         </div>
-        <span className="signal-chip signal-chip-soft">{t("resultsLabel", { count: matches.length })}</span>
+        <span className="signal-chip signal-chip-soft">{t("relatedSignalsCount", { count: relatedSignals.length })}</span>
       </div>
 
-      {hintLabel ? <p className="related-signals-hint">{hintLabel}</p> : null}
+      {duplicateDetected ? <p className="related-signals-notice">{t("relatedSignalsHintPossibleDuplicate")}</p> : null}
 
-      {matches.length === 0 ? (
+      {relatedSignals.length === 0 ? (
         <p className="muted related-signals-empty">{t("relatedSignalsEmpty")}</p>
       ) : (
-        <div className="related-signals-list">
-          {matches.map((match) => {
-            const { record } = match;
+        <div className="related-signal-list">
+          {relatedSignals.map((match) => {
+            const { record, reasons } = match;
             const respondentMeta = getSubmissionRespondentMeta(record.submission);
-            const preview = getSignalPreview(record.submission);
-            const reasonChips = [
-              ...match.reasons.slice(0, 3).map((reason) => getReasonLabel(reason, t)),
-              ...match.sharedKeywords.slice(0, 2),
-              ...match.sharedTags.slice(0, 1),
-            ].slice(0, 5);
+            const preview = getSafePreview(record, t);
+            const encryptedState = record.submission.isEncrypted
+              ? t("relatedSignalsEncryptedState")
+              : t("relatedSignalsOpenState");
 
             return (
               <button
                 key={record.submission.id}
                 type="button"
-                className="related-signal-card"
-                onClick={() => onSelectSignal(record.submission.id)}
+                className={`related-signal-item ${selectedSignalId === record.submission.id ? "is-selected" : ""}`}
+                aria-pressed={selectedSignalId === record.submission.id}
+                onClick={() => onSelectRecord(record)}
               >
-                <span className="related-signal-card-main">
+                <span className="related-signal-item-main">
                   <span className="related-signal-title-line">
                     <strong>{getSignalSubject(record.submission)}</strong>
                     <time dateTime={record.submission.createdAt}>{formatDate(record.submission.createdAt)}</time>
@@ -126,19 +116,20 @@ export function RelatedSignalsPanel({
                   </span>
                   <span className="related-signal-channel">{record.form.title}</span>
                   <span className="related-signal-meta">
-                    <span className="signal-chip">{getTriageStatusLabel(record.submission.triageStatus)}</span>
+                    <span className="signal-chip">{getTriageStatusLabel(record.submission.triageStatus, t)}</span>
                     <span className="signal-chip">{getPriorityLabel(record.submission.priority, t)}</span>
                     <span className={`signal-chip ${respondentMeta.isAnonymous ? "" : "signal-chip-soft"}`}>
                       {respondentMeta.isAnonymous ? t("anonymousLabel") : t("verifiedSignalsLabel")}
                     </span>
-                    {record.submission.isEncrypted ? (
-                      <span className="signal-chip">{t("encryptedPrivateSignalStatus")}</span>
-                    ) : null}
+                    <span className="signal-chip signal-chip-soft">{encryptedState}</span>
                   </span>
                   <span className="related-signal-reasons">
-                    {reasonChips.map((chip) => (
-                      <span key={`${record.submission.id}-${chip}`} className="related-reason-chip">
-                        {chip}
+                    {reasons.map((reason) => (
+                      <span
+                        key={`${record.submission.id}-${reason}`}
+                        className="related-signal-reason-chip"
+                      >
+                        {getReasonLabel(reason, t)}
                       </span>
                     ))}
                   </span>

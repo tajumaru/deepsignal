@@ -17453,7 +17453,7 @@ body.composer-mode .bg-orb {
   margin-bottom: 0;
 }
 
-.related-signals-hint {
+.related-signals-notice {
   margin: 0;
   padding: 0.7rem 0.8rem;
   border-radius: 12px;
@@ -17461,19 +17461,19 @@ body.composer-mode .bg-orb {
   background: rgba(102, 227, 255, 0.07);
   color: #dffaff;
   font-size: 0.84rem;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .related-signals-empty {
   margin: 0;
 }
 
-.related-signals-list {
+.related-signal-list {
   display: grid;
   gap: 0.7rem;
 }
 
-.related-signal-card {
+.related-signal-item {
   width: 100%;
   padding: 0.9rem;
   border: 1px solid rgba(116, 226, 255, 0.1);
@@ -17487,14 +17487,19 @@ body.composer-mode .bg-orb {
     transform 160ms ease;
 }
 
-.related-signal-card:hover,
-.related-signal-card:focus-visible {
+.related-signal-item:hover,
+.related-signal-item:focus-visible,
+.related-signal-item.is-selected {
   border-color: rgba(116, 226, 255, 0.24);
   background: rgba(4, 18, 31, 0.6);
+}
+
+.related-signal-item:hover,
+.related-signal-item:focus-visible {
   transform: translateY(-1px);
 }
 
-.related-signal-card-main {
+.related-signal-item-main {
   display: grid;
   gap: 0.45rem;
 }
@@ -17531,7 +17536,7 @@ body.composer-mode .bg-orb {
   color: #b7d5e2;
 }
 
-.related-reason-chip {
+.related-signal-reason-chip {
   display: inline-flex;
   align-items: center;
   padding: 0.24rem 0.5rem;
@@ -17549,7 +17554,7 @@ body.composer-mode .bg-orb {
     align-items: start;
   }
 
-  .related-signal-card {
+  .related-signal-item {
     padding: 0.8rem;
   }
 }
