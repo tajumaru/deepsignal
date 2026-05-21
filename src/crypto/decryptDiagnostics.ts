@@ -40,6 +40,7 @@ export interface DecryptDiagnosticContext {
   manifestBlobId?: string;
   submissionBlobId?: string;
   encryptedBlobId?: string;
+  receiptBlobId?: string;
   network?: string;
   walletAddress?: string;
   packageId?: string;
@@ -119,6 +120,7 @@ export function buildDecryptDiagnosticContext(
     manifestBlobId: form.manifestBlobId,
     submissionBlobId: submission.blobId,
     encryptedBlobId: submission.encryptedBlobId,
+    receiptBlobId: submission.receiptBlobId,
     network: SUI_NETWORK,
     walletAddress: normalizeOptionalSealIdentifier(context.walletAddress),
     timestamp: new Date().toISOString(),

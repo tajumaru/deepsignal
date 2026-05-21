@@ -1,5 +1,4 @@
 import {
-  useAutoConnectWallet,
   useCurrentAccount,
   useCurrentWallet,
   useDisconnectWallet,
@@ -29,8 +28,7 @@ export interface SuiWalletState {
 
 export function useSuiWallet(options: { resolveName?: boolean } = {}): SuiWalletState {
   const account = useCurrentAccount();
-  const { currentWallet, isConnected, isConnecting } = useCurrentWallet();
-  const autoConnectStatus = useAutoConnectWallet();
+  const { currentWallet, connectionStatus, isConnected, isConnecting } = useCurrentWallet();
   const disconnectWallet = useDisconnectWallet();
   const { data: suinsName = null } = useSuiName(account?.address, {
     enabled: options.resolveName ?? true,
@@ -38,7 +36,7 @@ export function useSuiWallet(options: { resolveName?: boolean } = {}): SuiWallet
   const [error, setError] = useState<Error | null>(null);
 
   const accountAddress = account?.address;
-  const isRestoringConnection = !isConnected && (isConnecting || autoConnectStatus === "idle");
+  const isRestoringConnection = connectionStatus === "connecting";
   const shortAddressLabel = accountAddress ? shortAddress(accountAddress) : "";
   const displayName = suinsName ?? shortAddressLabel;
   const status: SuiWalletConnectionStatus = error

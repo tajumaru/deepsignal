@@ -42,7 +42,8 @@ export function canAttemptPrivateSignalDecrypt(
     return false;
   }
   if (profile?.isConfigured) {
-    return canReview(profile) || getFormAccessState(form, currentAddress) !== "denied";
+    const formAccessState = getFormAccessState(form, currentAddress);
+    return canReview(profile) || formAccessState === "allowed" || formAccessState === "legacy";
   }
   return canAccessForm(form, currentAddress);
 }
@@ -100,7 +101,10 @@ export function getReviewAccessState(
   profile?: CapabilityProfile | null,
 ): FormAccessState {
   if (profile?.isConfigured) {
-    return canReview(profile) || getFormAccessState(form, currentAddress) !== "denied" ? "allowed" : "denied";
+    const formAccessState = getFormAccessState(form, currentAddress);
+    return canReview(profile) || formAccessState === "allowed" || formAccessState === "legacy"
+      ? "allowed"
+      : "denied";
   }
 
   return getFormAccessState(form, currentAddress);
@@ -112,7 +116,8 @@ export function canReviewForm(
   profile?: CapabilityProfile | null,
 ) {
   if (profile?.isConfigured) {
-    return canReview(profile) || getFormAccessState(form, currentAddress) !== "denied";
+    const formAccessState = getFormAccessState(form, currentAddress);
+    return canReview(profile) || formAccessState === "allowed" || formAccessState === "legacy";
   }
 
   return canAccessForm(form, currentAddress);

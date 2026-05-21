@@ -169,7 +169,31 @@ function getSealPolicyDebugErrorMessages(diagnostics: DecryptDiagnosticContext, 
 }
 
 function downloadSealPolicyDebugCsv(diagnostics: DecryptDiagnosticContext, errorMessage?: string) {
-  const rows = [["error"], ...getSealPolicyDebugErrorMessages(diagnostics, errorMessage).map((message) => [message])];
+  const rows = [
+    ["field", "value"],
+    ["error", getSealPolicyDebugErrorMessages(diagnostics, errorMessage).join(" | ")],
+    ["responseId", formatDebugValue(diagnostics.responseId)],
+    ["walletAddress", formatDebugValue(diagnostics.walletAddress)],
+    ["manifestBlobId", formatDebugValue(diagnostics.manifestBlobId)],
+    ["submissionBlobId", formatDebugValue(diagnostics.submissionBlobId)],
+    ["receiptBlobId", formatDebugValue(diagnostics.receiptBlobId)],
+    ["packageId", formatDebugValue(diagnostics.packageId)],
+    ["policyHash", formatDebugValue(diagnostics.policyHash)],
+    ["policyId", formatDebugValue(diagnostics.policyId)],
+    ["policyObjectId", formatDebugValue(diagnostics.policyObjectId)],
+    ["accessObjectId", formatDebugValue(diagnostics.accessObjectId)],
+    ["capabilityType", formatDebugValue(diagnostics.capabilityType)],
+    ["encryptedBlobId", formatDebugValue(diagnostics.encryptedBlobId)],
+    ["gateway", formatDebugValue(diagnostics.gateway)],
+    ["source", formatDebugValue(diagnostics.source)],
+    ["encryptPolicySnapshot", formatDebugValue(diagnostics.encryptPolicySnapshot)],
+    ["decryptPolicySnapshot", formatDebugValue(diagnostics.decryptPolicySnapshot)],
+    ["policySnapshotComparison", formatDebugValue(diagnostics.policySnapshotComparison)],
+    ["requiredCapabilityObjects", formatDebugValue(diagnostics.requiredCapabilityObjects)],
+    ["ownedCapabilityObjects", formatDebugValue(diagnostics.ownedCapabilityObjects)],
+    ["objectIdSources", formatDebugValue(diagnostics.objectIdSources)],
+    ["encryptedPayloadShape", formatDebugValue(diagnostics.encryptedPayloadShape)],
+  ];
   const csv = `\uFEFF${rows.map((row) => row.map((cell) => sanitizeCsvCell(formatDebugValue(cell))).join(",")).join("\r\n")}`;
   const responsePart = diagnostics.responseId ? `-${diagnostics.responseId}` : "";
   downloadTextFile(

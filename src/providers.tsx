@@ -24,7 +24,6 @@ import {
   isTatumRpcUrl,
   SUI_DEFAULT_RPC_URL,
   SUI_FALLBACK_RPC_URL,
-  SUI_FULLNODE_URL,
   SUI_NETWORK,
   SUI_TATUM_RPC_URL,
 } from "./lib/sui";

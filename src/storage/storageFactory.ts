@@ -95,6 +95,81 @@ function mergeById<T extends { id: string }>(primary: T[], secondary: T[]) {
   return [...map.values()];
 }
 
+function hasNonEmptyObject(value: Record<string, unknown> | undefined) {
+  return Boolean(value && Object.keys(value).length > 0);
+}
+
+function hasNonEmptyText(value?: string) {
+  return Boolean(value?.trim());
+}
+
+function getDecryptReadinessScore(submission: Submission) {
+  let score = 0;
+  if (hasNonEmptyText(submission.encryptedPayload)) {
+    score += 16;
+  }
+  if (hasNonEmptyText(submission.encryptedBlobId)) {
+    score += 12;
+  }
+  if (submission.isEncrypted && hasNonEmptyText(submission.blobId)) {
+    score += 8;
+  }
+  if (hasNonEmptyText(submission.receiptBlobId)) {
+    score += 4;
+  }
+  if (hasNonEmptyObject(submission.answers)) {
+    score += 2;
+  }
+  if (submission.attachments.length > 0) {
+    score += 1;
+  }
+  return score;
+}
+
+function mergeSubmissionRecord(primary: Submission, secondary: Submission) {
+  const decryptPreferred =
+    getDecryptReadinessScore(primary) >= getDecryptReadinessScore(secondary) ? primary : secondary;
+  const metadataPreferred =
+    Date.parse(primary.updatedAt || primary.createdAt) >= Date.parse(secondary.updatedAt || secondary.createdAt)
+      ? primary
+      : secondary;
+
+  return {
+    ...decryptPreferred,
+    status: metadataPreferred.status,
+    priority: metadataPreferred.priority,
+    triageStatus: metadataPreferred.triageStatus,
+    notes: hasNonEmptyText(metadataPreferred.notes) ? metadataPreferred.notes : decryptPreferred.notes,
+    tags: metadataPreferred.tags.length > 0 ? metadataPreferred.tags : decryptPreferred.tags,
+    encryptedBlobId: decryptPreferred.encryptedBlobId ?? metadataPreferred.encryptedBlobId,
+    encryptedPayload: decryptPreferred.encryptedPayload ?? metadataPreferred.encryptedPayload,
+    receiptBlobId: decryptPreferred.receiptBlobId ?? metadataPreferred.receiptBlobId,
+    blobId: decryptPreferred.blobId ?? metadataPreferred.blobId,
+    signalReceiptMetadataDigest:
+      decryptPreferred.signalReceiptMetadataDigest ?? metadataPreferred.signalReceiptMetadataDigest,
+    onchainSignalId: decryptPreferred.onchainSignalId ?? metadataPreferred.onchainSignalId,
+    onchainStatus: decryptPreferred.onchainStatus ?? metadataPreferred.onchainStatus,
+    walrusProof: decryptPreferred.walrusProof ?? metadataPreferred.walrusProof,
+    encryptedWalrusProof: decryptPreferred.encryptedWalrusProof ?? metadataPreferred.encryptedWalrusProof,
+    subjectPreview: decryptPreferred.subjectPreview ?? metadataPreferred.subjectPreview,
+    responderSignature: decryptPreferred.responderSignature ?? metadataPreferred.responderSignature,
+    responderSignedBytes: decryptPreferred.responderSignedBytes ?? metadataPreferred.responderSignedBytes,
+    responderSignedAt: decryptPreferred.responderSignedAt ?? metadataPreferred.responderSignedAt,
+  } satisfies Submission;
+}
+
+function mergeSubmissionsById(primary: Submission[], secondary: Submission[]) {
+  const map = new Map<string, Submission>();
+  for (const item of secondary) {
+    map.set(item.id, item);
+  }
+  for (const item of primary) {
+    const current = map.get(item.id);
+    map.set(item.id, current ? mergeSubmissionRecord(item, current) : item);
+  }
+  return [...map.values()];
+}
+
 async function withWriteFallback<T>(walrusTask: () => Promise<T>, localTask: () => Promise<T>) {
   try {
     const result = await walrusTask();
@@ -241,7 +316,7 @@ const hybridWalrusStorage: StorageAdapter = {
       swallow(() => walrusAdapter.listSubmissions(formId), [] as Submission[]),
       localStorageAdapter.listSubmissions(formId),
     ]);
-    return mergeById(walrusSubmissions, localSubmissions).sort((left, right) =>
+    return mergeSubmissionsById(walrusSubmissions, localSubmissions).sort((left, right) =>
       right.createdAt.localeCompare(left.createdAt),
     );
   },

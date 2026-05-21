@@ -646,25 +646,40 @@ export async function resolveSubmissionAnswers(
   seal: SealAdapter = activeSealAdapter,
   context: SealDecryptContext = {},
 ) {
-  if (submission.isEncrypted && (submission.encryptedPayload || submission.encryptedBlobId)) {
+  const encryptedPayloadBlobIds = Array.from(
+    new Set(
+      [
+        submission.encryptedBlobId,
+        submission.receiptBlobId,
+        submission.isEncrypted ? submission.blobId : undefined,
+      ].filter((value): value is string => typeof value === "string" && value.trim().length > 0),
+    ),
+  );
+  const encryptedPayloadBlobId = encryptedPayloadBlobIds[0];
+
+  if (submission.isEncrypted && (submission.encryptedPayload || encryptedPayloadBlobId)) {
     let activeDiagnostics: ReturnType<typeof buildDecryptDiagnosticContext> | undefined;
     try {
       const baseDiagnostics = buildDecryptDiagnosticContext(form, submission, context);
       activeDiagnostics = baseDiagnostics;
       context.onStatusChange?.("loading_seal_runtime");
       logDecryptDiagnostic("start", baseDiagnostics);
-      if (!submission.encryptedPayload && !submission.encryptedBlobId) {
+      if (!submission.encryptedPayload && !encryptedPayloadBlobId) {
         throw createMissingEncryptedPayloadError("Encrypted payload is missing.", baseDiagnostics);
       }
-      const payload =
-        submission.encryptedPayload ??
-        (submission.encryptedBlobId
-          ? await storageAdapter.readEncryptedPayload(submission.encryptedBlobId)
-          : null);
+      let payload = submission.encryptedPayload ?? null;
+      if (!payload) {
+        for (const candidateBlobId of encryptedPayloadBlobIds) {
+          payload = await storageAdapter.readEncryptedPayload(candidateBlobId);
+          if (payload) {
+            break;
+          }
+        }
+      }
       if (!payload) {
         throw new DecryptDiagnosticError(
-          submission.encryptedBlobId ? "BLOB_FETCH_FAILED" : "ENCRYPTED_PAYLOAD_MISSING",
-          submission.encryptedBlobId
+          encryptedPayloadBlobId ? "BLOB_FETCH_FAILED" : "ENCRYPTED_PAYLOAD_MISSING",
+          encryptedPayloadBlobId
             ? "Failed to fetch encrypted payload from Walrus."
             : "Encrypted payload is missing.",
           baseDiagnostics,

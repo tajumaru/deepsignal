@@ -72,7 +72,7 @@ import { getPublicFormPath, getPublicRoadmapPath } from "../lib/publicLinks";
 import { isSuiRateLimitError, shortAddress } from "../lib/sui";
 import { clearDeepSignalPolicyCapabilityCache } from "../lib/debugCache";
 import { formatResponseDeadline, type ResponseDeadlineLabels } from "../lib/responseDeadline";
-import { getRespondentDisplayLabel, getSubmissionRespondentMeta } from "../lib/respondentMeta";
+import { getSubmissionRespondentMeta } from "../lib/respondentMeta";
 import {
   getSignalPreview,
   getSignalPersistenceLabel,
@@ -100,6 +100,7 @@ type ReviewSaveStatus = "idle" | "saving" | "saved" | "skipped" | "error";
 type ReviewDraft = Pick<Submission, "status" | "triageStatus" | "priority" | "signalValue" | "notes">;
 type WorkspaceTab = "review" | "activity" | "insights";
 type QuickActionId = "reviewing" | "resolve" | "publish" | "archive";
+type KeyboardShortcutAction = QuickActionId | "next" | "previous" | "search" | "help";
 interface UnlockedSignalSummary {
   answers: Record<string, unknown>;
 }
@@ -134,6 +135,19 @@ function formatWorkspaceCount(count: number, singular: string, plural = `${singu
 
 function formatAccessLabel(roleLabel: string) {
   return `${roleLabel} access`;
+}
+
+function isInteractiveKeyboardTarget(target: EventTarget | null) {
+  if (!(target instanceof HTMLElement)) {
+    return false;
+  }
+  const tagName = target.tagName;
+  return (
+    tagName === "INPUT" ||
+    tagName === "TEXTAREA" ||
+    tagName === "SELECT" ||
+    target.isContentEditable
+  );
 }
 
 function getActivityActionLabel(action: ActivityAction, t: TranslationFn) {
@@ -753,16 +767,16 @@ function getSortLabel(sortOrder: SignalSortOrder) {
   }
 }
 
-function getQuickActionLabel(action: QuickActionId) {
+function getQuickActionLabel(action: QuickActionId, t: TranslationFn) {
   switch (action) {
     case "reviewing":
-      return "Mark Reviewing";
+      return t("shortcutActionReviewing");
     case "resolve":
-      return "Resolve";
+      return t("shortcutActionResolve");
     case "publish":
-      return "Publish";
+      return t("shortcutActionPublish");
     case "archive":
-      return "Archive";
+      return t("shortcutActionArchive");
     default:
       return action;
   }
@@ -772,14 +786,16 @@ function QuickActionBar({
   submission,
   disabled,
   onAction,
+  t,
 }: {
   submission: Submission;
   disabled?: boolean;
   onAction: (action: QuickActionId) => void;
+  t: TranslationFn;
 }) {
   const actions: QuickActionId[] = ["reviewing", "resolve", "publish", "archive"];
   return (
-    <div className="quick-action-bar" role="group" aria-label="Signal quick actions">
+    <div className="quick-action-bar" role="group" aria-label={t("signalQuickActionsLabel")}>
       {actions.map((action) => {
         const isActive = isQuickActionActive(submission, action);
         return (
@@ -791,7 +807,7 @@ function QuickActionBar({
             aria-pressed={isActive}
             onClick={() => onAction(action)}
           >
-            {getQuickActionLabel(action)}
+            {getQuickActionLabel(action, t)}
           </button>
         );
       })}
@@ -1094,6 +1110,7 @@ export function AdminDashboardPage() {
   const [pendingCsvExportResponses, setPendingCsvExportResponses] = useState<Submission[]>([]);
   const [pendingCsvExportOptions, setPendingCsvExportOptions] = useState<ExportResponsesToCsvOptions | null>(null);
   const [activeWorkspaceTab, setActiveWorkspaceTab] = useState<WorkspaceTab>("review");
+  const [showShortcutHelp, setShowShortcutHelp] = useState(false);
   const [localActivityEvents, setLocalActivityEvents] = useState<ActivityEvent[]>(() => listActivityEvents());
   const [suiActivityEvents, setSuiActivityEvents] = useState<ActivityEvent[]>([]);
   const { toast, setToast } = useAdminToast();
@@ -1102,7 +1119,11 @@ export function AdminDashboardPage() {
   const streamsPanelRef = useRef<HTMLDivElement | null>(null);
   const signalListPanelRef = useRef<HTMLElement | null>(null);
   const signalDetailPanelRef = useRef<HTMLElement | null>(null);
+  const signalSearchInputRef = useRef<HTMLInputElement | null>(null);
+  const shortcutHelpHeadingRef = useRef<HTMLHeadingElement | null>(null);
+  const signalCardRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const selectedRecordResetRef = useRef<string | null>(null);
+  const keyboardNavigationRef = useRef(false);
   const hasAdminAccess = canAdmin(capabilityProfile);
   const {
     forms,
@@ -1228,6 +1249,7 @@ export function AdminDashboardPage() {
       encryptionPolicyMismatch: t("decryptErrorEncryptionPolicyMismatch"),
       manifestMismatchDetected: t("decryptErrorManifestMismatch"),
       blobFetchFailed: t("decryptErrorBlobFetchFailed"),
+      onchainPayloadReferenceMissing: t("decryptErrorOnchainPayloadReferenceMissing"),
       encryptedPayloadMissing: t("decryptErrorEncryptedPayloadMissing"),
       sealRuntimeUnavailable: t("decryptErrorSealRuntimeUnavailable"),
       encryptedPayloadNotFound: t("decryptErrorEncryptedPayloadNotFound"),
@@ -1583,6 +1605,24 @@ export function AdminDashboardPage() {
       setSelectedSignalId("");
     }
   }, [selectedSignalId, selectedSignalIdFromUrl, setSelectedSignalId]);
+
+  useEffect(() => {
+    if (!showShortcutHelp) {
+      return;
+    }
+    window.requestAnimationFrame(() => {
+      shortcutHelpHeadingRef.current?.focus();
+    });
+  }, [showShortcutHelp]);
+
+  useEffect(() => {
+    if (!keyboardNavigationRef.current || !selectedSignalId) {
+      return;
+    }
+    keyboardNavigationRef.current = false;
+    const target = signalCardRefs.current[selectedSignalId];
+    target?.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" });
+  }, [selectedSignalId]);
 
   function syncMobileSignalUrl(record: SignalRecord | null) {
     if (typeof window === "undefined" || !window.matchMedia?.(MOBILE_REVIEW_MEDIA_QUERY).matches) {
@@ -2029,6 +2069,147 @@ export function AdminDashboardPage() {
     setToast({ tone: "success", message: t("signalAddedToPublicRoadmap") });
   }
 
+  const shortcutItems = useMemo(
+    () => [
+      { keys: "J / ↓", description: t("shortcutNextSignal") },
+      { keys: "K / ↑", description: t("shortcutPreviousSignal") },
+      { keys: "R", description: t("shortcutActionReviewing") },
+      { keys: "X", description: t("shortcutActionResolve") },
+      { keys: "P", description: t("shortcutActionPublish") },
+      { keys: "A", description: t("shortcutActionArchive") },
+      { keys: "/", description: t("shortcutFocusSearch") },
+      { keys: "?", description: t("shortcutShowHelp") },
+    ],
+    [t],
+  );
+
+  const handleSelectDesktopSignal = useCallback(
+    (signalId: string, options: { scrollIntoView?: boolean } = {}) => {
+      setSelectedSignalId(signalId);
+      if (!options.scrollIntoView) {
+        return;
+      }
+      const target = signalCardRefs.current[signalId];
+      if (!target) {
+        return;
+      }
+      window.requestAnimationFrame(() => {
+        target.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" });
+      });
+    },
+    [setSelectedSignalId],
+  );
+
+  const moveSelectedSignal = useCallback(
+    (direction: 1 | -1) => {
+      if (visibleSignals.length === 0) {
+        return;
+      }
+      const currentIndex = visibleSignals.findIndex((record) => record.submission.id === selectedSignalId);
+      const nextIndex =
+        currentIndex === -1
+          ? direction > 0
+            ? 0
+            : visibleSignals.length - 1
+          : Math.min(Math.max(currentIndex + direction, 0), visibleSignals.length - 1);
+      const nextRecord = visibleSignals[nextIndex];
+      if (!nextRecord) {
+        return;
+      }
+      keyboardNavigationRef.current = true;
+      handleSelectDesktopSignal(nextRecord.submission.id, { scrollIntoView: true });
+    },
+    [handleSelectDesktopSignal, selectedSignalId, visibleSignals],
+  );
+
+  const triggerShortcutAction = useCallback(
+    async (action: KeyboardShortcutAction) => {
+      if (action === "next") {
+        moveSelectedSignal(1);
+        return;
+      }
+      if (action === "previous") {
+        moveSelectedSignal(-1);
+        return;
+      }
+      if (action === "search") {
+        signalSearchInputRef.current?.focus();
+        signalSearchInputRef.current?.select();
+        return;
+      }
+      if (action === "help") {
+        setShowShortcutHelp(true);
+        return;
+      }
+      if (!selectedRecord) {
+        return;
+      }
+      await handleQuickAction(selectedRecord, action);
+    },
+    [handleQuickAction, moveSelectedSignal, selectedRecord],
+  );
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    const handleKeyboardShortcuts = (event: KeyboardEvent) => {
+      if (window.matchMedia?.(MOBILE_REVIEW_MEDIA_QUERY).matches) {
+        return;
+      }
+      if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey) {
+        return;
+      }
+      if (isInteractiveKeyboardTarget(event.target)) {
+        return;
+      }
+      if (event.key === "Escape" && showShortcutHelp) {
+        event.preventDefault();
+        setShowShortcutHelp(false);
+        return;
+      }
+      if (showShortcutHelp) {
+        return;
+      }
+      if (event.key === "j" || event.key === "ArrowDown") {
+        event.preventDefault();
+        void triggerShortcutAction("next");
+        return;
+      }
+      if (event.key === "k" || event.key === "ArrowUp") {
+        event.preventDefault();
+        void triggerShortcutAction("previous");
+        return;
+      }
+      if (event.key === "r") {
+        event.preventDefault();
+        void triggerShortcutAction("reviewing");
+        return;
+      }
+      if (event.key === "x") {
+        event.preventDefault();
+        void triggerShortcutAction("resolve");
+        return;
+      }
+      if (event.key === "p") {
+        event.preventDefault();
+        void triggerShortcutAction("publish");
+        return;
+      }
+      if (event.key === "a") {
+        event.preventDefault();
+        void triggerShortcutAction("archive");
+        return;
+      }
+      if (event.key === "/" || event.key === "?") {
+        event.preventDefault();
+        void triggerShortcutAction(event.key === "?" || event.shiftKey ? "help" : "search");
+      }
+    };
+    window.addEventListener("keydown", handleKeyboardShortcuts);
+    return () => window.removeEventListener("keydown", handleKeyboardShortcuts);
+  }, [showShortcutHelp, triggerShortcutAction]);
+
   const streamItems = [
     {
       id: "needs_review",
@@ -2380,6 +2561,7 @@ export function AdminDashboardPage() {
   ).length;
   const nodeDirectoryItems = useMemo(() => {
     const normalizedSearch = nodeSearch.trim().toLowerCase();
+    const accessibleFormIdSet = new Set(accessibleForms.map((form) => form.id));
     const allFormsItem = {
       id: "all",
       title: t("allSignalNodes"),
@@ -2387,8 +2569,9 @@ export function AdminDashboardPage() {
       unreadCount: signalIndex.counts.unread,
       isLegacyDemo: false,
       canDelete: false,
+      isAccessible: true,
     };
-    const formItems = accessibleForms
+    const formItems = forms
       .filter((form) => {
         if (!normalizedSearch) {
           return true;
@@ -2405,12 +2588,14 @@ export function AdminDashboardPage() {
         unreadCount: unreadCountByFormId[form.id] ?? 0,
         isLegacyDemo: !form.ownerAddress,
         canDelete: canDeleteForm(form),
+        isAccessible: accessibleFormIdSet.has(form.id),
       }));
     return [allFormsItem, ...formItems];
   }, [
     accessibleForms,
     allSignals.length,
     canDeleteForm,
+    forms,
     nodeSearch,
     signalIndex.counts.unread,
     t,
@@ -2727,10 +2912,19 @@ export function AdminDashboardPage() {
                   <span className="signal-chip signal-chip-soft">{t("resultsLabel", { count: visibleSignals.length })}</span>
                   <span className="signal-chip signal-chip-soft">{t("pendingSuiResultsLabel", { count: pendingSignals.length })}</span>
                   <input
+                    ref={signalSearchInputRef}
                     value={search}
                     onChange={(event) => setSearch(event.target.value)}
                     placeholder={t("searchSignalsPlaceholder")}
                   />
+                  <button
+                    type="button"
+                    className="ghost-button signal-shortcut-help-trigger"
+                    onClick={() => setShowShortcutHelp(true)}
+                    aria-label={t("shortcutHelpTitle")}
+                  >
+                    ?
+                  </button>
                   {hasAdminAccess ? (
                     <div className="bulk-decrypt-toolbar" aria-live="polite">
                       <button
@@ -2875,11 +3069,35 @@ export function AdminDashboardPage() {
                     const storageLabel = getStorageBadgeLabel(storageBlobId);
                     const persistenceState = getSignalPersistenceState(submission);
                     const storageState = getSignalStorageState(submission);
+                    const subject = getSignalSubject(submission);
+                    const preview = submission.isEncrypted
+                      ? t("encryptedPrivateSignalUnlockHint")
+                      : getSignalPreview(submission);
+                    const isAnonymousSignal = getSubmissionRespondentMeta(submission).isAnonymous;
                     const isPendingSui = submission.pendingOnchainRegistration;
                     const isSelectedForSui = selectedPendingSignalIds.includes(submission.id);
                     const isLocalOnlySignal = storageLabel === "Stored locally only";
                     const isSelectedSignal = selectedRecord?.submission.id === submission.id;
                     const isUnlockedSignal = Boolean(decryptedSignalsById[submission.id]) || (isSelectedSignal && Boolean(detailAnswers));
+                    const readStateLabel =
+                      submission.status === "unread"
+                        ? t("statusUnread")
+                        : submission.status === "read"
+                          ? t("statusRead")
+                          : t("statusArchived");
+                    const priorityLabel =
+                      submission.priority === "high"
+                        ? t("priorityHigh")
+                        : submission.priority === "medium"
+                          ? t("priorityMedium")
+                          : t("priorityLow");
+                    const lockStateLabel = submission.isEncrypted
+                      ? isUnlockedSignal
+                        ? t("unlockedSignalState")
+                        : t("lockedSignalState")
+                      : t("openSignalState");
+                    const persistenceLabel =
+                      persistenceState === "not_available" ? null : getSignalPersistenceLabel(persistenceState);
                     const hasNotableStatusBadge =
                       isPendingSui ||
                       isSelectedForSui ||
@@ -2890,13 +3108,13 @@ export function AdminDashboardPage() {
                       <div
                         key={submission.id}
                         className={`signal-card ${isSelectedSignal ? "is-active" : ""} ${submission.status === "unread" ? "is-unread" : "is-read"} ${isPendingSui ? "has-select-checkbox" : ""} ${isSelectedForSui ? "is-selected-for-sui" : ""} ${
-                          getSubmissionRespondentMeta(submission).isAnonymous ? "is-anonymous" : ""
+                          isAnonymousSignal ? "is-anonymous" : ""
                         }`}
                         role="button"
                         tabIndex={0}
                         aria-current={isSelectedSignal ? "true" : undefined}
                         onClick={() => {
-                          setSelectedSignalId(submission.id);
+                          handleSelectDesktopSignal(submission.id);
                           scrollToReviewPanel("detail");
                         }}
                         onKeyDown={(event) => {
@@ -2904,8 +3122,11 @@ export function AdminDashboardPage() {
                             return;
                           }
                           event.preventDefault();
-                          setSelectedSignalId(submission.id);
+                          handleSelectDesktopSignal(submission.id);
                           scrollToReviewPanel("detail");
+                        }}
+                        ref={(node) => {
+                          signalCardRefs.current[submission.id] = node;
                         }}
                       >
                         {isPendingSui ? (
@@ -2930,61 +3151,56 @@ export function AdminDashboardPage() {
                         ) : null}
                         <div className="signal-card-topline">
                           <span className={`signal-card-read-dot status-${submission.status}`} aria-hidden="true" />
-                          <strong>{getSignalSubject(submission)}</strong>
-                          <span className="signal-card-time">{formatDate(submission.createdAt)}</span>
+                          <strong>{subject}</strong>
+                          <span className="signal-card-topline-meta">
+                            {isSelectedSignal ? <span className="signal-card-selection-badge">{t("selectedLabel")}</span> : null}
+                            <span className="signal-card-time">{formatDate(submission.createdAt)}</span>
+                          </span>
                         </div>
                         <p className={`signal-card-preview ${submission.isEncrypted ? "is-locked" : ""}`}>
-                          {submission.isEncrypted
-                            ? t("encryptedPrivateSignalUnlockHint")
-                            : getSignalPreview(submission)}
+                          {preview}
                         </p>
-                        <div className="signal-card-formline">
+                        <div className="signal-card-secondary-line">
                           <span className="signal-card-form">{form.title}</span>
-                          {getSubmissionRespondentMeta(submission).isAnonymous ? (
-                            <span className="signal-chip">{t("anonymousRespondent")}</span>
-                          ) : submission.contributorId ? (
-                            <SignalMetaChip type="contributor" value={getRespondentDisplayLabel(submission)} />
+                          <span className="signal-card-meta-separator" aria-hidden="true">•</span>
+                          <span className="signal-card-triage">{getTriageStatusLabel(submission.triageStatus)}</span>
+                        </div>
+                        <div className="signal-card-footer">
+                          <div className="signal-card-mailbox-meta" aria-label={t("signalReviewStateLabel")}>
+                            <span className={`mailbox-meta-chip priority-${submission.priority}`}>
+                              {priorityLabel}
+                            </span>
+                            <span className={`mailbox-meta-chip ${isAnonymousSignal ? "identity-anonymous" : "identity-verified"}`}>
+                              {isAnonymousSignal ? t("anonymousLabel") : t("verifiedSignalsLabel")}
+                            </span>
+                            <span className={`mailbox-meta-chip ${submission.isEncrypted ? "is-locked" : "is-open"} ${isUnlockedSignal ? "is-unlocked" : ""}`}>
+                              {lockStateLabel}
+                            </span>
+                            <span className={`mailbox-meta-chip status-${submission.status}`}>
+                              {readStateLabel}
+                            </span>
+                            {persistenceLabel ? (
+                              <span className="mailbox-meta-chip mailbox-meta-chip-subtle">{persistenceLabel}</span>
+                            ) : null}
+                          </div>
+                          {hasNotableStatusBadge ? (
+                            <div className="signal-badge-row signal-badge-row-compact">
+                              <SignalStatusBadges
+                                submission={submission}
+                                category={category}
+                                pendingSui={isPendingSui}
+                                selectedForSui={isSelectedForSui}
+                                storageLabel={
+                                  storageState === "local_only" || storageState === "walrus_synced"
+                                    ? storageLabel
+                                    : undefined
+                                }
+                                persistenceState={persistenceState}
+                                density="notable"
+                              />
+                            </div>
                           ) : null}
                         </div>
-                        <div className="signal-card-mailbox-meta" aria-label="Signal review state">
-                          <span className={`mailbox-meta-chip priority-${submission.priority}`}>
-                            {submission.priority}
-                          </span>
-                          <span className={`mailbox-meta-chip triage-${submission.triageStatus}`}>
-                            {getTriageStatusLabel(submission.triageStatus)}
-                          </span>
-                          <span className={`mailbox-meta-chip ${submission.isEncrypted ? "is-locked" : "is-open"} ${isUnlockedSignal ? "is-unlocked" : ""}`}>
-                            {submission.isEncrypted
-                              ? isUnlockedSignal
-                                ? t("unlockedSignalState")
-                                : t("lockedSignalState")
-                              : t("openSignalState")}
-                          </span>
-                          <span className={`mailbox-meta-chip status-${submission.status}`}>
-                            {submission.status === "unread"
-                              ? t("statusUnread")
-                              : submission.status === "read"
-                                ? t("statusRead")
-                                : t("statusArchived")}
-                          </span>
-                        </div>
-                        {hasNotableStatusBadge ? (
-                          <div className="signal-badge-row signal-badge-row-compact">
-                            <SignalStatusBadges
-                              submission={submission}
-                              category={category}
-                              pendingSui={isPendingSui}
-                              selectedForSui={isSelectedForSui}
-                              storageLabel={
-                                storageState === "local_only" || storageState === "walrus_synced"
-                                  ? storageLabel
-                                  : undefined
-                              }
-                              persistenceState={persistenceState}
-                              density="notable"
-                            />
-                          </div>
-                        ) : null}
                         <div
                           className="signal-card-actions signal-card-actions-quick"
                           onClick={(event) => {
@@ -2996,6 +3212,7 @@ export function AdminDashboardPage() {
                             onAction={(action) => {
                               void handleQuickAction(record, action);
                             }}
+                            t={t}
                           />
                         </div>
                         {isPendingSui ? (
@@ -3097,6 +3314,7 @@ export function AdminDashboardPage() {
                       onAction={(action) => {
                         void handleQuickAction(selectedRecord, action);
                       }}
+                      t={t}
                     />
                     <div className="mobile-readable-trust-panel" aria-label="Signal storage and privacy">
                       {selectedRecordProtectionFacts.map((fact) => (
@@ -3508,6 +3726,7 @@ export function AdminDashboardPage() {
                         onAction={(action) => {
                           void handleQuickAction(selectedRecord, action);
                         }}
+                        t={t}
                       />
                       <button
                         type="button"
@@ -4076,6 +4295,37 @@ export function AdminDashboardPage() {
 
         <div className="mobile-console-banner">{t("adminDesktopNotice")}</div>
       </section>
+      {showShortcutHelp ? (
+        <div className="node-directory-overlay" role="dialog" aria-modal="true" aria-labelledby="shortcut-help-title">
+          <div className="node-directory-backdrop" onClick={() => setShowShortcutHelp(false)} />
+          <section className="panel glow-panel node-directory-panel shortcut-help-panel">
+            <div className="signal-detail-heading">
+              <div>
+                <p className="eyebrow">{t("signalInboxTitle")}</p>
+                <h2 id="shortcut-help-title" ref={shortcutHelpHeadingRef} tabIndex={-1}>
+                  {t("shortcutHelpTitle")}
+                </h2>
+                <p className="muted">{t("shortcutHelpBody")}</p>
+              </div>
+              <button
+                type="button"
+                className="ghost-button"
+                onClick={() => setShowShortcutHelp(false)}
+              >
+                {t("closeLabel")}
+              </button>
+            </div>
+            <div className="shortcut-help-list">
+              {shortcutItems.map((item) => (
+                <div key={item.keys} className="shortcut-help-row">
+                  <strong>{item.keys}</strong>
+                  <span>{item.description}</span>
+                </div>
+              ))}
+            </div>
+          </section>
+        </div>
+      ) : null}
       {nodeDirectoryOpen ? (
         <div className="node-directory-overlay" role="dialog" aria-modal="true">
           <div className="node-directory-backdrop" onClick={() => setNodeDirectoryOpen(false)} />
@@ -4104,7 +4354,7 @@ export function AdminDashboardPage() {
               <div className="node-directory-toolbar-actions">
                 <div className="node-directory-stats">
                   <span className="signal-chip">
-                    {t("activeNodeSummary", { count: accessibleForms.length })}
+                    {t("activeNodeSummary", { count: forms.length })}
                   </span>
                   <span className="signal-chip">
                     {t("signalsCount", { count: allSignals.length })}
@@ -4131,7 +4381,11 @@ export function AdminDashboardPage() {
                     <button
                       type="button"
                       className={`node-directory-item ${isSelected ? "is-active" : ""}`}
+                      disabled={!item.isAccessible}
                       onClick={() => {
+                        if (!item.isAccessible) {
+                          return;
+                        }
                         setSelectedFormId(item.id);
                         setNodeDirectoryOpen(false);
                       }}
@@ -4147,11 +4401,15 @@ export function AdminDashboardPage() {
                         </div>
                         <p className="muted">
                           {t("signalsCount", { count: item.submissionCount })}
-                          {item.isLegacyDemo ? ` / ${t("legacyDemoForm")}` : ""}
+                          {item.isLegacyDemo
+                            ? ` / ${t("legacyDemoForm")}`
+                            : !item.isAccessible
+                              ? ` / ${t("accessDeniedButton")}`
+                              : ""}
                         </p>
                       </div>
                     </button>
-                    {item.id !== "all" ? (
+                    {item.id !== "all" && item.isAccessible ? (
                       <div className="node-directory-actions">
                         <button
                           type="button"

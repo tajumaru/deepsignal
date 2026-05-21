@@ -1434,7 +1434,10 @@ export function FormSubmissionsPage() {
                     >
                       <div className="signal-card-topline">
                         <strong>{getSignalSubject(submission)}</strong>
-                        <span>{formatDate(submission.createdAt)}</span>
+                        <span className="signal-card-topline-meta">
+                          {isSelected ? <span className="signal-card-selection-badge">{t("selectedLabel")}</span> : null}
+                          <span className="signal-card-time">{formatDate(submission.createdAt)}</span>
+                        </span>
                       </div>
                       <p className="signal-card-form">{form.title}</p>
                       <p className="signal-card-preview">{getSignalPreview(submission)}</p>

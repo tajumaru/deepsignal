@@ -44,6 +44,8 @@ export type ProjectSealApprovalPolicy =
   | "project_signal_reviewer_v1"
   | "project_reviewer_v0";
 
+export type SealApprovalPolicy = ProjectSealApprovalPolicy | "owner_wallet_v1";
+
 export interface SealPolicySnapshot {
   policyHash: string;
   packageId: string;
@@ -73,11 +75,11 @@ export interface RealSealEnvelope {
   threshold: number;
   serverObjectIds: string[];
   encryptedObject: string;
-  policyId: RealSealApprovalPolicy;
+  policyId: SealApprovalPolicy;
   policyObjectId: string;
   projectId?: string;
   ownerAddress?: string;
-  approvalPolicy?: RealSealApprovalPolicy;
+  approvalPolicy?: SealApprovalPolicy;
   encryptPolicySnapshot?: SealPolicySnapshot;
   createdAt: string;
 }
@@ -117,6 +119,8 @@ export function parseRealSealEnvelope(value: string): RealSealEnvelope | null {
       (parsed.policyId !== undefined &&
         parsed.policyId !== "project_signal_v1" &&
         parsed.policyId !== "project_admin_v0" &&
+        parsed.policyId !== "project_signal_reviewer_v1" &&
+        parsed.policyId !== "project_reviewer_v0" &&
         parsed.policyId !== "owner_wallet_v1") ||
       (parsed.policyObjectId !== undefined && typeof parsed.policyObjectId !== "string") ||
       (parsed.projectId !== undefined && typeof parsed.projectId !== "string") ||
@@ -124,6 +128,8 @@ export function parseRealSealEnvelope(value: string): RealSealEnvelope | null {
       (parsed.approvalPolicy !== undefined &&
         parsed.approvalPolicy !== "project_signal_v1" &&
         parsed.approvalPolicy !== "project_admin_v0" &&
+        parsed.approvalPolicy !== "project_signal_reviewer_v1" &&
+        parsed.approvalPolicy !== "project_reviewer_v0" &&
         parsed.approvalPolicy !== "owner_wallet_v1") ||
       (parsed.encryptPolicySnapshot !== undefined &&
         (typeof parsed.encryptPolicySnapshot !== "object" || parsed.encryptPolicySnapshot === null)) ||
@@ -242,7 +248,7 @@ export function createSealPolicySnapshot(input: {
   packageId: string;
   network: string;
   objectId: string;
-  policyId: RealSealApprovalPolicy | string;
+  policyId: SealApprovalPolicy | string;
   policyObjectId: string;
   projectId?: string;
   ownerAddress?: string;

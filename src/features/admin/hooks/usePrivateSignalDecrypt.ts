@@ -68,6 +68,7 @@ interface DecryptMessages {
   encryptionPolicyMismatch: string;
   manifestMismatchDetected: string;
   blobFetchFailed: string;
+  onchainPayloadReferenceMissing: string;
   encryptedPayloadMissing: string;
   sealRuntimeUnavailable: string;
   encryptedPayloadNotFound: string;
@@ -89,6 +90,8 @@ const defaultDecryptMessages: DecryptMessages = {
   encryptionPolicyMismatch: "Encryption policy mismatch.",
   manifestMismatchDetected: "Manifest mismatch detected.",
   blobFetchFailed: "Failed to fetch encrypted payload from Walrus.",
+  onchainPayloadReferenceMissing:
+    "This onchain-recovered signal does not include a readable Walrus payload reference, so the private body cannot be unlocked from this inbox snapshot.",
   encryptedPayloadMissing: "Encrypted payload is missing.",
   sealRuntimeUnavailable: "Seal runtime unavailable.",
   encryptedPayloadNotFound: "Encrypted payload could not be found. Try refreshing the inbox, then unlock again.",
@@ -98,7 +101,20 @@ const defaultDecryptMessages: DecryptMessages = {
     `${unlockedCount} private signals unlocked. ${failedCount} still locked.`,
 };
 
-function getFriendlyDecryptError(reasonCode: string, fallbackMessage: string, messages: DecryptMessages) {
+function isOnchainShadowWithoutReadablePayload(diagnostics?: DecryptDiagnosticContext | null) {
+  return Boolean(
+    diagnostics?.responseId?.startsWith("onchain:") &&
+      !diagnostics.encryptedBlobId &&
+      !diagnostics.submissionBlobId,
+  );
+}
+
+function getFriendlyDecryptError(
+  reasonCode: string,
+  fallbackMessage: string,
+  messages: DecryptMessages,
+  diagnostics?: DecryptDiagnosticContext | null,
+) {
   switch (reasonCode) {
     case "WALLET_NOT_CONNECTED":
       return messages.connectWalletToUnlockSignal;
@@ -113,8 +129,14 @@ function getFriendlyDecryptError(reasonCode: string, fallbackMessage: string, me
     case "MANIFEST_MISMATCH":
       return messages.manifestMismatchDetected;
     case "BLOB_FETCH_FAILED":
+      if (isOnchainShadowWithoutReadablePayload(diagnostics)) {
+        return messages.onchainPayloadReferenceMissing;
+      }
       return messages.blobFetchFailed;
     case "ENCRYPTED_PAYLOAD_MISSING":
+      if (isOnchainShadowWithoutReadablePayload(diagnostics)) {
+        return messages.onchainPayloadReferenceMissing;
+      }
       return messages.encryptedPayloadMissing;
     case "SEAL_RUNTIME_UNAVAILABLE":
       return messages.sealRuntimeUnavailable;
@@ -348,10 +370,10 @@ export function usePrivateSignalDecrypt({
         );
         setDecryptError(
           isDecryptDiagnosticError(error)
-            ? getFriendlyDecryptError(error.reasonCode, error.message, messages)
-            : error instanceof Error
-              ? getFriendlyDecryptError(reasonCode, error.message, messages)
-              : decryptFailedLabel,
+              ? getFriendlyDecryptError(error.reasonCode, error.message, messages, error.diagnostics)
+              : error instanceof Error
+                ? getFriendlyDecryptError(reasonCode, error.message, messages)
+                : decryptFailedLabel,
         );
         setDecryptDiagnostics(isDecryptDiagnosticError(error) ? error.diagnostics : null);
       }
@@ -443,7 +465,7 @@ export function usePrivateSignalDecrypt({
           firstError =
             firstError ||
             (isDecryptDiagnosticError(error)
-              ? getFriendlyDecryptError(error.reasonCode, error.message, messages)
+              ? getFriendlyDecryptError(error.reasonCode, error.message, messages, error.diagnostics)
               : error instanceof Error
                 ? getFriendlyDecryptError(reasonCode, error.message, messages)
                 : decryptFailedLabel);

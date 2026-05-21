@@ -3,6 +3,7 @@ import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { AppShell } from "./components/AppShell";
 import { WalletSurface } from "./components/WalletSurface";
 import { WalrusRuntimeSurface } from "./components/WalrusRuntimeSurface";
+import { isChunkLoadFailure, recoverFromChunkLoadFailure } from "./lib/chunkLoadRecovery";
 import { retryLazyImport } from "./lib/lazyRetry";
 import { REQUIRE_GLOBAL_WALRUS_RUNTIME } from "./lib/runtimeFlags";
 import { LandingPage } from "./pages/LandingPage";
@@ -72,7 +73,7 @@ function RouteFallback() {
 }
 
 class RouteErrorBoundary extends Component<
-  { children: ReactNode },
+  { children: ReactNode; resetKey: string },
   { error: Error | null }
 > {
   state = { error: null };
@@ -83,17 +84,44 @@ class RouteErrorBoundary extends Component<
 
   componentDidCatch(error: Error) {
     console.error("DeepSignal route failed to render.", error);
+    recoverFromChunkLoadFailure(error);
+  }
+
+  componentDidUpdate(prevProps: Readonly<{ children: ReactNode; resetKey: string }>) {
+    if (prevProps.resetKey !== this.props.resetKey && this.state.error) {
+      this.setState({ error: null });
+    }
+  }
+
+  handleRetry = () => {
+    const { error } = this.state;
+    if (error && isChunkLoadFailure(error)) {
+      recoverFromChunkLoadFailure(error);
+      window.location.reload();
+      return;
+    }
+
+    this.setState({ error: null });
   }
 
   render() {
     if (this.state.error) {
+      const chunkFailure = isChunkLoadFailure(this.state.error);
+
       return (
         <div className="panel glow-panel route-status-panel" role="alert">
           <p className="eyebrow">Signal surface</p>
-          <h1>Explore could not open cleanly.</h1>
+          <h1>{chunkFailure ? "Explore could not open cleanly." : "Explore hit an unexpected fault."}</h1>
           <p className="muted">
-            Refresh the page to retry the current chunk. Local fallback data is still preserved.
+            {chunkFailure
+              ? "Refresh the page to retry the current chunk. Local fallback data is still preserved."
+              : "Retry the route to restore the workspace. Local fallback data is still preserved."}
           </p>
+          <div className="inline-actions">
+            <button type="button" className="primary-button" onClick={this.handleRetry}>
+              {chunkFailure ? "Retry chunk" : "Retry route"}
+            </button>
+          </div>
         </div>
       );
     }
@@ -120,39 +148,14 @@ function InitialBootReady({ onReady, children }: { onReady: () => void; children
   return <>{children}</>;
 }
 
-function isWalletRequiredRoute(pathname: string) {
-  return (
-    pathname === "/create" ||
-    pathname === "/admin" ||
-    pathname.startsWith("/admin/") ||
-    pathname === "/dashboard" ||
-    pathname.startsWith("/dashboard/") ||
-    pathname === "/troubleshooting"
-  );
-}
-
-function isWalletContextRoute(pathname: string) {
-  return pathname === "/" || pathname === "/explore";
-}
-
 export default function App() {
   const location = useLocation();
-  const routeRequiresWallet = isWalletRequiredRoute(location.pathname);
-  const routeUsesWalletContext = isWalletContextRoute(location.pathname);
   const routeUsesPublicChrome =
     location.pathname.startsWith("/f/") ||
     location.pathname.startsWith("/roadmap/") ||
     location.pathname.startsWith("/m/");
-  const [walletSurfaceActivated, setWalletSurfaceActivated] = useState(() => routeRequiresWallet);
   const [initialRouteReady, setInitialRouteReady] = useState(false);
   const [bootDismissed, setBootDismissed] = useState(false);
-  const walletSurfaceAvailable = walletSurfaceActivated || routeRequiresWallet || routeUsesWalletContext;
-
-  useEffect(() => {
-    if (routeRequiresWallet) {
-      setWalletSurfaceActivated(true);
-    }
-  }, [routeRequiresWallet]);
 
   const dismissBootOverlay = useCallback(() => {
     document.getElementById("boot-overlay")?.remove();
@@ -200,17 +203,9 @@ export default function App() {
     };
   }, [bootDismissed, dismissBootOverlay, initialRouteReady]);
 
-  const activateWalletSurface = useCallback(() => {
-    setWalletSurfaceActivated(true);
-  }, []);
-
   const routeSurface = (
-    <AppShell
-      walletAvailable={walletSurfaceAvailable}
-      onWalletActivate={activateWalletSurface}
-      chrome={routeUsesPublicChrome ? "public" : "full"}
-    >
-      <RouteErrorBoundary>
+    <AppShell walletAvailable chrome={routeUsesPublicChrome ? "public" : "full"}>
+      <RouteErrorBoundary resetKey={location.key}>
         <Suspense fallback={<RouteFallback />}>
           <InitialBootReady onReady={() => setInitialRouteReady(true)}>
             <Routes>
@@ -296,19 +291,11 @@ export default function App() {
     </AppShell>
   );
 
-  if (!walletSurfaceAvailable) {
-    return routeSurface;
-  }
-
   return (
     <WalletSurface
       fallback={
         <InitialBootReady onReady={() => setInitialRouteReady(true)}>
-          <AppShell
-            walletAvailable={false}
-            onWalletActivate={activateWalletSurface}
-            chrome={routeUsesPublicChrome ? "public" : "full"}
-          >
+          <AppShell walletAvailable={false} chrome={routeUsesPublicChrome ? "public" : "full"}>
             <RouteFallback />
           </AppShell>
         </InitialBootReady>

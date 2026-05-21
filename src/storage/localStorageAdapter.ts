@@ -3,12 +3,18 @@ import { assertEncryptedSubmissionLeakGuard, sanitizeSubmissionForStorage } from
 
 const FORMS_KEY = "deepsignal.forms";
 const SUBMISSIONS_KEY = "deepsignal.submissions";
+const ENCRYPTED_PAYLOADS_KEY = "deepsignal.encryptedPayloads";
 
 interface StoredFileRecord {
   blobId: string;
   name: string;
   size: number;
   type: string;
+}
+
+interface StoredEncryptedPayloadRecord {
+  blobId: string;
+  payload: string;
 }
 
 const transientFiles = new Map<string, Blob>();
@@ -114,11 +120,21 @@ export const localStorageAdapter: StorageAdapter = {
   async saveEncryptedPayload(payload) {
     const blobId = `local-sealed-transient-${crypto.randomUUID()}`;
     transientEncryptedPayloads.set(blobId, payload);
+    const encryptedPayloads = readJson<StoredEncryptedPayloadRecord[]>(ENCRYPTED_PAYLOADS_KEY, []);
+    writeJson(
+      ENCRYPTED_PAYLOADS_KEY,
+      [{ blobId, payload }, ...encryptedPayloads.filter((item) => item.blobId !== blobId)],
+    );
     return { blobId };
   },
 
   async readEncryptedPayload(blobId) {
-    return transientEncryptedPayloads.get(blobId) ?? null;
+    const transientPayload = transientEncryptedPayloads.get(blobId);
+    if (transientPayload) {
+      return transientPayload;
+    }
+    const encryptedPayloads = readJson<StoredEncryptedPayloadRecord[]>(ENCRYPTED_PAYLOADS_KEY, []);
+    return encryptedPayloads.find((item) => item.blobId === blobId)?.payload ?? null;
   },
 
   async uploadFile(file) {
