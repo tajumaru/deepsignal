@@ -114,6 +114,14 @@ import { deleteFormsFromLocalCache, getStorageRuntimeStatus } from "../storage/s
 import type { ActivityAction, ActivityEvent, FormSchema, Submission } from "../types";
 
 const MOBILE_REVIEW_MEDIA_QUERY = "(max-width: 768px)";
+const MODAL_FOCUSABLE_SELECTOR = [
+  "button:not([disabled])",
+  "input:not([disabled])",
+  "select:not([disabled])",
+  "textarea:not([disabled])",
+  "a[href]",
+  "[tabindex]:not([tabindex='-1'])",
+].join(",");
 const ROADMAP_READY_STATUSES = new Set<Submission["triageStatus"]>(["planned", "in_progress", "fixed"]);
 type ReviewSaveStatus = "idle" | "saving" | "saved" | "skipped" | "error";
 type ReviewDraft = Pick<Submission, "status" | "triageStatus" | "priority" | "signalValue"> & {
@@ -539,6 +547,30 @@ function getLocalizedPriorityLabel(priority: Submission["priority"], t: Translat
   }
 }
 
+function getPublicDecisionLabel(submission: Submission, t: TranslationFn) {
+  if (submission.status === "archived") {
+    return t("statusArchived");
+  }
+  if (submission.triageStatus === "fixed" || submission.triageStatus === "closed") {
+    return "Resolved";
+  }
+  if (ROADMAP_READY_STATUSES.has(submission.triageStatus)) {
+    return "Published";
+  }
+  return "Internal only";
+}
+
+function getSignalValueSummary(signalValue: Submission["signalValue"], t: TranslationFn) {
+  return typeof signalValue === "number" ? `${signalValue}/5` : t("notScored");
+}
+
+function getSignalValueStars(signalValue: Submission["signalValue"]) {
+  if (typeof signalValue !== "number" || signalValue < 1) {
+    return null;
+  }
+  return `${"★".repeat(signalValue)}${"☆".repeat(Math.max(0, 5 - signalValue))}`;
+}
+
 function buildSignalTimelineEntries(submission: Submission, t: TranslationFn) {
   const entries: SignalTimelineEntry[] = [];
   const createdAt = submission.createdAt;
@@ -668,21 +700,6 @@ function getSignalTimelineCurrentState(submission: Submission, entries: SignalTi
     detail: `${t("reviewStateLabel")}: ${getLocalizedSubmissionStatusLabel(submission.status, t)}`,
     phase: "intake",
   };
-}
-
-function getReviewLifecycleSteps(t: TranslationFn, submission?: Submission | null, unlocked = false) {
-  const hasSubmission = Boolean(submission);
-  const isReviewed = submission?.status === "read" || submission?.status === "archived";
-  const isTriaged = Boolean(submission?.triageStatus && submission.triageStatus !== "new");
-  const isResolved = submission?.status === "archived" || submission?.triageStatus === "fixed";
-
-  return [
-    { label: t("lifecycleIncoming"), active: hasSubmission, complete: hasSubmission },
-    { label: t("lifecycleProtected"), active: Boolean(submission?.isEncrypted), complete: Boolean(submission && (!submission.isEncrypted || unlocked)) },
-    { label: t("lifecycleNeedsReview"), active: submission?.status === "unread", complete: isReviewed },
-    { label: t("lifecycleTriaged"), active: isTriaged, complete: isTriaged },
-    { label: t("lifecycleResolved"), active: isResolved, complete: isResolved },
-  ];
 }
 
 type TranslationFn = ReturnType<typeof useI18n>["t"];
@@ -833,42 +850,36 @@ function MobileFilterMenu({
   );
 }
 
-function MobileInboxHeader({
-  t,
-  title,
-  activeScopeLabel,
-  visibleCountLabel,
-  unreadCountLabel,
-  search,
-  onSearchChange,
-  streamItems,
-  selectedStreamId,
-  onSelectStream,
-  sortOrder,
-  onSortOrderChange,
-  searchPlaceholder,
-  filterLabel,
-  queueLabel,
-  accessibleForms,
-  selectedFormId,
-  onSelectForm,
-  unreadCountByFormId,
-  allSignalsCount,
-  totalUnreadCount,
-  allSignalNodesLabel,
-  responseDeadlineLabels,
-  openNodeDirectoryLabel,
-  onOpenNodeDirectory,
-  activeNodeSummary,
-  onExportAllFormCsv,
-  hasAdminAccess,
-  selectedProjectName,
-  highlightCreateFormCta,
-  onOpenProjectSettings,
-  onJumpToReview,
-  onRevealCreateProject,
-  onRevealConnectProject,
-}: MobileInboxHeaderProps) {
+function MobileInboxHeader(props: MobileInboxHeaderProps) {
+  const {
+    t,
+    title,
+    activeScopeLabel,
+    visibleCountLabel,
+    unreadCountLabel,
+    search,
+    onSearchChange,
+    streamItems,
+    selectedStreamId,
+    onSelectStream,
+    sortOrder,
+    onSortOrderChange,
+    searchPlaceholder,
+    filterLabel,
+    queueLabel,
+    accessibleForms,
+    selectedFormId,
+    onSelectForm,
+    unreadCountByFormId,
+    allSignalsCount,
+    totalUnreadCount,
+    allSignalNodesLabel,
+    responseDeadlineLabels,
+    openNodeDirectoryLabel,
+    onOpenNodeDirectory,
+    activeNodeSummary,
+    onExportAllFormCsv,
+  } = props;
   const streamOptions: MobileFilterMenuOption[] = streamItems.map((stream) => ({
     value: stream.id,
     label: stream.label,
@@ -1047,21 +1058,6 @@ function buildQuickActionSubmission(submission: Submission, action: QuickActionI
   }
 }
 
-function isQuickActionActive(submission: Submission, action: QuickActionId) {
-  switch (action) {
-    case "reviewing":
-      return submission.status === "read" && submission.triageStatus === "investigating";
-    case "resolve":
-      return submission.status === "read" && (submission.triageStatus === "fixed" || submission.triageStatus === "closed");
-    case "publish":
-      return submission.triageStatus === "planned" || submission.triageStatus === "in_progress" || submission.triageStatus === "fixed";
-    case "archive":
-      return submission.status === "archived";
-    default:
-      return false;
-  }
-}
-
 function getSortLabel(sortOrder: SignalSortOrder, t: TranslationFn) {
   switch (sortOrder) {
     case "newest":
@@ -1075,54 +1071,6 @@ function getSortLabel(sortOrder: SignalSortOrder, t: TranslationFn) {
     default:
       return t("sortOrderDefault");
   }
-}
-
-function getQuickActionLabel(action: QuickActionId, t: TranslationFn) {
-  switch (action) {
-    case "reviewing":
-      return t("shortcutActionReviewing");
-    case "resolve":
-      return t("shortcutActionResolve");
-    case "publish":
-      return t("shortcutActionPublish");
-    case "archive":
-      return t("shortcutActionArchive");
-    default:
-      return action;
-  }
-}
-
-function QuickActionBar({
-  submission,
-  disabled,
-  onAction,
-  t,
-}: {
-  submission: Submission;
-  disabled?: boolean;
-  onAction: (action: QuickActionId) => void;
-  t: TranslationFn;
-}) {
-  const actions: QuickActionId[] = ["reviewing", "resolve", "publish", "archive"];
-  return (
-    <div className="quick-action-bar" role="group" aria-label={t("signalQuickActionsLabel")}>
-      {actions.map((action) => {
-        const isActive = isQuickActionActive(submission, action);
-        return (
-          <button
-            key={action}
-            type="button"
-            className={`quick-action-button quick-action-${action} ${isActive ? "is-active" : ""}`}
-            disabled={disabled || isActive}
-            aria-pressed={isActive}
-            onClick={() => onAction(action)}
-          >
-            {getQuickActionLabel(action, t)}
-          </button>
-        );
-      })}
-    </div>
-  );
 }
 
 function WorkspaceSectionToggle({
@@ -1453,6 +1401,8 @@ export function AdminDashboardPage() {
   const [csvExportScope, setCsvExportScope] = useState<ResponsesCsvExportScope>("filtered");
   const [csvSortOrder, setCsvSortOrder] = useState<ResponsesCsvSortOrder>("createdAtDesc");
   const [signalSortOrder, setSignalSortOrder] = useState<SignalSortOrder>("default");
+  const [reviewSessionOpen, setReviewSessionOpen] = useState(false);
+  const [reviewSessionStep, setReviewSessionStep] = useState<1 | 2 | 3 | 4>(1);
   const [excludedCsvPiiFields, setExcludedCsvPiiFields] = useState<ExportPiiField[]>([]);
   const [pendingCsvExportMetadata, setPendingCsvExportMetadata] = useState<ExportMetadata | null>(null);
   const [pendingCsvExportForm, setPendingCsvExportForm] = useState<FormSchema | null>(null);
@@ -1482,6 +1432,8 @@ export function AdminDashboardPage() {
   const signalSearchInputRef = useRef<HTMLInputElement | null>(null);
   const shortcutHelpHeadingRef = useRef<HTMLHeadingElement | null>(null);
   const signalCardRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const reviewSessionDialogRef = useRef<HTMLElement | null>(null);
+  const reviewSessionPrimaryActionRef = useRef<HTMLButtonElement | null>(null);
   const selectedRecordResetRef = useRef<string | null>(null);
   const keyboardNavigationRef = useRef(false);
   const hasAdminAccess = canAdmin(capabilityProfile);
@@ -2007,6 +1959,77 @@ export function AdminDashboardPage() {
         : undefined;
   const hasDuplicateLikelyRelatedSignals = relatedSignals.some((signal) => signal.duplicateLikely);
 
+  const closeReviewSession = useCallback(() => {
+    setReviewSessionOpen(false);
+  }, []);
+
+  const openReviewSession = useCallback((signalId?: string) => {
+    if (signalId) {
+      setSelectedSignalId(signalId);
+    }
+    setReviewSessionStep(selectedRecordNeedsDecrypt ? 1 : 2);
+    setReviewSessionOpen(true);
+  }, [selectedRecordNeedsDecrypt, setSelectedSignalId]);
+
+  useEffect(() => {
+    if (!reviewSessionOpen) {
+      return;
+    }
+    if (selectedRecordNeedsDecrypt) {
+      setReviewSessionStep(1);
+      return;
+    }
+    setReviewSessionStep((current) => (current < 2 ? 2 : current));
+  }, [reviewSessionOpen, selectedRecordNeedsDecrypt, selectedRecord?.submission.id]);
+
+  useEffect(() => {
+    if (!reviewSessionOpen) {
+      return;
+    }
+
+    const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const frame = window.requestAnimationFrame(() => {
+      reviewSessionPrimaryActionRef.current?.focus();
+    });
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closeReviewSession();
+        return;
+      }
+
+      if (event.key !== "Tab" || !reviewSessionDialogRef.current) {
+        return;
+      }
+
+      const focusable = Array.from(
+        reviewSessionDialogRef.current.querySelectorAll<HTMLElement>(MODAL_FOCUSABLE_SELECTOR),
+      ).filter((element) => element.offsetParent !== null);
+      if (focusable.length === 0) {
+        event.preventDefault();
+        return;
+      }
+
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    }
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      document.removeEventListener("keydown", handleKeyDown);
+      previouslyFocused?.focus();
+    };
+  }, [closeReviewSession, reviewSessionOpen]);
+
   useEffect(() => {
     if (!selectedRecord) {
       setDetailSectionsState({
@@ -2035,7 +2058,7 @@ export function AdminDashboardPage() {
       headerDetailsOpen: false,
     });
     setIsReviewerFocusMode(false);
-  }, [selectedRecord?.submission.id, detailAttachments.length, hasDuplicateLikelyRelatedSignals]);
+  }, [selectedRecord, detailAttachments.length, hasDuplicateLikelyRelatedSignals]);
   const reviewBasePath = location.pathname.startsWith("/admin") ? "/admin" : "/dashboard";
   const selectedSignalIdFromUrl = useMemo(() => {
     const params = new URLSearchParams(location.search);
@@ -2126,21 +2149,16 @@ export function AdminDashboardPage() {
       : selectedRecord.submission.status === "unread"
         ? {
             eyebrow: t("nextStepLabel"),
-            title: t("markSignalReviewedTitle"),
-            detail: t("markSignalReviewedDetail"),
+            title: "Start review session",
+            detail: "Unlock the signal, classify it, and save a review result in one flow.",
             cta: (
               <button
                 type="button"
                 className="primary-button"
                 disabled={saving}
-                onClick={() =>
-                  void updateSubmission({
-                    ...selectedRecord.submission,
-                    status: "read",
-                  })
-                }
+                onClick={() => openReviewSession()}
               >
-                {t("markReviewed")}
+                Review signal
               </button>
             ),
           }
@@ -2163,16 +2181,16 @@ export function AdminDashboardPage() {
           : !isSelectedRecordOnRoadmap
             ? {
                 eyebrow: t("nextStepLabel"),
-                title: t("decideRoadmapTitle"),
-                detail: t("decideRoadmapDetail"),
+                title: "Open review result",
+                detail: "Use the review session to decide roadmap visibility and internal status together.",
                 cta: (
                   <button
                     type="button"
                     className="ghost-button"
                     disabled={saving}
-                    onClick={() => void handleMoveToRoadmap()}
+                    onClick={() => openReviewSession()}
                   >
-                    {t("moveToPublicRoadmap")}
+                    Open review
                   </button>
                 ),
               }
@@ -2324,54 +2342,8 @@ export function AdminDashboardPage() {
   );
   const draftReviewStatus = activeReviewDraft?.status ?? selectedRecord?.submission.status ?? "unread";
   const draftTriageStatus = activeReviewDraft?.triageStatus ?? selectedRecord?.submission.triageStatus ?? "new";
-  const draftSignalValue = activeReviewDraft?.signalValue ?? selectedRecord?.submission.signalValue;
-  const draftNotes = activeReviewDraft?.notes ?? (selectedRecord ? getVisibleReviewerNotes(selectedRecord.submission) : "");
   const isReviewWorkbenchLocked = selectedRecordNeedsDecrypt;
-  const isDraftRead = draftReviewStatus !== "unread";
-  const isDraftClassified = draftTriageStatus !== "new" || draftSignalValue !== undefined;
-  const hasDraftNotes = draftNotes.trim().length > 0;
   const isDraftOnRoadmap = ROADMAP_READY_STATUSES.has(draftTriageStatus);
-  const reviewProgressBaseSteps = [
-    {
-      id: "read",
-      label: t("reviewReadSignalTitle"),
-      detail: t("reviewReadSignalDetail"),
-      complete: isDraftRead,
-    },
-    {
-      id: "classify",
-      label: t("reviewClassifyTitle"),
-      detail: t("reviewClassifyDetail"),
-      complete: isDraftClassified,
-    },
-    {
-      id: "notes",
-      label: t("reviewNotesTitle"),
-      detail: t("reviewNotesDetail"),
-      complete: hasDraftNotes,
-    },
-    {
-      id: "roadmap",
-      label: t("reviewRoadmapTitle"),
-      detail: t("reviewRoadmapDetail"),
-      complete: isDraftOnRoadmap,
-    },
-  ] satisfies Array<{ id: string; label: string; detail: string; complete: boolean }>;
-  let hasCurrentReviewStep = false;
-  const reviewProgressSteps = reviewProgressBaseSteps.map((step) => {
-    const state = step.complete ? "complete" : hasCurrentReviewStep ? "upcoming" : "current";
-    if (!step.complete && !hasCurrentReviewStep) {
-      hasCurrentReviewStep = true;
-    }
-    return {
-      ...step,
-      state,
-    };
-  });
-  const currentReviewStep =
-    reviewProgressSteps.find((step) => step.state === "current") ?? reviewProgressSteps[reviewProgressSteps.length - 1];
-  const currentReviewPhaseLabel = currentReviewStep?.label ?? t("reviewComplete");
-  const nextReviewActionLabel = currentReviewStep?.state === "current" ? currentReviewStep.detail : t("reviewWorkflowComplete");
 
   function patchReviewDraft(patch: Partial<ReviewDraft>) {
     if (!selectedRecord || isReviewWorkbenchLocked) {
@@ -2544,27 +2516,11 @@ export function AdminDashboardPage() {
     [selectedRecord, updateSubmission],
   );
 
-  async function handleSaveReviewDraft() {
+  async function saveActiveReviewDraft() {
     if (!selectedRecord || !activeReviewDraft || !hasReviewDraftChanges || isReviewWorkbenchLocked) {
-      return;
+      return false;
     }
-    await updateSubmission(
-      buildSubmissionFromReviewDraft(selectedRecord.submission, activeReviewDraft),
-      { announce: true },
-    );
-  }
-
-  async function handleSaveReviewerNotes() {
-    if (!selectedRecord || !activeReviewDraft || isReviewWorkbenchLocked) {
-      return;
-    }
-    if (
-      activeReviewDraft.notes === getVisibleReviewerNotes(selectedRecord.submission) &&
-      activeReviewDraft.reviewer === (getAssignedReviewer(selectedRecord.submission) ?? "")
-    ) {
-      return;
-    }
-    await updateSubmission(
+    return updateSubmission(
       buildSubmissionFromReviewDraft(selectedRecord.submission, activeReviewDraft),
       { announce: true },
     );
@@ -2885,6 +2841,32 @@ export function AdminDashboardPage() {
     : null;
   const selectedNeedsFollowUp = selectedRecord ? hasNeedsFollowUp(selectedRecord.submission) : false;
   const selectedReviewerNoteUpdatedAt = selectedRecord ? getReviewerNoteUpdatedAt(selectedRecord.submission) : undefined;
+  const selectedSavedReviewer = selectedRecord ? getAssignedReviewer(selectedRecord.submission) ?? "" : "";
+  const selectedSavedReviewerDisplayLabel = useReviewerDisplayLabel(selectedSavedReviewer);
+  const selectedPublicDecisionLabel = selectedRecord ? getPublicDecisionLabel(selectedRecord.submission, t) : "";
+  const selectedSignalValueStars = selectedRecord ? getSignalValueStars(selectedRecord.submission.signalValue) : null;
+  const selectedReviewResultItems = selectedRecord
+    ? [
+        { label: t("assignedReviewerLabel"), value: selectedSavedReviewerDisplayLabel || t("unassignedLabel") },
+        { label: "Reviewed at", value: selectedReviewerNoteUpdatedAt ? formatDate(selectedReviewerNoteUpdatedAt) : "Not reviewed yet" },
+        {
+          label: "Roadmap linked",
+          value: isSelectedRecordOnRoadmap && selectedRoadmapUrl ? "Linked" : "Not linked",
+          href: isSelectedRecordOnRoadmap && selectedRoadmapUrl ? selectedRoadmapUrl : undefined,
+        },
+        { label: t("lastUpdatedLabel"), value: formatDate(selectedRecord.submission.updatedAt) },
+      ]
+    : [];
+  const selectedReviewSummaryBadges = selectedRecord
+    ? [
+        reviewSaveStatus !== "idle" ? reviewStatusPillLabel : null,
+        isSelectedRecordOnRoadmap ? "Ready to publish" : null,
+        selectedRecord.submission.status === "archived" ? "Archived" : null,
+        selectedRecord.submission.triageStatus === "fixed" || selectedRecord.submission.triageStatus === "closed"
+          ? "Resolved"
+          : null,
+      ].filter((value): value is string => Boolean(value))
+    : [];
   const timelineNow = Date.now();
   const selectedSignalTimelineEntries = useMemo(
     () => (selectedRecord ? buildSignalTimelineEntries(selectedRecord.submission, t) : []),
@@ -2909,13 +2891,21 @@ export function AdminDashboardPage() {
         selectedRecordEncryptedBlobStoredOnWalrus ? t("storageWalrus") : null,
       ].filter((item): item is string => Boolean(item))
     : [];
-  const reviewerNotesSaveLabel =
-    hasReviewDraftChanges || !selectedRecord || !activeReviewDraft
-      ? t("reviewSaveUnsavedDraft")
-      : activeReviewDraft.notes === getVisibleReviewerNotes(selectedRecord.submission) &&
-          activeReviewDraft.reviewer === (getAssignedReviewer(selectedRecord.submission) ?? "")
-        ? t("reviewSaveSaved")
-        : t("reviewSaveUnsavedDraft");
+  const reviewSessionStepItems = [
+    { id: 1, title: "Unlock signal", detail: "Decrypt the private signal before review can continue." },
+    { id: 2, title: "Read & classify", detail: "Read the original signal and set review outcome metadata." },
+    { id: 3, title: "Reviewer note", detail: "Capture an internal-only note for the review session." },
+    { id: 4, title: "Public roadmap decision", detail: "Decide whether this review stays internal, publishes, or resolves." },
+  ] as const;
+  const reviewSessionCurrentStep = reviewSessionStepItems.find((step) => step.id === reviewSessionStep) ?? reviewSessionStepItems[0];
+  const canAdvanceReviewSession =
+    reviewSessionStep === 1
+      ? Boolean(detailAnswers)
+      : reviewSessionStep === 2
+        ? Boolean(activeReviewDraft && (activeReviewDraft.triageStatus !== "new" || activeReviewDraft.signalValue !== undefined))
+        : reviewSessionStep === 3
+          ? true
+          : hasReviewDraftChanges;
 
   function getCsvFilterSnapshot() {
     return {
@@ -3759,13 +3749,13 @@ export function AdminDashboardPage() {
                             event.stopPropagation();
                           }}
                         >
-                          <QuickActionBar
-                            submission={submission}
-                            onAction={(action) => {
-                              void handleQuickAction(record, action);
-                            }}
-                            t={t}
-                          />
+                          <button
+                            type="button"
+                            className="ghost-button review-open-button"
+                            onClick={() => openReviewSession(submission.id)}
+                          >
+                            {submission.status === "unread" ? "Start review" : "Open review"}
+                          </button>
                         </div>
                         {isPendingSui ? (
                           <div className="signal-card-actions">
@@ -4073,15 +4063,16 @@ export function AdminDashboardPage() {
                       </PrivateSignalUnlockCard>
                     ) : null}
 
-                    <section
-                      className={`answer-card review-controls-section review-triage-card ${isReviewWorkbenchLocked ? "is-review-locked" : ""}`}
-                      aria-disabled={isReviewWorkbenchLocked}
-                    >
+                    <section className="answer-card review-result-card">
                       <div className="review-controls-header">
                         <div>
-                          <p className="eyebrow">{t("reviewWorkbenchEyebrow")}</p>
-                          <h3>{currentReviewPhaseLabel}</h3>
-                          <p className="review-helper-copy">{nextReviewActionLabel}</p>
+                          <p className="eyebrow">Review Result</p>
+                          <h3>{selectedRecord.submission.status === "unread" ? "No review saved yet" : "Saved review result"}</h3>
+                          <p className="review-helper-copy">
+                            {selectedRecord.submission.status === "unread"
+                              ? "Run a review session to decrypt, classify, and save the operator decision."
+                              : "Admin view stays lightweight and reflects the last saved review outcome only."}
+                          </p>
                         </div>
                         <div className="review-save-actions">
                           <span className={`save-state-pill is-${reviewStatusPillState}`}>
@@ -4089,315 +4080,71 @@ export function AdminDashboardPage() {
                           </span>
                           <button
                             type="button"
-                            className={`primary-button review-save-button ${hasReviewDraftChanges ? "is-draft-ready" : ""}`}
-                            disabled={isReviewWorkbenchLocked || saving || !hasReviewDraftChanges}
-                            onClick={() => void handleSaveReviewDraft()}
+                            className="primary-button review-open-button"
+                            onClick={() => openReviewSession()}
                           >
-                            {saving ? t("reviewSaveSaving") : t("saveReview")}
+                            {selectedRecord.submission.status === "unread" ? "Start review" : "Open review"}
                           </button>
                         </div>
                       </div>
-                      <div className="review-progress-rail" aria-label={t("reviewProgressAriaLabel")}>
-                        {reviewProgressSteps.map((step) => (
-                          <div key={step.id} className={`review-progress-step is-${step.state}`}>
-                            <span className="review-progress-marker" aria-hidden="true">
-                              {step.state === "complete" ? "✓" : step.state === "current" ? "●" : "○"}
-                            </span>
-                            <span>{step.label}</span>
-                          </div>
-                        ))}
-                      </div>
-                      <div className="review-lifecycle-strip" aria-label={t("signalLifecycleAriaLabel")}>
-                        {getReviewLifecycleSteps(t, selectedRecord.submission, Boolean(detailAnswers)).map((step) => (
-                          <span key={step.label} className={step.complete ? "is-complete" : step.active ? "is-active" : ""}>
-                            <i aria-hidden="true" />
-                            {step.label}
-                          </span>
-                        ))}
-                      </div>
-                      <div className="review-stage-card">
-                        <div className="review-stage-header">
-                          <p className="eyebrow">{t("stepLabel", { count: 1 })}</p>
-                          <strong>{t("reviewReadSignalTitle")}</strong>
-                        </div>
-                        <label className="review-select review-step-select">
-                          <span>{t("reviewStateLabel")}</span>
-                          <select
-                            value={draftReviewStatus}
-                            disabled={isReviewWorkbenchLocked || saving}
-                            onChange={(event) => {
-                              const nextStatus = event.target.value as Submission["status"];
-                              const baseDraft =
-                                activeReviewDraft ?? {
-                                  status: selectedRecord.submission.status,
-                                  triageStatus: selectedRecord.submission.triageStatus,
-                                  priority: selectedRecord.submission.priority,
-                                  signalValue: selectedRecord.submission.signalValue,
-                                  notes: getVisibleReviewerNotes(selectedRecord.submission),
-                                  reviewer: getAssignedReviewer(selectedRecord.submission) ?? "",
-                                };
-                              void updateSubmission(
-                                buildSubmissionFromReviewDraft(selectedRecord.submission, {
-                                  ...baseDraft,
-                                  status: nextStatus,
-                                  triageStatus:
-                                    nextStatus === "archived"
-                                      ? "closed"
-                                      : baseDraft.triageStatus,
-                                }),
-                              );
-                            }}
-                          >
-                            <option value="unread">{t("statusUnread")}</option>
-                            <option value="read">{t("statusRead")}</option>
-                            <option value="archived">{t("statusArchived")}</option>
-                          </select>
-                        </label>
-                      </div>
-                      <div className="review-stage-card">
-                        <div className="review-stage-header">
-                          <p className="eyebrow">{t("stepLabel", { count: 2 })}</p>
-                          <strong>{t("reviewClassifyTitle")}</strong>
-                        </div>
-                        <div className="review-field-grid">
-                          <div className="review-badge-field">
-                            <span>{t("reviewStateLabel")}</span>
-                            <div className="review-badge-options" role="group" aria-label={t("reviewStateLabel")}>
-                              {[
-                                { value: "unread", label: t("statusUnread") },
-                                { value: "read", label: t("statusRead") },
-                                { value: "archived", label: t("statusArchived") },
-                              ].map((option) => {
-                                const isSelected = activeReviewDraft?.status === option.value;
 
-                                return (
-                                  <button
-                                    key={option.value}
-                                    type="button"
-                                    className={`review-state-badge is-status-${option.value} ${isSelected ? "is-active" : ""}`}
-                                    aria-pressed={isSelected}
-                                    disabled={isReviewWorkbenchLocked || isSelected}
-                                    onClick={() => patchReviewDraft({ status: option.value as Submission["status"] })}
-                                  >
-                                    {option.label}
-                                  </button>
-                                );
-                              })}
-                            </div>
-                          </div>
-                          <div className="review-badge-field">
-                            <span>{t("triageStatusLabel")}</span>
-                            <div className="review-badge-options" role="group" aria-label={t("triageStatusLabel")}>
-                              {TRIAGE_STATUS_OPTIONS.map((option) => {
-                                const isSelected = activeReviewDraft?.triageStatus === option.value;
-
-                                return (
-                                  <button
-                                    key={option.value}
-                                    type="button"
-                                    className={`review-state-badge is-triage-${option.value} ${isSelected ? "is-active" : ""}`}
-                                    aria-pressed={isSelected}
-                                    disabled={isReviewWorkbenchLocked || isSelected}
-                                    onClick={() => patchReviewDraft({ triageStatus: option.value })}
-                                  >
-                                    {getLocalizedTriageStatusLabel(option.value, t)}
-                                  </button>
-                                );
-                              })}
-                            </div>
-                          </div>
-                          <div className="review-badge-field">
-                            <span>{t("priority")}</span>
-                            <div className="review-badge-options" role="group" aria-label={t("priority")}>
-                              {[
-                                { value: "low", label: t("priorityLow") },
-                                { value: "medium", label: t("priorityMedium") },
-                                { value: "high", label: t("priorityHigh") },
-                              ].map((option) => {
-                                const isSelected = activeReviewDraft?.priority === option.value;
-
-                                return (
-                                  <button
-                                    key={option.value}
-                                    type="button"
-                                    className={`review-state-badge is-priority-${option.value} ${isSelected ? "is-active" : ""}`}
-                                    aria-pressed={isSelected}
-                                    disabled={isReviewWorkbenchLocked || isSelected}
-                                    onClick={() => patchReviewDraft({ priority: option.value as Submission["priority"] })}
-                                  >
-                                    {option.label}
-                                  </button>
-                                );
-                              })}
-                            </div>
-                          </div>
-                          <div className="review-badge-field">
-                            <span>{t("signalValueLabel")}</span>
-                            <div className="review-badge-options" role="group" aria-label={t("signalValueLabel")}>
-                              <button
-                                type="button"
-                                className={`review-state-badge is-value-none ${activeReviewDraft?.signalValue === undefined ? "is-active" : ""}`}
-                                aria-pressed={activeReviewDraft?.signalValue === undefined}
-                                disabled={isReviewWorkbenchLocked || activeReviewDraft?.signalValue === undefined}
-                                onClick={() => patchReviewDraft({ signalValue: undefined })}
-                              >
-                                {t("notScored")}
-                              </button>
-                              <div className="review-star-rating" aria-label={t("signalValueRatingLabel")}>
-                                {[1, 2, 3, 4, 5].map((value) => {
-                                  const currentValue = activeReviewDraft?.signalValue ?? 0;
-                                  const isSelected = activeReviewDraft?.signalValue === value;
-                                  const isFilled = currentValue >= value;
-
-                                  return (
-                                    <button
-                                      key={value}
-                                      type="button"
-                                      className={`review-star-button ${isFilled ? "is-filled" : ""} ${isSelected ? "is-selected" : ""}`}
-                                      aria-label={t("signalValueRatingOption", { value })}
-                                      aria-pressed={isSelected}
-                                      disabled={isReviewWorkbenchLocked || isSelected}
-                                      onClick={() => patchReviewDraft({ signalValue: value })}
-                                    >
-                                      ★
-                                    </button>
-                                  );
-                                })}
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="review-stage-card review-stage-card-collapsible">
-                        <WorkspaceSectionToggle
-                          eyebrow={t("stepLabel", { count: 3 })}
-                          title={t("reviewerNoteLabel")}
-                          detail={
-                            selectedReviewerNoteUpdatedAt
-                              ? `${t("lastUpdatedLabel")}: ${formatDate(selectedReviewerNoteUpdatedAt)}`
-                              : t("reviewUnsavedDraftHelper")
-                          }
-                          open={detailSectionsState.reviewerNotesOpen}
-                          onToggle={() =>
-                            setDetailSectionOpen("reviewerNotesOpen", !detailSectionsState.reviewerNotesOpen)
-                          }
-                          trailing={
+                      <div className="review-result-grid">
+                        <div className="review-result-item review-result-item-featured">
+                          <span>{t("signalValueLabel")}</span>
+                          {selectedSignalValueStars ? (
                             <>
-                              <span className={`save-state-pill is-${hasReviewDraftChanges ? "editing" : "saved"}`}>
-                                {reviewerNotesSaveLabel}
-                              </span>
-                              {selectedNeedsFollowUp ? (
-                                <span className="signal-chip signal-chip-accent">{t("needsFollowUpLabel")}</span>
-                              ) : null}
+                              <strong>{getSignalValueSummary(selectedRecord.submission.signalValue, t)}</strong>
+                              <div className="review-result-stars" aria-label={t("signalValueRatingLabel")}>
+                                <span className="review-result-stars-value" aria-hidden="true">{selectedSignalValueStars}</span>
+                              </div>
                             </>
-                          }
-                        />
-                        {detailSectionsState.reviewerNotesOpen ? (
-                          <>
-                            <label className="review-select">
-                              <span>{t("assignedReviewerLabel")}</span>
-                              <input
-                                type="text"
-                                value={activeReviewDraft?.reviewer ?? ""}
-                                disabled={isReviewWorkbenchLocked}
-                                onChange={(event) => patchReviewDraft({ reviewer: event.target.value })}
-                                placeholder={t("reviewerInputPlaceholder")}
-                              />
-                            </label>
-                            <div className="review-notes-actions">
-                              <span className="signal-chip signal-chip-soft">
-                                {selectedReviewerDisplayLabel || t("unassignedLabel")}
-                              </span>
-                              {wallet.accountAddress ? (
-                                <button
-                                  type="button"
-                                  className="ghost-button"
-                                  disabled={isReviewWorkbenchLocked || (activeReviewDraft?.reviewer ?? "") === wallet.accountAddress}
-                                  onClick={() => patchReviewDraft({ reviewer: wallet.accountAddress })}
-                                >
-                                  {t("assignToMe")}
-                                </button>
-                              ) : null}
-                              <button
-                                type="button"
-                                className={`ghost-button ${selectedNeedsFollowUp ? "is-active" : ""}`}
-                                disabled={isReviewWorkbenchLocked || saving}
-                                onClick={() => void handleToggleNeedsFollowUp()}
-                              >
-                                {selectedNeedsFollowUp ? t("followUpEnabledLabel") : t("needsFollowUpLabel")}
-                              </button>
-                            </div>
-                            <label className="review-select">
-                              <span>{t("internalNote")}</span>
-                              <textarea
-                                rows={5}
-                                value={activeReviewDraft?.notes ?? ""}
-                                disabled={isReviewWorkbenchLocked}
-                                onChange={(event) => patchReviewDraft({ notes: event.target.value })}
-                                placeholder={t("captureReviewNotes")}
-                              />
-                            </label>
-                            <div className="review-notes-actions">
-                              <span className={`save-state-pill is-${hasReviewDraftChanges ? "editing" : "saved"}`}>
-                                {reviewerNotesSaveLabel}
-                              </span>
-                              {selectedReviewerNoteUpdatedAt ? (
-                                <span className="muted">
-                                  {t("lastUpdatedLabel")}: {formatDate(selectedReviewerNoteUpdatedAt)}
-                                </span>
-                              ) : (
-                                <span className="muted">{t("reviewerNoteLabel")}</span>
-                              )}
-                              <button
-                                type="button"
-                                className="ghost-button"
-                                disabled={
-                                  isReviewWorkbenchLocked ||
-                                  saving ||
-                                  (
-                                    (activeReviewDraft?.notes ?? "") === getVisibleReviewerNotes(selectedRecord.submission) &&
-                                    (activeReviewDraft?.reviewer ?? "") === (getAssignedReviewer(selectedRecord.submission) ?? "")
-                                  )
-                                }
-                                onClick={() => void handleSaveReviewerNotes()}
-                              >
-                                {t("saveNotesLabel")}
-                              </button>
-                            </div>
-                            <p className="review-action-helper">
-                              {t("reviewUnsavedDraftHelper")}
-                            </p>
-                          </>
-                        ) : null}
-                      </div>
-                      <div className="review-stage-card review-roadmap-strip">
-                        <div>
-                          <p className="eyebrow">{t("publicRoadmapDecisionStep")}</p>
-                          <strong>
-                            {t("roadmapStatusLabel")}:{" "}
-                            {getLocalizedTriageStatusLabel(draftTriageStatus, t)}
-                          </strong>
-                          <p className="muted">
-                            {t("roadmapVisibilityHelper")}
-                          </p>
+                          ) : (
+                            <strong>{t("notScored")}</strong>
+                          )}
                         </div>
-                        <div className="review-action-bar review-roadmap-actions">
-                          <button
-                            type="button"
-                            className="primary-button review-primary-button"
-                            disabled={isReviewWorkbenchLocked || saving || isDraftOnRoadmap}
-                            onClick={() => void handleMoveToRoadmap()}
-                          >
-                            {isDraftOnRoadmap ? t("visibleOnRoadmap") : t("publishSafeMetadata")}
-                          </button>
-                          {isSelectedRecordOnRoadmap ? (
-                            <Link className="ghost-button" to={selectedRoadmapUrl}>
-                              {t("openRoadmap")}
-                            </Link>
+                        <div className="review-result-item review-result-item-wide">
+                          <span>Review badges</span>
+                          <div className="review-result-inline-badges">
+                            <span className={`pill status-${selectedRecord.submission.status}`}>
+                              {getLocalizedSubmissionStatusLabel(selectedRecord.submission.status, t)}
+                            </span>
+                            <span className={`pill priority-${selectedRecord.submission.priority}`}>
+                              {getLocalizedPriorityLabel(selectedRecord.submission.priority, t)}
+                            </span>
+                            <span className="pill">
+                              {getLocalizedTriageStatusLabel(selectedRecord.submission.triageStatus, t)}
+                            </span>
+                            <span className="signal-chip signal-chip-soft">{selectedPublicDecisionLabel}</span>
+                            <span className={`signal-chip ${isSelectedRecordOnRoadmap ? "signal-chip-accent" : ""}`}>
+                              {isSelectedRecordOnRoadmap ? "Roadmap linked" : "Internal only"}
+                            </span>
+                          </div>
+                        </div>
+                        {selectedReviewResultItems.map((item) => (
+                          <div key={item.label} className="review-result-item">
+                            <span>{item.label}</span>
+                            {item.href ? (
+                              <Link to={item.href}>{item.value}</Link>
+                            ) : (
+                              <strong>{item.value}</strong>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="review-result-footer">
+                        <div className="review-result-badges">
+                          {selectedReviewSummaryBadges.map((badge) => (
+                            <span key={badge} className="signal-chip signal-chip-soft">{badge}</span>
+                          ))}
+                          {selectedNeedsFollowUp ? (
+                            <span className="signal-chip signal-chip-accent">{t("needsFollowUpLabel")}</span>
                           ) : null}
+                        </div>
+                        <div className="review-action-bar">
                           {selectedRecord.submission.githubIssueUrl ? (
                             <a
-                              className="review-inline-link"
+                              className="ghost-button"
                               href={selectedRecord.submission.githubIssueUrl}
                               target="_blank"
                               rel="noreferrer"
@@ -4405,53 +4152,14 @@ export function AdminDashboardPage() {
                               Open GitHub issue
                             </a>
                           ) : null}
+                          {isSelectedRecordOnRoadmap ? (
+                            <Link className="ghost-button" to={selectedRoadmapUrl}>
+                              {t("openRoadmap")}
+                            </Link>
+                          ) : null}
                         </div>
                       </div>
                     </section>
-                    <div className="signal-detail-sticky-actions">
-                      <div className="signal-detail-sticky-meta">
-                        <span className="signal-chip signal-chip-soft">
-                          {selectedReviewerDisplayLabel || t("unassignedLabel")}
-                        </span>
-                        {selectedNeedsFollowUp ? (
-                          <span className="signal-chip signal-chip-accent">{t("needsFollowUpLabel")}</span>
-                        ) : null}
-                        {wallet.accountAddress ? (
-                          <button
-                            type="button"
-                            className="ghost-button"
-                            disabled={isReviewWorkbenchLocked || (activeReviewDraft?.reviewer ?? "") === wallet.accountAddress}
-                            onClick={() => patchReviewDraft({ reviewer: wallet.accountAddress })}
-                          >
-                            {t("assignToMe")}
-                          </button>
-                        ) : null}
-                        <button
-                          type="button"
-                          className={`ghost-button ${selectedNeedsFollowUp ? "is-active" : ""}`}
-                          disabled={isReviewWorkbenchLocked || saving}
-                          onClick={() => void handleToggleNeedsFollowUp()}
-                        >
-                          {selectedNeedsFollowUp ? t("followUpEnabledLabel") : t("needsFollowUpLabel")}
-                        </button>
-                      </div>
-                      <QuickActionBar
-                        submission={selectedRecord.submission}
-                        disabled={saving}
-                        onAction={(action) => {
-                          void handleQuickAction(selectedRecord, action);
-                        }}
-                        t={t}
-                      />
-                      <button
-                        type="button"
-                        className={`primary-button review-save-button ${hasReviewDraftChanges ? "is-draft-ready" : ""}`}
-                        disabled={isReviewWorkbenchLocked || saving || !hasReviewDraftChanges}
-                        onClick={() => void handleSaveReviewDraft()}
-                      >
-                        {saving ? t("reviewSaveSaving") : t("saveReview")}
-                      </button>
-                    </div>
                   </div>
 
                   {!isReviewerFocusMode ? (
@@ -5044,6 +4752,396 @@ export function AdminDashboardPage() {
 
         <div className="mobile-console-banner">{t("adminDesktopNotice")}</div>
       </section>
+      {reviewSessionOpen && selectedRecord ? (
+        <div className="modal-backdrop review-session-backdrop" role="presentation" onMouseDown={closeReviewSession}>
+          <section
+            ref={reviewSessionDialogRef}
+            className="answer-card review-session-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="review-session-title"
+            aria-describedby="review-session-description"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <div className="review-session-shell">
+              <div className="review-session-header">
+                <div>
+                  <p className="eyebrow">Review Session</p>
+                  <h3 id="review-session-title">{reviewSessionCurrentStep.title}</h3>
+                  <p id="review-session-description" className="muted">{reviewSessionCurrentStep.detail}</p>
+                </div>
+                <div className="review-session-header-actions">
+                  <span className={`save-state-pill is-${reviewStatusPillState}`}>{reviewStatusPillLabel}</span>
+                  <button type="button" className="ghost-button" onClick={closeReviewSession}>
+                    {t("closeLabel")}
+                  </button>
+                </div>
+              </div>
+
+              <div className="review-progress-rail review-session-progress" aria-label={t("reviewProgressAriaLabel")}>
+                {reviewSessionStepItems.map((step) => (
+                  <button
+                    key={step.id}
+                    type="button"
+                    className={`review-progress-step ${reviewSessionStep === step.id ? "is-current" : reviewSessionStep > step.id ? "is-complete" : ""}`}
+                    onClick={() => {
+                      if (step.id === 1 || !selectedRecordNeedsDecrypt || Boolean(detailAnswers)) {
+                        setReviewSessionStep(step.id);
+                      }
+                    }}
+                    disabled={step.id > 1 && selectedRecordNeedsDecrypt && !detailAnswers}
+                  >
+                    <span className="review-progress-marker" aria-hidden="true">
+                      {reviewSessionStep > step.id ? "✓" : step.id}
+                    </span>
+                    <span className="review-progress-copy">
+                      <span className="review-progress-step-label">
+                        {reviewSessionStep > step.id ? "Done" : reviewSessionStep === step.id ? `Step ${step.id}` : `Step ${step.id}`}
+                      </span>
+                      <span className="review-progress-title">{step.title}</span>
+                    </span>
+                  </button>
+                ))}
+              </div>
+
+              {reviewSessionStep === 1 ? (
+                <div className="review-session-stage review-session-stage-unlock">
+                  <div className="review-session-stage-copy">
+                    <strong>Private signal locked</strong>
+                    <p className="muted">
+                      Decrypt is the primary action in this session. Until the payload is unlocked, the rest of the workflow stays read-only.
+                    </p>
+                  </div>
+                  <div className={`review-session-decrypt-shell ${decrypting || decryptState === "decrypting" ? "is-active" : ""} ${detailAnswers ? "is-unlocked" : ""}`}>
+                    <PrivateSignalUnlockCard
+                      onUnlock={() => void handleDecrypt()}
+                      onClearDebugCache={() => void handleClearDebugPolicyCache()}
+                      isDecrypting={decrypting || decryptInFlightRef.current}
+                      isUnlocked={Boolean(detailAnswers)}
+                      actionLabel="Decrypt signal"
+                      unlockState={decryptState}
+                      statusMessage={decryptStatusMessage}
+                      errorMessage={decryptError}
+                      diagnostics={decryptDiagnostics}
+                      disabledReason={selectedRecordUnlockDisabledReason}
+                      actionDisabled={Boolean(selectedRecordUnlockDisabledReason)}
+                      supportContent={(
+                        <>
+                          <strong>Seal review session</strong>
+                          <p className="muted">
+                            {t("walletApprovalReuseNotice", { minutes: realSealSessionTtlMinutes })}
+                          </p>
+                        </>
+                      )}
+                    >
+                      {selectedRecord.submission.encryptedBlobId && !isLocalFallbackBlob(selectedRecord.submission.encryptedBlobId) ? (
+                        <StorageProof
+                          blobId={selectedRecord.submission.encryptedBlobId}
+                          proof={selectedRecord.submission.encryptedWalrusProof ?? selectedRecord.submission.walrusProof}
+                          compact
+                        />
+                      ) : null}
+                    </PrivateSignalUnlockCard>
+                  </div>
+                </div>
+              ) : null}
+
+              {reviewSessionStep === 2 ? (
+                <div className="review-session-stage">
+                  <div className="review-session-read-panel">
+                    <div className="review-session-stage-copy">
+                      <strong>Original signal</strong>
+                      <p className="muted">Review the submitted signal first, then classify it.</p>
+                    </div>
+                    <div className="review-session-answer-list">
+                      {selectedRecord.form.fields
+                        .filter((field) => !isAttachmentFieldType(field.type))
+                        .map((field, index) => (
+                          <article key={field.id} className="review-session-answer-card">
+                            <div className="review-session-question-head">
+                              <span className="review-session-question-index">Q{index + 1}</span>
+                              <strong>{field.label}</strong>
+                            </div>
+                            <div>{renderAnswerValue(field, detailAnswers?.[field.id])}</div>
+                          </article>
+                        ))}
+                      {detailAttachments.length > 0 ? (
+                        <article className="review-session-answer-card">
+                          <span>{t("attachmentsTitle")}</span>
+                          <SignalAttachmentList
+                            attachments={detailAttachments}
+                            attachmentPreviews={attachmentPreviews}
+                          />
+                        </article>
+                      ) : null}
+                    </div>
+                  </div>
+
+                  <div className="review-stage-card">
+                    <div className="review-stage-header">
+                      <p className="eyebrow">{t("stepLabel", { count: 2 })}</p>
+                      <strong>{t("reviewClassifyTitle")}</strong>
+                    </div>
+                    <div className="review-field-grid">
+                      <div className="review-badge-field">
+                        <span>{t("reviewStateLabel")}</span>
+                        <div className="review-badge-options" role="group" aria-label={t("reviewStateLabel")}>
+                          {[
+                            { value: "unread", label: t("statusUnread") },
+                            { value: "read", label: t("statusRead") },
+                            { value: "archived", label: t("statusArchived") },
+                          ].map((option) => {
+                            const isSelected = activeReviewDraft?.status === option.value;
+                            return (
+                              <button
+                                key={option.value}
+                                type="button"
+                                className={`review-state-badge is-status-${option.value} ${isSelected ? "is-active" : ""}`}
+                                aria-pressed={isSelected}
+                                disabled={isSelected}
+                                onClick={() => patchReviewDraft({ status: option.value as Submission["status"] })}
+                              >
+                                {option.label}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                      <label className="review-select review-badge-field">
+                        <span>{t("triageStatusLabel")}</span>
+                        <select
+                          value={activeReviewDraft?.triageStatus ?? "new"}
+                          onChange={(event) =>
+                            patchReviewDraft({
+                              triageStatus: event.target.value as Submission["triageStatus"],
+                            })
+                          }
+                        >
+                          {TRIAGE_STATUS_OPTIONS.map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {getLocalizedTriageStatusLabel(option.value, t)}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <div className="review-badge-field">
+                        <span>{t("priority")}</span>
+                        <div className="review-badge-options" role="group" aria-label={t("priority")}>
+                          {[
+                            { value: "low", label: t("priorityLow") },
+                            { value: "medium", label: t("priorityMedium") },
+                            { value: "high", label: t("priorityHigh") },
+                          ].map((option) => {
+                            const isSelected = activeReviewDraft?.priority === option.value;
+                            return (
+                              <button
+                                key={option.value}
+                                type="button"
+                                className={`review-state-badge is-priority-${option.value} ${isSelected ? "is-active" : ""}`}
+                                aria-pressed={isSelected}
+                                disabled={isSelected}
+                                onClick={() => patchReviewDraft({ priority: option.value as Submission["priority"] })}
+                              >
+                                {option.label}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                      <div className="review-badge-field">
+                        <span>{t("signalValueLabel")}</span>
+                        <div className="review-badge-options" role="group" aria-label={t("signalValueLabel")}>
+                          <button
+                            type="button"
+                            className={`review-state-badge is-value-none ${activeReviewDraft?.signalValue === undefined ? "is-active" : ""}`}
+                            aria-pressed={activeReviewDraft?.signalValue === undefined}
+                            disabled={activeReviewDraft?.signalValue === undefined}
+                            onClick={() => patchReviewDraft({ signalValue: undefined })}
+                          >
+                            {t("notScored")}
+                          </button>
+                          <div className="review-star-rating" aria-label={t("signalValueRatingLabel")}>
+                            {[1, 2, 3, 4, 5].map((value) => {
+                              const currentValue = activeReviewDraft?.signalValue ?? 0;
+                              const isSelected = activeReviewDraft?.signalValue === value;
+                              const isFilled = currentValue >= value;
+                              return (
+                                <button
+                                  key={value}
+                                  type="button"
+                                  className={`review-star-button ${isFilled ? "is-filled" : ""} ${isSelected ? "is-selected" : ""}`}
+                                  aria-label={t("signalValueRatingOption", { value })}
+                                  aria-pressed={isSelected}
+                                  disabled={isSelected}
+                                  onClick={() => patchReviewDraft({ signalValue: value })}
+                                >
+                                  ★
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+
+              {reviewSessionStep === 3 ? (
+                <div className="review-session-stage">
+                  <div className="review-stage-card">
+                    <div className="review-stage-header">
+                      <p className="eyebrow">{t("stepLabel", { count: 3 })}</p>
+                      <strong>{t("reviewerNoteLabel")}</strong>
+                    </div>
+                    <p className="review-session-internal-note">Internal only. This stays in the review result and is not part of the public signal payload.</p>
+                    <label className="review-select">
+                      <span>{t("assignedReviewerLabel")}</span>
+                      <input
+                        type="text"
+                        value={activeReviewDraft?.reviewer ?? ""}
+                        onChange={(event) => patchReviewDraft({ reviewer: event.target.value })}
+                        placeholder={t("reviewerInputPlaceholder")}
+                      />
+                    </label>
+                    <div className="review-notes-actions">
+                      <span className="signal-chip signal-chip-soft">{selectedReviewerDisplayLabel || t("unassignedLabel")}</span>
+                      {wallet.accountAddress ? (
+                        <button
+                          type="button"
+                          className="ghost-button"
+                          onClick={() => patchReviewDraft({ reviewer: wallet.accountAddress })}
+                        >
+                          {t("assignToMe")}
+                        </button>
+                      ) : null}
+                      <button
+                        type="button"
+                        className={`ghost-button ${selectedNeedsFollowUp ? "is-active" : ""}`}
+                        disabled={saving}
+                        onClick={() => void handleToggleNeedsFollowUp()}
+                      >
+                        {selectedNeedsFollowUp ? t("followUpEnabledLabel") : t("needsFollowUpLabel")}
+                      </button>
+                    </div>
+                    <label className="review-select">
+                      <span>{t("internalNote")}</span>
+                      <textarea
+                        rows={7}
+                        value={activeReviewDraft?.notes ?? ""}
+                        onChange={(event) => patchReviewDraft({ notes: event.target.value })}
+                        placeholder={t("captureReviewNotes")}
+                      />
+                    </label>
+                    <p className="review-action-helper">{t("reviewUnsavedDraftHelper")}</p>
+                  </div>
+                </div>
+              ) : null}
+
+              {reviewSessionStep === 4 ? (
+                <div className="review-session-stage">
+                  <div className="review-stage-card">
+                    <div className="review-stage-header">
+                      <p className="eyebrow">{t("publicRoadmapDecisionStep")}</p>
+                      <strong>Public roadmap decision</strong>
+                    </div>
+                    <p className="muted">
+                      Public visibility is handled here. Internal review status above can stay more detailed than what gets surfaced on the roadmap.
+                    </p>
+                    <div className="review-session-decision-grid">
+                      <button
+                        type="button"
+                        className={`review-state-badge ${!isDraftOnRoadmap && draftTriageStatus !== "closed" ? "is-active" : ""}`}
+                        onClick={() => patchReviewDraft({ status: "read" })}
+                      >
+                        Keep internal
+                      </button>
+                      <button
+                        type="button"
+                        className={`review-state-badge is-triage-planned ${isDraftOnRoadmap ? "is-active" : ""}`}
+                        onClick={() => patchReviewDraft({
+                          status: "read",
+                          triageStatus: ROADMAP_READY_STATUSES.has(draftTriageStatus) ? draftTriageStatus : "planned",
+                        })}
+                      >
+                        Publish to roadmap
+                      </button>
+                      <button
+                        type="button"
+                        className={`review-state-badge is-triage-closed ${draftTriageStatus === "closed" ? "is-active" : ""}`}
+                        onClick={() => patchReviewDraft({ status: "read", triageStatus: "closed" })}
+                      >
+                        Resolve internally
+                      </button>
+                      <button
+                        type="button"
+                        className={`review-state-badge is-status-archived ${draftReviewStatus === "archived" ? "is-active" : ""}`}
+                        onClick={() => patchReviewDraft({ status: "archived", triageStatus: "closed" })}
+                      >
+                        Archive signal
+                      </button>
+                    </div>
+                    <div className="review-result-grid review-result-grid-compact">
+                      <div className="review-result-item">
+                        <span>{t("roadmapStatusLabel")}</span>
+                        <strong>{isDraftOnRoadmap ? "Visible on roadmap" : "Not on roadmap"}</strong>
+                      </div>
+                      <div className="review-result-item">
+                        <span>Public result</span>
+                        <strong>{activeReviewDraft ? getPublicDecisionLabel(buildSubmissionFromReviewDraft(selectedRecord.submission, activeReviewDraft), t) : getPublicDecisionLabel(selectedRecord.submission, t)}</strong>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+
+              <div className="review-session-footer">
+                <button
+                  type="button"
+                  className="ghost-button"
+                  onClick={() => {
+                    if (reviewSessionStep === 1) {
+                      closeReviewSession();
+                      return;
+                    }
+                    setReviewSessionStep((current) => (current - 1) as 1 | 2 | 3 | 4);
+                  }}
+                >
+                  {reviewSessionStep === 1 ? t("closeLabel") : "Back"}
+                </button>
+                <div className="review-session-footer-actions">
+                  {reviewSessionStep < 4 ? (
+                    <button
+                      ref={reviewSessionPrimaryActionRef}
+                      type="button"
+                      className="primary-button"
+                      disabled={!canAdvanceReviewSession}
+                      onClick={() => setReviewSessionStep((current) => (Math.min(4, current + 1) as 1 | 2 | 3 | 4))}
+                    >
+                      Next step
+                    </button>
+                  ) : (
+                    <button
+                      ref={reviewSessionPrimaryActionRef}
+                      type="button"
+                      className={`primary-button review-save-button ${hasReviewDraftChanges ? "is-draft-ready" : ""}`}
+                      disabled={saving || !hasReviewDraftChanges}
+                      onClick={async () => {
+                        const saved = await saveActiveReviewDraft();
+                        if (saved) {
+                          closeReviewSession();
+                        }
+                      }}
+                    >
+                      {saving ? t("reviewSaveSaving") : t("saveReview")}
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          </section>
+        </div>
+      ) : null}
       {showShortcutHelp ? (
         <div className="node-directory-overlay" role="dialog" aria-modal="true" aria-labelledby="shortcut-help-title">
           <div className="node-directory-backdrop" onClick={() => setShowShortcutHelp(false)} />

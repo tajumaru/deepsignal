@@ -7,7 +7,6 @@ import {
   ACCESS_CONTROL_REGISTRY_ID,
   ACCESS_CONTROL_REVIEWER_CAP_TYPE,
 } from "../lib/sui";
-import { useRpcInfrastructure } from "../rpcInfrastructure";
 import { useAccessRegistry } from "./useAccessRegistry";
 import { useOwnedSuiObjects } from "./useOwnedSuiObjects";
 

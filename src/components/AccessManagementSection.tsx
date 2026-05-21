@@ -4,7 +4,6 @@ import { isValidSuiAddress, normalizeSuiAddress } from "@mysten/sui/utils";
 import { useState } from "react";
 import type { CapabilityProfile } from "../hooks/useAccessControl";
 import { useAccessRegistry } from "../hooks/useAccessRegistry";
-import { buildRegistryRows } from "./MemberDirectorySection";
 import { useI18n } from "../i18n";
 import { canIssueAdmin, canIssueReviewer } from "../lib/adminAccess";
 import type { RegistryRoleEntry } from "../lib/accessRegistry";
@@ -13,6 +12,7 @@ import {
   ACCESS_CONTROL_PACKAGE_ID,
   ACCESS_CONTROL_REGISTRY_ID,
 } from "../lib/sui";
+import { buildRegistryRows } from "./memberDirectoryRows";
 import { SignalMetaChip } from "./SignalMetaChip";
 
 interface AccessManagementSectionProps {

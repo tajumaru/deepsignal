@@ -3,6 +3,7 @@ import { useAccessRegistry } from "../hooks/useAccessRegistry";
 import type { CapabilityProfile } from "../hooks/useAccessControl";
 import { useI18n } from "../i18n";
 import type { RegistryRoleEntry } from "../lib/accessRegistry";
+import { buildRegistryRows } from "./memberDirectoryRows";
 import { SignalMetaChip } from "./SignalMetaChip";
 
 function roleTitle(role: RegistryRoleEntry["role"]) {
@@ -33,17 +34,6 @@ function profileRoleLabel(profile: CapabilityProfile, t: (key: string) => string
 
 function statusLabel(status: RegistryRoleEntry["status"], t: (key: string) => string) {
   return status === "active" ? t("statusActive") : status;
-}
-
-export function buildRegistryRows(registry: ReturnType<typeof useAccessRegistry>["registry"]) {
-  return [
-    ...(registry.owner ? [registry.owner] : []),
-    ...registry.admins,
-    ...registry.reviewers,
-  ].map((entry) => ({
-    ...entry,
-    key: `${entry.role}:${entry.address}:${entry.capId}`,
-  }));
 }
 
 export function MemberDirectorySection({
