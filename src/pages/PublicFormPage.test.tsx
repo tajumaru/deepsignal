@@ -348,9 +348,11 @@ describe("PublicFormPage shared manifest restore", () => {
       await waitFor(() => expect(mockSaveSubmission).toHaveBeenCalledTimes(attempt + 1));
     }
 
-    await waitFor(() => expect(screen.queryByRole("button", { name: "retryLabel" })).not.toBeInTheDocument());
+    await waitFor(() =>
+      expect(window.localStorage.getItem("deepsignal:public-recovery-retries:form-123:blob-abc")).not.toBeNull(),
+    );
     expect(screen.queryByRole("button", { name: "retryLabel" })).not.toBeInTheDocument();
-    expect(window.localStorage.getItem("deepsignal:public-recovery-retries:form-123:blob-abc")).not.toBeNull();
+    expect(screen.getByRole("button", { name: /^(discard|discardRecovery)$/ })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /^(discard|discardRecovery)$/ }));
 
