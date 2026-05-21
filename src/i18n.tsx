@@ -1122,6 +1122,9 @@ const messages = {
     openRoadmap: "Open roadmap",
     suiRegistrationOptionalProof: "Sui registration is optional proof, not required for review.",
     secondaryToolsEyebrow: "Secondary tools",
+    secondaryInspectorTitle: "Secondary inspector",
+    exportInspectorEyebrow: "Export",
+    currentExportSummaryAriaLabel: "Current export summary",
     metadataExportTitle: "Metadata / Export",
     metadataExportBody:
       "These details stay collapsed until you need to verify storage, encryption, or proof state.",
@@ -3108,6 +3111,9 @@ const messages = {
     suiRegistrationOptionalProof:
       "Sui \u767b\u9332\u306f\u4efb\u610f\u306e proof \u3067\u3042\u308a\u3001\u30ec\u30d3\u30e5\u30fc\u306b\u306f\u5fc5\u9808\u3067\u306f\u3042\u308a\u307e\u305b\u3093\u3002",
     secondaryToolsEyebrow: "\u88dc\u52a9\u30c4\u30fc\u30eb",
+    secondaryInspectorTitle: "\u30bb\u30ab\u30f3\u30c0\u30ea\u30a4\u30f3\u30b9\u30da\u30af\u30bf\u30fc",
+    exportInspectorEyebrow: "\u66f8\u304d\u51fa\u3057",
+    currentExportSummaryAriaLabel: "\u73fe\u5728\u306e\u66f8\u304d\u51fa\u3057\u6982\u8981",
     metadataExportTitle: "Metadata / Export",
     metadataExportBody:
       "\u30b9\u30c8\u30ec\u30fc\u30b8\u3001\u6697\u53f7\u5316\u3001proof \u72b6\u614b\u3092\u78ba\u8a8d\u3059\u308b\u3068\u304d\u3060\u3051\u958b\u304f\u8a73\u7d30\u3067\u3059\u3002",

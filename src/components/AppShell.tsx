@@ -117,6 +117,8 @@ export function AppShell({
   const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
   const moreMenuRef = useRef<HTMLDivElement | null>(null);
+  const mobileMenuToggleRef = useRef<HTMLButtonElement | null>(null);
+  const mobileDrawerRef = useRef<HTMLElement | null>(null);
   const walletChrome = useWalletChrome(walletAvailable, onWalletActivate, () => setMobileDrawerOpen(false));
   const showMobileBottomNav =
     !publicChrome &&
@@ -169,6 +171,22 @@ export function AppShell({
     };
   }, [mobileDrawerOpen]);
 
+  useEffect(() => {
+    const drawer = mobileDrawerRef.current as (HTMLElement & { inert?: boolean }) | null;
+    if (!drawer) {
+      return;
+    }
+    drawer.inert = !mobileDrawerOpen;
+  }, [mobileDrawerOpen]);
+
+  function closeMobileDrawer() {
+    if (mobileDrawerRef.current?.contains(document.activeElement)) {
+      mobileMenuToggleRef.current?.focus();
+    }
+    setMobileMoreOpen(false);
+    setMobileDrawerOpen(false);
+  }
+
   const shell = (
     <div
       className={`app-shell ${showMobileBottomNav ? "has-mobile-bottom-nav" : ""} ${
@@ -181,9 +199,16 @@ export function AppShell({
         {publicChrome ? null : (
           <div className="mobile-topbar-row">
             <button
+              ref={mobileMenuToggleRef}
               type="button"
               className={`mobile-menu-toggle ${mobileDrawerOpen ? "is-open" : ""}`}
-              onClick={() => setMobileDrawerOpen((current) => !current)}
+              onClick={() => {
+                if (mobileDrawerOpen) {
+                  closeMobileDrawer();
+                  return;
+                }
+                setMobileDrawerOpen(true);
+              }}
               aria-label="Toggle navigation menu"
               aria-expanded={mobileDrawerOpen}
               aria-controls="mobile-nav-drawer"
@@ -268,14 +293,17 @@ export function AppShell({
           <button
             type="button"
             className={`mobile-drawer-backdrop ${mobileDrawerOpen ? "is-open" : ""}`}
-            onClick={() => setMobileDrawerOpen(false)}
+            onClick={closeMobileDrawer}
             aria-hidden={!mobileDrawerOpen}
             tabIndex={mobileDrawerOpen ? 0 : -1}
           />
           <aside
+            ref={mobileDrawerRef}
             id="mobile-nav-drawer"
             className={`mobile-nav-drawer panel ${mobileDrawerOpen ? "is-open" : ""}`}
-            aria-hidden={!mobileDrawerOpen}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Mobile navigation menu"
           >
             <div className="mobile-drawer-header">
               <div>
@@ -283,7 +311,7 @@ export function AppShell({
                 <strong>DeepSignal</strong>
                 <p>{t("brandTagline")}</p>
               </div>
-              <CreateFormLink className="mobile-drawer-cta" onClick={() => setMobileDrawerOpen(false)}>
+              <CreateFormLink className="mobile-drawer-cta" onClick={closeMobileDrawer}>
                 <span aria-hidden="true">+</span>
                 <span>{t("navCreateForm")}</span>
               </CreateFormLink>
@@ -292,14 +320,14 @@ export function AppShell({
             <div className="mobile-drawer-section">
               <span className="mobile-drawer-section-label">Secure Inbox</span>
               <nav className="mobile-drawer-nav" aria-label="Mobile navigation">
-                <NavLink to="/" onClick={() => setMobileDrawerOpen(false)}>
+                <NavLink to="/" onClick={closeMobileDrawer}>
                   {t("navHome")}
                 </NavLink>
-                <CreateFormLink nav onClick={() => setMobileDrawerOpen(false)}>
+                <CreateFormLink nav onClick={closeMobileDrawer}>
                   <NavItemLabel icon={<CreateSignalNavIcon />}>{t("navCreateForm")}</NavItemLabel>
                 </CreateFormLink>
                 {walletChrome.inboxNav}
-                <NavLink to="/explore" onClick={() => setMobileDrawerOpen(false)}>
+                <NavLink to="/explore" onClick={closeMobileDrawer}>
                   {t("navExplore")}
                 </NavLink>
                 {walletChrome.accessNav}
@@ -316,7 +344,7 @@ export function AppShell({
                     <NavLink
                       className="mobile-drawer-subnav-link"
                       to="/troubleshooting"
-                      onClick={() => setMobileDrawerOpen(false)}
+                      onClick={closeMobileDrawer}
                     >
                       {t("navTroubleshooting")}
                     </NavLink>

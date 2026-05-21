@@ -4274,7 +4274,7 @@ export function AdminDashboardPage() {
                       <div className="secondary-inspector-header">
                         <div>
                           <p className="eyebrow">{t("secondaryToolsEyebrow")}</p>
-                          <h3>Secondary inspector</h3>
+                          <h3>{t("secondaryInspectorTitle")}</h3>
                         </div>
                         <p className="muted">{t("metadataExportBody")}</p>
                       </div>
@@ -4283,13 +4283,13 @@ export function AdminDashboardPage() {
                         <details className="inspector-panel inspector-export-panel">
                           <summary>
                             <span>
-                              <p className="eyebrow">Export</p>
+                              <p className="eyebrow">{t("exportInspectorEyebrow")}</p>
                               <strong>JSON / CSV</strong>
                             </span>
                             <span className="inspector-summary">{csvExportScopeLabel}</span>
                           </summary>
                           <div className="inspector-panel-body">
-                            <div className="export-quick-summary" aria-label="Current export summary">
+                            <div className="export-quick-summary" aria-label={t("currentExportSummaryAriaLabel")}>
                               <span>{csvExportShortScopeLabel}</span>
                               <span>{t("responsesCount", { count: csvExportCount })}</span>
                               <span>
