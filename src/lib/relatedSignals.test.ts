@@ -103,6 +103,66 @@ describe("getRelatedSignals", () => {
     expect(result?.duplicateLikely).toBe(true);
   });
 
+  it("adds a same-channel plus similar-subject bonus", () => {
+    const selected = record("signal-1", {
+      subjectPreview: "Login failure on mobile checkout",
+      answers: { detail: "session token expires unexpectedly" },
+      contributorId: "verified-user",
+    });
+    const sameChannelCandidate = record("signal-2", {
+      subjectPreview: "Login failure on mobile browser",
+      answers: { detail: "invoice summary looks misaligned" },
+      contributorId: "verified-user",
+    });
+    const differentChannelCandidate = record(
+      "signal-3",
+      {
+        subjectPreview: "Login failure on mobile browser",
+        answers: { detail: "invoice summary looks misaligned" },
+        contributorId: "verified-user",
+      },
+      { formOverrides: { id: "form-2" } },
+    );
+
+    const results = getRelatedSignals({
+      selectedRecord: selected,
+      records: [selected, differentChannelCandidate, sameChannelCandidate],
+    });
+
+    expect(results[0]?.record.submission.id).toBe("signal-2");
+    expect(results[0]?.score).toBe((results[1]?.score ?? 0) + 5);
+  });
+
+  it("adds a same-channel plus similar-preview bonus using safe preview text", () => {
+    const selected = record("signal-1", {
+      subjectPreview: "Billing report",
+      answers: { detail: "CSV export crashes for admins" },
+      contributorId: "verified-user",
+    });
+    const sameChannelCandidate = record("signal-2", {
+      subjectPreview: "Different subject",
+      answers: { detail: "CSV export crashes for admins" },
+      contributorId: "verified-user",
+    });
+    const differentChannelCandidate = record(
+      "signal-3",
+      {
+        subjectPreview: "Different subject",
+        answers: { detail: "CSV export crashes for admins" },
+        contributorId: "verified-user",
+      },
+      { formOverrides: { id: "form-2" } },
+    );
+
+    const results = getRelatedSignals({
+      selectedRecord: selected,
+      records: [selected, differentChannelCandidate, sameChannelCandidate],
+    });
+
+    expect(results[0]?.record.submission.id).toBe("signal-2");
+    expect(results[0]?.score).toBe((results[1]?.score ?? 0) + 4);
+  });
+
   it("does not use encrypted answers for similarity", () => {
     const selected = record(
       "signal-1",

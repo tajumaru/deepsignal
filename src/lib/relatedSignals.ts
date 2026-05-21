@@ -160,6 +160,16 @@ function buildResult(selectedRecord: SignalRecord, candidateRecord: SignalRecord
     reasons.push("similar_preview");
   }
 
+  if (reasons.includes("same_channel") && reasons.includes("similar_subject")) {
+    // Same channel plus similar wording is a stronger duplicate signal.
+    score += 2;
+  }
+
+  if (reasons.includes("same_channel") && reasons.includes("similar_preview")) {
+    // Matching safe preview language inside one channel is also a useful tie-breaker.
+    score += 1;
+  }
+
   if (score <= 0) {
     return null;
   }

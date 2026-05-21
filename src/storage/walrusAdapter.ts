@@ -919,6 +919,41 @@ async function cleanupSupersededWalrusObjects(blobObjectIds: Array<string | unde
   }
 }
 
+export function getPreservedCleanupObjectIdsForSubmissionUpdate(
+  submission: Pick<Submission, "isEncrypted" | "encryptedBlobId" | "receiptBlobId">,
+  formEntry: ReturnType<typeof getFormBlobIndex>,
+  submissionEntries: ReturnType<typeof listSubmissionBlobIndex>,
+) {
+  if (!submission.isEncrypted) {
+    return new Set<string>();
+  }
+
+  const referencedBlobIds = new Set(
+    [submission.encryptedBlobId, submission.receiptBlobId].filter(
+      (value): value is string => typeof value === "string" && value.trim().length > 0,
+    ),
+  );
+  if (referencedBlobIds.size === 0) {
+    return new Set<string>();
+  }
+
+  const preservedObjectIds = new Set<string>();
+  const rememberObjectId = (blobId?: string, objectId?: string) => {
+    if (!blobId || !objectId || !referencedBlobIds.has(blobId)) {
+      return;
+    }
+    preservedObjectIds.add(objectId);
+  };
+
+  rememberObjectId(formEntry?.formBlobId, formEntry?.formBlobObjectId);
+  rememberObjectId(formEntry?.manifestBlobId, formEntry?.manifestBlobObjectId);
+  submissionEntries.forEach((entry) => {
+    rememberObjectId(entry.blobId, entry.blobObjectId);
+  });
+
+  return preservedObjectIds;
+}
+
 function getMissingDeleteTargets(
   formEntry: ReturnType<typeof getFormBlobIndex>,
   submissionEntries: ReturnType<typeof listSubmissionBlobIndex>,
@@ -1681,6 +1716,11 @@ export const walrusAdapter: StorageAdapter = {
     }
 
     const existingSubmissionEntries = listSubmissionBlobIndex(sanitizedSubmission.formId);
+    const preservedCleanupObjectIds = getPreservedCleanupObjectIdsForSubmissionUpdate(
+      sanitizedSubmission,
+      entry,
+      existingSubmissionEntries,
+    );
     const existingSubmissionObjectIds = Object.fromEntries(
       existingSubmissionEntries.map((item) => [item.submissionId, item.blobObjectId]),
     );
@@ -1731,10 +1771,12 @@ export const walrusAdapter: StorageAdapter = {
       blobId: bundle.blobId,
       walrusProof: bundle.walrusProof,
     });
-    await cleanupSupersededWalrusObjects([
-      entry.manifestBlobObjectId,
-      form ? entry.formBlobObjectId : undefined,
-    ], `updating submission ${sanitizedSubmission.id}`);
+    await cleanupSupersededWalrusObjects(
+      [entry.manifestBlobObjectId, form ? entry.formBlobObjectId : undefined].filter(
+        (objectId) => objectId && !preservedCleanupObjectIds.has(objectId),
+      ),
+      `updating submission ${sanitizedSubmission.id}`,
+    );
   },
 
   async saveEncryptedPayload(payload) {
