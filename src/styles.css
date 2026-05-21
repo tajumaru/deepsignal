@@ -17725,6 +17725,20 @@ body.composer-mode .bg-orb {
   --status-text: #fff3c4;
 }
 
+.signal-status-chip.is-assigned {
+  --status-tint: rgba(147, 197, 253, 0.28);
+  --status-fill: rgba(18, 35, 68, 0.9);
+  --status-glow: rgba(96, 165, 250, 0.14);
+  --status-text: #dbeafe;
+}
+
+.signal-status-chip.is-follow-up {
+  --status-tint: rgba(251, 146, 60, 0.28);
+  --status-fill: rgba(66, 31, 11, 0.92);
+  --status-glow: rgba(249, 115, 22, 0.16);
+  --status-text: #ffedd5;
+}
+
 .signal-status-chip.is-new {
   --status-tint: rgba(168, 85, 247, 0.28);
   --status-fill: rgba(45, 18, 67, 0.9);
@@ -18311,7 +18325,10 @@ body.composer-mode .bg-orb {
 
 .review-notes-actions {
   display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
   justify-content: flex-end;
+  align-items: center;
 }
 
 .signal-detail-sticky-actions {
@@ -19980,6 +19997,9 @@ body.composer-mode .bg-orb {
 
 .review-controls-actions {
   display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  align-items: center;
   justify-content: flex-end;
   margin-top: auto;
   padding-top: 0.25rem;

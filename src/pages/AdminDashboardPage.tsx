@@ -1,4 +1,5 @@
 ﻿import {
+  useSignAndExecuteTransaction,
   useSuiClient,
 } from "@mysten/dapp-kit";
 import type { ReactNode } from "react";
@@ -58,6 +59,16 @@ import {
 } from "../lib/activityLog";
 import { getTriageStatusLabel, TRIAGE_STATUS_OPTIONS } from "../lib/signalOps";
 import { getRelatedSignals } from "../lib/relatedSignals";
+import {
+  getAssignedReviewer,
+  getReviewerNoteUpdatedAt,
+  getReviewerPresenceText,
+  getVisibleReviewerNotes,
+  hasNeedsFollowUp,
+  NEEDS_FOLLOW_UP_TAG,
+  serializeReviewNotes,
+  setNeedsFollowUpTag,
+} from "../lib/reviewCollaboration";
 import { exportSubmissionJson } from "../lib/export";
 import {
   buildExportMetadata,
@@ -70,17 +81,20 @@ import {
 } from "../lib/exportResponses";
 import { getEncryptedPayloadAvailabilityLabel, hasDedicatedEncryptedPayloadBlob } from "../lib/encryptionDisplay";
 import { getPublicFormPath, getPublicRoadmapPath } from "../lib/publicLinks";
+import { triageStatusToOnchainStatus, updateSignalStatusOnChain } from "../lib/projectRegistry";
 import { isSuiRateLimitError, shortAddress } from "../lib/sui";
 import { clearDeepSignalPolicyCapabilityCache } from "../lib/debugCache";
 import { formatResponseDeadline, type ResponseDeadlineLabels } from "../lib/responseDeadline";
 import { getSubmissionRespondentMeta } from "../lib/respondentMeta";
 import {
   getSignalPreview,
+  getPrivateSignalPayloadState,
   getSignalPersistenceLabel,
   getSignalPersistenceState,
   getSignalSyncSummary,
   getSignalSubject,
   getSignalStorageState,
+  hasPrivateSignalPayloadIssue,
   getStorageBadgeLabel,
   getWalletAccessLabel,
   getSignalStorageBlobId,
@@ -99,7 +113,10 @@ import type { ActivityAction, ActivityEvent, FormSchema, Submission } from "../t
 const MOBILE_REVIEW_MEDIA_QUERY = "(max-width: 768px)";
 const ROADMAP_READY_STATUSES = new Set<Submission["triageStatus"]>(["planned", "in_progress", "fixed"]);
 type ReviewSaveStatus = "idle" | "saving" | "saved" | "skipped" | "error";
-type ReviewDraft = Pick<Submission, "status" | "triageStatus" | "priority" | "signalValue" | "notes">;
+type ReviewDraft = Pick<Submission, "status" | "triageStatus" | "priority" | "signalValue"> & {
+  notes: string;
+  reviewer: string;
+};
 type WorkspaceTab = "review" | "activity" | "insights";
 type QuickActionId = "reviewing" | "resolve" | "publish" | "archive";
 type KeyboardShortcutAction = QuickActionId | "next" | "previous" | "search" | "help";
@@ -1084,6 +1101,7 @@ export function AdminDashboardPage() {
   const wallet = useSuiWallet();
   const suiClient = useSuiClient();
   const rpc = useRpcInfrastructure();
+  const updateSignalStatusTx = useSignAndExecuteTransaction();
   const {
     capabilityProfile,
     isPending: isLoadingCapabilities,
@@ -1255,6 +1273,7 @@ export function AdminDashboardPage() {
       manifestMismatchDetected: t("decryptErrorManifestMismatch"),
       blobFetchFailed: t("decryptErrorBlobFetchFailed"),
       onchainPayloadReferenceMissing: t("decryptErrorOnchainPayloadReferenceMissing"),
+      onchainPayloadBlobMissing: t("decryptErrorOnchainPayloadBlobMissing"),
       encryptedPayloadMissing: t("decryptErrorEncryptedPayloadMissing"),
       sealRuntimeUnavailable: t("decryptErrorSealRuntimeUnavailable"),
       encryptedPayloadNotFound: t("decryptErrorEncryptedPayloadNotFound"),
@@ -1570,6 +1589,12 @@ export function AdminDashboardPage() {
     selectedRecord &&
       !isLocalFallbackBlob(selectedRecord.submission.encryptedBlobId ?? selectedRecord.submission.blobId),
   );
+  const selectedRecordPayloadState = selectedRecord
+    ? getPrivateSignalPayloadState(selectedRecord.submission)
+    : "available";
+  const selectedRecordHasPayloadIssue = selectedRecord
+    ? hasPrivateSignalPayloadIssue(selectedRecord.submission)
+    : false;
   const selectedRecordProtectionFacts = selectedRecord
     ? [
         {
@@ -1590,12 +1615,34 @@ export function AdminDashboardPage() {
             ? "Only authorized reviewers should be able to read the private message."
             : "The inbox owner can review this signal now.",
         },
+        ...(selectedRecord.submission.isEncrypted
+          ? [
+              {
+                label:
+                  selectedRecordPayloadState === "missing_onchain_payload_reference"
+                    ? t("privateSignalPayloadMissingStatus")
+                    : selectedRecordPayloadState === "missing_payload"
+                      ? t("encryptedPayloadMissingLabel")
+                      : t("encryptedPayloadStored"),
+                detail:
+                  selectedRecordPayloadState === "missing_onchain_payload_reference"
+                    ? t("decryptErrorOnchainPayloadBlobMissing")
+                    : selectedRecordPayloadState === "missing_payload"
+                      ? t("decryptErrorEncryptedPayloadMissing")
+                      : t("encryptedPreview"),
+              },
+            ]
+          : []),
       ]
     : [];
   const selectedRecordUnlockDisabledReason = detailAnswers
     ? undefined
     : !selectedRecord?.submission.isEncrypted
       ? t("privateSignalUnlockUnavailable")
+      : selectedRecordPayloadState === "missing_onchain_payload_reference"
+        ? t("privateSignalPayloadMissingOnchainDisabled")
+        : selectedRecordPayloadState === "missing_payload"
+          ? t("privateSignalPayloadMissingDisabled")
       : !canAttemptPrivateSignalDecrypt(selectedRecord.form, wallet.accountAddress, capabilityProfile)
         ? t("privateSignalUnlockDisabled")
         : undefined;
@@ -1869,7 +1916,8 @@ export function AdminDashboardPage() {
             triageStatus: selectedRecord.submission.triageStatus,
             priority: selectedRecord.submission.priority,
             signalValue: selectedRecord.submission.signalValue,
-            notes: selectedRecord.submission.notes,
+            notes: getVisibleReviewerNotes(selectedRecord.submission),
+            reviewer: getAssignedReviewer(selectedRecord.submission) ?? "",
           }
         : null,
     [reviewDraft, selectedRecord],
@@ -1881,12 +1929,13 @@ export function AdminDashboardPage() {
         activeReviewDraft.triageStatus !== selectedRecord.submission.triageStatus ||
         activeReviewDraft.priority !== selectedRecord.submission.priority ||
         activeReviewDraft.signalValue !== selectedRecord.submission.signalValue ||
-        activeReviewDraft.notes !== selectedRecord.submission.notes),
+        activeReviewDraft.notes !== getVisibleReviewerNotes(selectedRecord.submission) ||
+        activeReviewDraft.reviewer !== (getAssignedReviewer(selectedRecord.submission) ?? "")),
   );
   const draftReviewStatus = activeReviewDraft?.status ?? selectedRecord?.submission.status ?? "unread";
   const draftTriageStatus = activeReviewDraft?.triageStatus ?? selectedRecord?.submission.triageStatus ?? "new";
   const draftSignalValue = activeReviewDraft?.signalValue ?? selectedRecord?.submission.signalValue;
-  const draftNotes = activeReviewDraft?.notes ?? selectedRecord?.submission.notes ?? "";
+  const draftNotes = activeReviewDraft?.notes ?? (selectedRecord ? getVisibleReviewerNotes(selectedRecord.submission) : "");
   const isReviewWorkbenchLocked = selectedRecordNeedsDecrypt;
   const isDraftRead = draftReviewStatus !== "unread";
   const isDraftClassified = draftTriageStatus !== "new" || draftSignalValue !== undefined;
@@ -1944,7 +1993,8 @@ export function AdminDashboardPage() {
         triageStatus: selectedRecord.submission.triageStatus,
         priority: selectedRecord.submission.priority,
         signalValue: selectedRecord.submission.signalValue,
-        notes: selectedRecord.submission.notes,
+        notes: getVisibleReviewerNotes(selectedRecord.submission),
+        reviewer: getAssignedReviewer(selectedRecord.submission) ?? "",
       };
       return {
         ...base,
@@ -1970,7 +2020,8 @@ export function AdminDashboardPage() {
       triageStatus: selectedRecord.submission.triageStatus,
       priority: selectedRecord.submission.priority,
       signalValue: selectedRecord.submission.signalValue,
-      notes: selectedRecord.submission.notes,
+      notes: getVisibleReviewerNotes(selectedRecord.submission),
+      reviewer: getAssignedReviewer(selectedRecord.submission) ?? "",
     });
     setDecryptError("");
   }, [selectedRecord, setDecryptError]);
@@ -1988,6 +2039,39 @@ export function AdminDashboardPage() {
       setReviewSaveStatus("saving");
       try {
         await storageAdapter.updateSubmission(normalized);
+        const signalRecord = signalIndex.signalById[normalized.id];
+        const projectId = signalRecord?.form.projectId;
+        const nextOnchainStatus =
+          projectId && typeof normalized.onchainSignalId === "number"
+            ? triageStatusToOnchainStatus(normalized.triageStatus, normalized.status)
+            : undefined;
+        const needsOnchainSync =
+          Boolean(projectId) &&
+          typeof normalized.onchainSignalId === "number" &&
+          !normalized.pendingOnchainRegistration &&
+          nextOnchainStatus !== undefined &&
+          normalized.onchainStatus !== nextOnchainStatus;
+
+        if (needsOnchainSync && projectId && nextOnchainStatus) {
+          const tx = updateSignalStatusOnChain({
+            projectId,
+            signalId: normalized.onchainSignalId ?? 0,
+            status: nextOnchainStatus,
+          });
+          const result = await updateSignalStatusTx.mutateAsync({ transaction: tx });
+          await suiClient.waitForTransaction({ digest: result.digest });
+          const syncedSubmission = normalizeSubmission({
+            ...normalized,
+            onchainStatus: nextOnchainStatus,
+            metadata: {
+              ...(normalized.metadata ?? {}),
+              onchainStatusTxDigest: result.digest,
+            },
+            updatedAt: new Date().toISOString(),
+          });
+          await storageAdapter.updateSubmission(syncedSubmission);
+          applySubmissionUpdate(syncedSubmission);
+        }
         const nextStatus = normalized.pendingOnchainRegistration ? "skipped" : "saved";
         setReviewSaveStatus(nextStatus);
         if (options.announce) {
@@ -1996,7 +2080,9 @@ export function AdminDashboardPage() {
             message:
               nextStatus === "skipped"
                 ? "Review saved. On-chain sync skipped until proof registration."
-                : "Review & Triage saved.",
+                : needsOnchainSync
+                  ? "Review & Triage saved. Sui status synced."
+                  : "Review & Triage saved.",
           });
         }
         saved = true;
@@ -2004,7 +2090,10 @@ export function AdminDashboardPage() {
         setReviewSaveStatus("error");
         setToast({
           tone: "error",
-          message: error instanceof Error ? error.message : "Review save failed.",
+          message:
+            error instanceof Error
+              ? error.message
+              : "Review save failed.",
         });
       } finally {
         setSaving(false);
@@ -2013,7 +2102,29 @@ export function AdminDashboardPage() {
     saveQueueRef.current = saveQueueRef.current.then(runSave, runSave);
     await saveQueueRef.current;
     return saved;
-  }, [applySubmissionUpdate, setSelectedSignalId, setToast]);
+  }, [applySubmissionUpdate, setSelectedSignalId, setToast, signalIndex.signalById, suiClient, updateSignalStatusTx]);
+
+  const buildSubmissionFromReviewDraft = useCallback(
+    (submission: Submission, draft: ReviewDraft) => {
+      const previousVisibleNotes = getVisibleReviewerNotes(submission);
+      const previousNoteUpdatedAt = getReviewerNoteUpdatedAt(submission);
+      const noteUpdatedAt =
+        draft.notes !== previousVisibleNotes ? new Date().toISOString() : previousNoteUpdatedAt;
+
+      return {
+        ...submission,
+        status: draft.status,
+        triageStatus: draft.triageStatus,
+        priority: draft.priority,
+        signalValue: draft.signalValue,
+        notes: serializeReviewNotes(draft.notes, {
+          reviewer: draft.reviewer,
+          noteUpdatedAt,
+        }),
+      } satisfies Submission;
+    },
+    [],
+  );
 
   const handleQuickAction = useCallback(
     async (record: SignalRecord, action: QuickActionId) => {
@@ -2028,7 +2139,8 @@ export function AdminDashboardPage() {
           triageStatus: nextSubmission.triageStatus,
           priority: nextSubmission.priority,
           signalValue: nextSubmission.signalValue,
-          notes: nextSubmission.notes,
+          notes: getVisibleReviewerNotes(nextSubmission),
+          reviewer: getAssignedReviewer(nextSubmission) ?? "",
         });
       }
     },
@@ -2040,10 +2152,7 @@ export function AdminDashboardPage() {
       return;
     }
     await updateSubmission(
-      {
-        ...selectedRecord.submission,
-        ...activeReviewDraft,
-      },
+      buildSubmissionFromReviewDraft(selectedRecord.submission, activeReviewDraft),
       { announce: true },
     );
   }
@@ -2052,14 +2161,14 @@ export function AdminDashboardPage() {
     if (!selectedRecord || !activeReviewDraft || isReviewWorkbenchLocked) {
       return;
     }
-    if (activeReviewDraft.notes === selectedRecord.submission.notes) {
+    if (
+      activeReviewDraft.notes === getVisibleReviewerNotes(selectedRecord.submission) &&
+      activeReviewDraft.reviewer === (getAssignedReviewer(selectedRecord.submission) ?? "")
+    ) {
       return;
     }
     await updateSubmission(
-      {
-        ...selectedRecord.submission,
-        ...activeReviewDraft,
-      },
+      buildSubmissionFromReviewDraft(selectedRecord.submission, activeReviewDraft),
       { announce: true },
     );
   }
@@ -2074,13 +2183,29 @@ export function AdminDashboardPage() {
       : "planned";
     const saved = await updateSubmission({
       ...selectedRecord.submission,
-      ...(activeReviewDraft ?? {}),
+      ...(activeReviewDraft ? buildSubmissionFromReviewDraft(selectedRecord.submission, activeReviewDraft) : {}),
       triageStatus: nextStatus,
     });
     if (!saved) {
       return;
     }
     setToast({ tone: "success", message: t("signalAddedToPublicRoadmap") });
+  }
+
+  async function handleToggleNeedsFollowUp() {
+    if (!selectedRecord || isReviewWorkbenchLocked) {
+      return;
+    }
+    await updateSubmission(
+      {
+        ...selectedRecord.submission,
+        tags: setNeedsFollowUpTag(
+          selectedRecord.submission.tags,
+          !hasNeedsFollowUp(selectedRecord.submission),
+        ),
+      },
+      { announce: true },
+    );
   }
 
   const shortcutItems = useMemo(
@@ -2261,6 +2386,11 @@ export function AdminDashboardPage() {
       count: signalIndex.counts.high,
     },
     {
+      id: "follow_up",
+      label: t("needsFollowUpLabel"),
+      count: signalIndex.counts.followUp,
+    },
+    {
       id: "encrypted",
       label: t("protectedLabel"),
       count: signalIndex.counts.encrypted,
@@ -2351,13 +2481,26 @@ export function AdminDashboardPage() {
   };
   const reviewStatusPillState = hasReviewDraftChanges ? "editing" : reviewSaveStatus;
   const reviewStatusPillLabel = hasReviewDraftChanges ? t("reviewSaveUnsavedDraft") : reviewSaveStatusLabel[reviewSaveStatus];
+  const selectedReviewer = activeReviewDraft?.reviewer ?? (selectedRecord ? getAssignedReviewer(selectedRecord.submission) ?? "" : "");
+  const selectedReviewerPresence = selectedRecord
+    ? getReviewerPresenceText(selectedRecord.submission, wallet.accountAddress)
+    : null;
+  const selectedNeedsFollowUp = selectedRecord ? hasNeedsFollowUp(selectedRecord.submission) : false;
+  const selectedReviewerNoteUpdatedAt = selectedRecord ? getReviewerNoteUpdatedAt(selectedRecord.submission) : undefined;
+  const reviewerNotesSaveLabel =
+    hasReviewDraftChanges || !selectedRecord || !activeReviewDraft
+      ? t("reviewSaveUnsavedDraft")
+      : activeReviewDraft.notes === getVisibleReviewerNotes(selectedRecord.submission) &&
+          activeReviewDraft.reviewer === (getAssignedReviewer(selectedRecord.submission) ?? "")
+        ? t("reviewSaveSaved")
+        : t("reviewSaveUnsavedDraft");
 
   function getCsvFilterSnapshot() {
     return {
       searchQuery: search,
       status: selectedStreamId === "all" ? undefined : `stream:${selectedStreamId}`,
       priority: selectedStreamId === "high" ? "high" : undefined,
-      tags: search.trim() ? [search.trim()] : [],
+      tags: [...(search.trim() ? [search.trim()] : []), ...(selectedStreamId === "follow_up" ? [NEEDS_FOLLOW_UP_TAG] : [])],
       triageStatus: undefined,
       dateRange: {},
     };
@@ -2540,6 +2683,7 @@ export function AdminDashboardPage() {
         (record) =>
           record.submission.isEncrypted &&
           !decryptedSignalsById[record.submission.id] &&
+          !hasPrivateSignalPayloadIssue(record.submission) &&
           canAttemptPrivateSignalDecrypt(record.form, wallet.accountAddress, capabilityProfile),
       ),
     [wallet.accountAddress, capabilityProfile, decryptedSignalsById, visibleSignals],
@@ -3091,11 +3235,13 @@ export function AdminDashboardPage() {
                       : t("openSignalState");
                     const persistenceLabel =
                       persistenceState === "not_available" ? null : getSignalPersistenceLabel(persistenceState);
+                    const hasPayloadIssue = hasPrivateSignalPayloadIssue(submission);
                     const hasNotableStatusBadge =
                       isPendingSui ||
                       isSelectedForSui ||
                       isLocalOnlySignal ||
-                      submission.attachments.length > 0;
+                      submission.attachments.length > 0 ||
+                      hasPayloadIssue;
                     return (
                       <div
                         key={submission.id}
@@ -3179,6 +3325,11 @@ export function AdminDashboardPage() {
                             {persistenceLabel ? (
                               <span className="mailbox-meta-chip mailbox-meta-chip-subtle">{persistenceLabel}</span>
                             ) : null}
+                            {hasPayloadIssue ? (
+                              <span className="mailbox-meta-chip mailbox-meta-chip-subtle">
+                                {t("privateSignalPayloadMissingStatus")}
+                              </span>
+                            ) : null}
                           </div>
                           {hasNotableStatusBadge ? (
                             <div className="signal-badge-row signal-badge-row-compact">
@@ -3187,6 +3338,7 @@ export function AdminDashboardPage() {
                                 category={category}
                                 pendingSui={isPendingSui}
                                 selectedForSui={isSelectedForSui}
+                                payloadIssue={hasPayloadIssue}
                                 storageLabel={
                                   storageState === "local_only" || storageState === "walrus_synced"
                                     ? storageLabel
@@ -3194,6 +3346,8 @@ export function AdminDashboardPage() {
                                 }
                                 persistenceState={persistenceState}
                                 density="notable"
+                                reviewerHint={getReviewerPresenceText(submission, wallet.accountAddress)}
+                                needsFollowUp={hasNeedsFollowUp(submission)}
                               />
                             </div>
                           ) : null}
@@ -3296,6 +3450,19 @@ export function AdminDashboardPage() {
                             ? t("encryptedPrivateSignalStatus")
                             : t("openSubmissionLabel")}
                       </span>
+                      {selectedRecordHasPayloadIssue ? (
+                        <span className="signal-chip">
+                          {t("privateSignalPayloadMissingStatus")}
+                        </span>
+                      ) : null}
+                      {selectedReviewerPresence ? (
+                        <span className="signal-chip">
+                          {selectedReviewerPresence.fullLabel}
+                        </span>
+                      ) : null}
+                      {selectedNeedsFollowUp ? (
+                        <span className="signal-chip signal-chip-accent">{t("needsFollowUpLabel")}</span>
+                      ) : null}
                       {typeof selectedRecord.submission.ratingValue === "number" ? (
                         <span className="signal-chip">
                           {t("ratingLabel", {
@@ -3514,15 +3681,25 @@ export function AdminDashboardPage() {
                             disabled={isReviewWorkbenchLocked || saving}
                             onChange={(event) => {
                               const nextStatus = event.target.value as Submission["status"];
-                              void updateSubmission({
-                                ...selectedRecord.submission,
-                                ...(activeReviewDraft ?? {}),
-                                status: nextStatus,
-                                triageStatus:
-                                  nextStatus === "archived"
-                                    ? "closed"
-                                    : (activeReviewDraft?.triageStatus ?? selectedRecord.submission.triageStatus),
-                              });
+                              const baseDraft =
+                                activeReviewDraft ?? {
+                                  status: selectedRecord.submission.status,
+                                  triageStatus: selectedRecord.submission.triageStatus,
+                                  priority: selectedRecord.submission.priority,
+                                  signalValue: selectedRecord.submission.signalValue,
+                                  notes: getVisibleReviewerNotes(selectedRecord.submission),
+                                  reviewer: getAssignedReviewer(selectedRecord.submission) ?? "",
+                                };
+                              void updateSubmission(
+                                buildSubmissionFromReviewDraft(selectedRecord.submission, {
+                                  ...baseDraft,
+                                  status: nextStatus,
+                                  triageStatus:
+                                    nextStatus === "archived"
+                                      ? "closed"
+                                      : baseDraft.triageStatus,
+                                }),
+                              );
                             }}
                           >
                             <option value="unread">{t("statusUnread")}</option>
@@ -3651,6 +3828,39 @@ export function AdminDashboardPage() {
                           <strong>Reviewer Notes</strong>
                         </div>
                         <label className="review-select">
+                          <span>{t("assignedReviewerLabel")}</span>
+                          <input
+                            type="text"
+                            value={activeReviewDraft?.reviewer ?? ""}
+                            disabled={isReviewWorkbenchLocked}
+                            onChange={(event) => patchReviewDraft({ reviewer: event.target.value })}
+                            placeholder={t("reviewerInputPlaceholder")}
+                          />
+                        </label>
+                        <div className="review-notes-actions">
+                          <span className="signal-chip signal-chip-soft">
+                            {selectedReviewer || t("unassignedLabel")}
+                          </span>
+                          {wallet.accountAddress ? (
+                            <button
+                              type="button"
+                              className="ghost-button"
+                              disabled={isReviewWorkbenchLocked || (activeReviewDraft?.reviewer ?? "") === wallet.accountAddress}
+                              onClick={() => patchReviewDraft({ reviewer: wallet.accountAddress })}
+                            >
+                              {t("assignToMe")}
+                            </button>
+                          ) : null}
+                          <button
+                            type="button"
+                            className={`ghost-button ${selectedNeedsFollowUp ? "is-active" : ""}`}
+                            disabled={isReviewWorkbenchLocked || saving}
+                            onClick={() => void handleToggleNeedsFollowUp()}
+                          >
+                            {selectedNeedsFollowUp ? t("followUpEnabledLabel") : t("needsFollowUpLabel")}
+                          </button>
+                        </div>
+                        <label className="review-select">
                           <span>{t("internalNote")}</span>
                           <textarea
                             rows={5}
@@ -3661,17 +3871,30 @@ export function AdminDashboardPage() {
                           />
                         </label>
                         <div className="review-notes-actions">
+                          <span className={`save-state-pill is-${hasReviewDraftChanges ? "editing" : "saved"}`}>
+                            {reviewerNotesSaveLabel}
+                          </span>
+                          {selectedReviewerNoteUpdatedAt ? (
+                            <span className="muted">
+                              {t("lastUpdatedLabel")}: {formatDate(selectedReviewerNoteUpdatedAt)}
+                            </span>
+                          ) : (
+                            <span className="muted">{t("reviewerNoteLabel")}</span>
+                          )}
                           <button
                             type="button"
                             className="ghost-button"
                             disabled={
                               isReviewWorkbenchLocked ||
                               saving ||
-                              (activeReviewDraft?.notes ?? "") === selectedRecord.submission.notes
+                              (
+                                (activeReviewDraft?.notes ?? "") === getVisibleReviewerNotes(selectedRecord.submission) &&
+                                (activeReviewDraft?.reviewer ?? "") === (getAssignedReviewer(selectedRecord.submission) ?? "")
+                              )
                             }
                             onClick={() => void handleSaveReviewerNotes()}
                           >
-                            Save notes
+                            {t("saveNotesLabel")}
                           </button>
                         </div>
                         <p className="review-action-helper">
@@ -4054,23 +4277,11 @@ export function AdminDashboardPage() {
                       </div>
 
                       <div className="inspector-utility-links">
-                          <button
-                            type="button"
-                            className="ghost-button"
-                            onClick={() => setNodeDirectoryOpen(true)}
-                          >
-                            {t("openNodeDirectory")}
-                          </button>
-                          <Link
-                            className="ghost-button"
-                            to={getPublicFormPath(selectedRecord.form.id, selectedRecord.form.manifestBlobId)}
-                          >
-                            {t("openPublicForm")}
-                          </Link>
-                          <Link className="ghost-button" to={`/dashboard/forms/${selectedRecord.form.id}`}>
-                            {t("reviewSubmissions")}
-                          </Link>
+                        <Link className="ghost-button" to={`/dashboard/forms/${selectedRecord.form.id}`}>
+                          {t("reviewSubmissions")}
+                        </Link>
                       </div>
+
                     </section>
                   </div>
                 </>

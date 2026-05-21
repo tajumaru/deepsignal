@@ -20,4 +20,10 @@ vite.config.js.timestamp-*.mjs
 /.codex/vite-verify.err.log
 /.codex/vite-verify.log
 /.npm-cache
+/.npm-cache-clean
+/.npm-cache-rollup
+/.ci-cache
+/.ci-run-verify
+/.ci-verify
 /.move-cache
+/ci-run-verify

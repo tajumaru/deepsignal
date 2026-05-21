@@ -10,6 +10,10 @@ export type SignalPersistenceState =
   | "local_only"
   | "not_available";
 export type SignalStorageState = "walrus_synced" | "local_only" | "not_available";
+export type PrivateSignalPayloadState =
+  | "available"
+  | "missing_onchain_payload_reference"
+  | "missing_payload";
 
 export function getSignalSubject(submission: Submission) {
   return submission.subjectPreview?.trim() || `Signal ${submission.id.slice(0, 8)}`;
@@ -20,6 +24,26 @@ export function isOnchainRecoveredSignal(submission: Submission) {
     submission.tags.includes("onchain-recovered") ||
     submission.id.startsWith("onchain:")
   );
+}
+
+export function getPrivateSignalPayloadState(submission: Submission): PrivateSignalPayloadState {
+  if (!submission.isEncrypted) {
+    return "available";
+  }
+
+  if (submission.encryptedPayload || submission.encryptedBlobId || submission.blobId) {
+    return "available";
+  }
+
+  if (isOnchainRecoveredSignal(submission) && submission.receiptBlobId) {
+    return "missing_onchain_payload_reference";
+  }
+
+  return "missing_payload";
+}
+
+export function hasPrivateSignalPayloadIssue(submission: Submission) {
+  return getPrivateSignalPayloadState(submission) !== "available";
 }
 
 export function getSignalPreview(submission: Submission) {

@@ -10,6 +10,11 @@ import {
   inferSignalCategory,
   type SignalCategory,
 } from "../../../lib/signalInbox";
+import {
+  getAssignedReviewer,
+  getVisibleReviewerNotes,
+  hasNeedsFollowUp,
+} from "../../../lib/reviewCollaboration";
 import type {
   OnchainProjectFormSummary,
   OnchainProjectSignalSummary,
@@ -31,6 +36,7 @@ export interface FormWithCount extends FormSchema {
 export type StreamId =
   | "all"
   | "needs_review"
+  | "follow_up"
   | "unresolved"
   | "unread"
   | "verified"
@@ -217,6 +223,8 @@ export function matchesStream(record: SignalRecord, streamId: StreamId) {
         record.submission.triageStatus !== "fixed" &&
         record.submission.triageStatus !== "closed"
       );
+    case "follow_up":
+      return hasNeedsFollowUp(record.submission);
     case "unread":
       return record.submission.status === "unread";
     case "verified":
@@ -380,6 +388,8 @@ export function useSignalInboxData({
             getSignalPreview(submission),
             flattenAnswer(submission.answers),
             submission.tags.join(" "),
+            getAssignedReviewer(submission) ?? "",
+            getVisibleReviewerNotes(submission),
             category,
             form.projectName ?? "",
           ]
@@ -516,6 +526,7 @@ export function useSignalInboxData({
     const signalById: Record<string, SignalRecord | undefined> = {};
     const counts = {
       needsReview: 0,
+      followUp: 0,
       unresolved: 0,
       unread: 0,
       verified: 0,
@@ -568,6 +579,9 @@ export function useSignalInboxData({
       if (record.submission.priority === "high" || record.submission.severity === "high") {
         counts.high += 1;
       }
+      if (hasNeedsFollowUp(record.submission)) {
+        counts.followUp += 1;
+      }
       if (record.submission.pendingOnchainRegistration) {
         counts.pendingSui += 1;
         pendingSignalIdSet.add(record.submission.id);
@@ -599,6 +613,8 @@ export function useSignalInboxData({
             getSignalPreview(submission),
             flattenAnswer(submission.answers),
             submission.tags.join(" "),
+            getAssignedReviewer(submission) ?? "",
+            getVisibleReviewerNotes(submission),
             category,
           ]
             .join(" ")

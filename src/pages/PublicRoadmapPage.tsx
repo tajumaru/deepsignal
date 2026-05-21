@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useParams, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { ContestGuidedFlow } from "../components/ContestGuidedFlow";
 import { EmptyState } from "../components/EmptyState";
 import { RichTextContent } from "../components/RichText";
@@ -24,6 +24,7 @@ const ROADMAP_GROUPS = [
 export function PublicRoadmapPage() {
   const { formId = "" } = useParams();
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
   const [form, setForm] = useState<FormSchema | null>(null);
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [loading, setLoading] = useState(true);
@@ -75,6 +76,14 @@ export function PublicRoadmapPage() {
     [submissions],
   );
 
+  function handleBack() {
+    if (window.history.length > 1) {
+      navigate(-1);
+      return;
+    }
+    navigate(getPublicFormPath(formId, manifestBlobId));
+  }
+
   if (loading) {
     return <div className="panel">Loading public roadmap...</div>;
   }
@@ -107,6 +116,9 @@ export function PublicRoadmapPage() {
         <h1>{form.title}</h1>
         <RichTextContent value={form.description ?? ""} className="lede rich-text-content" fallback="Deep Signals Worth Tracking" />
         <div className="inline-actions">
+          <button type="button" className="ghost-button" onClick={handleBack}>
+            Back
+          </button>
           <Link className="ghost-button" to={getPublicFormPath(form.id, form.manifestBlobId)}>
             Open Public Form
           </Link>

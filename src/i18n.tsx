@@ -1055,6 +1055,15 @@ const messages = {
     reviewSaveUnsavedDraft: "Unsaved draft",
     reviewSaveSkipped: "Saved / on-chain skipped",
     reviewSaveError: "Save failed",
+    assignedReviewerLabel: "Assigned reviewer",
+    reviewerInputPlaceholder: "Wallet address or reviewer name",
+    unassignedLabel: "Unassigned",
+    assignToMe: "Assign to me",
+    needsFollowUpLabel: "Needs follow-up",
+    followUpEnabledLabel: "Follow-up enabled",
+    reviewerNoteLabel: "Reviewer note",
+    saveNotesLabel: "Save notes",
+    lastUpdatedLabel: "Last updated",
     saveReview: "Save review",
     reviewWorkbenchEyebrow: "Review Workbench",
     reviewComplete: "Review complete",
@@ -1147,6 +1156,11 @@ const messages = {
     privateSignalUnlockSuccess: "Unlocked",
     privateSignalUnlockError: "Unable to decrypt. Check wallet permissions.",
     privateSignalUnlockDisabled: "Connect an authorized reviewer wallet to continue.",
+    privateSignalPayloadMissingDisabled:
+      "This private signal no longer has a readable encrypted payload, so it cannot be unlocked from this inbox.",
+    privateSignalPayloadMissingOnchainDisabled:
+      "This Sui-registered private signal no longer has a readable Walrus payload blob, so it cannot be unlocked from this inbox.",
+    privateSignalPayloadMissingStatus: "Payload missing",
     privateSignalUnlockUnavailable: "Select an encrypted private signal to unlock it.",
     privateSignalUnlockReviewNote: "Unlock private signal to review.",
     privateSignalUnlockReviewTriageNote: "Unlock private signal to review and triage.",
@@ -1164,7 +1178,10 @@ const messages = {
     decryptErrorBlobFetchFailed: "Failed to fetch encrypted payload from Walrus.",
     decryptErrorOnchainPayloadReferenceMissing:
       "This onchain-recovered signal does not include a readable Walrus payload reference, so the private body cannot be unlocked from this inbox snapshot.",
+    decryptErrorOnchainPayloadBlobMissing:
+      "This Sui-registered private signal no longer has a readable Walrus payload blob, so the private body cannot be unlocked from this inbox.",
     decryptErrorEncryptedPayloadMissing: "Encrypted payload is missing.",
+    encryptedPayloadMissingLabel: "Encrypted payload missing",
     decryptErrorSealRuntimeUnavailable: "Seal runtime unavailable.",
     decryptErrorEncryptedPayloadNotFound:
       "Encrypted payload could not be found. Try refreshing the inbox, then unlock again.",
@@ -3018,6 +3035,15 @@ const messages = {
     reviewSaveUnsavedDraft: "\u672a\u4fdd\u5b58\u306e\u4e0b\u66f8\u304d",
     reviewSaveSkipped: "\u4fdd\u5b58\u6e08\u307f / on-chain \u306f\u30b9\u30ad\u30c3\u30d7",
     reviewSaveError: "\u4fdd\u5b58\u5931\u6557",
+    assignedReviewerLabel: "\u62c5\u5f53\u30ec\u30d3\u30e5\u30a2\u30fc",
+    reviewerInputPlaceholder: "\u30a6\u30a9\u30ec\u30c3\u30c8\u30a2\u30c9\u30ec\u30b9\u307e\u305f\u306f\u30ec\u30d3\u30e5\u30a2\u30fc\u540d",
+    unassignedLabel: "\u672a\u5272\u308a\u5f53\u3066",
+    assignToMe: "\u81ea\u5206\u306b\u5272\u308a\u5f53\u3066",
+    needsFollowUpLabel: "\u30d5\u30a9\u30ed\u30fc\u30a2\u30c3\u30d7\u5fc5\u8981",
+    followUpEnabledLabel: "\u30d5\u30a9\u30ed\u30fc\u30a2\u30c3\u30d7\u4e2d",
+    reviewerNoteLabel: "\u30ec\u30d3\u30e5\u30a2\u30fc\u30e1\u30e2",
+    saveNotesLabel: "\u30e1\u30e2\u3092\u4fdd\u5b58",
+    lastUpdatedLabel: "\u6700\u7d42\u66f4\u65b0",
     saveReview: "\u30ec\u30d3\u30e5\u30fc\u3092\u4fdd\u5b58",
     reviewWorkbenchEyebrow: "\u30ec\u30d3\u30e5\u30fc\u4f5c\u696d\u53f0",
     reviewComplete: "\u30ec\u30d3\u30e5\u30fc\u5b8c\u4e86",
@@ -3121,6 +3147,11 @@ const messages = {
       "\u5fa9\u53f7\u3067\u304d\u307e\u305b\u3093\u3002\u30a6\u30a9\u30ec\u30c3\u30c8\u306e\u6a29\u9650\u3092\u78ba\u8a8d\u3057\u3066\u304f\u3060\u3055\u3044\u3002",
     privateSignalUnlockDisabled:
       "\u7d99\u7d9a\u3059\u308b\u306b\u306f\u8a8d\u53ef\u6e08\u307f\u306e\u30ec\u30d3\u30e5\u30a2\u30fc\u30a6\u30a9\u30ec\u30c3\u30c8\u304c\u5fc5\u8981\u3067\u3059\u3002",
+    privateSignalPayloadMissingDisabled:
+      "\u3053\u306e private signal \u306f\u8aad\u307f\u51fa\u305b\u308b\u6697\u53f7\u5316 payload \u3092\u5931\u3063\u3066\u3044\u308b\u305f\u3081\u3001\u3053\u306e inbox \u304b\u3089\u306f\u89e3\u9664\u3067\u304d\u307e\u305b\u3093\u3002",
+    privateSignalPayloadMissingOnchainDisabled:
+      "\u3053\u306e Sui \u767b\u9332\u6e08\u307f private signal \u306f\u8aad\u307f\u51fa\u305b\u308b Walrus payload blob \u3092\u5931\u3063\u3066\u3044\u308b\u305f\u3081\u3001\u3053\u306e inbox \u304b\u3089\u306f\u89e3\u9664\u3067\u304d\u307e\u305b\u3093\u3002",
+    privateSignalPayloadMissingStatus: "payload \u6b20\u843d",
     privateSignalUnlockUnavailable:
       "\u6697\u53f7\u5316\u3055\u308c\u305f\u975e\u516c\u958b\u30b7\u30b0\u30ca\u30eb\u3092\u9078\u3093\u3067\u5fa9\u53f7\u3057\u3066\u304f\u3060\u3055\u3044\u3002",
     privateSignalUnlockReviewNote:
@@ -3148,8 +3179,11 @@ const messages = {
       "Walrus \u304b\u3089\u6697\u53f7\u5316\u30da\u30a4\u30ed\u30fc\u30c9\u3092\u53d6\u5f97\u3067\u304d\u307e\u305b\u3093\u3067\u3057\u305f\u3002",
     decryptErrorOnchainPayloadReferenceMissing:
       "\u3053\u306e onchain \u5fa9\u5143 signal \u306b\u306f\u8aad\u307f\u51fa\u305b\u308b Walrus payload \u53c2\u7167\u304c\u542b\u307e\u308c\u3066\u3044\u306a\u3044\u305f\u3081\u3001\u3053\u306e inbox \u30b9\u30ca\u30c3\u30d7\u30b7\u30e7\u30c3\u30c8\u304b\u3089\u306f\u975e\u516c\u958b\u672c\u6587\u3092\u5fa9\u53f7\u3067\u304d\u307e\u305b\u3093\u3002",
+    decryptErrorOnchainPayloadBlobMissing:
+      "\u3053\u306e Sui \u767b\u9332\u6e08\u307f private signal \u306f\u8aad\u307f\u51fa\u305b\u308b Walrus payload blob \u3092\u5931\u3063\u3066\u3044\u308b\u305f\u3081\u3001\u3053\u306e inbox \u304b\u3089\u306f\u975e\u516c\u958b\u672c\u6587\u3092\u5fa9\u53f7\u3067\u304d\u307e\u305b\u3093\u3002",
     decryptErrorEncryptedPayloadMissing:
       "\u6697\u53f7\u5316\u30da\u30a4\u30ed\u30fc\u30c9\u304c\u898b\u3064\u304b\u308a\u307e\u305b\u3093\u3002",
+    encryptedPayloadMissingLabel: "\u6697\u53f7\u5316 payload \u6b20\u843d",
     decryptErrorSealRuntimeUnavailable:
       "Seal \u30e9\u30f3\u30bf\u30a4\u30e0\u3092\u5229\u7528\u3067\u304d\u307e\u305b\u3093\u3002",
     decryptErrorEncryptedPayloadNotFound:

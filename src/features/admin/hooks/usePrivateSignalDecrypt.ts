@@ -12,6 +12,7 @@ import {
 } from "../../../lib/seal";
 import { isDecryptDiagnosticError, type DecryptDiagnosticContext } from "../../../crypto/decryptDiagnostics";
 import type { CapabilityProfile } from "../../../hooks/useAccessControl";
+import { getPrivateSignalPayloadState } from "../../../lib/signalInbox";
 import { resolveSubmissionAnswers } from "../../../lib/storage";
 import type { SealDecryptContext, Submission } from "../../../types";
 import type { SignalRecord } from "./useSignalInboxData";
@@ -69,6 +70,7 @@ interface DecryptMessages {
   manifestMismatchDetected: string;
   blobFetchFailed: string;
   onchainPayloadReferenceMissing: string;
+  onchainPayloadBlobMissing: string;
   encryptedPayloadMissing: string;
   sealRuntimeUnavailable: string;
   encryptedPayloadNotFound: string;
@@ -92,6 +94,8 @@ const defaultDecryptMessages: DecryptMessages = {
   blobFetchFailed: "Failed to fetch encrypted payload from Walrus.",
   onchainPayloadReferenceMissing:
     "This onchain-recovered signal does not include a readable Walrus payload reference, so the private body cannot be unlocked from this inbox snapshot.",
+  onchainPayloadBlobMissing:
+    "This Sui-registered private signal no longer has a readable Walrus payload blob, so the private body cannot be unlocked from this inbox.",
   encryptedPayloadMissing: "Encrypted payload is missing.",
   sealRuntimeUnavailable: "Seal runtime unavailable.",
   encryptedPayloadNotFound: "Encrypted payload could not be found. Try refreshing the inbox, then unlock again.",
@@ -130,7 +134,9 @@ function getFriendlyDecryptError(
       return messages.manifestMismatchDetected;
     case "BLOB_FETCH_FAILED":
       if (isOnchainShadowWithoutReadablePayload(diagnostics)) {
-        return messages.onchainPayloadReferenceMissing;
+        return diagnostics?.receiptBlobId
+          ? messages.onchainPayloadBlobMissing
+          : messages.onchainPayloadReferenceMissing;
       }
       return messages.blobFetchFailed;
     case "ENCRYPTED_PAYLOAD_MISSING":
@@ -295,6 +301,18 @@ export function usePrivateSignalDecrypt({
     if (!selectedRecord || decryptInFlightRef.current) {
       return;
     }
+    const payloadState = getPrivateSignalPayloadState(selectedRecord.submission);
+    if (payloadState !== "available") {
+      setDecryptState("failed");
+      setDecryptStatusMessage("");
+      setDecryptDiagnostics(null);
+      setDecryptError(
+        payloadState === "missing_onchain_payload_reference"
+          ? messages.onchainPayloadBlobMissing
+          : messages.encryptedPayloadMissing,
+      );
+      return;
+    }
     const requestId = decryptRequestIdRef.current + 1;
     decryptRequestIdRef.current = requestId;
     const submissionId = selectedRecord.submission.id;
@@ -400,9 +418,12 @@ export function usePrivateSignalDecrypt({
     const targets = records.filter(
       (record) => record.submission.isEncrypted && !decryptedSignalsById[record.submission.id],
     );
-    if (targets.length === 0) {
+    const decryptableTargets = targets.filter(
+      (record) => getPrivateSignalPayloadState(record.submission) === "available",
+    );
+    if (decryptableTargets.length === 0) {
       setBulkDecryptStatusMessage("");
-      setBulkDecryptError("");
+      setBulkDecryptError(targets.length > 0 ? messages.onchainPayloadBlobMissing : "");
       setBulkDecryptProgress({ completed: 0, failed: 0, total: 0 });
       return { unlockedCount: 0, failedCount: 0, totalCount: 0 };
     }
@@ -410,16 +431,16 @@ export function usePrivateSignalDecrypt({
     bulkDecryptInFlightRef.current = true;
     setBulkDecrypting(true);
     setBulkDecryptError("");
-    setBulkDecryptProgress({ completed: 0, failed: 0, total: targets.length });
+    setBulkDecryptProgress({ completed: 0, failed: 0, total: decryptableTargets.length });
 
     let unlockedCount = 0;
     let failedCount = 0;
     let firstError = "";
 
     try {
-      for (const [index, record] of targets.entries()) {
+      for (const [index, record] of decryptableTargets.entries()) {
         const position = index + 1;
-        setBulkDecryptStatusMessage(`${messages.decryptingEncryptedPayload} (${position}/${targets.length})`);
+        setBulkDecryptStatusMessage(`${messages.decryptingEncryptedPayload} (${position}/${decryptableTargets.length})`);
         try {
           const resolved = await resolveSubmissionAnswers(
             record.form,
@@ -427,14 +448,14 @@ export function usePrivateSignalDecrypt({
             undefined,
             createDecryptContextForRecord(record, (status) => {
               setBulkDecryptStatusMessage(
-                `${getDecryptStatusMessage(status, messages)} (${position}/${targets.length})`,
+                `${getDecryptStatusMessage(status, messages)} (${position}/${decryptableTargets.length})`,
               );
             }),
           );
           if (!resolved) {
             failedCount += 1;
             firstError = firstError || messages.encryptedPayloadNotFound;
-            setBulkDecryptProgress({ completed: unlockedCount, failed: failedCount, total: targets.length });
+            setBulkDecryptProgress({ completed: unlockedCount, failed: failedCount, total: decryptableTargets.length });
             continue;
           }
           unlockedCount += 1;
@@ -454,7 +475,7 @@ export function usePrivateSignalDecrypt({
             setDecryptState("decrypted");
             setDecryptStatusMessage(messages.signalUnlocked);
           }
-          setBulkDecryptProgress({ completed: unlockedCount, failed: failedCount, total: targets.length });
+          setBulkDecryptProgress({ completed: unlockedCount, failed: failedCount, total: decryptableTargets.length });
         } catch (error) {
           failedCount += 1;
           const reasonCode = isDecryptDiagnosticError(error)
@@ -469,7 +490,7 @@ export function usePrivateSignalDecrypt({
               : error instanceof Error
                 ? getFriendlyDecryptError(reasonCode, error.message, messages)
                 : decryptFailedLabel);
-          setBulkDecryptProgress({ completed: unlockedCount, failed: failedCount, total: targets.length });
+          setBulkDecryptProgress({ completed: unlockedCount, failed: failedCount, total: decryptableTargets.length });
         }
       }
     } finally {
@@ -495,7 +516,7 @@ export function usePrivateSignalDecrypt({
     }
     setBulkDecryptStatusMessage("");
 
-    return { unlockedCount, failedCount, totalCount: targets.length };
+    return { unlockedCount, failedCount, totalCount: decryptableTargets.length };
   }
 
   return {

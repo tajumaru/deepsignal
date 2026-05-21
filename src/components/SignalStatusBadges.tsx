@@ -25,7 +25,10 @@ type BadgeTone =
   | "verified"
   | "reviewing"
   | "resolved"
-  | "published";
+  | "published"
+  | "warning"
+  | "assigned"
+  | "follow-up";
 
 interface BadgeIconProps {
   className?: string;
@@ -44,11 +47,23 @@ interface SignalStatusBadgesProps {
   category: SignalCategory | string;
   pendingSui?: boolean;
   selectedForSui?: boolean;
+  payloadIssue?: boolean;
   showEncrypted?: boolean;
   storageLabel?: string;
   persistenceState?: SignalPersistenceState;
   className?: string;
   density?: "full" | "notable";
+  reviewerHint?:
+    | {
+        label: string;
+        title: string;
+      }
+    | {
+        shortLabel: string;
+        fullLabel: string;
+      }
+    | null;
+  needsFollowUp?: boolean;
 }
 
 function joinClassNames(...values: Array<string | false | null | undefined>) {
@@ -344,6 +359,22 @@ function HardDriveIcon({ className }: BadgeIconProps) {
   );
 }
 
+function WarningIcon({ className }: BadgeIconProps) {
+  return (
+    <IconBase className={className}>
+      <path
+        d="M12 5.2 19 18H5L12 5.2Z"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinejoin="round"
+      />
+      <path d="M12 9.5v4.1" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+      <circle cx="12" cy="15.9" r="1" fill="currentColor" />
+    </IconBase>
+  );
+}
+
 function getPriorityBadge(priority: Submission["priority"]): BadgeDescriptor {
   const tone: Record<Submission["priority"], BadgeTone> = {
     low: "priority-low",
@@ -391,11 +422,14 @@ export function SignalStatusBadges({
   category,
   pendingSui = false,
   selectedForSui = false,
+  payloadIssue = false,
   showEncrypted = false,
   storageLabel,
   persistenceState,
   className,
   density = "full",
+  reviewerHint = null,
+  needsFollowUp = false,
 }: SignalStatusBadgesProps) {
   const badges: BadgeDescriptor[] = [];
   const showFullSet = density === "full";
@@ -452,6 +486,28 @@ export function SignalStatusBadges({
       label: "Encrypted",
       title: "Encrypted signal",
       Icon: LockIcon,
+    });
+  }
+
+  if (reviewerHint) {
+    const reviewerLabel = "label" in reviewerHint ? reviewerHint.label : reviewerHint.shortLabel;
+    const reviewerTitle = "title" in reviewerHint ? reviewerHint.title : reviewerHint.fullLabel;
+    badges.push({
+      key: "assigned-reviewer",
+      tone: reviewerLabel === "You" ? "reviewing" : "assigned",
+      label: reviewerLabel,
+      title: reviewerTitle,
+      Icon: ActivityIcon,
+    });
+  }
+
+  if (needsFollowUp) {
+    badges.push({
+      key: "needs-follow-up",
+      tone: "follow-up",
+      label: "Follow-up",
+      title: "Needs follow-up",
+      Icon: ClockIcon,
     });
   }
 
@@ -534,6 +590,16 @@ export function SignalStatusBadges({
       label: "Sui",
       title: "Registered on Sui",
       Icon: CheckIcon,
+    });
+  }
+
+  if (payloadIssue) {
+    badges.push({
+      key: "payload-issue",
+      tone: "warning",
+      label: "Payload",
+      title: "Referenced private payload blob is missing or no longer readable",
+      Icon: WarningIcon,
     });
   }
 

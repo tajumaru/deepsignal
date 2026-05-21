@@ -36,6 +36,16 @@ import { clearDeepSignalPolicyCapabilityCache } from "../lib/debugCache";
 import { formatResponseDeadline, type ResponseDeadlineLabels } from "../lib/responseDeadline";
 import { getRespondentDisplayLabel, getSubmissionRespondentMeta } from "../lib/respondentMeta";
 import {
+  getAssignedReviewer,
+  getReviewerNoteUpdatedAt,
+  getReviewerPresenceText,
+  getVisibleReviewerNotes,
+  hasNeedsFollowUp,
+  NEEDS_FOLLOW_UP_TAG,
+  serializeReviewNotes,
+  setNeedsFollowUpTag,
+} from "../lib/reviewCollaboration";
+import {
   triageStatusToOnchainStatus,
   updateSignalStatusOnChain,
 } from "../lib/projectRegistry";
@@ -59,6 +69,7 @@ import type { FormSchema, Submission } from "../types";
 type StreamId =
   | "all"
   | "unread"
+  | "follow_up"
   | "encrypted"
   | "high"
   | "planned"
@@ -74,6 +85,8 @@ function matchesStream(submission: Submission, streamId: StreamId) {
   switch (streamId) {
     case "unread":
       return submission.status === "unread";
+    case "follow_up":
+      return hasNeedsFollowUp(submission);
     case "encrypted":
       return submission.isEncrypted;
     case "high":
@@ -162,6 +175,7 @@ export function FormSubmissionsPage() {
   const [priorityDraft, setPriorityDraft] = useState<Submission["priority"]>("medium");
   const [signalValueDraft, setSignalValueDraft] = useState("");
   const [notesDraft, setNotesDraft] = useState("");
+  const [reviewerDraft, setReviewerDraft] = useState("");
   const [csvExportScope, setCsvExportScope] = useState<ResponsesCsvExportScope>("filtered");
   const [csvSortOrder, setCsvSortOrder] = useState<ResponsesCsvSortOrder>("createdAtDesc");
   const [excludedCsvPiiFields, setExcludedCsvPiiFields] = useState<ExportPiiField[]>([]);
@@ -303,6 +317,7 @@ export function FormSubmissionsPage() {
       unread: 0,
       encrypted: 0,
       high: 0,
+      followUp: 0,
       planned: 0,
       inProgress: 0,
       fixed: 0,
@@ -328,6 +343,9 @@ export function FormSubmissionsPage() {
       }
       if (submission.priority === "high") {
         next.high += 1;
+      }
+      if (hasNeedsFollowUp(submission)) {
+        next.followUp += 1;
       }
       if (submission.triageStatus === "new") {
         next.newSignals += 1;
@@ -381,6 +399,7 @@ export function FormSubmissionsPage() {
         { id: "unread", label: t("unreadSignals"), count: submissionMetrics.unread },
         { id: "encrypted", label: t("encryptedSignals"), count: submissionMetrics.encrypted },
         { id: "high", label: t("highPrioritySignals"), count: submissionMetrics.high },
+        { id: "follow_up", label: t("needsFollowUpLabel"), count: submissionMetrics.followUp },
         { id: "planned", label: "Planned Signals", count: submissionMetrics.planned },
         { id: "in_progress", label: "In Progress", count: submissionMetrics.inProgress },
         { id: "fixed", label: "Fixed Signals", count: submissionMetrics.fixed },
@@ -502,6 +521,7 @@ export function FormSubmissionsPage() {
   useEffect(() => {
     if (!selectedSubmission) {
       setNotesDraft("");
+      setReviewerDraft("");
       setDecryptError("");
       setDecryptDiagnostics(null);
       setUnlockInteractionNotice("");
@@ -513,7 +533,8 @@ export function FormSubmissionsPage() {
     const previousSelectedSubmissionId = previousSelectedSubmissionIdRef.current;
     const didSelectionChange = previousSelectedSubmissionId !== selectedSubmission.id;
     previousSelectedSubmissionIdRef.current = selectedSubmission.id;
-    setNotesDraft(selectedSubmission.notes);
+    setNotesDraft(getVisibleReviewerNotes(selectedSubmission));
+    setReviewerDraft(getAssignedReviewer(selectedSubmission) ?? "");
     setStatusDraft(selectedSubmission.status);
     setTriageStatusDraft(selectedSubmission.triageStatus);
     setPriorityDraft(selectedSubmission.priority);
@@ -618,6 +639,22 @@ export function FormSubmissionsPage() {
     setSelectedSignalId(submission.id);
   }
 
+  function buildSubmissionWithReviewState(submission: Submission) {
+    const previousVisibleNotes = getVisibleReviewerNotes(submission);
+    const previousNoteUpdatedAt = getReviewerNoteUpdatedAt(submission);
+    return {
+      ...submission,
+      status: statusDraft,
+      triageStatus: triageStatusDraft,
+      priority: priorityDraft,
+      signalValue: signalValueDraft ? Number(signalValueDraft) : undefined,
+      notes: serializeReviewNotes(notesDraft, {
+        reviewer: reviewerDraft,
+        noteUpdatedAt: notesDraft !== previousVisibleNotes ? new Date().toISOString() : previousNoteUpdatedAt,
+      }),
+    } satisfies Submission;
+  }
+
   function handleCancelDecrypt() {
     cancelSharedDecrypt();
     setUnlockInteractionNotice(t("unlockCancelledStatus"));
@@ -628,14 +665,7 @@ export function FormSubmissionsPage() {
       return;
     }
     await updateSubmission(
-      {
-        ...selectedSubmission,
-        status: statusDraft,
-        triageStatus: triageStatusDraft,
-        priority: priorityDraft,
-        signalValue: signalValueDraft ? Number(signalValueDraft) : undefined,
-        notes: notesDraft,
-      },
+      buildSubmissionWithReviewState(selectedSubmission),
       { notifyOnSuccess: true },
     );
   }
@@ -645,7 +675,7 @@ export function FormSubmissionsPage() {
       searchQuery: search,
       status: selectedStreamId === "all" ? undefined : `stream:${selectedStreamId}`,
       priority: selectedStreamId === "high" ? "high" : undefined,
-      tags: search.trim() ? [search.trim()] : [],
+      tags: [...(search.trim() ? [search.trim()] : []), ...(selectedStreamId === "follow_up" ? [NEEDS_FOLLOW_UP_TAG] : [])],
       triageStatus:
         selectedStreamId === "planned" || selectedStreamId === "in_progress" || selectedStreamId === "fixed"
           ? selectedStreamId
@@ -765,6 +795,11 @@ export function FormSubmissionsPage() {
     : [];
   const isDetailOnly = Boolean(submissionId);
   const inboxPath = "/admin";
+  const selectedReviewerPresence = selectedSubmission
+    ? getReviewerPresenceText(selectedSubmission, wallet.accountAddress)
+    : null;
+  const selectedNeedsFollowUp = selectedSubmission ? hasNeedsFollowUp(selectedSubmission) : false;
+  const selectedReviewerNoteUpdatedAt = selectedSubmission ? getReviewerNoteUpdatedAt(selectedSubmission) : undefined;
   const unlockDisabledReason = detailAnswers
     ? undefined
     : !selectedSubmission?.isEncrypted
@@ -962,7 +997,45 @@ export function FormSubmissionsPage() {
         </label>
       </div>
       <label>
-        <span>Internal note</span>
+        <span>{t("assignedReviewerLabel")}</span>
+        <input
+          type="text"
+          value={reviewerDraft}
+          onChange={(event) => setReviewerDraft(event.target.value)}
+          placeholder={t("reviewerInputPlaceholder")}
+        />
+      </label>
+      <div className="review-controls-actions">
+        <span className="signal-chip signal-chip-soft">{reviewerDraft || t("unassignedLabel")}</span>
+        {wallet.accountAddress ? (
+          <button
+            type="button"
+            className="ghost-button"
+            onClick={() => setReviewerDraft(wallet.accountAddress ?? "")}
+          >
+            {t("assignToMe")}
+          </button>
+        ) : null}
+        {selectedSubmission ? (
+          <button
+            type="button"
+            className="ghost-button"
+            onClick={() =>
+              void updateSubmission(
+                {
+                  ...selectedSubmission,
+                  tags: setNeedsFollowUpTag(selectedSubmission.tags, !hasNeedsFollowUp(selectedSubmission)),
+                },
+                { notifyOnSuccess: true },
+              )
+            }
+          >
+            {selectedNeedsFollowUp ? t("followUpEnabledLabel") : t("needsFollowUpLabel")}
+          </button>
+        ) : null}
+      </div>
+      <label>
+        <span>{t("reviewerNoteLabel")}</span>
         <textarea
           rows={5}
           value={notesDraft}
@@ -971,6 +1044,18 @@ export function FormSubmissionsPage() {
         />
       </label>
       <div className="review-controls-actions">
+        <span className={`save-state-pill is-${saveState === "saving" ? "saving" : notesDraft !== (selectedSubmission ? getVisibleReviewerNotes(selectedSubmission) : "") || reviewerDraft !== (selectedSubmission ? getAssignedReviewer(selectedSubmission) ?? "" : "") ? "editing" : "saved"}`}>
+          {saveState === "saving"
+            ? t("reviewSaveSaving")
+            : notesDraft !== (selectedSubmission ? getVisibleReviewerNotes(selectedSubmission) : "") || reviewerDraft !== (selectedSubmission ? getAssignedReviewer(selectedSubmission) ?? "" : "")
+              ? t("reviewSaveUnsavedDraft")
+              : t("reviewSaveSaved")}
+        </span>
+        {selectedReviewerNoteUpdatedAt ? (
+          <span className="muted">
+            {t("lastUpdatedLabel")}: {formatDate(selectedReviewerNoteUpdatedAt)}
+          </span>
+        ) : null}
         <button
           type="button"
           className="primary-button"
@@ -1242,6 +1327,8 @@ export function FormSubmissionsPage() {
                   <span className="pill">{inferSignalCategory(selectedSubmission)}</span>
                   <span className="pill">Severity {selectedSubmission.severity ?? "medium"}</span>
                   <span className="pill">Signal Value {selectedSubmission.signalValue ?? "N/A"}</span>
+                  {selectedReviewerPresence ? <span className="pill">{selectedReviewerPresence.fullLabel}</span> : null}
+                  {selectedNeedsFollowUp ? <span className="pill">{t("needsFollowUpLabel")}</span> : null}
                 </div>
                 <div className="review-lifecycle-strip" aria-label="Signal lifecycle">
                   {getReviewLifecycleSteps(selectedSubmission, Boolean(detailAnswers)).map((step) => (
@@ -1446,6 +1533,8 @@ export function FormSubmissionsPage() {
                           submission={submission}
                           category={category}
                           showEncrypted
+                          reviewerHint={getReviewerPresenceText(submission, wallet.accountAddress)}
+                          needsFollowUp={hasNeedsFollowUp(submission)}
                         />
                         {isActiveUnlockTarget ? (
                           <span className="signal-chip signal-chip-soft">
@@ -1519,6 +1608,8 @@ export function FormSubmissionsPage() {
                   <span className="pill">{inferSignalCategory(selectedSubmission)}</span>
                   <span className="pill">Severity {selectedSubmission.severity ?? "medium"}</span>
                   <span className="pill">Signal Value {selectedSubmission.signalValue ?? "N/A"}</span>
+                  {selectedReviewerPresence ? <span className="pill">{selectedReviewerPresence.fullLabel}</span> : null}
+                  {selectedNeedsFollowUp ? <span className="pill">{t("needsFollowUpLabel")}</span> : null}
                 </div>
                 <div className="review-lifecycle-strip" aria-label="Signal lifecycle">
                   {getReviewLifecycleSteps(selectedSubmission, Boolean(detailAnswers)).map((step) => (
