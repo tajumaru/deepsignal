@@ -83,6 +83,7 @@ import {
   getStorageBadgeLabel,
   getWalletAccessLabel,
   getSignalStorageBlobId,
+  isOnchainRecoveredSignal,
   isLocalFallbackBlob,
 } from "../lib/signalInbox";
 import {
@@ -3069,10 +3070,15 @@ export function AdminDashboardPage() {
                     const storageLabel = getStorageBadgeLabel(storageBlobId);
                     const persistenceState = getSignalPersistenceState(submission);
                     const storageState = getSignalStorageState(submission);
-                    const subject = getSignalSubject(submission);
-                    const preview = submission.isEncrypted
-                      ? t("encryptedPrivateSignalUnlockHint")
-                      : getSignalPreview(submission);
+                    const isOnchainRecoverySnapshot = isOnchainRecoveredSignal(submission);
+                    const subject = isOnchainRecoverySnapshot
+                      ? t("onchainRecoverySnapshotTitle")
+                      : getSignalSubject(submission);
+                    const preview = isOnchainRecoverySnapshot
+                      ? t("onchainRecoverySnapshotHint")
+                      : submission.isEncrypted
+                        ? t("encryptedPrivateSignalUnlockHint")
+                        : getSignalPreview(submission);
                     const isAnonymousSignal = getSubmissionRespondentMeta(submission).isAnonymous;
                     const isPendingSui = submission.pendingOnchainRegistration;
                     const isSelectedForSui = selectedPendingSignalIds.includes(submission.id);
@@ -3179,6 +3185,11 @@ export function AdminDashboardPage() {
                             <span className={`mailbox-meta-chip status-${submission.status}`}>
                               {readStateLabel}
                             </span>
+                            {isOnchainRecoverySnapshot ? (
+                              <span className="mailbox-meta-chip mailbox-meta-chip-subtle">
+                                {t("onchainRecoverySnapshotLabel")}
+                              </span>
+                            ) : null}
                             {persistenceLabel ? (
                               <span className="mailbox-meta-chip mailbox-meta-chip-subtle">{persistenceLabel}</span>
                             ) : null}

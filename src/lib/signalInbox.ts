@@ -15,6 +15,13 @@ export function getSignalSubject(submission: Submission) {
   return submission.subjectPreview?.trim() || `Signal ${submission.id.slice(0, 8)}`;
 }
 
+export function isOnchainRecoveredSignal(submission: Submission) {
+  return (
+    submission.tags.includes("onchain-recovered") ||
+    submission.id.startsWith("onchain:")
+  );
+}
+
 export function getSignalPreview(submission: Submission) {
   if (submission.isEncrypted) {
     return "Encrypted Signal";

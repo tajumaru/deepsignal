@@ -18,6 +18,7 @@ import { isQuotaExceededError, isRateLimitError } from "../../../storage/walrusD
 import type { FormSchema, Submission, SubmissionAttachment } from "../../../types";
 import { getOrderedFields, getVisibleFieldIds } from "../../../utils/formLogic";
 import type { PublicAnswers, ValidationErrors } from "../types";
+import { getUploadAnswer } from "../utils/getUploadAnswer";
 import { validatePublicSubmission } from "../utils/validatePublicSubmission";
 
 const REAL_SEAL_PROJECT_REQUIRED_MESSAGE =
@@ -117,12 +118,6 @@ function sanitizeDraftAnswers(answers: PublicAnswers, attachmentFields: Set<stri
   return Object.fromEntries(
     Object.entries(answers).map(([fieldId, value]) => [fieldId, attachmentFields.has(fieldId) ? [] : value]),
   ) satisfies PublicAnswers;
-}
-
-function getUploadAnswer(value: unknown) {
-  return Array.isArray(value)
-    ? value.filter((item): item is UploadDropzoneItem => Boolean(item) && typeof item === "object" && "id" in item)
-    : [];
 }
 
 function getAttachmentBlobIds(answers: PublicAnswers, attachmentFields: Set<string>) {

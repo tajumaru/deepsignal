@@ -4,6 +4,7 @@ import { getSuiAddressValidationState } from "../../../lib/suiAddress";
 import type { FormSchema } from "../../../types";
 import { isFieldRequired } from "../../../utils/formLogic";
 import type { PublicAnswers, ValidationErrors } from "../types";
+import { getUploadAnswer } from "./getUploadAnswer";
 
 type ValidatePublicSubmissionArgs = {
   form: FormSchema;
@@ -12,12 +13,6 @@ type ValidatePublicSubmissionArgs = {
   attachmentFields: Set<string>;
   requiredFieldError: string;
 };
-
-function getUploadAnswer(value: unknown) {
-  return Array.isArray(value)
-    ? value.filter((item): item is UploadDropzoneItem => Boolean(item) && typeof item === "object" && "id" in item)
-    : [];
-}
 
 export function isValidUrlAnswer(value: unknown) {
   if (typeof value !== "string" || !value.trim()) {

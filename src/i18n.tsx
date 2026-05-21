@@ -1429,6 +1429,10 @@ const messages = {
     openInboxView: "Open inbox view",
     returnToAdminInbox: "Return to admin inbox",
     encryptedPrivateSignalUnlockHint: "Encrypted private signal. Requires reviewer access to unlock.",
+    onchainRecoverySnapshotLabel: "On-chain recovery snapshot",
+    onchainRecoverySnapshotTitle: "Recovered on-chain signal",
+    onchainRecoverySnapshotHint:
+      "Recovered from the on-chain registry snapshot. This can appear even when no local signal node exists.",
     anonymousRespondent: "Anonymous respondent",
     signalMetadataAndProofTitle: "Signal metadata and proof",
     legacyUnencryptedResponse: "Legacy unencrypted response \u00b7 created before Seal enforcement",
@@ -3408,6 +3412,10 @@ const messages = {
     returnToAdminInbox: "\u7ba1\u7406\u53d7\u4fe1\u7bb1\u306b\u623b\u308b",
     encryptedPrivateSignalUnlockHint:
       "\u6697\u53f7\u5316\u3055\u308c\u305f private signal \u3067\u3059\u3002\u89e3\u9664\u306b\u306f\u30ec\u30d3\u30e5\u30a2\u30fc\u6a29\u9650\u304c\u5fc5\u8981\u3067\u3059\u3002",
+    onchainRecoverySnapshotLabel: "\u30aa\u30f3\u30c1\u30a7\u30fc\u30f3\u5fa9\u5143\u30b9\u30ca\u30c3\u30d7\u30b7\u30e7\u30c3\u30c8",
+    onchainRecoverySnapshotTitle: "\u5fa9\u5143\u3055\u308c\u305f onchain signal",
+    onchainRecoverySnapshotHint:
+      "\u30aa\u30f3\u30c1\u30a7\u30fc\u30f3\u30ec\u30b8\u30b9\u30c8\u30ea\u306e\u30b9\u30ca\u30c3\u30d7\u30b7\u30e7\u30c3\u30c8\u304b\u3089\u5fa9\u5143\u3057\u305f signal \u3067\u3059\u3002\u30ed\u30fc\u30ab\u30eb\u306e signal node \u304c\u306a\u304f\u3066\u3082\u8868\u793a\u3055\u308c\u308b\u3053\u3068\u304c\u3042\u308a\u307e\u3059\u3002",
     anonymousRespondent: "\u533f\u540d\u306e\u56de\u7b54\u8005",
     signalMetadataAndProofTitle: "signal \u306e\u30e1\u30bf\u30c7\u30fc\u30bf\u3068\u8a3c\u660e",
     legacyUnencryptedResponse:
