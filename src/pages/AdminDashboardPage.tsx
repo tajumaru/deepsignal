@@ -14,11 +14,11 @@ import { PrivateSignalUnlockCard } from "../components/PrivateSignalUnlockCard";
 import { RichTextContent } from "../components/RichText";
 import { SealStatusCard } from "../components/SealStatusCard";
 import { ShareCard } from "../components/ShareCard";
-import { SignalClusterPanel } from "../components/SignalClusterPanel";
 import { SignalStatusBadges } from "../components/SignalStatusBadges";
 import { SignalMetaChip, SignalMetaRow } from "../components/SignalMetaChip";
 import { StorageProof } from "../components/StorageProof";
 import { SuiAddressDisplay } from "../components/SuiAddressDisplay";
+import { RelatedSignalsPanel } from "../components/RelatedSignalsPanel";
 import { AdminOperationsStatus } from "../features/admin/components/AdminOperationsStatus";
 import { AdminToast } from "../features/admin/components/AdminToast";
 import { CsvExportConfirmationModal } from "../features/admin/components/CsvExportConfirmationModal";
@@ -2295,32 +2295,6 @@ export function AdminDashboardPage() {
       hasAdminAccess || !capabilityProfile.isConfigured || addressesMatch(form.ownerAddress, wallet.accountAddress),
     [wallet.accountAddress, capabilityProfile.isConfigured, hasAdminAccess],
   );
-  const formById = useMemo(
-    () =>
-      Object.fromEntries(accessibleForms.map((form) => [form.id, form])) as Record<
-        string,
-        FormSchema | undefined
-      >,
-    [accessibleForms],
-  );
-  const formTitleById = useMemo(
-    () =>
-      Object.fromEntries(accessibleForms.map((form) => [form.id, form.title])) as Record<
-        string,
-        string | undefined
-      >,
-    [accessibleForms],
-  );
-  const clusterCountById = signalIndex.clusterCountById;
-  const inferredAiConfidence = selectedRecord
-    ? selectedRecord.submission.aiSummary
-      ? selectedRecord.submission.keywords?.length
-        ? "High"
-        : "Medium"
-      : detailAnswers
-        ? "Medium"
-        : "Low"
-    : "Low";
   const workspaceMetaItems = hasAdminAccess
     ? [
         formatWorkspaceCount(selectedProject ? selectedProject.formsCount : accessibleForms.length, "Form"),
@@ -3111,7 +3085,6 @@ export function AdminDashboardPage() {
                       isPendingSui ||
                       isSelectedForSui ||
                       isLocalOnlySignal ||
-                      Boolean(submission.clusterId) ||
                       submission.attachments.length > 0;
                     return (
                       <div
@@ -4051,54 +4024,23 @@ export function AdminDashboardPage() {
                           <summary>
                             <span>
                               <p className="eyebrow">{t("reviewSupportEyebrow")}</p>
-                              <strong>Review cues</strong>
+                              <strong>{t("relatedSignalsTitle")}</strong>
                             </span>
-                            <span className="inspector-summary">Quiet intelligence</span>
+                            <span className="inspector-summary">{t("reviewSupportSummary")}</span>
                           </summary>
                           <div className="inspector-panel-body">
-                            <div className="inspector-subsection ai-summary-section">
-                              <div>
-                                <p className="eyebrow">Inferred context</p>
-                                <h3>Suggested review frame</h3>
-                              </div>
-                              <p>{selectedRecord.submission.aiSummary || getSignalPreview(selectedRecord.submission)}</p>
-                              <div className="signal-badge-row signal-badge-row-compact">
-                                <span className="signal-chip">{t("aiConfidenceLabel", { value: inferredAiConfidence })}</span>
-                                <span className="signal-chip">{selectedRecord.category}</span>
-                                {selectedRecord.submission.keywords?.slice(0, 3).map((keyword) => (
-                                  <span key={keyword} className="signal-chip">
-                                    {keyword}
-                                  </span>
-                                ))}
-                                {selectedRecord.submission.clusterId ? (
-                                  <span className="signal-chip signal-chip-accent">
-                                    {t("aiGroupedLabel")}
-                                    {clusterCountById[selectedRecord.submission.clusterId]
-                                      ? ` (${clusterCountById[selectedRecord.submission.clusterId]})`
-                                      : ""}
-                                  </span>
-                                ) : null}
-                              </div>
-                            </div>
-                            <details className="inspector-nested-detail">
-                              <summary>{t("similarSignalsTitle")}</summary>
-                              <SignalClusterPanel
-                                selectedSubmission={selectedRecord.submission}
-                                submissions={allSignals.map((record) => record.submission)}
-                                formById={formById}
-                                formTitleById={formTitleById}
-                                busy={saving}
-                                onSelectSignal={(submissionId) => {
-                                  if (decryptInFlightRef.current) {
-                                    return;
-                                  }
-                                  setSelectedSignalId(submissionId);
-                                }}
-                                onSaveSubmission={async (submission) => {
-                                  await updateSubmission(submission);
-                                }}
-                              />
-                            </details>
+                            <RelatedSignalsPanel
+                              selectedRecord={selectedRecord}
+                              visibleSignals={visibleSignals}
+                              allSignals={allSignals}
+                              signalById={signalIndex.signalById}
+                              onSelectSignal={(submissionId) => {
+                                if (decryptInFlightRef.current) {
+                                  return;
+                                }
+                                setSelectedSignalId(submissionId);
+                              }}
+                            />
                           </div>
                         </details>
                       </div>

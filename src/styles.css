@@ -17436,6 +17436,124 @@ body.composer-mode .bg-orb {
   flex-wrap: wrap;
 }
 
+.related-signals-panel {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.related-signals-header {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 0.85rem;
+}
+
+.related-signals-header h3,
+.related-signals-header p {
+  margin-bottom: 0;
+}
+
+.related-signals-hint {
+  margin: 0;
+  padding: 0.7rem 0.8rem;
+  border-radius: 12px;
+  border: 1px solid rgba(102, 227, 255, 0.14);
+  background: rgba(102, 227, 255, 0.07);
+  color: #dffaff;
+  font-size: 0.84rem;
+  font-weight: 700;
+}
+
+.related-signals-empty {
+  margin: 0;
+}
+
+.related-signals-list {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.related-signal-card {
+  width: 100%;
+  padding: 0.9rem;
+  border: 1px solid rgba(116, 226, 255, 0.1);
+  border-radius: 14px;
+  background: rgba(3, 15, 26, 0.42);
+  color: inherit;
+  text-align: left;
+  transition:
+    border-color 160ms ease,
+    background 160ms ease,
+    transform 160ms ease;
+}
+
+.related-signal-card:hover,
+.related-signal-card:focus-visible {
+  border-color: rgba(116, 226, 255, 0.24);
+  background: rgba(4, 18, 31, 0.6);
+  transform: translateY(-1px);
+}
+
+.related-signal-card-main {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.related-signal-title-line,
+.related-signal-meta,
+.related-signal-reasons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  align-items: center;
+}
+
+.related-signal-title-line {
+  justify-content: space-between;
+}
+
+.related-signal-title-line strong {
+  color: #effcff;
+}
+
+.related-signal-title-line time,
+.related-signal-channel {
+  color: #9cb9c9;
+  font-size: 0.78rem;
+}
+
+.related-signal-preview {
+  color: #d2e9f3;
+  line-height: 1.45;
+}
+
+.related-signal-preview.is-locked {
+  color: #b7d5e2;
+}
+
+.related-reason-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.24rem 0.5rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #b6d3df;
+  font-size: 0.72rem;
+}
+
+@media (max-width: 768px) {
+  .related-signals-header,
+  .related-signal-title-line {
+    flex-direction: column;
+    align-items: start;
+  }
+
+  .related-signal-card {
+    padding: 0.8rem;
+  }
+}
+
 .signal-chip {
   display: inline-flex;
   align-items: center;

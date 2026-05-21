@@ -528,7 +528,6 @@ export function useSignalInboxData({
       archived: 0,
     };
     const unreadCountByFormId: Record<string, number> = {};
-    const clusterCountById: Record<string, number> = {};
     const pendingSignalIdSet = new Set<string>();
     const seenOnchainSignals = new Set<string>();
 
@@ -582,9 +581,6 @@ export function useSignalInboxData({
       if (record.submission.status === "archived") {
         counts.archived += 1;
       }
-      if (record.submission.clusterId) {
-        clusterCountById[record.submission.clusterId] = (clusterCountById[record.submission.clusterId] ?? 0) + 1;
-      }
     }
 
     for (const form of accessibleForms) {
@@ -629,7 +625,6 @@ export function useSignalInboxData({
       signalById,
       counts,
       unreadCountByFormId,
-      clusterCountById,
       pendingSignalIdSet,
     };
   }, [accessibleForms, submissionsByFormId, supplementalSignals]);

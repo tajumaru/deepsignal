@@ -19,7 +19,6 @@ type BadgeTone =
   | "attachment"
   | "new"
   | "encrypted"
-  | "cluster"
   | "local"
   | "walrus"
   | "registered"
@@ -321,31 +320,6 @@ function LockIcon({ className }: BadgeIconProps) {
   );
 }
 
-function CpuIcon({ className }: BadgeIconProps) {
-  return (
-    <IconBase className={className}>
-      <rect
-        x="7.5"
-        y="7.5"
-        width="9"
-        height="9"
-        rx="2"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.8"
-      />
-      <path
-        d="M10.5 10.5h3v3h-3zM9 3.5v2M15 3.5v2M9 18.5v2M15 18.5v2M18.5 9h2M18.5 15h2M3.5 9h2M3.5 15h2"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </IconBase>
-  );
-}
-
 function HardDriveIcon({ className }: BadgeIconProps) {
   return (
     <IconBase className={className}>
@@ -458,16 +432,6 @@ export function SignalStatusBadges({
       label: "Pick",
       title: "Selected for Sui registration",
       Icon: CheckIcon,
-    });
-  }
-
-  if (submission.clusterId) {
-    badges.push({
-      key: "clustered",
-      tone: "cluster",
-      label: "AI",
-      title: "AI grouped signal",
-      Icon: CpuIcon,
     });
   }
 
