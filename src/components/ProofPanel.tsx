@@ -24,7 +24,7 @@ function ProofBlobRow({ label, blobId }: ProofItem) {
   const url = getProofBlobUrl(blobId);
 
   return (
-    <div className="proof-row">
+    <div className="metadata-row proof-row">
       <span>{label}</span>
       <div className="proof-row-value">
         {blobId ? <SignalMetaChip type="blob" value={blobId} /> : <strong>Not stored</strong>}
@@ -58,7 +58,7 @@ export function ProofPanel({
   const txUrl = getSuiTransactionUrl(transactionDigest ?? undefined);
 
   return (
-    <section className="panel proof-panel">
+    <section className="answer-card review-secondary-card proof-panel">
       <div className="section-row">
         <div>
           <p className="eyebrow">Proof Mode</p>
@@ -71,16 +71,16 @@ export function ProofPanel({
         {items.map((item) => (
           <ProofBlobRow key={item.label} {...item} />
         ))}
-        <div className="proof-row">
+        <div className="metadata-row proof-row">
           <span>Storage mode</span>
           <strong>{storageMode}</strong>
         </div>
-        <div className="proof-row">
+        <div className="metadata-row proof-row">
           <span>Seal mode</span>
           <strong>{sealMode}</strong>
         </div>
         {transactionDigest ? (
-          <div className="proof-row">
+          <div className="metadata-row proof-row">
             <span>Transaction digest</span>
             <div className="proof-row-value">
               <SignalMetaChip type="blob" value={transactionDigest} />
@@ -93,34 +93,34 @@ export function ProofPanel({
           </div>
         ) : null}
         {networkLabel ? (
-          <div className="proof-row">
+          <div className="metadata-row proof-row">
             <span>Network</span>
             <strong>{networkLabel}</strong>
           </div>
         ) : null}
         {encryptionStatus ? (
-          <div className="proof-row">
+          <div className="metadata-row proof-row">
             <span>Encryption status</span>
             <strong>{encryptionStatus}</strong>
           </div>
         ) : null}
         {storedTimestamp ? (
-          <div className="proof-row">
+          <div className="metadata-row proof-row">
             <span>Stored timestamp</span>
             <strong>{storedTimestamp}</strong>
           </div>
         ) : null}
         {rpcProvider ? (
-          <div className="proof-row">
+          <div className="metadata-row proof-row">
             <span>RPC provider</span>
             <strong>{rpcProvider}</strong>
           </div>
         ) : null}
-        <div className="proof-row">
+        <div className="metadata-row proof-row">
           <span>Current wallet address</span>
           {walletAddress ? <SignalMetaChip type="contributor" value={walletAddress} /> : <strong>Not connected</strong>}
         </div>
-        <div className="proof-row">
+        <div className="metadata-row proof-row">
           <span>Form ownerAddress</span>
           {ownerAddress ? <SignalMetaChip type="contributor" value={ownerAddress} /> : <strong>Legacy demo form</strong>}
         </div>

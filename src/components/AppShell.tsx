@@ -171,14 +171,6 @@ export function AppShell({
     };
   }, [mobileDrawerOpen]);
 
-  useEffect(() => {
-    const drawer = mobileDrawerRef.current as (HTMLElement & { inert?: boolean }) | null;
-    if (!drawer) {
-      return;
-    }
-    drawer.inert = !mobileDrawerOpen;
-  }, [mobileDrawerOpen]);
-
   function closeMobileDrawer() {
     if (mobileDrawerRef.current?.contains(document.activeElement)) {
       mobileMenuToggleRef.current?.focus();
@@ -290,95 +282,99 @@ export function AppShell({
       </header>
       {publicChrome ? null : (
         <>
-          <button
-            type="button"
-            className={`mobile-drawer-backdrop ${mobileDrawerOpen ? "is-open" : ""}`}
-            onClick={closeMobileDrawer}
-            aria-hidden={!mobileDrawerOpen}
-            tabIndex={mobileDrawerOpen ? 0 : -1}
-          />
-          <aside
-            ref={mobileDrawerRef}
-            id="mobile-nav-drawer"
-            className={`mobile-nav-drawer panel ${mobileDrawerOpen ? "is-open" : ""}`}
-            role="dialog"
-            aria-modal="true"
-            aria-label="Mobile navigation menu"
-          >
-            <div className="mobile-drawer-header">
-              <div>
-                <span className="mobile-drawer-eyebrow">Secure Command Panel</span>
-                <strong>DeepSignal</strong>
-                <p>{t("brandTagline")}</p>
-              </div>
-              <CreateFormLink className="mobile-drawer-cta" onClick={closeMobileDrawer}>
-                <span aria-hidden="true">+</span>
-                <span>{t("navCreateForm")}</span>
-              </CreateFormLink>
-            </div>
-
-            <div className="mobile-drawer-section">
-              <span className="mobile-drawer-section-label">Secure Inbox</span>
-              <nav className="mobile-drawer-nav" aria-label="Mobile navigation">
-                <NavLink to="/" onClick={closeMobileDrawer}>
-                  {t("navHome")}
-                </NavLink>
-                <CreateFormLink nav onClick={closeMobileDrawer}>
-                  <NavItemLabel icon={<CreateSignalNavIcon />}>{t("navCreateForm")}</NavItemLabel>
-                </CreateFormLink>
-                {walletChrome.inboxNav}
-                <NavLink to="/explore" onClick={closeMobileDrawer}>
-                  {t("navExplore")}
-                </NavLink>
-                {walletChrome.accessNav}
-                <div className="mobile-drawer-more">
-                  <button
-                    type="button"
-                    className={`mobile-drawer-more-trigger ${mobileMoreOpen ? "is-open" : ""}`}
-                    onClick={() => setMobileMoreOpen((current) => !current)}
-                    aria-expanded={mobileMoreOpen}
-                  >
-                    <NavItemLabel icon={<MoreNavIcon />}>{t("navMore")}</NavItemLabel>
-                  </button>
-                  {mobileMoreOpen ? (
-                    <NavLink
-                      className="mobile-drawer-subnav-link"
-                      to="/troubleshooting"
-                      onClick={closeMobileDrawer}
-                    >
-                      {t("navTroubleshooting")}
-                    </NavLink>
-                  ) : null}
+          {mobileDrawerOpen ? (
+            <>
+              <button
+                type="button"
+                className="mobile-drawer-backdrop is-open"
+                onClick={closeMobileDrawer}
+                aria-hidden="true"
+                tabIndex={-1}
+              />
+              <aside
+                ref={mobileDrawerRef}
+                id="mobile-nav-drawer"
+                className="mobile-nav-drawer panel is-open"
+                role="dialog"
+                aria-modal="true"
+                aria-label="Mobile navigation menu"
+              >
+                <div className="mobile-drawer-header">
+                  <div>
+                    <span className="mobile-drawer-eyebrow">Secure Command Panel</span>
+                    <strong>DeepSignal</strong>
+                    <p>{t("brandTagline")}</p>
+                  </div>
+                  <CreateFormLink className="mobile-drawer-cta" onClick={closeMobileDrawer}>
+                    <span aria-hidden="true">+</span>
+                    <span>{t("navCreateForm")}</span>
+                  </CreateFormLink>
                 </div>
-              </nav>
-            </div>
 
-            <div className="mobile-drawer-section">
-              <span className="mobile-drawer-section-label">Command Surface</span>
-              <div className="mobile-drawer-utility-group">
-              <div className="mobile-drawer-utility-card">
-                <span className="mobile-drawer-utility-label">Network</span>
-                {walletAvailable ? <NetworkMenu /> : <div className="mobile-drawer-utility-empty">Unavailable</div>}
-              </div>
-              <div className="mobile-drawer-utility-card">
-                <span className="mobile-drawer-utility-label">Wallet</span>
-                {walletChrome.connect}
-              </div>
-              <div className="mobile-drawer-utility-card">
-                <label className="language-switch mobile-drawer-language-switch">
-                  <span>{t("languageLabel")}</span>
-                  <select
-                    value={language}
-                    onChange={(event) => setLanguage(event.target.value as "en" | "ja")}
-                  >
-                    <option value="en">{t("languageEnglish")}</option>
-                    <option value="ja">{t("languageJapanese")}</option>
-                  </select>
-                </label>
-              </div>
-            </div>
-            </div>
-          </aside>
+                <div className="mobile-drawer-section">
+                  <span className="mobile-drawer-section-label">Secure Inbox</span>
+                  <nav className="mobile-drawer-nav" aria-label="Mobile navigation">
+                    <NavLink to="/" onClick={closeMobileDrawer}>
+                      {t("navHome")}
+                    </NavLink>
+                    <CreateFormLink nav onClick={closeMobileDrawer}>
+                      <NavItemLabel icon={<CreateSignalNavIcon />}>{t("navCreateForm")}</NavItemLabel>
+                    </CreateFormLink>
+                    {walletChrome.inboxNav}
+                    <NavLink to="/explore" onClick={closeMobileDrawer}>
+                      {t("navExplore")}
+                    </NavLink>
+                    {walletChrome.accessNav}
+                    <div className="mobile-drawer-more">
+                      <button
+                        type="button"
+                        className={`mobile-drawer-more-trigger ${mobileMoreOpen ? "is-open" : ""}`}
+                        onClick={() => setMobileMoreOpen((current) => !current)}
+                        aria-expanded={mobileMoreOpen}
+                      >
+                        <NavItemLabel icon={<MoreNavIcon />}>{t("navMore")}</NavItemLabel>
+                      </button>
+                      {mobileMoreOpen ? (
+                        <NavLink
+                          className="mobile-drawer-subnav-link"
+                          to="/troubleshooting"
+                          onClick={closeMobileDrawer}
+                        >
+                          {t("navTroubleshooting")}
+                        </NavLink>
+                      ) : null}
+                    </div>
+                  </nav>
+                </div>
+
+                <div className="mobile-drawer-section">
+                  <span className="mobile-drawer-section-label">Command Surface</span>
+                  <div className="mobile-drawer-utility-group">
+                    <div className="mobile-drawer-utility-card">
+                      <span className="mobile-drawer-utility-label">Network</span>
+                      {walletAvailable ? <NetworkMenu /> : <div className="mobile-drawer-utility-empty">Unavailable</div>}
+                    </div>
+                    <div className="mobile-drawer-utility-card">
+                      <span className="mobile-drawer-utility-label">Wallet</span>
+                      {walletChrome.connect}
+                    </div>
+                    <div className="mobile-drawer-utility-card">
+                      <label className="language-switch mobile-drawer-language-switch">
+                        <span>{t("languageLabel")}</span>
+                        <select
+                          value={language}
+                          onChange={(event) => setLanguage(event.target.value as "en" | "ja")}
+                        >
+                          <option value="en">{t("languageEnglish")}</option>
+                          <option value="ja">{t("languageJapanese")}</option>
+                        </select>
+                      </label>
+                    </div>
+                  </div>
+                </div>
+              </aside>
+            </>
+          ) : null}
         </>
       )}
       <main className="page-wrap">{children}</main>

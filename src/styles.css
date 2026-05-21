@@ -15004,10 +15004,7 @@ body.composer-mode .bg-orb {
   justify-content: space-between;
   gap: 0.75rem;
   align-items: flex-start;
-  padding: 0.85rem 1rem;
-  background: rgba(4, 18, 31, 0.68);
-  border: 1px solid rgba(116, 226, 255, 0.14);
-  border-radius: 18px;
+  min-width: 0;
 }
 
 .proof-row-value {
@@ -15015,6 +15012,25 @@ body.composer-mode .bg-orb {
   justify-items: end;
   gap: 0.35rem;
   text-align: right;
+  min-width: 0;
+}
+
+.proof-panel {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.proof-panel .section-row {
+  align-items: flex-start;
+}
+
+.proof-panel .proof-grid {
+  gap: 0.7rem;
+}
+
+.proof-panel .proof-row > span:first-child,
+.proof-panel .proof-row > strong,
+.proof-panel .proof-row .proof-row-value {
   min-width: 0;
 }
 
@@ -20537,6 +20553,307 @@ body.composer-mode .bg-orb {
   opacity: 0.92;
 }
 
+.signal-timeline-section {
+  display: grid;
+  gap: 0.85rem;
+  padding: 0.15rem;
+  border: 1px solid rgba(88, 211, 255, 0.12);
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at top right, rgba(70, 188, 255, 0.12), transparent 34%),
+    linear-gradient(180deg, rgba(9, 27, 43, 0.94), rgba(5, 18, 30, 0.92));
+  box-shadow:
+    inset 0 0 0 1px rgba(148, 230, 255, 0.04),
+    0 12px 28px rgba(1, 9, 17, 0.24);
+}
+
+.signal-timeline-section > .workspace-section-toggle {
+  position: relative;
+  overflow: hidden;
+  padding: 1rem 1.05rem;
+  border: 1px solid rgba(98, 223, 255, 0.14);
+  border-radius: 16px;
+  background:
+    linear-gradient(135deg, rgba(14, 41, 62, 0.96), rgba(6, 22, 36, 0.92)),
+    rgba(5, 18, 30, 0.95);
+  box-shadow:
+    inset 0 1px 0 rgba(213, 248, 255, 0.05),
+    inset 0 0 0 1px rgba(98, 223, 255, 0.04);
+}
+
+.signal-timeline-section > .workspace-section-toggle::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 4px;
+  border-radius: 16px 0 0 16px;
+  background: linear-gradient(180deg, #78e6ff, #34d399);
+  box-shadow: 0 0 16px rgba(120, 230, 255, 0.45);
+}
+
+.signal-timeline-section > .workspace-section-toggle:hover,
+.signal-timeline-section > .workspace-section-toggle:focus-visible,
+.signal-timeline-section > .workspace-section-toggle.is-open {
+  border-color: rgba(123, 236, 255, 0.28);
+  background:
+    linear-gradient(135deg, rgba(18, 50, 76, 0.98), rgba(8, 28, 43, 0.94)),
+    rgba(6, 21, 35, 0.95);
+}
+
+.signal-timeline-section > .workspace-section-toggle .workspace-section-toggle-copy {
+  gap: 0.22rem;
+  padding-left: 0.2rem;
+}
+
+.signal-timeline-section > .workspace-section-toggle .workspace-section-toggle-copy strong {
+  font-size: 1.08rem;
+}
+
+.signal-timeline-section > .workspace-section-toggle .eyebrow {
+  color: #8feaff;
+}
+
+.signal-timeline-section > .workspace-section-toggle .workspace-section-toggle-copy .muted {
+  color: #b3d4e1;
+  max-width: 54ch;
+}
+
+.signal-timeline-section > .workspace-section-toggle .signal-chip {
+  border-color: rgba(82, 212, 188, 0.22);
+  background: rgba(52, 211, 153, 0.12);
+  color: #d8fff1;
+}
+
+.signal-timeline-section > .workspace-section-toggle .workspace-section-toggle-icon {
+  width: 2rem;
+  height: 2rem;
+  border-color: rgba(126, 237, 255, 0.26);
+  background: rgba(97, 223, 255, 0.14);
+  box-shadow: 0 0 18px rgba(97, 223, 255, 0.14);
+}
+
+.signal-timeline-panel {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.signal-timeline-current-state {
+  display: grid;
+  gap: 0.28rem;
+  padding: 0.85rem 0.95rem;
+  border-radius: 14px;
+  border: 1px solid rgba(115, 231, 255, 0.16);
+  background:
+    linear-gradient(135deg, rgba(16, 45, 67, 0.96), rgba(8, 27, 43, 0.92)),
+    rgba(5, 18, 30, 0.94);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 10px 24px rgba(2, 10, 18, 0.22);
+}
+
+.signal-timeline-current-state.is-intake {
+  border-color: rgba(103, 232, 249, 0.22);
+}
+
+.signal-timeline-current-state.is-review {
+  border-color: rgba(125, 211, 252, 0.24);
+}
+
+.signal-timeline-current-state.is-escalation {
+  border-color: rgba(251, 191, 36, 0.28);
+}
+
+.signal-timeline-current-state.is-published {
+  border-color: rgba(52, 211, 153, 0.28);
+}
+
+.signal-timeline-current-state.is-resolved {
+  border-color: rgba(248, 113, 113, 0.26);
+}
+
+.signal-timeline-current-label {
+  color: #9cd6e5;
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.signal-timeline-current-state strong {
+  color: #f5fdff;
+  font-size: 1.05rem;
+  line-height: 1.2;
+}
+
+.signal-timeline-current-state p {
+  margin: 0;
+}
+
+.signal-timeline-derived-note {
+  margin: 0;
+  font-size: 0.78rem;
+}
+
+.signal-timeline-list {
+  display: grid;
+  gap: 0.38rem;
+}
+
+.signal-timeline-item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.55rem;
+  align-items: start;
+}
+
+.signal-timeline-marker {
+  position: relative;
+  width: 0.65rem;
+  height: 0.65rem;
+  margin-top: 0.72rem;
+  border-radius: 999px;
+  background: #66e3ff;
+  box-shadow: 0 0 0 0.2rem rgba(102, 227, 255, 0.12);
+}
+
+.signal-timeline-marker::after {
+  content: "";
+  position: absolute;
+  top: calc(100% + 0.18rem);
+  left: 50%;
+  width: 1px;
+  height: calc(100% + 1.85rem);
+  background: linear-gradient(180deg, rgba(120, 230, 255, 0.24), rgba(120, 230, 255, 0.03));
+  transform: translateX(-50%);
+}
+
+.signal-timeline-item:last-child .signal-timeline-marker::after {
+  display: none;
+}
+
+.signal-timeline-marker.is-intake {
+  background: #67e8f9;
+  box-shadow: 0 0 0 0.18rem rgba(103, 232, 249, 0.12);
+}
+
+.signal-timeline-marker.is-review {
+  background: #7dd3fc;
+  box-shadow: 0 0 0 0.18rem rgba(125, 211, 252, 0.12);
+}
+
+.signal-timeline-marker.is-escalation {
+  background: #fbbf24;
+  box-shadow: 0 0 0 0.18rem rgba(251, 191, 36, 0.12);
+}
+
+.signal-timeline-marker.is-published {
+  background: #34d399;
+  box-shadow: 0 0 0 0.18rem rgba(52, 211, 153, 0.12);
+}
+
+.signal-timeline-marker.is-resolved {
+  background: #f87171;
+  box-shadow: 0 0 0 0.18rem rgba(248, 113, 113, 0.12);
+}
+
+.signal-timeline-card {
+  display: grid;
+  gap: 0.18rem;
+  min-width: 0;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid rgba(116, 226, 255, 0.08);
+  border-radius: 12px;
+  background: rgba(4, 17, 29, 0.34);
+  box-shadow: inset 0 0 0 1px rgba(116, 226, 255, 0.03);
+}
+
+.signal-timeline-item.is-past .signal-timeline-card {
+  opacity: 0.76;
+}
+
+.signal-timeline-item.is-current .signal-timeline-card {
+  border-color: rgba(124, 236, 255, 0.18);
+  background: rgba(7, 26, 41, 0.68);
+  box-shadow:
+    inset 0 0 0 1px rgba(124, 236, 255, 0.04),
+    0 0 0 1px rgba(124, 236, 255, 0.04);
+}
+
+.signal-timeline-item.is-current .signal-timeline-marker {
+  transform: scale(1.1);
+}
+
+.signal-timeline-card-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.55rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.signal-timeline-card-header strong {
+  color: #f1fcff;
+  font-size: 0.92rem;
+  line-height: 1.25;
+}
+
+.signal-timeline-card-header time {
+  color: #9fc2d2;
+  font-size: 0.74rem;
+  white-space: nowrap;
+  opacity: 0.74;
+}
+
+.signal-timeline-detail {
+  margin: 0;
+  line-height: 1.35;
+  font-size: 0.8rem;
+}
+
+.signal-timeline-item.is-past .signal-timeline-detail {
+  opacity: 0.84;
+}
+
+@media (max-width: 768px) {
+  .signal-timeline-section > .workspace-section-toggle {
+    padding: 0.85rem 0.9rem;
+  }
+
+  .signal-timeline-current-state {
+    padding: 0.78rem 0.82rem;
+  }
+
+  .signal-timeline-current-state strong {
+    font-size: 0.98rem;
+  }
+
+  .signal-timeline-list {
+    gap: 0.32rem;
+  }
+
+  .signal-timeline-item {
+    gap: 0.5rem;
+  }
+
+  .signal-timeline-card {
+    padding: 0.52rem 0.65rem;
+  }
+
+  .signal-timeline-card-header {
+    gap: 0.32rem;
+  }
+
+  .signal-timeline-card-header strong {
+    font-size: 0.88rem;
+  }
+
+  .signal-timeline-card-header time,
+  .signal-timeline-detail,
+  .signal-timeline-derived-note {
+    font-size: 0.75rem;
+  }
+}
+
 .answer-line {
   position: relative;
   display: grid;
@@ -25400,6 +25717,11 @@ body.composer-mode .bg-orb {
 
   .signal-detail-sticky-actions {
     display: grid;
+  }
+
+  .desktop-signal-inbox.has-selected-signal .signal-detail-sticky-actions {
+    position: static;
+    bottom: auto;
   }
 
   .signal-detail-sticky-meta,

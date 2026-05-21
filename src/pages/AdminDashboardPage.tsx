@@ -108,7 +108,7 @@ import {
   normalizeSubmission,
   storageAdapter,
 } from "../lib/storage";
-import { flattenAnswer, formatDate } from "../lib/utils";
+import { flattenAnswer, formatDate, formatRelativeTime } from "../lib/utils";
 import { handleRateLimitedRpcFallback, useRpcInfrastructure } from "../rpcInfrastructure";
 import { deleteFormsFromLocalCache, getStorageRuntimeStatus } from "../storage/storageFactory";
 import type { ActivityAction, ActivityEvent, FormSchema, Submission } from "../types";
@@ -137,10 +137,26 @@ interface DetailWorkspaceSectionsState {
   originalSignalOpen: boolean;
   attachmentsOpen: boolean;
   reviewerNotesOpen: boolean;
+  signalTimelineOpen: boolean;
   relatedSignalsOpen: boolean;
   storageProofOpen: boolean;
   advancedMetadataOpen: boolean;
   headerDetailsOpen: boolean;
+}
+
+interface SignalTimelineEntry {
+  id: string;
+  title: string;
+  detail?: string;
+  timestamp: string;
+  phase: "intake" | "review" | "escalation" | "published" | "resolved";
+  order: number;
+}
+
+interface SignalTimelineCurrentState {
+  title: string;
+  detail?: string;
+  phase: SignalTimelineEntry["phase"];
 }
 
 function areActivityEventListsEqual(current: ActivityEvent[], next: ActivityEvent[]) {
@@ -497,6 +513,161 @@ function getTriageStatusTranslationKey(triageStatus: Submission["triageStatus"])
 
 function getLocalizedTriageStatusLabel(triageStatus: Submission["triageStatus"], t: TranslationFn) {
   return t(getTriageStatusTranslationKey(triageStatus));
+}
+
+function getLocalizedSubmissionStatusLabel(status: Submission["status"], t: TranslationFn) {
+  switch (status) {
+    case "read":
+      return t("statusRead");
+    case "archived":
+      return t("statusArchived");
+    case "unread":
+    default:
+      return t("statusUnread");
+  }
+}
+
+function getLocalizedPriorityLabel(priority: Submission["priority"], t: TranslationFn) {
+  switch (priority) {
+    case "high":
+      return t("priorityHigh");
+    case "low":
+      return t("priorityLow");
+    case "medium":
+    default:
+      return t("priorityMedium");
+  }
+}
+
+function buildSignalTimelineEntries(submission: Submission, t: TranslationFn) {
+  const entries: SignalTimelineEntry[] = [];
+  const createdAt = submission.createdAt;
+  const updatedAt = submission.updatedAt || submission.createdAt;
+  const noteUpdatedAt = getReviewerNoteUpdatedAt(submission);
+  const assignedReviewer = getAssignedReviewer(submission);
+  const reviewerNotes = getVisibleReviewerNotes(submission).trim();
+  const followUpEnabled = hasNeedsFollowUp(submission);
+  const isRoadmapVisible = ROADMAP_READY_STATUSES.has(submission.triageStatus);
+  const isResolved = submission.status === "archived" || submission.triageStatus === "fixed" || submission.triageStatus === "closed";
+  let order = 0;
+
+  const pushEntry = (entry: Omit<SignalTimelineEntry, "order">) => {
+    entries.push({
+      ...entry,
+      order: order++,
+    });
+  };
+
+  pushEntry({
+    id: "received",
+    title: t("signalTimelineReceivedTitle"),
+    detail: t("signalTimelineReceivedDetail"),
+    timestamp: createdAt,
+    phase: "intake",
+  });
+
+  if (
+    submission.status !== "unread" ||
+    submission.triageStatus === "investigating" ||
+    submission.triageStatus === "in_progress" ||
+    Boolean(assignedReviewer)
+  ) {
+    pushEntry({
+      id: "reviewing",
+      title: t("signalTimelineReviewingTitle"),
+      detail: `${t("reviewStateLabel")}: ${getLocalizedSubmissionStatusLabel(submission.status, t)}`,
+      timestamp: updatedAt,
+      phase: "review",
+    });
+  }
+
+  if (assignedReviewer) {
+    pushEntry({
+      id: "assigned-reviewer",
+      title: t("signalTimelineAssignedReviewerTitle", { reviewer: assignedReviewer }),
+      detail: assignedReviewer,
+      timestamp: updatedAt,
+      phase: "review",
+    });
+  }
+
+  if (followUpEnabled) {
+    pushEntry({
+      id: "follow-up-enabled",
+      title: t("signalTimelineFollowUpEnabledTitle"),
+      detail: t("followUpEnabledLabel"),
+      timestamp: updatedAt,
+      phase: "escalation",
+    });
+  }
+
+  if (reviewerNotes || noteUpdatedAt) {
+    pushEntry({
+      id: "reviewer-notes",
+      title: t("signalTimelineReviewerNotesUpdatedTitle"),
+      detail: reviewerNotes ? t("signalTimelineInternalNotesSavedDetail") : t("reviewerNoteLabel"),
+      timestamp: noteUpdatedAt ?? updatedAt,
+      phase: "review",
+    });
+  }
+
+  if (submission.priority !== "medium" || updatedAt !== createdAt) {
+    pushEntry({
+      id: "priority",
+      title: t("signalTimelinePriorityChangedTitle", { priority: getLocalizedPriorityLabel(submission.priority, t) }),
+      detail: `${t("priority")}: ${getLocalizedPriorityLabel(submission.priority, t)}`,
+      timestamp: updatedAt,
+      phase: submission.priority === "high" ? "escalation" : "review",
+    });
+  }
+
+  if (isRoadmapVisible) {
+    pushEntry({
+      id: "roadmap",
+      title: t("signalTimelinePublishedToRoadmapTitle"),
+      detail: `${t("roadmapStatusLabel")}: ${getLocalizedTriageStatusLabel(submission.triageStatus, t)}`,
+      timestamp: updatedAt,
+      phase: "published",
+    });
+  }
+
+  if (isResolved) {
+    pushEntry({
+      id: "resolved",
+      title:
+        submission.status === "archived"
+          ? t("signalTimelineArchivedTitle")
+          : t("signalTimelineResolvedTitle"),
+      detail:
+        submission.status === "archived"
+          ? t("statusArchived")
+          : getLocalizedTriageStatusLabel(submission.triageStatus, t),
+      timestamp: updatedAt,
+      phase: "resolved",
+    });
+  }
+
+  return entries.sort((left, right) => {
+    const timeDelta = Date.parse(left.timestamp) - Date.parse(right.timestamp);
+    return timeDelta !== 0 ? timeDelta : left.order - right.order;
+  });
+}
+
+function getSignalTimelineCurrentState(submission: Submission, entries: SignalTimelineEntry[], t: TranslationFn): SignalTimelineCurrentState {
+  const latestEntry = entries[entries.length - 1];
+  if (latestEntry) {
+    return {
+      title: latestEntry.title,
+      detail: latestEntry.detail,
+      phase: latestEntry.phase,
+    };
+  }
+
+  return {
+    title: submission.status === "unread" ? t("signalTimelineCurrentNew") : getLocalizedSubmissionStatusLabel(submission.status, t),
+    detail: `${t("reviewStateLabel")}: ${getLocalizedSubmissionStatusLabel(submission.status, t)}`,
+    phase: "intake",
+  };
 }
 
 function getReviewLifecycleSteps(t: TranslationFn, submission?: Submission | null, unlocked = false) {
@@ -1294,6 +1465,7 @@ export function AdminDashboardPage() {
     originalSignalOpen: true,
     attachmentsOpen: false,
     reviewerNotesOpen: false,
+    signalTimelineOpen: false,
     relatedSignalsOpen: false,
     storageProofOpen: false,
     advancedMetadataOpen: false,
@@ -1841,6 +2013,7 @@ export function AdminDashboardPage() {
         originalSignalOpen: true,
         attachmentsOpen: false,
         reviewerNotesOpen: false,
+        signalTimelineOpen: false,
         relatedSignalsOpen: false,
         storageProofOpen: false,
         advancedMetadataOpen: false,
@@ -1855,6 +2028,7 @@ export function AdminDashboardPage() {
       originalSignalOpen: true,
       attachmentsOpen: detailAttachments.length > 0,
       reviewerNotesOpen: hasVisibleNotes,
+      signalTimelineOpen: false,
       relatedSignalsOpen: hasDuplicateLikelyRelatedSignals,
       storageProofOpen: false,
       advancedMetadataOpen: false,
@@ -2711,6 +2885,18 @@ export function AdminDashboardPage() {
     : null;
   const selectedNeedsFollowUp = selectedRecord ? hasNeedsFollowUp(selectedRecord.submission) : false;
   const selectedReviewerNoteUpdatedAt = selectedRecord ? getReviewerNoteUpdatedAt(selectedRecord.submission) : undefined;
+  const timelineNow = Date.now();
+  const selectedSignalTimelineEntries = useMemo(
+    () => (selectedRecord ? buildSignalTimelineEntries(selectedRecord.submission, t) : []),
+    [selectedRecord, t],
+  );
+  const selectedSignalTimelineCurrentState = useMemo(
+    () =>
+      selectedRecord
+        ? getSignalTimelineCurrentState(selectedRecord.submission, selectedSignalTimelineEntries, t)
+        : null,
+    [selectedRecord, selectedSignalTimelineEntries, t],
+  );
   const selectedSecondaryMetaItems = selectedRecord
     ? [
         selectedRecord.submission.severity
@@ -4270,6 +4456,60 @@ export function AdminDashboardPage() {
 
                   {!isReviewerFocusMode ? (
                   <div className="signal-detail-sections review-secondary-sections">
+                    <section className="answer-card review-secondary-card signal-timeline-section">
+                      <WorkspaceSectionToggle
+                        eyebrow={t("signalTimelineEyebrow")}
+                        title={t("signalTimelineTitle")}
+                        detail={t("signalTimelineBody")}
+                        open={detailSectionsState.signalTimelineOpen}
+                        onToggle={() =>
+                          setDetailSectionOpen("signalTimelineOpen", !detailSectionsState.signalTimelineOpen)
+                        }
+                        trailing={
+                          <span className="signal-chip signal-chip-soft">
+                            {t("signalTimelineCount", { count: selectedSignalTimelineEntries.length })}
+                          </span>
+                        }
+                      />
+                      {detailSectionsState.signalTimelineOpen ? (
+                        <div className="signal-timeline-panel">
+                          {selectedSignalTimelineCurrentState ? (
+                            <div className={`signal-timeline-current-state is-${selectedSignalTimelineCurrentState.phase}`}>
+                              <span className="signal-timeline-current-label">{t("signalTimelineCurrentStateLabel")}</span>
+                              <strong>{selectedSignalTimelineCurrentState.title}</strong>
+                              {selectedSignalTimelineCurrentState.detail ? (
+                                <p className="muted">{selectedSignalTimelineCurrentState.detail}</p>
+                              ) : null}
+                            </div>
+                          ) : null}
+                          <p className="muted signal-timeline-derived-note">{t("signalTimelineDerivedHint")}</p>
+                          <div className="signal-timeline-list" aria-label={t("signalTimelineTitle")}>
+                            {selectedSignalTimelineEntries.map((entry, index) => {
+                              const isCurrent = index === selectedSignalTimelineEntries.length - 1;
+                              return (
+                              <article
+                                key={entry.id}
+                                className={`signal-timeline-item ${isCurrent ? "is-current" : "is-past"} is-${entry.phase}`}
+                              >
+                                <span className={`signal-timeline-marker is-${entry.phase}`} aria-hidden="true" />
+                                <div className="signal-timeline-card">
+                                  <div className="signal-timeline-card-header">
+                                    <strong>{entry.title}</strong>
+                                    <time dateTime={entry.timestamp} title={formatDate(entry.timestamp)}>
+                                      {formatRelativeTime(entry.timestamp, timelineNow)}
+                                    </time>
+                                  </div>
+                                  {entry.detail ? (
+                                    <p className="muted signal-timeline-detail">{entry.detail}</p>
+                                  ) : null}
+                                </div>
+                              </article>
+                            );})}
+                          </div>
+                        </div>
+                      ) : null}
+                    </section>
+
                     <section className="secondary-inspector">
                       <div className="secondary-inspector-header">
                         <div>
