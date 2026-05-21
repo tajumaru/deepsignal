@@ -356,11 +356,11 @@ export function AccessManagementSection({
 
       <div className="access-role-grid" role="table" aria-label={t("accessRegistryTableLabel")}>
         <div className="access-role-row access-role-row-header" role="row">
-          <span role="columnheader">{t("addressLabel")}</span>
-          <span role="columnheader">{t("roleLabel")}</span>
-          <span role="columnheader">{t("capObjectIdLabel")}</span>
-          <span role="columnheader">{t("statusLabel")}</span>
-          <span role="columnheader">{t("actionsLabel")}</span>
+          <span className="access-role-cell access-role-cell-address" role="columnheader">{t("addressLabel")}</span>
+          <span className="access-role-cell access-role-cell-role" role="columnheader">{t("roleLabel")}</span>
+          <span className="access-role-cell access-role-cell-cap" role="columnheader">{t("capObjectIdLabel")}</span>
+          <span className="access-role-cell access-role-cell-status" role="columnheader">{t("statusLabel")}</span>
+          <span className="access-role-cell access-role-cell-actions" role="columnheader">{t("actionsLabel")}</span>
         </div>
         {rows.map((entry) => {
           const canRemoveAdmin = entry.role === "admin" && canManageAdmins;
@@ -368,23 +368,23 @@ export function AccessManagementSection({
 
           return (
             <div key={entry.key} className="access-role-row" role="row">
-              <span className="access-role-value" role="cell">
+              <span className="access-role-value access-role-cell access-role-cell-address" role="cell" data-label={t("addressLabel")}>
                 <span className="access-role-meta">
                   <SignalMetaChip type="contributor" value={entry.address} />
                 </span>
               </span>
-              <span className="access-role-value" role="cell">
+              <span className="access-role-value access-role-cell access-role-cell-role" role="cell" data-label={t("roleLabel")}>
                 {t(roleTitle(entry.role))}
               </span>
-              <span className="access-role-value" role="cell">
+              <span className="access-role-value access-role-cell access-role-cell-cap" role="cell" data-label={t("capObjectIdLabel")}>
                 <span className="access-role-meta">
                   <SignalMetaChip type="registry" value={entry.capId} />
                 </span>
               </span>
-              <span className="access-role-value" role="cell">
+              <span className="access-role-value access-role-cell access-role-cell-status" role="cell" data-label={t("statusLabel")}>
                 <span className="signal-chip signal-chip-accent">{statusLabel(entry.status, t)}</span>
               </span>
-              <span className="access-role-value" role="cell">
+              <span className="access-role-value access-role-cell access-role-cell-actions" role="cell" data-label={t("actionsLabel")}>
                 {canRemoveAdmin ? (
                   <button
                     type="button"

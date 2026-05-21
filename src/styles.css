@@ -15465,6 +15465,10 @@ body.composer-mode .bg-orb {
   min-width: 0;
 }
 
+.access-role-cell {
+  min-width: 0;
+}
+
 .mobile-console-banner {
   display: none;
   padding: 0.9rem 1rem;
@@ -16776,18 +16780,27 @@ body.composer-mode .bg-orb {
 
 .signal-column-tools {
   justify-items: end;
-  min-width: min(100%, 320px);
+  min-width: min(100%, 420px);
 }
 
 .signal-column-tools input {
   width: min(100%, 320px);
 }
 
+.signal-column-status-stack {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: flex-start;
+  gap: 0.45rem 0.55rem;
+  width: 100%;
+}
+
 .bulk-decrypt-toolbar {
   display: grid;
   justify-items: end;
   gap: 0.28rem;
-  max-width: min(100%, 320px);
+  max-width: min(100%, 260px);
   color: #9fd1e3;
   font-size: 0.75rem;
   line-height: 1.35;
@@ -17297,10 +17310,25 @@ body.composer-mode .bg-orb {
 }
 
 .signal-shortcut-help-trigger {
-  min-width: 2.25rem;
-  width: 2.25rem;
-  padding-inline: 0;
-  font-weight: 900;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2rem;
+  height: 1.95rem;
+  padding: 0.32rem 0.65rem;
+  border-color: rgba(102, 227, 255, 0.14);
+  border-radius: 999px;
+  background: rgba(102, 227, 255, 0.08);
+  color: #dffaff;
+  font-size: 0.8rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.signal-shortcut-help-trigger:hover,
+.signal-shortcut-help-trigger:focus-visible {
+  border-color: rgba(102, 227, 255, 0.24);
+  background: rgba(102, 227, 255, 0.14);
 }
 
 .shortcut-help-panel {
@@ -24033,6 +24061,13 @@ body.composer-mode .bg-orb {
 }
 
 @media (max-width: 768px) {
+  .signal-channel-selector,
+  .signal-workbench-summary > .signal-channel-selector,
+  .signal-channel-menu {
+    width: 100%;
+    max-width: 100%;
+  }
+
   .mobile-console-banner {
     display: block;
   }
@@ -24644,6 +24679,10 @@ body.composer-mode .bg-orb {
     display: none;
   }
 
+  .operations-status-rail {
+    display: none;
+  }
+
   .explore-card-grid {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
@@ -24697,6 +24736,10 @@ body.composer-mode .bg-orb {
   }
 
   .mobile-signal-inbox.is-detail-open {
+    display: none;
+  }
+
+  .admin-operations-status {
     display: none;
   }
 
@@ -24791,6 +24834,23 @@ body.composer-mode .bg-orb {
     gap: 0.05rem;
   }
 
+  .mobile-inbox-title-group {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    min-width: 0;
+  }
+
+  .mobile-inbox-title-group .mailbox-icon {
+    width: 2.2rem;
+    height: 2.2rem;
+  }
+
+  .mobile-inbox-title-group .mailbox-icon svg {
+    width: 1.55rem;
+    height: 1.55rem;
+  }
+
   .mobile-inbox-title strong,
   .mobile-inbox-title span,
   .mobile-inbox-count-pill,
@@ -24830,13 +24890,14 @@ body.composer-mode .bg-orb {
 
   .mobile-inbox-search-row {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(6.8rem, 34%);
+    grid-template-columns: minmax(0, 1.8fr) repeat(2, minmax(6.8rem, auto));
     gap: 0.5rem;
     align-items: center;
   }
 
   .mobile-inbox-search,
-  .mobile-inbox-filter {
+  .mobile-inbox-filter,
+  .mobile-inbox-filter-menu {
     display: flex;
     align-items: center;
     min-width: 0;
@@ -24883,9 +24944,182 @@ body.composer-mode .bg-orb {
     padding: 0 0.58rem;
   }
 
+  .mobile-inbox-filter-menu {
+    position: relative;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    overflow: visible;
+  }
+
+  .mobile-inbox-filter-trigger {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.45rem;
+    width: 100%;
+    min-width: 0;
+    height: 100%;
+    padding: 0 0.58rem 0 0.72rem;
+    border: 1px solid rgba(148, 163, 184, 0.12);
+    border-radius: 12px;
+    background: rgba(10, 27, 42, 0.9);
+    color: #effcff;
+    text-align: left;
+  }
+
+  .mobile-inbox-filter-trigger-copy {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    min-width: 0;
+    flex: 1 1 auto;
+  }
+
+  .mobile-inbox-filter-trigger-copy span,
+  .mobile-inbox-filter-trigger-copy strong {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .mobile-inbox-filter-trigger-copy span {
+    min-width: 0;
+    font-size: 0.82rem;
+    font-weight: 800;
+  }
+
+  .mobile-inbox-filter-trigger-copy strong {
+    flex: 0 0 auto;
+    color: #93eaff;
+    font-size: 0.74rem;
+    font-weight: 900;
+  }
+
+  .mobile-inbox-filter-caret {
+    display: inline-grid;
+    place-items: center;
+    width: 1rem;
+    min-width: 1rem;
+    height: 1rem;
+    color: #c6f7ff;
+    transition: transform 160ms ease;
+  }
+
+  .mobile-inbox-filter-caret svg {
+    width: 0.82rem;
+    height: 0.82rem;
+  }
+
+  .mobile-inbox-filter-caret path {
+    fill: none;
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 1.7;
+  }
+
+  .mobile-inbox-filter-trigger.is-open .mobile-inbox-filter-caret {
+    transform: rotate(180deg);
+  }
+
+  .mobile-inbox-filter-panel {
+    position: absolute;
+    top: calc(100% + 0.45rem);
+    left: 0;
+    z-index: 32;
+    display: grid;
+    gap: 0.4rem;
+    width: max(100%, 13.5rem);
+    padding: 0.5rem;
+    border: 1px solid rgba(116, 226, 255, 0.16);
+    border-radius: 16px;
+    background:
+      radial-gradient(circle at top right, rgba(116, 226, 255, 0.1), transparent 28%),
+      linear-gradient(180deg, rgba(4, 18, 31, 0.98), rgba(3, 12, 23, 0.98));
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.04),
+      0 24px 44px rgba(0, 0, 0, 0.34);
+  }
+
+  .mobile-inbox-sort .mobile-inbox-filter-panel {
+    left: auto;
+    right: 0;
+  }
+
+  .mobile-inbox-filter-option {
+    display: flex;
+    width: 100%;
+    min-width: 0;
+    padding: 0.72rem 0.78rem;
+    border: 1px solid rgba(116, 226, 255, 0.08);
+    border-radius: 12px;
+    background: rgba(6, 21, 35, 0.7);
+    color: #dff8ff;
+    text-align: left;
+    transition:
+      border-color 160ms ease,
+      background 160ms ease,
+      transform 160ms ease,
+      box-shadow 160ms ease;
+  }
+
+  .mobile-inbox-filter-option:hover,
+  .mobile-inbox-filter-option:focus-visible {
+    border-color: rgba(116, 226, 255, 0.22);
+    background: rgba(8, 28, 44, 0.92);
+    box-shadow: 0 0 0 1px rgba(116, 226, 255, 0.08);
+    outline: none;
+  }
+
+  .mobile-inbox-filter-option.is-active {
+    border-color: rgba(110, 231, 183, 0.28);
+    background:
+      radial-gradient(circle at right center, rgba(110, 231, 183, 0.12), transparent 34%),
+      rgba(8, 31, 42, 0.94);
+    box-shadow: 0 0 0 1px rgba(110, 231, 183, 0.08);
+  }
+
+  .mobile-inbox-filter-option-copy {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .mobile-inbox-filter-option-copy strong,
+  .mobile-inbox-filter-option-copy small {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .mobile-inbox-filter-option-copy strong {
+    min-width: 0;
+    color: #effcff;
+    font-size: 0.84rem;
+    font-weight: 800;
+  }
+
+  .mobile-inbox-filter-option-copy small {
+    flex: 0 0 auto;
+    color: #8ddff2;
+    font-size: 0.74rem;
+    font-weight: 900;
+  }
+
   .mobile-inbox-filter select {
     font-size: 0.82rem;
     font-weight: 800;
+    color-scheme: dark;
+  }
+
+  .mobile-inbox-filter select option,
+  .mobile-inbox-filter select optgroup {
+    color: #0f2233;
+    background: #f4fbff;
   }
 
   .mobile-inbox-summary-row {
@@ -25341,8 +25575,9 @@ body.composer-mode .bg-orb {
   }
 
   .mobile-inbox-bottom-nav a > span:first-child {
-    display: inline-grid;
-    place-items: center;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     min-width: 2.05rem;
     height: 1.42rem;
     border-radius: 999px;
@@ -25350,6 +25585,7 @@ body.composer-mode .bg-orb {
     color: inherit;
     font-size: 0.72rem;
     font-weight: 900;
+    line-height: 1;
   }
 
   .mobile-inbox-bottom-nav a > span:last-child {
@@ -25564,6 +25800,69 @@ pre {
   .access-management-actions,
   .access-role-row {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .access-role-row.is-read-only {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .access-role-grid {
+    padding: 0.8rem;
+  }
+
+  .access-role-row-header {
+    display: none;
+  }
+
+  .access-role-row {
+    gap: 0.55rem;
+    padding: 0.8rem 0;
+    border-top: 1px solid rgba(116, 226, 255, 0.12);
+  }
+
+  .access-role-row:not(.access-role-row-header) {
+    padding: 0.9rem;
+    border-radius: 18px;
+    background: rgba(8, 27, 42, 0.56);
+    box-shadow: inset 0 0 0 1px rgba(116, 226, 255, 0.06);
+  }
+
+  .access-role-cell {
+    display: grid;
+    gap: 0.28rem;
+    justify-items: start;
+  }
+
+  .access-role-cell::before {
+    content: attr(data-label);
+    color: rgba(153, 183, 201, 0.9);
+    font-size: 0.7rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .access-role-cell-cap,
+  .access-role-cell-status {
+    display: none;
+  }
+
+  .access-role-cell-address .signal-meta-chip-shell,
+  .access-role-cell-address .signal-meta-chip-sui-address {
+    max-width: 100%;
+  }
+
+  .access-role-cell-actions {
+    padding-top: 0.1rem;
+  }
+
+  .access-role-cell-actions .muted {
+    white-space: normal;
+  }
+
+  .access-role-cell-actions .danger-button,
+  .access-role-cell-actions .ghost-button,
+  .access-role-cell-actions .primary-button {
+    width: 100%;
   }
 
   .review-roadmap-strip {
@@ -27789,7 +28088,7 @@ pre {
   }
 
   .mobile-inbox-search-row {
-    grid-template-columns: minmax(0, 1fr) minmax(6.6rem, 32%);
+    grid-template-columns: minmax(0, 1.55fr) repeat(2, minmax(6.2rem, auto));
   }
 
   .mobile-inbox-search,

@@ -26,7 +26,7 @@ import { AdminOperationsStatus } from "../features/admin/components/AdminOperati
 import { AdminToast } from "../features/admin/components/AdminToast";
 import { CsvExportConfirmationModal } from "../features/admin/components/CsvExportConfirmationModal";
 import { SignalAttachmentList } from "../features/admin/components/SignalAttachmentList";
-import { SignalChannelSelector, SignalStreamsNav } from "../features/admin/components/SignalStreamsNav";
+import { MailboxIcon, SignalChannelSelector, SignalStreamsNav } from "../features/admin/components/SignalStreamsNav";
 import { useAdminToast } from "../features/admin/hooks/useAdminToast";
 import { usePendingSuiRegistration } from "../features/admin/hooks/usePendingSuiRegistration";
 import { usePrivateSignalDecrypt } from "../features/admin/hooks/usePrivateSignalDecrypt";
@@ -553,6 +553,115 @@ interface MobileInboxHeaderProps {
   onRevealConnectProject: () => void;
 }
 
+function MobileFilterCaret() {
+  return (
+    <span className="mobile-inbox-filter-caret" aria-hidden="true">
+      <svg viewBox="0 0 12 12" focusable="false">
+        <path d="m2.2 4.5 3.8 3.6 3.8-3.6" />
+      </svg>
+    </span>
+  );
+}
+
+interface MobileFilterMenuOption {
+  value: string;
+  label: string;
+  meta?: string;
+}
+
+interface MobileFilterMenuProps {
+  srLabel: string;
+  buttonLabel: string;
+  selectedValue: string;
+  options: MobileFilterMenuOption[];
+  onSelect: (value: string) => void;
+  className?: string;
+}
+
+function MobileFilterMenu({
+  srLabel,
+  buttonLabel,
+  selectedValue,
+  options,
+  onSelect,
+  className = "",
+}: MobileFilterMenuProps) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const shellRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!menuOpen) {
+      return;
+    }
+
+    function handlePointerDown(event: MouseEvent) {
+      if (!shellRef.current?.contains(event.target as Node)) {
+        setMenuOpen(false);
+      }
+    }
+
+    function handleEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setMenuOpen(false);
+      }
+    }
+
+    window.addEventListener("mousedown", handlePointerDown);
+    window.addEventListener("keydown", handleEscape);
+    return () => {
+      window.removeEventListener("mousedown", handlePointerDown);
+      window.removeEventListener("keydown", handleEscape);
+    };
+  }, [menuOpen]);
+
+  const selectedOption = options.find((option) => option.value === selectedValue) ?? options[0];
+
+  return (
+    <div ref={shellRef} className={`mobile-inbox-filter-menu ${menuOpen ? "is-open" : ""} ${className}`.trim()}>
+      <span className="sr-only">{srLabel}</span>
+      <button
+        type="button"
+        className={`mobile-inbox-filter-trigger ${menuOpen ? "is-open" : ""}`}
+        onClick={() => setMenuOpen((current) => !current)}
+        aria-haspopup="menu"
+        aria-expanded={menuOpen}
+        aria-label={buttonLabel}
+      >
+        <span className="mobile-inbox-filter-trigger-copy">
+          <span>{selectedOption?.label ?? buttonLabel}</span>
+          {selectedOption?.meta ? <strong>{selectedOption.meta}</strong> : null}
+        </span>
+        <MobileFilterCaret />
+      </button>
+      {menuOpen ? (
+        <div className="mobile-inbox-filter-panel panel" role="menu" aria-label={buttonLabel}>
+          {options.map((option) => {
+            const active = option.value === selectedValue;
+            return (
+              <button
+                key={option.value}
+                type="button"
+                className={`mobile-inbox-filter-option ${active ? "is-active" : ""}`}
+                role="menuitemradio"
+                aria-checked={active}
+                onClick={() => {
+                  onSelect(option.value);
+                  setMenuOpen(false);
+                }}
+              >
+                <span className="mobile-inbox-filter-option-copy">
+                  <strong>{option.label}</strong>
+                  {option.meta ? <small>{option.meta}</small> : null}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function MobileInboxHeader({
   t,
   title,
@@ -589,6 +698,19 @@ function MobileInboxHeader({
   onRevealCreateProject,
   onRevealConnectProject,
 }: MobileInboxHeaderProps) {
+  const streamOptions: MobileFilterMenuOption[] = streamItems.map((stream) => ({
+    value: stream.id,
+    label: stream.label,
+    meta: String(stream.count),
+  }));
+  const sortOptions: MobileFilterMenuOption[] = [
+    { value: "default", label: getSortLabel("default", t) },
+    { value: "newest", label: getSortLabel("newest", t) },
+    { value: "oldest", label: getSortLabel("oldest", t) },
+    { value: "priority", label: getSortLabel("priority", t) },
+    { value: "unread", label: getSortLabel("unread", t) },
+  ];
+
   return (
     <header className="mobile-inbox-header">
       <div className="mobile-inbox-header-bar">
@@ -600,24 +722,17 @@ function MobileInboxHeader({
         >
           <span aria-hidden="true">&lt;</span>
         </button>
-        <div className="mobile-inbox-title">
-          <strong>{title}</strong>
-          <span>{activeScopeLabel}</span>
+        <div className="mobile-inbox-title-group">
+          <MailboxIcon hasUnread={totalUnreadCount > 0} />
+          <div className="mobile-inbox-title">
+            <strong>{title}</strong>
+            <span>{activeScopeLabel}</span>
+          </div>
         </div>
         <span className="mobile-inbox-count-pill">{unreadCountLabel}</span>
       </div>
 
       <div className="mobile-inbox-channel-row">
-        <WorkspaceShortcutBar
-          className="workspace-shortcut-bar-mobile"
-          hasAdminAccess={hasAdminAccess}
-          selectedProjectName={selectedProjectName}
-          highlightCreateFormCta={highlightCreateFormCta}
-          onOpenProjectSettings={onOpenProjectSettings}
-          onJumpToReview={onJumpToReview}
-          onRevealCreateProject={onRevealCreateProject}
-          onRevealConnectProject={onRevealConnectProject}
-        />
         <SignalChannelSelector
           className="signal-channel-selector-mobile"
           accessibleForms={accessibleForms}
@@ -646,26 +761,21 @@ function MobileInboxHeader({
             placeholder={searchPlaceholder}
           />
         </label>
-        <label className="mobile-inbox-filter">
-          <span className="sr-only">{filterLabel}</span>
-          <select value={selectedStreamId} onChange={(event) => onSelectStream(event.target.value as StreamId)}>
-            {streamItems.map((stream) => (
-              <option key={stream.id} value={stream.id}>
-                {stream.label} ({stream.count})
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="mobile-inbox-filter mobile-inbox-sort">
-          <span className="sr-only">Sort inbox</span>
-          <select value={sortOrder} onChange={(event) => onSortOrderChange(event.target.value as SignalSortOrder)}>
-            <option value="default">{getSortLabel("default", t)}</option>
-            <option value="newest">{getSortLabel("newest", t)}</option>
-            <option value="oldest">{getSortLabel("oldest", t)}</option>
-            <option value="priority">{getSortLabel("priority", t)}</option>
-            <option value="unread">{getSortLabel("unread", t)}</option>
-          </select>
-        </label>
+        <MobileFilterMenu
+          srLabel={filterLabel}
+          buttonLabel={filterLabel}
+          selectedValue={selectedStreamId}
+          options={streamOptions}
+          onSelect={(value) => onSelectStream(value as StreamId)}
+        />
+        <MobileFilterMenu
+          srLabel="Sort inbox"
+          buttonLabel="Sort inbox"
+          selectedValue={sortOrder}
+          options={sortOptions}
+          onSelect={(value) => onSortOrderChange(value as SignalSortOrder)}
+          className="mobile-inbox-sort"
+        />
       </div>
 
       <div className="mobile-inbox-summary-row">
@@ -3144,59 +3254,61 @@ export function AdminDashboardPage() {
                   </p>
                 </div>
                 <div className="signal-column-tools">
-                  <span className="signal-chip signal-chip-soft">{t("resultsLabel", { count: visibleSignals.length })}</span>
-                  <span className="signal-chip signal-chip-soft">{t("pendingSuiResultsLabel", { count: pendingSignals.length })}</span>
+                  <div className="signal-column-status-stack">
+                    <span className="signal-chip signal-chip-soft">{t("resultsLabel", { count: visibleSignals.length })}</span>
+                    <span className="signal-chip signal-chip-soft">{t("pendingSuiResultsLabel", { count: pendingSignals.length })}</span>
+                    {hasAdminAccess ? (
+                      <div className="bulk-decrypt-toolbar" aria-live="polite">
+                        <button
+                          type="button"
+                          className={`bulk-decrypt-button ${
+                            bulkDecryptableVisibleSignals.length > 0 ? "primary-button" : "ghost-button is-complete"
+                          }`}
+                          disabled={
+                            bulkDecryptableVisibleSignals.length === 0 ||
+                            bulkDecrypting ||
+                            decrypting ||
+                            decryptInFlightRef.current ||
+                            bulkDecryptInFlightRef.current
+                          }
+                          onClick={() => void handleDecryptRecords(bulkDecryptableVisibleSignals)}
+                        >
+                          {bulkDecrypting
+                            ? t("bulkDecryptingSignals")
+                            : bulkDecryptableVisibleSignals.length > 0
+                              ? t("bulkDecryptVisibleSignals", { count: bulkDecryptableVisibleSignals.length })
+                              : t("bulkDecryptVisibleSignalsComplete")}
+                        </button>
+                        <span>
+                          {bulkDecrypting || bulkDecryptProgress.total > 0
+                            ? t("bulkDecryptProgress", {
+                                completed: bulkDecryptProgress.completed,
+                                failed: bulkDecryptProgress.failed,
+                                total: bulkDecryptProgress.total,
+                              })
+                            : lockedVisibleSignalsCount > 0
+                              ? t("bulkDecryptLockedVisibleSignals", { count: lockedVisibleSignalsCount })
+                              : t("bulkDecryptNoLockedVisibleSignals")}
+                        </span>
+                        {bulkDecryptStatusMessage ? <small>{bulkDecryptStatusMessage}</small> : null}
+                        {bulkDecryptError ? <small className="is-error">{bulkDecryptError}</small> : null}
+                      </div>
+                    ) : null}
+                    <button
+                      type="button"
+                      className="ghost-button signal-shortcut-help-trigger"
+                      onClick={() => setShowShortcutHelp(true)}
+                      aria-label={t("shortcutHelpTitle")}
+                    >
+                      ?
+                    </button>
+                  </div>
                   <input
                     ref={signalSearchInputRef}
                     value={search}
                     onChange={(event) => setSearch(event.target.value)}
                     placeholder={t("searchSignalsPlaceholder")}
                   />
-                  <button
-                    type="button"
-                    className="ghost-button signal-shortcut-help-trigger"
-                    onClick={() => setShowShortcutHelp(true)}
-                    aria-label={t("shortcutHelpTitle")}
-                  >
-                    ?
-                  </button>
-                  {hasAdminAccess ? (
-                    <div className="bulk-decrypt-toolbar" aria-live="polite">
-                      <button
-                        type="button"
-                        className={`bulk-decrypt-button ${
-                          bulkDecryptableVisibleSignals.length > 0 ? "primary-button" : "ghost-button is-complete"
-                        }`}
-                        disabled={
-                          bulkDecryptableVisibleSignals.length === 0 ||
-                          bulkDecrypting ||
-                          decrypting ||
-                          decryptInFlightRef.current ||
-                          bulkDecryptInFlightRef.current
-                        }
-                        onClick={() => void handleDecryptRecords(bulkDecryptableVisibleSignals)}
-                      >
-                        {bulkDecrypting
-                          ? t("bulkDecryptingSignals")
-                          : bulkDecryptableVisibleSignals.length > 0
-                            ? t("bulkDecryptVisibleSignals", { count: bulkDecryptableVisibleSignals.length })
-                            : t("bulkDecryptVisibleSignalsComplete")}
-                      </button>
-                      <span>
-                        {bulkDecrypting || bulkDecryptProgress.total > 0
-                          ? t("bulkDecryptProgress", {
-                              completed: bulkDecryptProgress.completed,
-                              failed: bulkDecryptProgress.failed,
-                              total: bulkDecryptProgress.total,
-                            })
-                          : lockedVisibleSignalsCount > 0
-                            ? t("bulkDecryptLockedVisibleSignals", { count: lockedVisibleSignalsCount })
-                            : t("bulkDecryptNoLockedVisibleSignals")}
-                      </span>
-                      {bulkDecryptStatusMessage ? <small>{bulkDecryptStatusMessage}</small> : null}
-                      {bulkDecryptError ? <small className="is-error">{bulkDecryptError}</small> : null}
-                    </div>
-                  ) : null}
                 </div>
               </div>
               {hasAdminAccess ? (

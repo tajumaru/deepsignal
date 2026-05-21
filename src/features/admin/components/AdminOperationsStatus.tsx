@@ -15,11 +15,13 @@ export function AdminOperationsStatus({
   nextActionCta,
 }: AdminOperationsStatusProps) {
   return (
-    <OperationsStatusRail
-      items={items}
-      nextActionLabel={nextActionLabel}
-      nextActionDetail={nextActionDetail}
-      nextActionCta={nextActionCta}
-    />
+    <div className="admin-operations-status">
+      <OperationsStatusRail
+        items={items}
+        nextActionLabel={nextActionLabel}
+        nextActionDetail={nextActionDetail}
+        nextActionCta={nextActionCta}
+      />
+    </div>
   );
 }

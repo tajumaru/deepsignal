@@ -23,7 +23,7 @@ const FLOW_STREAM_IDS: StreamId[] = [
 ];
 const BLOCKCHAIN_STREAM_IDS: StreamId[] = ["pending_sui", "registered_sui"];
 
-function MailboxIcon({ hasUnread }: { hasUnread: boolean }) {
+export function MailboxIcon({ hasUnread }: { hasUnread: boolean }) {
   return (
     <span className={`mailbox-icon ${hasUnread ? "has-unread" : ""}`} aria-hidden="true">
       <svg viewBox="0 0 40 40" focusable="false">
