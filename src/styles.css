@@ -18630,6 +18630,33 @@ body.composer-mode .bg-orb {
   grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
 }
 
+.review-stage-card-compact-decision {
+  gap: 0.7rem;
+  padding: 0.85rem 0.95rem 0.95rem;
+}
+
+.review-stage-card-compact-decision .muted {
+  margin: 0;
+}
+
+.review-stage-card-compact-decision .review-session-decision-grid {
+  gap: 0.55rem;
+}
+
+.review-stage-card-compact-decision .review-state-badge {
+  min-height: 2rem;
+  padding-block: 0.45rem;
+}
+
+.review-stage-card-compact-decision .review-result-grid {
+  gap: 0.55rem;
+}
+
+.review-stage-card-compact-decision .review-result-item {
+  gap: 0.2rem;
+  padding: 0.65rem 0.8rem;
+}
+
 .review-result-item {
   display: grid;
   gap: 0.3rem;
@@ -18670,9 +18697,20 @@ body.composer-mode .bg-orb {
   letter-spacing: 0.08em;
 }
 
-.review-result-stars-value {
+.review-result-star {
+  line-height: 1;
+}
+
+.review-result-star.is-filled {
   color: #ffdf3a;
+  -webkit-text-fill-color: #ffdf3a;
   text-shadow: 0 0 18px rgba(255, 223, 58, 0.24);
+}
+
+.review-result-star.is-empty {
+  color: rgba(148, 163, 184, 0.78);
+  -webkit-text-fill-color: rgba(148, 163, 184, 0.78);
+  text-shadow: none;
 }
 
 .review-result-inline-badges {
@@ -18705,6 +18743,38 @@ body.composer-mode .bg-orb {
   min-height: 2.4rem;
 }
 
+.review-session-close-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 3rem;
+  min-width: 3rem;
+  height: 3rem;
+  min-height: 3rem;
+  padding: 0;
+  border: 1px solid rgba(248, 113, 113, 0.32);
+  border-radius: 999px;
+  background: rgba(62, 16, 24, 0.58);
+  color: #ff8f8f;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.review-session-close-button svg {
+  width: 1.1rem;
+  height: 1.1rem;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  fill: none;
+}
+
+.review-session-close-button:hover,
+.review-session-close-button:focus-visible {
+  border-color: rgba(252, 165, 165, 0.56);
+  background: rgba(92, 20, 31, 0.72);
+  color: #ffc0c0;
+}
+
 @media (max-width: 768px) {
   .review-result-item-wide {
     grid-column: span 1;
@@ -18726,7 +18796,7 @@ body.composer-mode .bg-orb {
 }
 
 .review-session-modal {
-  width: min(calc(100vw - 2rem), 980px);
+  width: min(calc(100vw - 2rem), 1180px);
   max-height: calc(100dvh - 2rem);
   padding: 1.2rem;
   overflow-y: auto;
@@ -18745,6 +18815,28 @@ body.composer-mode .bg-orb {
 .review-session-answer-list {
   display: grid;
   gap: 1rem;
+}
+
+.review-session-stage-split {
+  grid-template-columns: minmax(0, 1.2fr) minmax(20rem, 0.8fr);
+  align-items: start;
+}
+
+.review-session-stage-unlock {
+  gap: 0.8rem;
+}
+
+.review-session-stage-copy {
+  display: grid;
+  gap: 0.3rem;
+}
+
+.review-session-stage-copy p {
+  margin: 0;
+}
+
+.review-session-mobile-tabs {
+  display: none;
 }
 
 .review-session-read-panel {
@@ -18794,6 +18886,48 @@ body.composer-mode .bg-orb {
 
 .review-session-decrypt-shell.is-unlocked {
   box-shadow: 0 0 0 1px rgba(117, 241, 216, 0.2), 0 0 28px rgba(117, 241, 216, 0.08);
+}
+
+.review-session-stage-unlock .review-session-decrypt-shell {
+  border-radius: 20px;
+}
+
+.review-session-stage-unlock .private-signal-unlock-card {
+  gap: 0.75rem;
+  padding: 0.8rem 0.9rem;
+  border-radius: 20px;
+}
+
+.review-session-stage-unlock .private-signal-vault-visual {
+  min-height: 80px;
+  padding: 0.7rem 0.85rem;
+}
+
+.review-session-stage-unlock .private-signal-vault-lock {
+  width: 4.5rem;
+  height: 4.5rem;
+  border-radius: 22px;
+}
+
+.review-session-stage-unlock .private-signal-vault-lock .private-signal-unlock-icon {
+  width: 2.6rem;
+  height: 2.6rem;
+}
+
+.review-session-stage-unlock .private-signal-unlock-header {
+  gap: 0.7rem;
+}
+
+.review-session-stage-unlock .private-signal-unlock-steps {
+  gap: 0.45rem;
+}
+
+.review-session-stage-unlock .private-signal-unlock-actions {
+  gap: 0.6rem;
+}
+
+.review-session-stage-unlock .private-signal-unlock-note {
+  padding: 0.65rem 0.8rem;
 }
 
 .review-session-answer-card {
@@ -18863,6 +18997,43 @@ body.composer-mode .bg-orb {
 }
 
 @media (max-width: 768px) {
+  .review-session-mobile-tabs {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.55rem;
+  }
+
+  .review-session-mobile-tab {
+    appearance: none;
+    min-height: 2.8rem;
+    padding: 0.75rem 0.9rem;
+    border: 1px solid rgba(112, 209, 239, 0.18);
+    border-radius: 16px;
+    background: rgba(10, 28, 43, 0.9);
+    color: var(--text-soft);
+    font: inherit;
+    font-weight: 700;
+    text-align: center;
+    transition:
+      border-color 160ms ease,
+      background 160ms ease,
+      color 160ms ease,
+      box-shadow 160ms ease;
+  }
+
+  .review-session-mobile-tab.is-active {
+    border-color: rgba(112, 209, 239, 0.4);
+    background: linear-gradient(180deg, rgba(18, 62, 90, 0.96), rgba(10, 38, 60, 0.94));
+    color: #f3fcff;
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.05),
+      0 10px 24px rgba(0, 0, 0, 0.18);
+  }
+
+  .review-session-stage-split > .is-mobile-hidden {
+    display: none;
+  }
+
   .review-session-backdrop {
     padding: 0;
   }
@@ -18891,6 +19062,12 @@ body.composer-mode .bg-orb {
   .review-session-header-actions > span {
     width: 100%;
     justify-content: center;
+  }
+}
+
+@media (max-width: 1080px) {
+  .review-session-stage-split {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 
@@ -18963,6 +19140,7 @@ body.composer-mode .bg-orb {
 .review-progress-rail {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-auto-rows: 1fr;
   gap: 0.45rem;
 }
 
@@ -18970,7 +19148,9 @@ body.composer-mode .bg-orb {
   display: flex;
   min-width: 0;
   gap: 0.6rem;
-  align-items: center;
+  align-items: flex-start;
+  min-height: 4.25rem;
+  height: 100%;
   padding: 0.65rem 0.75rem;
   border: 1px solid rgba(148, 163, 184, 0.16);
   border-radius: 12px;
@@ -19017,10 +19197,13 @@ body.composer-mode .bg-orb {
 
 .review-progress-title {
   min-width: 0;
+  display: -webkit-box;
+  min-height: 2.2em;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
   color: #dcebf2;
+  line-height: 1.1;
 }
 
 .review-progress-step.is-complete {
@@ -19059,15 +19242,6 @@ body.composer-mode .bg-orb {
   color: #f2fcff;
 }
 
-.review-progress-marker {
-  display: inline-grid;
-  width: 1rem;
-  flex: 0 0 1rem;
-  place-items: center;
-  color: var(--accent-strong);
-  font-size: 0.78rem;
-}
-
 .review-stage-card {
   position: relative;
   display: grid;
@@ -19081,6 +19255,11 @@ body.composer-mode .bg-orb {
     inset 0 1px 0 rgba(219, 251, 255, 0.08),
     0 12px 28px rgba(0, 0, 0, 0.2);
   overflow: hidden;
+}
+
+.review-session-stage-split .review-stage-card {
+  position: sticky;
+  top: 0;
 }
 
 .review-stage-card::before {
@@ -20732,19 +20911,19 @@ body.composer-mode .bg-orb {
 
 .review-star-button:hover:not(:disabled),
 .review-star-button:focus-visible {
-  background: rgba(250, 204, 21, 0.12);
-  color: #fde68a;
+  background: rgba(255, 223, 58, 0.14);
+  color: #ffef8a;
   transform: translateY(-1px) scale(1.04);
 }
 
 .review-star-button.is-filled {
-  color: #facc15;
-  text-shadow: 0 0 14px rgba(250, 204, 21, 0.36);
+  color: #ffdf3a;
+  text-shadow: 0 0 14px rgba(255, 223, 58, 0.36);
 }
 
 .review-star-button.is-selected {
-  background: rgba(250, 204, 21, 0.16);
-  box-shadow: inset 0 0 0 1px rgba(250, 204, 21, 0.28);
+  background: rgba(255, 223, 58, 0.16);
+  box-shadow: inset 0 0 0 1px rgba(255, 223, 58, 0.34);
 }
 
 .review-star-button:disabled {

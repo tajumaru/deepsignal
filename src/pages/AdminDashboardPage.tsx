@@ -124,6 +124,7 @@ const MODAL_FOCUSABLE_SELECTOR = [
 ].join(",");
 const ROADMAP_READY_STATUSES = new Set<Submission["triageStatus"]>(["planned", "in_progress", "fixed"]);
 type ReviewSaveStatus = "idle" | "saving" | "saved" | "skipped" | "error";
+type ReviewSessionMobileTab = "answers" | "review";
 type ReviewDraft = Pick<Submission, "status" | "triageStatus" | "priority" | "signalValue"> & {
   notes: string;
   reviewer: string;
@@ -568,7 +569,7 @@ function getSignalValueStars(signalValue: Submission["signalValue"]) {
   if (typeof signalValue !== "number" || signalValue < 1) {
     return null;
   }
-  return `${"★".repeat(signalValue)}${"☆".repeat(Math.max(0, 5 - signalValue))}`;
+  return Array.from({ length: 5 }, (_, index) => index < signalValue);
 }
 
 function buildSignalTimelineEntries(submission: Submission, t: TranslationFn) {
@@ -1403,6 +1404,7 @@ export function AdminDashboardPage() {
   const [signalSortOrder, setSignalSortOrder] = useState<SignalSortOrder>("default");
   const [reviewSessionOpen, setReviewSessionOpen] = useState(false);
   const [reviewSessionStep, setReviewSessionStep] = useState<1 | 2 | 3 | 4>(1);
+  const [reviewSessionMobileTab, setReviewSessionMobileTab] = useState<ReviewSessionMobileTab>("answers");
   const [excludedCsvPiiFields, setExcludedCsvPiiFields] = useState<ExportPiiField[]>([]);
   const [pendingCsvExportMetadata, setPendingCsvExportMetadata] = useState<ExportMetadata | null>(null);
   const [pendingCsvExportForm, setPendingCsvExportForm] = useState<FormSchema | null>(null);
@@ -1432,6 +1434,7 @@ export function AdminDashboardPage() {
   const signalSearchInputRef = useRef<HTMLInputElement | null>(null);
   const shortcutHelpHeadingRef = useRef<HTMLHeadingElement | null>(null);
   const signalCardRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const hasUnsavedReviewChangesRef = useRef(false);
   const reviewSessionDialogRef = useRef<HTMLElement | null>(null);
   const reviewSessionPrimaryActionRef = useRef<HTMLButtonElement | null>(null);
   const selectedRecordResetRef = useRef<string | null>(null);
@@ -1959,9 +1962,17 @@ export function AdminDashboardPage() {
         : undefined;
   const hasDuplicateLikelyRelatedSignals = relatedSignals.some((signal) => signal.duplicateLikely);
 
-  const closeReviewSession = useCallback(() => {
+  const forceCloseReviewSession = useCallback(() => {
     setReviewSessionOpen(false);
   }, []);
+
+  const requestCloseReviewSession = useCallback(() => {
+    if (hasUnsavedReviewChangesRef.current && !window.confirm(t("discardChangesConfirm"))) {
+      return false;
+    }
+    forceCloseReviewSession();
+    return true;
+  }, [forceCloseReviewSession, t]);
 
   const openReviewSession = useCallback((signalId?: string) => {
     if (signalId) {
@@ -1995,7 +2006,7 @@ export function AdminDashboardPage() {
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") {
         event.preventDefault();
-        closeReviewSession();
+        requestCloseReviewSession();
         return;
       }
 
@@ -2028,7 +2039,7 @@ export function AdminDashboardPage() {
       document.removeEventListener("keydown", handleKeyDown);
       previouslyFocused?.focus();
     };
-  }, [closeReviewSession, reviewSessionOpen]);
+  }, [requestCloseReviewSession, reviewSessionOpen]);
 
   useEffect(() => {
     if (!selectedRecord) {
@@ -2088,6 +2099,35 @@ export function AdminDashboardPage() {
       shortcutHelpHeadingRef.current?.focus();
     });
   }, [showShortcutHelp]);
+
+  useEffect(() => {
+    if (!reviewSessionOpen) {
+      setReviewSessionMobileTab("answers");
+      return;
+    }
+    if (reviewSessionStep !== 2) {
+      setReviewSessionMobileTab("answers");
+    }
+  }, [reviewSessionOpen, reviewSessionStep]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    const mediaQuery = window.matchMedia(MOBILE_REVIEW_MEDIA_QUERY);
+    const syncReviewSessionMobileTab = (event?: MediaQueryListEvent) => {
+      if (!(event?.matches ?? mediaQuery.matches)) {
+        setReviewSessionMobileTab("answers");
+      }
+    };
+    syncReviewSessionMobileTab();
+    if (typeof mediaQuery.addEventListener === "function") {
+      mediaQuery.addEventListener("change", syncReviewSessionMobileTab);
+      return () => mediaQuery.removeEventListener("change", syncReviewSessionMobileTab);
+    }
+    mediaQuery.addListener(syncReviewSessionMobileTab);
+    return () => mediaQuery.removeListener(syncReviewSessionMobileTab);
+  }, []);
 
   useEffect(() => {
     if (!keyboardNavigationRef.current || !selectedSignalId) {
@@ -2340,6 +2380,24 @@ export function AdminDashboardPage() {
         activeReviewDraft.notes !== getVisibleReviewerNotes(selectedRecord.submission) ||
         activeReviewDraft.reviewer !== (getAssignedReviewer(selectedRecord.submission) ?? "")),
   );
+
+  useEffect(() => {
+    hasUnsavedReviewChangesRef.current = reviewSessionOpen && hasReviewDraftChanges;
+  }, [hasReviewDraftChanges, reviewSessionOpen]);
+
+  useEffect(() => {
+    if (!reviewSessionOpen || !hasReviewDraftChanges) {
+      return;
+    }
+
+    function handleBeforeUnload(event: BeforeUnloadEvent) {
+      event.preventDefault();
+      event.returnValue = "";
+    }
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [hasReviewDraftChanges, reviewSessionOpen]);
   const draftReviewStatus = activeReviewDraft?.status ?? selectedRecord?.submission.status ?? "unread";
   const draftTriageStatus = activeReviewDraft?.triageStatus ?? selectedRecord?.submission.triageStatus ?? "new";
   const isReviewWorkbenchLocked = selectedRecordNeedsDecrypt;
@@ -2847,7 +2905,7 @@ export function AdminDashboardPage() {
   const selectedSignalValueStars = selectedRecord ? getSignalValueStars(selectedRecord.submission.signalValue) : null;
   const selectedReviewResultItems = selectedRecord
     ? [
-        { label: t("assignedReviewerLabel"), value: selectedSavedReviewerDisplayLabel || t("unassignedLabel") },
+        { label: t("assignedReviewerLabel"), value: selectedSavedReviewerDisplayLabel || "-" },
         { label: "Reviewed at", value: selectedReviewerNoteUpdatedAt ? formatDate(selectedReviewerNoteUpdatedAt) : "Not reviewed yet" },
         {
           label: "Roadmap linked",
@@ -4075,9 +4133,6 @@ export function AdminDashboardPage() {
                           </p>
                         </div>
                         <div className="review-save-actions">
-                          <span className={`save-state-pill is-${reviewStatusPillState}`}>
-                            {reviewStatusPillLabel}
-                          </span>
                           <button
                             type="button"
                             className="primary-button review-open-button"
@@ -4095,7 +4150,15 @@ export function AdminDashboardPage() {
                             <>
                               <strong>{getSignalValueSummary(selectedRecord.submission.signalValue, t)}</strong>
                               <div className="review-result-stars" aria-label={t("signalValueRatingLabel")}>
-                                <span className="review-result-stars-value" aria-hidden="true">{selectedSignalValueStars}</span>
+                                {selectedSignalValueStars.map((isFilled, index) => (
+                                  <span
+                                    key={index}
+                                    className={isFilled ? "review-result-star is-filled" : "review-result-star is-empty"}
+                                    aria-hidden="true"
+                                  >
+                                    ★
+                                  </span>
+                                ))}
                               </div>
                             </>
                           ) : (
@@ -4753,7 +4816,7 @@ export function AdminDashboardPage() {
         <div className="mobile-console-banner">{t("adminDesktopNotice")}</div>
       </section>
       {reviewSessionOpen && selectedRecord ? (
-        <div className="modal-backdrop review-session-backdrop" role="presentation" onMouseDown={closeReviewSession}>
+        <div className="modal-backdrop review-session-backdrop" role="presentation" onMouseDown={requestCloseReviewSession}>
           <section
             ref={reviewSessionDialogRef}
             className="answer-card review-session-modal"
@@ -4772,27 +4835,39 @@ export function AdminDashboardPage() {
                 </div>
                 <div className="review-session-header-actions">
                   <span className={`save-state-pill is-${reviewStatusPillState}`}>{reviewStatusPillLabel}</span>
-                  <button type="button" className="ghost-button" onClick={closeReviewSession}>
-                    {t("closeLabel")}
+                  <button
+                    type="button"
+                    className="review-session-close-button"
+                    aria-label={t("closeLabel")}
+                    title={t("closeLabel")}
+                    onClick={requestCloseReviewSession}
+                  >
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M7 7 17 17" />
+                      <path d="M17 7 7 17" />
+                    </svg>
                   </button>
                 </div>
               </div>
 
               <div className="review-progress-rail review-session-progress" aria-label={t("reviewProgressAriaLabel")}>
-                {reviewSessionStepItems.map((step) => (
+                {reviewSessionStepItems.map((step) => {
+                  const isCompletedStep = reviewSessionStep > step.id;
+                  const isStepLocked = step.id > 1 && selectedRecordNeedsDecrypt && !detailAnswers;
+                  return (
                   <button
                     key={step.id}
                     type="button"
-                    className={`review-progress-step ${reviewSessionStep === step.id ? "is-current" : reviewSessionStep > step.id ? "is-complete" : ""}`}
+                    className={`review-progress-step ${reviewSessionStep === step.id ? "is-current" : isCompletedStep ? "is-complete" : ""}`}
                     onClick={() => {
-                      if (step.id === 1 || !selectedRecordNeedsDecrypt || Boolean(detailAnswers)) {
+                      if (!isCompletedStep && (step.id === 1 || !selectedRecordNeedsDecrypt || Boolean(detailAnswers))) {
                         setReviewSessionStep(step.id);
                       }
                     }}
-                    disabled={step.id > 1 && selectedRecordNeedsDecrypt && !detailAnswers}
+                    disabled={isCompletedStep || isStepLocked}
                   >
                     <span className="review-progress-marker" aria-hidden="true">
-                      {reviewSessionStep > step.id ? "✓" : step.id}
+                      {isCompletedStep ? "✓" : step.id}
                     </span>
                     <span className="review-progress-copy">
                       <span className="review-progress-step-label">
@@ -4801,7 +4876,8 @@ export function AdminDashboardPage() {
                       <span className="review-progress-title">{step.title}</span>
                     </span>
                   </button>
-                ))}
+                );
+                })}
               </div>
 
               {reviewSessionStep === 1 ? (
@@ -4847,8 +4923,40 @@ export function AdminDashboardPage() {
               ) : null}
 
               {reviewSessionStep === 2 ? (
-                <div className="review-session-stage">
-                  <div className="review-session-read-panel">
+                <div className="review-session-stage review-session-stage-split">
+                  <div className="review-session-mobile-tabs" role="tablist" aria-label="Review session sections">
+                    <button
+                      type="button"
+                      role="tab"
+                      id="review-session-mobile-tab-answers"
+                      aria-selected={reviewSessionMobileTab === "answers"}
+                      aria-controls="review-session-mobile-panel-answers"
+                      tabIndex={reviewSessionMobileTab === "answers" ? 0 : -1}
+                      className={`review-session-mobile-tab ${reviewSessionMobileTab === "answers" ? "is-active" : ""}`}
+                      onClick={() => setReviewSessionMobileTab("answers")}
+                    >
+                      Original signal
+                    </button>
+                    <button
+                      type="button"
+                      role="tab"
+                      id="review-session-mobile-tab-review"
+                      aria-selected={reviewSessionMobileTab === "review"}
+                      aria-controls="review-session-mobile-panel-review"
+                      tabIndex={reviewSessionMobileTab === "review" ? 0 : -1}
+                      className={`review-session-mobile-tab ${reviewSessionMobileTab === "review" ? "is-active" : ""}`}
+                      onClick={() => setReviewSessionMobileTab("review")}
+                    >
+                      {t("reviewClassifyTitle")}
+                    </button>
+                  </div>
+
+                  <div
+                    id="review-session-mobile-panel-answers"
+                    role="tabpanel"
+                    aria-labelledby="review-session-mobile-tab-answers"
+                    className={`review-session-read-panel ${reviewSessionMobileTab === "review" ? "is-mobile-hidden" : ""}`}
+                  >
                     <div className="review-session-stage-copy">
                       <strong>Original signal</strong>
                       <p className="muted">Review the submitted signal first, then classify it.</p>
@@ -4877,7 +4985,12 @@ export function AdminDashboardPage() {
                     </div>
                   </div>
 
-                  <div className="review-stage-card">
+                  <div
+                    id="review-session-mobile-panel-review"
+                    role="tabpanel"
+                    aria-labelledby="review-session-mobile-tab-review"
+                    className={`review-stage-card ${reviewSessionMobileTab === "answers" ? "is-mobile-hidden" : ""}`}
+                  >
                     <div className="review-stage-header">
                       <p className="eyebrow">{t("stepLabel", { count: 2 })}</p>
                       <strong>{t("reviewClassifyTitle")}</strong>
@@ -4951,20 +5064,12 @@ export function AdminDashboardPage() {
                       <div className="review-badge-field">
                         <span>{t("signalValueLabel")}</span>
                         <div className="review-badge-options" role="group" aria-label={t("signalValueLabel")}>
-                          <button
-                            type="button"
-                            className={`review-state-badge is-value-none ${activeReviewDraft?.signalValue === undefined ? "is-active" : ""}`}
-                            aria-pressed={activeReviewDraft?.signalValue === undefined}
-                            disabled={activeReviewDraft?.signalValue === undefined}
-                            onClick={() => patchReviewDraft({ signalValue: undefined })}
-                          >
-                            {t("notScored")}
-                          </button>
                           <div className="review-star-rating" aria-label={t("signalValueRatingLabel")}>
                             {[1, 2, 3, 4, 5].map((value) => {
                               const currentValue = activeReviewDraft?.signalValue ?? 0;
                               const isSelected = activeReviewDraft?.signalValue === value;
                               const isFilled = currentValue >= value;
+                              const canToggleOffToUnscored = value === 1 && activeReviewDraft?.signalValue === 1;
                               return (
                                 <button
                                   key={value}
@@ -4972,8 +5077,8 @@ export function AdminDashboardPage() {
                                   className={`review-star-button ${isFilled ? "is-filled" : ""} ${isSelected ? "is-selected" : ""}`}
                                   aria-label={t("signalValueRatingOption", { value })}
                                   aria-pressed={isSelected}
-                                  disabled={isSelected}
-                                  onClick={() => patchReviewDraft({ signalValue: value })}
+                                  disabled={isSelected && !canToggleOffToUnscored}
+                                  onClick={() => patchReviewDraft({ signalValue: canToggleOffToUnscored ? undefined : value })}
                                 >
                                   ★
                                 </button>
@@ -5040,7 +5145,7 @@ export function AdminDashboardPage() {
 
               {reviewSessionStep === 4 ? (
                 <div className="review-session-stage">
-                  <div className="review-stage-card">
+                  <div className="review-stage-card review-stage-card-compact-decision">
                     <div className="review-stage-header">
                       <p className="eyebrow">{t("publicRoadmapDecisionStep")}</p>
                       <strong>Public roadmap decision</strong>
@@ -5096,19 +5201,19 @@ export function AdminDashboardPage() {
               ) : null}
 
               <div className="review-session-footer">
-                <button
-                  type="button"
-                  className="ghost-button"
-                  onClick={() => {
-                    if (reviewSessionStep === 1) {
-                      closeReviewSession();
-                      return;
-                    }
-                    setReviewSessionStep((current) => (current - 1) as 1 | 2 | 3 | 4);
-                  }}
-                >
-                  {reviewSessionStep === 1 ? t("closeLabel") : "Back"}
-                </button>
+                {reviewSessionStep === 1 ? (
+                  <button
+                    type="button"
+                    className="ghost-button"
+                    onClick={() => {
+                      requestCloseReviewSession();
+                    }}
+                  >
+                    {t("closeLabel")}
+                  </button>
+                ) : (
+                  <span aria-hidden="true" />
+                )}
                 <div className="review-session-footer-actions">
                   {reviewSessionStep < 4 ? (
                     <button
@@ -5129,7 +5234,7 @@ export function AdminDashboardPage() {
                       onClick={async () => {
                         const saved = await saveActiveReviewDraft();
                         if (saved) {
-                          closeReviewSession();
+                          forceCloseReviewSession();
                         }
                       }}
                     >
