@@ -168,6 +168,22 @@ interface SignalTimelineCurrentState {
   phase: SignalTimelineEntry["phase"];
 }
 
+function getSignalTimelinePhaseLabel(phase: SignalTimelineEntry["phase"], t: TranslationFn) {
+  switch (phase) {
+    case "review":
+      return t("signalTimelinePhaseReview");
+    case "escalation":
+      return t("signalTimelinePhaseEscalation");
+    case "published":
+      return t("signalTimelinePhasePublished");
+    case "resolved":
+      return t("signalTimelinePhaseResolved");
+    case "intake":
+    default:
+      return t("signalTimelinePhaseIntake");
+  }
+}
+
 function areActivityEventListsEqual(current: ActivityEvent[], next: ActivityEvent[]) {
   if (current === next) {
     return true;
@@ -572,6 +588,19 @@ function getSignalValueStars(signalValue: Submission["signalValue"]) {
   return Array.from({ length: 5 }, (_, index) => index < signalValue);
 }
 
+function getSignalTimelinePriorityTitle(priority: Submission["priority"], t: TranslationFn) {
+  const localizedPriority = getLocalizedPriorityLabel(priority, t);
+  switch (priority) {
+    case "high":
+      return t("signalTimelinePriorityRaisedTitle", { priority: localizedPriority });
+    case "low":
+      return t("signalTimelinePriorityLoweredTitle", { priority: localizedPriority });
+    case "medium":
+    default:
+      return t("signalTimelinePrioritySetTitle", { priority: localizedPriority });
+  }
+}
+
 function buildSignalTimelineEntries(submission: Submission, t: TranslationFn) {
   const entries: SignalTimelineEntry[] = [];
   const createdAt = submission.createdAt;
@@ -647,7 +676,7 @@ function buildSignalTimelineEntries(submission: Submission, t: TranslationFn) {
   if (submission.priority !== "medium" || updatedAt !== createdAt) {
     pushEntry({
       id: "priority",
-      title: t("signalTimelinePriorityChangedTitle", { priority: getLocalizedPriorityLabel(submission.priority, t) }),
+      title: getSignalTimelinePriorityTitle(submission.priority, t),
       detail: `${t("priority")}: ${getLocalizedPriorityLabel(submission.priority, t)}`,
       timestamp: updatedAt,
       phase: submission.priority === "high" ? "escalation" : "review",
@@ -4246,7 +4275,12 @@ export function AdminDashboardPage() {
                         <div className="signal-timeline-panel">
                           {selectedSignalTimelineCurrentState ? (
                             <div className={`signal-timeline-current-state is-${selectedSignalTimelineCurrentState.phase}`}>
-                              <span className="signal-timeline-current-label">{t("signalTimelineCurrentStateLabel")}</span>
+                              <div className="signal-timeline-current-head">
+                                <span className="signal-timeline-current-label">{t("signalTimelineCurrentStateLabel")}</span>
+                                <span className={`signal-timeline-phase-pill is-${selectedSignalTimelineCurrentState.phase}`}>
+                                  {getSignalTimelinePhaseLabel(selectedSignalTimelineCurrentState.phase, t)}
+                                </span>
+                              </div>
                               <strong>{selectedSignalTimelineCurrentState.title}</strong>
                               {selectedSignalTimelineCurrentState.detail ? (
                                 <p className="muted">{selectedSignalTimelineCurrentState.detail}</p>
@@ -4266,9 +4300,14 @@ export function AdminDashboardPage() {
                                 <div className="signal-timeline-card">
                                   <div className="signal-timeline-card-header">
                                     <strong>{entry.title}</strong>
-                                    <time dateTime={entry.timestamp} title={formatDate(entry.timestamp)}>
-                                      {formatRelativeTime(entry.timestamp, timelineNow)}
-                                    </time>
+                                    <div className="signal-timeline-meta">
+                                      <span className={`signal-timeline-phase-pill is-${entry.phase}`}>
+                                        {getSignalTimelinePhaseLabel(entry.phase, t)}
+                                      </span>
+                                      <time dateTime={entry.timestamp} title={formatDate(entry.timestamp)}>
+                                        {formatRelativeTime(entry.timestamp, timelineNow)}
+                                      </time>
+                                    </div>
                                   </div>
                                   {entry.detail ? (
                                     <p className="muted signal-timeline-detail">{entry.detail}</p>
