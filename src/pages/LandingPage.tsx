@@ -430,6 +430,7 @@ export function LandingPage() {
   const heroSignalBars = [0.46, 0.72, 0.38, 0.92, 0.58, 0.81, 0.5, 0.68, 0.42, 0.86];
   const heroFeedRows = [t("landingHeroLiveFeed1"), t("landingHeroLiveFeed2"), t("landingHeroLiveFeed3")];
   const heroLifecycle = ["Intent", "Signal opened", "Protected", "Stored", "Reviewed", "Resolved"];
+  const heroTrustBadges = ["Encrypted", "Verifiable", "Immutable", "Audit-ready"];
 
   return (
     <section className="landing-shell">
@@ -452,6 +453,18 @@ export function LandingPage() {
             <h1 className="landing-hero-title">
               <span>{t("landingHeroContestTitle")}</span>
             </h1>
+
+            <p className="landing-hero-subcopy">
+              Secure, encrypted, and verifiable reporting workflows powered by Walrus.
+            </p>
+
+            <div className="landing-hero-trust-badges" aria-label="Trust badges">
+              {heroTrustBadges.map((badge) => (
+                <span key={badge} className="landing-hero-trust-badge">
+                  {badge}
+                </span>
+              ))}
+            </div>
 
             <p className="landing-tagline">{t("landingHeroContestTagline")}</p>
 
