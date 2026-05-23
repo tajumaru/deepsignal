@@ -181,12 +181,12 @@ export function useProjectWorkspace({
   async function connectManualProject() {
     if (!hasAdminAccess) {
       setProjectState("OwnerCap or AdminCap is required to connect a project.");
-      return;
+      return false;
     }
     const nextProjectId = manualProjectId.trim();
     if (!nextProjectId) {
       setProjectState("Enter a project object id.");
-      return;
+      return false;
     }
     try {
       setProjectState("Loading project...");
@@ -196,27 +196,11 @@ export function useProjectWorkspace({
       setSelectedProjectId(project.objectId);
       setManualProjectId("");
       setProjectState(`Connected to ${project.name}.`);
+      return true;
     } catch (projectError) {
       setProjectState(projectError instanceof Error ? projectError.message : "Failed to load project.");
+      return false;
     }
-  }
-
-  function revealProjectTools(mode: "connect" | "create") {
-    if (!hasAdminAccess) {
-      return;
-    }
-    const details = advancedProjectSettingsRef.current;
-    if (details && !details.open) {
-      details.open = true;
-    }
-    details?.scrollIntoView({ behavior: "smooth", block: "start" });
-    window.setTimeout(() => {
-      if (mode === "create") {
-        projectCreateInputRef.current?.focus();
-        return;
-      }
-      manualProjectInputRef.current?.focus();
-    }, 160);
   }
 
   function selectProject(projectId: string) {
@@ -230,18 +214,18 @@ export function useProjectWorkspace({
   async function handleCreateProject() {
     if (!hasAdminAccess) {
       setProjectState("OwnerCap or AdminCap is required to create a project.");
-      return;
+      return false;
     }
 
     const role = capabilityProfile.ownerCapIds[0] ? "owner" : "admin";
     const capId = capabilityProfile.ownerCapIds[0] ?? capabilityProfile.adminCapIds[0] ?? "";
     if (!capId) {
       setProjectState("No active OwnerCap or AdminCap object was found in the connected wallet.");
-      return;
+      return false;
     }
     if (!projectCreateName.trim()) {
       setProjectState("Enter a project name.");
-      return;
+      return false;
     }
 
     try {
@@ -278,8 +262,10 @@ export function useProjectWorkspace({
         top: 0,
         behavior: "smooth",
       });
+      return true;
     } catch (projectError) {
       setProjectState(projectError instanceof Error ? projectError.message : "Failed to create project.");
+      return false;
     }
   }
 
@@ -383,7 +369,6 @@ export function useProjectWorkspace({
     deleteProjectBlockedReason,
     visibleOnchainForms,
     connectManualProject,
-    revealProjectTools,
     handleCreateProject,
     handleDeleteProject,
     handleDeleteOnchainForm,

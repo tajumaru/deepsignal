@@ -1,5 +1,6 @@
 import { isValidSuiAddress } from "@mysten/sui/utils";
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useI18n } from "../i18n";
 import { SuiAddressDisplay } from "./SuiAddressDisplay";
 
 export type SignalMetaType =
@@ -66,6 +67,7 @@ export function SignalMetaChip({
   className = "",
   interactive = true,
 }: SignalMetaChipProps) {
+  const { t } = useI18n();
   const [isVisible, setIsVisible] = useState(false);
   const [copied, setCopied] = useState(false);
   const timeoutRef = useRef<number | null>(null);
@@ -118,7 +120,7 @@ export function SignalMetaChip({
       <span className="signal-meta-chip-label">{label}</span>
       {interactive ? (
         <span className="signal-meta-chip-copy" aria-hidden="true">
-          {copied ? "Copied" : "Copy"}
+          {copied ? t("copiedLabel") : t("copyLabel")}
         </span>
       ) : null}
     </>
@@ -136,7 +138,7 @@ export function SignalMetaChip({
           onFocus={() => setIsVisible(true)}
           onBlur={() => !copied && setIsVisible(false)}
           title={value}
-          aria-label={`Copy metadata value ${value}`}
+          aria-label={t("copyMetadataValueAria", { value })}
         >
           {content}
         </button>
@@ -148,7 +150,7 @@ export function SignalMetaChip({
       {interactive && isVisible ? (
         <span className="signal-meta-tooltip" role="status" aria-live="polite">
           <span className="signal-meta-tooltip-value">{value}</span>
-          {copied ? <span className="signal-meta-tooltip-copy">Copied</span> : null}
+          {copied ? <span className="signal-meta-tooltip-copy">{t("copiedLabel")}</span> : null}
         </span>
       ) : null}
     </span>
@@ -159,14 +161,15 @@ export function SignalMetaRow({
   label,
   type,
   value,
-  emptyLabel = "Not available",
+  emptyLabel,
   children,
 }: SignalMetaRowProps) {
+  const { t } = useI18n();
   return (
     <div className="metadata-row signal-meta-row">
       <span>{label}</span>
       <div className="signal-meta-row-value">
-        {value ? <SignalMetaChip type={type} value={value} /> : <strong>{emptyLabel}</strong>}
+        {value ? <SignalMetaChip type={type} value={value} /> : <strong>{emptyLabel ?? t("notAvailable")}</strong>}
         {children}
       </div>
     </div>

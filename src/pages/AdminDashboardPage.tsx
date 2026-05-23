@@ -12,7 +12,6 @@ import { MemberDirectorySection } from "../components/MemberDirectorySection";
 import { BlobLink } from "../components/BlobLink";
 import { EmptyState } from "../components/EmptyState";
 import { FormattedAnswerValue } from "../components/FormattedAnswerValue";
-import type { OperationsStatusItem } from "../components/OperationsStatusRail";
 import { PrivateSignalUnlockCard } from "../components/PrivateSignalUnlockCard";
 import { RichTextContent } from "../components/RichText";
 import { SealStatusCard } from "../components/SealStatusCard";
@@ -22,9 +21,9 @@ import { SignalMetaChip, SignalMetaRow } from "../components/SignalMetaChip";
 import { StorageProof } from "../components/StorageProof";
 import { SuiAddressDisplay } from "../components/SuiAddressDisplay";
 import { RelatedSignalsPanel } from "../components/RelatedSignalsPanel";
-import { AdminOperationsStatus } from "../features/admin/components/AdminOperationsStatus";
 import { AdminToast } from "../features/admin/components/AdminToast";
 import { CsvExportConfirmationModal } from "../features/admin/components/CsvExportConfirmationModal";
+import { ProjectWorkspaceModal } from "../features/admin/components/ProjectWorkspaceModal";
 import { SignalAttachmentList } from "../features/admin/components/SignalAttachmentList";
 import { MailboxIcon, SignalChannelSelector, SignalStreamsNav } from "../features/admin/components/SignalStreamsNav";
 import { useAdminToast } from "../features/admin/hooks/useAdminToast";
@@ -36,6 +35,7 @@ import {
   type FormWithCount,
   type SignalSortOrder,
   type SignalRecord,
+  type SignalViewScope,
   type StreamId,
 } from "../features/admin/hooks/useSignalInboxData";
 import { useAttachmentPreviews } from "../hooks/useAttachmentPreviews";
@@ -84,7 +84,7 @@ import {
 } from "../lib/exportResponses";
 import { getEncryptedPayloadAvailabilityLabel, hasDedicatedEncryptedPayloadBlob } from "../lib/encryptionDisplay";
 import { getPublicFormPath, getPublicRoadmapPath } from "../lib/publicLinks";
-import { triageStatusToOnchainStatus, updateSignalStatusOnChain } from "../lib/projectRegistry";
+import { getSelectedProjectId, triageStatusToOnchainStatus, updateSignalStatusOnChain } from "../lib/projectRegistry";
 import { isSuiRateLimitError, shortAddress } from "../lib/sui";
 import { clearDeepSignalPolicyCapabilityCache } from "../lib/debugCache";
 import { formatResponseDeadline, type ResponseDeadlineLabels } from "../lib/responseDeadline";
@@ -132,6 +132,7 @@ type ReviewDraft = Pick<Submission, "status" | "triageStatus" | "priority" | "si
 type WorkspaceTab = "review" | "activity" | "insights" | "members";
 type QuickActionId = "reviewing" | "resolve" | "publish" | "archive";
 type KeyboardShortcutAction = QuickActionId | "next" | "previous" | "search" | "help";
+type ProjectWorkspaceModalMode = "select" | "create" | "connect";
 interface UnlockedSignalSummary {
   answers: Record<string, unknown>;
 }
@@ -569,12 +570,12 @@ function getPublicDecisionLabel(submission: Submission, t: TranslationFn) {
     return t("statusArchived");
   }
   if (submission.triageStatus === "fixed" || submission.triageStatus === "closed") {
-    return "Resolved";
+    return t("publicDecisionResolved");
   }
   if (ROADMAP_READY_STATUSES.has(submission.triageStatus)) {
-    return "Published";
+    return t("publicDecisionPublished");
   }
-  return "Internal only";
+  return t("publicDecisionInternalOnly");
 }
 
 function getSignalValueSummary(signalValue: Submission["signalValue"], t: TranslationFn) {
@@ -586,6 +587,22 @@ function getSignalValueStars(signalValue: Submission["signalValue"]) {
     return null;
   }
   return Array.from({ length: 5 }, (_, index) => index < signalValue);
+}
+
+function hasSavedReviewResult(submission: Submission) {
+  const assignedReviewer = getAssignedReviewer(submission);
+  const reviewerNotes = getVisibleReviewerNotes(submission).trim();
+  const reviewerNoteUpdatedAt = getReviewerNoteUpdatedAt(submission);
+  return (
+    submission.status !== "unread" ||
+    submission.triageStatus !== "new" ||
+    submission.priority !== "medium" ||
+    typeof submission.signalValue === "number" ||
+    Boolean(assignedReviewer) ||
+    Boolean(reviewerNotes) ||
+    Boolean(reviewerNoteUpdatedAt) ||
+    hasNeedsFollowUp(submission)
+  );
 }
 
 function getSignalTimelinePriorityTitle(priority: Submission["priority"], t: TranslationFn) {
@@ -738,6 +755,11 @@ interface MobileInboxHeaderProps {
   t: TranslationFn;
   title: string;
   activeScopeLabel: string;
+  viewScope: SignalViewScope;
+  onViewScopeChange: (scope: SignalViewScope) => void;
+  canUseProjectScope: boolean;
+  allSignalsScopeLabel: string;
+  projectSignalsScopeLabel: string;
   visibleCountLabel: string;
   unreadCountLabel: string;
   search: string;
@@ -885,6 +907,11 @@ function MobileInboxHeader(props: MobileInboxHeaderProps) {
     t,
     title,
     activeScopeLabel,
+    viewScope,
+    onViewScopeChange,
+    canUseProjectScope,
+    allSignalsScopeLabel,
+    projectSignalsScopeLabel,
     visibleCountLabel,
     unreadCountLabel,
     search,
@@ -922,6 +949,8 @@ function MobileInboxHeader(props: MobileInboxHeaderProps) {
     { value: "priority", label: getSortLabel("priority", t) },
     { value: "unread", label: getSortLabel("unread", t) },
   ];
+  const scopeActionLabel =
+    viewScope === "project" ? allSignalsScopeLabel : projectSignalsScopeLabel;
 
   return (
     <header className="mobile-inbox-header">
@@ -981,8 +1010,8 @@ function MobileInboxHeader(props: MobileInboxHeaderProps) {
           onSelect={(value) => onSelectStream(value as StreamId)}
         />
         <MobileFilterMenu
-          srLabel="Sort inbox"
-          buttonLabel="Sort inbox"
+          srLabel={t("sortInboxSrOnly")}
+          buttonLabel={t("sortInboxSrOnly")}
           selectedValue={sortOrder}
           options={sortOptions}
           onSelect={(value) => onSortOrderChange(value as SignalSortOrder)}
@@ -992,7 +1021,17 @@ function MobileInboxHeader(props: MobileInboxHeaderProps) {
 
       <div className="mobile-inbox-summary-row">
         <span>{visibleCountLabel}</span>
-        <span>{queueLabel}</span>
+        {canUseProjectScope ? (
+          <button
+            type="button"
+            className="ghost-button mobile-inbox-scope-action"
+            onClick={() => onViewScopeChange(viewScope === "project" ? "all" : "project")}
+          >
+            {scopeActionLabel}
+          </button>
+        ) : (
+          <span>{queueLabel}</span>
+        )}
       </div>
     </header>
   );
@@ -1001,8 +1040,10 @@ function MobileInboxHeader(props: MobileInboxHeaderProps) {
 interface WorkspaceShortcutBarProps {
   hasAdminAccess: boolean;
   selectedProjectName: string | null;
+  selectedProjectId: string;
+  projects: Array<{ objectId: string; name: string }>;
   highlightCreateFormCta: boolean;
-  onOpenProjectSettings: () => void;
+  onSelectProject: (projectId: string) => void;
   onJumpToReview: () => void;
   onRevealCreateProject: () => void;
   onRevealConnectProject: () => void;
@@ -1012,14 +1053,43 @@ interface WorkspaceShortcutBarProps {
 function WorkspaceShortcutBar({
   hasAdminAccess,
   selectedProjectName,
+  selectedProjectId,
+  projects,
   highlightCreateFormCta,
-  onOpenProjectSettings,
+  onSelectProject,
   onJumpToReview,
   onRevealCreateProject,
   onRevealConnectProject,
   className = "",
 }: WorkspaceShortcutBarProps) {
   const { t } = useI18n();
+  const [projectMenuOpen, setProjectMenuOpen] = useState(false);
+  const projectMenuRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!projectMenuOpen) {
+      return;
+    }
+
+    function handlePointerDown(event: MouseEvent) {
+      if (!projectMenuRef.current?.contains(event.target as Node)) {
+        setProjectMenuOpen(false);
+      }
+    }
+
+    function handleEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setProjectMenuOpen(false);
+      }
+    }
+
+    window.addEventListener("mousedown", handlePointerDown);
+    window.addEventListener("keydown", handleEscape);
+    return () => {
+      window.removeEventListener("mousedown", handlePointerDown);
+      window.removeEventListener("keydown", handleEscape);
+    };
+  }, [projectMenuOpen]);
 
   return (
     <div className={`workspace-shortcut-bar ${className}`.trim()}>
@@ -1044,15 +1114,56 @@ function WorkspaceShortcutBar({
           {t("navCreateForm")}
         </CreateFormLink>
       )}
-      <button type="button" className="ghost-button" onClick={onJumpToReview}>
-        {t("reviewButton")}
-      </button>
       {hasAdminAccess ? (
-        <>
-          <button type="button" className="ghost-button workspace-project-trigger" onClick={onOpenProjectSettings}>
-            {selectedProjectName ? t("projectButtonLabel", { name: selectedProjectName }) : t("chooseProjectButton")}
+        <div ref={projectMenuRef} className={`workspace-project-menu-shell ${projectMenuOpen ? "is-open" : ""}`}>
+          <button
+            type="button"
+            className={`ghost-button workspace-project-menu-trigger ${projectMenuOpen ? "is-open" : ""}`}
+            onClick={() => setProjectMenuOpen((current) => !current)}
+            aria-haspopup="menu"
+            aria-expanded={projectMenuOpen}
+            aria-label={t("selectedProjectLabel")}
+          >
+            <span>{selectedProjectName ?? t("chooseProjectButton")}</span>
+            <MobileFilterCaret />
           </button>
-        </>
+          {projectMenuOpen ? (
+            <div className="workspace-project-menu panel" role="menu" aria-label={t("selectedProjectLabel")}>
+              {projects.length > 0 ? (
+                projects.map((project) => {
+                  const active = project.objectId === selectedProjectId;
+                  return (
+                    <button
+                      key={project.objectId}
+                      type="button"
+                      className={`workspace-project-menu-option ${active ? "is-active" : ""}`}
+                      role="menuitemradio"
+                      aria-checked={active}
+                      onClick={() => {
+                        onSelectProject(project.objectId);
+                        setProjectMenuOpen(false);
+                      }}
+                    >
+                      <span>{project.name}</span>
+                    </button>
+                  );
+                })
+              ) : (
+                <button
+                  type="button"
+                  className="workspace-project-menu-option"
+                  role="menuitem"
+                  onClick={() => {
+                    onRevealConnectProject();
+                    setProjectMenuOpen(false);
+                  }}
+                >
+                  <span>{t("connectExistingShort")}</span>
+                </button>
+              )}
+            </div>
+          ) : null}
+        </div>
       ) : null}
     </div>
   );
@@ -1249,10 +1360,11 @@ function MobileSignalRow({
 }
 
 function MobileComposeSignalButton() {
+  const { t } = useI18n();
   return (
     <CreateFormLink className="mobile-compose-signal-button">
       <span aria-hidden="true">+</span>
-      <span className="sr-only">Create signal inbox</span>
+      <span className="sr-only">{t("createSignalInboxSrOnly")}</span>
     </CreateFormLink>
   );
 }
@@ -1260,6 +1372,11 @@ function MobileComposeSignalButton() {
 interface MobileSignalInboxProps {
   title: string;
   activeScopeLabel: string;
+  viewScope: SignalViewScope;
+  onViewScopeChange: (scope: SignalViewScope) => void;
+  canUseProjectScope: boolean;
+  allSignalsScopeLabel: string;
+  projectSignalsScopeLabel: string;
   visibleCountLabel: string;
   unreadCountLabel: string;
   emptyContent: ReactNode;
@@ -1301,6 +1418,11 @@ interface MobileSignalInboxProps {
 function MobileSignalInbox({
   title,
   activeScopeLabel,
+  viewScope,
+  onViewScopeChange,
+  canUseProjectScope,
+  allSignalsScopeLabel,
+  projectSignalsScopeLabel,
   visibleCountLabel,
   unreadCountLabel,
   emptyContent,
@@ -1344,6 +1466,11 @@ function MobileSignalInbox({
         t={t}
         title={title}
         activeScopeLabel={activeScopeLabel}
+        viewScope={viewScope}
+        onViewScopeChange={onViewScopeChange}
+        canUseProjectScope={canUseProjectScope}
+        allSignalsScopeLabel={allSignalsScopeLabel}
+        projectSignalsScopeLabel={projectSignalsScopeLabel}
         visibleCountLabel={visibleCountLabel}
         unreadCountLabel={unreadCountLabel}
         search={search}
@@ -1454,6 +1581,7 @@ export function AdminDashboardPage() {
   });
   const [localActivityEvents, setLocalActivityEvents] = useState<ActivityEvent[]>(() => listActivityEvents());
   const [suiActivityEvents, setSuiActivityEvents] = useState<ActivityEvent[]>([]);
+  const [projectModalMode, setProjectModalMode] = useState<ProjectWorkspaceModalMode | null>(null);
   const { toast, setToast } = useAdminToast();
   const saveQueueRef = useRef(Promise.resolve());
   const reviewInboxRef = useRef<HTMLDivElement | null>(null);
@@ -1479,6 +1607,10 @@ export function AdminDashboardPage() {
     },
     [location.pathname, navigate],
   );
+  const [signalViewScope, setSignalViewScope] = useState<SignalViewScope>(() =>
+    getSelectedProjectId() ? "project" : "all",
+  );
+  const previousSelectedProjectIdRef = useRef<string | null>(getSelectedProjectId());
   const {
     forms,
     loading,
@@ -1504,6 +1636,8 @@ export function AdminDashboardPage() {
     accountAddress: wallet.accountAddress,
     capabilityProfile,
     sortOrder: signalSortOrder,
+    scopeProjectId: getSelectedProjectId(),
+    viewScope: signalViewScope,
   });
   const {
     selectedPendingSignalIds,
@@ -1540,7 +1674,6 @@ export function AdminDashboardPage() {
     deleteProjectBlockedReason,
     visibleOnchainForms,
     connectManualProject,
-    revealProjectTools,
     handleCreateProject,
     handleDeleteProject,
     handleDeleteOnchainForm,
@@ -1562,6 +1695,19 @@ export function AdminDashboardPage() {
     }
     setActiveWorkspaceTab("review");
   }, [location.search]);
+  useEffect(() => {
+    const previousProjectId = previousSelectedProjectIdRef.current;
+    if (selectedProjectId !== previousProjectId) {
+      previousSelectedProjectIdRef.current = selectedProjectId;
+      if (selectedProjectId) {
+        setSignalViewScope("project");
+        return;
+      }
+    }
+    if (!selectedProjectId && signalViewScope === "project") {
+      setSignalViewScope("all");
+    }
+  }, [selectedProjectId, signalViewScope]);
   const hasOwnedAccessibleForms = accessibleForms.some((form) =>
     addressesMatch(form.ownerAddress, wallet.accountAddress),
   );
@@ -1849,74 +1995,6 @@ export function AdminDashboardPage() {
     () => selectedProjectSignals.filter((record) => ROADMAP_READY_STATUSES.has(record.submission.triageStatus)),
     [selectedProjectSignals],
   );
-  const statusForms = hasAdminAccess ? selectedProjectForms : accessibleForms;
-  const statusSignals = hasAdminAccess ? selectedProjectSignals : allSignals;
-  const protectedStatusFormsCount = statusForms.filter(
-    (form) => form.encryptSubmissions,
-  ).length;
-  const hasProjectAndForms = Boolean(selectedProject) && selectedProjectForms.length > 0;
-  const operationsStatusItems: OperationsStatusItem[] = [
-    ...(hasAdminAccess && !hasProjectAndForms
-      ? [{
-          label: t("projectConnectedStatusLabel"),
-          tone: selectedProject ? "ready" : "action",
-          detail: selectedProject ? selectedProject.name : t("selectCreateOrConnectProject"),
-        } satisfies OperationsStatusItem]
-      : []),
-    {
-      label: t("privateSignalsEnabledStatusLabel"),
-      tone:
-        statusForms.length === 0
-          ? "pending"
-          : protectedStatusFormsCount > 0
-            ? "ready"
-            : "warning",
-      detail:
-        statusForms.length === 0
-          ? t("noFormPublishedYet")
-          : protectedStatusFormsCount > 0
-            ? t("protectedFormsActive", { count: protectedStatusFormsCount })
-            : t("privateSignalProtectionOff"),
-    },
-    {
-      label: t("reviewerWalletReadyStatusLabel"),
-      tone: !wallet.accountAddress ? "action" : canReview(capabilityProfile) || !capabilityProfile.isConfigured ? "ready" : "warning",
-      detail: !wallet.accountAddress
-        ? t("connectReviewerWallet")
-        : canReview(capabilityProfile) || !capabilityProfile.isConfigured
-          ? t("walletVerifiedWithRole", { role: getRoleLabel(capabilityProfile) })
-          : t("connectedWalletNoReviewerAccess"),
-    },
-    {
-      label: t("walrusSyncActiveStatusLabel"),
-      tone: storageRuntime.mode === "walrus" ? "ready" : "warning",
-      detail: storageRuntime.mode === "walrus"
-        ? t("trustedStorageAvailable")
-        : t("localFallbackActive"),
-    },
-    ...(hasAdminAccess
-      ? [
-          {
-            label: t("pendingSuiVerificationStatusLabel"),
-            tone: pendingSignals.length > 0 ? "pending" : statusSignals.length > 0 ? "ready" : "pending",
-            detail: pendingSignals.length > 0
-              ? t("signalsWaitingForVerification", { count: pendingSignals.length })
-              : statusSignals.length > 0
-                ? t("noPendingProofRegistrations")
-                : t("awaitingProjectSignals"),
-          },
-          {
-            label: t("roadmapPublishingReadyStatusLabel"),
-            tone: roadmapReadySignals.length > 0 ? "ready" : statusSignals.length > 0 ? "pending" : "pending",
-            detail: roadmapReadySignals.length > 0
-              ? t("signalsReadyForPublicRoadmap", { count: roadmapReadySignals.length })
-              : statusSignals.length > 0
-                ? t("markSignalsForRoadmap")
-                : t("noRoadmapCandidatesYet"),
-          },
-        ] satisfies OperationsStatusItem[]
-      : []),
-  ];
   const selectedRoadmapUrl = selectedRecord
     ? getPublicRoadmapPath(selectedRecord.form.id, selectedRecord.form.manifestBlobId)
     : "";
@@ -1950,45 +2028,48 @@ export function AdminDashboardPage() {
   const selectedRecordHasPayloadIssue = selectedRecord
     ? hasPrivateSignalPayloadIssue(selectedRecord.submission)
     : false;
-  const selectedRecordProtectionFacts = selectedRecord
+  const selectedReviewContextChips = selectedRecord
     ? [
         {
-          label: selectedRecordStoredOnWalrus ? "Stored on Walrus" : "Saved locally",
-          detail: selectedRecordStoredOnWalrus
-            ? "This signal is kept in durable Walrus storage."
-            : "This signal is available in this browser while Walrus is unavailable.",
+          label: t("prioritySummaryLabel", { value: getLocalizedPriorityLabel(selectedRecord.submission.priority, t) }),
+          tone: "soft" as const,
         },
         {
-          label: selectedRecord.submission.isEncrypted ? "Encrypted" : "Not encrypted",
-          detail: selectedRecord.submission.isEncrypted
-            ? "The message body stays hidden until you decrypt it."
-            : "This signal was submitted as readable content.",
+          label: selectedRecord.submission.isEncrypted ? t("encryptedSignals") : t("readableLabel"),
+          tone: selectedRecord.submission.isEncrypted ? ("accent" as const) : ("soft" as const),
         },
         {
-          label: "Readable by Owner/Admin",
-          detail: selectedRecord.submission.isEncrypted
-            ? "Only authorized reviewers should be able to read the private message."
-            : "The inbox owner can review this signal now.",
+          label: selectedRecordStoredOnWalrus ? t("storedOnWalrus") : t("localFallbackLabel"),
+          tone: selectedRecordStoredOnWalrus ? ("soft" as const) : ("accent" as const),
         },
-        ...(selectedRecord.submission.isEncrypted
-          ? [
-              {
-                label:
-                  selectedRecordPayloadState === "missing_onchain_payload_reference"
-                    ? t("privateSignalPayloadMissingStatus")
-                    : selectedRecordPayloadState === "missing_payload"
-                      ? t("encryptedPayloadMissingLabel")
-                      : t("encryptedPayloadStored"),
-                detail:
-                  selectedRecordPayloadState === "missing_onchain_payload_reference"
-                    ? t("decryptErrorOnchainPayloadBlobMissing")
-                    : selectedRecordPayloadState === "missing_payload"
-                      ? t("decryptErrorEncryptedPayloadMissing")
-                      : t("encryptedPreview"),
-              },
-            ]
-          : []),
-      ]
+        {
+          label: detailAnswers
+            ? t("privateSignalUnlockStepUnlocked")
+            : selectedRecord.submission.isEncrypted
+              ? t("awaitingUnlockLabel")
+              : t("readyForReviewLabel"),
+          tone: detailAnswers
+            ? ("soft" as const)
+            : selectedRecord.submission.isEncrypted
+              ? ("warn" as const)
+              : ("soft" as const),
+        },
+        isSelectedRecordOnRoadmap && selectedRoadmapUrl
+          ? {
+              label: t("roadmapLinkedLabel"),
+              tone: "accent" as const,
+            }
+          : null,
+        selectedRecordHasPayloadIssue
+          ? {
+              label:
+                selectedRecordPayloadState === "missing_onchain_payload_reference"
+                  ? t("privateSignalPayloadMissingStatus")
+                  : t("encryptedPayloadMissingLabel"),
+              tone: "warn" as const,
+            }
+          : null,
+      ].filter((chip): chip is { label: string; tone: "soft" | "accent" | "warn" } => Boolean(chip))
     : [];
   const selectedRecordUnlockDisabledReason = detailAnswers
     ? undefined
@@ -2230,8 +2311,8 @@ export function AdminDashboardPage() {
       : selectedRecord.submission.status === "unread"
         ? {
             eyebrow: t("nextStepLabel"),
-            title: "Start review session",
-            detail: "Unlock the signal, classify it, and save a review result in one flow.",
+            title: t("startReviewSessionTitle"),
+            detail: t("startReviewSessionDetail"),
             cta: (
               <button
                 type="button"
@@ -2239,7 +2320,13 @@ export function AdminDashboardPage() {
                 disabled={saving}
                 onClick={() => openReviewSession()}
               >
-                Review signal
+                <span className="review-focus-cta-icon" aria-hidden="true">
+                  <svg viewBox="0 0 20 20" focusable="false">
+                    <path d="M4 10h9" />
+                    <path d="m10.5 5.5 4.5 4.5-4.5 4.5" />
+                  </svg>
+                </span>
+                {t("reviewSignalAction")}
               </button>
             ),
           }
@@ -2268,120 +2355,7 @@ export function AdminDashboardPage() {
                 cta: selectedRoadmapUrl ? <Link className="ghost-button" to={selectedRoadmapUrl}>{t("openPublicRoadmap")}</Link> : null,
               };
   const firstProjectForm = selectedProjectForms[0] ?? null;
-  const firstVisibleForm = statusForms[0] ?? null;
-  const firstProtectedSignal = statusSignals.find((record) => record.submission.isEncrypted) ?? null;
-  const shouldHighlightCreateProjectCta = projects.length === 0 && hasAdminAccess;
-  const nextRecommendedAction =
-    !hasAdminAccess
-      ? accessibleForms.length === 0
-        ? {
-            label: t("createFirstSignalInbox"),
-            detail: t("createWalletOwnedInboxDetail"),
-            cta: <CreateFormLink className="primary-button">{t("navCreateForm")}</CreateFormLink>,
-          }
-        : allSignals.length === 0
-          ? {
-              label: t("sendTestSignal"),
-              detail: t("sendTestSignalOwnFormDetail"),
-              cta: firstVisibleForm ? <Link className="primary-button" to={getPublicFormPath(firstVisibleForm.id, firstVisibleForm.manifestBlobId)}>{t("openPublicLink")}</Link> : null,
-            }
-          : {
-              label: t("reviewSignalInbox"),
-              detail: t("walletCanReviewOwnFormsDetail"),
-              cta: null,
-            }
-    : !selectedProject
-      ? {
-          label: t("connectProject"),
-          detail: t("connectProjectBeforeReviewDetail"),
-          cta: (
-            <div className="inline-actions">
-              {hasAdminAccess ? (
-                <button
-                  type="button"
-                  className={`primary-button ${shouldHighlightCreateProjectCta ? "create-project-cta-highlight" : ""}`}
-                  onClick={() => revealProjectTools("create")}
-                >
-                  {t("createProjectButton")}
-                </button>
-              ) : null}
-              <button
-                type="button"
-                className="ghost-button"
-                onClick={() => revealProjectTools("connect")}
-              >
-                {t("connectExistingShort")}
-              </button>
-            </div>
-          ),
-        }
-      : selectedProjectForms.length === 0
-        ? {
-            label: t("createFirstSignalInbox"),
-            detail: t("publishProtectedFormDetail"),
-            cta: <CreateFormLink className="primary-button">{t("navCreateForm")}</CreateFormLink>,
-          }
-        : selectedProjectSignals.length === 0
-          ? {
-              label: t("sendTestSignal"),
-              detail: t("sendTestSignalToInboxDetail"),
-              cta: firstProjectForm ? <Link className="primary-button" to={getPublicFormPath(firstProjectForm.id, firstProjectForm.manifestBlobId)}>{t("openPublicLink")}</Link> : null,
-            }
-          : firstProtectedSignal && !detailAnswers
-            ? {
-                label: t("unlockPrivateSignal"),
-                detail: t("unlockPrivateSignalDetail"),
-                cta: firstProtectedSignal ? (
-                <button
-                  type="button"
-                  className="primary-button"
-                  disabled={decrypting || decryptInFlightRef.current}
-                  onClick={() => {
-                    if (decryptInFlightRef.current) {
-                      return;
-                    }
-                    handleOpenProtectedSignal(firstProtectedSignal);
-                  }}
-                >
-                    {t("openProtectedSignal")}
-                  </button>
-                ) : null,
-              }
-            : roadmapReadySignals.length === 0
-                ? {
-                    label: t("moveToPublicRoadmap"),
-                    detail: t("moveToPublicRoadmapDetail"),
-                    cta: selectedRecord ? (
-                      <button
-                        type="button"
-                        className="primary-button"
-                        disabled={saving}
-                        onClick={() => void handleMoveToRoadmap()}
-                      >
-                        {t("moveToPublicRoadmap")}
-                      </button>
-                    ) : null,
-                  }
-                : pendingSignals.length > 0
-                  ? {
-                      label: t("registerProofOnSui"),
-                      detail: t("optionalProofCompleteDetail"),
-                      cta: (
-                        <button
-                          type="button"
-                          className="ghost-button"
-                          disabled={registeringSignalIds.length > 0}
-                          onClick={() => void handleRegisterPendingSignals()}
-                        >
-                          {registeringSignalIds.length > 0 ? t("registeringStatus") : t("registerPendingSignals")}
-                        </button>
-                      ),
-                    }
-                : {
-                    label: t("reviewSignalInbox"),
-                    detail: t("queueHealthyDetail"),
-                    cta: selectedRoadmapUrl ? <Link className="primary-button" to={selectedRoadmapUrl}>{t("openPublicRoadmap")}</Link> : null,
-                  };
+  const firstVisibleForm = accessibleForms[0] ?? null;
 
   const activeReviewDraft: ReviewDraft | null = useMemo(
     () =>
@@ -2927,19 +2901,20 @@ export function AdminDashboardPage() {
   const selectedNeedsFollowUp = selectedRecord ? hasNeedsFollowUp(selectedRecord.submission) : false;
   const selectedReviewerNoteUpdatedAt = selectedRecord ? getReviewerNoteUpdatedAt(selectedRecord.submission) : undefined;
   const selectedSavedReviewer = selectedRecord ? getAssignedReviewer(selectedRecord.submission) ?? "" : "";
+  const selectedHasSavedReviewResult = selectedRecord ? hasSavedReviewResult(selectedRecord.submission) : false;
   const selectedSavedReviewerDisplayLabel = useReviewerDisplayLabel(selectedSavedReviewer);
   const selectedPublicDecisionLabel = selectedRecord ? getPublicDecisionLabel(selectedRecord.submission, t) : "";
   const selectedSignalValueStars = selectedRecord ? getSignalValueStars(selectedRecord.submission.signalValue) : null;
   const selectedReviewResultItems = selectedRecord
     ? [
         { label: t("assignedReviewerLabel"), value: selectedSavedReviewerDisplayLabel || "-" },
-        { label: "Reviewed at", value: selectedReviewerNoteUpdatedAt ? formatDate(selectedReviewerNoteUpdatedAt) : "Not reviewed yet" },
+        { label: t("reviewedAtLabel"), value: selectedReviewerNoteUpdatedAt ? formatDate(selectedReviewerNoteUpdatedAt) : "-" },
         {
-          label: "Roadmap linked",
-          value: isSelectedRecordOnRoadmap && selectedRoadmapUrl ? "Linked" : "Not linked",
+          label: t("roadmapLinkedLabel"),
+          value: isSelectedRecordOnRoadmap && selectedRoadmapUrl ? t("linkedLabel") : "-",
           href: isSelectedRecordOnRoadmap && selectedRoadmapUrl ? selectedRoadmapUrl : undefined,
         },
-        { label: t("lastUpdatedLabel"), value: formatDate(selectedRecord.submission.updatedAt) },
+        { label: t("lastUpdatedLabel"), value: selectedHasSavedReviewResult ? formatDate(selectedRecord.submission.updatedAt) : "-" },
       ]
     : [];
   const selectedReviewSummaryBadges = selectedRecord
@@ -2977,10 +2952,14 @@ export function AdminDashboardPage() {
       ].filter((item): item is string => Boolean(item))
     : [];
   const reviewSessionStepItems = [
-    { id: 1, title: "Unlock signal", detail: "Decrypt the private signal before review can continue." },
-    { id: 2, title: "Read & classify", detail: "Read the original signal and set review outcome metadata." },
-    { id: 3, title: "Reviewer note", detail: "Capture an internal-only note for the review session." },
-    { id: 4, title: "Public roadmap decision", detail: "Decide whether this review stays internal, publishes, or resolves." },
+    { id: 1, title: t("reviewUnlockSignalTitle"), detail: t("reviewUnlockSignalDetail") },
+    { id: 2, title: t("reviewReadAndClassifyTitle"), detail: t("reviewReadAndClassifyDetail") },
+    { id: 3, title: t("reviewReviewerNoteTitle"), detail: t("reviewReviewerNoteDetail") },
+    {
+      id: 4,
+      title: t("reviewPublicRoadmapDecisionTitle"),
+      detail: t("reviewPublicRoadmapDecisionDetail"),
+    },
   ] as const;
   const reviewSessionCurrentStep = reviewSessionStepItems.find((step) => step.id === reviewSessionStep) ?? reviewSessionStepItems[0];
   const canAdvanceReviewSession =
@@ -3130,25 +3109,45 @@ export function AdminDashboardPage() {
 
   function openAdvancedProjectSettings() {
     const details = advancedProjectSettingsRef.current;
-    if (!details) {
-      return;
+    if (details) {
+      details.open = true;
+      details.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
     }
-    details.open = true;
-    details.scrollIntoView({
-      behavior: "smooth",
-      block: "start",
-    });
+    setProjectModalMode("select");
   }
 
   function revealProjectSettingsTools(mode: "connect" | "create") {
-    openAdvancedProjectSettings();
-    window.setTimeout(() => {
-      if (mode === "create") {
-        projectCreateInputRef.current?.focus();
-        return;
-      }
-      manualProjectInputRef.current?.focus();
-    }, 160);
+    const details = advancedProjectSettingsRef.current;
+    if (details) {
+      details.open = true;
+      details.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    }
+    setProjectModalMode(mode);
+  }
+
+  async function handleCreateProjectFromModal() {
+    const success = await handleCreateProject();
+    if (success) {
+      setProjectModalMode(null);
+    }
+  }
+
+  async function handleConnectProjectFromModal() {
+    const success = await connectManualProject();
+    if (success) {
+      setProjectModalMode(null);
+    }
+  }
+
+  function handleSelectProjectFromModal(projectId: string) {
+    selectProject(projectId);
+    setProjectModalMode(null);
   }
 
   function jumpToReviewWorkspace() {
@@ -3160,6 +3159,14 @@ export function AdminDashboardPage() {
 
   const activeScopeLabel =
     selectedFormId === "all" ? t("allSignalNodes") : selectedForm?.title ?? t("selectedNode");
+  const canUseProjectScope = Boolean(selectedProjectId);
+  const projectScopeActive = signalViewScope === "project" && canUseProjectScope;
+  const signalScopeAllLabel = t("signalViewScopeAll");
+  const signalScopeProjectLabel = selectedProject
+    ? t("signalViewScopeProjectOnlyNamed", { name: selectedProject.name })
+    : t("signalViewScopeProjectOnly");
+  const signalScopeActionLabel = projectScopeActive ? signalScopeAllLabel : signalScopeProjectLabel;
+  const shouldRequireProjectSelection = hasAdminAccess && projectScopeActive && !selectedProject;
   const activeStreamLabel =
     streamItems.find((stream) => stream.id === selectedStreamId)?.label ?? "All Signals";
   const visibleUnreadCount = visibleSignals.filter(
@@ -3200,7 +3207,7 @@ export function AdminDashboardPage() {
       canDelete: false,
       isAccessible: true,
     };
-    const formItems = forms
+    const formItems = accessibleForms
       .filter((form) => {
         if (!normalizedSearch) {
           return true;
@@ -3326,8 +3333,10 @@ export function AdminDashboardPage() {
                 className="workspace-dock-actions"
                 hasAdminAccess={hasProjectManagementAccess}
                 selectedProjectName={selectedProject?.name ?? null}
+                selectedProjectId={selectedProjectId}
+                projects={projects}
                 highlightCreateFormCta={highlightCreateFormCta}
-                onOpenProjectSettings={openAdvancedProjectSettings}
+                onSelectProject={selectProject}
                 onJumpToReview={jumpToReviewWorkspace}
                 onRevealCreateProject={() => revealProjectSettingsTools("create")}
                 onRevealConnectProject={() => revealProjectSettingsTools("connect")}
@@ -3369,6 +3378,11 @@ export function AdminDashboardPage() {
           <MobileSignalInbox
             title={t("signalInboxTitle")}
             activeScopeLabel={activeScopeLabel}
+            viewScope={signalViewScope}
+            onViewScopeChange={setSignalViewScope}
+            canUseProjectScope={canUseProjectScope}
+            allSignalsScopeLabel={signalScopeAllLabel}
+            projectSignalsScopeLabel={signalScopeProjectLabel}
             visibleCountLabel={t("visibleSignalsLabel", { count: visibleSignals.length })}
             unreadCountLabel={t("unreadBadge", { count: visibleUnreadCount })}
             emptyContent={(
@@ -3377,18 +3391,18 @@ export function AdminDashboardPage() {
                 <h2>
                   {!hasAdminAccess
                     ? t("sendTestSignalToStartReviewTitle")
-                    : !selectedProject
+                    : shouldRequireProjectSelection
                     ? t("chooseProjectFirstTitle")
-                    : selectedProjectForms.length === 0
+                    : accessibleForms.length === 0
                       ? t("createFirstSignalFormTitle")
                       : t("sendTestSignalToStartReviewTitle")}
                 </h2>
                 <p>
                   {!hasAdminAccess
                     ? t("sendTestSignalToStartReviewBody")
-                    : !selectedProject
+                    : shouldRequireProjectSelection
                     ? t("chooseProjectFirstBody")
-                    : selectedProjectForms.length === 0
+                    : accessibleForms.length === 0
                       ? t("createFirstSignalFormBody")
                       : t("sendTestSignalToStartReviewBody")}
                 </p>
@@ -3462,9 +3476,18 @@ export function AdminDashboardPage() {
                   <span className="signal-chip signal-chip-soft">{t("unreadBadge", { count: visibleUnreadCount })}</span>
                 </div>
                 <div className="signal-workbench-controls">
+                  {canUseProjectScope ? (
+                    <button
+                      type="button"
+                      className="ghost-button signal-scope-action-button"
+                      onClick={() => setSignalViewScope(projectScopeActive ? "all" : "project")}
+                    >
+                      {signalScopeActionLabel}
+                    </button>
+                  ) : null}
                   <span className="signal-chip signal-chip-soft">{activeScopeLabel}</span>
                   <label className="review-sort-control">
-                    <span className="sr-only">Sort inbox</span>
+                    <span className="sr-only">{t("sortInboxSrOnly")}</span>
                     <select
                       value={signalSortOrder}
                       onChange={(event) => setSignalSortOrder(event.target.value as SignalSortOrder)}
@@ -3615,18 +3638,18 @@ export function AdminDashboardPage() {
                   <h2>
                     {!hasAdminAccess
                       ? t("sendTestSignalToStartReviewTitle")
-                      : !selectedProject
+                      : shouldRequireProjectSelection
                       ? t("chooseProjectFirstTitle")
-                      : selectedProjectForms.length === 0
+                      : accessibleForms.length === 0
                         ? t("createFirstSignalFormTitle")
                         : t("sendTestSignalToStartReviewTitle")}
                   </h2>
                   <p>
                     {!hasAdminAccess
                       ? t("sendTestSignalToStartReviewBody")
-                      : !selectedProject
+                      : shouldRequireProjectSelection
                       ? t("chooseProjectFirstBody")
-                      : selectedProjectForms.length === 0
+                      : accessibleForms.length === 0
                         ? t("createFirstSignalFormBody")
                         : t("sendTestSignalToStartReviewBody")}
                   </p>
@@ -3837,15 +3860,6 @@ export function AdminDashboardPage() {
                             event.stopPropagation();
                           }}
                         >
-                          {submission.status === "unread" ? (
-                            <button
-                              type="button"
-                              className="ghost-button review-open-button"
-                              onClick={() => openReviewSession(submission.id)}
-                            >
-                              Start review
-                            </button>
-                          ) : null}
                         </div>
                         {isPendingSui ? (
                           <div className="signal-card-actions">
@@ -3894,12 +3908,12 @@ export function AdminDashboardPage() {
                     </button>
                     <div className="signal-detail-heading">
                     <div>
-                      <p className="eyebrow">Review Console</p>
+                      <p className="eyebrow">{t("reviewConsoleEyebrow")}</p>
                       <h2>{getSignalSubject(selectedRecord.submission)}</h2>
                       <p className="muted">
                         {selectedRecord.form.title} / {formatDate(selectedRecord.submission.createdAt)}
                       </p>
-                      <p className="muted">Inspect trusted submissions, verify evidence, and record the reviewer decision.</p>
+                      <p className="muted">{t("reviewConsoleBody")}</p>
                     </div>
                     <div className="inline-actions signal-detail-utility-actions">
                       <Link
@@ -3971,68 +3985,25 @@ export function AdminDashboardPage() {
                         </div>
                       </details>
                     ) : null}
-                    {!isReviewerFocusMode ? (
-                      <div className="mobile-readable-trust-panel" aria-label="Signal storage and privacy">
-                        {selectedRecordProtectionFacts.map((fact) => (
-                          <div key={fact.label} className="mobile-readable-trust-item">
-                            <strong>{fact.label}</strong>
-                            <span>{fact.detail}</span>
-                          </div>
-                        ))}
-                      </div>
-                    ) : null}
                     <section className="answer-card review-trust-summary-card">
-                      <div className="review-trust-summary-header">
-                        <div>
-                          <p className="eyebrow">Trust snapshot</p>
-                          <h3>Submission summary</h3>
+                      {selectedReviewContextChips.length > 0 ? (
+                        <div className="signal-badge-row signal-badge-row-compact" aria-label="Review context">
+                          {selectedReviewContextChips.map((chip) => (
+                            <span
+                              key={chip.label}
+                              className={`signal-chip ${
+                                chip.tone === "warn"
+                                  ? "signal-chip-warn"
+                                  : chip.tone === "accent"
+                                    ? "signal-chip-accent"
+                                    : "signal-chip-soft"
+                              }`}
+                            >
+                              {chip.label}
+                            </span>
+                          ))}
                         </div>
-                        <span className="signal-chip signal-chip-soft">
-                          {selectedRecordStoredOnWalrus ? "Stored on Walrus" : "Local fallback"}
-                        </span>
-                      </div>
-                      <div className="review-trust-summary-grid">
-                        <div className="review-trust-summary-item">
-                          <span>AI-assisted insight</span>
-                          <strong>{getSignalPreview(selectedRecord.submission)}</strong>
-                        </div>
-                        <div className="review-trust-summary-item">
-                          <span>Risk / priority score</span>
-                          <strong>
-                            {getLocalizedPriorityLabel(selectedRecord.submission.priority, t)}
-                            {typeof selectedRecord.submission.signalValue === "number"
-                              ? ` / ${selectedRecord.submission.signalValue} of 5`
-                              : selectedRecord.submission.severity
-                                ? ` / ${selectedRecord.submission.severity}`
-                                : ""}
-                          </strong>
-                        </div>
-                        <div className="review-trust-summary-item">
-                          <span>Verification status</span>
-                          <strong>
-                            {detailAnswers
-                              ? "Reviewer verified"
-                              : selectedRecord.submission.isEncrypted
-                                ? "Awaiting reviewer unlock"
-                                : "Readable for review"}
-                          </strong>
-                        </div>
-                        <div className="review-trust-summary-item">
-                          <span>Walrus evidence</span>
-                          <strong>{selectedRecordStoredOnWalrus ? "Evidence receipt available" : "Fallback copy preserved"}</strong>
-                        </div>
-                      </div>
-                      <div className="review-trust-summary-actions">
-                        <button type="button" className="ghost-button" onClick={() => openReviewSession()}>
-                          Approve
-                        </button>
-                        <button type="button" className="ghost-button" onClick={() => openReviewSession()}>
-                          Reject
-                        </button>
-                        <button type="button" className="ghost-button" onClick={() => openReviewSession()}>
-                          Needs follow-up
-                        </button>
-                      </div>
+                      ) : null}
                     </section>
                   </section>
 
@@ -4131,7 +4102,7 @@ export function AdminDashboardPage() {
                               </div>
                             </div>
                           ) : (
-                            <p className="muted">No response content is available yet.</p>
+                            <p className="muted">{t("noResponseContentYet")}</p>
                           )}
                           </div>
                           {!isReviewerFocusMode ? (
@@ -4209,25 +4180,14 @@ export function AdminDashboardPage() {
                     <section className="answer-card review-result-card">
                       <div className="review-controls-header">
                         <div>
-                          <p className="eyebrow">Review Result</p>
-                          <h3>{selectedRecord.submission.status === "unread" ? "No review saved yet" : "Saved review result"}</h3>
+                          <p className="eyebrow">{t("reviewResultEyebrow")}</p>
+                          <h3>{selectedHasSavedReviewResult ? t("savedReviewResultTitle") : t("noReviewSavedYetTitle")}</h3>
                           <p className="review-helper-copy">
-                            {selectedRecord.submission.status === "unread"
-                              ? "Run a review session to decrypt, classify, and save the operator decision."
-                              : "Admin view stays lightweight and reflects the last saved review outcome only."}
+                            {selectedHasSavedReviewResult
+                              ? t("savedReviewResultBody")
+                              : t("noReviewSavedYetBody")}
                           </p>
                         </div>
-                        {selectedRecord.submission.status === "unread" ? (
-                          <div className="review-save-actions">
-                            <button
-                              type="button"
-                              className="primary-button review-open-button"
-                              onClick={() => openReviewSession()}
-                            >
-                              Start review
-                            </button>
-                          </div>
-                        ) : null}
                       </div>
 
                       <div className="review-result-grid">
@@ -4253,7 +4213,7 @@ export function AdminDashboardPage() {
                           )}
                         </div>
                         <div className="review-result-item review-result-item-wide">
-                          <span>Review badges</span>
+                          <span>{t("reviewBadgesLabel")}</span>
                           <div className="review-result-inline-badges">
                             <span className={`pill status-${selectedRecord.submission.status}`}>
                               {getLocalizedSubmissionStatusLabel(selectedRecord.submission.status, t)}
@@ -4266,7 +4226,7 @@ export function AdminDashboardPage() {
                             </span>
                             <span className="signal-chip signal-chip-soft">{selectedPublicDecisionLabel}</span>
                             <span className={`signal-chip ${isSelectedRecordOnRoadmap ? "signal-chip-accent" : ""}`}>
-                              {isSelectedRecordOnRoadmap ? "Roadmap linked" : "Internal only"}
+                              {isSelectedRecordOnRoadmap ? t("roadmapLinkedLabel") : t("publicDecisionInternalOnly")}
                             </span>
                           </div>
                         </div>
@@ -4299,7 +4259,7 @@ export function AdminDashboardPage() {
                               target="_blank"
                               rel="noreferrer"
                             >
-                              Open GitHub issue
+                              {t("openGithubIssue")}
                             </a>
                           ) : null}
                           {isSelectedRecordOnRoadmap ? (
@@ -4392,7 +4352,7 @@ export function AdminDashboardPage() {
                           <summary>
                             <span>
                               <p className="eyebrow">{t("exportInspectorEyebrow")}</p>
-                              <strong>JSON / CSV</strong>
+                              <strong>{t("jsonCsvTitle")}</strong>
                             </span>
                             <span className="inspector-summary">{csvExportScopeLabel}</span>
                           </summary>
@@ -4466,8 +4426,8 @@ export function AdminDashboardPage() {
                         >
                           <summary>
                             <span>
-                              <p className="eyebrow">Evidence / Verification</p>
-                              <strong>Trust layer receipt</strong>
+                              <p className="eyebrow">{t("evidenceVerificationEyebrow")}</p>
+                              <strong>{t("trustLayerReceiptTitle")}</strong>
                             </span>
                             <span className="inspector-summary">{storageRuntime.mode === "walrus" ? t("storageWalrus") : t("localFallbackLabel")}</span>
                           </summary>
@@ -4475,7 +4435,7 @@ export function AdminDashboardPage() {
                             <div className="inspector-subsection">
                               <div className="section-row">
                                 <div>
-                                  <p className="eyebrow">Evidence layer</p>
+                                  <p className="eyebrow">{t("evidenceLayerEyebrow")}</p>
                                   <h3>{t("signalMetadataAndProofTitle")}</h3>
                                 </div>
                                 {selectedRecord.submission.pendingOnchainRegistration ? (
@@ -4491,7 +4451,7 @@ export function AdminDashboardPage() {
                               </div>
                               <div className="metadata-list signal-proof-metadata-list">
                                 <div className="metadata-row">
-                                  <span>Verification status</span>
+                                  <span>{t("verificationStatusLabel")}</span>
                                   <strong>
                                     {detailLegacyUnencrypted
                                       ? t("legacyUnencryptedResponse")
@@ -4501,16 +4461,16 @@ export function AdminDashboardPage() {
                                   </strong>
                                 </div>
                                 <div className="metadata-row">
-                                  <span>Review access</span>
+                                  <span>{t("reviewAccessLabel")}</span>
                                   <strong>{hasAdminAccess ? t("projectReviewerAccess") : t("walletLabel")}</strong>
                                 </div>
                                 <div className="metadata-row">
-                                  <span>Storage status</span>
-                                  <strong>{selectedRecordStoredOnWalrus ? "Stored on Walrus" : t("localFallbackLabel")}</strong>
+                                  <span>{t("storageStatusLabel")}</span>
+                                  <strong>{selectedRecordStoredOnWalrus ? t("storedOnWalrus") : t("localFallbackLabel")}</strong>
                                 </div>
                                 <div className="metadata-row">
-                                  <span>Provider</span>
-                                  <strong>Powered by Tatum</strong>
+                                  <span>{t("providerLabel")}</span>
+                                  <strong>{t("poweredByTatum")}</strong>
                                 </div>
                                 <SignalMetaRow label={t("formBlobId")} type="blob" value={selectedRecord.form.blobId} emptyLabel={t("notAvailable")}>
                                   {!isLocalFallbackBlob(selectedRecord.form.blobId) ? (
@@ -4550,7 +4510,7 @@ export function AdminDashboardPage() {
                                   </div>
                                 ) : null}
                                 <div className="metadata-row">
-                                  <span>Audit trail</span>
+                                  <span>{t("auditTrailLabel")}</span>
                                   <strong>{privateReviewLabel}</strong>
                                 </div>
                               </div>
@@ -4657,7 +4617,7 @@ export function AdminDashboardPage() {
                                     </strong>
                                   </div>
                                   <div className="metadata-row">
-                                    <span>Signal sync</span>
+                                    <span>{t("signalSyncLabel")}</span>
                                     <strong>{getSignalSyncSummary(selectedRecord.submission)}</strong>
                                   </div>
                                   <div className="metadata-row">
@@ -4742,15 +4702,6 @@ export function AdminDashboardPage() {
           </>
         )}
 
-        {activeWorkspaceTab !== "insights" && activeWorkspaceTab !== "members" ? (
-          <AdminOperationsStatus
-            items={operationsStatusItems}
-            nextActionLabel={nextRecommendedAction.label}
-            nextActionDetail={nextRecommendedAction.detail}
-            nextActionCta={nextRecommendedAction.cta}
-          />
-        ) : null}
-
         {hasProjectManagementAccess && activeWorkspaceTab !== "insights" && activeWorkspaceTab !== "members" ? (
         <details ref={advancedProjectSettingsRef} className="panel advanced-project-settings" open>
           <summary>
@@ -4774,73 +4725,37 @@ export function AdminDashboardPage() {
                 <span className="signal-chip">{t("workspaceScopeLabel")}</span>
               </div>
               <p className="muted">{t("switchProjectBody")}</p>
-              <label className="project-selector-inline" htmlFor="workspace-project-selector">
+              <div className="advanced-project-actions">
+                <button type="button" className="ghost-button" onClick={() => setProjectModalMode("select")}>
+                  {t("chooseProjectButton")}
+                </button>
+                <button type="button" className="primary-button" onClick={() => setProjectModalMode("create")}>
+                  {t("createProjectButton")}
+                </button>
+                <button type="button" className="ghost-button" onClick={() => setProjectModalMode("connect")}>
+                  {t("connectExistingShort")}
+                </button>
+              </div>
+              <div className="advanced-project-current">
                 <span className="eyebrow">{t("selectedProjectLabel")}</span>
-                <select
-                  id="workspace-project-selector"
-                  className="project-selector-field"
-                  value={selectedProjectId}
-                  onChange={(event) => {
-                    selectProject(event.target.value);
-                  }}
-                >
-                  <option value="">{t("chooseProjectButton")}</option>
-                  {projects.map((project) => (
-                    <option key={project.objectId} value={project.objectId}>
-                      {project.name} ({project.formsCount} forms / {project.signalsCount} signals)
-                    </option>
-                  ))}
-                </select>
-              </label>
-              {hasProjectManagementAccess ? (
-                <div className="workspace-create-project">
-                  <div className="workspace-create-project-copy">
-                    <span className="eyebrow">{t("createProjectEyebrow")}</span>
-                    <p className="muted">{t("createProjectBody")}</p>
+                {selectedProject ? (
+                  <div className="advanced-project-current-card">
+                    <strong>{selectedProject.name}</strong>
+                    <span className="muted">
+                      {t("projectModalProjectStats", {
+                        forms: selectedProject.formsCount,
+                        signals: selectedProject.signalsCount,
+                      })}
+                    </span>
                   </div>
-                  <div className="workspace-create-project-actions">
-                    <input
-                      ref={projectCreateInputRef}
-                      value={projectCreateName}
-                      onChange={(event) => setProjectCreateName(event.target.value)}
-                      placeholder={t("newProjectNamePlaceholder")}
-                    />
-                    <button
-                      type="button"
-                      className="ghost-button"
-                      onClick={() => void handleCreateProject()}
-                      disabled={isCreatingProject}
-                    >
-                      {isCreatingProject ? t("creatingLabel") : t("createProjectButton")}
-                    </button>
-                  </div>
-                </div>
-              ) : null}
+                ) : (
+                  <p className="muted advanced-project-empty">{t("projectModalNoProjectsSelected")}</p>
+                )}
+              </div>
+              {projectState ? <p className="muted advanced-project-feedback">{projectState}</p> : null}
             </article>
 
             <div className="project-registry-grid project-registry-grid-advanced">
-              <article className="project-registry-subpanel project-registry-subpanel-soft">
-                <div className="project-panel-head">
-                  <div>
-                    <p className="eyebrow">{t("existingProjectEyebrow")}</p>
-                    <h3>{t("connectExistingProjectTitle")}</h3>
-                  </div>
-                  <span className="signal-chip">{t("projectOwnerCapLabel")}</span>
-                </div>
-                <p className="muted">{t("attachWorkspaceBody")}</p>
-                <div className="inline-actions">
-                  <input
-                    ref={manualProjectInputRef}
-                    value={manualProjectId}
-                    onChange={(event) => setManualProjectId(event.target.value)}
-                    placeholder={t("projectOrOwnerCapPlaceholder")}
-                  />
-                  <button type="button" className="ghost-button" onClick={() => void connectManualProject()}>
-                    {t("connectLabel")}
-                  </button>
-                </div>
-              </article>
-
               {selectedProject ? (
                 <article className="project-registry-subpanel project-registry-danger">
                   <div className="project-panel-head">
@@ -4934,7 +4849,7 @@ export function AdminDashboardPage() {
             <div className="review-session-shell">
               <div className="review-session-header">
                 <div>
-                  <p className="eyebrow">Review Session</p>
+                  <p className="eyebrow">{t("reviewSessionEyebrow")}</p>
                   <h3 id="review-session-title">{reviewSessionCurrentStep.title}</h3>
                   <p id="review-session-description" className="muted">{reviewSessionCurrentStep.detail}</p>
                 </div>
@@ -4965,18 +4880,18 @@ export function AdminDashboardPage() {
                     type="button"
                     className={`review-progress-step ${reviewSessionStep === step.id ? "is-current" : isCompletedStep ? "is-complete" : ""}`}
                     onClick={() => {
-                      if (!isCompletedStep && (step.id === 1 || !selectedRecordNeedsDecrypt || Boolean(detailAnswers))) {
+                      if (step.id === 1 || !selectedRecordNeedsDecrypt || Boolean(detailAnswers)) {
                         setReviewSessionStep(step.id);
                       }
                     }}
-                    disabled={isCompletedStep || isStepLocked}
+                    disabled={isStepLocked}
                   >
                     <span className="review-progress-marker" aria-hidden="true">
                       {isCompletedStep ? "✓" : step.id}
                     </span>
                     <span className="review-progress-copy">
                       <span className="review-progress-step-label">
-                        {reviewSessionStep > step.id ? "Done" : reviewSessionStep === step.id ? `Step ${step.id}` : `Step ${step.id}`}
+                        {reviewSessionStep > step.id ? t("doneLabel") : t("stepLabel", { count: step.id })}
                       </span>
                       <span className="review-progress-title">{step.title}</span>
                     </span>
@@ -4988,9 +4903,9 @@ export function AdminDashboardPage() {
               {reviewSessionStep === 1 ? (
                 <div className="review-session-stage review-session-stage-unlock">
                   <div className="review-session-stage-copy">
-                    <strong>Private signal locked</strong>
+                    <strong>{t("privateSignalLockedTitle")}</strong>
                     <p className="muted">
-                      Decrypt is the primary action in this session. Until the payload is unlocked, the rest of the workflow stays read-only.
+                      {t("privateSignalLockedBody")}
                     </p>
                   </div>
                   <div className={`review-session-decrypt-shell ${decrypting || decryptState === "decrypting" ? "is-active" : ""} ${detailAnswers ? "is-unlocked" : ""}`}>
@@ -4999,7 +4914,7 @@ export function AdminDashboardPage() {
                       onClearDebugCache={() => void handleClearDebugPolicyCache()}
                       isDecrypting={decrypting || decryptInFlightRef.current}
                       isUnlocked={Boolean(detailAnswers)}
-                      actionLabel="Decrypt signal"
+                      actionLabel={t("decryptSignalAction")}
                       unlockState={decryptState}
                       statusMessage={decryptStatusMessage}
                       errorMessage={decryptError}
@@ -5008,7 +4923,7 @@ export function AdminDashboardPage() {
                       actionDisabled={Boolean(selectedRecordUnlockDisabledReason)}
                       supportContent={(
                         <>
-                          <strong>Seal review session</strong>
+                          <strong>{t("sealReviewSessionTitle")}</strong>
                           <p className="muted">
                             {t("walletApprovalReuseNotice", { minutes: realSealSessionTtlMinutes })}
                           </p>
@@ -5029,7 +4944,7 @@ export function AdminDashboardPage() {
 
               {reviewSessionStep === 2 ? (
                 <div className="review-session-stage review-session-stage-split">
-                  <div className="review-session-mobile-tabs" role="tablist" aria-label="Review session sections">
+                  <div className="review-session-mobile-tabs" role="tablist" aria-label={t("reviewSessionSectionsAriaLabel")}>
                     <button
                       type="button"
                       role="tab"
@@ -5040,7 +4955,7 @@ export function AdminDashboardPage() {
                       className={`review-session-mobile-tab ${reviewSessionMobileTab === "answers" ? "is-active" : ""}`}
                       onClick={() => setReviewSessionMobileTab("answers")}
                     >
-                      Original signal
+                      {t("originalSignalTitle")}
                     </button>
                     <button
                       type="button"
@@ -5063,8 +4978,8 @@ export function AdminDashboardPage() {
                     className={`review-session-read-panel ${reviewSessionMobileTab === "review" ? "is-mobile-hidden" : ""}`}
                   >
                     <div className="review-session-stage-copy">
-                      <strong>Original signal</strong>
-                      <p className="muted">Review the submitted signal first, then classify it.</p>
+                      <strong>{t("originalSignalTitle")}</strong>
+                      <p className="muted">{t("originalSignalBody")}</p>
                     </div>
                     <div className="review-session-answer-list">
                       {selectedRecord.form.fields
@@ -5204,7 +5119,7 @@ export function AdminDashboardPage() {
                       <p className="eyebrow">{t("stepLabel", { count: 3 })}</p>
                       <strong>{t("reviewerNoteLabel")}</strong>
                     </div>
-                    <p className="review-session-internal-note">Internal only. This stays in the review result and is not part of the public signal payload.</p>
+                    <p className="review-session-internal-note">{t("reviewInternalOnlyNote")}</p>
                     <label className="review-select">
                       <span>{t("assignedReviewerLabel")}</span>
                       <input
@@ -5253,10 +5168,10 @@ export function AdminDashboardPage() {
                   <div className="review-stage-card review-stage-card-compact-decision">
                     <div className="review-stage-header">
                       <p className="eyebrow">{t("publicRoadmapDecisionStep")}</p>
-                      <strong>Public roadmap decision</strong>
+                      <strong>{t("reviewPublicRoadmapDecisionTitle")}</strong>
                     </div>
                     <p className="muted">
-                      Public visibility is handled here. Internal review status above can stay more detailed than what gets surfaced on the roadmap.
+                      {t("publicRoadmapDecisionBody")}
                     </p>
                     <div className="review-session-decision-grid">
                       <button
@@ -5264,7 +5179,7 @@ export function AdminDashboardPage() {
                         className={`review-state-badge ${!isDraftOnRoadmap && draftTriageStatus !== "closed" ? "is-active" : ""}`}
                         onClick={() => patchReviewDraft({ status: "read" })}
                       >
-                        Keep internal
+                        {t("keepInternal")}
                       </button>
                       <button
                         type="button"
@@ -5274,30 +5189,30 @@ export function AdminDashboardPage() {
                           triageStatus: ROADMAP_READY_STATUSES.has(draftTriageStatus) ? draftTriageStatus : "planned",
                         })}
                       >
-                        Publish to roadmap
+                        {t("publishToRoadmap")}
                       </button>
                       <button
                         type="button"
                         className={`review-state-badge is-triage-closed ${draftTriageStatus === "closed" ? "is-active" : ""}`}
                         onClick={() => patchReviewDraft({ status: "read", triageStatus: "closed" })}
                       >
-                        Resolve internally
+                        {t("resolveInternally")}
                       </button>
                       <button
                         type="button"
                         className={`review-state-badge is-status-archived ${draftReviewStatus === "archived" ? "is-active" : ""}`}
                         onClick={() => patchReviewDraft({ status: "archived", triageStatus: "closed" })}
                       >
-                        Archive signal
+                        {t("archiveSignal")}
                       </button>
                     </div>
                     <div className="review-result-grid review-result-grid-compact">
                       <div className="review-result-item">
                         <span>{t("roadmapStatusLabel")}</span>
-                        <strong>{isDraftOnRoadmap ? "Visible on roadmap" : "Not on roadmap"}</strong>
+                        <strong>{isDraftOnRoadmap ? t("visibleOnRoadmap") : t("notOnRoadmap")}</strong>
                       </div>
                       <div className="review-result-item">
-                        <span>Public result</span>
+                        <span>{t("publicResultLabel")}</span>
                         <strong>{activeReviewDraft ? getPublicDecisionLabel(buildSubmissionFromReviewDraft(selectedRecord.submission, activeReviewDraft), t) : getPublicDecisionLabel(selectedRecord.submission, t)}</strong>
                       </div>
                     </div>
@@ -5316,6 +5231,16 @@ export function AdminDashboardPage() {
                   >
                     {t("closeLabel")}
                   </button>
+                ) : reviewSessionStep > 1 ? (
+                  <button
+                    type="button"
+                    className="ghost-button"
+                    onClick={() =>
+                      setReviewSessionStep((current) => (Math.max(1, current - 1) as 1 | 2 | 3 | 4))
+                    }
+                  >
+                    {t("back")}
+                  </button>
                 ) : (
                   <span aria-hidden="true" />
                 )}
@@ -5328,7 +5253,7 @@ export function AdminDashboardPage() {
                       disabled={!canAdvanceReviewSession}
                       onClick={() => setReviewSessionStep((current) => (Math.min(4, current + 1) as 1 | 2 | 3 | 4))}
                     >
-                      Next step
+                      {t("nextStepLabel")}
                     </button>
                   ) : (
                     <button
@@ -5351,6 +5276,45 @@ export function AdminDashboardPage() {
             </div>
           </section>
         </div>
+      ) : null}
+      {projectModalMode ? (
+        <ProjectWorkspaceModal
+          mode={projectModalMode}
+          projects={projects}
+          selectedProjectId={selectedProjectId}
+          projectCreateName={projectCreateName}
+          manualProjectId={manualProjectId}
+          isCreatingProject={isCreatingProject}
+          projectState={projectState}
+          createInputRef={projectCreateInputRef}
+          connectInputRef={manualProjectInputRef}
+          onSelectProject={handleSelectProjectFromModal}
+          onProjectCreateNameChange={setProjectCreateName}
+          onManualProjectIdChange={setManualProjectId}
+          onCreateProject={handleCreateProjectFromModal}
+          onConnectProject={handleConnectProjectFromModal}
+          onClose={() => setProjectModalMode(null)}
+          labels={{
+            close: t("closeLabel"),
+            cancel: t("cancel"),
+            currentProject: t("currentProjectEyebrow"),
+            selectedStatus: t("projectSelectedStatus"),
+            noProjectSelectedStatus: t("noProjectSelectedStatus"),
+            selectTitle: t("projectModalSelectTitle"),
+            selectBody: t("projectModalSelectBody"),
+            selectEmpty: t("projectModalSelectEmpty"),
+            createTitle: t("projectModalCreateTitle"),
+            createBody: t("projectModalCreateBody"),
+            createPlaceholder: t("newProjectNamePlaceholder"),
+            createButton: t("createProjectButton"),
+            creatingLabel: t("creatingLabel"),
+            connectTitle: t("projectModalConnectTitle"),
+            connectBody: t("projectModalConnectBody"),
+            connectPlaceholder: t("projectOrOwnerCapPlaceholder"),
+            connectButton: t("connectLabel"),
+            projectStats: (params) => t("projectModalProjectStats", params),
+          }}
+        />
       ) : null}
       {showShortcutHelp ? (
         <div className="node-directory-overlay" role="dialog" aria-modal="true" aria-labelledby="shortcut-help-title">

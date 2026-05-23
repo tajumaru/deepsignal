@@ -1,6 +1,7 @@
 import { SignalMetaChip } from "../../../components/SignalMetaChip";
 import { StorageProof } from "../../../components/StorageProof";
 import { getAttachmentDownloadHref, type AttachmentPreviewState } from "../../../hooks/useAttachmentPreviews";
+import { useI18n } from "../../../i18n";
 import { isLocalFallbackBlob } from "../../../lib/signalInbox";
 import type { Submission } from "../../../types";
 
@@ -13,6 +14,7 @@ export function SignalAttachmentList({
   attachments,
   attachmentPreviews,
 }: SignalAttachmentListProps) {
+  const { t } = useI18n();
   if (attachments.length === 0) {
     return null;
   }
@@ -50,7 +52,7 @@ export function SignalAttachmentList({
             </div>
             <div className="attachment-actions signal-meta-row-value">
               {attachment.storage === "inline" ? (
-                <strong>Embedded in private signal</strong>
+                <strong>{t("embeddedInPrivateSignal")}</strong>
               ) : (
                 <SignalMetaChip type="blob" value={attachment.blobId} />
               )}
@@ -68,7 +70,7 @@ export function SignalAttachmentList({
                   href={downloadHref}
                   download={label}
                 >
-                  Download attachment
+                  {t("downloadAttachment")}
                 </a>
               ) : null}
             </div>

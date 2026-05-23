@@ -18,11 +18,9 @@ export function SealStatusCard({
 
   return (
     <section className="panel seal-status-card">
-      <p className="eyebrow">Seal / Encryption</p>
-      <h3>Private signal details</h3>
-      <p className="muted">
-        Open this only when you need to verify how the encrypted payload is stored or how reviewer access is being resolved.
-      </p>
+      <p className="eyebrow">{t("sealEncryptionEyebrow")}</p>
+      <h3>{t("privateSignalDetailsTitle")}</h3>
+      <p className="muted">{t("privateSignalDetailsBody")}</p>
       <div className="proof-grid">
         <div className="proof-row">
           <span>{t("sealRuntimeLabel")}</span>
@@ -33,8 +31,8 @@ export function SealStatusCard({
           <strong>{status.warning ?? "none"}</strong>
         </div>
         <div className="proof-row">
-          <span>Decryption required</span>
-          <strong>{encryptSubmissions ? "creator/admin only" : "as needed"}</strong>
+          <span>{t("decryptionRequiredLabel")}</span>
+          <strong>{encryptSubmissions ? t("creatorAdminOnly") : t("asNeeded")}</strong>
         </div>
         <div className="proof-row">
           <span>{t("encryptionLabel")}</span>
@@ -46,7 +44,7 @@ export function SealStatusCard({
         <p className="muted">{t("encryptionDisabledForForm")}</p>
       ) : null}
 
-      <p className="muted">Creator/admin only access. Reviewer wallet approval is required before private responses are revealed.</p>
+      <p className="muted">{t("creatorAdminOnlyAccessBody")}</p>
       <p className="muted">{t("walletApprovalReuseNotice", { minutes: REAL_SEAL_SESSION_TTL_MIN })}</p>
 
       {!canDecrypt && encryptSubmissions ? (

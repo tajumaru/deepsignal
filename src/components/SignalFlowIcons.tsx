@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import type { SignalPipelineStage } from "../features/public-form/hooks/usePublicSubmission";
 
-export type FlowStepIconName = "Submit" | "Encrypt" | "Store" | "Review";
+export type FlowStepIconName = "Submit" | "Encrypt" | "Store" | "Review" | "Certify";
 
 function SignalGlyph({
   children,
@@ -64,6 +64,14 @@ export function FlowStepIcon({ name }: { name: FlowStepIconName }) {
           <circle cx="16.4" cy="15.4" r="1.75" />
           <path d="m17.75 16.75 1.9 1.9" />
           <path d="M13.5 7.9a2.1 2.1 0 0 1 3.45 1.62" />
+        </SignalGlyph>
+      );
+    case "Certify":
+      return (
+        <SignalGlyph>
+          <path d="M12 4.5 17.6 6.9v4.4c0 3.45-2.2 6.58-5.6 7.45-3.4-.87-5.6-4-5.6-7.45V6.9Z" />
+          <path d="m9.25 12.25 1.8 1.85 3.7-3.8" />
+          <path d="M16.8 8.2h2.45M18.02 6.98v2.45" />
         </SignalGlyph>
       );
   }

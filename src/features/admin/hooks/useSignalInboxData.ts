@@ -59,6 +59,7 @@ export type StreamId =
   | "archived";
 
 export type SignalSortOrder = "default" | "newest" | "oldest" | "priority" | "unread";
+export type SignalViewScope = "all" | "project";
 
 export interface SignalRecord {
   form: FormWithCount;
@@ -268,12 +269,16 @@ interface UseSignalInboxDataArgs {
   accountAddress?: string | null;
   capabilityProfile: CapabilityProfile;
   sortOrder?: SignalSortOrder;
+  scopeProjectId?: string | null;
+  viewScope?: SignalViewScope;
 }
 
 export function useSignalInboxData({
   accountAddress,
   capabilityProfile,
   sortOrder = "default",
+  scopeProjectId = null,
+  viewScope = "all",
 }: UseSignalInboxDataArgs) {
   const suiClient = useSuiClient();
   const { projects, dataUpdatedAt: projectsUpdatedAt } = useProjectRegistry(accountAddress);
@@ -584,17 +589,25 @@ export function useSignalInboxData({
       forms.filter((form) => canReviewForm(form, accountAddress, capabilityProfile)),
     [accountAddress, capabilityProfile, forms],
   );
+  const isProjectScoped = viewScope === "project" && Boolean(scopeProjectId);
+  const scopedAccessibleForms = useMemo(
+    () =>
+      isProjectScoped && scopeProjectId
+        ? accessibleForms.filter((form) => form.projectId === scopeProjectId)
+        : accessibleForms,
+    [accessibleForms, isProjectScoped, scopeProjectId],
+  );
 
   useEffect(() => {
     if (selectedFormId === "all") {
       return;
     }
-    if (!accessibleForms.some((form) => form.id === selectedFormId)) {
+    if (!scopedAccessibleForms.some((form) => form.id === selectedFormId)) {
       setSelectedFormId("all");
     }
-  }, [accessibleForms, selectedFormId]);
+  }, [scopedAccessibleForms, selectedFormId]);
 
-  const signalIndex = useMemo(() => {
+  const fullSignalIndex = useMemo(() => {
     const signals: SignalRecord[] = [];
     const signalById: Record<string, SignalRecord | undefined> = {};
     const counts = {
@@ -717,6 +730,92 @@ export function useSignalInboxData({
       pendingSignalIdSet,
     };
   }, [accessibleForms, submissionsByFormId, supplementalSignals]);
+  const signalIndex = useMemo(() => {
+    if (!isProjectScoped || !scopeProjectId) {
+      return fullSignalIndex;
+    }
+
+    const signals = fullSignalIndex.signals.filter((record) => record.form.projectId === scopeProjectId);
+    const signalById: Record<string, SignalRecord | undefined> = {};
+    const counts = {
+      needsReview: 0,
+      followUp: 0,
+      unresolved: 0,
+      unread: 0,
+      verified: 0,
+      anonymous: 0,
+      published: 0,
+      encrypted: 0,
+      high: 0,
+      pendingSui: 0,
+      registeredSui: 0,
+      archived: 0,
+    };
+    const unreadCountByFormId: Record<string, number> = {};
+    const pendingSignalIdSet = new Set<string>();
+
+    scopedAccessibleForms.forEach((form) => {
+      unreadCountByFormId[form.id] = 0;
+    });
+
+    signals.forEach((record) => {
+      signalById[record.submission.id] = record;
+      if (record.submission.status === "unread") {
+        unreadCountByFormId[record.form.id] = (unreadCountByFormId[record.form.id] ?? 0) + 1;
+        counts.unread += 1;
+      }
+      if (
+        record.submission.status !== "archived" &&
+        record.submission.triageStatus !== "fixed" &&
+        record.submission.triageStatus !== "closed"
+      ) {
+        counts.unresolved += 1;
+      }
+      if (isVerifiedSignal(record.submission)) {
+        counts.verified += 1;
+      }
+      if (getSubmissionRespondentMeta(record.submission).isAnonymous) {
+        counts.anonymous += 1;
+      }
+      if (record.submission.status !== "archived") {
+        counts.needsReview += 1;
+      }
+      if (
+        record.submission.triageStatus === "planned" ||
+        record.submission.triageStatus === "in_progress" ||
+        record.submission.triageStatus === "fixed"
+      ) {
+        counts.published += 1;
+      }
+      if (record.submission.isEncrypted) {
+        counts.encrypted += 1;
+      }
+      if (record.submission.priority === "high" || record.submission.severity === "high") {
+        counts.high += 1;
+      }
+      if (hasNeedsFollowUp(record.submission)) {
+        counts.followUp += 1;
+      }
+      if (record.submission.pendingOnchainRegistration) {
+        counts.pendingSui += 1;
+        pendingSignalIdSet.add(record.submission.id);
+      }
+      if (typeof record.submission.onchainSignalId === "number") {
+        counts.registeredSui += 1;
+      }
+      if (record.submission.status === "archived") {
+        counts.archived += 1;
+      }
+    });
+
+    return {
+      signals,
+      signalById,
+      counts,
+      unreadCountByFormId,
+      pendingSignalIdSet,
+    };
+  }, [fullSignalIndex, isProjectScoped, scopeProjectId, scopedAccessibleForms]);
 
   const allSignals = signalIndex.signals;
   const pendingSignals = useMemo(
@@ -808,7 +907,7 @@ export function useSignalInboxData({
     search,
     setSearch,
     loadConsole,
-    accessibleForms,
+    accessibleForms: scopedAccessibleForms,
     signalIndex,
     allSignals,
     pendingSignals,

@@ -45,6 +45,39 @@ function UseCaseIcon({ kind }: { kind: "company" | "dao" | "hackathon" | "resear
   }
 }
 
+function SignalInfrastructureVisualization() {
+  return (
+    <div className="landing-live-flow-visual" aria-hidden="true">
+      <div className="landing-live-flow-visual-grid" />
+      <div className="landing-live-flow-visual-radar">
+        <span className="landing-live-flow-visual-radar-ring landing-live-flow-visual-radar-ring-1" />
+        <span className="landing-live-flow-visual-radar-ring landing-live-flow-visual-radar-ring-2" />
+        <span className="landing-live-flow-visual-radar-ring landing-live-flow-visual-radar-ring-3" />
+        <span className="landing-live-flow-visual-sweep" />
+        <span className="landing-live-flow-visual-core" />
+      </div>
+      <svg className="landing-live-flow-visual-network" viewBox="0 0 320 220" role="presentation" focusable="false">
+        <path className="landing-live-flow-visual-path landing-live-flow-visual-path-seal" d="M54 144C92 124 112 112 148 103C184 94 214 92 260 80" />
+        <path className="landing-live-flow-visual-path landing-live-flow-visual-path-review" d="M55 144C104 154 136 162 176 172C208 180 233 179 271 160" />
+        <path className="landing-live-flow-visual-path landing-live-flow-visual-path-audit" d="M161 64C170 96 176 127 182 168" />
+        <circle className="landing-live-flow-visual-node is-entry" cx="54" cy="144" r="8" />
+        <circle className="landing-live-flow-visual-node is-seal" cx="160" cy="64" r="10" />
+        <circle className="landing-live-flow-visual-node is-walrus" cx="266" cy="80" r="11" />
+        <circle className="landing-live-flow-visual-node is-review" cx="272" cy="160" r="9" />
+        <circle className="landing-live-flow-visual-node is-audit" cx="182" cy="170" r="9" />
+      </svg>
+      <div className="landing-live-flow-visual-packet landing-live-flow-visual-packet-1" />
+      <div className="landing-live-flow-visual-packet landing-live-flow-visual-packet-2" />
+      <div className="landing-live-flow-visual-packet landing-live-flow-visual-packet-3" />
+      <div className="landing-live-flow-visual-label landing-live-flow-visual-label-entry">Ingress</div>
+      <div className="landing-live-flow-visual-label landing-live-flow-visual-label-seal">Seal</div>
+      <div className="landing-live-flow-visual-label landing-live-flow-visual-label-walrus">Walrus</div>
+      <div className="landing-live-flow-visual-label landing-live-flow-visual-label-review">Review</div>
+      <div className="landing-live-flow-visual-label landing-live-flow-visual-label-audit">Audit</div>
+    </div>
+  );
+}
+
 function useScrollReveal() {
   const sectionRef = useRef<HTMLElement | null>(null);
   const [isVisible, setIsVisible] = useState(false);
@@ -57,19 +90,51 @@ function useScrollReveal() {
       return;
     }
 
+    const revealNowIfNearViewport = () => {
+      const rect = node.getBoundingClientRect();
+      const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
+      if (rect.top <= viewportHeight * 0.92) {
+        setIsVisible(true);
+        return true;
+      }
+      return false;
+    };
+
+    if (revealNowIfNearViewport()) {
+      return;
+    }
+
     const observer = new IntersectionObserver(
       ([entry]) => {
-        if (entry.isIntersecting) {
+        if (entry.isIntersecting || entry.intersectionRatio > 0) {
           setIsVisible(true);
           observer.disconnect();
         }
       },
-      { rootMargin: "0px 0px -12% 0px", threshold: 0.24 },
+      {
+        rootMargin: "0px 0px 8% 0px",
+        threshold: [0, 0.08, 0.16],
+      },
     );
 
     observer.observe(node);
 
-    return () => observer.disconnect();
+    const handleScroll = () => {
+      if (revealNowIfNearViewport()) {
+        observer.disconnect();
+        window.removeEventListener("scroll", handleScroll);
+        window.removeEventListener("resize", handleScroll);
+      }
+    };
+
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    window.addEventListener("resize", handleScroll);
+
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("scroll", handleScroll);
+      window.removeEventListener("resize", handleScroll);
+    };
   }, []);
 
   return { sectionRef, isVisible };
@@ -547,9 +612,11 @@ function UseCasesSection() {
                         <span />
                       </div>
                       <div className="landing-use-case-review-score">
-                        <small>{useCase.metricLabel}</small>
                         <strong>{useCase.metricValue}</strong>
-                        <span aria-label={t("landingUseCasesHackathonMockStarsLabel")}>5 stars</span>
+                        <div className="landing-use-case-review-score-meta">
+                          <small>{useCase.metricLabel}</small>
+                          <span aria-label={t("landingUseCasesHackathonMockStarsLabel")}>★★★★★</span>
+                        </div>
                       </div>
                     </div>
                     <div className="landing-use-case-review-comments">
@@ -674,11 +741,100 @@ function CorePrinciplesSection() {
 function LiveSignalFlowSection() {
   const { sectionRef, isVisible } = useScrollReveal();
   const { t } = useI18n();
-  const flowRows = [
-    t("landingLiveFlowStep1"),
-    t("landingLiveFlowStep2"),
-    t("landingLiveFlowStep3"),
-    t("landingLiveFlowStep4"),
+  const runtimeRows = [
+    {
+      title: t("landingLiveFlowStep1"),
+      body: t("landingLiveFlowRuntimeBody1"),
+      time: "14:32:21",
+      status: t("landingLiveFlowRuntimeStatus1"),
+      icon: "Submit" as FlowStepIconName,
+    },
+    {
+      title: t("landingLiveFlowStep2"),
+      body: t("landingLiveFlowRuntimeBody2"),
+      time: "14:32:22",
+      status: t("landingLiveFlowRuntimeStatus2"),
+      icon: "Review" as FlowStepIconName,
+    },
+    {
+      title: t("landingLiveFlowStep3"),
+      body: t("landingLiveFlowRuntimeBody3"),
+      time: "14:32:23",
+      status: t("landingLiveFlowRuntimeStatus3"),
+      icon: "Encrypt" as FlowStepIconName,
+      tone: "seal",
+      priority: "highlight",
+    },
+    {
+      title: t("landingLiveFlowStep4"),
+      body: t("landingLiveFlowRuntimeBody4"),
+      time: "14:32:25",
+      status: t("landingLiveFlowRuntimeStatus4"),
+      icon: "Store" as FlowStepIconName,
+      tone: "walrus",
+      priority: "primary",
+      badge: "Certified",
+    },
+    {
+      title: t("landingLiveFlowStep5"),
+      body: t("landingLiveFlowRuntimeBody5"),
+      time: "14:32:27",
+      status: t("landingLiveFlowRuntimeStatus5"),
+      icon: "Review" as FlowStepIconName,
+    },
+    {
+      title: t("landingLiveFlowStep6"),
+      body: t("landingLiveFlowRuntimeBody6"),
+      time: "14:32:28",
+      status: t("landingLiveFlowRuntimeStatus6"),
+      icon: "Certify" as FlowStepIconName,
+      tone: "audit",
+      priority: "highlight",
+    },
+  ];
+  const runtimeMetrics = [
+    { label: t("landingLiveFlowMetric1Label"), value: t("landingLiveFlowMetric1Value"), meta: t("landingLiveFlowMetric1Meta") },
+    { label: t("landingLiveFlowMetric2Label"), value: t("landingLiveFlowMetric2Value"), meta: t("landingLiveFlowMetric2Meta") },
+    { label: t("landingLiveFlowMetric3Label"), value: t("landingLiveFlowMetric3Value"), meta: t("landingLiveFlowMetric3Meta") },
+    { label: t("landingLiveFlowMetric4Label"), value: t("landingLiveFlowMetric4Value"), meta: t("landingLiveFlowMetric4Meta") },
+  ];
+  const trustPills = [
+    t("landingLiveFlowTrust1"),
+    t("landingLiveFlowTrust2"),
+    t("landingLiveFlowTrust3"),
+    t("landingLiveFlowTrust4"),
+  ];
+  const pipelineSteps = [
+    {
+      title: t("landingLiveFlowPipeline1Title"),
+      body: t("landingLiveFlowPipeline1Body"),
+      chip: t("landingLiveFlowPipeline1Chip"),
+      icon: "Submit" as FlowStepIconName,
+    },
+    {
+      title: t("landingLiveFlowPipeline2Title"),
+      body: t("landingLiveFlowPipeline2Body"),
+      chip: t("landingLiveFlowPipeline2Chip"),
+      icon: "Encrypt" as FlowStepIconName,
+    },
+    {
+      title: t("landingLiveFlowPipeline3Title"),
+      body: t("landingLiveFlowPipeline3Body"),
+      chip: t("landingLiveFlowPipeline3Chip"),
+      icon: "Store" as FlowStepIconName,
+    },
+    {
+      title: t("landingLiveFlowPipeline4Title"),
+      body: t("landingLiveFlowPipeline4Body"),
+      chip: t("landingLiveFlowPipeline4Chip"),
+      icon: "Review" as FlowStepIconName,
+    },
+    {
+      title: t("landingLiveFlowPipeline5Title"),
+      body: t("landingLiveFlowPipeline5Body"),
+      chip: t("landingLiveFlowPipeline5Chip"),
+      icon: "Certify" as FlowStepIconName,
+    },
   ];
 
   return (
@@ -688,26 +844,109 @@ function LiveSignalFlowSection() {
       aria-labelledby="landing-live-flow-title"
     >
       <div className="landing-signal-section-shell landing-live-flow-shell">
-        <div className="landing-live-flow-copy">
-          <p className="eyebrow">{t("landingLiveFlowEyebrow")}</p>
-          <h2 id="landing-live-flow-title">{t("landingLiveFlowTitle")}</h2>
+        <div className="landing-live-flow-upper">
+          <div className="landing-live-flow-copy">
+            <p className="eyebrow">{t("landingLiveFlowEyebrow")}</p>
+            <h2 id="landing-live-flow-title">{t("landingLiveFlowTitle")}</h2>
+            <p className="landing-live-flow-body">{t("landingLiveFlowBody")}</p>
+            <div className="landing-live-flow-trust">
+              {trustPills.map((item) => (
+                <span key={item} className="landing-live-flow-trust-pill">{item}</span>
+              ))}
+            </div>
+            <SignalInfrastructureVisualization />
+            <div className="landing-live-flow-metrics">
+              {runtimeMetrics.map((metric) => (
+                <div key={metric.label} className="landing-live-flow-metric-card">
+                  <small>{metric.label}</small>
+                  <strong>{metric.value}</strong>
+                  <span>{metric.meta}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="landing-live-terminal" role="status" aria-label={t("landingLiveFlowTitle")}>
+            <div className="landing-live-terminal-scanline" aria-hidden="true" />
+            <div className="landing-live-terminal-topline">
+              <div>
+                <span>{t("landingLiveFlowConsole")}</span>
+                <small>{t("landingLiveFlowRuntimeSince")}</small>
+              </div>
+              <strong>{t("landingLiveFlowStatus")}</strong>
+            </div>
+            <div className="landing-live-flow-rail" aria-hidden="true">
+              <span />
+            </div>
+            <div className="landing-live-log">
+              {runtimeRows.map((row, index) => (
+                <div
+                  key={`${row.title}-${row.time}`}
+                  className={`landing-live-log-row ${"priority" in row && row.priority ? `is-${row.priority}` : ""} ${
+                    "tone" in row && row.tone ? `is-${row.tone}` : ""
+                  }`}
+                  style={{ "--reveal-index": index } as CSSProperties}
+                >
+                  <span className="landing-live-log-dot" />
+                  <span className="landing-live-log-icon">
+                    <FlowStepIcon name={row.icon} />
+                  </span>
+                  <span className="landing-live-log-timestamp">{row.time}</span>
+                  <div className="landing-live-log-copy">
+                    <strong>{row.title}</strong>
+                    <span>{row.body}</span>
+                  </div>
+                  <div className="landing-live-log-meta">
+                    <span>{row.status}</span>
+                    {"badge" in row && row.badge ? <em className="landing-live-log-badge">{row.badge}</em> : null}
+                  </div>
+                  <span className="landing-live-log-check" aria-hidden="true" />
+                </div>
+              ))}
+            </div>
+            <div className="landing-live-terminal-footer">
+              <span>{t("landingLiveFlowFooter")}</span>
+              <a href="#landing-live-flow-title">{t("landingLiveFlowFooterLink")}</a>
+            </div>
+          </div>
         </div>
 
-        <div className="landing-live-terminal" role="status" aria-label={t("landingLiveFlowTitle")}>
-          <div className="landing-live-terminal-topline">
-            <span>{t("landingLiveFlowConsole")}</span>
-            <strong>{t("landingLiveFlowStatus")}</strong>
+        <div className="landing-live-flow-lower">
+          <div className="landing-live-flow-pipeline">
+            <div className="landing-live-flow-pipeline-topline">{t("landingLiveFlowPipelineTitle")}</div>
+            <div className="landing-live-flow-pipeline-track">
+              {pipelineSteps.map((step, index) => (
+                <div key={step.title} className="landing-live-flow-pipeline-step">
+                  <span className="landing-live-flow-pipeline-icon">
+                    <FlowStepIcon name={step.icon} />
+                  </span>
+                  {index < pipelineSteps.length - 1 ? <i className="landing-live-flow-pipeline-link" aria-hidden="true" /> : null}
+                  <strong>{step.title}</strong>
+                  <p>{step.body}</p>
+                  <span className="landing-live-flow-pipeline-chip">{step.chip}</span>
+                </div>
+              ))}
+            </div>
           </div>
-          <div className="landing-live-flow-rail" aria-hidden="true">
-            <span />
-          </div>
-          <div className="landing-live-log">
-            {flowRows.map((row, index) => (
-              <div key={row} className="landing-live-log-row" style={{ "--reveal-index": index } as CSSProperties}>
-                <span className="landing-live-log-dot" />
-                <span>{row}</span>
+          <div className="landing-live-flow-powered">
+            <div className="landing-live-flow-powered-topline">{t("landingLiveFlowPoweredBy")}</div>
+            <div className="landing-live-flow-powered-item">
+              <span className="landing-live-flow-powered-icon is-walrus">W</span>
+              <div>
+                <strong>Walrus</strong>
+                <p>{t("landingLiveFlowPoweredWalrus")}</p>
               </div>
-            ))}
+            </div>
+            <div className="landing-live-flow-powered-item">
+              <span className="landing-live-flow-powered-icon is-seal">S</span>
+              <div>
+                <strong>Seal</strong>
+                <p>{t("landingLiveFlowPoweredSeal")}</p>
+              </div>
+            </div>
+            <button type="button" className="landing-live-flow-powered-button">
+              {t("landingLiveFlowPoweredCta")}
+            </button>
           </div>
         </div>
       </div>
