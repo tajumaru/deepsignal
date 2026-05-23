@@ -13,6 +13,7 @@ export function AccessManagementPage() {
     capabilityProfile,
     refetch: refetchCapabilities,
     isLoadingAccess,
+    accessVerificationBlocked,
   } = useAccessControl(wallet.accountAddress);
   const accessState = getAdminSurfaceAccessState(
     "reviewer",
@@ -22,6 +23,23 @@ export function AccessManagementPage() {
 
   if (isLoadingAccess) {
     return <div className="panel">{t("loadingAccessManagement")}</div>;
+  }
+
+  if (accessVerificationBlocked) {
+    return (
+      <section className="stack">
+        <section className="panel glow-panel access-panel">
+          <p className="eyebrow">{t("creatorOnlyInbox")}</p>
+          <h1>{t("loadingAccessManagement")}</h1>
+          <p>Tatum RPC is rate limiting access checks right now, so DeepSignal could not verify your capability objects yet.</p>
+          <div className="inline-actions">
+            <button type="button" className="ghost-button" onClick={() => void refetchCapabilities()}>
+              Retry access check
+            </button>
+          </div>
+        </section>
+      </section>
+    );
   }
 
   return (

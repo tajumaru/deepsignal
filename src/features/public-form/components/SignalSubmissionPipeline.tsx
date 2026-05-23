@@ -1,5 +1,6 @@
 import { createPortal } from "react-dom";
 import { TatumFrogIcon } from "../../../components/NetworkMenu";
+import { PipelineStageIcon } from "../../../components/SignalFlowIcons";
 import {
   SIGNAL_PIPELINE_STAGES,
   type SignalPipelineState,
@@ -97,7 +98,9 @@ export function SignalSubmissionPipeline({ pipeline, visible, onClose, labels }:
                   } ${isFailed ? "is-failed" : ""}`}
                   role="listitem"
                 >
-                  <span className="signal-submission-step-dot" aria-hidden="true" />
+                  <span className="signal-submission-step-icon" aria-hidden="true">
+                    <PipelineStageIcon stage={stage} />
+                  </span>
                   <span>{labels.stages[stage] ?? PIPELINE_LABELS[stage]}</span>
                   <small>{statusText}</small>
                 </div>

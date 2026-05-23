@@ -129,11 +129,22 @@ export function useAccessControl(address?: string | null, options: { enabled?: b
     ),
     [],
   );
-  const ownedObjectsQuery = useOwnedSuiObjects(address, { enabled });
+  const ownedObjectsQuery = useOwnedSuiObjects(address, {
+    enabled,
+    structTypes: [
+      ACCESS_CONTROL_OWNER_CAP_TYPE,
+      ACCESS_CONTROL_ADMIN_CAP_TYPE,
+      ACCESS_CONTROL_REVIEWER_CAP_TYPE,
+    ],
+  });
   const ownedCapabilityEntries = useMemo(
     () => (ownedObjectsQuery.data ?? []).filter((entry) => targetTypes.has(normalizeType(entry.data?.type))),
     [ownedObjectsQuery.data, targetTypes],
   );
+  const accessVerificationBlocked =
+    enabled &&
+    ownedCapabilityEntries.length === 0 &&
+    ownedObjectsQuery.isRateLimitedFallback === true;
 
   const capabilityProfile = useMemo<CapabilityProfile>(() => {
     const inferredRegistryId = inferOwnedCapRegistryId(ownedCapabilityEntries, registryId);
@@ -212,6 +223,7 @@ export function useAccessControl(address?: string | null, options: { enabled?: b
     isError: ownedObjectsQuery.isError,
     isPending: ownedObjectsQuery.isPending,
     isLoadingAccess: (enabled && ownedObjectsQuery.isPending) || isLoadingRegistry,
+    accessVerificationBlocked,
     ownedObjects,
     capabilityProfile,
     registry,

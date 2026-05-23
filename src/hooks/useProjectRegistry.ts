@@ -76,7 +76,10 @@ export function useProjectRegistry(address?: string | null) {
   const enabled = Boolean(address && PROJECT_OWNER_CAP_TYPE && !rpc.isRateLimitedCooldownActive);
   const expectedType = normalizeType(PROJECT_OWNER_CAP_TYPE);
   const [recentProjects, setRecentProjects] = useState<ProjectSummary[]>(() => loadRecentProjects());
-  const ownedObjectsQuery = useOwnedSuiObjects(address, { enabled });
+  const ownedObjectsQuery = useOwnedSuiObjects(address, {
+    enabled,
+    structTypes: PROJECT_OWNER_CAP_TYPE ? [PROJECT_OWNER_CAP_TYPE] : [],
+  });
   const ownerCapObjectIds = useMemo(
     () =>
       (ownedObjectsQuery.data ?? [])

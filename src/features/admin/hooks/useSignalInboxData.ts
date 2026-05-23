@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useSuiClient } from "@mysten/dapp-kit";
 import { canReviewForm } from "../../../lib/adminAccess";
 import { isVerifiedSignal } from "../../../lib/respondentMeta";
 import { getSubmissionRespondentMeta } from "../../../lib/respondentMeta";
@@ -19,6 +20,13 @@ import type {
   OnchainProjectFormSummary,
   OnchainProjectSignalSummary,
   ProjectSummary,
+} from "../../../lib/projectRegistry";
+import {
+  getSelectedProjectId,
+  isProjectObjectType,
+  parseProjectSummary,
+  parseSuiObjectData,
+  subscribeProjectRegistryStorageChange,
 } from "../../../lib/projectRegistry";
 import {
   normalizeForm,
@@ -267,7 +275,10 @@ export function useSignalInboxData({
   capabilityProfile,
   sortOrder = "default",
 }: UseSignalInboxDataArgs) {
+  const suiClient = useSuiClient();
   const { projects, dataUpdatedAt: projectsUpdatedAt } = useProjectRegistry(accountAddress);
+  const [selectedProjectId, setSelectedProjectId] = useState(() => getSelectedProjectId());
+  const [hydratedSelectedProject, setHydratedSelectedProject] = useState<ProjectSummary | null>(null);
   const [forms, setForms] = useState<FormWithCount[]>([]);
   const [submissionsByFormId, setSubmissionsByFormId] = useState<Record<string, Submission[]>>({});
   const [supplementalSignals, setSupplementalSignals] = useState<SignalRecord[]>([]);
@@ -280,12 +291,74 @@ export function useSignalInboxData({
   const [search, setSearch] = useState("");
   const loadConsoleRunRef = useRef(0);
 
+  useEffect(() => {
+    return subscribeProjectRegistryStorageChange(() => {
+      setSelectedProjectId(getSelectedProjectId());
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!selectedProjectId) {
+      setHydratedSelectedProject(null);
+      return;
+    }
+
+    let cancelled = false;
+
+    const refreshSelectedProject = async () => {
+      try {
+        const response = await suiClient.getObject({
+          id: selectedProjectId,
+          options: {
+            showType: true,
+            showContent: true,
+          },
+        });
+        const parsed = parseSuiObjectData(response);
+        if (!parsed || !isProjectObjectType(parsed.type)) {
+          if (!cancelled) {
+            setHydratedSelectedProject(null);
+          }
+          return;
+        }
+        const project = parseProjectSummary(parsed.objectId, parsed.fields);
+        if (!cancelled) {
+          setHydratedSelectedProject(project);
+        }
+      } catch {
+        if (!cancelled) {
+          setHydratedSelectedProject(null);
+        }
+      }
+    };
+
+    void refreshSelectedProject();
+
+    const handleFocus = () => {
+      void refreshSelectedProject();
+    };
+
+    window.addEventListener("focus", handleFocus);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("focus", handleFocus);
+    };
+  }, [projectsUpdatedAt, selectedProjectId, suiClient]);
+
   async function hydrateOnchainSignals(
     nextForms: FormWithCount[],
     nextSubmissions: Record<string, Submission[]>,
     runId: number,
   ) {
-    if (projects.length === 0) {
+    const activeProjects =
+      hydratedSelectedProject
+        ? [
+            hydratedSelectedProject,
+            ...projects.filter((project) => project.objectId !== hydratedSelectedProject.objectId),
+          ]
+        : projects;
+
+    if (activeProjects.length === 0) {
       if (runId === loadConsoleRunRef.current) {
         setSupplementalSignals([]);
       }
@@ -313,7 +386,7 @@ export function useSignalInboxData({
       });
     });
 
-    const candidates = projects.flatMap((project) =>
+    const candidates = activeProjects.flatMap((project) =>
       (project.onchainSignals ?? []).flatMap((signal) => {
         const dedupeKey = `${project.objectId}:${signal.signalId}`;
         if (localSignalKeys.has(dedupeKey)) {

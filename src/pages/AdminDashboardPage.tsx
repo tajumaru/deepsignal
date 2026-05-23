@@ -1813,13 +1813,25 @@ export function AdminDashboardPage() {
     };
   }, [activeWorkspaceTab, hasAdminAccess, projects, rpc, suiClient]);
 
-  const selectedProjectForms = useMemo(
-    () =>
-      selectedProject
-        ? accessibleForms.filter((form) => form.projectId === selectedProject.objectId)
-        : [],
-    [accessibleForms, selectedProject],
-  );
+  const selectedProjectForms = useMemo(() => {
+    if (!selectedProject) {
+      return [];
+    }
+
+    const formsById = new Map<string, FormWithCount>();
+    accessibleForms
+      .filter((form) => form.projectId === selectedProject.objectId)
+      .forEach((form) => {
+        formsById.set(form.id, form);
+      });
+    allSignals
+      .filter((record) => record.form.projectId === selectedProject.objectId)
+      .forEach((record) => {
+        formsById.set(record.form.id, record.form);
+      });
+
+    return [...formsById.values()];
+  }, [accessibleForms, allSignals, selectedProject]);
   const selectedProjectSignals = useMemo(
     () =>
       selectedProject
@@ -3341,7 +3353,10 @@ export function AdminDashboardPage() {
           />
         ) : activeWorkspaceTab === "members" && hasAdminAccess ? (
           <MemberDirectorySection capabilityProfile={capabilityProfile} readOnly />
-        ) : accessibleForms.length === 0 ? (
+        ) : accessibleForms.length === 0 &&
+          (!hasAdminAccess ||
+            !selectedProject ||
+            (selectedProject.formsCount === 0 && selectedProject.signalsCount === 0)) ? (
           <EmptyState>
             <h2>{t("noCreatorInboxesTitle")}</h2>
             <p>{t("noCreatorInboxesBody")}</p>

@@ -41,6 +41,7 @@ export function useProjectWorkspace({
   const deleteProjectTx = useSignAndExecuteTransaction();
   const deleteOnchainFormTx = useSignAndExecuteTransaction();
   const [selectedProjectId, setSelectedProjectIdState] = useState(() => getSelectedProjectId());
+  const [hydratedSelectedProject, setHydratedSelectedProject] = useState<ReturnType<typeof parseProjectSummary> | null>(null);
   const [manualProjectId, setManualProjectId] = useState("");
   const [projectCreateName, setProjectCreateName] = useState("");
   const [projectState, setProjectState] = useState("");
@@ -54,7 +55,20 @@ export function useProjectWorkspace({
 
   const visibleProjects = hasAdminAccess ? projects : [];
   const visibleSelectedProjectId = hasAdminAccess ? selectedProjectId : "";
-  const selectedProject = visibleProjects.find((project) => project.objectId === visibleSelectedProjectId) ?? null;
+  const cachedSelectedProject = visibleProjects.find((project) => project.objectId === visibleSelectedProjectId) ?? null;
+  const selectedProject = useMemo(() => {
+    if (!visibleSelectedProjectId) {
+      return null;
+    }
+    if (hydratedSelectedProject?.objectId === visibleSelectedProjectId) {
+      return {
+        ...(cachedSelectedProject ?? {}),
+        ...hydratedSelectedProject,
+        ownedOwnerCapId: cachedSelectedProject?.ownedOwnerCapId,
+      };
+    }
+    return cachedSelectedProject;
+  }, [cachedSelectedProject, hydratedSelectedProject, visibleSelectedProjectId]);
   const projectMemberCount = selectedProject ? selectedProject.admins.length + 1 : 0;
   const localProjectFormsCount = useMemo(
     () => forms.filter((form) => form.projectId === selectedProject?.objectId).length,
@@ -129,6 +143,40 @@ export function useProjectWorkspace({
     saveRecentProject(summary);
     return summary;
   }
+
+  useEffect(() => {
+    if (!hasAdminAccess || !visibleSelectedProjectId) {
+      setHydratedSelectedProject(null);
+      return;
+    }
+
+    let cancelled = false;
+
+    const refreshSelectedProject = async () => {
+      try {
+        const project = await hydrateProject(visibleSelectedProjectId);
+        if (!cancelled) {
+          setHydratedSelectedProject(project);
+        }
+      } catch {
+        if (!cancelled) {
+          setHydratedSelectedProject(null);
+        }
+      }
+    };
+
+    void refreshSelectedProject();
+
+    const handleFocus = () => {
+      void refreshSelectedProject();
+    };
+
+    window.addEventListener("focus", handleFocus);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("focus", handleFocus);
+    };
+  }, [hasAdminAccess, visibleSelectedProjectId]);
 
   async function connectManualProject() {
     if (!hasAdminAccess) {

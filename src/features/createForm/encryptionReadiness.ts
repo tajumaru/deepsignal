@@ -1,6 +1,7 @@
 import { getSealRuntimeStatus } from "../../crypto/cryptoFactory";
 import { SUI_FULLNODE_URL, SUI_NETWORK, WALRUS_AGGREGATOR_URL, WALRUS_UPLOAD_RELAY_URL } from "../../lib/sui";
 import { getWalrusMutationRuntimeStatus } from "../../lib/walrus";
+import { getSuiRuntimeContext } from "../../suiRuntime";
 
 type NetworkName = "mainnet" | "testnet";
 
@@ -31,10 +32,11 @@ function inferNetworkFromUrl(value: string): NetworkName | null {
 }
 
 function getNetworkMismatchWarnings(): EncryptionReadinessWarning[] {
+  const activeRpcUrl = getSuiRuntimeContext().rpcUrl;
   const endpoints = [
     { label: "Walrus aggregator", value: WALRUS_AGGREGATOR_URL },
     { label: "Walrus upload relay", value: WALRUS_UPLOAD_RELAY_URL },
-    { label: "Sui RPC", value: SUI_FULLNODE_URL },
+    { label: "Sui RPC", value: activeRpcUrl || SUI_FULLNODE_URL },
     { label: "Seal aggregator", value: import.meta.env.VITE_SEAL_AGGREGATOR_URL ?? "" },
   ];
 

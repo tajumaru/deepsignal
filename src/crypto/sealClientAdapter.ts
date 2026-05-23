@@ -10,6 +10,7 @@ import { Transaction } from "@mysten/sui/transactions";
 import { fromHex } from "@mysten/sui/utils";
 import type { SealAdapter, SealDecryptContext } from "../types";
 import { ACCESS_CONTROL_REGISTRY_ID, SUI_NETWORK } from "../lib/sui";
+import { getSuiRuntimeContext } from "../suiRuntime";
 import { serializeDecryptError } from "./decryptDiagnostics";
 import {
   createOwnerScopedSealId,
@@ -47,15 +48,41 @@ const serverConfig: KeyServerConfig = {
     : {}),
 };
 
-const suiClient = new SuiJsonRpcClient({
+const defaultSuiClient = new SuiJsonRpcClient({
   url: getJsonRpcFullnodeUrl(requestedNetwork),
   network: requestedNetwork,
 });
 
-const sealClient = new SealClient({
-  suiClient: suiClient as unknown as SealCompatibleClient,
-  serverConfigs: [serverConfig],
-});
+const sealClientCache = new WeakMap<SealCompatibleClient, SealClient>();
+
+function createSealClient(suiClient: SealCompatibleClient) {
+  return new SealClient({
+    suiClient,
+    serverConfigs: [serverConfig],
+  });
+}
+
+function getActiveSealCompatibleClient(contextClient?: SealCompatibleClient) {
+  if (contextClient) {
+    return contextClient;
+  }
+  const runtimeClient = getSuiRuntimeContext().client;
+  if (runtimeClient) {
+    return runtimeClient;
+  }
+  return defaultSuiClient as unknown as SealCompatibleClient;
+}
+
+function getSealClientForActiveRpc(contextClient?: SealCompatibleClient) {
+  const activeClient = getActiveSealCompatibleClient(contextClient);
+  const cachedClient = sealClientCache.get(activeClient);
+  if (cachedClient) {
+    return cachedClient;
+  }
+  const nextClient = createSealClient(activeClient);
+  sealClientCache.set(activeClient, nextClient);
+  return nextClient;
+}
 
 const SESSION_KEY_STORAGE_PREFIX = "deepsignal.seal.sessionKey";
 const sessionKeyCache = new Map<string, SessionKey>();
@@ -109,6 +136,7 @@ export const sealClientAdapter: SealAdapter = {
         ? createOwnerScopedSealId(ownerAddress)
         : createRandomObjectId();
     const data = new TextEncoder().encode(value);
+    const sealClient = getSealClientForActiveRpc();
     const { encryptedObject } = await sealClient.encrypt({
       threshold: 1,
       packageId,
@@ -148,6 +176,10 @@ export const sealClientAdapter: SealAdapter = {
   },
 
   async decrypt(value, context) {
+    const activeSuiClient = getActiveSealCompatibleClient(
+      context?.suiClient as SealCompatibleClient | undefined,
+    );
+    const sealClient = getSealClientForActiveRpc(activeSuiClient);
     const envelope = parseRealSealEnvelope(value);
     if (!envelope) {
       throw new Error("Legacy unencrypted response.");
@@ -178,17 +210,17 @@ export const sealClientAdapter: SealAdapter = {
       const sessionKey = await getOrCreateSessionKey({
         walletAddress,
         packageId: envelope.packageId,
-        suiClient: context.suiClient as SealCompatibleClient,
+        suiClient: activeSuiClient,
         signPersonalMessage: context.signPersonalMessage,
         onStatusChange: context.onStatusChange,
       });
       context.onStatusChange?.("decrypting_encrypted_payload");
-      const txBytes = await buildSealApproveTransactionBytes({
-        objectId: envelope.objectId,
-        approvalPolicy: "owner_wallet_v1",
-        suiClient: context.suiClient as SealCompatibleClient,
-        packageId: envelope.packageId,
-      });
+        const txBytes = await buildSealApproveTransactionBytes({
+          objectId: envelope.objectId,
+          approvalPolicy: "owner_wallet_v1",
+          suiClient: activeSuiClient,
+          packageId: envelope.packageId,
+        });
       const plaintext = await sealClient.decrypt({
         data: fromBase64(envelope.encryptedObject),
         sessionKey,
@@ -205,7 +237,7 @@ export const sealClientAdapter: SealAdapter = {
       const sessionKey = await getOrCreateSessionKey({
         walletAddress,
         packageId: envelope.packageId,
-        suiClient: context.suiClient as SealCompatibleClient,
+        suiClient: activeSuiClient,
         signPersonalMessage: context.signPersonalMessage,
         onStatusChange: context.onStatusChange,
       });
@@ -226,7 +258,7 @@ export const sealClientAdapter: SealAdapter = {
           projectId,
           approvalPolicy: primaryApprovalPolicy,
           reviewerCapId,
-          suiClient: context.suiClient as SealCompatibleClient,
+          suiClient: activeSuiClient,
           packageId: envelope.packageId,
         });
 
@@ -277,7 +309,7 @@ export const sealClientAdapter: SealAdapter = {
           projectId,
           approvalPolicy: fallbackApprovalPolicy,
           reviewerCapId,
-          suiClient: context.suiClient as SealCompatibleClient,
+          suiClient: activeSuiClient,
           packageId: envelope.packageId,
         });
 

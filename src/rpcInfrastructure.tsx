@@ -41,12 +41,11 @@ export function handleRateLimitedRpcFallback(
   error: unknown,
 ) {
   rpc.noteRateLimited();
-  if (!rpc.usingTatum || !rpc.canAutoFallbackFromRateLimit || tatumRateLimitFallbackTriggered) {
+  if (!rpc.usingTatum || tatumRateLimitFallbackTriggered) {
     return false;
   }
   tatumRateLimitFallbackTriggered = true;
-  console.warn("Tatum RPC rate limited; switching to default Sui RPC.", error);
-  rpc.switchToDefault();
+  console.warn("Tatum RPC rate limited; keeping the active Tatum connection and waiting for retry.", error);
   return true;
 }
 

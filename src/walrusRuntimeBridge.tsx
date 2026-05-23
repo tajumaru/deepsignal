@@ -9,6 +9,7 @@ import { useEffect, useMemo, type PropsWithChildren } from "react";
 import { WALRUS_UPLOAD_RELAY_URL } from "./lib/sui";
 import { WalrusDiagnosticError, getWalrusErrorMessage } from "./storage/walrusDiagnostics";
 import { setWalrusRuntimeContext } from "./storage/walrusAdapter";
+import { setSuiRuntimeContext } from "./suiRuntime";
 
 const WALRUS_TX_WAIT_TIMEOUT_MS = 3 * 60 * 1000;
 const WALRUS_UPLOAD_RELAY_TIMEOUT_RAW = import.meta.env.VITE_WALRUS_UPLOAD_RELAY_TIMEOUT_MS;
@@ -148,6 +149,11 @@ function WalrusRuntimeBridgeInner() {
 
   useEffect(() => {
     setWalrusRuntimeContext(runtimeContext);
+    setSuiRuntimeContext({
+      client,
+      rpcUrl,
+      network: currentNetwork,
+    });
 
     return () => {
       setWalrusRuntimeContext({
@@ -158,8 +164,13 @@ function WalrusRuntimeBridgeInner() {
         rpcUrl: null,
         network: null,
       });
+      setSuiRuntimeContext({
+        client: null,
+        rpcUrl: null,
+        network: null,
+      });
     };
-  }, [runtimeContext]);
+  }, [client, currentNetwork, rpcUrl, runtimeContext]);
 
   return null;
 }

@@ -18,6 +18,8 @@ type RegistryObjectResponse = {
   } | null;
 };
 
+const ACCESS_REGISTRY_CACHE_PREFIX = "deepsignal.accessRegistry";
+
 function normalizeObjectId(value?: string | null) {
   if (!value) {
     return "";
@@ -34,6 +36,7 @@ export function useAccessRegistry(options: { enabled?: boolean } = {}) {
   const rpc = useRpcInfrastructure();
   const packageId = normalizeObjectId(ACCESS_CONTROL_PACKAGE_ID);
   const registryId = normalizeObjectId(ACCESS_CONTROL_REGISTRY_ID);
+  const cacheKey = `${ACCESS_REGISTRY_CACHE_PREFIX}:${packageId}:${registryId}:${rpc.network}`;
   const queryEnabled = options.enabled ?? true;
   const enabled = Boolean(queryEnabled && packageId && registryId);
 
@@ -52,6 +55,17 @@ export function useAccessRegistry(options: { enabled?: boolean } = {}) {
     refetchOnMount: false,
     refetchOnReconnect: false,
     refetchOnWindowFocus: false,
+    initialData: () => {
+      if (typeof window === "undefined" || !packageId || !registryId) {
+        return undefined;
+      }
+      try {
+        const raw = window.sessionStorage.getItem(cacheKey);
+        return raw ? (JSON.parse(raw) as Record<string, unknown>) : undefined;
+      } catch {
+        return undefined;
+      }
+    },
     queryFn: async () => {
       try {
         const response = (await suiClient.getObject({
@@ -61,10 +75,26 @@ export function useAccessRegistry(options: { enabled?: boolean } = {}) {
           },
         })) as RegistryObjectResponse;
 
-        return response.data?.content?.fields ?? null;
+        const fields = response.data?.content?.fields ?? null;
+        if (fields && typeof window !== "undefined") {
+          try {
+            window.sessionStorage.setItem(cacheKey, JSON.stringify(fields));
+          } catch {
+            // Best effort cache only.
+          }
+        }
+        return fields;
       } catch (error) {
         if (isSuiRateLimitError(error)) {
           handleRateLimitedRpcFallback(rpc, error);
+          if (typeof window !== "undefined") {
+            try {
+              const raw = window.sessionStorage.getItem(cacheKey);
+              return raw ? (JSON.parse(raw) as Record<string, unknown>) : null;
+            } catch {
+              return null;
+            }
+          }
           return null;
         }
         throw error;

@@ -24,6 +24,9 @@ type OwnedObjectsResponse = {
 type OwnedObjectsRequest = {
   owner: string;
   cursor?: string;
+  filter?: {
+    StructType: string;
+  };
   options?: {
     showType?: boolean;
     showContent?: boolean;
@@ -31,42 +34,79 @@ type OwnedObjectsRequest = {
   limit?: number;
 };
 
+const OWNED_OBJECTS_CACHE_PREFIX = "deepsignal.ownedObjects";
+
 async function fetchOwnedObjects(
   suiClient: ReturnType<typeof useSuiClient>,
   owner: string,
+  structTypes: string[] = [],
 ) {
+  const normalizedStructTypes = [...new Set(structTypes.map((value) => value.trim()).filter(Boolean))];
   const matches: OwnedObjectEntry[] = [];
-  let cursor: string | null | undefined = null;
-  let pageCount = 0;
+  const queryStructTypes = normalizedStructTypes.length > 0 ? normalizedStructTypes : [""];
 
-  do {
-    const page = (await suiClient.getOwnedObjects({
-      owner,
-      cursor: cursor ?? undefined,
-      options: {
-        showType: true,
-        showContent: true,
-      },
-      limit: 50,
-    } as OwnedObjectsRequest)) as OwnedObjectsResponse;
+  for (const structType of queryStructTypes) {
+    let cursor: string | null | undefined = null;
 
-    matches.push(...(page.data ?? []));
-    cursor = page.hasNextPage ? page.nextCursor : null;
-    pageCount += 1;
-  } while (cursor && pageCount < 20);
+    do {
+      const request: OwnedObjectsRequest = {
+        owner,
+        cursor: cursor ?? undefined,
+        options: {
+          showType: true,
+          showContent: true,
+        },
+        limit: 50,
+      };
+      if (structType) {
+        request.filter = { StructType: structType };
+      }
+      const page = (await suiClient.getOwnedObjects(request)) as OwnedObjectsResponse;
 
-  return matches;
+      matches.push(...(page.data ?? []));
+      cursor = page.hasNextPage ? page.nextCursor : null;
+    } while (cursor);
+  }
+
+  return matches.reduce<OwnedObjectEntry[]>((unique, entry) => {
+    const objectId = entry.data?.objectId?.trim();
+    if (!objectId || unique.some((candidate) => candidate.data?.objectId?.trim() === objectId)) {
+      return unique;
+    }
+    unique.push(entry);
+    return unique;
+  }, []);
 }
 
-export function useOwnedSuiObjects(address?: string | null, options: { enabled?: boolean } = {}) {
+export function useOwnedSuiObjects(
+  address?: string | null,
+  options: { enabled?: boolean; structTypes?: string[] } = {},
+) {
   const suiClient = useSuiClient();
   const rpc = useRpcInfrastructure();
   const queryEnabled = options.enabled ?? true;
+  const structTypes = options.structTypes ?? [];
   const enabled = Boolean(queryEnabled && address);
-  const [lastSuccessfulData, setLastSuccessfulData] = useState<OwnedObjectEntry[]>([]);
+  const cacheKey = `${OWNED_OBJECTS_CACHE_PREFIX}:${address ?? ""}:${structTypes.join(",")}:${rpc.network}`;
+  const [lastSuccessfulData, setLastSuccessfulData] = useState<OwnedObjectEntry[]>(() => {
+    if (typeof window === "undefined" || !address) {
+      return [];
+    }
+    try {
+      const raw = window.sessionStorage.getItem(cacheKey);
+      if (!raw) {
+        return [];
+      }
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? (parsed as OwnedObjectEntry[]) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [isRateLimitedFallback, setIsRateLimitedFallback] = useState(false);
 
   const query = useQuery({
-    queryKey: ["sui-owned-objects", address ?? "", rpc.mode, rpc.currentRpcUrl],
+    queryKey: ["sui-owned-objects", address ?? "", structTypes.join(","), rpc.mode, rpc.currentRpcUrl],
     enabled,
     staleTime: 1000 * 60 * 5,
     gcTime: 1000 * 60 * 30,
@@ -77,10 +117,13 @@ export function useOwnedSuiObjects(address?: string | null, options: { enabled?:
     placeholderData: (previousData) => previousData,
     queryFn: async () => {
       try {
-        return await fetchOwnedObjects(suiClient, address ?? "");
+        const result = await fetchOwnedObjects(suiClient, address ?? "", structTypes);
+        setIsRateLimitedFallback(false);
+        return result;
       } catch (error) {
         if (isSuiRateLimitError(error)) {
           handleRateLimitedRpcFallback(rpc, error);
+          setIsRateLimitedFallback(true);
           return lastSuccessfulData;
         }
         throw error;
@@ -91,14 +134,25 @@ export function useOwnedSuiObjects(address?: string | null, options: { enabled?:
   useEffect(() => {
     if (query.data && query.data.length > 0) {
       setLastSuccessfulData(query.data);
+      if (typeof window !== "undefined") {
+        try {
+          window.sessionStorage.setItem(cacheKey, JSON.stringify(query.data));
+        } catch {
+          // Best effort cache only.
+        }
+      }
       return;
     }
     if (!address) {
       setLastSuccessfulData([]);
+      setIsRateLimitedFallback(false);
     }
-  }, [address, query.data]);
+  }, [address, cacheKey, query.data]);
 
-  return query;
+  return {
+    ...query,
+    isRateLimitedFallback,
+  };
 }
 
 export type { OwnedObjectEntry };
