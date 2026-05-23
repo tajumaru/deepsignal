@@ -1,4 +1,4 @@
-import { useI18n } from "../../../i18n";
+﻿import { useI18n } from "../../../i18n";
 import { formatDate, formatRelativeTime } from "../../../lib/utils";
 import type { ReactNode } from "react";
 
@@ -58,7 +58,7 @@ function SectionToggle({
       <span className="workspace-section-toggle-side">
         {trailing}
         <span className="workspace-section-toggle-icon" aria-hidden="true">
-          {open ? "−" : "+"}
+          {open ? "-" : "+"}
         </span>
       </span>
     </button>
@@ -136,3 +136,4 @@ export function SignalTimelineSection({
     </section>
   );
 }
+

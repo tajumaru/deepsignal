@@ -2430,10 +2430,10 @@ export function AdminDashboardPage() {
   const selectedReviewSummaryBadges = selectedRecord
     ? [
         reviewSaveStatus !== "idle" ? reviewStatusPillLabel : null,
-        isSelectedRecordOnRoadmap ? "Ready to publish" : null,
-        selectedRecord.submission.status === "archived" ? "Archived" : null,
+        isSelectedRecordOnRoadmap ? t("publishReadyTitle") : null,
+        selectedRecord.submission.status === "archived" ? t("statusArchived") : null,
         selectedRecord.submission.triageStatus === "fixed" || selectedRecord.submission.triageStatus === "closed"
-          ? "Resolved"
+          ? t("resolvedLabel")
           : null,
       ].filter((value): value is string => Boolean(value))
     : [];
@@ -3233,7 +3233,7 @@ export function AdminDashboardPage() {
                     const isAnonymousSignal = getSubmissionRespondentMeta(submission).isAnonymous;
                     const isPendingSui = Boolean(submission.pendingOnchainRegistration);
                     const isSelectedForSui = selectedPendingSignalIds.includes(submission.id);
-                    const isLocalOnlySignal = storageLabel === "Stored locally only";
+                    const isLocalOnlySignal = storageState === "local_only";
                     const isSelectedSignal = selectedRecord?.submission.id === submission.id;
                     const isUnlockedSignal = Boolean(decryptedSignalsById[submission.id]) || (isSelectedSignal && Boolean(detailAnswers));
                     const readStateLabel =

@@ -75,6 +75,15 @@ This is the fastest path through the current UX.
 9. Triage the signal, set priority/tags/notes, assign roadmap stage, and export JSON or CSV.
 10. Open `/explore` or `/roadmap/:formId` and confirm that public views contain only selected roadmap-safe metadata.
 
+## Phase2 Demo Flow
+
+For a short Signal Operations Workspace demo:
+
+1. Open `/admin` or `/dashboard` and show the stream list plus the selected signal detail panel.
+2. Start **Review Session** on an unread signal and walk through unlock, classify, reviewer note, and public roadmap decision steps.
+3. Show **Related Signals**, **Signal Timeline**, and the secondary inspector so the audience can see triage context, lifecycle history, and Walrus/Seal proof metadata together.
+4. Save the review, then show the resulting badges, reviewer summary, and export options without exposing private payloads on public views.
+
 ## Why Walrus / Seal / Sui
 
 | Layer | Why DeepSignal Uses It |

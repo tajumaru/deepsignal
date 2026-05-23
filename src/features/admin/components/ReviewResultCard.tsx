@@ -47,9 +47,7 @@ export function ReviewResultCard({
           <p className="eyebrow">{t("reviewResultEyebrow")}</p>
           <h3>{hasSavedReviewResult ? t("savedReviewResultTitle") : t("noReviewSavedYetTitle")}</h3>
           <p className="review-helper-copy">
-            {hasSavedReviewResult
-              ? t("savedReviewResultBody")
-              : t("noReviewSavedYetBody")}
+            {hasSavedReviewResult ? t("savedReviewResultBody") : t("noReviewSavedYetBody")}
           </p>
         </div>
       </div>
@@ -67,7 +65,7 @@ export function ReviewResultCard({
                     className={isFilled ? "review-result-star is-filled" : "review-result-star is-empty"}
                     aria-hidden="true"
                   >
-                    ★
+                    {"\u2605"}
                   </span>
                 ))}
               </div>
@@ -107,11 +105,7 @@ export function ReviewResultCard({
         {reviewResultItems.map((item) => (
           <div key={item.label} className="review-result-item">
             <span>{item.label}</span>
-            {item.href ? (
-              <Link to={item.href}>{item.value}</Link>
-            ) : (
-              <strong>{item.value}</strong>
-            )}
+            {item.href ? <Link to={item.href}>{item.value}</Link> : <strong>{item.value}</strong>}
           </div>
         ))}
       </div>
@@ -121,9 +115,7 @@ export function ReviewResultCard({
           {reviewSummaryBadges.map((badge) => (
             <span key={badge} className="signal-chip signal-chip-soft">{badge}</span>
           ))}
-          {needsFollowUp ? (
-            <span className="signal-chip signal-chip-accent">{t("needsFollowUpLabel")}</span>
-          ) : null}
+          {needsFollowUp ? <span className="signal-chip signal-chip-accent">{t("needsFollowUpLabel")}</span> : null}
         </div>
         <div className="review-action-bar">
           {reviewAction}

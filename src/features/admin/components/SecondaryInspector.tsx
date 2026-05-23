@@ -273,7 +273,7 @@ export function SecondaryInspector({
                 <summary>{t("advancedMetadataTitle")}</summary>
                 <div className="metadata-list signal-proof-metadata-list">
                   {hasAdminAccess ? (
-                    <SignalMetaRow label="Project" type="registry" value={selectedRecord.form.projectId} emptyLabel={t("notAvailable")} />
+                    <SignalMetaRow label={t("projectLabel")} type="registry" value={selectedRecord.form.projectId} emptyLabel={t("notAvailable")} />
                   ) : null}
                   {typeof selectedRecord.form.onchainFormId === "number" ? (
                     <div className="metadata-row">
@@ -389,7 +389,7 @@ export function SecondaryInspector({
                 className="review-inline-link"
                 to={`/dashboard/forms/${selectedRecord.form.id}/submissions/${selectedRecord.submission.id}`}
               >
-                Review thread
+                {t("reviewThreadLabel")}
               </Link>
               {selectedRecord.submission.pendingOnchainRegistration ? (
                 <span className="muted">{t("suiRegistrationOptionalProof")}</span>

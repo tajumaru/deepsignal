@@ -22067,6 +22067,22 @@ body.composer-mode .bg-orb {
 }
 
 @media (max-width: 768px) {
+  .review-session-stage,
+  .review-session-read-panel,
+  .review-stage-card,
+  .related-signal-item-main,
+  .signal-timeline-card {
+    min-width: 0;
+  }
+
+  .review-session-question-head strong,
+  .related-signal-title-line strong,
+  .related-signal-preview,
+  .signal-timeline-card-header strong,
+  .signal-timeline-detail {
+    overflow-wrap: anywhere;
+  }
+
   .review-session-mobile-tabs {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
