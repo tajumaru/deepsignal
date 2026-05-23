@@ -407,7 +407,7 @@ function getCategoryBadge(category: SignalCategory | string): BadgeDescriptor {
     case "Feature":
       return { key: "category-feature", tone: "feature", label: "Feat", title: "Feature request", Icon: RocketIcon };
     case "Survey":
-      return { key: "category-survey", tone: "survey", label: "Form", title: "Survey response", Icon: LayersIcon };
+      return { key: "category-survey", tone: "survey", label: "Channel", title: "Signal channel response", Icon: LayersIcon };
     case "Praise":
       return { key: "category-praise", tone: "praise", label: "Love", title: "Positive feedback", Icon: HeartIcon };
     case "General":

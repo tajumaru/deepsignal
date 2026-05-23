@@ -120,11 +120,11 @@ export function PublicRoadmapPage() {
             Back
           </button>
           <Link className="ghost-button" to={getPublicFormPath(form.id, form.manifestBlobId)}>
-            Open Public Form
+            Open Public Channel
           </Link>
         </div>
         <div className="roadmap-metadata-grid">
-          <SignalMetaRow label="Form blob" type="blob" value={form.blobId} />
+          <SignalMetaRow label="Channel blob" type="blob" value={form.blobId} />
           <SignalMetaRow label="Manifest" type="manifest" value={form.manifestBlobId} />
           <SignalMetaRow label="Contributor owner" type="contributor" value={form.ownerAddress} emptyLabel="Legacy demo form" />
         </div>
