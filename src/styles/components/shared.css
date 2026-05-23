@@ -704,12 +704,6 @@ h2 {
   color: rgba(148, 163, 184, 0.65);
 }
 
-.form-stream-actions {
-  display: flex;
-  gap: 0.4rem;
-  flex-wrap: wrap;
-}
-
 .stream-item {
   display: flex;
   align-items: center;

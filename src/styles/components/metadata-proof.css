@@ -458,11 +458,6 @@
   animation-delay: -14s;
 }
 
-.signal-block-palette-card.is-media::after,
-.signal-block-palette-card.is-attachment::after {
-  background: rgba(251, 191, 36, 0.7);
-}
-
 .status-new,
 .status-unread {
   background: rgba(14, 165, 198, 0.2);

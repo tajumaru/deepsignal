@@ -4931,3 +4931,367 @@
   color: rgba(226, 251, 255, 0.78);
   text-align: center;
 }
+
+/* Reclassified by owning screen/component usage; selectors kept unchanged. */
+
+body.composer-mode {
+  background:
+    radial-gradient(circle at top, rgba(49, 130, 206, 0.12), transparent 24%),
+    linear-gradient(180deg, #07111b 0%, #08131f 100%);
+}
+
+body.composer-mode .bg-orb {
+  opacity: 0.1;
+  filter: blur(24px);
+}
+
+.signal-identity-heading,
+.signal-identity-layout,
+.signal-logo-panel {
+  position: relative;
+  z-index: 1;
+}
+
+.signal-identity-controls,
+.signal-asset-panel {
+  display: grid;
+  gap: 0.9rem;
+  min-width: 0;
+}
+
+.signal-asset-panel {
+  padding: 0.95rem;
+  border-radius: 16px;
+  border: 1px solid rgba(116, 226, 255, 0.13);
+  background:
+    linear-gradient(180deg, rgba(6, 20, 33, 0.78), rgba(4, 14, 25, 0.7)),
+    radial-gradient(circle at top right, rgba(85, 255, 218, 0.07), transparent 32%);
+}
+
+.signal-asset-heading strong,
+.signal-logo-panel strong {
+  color: #effcff;
+}
+
+.signal-asset-clear-button {
+  min-height: 2rem;
+  padding: 0.35rem 0.65rem;
+  white-space: nowrap;
+}
+
+.signal-identity-heading span:not(.signal-chip) {
+  display: block;
+  color: #effcff;
+  font-size: 1.06rem;
+  font-weight: 760;
+}
+
+.signal-source-control button {
+  min-height: 2.35rem;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: #a9cad7;
+  font-weight: 760;
+  transition: background var(--transition-fast), color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.signal-source-control button:hover,
+.signal-source-control button:focus-visible {
+  color: #effcff;
+  box-shadow: 0 0 0 1px rgba(116, 226, 255, 0.18);
+}
+
+.signal-source-control button.is-active {
+  background: linear-gradient(135deg, rgba(32, 211, 238, 0.24), rgba(86, 126, 255, 0.2));
+  color: #f2fdff;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.09),
+    0 0 22px rgba(91, 231, 255, 0.12);
+}
+
+.signal-position-selector button {
+  display: grid;
+  gap: 0.35rem;
+  justify-items: center;
+  min-width: 0;
+  min-height: 4.55rem;
+  padding: 0.55rem 0.42rem;
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(116, 226, 255, 0.13);
+  background: rgba(3, 14, 25, 0.64);
+  color: #a9cad7;
+  font-weight: 740;
+  overflow-wrap: anywhere;
+  transition: border-color var(--transition-fast), color var(--transition-fast), background var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.signal-position-selector button:hover,
+.signal-position-selector button:focus-visible,
+.signal-position-selector button.is-active {
+  border-color: rgba(139, 246, 255, 0.46);
+  color: #effcff;
+  background: rgba(9, 31, 48, 0.86);
+  box-shadow: 0 0 22px rgba(83, 231, 255, 0.11);
+}
+
+.signal-block-palette-card.is-markdown::after {
+  background: rgba(52, 211, 153, 0.78);
+}
+
+.signal-block-palette-card.is-choice::after {
+  background: rgba(125, 211, 252, 0.72);
+}
+
+.signal-upload-zone {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.8rem;
+  align-items: center;
+  min-height: 116px;
+  padding: 0.95rem;
+  overflow: hidden;
+  cursor: pointer;
+  border-radius: 16px;
+  border: 1px dashed rgba(126, 239, 255, 0.3);
+  background:
+    radial-gradient(circle at 12% 18%, rgba(108, 255, 214, 0.13), transparent 28%),
+    rgba(3, 15, 26, 0.68);
+  transition: border-color 170ms ease, box-shadow 170ms ease, transform 170ms ease, background 170ms ease;
+}
+
+.signal-upload-zone:hover,
+.signal-upload-zone:focus-visible,
+.signal-upload-zone.is-dragging {
+  transform: translateY(-1px);
+  border-color: rgba(143, 251, 255, 0.66);
+  background:
+    radial-gradient(circle at 16% 18%, rgba(108, 255, 214, 0.18), transparent 30%),
+    rgba(6, 25, 42, 0.82);
+  box-shadow:
+    0 0 0 1px rgba(126, 239, 255, 0.12),
+    0 0 34px rgba(67, 219, 255, 0.16);
+}
+
+.signal-upload-zone input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.signal-upload-icon {
+  display: grid;
+  place-items: center;
+  width: 3.1rem;
+  height: 3.1rem;
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(137, 244, 255, 0.22);
+  background:
+    linear-gradient(135deg, rgba(33, 219, 239, 0.18), rgba(91, 117, 255, 0.12)),
+    rgba(3, 16, 29, 0.86);
+  color: #c8fbff;
+}
+
+.signal-upload-icon svg {
+  width: 1.45rem;
+  height: 1.45rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.signal-upload-copy {
+  display: grid;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.signal-upload-copy strong {
+  color: #effcff;
+}
+
+.signal-upload-copy span {
+  color: #b8dce7;
+  line-height: 1.35;
+}
+
+.signal-upload-copy small {
+  color: #8faebb;
+  line-height: 1.35;
+}
+
+.signal-position-selector {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.signal-block-palette-card.is-media::after,
+.signal-block-palette-card.is-attachment::after {
+  background: rgba(251, 191, 36, 0.7);
+}
+
+.signal-type-posture-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.45rem;
+}
+
+.signal-composition-studio {
+  grid-template-columns: minmax(230px, 300px) minmax(0, 1fr);
+}
+
+.signal-flow-presets {
+  display: flex;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+}
+
+.signal-flow-preset {
+  min-height: 2.15rem;
+  padding: 0.28rem 0.58rem;
+  border: 1px solid rgba(116, 226, 255, 0.14);
+  border-radius: var(--radius-pill);
+  background: rgba(116, 226, 255, 0.055);
+  color: #bceef8;
+  font-size: 0.76rem;
+  font-weight: 800;
+}
+
+.signal-flow-preset:hover,
+.signal-flow-preset:focus-visible {
+  border-color: rgba(135, 244, 255, 0.34);
+  background: rgba(116, 226, 255, 0.1);
+}
+
+.signal-block-palette-card {
+  position: relative;
+  overflow: hidden;
+}
+
+.signal-block-palette-card::after {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  content: "";
+  background: rgba(116, 226, 255, 0.35);
+}
+
+.signal-block-palette-card.is-identity::after {
+  background: rgba(96, 165, 250, 0.75);
+}
+
+.signal-node-status {
+  display: inline-flex;
+  justify-self: start;
+  min-height: 1.9rem;
+  margin-top: 0.45rem;
+  padding: 0.18rem 0.62rem;
+  align-items: center;
+  border: 1px solid rgba(52, 211, 153, 0.2);
+  border-radius: var(--radius-pill);
+  color: #bdfce7;
+  background: rgba(52, 211, 153, 0.08);
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.signal-composition-node {
+  border-color: rgba(116, 226, 255, 0.16);
+  background:
+    radial-gradient(circle at top left, rgba(116, 226, 255, 0.07), transparent 32%),
+    rgba(3, 16, 27, 0.86);
+  transition: border-color var(--transition-ui), box-shadow var(--transition-ui), transform var(--transition-ui);
+}
+
+.signal-composition-node:hover,
+.signal-composition-node:focus-within,
+.signal-composition-node.is-expanded {
+  border-color: rgba(96, 165, 250, 0.58);
+  box-shadow:
+    0 0 0 1px rgba(96, 165, 250, 0.18),
+    0 22px 52px rgba(0, 0, 0, 0.2);
+}
+
+.signal-composition-node.is-expanded {
+  transform: translateY(-1px);
+}
+
+.signal-composition-node .question-drag-handle {
+  border-color: rgba(116, 226, 255, 0.2);
+  background: rgba(116, 226, 255, 0.065);
+}
+
+.signal-identity-builder::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(rgba(126, 239, 255, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(126, 239, 255, 0.035) 1px, transparent 1px);
+  background-size: 26px 26px;
+  mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.78), transparent 72%);
+}
+
+.signal-identity-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.12fr) minmax(0, 0.88fr);
+  gap: 1rem;
+  align-items: start;
+  min-width: 0;
+}
+
+.signal-asset-heading {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.signal-asset-heading-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.7rem;
+  min-width: 0;
+}
+
+.signal-asset-heading small {
+  color: #9fc2cf;
+}
+
+.signal-source-control {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.35rem;
+  padding: 0.32rem;
+  border-radius: var(--radius-pill);
+  border: 1px solid rgba(116, 226, 255, 0.13);
+  background: rgba(2, 12, 22, 0.62);
+}
+
+.signal-asset-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.8rem;
+}
+
+.signal-position-field {
+  display: grid;
+  gap: 0.45rem;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+}
+
+.signal-position-field legend {
+  color: #d9f8ff;
+  font-size: 0.9rem;
+  font-weight: 700;
+}

@@ -631,36 +631,8 @@
   gap: 0.75rem;
 }
 
-.signal-identity-heading,
-.signal-identity-layout,
-.signal-logo-panel {
-  position: relative;
-  z-index: 1;
-}
-
-.signal-identity-controls,
-.signal-asset-panel {
-  display: grid;
-  gap: 0.9rem;
-  min-width: 0;
-}
-
-.signal-asset-panel {
-  padding: 0.95rem;
-  border-radius: 16px;
-  border: 1px solid rgba(116, 226, 255, 0.13);
-  background:
-    linear-gradient(180deg, rgba(6, 20, 33, 0.78), rgba(4, 14, 25, 0.7)),
-    radial-gradient(circle at top right, rgba(85, 255, 218, 0.07), transparent 32%);
-}
-
 .signal-logo-panel {
   margin-top: 0.15rem;
-}
-
-.signal-asset-heading strong,
-.signal-logo-panel strong {
-  color: #effcff;
 }
 
 .proof-stack {

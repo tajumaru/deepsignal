@@ -4518,3 +4518,28 @@ pre,
   overflow-wrap: anywhere;
   word-break: break-word;
 }
+
+/* Reclassified by owning screen/component usage; selectors kept unchanged. */
+
+.signal-scope-action-button {
+  white-space: nowrap;
+}
+
+.form-stream-actions .signal-chip {
+  padding: 0.22rem 0.48rem;
+  font-size: 0.68rem;
+  line-height: 1;
+}
+
+.form-stream-actions .ghost-button,
+.form-stream-actions .danger-button {
+  flex: 1;
+}
+
+/* Reclassified by owning screen/component usage; selectors kept unchanged. */
+
+.form-stream-actions {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
