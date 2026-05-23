@@ -37,7 +37,7 @@ interface FieldsStepProps {
 const libraryBlocks: Array<{
   type?: FieldType;
   icon: string;
-  titleKey: "libraryShortText" | "libraryLongText" | "libraryRichText" | "libraryDate" | "libraryDropdown" | "libraryCheckboxes" | "libraryMatrix" | "libraryCountrySelect" | "libraryConfirmationCheckbox" | "libraryScreenshotUpload" | "libraryVideoUpload" | "libraryUrl" | "libraryStarRating" | "libraryWalletAddress" | "librarySignatureVerification" | "libraryEncryptedAnswer";
+  titleKey: "libraryShortText" | "libraryLongText" | "libraryRichText" | "libraryDate" | "libraryDropdown" | "libraryCheckboxes" | "libraryMatrix" | "libraryCountrySelect" | "libraryConfirmationCheckbox" | "libraryScreenshotUpload" | "libraryVideoUpload" | "libraryVoiceAnswer" | "libraryUrl" | "libraryStarRating" | "libraryEmotionRating" | "libraryWalletAddress" | "librarySignatureVerification" | "libraryEncryptedAnswer";
   soon?: boolean;
   mirrorTitle: string;
   mirrorBody: string;
@@ -54,8 +54,10 @@ const libraryBlocks: Array<{
   { type: "confirmation", icon: "OK", titleKey: "libraryConfirmationCheckbox", mirrorTitle: "Consent Block", mirrorBody: "Explicit confirmation", mirrorKind: "identity" },
   { type: "screenshot", icon: "UP", titleKey: "libraryScreenshotUpload", mirrorTitle: "Media Block", mirrorBody: "Image evidence upload", mirrorKind: "media" },
   { type: "video", icon: "VID", titleKey: "libraryVideoUpload", mirrorTitle: "Video Block", mirrorBody: "Motion evidence upload", mirrorKind: "media" },
+  { type: "voice", icon: "MIC", titleKey: "libraryVoiceAnswer", mirrorTitle: "Voice Block", mirrorBody: "Spoken signal capture", mirrorKind: "media" },
   { type: "url", icon: "->", titleKey: "libraryUrl", mirrorTitle: "Reference Block", mirrorBody: "Link external context", mirrorKind: "attachment" },
   { type: "rating", icon: "*", titleKey: "libraryStarRating", mirrorTitle: "Sentiment Block", mirrorBody: "Quick intensity rating", mirrorKind: "question" },
+  { type: "emotionRating", icon: ":-)", titleKey: "libraryEmotionRating", mirrorTitle: "Emotion Block", mirrorBody: "Facial sentiment pulse", mirrorKind: "question" },
   { type: "walletAddress", icon: "💧", titleKey: "libraryWalletAddress", mirrorTitle: "Wallet Block", mirrorBody: "Validated SUI address", mirrorKind: "identity" },
   { icon: "OK", titleKey: "librarySignatureVerification", soon: true, mirrorTitle: "Signature Block", mirrorBody: "Proof-of-author block", mirrorKind: "identity" },
   { icon: "PX", titleKey: "libraryEncryptedAnswer", soon: true, mirrorTitle: "Sealed Block", mirrorBody: "Encrypted answer node", mirrorKind: "attachment" },

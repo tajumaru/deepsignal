@@ -1,5 +1,6 @@
 import { useRef, type CSSProperties } from "react";
 import { useI18n } from "../i18n";
+import { EMOTION_SCALE_OPTIONS } from "../lib/emotionScale";
 import { isAttachmentFieldType, isConfirmationCheckboxField, isLongTextLikeField } from "../lib/fieldTypes";
 import { getSuiAddressValidationState, normalizeValidSuiAddress } from "../lib/suiAddress";
 import type { FormField } from "../types";
@@ -7,6 +8,7 @@ import { CountrySelectQuestion } from "./CountrySelectQuestion";
 import { DateInput } from "./DateInput";
 import { RichTextContent } from "./RichText";
 import { UploadDropzone, type UploadDropzoneItem } from "./UploadDropzone";
+import { VoiceRecorderField } from "./VoiceRecorderField";
 
 interface DynamicFieldProps {
   field: FormField;
@@ -117,6 +119,7 @@ export function DynamicField({
       : suiAddressStatus === "invalid"
         ? t("suiAddressInvalid")
         : t("suiAddressHint");
+  const selectedEmotion = EMOTION_SCALE_OPTIONS.find((option) => String(option.value) === String(value ?? ""));
 
   function updateCheckbox(option: string, checked: boolean) {
     const current = Array.isArray(value) ? value : [];
@@ -464,6 +467,47 @@ export function DynamicField({
         </div>
       ) : null}
 
+      {field.type === "emotionRating" ? (
+        <div
+          className={`emotion-rating-picker ${hasError ? "is-error" : ""}`}
+          role="radiogroup"
+          aria-label={field.label}
+          aria-invalid={hasError}
+          aria-describedby={hasError ? fieldErrorId : undefined}
+        >
+          <div className="emotion-rating-grid">
+            {EMOTION_SCALE_OPTIONS.map((option) => {
+              const active = String(value ?? "") === String(option.value);
+              return (
+                <button
+                  key={option.value}
+                  type="button"
+                  className={`emotion-rating-button ${active ? "is-selected" : ""}`}
+                  aria-label={t("emotionScaleSelected", { emoji: option.emoji, label: t(option.labelKey) })}
+                  aria-pressed={active}
+                  data-tone={option.value}
+                  disabled={disabled}
+                  onClick={() => onChange(String(option.value))}
+                >
+                  <span className="emotion-rating-emoji" aria-hidden="true">
+                    {option.emoji}
+                  </span>
+                  <span className="emotion-rating-text">{t(option.labelKey)}</span>
+                </button>
+              );
+            })}
+          </div>
+          <span className="emotion-rating-label">
+            {selectedEmotion
+              ? t("emotionScaleSelected", {
+                  emoji: selectedEmotion.emoji,
+                  label: t(selectedEmotion.labelKey),
+                })
+              : t("chooseEmotionRating")}
+          </span>
+        </div>
+      ) : null}
+
       {field.type === "url" ? (
         <input
           type="url"
@@ -474,6 +518,32 @@ export function DynamicField({
           aria-invalid={hasError}
           aria-describedby={hasError ? fieldErrorId : undefined}
           onChange={(event) => onChange(event.target.value)}
+        />
+      ) : null}
+
+      {field.type === "voice" ? (
+        <VoiceRecorderField
+          fieldId={field.id}
+          value={value}
+          disabled={disabled}
+          ariaInvalid={hasError}
+          ariaDescribedBy={hasError ? fieldErrorId : undefined}
+          labels={{
+            title: t("fieldTypeVoice"),
+            idle: "Tap to capture a voice answer",
+            recording: "Recording...",
+            recorded: "Voice answer ready",
+            start: "Start recording",
+            stop: "Stop",
+            retry: "Record again",
+            preview: "Playback preview",
+            duration: "Duration:",
+            permissionDenied: "Microphone access was denied. Allow the mic and try again.",
+            unsupported: "This browser does not support microphone recording.",
+            failed: "Recording could not start. Please try again.",
+            emptyPreview: "Audio preview is unavailable.",
+          }}
+          onChange={onChange}
         />
       ) : null}
 

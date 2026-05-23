@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { useI18n } from "../../../i18n";
 import type { CriticalFailure } from "../../../lib/criticalFailure";
+import { EMOTION_SCALE_OPTIONS } from "../../../lib/emotionScale";
 import { isLongTextLikeField } from "../../../lib/fieldTypes";
 import type { WalrusCostEstimate } from "../../../storage/walrusCostEstimate";
 import type { WalrusFailureDetails } from "../../../storage/walrusDiagnostics";
@@ -78,7 +79,7 @@ interface TimelineStep {
   active?: boolean;
 }
 
-const mediaFieldTypes: FieldType[] = ["screenshot", "video"];
+const mediaFieldTypes: FieldType[] = ["screenshot", "video", "voice"];
 
 function displayValue(value: string | number | null | undefined, fallback: string) {
   if (value === null || value === undefined) {
@@ -663,11 +664,18 @@ function MirrorCurrentSignalNode({ state }: { state: MirrorPreviewState }) {
           </div>
         ) : null}
 
+        {field.type === "emotionRating" ? (
+          <div className="mirror-emotion-preview" aria-hidden="true">
+            <span>{EMOTION_SCALE_OPTIONS.map((option) => option.emoji).join(" ")}</span>
+            <small>{t("chooseEmotionRating")}</small>
+          </div>
+        ) : null}
+
         {mediaFieldTypes.includes(field.type) ? (
           <div className="mirror-upload-preview is-media-ready">
             <span className="mirror-upload-icon" aria-hidden="true" />
-            <strong>{field.type === "screenshot" ? t("fieldTypeScreenshot") : t("fieldTypeVideo")}</strong>
-            <small>{field.type === "screenshot" ? t("screenshotHint") : t("videoHint")}</small>
+            <strong>{field.type === "screenshot" ? t("fieldTypeScreenshot") : field.type === "video" ? t("fieldTypeVideo") : t("fieldTypeVoice")}</strong>
+            <small>{field.type === "screenshot" ? t("screenshotHint") : field.type === "video" ? t("videoHint") : "Record, replay, and send a spoken response."}</small>
           </div>
         ) : null}
 
@@ -675,6 +683,7 @@ function MirrorCurrentSignalNode({ state }: { state: MirrorPreviewState }) {
         field.type !== "checkbox" &&
         field.type !== "matrix" &&
         field.type !== "rating" &&
+        field.type !== "emotionRating" &&
         !mediaFieldTypes.includes(field.type) ? (
           <div className={`mirror-input-preview ${isLongTextLikeField(field.type) ? "is-long" : ""}`}>
             <span>{field.type === "markdown" ? t("markdownPreviewExample") : hint}</span>

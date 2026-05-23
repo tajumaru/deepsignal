@@ -197,6 +197,7 @@ The active Walrus path is adapter-driven:
 - upload-relay mode uses the connected wallet for Walrus registration/certification while the relay forwards blob data;
 - successful writes store `blobId` values back into form, submission, encrypted-payload, and attachment models;
 - each form can maintain a separate manifest blob for recovery;
+- project-backed Sui form registration can embed a Walrus manifest reference inside on-chain form metadata so other admin devices can rebuild the inbox cache for that project;
 - legacy publisher mode remains available with `VITE_WALRUS_STORAGE_MODE=publisher`.
 
 Manifest blobs store only recovery references:
@@ -378,7 +379,7 @@ The MVP is intentionally narrow: collect private signals, store them on Walrus, 
 
 - `manifestBlobId` holders can inspect the public manifest index structure.
 - Attachment blob IDs are intentionally not stored in manifests, so restore focuses on form/submission blobs.
-- Latest `manifestBlobId` tracking still depends on local browser cache.
+- Legacy forms published before manifest references were embedded on-chain still depend on local browser cache or a saved restore link for `manifestBlobId` recovery.
 - Local fallback data is browser-local and not shared across devices.
 - Walrus delete is currently index cleanup only; uploaded blobs are not garbage-collected by this MVP.
 - Frontend wallet-gating is MVP protection and should continue evolving around the Move Project / Form / SignalReceipt registry model.

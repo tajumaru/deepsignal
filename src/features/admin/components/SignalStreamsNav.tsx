@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useI18n } from "../../../i18n";
+import { isLocalFallbackBlob } from "../../../lib/proof";
 import { formatResponseDeadline, type ResponseDeadlineLabels } from "../../../lib/responseDeadline";
 import { shortAddress } from "../../../lib/sui";
 import type { FormWithCount, StreamId } from "../hooks/useSignalInboxData";
@@ -264,6 +265,27 @@ function ChannelSelectorCaret() {
   );
 }
 
+function hasUnregisteredWalrusNode(form: FormWithCount) {
+  return Boolean(
+    form.projectId &&
+      form.manifestBlobId &&
+      !form.onchainFormId &&
+      !isLocalFallbackBlob(form.manifestBlobId),
+  );
+}
+
+function WarningTriangle({ title }: { title: string }) {
+  return (
+    <span className="signal-warning-indicator" aria-label={title} title={title}>
+      <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+        <path d="M12 3.8 21 19.5H3L12 3.8Z" />
+        <path d="M12 9v5.2" />
+        <circle cx="12" cy="17.1" r="1.1" />
+      </svg>
+    </span>
+  );
+}
+
 function SignalChannelSelectorItem({
   accessibleForms,
   selectedFormId,
@@ -290,6 +312,11 @@ function SignalChannelSelectorItem({
   closeMenu: () => void;
 }) {
   const { t } = useI18n();
+  const unregisteredCount = accessibleForms.filter(hasUnregisteredWalrusNode).length;
+  const allNodesWarningTitle =
+    unregisteredCount > 0
+      ? t("projectRecoveryNoticeWalrusOnlyBody", { count: unregisteredCount })
+      : "";
   return (
     <div className="form-stream-list">
       <div className={`form-stream-item ${selectedFormId === "all" ? "is-active" : ""}`}>
@@ -302,7 +329,10 @@ function SignalChannelSelectorItem({
           }}
         >
           <span className="form-stream-heading">
-            <strong>{allSignalNodesLabel}</strong>
+            <strong>
+              {allSignalNodesLabel}
+              {unregisteredCount > 0 ? <WarningTriangle title={allNodesWarningTitle} /> : null}
+            </strong>
             <span className="form-stream-count">{allSignalsCount}</span>
           </span>
           <p className="muted">{t("signalsAcrossEveryFormInbox", { count: allSignalsCount })}</p>
@@ -317,8 +347,12 @@ function SignalChannelSelectorItem({
         const unreadCount = unreadCountByFormId[form.id] ?? 0;
         const ownerLabel = form.ownerAddress ? shortAddress(form.ownerAddress) : t("legacyDemoForm");
         const deadlineValue = formatResponseDeadline(form.responseDeadline, responseDeadlineLabels);
+        const hasWarning = hasUnregisteredWalrusNode(form);
+        const warningTitle = hasWarning
+          ? t("projectRecoveryNoticeWalrusOnlyBody", { count: 1 })
+          : "";
         return (
-          <div key={form.id} className={`form-stream-item ${isSelected ? "is-active" : ""}`}>
+          <div key={form.id} className={`form-stream-item ${isSelected ? "is-active" : ""} ${hasWarning ? "has-warning" : ""}`}>
             <button
               type="button"
               className="form-stream-select"
@@ -328,7 +362,10 @@ function SignalChannelSelectorItem({
               }}
             >
               <span className="form-stream-heading">
-                <strong>{form.title}</strong>
+                <strong>
+                  {form.title}
+                  {hasWarning ? <WarningTriangle title={warningTitle} /> : null}
+                </strong>
                 <span className="form-stream-count">{form.submissionCount}</span>
               </span>
               <p className="muted">
@@ -384,9 +421,16 @@ export function SignalChannelSelector({
   const [menuOpen, setMenuOpen] = useState(false);
   const shellRef = useRef<HTMLDivElement | null>(null);
   const hasUnreadSignals = totalUnreadCount > 0;
+  const unregisteredCount = accessibleForms.filter(hasUnregisteredWalrusNode).length;
   const selectedForm = accessibleForms.find((form) => form.id === selectedFormId) ?? null;
   const selectedCount = selectedFormId === "all" ? allSignalsCount : selectedForm?.submissionCount ?? 0;
   const selectedUnreadCount = selectedFormId === "all" ? totalUnreadCount : unreadCountByFormId[selectedFormId] ?? 0;
+  const selectedHasWarning =
+    selectedFormId === "all" ? unregisteredCount > 0 : selectedForm ? hasUnregisteredWalrusNode(selectedForm) : false;
+  const selectedWarningTitle =
+    selectedFormId === "all"
+      ? t("projectRecoveryNoticeWalrusOnlyBody", { count: unregisteredCount })
+      : t("projectRecoveryNoticeWalrusOnlyBody", { count: 1 });
 
   useEffect(() => {
     if (!menuOpen) {
@@ -424,7 +468,10 @@ export function SignalChannelSelector({
       >
         <span className="signal-channel-trigger-copy">
           <span className="signal-channel-trigger-label">{t("formsTitle")}</span>
-          <strong>{activeScopeLabel}</strong>
+          <strong>
+            {activeScopeLabel}
+            {selectedHasWarning ? <WarningTriangle title={selectedWarningTitle} /> : null}
+          </strong>
           <span className="signal-channel-trigger-meta">
             <span>{t("resultsLabel", { count: selectedCount })}</span>
             <span>{t("unreadBadge", { count: selectedUnreadCount })}</span>
@@ -461,7 +508,12 @@ export function SignalChannelSelector({
           <div className="signal-channel-menu-footer">
             <div className="signal-node-summary">
               <div className="signal-node-summary-copy">
-                <strong>{activeScopeLabel}</strong>
+                <strong>
+                  {activeScopeLabel}
+                  {unregisteredCount > 0 ? (
+                    <WarningTriangle title={t("projectRecoveryNoticeWalrusOnlyBody", { count: unregisteredCount })} />
+                  ) : null}
+                </strong>
                 <p className="muted">{activeNodeSummary}</p>
               </div>
               <button

@@ -145,12 +145,6 @@ export function PublishOverlay({
                 )}
               </div>
               <p className="publish-beacon-note muted">{t("publishBeaconNote")}</p>
-              <div className="publish-beacon-link-row">
-                <span className="publish-beacon-link-hint muted">{t("publishBeaconCopyHint")}</span>
-                <button type="button" className="ghost-button publish-beacon-link-button" onClick={() => void onCopyLink()}>
-                  {overlay.linkCopied ? t("copied") : t("copyTransmissionLink")}
-                </button>
-              </div>
             </div>
           ) : null}
         </div>

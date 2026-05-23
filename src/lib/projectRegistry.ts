@@ -32,6 +32,9 @@ export interface OnchainProjectFormSummary {
   formId: number;
   title: string;
   metadataDigest: string;
+  manifestBlobId?: string;
+  formBlobId?: string;
+  sourceFormId?: string;
   active: boolean;
   createdAt?: string;
 }
@@ -125,6 +128,15 @@ export interface UpdateSignalStatusOnChainArgs {
   packageId?: string;
   tx?: Transaction;
 }
+
+export interface ProjectFormMetadataReference {
+  digest: string;
+  manifestBlobId?: string;
+  formBlobId?: string;
+  formId?: string;
+}
+
+const PROJECT_FORM_METADATA_PREFIX = "deepsignal-form-ref:v1:";
 
 function requireValue(value: string | undefined, label: string) {
   if (!value?.trim()) {
@@ -298,10 +310,14 @@ export function parseProjectForms(source: unknown) {
           : entry;
       const formId = readU64(fields.form_id);
       const title = readString(fields.title);
+      const metadata = parseProjectFormMetadataReference(readString(fields.metadata_digest));
       return {
         formId,
         title,
-        metadataDigest: readString(fields.metadata_digest),
+        metadataDigest: metadata.digest,
+        manifestBlobId: metadata.manifestBlobId,
+        formBlobId: metadata.formBlobId,
+        sourceFormId: metadata.formId,
         active: readBool(fields.active),
         createdAt: readU64(fields.created_at)
           ? new Date(readU64(fields.created_at)).toISOString()
@@ -371,10 +387,58 @@ function stableSerialize(value: unknown): string {
   return JSON.stringify(value);
 }
 
+function encodeUtf8Base64(value: string) {
+  const bytes = new TextEncoder().encode(value);
+  let binary = "";
+  bytes.forEach((byte) => {
+    binary += String.fromCharCode(byte);
+  });
+  return btoa(binary);
+}
+
+function decodeUtf8Base64(value: string) {
+  const binary = atob(value);
+  const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
+  return new TextDecoder().decode(bytes);
+}
+
 export async function createMetadataDigest(value: unknown) {
   const payload = new TextEncoder().encode(stableSerialize(value));
   const digest = await crypto.subtle.digest("SHA-256", payload);
   return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+export function serializeProjectFormMetadataReference(reference: ProjectFormMetadataReference) {
+  const normalized = {
+    digest: reference.digest,
+    ...(reference.manifestBlobId ? { manifestBlobId: reference.manifestBlobId } : {}),
+    ...(reference.formBlobId ? { formBlobId: reference.formBlobId } : {}),
+    ...(reference.formId ? { formId: reference.formId } : {}),
+  } satisfies ProjectFormMetadataReference;
+  return `${PROJECT_FORM_METADATA_PREFIX}${encodeUtf8Base64(JSON.stringify(normalized))}`;
+}
+
+export function parseProjectFormMetadataReference(value?: string | null): ProjectFormMetadataReference {
+  const raw = value?.trim() ?? "";
+  if (!raw) {
+    return { digest: "" };
+  }
+  if (!raw.startsWith(PROJECT_FORM_METADATA_PREFIX)) {
+    return { digest: raw };
+  }
+
+  try {
+    const decoded = decodeUtf8Base64(raw.slice(PROJECT_FORM_METADATA_PREFIX.length));
+    const parsed = JSON.parse(decoded) as Partial<ProjectFormMetadataReference> | null;
+    return {
+      digest: typeof parsed?.digest === "string" ? parsed.digest : "",
+      manifestBlobId: typeof parsed?.manifestBlobId === "string" ? parsed.manifestBlobId : undefined,
+      formBlobId: typeof parsed?.formBlobId === "string" ? parsed.formBlobId : undefined,
+      formId: typeof parsed?.formId === "string" ? parsed.formId : undefined,
+    } satisfies ProjectFormMetadataReference;
+  } catch {
+    return { digest: raw };
+  }
 }
 
 export function parseProjectOwnerCap(entry: { data?: { objectId?: string; content?: { fields?: Record<string, unknown> } | null } | null }) {

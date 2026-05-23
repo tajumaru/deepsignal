@@ -38,7 +38,7 @@ type SignalDraftAnalysisInput = Pick<
 >;
 
 const reflectionFieldTypes: FieldType[] = ["longText", "markdown"];
-const shallowFieldTypes: FieldType[] = ["rating", "checkbox", "dropdown"];
+const shallowFieldTypes: FieldType[] = ["rating", "emotionRating", "checkbox", "dropdown"];
 const reflectionWords = ["why", "feel", "reflection", "improve", "change"];
 const sensitiveWords = [
   "private",

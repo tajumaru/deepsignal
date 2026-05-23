@@ -864,14 +864,6 @@ export function PublishStep({
                   <Link className="primary-button" to={`/dashboard/forms/${savedForm.id}`}>
                     {t("signalInboxTitle")}
                   </Link>
-                  <p>
-                    {isLocalOnlyForm ? t("localResponderPreview") : t("publicShareLink")}:{" "}
-                    {savedForm.manifestBlobId ? (
-                      <a href={publicUrl} target="_blank" rel="noreferrer">{publicUrl}</a>
-                    ) : (
-                      <Link to={publicPath}>{publicPath}</Link>
-                    )}
-                  </p>
                 </div>
                 {isLocalOnlyForm ? (
                   <p className="warning-text">

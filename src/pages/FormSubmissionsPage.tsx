@@ -1,5 +1,5 @@
 import { useSignAndExecuteTransaction } from "@mysten/dapp-kit";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { Link, useParams } from "react-router-dom";
 import { AdminAccessGate } from "../components/AdminAccessGate";
 import { BlobLink } from "../components/BlobLink";
@@ -438,6 +438,10 @@ export function FormSubmissionsPage() {
   const showSurveySummary = useMemo(
     () => Boolean(form && (form.purpose === "survey" || submissionMetrics.survey > 0)),
     [form, submissionMetrics.survey],
+  );
+  const hasRatingQuestion = useMemo(
+    () => Boolean(form?.fields.some((field) => field.type === "rating")),
+    [form],
   );
   const selectedSubmissionEncryptedBlobId = selectedSubmission?.encryptedBlobId;
   const selectedSubmissionEncryptedBlobStoredOnWalrus = Boolean(
@@ -1047,6 +1051,7 @@ export function FormSubmissionsPage() {
           placeholder={t("captureReviewNotes")}
         />
       </label>
+      <p className="muted">{t("reviewEditableHelper")}</p>
       <div className="review-controls-actions">
         <span className={`save-state-pill is-${saveState === "saving" ? "saving" : notesDraft !== (selectedSubmission ? getVisibleReviewerNotes(selectedSubmission) : "") || reviewerDraft !== (selectedSubmission ? getAssignedReviewer(selectedSubmission) ?? "" : "") ? "editing" : "saved"}`}>
           {saveState === "saving"
@@ -1232,11 +1237,44 @@ export function FormSubmissionsPage() {
                 <span>{t("submissionCount")}</span>
                 <strong>{surveySummary.submissionCount}</strong>
               </div>
-              <div className="metadata-row">
-                <span>{t("averageRating")}</span>
-                <strong>{surveySummary.averageRating ?? t("notAvailable")}</strong>
-              </div>
+              {hasRatingQuestion ? (
+                <div className="metadata-row">
+                  <span>{t("averageRating")}</span>
+                  <strong>{surveySummary.averageRating ?? t("notAvailable")}</strong>
+                </div>
+              ) : null}
             </div>
+            {surveySummary.emotionDistributions.length > 0 ? (
+              <div className="emotion-summary-list">
+                {surveySummary.emotionDistributions.map((distribution) => (
+                  <section key={distribution.fieldId} className="emotion-summary-card" aria-label={distribution.fieldLabel}>
+                    <div className="section-row">
+                      <div>
+                        <strong>{distribution.fieldLabel}</strong>
+                        <p className="muted">{t("emotionSummaryResponses", { count: distribution.responses })}</p>
+                      </div>
+                      <span className="signal-chip signal-chip-soft">{t("emotionSummaryTitle")}</span>
+                    </div>
+                    <div className="emotion-summary-grid">
+                      {distribution.items.map((item) => (
+                        <div
+                          key={item.value}
+                          className={`emotion-summary-item ${distribution.dominantValue === item.value ? "is-dominant" : ""}`}
+                          style={{ "--emotion-percent": `${item.percent}%` } as CSSProperties}
+                        >
+                          <div className="emotion-summary-orbit" aria-hidden="true">
+                            <span>{item.emoji}</span>
+                          </div>
+                          <strong>{t(item.labelKey)}</strong>
+                          <span>{t("emotionSummaryPercent", { percent: item.percent })}</span>
+                          <small>{t("emotionSummaryResponses", { count: item.count })}</small>
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+                ))}
+              </div>
+            ) : null}
             {surveySummary.encryptedPendingCount > 0 ? (
               <p className="warning-text">{t("surveySummaryEncryptedNotice")}</p>
             ) : null}

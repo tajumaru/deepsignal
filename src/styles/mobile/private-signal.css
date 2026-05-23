@@ -1,0 +1,76 @@
+/* Private signal unlock responsive overrides inside review sessions. */
+
+@media (min-width: 769px) {
+  .review-session-modal {
+    overflow: hidden;
+  }
+
+  .review-session-shell {
+    grid-template-rows: auto auto minmax(0, 1fr) auto;
+  }
+
+  .review-session-stage {
+    min-height: 0;
+    overflow-y: auto;
+    padding-right: 0.15rem;
+  }
+
+  .review-session-stage-unlock {
+    align-content: start;
+  }
+
+  .review-session-stage-unlock .private-signal-unlock-card.is-loading,
+  .review-session-stage-unlock .private-signal-unlock-card.is-locked {
+    gap: 0.65rem;
+  }
+
+  .review-session-stage-unlock .private-signal-unlock-card.is-loading .private-signal-vault-visual,
+  .review-session-stage-unlock .private-signal-unlock-card.is-locked .private-signal-vault-visual {
+    min-height: 72px;
+    padding: 0.6rem 0.75rem;
+  }
+
+  .review-session-stage-unlock .private-signal-unlock-card.is-loading .private-signal-vault-lock,
+  .review-session-stage-unlock .private-signal-unlock-card.is-locked .private-signal-vault-lock {
+    width: 4rem;
+    height: 4rem;
+  }
+
+  .review-session-stage-unlock .private-signal-unlock-card.is-loading .private-signal-vault-lock .private-signal-unlock-icon,
+  .review-session-stage-unlock .private-signal-unlock-card.is-locked .private-signal-vault-lock .private-signal-unlock-icon {
+    width: 2.2rem;
+    height: 2.2rem;
+  }
+
+  .review-session-stage-unlock .private-signal-unlock-card.is-loading .private-signal-unlock-header,
+  .review-session-stage-unlock .private-signal-unlock-card.is-locked .private-signal-unlock-header {
+    gap: 0.55rem;
+  }
+
+  .review-session-stage-unlock .private-signal-unlock-card.is-loading .private-signal-unlock-steps,
+  .review-session-stage-unlock .private-signal-unlock-card.is-locked .private-signal-unlock-steps {
+    gap: 0.35rem;
+  }
+
+  .review-session-stage-unlock .private-signal-unlock-card.is-loading .private-signal-unlock-steps li,
+  .review-session-stage-unlock .private-signal-unlock-card.is-locked .private-signal-unlock-steps li {
+    padding: 0.38rem;
+  }
+
+  .review-session-stage-unlock .private-signal-unlock-card.is-loading .private-signal-unlock-button,
+  .review-session-stage-unlock .private-signal-unlock-card.is-locked .private-signal-unlock-button {
+    min-height: 2.85rem;
+    padding: 0.75rem 1.05rem;
+  }
+
+  .review-session-stage-unlock .private-signal-unlock-card.is-loading .private-signal-unlock-note,
+  .review-session-stage-unlock .private-signal-unlock-card.is-locked .private-signal-unlock-note {
+    padding: 0.55rem 0.75rem;
+  }
+
+  .review-session-stage-unlock .private-signal-unlock-card.is-loading .private-signal-unlock-status,
+  .review-session-stage-unlock .private-signal-unlock-card.is-locked .private-signal-unlock-status {
+    min-height: 1.3rem;
+    font-size: 0.86rem;
+  }
+}

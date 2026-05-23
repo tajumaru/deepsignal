@@ -11,10 +11,12 @@ const FIELD_TYPES: FieldType[] = [
   "country_select",
   "confirmation",
   "rating",
+  "emotionRating",
   "url",
   "walletAddress",
   "screenshot",
   "video",
+  "voice",
 ];
 
 export function normalizeFieldType(raw: unknown): FieldType {
@@ -43,6 +45,10 @@ export function normalizeFieldType(raw: unknown): FieldType {
       return "country_select";
     case "starRating":
       return "rating";
+    case "emotion_scale":
+    case "emotionScale":
+    case "faceRating":
+      return "emotionRating";
     case "suiAddress":
     case "wallet":
     case "wallet_address":
@@ -51,6 +57,10 @@ export function normalizeFieldType(raw: unknown): FieldType {
       return "screenshot";
     case "videoUpload":
       return "video";
+    case "voiceNote":
+    case "audio":
+    case "audioUpload":
+      return "voice";
     default:
       return "shortText";
   }

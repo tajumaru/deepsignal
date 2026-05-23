@@ -5,7 +5,10 @@ import {
   type CriticalFailure,
 } from "../../../lib/criticalFailure";
 import { getAbsolutePublicFormUrl, getPublicFormPath } from "../../../lib/publicLinks";
-import { createFormOnChain } from "../../../lib/projectRegistry";
+import {
+  createFormOnChain,
+  serializeProjectFormMetadataReference,
+} from "../../../lib/projectRegistry";
 import {
   appendActivityEvents,
   createActivityEvent,
@@ -485,10 +488,19 @@ export function useCreateFormPublish({
     setFailure(null);
     setDiagnosticsCopied(false);
     try {
+      const metadataReference =
+        savedForm.manifestBlobId && !isLocalFallbackBlob(savedForm.manifestBlobId)
+          ? serializeProjectFormMetadataReference({
+              digest: savedForm.formMetadataDigest,
+              manifestBlobId: savedForm.manifestBlobId,
+              formBlobId: savedForm.blobId,
+              formId: savedForm.id,
+            })
+          : savedForm.formMetadataDigest;
       const tx = createFormOnChain({
         projectId: savedForm.projectId,
         title: savedForm.title,
-        metadataDigest: savedForm.formMetadataDigest,
+        metadataDigest: metadataReference,
       });
       const result = await signAndExecuteTransaction(tx);
       const confirmed = await waitForTransaction(result.digest);

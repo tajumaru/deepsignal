@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { validateSubmissionLocation } from "./validatePublicSubmission";
+import { validatePublicSubmission, validateSubmissionLocation } from "./validatePublicSubmission";
 import type { FormSchema, SubmissionLocation } from "../../../types";
 
 const baseForm: FormSchema = {
@@ -53,5 +53,49 @@ describe("validateSubmissionLocation", () => {
         "locationRequiredFriendly",
       ),
     ).toBe("");
+  });
+});
+
+describe("validatePublicSubmission", () => {
+  it("requires a recorded voice answer when the field is required", () => {
+    const form: FormSchema = {
+      ...baseForm,
+      fields: [
+        {
+          id: "voice-1",
+          type: "voice",
+          label: "Share a voice update",
+          required: true,
+          sensitive: false,
+        },
+      ],
+    };
+
+    expect(
+      validatePublicSubmission({
+        form,
+        answers: {},
+        visibleFieldIds: new Set(["voice-1"]),
+        attachmentFields: new Set(),
+        requiredFieldError: "required",
+      }),
+    ).toEqual({ "voice-1": "required" });
+
+    expect(
+      validatePublicSubmission({
+        form,
+        answers: {
+          "voice-1": {
+            kind: "voice",
+            audioUrl: "blob:preview",
+            duration: 7,
+            mimeType: "audio/webm",
+          },
+        },
+        visibleFieldIds: new Set(["voice-1"]),
+        attachmentFields: new Set(),
+        requiredFieldError: "required",
+      }),
+    ).toEqual({});
   });
 });

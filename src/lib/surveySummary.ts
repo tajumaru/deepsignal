@@ -1,4 +1,5 @@
 import { flattenAnswer } from "./utils";
+import { EMOTION_SCALE_OPTIONS, type EmotionScaleValue } from "./emotionScale";
 import type { FormField, FormSchema, Submission } from "../types";
 
 function countAnswer(map: Record<string, number>, value: string) {
@@ -11,6 +12,22 @@ function countAnswer(map: Record<string, number>, value: string) {
 function isYesNoField(field: FormField) {
   const options = (field.options ?? []).map((option) => option.trim().toLowerCase());
   return options.length === 2 && options.includes("yes") && options.includes("no");
+}
+
+interface EmotionSummaryItem {
+  value: EmotionScaleValue;
+  emoji: string;
+  labelKey: (typeof EMOTION_SCALE_OPTIONS)[number]["labelKey"];
+  count: number;
+  percent: number;
+}
+
+interface EmotionSummaryField {
+  fieldId: string;
+  fieldLabel: string;
+  responses: number;
+  dominantValue: EmotionScaleValue | null;
+  items: EmotionSummaryItem[];
 }
 
 export function buildSurveySummary(form: FormSchema, submissions: Submission[]) {
@@ -34,8 +51,48 @@ export function buildSurveySummary(form: FormSchema, submissions: Submission[]) 
 
   const choiceCounts: Record<string, Record<string, number>> = {};
   const yesNoDistributions: Record<string, Record<string, number>> = {};
+  const emotionDistributions: EmotionSummaryField[] = [];
 
   for (const field of form.fields) {
+    if (field.type === "emotionRating") {
+      const counts = new Map<EmotionScaleValue, number>();
+      for (const option of EMOTION_SCALE_OPTIONS) {
+        counts.set(option.value, 0);
+      }
+
+      for (const submission of availableSubmissions) {
+        const rawValue = submission.answers[field.id];
+        const numericValue = typeof rawValue === "number" ? rawValue : typeof rawValue === "string" ? Number(rawValue) : NaN;
+        const option = EMOTION_SCALE_OPTIONS.find((candidate) => candidate.value === numericValue);
+        if (option) {
+          counts.set(option.value, (counts.get(option.value) ?? 0) + 1);
+        }
+      }
+
+      const responses = Array.from(counts.values()).reduce((sum, count) => sum + count, 0);
+      if (responses > 0) {
+        const items = EMOTION_SCALE_OPTIONS.map((option) => {
+          const count = counts.get(option.value) ?? 0;
+          return {
+            value: option.value,
+            emoji: option.emoji,
+            labelKey: option.labelKey,
+            count,
+            percent: Math.round((count / responses) * 100),
+          };
+        });
+        const dominantItem = [...items].sort((left, right) => right.count - left.count || right.value - left.value)[0];
+        emotionDistributions.push({
+          fieldId: field.id,
+          fieldLabel: field.label,
+          responses,
+          dominantValue: dominantItem?.count ? dominantItem.value : null,
+          items,
+        });
+      }
+      continue;
+    }
+
     if (field.type !== "dropdown" && field.type !== "checkbox") {
       continue;
     }
@@ -70,5 +127,6 @@ export function buildSurveySummary(form: FormSchema, submissions: Submission[]) 
         : Number((ratingValues.reduce((sum, value) => sum + value, 0) / ratingValues.length).toFixed(2)),
     choiceCounts,
     yesNoDistributions,
+    emotionDistributions,
   };
 }

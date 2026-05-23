@@ -36,6 +36,23 @@ export function formatRelativeTime(value: string, now = Date.now()) {
 }
 
 export function flattenAnswer(value: unknown): string {
+  if (value && typeof value === "object" && !Array.isArray(value) && "kind" in (value as Record<string, unknown>)) {
+    const voice = value as {
+      kind?: unknown;
+      duration?: unknown;
+      audioBlobId?: unknown;
+      audioUrl?: unknown;
+      transcript?: unknown;
+    };
+    if (voice.kind === "voice") {
+      const duration = typeof voice.duration === "number" ? voice.duration : 0;
+      const minutes = Math.floor(duration / 60);
+      const seconds = duration % 60;
+      const hasStoredAudio = typeof voice.audioBlobId === "string" || typeof voice.audioUrl === "string";
+      const transcript = typeof voice.transcript === "string" && voice.transcript.trim() ? ` ${voice.transcript.trim()}` : "";
+      return `Voice response (${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")})${hasStoredAudio ? " attached" : ""}${transcript}`;
+    }
+  }
   if (Array.isArray(value)) {
     return value.join(" | ");
   }

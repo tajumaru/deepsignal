@@ -866,6 +866,7 @@
 }
 
 .mirror-rating-preview,
+.mirror-emotion-preview,
 .mirror-upload-preview {
   display: grid;
   gap: 0.35rem;
@@ -878,6 +879,11 @@
 .mirror-rating-preview span {
   color: #a4f7d9;
   letter-spacing: 0.18em;
+}
+
+.mirror-emotion-preview span {
+  font-size: 1.55rem;
+  letter-spacing: 0.12em;
 }
 
 .mirror-upload-icon,
@@ -3452,6 +3458,17 @@
   gap: 0.75rem;
   align-items: center;
   color: #ffd978;
+}
+
+.composer-canvas-emotion-rating {
+  display: grid;
+  gap: 0.35rem;
+  color: #dffaff;
+}
+
+.composer-canvas-emotion-rating span {
+  font-size: 1.35rem;
+  letter-spacing: 0.12em;
 }
 
 .composer-country-preview {

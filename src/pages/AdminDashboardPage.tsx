@@ -86,7 +86,15 @@ import {
   type ResponsesCsvSortOrder,
 } from "../lib/exportResponses";
 import { getPublicFormPath, getPublicRoadmapPath } from "../lib/publicLinks";
-import { getSelectedProjectId, triageStatusToOnchainStatus, updateSignalStatusOnChain } from "../lib/projectRegistry";
+import {
+  createFormOnChain,
+  createMetadataDigest,
+  deleteFormOnChain,
+  getSelectedProjectId,
+  serializeProjectFormMetadataReference,
+  triageStatusToOnchainStatus,
+  updateSignalStatusOnChain,
+} from "../lib/projectRegistry";
 import { isSuiRateLimitError } from "../lib/sui";
 import { clearDeepSignalPolicyCapabilityCache } from "../lib/debugCache";
 import { formatResponseDeadline, type ResponseDeadlineLabels } from "../lib/responseDeadline";
@@ -111,6 +119,11 @@ import {
 } from "../lib/storage";
 import { formatDate } from "../lib/utils";
 import { handleRateLimitedRpcFallback, useRpcInfrastructure } from "../rpcInfrastructure";
+import { localStorageAdapter } from "../storage/localStorageAdapter";
+import { listFormBlobIndex } from "../storage/blobIndex";
+import { markDeletedFormTombstones } from "../storage/deletedFormTombstones";
+import { forcePurgeFormArtifacts } from "../storage/forcePurgeFormArtifacts";
+import { saveFormMetadataOverlay } from "../storage/formMetadataOverlay";
 import { deleteFormsFromLocalCache, getStorageRuntimeStatus } from "../storage/storageFactory";
 import type { ActivityEvent, FormSchema, Submission } from "../types";
 
@@ -125,6 +138,7 @@ const MODAL_FOCUSABLE_SELECTOR = [
 ].join(",");
 const ROADMAP_READY_STATUSES = new Set<Submission["triageStatus"]>(["planned", "in_progress", "fixed"]);
 const DEMO_FLOW_VISIBLE = false;
+const PROJECT_RECOVERY_NOTICE_ACK_KEY = "deepsignal.admin.projectRecoveryNoticeAck";
 type WorkspaceTab = "review" | "activity" | "insights" | "members";
 type QuickActionId = "reviewing" | "resolve" | "publish" | "archive";
 type KeyboardShortcutAction = QuickActionId | "next" | "previous" | "search" | "help";
@@ -154,6 +168,54 @@ interface SignalTimelineCurrentState {
   title: string;
   detail?: string;
   phase: SignalTimelineEntry["phase"];
+}
+
+function readProjectRecoveryNoticeAcks() {
+  if (typeof window === "undefined") {
+    return {} as Record<string, string>;
+  }
+  try {
+    const raw = window.localStorage.getItem(PROJECT_RECOVERY_NOTICE_ACK_KEY);
+    if (!raw) {
+      return {} as Record<string, string>;
+    }
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object") {
+      return {} as Record<string, string>;
+    }
+    return Object.fromEntries(
+      Object.entries(parsed).filter(
+        (entry): entry is [string, string] => typeof entry[0] === "string" && typeof entry[1] === "string",
+      ),
+    );
+  } catch {
+    return {} as Record<string, string>;
+  }
+}
+
+function writeProjectRecoveryNoticeAcks(next: Record<string, string>) {
+  if (typeof window === "undefined") {
+    return;
+  }
+  try {
+    window.localStorage.setItem(PROJECT_RECOVERY_NOTICE_ACK_KEY, JSON.stringify(next));
+  } catch {
+    // Ignore storage write failures and continue with in-memory state.
+  }
+}
+
+function buildProjectFormIdentityKey(form: Pick<FormSchema, "projectId" | "onchainFormId" | "manifestBlobId">) {
+  if (form.projectId && typeof form.onchainFormId === "number") {
+    return `onchain:${form.projectId}:${form.onchainFormId}`;
+  }
+  if (form.projectId && form.manifestBlobId && !isLocalFallbackBlob(form.manifestBlobId)) {
+    return `manifest:${form.projectId}:${form.manifestBlobId}`;
+  }
+  return "";
+}
+
+function isFiniteFormId(value: number | null): value is number {
+  return typeof value === "number" && Number.isFinite(value);
 }
 
 function getSignalTimelinePhaseLabel(phase: SignalTimelineEntry["phase"], t: TranslationFn) {
@@ -1211,6 +1273,8 @@ export function AdminDashboardPage() {
   const suiClient = useSuiClient();
   const rpc = useRpcInfrastructure();
   const updateSignalStatusTx = useSignAndExecuteTransaction();
+  const registerFormTx = useSignAndExecuteTransaction();
+  const deleteNodeOnchainTx = useSignAndExecuteTransaction();
   const {
     capabilityProfile,
     isPending: isLoadingCapabilities,
@@ -1227,9 +1291,14 @@ export function AdminDashboardPage() {
   };
   const [saving, setSaving] = useState(false);
   const [deletingFormId, setDeletingFormId] = useState<string | null>(null);
+  const [registeringFormId, setRegisteringFormId] = useState<string | null>(null);
   const [deletingVisibleNodes, setDeletingVisibleNodes] = useState(false);
   const [nodeDirectoryOpen, setNodeDirectoryOpen] = useState(false);
   const [beaconFormId, setBeaconFormId] = useState<string | null>(null);
+  const [projectRecoveryNoticeOpen, setProjectRecoveryNoticeOpen] = useState(false);
+  const [projectRecoveryNoticeAcks, setProjectRecoveryNoticeAcks] = useState<Record<string, string>>(
+    () => readProjectRecoveryNoticeAcks(),
+  );
   const [nodeSearch, setNodeSearch] = useState("");
   const [csvExportScope, setCsvExportScope] = useState<ResponsesCsvExportScope>("filtered");
   const [csvSortOrder, setCsvSortOrder] = useState<ResponsesCsvSortOrder>("createdAtDesc");
@@ -1327,6 +1396,7 @@ export function AdminDashboardPage() {
   });
   const {
     projects,
+    refetchProjects,
     selectedProjectId,
     selectProject,
     selectedProject,
@@ -1467,21 +1537,102 @@ export function AdminDashboardPage() {
   }
 
   async function deleteNodes(formIds: string[]) {
-    const uniqueIds = [...new Set(formIds)];
     const formsById = new Map(forms.map((form) => [form.id, form]));
-    const walletOwnedIds = uniqueIds.filter((formId) => {
+    const selectedIdentityKeys = new Set(
+      [...new Set(formIds)]
+        .map((formId) => formsById.get(formId))
+        .map((form) => (form ? buildProjectFormIdentityKey(form) : ""))
+        .filter(Boolean),
+    );
+    const uniqueIds = [
+      ...new Set([
+        ...formIds,
+        ...forms
+          .filter((form) => {
+            const identityKey = buildProjectFormIdentityKey(form);
+            return Boolean(identityKey) && selectedIdentityKeys.has(identityKey);
+          })
+          .map((form) => form.id),
+      ]),
+    ];
+    const selectedManifestBlobIds = new Set(
+      uniqueIds
+        .map((formId) => formsById.get(formId)?.manifestBlobId)
+        .filter((blobId): blobId is string => Boolean(blobId) && !isLocalFallbackBlob(blobId)),
+    );
+    const selectedFormBlobIds = new Set(
+      uniqueIds
+        .map((formId) => formsById.get(formId)?.blobId)
+        .filter((blobId): blobId is string => Boolean(blobId) && !isLocalFallbackBlob(blobId)),
+    );
+    const blobIndexAliasIds = listFormBlobIndex()
+      .filter(
+        (entry) =>
+          (entry.manifestBlobId && selectedManifestBlobIds.has(entry.manifestBlobId)) ||
+          selectedFormBlobIds.has(entry.formBlobId),
+      )
+      .map((entry) => entry.formId);
+    const expandedIds = [...new Set([...uniqueIds, ...blobIndexAliasIds])];
+    markDeletedFormTombstones({
+      forms: expandedIds
+        .map((formId) => formsById.get(formId))
+        .filter((form): form is FormWithCount => Boolean(form)),
+      manifestBlobIds: [...selectedManifestBlobIds],
+      blobIds: [...selectedFormBlobIds],
+    });
+    const onchainDeleteTargets = [
+      ...new Set(
+        expandedIds
+          .map((formId) => formsById.get(formId))
+          .map((form) => (form ? resolveOnchainDeleteTarget(form) : null))
+          .filter(isFiniteFormId),
+      ),
+    ];
+
+    if (onchainDeleteTargets.length > 0) {
+      if (!selectedProject) {
+        throw new Error("Select the linked project before deleting this node.");
+      }
+      if (selectedProject.signalsCount > 0) {
+        throw new Error(t("deleteOnchainFormsNoSignalsOnly"));
+      }
+      for (const onchainFormId of onchainDeleteTargets) {
+        try {
+          const tx = deleteFormOnChain({
+            projectId: selectedProject.objectId,
+            formId: onchainFormId,
+          });
+          const result = await deleteNodeOnchainTx.mutateAsync({ transaction: tx });
+          await suiClient.waitForTransaction({ digest: result.digest });
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          if (!message.includes("find_form_index")) {
+            throw error;
+          }
+          console.warn(`On-chain form ${onchainFormId} was already absent during node delete. Continuing local cleanup.`);
+        }
+      }
+      await refetchProjects();
+    }
+
+    const walletOwnedIds = expandedIds.filter((formId) => {
       const form = formsById.get(formId);
       return addressesMatch(form?.ownerAddress, wallet.accountAddress);
     });
-    const localCacheOnlyIds = uniqueIds.filter((formId) => !walletOwnedIds.includes(formId));
+    const localCacheOnlyIds = expandedIds.filter((formId) => !walletOwnedIds.includes(formId));
 
     if (walletOwnedIds.length > 0) {
       await storageAdapter.deleteForms(walletOwnedIds);
     }
-    if (localCacheOnlyIds.length > 0) {
-      await deleteFormsFromLocalCache(localCacheOnlyIds);
+    if (expandedIds.length > 0) {
+      await deleteFormsFromLocalCache(expandedIds);
     }
-    const archivedEvents = uniqueIds.flatMap((formId) => {
+    forcePurgeFormArtifacts({
+      formIds: expandedIds,
+      manifestBlobIds: [...selectedManifestBlobIds],
+      blobIds: [...selectedFormBlobIds],
+    });
+    const archivedEvents = expandedIds.flatMap((formId) => {
       const form = formsById.get(formId);
       return form
         ? [
@@ -1500,7 +1651,7 @@ export function AdminDashboardPage() {
     return {
       walletDeletedCount: walletOwnedIds.length,
       localCacheDeletedCount: localCacheOnlyIds.length,
-      totalDeletedCount: uniqueIds.length,
+      totalDeletedCount: expandedIds.length,
     };
   }
 
@@ -1549,6 +1700,112 @@ export function AdminDashboardPage() {
       });
     } finally {
       setDeletingFormId(null);
+    }
+  }
+
+  const canRegisterNodeOnSui = useCallback(
+    (form: FormWithCount) =>
+      Boolean(
+        form.projectId &&
+        !form.onchainFormId &&
+        form.manifestBlobId &&
+        !isLocalFallbackBlob(form.manifestBlobId),
+      ),
+    [],
+  );
+
+  async function handleRegisterNodeOnSui(formId: string) {
+    const form = accessibleForms.find((item) => item.id === formId);
+    if (!form) {
+      return;
+    }
+    if (!form.projectId) {
+      setToast({ tone: "error", message: t("registerNodeMissingProject") });
+      return;
+    }
+    if (!form.manifestBlobId || isLocalFallbackBlob(form.manifestBlobId)) {
+      setToast({ tone: "error", message: t("registerNodeRequiresWalrus") });
+      return;
+    }
+    if (form.onchainFormId) {
+      setToast({ tone: "success", message: t("registerNodeAlreadyOnSui") });
+      return;
+    }
+
+    setRegisteringFormId(formId);
+    try {
+      const formMetadataDigest =
+        form.formMetadataDigest ??
+        await createMetadataDigest({
+          localFormId: form.id,
+          title: form.title,
+          description: form.description,
+          purpose: form.purpose,
+          visibility: form.visibility,
+          publicExplore: form.publicExplore,
+          fieldCount: form.fields.length,
+          sectionCount: form.sections?.length ?? 0,
+          encryptSubmissions: form.encryptSubmissions,
+          responseDeadline: form.responseDeadline ?? null,
+          responseDeadlineMode: form.responseDeadlineMode ?? "none",
+          ownerAddress: form.ownerAddress,
+          projectId: form.projectId ?? null,
+        });
+      const metadataReference = serializeProjectFormMetadataReference({
+        digest: formMetadataDigest,
+        manifestBlobId: form.manifestBlobId,
+        formBlobId: form.blobId,
+        formId: form.id,
+      });
+      const tx = createFormOnChain({
+        projectId: form.projectId,
+        title: form.title,
+        metadataDigest: metadataReference,
+      });
+      const result = await registerFormTx.mutateAsync({ transaction: tx });
+      const confirmed = await suiClient.waitForTransaction({
+        digest: result.digest,
+        options: { showEvents: true },
+      });
+      const formCreatedEvent = (confirmed.events ?? []).find((chainEvent) =>
+        String(chainEvent.type ?? "").endsWith("::FormCreated"),
+      );
+      const rawFormId = (formCreatedEvent?.parsedJson as { form_id?: string | number } | undefined)?.form_id;
+      const parsedFormId = typeof rawFormId === "number" ? rawFormId : Number(rawFormId ?? Number.NaN);
+      if (!Number.isFinite(parsedFormId)) {
+        throw new Error("Sui registration completed, but the new form id was not returned.");
+      }
+
+      const registeredForm = {
+        ...form,
+        formMetadataDigest,
+        onchainFormId: parsedFormId,
+        isOnchain: true,
+        registrationMode: "sui" as const,
+        activityEvents: [
+          ...(form.activityEvents ?? []),
+          createActivityEvent({
+            form,
+            actorAddress: wallet.accountAddress,
+            actorRole: activityActorRole,
+            action: "form_updated",
+            txDigest: result.digest,
+          }),
+        ],
+      } satisfies FormWithCount;
+
+      await localStorageAdapter.saveForm(registeredForm);
+      saveFormMetadataOverlay(registeredForm);
+      appendActivityEvents(registeredForm.activityEvents.slice(-1));
+      await loadConsole(formId);
+      setToast({ tone: "success", message: t("registerNodeSuccess", { title: form.title }) });
+    } catch (error) {
+      setToast({
+        tone: "error",
+        message: error instanceof Error ? error.message : t("registerNodeFailed"),
+      });
+    } finally {
+      setRegisteringFormId(null);
     }
   }
 
@@ -1651,6 +1908,77 @@ export function AdminDashboardPage() {
 
     return [...formsById.values()];
   }, [accessibleForms, allSignals, selectedProject]);
+  const walrusOnlyProjectForms = useMemo(() => {
+    if (!selectedProject) {
+      return [];
+    }
+
+    return accessibleForms.filter(
+      (form) =>
+        form.projectId === selectedProject.objectId &&
+        !form.onchainFormId &&
+        Boolean(form.manifestBlobId) &&
+        !isLocalFallbackBlob(form.manifestBlobId),
+    );
+  }, [accessibleForms, selectedProject]);
+  const shouldExplainProjectRecovery =
+    hasAdminAccess &&
+    Boolean(selectedProject) &&
+    walrusOnlyProjectForms.length > 0;
+  const latestProjectRecoveryNoticeAt = useMemo(() => {
+    const latestWalrusOnlyFormAt = walrusOnlyProjectForms.reduce<number | null>((latest, form) => {
+      const candidate = Date.parse(form.updatedAt ?? form.createdAt);
+      if (!Number.isFinite(candidate)) {
+        return latest;
+      }
+      return latest === null || candidate > latest ? candidate : latest;
+    }, null);
+    if (latestWalrusOnlyFormAt !== null) {
+      return new Date(latestWalrusOnlyFormAt).toISOString();
+    }
+    return selectedProject?.createdAt ?? null;
+  }, [selectedProject?.createdAt, walrusOnlyProjectForms]);
+
+  const acknowledgeProjectRecoveryNotice = useCallback(() => {
+    if (!selectedProject || !latestProjectRecoveryNoticeAt) {
+      setProjectRecoveryNoticeOpen(false);
+      return;
+    }
+    setProjectRecoveryNoticeOpen(false);
+    setProjectRecoveryNoticeAcks((current) => {
+      const next = {
+        ...current,
+        [selectedProject.objectId]: latestProjectRecoveryNoticeAt,
+      };
+      writeProjectRecoveryNoticeAcks(next);
+      return next;
+    });
+  }, [latestProjectRecoveryNoticeAt, selectedProject]);
+
+  useEffect(() => {
+    if (!selectedProject) {
+      setProjectRecoveryNoticeOpen(false);
+      return;
+    }
+    if (!shouldExplainProjectRecovery) {
+      setProjectRecoveryNoticeOpen(false);
+      return;
+    }
+    const acknowledgedAt = projectRecoveryNoticeAcks[selectedProject.objectId];
+    if (acknowledgedAt && latestProjectRecoveryNoticeAt) {
+      const acknowledgedMs = Date.parse(acknowledgedAt);
+      const latestNoticeMs = Date.parse(latestProjectRecoveryNoticeAt);
+      if (Number.isFinite(acknowledgedMs) && Number.isFinite(latestNoticeMs) && acknowledgedMs >= latestNoticeMs) {
+        setProjectRecoveryNoticeOpen(false);
+        return;
+      }
+    }
+    if (acknowledgedAt && !latestProjectRecoveryNoticeAt) {
+      setProjectRecoveryNoticeOpen(false);
+      return;
+    }
+    setProjectRecoveryNoticeOpen(true);
+  }, [latestProjectRecoveryNoticeAt, projectRecoveryNoticeAcks, selectedProject, shouldExplainProjectRecovery]);
   const attachmentPreviews = useAttachmentPreviews(detailAttachments, {
     enabled:
       detailAttachments.length > 0 &&
@@ -2353,6 +2681,23 @@ export function AdminDashboardPage() {
   );
   const selectedBeaconForm =
     accessibleForms.find((form) => form.id === beaconFormId) ?? null;
+  const resolveOnchainDeleteTarget = useCallback(
+    (form: Pick<FormSchema, "id" | "projectId" | "onchainFormId" | "manifestBlobId">) => {
+      if (!selectedProject || form.projectId !== selectedProject.objectId) {
+        return null;
+      }
+      if (typeof form.onchainFormId === "number") {
+        return form.onchainFormId;
+      }
+      const matchedOnchainForm = visibleOnchainForms.find(
+        (entry) =>
+          (form.manifestBlobId && entry.manifestBlobId === form.manifestBlobId) ||
+          entry.sourceFormId === form.id,
+      );
+      return matchedOnchainForm?.formId ?? null;
+    },
+    [selectedProject, visibleOnchainForms],
+  );
   const canDeleteForm = useCallback(
     (form: Pick<FormSchema, "ownerAddress">) =>
       hasAdminAccess || !capabilityProfile.isConfigured || addressesMatch(form.ownerAddress, wallet.accountAddress),
@@ -2746,6 +3091,7 @@ export function AdminDashboardPage() {
       unreadCount: signalIndex.counts.unread,
       isLegacyDemo: false,
       canDelete: false,
+      canRegisterOnSui: false,
       isAccessible: true,
     };
     const formItems = accessibleForms
@@ -2765,6 +3111,7 @@ export function AdminDashboardPage() {
         unreadCount: unreadCountByFormId[form.id] ?? 0,
         isLegacyDemo: !form.ownerAddress,
         canDelete: canDeleteForm(form),
+        canRegisterOnSui: canRegisterNodeOnSui(form),
         isAccessible: accessibleFormIdSet.has(form.id),
       }));
     return [allFormsItem, ...formItems];
@@ -2772,6 +3119,7 @@ export function AdminDashboardPage() {
     accessibleForms,
     allSignals.length,
     canDeleteForm,
+    canRegisterNodeOnSui,
     nodeSearch,
     signalIndex.counts.unread,
     t,
@@ -2815,6 +3163,43 @@ export function AdminDashboardPage() {
     >
       <section className="stack">
         <AdminToast toast={toast} />
+        {projectRecoveryNoticeOpen && selectedProject ? (
+          <div className="node-directory-overlay" role="dialog" aria-modal="true" aria-labelledby="project-recovery-notice-title">
+            <div className="node-directory-backdrop" />
+            <section className="panel glow-panel node-directory-panel shortcut-help-panel">
+              <div className="signal-detail-heading">
+                <div>
+                  <p className="eyebrow">{t("signalRegistryTitle")}</p>
+                  <h2 id="project-recovery-notice-title">{t("projectRecoveryNoticeTitle")}</h2>
+                  <p className="muted">
+                    {t("projectRecoveryNoticeWalrusOnlyBody", {
+                      count: walrusOnlyProjectForms.length,
+                    })}
+                  </p>
+                </div>
+              </div>
+              <div className="inline-actions">
+                <button
+                  type="button"
+                  className="primary-button"
+                  onClick={() => {
+                    setProjectRecoveryNoticeOpen(false);
+                    setNodeDirectoryOpen(true);
+                  }}
+                >
+                  {t("projectRecoveryNoticeOpenNodes")}
+                </button>
+                <button
+                  type="button"
+                  className="ghost-button"
+                  onClick={acknowledgeProjectRecoveryNotice}
+                >
+                  {t("projectRecoveryNoticeDismiss")}
+                </button>
+              </div>
+            </section>
+          </div>
+        ) : null}
         {pendingCsvExportMetadata ? (
           <CsvExportConfirmationModal
             metadata={pendingCsvExportMetadata}
@@ -3943,6 +4328,7 @@ export function AdminDashboardPage() {
         publicResultValue={reviewSessionPublicResultValue}
         canAdvanceReviewSession={canAdvanceReviewSession}
         hasReviewDraftChanges={hasReviewDraftChanges}
+        hasSavedReviewResult={selectedHasSavedReviewResult}
         onSaveReview={saveActiveReviewDraft}
       />
       {projectModalMode ? (
@@ -4110,6 +4496,16 @@ export function AdminDashboardPage() {
                         >
                           {t("openSignalBeacon")}
                         </button>
+                        {item.canRegisterOnSui ? (
+                          <button
+                            type="button"
+                            className="ghost-button"
+                            onClick={() => void handleRegisterNodeOnSui(item.id)}
+                            disabled={registeringFormId === item.id || deletingVisibleNodes}
+                          >
+                            {registeringFormId === item.id ? t("registeringLabel") : t("registerNodeOnSui")}
+                          </button>
+                        ) : null}
                         {item.canDelete ? (
                           <button
                             type="button"

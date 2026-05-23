@@ -3,6 +3,7 @@ import { PrivateSignalUnlockCard } from "../../../components/PrivateSignalUnlock
 import { StorageProof } from "../../../components/StorageProof";
 import { useI18n } from "../../../i18n";
 import { isAttachmentFieldType } from "../../../lib/fieldTypes";
+import { formatDate } from "../../../lib/utils";
 import { isLocalFallbackBlob } from "../../../lib/signalInbox";
 import type { AttachmentPreviewState } from "../../../hooks/useAttachmentPreviews";
 import type { SignalRecord } from "../hooks/useSignalInboxData";
@@ -63,6 +64,7 @@ interface ReviewSessionModalProps {
   publicResultValue: string;
   canAdvanceReviewSession: boolean;
   hasReviewDraftChanges: boolean;
+  hasSavedReviewResult: boolean;
   onSaveReview: () => Promise<boolean>;
 }
 
@@ -112,6 +114,7 @@ export function ReviewSessionModal({
   publicResultValue,
   canAdvanceReviewSession,
   hasReviewDraftChanges,
+  hasSavedReviewResult,
   onSaveReview,
 }: ReviewSessionModalProps) {
   const { t } = useI18n();
@@ -151,7 +154,7 @@ export function ReviewSessionModal({
                   <path d="M7 7 17 17" />
                   <path d="M17 7 7 17" />
                 </svg>
-             {"\u2605"}</button>
+              </button>
             </div>
           </div>
 
@@ -238,7 +241,7 @@ export function ReviewSessionModal({
                   className={`review-session-mobile-tab ${reviewSessionMobileTab === "answers" ? "is-active" : ""}`}
                   onClick={() => setReviewSessionMobileTab("answers")}
                 >
-                  {"\u2605"}
+                  {t("originalSignalTitle")}
                 </button>
                 <button
                   type="button"
@@ -250,7 +253,7 @@ export function ReviewSessionModal({
                   className={`review-session-mobile-tab ${reviewSessionMobileTab === "review" ? "is-active" : ""}`}
                   onClick={() => setReviewSessionMobileTab("review")}
                 >
-                  {"\u2605"}
+                  {t("reviewClassifyTitle")}
                 </button>
               </div>
 
@@ -314,7 +317,7 @@ export function ReviewSessionModal({
                             disabled={isSelected}
                             onClick={() => patchReviewDraft({ status: option.value as Submission["status"] })}
                           >
-                            {"\u2605"}
+                            {option.label}
                           </button>
                         );
                       })}
@@ -354,7 +357,7 @@ export function ReviewSessionModal({
                             disabled={isSelected}
                             onClick={() => patchReviewDraft({ priority: option.value as Submission["priority"] })}
                           >
-                            {"\u2605"}
+                            {option.label}
                           </button>
                         );
                       })}
@@ -415,7 +418,7 @@ export function ReviewSessionModal({
                       className="ghost-button"
                       onClick={() => patchReviewDraft({ reviewer: walletAccountAddress })}
                     >
-                      {"\u2605"}
+                      {t("assignToMe")}
                     </button>
                   ) : null}
                   <button
@@ -424,7 +427,7 @@ export function ReviewSessionModal({
                     disabled={saving}
                     onClick={onToggleNeedsFollowUp}
                   >
-                    {"\u2605"}
+                    {selectedNeedsFollowUp ? t("followUpEnabledLabel") : t("needsFollowUpLabel")}
                   </button>
                 </div>
                 <label className="review-select">
@@ -436,6 +439,12 @@ export function ReviewSessionModal({
                     placeholder={t("captureReviewNotes")}
                   />
                 </label>
+                <p className="review-action-helper">{t("reviewEditableHelper")}</p>
+                {hasSavedReviewResult ? (
+                  <p className="review-action-helper muted">
+                    {t("lastUpdatedLabel")}: {formatDate(selectedRecord.submission.updatedAt)}
+                  </p>
+                ) : null}
                 <p className="review-action-helper">{t("reviewUnsavedDraftHelper")}</p>
               </div>
             </div>
@@ -455,7 +464,7 @@ export function ReviewSessionModal({
                     className={`review-state-badge ${!isDraftOnRoadmap && draftTriageStatus !== "closed" ? "is-active" : ""}`}
                     onClick={() => patchReviewDraft({ status: "read" })}
                   >
-                    {"\u2605"}
+                    {t("keepInternal")}
                   </button>
                   <button
                     type="button"
@@ -471,21 +480,21 @@ export function ReviewSessionModal({
                             : "planned",
                       })}
                   >
-                    {"\u2605"}
+                    {t("publishToRoadmap")}
                   </button>
                   <button
                     type="button"
                     className={`review-state-badge is-triage-closed ${draftTriageStatus === "closed" ? "is-active" : ""}`}
                     onClick={() => patchReviewDraft({ status: "read", triageStatus: "closed" })}
                   >
-                    {"\u2605"}
+                    {t("resolveInternally")}
                   </button>
                   <button
                     type="button"
                     className={`review-state-badge is-status-archived ${draftReviewStatus === "archived" ? "is-active" : ""}`}
                     onClick={() => patchReviewDraft({ status: "archived", triageStatus: "closed" })}
                   >
-                    {"\u2605"}
+                    {t("archiveSignal")}
                   </button>
                 </div>
                 <div className="review-result-grid review-result-grid-compact">
@@ -505,7 +514,7 @@ export function ReviewSessionModal({
           <div className="review-session-footer">
             {reviewSessionStep === 1 ? (
               <button type="button" className="ghost-button" onClick={onRequestClose}>
-                {"\u2605"}
+                {t("closeLabel")}
               </button>
             ) : reviewSessionStep > 1 ? (
               <button
@@ -514,7 +523,7 @@ export function ReviewSessionModal({
                 onClick={() =>
                   setReviewSessionStep((current) => (Math.max(1, current - 1) as ReviewSessionStep))}
               >
-                {"\u2605"}
+                {t("back")}
               </button>
             ) : (
               <span aria-hidden="true" />
@@ -528,7 +537,7 @@ export function ReviewSessionModal({
                   disabled={!canAdvanceReviewSession}
                   onClick={() => setReviewSessionStep((current) => (Math.min(4, current + 1) as ReviewSessionStep))}
                 >
-                  {"\u2605"}
+                  {t("nextStepLabel")}
                 </button>
               ) : (
                 <button
@@ -543,7 +552,7 @@ export function ReviewSessionModal({
                     }
                   }}
                 >
-                  {"\u2605"}
+                  {saving ? t("reviewSaveSaving") : t("saveReview")}
                 </button>
               )}
             </div>

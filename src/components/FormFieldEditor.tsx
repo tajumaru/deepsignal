@@ -1,5 +1,6 @@
 import type { ChangeEvent, DragEvent, KeyboardEvent } from "react";
 import { fieldTypeOptions } from "../lib/constants";
+import { EMOTION_SCALE_OPTIONS } from "../lib/emotionScale";
 import { useI18n } from "../i18n";
 import { getCountryFlag } from "../lib/countries";
 import { hasChoiceOptions, isConfirmationCheckboxField, isLongTextLikeField, isMatrixFieldType, normalizeFieldType } from "../lib/fieldTypes";
@@ -291,6 +292,24 @@ export function FormFieldEditor({
         <div className="composer-canvas-rating" aria-hidden="true">
           <span>*****</span>
           <small className="muted">{t("chooseRating")}</small>
+        </div>
+      );
+    }
+
+    if (field.type === "emotionRating") {
+      return (
+        <div className="composer-canvas-emotion-rating" aria-hidden="true">
+          <span>{EMOTION_SCALE_OPTIONS.map((option) => option.emoji).join(" ")}</span>
+          <small className="muted">{t("chooseEmotionRating")}</small>
+        </div>
+      );
+    }
+
+    if (field.type === "voice") {
+      return (
+        <div className="composer-upload-placeholder composer-voice-placeholder" aria-hidden="true">
+          <strong>{t("fieldTypeVoice")}</strong>
+          <span className="muted">Record a quick spoken answer with playback preview.</span>
         </div>
       );
     }

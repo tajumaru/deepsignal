@@ -1,4 +1,5 @@
 import type { Language } from "../i18n";
+import { getEmotionScaleOption } from "./emotionScale";
 import type { FormField } from "../types";
 import { formatCountryAnswerText } from "./countries";
 import { isConfirmationCheckboxField, normalizeFieldType } from "./fieldTypes";
@@ -20,6 +21,16 @@ function formatDateAnswerText(value: string, language: Language) {
 
 export function formatAnswerText(field: FormField | undefined, value: unknown, language: Language) {
   const fieldType = field ? normalizeFieldType(field.type) : undefined;
+  if (fieldType === "emotionRating") {
+    const option = getEmotionScaleOption(value);
+    if (option) {
+      const labels =
+        language === "ja"
+          ? ["とても不満", "やや不満", "ふつう", "満足", "とても満足"]
+          : ["Very frustrated", "Concerned", "Neutral", "Satisfied", "Delighted"];
+      return `${option.emoji} ${labels[option.value - 1]}`;
+    }
+  }
   if (fieldType === "country_select" && typeof value === "string" && value.trim()) {
     return formatCountryAnswerText(value, language);
   }

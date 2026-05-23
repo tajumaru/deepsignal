@@ -208,10 +208,12 @@ function getBlockKind(type: FieldType) {
     country_select: "Identity Block",
     confirmation: "Consent Block",
     rating: "Signal Strength Block",
+    emotionRating: "Emotion Block",
     url: "Reference Block",
     walletAddress: "Wallet Block",
     screenshot: "Attachment Block",
     video: "Media Block",
+    voice: "Voice Block",
   };
   return labels[type] ?? "Signal Block";
 }

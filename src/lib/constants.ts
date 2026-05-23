@@ -11,10 +11,12 @@ export const fieldTypeLabels: Record<FieldType, string> = {
   country_select: "Country select",
   confirmation: "Confirmation checkbox",
   rating: "Star rating",
+  emotionRating: "Emotion scale",
   url: "URL",
   walletAddress: "SUI address",
   screenshot: "Screenshot upload",
   video: "Video upload",
+  voice: "Voice answer",
 };
 
 export const fieldTypeOptions: FieldType[] = [
@@ -28,8 +30,10 @@ export const fieldTypeOptions: FieldType[] = [
   "country_select",
   "confirmation",
   "rating",
+  "emotionRating",
   "url",
   "walletAddress",
   "screenshot",
   "video",
+  "voice",
 ];

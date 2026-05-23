@@ -3,7 +3,7 @@ import { isConfirmationCheckboxField } from "../../../lib/fieldTypes";
 import { getSuiAddressValidationState } from "../../../lib/suiAddress";
 import type { FormSchema, SubmissionLocation } from "../../../types";
 import { isFieldRequired } from "../../../utils/formLogic";
-import type { PublicAnswers, ValidationErrors } from "../types";
+import type { PublicAnswers, PublicVoiceAnswerDraft, ValidationErrors } from "../types";
 import { getUploadAnswer } from "./getUploadAnswer";
 
 type ValidatePublicSubmissionArgs = {
@@ -50,6 +50,20 @@ function isInvalidWalletAddressAnswer(value: unknown) {
   return Boolean(value) && getSuiAddressValidationState(value) === "invalid";
 }
 
+function hasVoiceAnswer(value: unknown): value is PublicVoiceAnswerDraft {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return false;
+  }
+  const answer = value as Partial<PublicVoiceAnswerDraft>;
+  return (
+    answer.kind === "voice" &&
+    typeof answer.duration === "number" &&
+    answer.duration > 0 &&
+    typeof answer.mimeType === "string" &&
+    Boolean(answer.audioUrl || answer.audioBlobId || answer.blob)
+  );
+}
+
 export function validatePublicSubmission({
   form,
   answers,
@@ -92,6 +106,7 @@ export function validatePublicSubmission({
       value === undefined ||
       (isConfirmationCheckboxField(field.type) && value !== true) ||
       (field.type === "matrix" && !isCompleteMatrixAnswer(value, matrixRows)) ||
+      (field.type === "voice" && !hasVoiceAnswer(value)) ||
       (Array.isArray(value) && value.length === 0) ||
       (attachmentFields.has(field.id) &&
         (usesInlineEncryptedAttachments

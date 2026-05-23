@@ -17,7 +17,7 @@ import { useRpcInfrastructure } from "../../../rpcInfrastructure";
 import { isQuotaExceededError, isRateLimitError } from "../../../storage/walrusDiagnostics";
 import type { FormSchema, Submission, SubmissionAttachment, SubmissionLocation } from "../../../types";
 import { getOrderedFields, getVisibleFieldIds } from "../../../utils/formLogic";
-import type { PublicAnswers, ValidationErrors } from "../types";
+import type { PublicAnswers, PublicVoiceAnswerDraft, ValidationErrors } from "../types";
 import { getUploadAnswer } from "../utils/getUploadAnswer";
 import { validatePublicSubmission, validateSubmissionLocation } from "../utils/validatePublicSubmission";
 
@@ -124,7 +124,22 @@ function hasRecoverableAnswers(answers: PublicAnswers) {
 
 function sanitizeDraftAnswers(answers: PublicAnswers, attachmentFields: Set<string>) {
   return Object.fromEntries(
-    Object.entries(answers).map(([fieldId, value]) => [fieldId, attachmentFields.has(fieldId) ? [] : value]),
+    Object.entries(answers).map(([fieldId, value]) => {
+      if (attachmentFields.has(fieldId)) {
+        return [fieldId, []];
+      }
+      if (isVoiceAnswerDraft(value)) {
+        return [
+          fieldId,
+          {
+            ...value,
+            audioUrl: undefined,
+            blob: undefined,
+          },
+        ];
+      }
+      return [fieldId, value];
+    }),
   ) satisfies PublicAnswers;
 }
 
@@ -145,6 +160,9 @@ function getApproxPayloadSize(value: unknown) {
 }
 
 function getAttachmentTypeFromMime(mimeType: string): SubmissionAttachment["type"] {
+  if (mimeType.startsWith("audio/")) {
+    return "audio";
+  }
   if (mimeType.startsWith("video/")) {
     return "video";
   }
@@ -152,6 +170,25 @@ function getAttachmentTypeFromMime(mimeType: string): SubmissionAttachment["type
     return "image";
   }
   return "document";
+}
+
+function isVoiceAnswerDraft(value: unknown): value is PublicVoiceAnswerDraft {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return false;
+  }
+  const answer = value as Partial<PublicVoiceAnswerDraft>;
+  return (
+    answer.kind === "voice" &&
+    typeof answer.duration === "number" &&
+    answer.duration > 0 &&
+    typeof answer.mimeType === "string" &&
+    Boolean(answer.audioUrl || answer.audioBlobId || answer.blob)
+  );
+}
+
+function buildVoiceFileName(fieldId: string, mimeType: string) {
+  const subtype = (mimeType.split("/")[1] || "webm").split(";")[0];
+  return `${fieldId}-voice.${subtype}`;
 }
 
 function createPseudoProgress(onTick: (progress: number) => void) {
@@ -1040,6 +1077,74 @@ export function usePublicSubmission({
             plainAnswers[field.id] = validUploads.map((attachment) => attachment.fileName).join(", ");
           }
         } else {
+          if (field.type === "voice" && isVoiceAnswerDraft(value)) {
+            if (!value.blob) {
+              plainAnswers[field.id] = {
+                kind: "voice",
+                audioUrl: value.audioUrl,
+                audioBlobId: value.audioBlobId,
+                duration: value.duration,
+                mimeType: value.mimeType,
+                transcript: value.transcript,
+                fileName: value.fileName,
+                size: value.size,
+              };
+              continue;
+            }
+
+            const voiceFile = new File([value.blob], value.fileName || buildVoiceFileName(field.id, value.mimeType), {
+              type: value.mimeType || "audio/webm",
+              lastModified: Date.now(),
+            });
+
+            if (form.encryptSubmissions) {
+              if (voiceFile.size > ENCRYPTED_INLINE_ATTACHMENT_MAX_BYTES) {
+                throw new Error(attachmentTooLargeLabel(field.label || "Voice answer", ENCRYPTED_INLINE_ATTACHMENT_MAX_BYTES));
+              }
+              const inlineAttachment = await createInlinePrivateAttachment(voiceFile, ENCRYPTED_INLINE_ATTACHMENT_MAX_BYTES);
+              const audioBlobId = inlineAttachment.blobId;
+              attachments.push({
+                ...inlineAttachment,
+                fieldId: field.id,
+                type: "audio",
+              });
+              plainAnswers[field.id] = {
+                kind: "voice",
+                audioBlobId,
+                duration: value.duration,
+                mimeType: value.mimeType,
+                transcript: value.transcript,
+                fileName: value.fileName || voiceFile.name,
+                size: value.size ?? voiceFile.size,
+              };
+              continue;
+            }
+
+            const uploadedVoice = await storageAdapter.uploadFile(voiceFile);
+            attachments.push({
+              fieldId: field.id,
+              type: "audio",
+              blobId: uploadedVoice.blobId,
+              name: value.fileName || voiceFile.name,
+              size: value.size ?? voiceFile.size,
+              storage: "blob",
+              originalName: value.fileName || voiceFile.name,
+              originalType: value.mimeType,
+              walrusProof: uploadedVoice.walrusProof,
+              tatumStorage: uploadedVoice.tatumStorage,
+            });
+            plainAnswers[field.id] = {
+              kind: "voice",
+              audioBlobId: uploadedVoice.blobId,
+              audioUrl: uploadedVoice.url,
+              duration: value.duration,
+              mimeType: value.mimeType,
+              transcript: value.transcript,
+              fileName: value.fileName || voiceFile.name,
+              size: value.size ?? voiceFile.size,
+            };
+            continue;
+          }
           plainAnswers[field.id] = value;
         }
       }

@@ -27,6 +27,14 @@
 }
 
 @media (max-width: 640px) {
+  .voice-recorder-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .voice-recorder-button {
+    width: 100%;
+  }
+
   .publish-overlay-panel.signal-submission-overlay-panel {
     width: calc(100vw - 20px - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px));
     max-width: calc(100vw - 20px - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px));

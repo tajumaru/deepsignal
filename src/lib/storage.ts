@@ -86,6 +86,9 @@ const REAL_SEAL_PROJECT_REQUIRED_MESSAGE =
   "Real Seal encrypted submissions require a project or form owner wallet. Connect the creator wallet or turn off Encrypt submissions.";
 
 function inferAttachmentType(mimeType: string | undefined) {
+  if (mimeType?.startsWith("audio/")) {
+    return "audio" as const;
+  }
   if (mimeType?.startsWith("video/")) {
     return "video" as const;
   }
@@ -134,6 +137,8 @@ function normalizeSubmissionAttachment(raw: unknown): SubmissionAttachment | nul
     type:
       attachment.type === "video"
         ? "video"
+        : attachment.type === "audio"
+          ? "audio"
         : attachment.type === "document"
           ? "document"
           : "image",
@@ -354,6 +359,9 @@ export function createEmptyAnswer(field: FormField) {
   const fieldType = normalizeFieldType(field.type);
   if (fieldType === "checkbox" || isAttachmentFieldType(fieldType)) {
     return [] as string[];
+  }
+  if (fieldType === "voice") {
+    return null;
   }
   if (fieldType === "matrix") {
     return {} as Record<string, string>;

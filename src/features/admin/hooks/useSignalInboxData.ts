@@ -3,7 +3,7 @@ import { useSuiClient } from "@mysten/dapp-kit";
 import { canReviewForm } from "../../../lib/adminAccess";
 import { isVerifiedSignal } from "../../../lib/respondentMeta";
 import { getSubmissionRespondentMeta } from "../../../lib/respondentMeta";
-import { fetchJsonBlob } from "../../../lib/walrus";
+import { fetchJsonBlob, readManifestWithForm } from "../../../lib/walrus";
 import { useProjectRegistry } from "../../../hooks/useProjectRegistry";
 import {
   getSignalPreview,
@@ -11,6 +11,7 @@ import {
   inferSignalCategory,
   type SignalCategory,
 } from "../../../lib/signalInbox";
+import { isLocalFallbackBlob } from "../../../lib/proof";
 import {
   getAssignedReviewer,
   getVisibleReviewerNotes,
@@ -36,6 +37,10 @@ import {
 import { flattenAnswer } from "../../../lib/utils";
 import type { CapabilityProfile } from "../../../hooks/useAccessControl";
 import type { FormSchema, Submission } from "../../../types";
+import { localStorageAdapter } from "../../../storage/localStorageAdapter";
+import { upsertFormBlobIndex } from "../../../storage/blobIndex";
+import { isDeletedFormTombstone } from "../../../storage/deletedFormTombstones";
+import { saveFormMetadataOverlay } from "../../../storage/formMetadataOverlay";
 
 export interface FormWithCount extends FormSchema {
   submissionCount: number;
@@ -79,7 +84,21 @@ function buildOnchainShadowSignalId(projectId: string, signalId: number) {
   return `onchain:${projectId}:${signalId}`;
 }
 
-function createShadowForm(
+function buildProjectFormKey(projectId?: string | null, onchainFormId?: number | null) {
+  if (!projectId || typeof onchainFormId !== "number") {
+    return "";
+  }
+  return `${projectId}:${onchainFormId}`;
+}
+
+function buildProjectManifestKey(projectId?: string | null, manifestBlobId?: string | null) {
+  if (!projectId || !manifestBlobId || isLocalFallbackBlob(manifestBlobId)) {
+    return "";
+  }
+  return `${projectId}:${manifestBlobId}`;
+}
+
+export function createShadowForm(
   project: ProjectSummary,
   onchainForm: OnchainProjectFormSummary | undefined,
   onchainFormId: number,
@@ -103,6 +122,141 @@ function createShadowForm(
     registrationMode: "sui",
     submissionCount: 0,
   } satisfies FormWithCount;
+}
+
+export function mergeFormsWithProjectRegistry(
+  forms: FormWithCount[],
+  projects: ProjectSummary[],
+  preferredProject: ProjectSummary | null,
+) {
+  const orderedProjects = preferredProject
+    ? [preferredProject, ...projects.filter((project) => project.objectId !== preferredProject.objectId)]
+    : projects;
+  const mergedForms = [...forms];
+  const seenFormIds = new Set(forms.map((form) => form.id));
+  const seenProjectFormKeys = new Set(
+    forms.map((form) => buildProjectFormKey(form.projectId, form.onchainFormId)).filter(Boolean),
+  );
+
+  orderedProjects.forEach((project) => {
+    const onchainSignalCountByFormId = new Map<number, number>();
+    (project.onchainSignals ?? []).forEach((signal) => {
+      onchainSignalCountByFormId.set(signal.formId, (onchainSignalCountByFormId.get(signal.formId) ?? 0) + 1);
+    });
+
+    (project.onchainForms ?? []).forEach((onchainForm) => {
+      const projectFormKey = buildProjectFormKey(project.objectId, onchainForm.formId);
+      if (!projectFormKey || seenProjectFormKeys.has(projectFormKey)) {
+        return;
+      }
+
+      const shadowForm = createShadowForm(project, onchainForm, onchainForm.formId);
+      const nextForm = {
+        ...shadowForm,
+        submissionCount: Math.max(shadowForm.submissionCount, onchainSignalCountByFormId.get(onchainForm.formId) ?? 0),
+      } satisfies FormWithCount;
+
+      if (isDeletedFormTombstone(nextForm)) {
+        return;
+      }
+
+      if (seenFormIds.has(nextForm.id)) {
+        return;
+      }
+
+      mergedForms.push(nextForm);
+      seenFormIds.add(nextForm.id);
+      seenProjectFormKeys.add(projectFormKey);
+    });
+  });
+
+  return mergedForms;
+}
+
+function mergeFormsById(primary: FormWithCount[], secondary: FormWithCount[]) {
+  const formsById = new Map<string, FormWithCount>();
+  const seenProjectFormKeys = new Set<string>();
+  const seenProjectManifestKeys = new Set<string>();
+  [...secondary, ...primary].forEach((form) => {
+    const projectFormKey = buildProjectFormKey(form.projectId, form.onchainFormId);
+    if (projectFormKey && seenProjectFormKeys.has(projectFormKey)) {
+      return;
+    }
+    const projectManifestKey = buildProjectManifestKey(form.projectId, form.manifestBlobId);
+    if (projectManifestKey && seenProjectManifestKeys.has(projectManifestKey)) {
+      return;
+    }
+    formsById.set(form.id, form);
+    if (projectFormKey) {
+      seenProjectFormKeys.add(projectFormKey);
+    }
+    if (projectManifestKey) {
+      seenProjectManifestKeys.add(projectManifestKey);
+    }
+  });
+  return [...formsById.values()];
+}
+
+async function restoreProjectFormFromManifest(
+  project: ProjectSummary,
+  onchainForm: OnchainProjectFormSummary,
+) {
+  if (!onchainForm.manifestBlobId) {
+    return null;
+  }
+
+  const carrier = await readManifestWithForm(onchainForm.manifestBlobId);
+  const bundledForm = carrier.form;
+  const linkedFormBlobId =
+    carrier.manifest.formBlobId && carrier.manifest.formBlobId !== "__bundled_form__"
+      ? carrier.manifest.formBlobId
+      : undefined;
+  const linkedForm = !bundledForm && linkedFormBlobId ? await fetchJsonBlob<FormSchema>(linkedFormBlobId) : null;
+  const restoredForm = bundledForm ?? linkedForm;
+  if (!restoredForm) {
+    return null;
+  }
+
+  if (onchainForm.sourceFormId && restoredForm.id !== onchainForm.sourceFormId) {
+    return null;
+  }
+
+  const formBlobId =
+    onchainForm.formBlobId ??
+    linkedFormBlobId ??
+    (bundledForm ? onchainForm.manifestBlobId : undefined) ??
+    onchainForm.manifestBlobId;
+  const normalized = normalizeForm({
+    ...restoredForm,
+    ownerAddress: restoredForm.ownerAddress ?? project.owner,
+    projectId: project.objectId,
+    projectName: project.name,
+    onchainFormId: onchainForm.formId,
+    formMetadataDigest: onchainForm.metadataDigest || restoredForm.formMetadataDigest,
+    manifestBlobId: onchainForm.manifestBlobId,
+    blobId: formBlobId,
+    isOnchain: true,
+    registrationMode: "sui",
+  });
+  const persistedForm = {
+    ...normalized,
+    submissionCount: 0,
+  } satisfies FormWithCount;
+
+  if (isDeletedFormTombstone(persistedForm)) {
+    return null;
+  }
+
+  await localStorageAdapter.saveForm(persistedForm);
+  saveFormMetadataOverlay(persistedForm);
+  upsertFormBlobIndex({
+    formId: persistedForm.id,
+    formBlobId: formBlobId ?? onchainForm.manifestBlobId,
+    manifestBlobId: onchainForm.manifestBlobId,
+    createdAt: persistedForm.createdAt,
+  });
+
+  return persistedForm;
 }
 
 function mapOnchainStatusToSubmissionState(status: OnchainProjectSignalSummary["status"]) {
@@ -490,12 +644,51 @@ export function useSignalInboxData({
     setLoadError("");
     setSupplementalSignals([]);
     try {
-      const allForms = await storageAdapter.listForms();
+      const initialForms = await storageAdapter.listForms();
       if (runId !== loadConsoleRunRef.current) {
         return;
       }
 
-      const nextForms = allForms.map((form) => ({ ...normalizeForm(form), submissionCount: 0 }));
+      const normalizedInitialForms = initialForms
+        .map((form) => ({ ...normalizeForm(form), submissionCount: 0 }))
+        .filter((form) => !isDeletedFormTombstone(form));
+      const restoredForms: FormWithCount[] = [];
+      const knownProjectFormKeys = new Set(
+        normalizedInitialForms
+          .map((form) => buildProjectFormKey(form.projectId, form.onchainFormId))
+          .filter(Boolean),
+      );
+      const orderedProjects = hydratedSelectedProject
+        ? [hydratedSelectedProject, ...projects.filter((project) => project.objectId !== hydratedSelectedProject.objectId)]
+        : projects;
+
+      for (const project of orderedProjects) {
+        for (const onchainForm of project.onchainForms ?? []) {
+          const projectFormKey = buildProjectFormKey(project.objectId, onchainForm.formId);
+          if (!projectFormKey || knownProjectFormKeys.has(projectFormKey) || !onchainForm.manifestBlobId) {
+            continue;
+          }
+
+          try {
+            const restoredForm = await restoreProjectFormFromManifest(project, onchainForm);
+            if (!restoredForm) {
+              continue;
+            }
+            restoredForms.push(restoredForm);
+            knownProjectFormKeys.add(projectFormKey);
+          } catch (error) {
+            console.warn(`Failed to restore project form ${project.objectId}:${onchainForm.formId} from Walrus`, error);
+          }
+        }
+      }
+
+      const localForms = mergeFormsById(restoredForms, normalizedInitialForms).map((form) => ({
+        ...form,
+        submissionCount: 0,
+      }));
+      const nextForms = mergeFormsWithProjectRegistry(localForms, projects, hydratedSelectedProject).filter(
+        (form) => !isDeletedFormTombstone(form),
+      );
       const nextAccessibleForms = nextForms.filter((form) => canReviewForm(form, accountAddress, capabilityProfile));
       setForms(nextForms);
       setSubmissionsByFormId({});

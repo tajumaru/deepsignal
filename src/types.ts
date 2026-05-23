@@ -9,10 +9,12 @@ export type FieldType =
   | "country_select"
   | "confirmation"
   | "rating"
+  | "emotionRating"
   | "url"
   | "walletAddress"
   | "screenshot"
-  | "video";
+  | "video"
+  | "voice";
 
 export type FormPurpose = "bug" | "feature" | "survey" | "custom";
 export type FormVisibility = "private" | "unlisted" | "public";
@@ -195,7 +197,7 @@ export interface ActivityEvent {
 
 export interface SubmissionAttachment {
   fieldId: string;
-  type: "image" | "video" | "document";
+  type: "image" | "video" | "audio" | "document";
   blobId: string;
   name: string;
   size: number;
@@ -210,6 +212,17 @@ export interface SubmissionAttachment {
   inlineData?: string;
   walrusProof?: WalrusBlobProof;
   tatumStorage?: TatumStorageRecord;
+}
+
+export interface VoiceAnswerValue {
+  kind: "voice";
+  audioUrl?: string;
+  audioBlobId?: string;
+  duration: number;
+  mimeType: string;
+  transcript?: string;
+  fileName?: string;
+  size?: number;
 }
 
 export interface UploadedAttachment {

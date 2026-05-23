@@ -18,10 +18,12 @@ type FieldTypeDescriptionKey =
   | "fieldTypeDescriptionCountrySelect"
   | "fieldTypeDescriptionConfirmation"
   | "fieldTypeDescriptionRating"
+  | "fieldTypeDescriptionEmotionRating"
   | "fieldTypeDescriptionUrl"
   | "fieldTypeDescriptionWalletAddress"
   | "fieldTypeDescriptionScreenshot"
-  | "fieldTypeDescriptionVideo";
+  | "fieldTypeDescriptionVideo"
+  | "fieldTypeDescriptionVoice";
 
 interface FieldTypeChoice {
   type: FieldType;
@@ -49,6 +51,7 @@ const fieldTypeCategories: Array<{
       { type: "matrix", icon: "GRID", descriptionKey: "fieldTypeDescriptionMatrix" },
       { type: "country_select", icon: "JP", descriptionKey: "fieldTypeDescriptionCountrySelect" },
       { type: "rating", icon: "*", descriptionKey: "fieldTypeDescriptionRating" },
+      { type: "emotionRating", icon: ":-)", descriptionKey: "fieldTypeDescriptionEmotionRating" },
     ],
   },
   {
@@ -70,6 +73,7 @@ const fieldTypeCategories: Array<{
     choices: [
       { type: "screenshot", icon: "IMG", descriptionKey: "fieldTypeDescriptionScreenshot" },
       { type: "video", icon: "VID", descriptionKey: "fieldTypeDescriptionVideo" },
+      { type: "voice", icon: "MIC", descriptionKey: "fieldTypeDescriptionVoice" },
     ],
   },
 ];

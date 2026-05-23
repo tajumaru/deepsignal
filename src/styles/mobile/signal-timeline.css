@@ -1,0 +1,52 @@
+/* Signal timeline responsive overrides. */
+
+@media (max-width: 768px) {
+  .signal-timeline-section > .workspace-section-toggle {
+    padding: 0.85rem 0.9rem;
+  }
+
+  .signal-timeline-current-state {
+    padding: 0.8rem 0.82rem;
+  }
+
+  .signal-timeline-current-state strong {
+    font-size: 1.02rem;
+  }
+
+  .signal-timeline-list {
+    gap: 0.18rem;
+  }
+
+  .signal-timeline-item {
+    gap: 0.42rem;
+  }
+
+  .signal-timeline-card {
+    padding: 0.44rem 0.56rem;
+  }
+
+  .signal-timeline-card-header {
+    gap: 0.28rem;
+  }
+
+  .signal-timeline-card-header strong {
+    font-size: 0.84rem;
+  }
+
+  .signal-timeline-meta {
+    justify-content: flex-start;
+    gap: 0.32rem;
+  }
+
+  .signal-timeline-phase-pill {
+    min-height: 1.35rem;
+    padding: 0.12rem 0.44rem;
+    font-size: 0.64rem;
+  }
+
+  .signal-timeline-card-header time,
+  .signal-timeline-detail,
+  .signal-timeline-derived-note {
+    font-size: 0.72rem;
+  }
+}
