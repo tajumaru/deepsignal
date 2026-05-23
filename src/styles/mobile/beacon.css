@@ -1,0 +1,225 @@
+/* Signal beacon and share overlay responsive overrides. */
+
+@media (max-width: 480px) {
+  .beacon-card {
+    padding: 0.9rem;
+    border-radius: 22px;
+  }
+
+  .beacon-copy h4 {
+    font-size: clamp(1.3rem, 8vw, 1.7rem);
+    letter-spacing: 0.04em;
+  }
+
+  .beacon-copy .muted,
+  .publish-overlay-intro {
+    font-size: 0.92rem;
+    line-height: 1.45;
+  }
+
+  .beacon-frame {
+    max-width: min(100%, 360px);
+    padding: clamp(0.8rem, 3vw, 0.95rem);
+    border-radius: 26px;
+  }
+
+  .beacon-qr-shell {
+    max-width: 100%;
+    padding: clamp(12px, 4vw, 18px);
+    border-radius: 22px;
+  }
+
+  .beacon-meta-row,
+  .beacon-meta-grid > div,
+  .publish-blob-panel,
+  .publish-active-panel {
+    padding: 0.8rem 0.85rem;
+  }
+
+  .publish-overlay-copy h2 {
+    font-size: clamp(1.35rem, 7vw, 1.65rem);
+    letter-spacing: 0.04em;
+  }
+
+  .publish-beacon-panel {
+    max-width: min(100%, 360px);
+  }
+
+  .publish-beacon-qr-shell {
+    max-width: min(100%, 160px);
+    margin-inline: auto;
+  }
+
+  .publish-blob-id {
+    font-size: 0.84rem;
+  }
+}
+
+@media (max-width: 430px) {
+  .page-wrap {
+    padding-inline:
+      max(0.75rem, env(safe-area-inset-left, 0px))
+      max(0.75rem, env(safe-area-inset-right, 0px));
+  }
+
+  .node-directory-overlay,
+  .publish-overlay,
+  .composer-modal {
+    padding-left: max(0.5rem, env(safe-area-inset-left, 0px));
+    padding-right: max(0.5rem, env(safe-area-inset-right, 0px));
+  }
+
+  .beacon-card {
+    padding: 1rem;
+    border-radius: 20px;
+  }
+
+  .beacon-copy .eyebrow,
+  .publish-beacon-panel .eyebrow,
+  .beacon-meta-row span,
+  .beacon-meta-grid span {
+    letter-spacing: clamp(0.08em, 1.5vw, 0.12em);
+  }
+
+  .beacon-copy h4 {
+    font-size: clamp(1.35rem, 7.4vw, 1.8rem);
+    letter-spacing: clamp(0.06em, 1.1vw, 0.1em);
+  }
+
+  .beacon-core {
+    min-height: clamp(220px, 64vw, 280px);
+  }
+
+  .beacon-frame {
+    width: min(100%, 320px);
+    max-width: min(100%, 320px);
+    padding: clamp(10px, 3vw, 14px);
+    border-radius: 22px;
+  }
+
+  .beacon-qr-shell {
+    width: min(100%, 288px);
+    max-width: min(100%, 288px);
+    padding: clamp(10px, 3vw, 14px);
+    border-radius: 20px;
+  }
+
+  .beacon-meta-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .publish-overlay-panel,
+  .node-directory-panel {
+    padding: 1rem;
+    border-radius: 20px;
+  }
+
+  .publish-beacon-panel {
+    max-width: min(100%, 420px);
+  }
+
+  .publish-beacon-qr-shell {
+    width: 100%;
+    max-width: min(100%, 220px);
+    padding: clamp(12px, 4vw, 16px);
+  }
+
+  .publish-beacon-link-row {
+    max-width: 100%;
+  }
+}
+
+@media (max-width: 380px) {
+  .beacon-card {
+    gap: 1rem;
+    padding: 0.9rem;
+  }
+
+  .beacon-copy h4 {
+    font-size: clamp(1.2rem, 6.8vw, 1.55rem);
+  }
+
+  .beacon-copy .muted {
+    font-size: 0.95rem;
+  }
+
+  .beacon-core {
+    min-height: clamp(200px, 60vw, 248px);
+  }
+
+  .beacon-frame {
+    width: min(100%, 286px);
+    max-width: min(100%, 286px);
+    padding: 10px;
+    border-radius: 20px;
+  }
+
+  .beacon-qr-shell {
+    width: min(100%, 256px);
+    max-width: min(100%, 256px);
+    padding: 9px;
+    border-radius: var(--radius-lg);
+  }
+
+  .beacon-meta-row,
+  .beacon-meta-grid > div {
+    padding: 0.72rem 0.8rem;
+  }
+
+  .beacon-meta-link-copy code,
+  .beacon-copy-value code,
+  .beacon-meta-grid strong {
+    font-size: 0.88rem;
+  }
+}
+
+@media (max-width: 600px) {
+  .publish-overlay {
+    padding:
+      max(0.35rem, env(safe-area-inset-top, 0px))
+      max(0.35rem, env(safe-area-inset-right, 0px))
+      max(0.5rem, env(safe-area-inset-bottom, 0px))
+      max(0.35rem, env(safe-area-inset-left, 0px));
+  }
+
+  .publish-overlay-panel {
+    gap: 0.56rem;
+    max-height: calc(100svh - 0.7rem - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+    max-height: calc(100dvh - 0.7rem - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+    padding:
+      0.72rem
+      0.72rem
+      calc(0.82rem + env(safe-area-inset-bottom, 0px))
+      0.72rem;
+  }
+
+  .publish-overlay-hero {
+    gap: 0.38rem;
+  }
+
+  .publish-beacon-panel {
+    max-width: min(100%, 100%);
+    gap: 0.34rem;
+  }
+
+  .publish-beacon-qr-shell {
+    width: min(100%, clamp(132px, 39vw, 168px));
+    max-width: min(100%, 168px);
+    padding: clamp(0.44rem, 1.8vw, 0.56rem);
+    border-radius: var(--radius-lg);
+  }
+
+  .publish-beacon-note {
+    max-width: 28ch;
+    font-size: 0.74rem;
+  }
+
+  .publish-beacon-link-row {
+    gap: 0.38rem;
+    max-width: min(100%, 220px);
+  }
+
+  .publish-beacon-link-hint {
+    font-size: 0.72rem;
+  }
+}

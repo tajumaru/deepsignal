@@ -1,0 +1,13 @@
+/* Matrix question responsive overrides. */
+
+@media (max-width: 720px) {
+  .matrix-question > .matrix-table-wrap,
+  .matrix-question > .matrix-desktop-layout {
+    display: none !important;
+  }
+
+  .matrix-question > .matrix-card-stack,
+  .matrix-question > .matrix-mobile-layout {
+    display: grid !important;
+  }
+}

@@ -1,0 +1,13 @@
+/* Wallet responsive overrides. */
+
+@media (max-width: 720px) {
+  .wallet-sync-menu {
+    position: fixed;
+    top: calc(env(safe-area-inset-top, 0px) + 5rem);
+    left: 1rem;
+    right: 1rem;
+    width: auto;
+    max-height: calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 6rem);
+    overflow-y: auto;
+  }
+}

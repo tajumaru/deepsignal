@@ -1,0 +1,97 @@
+/* Composer and builder responsive overrides. */
+
+@media (max-width: 860px) {
+  .quick-create,
+  .quick-create-compact {
+    grid-template-columns: 1fr;
+  }
+
+  .quick-create-control {
+    grid-template-columns: 1fr;
+  }
+
+  .quick-create-chip-row {
+    grid-column: auto;
+  }
+
+  .composer-guest-draft-banner {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+
+@media (prefers-color-scheme: light) {
+  .mirror-theme-surface {
+    --mirror-ink: #0f2c36;
+    --mirror-muted: #476a76;
+    --mirror-line: rgba(14, 116, 144, 0.18);
+    --mirror-line-strong: rgba(8, 145, 178, 0.34);
+    --mirror-glass: rgba(247, 253, 255, 0.82);
+    --mirror-glass-soft: rgba(8, 145, 178, 0.06);
+    --mirror-shadow: 0 24px 70px rgba(14, 116, 144, 0.12);
+  }
+
+  .mirror-theme-surface {
+    background:
+      radial-gradient(circle at 18% 8%, rgba(14, 165, 233, 0.14), transparent 28%),
+      radial-gradient(circle at 88% 18%, rgba(13, 148, 136, 0.1), transparent 24%),
+      rgba(248, 253, 255, 0.9);
+  }
+
+  .mirror-object-ledger,
+  .mirror-signal-metadata span,
+  .mirror-input-preview,
+  .mirror-choice-list span,
+  .mirror-rating-preview,
+  .mirror-upload-preview,
+  .mirror-object-status-progress,
+  .mirror-timeline-list span,
+  .mirror-published-grid span,
+  .mirror-intelligence-score,
+  .mirror-intelligence-list span {
+    background: rgba(255, 255, 255, 0.72);
+  }
+
+  .mirror-object-ledger strong,
+  .mirror-question-frame-topline span {
+    color: #0f3d4a;
+  }
+}
+
+@media (min-width: 901px) and (max-width: 1140px) {
+  .composer-toolbar {
+    grid-template-columns: minmax(200px, 0.72fr) minmax(0, 1.28fr);
+  }
+
+  .composer-toolbar-copy h1 {
+    font-size: clamp(1.8rem, 3vw, 2.5rem);
+  }
+
+  .composer-toolbar-actions {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .composer-signal-type-chip,
+  .composer-featured-template,
+  .composer-template-card {
+    transition: none;
+  }
+
+  .composer-featured-template::before {
+    animation: none;
+  }
+
+  .composer-signal-type-chip:hover,
+  .composer-signal-type-chip.is-active,
+  .composer-featured-template:hover,
+  .composer-featured-template:focus-visible,
+  .composer-featured-template.is-active,
+  .composer-template-card:hover,
+  .composer-template-card:focus-visible,
+  .composer-template-card.is-active {
+    transform: none;
+  }
+}

@@ -1,0 +1,219 @@
+/* Landing live flow responsive overrides. */
+
+@media (max-width: 640px) {
+  .landing-live-flow-shell,
+  .landing-live-flow-upper,
+  .landing-live-flow-lower {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .landing-live-flow-shell {
+    gap: 0.9rem;
+  }
+
+  .landing-live-flow-copy,
+  .landing-live-terminal,
+  .landing-live-flow-pipeline,
+  .landing-live-flow-powered,
+  .landing-live-log,
+  .landing-live-log-row {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .landing-live-flow-copy {
+    gap: 0.8rem;
+  }
+
+  .landing-live-flow-trust-pill {
+    justify-content: flex-start;
+    min-height: 2.6rem;
+    padding: 0.55rem 0.7rem;
+    font-size: 0.72rem;
+    text-align: left;
+  }
+
+  .landing-live-flow-body,
+  .landing-live-flow-copy h2 {
+    max-width: none;
+    overflow-wrap: anywhere;
+  }
+
+  .landing-live-flow-trust,
+  .landing-live-flow-metrics,
+  .landing-live-flow-pipeline-track {
+    grid-template-columns: 1fr;
+  }
+
+  .landing-live-flow-visual {
+    min-height: 12.25rem;
+    max-width: 100%;
+    overflow: hidden;
+  }
+
+  .landing-live-flow-visual-network {
+    width: min(100%, 15.5rem);
+  }
+
+  .landing-live-flow-visual-label {
+    font-size: 0.56rem;
+  }
+
+  .landing-live-terminal {
+    min-height: auto;
+    padding: 0.85rem;
+  }
+
+  .landing-live-terminal-topline {
+    align-items: start;
+  }
+
+  .landing-live-terminal-topline strong {
+    font-size: 0.9rem;
+  }
+
+  .landing-live-terminal-scanline,
+  .landing-live-flow-rail {
+    display: none;
+  }
+
+  .landing-live-log {
+    margin-top: 0.75rem;
+    padding-left: 0;
+  }
+
+  .landing-live-log-row {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: 0.65rem;
+    padding: 0.8rem;
+  }
+
+  .landing-live-log-dot {
+    margin-top: 0.4rem;
+  }
+
+  .landing-live-log-icon {
+    order: 3;
+    width: 2rem;
+    height: 2rem;
+  }
+
+  .landing-live-log-timestamp {
+    grid-column: 2;
+    grid-row: 1;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .landing-live-log-copy {
+    grid-column: 2 / 4;
+    grid-row: 2;
+  }
+
+  .landing-live-log-copy strong,
+  .landing-live-log-copy span {
+    overflow-wrap: anywhere;
+  }
+
+  .landing-live-log-meta {
+    grid-column: 2 / 4;
+    grid-row: 3;
+    justify-items: start;
+    min-width: 0;
+  }
+
+  .landing-live-log-meta span,
+  .landing-live-log-badge {
+    max-width: 100%;
+    overflow-wrap: anywhere;
+  }
+
+  .landing-live-log-check {
+    grid-column: 1;
+    grid-row: 3;
+    margin-top: 0.18rem;
+  }
+
+  .landing-live-terminal-footer {
+    display: grid;
+    gap: 0.45rem;
+  }
+
+  .landing-live-terminal-footer a,
+  .landing-live-terminal-footer span {
+    overflow-wrap: anywhere;
+  }
+
+  .landing-live-flow-lower {
+    gap: 0.85rem;
+    padding: 0.85rem;
+  }
+
+  .landing-live-flow-pipeline-track {
+    position: relative;
+    gap: 0.95rem;
+  }
+
+  .landing-live-flow-pipeline-step {
+    position: relative;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: start;
+    justify-items: start;
+    gap: 0.35rem 0.85rem;
+    padding: 0.75rem 0.8rem 0.75rem 0.45rem;
+    border: 1px solid rgba(110, 227, 255, 0.08);
+    border-radius: var(--radius-lg);
+    background:
+      linear-gradient(180deg, rgba(8, 26, 40, 0.72), rgba(4, 14, 24, 0.84)),
+      rgba(6, 19, 32, 0.48);
+    box-shadow: inset 0 1px 0 rgba(219, 253, 255, 0.02);
+    text-align: left;
+  }
+
+  .landing-live-flow-pipeline-icon {
+    grid-column: 1;
+    grid-row: 1 / span 3;
+    width: 2.7rem;
+    height: 2.7rem;
+    margin-top: 0.08rem;
+    z-index: 1;
+  }
+
+  .landing-live-flow-pipeline-step strong {
+    grid-column: 2;
+    align-self: end;
+    font-size: 1rem;
+  }
+
+  .landing-live-flow-pipeline-step p {
+    grid-column: 2;
+    font-size: 0.8rem;
+  }
+
+  .landing-live-flow-pipeline-chip {
+    grid-column: 2;
+    margin-top: 0.1rem;
+  }
+
+  .landing-live-flow-pipeline-link {
+    display: block;
+    top: 2.9rem;
+    left: 1.78rem;
+    width: 2px;
+    height: calc(100% - 1.6rem);
+    background: linear-gradient(180deg, rgba(79, 233, 255, 0.68), rgba(79, 233, 255, 0.14));
+  }
+
+  .landing-live-flow-powered {
+    padding-left: 0;
+    border-left: 0;
+    border-top: 1px solid rgba(110, 227, 255, 0.1);
+    padding-top: 0.85rem;
+  }
+
+  .landing-live-flow-powered-button {
+    width: 100%;
+  }
+}

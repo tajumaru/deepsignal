@@ -1,0 +1,275 @@
+/* Landing hero responsive and reduced-motion overrides. */
+
+@media (max-width: 640px) {
+  .landing-hero-title {
+    font-size: clamp(2.7rem, 15vw, 3.9rem);
+    line-height: 0.96;
+  }
+
+  .landing-hero-system-topline {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .landing-hero-copy::before {
+    width: 112%;
+    height: 18rem;
+  }
+
+  .landing-hero-global-traces,
+  .landing-hero-grid::after {
+    display: none;
+  }
+
+  .landing-hero-copy::after {
+    display: block;
+    top: 9.6rem;
+    right: -28%;
+    width: min(22rem, 92vw);
+    height: 10rem;
+    opacity: 0.34;
+    transform: rotate(-7deg);
+    animation-duration: 6.2s;
+  }
+
+  .landing-hero-intel-grid {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "core"
+      "routing"
+      "seal"
+      "walrus"
+      "anon"
+      "live";
+    gap: 0.55rem;
+  }
+
+  .landing-hero-system-links {
+    display: none;
+  }
+
+  .landing-hero-core {
+    grid-template-columns: 1fr;
+    min-height: auto;
+    margin: 0;
+  }
+
+  .landing-hero-core-visual {
+    min-height: 170px;
+  }
+
+  .landing-hero-create-preview {
+    grid-column: 1;
+  }
+
+  .landing-hero-routing,
+  .landing-hero-seal,
+  .landing-hero-walrus,
+  .landing-hero-anon,
+  .landing-hero-live {
+    margin: 0;
+  }
+
+  .landing-signal-section-shell {
+    border-radius: 20px;
+  }
+
+  .landing-use-cases-shell,
+  .landing-principles-shell,
+  .landing-live-flow-shell,
+  .landing-final-cta-shell {
+    padding: 1.05rem;
+  }
+
+  .landing-final-cta-shell {
+    min-height: 18rem;
+  }
+
+  .landing-flow-track {
+    grid-template-columns: 1fr;
+  }
+
+  .landing-flow-card {
+    grid-template-columns: auto 1fr;
+  }
+
+  .landing-hero-actions,
+  .landing-hero-copy .cta-row,
+  .landing-hero-actions .landing-cta-primary,
+  .landing-hero-actions .landing-cta-secondary,
+  .landing-hero-form-preview-cta,
+  .landing-final-cta-button {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .landing-hero-actions .landing-cta-primary,
+  .landing-hero-actions .landing-cta-secondary,
+  .landing-hero-form-preview-cta,
+  .landing-final-cta-button,
+  .landing-live-terminal-footer a,
+  .landing-live-terminal-footer span,
+  .landing-live-log-copy strong,
+  .landing-live-log-copy span,
+  .landing-live-log-meta span,
+  .landing-live-log-badge,
+  .landing-live-log-timestamp,
+  .landing-live-flow-powered-item p,
+  .landing-live-flow-pipeline-step p {
+    overflow-wrap: anywhere;
+  }
+
+  .landing-hero-lifecycle {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.45rem;
+  }
+
+  .landing-hero-lifecycle span:not(:last-child)::after {
+    display: none;
+  }
+
+  .landing-live-terminal {
+    min-height: auto;
+  }
+
+  .landing-live-terminal-scanline,
+  .landing-live-flow-rail {
+    display: none;
+  }
+
+  .landing-live-log {
+    margin-top: 0.85rem;
+    padding-left: 0;
+  }
+
+  .landing-live-flow-lower {
+    grid-template-columns: 1fr;
+    padding: 0.85rem;
+  }
+
+  .landing-live-flow-powered-button {
+    width: 100%;
+  }
+
+  .landing-live-flow-pipeline-link {
+    display: none;
+  }
+
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .intent-example-chip,
+  .intent-draft-block,
+  .landing-cta-primary,
+  .landing-cta-secondary,
+  .landing-hero-grid::before,
+  .landing-hero-copy::before,
+  .landing-hero-copy::after,
+  .landing-hero-title::after,
+  .landing-hero-actions .landing-cta-primary::after,
+  .landing-hero-global-trace::after,
+  .landing-hero-particle,
+  .landing-hero-app-preview,
+  .landing-hero-app-preview::after,
+  .landing-hero-app-preview::before,
+  .landing-hero-backdrop-card,
+  .landing-hero-orbit,
+  .landing-hero-system-status span,
+  .landing-hero-core::before,
+  .landing-hero-core::after,
+  .landing-hero-core-ring,
+  .landing-hero-core-node,
+  .landing-hero-core-scan,
+  .landing-hero-core-bars span,
+  .landing-hero-routing::after,
+  .landing-hero-routing-lines i,
+  .landing-hero-link::after,
+  .landing-hero-form-preview-cta::after,
+  .landing-hero-lock span,
+  .landing-hero-mask span,
+  .landing-hero-live-feed span::before,
+  .landing-hero-live-feed span:last-child::after,
+  .landing-section-kicker span,
+  .landing-use-case-field::before,
+  .landing-use-case-field::after,
+  .landing-use-case,
+  .landing-use-case::before,
+  .landing-use-case::after,
+  .landing-live-flow-rail span,
+  .landing-live-log-row:last-child::after,
+  .landing-final-cta-orbit,
+  .landing-final-cta-button::after,
+  .landing-flow-node-core,
+  .landing-flow-particle,
+  .landing-sync-dot,
+  .landing-reveal-panel,
+  .landing-sonar-sweep,
+  .landing-sonar-center-dot,
+  .landing-sonar-blip,
+  .signal-sweep,
+  .signal-dot,
+  .signal-waveform path,
+  .private-signal-unlock-card::before,
+  .private-signal-unlock-card::after,
+  .private-signal-unlock-button,
+  .private-signal-unlock-button::before,
+  .private-signal-unlock-button::after,
+  .private-signal-vault-lock,
+  .private-signal-vault-grid,
+  .private-signal-vault-grid span,
+  .classified-signal-redaction span,
+  .review-unlock-context::before,
+  .review-locked-signal-copy::before,
+  .publish-particle,
+  .publish-overlay-rings span,
+  .publish-signal-shell::before,
+  .publish-signal-shell::after,
+  .beacon-rings span,
+  .beacon-frame,
+  .beacon-particle,
+  .beacon-scan,
+  .beacon-qr-placeholder,
+  .signal-preview-stage .form-header-image > img,
+  .signal-preview-stage .form-header-default-art,
+  .signal-preview-stage .form-header-logo,
+  .signal-preview-shimmer,
+  .explore-scanlines,
+  .explore-dataflow,
+  .explore-radar-sweep,
+  .explore-grid-glow,
+  .explore-node,
+  .explore-pulse,
+  .explore-card-ambient,
+  .explore-tab,
+  .mirror-current-node-card,
+  .mirror-question-card-v2,
+  .mirror-object-card-v2,
+  .mirror-metadata-badge {
+    animation: none;
+    transition: none;
+  }
+
+  .landing-hero-app-preview:hover,
+  .landing-hero-app-preview:focus-within,
+  .intent-example-chip:hover,
+  .intent-draft-block:hover,
+  .explore-card:hover,
+  .explore-card:focus-within,
+  .mirror-object-card-v2:hover,
+  .mirror-metadata-badge:hover {
+    transform: none;
+  }
+
+  .landing-flow-card,
+  .landing-status-row,
+  .landing-use-cases-section,
+  .landing-principles-section,
+  .landing-live-flow-section,
+  .landing-final-cta-section,
+  .landing-principle,
+  .landing-live-log-row {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+}

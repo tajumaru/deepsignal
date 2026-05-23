@@ -1,0 +1,15 @@
+/* Small signal row responsive overrides. */
+
+@media (max-width: 340px) {
+  .mobile-signal-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .mobile-signal-side {
+    grid-column: 1;
+    display: flex;
+    justify-content: flex-start;
+    align-items: center;
+    gap: 0.35rem;
+  }
+}

@@ -1,0 +1,342 @@
+/* Landing and landing use-case responsive overrides. */
+
+@media (max-width: 1180px) {
+  .landing-use-cases-hero {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .landing-use-cases-trust-strip {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .landing-use-cases-visual {
+    min-height: 14rem;
+  }
+}
+
+@media (max-width: 920px) {
+  .landing-hero-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .landing-hero-title {
+    max-width: 8.4ch;
+  }
+
+  .landing-use-case {
+    min-height: 26.5rem;
+    grid-template-rows: 13.2rem auto minmax(7.5rem, auto) auto;
+  }
+
+  .landing-use-case-mock {
+    height: 13.2rem;
+    min-height: 13.2rem;
+  }
+
+  .landing-use-case-copy {
+    min-height: 7.5rem;
+  }
+
+  .landing-use-cases-trust-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .landing-use-case-review-grid {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .landing-use-case-review-summary {
+    grid-column: 1 / -1;
+  }
+
+  .landing-live-flow-upper,
+  .landing-live-flow-lower {
+    grid-template-columns: 1fr;
+  }
+
+  .landing-live-flow-trust,
+  .landing-live-flow-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .landing-live-flow-visual {
+    min-height: 15rem;
+  }
+
+  .landing-live-flow-pipeline-track {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .landing-live-flow-powered {
+    padding-left: 0;
+    padding-top: 1rem;
+    border-left: 0;
+    border-top: 1px solid rgba(110, 227, 255, 0.1);
+  }
+}
+
+@media (max-width: 640px) {
+  .landing-hero-header {
+    gap: 1rem;
+  }
+
+  .landing-hero-intro-panel {
+    padding: 0.9rem;
+    border-radius: var(--radius-lg);
+  }
+
+  .landing-use-case-field {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .landing-use-cases-hero {
+    gap: 1rem;
+  }
+
+  .landing-live-flow-trust {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.5rem;
+  }
+
+  .landing-live-flow-metrics,
+  .landing-live-flow-pipeline-track {
+    grid-template-columns: 1fr;
+  }
+
+  .landing-live-flow-visual {
+    min-height: 13rem;
+  }
+
+  .landing-live-flow-visual-radar {
+    width: 7rem;
+    height: 7rem;
+  }
+
+  .landing-live-flow-visual-network {
+    width: min(100%, 17rem);
+  }
+
+  .landing-live-flow-visual-label {
+    font-size: 0.58rem;
+  }
+
+  .landing-live-flow-visual-label-seal {
+    left: 6rem;
+  }
+
+  .landing-live-flow-visual-label-audit {
+    left: 7.2rem;
+  }
+
+  .landing-live-log-row {
+    grid-template-columns: auto auto minmax(0, 1fr);
+    align-items: start;
+  }
+
+  .landing-live-log-timestamp {
+    grid-column: 2 / 4;
+    grid-row: 1;
+    margin-top: 0.15rem;
+  }
+
+  .landing-live-log-copy {
+    grid-column: 2 / 4;
+    grid-row: 2;
+  }
+
+  .landing-live-log-meta,
+  .landing-live-log-check {
+    grid-column: 2 / 4;
+  }
+
+  .landing-live-log-meta {
+    grid-row: 3;
+    justify-items: start;
+  }
+
+  .landing-live-log-check {
+    grid-row: 4;
+    margin-top: 0.2rem;
+  }
+
+  .landing-live-terminal-footer {
+    display: grid;
+  }
+
+  .landing-use-cases-visual {
+    min-height: 11.5rem;
+  }
+
+  .landing-use-cases-visual-pillar {
+    right: 2%;
+    top: 6%;
+    transform: scale(0.82);
+    transform-origin: top right;
+  }
+
+  .landing-use-cases-visual-node-lock {
+    left: 6%;
+    top: 58%;
+  }
+
+  .landing-use-cases-visual-node-shield {
+    right: -1%;
+    top: 30%;
+  }
+
+  .landing-use-cases-trust-strip {
+    grid-template-columns: 1fr;
+  }
+
+  .landing-use-case {
+    min-height: auto;
+    grid-template-rows: 11.5rem auto auto auto;
+    gap: 0.95rem;
+    padding: 1rem;
+  }
+
+  .landing-use-case-mock {
+    height: 11.5rem;
+    min-height: 11.5rem;
+    padding: 0.8rem;
+  }
+
+  .landing-use-case-copy {
+    min-height: 0;
+    gap: 0.7rem;
+  }
+
+  .landing-use-case-topline {
+    align-items: flex-start;
+    gap: 0.7rem;
+  }
+
+  .landing-use-case-trust-badge {
+    max-width: 100%;
+    white-space: normal;
+    text-align: right;
+  }
+
+  .landing-use-case h3 {
+    font-size: 1.1rem;
+  }
+
+  .landing-use-case p {
+    font-size: 0.88rem;
+  }
+
+  .landing-use-case-flow {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.7rem 0.5rem;
+    padding: 0.75rem 0.55rem 0.6rem;
+  }
+
+  .landing-use-case-flow::before {
+    display: none;
+  }
+
+  .landing-use-case-flow-step {
+    gap: 0.32rem;
+  }
+
+  .landing-use-case-flow-step i {
+    width: 2rem;
+    height: 2rem;
+  }
+
+  .landing-use-case-flow-label {
+    font-size: 0.68rem;
+  }
+
+  .landing-use-case-review-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.6rem;
+    margin-top: 0.65rem;
+    align-content: start;
+  }
+
+  .landing-use-case-review-summary {
+    display: none;
+  }
+
+  .landing-use-case-review-radar {
+    min-height: 4.1rem;
+  }
+
+  .landing-use-case-review-score {
+    order: -1;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.4rem;
+    width: 100%;
+    max-width: none;
+    min-width: 0;
+    padding: 0.75rem 0.8rem;
+  }
+
+  .landing-use-case-review-score strong {
+    font-size: 1.5rem;
+  }
+
+  .landing-use-case-review-score-meta {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.55rem;
+    flex-wrap: wrap;
+  }
+
+  .landing-use-case-review-score-meta small {
+    font-size: 0.64rem;
+    line-height: 1.2;
+  }
+
+  .landing-use-case-review-score span {
+    font-size: 0.78rem;
+    letter-spacing: 0.12em;
+  }
+
+  .landing-use-case-review-bot {
+    right: 0.8rem;
+    top: 0.8rem;
+    width: 1.9rem;
+    height: 1.9rem;
+  }
+
+  .landing-use-cases-powered-by {
+    text-align: center;
+  }
+
+  .landing-use-case-radar {
+    inset: 0.8rem 44% 1rem 0.8rem;
+  }
+
+  .landing-use-case-incident-card,
+  .landing-use-case-paper-comment {
+    width: 7rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .publish-cta-button,
+  .publish-cta-button:not(:disabled)::after,
+  .create-form-cta-highlight,
+  .create-form-cta-highlight::after,
+  .create-project-cta-highlight,
+  .create-project-cta-highlight::after,
+  .landing-cta-primary,
+  .landing-cta-primary::before,
+  .landing-cta-secondary,
+  .landing-explore-rail span {
+    animation: none;
+  }
+
+  .landing-explore-section,
+  .landing-explore-card,
+  .landing-inbox-section,
+  .landing-inbox-card,
+  .landing-inbox-preview-row {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+}

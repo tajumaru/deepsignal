@@ -1,0 +1,382 @@
+/* Composer and review console responsive bridge overrides. */
+
+@media (max-width: 768px) {
+  .signal-channel-selector,
+  .signal-workbench-summary > .signal-channel-selector,
+  .signal-channel-menu {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .mobile-console-banner {
+    display: block;
+  }
+
+  .mobile-review-nav {
+    position: sticky;
+    top: calc(env(safe-area-inset-top, 0px) + 0.45rem);
+    z-index: 8;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.45rem;
+    padding: 0.42rem;
+    border: 1px solid rgba(116, 226, 255, 0.14);
+    border-radius: 16px;
+    background: rgba(3, 13, 24, 0.92);
+    box-shadow: 0 14px 28px rgba(0, 0, 0, 0.22);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+  }
+
+  .mobile-review-nav button {
+    min-height: 44px;
+    padding: 0.55rem 0.4rem;
+    border: 1px solid rgba(116, 226, 255, 0.12);
+    border-radius: 12px;
+    background: rgba(102, 227, 255, 0.07);
+    color: #effcff;
+    font-weight: 800;
+  }
+
+  .mobile-review-nav button:disabled {
+    cursor: not-allowed;
+    color: rgba(153, 183, 201, 0.55);
+    background: rgba(255, 255, 255, 0.03);
+  }
+
+  .composer-toolbar {
+    gap: 0.75rem;
+  }
+
+  .composer-mobile-tabs {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.65rem;
+    margin-bottom: 0.25rem;
+  }
+
+  .composer-mobile-tab {
+    border-radius: var(--radius-pill);
+    border: 1px solid rgba(116, 226, 255, 0.12);
+    background: rgba(5, 18, 29, 0.78);
+    color: var(--text-soft);
+  }
+
+  .composer-mobile-tab.is-active {
+    color: #effcff;
+    border-color: rgba(116, 226, 255, 0.24);
+    background: rgba(102, 227, 255, 0.08);
+  }
+
+  .is-hidden-mobile {
+    display: none;
+  }
+
+  .composer-flow-steps {
+    display: flex;
+    gap: 0.6rem;
+    overflow-x: auto;
+    padding-bottom: 0.15rem;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    scroll-snap-type: x proximity;
+  }
+
+  .composer-flow-steps::-webkit-scrollbar {
+    display: none;
+  }
+
+  .composer-flow-step {
+    flex: 0 0 min(260px, 78vw);
+    min-width: 0;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    scroll-snap-align: start;
+  }
+
+  .composer-flow-step-copy small {
+    display: block;
+    font-size: 0.73rem;
+    line-height: 1.35;
+  }
+
+  .composer-builder-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .composer-builder-grid-composer {
+    grid-template-columns: 1fr;
+  }
+
+  .composer-library-column {
+    position: static;
+    top: auto;
+  }
+
+  .composer-library-panel {
+    gap: 0.7rem;
+  }
+
+  .composer-library-panel .composer-pane-heading {
+    align-items: center;
+  }
+
+  .composer-library-panel .composer-pane-heading .muted {
+    display: none;
+  }
+
+  .composer-library-list {
+    display: flex;
+    gap: 0.55rem;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    padding: 0.05rem 0 0.2rem;
+    scroll-snap-type: x proximity;
+    scrollbar-width: none;
+    touch-action: pan-x;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .composer-library-list::-webkit-scrollbar {
+    display: none;
+  }
+
+  .composer-library-card {
+    flex: 0 0 min(10.5rem, calc((100% - 1.1rem) / 3));
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.58rem 0.65rem;
+    border-radius: 16px;
+    scroll-snap-align: start;
+  }
+
+  .composer-library-card-icon {
+    width: 2.25rem;
+    height: 2.25rem;
+    border-radius: 13px;
+    font-size: 0.9rem;
+  }
+
+  .composer-library-card-topline {
+    display: block;
+  }
+
+  .composer-library-card-topline strong {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .composer-library-chip,
+  .composer-library-footer {
+    display: none;
+  }
+
+  .composer-template-grid {
+    display: flex;
+    grid-template-columns: none;
+    gap: 0.75rem;
+    margin-top: 0.75rem;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    padding: 0.05rem 0 0.2rem;
+    scroll-snap-type: x proximity;
+    scrollbar-width: none;
+    touch-action: pan-x;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .composer-template-grid::-webkit-scrollbar {
+    display: none;
+  }
+
+  .composer-template-signal-nav {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    padding-bottom: 0.2rem;
+    scrollbar-width: none;
+  }
+
+  .composer-template-filter-help {
+    font-size: 0.78rem;
+  }
+
+  .composer-template-signal-nav::-webkit-scrollbar {
+    display: none;
+  }
+
+  .composer-featured-template {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.85rem;
+    padding: 1rem;
+    border-radius: 22px;
+  }
+
+  .composer-featured-template-copy h3 {
+    font-size: 1.2rem;
+  }
+
+  .composer-featured-template-meta {
+    padding: 0.85rem;
+  }
+
+  .composer-template-card {
+    flex: 0 0 min(17rem, calc(100% - 2rem));
+    min-height: 10.6rem;
+    gap: 0.55rem;
+    padding: 0.9rem;
+    border-radius: var(--radius-lg);
+    border-color: rgba(116, 226, 255, 0.1);
+    scroll-snap-align: start;
+  }
+
+  .composer-template-library {
+    gap: 1rem;
+  }
+
+  .composer-template-library-description {
+    font-size: 0.78rem;
+  }
+
+  .composer-template-description {
+    -webkit-line-clamp: 2;
+  }
+
+  .composer-template-card-details {
+    gap: 0.45rem;
+  }
+
+  .composer-template-detail-list {
+    font-size: 0.74rem;
+  }
+
+  .composer-library-swipe-cue {
+    position: relative;
+    display: block;
+    width: min(7.5rem, 36vw);
+    height: 0.26rem;
+    margin: 0.3rem 0 0 auto;
+    pointer-events: none;
+    background: linear-gradient(90deg, transparent, rgba(116, 226, 255, 0.24) 30%, rgba(135, 244, 255, 0.9));
+    border-radius: var(--radius-pill);
+    box-shadow: 0 0 16px rgba(102, 227, 255, 0.26);
+  }
+
+  .composer-library-swipe-cue::after {
+    position: absolute;
+    top: 50%;
+    right: -0.02rem;
+    width: 0.45rem;
+    height: 0.45rem;
+    content: "";
+    border-top: 2px solid rgba(239, 252, 255, 0.92);
+    border-right: 2px solid rgba(239, 252, 255, 0.92);
+    transform: translateY(-50%) rotate(45deg);
+  }
+
+  .composer-template-swipe-cue {
+    position: relative;
+    display: block;
+    width: min(7.5rem, 36vw);
+    height: 0.26rem;
+    margin: 0.3rem 0 0 auto;
+    pointer-events: none;
+    background: linear-gradient(90deg, transparent, rgba(116, 226, 255, 0.24) 30%, rgba(135, 244, 255, 0.9));
+    border-radius: var(--radius-pill);
+    box-shadow: 0 0 16px rgba(102, 227, 255, 0.26);
+  }
+
+  .composer-template-swipe-cue::after {
+    position: absolute;
+    top: 50%;
+    right: -0.02rem;
+    width: 0.45rem;
+    height: 0.45rem;
+    content: "";
+    border-top: 2px solid rgba(239, 252, 255, 0.92);
+    border-right: 2px solid rgba(239, 252, 255, 0.92);
+    transform: translateY(-50%) rotate(45deg);
+  }
+
+  .composer-template-emoji {
+    font-size: 1.05rem;
+  }
+
+  .composer-template-card strong {
+    overflow: hidden;
+    font-size: 0.92rem;
+    line-height: 1.15;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .composer-template-card .muted {
+    display: none;
+  }
+
+  .composer-template-meta {
+    font-size: 0.75rem;
+  }
+
+  .composer-live-preview {
+    position: static;
+  }
+
+  .question-card-summary,
+  .composer-inline-section-header {
+    grid-template-columns: 1fr;
+  }
+
+  .composer-question-header,
+  .question-card-topline {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .question-card-actions,
+  .composer-section-preset-row,
+  .composer-smart-template-row,
+  .composer-add-bar-main,
+  .composer-add-bar-secondary,
+  .composer-canvas-header-actions,
+  .composer-canvas-quick-actions,
+  .composer-pane-heading {
+    flex-wrap: wrap;
+  }
+
+  .composer-question-row {
+    grid-template-columns: 1fr;
+  }
+
+  .composer-option-row {
+    grid-template-columns: 1fr;
+  }
+
+  .composer-conditional-branch {
+    margin-left: 1rem;
+    padding-left: 0.85rem;
+  }
+
+  .composer-conditional-rule-row {
+    grid-template-columns: 1fr;
+  }
+
+  .composer-step-actions {
+    padding-bottom: 2.5rem;
+  }
+
+  .inbox-shell-header,
+  .inbox-header-actions,
+  .signal-column-header,
+  .signal-column-tools,
+  .signal-detail-heading,
+  .metadata-row {
+    display: grid;
+  }
+
+  .signal-console-layout {
+    grid-template-columns: 1fr;
+  }
+}

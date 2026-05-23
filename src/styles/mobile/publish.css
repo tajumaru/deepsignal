@@ -1,0 +1,160 @@
+/* Publish overlay responsive overrides. */
+
+@media (min-width: 641px) and (max-height: 960px) {
+  .publish-overlay {
+    padding: 0.5rem;
+  }
+
+  .publish-overlay-panel {
+    gap: 0.72rem;
+    max-height: calc(100dvh - 1rem);
+    padding: 0.85rem 0.95rem;
+    border-radius: var(--radius-panel);
+  }
+
+  .publish-signal-shell {
+    min-height: 132px;
+  }
+
+  .publish-signal-card {
+    gap: 0.35rem;
+    width: min(100%, 360px);
+    padding: 0.74rem 0.82rem;
+  }
+
+  .publish-signal-card strong {
+    font-size: 1rem;
+  }
+
+  .publish-signal-card p {
+    font-size: 0.86rem;
+    line-height: 1.35;
+  }
+
+  .publish-signal-metrics {
+    gap: 0.35rem;
+  }
+
+  .publish-signal-metrics span {
+    padding: 0.22rem 0.46rem;
+    font-size: 0.7rem;
+  }
+
+  .publish-signal-shell.stage-sending .publish-signal-card,
+  .publish-signal-shell.stage-stored .publish-signal-card,
+  .publish-signal-shell.stage-active .publish-signal-card {
+    transform: translateY(38px) scale(0.74);
+  }
+
+  .publish-overlay-hero {
+    gap: 0.6rem;
+    align-items: end;
+  }
+
+  .publish-overlay-copy h2 {
+    font-size: clamp(1.45rem, 2.2vw, 1.8rem);
+  }
+
+  .publish-overlay-intro {
+    font-size: 0.88rem;
+    line-height: 1.4;
+  }
+
+  .publish-terminal {
+    padding: 0.72rem 0.82rem;
+    border-radius: var(--radius-lg);
+  }
+
+  .publish-terminal-header {
+    margin-bottom: 0.58rem;
+    font-size: 0.74rem;
+  }
+
+  .publish-terminal-log {
+    gap: 0.38rem;
+  }
+
+  .publish-terminal-row {
+    padding: 0.54rem 0.7rem;
+    border-radius: var(--radius-md);
+    font-size: 0.92rem;
+  }
+
+  .publish-terminal-row small {
+    font-size: 0.7rem;
+  }
+
+  .publish-terminal-detail {
+    margin-top: 0.58rem;
+    font-size: 0.86rem;
+  }
+
+  .publish-status-grid {
+    gap: 0.72rem;
+    grid-template-columns: minmax(0, 1.45fr) minmax(260px, 1fr);
+    align-items: stretch;
+  }
+
+  .publish-blob-panel,
+  .publish-active-panel {
+    gap: 0.56rem;
+    padding: 0.74rem 0.82rem;
+    border-radius: var(--radius-lg);
+  }
+
+  .publish-blob-id {
+    padding: 0.6rem 0.76rem;
+    min-height: 2.7rem;
+    font-size: clamp(0.82rem, 1.45vw, 0.95rem);
+  }
+
+  .publish-storage-note,
+  .publish-active-panel .muted {
+    font-size: 0.78rem;
+    line-height: 1.35;
+  }
+
+  .publish-active-panel h3 {
+    font-size: clamp(0.94rem, 1.7vw, 1.12rem);
+  }
+
+  .publish-beacon-panel {
+    gap: 0.25rem;
+    min-width: 0;
+  }
+
+  .publish-beacon-qr-shell {
+    width: clamp(100px, 11vw, 126px);
+    padding: 0.4rem;
+    border-radius: var(--radius-md);
+  }
+
+  .publish-beacon-note {
+    font-size: 0.7rem;
+  }
+}
+
+@media (min-width: 641px) and (max-height: 820px) {
+  .publish-overlay-panel {
+    gap: 0.62rem;
+    padding: 0.72rem 0.82rem;
+  }
+
+  .publish-signal-shell {
+    min-height: 108px;
+  }
+
+  .publish-overlay-intro,
+  .publish-beacon-note,
+  .publish-terminal-detail {
+    display: none;
+  }
+
+  .publish-terminal-row {
+    padding: 0.46rem 0.62rem;
+  }
+
+  .publish-status-grid {
+    grid-template-columns: minmax(0, 1.3fr) minmax(220px, 0.92fr);
+  }
+}

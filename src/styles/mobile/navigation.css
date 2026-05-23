@@ -1,0 +1,13 @@
+/* Mobile menu and drawer responsive overrides. */
+
+@media (prefers-reduced-motion: reduce) {
+  .mobile-menu-toggle,
+  .mobile-menu-toggle-icon,
+  .mobile-menu-toggle-icon span,
+  .mobile-drawer-backdrop,
+  .mobile-nav-drawer,
+  .mobile-drawer-nav a,
+  .mobile-drawer-more-trigger {
+    transition: none;
+  }
+}
