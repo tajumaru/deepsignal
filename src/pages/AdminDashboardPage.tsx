@@ -2248,21 +2248,7 @@ export function AdminDashboardPage() {
               ),
             }
           : !isSelectedRecordOnRoadmap
-            ? {
-                eyebrow: t("nextStepLabel"),
-                title: "Open review result",
-                detail: "Use the review session to decide roadmap visibility and internal status together.",
-                cta: (
-                  <button
-                    type="button"
-                    className="ghost-button"
-                    disabled={saving}
-                    onClick={() => openReviewSession()}
-                  >
-                    Open review
-                  </button>
-                ),
-              }
+            ? null
             : {
                 eyebrow: t("nextStepLabel"),
                 title: t("signalAlreadyInReviewFlowTitle"),
@@ -3836,13 +3822,15 @@ export function AdminDashboardPage() {
                             event.stopPropagation();
                           }}
                         >
-                          <button
-                            type="button"
-                            className="ghost-button review-open-button"
-                            onClick={() => openReviewSession(submission.id)}
-                          >
-                            {submission.status === "unread" ? "Start review" : "Open review"}
-                          </button>
+                          {submission.status === "unread" ? (
+                            <button
+                              type="button"
+                              className="ghost-button review-open-button"
+                              onClick={() => openReviewSession(submission.id)}
+                            >
+                              Start review
+                            </button>
+                          ) : null}
                         </div>
                         {isPendingSui ? (
                           <div className="signal-card-actions">
@@ -3891,12 +3879,12 @@ export function AdminDashboardPage() {
                     </button>
                     <div className="signal-detail-heading">
                     <div>
-                      <p className="eyebrow">{t("signalDetailTitle")}</p>
+                      <p className="eyebrow">Review Console</p>
                       <h2>{getSignalSubject(selectedRecord.submission)}</h2>
                       <p className="muted">
                         {selectedRecord.form.title} / {formatDate(selectedRecord.submission.createdAt)}
                       </p>
-                      <p className="muted">{t("signalDetailReviewHint")}</p>
+                      <p className="muted">Inspect trusted submissions, verify evidence, and record the reviewer decision.</p>
                     </div>
                     <div className="inline-actions signal-detail-utility-actions">
                       <Link
@@ -3978,6 +3966,59 @@ export function AdminDashboardPage() {
                         ))}
                       </div>
                     ) : null}
+                    <section className="answer-card review-trust-summary-card">
+                      <div className="review-trust-summary-header">
+                        <div>
+                          <p className="eyebrow">Trust snapshot</p>
+                          <h3>Submission summary</h3>
+                        </div>
+                        <span className="signal-chip signal-chip-soft">
+                          {selectedRecordStoredOnWalrus ? "Stored on Walrus" : "Local fallback"}
+                        </span>
+                      </div>
+                      <div className="review-trust-summary-grid">
+                        <div className="review-trust-summary-item">
+                          <span>AI-assisted insight</span>
+                          <strong>{getSignalPreview(selectedRecord.submission)}</strong>
+                        </div>
+                        <div className="review-trust-summary-item">
+                          <span>Risk / priority score</span>
+                          <strong>
+                            {getLocalizedPriorityLabel(selectedRecord.submission.priority, t)}
+                            {typeof selectedRecord.submission.signalValue === "number"
+                              ? ` / ${selectedRecord.submission.signalValue} of 5`
+                              : selectedRecord.submission.severity
+                                ? ` / ${selectedRecord.submission.severity}`
+                                : ""}
+                          </strong>
+                        </div>
+                        <div className="review-trust-summary-item">
+                          <span>Verification status</span>
+                          <strong>
+                            {detailAnswers
+                              ? "Reviewer verified"
+                              : selectedRecord.submission.isEncrypted
+                                ? "Awaiting reviewer unlock"
+                                : "Readable for review"}
+                          </strong>
+                        </div>
+                        <div className="review-trust-summary-item">
+                          <span>Walrus evidence</span>
+                          <strong>{selectedRecordStoredOnWalrus ? "Evidence receipt available" : "Fallback copy preserved"}</strong>
+                        </div>
+                      </div>
+                      <div className="review-trust-summary-actions">
+                        <button type="button" className="ghost-button" onClick={() => openReviewSession()}>
+                          Approve
+                        </button>
+                        <button type="button" className="ghost-button" onClick={() => openReviewSession()}>
+                          Reject
+                        </button>
+                        <button type="button" className="ghost-button" onClick={() => openReviewSession()}>
+                          Needs follow-up
+                        </button>
+                      </div>
+                    </section>
                   </section>
 
                   {selectedRecordFocusAction ? (
@@ -4161,15 +4202,17 @@ export function AdminDashboardPage() {
                               : "Admin view stays lightweight and reflects the last saved review outcome only."}
                           </p>
                         </div>
-                        <div className="review-save-actions">
-                          <button
-                            type="button"
-                            className="primary-button review-open-button"
-                            onClick={() => openReviewSession()}
-                          >
-                            {selectedRecord.submission.status === "unread" ? "Start review" : "Open review"}
-                          </button>
-                        </div>
+                        {selectedRecord.submission.status === "unread" ? (
+                          <div className="review-save-actions">
+                            <button
+                              type="button"
+                              className="primary-button review-open-button"
+                              onClick={() => openReviewSession()}
+                            >
+                              Start review
+                            </button>
+                          </div>
+                        ) : null}
                       </div>
 
                       <div className="review-result-grid">
@@ -4408,8 +4451,8 @@ export function AdminDashboardPage() {
                         >
                           <summary>
                             <span>
-                              <p className="eyebrow">Verification</p>
-                              <strong>Metadata / Seal</strong>
+                              <p className="eyebrow">Evidence / Verification</p>
+                              <strong>Trust layer receipt</strong>
                             </span>
                             <span className="inspector-summary">{storageRuntime.mode === "walrus" ? t("storageWalrus") : t("localFallbackLabel")}</span>
                           </summary>
@@ -4417,7 +4460,7 @@ export function AdminDashboardPage() {
                             <div className="inspector-subsection">
                               <div className="section-row">
                                 <div>
-                                  <p className="eyebrow">Metadata</p>
+                                  <p className="eyebrow">Evidence layer</p>
                                   <h3>{t("signalMetadataAndProofTitle")}</h3>
                                 </div>
                                 {selectedRecord.submission.pendingOnchainRegistration ? (
@@ -4433,7 +4476,7 @@ export function AdminDashboardPage() {
                               </div>
                               <div className="metadata-list signal-proof-metadata-list">
                                 <div className="metadata-row">
-                                  <span>{t("reviewStateLabel")}</span>
+                                  <span>Verification status</span>
                                   <strong>
                                     {detailLegacyUnencrypted
                                       ? t("legacyUnencryptedResponse")
@@ -4443,8 +4486,16 @@ export function AdminDashboardPage() {
                                   </strong>
                                 </div>
                                 <div className="metadata-row">
-                                  <span>{t("sealRuntimeLabel")}</span>
+                                  <span>Review access</span>
                                   <strong>{hasAdminAccess ? t("projectReviewerAccess") : t("walletLabel")}</strong>
+                                </div>
+                                <div className="metadata-row">
+                                  <span>Storage status</span>
+                                  <strong>{selectedRecordStoredOnWalrus ? "Stored on Walrus" : t("localFallbackLabel")}</strong>
+                                </div>
+                                <div className="metadata-row">
+                                  <span>Provider</span>
+                                  <strong>Powered by Tatum</strong>
                                 </div>
                                 <SignalMetaRow label={t("formBlobId")} type="blob" value={selectedRecord.form.blobId} emptyLabel={t("notAvailable")}>
                                   {!isLocalFallbackBlob(selectedRecord.form.blobId) ? (
@@ -4484,7 +4535,7 @@ export function AdminDashboardPage() {
                                   </div>
                                 ) : null}
                                 <div className="metadata-row">
-                                  <span>{t("reviewerAccessLabel")}</span>
+                                  <span>Audit trail</span>
                                   <strong>{privateReviewLabel}</strong>
                                 </div>
                               </div>

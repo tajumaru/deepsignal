@@ -1,4 +1,5 @@
 import { createPortal } from "react-dom";
+import { TatumFrogIcon } from "../../../components/NetworkMenu";
 import {
   SIGNAL_PIPELINE_STAGES,
   type SignalPipelineState,
@@ -6,12 +7,12 @@ import {
 } from "../hooks/usePublicSubmission";
 
 const PIPELINE_LABELS: Record<SignalPipelineStage, string> = {
-  preparing_signal: "Preparing signal",
+  preparing_signal: "Preparing secure report",
   encrypting: "Encrypting",
-  uploading_to_walrus: "Uploading to Walrus",
-  confirming_blob: "Confirming blob",
+  uploading_to_walrus: "Sending evidence to Walrus",
+  confirming_blob: "Confirming blob receipt",
   generating_manifest: "Generating manifest",
-  signal_secured: "Signal secured",
+  signal_secured: "Report certified",
 };
 
 interface SignalSubmissionPipelineProps {
@@ -58,6 +59,10 @@ export function SignalSubmissionPipeline({ pipeline, visible, onClose, labels }:
             <p className="eyebrow">{labels.eyebrow}</p>
             <h2 id="signal-submission-title">{failed ? labels.statusNeedsAttention : labels.title}</h2>
             <p className="muted publish-overlay-intro">{labels.intro}</p>
+          </div>
+          <div className="signal-submission-courier" aria-hidden="true">
+            <TatumFrogIcon className="signal-submission-courier-icon" />
+            <span>Frog courier relaying your report</span>
           </div>
           <span className="signal-submission-pipeline-pill">
             {failed

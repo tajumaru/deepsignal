@@ -157,22 +157,22 @@ export function PublicFormPage() {
   }, [form?.responseDeadline, t]);
   const submitModeLabel =
     walletRequired || (attachWallet && walletAccountAddress)
-      ? t("publicSubmitModeWalletAttached")
-      : t("publicSubmitModeAnonymous");
+      ? "Verified submission"
+      : "Anonymous submission";
   const storageModeLabel = form?.encryptSubmissions
-    ? t("publicStorageModeEncrypted")
-    : t("publicStorageModePlain");
+    ? "Evidence layer active"
+    : "Protected review delivery";
   const submitButtonLabel = deadlinePassed
     ? t("publicSubmissionClosed")
     : submitting
-      ? t("publicSubmittingSecure")
+      ? "Submitting secure report..."
     : walletRequired
         ? walletAccountAddress
-          ? t("publicSubmitWithRequiredWallet")
-          : t("publicConnectWalletToSubmit")
+          ? "Submit Secure Report"
+          : "Connect wallet to submit secure report"
         : attachWallet && walletAccountAddress
-        ? t("publicSubmitWithWallet")
-        : t("publicSubmitAnonymously");
+        ? "Submit Secure Report"
+        : "Submit Secure Report";
   const submissionPipelineLabels = {
     eyebrow: t("publicSubmissionOverlayEyebrow"),
     title: t("publicSubmissionOverlayTitle"),
@@ -379,19 +379,15 @@ export function PublicFormPage() {
       />
       <section className={`public-trust-header ${deadlinePassed ? "is-expired" : ""}`} aria-label={t("publicFormStatusSummary")}>
         <div className="public-trust-copy">
-          <p className="eyebrow">{t("publicEyebrow")}</p>
+          <p className="eyebrow">Secure reporting workflow</p>
           <h1>{form.title}</h1>
           <RichTextContent value={form.description ?? ""} className="lede rich-text-content" fallback={t("publicDefaultBody")} />
         </div>
         <div className="public-trust-list" role="list">
-          <span role="listitem">{t("publicTrustPrivateDefault")}</span>
-          <span role="listitem">
-            {form.encryptSubmissions ? t("publicTrustEncryptedBeforeUpload") : t("publicTrustProtectedReview")}
-          </span>
-          <span role="listitem">
-            {form.encryptSubmissions ? t("publicTrustSelectedUnlock") : t("publicTrustSelectedReview")}
-          </span>
-          <span role="listitem">{walletRequired ? t("publicTrustWalletRequired") : t("publicTrustWalletOptional")}</span>
+          <span role="listitem">Anonymous or verified submissions</span>
+          <span role="listitem">{form.encryptSubmissions ? "Encrypted before upload" : "Protected reviewer workflow"}</span>
+          <span role="listitem">{form.encryptSubmissions ? "Only authorized reviewers can unlock evidence" : "Selected reviewers can inspect submissions"}</span>
+          <span role="listitem">{walletRequired ? "Wallet verification required" : "Wallet verification optional"}</span>
         </div>
         <div className="public-trust-footer">
           <div className="public-form-status-badges">
@@ -400,16 +396,16 @@ export function PublicFormPage() {
               <strong>{deadlinePassed ? t("publicDeadlineClosedBadge") : deadlineLabel}</strong>
             </span>
             <span className="public-form-status-badge is-private">
-              <span>{t("publicEncryptedInboxEyebrow")}</span>
-              <strong>{form.encryptSubmissions ? t("publicPrivateSignalBadge") : t("publicTrustProtectedBadge")}</strong>
+              <span>Evidence layer</span>
+              <strong>{form.encryptSubmissions ? "Seal + Walrus active" : "Protected review mode"}</strong>
             </span>
           </div>
           <p className="muted">
             {deadlinePassed
               ? t("publicDeadlineClosedHelp")
               : form.encryptSubmissions
-                ? t("publicPrivateSignalBadgeHelp")
-                : t("publicDeadlineActiveHelp")}
+                ? "This workflow creates a secure report with verifiable storage metadata."
+                : "This workflow stays public-facing while preserving review controls."}
           </p>
         </div>
       </section>

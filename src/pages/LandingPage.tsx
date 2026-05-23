@@ -5,6 +5,45 @@ import { TatumFrogIcon } from "../components/NetworkMenu";
 import { useI18n } from "../i18n";
 import { useRpcInfrastructure } from "../rpcInfrastructure";
 
+function UseCaseIcon({ kind }: { kind: "company" | "dao" | "hackathon" | "research" | "incident" }) {
+  switch (kind) {
+    case "company":
+      return (
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M5.5 20V7.6L12 4.5l6.5 3.1V20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+          <path d="M9 20v-4h6v4M9 10.3h.01M12 10.3h.01M15 10.3h.01M9 13.2h.01M12 13.2h.01M15 13.2h.01" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+        </svg>
+      );
+    case "dao":
+      return (
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <circle cx="12" cy="12" r="2.9" fill="none" stroke="currentColor" strokeWidth="1.8" />
+          <path d="M12 4.8v2.7M12 16.5v2.7M4.8 12h2.7M16.5 12h2.7M7 7l1.95 1.95M15.05 15.05 17 17M17 7l-1.95 1.95M8.95 15.05 7 17" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+        </svg>
+      );
+    case "hackathon":
+      return (
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="m12 3.8 2.4 5 5.5.8-4 3.9.95 5.5L12 16.4 7.15 19l.95-5.5-4-3.9 5.5-.8Z" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+        </svg>
+      );
+    case "research":
+      return (
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M6.2 5.5h10.1A1.7 1.7 0 0 1 18 7.2v11.3H7.9a1.7 1.7 0 0 0-1.7 1.7V5.5Z" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+          <path d="M6.2 5.5H5.3a1.8 1.8 0 0 0-1.8 1.8v11.2h4.4M9.3 10h5.2M9.3 13.2h5.2" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      );
+    case "incident":
+      return (
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M12 4.5 3.9 18.8h16.2L12 4.5Z" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+          <path d="M12 9.3v4.7M12 17.1h.01" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+        </svg>
+      );
+  }
+}
+
 function useScrollReveal() {
   const sectionRef = useRef<HTMLElement | null>(null);
   const [isVisible, setIsVisible] = useState(false);
@@ -282,14 +321,67 @@ function LiveSystemStatusSection() {
 
 function UseCasesSection() {
   const { sectionRef, isVisible } = useScrollReveal();
-  const { t } = useI18n();
   const useCases = [
-    { label: "SEC-01", title: t("landingUseCase1Title"), body: t("landingUseCase1Body"), tone: "feedback" },
-    { label: "CON-02", title: t("landingUseCase2Title"), body: t("landingUseCase2Body"), tone: "applications" },
-    { label: "GOV-03", title: t("landingUseCase3Title"), body: t("landingUseCase3Body"), tone: "intelligence" },
-    { label: "TIP-04", title: t("landingUseCase4Title"), body: t("landingUseCase4Body"), tone: "ai" },
-    { label: "PRO-05", title: t("landingUseCase5Title"), body: t("landingUseCase5Body"), tone: "feedback" },
-    { label: "INT-06", title: t("landingUseCase6Title"), body: t("landingUseCase6Body"), tone: "applications" },
+    {
+      title: "Company Feedback",
+      body: "Secure employee feedback, whistleblowing, customer signals, and internal audit reports.",
+      badge: "Encrypted",
+      tone: "feedback",
+      icon: "company" as const,
+      chips: ["Encrypted", "Anonymous"],
+      metricLabel: "Confidential Report",
+      metricValue: "Submit Securely",
+      flowSteps: ["Submit", "Encrypt", "Store", "Review"],
+      mockType: "company" as const,
+    },
+    {
+      title: "DAO Governance",
+      body: "Review proposals, grants, contributors, and incident reports with wallet-aware trust trails.",
+      badge: "Verifiable",
+      tone: "applications",
+      icon: "dao" as const,
+      chips: ["Verifiable", "On-chain"],
+      metricLabel: "Voting active",
+      metricValue: "62% YES",
+      flowSteps: ["Submit", "Encrypt", "Store", "Review"],
+      mockType: "dao" as const,
+    },
+    {
+      title: "Hackathon Review",
+      body: "Collect judge feedback, AI summaries, scores, and approvals with verifiable evidence.",
+      badge: "Audit-ready",
+      tone: "intelligence",
+      icon: "hackathon" as const,
+      chips: ["AI-Powered", "Audit-ready"],
+      metricLabel: "Score",
+      metricValue: "8.7 / 10",
+      flowSteps: ["Submit", "Encrypt", "Store", "Review"],
+      mockType: "hackathon" as const,
+    },
+    {
+      title: "Research Peer Review",
+      body: "Route sensitive peer review, ethics notes, and experiment logs into protected review workflows.",
+      badge: "Confidential",
+      tone: "ai",
+      icon: "research" as const,
+      chips: ["Encrypted", "Confidential"],
+      metricLabel: "Private Review",
+      metricValue: "Reviewer #2",
+      flowSteps: ["Submit", "Encrypt", "Store", "Review"],
+      mockType: "research" as const,
+    },
+    {
+      title: "Disaster / Incident Reporting",
+      body: "Anchor urgent field reports, safety check-ins, and infrastructure incidents to durable evidence.",
+      badge: "High urgency",
+      tone: "incident",
+      icon: "incident" as const,
+      chips: ["Immutable", "Always available"],
+      metricLabel: "Severity",
+      metricValue: "High",
+      flowSteps: ["Submit", "Encrypt", "Store", "Review"],
+      mockType: "incident" as const,
+    },
   ];
 
   return (
@@ -301,10 +393,14 @@ function UseCasesSection() {
       <div className="landing-signal-section-shell landing-use-cases-shell">
         <div className="landing-section-kicker">
           <span />
-          <p className="eyebrow">{t("landingUseCasesEyebrow")}</p>
+          <p className="eyebrow">Use Cases</p>
         </div>
         <div className="landing-use-cases-header">
-          <h2 id="landing-use-cases-title">{t("landingUseCasesTitle")}</h2>
+          <h2 id="landing-use-cases-title">Trust-ready reporting for teams, judges, and reviewers</h2>
+          <p>
+            From company feedback to DAO governance, DeepSignal turns sensitive submissions into encrypted,
+            verifiable evidence.
+          </p>
         </div>
 
         <div className="landing-use-case-field">
@@ -314,10 +410,128 @@ function UseCasesSection() {
               className={`landing-use-case landing-use-case-${useCase.tone}`}
               style={{ "--reveal-index": index } as CSSProperties}
             >
-              <span className="landing-use-case-index">{useCase.label}</span>
-              <div>
+              <div className={`landing-use-case-mock landing-use-case-mock-${useCase.mockType}`} aria-hidden="true">
+                {useCase.mockType === "company" ? (
+                  <>
+                    <div className="landing-use-case-windowbar">
+                      <span />
+                      <span />
+                      <span />
+                    </div>
+                    <div className="landing-use-case-form-title">New Confidential Report</div>
+                    <div className="landing-use-case-form-field">
+                      <strong>Share your feedback confidentially</strong>
+                      <span>Your report is encrypted and protected.</span>
+                    </div>
+                    <div className="landing-use-case-form-button">{useCase.metricValue}</div>
+                    <span className="landing-use-case-form-lock" />
+                  </>
+                ) : null}
+
+                {useCase.mockType === "dao" ? (
+                  <>
+                    <div className="landing-use-case-governance-topline">
+                      <strong>Governance Proposal</strong>
+                      <span>Treasury Allocation</span>
+                    </div>
+                    <div className="landing-use-case-dao-ring">
+                      <div className="landing-use-case-dao-ring-core">
+                        <strong>62%</strong>
+                        <span>YES</span>
+                      </div>
+                    </div>
+                    <div className="landing-use-case-dao-split">
+                      <span>38%</span>
+                      <span>NO</span>
+                    </div>
+                    <div className="landing-use-case-dao-badge" />
+                  </>
+                ) : null}
+
+                {useCase.mockType === "hackathon" ? (
+                  <>
+                    <div className="landing-use-case-review-topline">
+                      <strong>Judge Review Console</strong>
+                    </div>
+                    <div className="landing-use-case-review-grid">
+                      <div className="landing-use-case-review-radar">
+                        <span />
+                        <span />
+                        <span />
+                      </div>
+                      <div className="landing-use-case-review-score">
+                        <small>{useCase.metricLabel}</small>
+                        <strong>{useCase.metricValue}</strong>
+                        <span>★★★★★</span>
+                      </div>
+                    </div>
+                    <div className="landing-use-case-review-bot" />
+                  </>
+                ) : null}
+
+                {useCase.mockType === "research" ? (
+                  <>
+                    <div className="landing-use-case-paper-topline">
+                      <strong>Paper v2.1</strong>
+                      <span>{useCase.metricLabel}</span>
+                    </div>
+                    <div className="landing-use-case-paper-lines">
+                      <span />
+                      <span />
+                      <span />
+                      <span />
+                    </div>
+                    <div className="landing-use-case-paper-comment">
+                      <strong>{useCase.metricValue}</strong>
+                      <span>Consider clarifying this methodology.</span>
+                    </div>
+                  </>
+                ) : null}
+
+                {useCase.mockType === "incident" ? (
+                  <>
+                    <div className="landing-use-case-radar">
+                      <span className="landing-use-case-radar-ring landing-use-case-radar-ring-1" />
+                      <span className="landing-use-case-radar-ring landing-use-case-radar-ring-2" />
+                      <span className="landing-use-case-radar-ring landing-use-case-radar-ring-3" />
+                      <span className="landing-use-case-radar-sweep" />
+                      <span className="landing-use-case-radar-point landing-use-case-radar-point-1" />
+                      <span className="landing-use-case-radar-point landing-use-case-radar-point-2" />
+                      <span className="landing-use-case-radar-point landing-use-case-radar-point-3" />
+                    </div>
+                    <div className="landing-use-case-incident-card">
+                      <strong>Incident Report</strong>
+                      <span>Flood in Sector 7G</span>
+                      <small>{useCase.metricLabel}: {useCase.metricValue}</small>
+                    </div>
+                  </>
+                ) : null}
+              </div>
+
+              <div className="landing-use-case-topline">
+                <span className="landing-use-case-icon">
+                  <UseCaseIcon kind={useCase.icon} />
+                </span>
+                <span className="landing-use-case-trust-badge">{useCase.badge}</span>
+              </div>
+              <div className="landing-use-case-copy">
                 <h3>{useCase.title}</h3>
                 <p>{useCase.body}</p>
+                <div className="landing-use-case-chip-row">
+                  {useCase.chips.map((chip) => (
+                    <span key={chip} className="landing-use-case-chip">
+                      {chip}
+                    </span>
+                  ))}
+                </div>
+              </div>
+              <div className="landing-use-case-flow" aria-hidden="true">
+                {useCase.flowSteps.map((step) => (
+                  <span key={step} className="landing-use-case-flow-step">
+                    <i />
+                    {step}
+                  </span>
+                ))}
               </div>
             </article>
           ))}
@@ -431,6 +645,8 @@ export function LandingPage() {
   const heroFeedRows = [t("landingHeroLiveFeed1"), t("landingHeroLiveFeed2"), t("landingHeroLiveFeed3")];
   const heroLifecycle = ["Intent", "Signal opened", "Protected", "Stored", "Reviewed", "Resolved"];
   const heroTrustBadges = ["Encrypted", "Verifiable", "Immutable", "Audit-ready"];
+  const heroDescription =
+    "From company feedback to DAO governance, DeepSignal turns sensitive submissions into encrypted, verifiable evidence.";
 
   return (
     <section className="landing-shell">
@@ -454,9 +670,7 @@ export function LandingPage() {
               <span>{t("landingHeroContestTitle")}</span>
             </h1>
 
-            <p className="landing-hero-subcopy">
-              Secure, encrypted, and verifiable reporting workflows powered by Walrus.
-            </p>
+            <p className="landing-hero-subcopy">{heroDescription}</p>
 
             <div className="landing-hero-trust-badges" aria-label="Trust badges">
               {heroTrustBadges.map((badge) => (
