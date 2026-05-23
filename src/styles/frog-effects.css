@@ -1,5 +1,14 @@
 /* Animation keyframes only. Rules that use animations live with their component or page module. */
 
+@keyframes inboxSkeletonSweep {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(100%);
+  }
+}
+
 @keyframes walletSyncPulse {
   0%,
   100% {

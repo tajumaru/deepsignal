@@ -1,5 +1,72 @@
 /* Creator/admin Encrypted Signal Inbox views and admin workspace pages. */
 
+.inbox-loading-panel {
+  width: min(100%, 42rem);
+  margin: clamp(2rem, 12vh, 7rem) auto;
+  display: grid;
+  gap: 1rem;
+}
+
+.inbox-loading-copy {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.inbox-loading-copy p {
+  margin: 0;
+}
+
+.inbox-loading-steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.inbox-loading-steps span {
+  min-width: 0;
+  padding: 0.35rem 0.7rem;
+  border: 1px solid rgba(116, 226, 255, 0.12);
+  border-radius: var(--radius-pill);
+  color: var(--text-soft);
+  background: rgba(116, 226, 255, 0.045);
+  font-size: 0.8rem;
+}
+
+.inbox-loading-steps span.is-active {
+  border-color: rgba(102, 227, 255, 0.28);
+  color: var(--accent-strong);
+  background: rgba(102, 227, 255, 0.1);
+}
+
+.inbox-loading-skeleton {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.inbox-loading-card {
+  position: relative;
+  min-height: 4.5rem;
+  overflow: hidden;
+  border: 1px solid rgba(116, 226, 255, 0.1);
+  border-radius: var(--radius-lg);
+  background:
+    linear-gradient(180deg, rgba(7, 24, 40, 0.82), rgba(4, 15, 25, 0.72)),
+    radial-gradient(circle at top left, rgba(102, 227, 255, 0.08), transparent 38%);
+}
+
+.inbox-loading-card.is-wide {
+  min-height: 6rem;
+}
+
+.inbox-loading-card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, rgba(180, 245, 255, 0.08), transparent);
+  animation: inboxSkeletonSweep 1.35s ease-in-out infinite;
+}
+
 .wallet-inline-address .sui-address-display,
 .workspace-activity-address .sui-address-display {
   min-height: 2.25rem;
