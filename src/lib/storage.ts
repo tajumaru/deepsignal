@@ -54,6 +54,7 @@ import type {
   Submission,
   SubmissionAttachment,
   SubmissionLocation,
+  TatumStorageRecord,
   WalrusBlobProof,
 } from "../types";
 
@@ -146,6 +147,7 @@ function normalizeSubmissionAttachment(raw: unknown): SubmissionAttachment | nul
     encoding: attachment.encoding === "seal-base64-v1" ? "seal-base64-v1" : undefined,
     inlineData: typeof attachment.inlineData === "string" ? attachment.inlineData : undefined,
     walrusProof: normalizeWalrusProof(attachment.walrusProof, attachment.blobId),
+    tatumStorage: normalizeTatumStorageRecord(attachment.tatumStorage, attachment.blobId),
   };
 }
 
@@ -166,6 +168,28 @@ function normalizeWalrusProof(raw: unknown, fallbackBlobId?: string): WalrusBlob
     size,
     epoch,
     network: getWalrusNetwork(typeof proof.network === "string" ? proof.network : SUI_NETWORK),
+  };
+}
+
+function normalizeTatumStorageRecord(raw: unknown, fallbackBlobId?: string): TatumStorageRecord | undefined {
+  if (!raw || typeof raw !== "object") {
+    return undefined;
+  }
+  const record = raw as Partial<TatumStorageRecord> & Record<string, unknown>;
+  const jobId = typeof record.jobId === "string" ? record.jobId : undefined;
+  const blobId = typeof record.blobId === "string" ? record.blobId : fallbackBlobId;
+  const fileId = typeof record.fileId === "string" ? record.fileId : undefined;
+  const status = typeof record.status === "string" ? record.status : undefined;
+  const downloadUrl = typeof record.downloadUrl === "string" ? record.downloadUrl : undefined;
+  if (!jobId && !blobId && !fileId && !status && !downloadUrl) {
+    return undefined;
+  }
+  return {
+    jobId,
+    blobId,
+    fileId,
+    status,
+    downloadUrl,
   };
 }
 
@@ -580,6 +604,7 @@ export function normalizeSubmission(raw: Submission | (Record<string, unknown> &
     updatedAt: typeof raw.updatedAt === "string" ? raw.updatedAt : raw.createdAt,
     blobId: typeof raw.blobId === "string" ? raw.blobId : undefined,
     walrusProof: normalizeWalrusProof(raw.walrusProof, typeof raw.blobId === "string" ? raw.blobId : undefined),
+    tatumStorage: normalizeTatumStorageRecord(raw.tatumStorage, typeof raw.blobId === "string" ? raw.blobId : undefined),
   } satisfies Submission;
 }
 
@@ -648,6 +673,7 @@ export function normalizeForm(raw: FormSchema | (Record<string, unknown> & { id:
           : undefined,
     formMetadataDigest: typeof raw.formMetadataDigest === "string" ? raw.formMetadataDigest : undefined,
     registrationMode: raw.registrationMode === "sui" ? "sui" : "walrus",
+    tatumStorage: normalizeTatumStorageRecord(raw.tatumStorage, typeof raw.blobId === "string" ? raw.blobId : undefined),
     activityEvents: Array.isArray(raw.activityEvents)
       ? raw.activityEvents
           .map((event) => normalizeActivityEvent(event as Record<string, unknown>))

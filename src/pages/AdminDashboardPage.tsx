@@ -32,6 +32,10 @@ import { usePendingSuiRegistration } from "../features/admin/hooks/usePendingSui
 import { usePrivateSignalDecrypt } from "../features/admin/hooks/usePrivateSignalDecrypt";
 import { useProjectWorkspace } from "../features/admin/hooks/useProjectWorkspace";
 import {
+  useReviewWorkspace,
+  type ReviewSaveStatus,
+} from "../features/admin/hooks/useReviewWorkspace";
+import {
   useSignalInboxData,
   type FormWithCount,
   type SignalSortOrder,
@@ -68,7 +72,6 @@ import {
   getVisibleReviewerNotes,
   hasNeedsFollowUp,
   NEEDS_FOLLOW_UP_TAG,
-  serializeReviewNotes,
   setNeedsFollowUpTag,
 } from "../lib/reviewCollaboration";
 import { exportSubmissionJson } from "../lib/export";
@@ -120,12 +123,6 @@ const MODAL_FOCUSABLE_SELECTOR = [
   "[tabindex]:not([tabindex='-1'])",
 ].join(",");
 const ROADMAP_READY_STATUSES = new Set<Submission["triageStatus"]>(["planned", "in_progress", "fixed"]);
-type ReviewSaveStatus = "idle" | "saving" | "saved" | "skipped" | "error";
-type ReviewSessionMobileTab = "answers" | "review";
-type ReviewDraft = Pick<Submission, "status" | "triageStatus" | "priority" | "signalValue"> & {
-  notes: string;
-  reviewer: string;
-};
 type WorkspaceTab = "review" | "activity" | "insights" | "members";
 type QuickActionId = "reviewing" | "resolve" | "publish" | "archive";
 type KeyboardShortcutAction = QuickActionId | "next" | "previous" | "search" | "help";
@@ -1239,8 +1236,6 @@ export function AdminDashboardPage() {
     daysLeft: (days) => t("responseDeadlineDaysLeft", { count: days }),
   };
   const [saving, setSaving] = useState(false);
-  const [reviewSaveStatus, setReviewSaveStatus] = useState<ReviewSaveStatus>("idle");
-  const [reviewDraft, setReviewDraft] = useState<ReviewDraft | null>(null);
   const [deletingFormId, setDeletingFormId] = useState<string | null>(null);
   const [deletingVisibleNodes, setDeletingVisibleNodes] = useState(false);
   const [nodeDirectoryOpen, setNodeDirectoryOpen] = useState(false);
@@ -1249,9 +1244,6 @@ export function AdminDashboardPage() {
   const [csvExportScope, setCsvExportScope] = useState<ResponsesCsvExportScope>("filtered");
   const [csvSortOrder, setCsvSortOrder] = useState<ResponsesCsvSortOrder>("createdAtDesc");
   const [signalSortOrder, setSignalSortOrder] = useState<SignalSortOrder>("default");
-  const [reviewSessionOpen, setReviewSessionOpen] = useState(false);
-  const [reviewSessionStep, setReviewSessionStep] = useState<1 | 2 | 3 | 4>(1);
-  const [reviewSessionMobileTab, setReviewSessionMobileTab] = useState<ReviewSessionMobileTab>("answers");
   const [excludedCsvPiiFields, setExcludedCsvPiiFields] = useState<ExportPiiField[]>([]);
   const [pendingCsvExportMetadata, setPendingCsvExportMetadata] = useState<ExportMetadata | null>(null);
   const [pendingCsvExportForm, setPendingCsvExportForm] = useState<FormSchema | null>(null);
@@ -1282,10 +1274,8 @@ export function AdminDashboardPage() {
   const signalSearchInputRef = useRef<HTMLInputElement | null>(null);
   const shortcutHelpHeadingRef = useRef<HTMLHeadingElement | null>(null);
   const signalCardRefs = useRef<Record<string, HTMLDivElement | null>>({});
-  const hasUnsavedReviewChangesRef = useRef(false);
   const reviewSessionDialogRef = useRef<HTMLElement | null>(null);
   const reviewSessionPrimaryActionRef = useRef<HTMLButtonElement | null>(null);
-  const selectedRecordResetRef = useRef<string | null>(null);
   const keyboardNavigationRef = useRef(false);
   const hasAdminAccess = canAdmin(capabilityProfile);
   const setWorkspaceTab = useCallback(
@@ -1694,6 +1684,44 @@ export function AdminDashboardPage() {
   const selectedRecordNeedsDecrypt = Boolean(
     selectedRecord?.submission.isEncrypted && !detailAnswers,
   );
+  const reviewSaveStatusLabel: Record<ReviewSaveStatus, string> = {
+    idle: t("reviewSaveReadyToSave"),
+    saving: t("reviewSaveSaving"),
+    saved: t("reviewSaveSaved"),
+    skipped: t("reviewSaveSkipped"),
+    error: t("reviewSaveError"),
+  };
+  const {
+    reviewSaveStatus,
+    setReviewSaveStatus,
+    activeReviewDraft,
+    hasReviewDraftChanges,
+    reviewStatusPillState,
+    reviewStatusPillLabel,
+    patchReviewDraft,
+    buildSubmissionFromReviewDraft,
+    syncReviewDraftFromSubmission,
+    reviewSessionOpen,
+    forceCloseReviewSession,
+    requestCloseReviewSession,
+    openReviewSession,
+    reviewSessionStep,
+    setReviewSessionStep,
+    reviewSessionMobileTab,
+    setReviewSessionMobileTab,
+  } = useReviewWorkspace({
+    selectedRecord,
+    selectedRecordNeedsDecrypt,
+    isReviewWorkbenchLocked: selectedRecordNeedsDecrypt,
+    setSelectedSignalId,
+    onSelectedRecordChange: () => {
+      setDecryptError("");
+    },
+    discardChangesConfirmLabel: t("discardChangesConfirm"),
+    reviewSaveStatusLabel,
+    reviewSaveUnsavedDraftLabel: t("reviewSaveUnsavedDraft"),
+    mobileReviewMediaQuery: MOBILE_REVIEW_MEDIA_QUERY,
+  });
   const selectedRecordEncryptedBlobId = selectedRecord?.submission.encryptedBlobId;
   const selectedRecordEncryptedBlobStoredOnWalrus = Boolean(
     selectedRecordEncryptedBlobId && !isLocalFallbackBlob(selectedRecordEncryptedBlobId),
@@ -1763,37 +1791,6 @@ export function AdminDashboardPage() {
         ? t("privateSignalUnlockDisabled")
         : undefined;
   const hasDuplicateLikelyRelatedSignals = relatedSignals.some((signal) => signal.duplicateLikely);
-
-  const forceCloseReviewSession = useCallback(() => {
-    setReviewSessionOpen(false);
-  }, []);
-
-  const requestCloseReviewSession = useCallback(() => {
-    if (hasUnsavedReviewChangesRef.current && !window.confirm(t("discardChangesConfirm"))) {
-      return false;
-    }
-    forceCloseReviewSession();
-    return true;
-  }, [forceCloseReviewSession, t]);
-
-  const openReviewSession = useCallback((signalId?: string) => {
-    if (signalId) {
-      setSelectedSignalId(signalId);
-    }
-    setReviewSessionStep(selectedRecordNeedsDecrypt ? 1 : 2);
-    setReviewSessionOpen(true);
-  }, [selectedRecordNeedsDecrypt, setSelectedSignalId]);
-
-  useEffect(() => {
-    if (!reviewSessionOpen) {
-      return;
-    }
-    if (selectedRecordNeedsDecrypt) {
-      setReviewSessionStep(1);
-      return;
-    }
-    setReviewSessionStep((current) => (current < 2 ? 2 : current));
-  }, [reviewSessionOpen, selectedRecordNeedsDecrypt, selectedRecord?.submission.id]);
 
   useEffect(() => {
     if (!reviewSessionOpen) {
@@ -1903,35 +1900,6 @@ export function AdminDashboardPage() {
   }, [showShortcutHelp]);
 
   useEffect(() => {
-    if (!reviewSessionOpen) {
-      setReviewSessionMobileTab("answers");
-      return;
-    }
-    if (reviewSessionStep !== 2) {
-      setReviewSessionMobileTab("answers");
-    }
-  }, [reviewSessionOpen, reviewSessionStep]);
-
-  useEffect(() => {
-    if (typeof window === "undefined") {
-      return;
-    }
-    const mediaQuery = window.matchMedia(MOBILE_REVIEW_MEDIA_QUERY);
-    const syncReviewSessionMobileTab = (event?: MediaQueryListEvent) => {
-      if (!(event?.matches ?? mediaQuery.matches)) {
-        setReviewSessionMobileTab("answers");
-      }
-    };
-    syncReviewSessionMobileTab();
-    if (typeof mediaQuery.addEventListener === "function") {
-      mediaQuery.addEventListener("change", syncReviewSessionMobileTab);
-      return () => mediaQuery.removeEventListener("change", syncReviewSessionMobileTab);
-    }
-    mediaQuery.addListener(syncReviewSessionMobileTab);
-    return () => mediaQuery.removeListener(syncReviewSessionMobileTab);
-  }, []);
-
-  useEffect(() => {
     if (!keyboardNavigationRef.current || !selectedSignalId) {
       return;
     }
@@ -2029,48 +1997,6 @@ export function AdminDashboardPage() {
   const firstProjectForm = selectedProjectForms[0] ?? null;
   const firstVisibleForm = accessibleForms[0] ?? null;
 
-  const activeReviewDraft: ReviewDraft | null = useMemo(
-    () =>
-      selectedRecord
-        ? reviewDraft ?? {
-            status: selectedRecord.submission.status,
-            triageStatus: selectedRecord.submission.triageStatus,
-            priority: selectedRecord.submission.priority,
-            signalValue: selectedRecord.submission.signalValue,
-            notes: getVisibleReviewerNotes(selectedRecord.submission),
-            reviewer: getAssignedReviewer(selectedRecord.submission) ?? "",
-          }
-        : null,
-    [reviewDraft, selectedRecord],
-  );
-  const hasReviewDraftChanges = Boolean(
-    selectedRecord &&
-      activeReviewDraft &&
-      (activeReviewDraft.status !== selectedRecord.submission.status ||
-        activeReviewDraft.triageStatus !== selectedRecord.submission.triageStatus ||
-        activeReviewDraft.priority !== selectedRecord.submission.priority ||
-        activeReviewDraft.signalValue !== selectedRecord.submission.signalValue ||
-        activeReviewDraft.notes !== getVisibleReviewerNotes(selectedRecord.submission) ||
-        activeReviewDraft.reviewer !== (getAssignedReviewer(selectedRecord.submission) ?? "")),
-  );
-
-  useEffect(() => {
-    hasUnsavedReviewChangesRef.current = reviewSessionOpen && hasReviewDraftChanges;
-  }, [hasReviewDraftChanges, reviewSessionOpen]);
-
-  useEffect(() => {
-    if (!reviewSessionOpen || !hasReviewDraftChanges) {
-      return;
-    }
-
-    function handleBeforeUnload(event: BeforeUnloadEvent) {
-      event.preventDefault();
-      event.returnValue = "";
-    }
-
-    window.addEventListener("beforeunload", handleBeforeUnload);
-    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
-  }, [hasReviewDraftChanges, reviewSessionOpen]);
   const draftReviewStatus = activeReviewDraft?.status ?? selectedRecord?.submission.status ?? "unread";
   const draftTriageStatus = activeReviewDraft?.triageStatus ?? selectedRecord?.submission.triageStatus ?? "new";
   const isReviewWorkbenchLocked = selectedRecordNeedsDecrypt;
@@ -2081,55 +2007,12 @@ export function AdminDashboardPage() {
       selectedRecordNeedsDecrypt,
   );
 
-  function patchReviewDraft(patch: Partial<ReviewDraft>) {
-    if (!selectedRecord || isReviewWorkbenchLocked) {
-      return;
-    }
-    setReviewDraft((current) => {
-      const base = current ?? {
-        status: selectedRecord.submission.status,
-        triageStatus: selectedRecord.submission.triageStatus,
-        priority: selectedRecord.submission.priority,
-        signalValue: selectedRecord.submission.signalValue,
-        notes: getVisibleReviewerNotes(selectedRecord.submission),
-        reviewer: getAssignedReviewer(selectedRecord.submission) ?? "",
-      };
-      return {
-        ...base,
-        ...patch,
-      };
-    });
-  }
-
   function setDetailSectionOpen(section: keyof DetailWorkspaceSectionsState, open: boolean) {
     setDetailSectionsState((current) => ({
       ...current,
       [section]: open,
     }));
   }
-
-  useEffect(() => {
-    const selectedRecordId = selectedRecord?.submission.id ?? null;
-    if (selectedRecordId === selectedRecordResetRef.current) {
-      return;
-    }
-    selectedRecordResetRef.current = selectedRecordId;
-
-    if (!selectedRecord) {
-      setReviewDraft(null);
-      setDecryptError("");
-      return;
-    }
-    setReviewDraft({
-      status: selectedRecord.submission.status,
-      triageStatus: selectedRecord.submission.triageStatus,
-      priority: selectedRecord.submission.priority,
-      signalValue: selectedRecord.submission.signalValue,
-      notes: getVisibleReviewerNotes(selectedRecord.submission),
-      reviewer: getAssignedReviewer(selectedRecord.submission) ?? "",
-    });
-    setDecryptError("");
-  }, [selectedRecord, setDecryptError]);
 
   const updateSubmission = useCallback(async (nextSubmission: Submission, options: { announce?: boolean } = {}) => {
     const normalized = normalizeSubmission({
@@ -2207,29 +2090,7 @@ export function AdminDashboardPage() {
     saveQueueRef.current = saveQueueRef.current.then(runSave, runSave);
     await saveQueueRef.current;
     return saved;
-  }, [applySubmissionUpdate, setSelectedSignalId, setToast, signalIndex.signalById, suiClient, updateSignalStatusTx]);
-
-  const buildSubmissionFromReviewDraft = useCallback(
-    (submission: Submission, draft: ReviewDraft) => {
-      const previousVisibleNotes = getVisibleReviewerNotes(submission);
-      const previousNoteUpdatedAt = getReviewerNoteUpdatedAt(submission);
-      const noteUpdatedAt =
-        draft.notes !== previousVisibleNotes ? new Date().toISOString() : previousNoteUpdatedAt;
-
-      return {
-        ...submission,
-        status: draft.status,
-        triageStatus: draft.triageStatus,
-        priority: draft.priority,
-        signalValue: draft.signalValue,
-        notes: serializeReviewNotes(draft.notes, {
-          reviewer: draft.reviewer,
-          noteUpdatedAt,
-        }),
-      } satisfies Submission;
-    },
-    [],
-  );
+  }, [applySubmissionUpdate, setReviewSaveStatus, setSelectedSignalId, setToast, signalIndex.signalById, suiClient, updateSignalStatusTx]);
 
   const handleQuickAction = useCallback(
     async (record: SignalRecord, action: QuickActionId) => {
@@ -2239,20 +2100,13 @@ export function AdminDashboardPage() {
         return;
       }
       if (selectedRecord?.submission.id === record.submission.id) {
-        setReviewDraft({
-          status: nextSubmission.status,
-          triageStatus: nextSubmission.triageStatus,
-          priority: nextSubmission.priority,
-          signalValue: nextSubmission.signalValue,
-          notes: getVisibleReviewerNotes(nextSubmission),
-          reviewer: getAssignedReviewer(nextSubmission) ?? "",
-        });
+        syncReviewDraftFromSubmission(nextSubmission);
       }
     },
-    [selectedRecord, updateSubmission],
+    [selectedRecord, syncReviewDraftFromSubmission, updateSubmission],
   );
 
-  async function saveActiveReviewDraft() {
+  const saveActiveReviewDraft = useCallback(async () => {
     if (!selectedRecord || !activeReviewDraft || !hasReviewDraftChanges || isReviewWorkbenchLocked) {
       return false;
     }
@@ -2260,7 +2114,14 @@ export function AdminDashboardPage() {
       buildSubmissionFromReviewDraft(selectedRecord.submission, activeReviewDraft),
       { announce: true },
     );
-  }
+  }, [
+    activeReviewDraft,
+    buildSubmissionFromReviewDraft,
+    hasReviewDraftChanges,
+    isReviewWorkbenchLocked,
+    selectedRecord,
+    updateSubmission,
+  ]);
 
   async function handleToggleNeedsFollowUp() {
     if (!selectedRecord || isReviewWorkbenchLocked) {
@@ -2542,15 +2403,6 @@ export function AdminDashboardPage() {
         ? t("selectedExportShort")
         : t("allExportShort");
   const csvExportIncludesDecryptedData = Boolean(detailAnswers && csvExportCount > 0);
-  const reviewSaveStatusLabel: Record<ReviewSaveStatus, string> = {
-    idle: t("reviewSaveReadyToSave"),
-    saving: t("reviewSaveSaving"),
-    saved: t("reviewSaveSaved"),
-    skipped: t("reviewSaveSkipped"),
-    error: t("reviewSaveError"),
-  };
-  const reviewStatusPillState = hasReviewDraftChanges ? "editing" : reviewSaveStatus;
-  const reviewStatusPillLabel = hasReviewDraftChanges ? t("reviewSaveUnsavedDraft") : reviewSaveStatusLabel[reviewSaveStatus];
   const selectedReviewer = activeReviewDraft?.reviewer ?? (selectedRecord ? getAssignedReviewer(selectedRecord.submission) ?? "" : "");
   const selectedReviewerDisplayLabel = useReviewerDisplayLabel(selectedReviewer);
   const selectedReviewerPresence = selectedRecord

@@ -128,6 +128,7 @@ export interface FormSchema {
   blobId?: string;
   manifestBlobId?: string;
   walrusActualCost?: WalrusActualCost;
+  tatumStorage?: TatumStorageRecord;
   activityEvents?: ActivityEvent[];
 }
 
@@ -148,6 +149,15 @@ export interface WalrusActualCost {
 }
 
 export type WalrusNetwork = "testnet" | "mainnet";
+export type TatumStorageStatus = "PENDING" | "UPLOADING" | "CERTIFIED" | "FAILED" | string;
+
+export interface TatumStorageRecord {
+  jobId?: string;
+  blobId?: string;
+  fileId?: string;
+  status?: TatumStorageStatus;
+  downloadUrl?: string;
+}
 
 export interface WalrusBlobProof {
   blobId: string;
@@ -199,6 +209,7 @@ export interface SubmissionAttachment {
   encoding?: "seal-base64-v1";
   inlineData?: string;
   walrusProof?: WalrusBlobProof;
+  tatumStorage?: TatumStorageRecord;
 }
 
 export interface UploadedAttachment {
@@ -211,6 +222,7 @@ export interface UploadedAttachment {
   progress: number;
   walrusBlobId?: string;
   walrusProof?: WalrusBlobProof;
+  tatumStorage?: TatumStorageRecord;
   error?: string;
 }
 
@@ -274,6 +286,7 @@ export interface Submission {
   updatedAt: string;
   blobId?: string;
   walrusProof?: WalrusBlobProof;
+  tatumStorage?: TatumStorageRecord;
 }
 
 export interface EncryptedSubmissionRecord extends Omit<
@@ -299,20 +312,30 @@ export interface EncryptedSubmissionRecord extends Omit<
 }
 
 export interface StorageAdapter {
-  saveForm(form: FormSchema): Promise<{ id: string; blobId?: string; manifestBlobId?: string; walrusActualCost?: WalrusActualCost }>;
+  saveForm(
+    form: FormSchema,
+  ): Promise<{ id: string; blobId?: string; manifestBlobId?: string; walrusActualCost?: WalrusActualCost; tatumStorage?: TatumStorageRecord }>;
   getForm(id: string): Promise<FormSchema | null>;
   listForms(): Promise<FormSchema[]>;
   deleteForm(id: string): Promise<void>;
   deleteForms(ids: string[]): Promise<void>;
-  saveSubmission(submission: Submission): Promise<{ id: string; blobId?: string; walrusProof?: WalrusBlobProof }>;
+  saveSubmission(
+    submission: Submission,
+  ): Promise<{ id: string; blobId?: string; walrusProof?: WalrusBlobProof; tatumStorage?: TatumStorageRecord }>;
   saveEncryptedSubmission?(
     submission: Submission,
-  ): Promise<{ id: string; blobId?: string; encryptedBlobId?: string; walrusProof?: WalrusBlobProof }>;
+  ): Promise<{
+    id: string;
+    blobId?: string;
+    encryptedBlobId?: string;
+    walrusProof?: WalrusBlobProof;
+    tatumStorage?: TatumStorageRecord;
+  }>;
   listSubmissions(formId: string): Promise<Submission[]>;
   updateSubmission(submission: Submission): Promise<void>;
-  saveEncryptedPayload(payload: string): Promise<{ blobId: string; walrusProof?: WalrusBlobProof }>;
+  saveEncryptedPayload(payload: string): Promise<{ blobId: string; walrusProof?: WalrusBlobProof; tatumStorage?: TatumStorageRecord }>;
   readEncryptedPayload(blobId: string): Promise<string | null>;
-  uploadFile(file: File): Promise<{ blobId: string; url?: string; walrusProof?: WalrusBlobProof }>;
+  uploadFile(file: File): Promise<{ blobId: string; url?: string; walrusProof?: WalrusBlobProof; tatumStorage?: TatumStorageRecord }>;
   readFileBlob(blobId: string): Promise<Blob | null>;
   readFileText(blobId: string): Promise<string | null>;
 }

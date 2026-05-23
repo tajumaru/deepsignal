@@ -50,7 +50,7 @@ export const localStorageAdapter: StorageAdapter = {
     const blobId = form.blobId ?? `local-form-${form.id}`;
     nextForms.unshift({ ...form, blobId });
     writeJson(FORMS_KEY, nextForms);
-    return { id: form.id, blobId, manifestBlobId: form.manifestBlobId };
+    return { id: form.id, blobId, manifestBlobId: form.manifestBlobId, tatumStorage: form.tatumStorage };
   },
 
   async getForm(id) {
@@ -94,7 +94,7 @@ export const localStorageAdapter: StorageAdapter = {
     const blobId = sanitizedSubmission.blobId ?? `local-submission-${sanitizedSubmission.id}`;
     nextSubmissions.unshift({ ...sanitizedSubmission, blobId });
     writeJson(SUBMISSIONS_KEY, nextSubmissions);
-    return { id: sanitizedSubmission.id, blobId };
+    return { id: sanitizedSubmission.id, blobId, tatumStorage: sanitizedSubmission.tatumStorage };
   },
 
   async listSubmissions(formId) {

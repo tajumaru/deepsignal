@@ -145,6 +145,7 @@ function mergeSubmissionRecord(primary: Submission, secondary: Submission) {
     encryptedPayload: decryptPreferred.encryptedPayload ?? metadataPreferred.encryptedPayload,
     receiptBlobId: decryptPreferred.receiptBlobId ?? metadataPreferred.receiptBlobId,
     blobId: decryptPreferred.blobId ?? metadataPreferred.blobId,
+    tatumStorage: decryptPreferred.tatumStorage ?? metadataPreferred.tatumStorage,
     signalReceiptMetadataDigest:
       decryptPreferred.signalReceiptMetadataDigest ?? metadataPreferred.signalReceiptMetadataDigest,
     onchainSignalId: decryptPreferred.onchainSignalId ?? metadataPreferred.onchainSignalId,
