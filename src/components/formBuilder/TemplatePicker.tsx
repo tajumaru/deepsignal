@@ -15,7 +15,6 @@ const LIBRARY_SECTIONS = [
 
 export function TemplatePicker({ templates, selectedTemplateKey, onSelect }: TemplatePickerProps) {
   const [activeFilter, setActiveFilter] = useState<SignalTypeKey | null>(null);
-  const selectedTemplate = templates.find((template) => template.key === selectedTemplateKey) ?? templates[0];
   const featuredTemplate = templates.find((template) => template.featured) ?? templates[0];
   const standardTemplates = templates.filter((template) => template.key !== featuredTemplate.key);
 

@@ -2,7 +2,7 @@ import {
   useSignAndExecuteTransaction,
   useSuiClient,
 } from "@mysten/dapp-kit";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { canAdmin } from "../../../lib/adminAccess";
 import {
   createProject,
@@ -111,7 +111,7 @@ export function useProjectWorkspace({
     return () => window.clearTimeout(timer);
   }, [highlightCreateFormCta]);
 
-  async function hydrateProject(projectId: string) {
+  const hydrateProject = useCallback(async (projectId: string) => {
     const response = await suiClient.getObject({
       id: projectId,
       options: {
@@ -142,7 +142,7 @@ export function useProjectWorkspace({
     }
     saveRecentProject(summary);
     return summary;
-  }
+  }, [suiClient]);
 
   useEffect(() => {
     if (!hasAdminAccess || !visibleSelectedProjectId) {
@@ -176,7 +176,7 @@ export function useProjectWorkspace({
       cancelled = true;
       window.removeEventListener("focus", handleFocus);
     };
-  }, [hasAdminAccess, visibleSelectedProjectId]);
+  }, [hasAdminAccess, hydrateProject, visibleSelectedProjectId]);
 
   async function connectManualProject() {
     if (!hasAdminAccess) {
