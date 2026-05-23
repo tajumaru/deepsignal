@@ -12,7 +12,7 @@ function redirectLegacyPublicPathToHashRoute() {
     return;
   }
   const { pathname, search } = window.location;
-  const legacyRoutePrefixes = ["/f/", "/roadmap/", "/m/"];
+  const legacyRoutePrefixes = ["/f/", "/roadmap/", "/m/", "/auth/zklogin/"];
   if (!legacyRoutePrefixes.some((prefix) => pathname.startsWith(prefix))) {
     return;
   }

@@ -253,6 +253,16 @@ export interface RespondentMeta {
   sessionId?: string;
   submittedAt: string;
   isAnonymous: boolean;
+  identityKind?: "anonymous" | "sui_wallet" | "zklogin";
+  identityProvider?: "google";
+  verifiedAddress?: string;
+  zkLogin?: {
+    iss: string;
+    aud?: string;
+    address: string;
+    legacyAddress?: false;
+    subHash?: string;
+  };
 }
 
 export interface Submission {

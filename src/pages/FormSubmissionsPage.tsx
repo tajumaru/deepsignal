@@ -35,7 +35,7 @@ import {
 import { getPublicFormPath, getPublicRoadmapPath } from "../lib/publicLinks";
 import { clearDeepSignalPolicyCapabilityCache } from "../lib/debugCache";
 import { formatResponseDeadline, type ResponseDeadlineLabels } from "../lib/responseDeadline";
-import { getRespondentDisplayLabel, getSubmissionRespondentMeta } from "../lib/respondentMeta";
+import { getRespondentDisplayLabel, getRespondentIdentityLabel, getSubmissionRespondentMeta } from "../lib/respondentMeta";
 import {
   getAssignedReviewer,
   getReviewerNoteUpdatedAt,
@@ -1178,7 +1178,10 @@ export function FormSubmissionsPage() {
             {getSubmissionRespondentMeta(selectedSubmission).isAnonymous ? (
               <strong>{getRespondentDisplayLabel(selectedSubmission)}</strong>
             ) : (
-              <SignalMetaChip type="contributor" value={getRespondentDisplayLabel(selectedSubmission)} />
+              <div className="stack signal-meta-row-value">
+                <SignalMetaChip type="contributor" value={getRespondentDisplayLabel(selectedSubmission)} />
+                <strong>{getRespondentIdentityLabel(selectedSubmission)}</strong>
+              </div>
             )}
           </div>
           <div className="metadata-row">
@@ -1592,11 +1595,14 @@ export function FormSubmissionsPage() {
                         {getSubmissionRespondentMeta(submission).isAnonymous ? (
                           <span className="signal-chip">Anonymous respondent</span>
                         ) : (
-                          <SignalMetaChip
-                            type="contributor"
-                            value={getRespondentDisplayLabel(submission)}
-                            interactive={false}
-                          />
+                          <>
+                            <SignalMetaChip
+                              type="contributor"
+                              value={getRespondentDisplayLabel(submission)}
+                              interactive={false}
+                            />
+                            <span className="signal-chip">{getRespondentIdentityLabel(submission)}</span>
+                          </>
                         )}
                         {typeof submission.signalValue === "number" ? (
                           <span className="signal-chip">Signal Value {submission.signalValue}/5</span>

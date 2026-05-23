@@ -192,7 +192,7 @@ export function buildColumns(form: FormSchema, options: ExportResponsesToCsvOpti
     columns.push("respondentAddress");
   }
 
-  columns.push("isAnonymous", "walrusBlobId", "storageBlobId");
+  columns.push("respondentIdentity", "identityProvider", "isAnonymous", "walrusBlobId", "storageBlobId");
 
   if (!isExcluded(options.excludedPiiFields, "attachments")) {
     columns.push("attachments");
@@ -249,7 +249,14 @@ export function buildRows(
     const answers = omitDecryptedAnswers ? submission.answers ?? {} : override?.answers ?? submission.answers ?? {};
     const attachments = override?.attachments ?? submission.attachments ?? [];
     const respondentMeta = getSubmissionRespondentMeta(submission);
-    const respondentAddress = respondentMeta.isAnonymous ? "" : respondentMeta.walletAddress ?? "";
+    const respondentAddress = respondentMeta.isAnonymous ? "" : respondentMeta.verifiedAddress ?? respondentMeta.walletAddress ?? "";
+    const respondentIdentity =
+      respondentMeta.identityKind === "zklogin"
+        ? "zklogin"
+        : respondentMeta.isAnonymous
+          ? "anonymous"
+          : "sui_wallet";
+    const identityProvider = respondentMeta.identityKind === "zklogin" ? respondentMeta.identityProvider ?? "" : "";
     const storageBlobId = submission.blobId ?? submission.encryptedBlobId ?? submission.receiptBlobId ?? "";
     const walrusBlobId = submission.blobId ?? submission.encryptedBlobId ?? "";
     const row = [
@@ -265,7 +272,13 @@ export function buildRows(
       row.push(respondentAddress);
     }
 
-    row.push(respondentMeta.isAnonymous ? "true" : "false", walrusBlobId, storageBlobId);
+    row.push(
+      respondentIdentity,
+      identityProvider,
+      respondentMeta.isAnonymous ? "true" : "false",
+      walrusBlobId,
+      storageBlobId,
+    );
 
     if (!omitAttachments) {
       row.push(formatAttachmentsForCsv(attachments));

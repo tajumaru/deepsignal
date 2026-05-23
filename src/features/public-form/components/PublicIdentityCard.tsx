@@ -22,6 +22,12 @@ interface PublicIdentityCardProps {
   onAttachWalletTouched: () => void;
   onAccountAddressChange: (address?: string) => void;
   onWalletProviderChange?: (provider?: string) => void;
+  zkLoginEnabled?: boolean;
+  zkLoginConnected?: boolean;
+  zkLoginAddress?: string;
+  zkLoginProviderLabel?: string;
+  onBeginZkLogin?: () => void;
+  onClearZkLogin?: () => void;
   labels: {
     eyebrow: string;
     title: string;
@@ -41,6 +47,14 @@ interface PublicIdentityCardProps {
     walletUnavailable: string;
     walletUnavailableRequired: string;
     walletRetry: string;
+    modeZkLogin: string;
+    zkLoginTitle: string;
+    zkLoginBody: string;
+    zkLoginConnect: string;
+    zkLoginDisconnect: string;
+    zkLoginConnectedHelp: string;
+    zkLoginOptionalHelp: string;
+    zkLoginUnavailable: string;
   };
 }
 
@@ -90,6 +104,12 @@ export function PublicIdentityCard({
   onAttachWalletTouched,
   onAccountAddressChange,
   onWalletProviderChange,
+  zkLoginEnabled = false,
+  zkLoginConnected = false,
+  zkLoginAddress,
+  zkLoginProviderLabel,
+  onBeginZkLogin,
+  onClearZkLogin,
   labels,
 }: PublicIdentityCardProps) {
   const [walletRequested, setWalletRequested] = useState(walletRequired);
@@ -192,11 +212,62 @@ export function PublicIdentityCard({
         {!walletRequired ? (
           <div className="public-identity-note">
             <span className="public-identity-label">{labels.currentMode}</span>
-            <strong>{attachWallet && accountAddress ? labels.modeWallet : labels.modeAnonymous}</strong>
-            <p className="muted">{attachWallet && accountAddress ? labels.walletModeHelpNoSignature : labels.anonymousModeHelp}</p>
+            <strong>
+              {attachWallet && accountAddress
+                  ? labels.modeWallet
+                  : zkLoginConnected
+                    ? labels.modeZkLogin
+                  : labels.modeAnonymous}
+            </strong>
+            <p className="muted">
+              {attachWallet && accountAddress
+                  ? labels.walletModeHelpNoSignature
+                  : zkLoginConnected
+                    ? labels.zkLoginConnectedHelp
+                  : labels.anonymousModeHelp}
+            </p>
           </div>
         ) : null}
       </div>
+
+      {!walletRequired ? (
+        <div className="public-identity-grid">
+          <div className="public-identity-note">
+            <span className="public-identity-label">{labels.zkLoginTitle}</span>
+            <strong>{zkLoginProviderLabel ?? "Google zkLogin"}</strong>
+            <p className="muted">{labels.zkLoginBody}</p>
+          </div>
+          <div className="public-identity-mode">
+            <span className="public-identity-label">{labels.modeZkLogin}</span>
+            {zkLoginConnected ? (
+              <div className="public-identity-note">
+                <strong>{zkLoginAddress ?? labels.modeZkLogin}</strong>
+                <p className="muted">{labels.zkLoginConnectedHelp}</p>
+                <button type="button" className="ghost-button" onClick={onClearZkLogin} disabled={deadlinePassed}>
+                  {labels.zkLoginDisconnect}
+                </button>
+              </div>
+            ) : (
+              <div className="wallet-connect-shell wallet-connect-shell-compact">
+                <div className="wallet-connect-direct panel">
+                  <div className="wallet-connect-direct-copy">
+                    <strong>{labels.zkLoginConnect}</strong>
+                    <span>{zkLoginEnabled ? labels.zkLoginOptionalHelp : labels.zkLoginUnavailable}</span>
+                  </div>
+                  <button
+                    type="button"
+                    className="wallet-sync-button"
+                    onClick={onBeginZkLogin}
+                    disabled={!zkLoginEnabled || deadlinePassed}
+                  >
+                    {labels.zkLoginConnect}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }

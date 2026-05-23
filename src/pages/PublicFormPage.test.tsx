@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { RpcInfrastructureContext, type RpcInfrastructureContextValue } from "../rpcInfrastructure";
 import { PublicFormPage } from "./PublicFormPage";
 import type { FormSchema } from "../types";
+import type { ZkLoginSession } from "../lib/zkloginSession";
 
 const mockUseCurrentAccount = vi.fn();
 const mockReadManifestWithForm = vi.fn();
@@ -13,6 +14,10 @@ const mockGetForm = vi.fn();
 const mockSaveSubmission = vi.fn();
 const mockSaveForm = vi.fn();
 const mockUpsertFormBlobIndex = vi.fn();
+const mockIsZkLoginEnabled = vi.fn();
+const mockBeginGoogleZkLogin = vi.fn();
+const mockLoadZkLoginSession = vi.fn();
+const mockClearZkLoginSession = vi.fn();
 const mockRpcInfrastructure: RpcInfrastructureContextValue = {
   mode: "default",
   network: "mainnet",
@@ -54,6 +59,16 @@ vi.mock("../i18n", () => ({
 
 vi.mock("../components/WalletConnect", () => ({
   WalletConnect: () => <div>Wallet Connect</div>,
+}));
+
+vi.mock("../lib/zkloginOAuth", () => ({
+  isZkLoginEnabled: () => mockIsZkLoginEnabled(),
+  beginGoogleZkLogin: (...args: unknown[]) => mockBeginGoogleZkLogin(...args),
+}));
+
+vi.mock("../lib/zkloginSession", () => ({
+  loadZkLoginSession: () => mockLoadZkLoginSession(),
+  clearZkLoginSession: () => mockClearZkLoginSession(),
 }));
 
 vi.mock("../lib/walrus", () => ({
@@ -126,6 +141,12 @@ describe("PublicFormPage shared manifest restore", () => {
     mockGetForm.mockResolvedValue(null);
     mockSaveSubmission.mockResolvedValue({ id: "submission-123", blobId: "local-submission-123" });
     mockSaveForm.mockResolvedValue(undefined);
+    mockIsZkLoginEnabled.mockReset();
+    mockBeginGoogleZkLogin.mockReset();
+    mockLoadZkLoginSession.mockReset();
+    mockClearZkLoginSession.mockReset();
+    mockIsZkLoginEnabled.mockReturnValue(false);
+    mockLoadZkLoginSession.mockReturnValue(null);
   });
 
   it("renders a shared public form without a connected wallet", async () => {
@@ -253,7 +274,7 @@ describe("PublicFormPage shared manifest restore", () => {
     const answerInput = screen.getByRole("textbox");
     fireEvent.input(answerInput, { target: { value: "The shared responder path works." } });
     expect(answerInput).toHaveValue("The shared responder path works.");
-    fireEvent.click(screen.getByRole("button", { name: "publicSubmitAnonymously" }));
+    fireEvent.click(screen.getByRole("button", { name: "Submit Secure Report" }));
 
     await waitFor(() => expect(mockSaveSubmission).toHaveBeenCalledTimes(1));
     expect(screen.queryByText(/sending it requires/i)).not.toBeInTheDocument();
@@ -293,7 +314,7 @@ describe("PublicFormPage shared manifest restore", () => {
 
     await waitFor(() => expect(screen.getByRole("heading", { name: "Shared Feedback Form" })).toBeInTheDocument());
     fireEvent.input(screen.getByRole("textbox"), { target: { value: "Please keep this draft." } });
-    fireEvent.click(screen.getByRole("button", { name: "publicSubmitAnonymously" }));
+    fireEvent.click(screen.getByRole("button", { name: "Submit Secure Report" }));
 
     await waitFor(() => expect(screen.getAllByText("Walrus upload failed.").length).toBeGreaterThan(0));
     expect(window.localStorage.getItem("deepsignal:public-draft:form-123:blob-abc")).toContain("Please keep this draft.");
@@ -344,7 +365,7 @@ describe("PublicFormPage shared manifest restore", () => {
     fireEvent.input(screen.getByRole("textbox"), { target: { value: "Please keep this draft." } });
 
     for (let attempt = 0; attempt < 3; attempt += 1) {
-      fireEvent.click(screen.getByRole("button", { name: "publicSubmitAnonymously" }));
+      fireEvent.click(screen.getByRole("button", { name: "Submit Secure Report" }));
       await waitFor(() => expect(mockSaveSubmission).toHaveBeenCalledTimes(attempt + 1));
     }
 
@@ -357,5 +378,131 @@ describe("PublicFormPage shared manifest restore", () => {
     fireEvent.click(screen.getByRole("button", { name: /^(discard|discardRecovery)$/ }));
 
     expect(window.localStorage.getItem("deepsignal:public-draft:form-123:blob-abc")).toBeNull();
+  });
+
+  it("saves a zkLogin verified respondent identity on wallet-optional forms", async () => {
+    const form: FormSchema = {
+      id: "form-123",
+      title: "Shared Feedback Form",
+      description: "Restored from a Walrus manifest link.",
+      fields: [
+        {
+          id: "field-1",
+          type: "shortText",
+          label: "What happened?",
+          required: true,
+          sensitive: false,
+        },
+      ],
+      createdAt: "2026-05-14T00:00:00.000Z",
+      identityPolicy: "anonymous_allowed",
+    };
+    const zkLoginSession: ZkLoginSession = {
+      provider: "google",
+      iss: "https://accounts.google.com",
+      aud: "google-client-id",
+      address: "0xzklogin123",
+      subHash: "hashed-sub",
+      expiresAt: new Date(Date.now() + 60_000).toISOString(),
+    };
+
+    mockReadManifestWithForm.mockResolvedValue({
+      manifest: {
+        version: 1,
+        formId: "form-123",
+        createdAt: "2026-05-14T00:00:00.000Z",
+        updatedAt: "2026-05-14T00:00:00.000Z",
+        formBlobId: "__bundled_form__",
+        submissions: [],
+      },
+      form,
+    });
+    mockIsZkLoginEnabled.mockReturnValue(true);
+    mockLoadZkLoginSession.mockReturnValue(zkLoginSession);
+
+    renderPublicFormPage();
+
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Shared Feedback Form" })).toBeInTheDocument());
+    fireEvent.input(screen.getByRole("textbox"), { target: { value: "The zkLogin responder path works." } });
+    fireEvent.click(screen.getByRole("button", { name: "Submit Secure Report" }));
+
+    await waitFor(() => expect(mockSaveSubmission).toHaveBeenCalledTimes(1));
+    const [savedSubmission] = mockSaveSubmission.mock.calls[0] as [{
+      respondentMeta?: unknown;
+      metadata?: unknown;
+      contributorId?: unknown;
+    }];
+    expect(savedSubmission.respondentMeta).toMatchObject({
+      isAnonymous: false,
+      identityKind: "zklogin",
+      identityProvider: "google",
+      verifiedAddress: "0xzklogin123",
+      zkLogin: {
+        iss: "https://accounts.google.com",
+        aud: "google-client-id",
+        address: "0xzklogin123",
+        legacyAddress: false,
+        subHash: "hashed-sub",
+      },
+    });
+    expect(savedSubmission.metadata).toMatchObject({
+      respondentIdentity: {
+        mode: "zklogin",
+        provider: "google",
+        verifiedAddress: "0xzklogin123",
+        zkLoginIssuer: "https://accounts.google.com",
+      },
+    });
+    expect(savedSubmission.contributorId).toBe("0xzklogin123");
+  });
+
+  it("keeps wallet-required forms gated to Sui wallets even when a zkLogin session exists", async () => {
+    const form: FormSchema = {
+      id: "form-123",
+      title: "Secure Feedback Form",
+      description: "Wallet verification is required.",
+      fields: [
+        {
+          id: "field-1",
+          type: "shortText",
+          label: "What happened?",
+          required: true,
+          sensitive: false,
+        },
+      ],
+      createdAt: "2026-05-14T00:00:00.000Z",
+      identityPolicy: "wallet_required",
+    };
+    const zkLoginSession: ZkLoginSession = {
+      provider: "google",
+      iss: "https://accounts.google.com",
+      address: "0xzklogin123",
+      expiresAt: new Date(Date.now() + 60_000).toISOString(),
+    };
+
+    mockReadManifestWithForm.mockResolvedValue({
+      manifest: {
+        version: 1,
+        formId: "form-123",
+        createdAt: "2026-05-14T00:00:00.000Z",
+        updatedAt: "2026-05-14T00:00:00.000Z",
+        formBlobId: "__bundled_form__",
+        submissions: [],
+      },
+      form,
+    });
+    mockIsZkLoginEnabled.mockReturnValue(true);
+    mockLoadZkLoginSession.mockReturnValue(zkLoginSession);
+
+    renderPublicFormPage();
+
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Secure Feedback Form" })).toBeInTheDocument());
+    fireEvent.input(screen.getByRole("textbox"), { target: { value: "Wallet-required forms still reject zkLogin only." } });
+    fireEvent.click(screen.getByRole("button", { name: "Connect wallet to submit secure report" }));
+
+    await waitFor(() =>
+      expect(screen.getByText("This form requires a connected wallet before you can submit.")).toBeInTheDocument(),
+    );
+    expect(mockSaveSubmission).not.toHaveBeenCalled();
   });
 });

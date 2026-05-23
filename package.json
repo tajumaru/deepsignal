@@ -7,6 +7,7 @@
     "dev": "vite",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "test": "vitest run",
+    "test:zklogin": "vitest run src/lib/zkloginAddress.test.ts src/lib/zkloginOAuth.test.ts src/lib/zkloginSession.test.ts src/lib/respondentMeta.test.ts src/lib/exportResponses.test.ts src/pages/ZkLoginCallbackPage.test.tsx src/pages/PublicFormPage.test.tsx --exclude ci-run-verify/** --exclude .ci-run-verify/**",
     "typecheck": "tsc -b",
     "check": "npm run typecheck && npm run lint",
     "build": "npm run typecheck && vite build",

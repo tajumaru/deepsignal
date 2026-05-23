@@ -249,9 +249,10 @@
   }
 
   .landing-use-case-review-grid {
-    grid-template-columns: minmax(0, 1fr);
+    grid-template-columns: minmax(4.4rem, 4.9rem) minmax(0, 1fr);
     gap: 0.6rem;
     margin-top: 0.65rem;
+    align-items: center;
     align-content: start;
   }
 
@@ -260,29 +261,31 @@
   }
 
   .landing-use-case-review-radar {
-    min-height: 4.1rem;
+    width: 100%;
+    max-width: 4.9rem;
+    min-height: 0;
+    aspect-ratio: 1 / 1;
+    justify-self: start;
   }
 
   .landing-use-case-review-score {
-    order: -1;
     grid-template-columns: minmax(0, 1fr);
     gap: 0.4rem;
     width: 100%;
     max-width: none;
     min-width: 0;
-    padding: 0.75rem 0.8rem;
+    min-height: 4.9rem;
+    padding: 0.72rem 0.75rem;
   }
 
   .landing-use-case-review-score strong {
-    font-size: 1.5rem;
+    font-size: 1.38rem;
   }
 
   .landing-use-case-review-score-meta {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 0.55rem;
-    flex-wrap: wrap;
+    display: grid;
+    gap: 0.25rem;
+    justify-items: start;
   }
 
   .landing-use-case-review-score-meta small {
@@ -291,8 +294,8 @@
   }
 
   .landing-use-case-review-score span {
-    font-size: 0.78rem;
-    letter-spacing: 0.12em;
+    font-size: 0.72rem;
+    letter-spacing: 0.1em;
   }
 
   .landing-use-case-review-bot {

@@ -125,7 +125,24 @@ The Walrus manifest design is especially important. A manifest is a recovery map
 - Public form route at `/f/:formId`.
 - Wallet-optional response by default.
 - Optional respondent wallet context without wallet-gating the route.
+- Optional Google zkLogin respondent mode for wallet-optional forms.
+- Public zkLogin callback route at `/auth/zklogin/callback`.
 - Recoverable public draft behavior for interrupted responses.
+
+### Respondent Identity Modes
+
+DeepSignal currently supports three respondent identity modes on the public answer flow:
+
+- `anonymous`: the responder submits without a wallet or Google identity.
+- `sui_wallet`: the responder attaches a connected Sui wallet address.
+- `zklogin`: the responder signs in with Google and DeepSignal derives a zkLogin Sui address for metadata only.
+
+Current zkLogin behavior is intentionally lightweight:
+
+- DeepSignal stores the derived zkLogin address and minimal issuer metadata with the submission.
+- DeepSignal does not persist raw JWTs, OAuth access tokens, refresh tokens, ephemeral private keys, or zk proofs.
+- DeepSignal does not generate a zkLogin signature or execute an on-chain responder transaction in this phase.
+- `wallet_required` forms remain Sui Wallet-only in the current phase. zkLogin is available only on wallet-optional public responder routes.
 
 ### Review
 
@@ -326,6 +343,14 @@ Notes:
 - Set `VITE_RELEASE_STORAGE_RESET_TOKEN` to a new release identifier when the next deployed build should clear browser-local forms, submissions, drafts, Walrus blob indexes, and related form caches once per browser. Leave it blank for normal releases.
 - Vite client env vars in this repo now accept both `VITE_` and `NEXT_PUBLIC_` prefixes.
 - Tatum setup details and troubleshooting live in [`docs/tatum-rpc.md`](./docs/tatum-rpc.md).
+- `VITE_ZKLOGIN_ENABLE=true` turns on the Google zkLogin option in the public answer flow.
+- `VITE_ZKLOGIN_GOOGLE_CLIENT_ID` and `VITE_ZKLOGIN_REDIRECT_URI` must match the Google OAuth client configuration for the deployed public app origin.
+- `VITE_ZKLOGIN_REDIRECT_URI` should point at the SPA callback path, for example `https://your-app.example.com/auth/zklogin/callback`. DeepSignal rewrites that path into the HashRouter route automatically.
+- `VITE_ZKLOGIN_SALT_SERVICE_URL` should point to a stable salt service for production use. If it is omitted, DeepSignal falls back to a deterministic local salt strategy intended for development only.
+- `VITE_ZKLOGIN_MAX_EPOCH_OFFSET` controls how far ahead the temporary zkLogin session may be treated as valid in the lightweight respondent flow.
+- In the current lightweight zkLogin phase, DeepSignal derives and stores the address only. It does not produce a zk proof, a zkLogin signature, or a responder-side on-chain transaction.
+- If `VITE_WALRUS_STORAGE_MODE=uploadRelay`, responder-side writes still depend on a connected runtime wallet for Walrus mutation readiness. zkLogin respondents can still submit, but local fallback may be used more often unless you run a non-wallet-dependent write mode such as `publisher` or `tatum`.
+- A manual verification checklist for the lightweight zkLogin responder flow lives in [`docs/zklogin-respondent-qa.md`](./docs/zklogin-respondent-qa.md).
 
 ## Move Setup On Sui Mainnet
 
@@ -384,3 +409,5 @@ The MVP is intentionally narrow: collect private signals, store them on Walrus, 
 - Walrus delete is currently index cleanup only; uploaded blobs are not garbage-collected by this MVP.
 - Frontend wallet-gating is MVP protection and should continue evolving around the Move Project / Form / SignalReceipt registry model.
 - Real Seal decrypt requires wallet/session approval.
+- Public zkLogin is currently a metadata identity mode only. It does not yet satisfy `wallet_required` forms, produce responder-side zkLogin signatures, or execute on-chain responder transactions.
+- Production zkLogin deployments should provide a stable salt service. The built-in deterministic fallback exists to unblock local development, not to replace production identity infrastructure.

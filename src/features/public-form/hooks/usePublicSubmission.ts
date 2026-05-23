@@ -13,6 +13,7 @@ import { ensureRespondentSession } from "../../../lib/respondentSession";
 import { collectSignalContext, installSignalContextCapture } from "../../../lib/signalContext";
 import { ENCRYPTED_INLINE_ATTACHMENT_MAX_BYTES } from "../../../lib/attachmentLimits";
 import { makeId } from "../../../lib/utils";
+import type { ZkLoginSession } from "../../../lib/zkloginSession";
 import { useRpcInfrastructure } from "../../../rpcInfrastructure";
 import { isQuotaExceededError, isRateLimitError } from "../../../storage/walrusDiagnostics";
 import type { FormSchema, Submission, SubmissionAttachment, SubmissionLocation } from "../../../types";
@@ -316,6 +317,8 @@ interface UsePublicSubmissionArgs {
   walletProvider?: string | null;
   attachWallet: boolean;
   walletRequired: boolean;
+  identityMode: "anonymous" | "wallet" | "zklogin";
+  zkLoginSession?: ZkLoginSession | null;
   manifestBlobId: string;
   requiredFieldError: string;
   responseDeadlinePassedLabel: string;
@@ -328,6 +331,8 @@ interface UsePublicSubmissionArgs {
   locationDeniedLabel: string;
   locationUnavailableLabel: string;
   locationFailedLabel: string;
+  zkLoginSessionExpiredLabel: string;
+  zkLoginProviderLabel: string;
 }
 
 export function usePublicSubmission({
@@ -337,6 +342,8 @@ export function usePublicSubmission({
   walletProvider,
   attachWallet,
   walletRequired,
+  identityMode,
+  zkLoginSession,
   manifestBlobId,
   requiredFieldError,
   responseDeadlinePassedLabel,
@@ -349,6 +356,8 @@ export function usePublicSubmission({
   locationDeniedLabel,
   locationUnavailableLabel,
   locationFailedLabel,
+  zkLoginSessionExpiredLabel,
+  zkLoginProviderLabel,
 }: UsePublicSubmissionArgs) {
   const rpcInfrastructure = useRpcInfrastructure();
   const [answers, setAnswers] = useState<PublicAnswers>(initialAnswers);
@@ -376,7 +385,7 @@ export function usePublicSubmission({
   useEffect(() => installSignalContextCapture(), []);
 
   useEffect(() => {
-    if (!accountAddress || (!walletRequired && !attachWallet)) {
+    if (identityMode !== "wallet" || !accountAddress) {
       setWalrusRuntime(DEFAULT_WALRUS_RUNTIME_STATUS);
       return undefined;
     }
@@ -395,7 +404,7 @@ export function usePublicSubmission({
       cancelled = true;
       unsubscribe?.();
     };
-  }, [accountAddress, attachWallet, walletRequired]);
+  }, [accountAddress, identityMode]);
 
   useEffect(() => {
     setAnswers(initialAnswers);
@@ -611,7 +620,7 @@ export function usePublicSubmission({
         getStorageRuntimeStatus,
         storageAdapter,
       } = await import("../../../lib/storage");
-      if (accountAddress && (walletRequired || attachWallet)) {
+      if (identityMode === "wallet" && accountAddress) {
         const { waitForWalrusMutationRuntimeReady } = await import("../../../lib/walrus");
         await waitForWalrusMutationRuntimeReady({
           requireWallet: true,
@@ -946,6 +955,20 @@ export function usePublicSubmission({
       );
       return;
     }
+    if (identityMode === "zklogin" && !zkLoginSession) {
+      setSubmitError(zkLoginSessionExpiredLabel);
+      setSubmitNotice("");
+      setFailure(
+        createCriticalFailure({
+          error: new Error(zkLoginSessionExpiredLabel),
+          surface: "wallet",
+          step: "validation",
+          noDataSubmitted: true,
+          diagnostics: { formId: form.id, identityMode },
+        }),
+      );
+      return;
+    }
     if (form.locationRequirement === "required" && !location) {
       const attached = await requestLocation();
       if (!attached) {
@@ -964,7 +987,7 @@ export function usePublicSubmission({
     setDiagnosticsCopied(false);
     activatePipeline("preparing_signal", "Preparing secure upload...");
     try {
-      if (accountAddress && (walletRequired || attachWallet)) {
+      if (identityMode === "wallet" && accountAddress) {
         const { waitForWalrusMutationRuntimeReady } = await import("../../../lib/walrus");
         await waitForWalrusMutationRuntimeReady({
           requireWallet: true,
@@ -981,23 +1004,41 @@ export function usePublicSubmission({
       } = await import("../../../lib/storage");
       setStorageRuntime(getStorageRuntimeStatus());
       const signedAt = new Date().toISOString();
-      const isAnonymous = walletRequired ? false : !attachWallet || !accountAddress;
+      const isAnonymous = identityMode === "anonymous";
       const session = await ensureRespondentSession({
-        walletAddress: accountAddress,
+        walletAddress: identityMode === "wallet" ? accountAddress : zkLoginSession?.address,
         isAnonymous,
       });
-      const respondentMeta = {
-        walletAddress: isAnonymous ? undefined : accountAddress,
+      const respondentMeta: Submission["respondentMeta"] = {
+        walletAddress: identityMode === "wallet" && !isAnonymous ? accountAddress : undefined,
         chain: "sui" as const,
         sessionId: session.sessionId,
         submittedAt: signedAt,
         isAnonymous,
+        identityKind: isAnonymous ? "anonymous" : identityMode === "zklogin" ? "zklogin" : "sui_wallet",
+        identityProvider: identityMode === "zklogin" ? "google" : undefined,
+        verifiedAddress:
+          identityMode === "zklogin"
+            ? zkLoginSession?.address
+            : !isAnonymous
+              ? accountAddress
+              : undefined,
+        zkLogin:
+          identityMode === "zklogin" && zkLoginSession
+            ? {
+                iss: zkLoginSession.iss,
+                aud: zkLoginSession.aud,
+                address: zkLoginSession.address,
+                legacyAddress: false,
+                subHash: zkLoginSession.subHash,
+              }
+            : undefined,
       };
       const signalContext = collectSignalContext({
         form,
         manifestBlobId,
-        walletAddress: accountAddress,
-        walletProvider,
+        walletAddress: identityMode === "wallet" ? accountAddress : zkLoginSession?.address,
+        walletProvider: identityMode === "wallet" ? walletProvider : zkLoginSession ? zkLoginProviderLabel : undefined,
       });
       const attachments: SubmissionAttachment[] = [];
       const plainAnswers: PublicAnswers = {};
@@ -1176,6 +1217,12 @@ export function usePublicSubmission({
           rpcProvider: rpcInfrastructure.providerLabel,
           rpcUrl: rpcInfrastructure.displayRpcUrl,
           network: rpcInfrastructure.connectedNetworkLabel,
+          respondentIdentity: {
+            mode: respondentMeta.identityKind,
+            provider: respondentMeta.identityProvider,
+            verifiedAddress: respondentMeta.verifiedAddress,
+            zkLoginIssuer: respondentMeta.zkLogin?.iss,
+          },
         },
         category: getSubmissionCategoryFromPurpose(form.purpose),
         status: "unread",
@@ -1183,7 +1230,7 @@ export function usePublicSubmission({
         triageStatus: "new",
         tags: [],
         notes: "",
-        contributorId: respondentMeta.walletAddress ?? respondentMeta.sessionId,
+        contributorId: respondentMeta.verifiedAddress ?? respondentMeta.walletAddress ?? respondentMeta.sessionId,
         isEncrypted: Boolean(form.encryptSubmissions),
         pendingOnchainRegistration: Boolean(form.projectId),
         createdAt: signedAt,
@@ -1251,6 +1298,7 @@ export function usePublicSubmission({
           walletRequired,
           attachWallet,
           accountAddress,
+          identityMode,
         });
       }
       const message = getUserFacingSubmissionError(error, submitFailedLabel);
@@ -1280,6 +1328,7 @@ export function usePublicSubmission({
             walletRequired,
             attachWallet,
             walrusRuntime: latestWalrusRuntime,
+            identityMode,
             rawError: getDiagnosticErrorMessage(error),
             ...buildRecoveryDiagnostics({
               formId: form.id,
@@ -1318,7 +1367,7 @@ export function usePublicSubmission({
     locationState,
     locationMessage,
     storageConnectionPreparing:
-      Boolean(accountAddress && (walletRequired || attachWallet)) &&
+      Boolean(identityMode === "wallet" && accountAddress) &&
       walrusRuntime.storageMode === "uploadRelay" &&
       walrusRuntime.writeConfigured &&
       (!walrusRuntime.hasClient || !walrusRuntime.hasWallet),

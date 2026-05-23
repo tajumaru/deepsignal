@@ -8,6 +8,7 @@ import { retryLazyImport } from "./lib/lazyRetry";
 import { REQUIRE_GLOBAL_WALRUS_RUNTIME } from "./lib/runtimeFlags";
 import { LandingPage } from "./pages/LandingPage";
 import { PublicFormPage } from "./pages/PublicFormPage";
+import { ZkLoginCallbackPage } from "./pages/ZkLoginCallbackPage";
 
 const AccessManagementPage = lazy(() =>
   retryLazyImport(() => import("./pages/AccessManagementPage")).then((module) => ({
@@ -153,7 +154,8 @@ export default function App() {
   const routeUsesPublicChrome =
     location.pathname.startsWith("/f/") ||
     location.pathname.startsWith("/roadmap/") ||
-    location.pathname.startsWith("/m/");
+    location.pathname.startsWith("/m/") ||
+    location.pathname.startsWith("/auth/zklogin/");
   const [initialRouteReady, setInitialRouteReady] = useState(false);
   const [bootDismissed, setBootDismissed] = useState(false);
 
@@ -283,6 +285,7 @@ export default function App() {
               <Route path="/f/:formId" element={<PublicFormPage />} />
               <Route path="/roadmap/:formId" element={<PublicRoadmapPage />} />
               <Route path="/m/:manifestBlobId" element={<ManifestRestorePage />} />
+              <Route path="/auth/zklogin/callback" element={<ZkLoginCallbackPage />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </InitialBootReady>

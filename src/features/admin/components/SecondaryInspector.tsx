@@ -7,7 +7,7 @@ import { StorageProof } from "../../../components/StorageProof";
 import { useI18n } from "../../../i18n";
 import { getEncryptedPayloadAvailabilityLabel, hasDedicatedEncryptedPayloadBlob } from "../../../lib/encryptionDisplay";
 import type { RelatedSignalResult } from "../../../lib/relatedSignals";
-import { getSubmissionRespondentMeta } from "../../../lib/respondentMeta";
+import { getRespondentIdentityLabel, getSubmissionRespondentMeta } from "../../../lib/respondentMeta";
 import { getSignalSyncSummary, isLocalFallbackBlob } from "../../../lib/signalInbox";
 import { formatDate } from "../../../lib/utils";
 import type { SignalRecord } from "../hooks/useSignalInboxData";
@@ -87,6 +87,8 @@ export function SecondaryInspector({
   onSelectRelatedRecord,
 }: SecondaryInspectorProps) {
   const respondentMeta = getSubmissionRespondentMeta(selectedRecord.submission);
+  const respondentIdentityLabel = getRespondentIdentityLabel(selectedRecord.submission);
+  const respondentDisplayAddress = respondentMeta.verifiedAddress ?? respondentMeta.walletAddress;
 
   return (
     <section className="secondary-inspector">
@@ -323,17 +325,21 @@ export function SecondaryInspector({
                     </div>
                   </div>
                   <div className="metadata-row">
-                    <span>{t("walletLabel")}</span>
+                    <span>Respondent identity</span>
                     {respondentMeta.isAnonymous ? (
                       <strong>{t("anonymousRespondent")}</strong>
-                    ) : respondentMeta.walletAddress ? (
+                    ) : respondentDisplayAddress ? (
                       <SignalMetaChip
                         type="contributor"
-                        value={respondentMeta.walletAddress ?? ""}
+                        value={respondentDisplayAddress}
                       />
                     ) : (
                       <strong>{t("notAvailable")}</strong>
                     )}
+                  </div>
+                  <div className="metadata-row">
+                    <span>Identity type</span>
+                    <strong>{respondentIdentityLabel}</strong>
                   </div>
                   <div className="metadata-row">
                     <span>{t("anonymousLabel")}</span>

@@ -23,6 +23,8 @@ import { DEFAULT_ATTACHMENT_MAX_BYTES, ENCRYPTED_INLINE_ATTACHMENT_MAX_BYTES } f
 import { getOrderedFields, getVisibleFieldIds, isFieldRequired } from "../utils/formLogic";
 import { isAttachmentFieldType, isConfirmationCheckboxField } from "../lib/fieldTypes";
 import { collectSignalContext, type AttachedSignalContext } from "../lib/signalContext";
+import { beginGoogleZkLogin, isZkLoginEnabled } from "../lib/zkloginOAuth";
+import { clearZkLoginSession, loadZkLoginSession, type ZkLoginSession } from "../lib/zkloginSession";
 import type { FieldType } from "../types";
 
 function hasPublicAnswerValue(field: { type: string; rows?: string[] }, value: unknown) {
@@ -68,6 +70,9 @@ export function PublicFormPage() {
   const [walletProvider, setWalletProvider] = useState<string | undefined>();
   const [attachWallet, setAttachWallet] = useState(false);
   const [attachWalletTouched, setAttachWalletTouched] = useState(false);
+  const [zkLoginSession, setZkLoginSession] = useState<ZkLoginSession | null>(() =>
+    typeof window === "undefined" ? null : loadZkLoginSession(),
+  );
   const [submissionOverlayDismissed, setSubmissionOverlayDismissed] = useState(false);
   const manifestBlobId = searchParams.get("manifest") ?? "";
   const { form, initialAnswers, loading, loadError, loadErrorDetail } = usePublicFormLoader({
@@ -76,6 +81,9 @@ export function PublicFormPage() {
     missingFormMessage: t("publicFormMissingBody"),
   });
   const walletRequired = form?.identityPolicy === "wallet_required";
+  const zkLoginEnabled = isZkLoginEnabled();
+  const zkLoginConnected = Boolean(zkLoginSession);
+  const usingZkLogin = !walletRequired && zkLoginConnected && (!attachWallet || !walletAccountAddress);
   const {
     answers,
     errors,
@@ -109,6 +117,8 @@ export function PublicFormPage() {
     walletProvider,
     attachWallet,
     walletRequired,
+    zkLoginSession,
+    identityMode: walletRequired || (attachWallet && walletAccountAddress) ? "wallet" : usingZkLogin ? "zklogin" : "anonymous",
     manifestBlobId,
     requiredFieldError: t("requiredFieldError"),
     responseDeadlinePassedLabel: t("formResponseClosed"),
@@ -125,6 +135,8 @@ export function PublicFormPage() {
     locationDeniedLabel: t("locationDeniedLabel"),
     locationUnavailableLabel: t("locationUnavailableLabel"),
     locationFailedLabel: t("locationFailedLabel"),
+    zkLoginSessionExpiredLabel: t("publicZkLoginSessionExpired"),
+    zkLoginProviderLabel: t("publicZkLoginProvider"),
   });
 
   useEffect(() => {
@@ -137,6 +149,13 @@ export function PublicFormPage() {
       }
     }
   }, [walletAccountAddress, attachWallet, attachWalletTouched]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    setZkLoginSession(loadZkLoginSession());
+  }, []);
 
   useEffect(() => {
     if (submitting || submitPipeline.status !== "failed") {
@@ -175,8 +194,10 @@ export function PublicFormPage() {
   }, [form?.responseDeadline, t]);
   const submitModeLabel =
     walletRequired || (attachWallet && walletAccountAddress)
-      ? "Verified submission"
-      : "Anonymous submission";
+      ? t("publicSubmitModeWallet")
+      : usingZkLogin
+        ? t("publicSubmitModeZkLogin")
+      : t("publicSubmitModeAnonymous");
   const locationStatusLabel =
     locationState === "success"
       ? t("locationAttached")
@@ -294,17 +315,29 @@ export function PublicFormPage() {
       maxSize: `${Math.round(maxSizeBytes / (1024 * 1024))}MB`,
     });
   const [attachedContext, setAttachedContext] = useState<AttachedSignalContext>(() =>
-    collectSignalContext({ form: null, manifestBlobId, walletAddress: walletAccountAddress, walletProvider }),
+    collectSignalContext({
+      form: null,
+      manifestBlobId,
+      walletAddress: walletAccountAddress ?? zkLoginSession?.address,
+      walletProvider: walletProvider ?? (zkLoginConnected ? t("publicZkLoginProvider") : undefined),
+    }),
   );
 
   useEffect(() => {
     function updateAttachedContext() {
-      setAttachedContext(collectSignalContext({ form, manifestBlobId, walletAddress: walletAccountAddress, walletProvider }));
+      setAttachedContext(
+        collectSignalContext({
+          form,
+          manifestBlobId,
+          walletAddress: walletAccountAddress ?? zkLoginSession?.address,
+          walletProvider: walletProvider ?? (zkLoginConnected ? t("publicZkLoginProvider") : undefined),
+        }),
+      );
     }
     updateAttachedContext();
     window.addEventListener("resize", updateAttachedContext);
     return () => window.removeEventListener("resize", updateAttachedContext);
-  }, [form, manifestBlobId, walletAccountAddress, walletProvider]);
+  }, [form, manifestBlobId, walletAccountAddress, walletProvider, zkLoginConnected, zkLoginSession?.address, t]);
 
   function getAttachmentHint(fieldType: "screenshot" | "video") {
     const baseHint = fieldType === "screenshot" ? t("screenshotHint") : t("videoHint");
@@ -324,6 +357,17 @@ export function PublicFormPage() {
       setAttachWalletTouched(Boolean(walletAccountAddress));
     }
   }, [walletAccountAddress, walletRequired]);
+
+  async function handleBeginZkLogin() {
+    const fallbackReturnTo = `/f/${formId}${window.location.search || ""}`;
+    const returnTo = window.location.hash.replace(/^#/, "") || fallbackReturnTo;
+    await beginGoogleZkLogin(returnTo);
+  }
+
+  function handleClearZkLogin() {
+    clearZkLoginSession();
+    setZkLoginSession(null);
+  }
 
   if (loading) {
     return <div className="panel">{t("loadingPublicForm")}</div>;
@@ -462,7 +506,7 @@ export function PublicFormPage() {
       <div className="public-form-status-strip">
         <PublicSubmitReadiness
           className="public-submit-readiness-inline"
-          identityMode={walletRequired || (attachWallet && walletAccountAddress) ? "wallet" : "anonymous"}
+          identityMode={walletRequired || (attachWallet && walletAccountAddress) ? "wallet" : usingZkLogin ? "zklogin" : "anonymous"}
           sealEnabled={Boolean(form.encryptSubmissions)}
           submitModeLabel={submitModeLabel}
           storageModeLabel={storageModeLabel}
@@ -471,6 +515,7 @@ export function PublicFormPage() {
             deliveryMode: t("publicReadinessDeliveryMode"),
             anonymous: t("publicReadinessAnonymous"),
             suiWallet: t("publicReadinessSuiWallet"),
+            zkLogin: t("publicZkLoginProvider"),
             storageTarget: t("publicReadinessStorageTarget"),
             walrus: t("publicReadinessWalrus"),
             walrusIcon: t("publicReadinessWalrusIcon"),
@@ -498,6 +543,12 @@ export function PublicFormPage() {
         onAttachWalletTouched={() => setAttachWalletTouched(true)}
         onAccountAddressChange={setWalletAccountAddress}
         onWalletProviderChange={setWalletProvider}
+        zkLoginEnabled={zkLoginEnabled}
+        zkLoginConnected={zkLoginConnected}
+        zkLoginAddress={zkLoginSession?.address}
+        zkLoginProviderLabel={zkLoginSession ? t("publicZkLoginProvider") : undefined}
+        onBeginZkLogin={() => void handleBeginZkLogin()}
+        onClearZkLogin={handleClearZkLogin}
         labels={{
           eyebrow: t("publicIdentityEyebrow"),
           title: t("publicIdentityTitle"),
@@ -517,6 +568,14 @@ export function PublicFormPage() {
           walletUnavailable: t("publicWalletUnavailable"),
           walletUnavailableRequired: t("publicWalletUnavailableRequired"),
           walletRetry: t("publicWalletRetry"),
+          modeZkLogin: t("publicModeZkLogin"),
+          zkLoginTitle: t("publicZkLoginTitle"),
+          zkLoginBody: t("publicZkLoginBody"),
+          zkLoginConnect: t("publicZkLoginConnect"),
+          zkLoginDisconnect: t("publicZkLoginDisconnect"),
+          zkLoginConnectedHelp: t("publicZkLoginConnectedHelp"),
+          zkLoginOptionalHelp: t("publicZkLoginOptionalHelp"),
+          zkLoginUnavailable: t("publicZkLoginUnavailable"),
         }}
       />
 

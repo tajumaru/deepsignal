@@ -1,5 +1,5 @@
 interface PublicSubmitReadinessProps {
-  identityMode: "anonymous" | "wallet";
+  identityMode: "anonymous" | "wallet" | "zklogin";
   sealEnabled: boolean;
   submitModeLabel: string;
   storageModeLabel: string;
@@ -9,6 +9,7 @@ interface PublicSubmitReadinessProps {
     deliveryMode: string;
     anonymous: string;
     suiWallet: string;
+    zkLogin: string;
     storageTarget: string;
     walrus: string;
     walrusIcon: string;
@@ -37,11 +38,17 @@ export function PublicSubmitReadiness({
       <div className="public-submit-badge-grid">
         <span className={`public-submit-badge is-${identityMode}`}>
           <span className="public-submit-badge-icon" aria-hidden="true">
-            {identityMode === "wallet" ? "Sui" : "Anon"}
+            {identityMode === "wallet" ? "Sui" : identityMode === "zklogin" ? "ZK" : "Anon"}
           </span>
           <span>
             <small>{labels.deliveryMode}</small>
-            <strong>{identityMode === "wallet" ? labels.suiWallet : labels.anonymous}</strong>
+            <strong>
+              {identityMode === "wallet"
+                ? labels.suiWallet
+                : identityMode === "zklogin"
+                  ? labels.zkLogin
+                  : labels.anonymous}
+            </strong>
           </span>
         </span>
         <span className="public-submit-badge is-walrus">

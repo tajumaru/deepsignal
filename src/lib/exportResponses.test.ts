@@ -62,10 +62,10 @@ describe("responses CSV export", () => {
 
     const [header, row] = csv.split("\r\n");
     expect(header).toBe(
-      '"formTitle","exportedAt","responseCount","responseId","submittedAt","createdAt","respondentAddress","isAnonymous","walrusBlobId","storageBlobId","attachments","tags","priority","triageStatus","status","notes","Comment","Score","Comment (2)"',
+      '"formTitle","exportedAt","responseCount","responseId","submittedAt","createdAt","respondentAddress","respondentIdentity","identityProvider","isAnonymous","walrusBlobId","storageBlobId","attachments","tags","priority","triageStatus","status","notes","Comment","Score","Comment (2)"',
     );
     expect(row).toContain(
-      '"Feedback","2026-05-16T12:00:00.000Z","1","response-1","2026-05-16T01:02:03.000Z","2026-05-16T01:02:03.000Z","0xabc","false","walrus-blob-1","walrus-blob-1"',
+      '"Feedback","2026-05-16T12:00:00.000Z","1","response-1","2026-05-16T01:02:03.000Z","2026-05-16T01:02:03.000Z","0xabc","sui_wallet","","false","walrus-blob-1","walrus-blob-1"',
     );
     expect(row).toContain('"日本語, comma, and ""quotes""\nsecond line"');
     expect(row.endsWith(',"5",""')).toBe(true);
@@ -87,9 +87,34 @@ describe("responses CSV export", () => {
     ]);
 
     expect(csv).toContain(
-      '"response-locked","2026-05-16T02:00:00.000Z","2026-05-16T01:02:03.000Z","","true","encrypted-blob-1","encrypted-blob-1"',
+      '"response-locked","2026-05-16T02:00:00.000Z","2026-05-16T01:02:03.000Z","","anonymous","","true","encrypted-blob-1","encrypted-blob-1"',
     );
     expect(csv).toContain('"[encrypted]","[encrypted]","[encrypted]"');
+  });
+
+  it("distinguishes zkLogin respondents from Sui wallet respondents in CSV metadata", () => {
+    const csv = buildResponsesCsv(form, [
+      makeSubmission({
+        id: "response-zklogin",
+        respondentMeta: {
+          chain: "sui",
+          isAnonymous: false,
+          submittedAt: "2026-05-16T02:30:00.000Z",
+          identityKind: "zklogin",
+          identityProvider: "google",
+          verifiedAddress: "0xzklogin123",
+          zkLogin: {
+            iss: "https://accounts.google.com",
+            address: "0xzklogin123",
+            legacyAddress: false,
+          },
+        },
+      }),
+    ]);
+
+    expect(csv).toContain(
+      '"response-zklogin","2026-05-16T02:30:00.000Z","2026-05-16T01:02:03.000Z","0xzklogin123","zklogin","google","false"',
+    );
   });
 
   it("includes readable attachment summaries and triage metadata", () => {
@@ -198,7 +223,10 @@ describe("responses CSV export", () => {
     expect(header).not.toContain("respondentAddress");
     expect(header).not.toContain("notes");
     expect(header).not.toContain("attachments");
+    expect(header).toContain("respondentIdentity");
+    expect(header).toContain("identityProvider");
     expect(row).not.toContain("0xabc");
+    expect(row).toContain('"sui_wallet","","false"');
     expect(row).not.toContain("private operator note");
     expect(row).not.toContain("contract.pdf");
   });

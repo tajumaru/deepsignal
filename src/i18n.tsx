@@ -781,12 +781,28 @@ const messages = {
     publicCurrentMode: "Selected mode",
     publicModeAnonymous: "Anonymous signal",
     publicModeWallet: "Verified signal",
+    publicModeZkLogin: "zkLogin verified",
     publicAnonymousModeHelp: "You can submit immediately without any wallet signature.",
     publicWalletUnavailable:
       "Wallet connect is temporarily unavailable. You can still continue without a wallet or refresh to retry.",
     publicWalletUnavailableRequired:
       "Wallet connect is temporarily unavailable. Refresh and retry wallet mode to submit this form.",
     publicWalletRetry: "Retry wallet",
+    publicZkLoginProvider: "Google zkLogin",
+    publicZkLoginTitle: "Google zkLogin",
+    publicZkLoginBody:
+      "Use Google sign-in to attach a derived zkLogin address without running an on-chain transaction.",
+    publicZkLoginConnect: "Continue with Google",
+    publicZkLoginDisconnect: "Clear Google session",
+    publicZkLoginConnectedHelp:
+      "This response will include a verified zkLogin-derived address. No on-chain signature is executed in this mode.",
+    publicZkLoginOptionalHelp:
+      "Attach a Google-based zkLogin identity while keeping the public flow wallet-optional.",
+    publicZkLoginUnavailable: "Google zkLogin is not configured for this environment.",
+    publicSubmitModeWallet: "Verified submission",
+    publicSubmitModeAnonymous: "Anonymous submission",
+    publicSubmitModeZkLogin: "zkLogin verified submission",
+    publicZkLoginSessionExpired: "The Google zkLogin session expired. Sign in again before submitting.",
     publicConnectWalletToSubmit: "Verify identity to send",
     publicSubmitWithRequiredWallet: "Send Secure Signal",
     publicSubmitWithWallet: "Send Secure Signal",
@@ -799,7 +815,6 @@ const messages = {
       `${params?.completed ?? 0} of ${params?.total ?? 0} completed`,
     publicSubmitBarErrors: (params) => `${params?.count ?? 0} field needs attention`,
     publicSubmitModeWalletAttached: "Verified signal, no extra personal-message signature",
-    publicSubmitModeAnonymous: "Anonymous signal",
     publicSubmissionOverlayEyebrow: "Secure delivery",
     publicSubmissionOverlayTitle: "Securing your signal",
     publicSubmissionOverlayIntro:
@@ -818,6 +833,15 @@ const messages = {
     publicSubmissionStageConfirming: "Verifying secure storage...",
     publicSubmissionStageManifest: "Preparing recovery path...",
     publicSubmissionStageSecured: "Signal secured",
+    zkLoginCallbackEyebrow: "Public identity",
+    zkLoginCallbackFinalizing: "Finalizing Google zkLogin...",
+    zkLoginCallbackExchanging: "Exchanging Google authorization...",
+    zkLoginCallbackDeriving: "Deriving zkLogin address...",
+    zkLoginCallbackFailed: "Google zkLogin could not be completed.",
+    zkLoginCallbackVerifyingBody:
+      "DeepSignal is verifying your Google session and restoring the public form.",
+    zkLoginCallbackMissingCode: "Google zkLogin callback was missing the authorization code.",
+    zkLoginCallbackFailedGeneric: "zkLogin sign-in failed.",
     publicStorageModeEncrypted: "Encrypted before upload",
     publicStorageModePlain: "Protected signal storage",
     publicReadinessSummary: "Submit readiness badges",
@@ -3137,6 +3161,7 @@ const messages = {
     publicCurrentMode: "\u9078\u629e\u4e2d\u306e\u30e2\u30fc\u30c9",
     publicModeAnonymous: "\u533f\u540d\u9001\u4fe1",
     publicModeWallet: "\u30a6\u30a9\u30ec\u30c3\u30c8\u9023\u643a\u3067\u9001\u4fe1",
+    publicModeZkLogin: "zkLogin \u78ba\u8a8d\u6e08\u307f",
     publicAnonymousModeHelp:
       "\u30a6\u30a9\u30ec\u30c3\u30c8\u7f72\u540d\u306a\u3057\u3067\u3059\u3050\u306b\u9001\u4fe1\u3067\u304d\u307e\u3059\u3002",
     publicWalletUnavailable:
@@ -3144,6 +3169,21 @@ const messages = {
     publicWalletUnavailableRequired:
       "\u30a6\u30a9\u30ec\u30c3\u30c8\u63a5\u7d9a\u304c\u4e00\u6642\u7684\u306b\u4f7f\u3048\u307e\u305b\u3093\u3002\u3053\u306e\u30d5\u30a9\u30fc\u30e0\u306f\u9001\u4fe1\u306b\u30a6\u30a9\u30ec\u30c3\u30c8\u304c\u5fc5\u8981\u306a\u305f\u3081\u3001\u30ea\u30ed\u30fc\u30c9\u3057\u3066\u30a6\u30a9\u30ec\u30c3\u30c8\u63a5\u7d9a\u3092\u3084\u308a\u76f4\u3057\u3066\u304f\u3060\u3055\u3044\u3002",
     publicWalletRetry: "\u30a6\u30a9\u30ec\u30c3\u30c8\u3092\u518d\u8a66\u884c",
+    publicZkLoginProvider: "Google zkLogin",
+    publicZkLoginTitle: "Google zkLogin",
+    publicZkLoginBody:
+      "Google \u30b5\u30a4\u30f3\u30a4\u30f3\u3067 derived zkLogin address \u3092\u4ed8\u3051\u3066\u9001\u4fe1\u3067\u304d\u307e\u3059\u3002\u3053\u306e\u6bb5\u968e\u3067\u306f on-chain transaction \u306f\u5b9f\u884c\u3057\u307e\u305b\u3093\u3002",
+    publicZkLoginConnect: "Google \u3067\u7d9a\u3051\u308b",
+    publicZkLoginDisconnect: "Google session \u3092\u89e3\u9664",
+    publicZkLoginConnectedHelp:
+      "\u3053\u306e\u56de\u7b54\u306b\u306f zkLogin \u7531\u6765\u306e verified address \u304c\u542b\u307e\u308c\u307e\u3059\u3002\u3053\u306e\u30e2\u30fc\u30c9\u3067 on-chain \u7f72\u540d\u306f\u5b9f\u884c\u3057\u307e\u305b\u3093\u3002",
+    publicZkLoginOptionalHelp:
+      "\u516c\u958b\u56de\u7b54\u30d5\u30ed\u30fc\u3092 wallet-\u4efb\u610f\u306e\u307e\u307e\u4fdd\u3061\u306a\u304c\u3089\u3001Google \u7531\u6765\u306e zkLogin \u8eab\u5143\u3092\u4ed8\u3051\u3066\u9001\u4fe1\u3067\u304d\u307e\u3059\u3002",
+    publicZkLoginUnavailable: "\u3053\u306e\u74b0\u5883\u3067\u306f Google zkLogin \u304c\u8a2d\u5b9a\u3055\u308c\u3066\u3044\u307e\u305b\u3093\u3002",
+    publicSubmitModeWallet: "\u8a8d\u8a3c\u6e08\u307f\u9001\u4fe1",
+    publicSubmitModeAnonymous: "\u533f\u540d\u9001\u4fe1",
+    publicSubmitModeZkLogin: "zkLogin \u78ba\u8a8d\u6e08\u307f\u9001\u4fe1",
+    publicZkLoginSessionExpired: "Google zkLogin session \u306e\u6709\u52b9\u671f\u9650\u304c\u5207\u308c\u307e\u3057\u305f\u3002\u9001\u4fe1\u524d\u306b\u3082\u3046\u4e00\u5ea6\u30b5\u30a4\u30f3\u30a4\u30f3\u3057\u3066\u304f\u3060\u3055\u3044\u3002",
     publicConnectWalletToSubmit: "Verify identity \u3057\u3066\u9001\u4fe1",
     publicSubmitWithRequiredWallet: "Send Secure Signal",
     publicSubmitWithWallet: "Send Secure Signal",
@@ -3156,7 +3196,6 @@ const messages = {
       `${params?.completed ?? 0} of ${params?.total ?? 0} completed`,
     publicSubmitBarErrors: (params) => `${params?.count ?? 0} \u9805\u76ee\u306e\u78ba\u8a8d\u304c\u5fc5\u8981\u3067\u3059`,
     publicSubmitModeWalletAttached: "\u30a6\u30a9\u30ec\u30c3\u30c8\u4ed8\u304d\u3001personal message \u7f72\u540d\u306a\u3057",
-    publicSubmitModeAnonymous: "\u533f\u540d signal",
     publicSubmissionOverlayEyebrow: "\u5b89\u5168\u306a\u9001\u4fe1",
     publicSubmissionOverlayTitle: "Signal \u3092\u4fdd\u8b77\u3057\u3066\u3044\u307e\u3059",
     publicSubmissionOverlayIntro:
@@ -3175,6 +3214,15 @@ const messages = {
     publicSubmissionStageConfirming: "Verifying secure storage...",
     publicSubmissionStageManifest: "Preparing recovery path...",
     publicSubmissionStageSecured: "Signal secured",
+    zkLoginCallbackEyebrow: "\u516c\u958b\u8eab\u5143",
+    zkLoginCallbackFinalizing: "Google zkLogin \u3092\u78ba\u5b9a\u4e2d...",
+    zkLoginCallbackExchanging: "Google \u8a8d\u53ef\u3092\u4ea4\u63db\u4e2d...",
+    zkLoginCallbackDeriving: "zkLogin address \u3092\u751f\u6210\u4e2d...",
+    zkLoginCallbackFailed: "Google zkLogin \u3092\u5b8c\u4e86\u3067\u304d\u307e\u305b\u3093\u3067\u3057\u305f\u3002",
+    zkLoginCallbackVerifyingBody:
+      "DeepSignal \u304c Google session \u3092\u691c\u8a3c\u3057\u3001\u516c\u958b\u30d5\u30a9\u30fc\u30e0\u306b\u623b\u3057\u3066\u3044\u307e\u3059\u3002",
+    zkLoginCallbackMissingCode: "Google zkLogin callback \u306b authorization code \u304c\u3042\u308a\u307e\u305b\u3093\u3002",
+    zkLoginCallbackFailedGeneric: "zkLogin \u30b5\u30a4\u30f3\u30a4\u30f3\u306b\u5931\u6557\u3057\u307e\u3057\u305f\u3002",
     publicStorageModeEncrypted: "\u30a2\u30c3\u30d7\u30ed\u30fc\u30c9\u524d\u306b\u6697\u53f7\u5316",
     publicStorageModePlain: "\u4fdd\u8b77\u3055\u308c\u305f signal \u4fdd\u5b58",
     publicReadinessSummary: "\u9001\u4fe1\u6e96\u5099\u30d0\u30c3\u30b8",
