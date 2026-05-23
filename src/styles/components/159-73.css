@@ -1,0 +1,17 @@
+.thread-preview {
+  color: #d1eaf6;
+  margin-bottom: 0;
+}
+
+.unread-dot {
+  width: 0.7rem;
+  height: 0.7rem;
+  border-radius: var(--radius-pill);
+  background: #67e8f9;
+  box-shadow: 0 0 14px rgba(103, 232, 249, 0.8);
+}
+
+.detail-shell {
+  grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.8fr);
+  align-items: start;
+}

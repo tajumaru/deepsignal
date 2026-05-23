@@ -1,0 +1,15 @@
+.contest-builder-quickstart {
+  margin-bottom: 1rem;
+}
+
+.contest-builder-quickstart-plain {
+  display: grid;
+  gap: 0.75rem;
+  padding: 0 0 0.25rem;
+  background: transparent;
+  border: 0;
+}
+
+.contest-builder-quickstart-plain p {
+  margin-bottom: 0;
+}

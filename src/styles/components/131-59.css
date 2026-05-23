@@ -1,0 +1,24 @@
+.export-confirmation-modal h3,
+.export-confirmation-modal .eyebrow,
+.export-confirmation-modal .muted {
+  margin-bottom: 0;
+}
+
+.export-confirmation-modal .metadata-list {
+  gap: 0.55rem;
+}
+
+.export-confirmation-modal .metadata-row {
+  display: grid;
+  grid-template-columns: minmax(9rem, 0.9fr) minmax(0, 1.4fr);
+  gap: 0.75rem;
+  align-items: center;
+  padding: 0.65rem 0.75rem;
+  border-radius: var(--radius-md);
+}
+
+.export-confirmation-modal .metadata-row strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  text-align: right;
+}

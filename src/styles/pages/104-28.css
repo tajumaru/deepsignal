@@ -1,0 +1,7 @@
+.stream-list,
+.form-stream-list,
+.signal-list,
+.signal-detail-sections {
+  display: grid;
+  gap: 0.75rem;
+}

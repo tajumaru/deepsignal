@@ -1,0 +1,305 @@
+.inbox-layout {
+  display: grid;
+  grid-template-columns: minmax(300px, 0.8fr) minmax(0, 1.4fr);
+  gap: 1rem;
+  align-items: start;
+}
+
+.inbox-shell-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  background:
+    radial-gradient(circle at top right, rgba(103, 232, 249, 0.16), transparent 30%),
+    linear-gradient(180deg, rgba(4, 18, 31, 0.95), rgba(3, 13, 24, 0.95));
+}
+
+.inbox-header-actions {
+  display: grid;
+  justify-items: end;
+  gap: 0.75rem;
+  min-width: 220px;
+}
+
+.inbox-status-chip,
+.wallet-status-card {
+  padding: 0.9rem 1rem;
+  border-radius: var(--radius-lg);
+  background: rgba(6, 26, 42, 0.72);
+  border: 1px solid rgba(116, 226, 255, 0.18);
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.workspace-hero {
+  display: grid;
+  gap: 0.75rem;
+  padding: 1rem 1rem 1rem;
+  background:
+    radial-gradient(circle at top right, rgba(103, 232, 249, 0.16), transparent 28%),
+    linear-gradient(180deg, rgba(4, 18, 31, 0.95), rgba(3, 13, 24, 0.97));
+}
+
+.workspace-hero.workspace-hero-compact {
+  gap: 0.5rem;
+  padding: 0.75rem 0.9rem;
+  background:
+    radial-gradient(circle at top right, rgba(103, 232, 249, 0.1), transparent 24%),
+    linear-gradient(180deg, rgba(4, 18, 31, 0.88), rgba(3, 13, 24, 0.9));
+}
+
+.workspace-hero-main,
+.workspace-hero-controls,
+.workspace-primary-action,
+.workspace-primary-actions {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.workspace-hero-main,
+.workspace-primary-action {
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.workspace-hero-copy {
+  display: grid;
+  gap: 0.55rem;
+  max-width: 44rem;
+}
+
+.workspace-hero-compact .workspace-hero-copy {
+  gap: 0.35rem;
+  max-width: 56rem;
+}
+
+.workspace-hero-compact .workspace-hero-copy h1 {
+  font-size: clamp(1.45rem, 2vw, 2rem);
+  line-height: 1.08;
+}
+
+.workspace-hero-copy .lede,
+.workspace-hero-copy h1 {
+  margin-bottom: 0;
+}
+
+.workspace-hero-controls {
+  min-width: 0;
+  width: min(100%, 340px);
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.55rem;
+}
+
+.workspace-hero-controls .ghost-button {
+  align-self: flex-end;
+  width: auto;
+  min-width: 0;
+  padding-inline: 1rem;
+}
+
+.workspace-overview-shell {
+  align-items: stretch;
+  gap: 1.25rem;
+}
+
+.workspace-hero-compact .workspace-overview-shell {
+  gap: 0.9rem;
+}
+
+.workspace-action-dock {
+  min-width: min(100%, 360px);
+  display: grid;
+  gap: 0.8rem;
+  align-content: start;
+  padding: 0.95rem 1rem;
+  border-radius: 22px;
+  background: rgba(7, 22, 35, 0.46);
+  box-shadow:
+    inset 0 0 0 1px rgba(116, 226, 255, 0.08),
+    inset 0 1px 0 rgba(208, 247, 255, 0.04);
+}
+
+.workspace-hero-compact .workspace-action-dock {
+  min-width: min(100%, 420px);
+  gap: 0;
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.workspace-dock-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.6rem;
+}
+
+.workspace-shortcut-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.workspace-shortcut-bar .primary-button,
+.workspace-shortcut-bar .ghost-button {
+  min-height: 2.45rem;
+  padding: 0.5rem 0.85rem;
+  white-space: nowrap;
+}
+
+.workspace-shortcut-bar-inline {
+  margin-top: 0.35rem;
+}
+
+.workspace-shortcut-bar-mobile {
+  margin-bottom: 0.15rem;
+}
+
+.workspace-hero-compact .workspace-dock-actions {
+  grid-template-columns: repeat(4, minmax(0, auto));
+  justify-content: flex-end;
+  gap: 0.45rem;
+}
+
+.workspace-dock-actions .primary-button,
+.workspace-dock-actions .ghost-button {
+  width: 100%;
+  min-width: 0;
+}
+
+.workspace-dock-actions .ghost-button:last-child {
+  grid-column: 1 / -1;
+}
+
+.workspace-hero-compact .workspace-dock-actions .primary-button,
+.workspace-hero-compact .workspace-dock-actions .ghost-button {
+  width: auto;
+  min-height: 2.5rem;
+  padding: 0.52rem 0.85rem;
+  white-space: nowrap;
+}
+
+.workspace-hero-compact .workspace-dock-actions .ghost-button:last-child {
+  grid-column: auto;
+}
+
+.workspace-project-menu-shell {
+  position: relative;
+  min-width: 15rem;
+  max-width: 18rem;
+}
+
+.workspace-project-menu-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.55rem;
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.workspace-project-menu-trigger span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspace-project-menu-trigger .mobile-inbox-filter-caret {
+  flex: 0 0 auto;
+}
+
+.workspace-project-menu {
+  position: absolute;
+  top: calc(100% + 0.45rem);
+  right: 0;
+  z-index: 30;
+  display: grid;
+  gap: 0.35rem;
+  min-width: 100%;
+  padding: 0.45rem;
+  border-radius: 16px;
+  background:
+    linear-gradient(180deg, rgba(8, 26, 41, 0.98), rgba(5, 18, 30, 0.98));
+  box-shadow:
+    0 20px 44px rgba(0, 0, 0, 0.34),
+    inset 0 0 0 1px rgba(116, 226, 255, 0.12);
+}
+
+.workspace-project-menu-option {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-width: 0;
+  padding: 0.7rem 0.85rem;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: #dceff7;
+  text-align: left;
+  transition:
+    background-color 0.18s ease,
+    color 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+.workspace-project-menu-option span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspace-project-menu-option:hover {
+  background: rgba(116, 226, 255, 0.08);
+  color: #f2fdff;
+}
+
+.workspace-project-menu-option.is-active {
+  background: linear-gradient(135deg, rgba(55, 134, 255, 0.26), rgba(77, 213, 255, 0.18));
+  box-shadow: inset 0 0 0 1px rgba(116, 226, 255, 0.18);
+  color: #f4fdff;
+}
+
+.workspace-dock-tools {
+  display: grid;
+  gap: 0.6rem;
+  padding-top: 0.1rem;
+  border-top: 1px solid rgba(116, 226, 255, 0.08);
+}
+
+.workspace-create-project {
+  width: 100%;
+  display: grid;
+  gap: 0.4rem;
+}
+
+.workspace-create-project-copy {
+  display: grid;
+  gap: 0.18rem;
+}
+
+.workspace-create-project-copy .muted,
+.workspace-create-project-copy .eyebrow {
+  margin: 0;
+}
+
+.workspace-create-project-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.55rem;
+  align-items: center;
+}
+
+.workspace-create-project-actions input {
+  min-width: 0;
+  min-height: 42px;
+}
+
+.workspace-create-project-actions .primary-button {
+  min-height: 42px;
+  white-space: nowrap;
+}

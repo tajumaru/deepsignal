@@ -1,0 +1,14 @@
+.signal-column-copy,
+.signal-column-tools {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.signal-column-tools {
+  justify-items: end;
+  min-width: min(100%, 420px);
+}
+
+.signal-column-tools input {
+  width: min(100%, 320px);
+}

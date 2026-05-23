@@ -1,0 +1,8 @@
+.mirror-desktop-detail-stack {
+  display: grid;
+  gap: 1rem;
+}
+
+.mirror-mobile-detail-stack {
+  display: none;
+}

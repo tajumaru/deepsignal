@@ -1,0 +1,199 @@
+.mailbox-meta-chip {
+  min-width: 0;
+  max-width: 100%;
+  padding: 0.18rem 0.45rem;
+  border: 1px solid rgba(116, 226, 255, 0.11);
+  border-radius: 7px;
+  background: rgba(116, 226, 255, 0.055);
+  color: #bfeef8;
+  font-size: 0.72rem;
+  font-weight: 800;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mailbox-meta-chip.priority-high {
+  border-color: rgba(248, 113, 113, 0.28);
+  background: rgba(248, 113, 113, 0.12);
+  color: #fecaca;
+}
+
+.mailbox-meta-chip.priority-medium {
+  border-color: rgba(116, 226, 255, 0.18);
+  color: #d5fbff;
+}
+
+.mailbox-meta-chip.is-locked {
+  border-color: rgba(250, 204, 21, 0.24);
+  background: rgba(250, 204, 21, 0.1);
+  color: #fde68a;
+}
+
+.mailbox-meta-chip.is-unlocked,
+.mailbox-meta-chip.status-read {
+  border-color: rgba(82, 208, 141, 0.28);
+  background: rgba(82, 208, 141, 0.1);
+  color: #c8ffdf;
+}
+
+.mailbox-meta-chip.status-unread {
+  border-color: rgba(102, 227, 255, 0.26);
+  background: rgba(102, 227, 255, 0.1);
+  color: #d9fcff;
+}
+
+.mailbox-meta-chip.identity-anonymous {
+  border-color: rgba(244, 208, 63, 0.24);
+  background: rgba(244, 208, 63, 0.09);
+  color: #fde68a;
+}
+
+.mailbox-meta-chip.identity-verified {
+  border-color: rgba(96, 165, 250, 0.24);
+  background: rgba(96, 165, 250, 0.1);
+  color: #dbeafe;
+}
+
+.mailbox-meta-chip.mailbox-meta-chip-subtle {
+  opacity: 0.88;
+}
+
+.signal-badge-row-compact .signal-chip,
+.signal-badge-row-compact .pill,
+.signal-badge-row-compact .signal-status-chip {
+  font-size: 0.75rem;
+}
+
+.signal-card-actions {
+  display: flex;
+  gap: 0.55rem;
+  flex-wrap: wrap;
+  padding-top: 0.2rem;
+}
+
+.signal-card-actions .ghost-button {
+  min-width: 0;
+  padding-inline: 0.85rem;
+}
+
+.quick-action-bar {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.32rem;
+  width: 100%;
+}
+
+.quick-action-button {
+  min-height: 1.9rem;
+  min-width: 0;
+  padding: 0.32rem 0.48rem;
+  border: 1px solid rgba(116, 226, 255, 0.14);
+  border-radius: var(--radius-pill);
+  background: rgba(116, 226, 255, 0.06);
+  color: #d8fbff;
+  font-size: 0.69rem;
+  font-weight: 800;
+  line-height: 1.15;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.quick-action-button.is-active,
+.quick-action-button:disabled {
+  opacity: 0.68;
+}
+
+.quick-action-button.quick-action-reviewing {
+  border-color: rgba(96, 165, 250, 0.34);
+}
+
+.quick-action-button.quick-action-resolve {
+  border-color: rgba(82, 208, 141, 0.36);
+  color: #cbffe0;
+}
+
+.quick-action-button.quick-action-publish {
+  border-color: rgba(250, 204, 21, 0.32);
+  color: #fde68a;
+}
+
+.quick-action-button.quick-action-archive {
+  border-color: rgba(148, 163, 184, 0.3);
+  color: #d7e1e8;
+}
+
+.signal-card-select-toggle {
+  position: absolute;
+  top: 0.78rem;
+  left: 0.8rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1;
+}
+
+.signal-shortcut-help-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2rem;
+  height: 1.95rem;
+  padding: 0.32rem 0.65rem;
+  border-color: rgba(102, 227, 255, 0.14);
+  border-radius: var(--radius-pill);
+  background: rgba(102, 227, 255, 0.08);
+  color: #dffaff;
+  font-size: 0.8rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.signal-shortcut-help-trigger:hover,
+.signal-shortcut-help-trigger:focus-visible {
+  border-color: rgba(102, 227, 255, 0.24);
+  background: rgba(102, 227, 255, 0.14);
+}
+
+.shortcut-help-panel {
+  display: grid;
+  gap: 1rem;
+  max-width: min(38rem, calc(100vw - 2rem));
+}
+
+.shortcut-help-list {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.shortcut-help-row {
+  display: grid;
+  grid-template-columns: minmax(4.5rem, 6rem) minmax(0, 1fr);
+  gap: 0.75rem;
+  align-items: center;
+  padding: 0.7rem 0.8rem;
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(116, 226, 255, 0.08);
+  background: rgba(6, 20, 33, 0.72);
+}
+
+.shortcut-help-row strong {
+  color: #f3fdff;
+  font-size: 0.82rem;
+  letter-spacing: 0.04em;
+}
+
+.shortcut-help-row span {
+  min-width: 0;
+  color: #b9d9e6;
+}
+
+.signal-card-select-toggle input {
+  width: 0.95rem;
+  height: 0.95rem;
+  margin: 0;
+  accent-color: #7de7ff;
+  cursor: pointer;
+}

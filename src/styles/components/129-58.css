@@ -1,0 +1,30 @@
+.signal-sidebar .export-select {
+  width: 100%;
+}
+
+.export-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  padding: max(1rem, env(safe-area-inset-top, 0px)) max(1rem, env(safe-area-inset-right, 0px))
+    max(1rem, env(safe-area-inset-bottom, 0px)) max(1rem, env(safe-area-inset-left, 0px));
+  overflow-y: auto;
+  background: rgba(2, 11, 18, 0.76);
+}
+
+.export-confirmation-modal {
+  box-sizing: border-box;
+  display: grid;
+  gap: 0.8rem;
+  width: min(calc(100vw - 2rem), 640px);
+  max-height: calc(100dvh - 2rem);
+  padding: 1.15rem;
+  overflow-y: auto;
+  border-radius: 20px;
+  background: rgba(7, 21, 34, 0.98);
+  box-shadow:
+    0 24px 80px rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}

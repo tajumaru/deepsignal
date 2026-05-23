@@ -982,9 +982,9 @@ export function LandingPage() {
   const heroSignalBars = [0.46, 0.72, 0.38, 0.92, 0.58, 0.81, 0.5, 0.68, 0.42, 0.86];
   const heroFeedRows = [t("landingHeroLiveFeed1"), t("landingHeroLiveFeed2"), t("landingHeroLiveFeed3")];
   const heroLifecycle = ["Intent", "Signal opened", "Protected", "Stored", "Reviewed", "Resolved"];
-  const heroTrustBadges = ["Encrypted", "Verifiable", "Immutable", "Audit-ready"];
+  const heroTrustBadges = ["Encrypted", "Private", "Review-ready"];
   const heroDescription =
-    "From company feedback to DAO governance, DeepSignal turns sensitive submissions into encrypted, verifiable evidence.";
+    "DeepSignal turns feedback, reports, and forms into an encrypted inbox that feels fast to open and easy to review.";
 
   return (
     <section className="landing-shell">
@@ -1021,15 +1021,20 @@ export function LandingPage() {
             <p className="landing-tagline">{t("landingHeroContestTagline")}</p>
 
             <div className="cta-row landing-hero-actions">
-              <CreateFormLink className="primary-button landing-cta-primary">
-                {t("landingHeroContestCreate")}
+              <Link className="primary-button landing-cta-primary" to="/dashboard">
+                {t("openInboxCta")}
+              </Link>
+              <CreateFormLink className="ghost-button landing-cta-secondary">
+                {t("composeSignalCta")}
               </CreateFormLink>
+            </div>
+
+            <div className="cta-row landing-hero-actions landing-hero-actions-secondary">
               <Link className="landing-hero-text-link" to="/explore">
                 {t("landingHeroDemo")}
               </Link>
+              <span className="landing-hero-proofline">{t("landingHeroContestProofline")}</span>
             </div>
-
-            <p className="landing-hero-proofline">{t("landingHeroContestProofline")}</p>
           </div>
 
           <div className="landing-sonar-column">

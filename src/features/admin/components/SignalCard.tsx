@@ -59,7 +59,6 @@ export const SignalCard = forwardRef<HTMLDivElement, SignalCardProps>(function S
     isSelectedSignal,
     isPendingSui,
     isSelectedForSui,
-    isAnonymousSignal,
     isUnlockedSignal,
     isOnchainRecoverySnapshot,
     hasPayloadIssue,
@@ -72,11 +71,16 @@ export const SignalCard = forwardRef<HTMLDivElement, SignalCardProps>(function S
   },
   ref,
 ) {
+  const showCompactStateMeta =
+    submission.isEncrypted ||
+    submission.status === "archived" ||
+    isOnchainRecoverySnapshot ||
+    hasPayloadIssue ||
+    (persistenceLabel !== null && persistenceState !== "walrus_synced");
+
   return (
     <div
-      className={`signal-card ${isSelectedSignal ? "is-active" : ""} ${submission.status === "unread" ? "is-unread" : "is-read"} ${isPendingSui ? "has-select-checkbox" : ""} ${isSelectedForSui ? "is-selected-for-sui" : ""} ${
-        isAnonymousSignal ? "is-anonymous" : ""
-      }`}
+      className={`signal-card ${isSelectedSignal ? "is-active" : ""} ${submission.status === "unread" ? "is-unread" : "is-read"} ${isPendingSui ? "has-select-checkbox" : ""} ${isSelectedForSui ? "is-selected-for-sui" : ""}`}
       role="button"
       tabIndex={0}
       aria-current={isSelectedSignal ? "true" : undefined}
@@ -116,66 +120,51 @@ export const SignalCard = forwardRef<HTMLDivElement, SignalCardProps>(function S
           <span className="signal-card-time">{formatDate(submission.createdAt)}</span>
         </span>
       </div>
-      <p className={`signal-card-preview ${submission.isEncrypted ? "is-locked" : ""}`}>
-        {preview}
-      </p>
       <div className="signal-card-secondary-line">
-        <span className="signal-card-form">{formTitle}</span>
-        <span className="signal-card-meta-separator" aria-hidden="true">•</span>
+        <span className={`mailbox-meta-chip priority-${submission.priority}`}>{priorityLabel}</span>
         <span className="signal-card-triage">{triageStatusLabel}</span>
+        <span className="signal-card-form">{formTitle}</span>
       </div>
-      <div className="signal-card-footer">
-        <div className="signal-card-mailbox-meta" aria-label={t("signalReviewStateLabel")}>
-          <span className={`mailbox-meta-chip priority-${submission.priority}`}>
-            {priorityLabel}
-          </span>
-          <span className={`mailbox-meta-chip ${isAnonymousSignal ? "identity-anonymous" : "identity-verified"}`}>
-            {isAnonymousSignal ? t("anonymousLabel") : t("verifiedSignalsLabel")}
-          </span>
-          <span className={`mailbox-meta-chip ${submission.isEncrypted ? "is-locked" : "is-open"} ${isUnlockedSignal ? "is-unlocked" : ""}`}>
-            {lockStateLabel}
-          </span>
-          <span className={`mailbox-meta-chip status-${submission.status}`}>
-            {readStateLabel}
-          </span>
-          {isOnchainRecoverySnapshot ? (
-            <span className="mailbox-meta-chip mailbox-meta-chip-subtle">
-              {t("onchainRecoverySnapshotLabel")}
-            </span>
-          ) : null}
-          {persistenceLabel ? (
-            <span className="mailbox-meta-chip mailbox-meta-chip-subtle">{persistenceLabel}</span>
-          ) : null}
-          {hasPayloadIssue ? (
-            <span className="mailbox-meta-chip mailbox-meta-chip-subtle">
-              {t("privateSignalPayloadMissingStatus")}
-            </span>
+      <p className={`signal-card-preview ${submission.isEncrypted ? "is-locked" : ""}`}>{preview}</p>
+      {showCompactStateMeta ? (
+        <div className="signal-card-footer">
+          <div className="signal-card-mailbox-meta" aria-label={t("signalReviewStateLabel")}>
+            {submission.isEncrypted ? (
+              <span className={`mailbox-meta-chip mailbox-meta-chip-subtle ${isUnlockedSignal ? "is-unlocked" : "is-locked"}`}>
+                {lockStateLabel}
+              </span>
+            ) : null}
+            {submission.status === "archived" ? (
+              <span className="mailbox-meta-chip mailbox-meta-chip-subtle status-read">{readStateLabel}</span>
+            ) : null}
+            {isOnchainRecoverySnapshot ? (
+              <span className="mailbox-meta-chip mailbox-meta-chip-subtle">{t("onchainRecoverySnapshotLabel")}</span>
+            ) : null}
+            {persistenceLabel && persistenceState !== "walrus_synced" ? (
+              <span className="mailbox-meta-chip mailbox-meta-chip-subtle">{persistenceLabel}</span>
+            ) : null}
+            {hasPayloadIssue ? (
+              <span className="mailbox-meta-chip mailbox-meta-chip-subtle">{t("privateSignalPayloadMissingStatus")}</span>
+            ) : null}
+          </div>
+          {hasNotableStatusBadge ? (
+            <div className="signal-badge-row signal-badge-row-compact">
+              <SignalStatusBadges
+                submission={submission}
+                category={category}
+                pendingSui={isPendingSui}
+                selectedForSui={isSelectedForSui}
+                payloadIssue={hasPayloadIssue}
+                storageLabel={storageLabel}
+                persistenceState={persistenceState}
+                density="notable"
+                reviewerHint={reviewerHint}
+                needsFollowUp={needsFollowUp}
+              />
+            </div>
           ) : null}
         </div>
-        {hasNotableStatusBadge ? (
-          <div className="signal-badge-row signal-badge-row-compact">
-            <SignalStatusBadges
-              submission={submission}
-              category={category}
-              pendingSui={isPendingSui}
-              selectedForSui={isSelectedForSui}
-              payloadIssue={hasPayloadIssue}
-              storageLabel={storageLabel}
-              persistenceState={persistenceState}
-              density="notable"
-              reviewerHint={reviewerHint}
-              needsFollowUp={needsFollowUp}
-            />
-          </div>
-        ) : null}
-      </div>
-      <div
-        className="signal-card-actions signal-card-actions-quick"
-        onClick={(event) => {
-          event.stopPropagation();
-        }}
-      >
-      </div>
+      ) : null}
       {isPendingSui ? (
         <div className="signal-card-actions">
           <button

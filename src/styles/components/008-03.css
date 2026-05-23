@@ -1,0 +1,6 @@
+.language-switch {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  color: var(--text-soft);
+}

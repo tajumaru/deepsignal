@@ -1,0 +1,149 @@
+.secondary-inspector {
+  display: grid;
+  gap: 0.7rem;
+  padding: 0.15rem 0 0;
+}
+
+.secondary-inspector-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0 0.15rem;
+}
+
+.secondary-inspector-header .muted {
+  max-width: 48ch;
+  margin: 0;
+  font-size: 0.82rem;
+}
+
+.secondary-inspector-grid {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.inspector-panel {
+  min-width: 0;
+  border-radius: 12px;
+  background: rgba(4, 17, 29, 0.46);
+  box-shadow: inset 0 0 0 1px rgba(116, 226, 255, 0.06);
+}
+
+.inspector-panel summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.75rem 0.85rem;
+  cursor: pointer;
+  list-style: none;
+}
+
+.inspector-panel summary::-webkit-details-marker,
+.inspector-nested-detail summary::-webkit-details-marker {
+  display: none;
+}
+
+.inspector-panel summary > span:first-child {
+  display: grid;
+  gap: 0.12rem;
+  min-width: 0;
+}
+
+.inspector-panel summary strong {
+  font-size: 0.95rem;
+}
+
+.inspector-summary {
+  color: var(--text-soft);
+  font-size: 0.76rem;
+  text-align: right;
+}
+
+.inspector-panel-body {
+  display: grid;
+  gap: 0.75rem;
+  padding: 0 0.85rem 0.9rem;
+}
+
+.inspector-subsection {
+  display: grid;
+  gap: 0.65rem;
+  padding-top: 0.7rem;
+  border-top: 1px solid rgba(116, 226, 255, 0.07);
+}
+
+.inspector-subsection:first-child {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.inspector-subsection h3 {
+  margin-bottom: 0;
+  font-size: 1rem;
+}
+
+.inspector-export-actions,
+.inspector-export-options,
+.inspector-utility-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  align-items: center;
+}
+
+.inspector-export-options {
+  align-items: flex-end;
+}
+
+.inspector-related-links {
+  padding-top: 0.15rem;
+}
+
+.inspector-utility-links {
+  padding: 0.15rem 0.15rem 0;
+}
+
+.inspector-utility-links .ghost-button,
+.inspector-export-actions .ghost-button {
+  min-height: 2.25rem;
+  padding: 0.45rem 0.75rem;
+}
+
+.inspector-nested-detail {
+  border-radius: var(--radius-base);
+  background: rgba(2, 11, 21, 0.32);
+}
+
+.inspector-nested-detail > summary {
+  padding: 0.65rem 0.75rem;
+  color: var(--text);
+  cursor: pointer;
+  list-style: none;
+  font-weight: 800;
+}
+
+.inspector-nested-detail > :not(summary) {
+  margin: 0 0.75rem 0.75rem;
+}
+
+.secondary-inspector .metadata-list {
+  gap: 0.55rem;
+}
+
+.secondary-inspector .metadata-row {
+  padding: 0.55rem 0;
+  border-bottom-color: rgba(116, 226, 255, 0.06);
+}
+
+.secondary-inspector .seal-status-card {
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.secondary-inspector .cluster-card {
+  background: rgba(2, 11, 21, 0.34);
+  box-shadow: inset 0 0 0 1px rgba(116, 226, 255, 0.05);
+}

@@ -1,0 +1,73 @@
+.stat-row {
+  margin: 1rem 0;
+}
+
+.stat-row div {
+  min-width: 6rem;
+}
+
+.stat-row dt,
+.eyebrow,
+.muted,
+small {
+  color: var(--text-soft);
+}
+
+.stat-row dd {
+  margin: 0.25rem 0 0;
+  font-size: 1.05rem;
+}
+
+.eyebrow {
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  font-size: 0.75rem;
+  margin: 0 0 0.4rem;
+}
+
+h1,
+h2,
+h3,
+p {
+  margin-top: 0;
+}
+
+h1 {
+  font-size: clamp(2rem, 4vw, 3.5rem);
+  line-height: 1.05;
+}
+
+h2 {
+  font-size: 1.25rem;
+}
+
+.lede {
+  max-width: 60ch;
+  color: #d5eef8;
+}
+
+.feature-list {
+  margin: 0;
+  padding-left: 1.1rem;
+  color: #d5eef8;
+}
+
+.feature-panel {
+  align-self: stretch;
+}
+
+.info-pills {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-top: 1rem;
+}
+
+.form-sticky-inner {
+  max-width: 1120px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(180px, 260px) auto;
+  align-items: center;
+  gap: 12px;
+}

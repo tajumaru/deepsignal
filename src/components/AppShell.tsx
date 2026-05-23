@@ -26,11 +26,11 @@ function WalletConnectPlaceholder({ onActivate }: { onActivate: () => void }) {
     <div className="wallet-connect-shell wallet-connect-shell-compact">
       <div className="wallet-connect-direct panel">
         <div className="wallet-connect-direct-copy">
-          <strong>Sync Wallet</strong>
+          <strong>Activate Session</strong>
           <span>Wallet-optional public mode</span>
         </div>
         <button type="button" className="wallet-sync-button" onClick={onActivate}>
-          Sync Wallet
+          Activate Session
         </button>
       </div>
     </div>
@@ -94,7 +94,7 @@ function MobileAppBottomNav() {
       </NavLink>
       <CreateFormLink>
         <span aria-hidden="true">+</span>
-        <span>{t("navMobileNewSignal")}</span>
+        <span>{t("composeSignalCta")}</span>
       </CreateFormLink>
       <NavLink to="/admin/access">
         <span aria-hidden="true">Set</span>
@@ -215,7 +215,7 @@ export function AppShell({
             </Link>
             <CreateFormLink className="mobile-header-cta" onClick={() => setMobileDrawerOpen(false)}>
               <span aria-hidden="true">+</span>
-              <span>{t("navMobileNewSignal")}</span>
+              <span>{t("composeSignalCta")}</span>
             </CreateFormLink>
           </div>
         )}
@@ -307,7 +307,7 @@ export function AppShell({
                   </div>
                   <CreateFormLink className="mobile-drawer-cta" onClick={closeMobileDrawer}>
                     <span aria-hidden="true">+</span>
-                    <span>{t("navCreateForm")}</span>
+                    <span>{t("composeSignalCta")}</span>
                   </CreateFormLink>
                 </div>
 

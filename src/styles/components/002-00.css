@@ -1,0 +1,85 @@
+.build-indicator {
+  position: fixed;
+  right: max(0.75rem, env(safe-area-inset-right, 0px));
+  bottom: max(0.55rem, env(safe-area-inset-bottom, 0px));
+  z-index: 2;
+  pointer-events: none;
+  display: grid;
+  justify-items: end;
+  gap: 0.35rem;
+}
+
+.build-indicator-attribution {
+  max-width: min(90vw, 34rem);
+  padding: 0.28rem 0.55rem;
+  border: 1px solid rgba(116, 226, 255, 0.16);
+  border-radius: var(--radius-pill);
+  background: rgba(4, 15, 25, 0.48);
+  color: rgba(196, 245, 255, 0.72);
+  font-size: 0.68rem;
+  text-align: right;
+  pointer-events: auto;
+  backdrop-filter: blur(12px);
+}
+
+.build-indicator-button {
+  display: inline-flex;
+  max-width: min(80vw, 34rem);
+  padding: 0.22rem 0.38rem;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background:
+    linear-gradient(90deg, rgba(102, 227, 255, 0.04), rgba(85, 170, 255, 0.015)),
+    rgba(4, 15, 25, 0.24);
+  color: rgba(174, 238, 255, 0.54);
+  font-family: "Consolas", "SFMono-Regular", "Roboto Mono", monospace;
+  font-size: 0.62rem;
+  line-height: 1.2;
+  letter-spacing: 0.04em;
+  text-align: right;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  opacity: 0.52;
+  pointer-events: auto;
+  text-shadow: 0 0 8px rgba(102, 227, 255, 0.2);
+  transition:
+    opacity var(--transition-fast),
+    color var(--transition-fast),
+    background var(--transition-fast);
+}
+
+.build-indicator-button:hover,
+.build-indicator-button:focus-visible {
+  color: rgba(211, 250, 255, 0.78);
+  background:
+    linear-gradient(90deg, rgba(102, 227, 255, 0.07), rgba(85, 170, 255, 0.025)),
+    rgba(4, 15, 25, 0.34);
+  opacity: 0.82;
+  outline: none;
+}
+
+.bg-orb {
+  position: fixed;
+  inset: auto;
+  border-radius: var(--radius-pill);
+  filter: blur(12px);
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+.bg-orb-a {
+  top: 8%;
+  right: -4rem;
+  width: 18rem;
+  height: 18rem;
+  background: radial-gradient(circle, rgba(102, 227, 255, 0.38), transparent 70%);
+}
+
+.bg-orb-b {
+  bottom: 5%;
+  left: -6rem;
+  width: 22rem;
+  height: 22rem;
+  background: radial-gradient(circle, rgba(56, 189, 248, 0.25), transparent 70%);
+}

@@ -60,8 +60,8 @@ export function WalletConnect({ compact = false }: WalletConnectProps) {
       <div className={`wallet-connect-shell ${compact ? "wallet-connect-shell-compact" : ""}`.trim()}>
         <div className="wallet-connect-direct panel">
           <div className="wallet-connect-direct-copy">
-            <strong>{wallet.isRestoringConnection ? "Syncing Signal..." : "Sync Wallet"}</strong>
-            <span>{wallet.isRestoringConnection ? "Restoring wallet uplink" : "Wallet-optional public mode"}</span>
+            <strong>{wallet.isRestoringConnection ? "Opening Session..." : "Activate Session"}</strong>
+            <span>{wallet.isRestoringConnection ? "Restoring secure session" : "Wallet-optional public mode"}</span>
           </div>
           <ConnectWalletButton wallet={wallet} compact={compact} />
         </div>
@@ -75,7 +75,7 @@ export function WalletConnect({ compact = false }: WalletConnectProps) {
         className={`wallet-sync-button ${wallet.isConnected ? "is-synced" : ""} ${wallet.isConnecting ? "is-syncing" : ""}`}
       >
         <ConnectWalletButton wallet={wallet} compact={compact} onConnectedPress={handleToggleMenu} />
-        {wallet.accountAddress ? (
+        {wallet.accountAddress && !compact ? (
           <SuiAddressDisplay
             address={wallet.accountAddress}
             className="wallet-sync-address-shell"
@@ -92,7 +92,7 @@ export function WalletConnect({ compact = false }: WalletConnectProps) {
       {menuOpen ? (
         <div className="wallet-sync-menu panel" role="menu">
           <div className="wallet-sync-menu-header">
-            <span className="wallet-sync-menu-eyebrow">{t("connectedLabel")}</span>
+            <span className="wallet-sync-menu-eyebrow">{t("secureSessionActive")}</span>
             <strong>{wallet.walletName ?? "Wallet"}</strong>
             {wallet.accountAddress ? (
               <SuiAddressDisplay

@@ -1,0 +1,14 @@
+.review-lifecycle-strip {
+  padding: 0.7rem 0.78rem;
+  border: 1px solid rgba(116, 226, 255, 0.09);
+  border-radius: 16px;
+  background:
+    linear-gradient(90deg, rgba(116, 226, 255, 0.07), transparent 74%),
+    rgba(3, 14, 24, 0.34);
+}
+
+.review-lifecycle-strip-header {
+  margin-top: -0.55rem;
+  margin-bottom: 0.25rem;
+  padding-inline: 1rem;
+}

@@ -1,0 +1,37 @@
+.publish-diagnostics-card {
+  padding: 0.9rem 1rem;
+  background: rgba(4, 18, 31, 0.42);
+  border: 1px solid rgba(116, 226, 255, 0.12);
+  border-radius: var(--radius-lg);
+  box-shadow: none;
+}
+
+.publish-diagnostics-header {
+  margin-bottom: 0.35rem;
+}
+
+.publish-diagnostics-header .eyebrow {
+  margin-bottom: 0.2rem;
+}
+
+.publish-diagnostics-header h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.publish-diagnostics-list {
+  gap: 0;
+}
+
+.publish-diagnostics-list .metadata-row {
+  padding: 0.65rem 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  border-top: 1px solid rgba(116, 226, 255, 0.1);
+}
+
+.publish-diagnostics-list > :first-child {
+  border-top: 0;
+  padding-top: 0;
+}

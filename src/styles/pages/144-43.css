@@ -1,0 +1,7 @@
+.signal-detail-group-header-details {
+  margin-top: 0.4rem;
+}
+
+.signal-detail-group-header-details .muted {
+  max-width: 64ch;
+}

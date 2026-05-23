@@ -1,0 +1,30 @@
+.public-submit-details summary {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0 0 0.85rem;
+  cursor: pointer;
+  list-style: none;
+}
+
+.public-submit-details summary::-webkit-details-marker {
+  display: none;
+}
+
+.public-submit-details summary > span {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.public-submit-details summary::after {
+  content: "▾";
+  color: #d7edf6;
+  font-size: 0.95rem;
+  line-height: 1;
+  transform: translateY(0.2rem);
+}
+
+.public-submit-details[open] summary::after {
+  transform: translateY(0.2rem) rotate(0deg);
+}

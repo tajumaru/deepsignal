@@ -129,6 +129,7 @@ export default defineConfig(({ mode }) => {
   const configuredRpcUrl =
     env.NEXT_PUBLIC_SUI_RPC_URL || env.VITE_SUI_FULLNODE_URL || env.VITE_RPC_URL || "";
   const tatumEnabled = String(env.NEXT_PUBLIC_TATUM_ENABLED || "").toLowerCase() === "true";
+  const tatumStorageEnabled = String(env.NEXT_PUBLIC_TATUM_STORAGE_ENABLED || "").toLowerCase() === "true";
   const tatumProxyEnabled = Boolean(
     tatumEnabled &&
       configuredRpcUrl &&
@@ -136,6 +137,8 @@ export default defineConfig(({ mode }) => {
       tatumApiKey,
   );
   const tatumProxyPath = "/api/tatum/sui-rpc";
+  const tatumStorageProxyEnabled = Boolean(tatumStorageEnabled && tatumApiKey);
+  const tatumStorageProxyPath = "/api/tatum/storage";
 
   return {
     base: "./",
@@ -148,6 +151,8 @@ export default defineConfig(({ mode }) => {
       "import.meta.env.VITE_APP_ENV": JSON.stringify(appEnvironment),
       "import.meta.env.VITE_TATUM_PROXY_ENABLED": JSON.stringify(tatumProxyEnabled ? "true" : "false"),
       "import.meta.env.VITE_TATUM_PROXY_PATH": JSON.stringify(tatumProxyPath),
+      "import.meta.env.VITE_TATUM_STORAGE_PROXY_ENABLED": JSON.stringify(tatumStorageProxyEnabled ? "true" : "false"),
+      "import.meta.env.VITE_TATUM_STORAGE_PROXY_PATH": JSON.stringify(tatumStorageProxyPath),
     },
     plugins: [
       react(),
@@ -240,31 +245,63 @@ export default defineConfig(({ mode }) => {
         },
       },
     },
-    server: tatumProxyEnabled
+    server: tatumProxyEnabled || tatumStorageProxyEnabled
       ? {
           proxy: {
-            [tatumProxyPath]: {
-              target: configuredRpcUrl,
-              changeOrigin: true,
-              rewrite: () => "",
-              headers: {
-                "x-api-key": tatumApiKey,
-              },
-            },
+            ...(tatumProxyEnabled
+              ? {
+                  [tatumProxyPath]: {
+                    target: configuredRpcUrl,
+                    changeOrigin: true,
+                    rewrite: () => "",
+                    headers: {
+                      "x-api-key": tatumApiKey,
+                    },
+                  },
+                }
+              : {}),
+            ...(tatumStorageProxyEnabled
+              ? {
+                  [tatumStorageProxyPath]: {
+                    target: env.VITE_TATUM_STORAGE_API_URL || "https://api.tatum.io",
+                    changeOrigin: true,
+                    rewrite: (path) => path.replace(new RegExp(`^${tatumStorageProxyPath}`), ""),
+                    headers: {
+                      "x-api-key": tatumApiKey,
+                    },
+                  },
+                }
+              : {}),
           },
         }
       : undefined,
-    preview: tatumProxyEnabled
+    preview: tatumProxyEnabled || tatumStorageProxyEnabled
       ? {
           proxy: {
-            [tatumProxyPath]: {
-              target: configuredRpcUrl,
-              changeOrigin: true,
-              rewrite: () => "",
-              headers: {
-                "x-api-key": tatumApiKey,
-              },
-            },
+            ...(tatumProxyEnabled
+              ? {
+                  [tatumProxyPath]: {
+                    target: configuredRpcUrl,
+                    changeOrigin: true,
+                    rewrite: () => "",
+                    headers: {
+                      "x-api-key": tatumApiKey,
+                    },
+                  },
+                }
+              : {}),
+            ...(tatumStorageProxyEnabled
+              ? {
+                  [tatumStorageProxyPath]: {
+                    target: env.VITE_TATUM_STORAGE_API_URL || "https://api.tatum.io",
+                    changeOrigin: true,
+                    rewrite: (path) => path.replace(new RegExp(`^${tatumStorageProxyPath}`), ""),
+                    headers: {
+                      "x-api-key": tatumApiKey,
+                    },
+                  },
+                }
+              : {}),
           },
         }
       : undefined,

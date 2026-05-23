@@ -1,0 +1,50 @@
+.inbox-overview-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0.75rem;
+}
+
+.inbox-overview-card {
+  display: grid;
+  gap: 0.2rem;
+  min-width: 0;
+  padding: 0.8rem 0.9rem;
+  background:
+    radial-gradient(circle at top right, rgba(102, 227, 255, 0.12), transparent 34%),
+    linear-gradient(180deg, rgba(5, 21, 36, 0.82), rgba(4, 16, 28, 0.78));
+}
+
+.inbox-overview-card span {
+  color: #8eb0c2;
+  font-size: 0.68rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.inbox-overview-card strong {
+  min-width: 0;
+  color: #f2fdff;
+  font-size: 1rem;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.inbox-overview-card p {
+  margin: 0;
+  font-size: 0.92rem;
+  line-height: 1.3;
+}
+
+.inbox-overview-section {
+  display: grid;
+  gap: 1rem;
+}
+
+.inbox-overview-heading {
+  align-items: end;
+}
+
+.inbox-overview-heading .muted {
+  max-width: 42rem;
+  margin-bottom: 0;
+}

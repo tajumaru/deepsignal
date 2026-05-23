@@ -1,0 +1,33 @@
+.signal-metric {
+  padding: 1rem;
+  background: rgba(4, 18, 31, 0.68);
+  border: 1px solid rgba(116, 226, 255, 0.14);
+  border-radius: var(--radius-lg);
+  display: grid;
+  gap: 0.35rem;
+}
+
+.signal-metric span {
+  color: var(--text-soft);
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+
+.blob-prominent {
+  color: #b4f5ff;
+  font-size: 1rem;
+  overflow-wrap: anywhere;
+}
+
+.proof-badge,
+.proof-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.4rem 0.8rem;
+  background: linear-gradient(135deg, rgba(64, 222, 255, 0.16), rgba(117, 255, 220, 0.12));
+  border: 1px solid rgba(132, 245, 255, 0.28);
+  border-radius: var(--radius-pill);
+  color: #baf7ff;
+}

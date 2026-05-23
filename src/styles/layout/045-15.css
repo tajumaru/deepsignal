@@ -1,0 +1,19 @@
+.topbar-public {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(7rem, auto);
+  align-items: center;
+  padding-block: 0.85rem;
+}
+
+.topbar-public .brand {
+  width: auto;
+}
+
+.topbar-public .brand p {
+  white-space: normal;
+}
+
+.topbar-public .topbar-actions {
+  flex: 0 0 auto;
+  margin-left: 0;
+}

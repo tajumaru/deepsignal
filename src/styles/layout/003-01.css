@@ -1,0 +1,42 @@
+.topbar,
+.panel {
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+
+.topbar {
+  position: sticky;
+  top: env(safe-area-inset-top, 0px);
+  z-index: 10;
+  width: auto;
+  max-width: none;
+  margin:
+    max(1rem, env(safe-area-inset-top, 0px))
+    max(1rem, env(safe-area-inset-right, 0px))
+    0
+    max(1rem, env(safe-area-inset-left, 0px));
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.1rem 1.45rem;
+  border-color: rgba(72, 169, 233, 0.12);
+  background:
+    linear-gradient(180deg, rgba(3, 12, 24, 0.92), rgba(2, 9, 18, 0.88)),
+    radial-gradient(circle at top left, rgba(86, 218, 255, 0.05), transparent 34%);
+  box-shadow:
+    inset 0 1px 0 rgba(153, 238, 255, 0.04),
+    0 0 0 1px rgba(149, 242, 255, 0.03),
+    0 0 22px rgba(74, 184, 255, 0.05),
+    var(--shadow);
+}
+
+.page-wrap {
+  padding:
+    1rem max(1rem, env(safe-area-inset-right, 0px))
+    calc(2rem + env(safe-area-inset-bottom, 0px))
+    max(1rem, env(safe-area-inset-left, 0px));
+  max-width: none;
+  margin: 0 auto;
+}

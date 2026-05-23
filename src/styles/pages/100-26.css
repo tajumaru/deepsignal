@@ -1,0 +1,14 @@
+.admin-console-layout {
+  grid-template-columns: minmax(252px, 280px) minmax(0, 0.9fr) minmax(0, 1.1fr);
+}
+
+.admin-console-layout .signal-detail-column {
+  display: grid;
+}
+
+.signal-sidebar,
+.signal-inbox-column,
+.signal-detail-column {
+  min-height: 70vh;
+  min-width: 0;
+}

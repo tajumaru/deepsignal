@@ -44,18 +44,20 @@ import {
   assertEncryptedSubmissionLeakGuard,
   sanitizeSubmissionForStorage,
 } from "./submissionSanitizer";
+import { getTatumStorageWriteUrl, isTatumStorageEnabled, uploadWithTatum } from "./tatumStorage";
 import type {
   EncryptedSubmissionRecord,
   FormSchema,
   SignalManifest,
   StorageAdapter,
   Submission,
+  TatumStorageRecord,
   WalrusBlobProof,
   WalrusActualCost,
 } from "../types";
 
 type WalrusEnabledClient = ClientWithCoreApi & { walrus: WalrusClient };
-type WalrusStorageMode = "publisher" | "uploadRelay";
+type WalrusStorageMode = "publisher" | "uploadRelay" | "tatum";
 type FormBundle = {
   version: 1;
   kind: "formBundle";
@@ -74,6 +76,7 @@ type UploadResult = {
   blobObjectId?: string;
   walrusProof: WalrusBlobProof;
   walrusActualCost?: WalrusActualCost;
+  tatumStorage?: TatumStorageRecord;
 };
 type UploadKind =
   | "form-bundle"
@@ -106,11 +109,16 @@ const bundledFormPointer = "__bundled_form__";
 const WALRUS_READ_TIMEOUT_MS = 4000;
 const WALRUS_READ_MAX_ATTEMPTS = 3;
 const WALRUS_BLOB_READ_CONCURRENCY = 6;
-const walrusStorageMode = (
-  String(import.meta.env.VITE_WALRUS_STORAGE_MODE || "uploadRelay").toLowerCase() === "publisher"
-    ? "publisher"
-    : "uploadRelay"
-) satisfies WalrusStorageMode;
+const walrusStorageMode = (() => {
+  const configuredMode = String(import.meta.env.VITE_WALRUS_STORAGE_MODE || "uploadRelay").toLowerCase();
+  if (configuredMode === "publisher") {
+    return "publisher" as const;
+  }
+  if (configuredMode === "tatum") {
+    return "tatum" as const;
+  }
+  return "uploadRelay" as const;
+})() satisfies WalrusStorageMode;
 
 let runtimeContext: WalrusRuntimeContext = {
   account: null,
@@ -159,19 +167,26 @@ export function subscribeWalrusRuntime(listener: () => void) {
 }
 
 export function getWalrusMutationRuntimeStatus() {
+  const tatumWriteConfigured = isTatumStorageEnabled() && Boolean(getTatumStorageWriteUrl());
   return {
     aggregatorConfigured: Boolean(aggregatorUrl),
-    writeConfigured: walrusStorageMode === "publisher" ? Boolean(publisherUrl) : Boolean(uploadRelayUrl),
+    writeConfigured:
+      walrusStorageMode === "publisher"
+        ? Boolean(publisherUrl)
+        : walrusStorageMode === "tatum"
+          ? tatumWriteConfigured
+          : Boolean(uploadRelayUrl),
     hasClient: Boolean(runtimeContext.client),
     hasWallet: Boolean(runtimeContext.account && runtimeContext.wallet),
     rpcUrl: runtimeContext.rpcUrl,
     network: runtimeContext.network,
     canWrite: Boolean(
       aggregatorUrl &&
-        (walrusStorageMode === "publisher" ? publisherUrl : uploadRelayUrl) &&
-        runtimeContext.client &&
-        runtimeContext.account &&
-        runtimeContext.wallet,
+        (walrusStorageMode === "publisher"
+          ? publisherUrl && runtimeContext.client && runtimeContext.account && runtimeContext.wallet
+          : walrusStorageMode === "tatum"
+            ? tatumWriteConfigured
+            : uploadRelayUrl && runtimeContext.client && runtimeContext.account && runtimeContext.wallet),
     ),
     storageMode: walrusStorageMode,
   };
@@ -196,6 +211,12 @@ function assertPublisherEnv() {
 function assertUploadRelayEnv() {
   if (!uploadRelayUrl || !aggregatorUrl) {
     throw new Error("Walrus upload relay or aggregator URL is not configured.");
+  }
+}
+
+function assertTatumEnv() {
+  if (!isTatumStorageEnabled() || !getTatumStorageWriteUrl() || !aggregatorUrl) {
+    throw new Error("Tatum storage or Walrus aggregator URL is not configured.");
   }
 }
 
@@ -242,7 +263,7 @@ export async function waitForWalrusMutationRuntimeReady({
   expectedRpcUrl?: string;
   expectedNetwork?: string;
 } = {}) {
-  if (walrusStorageMode === "publisher") {
+  if (walrusStorageMode === "publisher" || walrusStorageMode === "tatum") {
     return;
   }
   assertUploadRelayEnv();
@@ -851,9 +872,22 @@ async function uploadBodyWithSdk(body: Blob | File, kind: UploadKind): Promise<U
   throw new Error("Walrus upload failed.");
 }
 
+async function uploadBodyWithTatum(body: Blob | File, kind: UploadKind): Promise<UploadResult> {
+  assertTatumEnv();
+  const result = await uploadWithTatum(body, kind);
+  return {
+    blobId: result.blobId,
+    walrusProof: result.walrusProof,
+    tatumStorage: result.tatumStorage,
+  };
+}
+
 async function uploadBody(body: Blob | File, kind: UploadKind): Promise<UploadResult> {
   if (walrusStorageMode === "publisher") {
     return uploadBodyWithPublisher(body, kind);
+  }
+  if (walrusStorageMode === "tatum") {
+    return uploadBodyWithTatum(body, kind);
   }
   return uploadBodyWithSdk(body, kind);
 }
@@ -1463,7 +1497,7 @@ async function saveSubmissionRecord(
     if (sanitizedSubmission.isEncrypted) {
       assertEncryptedSubmissionLeakGuard(sanitizedSubmission, encryptedSubmissionOptions);
     }
-    const { blobId, blobObjectId, walrusProof } = await uploadBody(
+    const { blobId, blobObjectId, walrusProof, tatumStorage } = await uploadBody(
       new Blob([JSON.stringify(sanitizedSubmission)], { type: "application/json" }),
       "submission-bundle",
     );
@@ -1471,6 +1505,7 @@ async function saveSubmissionRecord(
       ...sanitizedSubmission,
       blobId,
       walrusProof,
+      tatumStorage,
       ...(allowEmbeddedEncryptedPayload ? { encryptedBlobId: blobId, encryptedPayload: undefined } : {}),
     });
     upsertSubmissionBlobIndex({
@@ -1484,6 +1519,7 @@ async function saveSubmissionRecord(
       id: sanitizedSubmission.id,
       blobId,
       walrusProof,
+      tatumStorage,
       ...(allowEmbeddedEncryptedPayload ? { encryptedBlobId: blobId } : {}),
     };
   }
@@ -1534,6 +1570,7 @@ async function saveSubmissionRecord(
     ...sanitizedSubmission,
     blobId: bundle.blobId,
     walrusProof: bundle.walrusProof,
+    tatumStorage: bundle.tatumStorage,
     ...(allowEmbeddedEncryptedPayload ? { encryptedBlobId: bundle.blobId, encryptedPayload: undefined } : {}),
   });
   if (!allowEmbeddedEncryptedPayload) {
@@ -1546,6 +1583,7 @@ async function saveSubmissionRecord(
     id: sanitizedSubmission.id,
     blobId: bundle.blobId,
     walrusProof: bundle.walrusProof,
+    tatumStorage: bundle.tatumStorage,
     ...(allowEmbeddedEncryptedPayload ? { encryptedBlobId: bundle.blobId } : {}),
   };
 }
@@ -1553,7 +1591,7 @@ async function saveSubmissionRecord(
 export const walrusAdapter: StorageAdapter = {
   async saveForm(form: FormSchema) {
     const manifest = createManifest(form, bundledFormPointer, [], form.createdAt);
-    const { blobId, blobObjectId, walrusActualCost } = await writeFormBundle(form, manifest);
+    const { blobId, blobObjectId, walrusActualCost, tatumStorage } = await writeFormBundle(form, manifest);
     upsertFormBlobIndex({
       formId: form.id,
       formBlobId: blobId,
@@ -1562,8 +1600,8 @@ export const walrusAdapter: StorageAdapter = {
       manifestBlobObjectId: blobObjectId,
       createdAt: form.createdAt,
     });
-    await localStorageAdapter.saveForm({ ...form, blobId, manifestBlobId: blobId, walrusActualCost });
-    return { id: form.id, blobId, manifestBlobId: blobId, walrusActualCost };
+    await localStorageAdapter.saveForm({ ...form, blobId, manifestBlobId: blobId, walrusActualCost, tatumStorage });
+    return { id: form.id, blobId, manifestBlobId: blobId, walrusActualCost, tatumStorage };
   },
 
   async getForm(id) {
@@ -1700,11 +1738,11 @@ export const walrusAdapter: StorageAdapter = {
       if (sanitizedSubmission.isEncrypted) {
         assertEncryptedSubmissionLeakGuard(sanitizedSubmission);
       }
-      const { blobId, blobObjectId, walrusProof } = await uploadBody(
+      const { blobId, blobObjectId, walrusProof, tatumStorage } = await uploadBody(
         new Blob([JSON.stringify(sanitizedSubmission)], { type: "application/json" }),
         "submission-bundle",
       );
-      await localStorageAdapter.updateSubmission({ ...sanitizedSubmission, blobId, walrusProof });
+      await localStorageAdapter.updateSubmission({ ...sanitizedSubmission, blobId, walrusProof, tatumStorage });
       upsertSubmissionBlobIndex({
         submissionId: sanitizedSubmission.id,
         formId: sanitizedSubmission.formId,
@@ -1770,6 +1808,7 @@ export const walrusAdapter: StorageAdapter = {
       ...sanitizedSubmission,
       blobId: bundle.blobId,
       walrusProof: bundle.walrusProof,
+      tatumStorage: bundle.tatumStorage,
     });
     await cleanupSupersededWalrusObjects(
       [entry.manifestBlobObjectId, form ? entry.formBlobObjectId : undefined].filter(
@@ -1780,8 +1819,11 @@ export const walrusAdapter: StorageAdapter = {
   },
 
   async saveEncryptedPayload(payload) {
-    const { blobId, walrusProof } = await uploadBody(new Blob([payload], { type: "text/plain" }), "encrypted-payload");
-    return { blobId, walrusProof };
+    const { blobId, walrusProof, tatumStorage } = await uploadBody(
+      new Blob([payload], { type: "text/plain" }),
+      "encrypted-payload",
+    );
+    return { blobId, walrusProof, tatumStorage };
   },
 
   async readEncryptedPayload(blobId) {
@@ -1793,10 +1835,11 @@ export const walrusAdapter: StorageAdapter = {
   },
 
   async uploadFile(file) {
-    const { blobId, walrusProof } = await uploadBody(file, "attachment");
+    const { blobId, walrusProof, tatumStorage } = await uploadBody(file, "attachment");
     return {
       blobId,
       walrusProof,
+      tatumStorage,
       url: getWalrusBlobUrl(blobId) ?? undefined,
     };
   },

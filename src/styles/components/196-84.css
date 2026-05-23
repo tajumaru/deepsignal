@@ -1,0 +1,61 @@
+.intent-start-card-creative {
+  padding: clamp(1rem, 2vw, 1.6rem);
+}
+
+.intent-start-card-creative .intent-start-grid {
+  grid-template-columns: minmax(0, 0.9fr) minmax(380px, 1.1fr);
+  gap: clamp(1rem, 2vw, 1.5rem);
+}
+
+.intent-start-card-creative .intent-prompt-panel {
+  align-content: center;
+  padding: clamp(1rem, 2vw, 1.5rem);
+}
+
+.intent-start-card-creative .intent-prompt-panel h2 {
+  max-width: 9ch;
+  font-size: clamp(2.8rem, 5vw, 5.2rem);
+  line-height: 0.94;
+  letter-spacing: 0;
+}
+
+.intent-start-card-creative .intent-textarea-wrap span {
+  font-size: 1.02rem;
+}
+
+.intent-start-card-creative .intent-textarea {
+  min-height: 132px;
+  border: 0;
+  border-bottom: 1px solid rgba(162, 239, 255, 0.18);
+  border-radius: 0;
+  background: transparent;
+  font-size: clamp(1.7rem, 3vw, 3rem);
+  line-height: 1.08;
+  padding-inline: 0;
+}
+
+.intent-add-question-button {
+  min-height: 3.3rem;
+  justify-self: start;
+  padding-inline: 1.4rem;
+}
+
+.intent-policy-grid-soft {
+  opacity: 0.72;
+}
+
+.intent-draft-flow.is-empty {
+  min-height: 260px;
+  place-items: center;
+}
+
+.intent-draft-empty {
+  display: grid;
+  justify-items: center;
+  gap: 0.45rem;
+  padding: 2rem;
+  border: 1px dashed rgba(126, 237, 255, 0.22);
+  border-radius: 22px;
+  color: rgba(226, 251, 255, 0.78);
+  text-align: center;
+}

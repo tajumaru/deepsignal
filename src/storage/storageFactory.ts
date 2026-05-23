@@ -1,4 +1,5 @@
 import { localStorageAdapter } from "./localStorageAdapter";
+import { getTatumStorageWriteUrl, isTatumStorageEnabled } from "./tatumStorage";
 import {
   deleteFormBlobIndex,
 } from "./blobIndex";
@@ -31,13 +32,16 @@ const requireWalrus = String(import.meta.env.VITE_REQUIRE_WALRUS).toLowerCase() 
 const walrusRequested = requireWalrus || import.meta.env.VITE_STORAGE_MODE === "walrus";
 const isProductionRuntime = import.meta.env.PROD;
 const walrusWriteMode = String(import.meta.env.VITE_WALRUS_STORAGE_MODE || "uploadRelay").toLowerCase();
+const tatumStorageConfigured = isTatumStorageEnabled() && Boolean(getTatumStorageWriteUrl());
 
 const walrusConfigured =
   walrusRequested &&
   Boolean(WALRUS_AGGREGATOR_URL) &&
   (walrusWriteMode === "publisher"
     ? Boolean(import.meta.env.VITE_WALRUS_PUBLISHER_URL)
-    : Boolean(WALRUS_UPLOAD_RELAY_URL));
+    : walrusWriteMode === "tatum"
+      ? tatumStorageConfigured
+      : Boolean(WALRUS_UPLOAD_RELAY_URL));
 
 let runtimeStatus: RuntimeStatus = {
   mode: walrusRequested ? "walrus" : "local-fallback",
@@ -45,6 +49,8 @@ let runtimeStatus: RuntimeStatus = {
     requireWalrus && !walrusConfigured
       ? walrusWriteMode === "publisher"
         ? "Walrus is required, but the publisher or aggregator URL is not configured."
+        : walrusWriteMode === "tatum"
+          ? "Walrus is required, but Tatum storage or the aggregator URL is not configured."
         : "Walrus is required, but the upload relay or aggregator URL is not configured."
       : null,
   diagnostics: null,

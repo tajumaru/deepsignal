@@ -1,0 +1,10 @@
+body.composer-mode {
+  background:
+    radial-gradient(circle at top, rgba(49, 130, 206, 0.12), transparent 24%),
+    linear-gradient(180deg, #07111b 0%, #08131f 100%);
+}
+
+body.composer-mode .bg-orb {
+  opacity: 0.1;
+  filter: blur(24px);
+}

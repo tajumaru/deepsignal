@@ -1,0 +1,414 @@
+.public-identity-card {
+  display: grid;
+  gap: 0.85rem;
+  padding: 1rem 1.1rem;
+  border: 0;
+}
+
+.public-identity-topline {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(280px, 0.85fr);
+  gap: 0.9rem;
+  align-items: center;
+}
+
+.public-identity-copy {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.public-identity-copy .eyebrow {
+  display: none;
+}
+
+.public-identity-copy h3 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.public-identity-copy .muted {
+  max-width: 56ch;
+  font-size: 0.95rem;
+}
+
+.public-identity-wallet {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.public-identity-wallet .wallet-connect-shell {
+  width: auto;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.public-identity-wallet .wallet-connect-shell-compact {
+  width: auto;
+}
+
+.public-identity-wallet .wallet-connect-direct {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.public-identity-wallet .wallet-connect-direct-copy {
+  display: none;
+}
+
+.public-identity-wallet .wallet-connect-direct [data-dapp-kit] button,
+.public-identity-wallet .wallet-connect-direct button[data-dapp-kit],
+.public-identity-wallet .wallet-sync-button {
+  width: auto;
+  min-height: 2.25rem;
+  padding: 0.42rem 0.68rem;
+  border-radius: var(--radius-pill);
+  border-color: rgba(116, 226, 255, 0.18);
+  background: rgba(6, 22, 36, 0.52) !important;
+  box-shadow: none;
+  font-size: 0.78rem;
+}
+
+.public-identity-wallet .wallet-sync-button {
+  grid-template-columns: auto minmax(0, auto);
+  gap: 0.45rem;
+  color: #d9f8ff;
+}
+
+.public-identity-wallet .wallet-sync-copy {
+  display: none;
+}
+
+.public-identity-wallet .wallet-sync-indicator {
+  width: 0.48rem;
+  height: 0.48rem;
+}
+
+.public-identity-wallet .wallet-sync-address {
+  font-size: 0.78rem;
+}
+
+.public-identity-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.8rem;
+  padding-top: 0.2rem;
+  border-top: 1px solid rgba(116, 226, 255, 0.1);
+}
+
+.public-identity-grid.is-wallet-required {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.public-identity-mode,
+.public-identity-note {
+  display: grid;
+  gap: 0.65rem;
+  padding: 0.95rem;
+  border-radius: var(--radius-lg);
+  border: 1px solid rgba(116, 226, 255, 0.1);
+  background: rgba(5, 19, 31, 0.52);
+}
+
+.public-identity-label {
+  color: var(--text-soft);
+  font-size: 0.74rem;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+}
+
+.public-identity-toggle {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.8rem;
+}
+
+.public-identity-toggle input {
+  width: auto;
+  margin-top: 0.1rem;
+  transform: scale(1.15);
+  transform-origin: top left;
+}
+
+.public-identity-toggle strong,
+.public-identity-note strong {
+  display: block;
+  margin-bottom: 0.2rem;
+}
+
+.public-identity-toggle small {
+  display: block;
+  color: var(--text-soft);
+  line-height: 1.5;
+}
+
+.public-identity-note p {
+  margin: 0;
+}
+
+.public-form-fields {
+  gap: 1.25rem;
+}
+
+.public-location-card {
+  display: grid;
+  gap: 1rem;
+  padding: 1rem 1.05rem;
+  border: 1px solid rgba(116, 226, 255, 0.14);
+  border-radius: var(--radius-lg);
+  background:
+    linear-gradient(180deg, rgba(13, 34, 46, 0.78), rgba(9, 24, 35, 0.72)),
+    rgba(7, 18, 27, 0.86);
+}
+
+.public-location-card.is-success {
+  border-color: rgba(94, 227, 165, 0.28);
+  box-shadow: 0 18px 42px rgba(12, 28, 24, 0.22);
+}
+
+.public-location-card-copy,
+.public-location-card-body {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.public-location-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.7rem;
+}
+
+.public-location-actions .ghost-button {
+  width: auto;
+  min-width: 10rem;
+}
+
+.public-form-header-image {
+  aspect-ratio: 16 / 7;
+  border-radius: var(--radius-panel);
+}
+
+.public-trust-header {
+  display: grid;
+  gap: 1rem;
+  padding: 1.15rem;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 20px;
+  background:
+    linear-gradient(180deg, rgba(9, 24, 38, 0.68), rgba(6, 18, 30, 0.46)),
+    rgba(8, 20, 32, 0.42);
+}
+
+.public-trust-header.is-expired {
+  border-color: rgba(255, 177, 72, 0.28);
+  background: rgba(48, 33, 17, 0.26);
+}
+
+.public-trust-copy {
+  display: grid;
+  gap: 0.42rem;
+}
+
+.public-trust-copy .eyebrow,
+.public-trust-copy h1,
+.public-trust-copy .lede {
+  margin: 0;
+}
+
+.public-trust-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.55rem 0.85rem;
+}
+
+.public-trust-list span {
+  position: relative;
+  min-width: 0;
+  padding-left: 1.05rem;
+  color: #d9edf2;
+  font-size: 0.92rem;
+  line-height: 1.45;
+}
+
+.public-trust-list span::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.55em;
+  width: 0.42rem;
+  height: 0.42rem;
+  border-radius: var(--radius-pill);
+  background: #74e2ff;
+  box-shadow: 0 0 14px rgba(116, 226, 255, 0.28);
+}
+
+.public-trust-footer {
+  display: grid;
+  gap: 0.55rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid rgba(148, 163, 184, 0.12);
+}
+
+.public-trust-footer .muted {
+  margin: 0;
+  max-width: 62ch;
+}
+
+.public-form-status-strip {
+  display: grid;
+  justify-items: end;
+  gap: 0.65rem;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.public-form-status-strip.is-expired {
+  border-color: rgba(255, 139, 120, 0.35);
+  background: rgba(61, 19, 18, 0.3);
+}
+
+.public-form-status-main {
+  display: grid;
+  align-content: center;
+  min-width: 0;
+  gap: 0.45rem;
+}
+
+.public-form-status-badges {
+  display: flex;
+  flex: 0 1 auto;
+  flex-wrap: wrap;
+  gap: 0.48rem;
+  min-width: 0;
+}
+
+.public-form-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-height: 2.15rem;
+  max-width: 100%;
+  padding: 0.34rem 0.65rem;
+  border: 1px solid rgba(116, 226, 255, 0.16);
+  border-radius: var(--radius-pill);
+  background: rgba(116, 226, 255, 0.08);
+  color: var(--text);
+  line-height: 1.1;
+}
+
+.public-form-status-badge span {
+  color: var(--text-soft);
+  font-size: 0.66rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.public-form-status-badge strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: 0.86rem;
+}
+
+.public-form-status-badge.is-live {
+  border-color: rgba(90, 242, 185, 0.28);
+  background: rgba(38, 189, 140, 0.12);
+}
+
+.public-form-status-badge.is-private {
+  border-color: rgba(197, 161, 255, 0.28);
+  background: rgba(125, 86, 255, 0.14);
+}
+
+.public-form-status-badge.is-expired {
+  border-color: rgba(255, 139, 120, 0.4);
+  background: rgba(255, 139, 120, 0.12);
+}
+
+.public-form-status-strip .muted {
+  min-width: 13rem;
+  max-width: 34rem;
+  margin: 0;
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
+
+.public-form-status-strip .public-submit-readiness {
+  align-self: center;
+}
+
+.public-progress-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.85rem;
+  padding: 0.2rem 0.05rem 0.35rem;
+  color: var(--text-soft);
+  font-size: 0.9rem;
+}
+
+.public-progress-row span {
+  color: #effcff;
+  font-weight: 700;
+}
+
+.public-progress-row small {
+  color: var(--text-soft);
+}
+
+.public-submit-readiness-inline .public-submit-badge-grid {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.45rem;
+}
+
+.public-submit-readiness-inline .public-submit-badge {
+  width: auto;
+  min-height: 2.1rem;
+  padding: 0.32rem 0.58rem 0.32rem 0.38rem;
+  border-radius: var(--radius-pill);
+}
+
+.public-submit-readiness-inline .public-submit-badge-icon {
+  width: 1.45rem;
+  height: 1.45rem;
+  font-size: 0.56rem;
+}
+
+.public-submit-readiness-inline .public-submit-badge.is-walrus .public-submit-badge-icon {
+  font-size: 0.88rem;
+}
+
+.public-submit-readiness-inline .public-submit-badge small {
+  display: none;
+}
+
+.public-submit-readiness-inline .public-submit-badge strong {
+  font-size: 0.78rem;
+}
+
+.public-form .composer-preview-section {
+  gap: 1rem;
+  padding: 1.05rem 0 0;
+  border: 0;
+  border-top: 1px solid rgba(148, 163, 184, 0.12);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.public-form .field-block {
+  gap: 0.8rem;
+  padding: 1.05rem 0;
+  border-top: 1px solid rgba(148, 163, 184, 0.1);
+}

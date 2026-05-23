@@ -1,0 +1,15 @@
+.section-row,
+.cta-row,
+.inline-actions,
+.filter-row,
+.pill-row,
+.stat-row {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.section-row {
+  align-items: center;
+  justify-content: space-between;
+}

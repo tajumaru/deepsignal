@@ -1,0 +1,36 @@
+.inbox-list-panel,
+.inbox-detail-panel {
+  min-height: 65vh;
+}
+
+.inbox-thread-list {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.inbox-thread {
+  width: 100%;
+  text-align: left;
+  padding: 1rem;
+  border: 1px solid rgba(116, 226, 255, 0.14);
+  border-radius: var(--radius-lg);
+  background:
+    linear-gradient(180deg, rgba(4, 20, 35, 0.92), rgba(3, 14, 26, 0.92)),
+    radial-gradient(circle at left top, rgba(52, 211, 153, 0.08), transparent 35%);
+  display: grid;
+  gap: 0.55rem;
+}
+
+.inbox-thread.is-active {
+  border-color: rgba(135, 244, 255, 0.45);
+  box-shadow: 0 0 0 1px rgba(149, 242, 255, 0.1), 0 0 30px rgba(102, 227, 255, 0.08);
+}
+
+.inbox-thread-header,
+.inbox-thread-meta,
+.attachment-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}

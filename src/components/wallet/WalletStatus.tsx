@@ -19,8 +19,8 @@ export function WalletStatus({
   status,
   address,
   walletName,
-  connectedLabel = "SIGNAL LINK ESTABLISHED",
-  connectingLabel = "Restoring wallet uplink",
+  connectedLabel = "Secure Session Active",
+  connectingLabel = "Restoring secure session",
   disconnectedLabel = "Wallet-optional public mode",
   errorLabel = "Wallet connection needs attention",
   className = "",
@@ -45,7 +45,13 @@ export function WalletStatus({
         }`}
       />
       <span className="wallet-sync-copy">
-        <strong>{status === "connected" ? "Synced" : status === "connecting" ? "Syncing Signal..." : "Sync Wallet"}</strong>
+        <strong>
+          {status === "connected"
+            ? "Secure Session"
+            : status === "connecting"
+              ? "Opening Session..."
+              : "Activate Session"}
+        </strong>
         <span>{walletName && status === "connected" ? `${statusCopy} · ${walletName}` : statusCopy}</span>
       </span>
       {showAddress && status === "connected" && address ? (

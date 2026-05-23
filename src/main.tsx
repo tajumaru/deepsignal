@@ -5,7 +5,7 @@ import App from "./App";
 import { startRuntimeBootstrap } from "./bootstrap/runtime";
 import { I18nProvider } from "./i18n";
 import { startChunkLoadRecovery } from "./lib/chunkLoadRecovery";
-import "./styles.css";
+import "./styles/index.css";
 
 function redirectLegacyPublicPathToHashRoute() {
   if (typeof window === "undefined" || window.location.hash) {

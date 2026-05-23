@@ -75,14 +75,15 @@ This is the fastest path through the current UX.
 9. Triage the signal, set priority/tags/notes, assign roadmap stage, and export JSON or CSV.
 10. Open `/explore` or `/roadmap/:formId` and confirm that public views contain only selected roadmap-safe metadata.
 
-## Phase2 Demo Flow
+## Demo flow: Secure Signal Operations
 
-For a short Signal Operations Workspace demo:
-
-1. Open `/admin` or `/dashboard` and show the stream list plus the selected signal detail panel.
-2. Start **Review Session** on an unread signal and walk through unlock, classify, reviewer note, and public roadmap decision steps.
-3. Show **Related Signals**, **Signal Timeline**, and the secondary inspector so the audience can see triage context, lifecycle history, and Walrus/Seal proof metadata together.
-4. Save the review, then show the resulting badges, reviewer summary, and export options without exposing private payloads on public views.
+- Anonymous or verified signals come into the Signal Operations Workspace.
+- Reviewers decrypt private payloads with Seal when the signal is protected.
+- Related Signals suggests duplicate wallet recovery, abuse, or security reports.
+- Reviewers can assign ownership, add notes, and flag needs follow-up.
+- The Signal Timeline shows the intake-to-resolution lifecycle for each report.
+- Safe metadata can be published to the roadmap without exposing private payload details.
+- Walrus keeps durable proof and storage metadata available for export and audit.
 
 ## Why Walrus / Seal / Sui
 
@@ -285,6 +286,12 @@ VITE_WALRUS_AGGREGATOR_URL=https://aggregator.walrus-mainnet.walrus.space
 VITE_WALRUS_UPLOAD_RELAY_TIMEOUT_MS=90000
 VITE_WALRUS_UPLOAD_RELAY_TIP_MAX=1000000
 VITE_WALRUS_STORAGE_EPOCHS=5
+
+# Optional: Tatum-managed Walrus uploads without exposing x-api-key in the browser
+NEXT_PUBLIC_TATUM_STORAGE_ENABLED=false
+VITE_TATUM_STORAGE_API_URL=https://api.tatum.io
+VITE_TATUM_STORAGE_UPLOAD_TIMEOUT_MS=120000
+VITE_TATUM_STORAGE_POLL_INTERVAL_MS=2000
 VITE_RELEASE_STORAGE_RESET_TOKEN=
 
 VITE_SEAL_PACKAGE_ID=
@@ -307,8 +314,10 @@ VITE_OWNER_CAP_ID=
 Notes:
 
 - `VITE_WALRUS_NETWORK` accepts `testnet` or `mainnet`; keep Walrus and Sui URLs aligned with the selected network.
+- `VITE_WALRUS_STORAGE_MODE` also accepts `tatum`. In that mode DeepSignal uploads through the Tatum Storage API, still keeps `blobId` as the recovery/read key, and continues to use `VITE_WALRUS_AGGREGATOR_URL` as the read fallback.
 - `NEXT_PUBLIC_SUI_RPC_URL` is the active client RPC target. Point it to Tatum for hackathon/demo infrastructure visibility, or leave the legacy `VITE_SUI_FULLNODE_URL` / `VITE_RPC_URL` values in place for the default Sui fullnode path.
 - `NEXT_PUBLIC_TATUM_ENABLED=true` turns on the Tatum RPC presentation and switchable client path.
+- `NEXT_PUBLIC_TATUM_STORAGE_ENABLED=true` turns on the Tatum Storage API path. For local `vite dev` / `vite preview`, `TATUM_API_KEY` also enables a `/api/tatum/storage` proxy so the storage API key stays server-side.
 - `TATUM_API_KEY` is optional. When present during `vite dev` or `vite preview`, DeepSignal proxies RPC calls through a local `/api/tatum/sui-rpc` path so the secret does not need to be exposed in the browser bundle.
 - `VITE_ADMIN_CAP_ID` and `VITE_OWNER_CAP_ID` are optional helper envs for operator tooling and manual transaction flows.
 - Normal app access discovers active cap objects from the connected wallet.

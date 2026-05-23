@@ -1,0 +1,22 @@
+button,
+input,
+textarea,
+select,
+.primary-button,
+.ghost-button,
+.danger-button {
+  min-width: 0;
+  max-width: 100%;
+}
+
+button,
+.primary-button,
+.ghost-button,
+.danger-button,
+input,
+select,
+textarea,
+.country-picker-trigger,
+.markdown-toolbar-button {
+  min-height: 44px;
+}

@@ -1,0 +1,19 @@
+.sticky-form-title-preview {
+  display: grid;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.sticky-form-title-preview strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.95rem;
+}
+
+.form-sticky-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.75rem;
+}

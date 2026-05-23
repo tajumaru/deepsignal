@@ -1,4 +1,5 @@
 import { WALRUS_UPLOAD_RELAY_URL } from "../lib/sui";
+import { getTatumStorageWriteUrl, isTatumStorageEnabled } from "./tatumStorage";
 import type { FormSchema, SignalManifest } from "../types";
 
 export type WalrusCostEstimateStatus = "ready" | "relay-unavailable" | "local-fallback";
@@ -7,7 +8,7 @@ export interface WalrusCostEstimate {
   status: WalrusCostEstimateStatus;
   payloadBytes: number;
   storageEpochs: number;
-  storageMode: "publisher" | "uploadRelay";
+  storageMode: "publisher" | "uploadRelay" | "tatum";
   relayTipMist: number | null;
   estimatedWal: number | null;
   estimatedSui: number | null;
@@ -32,10 +33,16 @@ type RelayTipConfig =
     };
 
 const bundledFormPointer = "__bundled_form__";
-const walrusStorageMode =
-  String(import.meta.env.VITE_WALRUS_STORAGE_MODE || "uploadRelay").toLowerCase() === "publisher"
-    ? "publisher"
-    : "uploadRelay";
+const walrusStorageMode = (() => {
+  const configuredMode = String(import.meta.env.VITE_WALRUS_STORAGE_MODE || "uploadRelay").toLowerCase();
+  if (configuredMode === "publisher") {
+    return "publisher" as const;
+  }
+  if (configuredMode === "tatum") {
+    return "tatum" as const;
+  }
+  return "uploadRelay" as const;
+})();
 const storageEpochs = Math.max(1, Number(import.meta.env.VITE_WALRUS_STORAGE_EPOCHS || "5"));
 const estimateBaseWal = Math.max(0, Number(import.meta.env.VITE_WALRUS_ESTIMATE_BASE_WAL || "0.012"));
 const estimateWalPerMbEpoch = Math.max(0, Number(import.meta.env.VITE_WALRUS_ESTIMATE_WAL_PER_MB_EPOCH || "0.0002"));
@@ -44,6 +51,7 @@ const requireWalrus = String(import.meta.env.VITE_REQUIRE_WALRUS).toLowerCase() 
 const walrusRequested = requireWalrus || import.meta.env.VITE_STORAGE_MODE === "walrus";
 const publisherConfigured = Boolean(import.meta.env.VITE_WALRUS_PUBLISHER_URL);
 const uploadRelayConfigured = Boolean(WALRUS_UPLOAD_RELAY_URL);
+const tatumStorageConfigured = isTatumStorageEnabled() && Boolean(getTatumStorageWriteUrl());
 let relayTipConfigPromise: Promise<RelayTipConfig | null> | null = null;
 
 function createEstimateManifest(form: Pick<FormSchema, "id" | "createdAt" | "headerImage" | "headerLogo">): SignalManifest {
@@ -164,6 +172,22 @@ export async function createWalrusCostEstimate(form: FormSchema): Promise<Walrus
       note: publisherConfigured
         ? "Publisher mode returns exact Walrus cost after upload."
         : "Publisher is not configured; publish may use local fallback.",
+    };
+  }
+
+  if (walrusStorageMode === "tatum") {
+    return {
+      status: tatumStorageConfigured ? "ready" : "local-fallback",
+      payloadBytes,
+      storageEpochs,
+      storageMode: "tatum",
+      relayTipMist: null,
+      estimatedWal: null,
+      estimatedSui: null,
+      relayTipSource: "not-applicable",
+      note: tatumStorageConfigured
+        ? "Tatum Storage API handles upload and certification asynchronously; final billing is managed by Tatum."
+        : "Tatum storage is not configured; publish may use local fallback.",
     };
   }
 

@@ -1,0 +1,14 @@
+.form-sticky-brand {
+  display: grid;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.form-sticky-brand strong {
+  font-size: 1rem;
+}
+
+.form-sticky-brand span {
+  color: #d5eef8;
+  font-size: 0.96rem;
+}

@@ -1,0 +1,26 @@
+.publish-overlay-rings span {
+  position: absolute;
+  left: 50%;
+  top: 27%;
+  border-radius: var(--radius-pill);
+  border: 1px solid rgba(113, 222, 255, 0.12);
+  transform: translate(-50%, -50%);
+  animation: publishSonar 5.2s ease-out infinite;
+}
+
+.publish-overlay-rings span:nth-child(1) {
+  width: 160px;
+  height: 160px;
+}
+
+.publish-overlay-rings span:nth-child(2) {
+  width: 260px;
+  height: 260px;
+  animation-delay: 1.1s;
+}
+
+.publish-overlay-rings span:nth-child(3) {
+  width: 360px;
+  height: 360px;
+  animation-delay: 2.2s;
+}

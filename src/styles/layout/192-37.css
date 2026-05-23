@@ -1,0 +1,7 @@
+.demo-builder-form,
+.demo-question-stack,
+.demo-public-card,
+.demo-inbox-detail {
+  display: grid;
+  gap: 0.85rem;
+}

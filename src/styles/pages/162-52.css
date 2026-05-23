@@ -1,0 +1,317 @@
+.review-controls-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  align-items: center;
+  justify-content: flex-end;
+  margin-top: auto;
+  padding-top: 0.25rem;
+}
+
+.review-primary-sections {
+  grid-template-columns: minmax(0, 1.05fr) minmax(280px, 0.95fr);
+  grid-template-areas:
+    "original original"
+    "unlock triage"
+    "context triage"
+    "success triage";
+  align-items: start;
+}
+
+.review-primary-sections .original-signal-section {
+  grid-area: original;
+}
+
+.review-primary-sections .private-signal-unlock-card {
+  grid-area: unlock;
+}
+
+.review-primary-sections .private-signal-unlock-card.is-success {
+  grid-area: success;
+}
+
+.review-primary-sections .review-unlock-context {
+  grid-area: context;
+}
+
+.review-primary-sections .contest-inline-success {
+  grid-area: success;
+}
+
+.review-primary-sections .review-triage-card {
+  grid-area: triage;
+}
+
+.review-primary-sections.is-review-ready {
+  grid-template-columns: 1fr;
+  grid-template-areas:
+    "original"
+    "triage";
+  gap: 1.2rem;
+}
+
+.review-primary-sections.is-review-ready .original-signal-section {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.14),
+    inset 0 0 0 1px rgba(195, 242, 250, 0.1),
+    0 18px 40px rgba(0, 0, 0, 0.28),
+    0 0 0 1px rgba(178, 244, 255, 0.16);
+}
+
+.review-primary-sections.is-review-ready .review-triage-card {
+  position: relative;
+  margin-top: 0.2rem;
+  padding-top: 1.2rem;
+  border-top: 1px solid rgba(125, 211, 252, 0.34);
+  background:
+    radial-gradient(circle at 92% 0%, rgba(14, 165, 233, 0.12), transparent 24%),
+    linear-gradient(180deg, #05121f, #030d18);
+  box-shadow:
+    inset 0 1px 0 rgba(125, 211, 252, 0.08),
+    inset 0 0 0 1px rgba(116, 226, 255, 0.12);
+}
+
+.review-primary-sections.is-review-ready .review-triage-card::before {
+  content: "";
+  position: absolute;
+  top: -0.7rem;
+  left: 0.05rem;
+  right: 0.05rem;
+  height: 1px;
+  background: linear-gradient(90deg, rgba(178, 244, 255, 0), rgba(178, 244, 255, 0.6), rgba(56, 189, 248, 0));
+}
+
+.review-triage-card {
+  display: grid;
+  gap: 0.85rem;
+  background:
+    linear-gradient(180deg, rgba(7, 26, 41, 0.86), rgba(4, 18, 31, 0.68));
+}
+
+.review-triage-card.is-review-locked {
+  border-color: rgba(148, 163, 184, 0.2);
+}
+
+.review-triage-card.is-review-locked .review-stage-card,
+.review-triage-card.is-review-locked .review-field-grid,
+.review-triage-card.is-review-locked .review-select,
+.review-triage-card.is-review-locked .review-roadmap-strip {
+  opacity: 0.58;
+}
+
+.review-triage-card.is-review-locked button:disabled,
+.review-triage-card.is-review-locked textarea:disabled {
+  cursor: not-allowed;
+}
+
+.review-field-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.review-badge-field {
+  display: grid;
+  gap: 0.45rem;
+  min-width: 0;
+}
+
+.review-badge-field > span {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--text-soft);
+}
+
+.review-badge-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
+.review-state-badge {
+  min-height: 2rem;
+  min-width: 0;
+  padding: 0.4rem 0.6rem;
+  border: 1px solid rgba(116, 226, 255, 0.14);
+  border-radius: var(--radius-pill);
+  background: rgba(5, 17, 29, 0.72);
+  color: rgba(219, 237, 246, 0.78);
+  font-size: 0.78rem;
+  font-weight: 800;
+  line-height: 1.1;
+  cursor: pointer;
+  transition:
+    border-color 0.18s ease,
+    background 0.18s ease,
+    color 0.18s ease,
+    transform 0.18s ease;
+}
+
+.review-state-badge:hover:not(:disabled),
+.review-state-badge:focus-visible {
+  border-color: rgba(125, 211, 252, 0.58);
+  background: rgba(14, 45, 68, 0.82);
+  color: #ffffff;
+  transform: translateY(-1px);
+}
+
+.review-state-badge.is-active {
+  border-color: rgba(125, 211, 252, 0.64);
+  background:
+    linear-gradient(135deg, rgba(14, 165, 233, 0.26), rgba(37, 99, 235, 0.2)),
+    rgba(7, 28, 45, 0.92);
+  color: #f8fdff;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    0 8px 18px rgba(8, 47, 73, 0.18);
+}
+
+.review-state-badge.is-active.is-status-unread,
+.review-state-badge.is-active.is-triage-new,
+.review-state-badge.is-active.is-value-none {
+  border-color: rgba(148, 163, 184, 0.46);
+  background: rgba(71, 85, 105, 0.3);
+}
+
+.review-state-badge.is-active.is-status-read,
+.review-state-badge.is-active.is-triage-investigating,
+.review-state-badge.is-active.is-priority-high,
+.review-state-badge.is-active.is-value-4,
+.review-state-badge.is-active.is-value-5 {
+  border-color: rgba(56, 189, 248, 0.72);
+  background:
+    linear-gradient(135deg, rgba(14, 165, 233, 0.36), rgba(37, 99, 235, 0.28)),
+    rgba(7, 28, 45, 0.94);
+}
+
+.review-state-badge.is-active.is-status-archived,
+.review-state-badge.is-active.is-triage-closed,
+.review-state-badge.is-active.is-priority-low {
+  border-color: rgba(52, 211, 153, 0.56);
+  background:
+    linear-gradient(135deg, rgba(52, 211, 153, 0.26), rgba(20, 184, 166, 0.18)),
+    rgba(5, 30, 30, 0.92);
+}
+
+.review-state-badge.is-active.is-triage-planned,
+.review-state-badge.is-active.is-triage-in_progress,
+.review-state-badge.is-active.is-triage-fixed,
+.review-state-badge.is-active.is-priority-medium,
+.review-state-badge.is-active.is-value-2,
+.review-state-badge.is-active.is-value-3 {
+  border-color: rgba(250, 204, 21, 0.56);
+  background:
+    linear-gradient(135deg, rgba(250, 204, 21, 0.2), rgba(245, 158, 11, 0.14)),
+    rgba(35, 27, 6, 0.78);
+}
+
+.review-state-badge:disabled {
+  cursor: default;
+}
+
+.review-star-rating {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.22rem;
+  min-height: 2rem;
+  padding: 0.18rem 0.28rem;
+  border: 1px solid rgba(116, 226, 255, 0.12);
+  border-radius: var(--radius-pill);
+  background: rgba(5, 17, 29, 0.52);
+}
+
+.review-star-button {
+  display: inline-grid;
+  place-items: center;
+  width: 1.55rem;
+  height: 1.55rem;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: rgba(148, 163, 184, 0.72);
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    background 0.18s ease,
+    color 0.18s ease,
+    transform 0.18s ease,
+    text-shadow 0.18s ease;
+}
+
+.review-star-button:hover:not(:disabled),
+.review-star-button:focus-visible {
+  background: rgba(255, 223, 58, 0.14);
+  color: #ffef8a;
+  transform: translateY(-1px) scale(1.04);
+}
+
+.review-star-button.is-filled {
+  color: #ffdf3a;
+  text-shadow: 0 0 14px rgba(255, 223, 58, 0.36);
+}
+
+.review-star-button.is-selected {
+  background: rgba(255, 223, 58, 0.16);
+  box-shadow: inset 0 0 0 1px rgba(255, 223, 58, 0.34);
+}
+
+.review-star-button:disabled {
+  cursor: default;
+}
+
+.review-triage-card label,
+.signal-detail-primary-card {
+  min-width: 0;
+}
+
+.review-triage-card textarea {
+  min-height: 7rem;
+}
+
+.review-unlock-block {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.review-unlock-context,
+.review-locked-signal-copy {
+  position: relative;
+  overflow: hidden;
+  display: grid;
+  gap: 0.55rem;
+  padding: 0.95rem;
+  border-radius: var(--radius-md);
+  background:
+    repeating-linear-gradient(
+      0deg,
+      rgba(116, 226, 255, 0.04) 0,
+      rgba(116, 226, 255, 0.04) 1px,
+      transparent 1px,
+      transparent 8px
+    ),
+    linear-gradient(180deg, rgba(2, 11, 21, 0.72), rgba(4, 18, 31, 0.56));
+  border: 1px solid rgba(116, 226, 255, 0.13);
+  box-shadow:
+    inset 0 0 0 1px rgba(116, 226, 255, 0.04),
+    0 0 20px rgba(59, 130, 246, 0.06);
+}
+
+.review-unlock-context::before,
+.review-locked-signal-copy::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(90deg, transparent, rgba(125, 245, 255, 0.12), transparent);
+  transform: translateX(-110%);
+  animation: privateSignalHorizontalScan 2.8s ease-in-out infinite;
+}
+
+.review-unlock-context p,
+.review-locked-signal-copy p {
+  margin: 0;
+}

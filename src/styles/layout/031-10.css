@@ -1,0 +1,15 @@
+.builder-layout,
+.detail-layout,
+.public-layout {
+  grid-template-columns: minmax(0, 1.45fr) minmax(280px, 0.85fr);
+}
+
+.grid,
+.card-grid,
+.stack,
+.summary-grid,
+.roadmap-group-grid,
+.roadmap-card-list {
+  display: grid;
+  gap: 1rem;
+}

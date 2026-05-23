@@ -1,0 +1,1235 @@
+@keyframes walletSyncPulse {
+  0%,
+  100% {
+    opacity: 0.55;
+    box-shadow: 0 0 0 1px rgba(163, 245, 255, 0.18), 0 0 0 rgba(106, 242, 255, 0);
+  }
+  50% {
+    opacity: 1;
+    box-shadow: 0 0 0 1px rgba(163, 245, 255, 0.24), 0 0 18px rgba(106, 242, 255, 0.42);
+  }
+}
+
+@keyframes landing-primary-invite {
+  0%,
+  100% {
+    transform: translateY(0) scale(1);
+    box-shadow:
+      0 0 0 0 rgba(59, 130, 246, 0.18),
+      0 14px 30px rgba(14, 165, 198, 0.22);
+  }
+  52% {
+    transform: translateY(-1px) scale(1.035);
+    box-shadow:
+      0 0 0 0.42rem rgba(59, 130, 246, 0.075),
+      0 18px 38px rgba(59, 130, 246, 0.3);
+  }
+}
+
+@keyframes landing-button-sheen {
+  0%,
+  38% {
+    transform: translateX(-82%) rotate(8deg);
+    opacity: 0;
+  }
+  52% {
+    opacity: 0.62;
+  }
+  70%,
+  100% {
+    transform: translateX(82%) rotate(8deg);
+    opacity: 0;
+  }
+}
+
+@keyframes landing-secondary-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-1px);
+  }
+}
+
+@keyframes landing-flow-node-pulse {
+  0%,
+  100% {
+    transform: translate(-50%, -50%) scale(1);
+    box-shadow:
+      0 0 0 0.25rem rgba(82, 205, 255, 0.12),
+      0 0 18px rgba(87, 215, 255, 0.42);
+  }
+  50% {
+    transform: translate(-50%, -50%) scale(1.08);
+    box-shadow:
+      0 0 0 0.45rem rgba(82, 205, 255, 0.08),
+      0 0 26px rgba(87, 215, 255, 0.54);
+  }
+}
+
+@keyframes landing-flow-particle-drift {
+  0% {
+    transform: translate3d(0, 0, 0);
+    opacity: 0;
+  }
+  15%,
+  75% {
+    opacity: 0.85;
+  }
+  100% {
+    transform: translate3d(42px, -26px, 0);
+    opacity: 0;
+  }
+}
+
+@keyframes landing-layer-arrow {
+  0%,
+  100% {
+    opacity: 0.52;
+    transform: translateY(0) rotate(45deg);
+  }
+  50% {
+    opacity: 1;
+    transform: translateY(8px) rotate(45deg);
+  }
+}
+
+@keyframes landing-hero-card-pulse {
+  0%,
+  100% {
+    box-shadow:
+      inset 0 1px 0 rgba(220, 222, 255, 0.08),
+      0 30px 80px rgba(0, 0, 0, 0.34),
+      0 0 28px rgba(104, 107, 255, 0.06);
+  }
+  50% {
+    box-shadow:
+      inset 0 1px 0 rgba(220, 222, 255, 0.1),
+      0 32px 86px rgba(0, 0, 0, 0.36),
+      0 0 42px rgba(112, 125, 255, 0.12);
+  }
+}
+
+@keyframes landing-hero-glow {
+  0%,
+  100% {
+    opacity: 0.62;
+    transform: scale(0.96);
+  }
+  50% {
+    opacity: 0.96;
+    transform: scale(1.04);
+  }
+}
+
+@keyframes landing-hero-float {
+  0%,
+  100% {
+    margin-top: 0;
+  }
+  50% {
+    margin-top: -8px;
+  }
+}
+
+@keyframes landing-hero-system-scan {
+  0% {
+    background-position: 0 0, 0 0, 0 -140%;
+  }
+  100% {
+    background-position: 0 0, 0 0, 0 160%;
+  }
+}
+
+@keyframes landing-hero-orbit-drift {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes landing-hero-gradient-drift {
+  0%,
+  100% {
+    background-position: 0 0, 0 0;
+    opacity: 0.72;
+  }
+  50% {
+    background-position: 100% 0, 0 0;
+    opacity: 1;
+  }
+}
+
+@keyframes landing-hero-signal-line {
+  0%,
+  100% {
+    opacity: 0.28;
+    transform: translateY(0);
+  }
+  50% {
+    opacity: 0.72;
+    transform: translateY(12px);
+  }
+}
+
+@keyframes landing-hero-ring-breathe {
+  0%,
+  100% {
+    opacity: 0.44;
+    scale: 0.97;
+  }
+  50% {
+    opacity: 0.82;
+    scale: 1.04;
+  }
+}
+
+@keyframes landing-hero-node-pulse {
+  0%,
+  100% {
+    opacity: 0.72;
+    filter: brightness(0.92);
+  }
+  50% {
+    opacity: 1;
+    filter: brightness(1.22);
+  }
+}
+
+@keyframes landing-hero-node-shell-pulse {
+  0%,
+  100% {
+    opacity: 0.96;
+    box-shadow: 0 0 24px rgba(78, 244, 239, 0.26), 0 0 40px rgba(56, 211, 233, 0.14);
+  }
+  50% {
+    opacity: 1;
+    box-shadow: 0 0 32px rgba(92, 247, 241, 0.34), 0 0 52px rgba(64, 220, 239, 0.2);
+  }
+}
+
+@keyframes landing-hero-frog-pulse {
+  0%,
+  100% {
+    opacity: 0.86;
+    transform: scale(0.96);
+    filter: drop-shadow(0 0 4px rgba(84, 244, 239, 0.24));
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.03);
+    filter: drop-shadow(0 0 9px rgba(84, 244, 239, 0.36));
+  }
+}
+
+@keyframes landing-hero-frog-blink {
+  0%,
+  44%,
+  48%,
+  82%,
+  86%,
+  100% {
+    transform: scaleY(1);
+    opacity: 0.94;
+  }
+  46%,
+  84% {
+    transform: scaleY(0.12);
+    opacity: 0.78;
+  }
+}
+
+@keyframes landing-hero-radar-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes landing-hero-bar-stream {
+  0%,
+  100% {
+    opacity: 0.46;
+    transform: scaleY(0.74);
+  }
+  50% {
+    opacity: 0.96;
+    transform: scaleY(1);
+  }
+}
+
+@keyframes landing-hero-routing-sweep {
+  0%,
+  48% {
+    transform: translateX(-100%);
+  }
+  76%,
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+@keyframes landing-hero-relay-dot {
+  0% {
+    left: 0;
+    opacity: 0;
+  }
+  18%,
+  82% {
+    opacity: 1;
+  }
+  100% {
+    left: calc(100% - 0.38rem);
+    opacity: 0;
+  }
+}
+
+@keyframes landing-hero-mask-blink {
+  0%,
+  100% {
+    opacity: 0.42;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes landing-hero-cursor-blink {
+  50% {
+    opacity: 0;
+  }
+}
+
+@keyframes landing-hero-left-glow {
+  0%,
+  100% {
+    opacity: 0.54;
+    transform: translate3d(0, 0, 0) scale(0.98);
+  }
+  50% {
+    opacity: 0.86;
+    transform: translate3d(12px, -8px, 0) scale(1.03);
+  }
+}
+
+@keyframes landing-hero-left-wave {
+  0%,
+  100% {
+    opacity: 0.34;
+    transform: translateX(-8px);
+  }
+  50% {
+    opacity: 0.62;
+    transform: translateX(18px);
+  }
+}
+
+@keyframes landing-hero-title-sheen {
+  0%,
+  46% {
+    opacity: 0;
+    transform: translateX(-82%);
+  }
+  56% {
+    opacity: 0.72;
+  }
+  70%,
+  100% {
+    opacity: 0;
+    transform: translateX(72%);
+  }
+}
+
+@keyframes landing-hero-shared-grid {
+  0% {
+    background-position: 0 0, 0 0, 0 0;
+  }
+  100% {
+    background-position: 44px 0, 0 44px, 0 0;
+  }
+}
+
+@keyframes landing-hero-global-flow {
+  0% {
+    right: 0;
+    opacity: 0;
+  }
+  18%,
+  72% {
+    opacity: 0.82;
+  }
+  100% {
+    right: calc(100% - 0.28rem);
+    opacity: 0;
+  }
+}
+
+@keyframes landing-hero-particle-drift {
+  0%,
+  100% {
+    opacity: 0.18;
+    transform: translate3d(0, 0, 0);
+  }
+  45% {
+    opacity: 0.5;
+    transform: translate3d(18px, -10px, 0);
+  }
+  72% {
+    opacity: 0.32;
+    transform: translate3d(34px, 8px, 0);
+  }
+}
+
+@keyframes landing-hero-link-flow {
+  0% {
+    left: 4%;
+    opacity: 0;
+  }
+  18%,
+  78% {
+    opacity: 0.9;
+  }
+  100% {
+    left: calc(100% - 0.34rem);
+    opacity: 0;
+  }
+}
+
+@keyframes landing-final-field-breathe {
+  0%,
+  100% {
+    opacity: 0.34;
+    scale: 0.992;
+  }
+  50% {
+    opacity: 0.48;
+    scale: 1.006;
+  }
+}
+
+@keyframes landing-final-core-pulse {
+  0%,
+  100% {
+    opacity: 0.32;
+    transform: scale(0.992);
+  }
+  50% {
+    opacity: 0.5;
+    transform: scale(1.015);
+  }
+}
+
+@keyframes landing-live-flow-dot {
+  0% {
+    top: 0;
+    opacity: 0;
+  }
+  14%,
+  82% {
+    opacity: 1;
+  }
+  100% {
+    top: calc(100% - 0.38rem);
+    opacity: 0;
+  }
+}
+
+@keyframes landing-live-flow-sweep {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes landing-live-flow-path {
+  from {
+    stroke-dashoffset: 0;
+  }
+  to {
+    stroke-dashoffset: -220;
+  }
+}
+
+@keyframes landing-live-flow-packet-1 {
+  0%,
+  100% {
+    transform: translate(3.1rem, 11.4rem);
+    opacity: 0;
+  }
+  10%,
+  78% {
+    opacity: 1;
+  }
+  50% {
+    transform: translate(14.8rem, 5rem);
+  }
+  100% {
+    transform: translate(19.4rem, 4.2rem);
+  }
+}
+
+@keyframes landing-live-flow-packet-2 {
+  0%,
+  100% {
+    transform: translate(3.1rem, 11.4rem);
+    opacity: 0;
+  }
+  12%,
+  80% {
+    opacity: 1;
+  }
+  55% {
+    transform: translate(15.4rem, 13.2rem);
+  }
+  100% {
+    transform: translate(20.1rem, 12rem);
+  }
+}
+
+@keyframes landing-live-flow-packet-3 {
+  0%,
+  100% {
+    transform: translate(12.8rem, 4.2rem);
+    opacity: 0;
+  }
+  14%,
+  76% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate(14.1rem, 12.5rem);
+  }
+}
+
+@keyframes landing-live-flow-pipeline-pulse {
+  0%,
+  100% {
+    transform: translateY(0);
+    box-shadow: 0 0 20px rgba(110, 227, 255, 0.12);
+  }
+  50% {
+    transform: translateY(-1px);
+    box-shadow: 0 0 26px rgba(110, 227, 255, 0.2);
+  }
+}
+
+@keyframes landing-live-flow-link-travel {
+  from {
+    transform: translateX(-120%);
+  }
+  to {
+    transform: translateX(120%);
+  }
+}
+
+@keyframes landing-live-terminal-cursor {
+  0%,
+  50% {
+    opacity: 1;
+  }
+  50.01%,
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes create-form-cta-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    filter: saturate(1);
+    box-shadow:
+      0 0 0 0 rgba(59, 130, 246, 0.18),
+      0 16px 36px rgba(14, 165, 198, 0.24);
+  }
+  50% {
+    transform: scale(1.06);
+    filter: saturate(1.18) brightness(1.08);
+    box-shadow:
+      0 0 0 0.62rem rgba(59, 130, 246, 0.1),
+      0 22px 46px rgba(59, 130, 246, 0.34);
+  }
+}
+
+@keyframes create-form-cta-ring {
+  0% {
+    opacity: 0.55;
+    transform: scale(0.98);
+  }
+  70%,
+  100% {
+    opacity: 0;
+    transform: scale(1.16);
+  }
+}
+
+@keyframes create-project-cta-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    filter: saturate(1);
+    box-shadow:
+      0 0 0 0 rgba(59, 130, 246, 0.16),
+      0 14px 30px rgba(14, 165, 198, 0.18);
+  }
+  50% {
+    transform: scale(1.04);
+    filter: saturate(1.1) brightness(1.04);
+    box-shadow:
+      0 0 0 0.45rem rgba(59, 130, 246, 0.08),
+      0 18px 38px rgba(59, 130, 246, 0.26);
+  }
+}
+
+@keyframes create-project-cta-ring {
+  0% {
+    opacity: 0.42;
+    transform: scale(0.99);
+  }
+  70%,
+  100% {
+    opacity: 0;
+    transform: scale(1.12);
+  }
+}
+
+@keyframes publish-cta-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    filter: saturate(1);
+    box-shadow:
+      0 0 0 0 rgba(59, 130, 246, 0.18),
+      0 12px 28px rgba(14, 165, 198, 0.2);
+  }
+  50% {
+    transform: scale(1.045);
+    filter: saturate(1.14) brightness(1.06);
+    box-shadow:
+      0 0 0 0.5rem rgba(59, 130, 246, 0.08),
+      0 18px 38px rgba(59, 130, 246, 0.3);
+  }
+}
+
+@keyframes publish-cta-ring {
+  0% {
+    opacity: 0.5;
+    transform: scale(0.98);
+  }
+  70%,
+  100% {
+    opacity: 0;
+    transform: scale(1.12);
+  }
+}
+
+@keyframes privateSignalSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes privateSignalScanline {
+  0% {
+    transform: translateY(-110%);
+    opacity: 0;
+  }
+  18%,
+  76% {
+    opacity: 0.78;
+  }
+  100% {
+    transform: translateY(110%);
+    opacity: 0;
+  }
+}
+
+@keyframes privateSignalNoise {
+  0% {
+    transform: translate3d(0, 0, 0);
+  }
+  33% {
+    transform: translate3d(2%, -1%, 0);
+  }
+  66% {
+    transform: translate3d(-1%, 2%, 0);
+  }
+  100% {
+    transform: translate3d(1%, 1%, 0);
+  }
+}
+
+@keyframes privateSignalLockPulse {
+  0%,
+  100% {
+    transform: scale(1);
+    filter: brightness(1);
+  }
+  50% {
+    transform: scale(1.035);
+    filter: brightness(1.12);
+  }
+}
+
+@keyframes privateSignalDecryptPulse {
+  0%,
+  100% {
+    transform: scale(1) rotate(0deg);
+  }
+  50% {
+    transform: scale(1.045) rotate(1deg);
+  }
+}
+
+@keyframes privateSignalPrimaryCtaPulse {
+  0%,
+  100% {
+    transform: translateY(0) scale(1);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.42),
+      inset 0 -1px 0 rgba(85, 31, 18, 0.18),
+      0 16px 34px rgba(251, 113, 133, 0.28),
+      0 0 30px rgba(248, 184, 78, 0.26);
+  }
+  50% {
+    transform: translateY(-1px) scale(1.01);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.5),
+      inset 0 -1px 0 rgba(85, 31, 18, 0.16),
+      0 20px 40px rgba(251, 113, 133, 0.34),
+      0 0 40px rgba(248, 184, 78, 0.36);
+  }
+}
+
+@keyframes privateSignalPrimaryCtaSweep {
+  0%,
+  42% {
+    transform: translateX(-120%);
+  }
+  64%,
+  100% {
+    transform: translateX(120%);
+  }
+}
+
+@keyframes privateSignalPrimaryCtaRing {
+  0% {
+    opacity: 0.44;
+    transform: scale(0.98);
+  }
+  72%,
+  100% {
+    opacity: 0;
+    transform: scale(1.13);
+  }
+}
+
+@keyframes privateSignalUnlockPop {
+  0% {
+    transform: scale(0.96) rotate(0deg);
+    filter: brightness(1.2);
+  }
+  58% {
+    transform: scale(1.08) rotate(-8deg);
+    filter: brightness(1.34);
+  }
+  100% {
+    transform: scale(1) rotate(0deg);
+    filter: brightness(1);
+  }
+}
+
+@keyframes privateSignalRevealSweep {
+  0% {
+    transform: translateY(-110%);
+    opacity: 0.95;
+  }
+  100% {
+    transform: translateY(120%);
+    opacity: 0;
+  }
+}
+
+@keyframes privateSignalCipherBlink {
+  0%,
+  100% {
+    opacity: 0.22;
+  }
+  50% {
+    opacity: 0.9;
+  }
+}
+
+@keyframes privateSignalDataShake {
+  0% {
+    transform: translateX(0);
+  }
+  50% {
+    transform: translateX(1.5px);
+  }
+  100% {
+    transform: translateX(-1.5px);
+  }
+}
+
+@keyframes privateSignalHorizontalScan {
+  0%,
+  18% {
+    transform: translateX(-110%);
+    opacity: 0;
+  }
+  45% {
+    opacity: 0.7;
+  }
+  100% {
+    transform: translateX(110%);
+    opacity: 0;
+  }
+}
+
+@keyframes mirror-question-in {
+  from {
+    opacity: 0.72;
+    transform: translateY(5px) scale(0.992);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes featured-template-border {
+  0% {
+    filter: hue-rotate(0deg);
+  }
+
+  100% {
+    filter: hue-rotate(360deg);
+  }
+}
+
+@keyframes signalPreviewFade {
+  from {
+    opacity: 0.42;
+    filter: saturate(0.78) brightness(1.16);
+  }
+  to {
+    opacity: 1;
+    filter: none;
+  }
+}
+
+@keyframes signalPreviewShimmer {
+  0% {
+    opacity: 0;
+    transform: translateX(-120%);
+  }
+  24% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(120%);
+  }
+}
+
+@keyframes signal-step-pulse {
+  0%,
+  100% {
+    transform: scale(0.86);
+    opacity: 0.72;
+  }
+  50% {
+    transform: scale(1.12);
+    opacity: 1;
+  }
+}
+
+@keyframes frog-courier-hop {
+  0%,
+  100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  30% {
+    transform: translateY(-2px) rotate(-3deg);
+  }
+  60% {
+    transform: translateY(1px) rotate(3deg);
+  }
+}
+
+@keyframes mailbox-unread-pulse {
+  0% {
+    opacity: 0.9;
+    transform: scale(0.96);
+  }
+
+  100% {
+    opacity: 0;
+    transform: scale(1.15);
+  }
+}
+
+@keyframes signalSweep {
+  from {
+    transform: translate(-50%, -50%) rotate(0deg);
+  }
+  to {
+    transform: translate(-50%, -50%) rotate(360deg);
+  }
+}
+
+@keyframes signalPulse {
+  0%,
+  100% {
+    opacity: 0.5;
+    transform: scale(0.9);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.2);
+  }
+}
+
+@keyframes signalWave {
+  0%,
+  100% {
+    stroke-dashoffset: 100;
+    opacity: 0.55;
+  }
+  50% {
+    stroke-dashoffset: 0;
+    opacity: 1;
+  }
+}
+
+@keyframes review-focus-card-glow {
+  0%,
+  100% {
+    box-shadow:
+      inset 0 1px 0 rgba(199, 248, 255, 0.08),
+      inset 0 0 0 1px rgba(116, 226, 255, 0.16),
+      0 14px 34px rgba(2, 12, 22, 0.32);
+  }
+  50% {
+    box-shadow:
+      inset 0 1px 0 rgba(199, 248, 255, 0.1),
+      inset 0 0 0 1px rgba(116, 226, 255, 0.22),
+      0 16px 40px rgba(5, 24, 40, 0.4),
+      0 0 0 1px rgba(82, 191, 255, 0.08);
+  }
+}
+
+@keyframes review-focus-card-sheen {
+  0% {
+    transform: translateX(-18%) rotate(12deg);
+    opacity: 0;
+  }
+  12% {
+    opacity: 0.48;
+  }
+  42% {
+    opacity: 0.22;
+  }
+  100% {
+    transform: translateX(175%) rotate(12deg);
+    opacity: 0;
+  }
+}
+
+@keyframes review-focus-cta-pulse {
+  0%,
+  100% {
+    transform: translateY(0);
+    box-shadow:
+      0 12px 28px rgba(25, 168, 129, 0.3),
+      0 0 0 1px rgba(157, 255, 226, 0.14),
+      inset 0 1px 0 rgba(255, 255, 255, 0.36);
+  }
+  50% {
+    transform: translateY(-1px);
+    box-shadow:
+      0 18px 36px rgba(26, 184, 140, 0.4),
+      0 0 0 7px rgba(109, 255, 214, 0.14),
+      inset 0 1px 0 rgba(255, 255, 255, 0.42);
+  }
+}
+
+@keyframes reviewSaveReadyPulse {
+  0%,
+  100% {
+    transform: translateY(0);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.42),
+      0 14px 30px rgba(251, 113, 133, 0.28),
+      0 0 28px rgba(248, 184, 78, 0.3);
+  }
+  50% {
+    transform: translateY(-1px);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.5),
+      0 18px 36px rgba(251, 113, 133, 0.34),
+      0 0 38px rgba(248, 184, 78, 0.38);
+  }
+}
+
+@keyframes reviewDecryptScan {
+  0% {
+    transform: translateY(-100%);
+  }
+  100% {
+    transform: translateY(100%);
+  }
+}
+
+@keyframes storageProofNetworkPulse {
+  0%,
+  100% {
+    opacity: 0.72;
+    transform: scale(0.82);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.08);
+  }
+}
+
+@keyframes explorePulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(117, 238, 255, 0.42);
+  }
+  70% {
+    box-shadow: 0 0 0 14px rgba(117, 238, 255, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(117, 238, 255, 0);
+  }
+}
+
+@keyframes exploreDataflow {
+  0% {
+    transform: translateX(-14%);
+    opacity: 0.24;
+  }
+  50% {
+    opacity: 0.55;
+  }
+  100% {
+    transform: translateX(14%);
+    opacity: 0.24;
+  }
+}
+
+@keyframes exploreGridGlow {
+  0%,
+  100% {
+    opacity: 0.3;
+  }
+  50% {
+    opacity: 0.58;
+  }
+}
+
+@keyframes exploreCardFlow {
+  0% {
+    transform: translateX(-18%) skewX(-20deg);
+    opacity: 0;
+  }
+  20% {
+    opacity: 0.4;
+  }
+  100% {
+    transform: translateX(18%) skewX(-20deg);
+    opacity: 0;
+  }
+}
+
+@keyframes exploreCardSweep {
+  0% {
+    transform: translateX(-42%);
+    opacity: 0;
+  }
+  18% {
+    opacity: 0.38;
+  }
+  55% {
+    opacity: 0.2;
+  }
+  100% {
+    transform: translateX(42%);
+    opacity: 0;
+  }
+}
+
+@keyframes landingStatusPulse {
+  0%,
+  100% {
+    opacity: 0.82;
+    transform: scale(1);
+    box-shadow:
+      0 0 0 1px rgba(134, 235, 255, 0.18),
+      0 0 10px rgba(134, 235, 255, 0.22);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.08);
+    box-shadow:
+      0 0 0 1px rgba(134, 235, 255, 0.24),
+      0 0 16px rgba(134, 235, 255, 0.32);
+  }
+}
+
+@keyframes landingSonarSweep {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes landingSonarPulse {
+  0%,
+  100% {
+    opacity: 0.62;
+    transform: scale(0.92);
+  }
+
+  50% {
+    opacity: 1;
+    transform: scale(1.08);
+  }
+}
+
+@keyframes publishSonar {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.82);
+  }
+  16% {
+    opacity: 0.2;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(1.18);
+  }
+}
+
+@keyframes publishRipple {
+  0% {
+    transform: translateX(-50%) scale(0.78);
+    opacity: 0;
+  }
+  20% {
+    opacity: 0.16;
+  }
+  100% {
+    transform: translateX(-50%) scale(1.12);
+    opacity: 0;
+  }
+}
+
+@keyframes publishParticleDrift {
+  0% {
+    top: -6%;
+    opacity: 0;
+    transform: translateY(0) scale(0.8);
+  }
+  12% {
+    opacity: 0.7;
+  }
+  100% {
+    top: 110%;
+    opacity: 0;
+    transform: translateY(0) scale(1.2);
+  }
+}
+
+@keyframes beaconPulse {
+  0% {
+    opacity: 0;
+    transform: scale(0.82);
+  }
+  12% {
+    opacity: 0.28;
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.18);
+  }
+}
+
+@keyframes beaconDrift {
+  0%,
+  100% {
+    transform: translate3d(0, -3px, 0);
+  }
+  50% {
+    transform: translate3d(0, 4px, 0);
+  }
+}
+
+@keyframes beaconScan {
+  0% {
+    transform: translateY(0);
+    opacity: 0;
+  }
+  12% {
+    opacity: 0.9;
+  }
+  100% {
+    transform: translateY(calc(100% + 300px));
+    opacity: 0;
+  }
+}
+
+@keyframes beaconScanDrift {
+  0%,
+  100% {
+    transform: translateY(36px);
+    opacity: 0.2;
+  }
+  50% {
+    transform: translateY(260px);
+    opacity: 0.5;
+  }
+}
+
+@keyframes beaconParticle {
+  0% {
+    top: -8%;
+    opacity: 0;
+    transform: translateY(0) scale(0.7);
+  }
+  10% {
+    opacity: 0.7;
+  }
+  100% {
+    top: 108%;
+    opacity: 0;
+    transform: translateY(0) scale(1.25);
+  }
+}
+
+@keyframes beaconPlaceholder {
+  0% {
+    background-position: 100% 0;
+  }
+  100% {
+    background-position: -100% 0;
+  }
+}
+
+@keyframes demoQuestionArrive {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}

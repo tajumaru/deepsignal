@@ -22,8 +22,14 @@ interface ImportMetaEnv {
   readonly VITE_SUI_FULLNODE_URL?: string;
   readonly NEXT_PUBLIC_SUI_RPC_URL?: string;
   readonly NEXT_PUBLIC_TATUM_ENABLED?: string;
+  readonly NEXT_PUBLIC_TATUM_STORAGE_ENABLED?: string;
   readonly VITE_TATUM_PROXY_ENABLED?: string;
   readonly VITE_TATUM_PROXY_PATH?: string;
+  readonly VITE_TATUM_STORAGE_API_URL?: string;
+  readonly VITE_TATUM_STORAGE_PROXY_ENABLED?: string;
+  readonly VITE_TATUM_STORAGE_PROXY_PATH?: string;
+  readonly VITE_TATUM_STORAGE_UPLOAD_TIMEOUT_MS?: string;
+  readonly VITE_TATUM_STORAGE_POLL_INTERVAL_MS?: string;
   readonly VITE_WALFORM_PACKAGE_ID?: string;
   readonly VITE_PACKAGE_ID?: string;
   readonly VITE_REGISTRY_ID?: string;

@@ -1,0 +1,44 @@
+.classified-signal-redaction {
+  display: grid;
+  gap: 0.36rem;
+  width: 100%;
+  padding-bottom: 0.25rem;
+  filter: blur(1.7px) contrast(1.65);
+  mask-image: linear-gradient(90deg, #000 72%, transparent);
+}
+
+.classified-signal-redaction span {
+  display: block;
+  height: 0.72rem;
+  border-radius: var(--radius-pill);
+  background:
+    linear-gradient(90deg, rgba(125, 245, 255, 0.24), rgba(96, 165, 250, 0.05), rgba(125, 245, 255, 0.18)),
+    rgba(2, 11, 21, 0.78);
+  box-shadow: 0 0 14px rgba(116, 226, 255, 0.08);
+  animation: privateSignalCipherBlink 1.4s steps(2, end) infinite;
+}
+
+.classified-signal-redaction span:nth-child(2) {
+  width: 82%;
+  animation-delay: -0.35s;
+}
+
+.classified-signal-redaction span:nth-child(3) {
+  width: 94%;
+  animation-delay: -0.72s;
+}
+
+.classified-signal-redaction span:nth-child(4) {
+  width: 67%;
+  animation-delay: -1.1s;
+}
+
+.classified-signal-redaction span:nth-child(5) {
+  width: 88%;
+  animation-delay: -0.55s;
+}
+
+.classified-signal-redaction span:nth-child(6) {
+  width: 74%;
+  animation-delay: -0.18s;
+}

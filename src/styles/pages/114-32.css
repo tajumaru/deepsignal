@@ -1,0 +1,8 @@
+.signal-summary-card-meta,
+.private-access-actions,
+.signal-detail-utility-actions {
+  display: flex;
+  gap: 0.6rem;
+  align-items: center;
+  flex-wrap: wrap;
+}

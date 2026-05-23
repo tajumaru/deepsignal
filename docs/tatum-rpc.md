@@ -2,6 +2,8 @@
 
 DeepSignal can use Tatum as its Sui RPC infrastructure layer while keeping the existing Walrus storage and Seal encryption flow unchanged.
 
+If you also want Tatum to manage Walrus uploads, DeepSignal can optionally route storage writes through the Tatum Storage API while still reading by `blobId` from Walrus aggregators.
+
 ## What This Changes
 
 - Walrus remains the storage layer.
@@ -39,6 +41,14 @@ Optional secret for local proxy mode:
 TATUM_API_KEY=your_tatum_key_here
 ```
 
+Optional Tatum storage upload settings:
+
+```bash
+NEXT_PUBLIC_TATUM_STORAGE_ENABLED=true
+VITE_WALRUS_STORAGE_MODE=tatum
+VITE_TATUM_STORAGE_API_URL=https://api.tatum.io
+```
+
 ## Example Tatum Endpoints
 
 - Testnet: `https://sui-testnet.gateway.tatum.io`
@@ -60,6 +70,7 @@ DeepSignal does not inject `TATUM_API_KEY` into the browser bundle.
 When `TATUM_API_KEY` is present during local dev or preview:
 
 - Vite proxies requests through `/api/tatum/sui-rpc`;
+- Vite can also proxy Tatum storage requests through `/api/tatum/storage` when `NEXT_PUBLIC_TATUM_STORAGE_ENABLED=true`;
 - the proxy adds the `x-api-key` header server-side;
 - the UI still labels the provider as `Tatum RPC`.
 

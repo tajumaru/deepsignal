@@ -1,0 +1,142 @@
+.project-active-card,
+.project-primary-panel,
+.project-registry-subpanel {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--radius-panel);
+  border: 0;
+  background:
+    linear-gradient(180deg, rgba(4, 20, 35, 0.72), rgba(3, 14, 26, 0.78)),
+    radial-gradient(circle at left top, rgba(52, 211, 153, 0.06), transparent 36%);
+  box-shadow:
+    inset 0 0 0 1px rgba(149, 242, 255, 0.08),
+    inset 0 1px 0 rgba(201, 250, 255, 0.03);
+}
+
+.project-active-card::after,
+.project-primary-panel::after,
+.project-registry-subpanel::after {
+  content: "";
+  position: absolute;
+  inset: auto auto -80px -40px;
+  width: 180px;
+  height: 180px;
+  border-radius: var(--radius-pill);
+  background: radial-gradient(circle, rgba(102, 227, 255, 0.12), transparent 72%);
+  pointer-events: none;
+}
+
+.project-active-card,
+.project-registry-subpanel {
+  padding: 0.9rem 1rem;
+}
+
+.project-primary-panel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.15rem 1.2rem;
+  background:
+    radial-gradient(circle at top right, rgba(102, 227, 255, 0.14), transparent 34%),
+    linear-gradient(180deg, rgba(5, 21, 36, 0.94), rgba(3, 14, 26, 0.96));
+}
+
+.project-active-heading,
+.project-panel-head {
+  display: flex;
+  gap: 1rem;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.project-active-copy h3,
+.project-primary-panel h3,
+.project-panel-head h3 {
+  margin: 0;
+  line-height: 1.2;
+}
+
+.project-active-copy .muted,
+.project-primary-panel .muted,
+.project-registry-subpanel .muted {
+  margin-bottom: 0;
+  max-width: 56ch;
+  line-height: 1.45;
+}
+
+.project-selector-field {
+  width: 100%;
+  flex: 0 0 auto;
+  margin: 0;
+}
+
+.project-active-stats,
+.project-registry-grid {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.project-active-stats {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-top: 1rem;
+}
+
+.project-registry-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.project-registry-grid-advanced {
+  align-items: start;
+}
+
+.project-registry-stat {
+  display: grid;
+  gap: 0.32rem;
+  min-height: 88px;
+  padding: 0.95rem 1rem;
+  border-radius: var(--radius-lg);
+  border: 1px solid rgba(116, 226, 255, 0.12);
+  background:
+    linear-gradient(180deg, rgba(6, 22, 36, 0.8), rgba(4, 18, 31, 0.68));
+}
+
+.project-registry-stat span {
+  color: #90b3c5;
+  font-size: 0.72rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.project-registry-stat strong {
+  color: #f1fdff;
+  font-size: 1rem;
+  line-height: 1.35;
+}
+
+.project-registry-subpanel {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.project-registry-subpanel-soft {
+  background:
+    linear-gradient(180deg, rgba(5, 20, 34, 0.64), rgba(3, 14, 26, 0.68));
+}
+
+.project-registry-danger {
+  background:
+    linear-gradient(180deg, rgba(37, 18, 24, 0.74), rgba(26, 11, 16, 0.84)),
+    radial-gradient(circle at left top, rgba(248, 113, 113, 0.08), transparent 38%);
+  box-shadow:
+    inset 0 0 0 1px rgba(248, 113, 113, 0.18),
+    inset 0 1px 0 rgba(255, 219, 219, 0.03);
+}
+
+.project-panel-head {
+  gap: 0.75rem;
+}
+
+.project-panel-head .eyebrow {
+  margin-bottom: 0.2rem;
+}

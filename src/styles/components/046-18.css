@@ -1,0 +1,174 @@
+.private-signal-cancel-button {
+  min-height: 3rem;
+}
+
+.private-signal-unlock-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  min-height: 1.6rem;
+  color: #a5c4d4;
+  font-size: 0.92rem;
+}
+
+.private-signal-unlock-status.is-error {
+  color: #ffd6a6;
+}
+
+.private-signal-unlock-detail {
+  margin: -0.35rem 0 0;
+  color: #a5c4d4;
+  font-size: 0.84rem;
+}
+
+.seal-policy-debug-panel {
+  border: 1px solid rgba(120, 214, 255, 0.2);
+  border-radius: var(--radius-card);
+  background: rgba(2, 12, 22, 0.72);
+  color: #cfe8f4;
+  font-size: 0.78rem;
+  overflow: hidden;
+}
+
+.seal-policy-debug-panel summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  cursor: pointer;
+  padding: 0.7rem 0.85rem;
+  color: #7ad8ff;
+  font-weight: 700;
+}
+
+.seal-policy-debug-export-button {
+  min-height: 2rem;
+  padding: 0.35rem 0.65rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.72rem;
+  white-space: nowrap;
+}
+
+.seal-policy-debug-alert {
+  margin: 0 0.85rem 0.85rem;
+  border: 1px solid rgba(255, 171, 105, 0.42);
+  border-radius: var(--radius-sm);
+  padding: 0.6rem 0.7rem;
+  background: rgba(74, 30, 13, 0.42);
+  color: #ffd6b7;
+  line-height: 1.45;
+}
+
+.seal-policy-debug-panel dl,
+.seal-policy-debug-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.55rem;
+  margin: 0;
+  padding: 0 0.85rem 0.85rem;
+}
+
+.seal-policy-debug-panel dl div,
+.seal-policy-debug-grid > div {
+  min-width: 0;
+  border: 1px solid rgba(169, 216, 237, 0.13);
+  border-radius: var(--radius-sm);
+  padding: 0.55rem;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.seal-policy-debug-grid-wide {
+  grid-template-columns: 1fr;
+}
+
+.seal-policy-debug-panel dt,
+.seal-policy-debug-grid strong {
+  display: block;
+  margin: 0 0 0.35rem;
+  color: #8caabb;
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.seal-policy-debug-panel dd,
+.seal-policy-debug-panel pre {
+  margin: 0;
+  color: #e6f6ff;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  line-height: 1.45;
+}
+
+.seal-policy-diff-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  color: #e6f6ff;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  line-height: 1.45;
+}
+
+.seal-policy-diff-table th,
+.seal-policy-diff-table td {
+  border-top: 1px solid rgba(169, 216, 237, 0.12);
+  padding: 0.45rem 0.35rem;
+  text-align: left;
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+
+.seal-policy-diff-table th {
+  color: #8caabb;
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.seal-policy-diff-table tr.is-critical td {
+  background: rgba(255, 171, 105, 0.08);
+  color: #ffe3cc;
+}
+
+label,
+.field-block {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.field-label-row {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+}
+
+.field-label-text {
+  font-weight: 600;
+}
+
+.field-block.has-error .field-label-text,
+.field-block.has-error .field-question-index {
+  color: #ffe7ad;
+}
+
+.field-required-mark {
+  color: #ff5c73;
+}
+
+.field-question-index {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2.7rem;
+  padding: 0.28rem 0.65rem;
+  border-radius: var(--radius-pill);
+  border: 1px solid rgba(116, 226, 255, 0.2);
+  background: rgba(102, 227, 255, 0.08);
+  color: #9fe9ff;
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}

@@ -1,0 +1,48 @@
+.workspace-hero-controls select {
+  min-height: 44px;
+  padding: 0.55rem 0.8rem;
+}
+
+.workspace-hero-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem 0.9rem;
+}
+
+.workspace-hero-compact .workspace-hero-meta {
+  gap: 0.35rem 0.7rem;
+}
+
+.workspace-meta-item {
+  color: #a9c6d4;
+  font-size: 0.84rem;
+  letter-spacing: 0.01em;
+}
+
+.workspace-hero-compact .workspace-meta-item {
+  font-size: 0.78rem;
+}
+
+.workspace-meta-item::before {
+  content: "•";
+  margin-right: 0.45rem;
+  color: rgba(103, 232, 249, 0.55);
+}
+
+.workspace-primary-action {
+  border: 1px solid rgba(116, 226, 255, 0.12);
+  padding: 1rem 1.1rem;
+  background:
+    radial-gradient(circle at top right, rgba(102, 227, 255, 0.1), transparent 34%),
+    linear-gradient(180deg, rgba(5, 21, 36, 0.84), rgba(3, 14, 26, 0.88));
+}
+
+.workspace-primary-action h2,
+.workspace-primary-action p {
+  margin-bottom: 0;
+}
+
+.workspace-primary-actions {
+  align-items: center;
+  flex-wrap: wrap;
+}

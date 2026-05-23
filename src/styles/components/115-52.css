@@ -1,0 +1,387 @@
+.signal-card:hover,
+.stream-item:hover {
+  transform: translateY(-1px);
+  border-color: rgba(135, 244, 255, 0.24);
+  background:
+    linear-gradient(180deg, rgba(12, 38, 59, 0.95) 0%, rgba(7, 26, 42, 0.93) 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(178, 245, 255, 0.07),
+    0 12px 28px rgba(2, 10, 18, 0.24);
+}
+
+.stream-item.is-primary-queue:hover {
+  transform: translateY(-2px);
+  border-color: rgba(103, 232, 249, 0.68);
+  background:
+    radial-gradient(circle at 94% 48%, rgba(103, 232, 249, 0.27), transparent 45%),
+    linear-gradient(180deg, rgba(17, 66, 88, 0.98), rgba(7, 36, 57, 0.96));
+  box-shadow:
+    inset 0 1px 0 rgba(225, 252, 255, 0.09),
+    0 0 0 1px rgba(103, 232, 249, 0.14),
+    0 15px 34px rgba(2, 10, 18, 0.28),
+    0 0 34px rgba(103, 232, 249, 0.17);
+}
+
+.stream-item.is-secondary:hover {
+  transform: none;
+  border-color: rgba(148, 163, 184, 0.12);
+  background: rgba(116, 226, 255, 0.045);
+  box-shadow: none;
+  opacity: 0.9;
+}
+
+.stream-item.is-history:hover {
+  border-color: rgba(110, 231, 183, 0.16);
+  background:
+    radial-gradient(circle at 96% 50%, rgba(110, 231, 183, 0.08), transparent 40%),
+    linear-gradient(180deg, rgba(5, 24, 31, 0.5), rgba(3, 15, 24, 0.45));
+  box-shadow:
+    inset 0 1px 0 rgba(178, 245, 255, 0.035),
+    0 8px 20px rgba(2, 10, 18, 0.18);
+  opacity: 0.86;
+}
+
+.cluster-list {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.cluster-card {
+  display: grid;
+  gap: 0.85rem;
+  padding: 0.95rem;
+  border-radius: 1rem;
+  border: 0;
+  background: rgba(3, 15, 26, 0.52);
+  box-shadow:
+    inset 0 0 0 1px rgba(102, 227, 255, 0.09),
+    inset 0 1px 0 rgba(219, 249, 255, 0.04);
+}
+
+.cluster-card-main {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.cluster-card-main p {
+  margin-bottom: 0;
+}
+
+.cluster-card-actions {
+  display: flex;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+}
+
+.related-signals-panel {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.related-signals-header {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 0.85rem;
+}
+
+.related-signals-header h3,
+.related-signals-header p {
+  margin-bottom: 0;
+}
+
+.related-signals-notice {
+  margin: 0;
+  padding: 0.7rem 0.8rem;
+  border-radius: 12px;
+  border: 1px solid rgba(102, 227, 255, 0.14);
+  background: rgba(102, 227, 255, 0.07);
+  color: #dffaff;
+  font-size: 0.84rem;
+  font-weight: 600;
+}
+
+.related-signals-empty {
+  margin: 0;
+}
+
+.related-signal-list {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.related-signal-item {
+  width: 100%;
+  padding: 0.9rem;
+  border: 1px solid rgba(116, 226, 255, 0.1);
+  border-radius: var(--radius-md);
+  background: rgba(3, 15, 26, 0.42);
+  color: inherit;
+  text-align: left;
+  transition:
+    border-color var(--transition-fast),
+    background var(--transition-fast),
+    transform var(--transition-fast);
+}
+
+.related-signal-item:hover,
+.related-signal-item:focus-visible,
+.related-signal-item.is-selected {
+  border-color: rgba(116, 226, 255, 0.24);
+  background: rgba(4, 18, 31, 0.6);
+}
+
+.related-signal-item:hover,
+.related-signal-item:focus-visible {
+  transform: translateY(-1px);
+}
+
+.related-signal-item-main {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.related-signal-title-line,
+.related-signal-meta,
+.related-signal-reasons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  align-items: center;
+}
+
+.related-signal-title-line {
+  justify-content: space-between;
+}
+
+.related-signal-title-line strong {
+  color: #effcff;
+}
+
+.related-signal-title-line time,
+.related-signal-channel {
+  color: #9cb9c9;
+  font-size: 0.78rem;
+}
+
+.related-signal-preview {
+  color: #d2e9f3;
+  line-height: 1.45;
+}
+
+.related-signal-preview.is-locked {
+  color: #b7d5e2;
+}
+
+.related-signal-reason-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.24rem 0.5rem;
+  border-radius: var(--radius-pill);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #b6d3df;
+  font-size: 0.72rem;
+}
+
+.signal-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.32rem 0.65rem;
+  border-radius: var(--radius-pill);
+  background: rgba(102, 227, 255, 0.08);
+  border: 1px solid rgba(102, 227, 255, 0.14);
+  color: #dffaff;
+  font-size: 0.8rem;
+}
+
+.signal-chip-accent {
+  background: rgba(14, 165, 198, 0.18);
+}
+
+.signal-chip-warn {
+  background: rgba(248, 113, 113, 0.18);
+}
+
+.signal-chip-soft {
+  background: rgba(52, 211, 153, 0.09);
+  border-color: rgba(52, 211, 153, 0.16);
+}
+
+.signal-status-badges {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  min-width: 0;
+}
+
+.signal-status-chip {
+  --status-tint: rgba(102, 227, 255, 0.22);
+  --status-fill: rgba(8, 27, 43, 0.84);
+  --status-glow: rgba(102, 227, 255, 0.14);
+  --status-text: #e7fbff;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.42rem;
+  min-height: 1.95rem;
+  padding: 0.26rem 0.62rem 0.26rem 0.34rem;
+  border-radius: var(--radius-pill);
+  border: 1px solid color-mix(in srgb, var(--status-tint) 72%, rgba(255, 255, 255, 0.06));
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--status-fill) 92%, rgba(255, 255, 255, 0.03)) 0%, var(--status-fill) 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 0 0 1px rgba(2, 10, 18, 0.22),
+    0 10px 18px rgba(2, 10, 18, 0.18),
+    0 0 22px var(--status-glow);
+  color: var(--status-text);
+  white-space: nowrap;
+}
+
+.signal-status-chip-icon-shell {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.32rem;
+  height: 1.32rem;
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--status-tint) 26%, rgba(255, 255, 255, 0.04));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 0 14px color-mix(in srgb, var(--status-glow) 78%, transparent);
+  flex: 0 0 auto;
+}
+
+.signal-status-icon {
+  width: 0.82rem;
+  height: 0.82rem;
+}
+
+.signal-status-chip-label {
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+}
+
+.signal-status-chip.is-unread {
+  --status-tint: rgba(255, 102, 146, 0.34);
+  --status-fill: rgba(47, 13, 26, 0.9);
+  --status-glow: rgba(255, 87, 136, 0.18);
+  --status-text: #ffd6e2;
+}
+
+.signal-status-chip.is-priority-low {
+  --status-tint: rgba(251, 191, 36, 0.2);
+  --status-fill: rgba(51, 36, 10, 0.88);
+  --status-glow: rgba(245, 158, 11, 0.1);
+  --status-text: #ffecb3;
+}
+
+.signal-status-chip.is-priority-medium {
+  --status-tint: rgba(251, 191, 36, 0.28);
+  --status-fill: rgba(60, 38, 8, 0.9);
+  --status-glow: rgba(249, 168, 37, 0.14);
+  --status-text: #ffe2a8;
+}
+
+.signal-status-chip.is-priority-high,
+.signal-status-chip.is-bug {
+  --status-tint: rgba(251, 113, 133, 0.3);
+  --status-fill: rgba(62, 18, 16, 0.9);
+  --status-glow: rgba(248, 113, 113, 0.16);
+  --status-text: #ffd1cf;
+}
+
+.signal-status-chip.is-feature {
+  --status-tint: rgba(129, 140, 248, 0.3);
+  --status-fill: rgba(24, 26, 64, 0.9);
+  --status-glow: rgba(129, 140, 248, 0.14);
+  --status-text: #dbe4ff;
+}
+
+.signal-status-chip.is-survey,
+.signal-status-chip.is-attachment {
+  --status-tint: rgba(45, 212, 191, 0.28);
+  --status-fill: rgba(10, 44, 46, 0.9);
+  --status-glow: rgba(45, 212, 191, 0.14);
+  --status-text: #c7fffa;
+}
+
+.signal-status-chip.is-praise {
+  --status-tint: rgba(244, 114, 182, 0.28);
+  --status-fill: rgba(64, 19, 45, 0.9);
+  --status-glow: rgba(244, 114, 182, 0.14);
+  --status-text: #ffd7ec;
+}
+
+.signal-status-chip.is-general,
+.signal-status-chip.is-unknown,
+.signal-status-chip.is-local {
+  --status-tint: rgba(148, 163, 184, 0.22);
+  --status-fill: rgba(21, 30, 44, 0.9);
+  --status-glow: rgba(148, 163, 184, 0.1);
+  --status-text: #deecf8;
+}
+
+.signal-status-chip.is-pending,
+.signal-status-chip.is-selected,
+.signal-status-chip.is-encrypted,
+.signal-status-chip.is-cluster {
+  --status-tint: rgba(96, 165, 250, 0.28);
+  --status-fill: rgba(12, 31, 56, 0.9);
+  --status-glow: rgba(96, 165, 250, 0.14);
+  --status-text: #d7ebff;
+}
+
+.signal-status-chip.is-verified,
+.signal-status-chip.is-published {
+  --status-tint: rgba(52, 211, 153, 0.28);
+  --status-fill: rgba(11, 48, 39, 0.9);
+  --status-glow: rgba(52, 211, 153, 0.14);
+  --status-text: #d9fff2;
+}
+
+.signal-status-chip.is-reviewing,
+.signal-status-chip.is-resolved {
+  --status-tint: rgba(250, 204, 21, 0.28);
+  --status-fill: rgba(54, 39, 8, 0.9);
+  --status-glow: rgba(250, 204, 21, 0.14);
+  --status-text: #fff3c4;
+}
+
+.signal-status-chip.is-assigned {
+  --status-tint: rgba(147, 197, 253, 0.28);
+  --status-fill: rgba(18, 35, 68, 0.9);
+  --status-glow: rgba(96, 165, 250, 0.14);
+  --status-text: #dbeafe;
+}
+
+.signal-status-chip.is-follow-up {
+  --status-tint: rgba(251, 146, 60, 0.28);
+  --status-fill: rgba(66, 31, 11, 0.92);
+  --status-glow: rgba(249, 115, 22, 0.16);
+  --status-text: #ffedd5;
+}
+
+.signal-status-chip.is-new {
+  --status-tint: rgba(168, 85, 247, 0.28);
+  --status-fill: rgba(45, 18, 67, 0.9);
+  --status-glow: rgba(192, 132, 252, 0.16);
+  --status-text: #efd8ff;
+}
+
+.project-registry-panel {
+  display: grid;
+  gap: 1rem;
+  background:
+    radial-gradient(circle at top right, rgba(103, 232, 249, 0.12), transparent 28%),
+    linear-gradient(180deg, rgba(4, 18, 31, 0.94), rgba(3, 13, 24, 0.96));
+}
+
+.project-registry-status {
+  display: flex;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+}

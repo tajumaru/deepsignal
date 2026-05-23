@@ -1,0 +1,78 @@
+.signal-detail-column {
+  display: grid;
+  gap: 0.75rem;
+  align-content: start;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.signal-detail-column.panel {
+  padding: 1rem;
+  background:
+    radial-gradient(circle at top right, rgba(63, 197, 255, 0.08), transparent 26%),
+    linear-gradient(180deg, rgba(5, 20, 34, 0.86), rgba(4, 16, 28, 0.84));
+}
+
+.signal-detail-column .answer-card {
+  min-width: 0;
+  border: 0;
+  border-radius: var(--radius-lg);
+  padding: 0.9rem 1rem;
+  background:
+    linear-gradient(180deg, rgba(6, 22, 36, 0.78), rgba(4, 18, 31, 0.56));
+  box-shadow:
+    inset 0 1px 0 rgba(149, 242, 255, 0.1),
+    inset 0 0 0 1px rgba(116, 226, 255, 0.08);
+}
+
+.signal-detail-column .answer-card + .answer-card {
+  margin-top: 0;
+}
+
+.signal-detail-group-header {
+  display: grid;
+  gap: 0.2rem;
+  margin: 0.2rem 0 0.1rem;
+}
+
+.signal-detail-group {
+  display: contents;
+}
+
+.review-controls-section {
+  position: sticky;
+  top: 6.75rem;
+  z-index: 3;
+  display: grid;
+  gap: 0.7rem;
+  padding: 0.9rem 0.95rem;
+  background:
+    linear-gradient(180deg, rgba(7, 24, 39, 0.94), rgba(6, 20, 33, 0.92));
+  box-shadow:
+    inset 0 1px 0 rgba(199, 248, 255, 0.08),
+    inset 0 0 0 1px rgba(116, 226, 255, 0.1);
+}
+
+.signal-detail-hero h2,
+.private-access-card h3,
+.triage-compact-card h3,
+.collapsible-detail-card h3,
+.signal-detail-column .answer-card h3,
+.signal-detail-column .answer-card h4 {
+  margin-bottom: 0;
+}
+
+.signal-detail-hero .signal-detail-heading {
+  margin-bottom: 0.75rem;
+}
+
+.signal-detail-utility-actions .ghost-button,
+.private-access-actions .ghost-button {
+  min-height: 2.5rem;
+  padding: 0.55rem 0.9rem;
+}
+
+.signal-detail-utility-actions {
+  justify-content: flex-start;
+  gap: 0.55rem;
+}

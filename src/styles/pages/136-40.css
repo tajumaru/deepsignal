@@ -1,0 +1,271 @@
+.signal-detail-heading > div:first-child,
+.signal-detail-meta-row > * {
+  min-width: 0;
+}
+
+.signal-detail-meta-row {
+  justify-content: flex-start;
+}
+
+.review-primary-button {
+  min-height: 2.5rem;
+  padding-inline: 1rem;
+}
+
+.review-secondary-button {
+  min-height: 2.5rem;
+  border-color: rgba(116, 226, 255, 0.12);
+  color: #cfe9f1;
+}
+
+.review-secondary-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.85rem;
+  align-items: center;
+  min-height: 1.5rem;
+}
+
+.review-inline-link {
+  color: var(--text-soft);
+  font-size: 0.92rem;
+  transition: color 140ms ease;
+}
+
+.review-inline-link:hover,
+.review-inline-link:focus-visible {
+  color: var(--accent-strong);
+}
+
+.review-helper-copy {
+  margin: 0;
+  font-size: 0.88rem;
+}
+
+.review-progress-rail {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-auto-rows: 1fr;
+  gap: 0.45rem;
+}
+
+.review-progress-step {
+  display: flex;
+  min-width: 0;
+  gap: 0.6rem;
+  align-items: flex-start;
+  min-height: 4.25rem;
+  height: 100%;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 12px;
+  background: rgba(8, 24, 36, 0.72);
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-align: left;
+  transition:
+    border-color 140ms ease,
+    background-color 140ms ease,
+    color 140ms ease,
+    transform 140ms ease;
+}
+
+.review-progress-marker {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.65rem;
+  height: 1.65rem;
+  flex: 0 0 1.65rem;
+  border-radius: var(--radius-pill);
+  border: 1px solid rgba(126, 211, 236, 0.28);
+  background: rgba(14, 47, 68, 0.92);
+  color: #dffaff;
+  font-size: 0.76rem;
+  font-weight: 800;
+}
+
+.review-progress-copy {
+  display: grid;
+  gap: 0.1rem;
+  min-width: 0;
+}
+
+.review-progress-step-label {
+  color: #86aaba;
+  font-size: 0.66rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.review-progress-title {
+  min-width: 0;
+  display: -webkit-box;
+  min-height: 2.2em;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  color: #dcebf2;
+  line-height: 1.1;
+}
+
+.review-progress-step.is-complete {
+  border-color: rgba(45, 212, 191, 0.28);
+  color: #c7fff6;
+  background: rgba(8, 41, 44, 0.76);
+}
+
+.review-progress-step.is-complete .review-progress-marker {
+  border-color: rgba(117, 241, 216, 0.34);
+  background: rgba(10, 82, 70, 0.94);
+  color: #dffff9;
+}
+
+.review-progress-step.is-complete .review-progress-step-label,
+.review-progress-step.is-complete .review-progress-title {
+  color: #d9fff4;
+}
+
+.review-progress-step.is-current {
+  border-color: rgba(116, 226, 255, 0.42);
+  background: rgba(18, 85, 116, 0.42);
+  color: #effcff;
+  transform: translateY(-1px);
+}
+
+.review-progress-step.is-current .review-progress-marker {
+  border-color: rgba(149, 235, 255, 0.52);
+  background: linear-gradient(180deg, rgba(41, 139, 191, 0.98), rgba(16, 91, 133, 0.98));
+  color: #ffffff;
+  box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.12);
+}
+
+.review-progress-step.is-current .review-progress-step-label,
+.review-progress-step.is-current .review-progress-title {
+  color: #f2fcff;
+}
+
+.review-stage-card {
+  position: relative;
+  display: grid;
+  gap: 0.85rem;
+  padding: 0.95rem 1rem 1rem;
+  border: 1px solid rgba(116, 226, 255, 0.32);
+  border-radius: var(--radius-card);
+  background:
+    linear-gradient(180deg, rgba(14, 45, 66, 0.82), rgba(7, 27, 42, 0.78));
+  box-shadow:
+    inset 0 1px 0 rgba(219, 251, 255, 0.08),
+    0 12px 28px rgba(0, 0, 0, 0.2);
+  overflow: hidden;
+}
+
+.review-session-stage-split .review-stage-card {
+  position: sticky;
+  top: 0;
+}
+
+.review-trust-summary-card {
+  display: grid;
+  gap: 0.95rem;
+}
+
+.review-trust-summary-header,
+.review-trust-summary-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+  flex-wrap: wrap;
+}
+
+.review-trust-summary-header h3 {
+  margin: 0.18rem 0 0;
+}
+
+.review-trust-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.8rem;
+}
+
+.review-trust-summary-item {
+  display: grid;
+  gap: 0.3rem;
+  padding: 0.8rem 0.88rem;
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(116, 226, 255, 0.1);
+  background: rgba(5, 18, 29, 0.48);
+}
+
+.review-trust-summary-item span {
+  color: #9bc1cf;
+  font-size: 0.75rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.review-trust-summary-item strong {
+  color: #e8fbff;
+  line-height: 1.45;
+}
+
+.review-trust-summary-actions > button {
+  min-width: 10rem;
+}
+
+.review-stage-card::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  background: linear-gradient(180deg, rgba(116, 226, 255, 0.92), rgba(45, 212, 191, 0.24));
+  opacity: 0.78;
+}
+
+.review-stage-header {
+  display: grid;
+  gap: 0.12rem;
+  position: relative;
+  z-index: 1;
+}
+
+.review-stage-header .eyebrow {
+  margin: 0;
+}
+
+.review-stage-header strong {
+  color: var(--text);
+  font-size: 0.95rem;
+}
+
+.review-action-helper {
+  margin: -0.15rem 0 0;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+}
+
+.review-roadmap-strip {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 1rem;
+  margin-top: 0;
+}
+
+.review-roadmap-strip > div:first-child {
+  display: grid;
+  gap: 0.18rem;
+  min-width: 0;
+}
+
+.review-roadmap-strip strong {
+  color: var(--text);
+}
+
+.review-roadmap-actions {
+  justify-content: flex-end;
+  min-width: max-content;
+}

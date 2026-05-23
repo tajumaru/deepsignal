@@ -1,4 +1,4 @@
-import type { MouseEvent, ReactNode } from "react";
+import { useState, type MouseEvent, type ReactNode } from "react";
 import { Link, NavLink, useNavigate } from "react-router-dom";
 import { preloadWalletProviders } from "./walletPreload";
 
@@ -22,6 +22,8 @@ function createFreshFormTarget() {
 
 export function CreateFormLink({ children, className, nav = false, onClick }: CreateFormLinkProps) {
   const navigate = useNavigate();
+  const [isPressing, setIsPressing] = useState(false);
+  const resolvedClassName = `${className ?? ""} ${isPressing ? "is-pressing" : ""}`.trim();
 
   function handleClick(event: MouseEvent<HTMLAnchorElement>) {
     preloadWalletProviders();
@@ -29,6 +31,7 @@ export function CreateFormLink({ children, className, nav = false, onClick }: Cr
       return;
     }
     event.preventDefault();
+    setIsPressing(true);
     onClick?.();
     navigate(createFreshFormTarget());
   }
@@ -36,10 +39,14 @@ export function CreateFormLink({ children, className, nav = false, onClick }: Cr
   if (nav) {
     return (
       <NavLink
-        className={className}
+        className={resolvedClassName}
         to="/create"
         onClick={handleClick}
+        onBlur={() => setIsPressing(false)}
         onFocus={preloadWalletProviders}
+        onPointerDown={() => setIsPressing(true)}
+        onPointerLeave={() => setIsPressing(false)}
+        onPointerUp={() => setIsPressing(false)}
         onPointerEnter={preloadWalletProviders}
       >
         {children}
@@ -49,10 +56,14 @@ export function CreateFormLink({ children, className, nav = false, onClick }: Cr
 
   return (
     <Link
-      className={className}
+      className={resolvedClassName}
       to="/create"
       onClick={handleClick}
+      onBlur={() => setIsPressing(false)}
       onFocus={preloadWalletProviders}
+      onPointerDown={() => setIsPressing(true)}
+      onPointerLeave={() => setIsPressing(false)}
+      onPointerUp={() => setIsPressing(false)}
       onPointerEnter={preloadWalletProviders}
     >
       {children}

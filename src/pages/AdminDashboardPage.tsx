@@ -48,6 +48,7 @@ import { useAccessControl } from "../hooks/useAccessControl";
 import { useReviewerDisplayLabel } from "../hooks/useReviewerDisplayLabel";
 import { useSuiWallet } from "../hooks/useSuiWallet";
 import { useI18n } from "../i18n";
+import { DEMO_FORM_ID, DEMO_PRIMARY_SIGNAL_ID, seedDemoWorkspace } from "../demo/demoData";
 import { isAttachmentFieldType, isLongTextLikeField } from "../lib/fieldTypes";
 import {
   addressesMatch,
@@ -123,6 +124,7 @@ const MODAL_FOCUSABLE_SELECTOR = [
   "[tabindex]:not([tabindex='-1'])",
 ].join(",");
 const ROADMAP_READY_STATUSES = new Set<Submission["triageStatus"]>(["planned", "in_progress", "fixed"]);
+const DEMO_FLOW_VISIBLE = false;
 type WorkspaceTab = "review" | "activity" | "insights" | "members";
 type QuickActionId = "reviewing" | "resolve" | "publish" | "archive";
 type KeyboardShortcutAction = QuickActionId | "next" | "previous" | "search" | "help";
@@ -444,6 +446,7 @@ type TranslationFn = ReturnType<typeof useI18n>["t"];
 interface MobileInboxHeaderProps {
   t: TranslationFn;
   title: string;
+  sessionLabel: string;
   activeScopeLabel: string;
   viewScope: SignalViewScope;
   onViewScopeChange: (scope: SignalViewScope) => void;
@@ -596,6 +599,7 @@ function MobileInboxHeader(props: MobileInboxHeaderProps) {
   const {
     t,
     title,
+    sessionLabel,
     activeScopeLabel,
     viewScope,
     onViewScopeChange,
@@ -645,18 +649,11 @@ function MobileInboxHeader(props: MobileInboxHeaderProps) {
   return (
     <header className="mobile-inbox-header">
       <div className="mobile-inbox-header-bar">
-        <button
-          type="button"
-          className="mobile-inbox-icon-button"
-          aria-label="Back"
-          onClick={() => window.history.back()}
-        >
-          <span aria-hidden="true">&lt;</span>
-        </button>
         <div className="mobile-inbox-title-group">
           <MailboxIcon hasUnread={totalUnreadCount > 0} />
           <div className="mobile-inbox-title">
             <strong>{title}</strong>
+            <span className="mobile-inbox-session-status">{sessionLabel}</span>
             <span>{activeScopeLabel}</span>
           </div>
         </div>
@@ -709,9 +706,8 @@ function MobileInboxHeader(props: MobileInboxHeaderProps) {
         />
       </div>
 
-      <div className="mobile-inbox-summary-row">
-        <span>{visibleCountLabel}</span>
-        {canUseProjectScope ? (
+      {canUseProjectScope ? (
+        <div className="mobile-inbox-summary-row">
           <button
             type="button"
             className="ghost-button mobile-inbox-scope-action"
@@ -719,10 +715,8 @@ function MobileInboxHeader(props: MobileInboxHeaderProps) {
           >
             {scopeActionLabel}
           </button>
-        ) : (
-          <span>{queueLabel}</span>
-        )}
-      </div>
+        </div>
+      ) : null}
     </header>
   );
 }
@@ -781,9 +775,12 @@ function WorkspaceShortcutBar({
 
   return (
     <div className={`workspace-shortcut-bar ${className}`.trim()}>
+      <CreateFormLink className={`primary-button ${highlightCreateFormCta ? "create-form-cta-highlight" : ""}`}>
+        {t("composeSignalCta")}
+      </CreateFormLink>
       {hasAdminAccess ? (
         <>
-          <button type="button" className="primary-button" onClick={onRevealCreateProject}>
+          <button type="button" className="ghost-button" onClick={onRevealCreateProject}>
             {t("createProjectButton")}
           </button>
           {!selectedProjectName ? (
@@ -791,17 +788,8 @@ function WorkspaceShortcutBar({
               {t("connectExistingShort")}
             </button>
           ) : null}
-          {selectedProjectName ? (
-            <CreateFormLink className={`primary-button ${highlightCreateFormCta ? "create-form-cta-highlight" : ""}`}>
-              {t("navCreateForm")}
-            </CreateFormLink>
-          ) : null}
         </>
-      ) : (
-        <CreateFormLink className={`primary-button ${highlightCreateFormCta ? "create-form-cta-highlight" : ""}`}>
-          {t("navCreateForm")}
-        </CreateFormLink>
-      )}
+      ) : null}
       {hasAdminAccess ? (
         <div ref={projectMenuRef} className={`workspace-project-menu-shell ${projectMenuOpen ? "is-open" : ""}`}>
           <button
@@ -944,13 +932,11 @@ function MobileSignalRow({
   isSelected,
   isUnlocked,
   onSelect,
-  onQuickAction,
   t,
 }: MobileSignalRowProps) {
   const { submission } = record;
   const title = getSignalSubject(submission);
   const persistenceState = getSignalPersistenceState(submission);
-  const persistenceLabel = getSignalPersistenceLabel(persistenceState);
   const priorityLabel =
     submission.priority === "high"
       ? t("priorityHigh")
@@ -963,13 +949,7 @@ function MobileSignalRow({
       : t("lockedSignalState")
     : t("openSignalState");
   const preview = submission.isEncrypted ? t("encryptedPrivateSignalUnlockHint") : getSignalPreview(submission);
-  const sourceLabel = getSubmissionRespondentMeta(submission).isAnonymous
-    ? t("anonymousRespondent")
-    : record.form.title;
-  const signalLevelLabel =
-    typeof submission.signalValue === "number"
-      ? `Signal ${submission.signalValue}/5`
-      : `Signal level ${submission.severity ?? submission.priority}`;
+  const sourceLabel = getSubmissionRespondentMeta(submission).isAnonymous ? t("anonymousRespondent") : record.form.title;
   const readStateLabel =
     submission.status === "unread"
       ? t("statusUnread")
@@ -1007,41 +987,28 @@ function MobileSignalRow({
           </span>
           <span className={`mobile-signal-preview ${submission.isEncrypted ? "is-locked" : ""}`}>{preview}</span>
           <span className="mobile-signal-source-line">
-            <span>{sourceLabel}</span>
+            <span>{priorityLabel}</span>
             <span>{getTriageStatusLabel(submission.triageStatus)}</span>
+            <span>{sourceLabel}</span>
           </span>
-          <span className="mobile-signal-meta-row">
-            {submission.isEncrypted ? (
-              <span className={`mobile-signal-mini-badge ${isUnlocked ? "is-selected" : ""}`}>
-                {lockStateLabel}
-              </span>
-            ) : (
-              <span className="mobile-signal-mini-badge">{lockStateLabel}</span>
-            )}
-            <span className={`mobile-signal-mini-badge status-${submission.status}`}>
-              {readStateLabel}
+          {submission.isEncrypted || submission.status === "archived" || persistenceState !== "walrus_synced" ? (
+            <span className="mobile-signal-meta-row">
+              {submission.isEncrypted ? (
+                <span className={`mobile-signal-mini-badge ${isUnlocked ? "is-selected" : ""}`}>
+                  {lockStateLabel}
+                </span>
+              ) : null}
+              {submission.status === "archived" ? (
+                <span className="mobile-signal-mini-badge">{readStateLabel}</span>
+              ) : null}
             </span>
-            {persistenceState !== "not_available" ? (
-              <span className="mobile-signal-mini-badge">{persistenceLabel}</span>
-            ) : null}
-            <span className="mobile-signal-mini-badge">{signalLevelLabel}</span>
-          </span>
+          ) : null}
         </span>
       </button>
 
       <span className="mobile-signal-side">
         <time>{formatDate(submission.createdAt)}</time>
         <span className={`mobile-priority-badge priority-${submission.priority}`}>{priorityLabel}</span>
-        <button
-          type="button"
-          className="mobile-row-action-button"
-          onClick={(event) => {
-            event.stopPropagation();
-            onQuickAction(record, submission.status === "unread" ? "reviewing" : "resolve");
-          }}
-        >
-          {submission.status === "unread" ? "Review" : "Resolve"}
-        </button>
       </span>
     </article>
   );
@@ -1052,13 +1019,14 @@ function MobileComposeSignalButton() {
   return (
     <CreateFormLink className="mobile-compose-signal-button">
       <span aria-hidden="true">+</span>
-      <span className="sr-only">{t("createSignalInboxSrOnly")}</span>
+      <span>{t("composeSignalCta")}</span>
     </CreateFormLink>
   );
 }
 
 interface MobileSignalInboxProps {
   title: string;
+  sessionLabel: string;
   activeScopeLabel: string;
   viewScope: SignalViewScope;
   onViewScopeChange: (scope: SignalViewScope) => void;
@@ -1105,6 +1073,7 @@ interface MobileSignalInboxProps {
 
 function MobileSignalInbox({
   title,
+  sessionLabel,
   activeScopeLabel,
   viewScope,
   onViewScopeChange,
@@ -1153,6 +1122,7 @@ function MobileSignalInbox({
       <MobileInboxHeader
         t={t}
         title={title}
+        sessionLabel={sessionLabel}
         activeScopeLabel={activeScopeLabel}
         viewScope={viewScope}
         onViewScopeChange={onViewScopeChange}
@@ -1213,6 +1183,28 @@ function MobileSignalInbox({
   );
 }
 
+function InboxLoadingPanel({ title, body }: { title: string; body: string }) {
+  return (
+    <section className="panel inbox-loading-panel" role="status" aria-live="polite">
+      <div className="inbox-loading-copy">
+        <p className="eyebrow">Encrypted Signal Inbox</p>
+        <h1>{title}</h1>
+        <p className="muted">{body}</p>
+      </div>
+      <div className="inbox-loading-steps" aria-hidden="true">
+        <span className="is-active" />
+        <span className="is-active" />
+        <span />
+      </div>
+      <div className="inbox-loading-skeleton">
+        <span className="inbox-loading-card is-wide" />
+        <span className="inbox-loading-card" />
+        <span className="inbox-loading-card" />
+      </div>
+    </section>
+  );
+}
+
 export function AdminDashboardPage() {
   const { language, t } = useI18n();
   const location = useLocation();
@@ -1252,6 +1244,8 @@ export function AdminDashboardPage() {
   const [activeWorkspaceTab, setActiveWorkspaceTab] = useState<WorkspaceTab>("review");
   const [showShortcutHelp, setShowShortcutHelp] = useState(false);
   const [isReviewerFocusMode, setIsReviewerFocusMode] = useState(false);
+  const [isRunningDemoFlow, setIsRunningDemoFlow] = useState(false);
+  const [isDemoGuideOpen, setIsDemoGuideOpen] = useState(true);
   const [detailSectionsState, setDetailSectionsState] = useState<DetailWorkspaceSectionsState>({
     originalSignalOpen: true,
     attachmentsOpen: false,
@@ -1456,6 +1450,7 @@ export function AdminDashboardPage() {
   const activityActorRole = getActivityActorRole(capabilityProfile);
   const accessState = wallet.accountAddress ? "allowed" : "denied";
   const privateReviewLabel = t("privateReviewEnabled");
+  const sessionStatusLabel = wallet.accountAddress ? t("secureSessionActive") : t("secureSessionStandby");
 
   async function handleClearDebugPolicyCache() {
     const result = await clearDeepSignalPolicyCapabilityCache();
@@ -2370,14 +2365,12 @@ export function AdminDashboardPage() {
     ? [
         formatWorkspaceCount(selectedProject ? selectedProject.formsCount : accessibleForms.length, "Channel"),
         formatWorkspaceCount(selectedProject ? selectedProject.signalsCount : allSignals.length, "Signal"),
-        formatWorkspaceCount(projectMemberCount || 1, "Member"),
-        selectedProject ? "Protected" : "Local mode",
         formatAccessLabel(roleLabel),
       ]
     : [
         formatWorkspaceCount(accessibleForms.length, "Channel"),
         formatWorkspaceCount(allSignals.length, "Signal"),
-        "Owner wallet",
+        sessionStatusLabel,
       ];
   const selectedFormSubmissionCount = selectedRecord ? (submissionsByFormId[selectedRecord.form.id] ?? []).length : 0;
   const selectedFormFilteredExportCount = selectedRecord
@@ -2677,6 +2670,36 @@ export function AdminDashboardPage() {
     reviewInboxRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
+  async function handleRunDemoFlow() {
+    if (isRunningDemoFlow) {
+      return;
+    }
+    setIsRunningDemoFlow(true);
+    try {
+      await seedDemoWorkspace();
+      await loadConsole();
+      setActiveWorkspaceTab("review");
+      setSignalViewScope("all");
+      setSelectedFormId(DEMO_FORM_ID);
+      setSelectedStreamId("all");
+      setSearch("");
+      setSelectedSignalId(DEMO_PRIMARY_SIGNAL_ID);
+      setIsDemoGuideOpen(true);
+      reviewInboxRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      setToast({
+        tone: "success",
+        message: t("demoFlowSeeded"),
+      });
+    } catch {
+      setToast({
+        tone: "error",
+        message: t("demoFlowSeedFailed"),
+      });
+    } finally {
+      setIsRunningDemoFlow(false);
+    }
+  }
+
   const activeScopeLabel =
     selectedFormId === "all" ? t("allSignalNodes") : selectedForm?.title ?? t("selectedNode");
   const canUseProjectScope = Boolean(selectedProjectId);
@@ -2686,6 +2709,7 @@ export function AdminDashboardPage() {
     ? t("signalViewScopeProjectOnlyNamed", { name: selectedProject.name })
     : t("signalViewScopeProjectOnly");
   const signalScopeActionLabel = projectScopeActive ? signalScopeAllLabel : signalScopeProjectLabel;
+  const hasDemoWorkspace = accessibleForms.some((form) => form.id === DEMO_FORM_ID);
   const shouldRequireProjectSelection = hasAdminAccess && projectScopeActive && !selectedProject;
   const activeStreamLabel =
     streamItems.find((stream) => stream.id === selectedStreamId)?.label ?? "All Signals";
@@ -2763,7 +2787,7 @@ export function AdminDashboardPage() {
   );
 
   if (loading) {
-    return <div className="panel">{t("loadingResearchLab")}</div>;
+    return <InboxLoadingPanel title={t("loadingResearchLab")} body={t("loadingSignalInboxBody")} />;
   }
 
   if (loadError) {
@@ -2832,18 +2856,19 @@ export function AdminDashboardPage() {
         <section className="panel glow-panel workspace-hero workspace-hero-compact desktop-signal-inbox-hero">
           <div className="workspace-hero-main workspace-overview-shell">
             <div className="workspace-hero-copy">
-              <p className="eyebrow">{t("signalInboxTitle")}</p>
-              <h1>{hasAdminAccess && selectedProject ? selectedProject.name : t("signalInboxTitle")}</h1>
+              <p className="eyebrow">{sessionStatusLabel}</p>
+              <h1>{hasAdminAccess && selectedProject ? selectedProject.name : t("openInboxCta")}</h1>
+              <p className="lede">{t("signalInboxFastLaneBody")}</p>
               <div className="workspace-hero-meta">
                 {workspaceMetaItems.map((item) => (
                   <span key={item} className="workspace-meta-item">
                     {item}
                   </span>
                 ))}
-                <span className="workspace-meta-item">{privateReviewLabel}</span>
                 {isLoadingCapabilities ? (
                   <span className="workspace-meta-item">{t("checkingWalletAccess")}</span>
                 ) : null}
+                <span className="workspace-meta-item">{sessionStatusLabel}</span>
               </div>
             </div>
 
@@ -2894,7 +2919,8 @@ export function AdminDashboardPage() {
         ) : (
           <>
           <MobileSignalInbox
-            title={t("signalInboxTitle")}
+            title={selectedProject?.name ?? t("signalInboxTitle")}
+            sessionLabel={sessionStatusLabel}
             activeScopeLabel={activeScopeLabel}
             viewScope={signalViewScope}
             onViewScopeChange={setSignalViewScope}
@@ -3003,6 +3029,20 @@ export function AdminDashboardPage() {
                       {signalScopeActionLabel}
                     </button>
                   ) : null}
+                  {DEMO_FLOW_VISIBLE ? (
+                    <button
+                      type="button"
+                      className={isRunningDemoFlow ? "ghost-button" : "primary-button"}
+                      onClick={() => void handleRunDemoFlow()}
+                      disabled={isRunningDemoFlow}
+                    >
+                      {isRunningDemoFlow
+                        ? t("demoFlowRunning")
+                        : hasDemoWorkspace
+                          ? t("demoFlowRerun")
+                          : t("runDemoFlow")}
+                    </button>
+                  ) : null}
                   <span className="signal-chip signal-chip-soft">{activeScopeLabel}</span>
                   <label className="review-sort-control">
                     <span className="sr-only">{t("sortInboxSrOnly")}</span>
@@ -3020,6 +3060,40 @@ export function AdminDashboardPage() {
                 </div>
               </div>
             </div>
+            {DEMO_FLOW_VISIBLE ? (
+              <section className="demo-flow-panel" aria-label={t("demoFlowPanelTitle")}>
+                <div className="demo-flow-panel-header">
+                  <div className="demo-flow-panel-copy">
+                    <p className="eyebrow">{t("demoFlowPanelEyebrow")}</p>
+                    <h3>{t("demoFlowPanelTitle")}</h3>
+                    <p className="muted">{t("demoFlowPanelBody")}</p>
+                  </div>
+                  <div className="demo-flow-panel-actions">
+                    {hasDemoWorkspace ? (
+                      <span className="signal-chip signal-chip-soft">{t("demoFlowReadyBadge")}</span>
+                    ) : null}
+                    <button
+                      type="button"
+                      className="ghost-button"
+                      onClick={() => setIsDemoGuideOpen((current) => !current)}
+                      aria-expanded={isDemoGuideOpen}
+                    >
+                      {isDemoGuideOpen ? t("hideDemoGuide") : t("showDemoGuide")}
+                    </button>
+                  </div>
+                </div>
+                {isDemoGuideOpen ? (
+                  <ol className="demo-flow-steps">
+                    <li>{t("demoFlowStep1")}</li>
+                    <li>{t("demoFlowStep2")}</li>
+                    <li>{t("demoFlowStep3")}</li>
+                    <li>{t("demoFlowStep4")}</li>
+                    <li>{t("demoFlowStep5")}</li>
+                    <li>{t("demoFlowStep6")}</li>
+                  </ol>
+                ) : null}
+              </section>
+            ) : null}
 
             <nav className="mobile-review-nav" aria-label={t("reviewWorkspaceTitle")}>
               <button type="button" onClick={() => scrollToReviewPanel("streams")}>

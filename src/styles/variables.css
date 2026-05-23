@@ -1,0 +1,47 @@
+html,
+:root {
+  width: 100%;
+  max-width: 100%;
+  color-scheme: dark;
+  font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+  color: var(--color-text);
+  background:
+    radial-gradient(circle at top, rgba(49, 130, 206, 0.22), transparent 35%),
+    radial-gradient(circle at 20% 80%, rgba(19, 78, 74, 0.45), transparent 30%),
+    linear-gradient(180deg, var(--color-bg-start) 0%, var(--color-bg-mid) 45%, var(--color-bg-end) 100%);
+  --color-text: #ecfdff;
+  --color-bg-start: #06111d;
+  --color-bg-mid: #081726;
+  --color-bg-end: #04101b;
+  --panel: rgba(7, 24, 40, 0.78);
+  --panel-strong: rgba(7, 24, 40, 0.92);
+  --line: rgba(116, 226, 255, 0.22);
+  --accent: #66e3ff;
+  --accent-strong: #95f2ff;
+  --danger: #ff7e8f;
+  --text-soft: #99b7c9;
+  --radius-sm: 6px;
+  --radius-card: 8px;
+  --radius-base: 10px;
+  --radius-md: 14px;
+  --radius-lg: 18px;
+  --radius-panel: 24px;
+  --radius-pill: 999px;
+  --transition-fast: 160ms ease;
+  --transition-ui: 180ms ease;
+  --transition-base: 200ms ease;
+  --transition-smooth: 220ms ease;
+  --shadow: 0 22px 60px rgba(0, 0, 0, 0.38);
+  overflow-x: hidden;
+}
+
+/* Last-mile mobile guardrails. These intentionally live at EOF. */
+html,
+body,
+#root,
+.app-shell {
+  max-width: 100%;
+  overflow-x: hidden;
+}

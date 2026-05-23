@@ -1,0 +1,179 @@
+.wallet-sync-wallets {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.wallet-sync-menu-item,
+.wallet-sync-empty {
+  width: 100%;
+  display: grid;
+  gap: 0.2rem;
+  padding: 0.82rem 0.9rem;
+  border-radius: 16px;
+  border: 1px solid rgba(118, 206, 255, 0.14);
+  background: rgba(8, 26, 43, 0.76);
+  text-align: left;
+  color: #effcff;
+}
+
+.wallet-sync-menu-item:hover,
+.wallet-sync-menu-item:focus-visible {
+  border-color: rgba(144, 230, 255, 0.28);
+  background: rgba(10, 31, 50, 0.88);
+}
+
+.wallet-sync-menu-item-danger {
+  border-color: rgba(255, 126, 143, 0.16);
+}
+
+.wallet-sync-menu-item-danger:hover,
+.wallet-sync-menu-item-danger:focus-visible {
+  border-color: rgba(255, 126, 143, 0.28);
+  background: rgba(41, 14, 25, 0.88);
+}
+
+.wallet-sync-disconnect-button {
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.48rem;
+  max-width: 100%;
+  padding: 0.5rem 0.66rem;
+  border: 1px solid rgba(255, 126, 143, 0.16);
+  border-radius: var(--radius-pill);
+  background: rgba(18, 18, 32, 0.72);
+  color: #effcff;
+  font-weight: 700;
+  font-size: 0.8rem;
+  line-height: 1.2;
+}
+
+.wallet-sync-disconnect-button:hover,
+.wallet-sync-disconnect-button:focus-visible {
+  border-color: rgba(255, 126, 143, 0.28);
+  background: rgba(41, 14, 25, 0.88);
+}
+
+.wallet-sync-disconnect-button:disabled {
+  cursor: wait;
+  opacity: 0.72;
+}
+
+.wallet-sync-disconnect-icon {
+  position: relative;
+  width: 0.88rem;
+  height: 0.88rem;
+  flex: 0 0 auto;
+  border: 1.5px solid #ff9aa7;
+  border-top-color: transparent;
+  border-radius: var(--radius-pill);
+}
+
+.wallet-sync-disconnect-icon::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: -0.22rem;
+  width: 1.5px;
+  height: 0.52rem;
+  border-radius: var(--radius-pill);
+  background: #ff9aa7;
+  transform: translateX(-50%);
+}
+
+.wallet-sync-empty {
+  cursor: default;
+}
+
+.signal-meta-chip-shell {
+  position: relative;
+  display: inline-flex;
+  max-width: 100%;
+}
+
+.sui-address-display-shell {
+  position: relative;
+  display: inline-flex;
+  max-width: 100%;
+}
+
+.sui-address-display {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-width: 0;
+  max-width: 100%;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  line-height: inherit;
+}
+
+.sui-address-display-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sui-address-display-copy {
+  flex-shrink: 0;
+}
+
+.signal-meta-chip {
+  --meta-bg: rgba(120, 140, 160, 0.14);
+  --meta-border: rgba(140, 160, 180, 0.2);
+  --meta-text: #dbeaf3;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-width: 0;
+  max-width: 100%;
+  padding: 0.42rem 0.68rem;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--meta-border);
+  background: var(--meta-bg);
+  color: var(--meta-text);
+  font-family: "Consolas", "SFMono-Regular", "Roboto Mono", monospace;
+  font-size: 0.82rem;
+  letter-spacing: 0.01em;
+  line-height: 1;
+}
+
+.signal-meta-chip:hover,
+.signal-meta-chip:focus-visible {
+  border-color: color-mix(in srgb, var(--meta-border) 72%, white);
+  transform: translateY(-1px);
+}
+
+.signal-meta-chip-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.signal-meta-chip-copy {
+  flex-shrink: 0;
+  padding-left: 0.1rem;
+  color: color-mix(in srgb, var(--meta-text) 72%, white);
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.85;
+}
+
+.signal-meta-chip-contributor {
+  --meta-bg: rgba(120, 160, 176, 0.15);
+  --meta-border: rgba(120, 160, 176, 0.24);
+  --meta-text: #d7edf5;
+}
+
+.signal-meta-chip-blob {
+  --meta-bg: rgba(112, 146, 166, 0.14);
+  --meta-border: rgba(112, 146, 166, 0.24);
+  --meta-text: #d6eaf4;
+}

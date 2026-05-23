@@ -1,0 +1,7 @@
+.critical-failure-panel .inline-actions,
+.recoverable-draft-banner .inline-actions {
+  margin-top: 0.85rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}

@@ -1,0 +1,16 @@
+code,
+pre,
+.build-indicator-button,
+.publish-blob-id,
+.signal-meta-tooltip-value,
+.signal-meta-row-value,
+.signal-meta-inline,
+.access-role-value,
+.workspace-meta-item,
+.wallet-sync-menu-header code,
+.wallet-sync-address,
+.metadata-row strong,
+.metadata-row span {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
