@@ -102,10 +102,12 @@ vi.mock("../storage/blobIndex", () => ({
   upsertFormBlobIndex: (...args: unknown[]) => mockUpsertFormBlobIndex(...args),
 }));
 
-function renderPublicFormPage() {
+function renderPublicFormPage(
+  initialEntry = "/f/form-123?manifest=blob-abc&step=answer&identity=anonymous",
+) {
   return render(
     <RpcInfrastructureContext.Provider value={mockRpcInfrastructure}>
-      <MemoryRouter initialEntries={["/f/form-123?manifest=blob-abc"]}>
+      <MemoryRouter initialEntries={[initialEntry]}>
         <Routes>
           <Route path="/f/:formId" element={<PublicFormPage />} />
         </Routes>
@@ -178,7 +180,7 @@ describe("PublicFormPage shared manifest restore", () => {
       form,
     });
 
-    renderPublicFormPage();
+    renderPublicFormPage("/f/form-123?manifest=blob-abc&step=answer&identity=wallet");
 
     expect(screen.getByText("Loading public form...")).toBeInTheDocument();
     await waitFor(() => expect(screen.getByRole("heading", { name: "Shared Feedback Form" })).toBeInTheDocument());

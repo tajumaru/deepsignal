@@ -18,6 +18,7 @@ interface PublicIdentityCardProps {
   accountAddress?: string;
   attachWallet: boolean;
   deadlinePassed: boolean;
+  initialWalletRequested?: boolean;
   onAttachWalletChange: (attached: boolean) => void;
   onAttachWalletTouched: () => void;
   onAccountAddressChange: (address?: string) => void;
@@ -26,6 +27,7 @@ interface PublicIdentityCardProps {
   zkLoginConnected?: boolean;
   zkLoginAddress?: string;
   zkLoginProviderLabel?: string;
+  zkLoginError?: string;
   onBeginZkLogin?: () => void;
   onClearZkLogin?: () => void;
   labels: {
@@ -100,6 +102,7 @@ export function PublicIdentityCard({
   accountAddress,
   attachWallet,
   deadlinePassed,
+  initialWalletRequested = false,
   onAttachWalletChange,
   onAttachWalletTouched,
   onAccountAddressChange,
@@ -108,17 +111,18 @@ export function PublicIdentityCard({
   zkLoginConnected = false,
   zkLoginAddress,
   zkLoginProviderLabel,
+  zkLoginError,
   onBeginZkLogin,
   onClearZkLogin,
   labels,
 }: PublicIdentityCardProps) {
-  const [walletRequested, setWalletRequested] = useState(walletRequired);
+  const [walletRequested, setWalletRequested] = useState(walletRequired || initialWalletRequested);
 
   useEffect(() => {
-    if (walletRequired) {
+    if (walletRequired || initialWalletRequested) {
       setWalletRequested(true);
     }
-  }, [walletRequired]);
+  }, [initialWalletRequested, walletRequired]);
 
   const walletFallback = <div className="wallet-connect-shell wallet-connect-shell-compact" />;
   const walletUnavailableCopy = walletRequired ? labels.walletUnavailableRequired : labels.walletUnavailable;
@@ -230,7 +234,7 @@ export function PublicIdentityCard({
         ) : null}
       </div>
 
-      {!walletRequired ? (
+      {!walletRequired && zkLoginEnabled ? (
         <div className="public-identity-grid">
           <div className="public-identity-note">
             <span className="public-identity-label">{labels.zkLoginTitle}</span>
@@ -262,6 +266,7 @@ export function PublicIdentityCard({
                   >
                     {labels.zkLoginConnect}
                   </button>
+                  {zkLoginError ? <p className="error-text">{zkLoginError}</p> : null}
                 </div>
               </div>
             )}

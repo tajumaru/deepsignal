@@ -941,7 +941,7 @@ export function usePublicSubmission({
       );
       return;
     }
-    if (walletRequired && !accountAddress) {
+    if (identityMode === "wallet" && !accountAddress) {
       setSubmitError("This form requires a connected wallet before you can submit.");
       setSubmitNotice("");
       setFailure(

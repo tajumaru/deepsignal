@@ -216,6 +216,8 @@ export function PublishStep({
   onCopyDiagnostics,
   onBack,
 }: PublishStepProps) {
+  void publicPath;
+  void publicUrl;
   const isRegisteredOnSui = Boolean(savedForm?.isOnchain && typeof savedForm.onchainFormId === "number");
   const isMirrorMode = displayMode === "mirror";
   const hideLivePreview = isMirrorMode;

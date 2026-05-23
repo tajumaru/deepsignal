@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCurrentAccount } from "@mysten/dapp-kit";
+import { useEffect, useMemo, useState, type MouseEvent } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import { DynamicField } from "../components/DynamicField";
 import { EmptyState } from "../components/EmptyState";
@@ -6,6 +7,7 @@ import { FormHeaderImage } from "../components/FormHeaderImage";
 import { RichTextContent } from "../components/RichText";
 import { CriticalFailurePanel } from "../components/CriticalFailurePanel";
 import { RecoverableDraftBanner } from "../components/RecoverableDraftBanner";
+import { WalletConnect } from "../components/WalletConnect";
 import { PublicFormSuccess } from "../features/public-form/components/PublicFormSuccess";
 import { PublicIdentityCard } from "../features/public-form/components/PublicIdentityCard";
 import { PublicSubmitReadiness } from "../features/public-form/components/PublicSubmitReadiness";
@@ -23,8 +25,6 @@ import { DEFAULT_ATTACHMENT_MAX_BYTES, ENCRYPTED_INLINE_ATTACHMENT_MAX_BYTES } f
 import { getOrderedFields, getVisibleFieldIds, isFieldRequired } from "../utils/formLogic";
 import { isAttachmentFieldType, isConfirmationCheckboxField } from "../lib/fieldTypes";
 import { collectSignalContext, type AttachedSignalContext } from "../lib/signalContext";
-import { beginGoogleZkLogin, isZkLoginEnabled } from "../lib/zkloginOAuth";
-import { clearZkLoginSession, loadZkLoginSession, type ZkLoginSession } from "../lib/zkloginSession";
 import type { FieldType } from "../types";
 
 function hasPublicAnswerValue(field: { type: string; rows?: string[] }, value: unknown) {
@@ -66,13 +66,14 @@ export function PublicFormPage() {
   const { t } = useI18n();
   const { formId = "" } = useParams();
   const [searchParams] = useSearchParams();
+  const currentAccount = useCurrentAccount();
   const [walletAccountAddress, setWalletAccountAddress] = useState<string | undefined>();
   const [walletProvider, setWalletProvider] = useState<string | undefined>();
-  const [attachWallet, setAttachWallet] = useState(false);
-  const [attachWalletTouched, setAttachWalletTouched] = useState(false);
-  const [zkLoginSession, setZkLoginSession] = useState<ZkLoginSession | null>(() =>
-    typeof window === "undefined" ? null : loadZkLoginSession(),
-  );
+  const initialAnswerAuthMode = searchParams.get("identity") === "wallet" ? "sui_wallet" : searchParams.get("identity") === "guest" ? "guest" : null;
+  const initialStep = searchParams.get("step") === "answer" ? "form" : "identity";
+  const [publicStep, setPublicStep] = useState<"identity" | "form">(initialStep);
+  const [answerAuthMode, setAnswerAuthMode] = useState<"guest" | "sui_wallet" | null>(initialAnswerAuthMode);
+  const [walletChoicePending, setWalletChoicePending] = useState(false);
   const [submissionOverlayDismissed, setSubmissionOverlayDismissed] = useState(false);
   const manifestBlobId = searchParams.get("manifest") ?? "";
   const { form, initialAnswers, loading, loadError, loadErrorDetail } = usePublicFormLoader({
@@ -81,9 +82,9 @@ export function PublicFormPage() {
     missingFormMessage: t("publicFormMissingBody"),
   });
   const walletRequired = form?.identityPolicy === "wallet_required";
-  const zkLoginEnabled = isZkLoginEnabled();
-  const zkLoginConnected = Boolean(zkLoginSession);
-  const usingZkLogin = !walletRequired && zkLoginConnected && (!attachWallet || !walletAccountAddress);
+  const resolvedWalletAddress = walletAccountAddress ?? currentAccount?.address ?? undefined;
+  const walletModeSelected = walletRequired || answerAuthMode === "sui_wallet";
+  const attachWallet = walletModeSelected;
   const {
     answers,
     errors,
@@ -113,12 +114,12 @@ export function PublicFormPage() {
   } = usePublicSubmission({
     form,
     initialAnswers,
-    accountAddress: walletAccountAddress,
+    accountAddress: resolvedWalletAddress,
     walletProvider,
     attachWallet,
     walletRequired,
-    zkLoginSession,
-    identityMode: walletRequired || (attachWallet && walletAccountAddress) ? "wallet" : usingZkLogin ? "zklogin" : "anonymous",
+    zkLoginSession: null,
+    identityMode: walletModeSelected ? "wallet" : "anonymous",
     manifestBlobId,
     requiredFieldError: t("requiredFieldError"),
     responseDeadlinePassedLabel: t("formResponseClosed"),
@@ -140,22 +141,18 @@ export function PublicFormPage() {
   });
 
   useEffect(() => {
-    if (!walletAccountAddress) {
-      if (attachWallet) {
-        setAttachWallet(false);
-      }
-      if (attachWalletTouched) {
-        setAttachWalletTouched(false);
-      }
+    if (walletRequired) {
+      setAnswerAuthMode("sui_wallet");
     }
-  }, [walletAccountAddress, attachWallet, attachWalletTouched]);
+  }, [walletRequired]);
 
   useEffect(() => {
-    if (typeof window === "undefined") {
-      return;
+    if (walletChoicePending && resolvedWalletAddress) {
+      setAnswerAuthMode("sui_wallet");
+      setPublicStep("form");
+      setWalletChoicePending(false);
     }
-    setZkLoginSession(loadZkLoginSession());
-  }, []);
+  }, [resolvedWalletAddress, walletChoicePending]);
 
   useEffect(() => {
     if (submitting || submitPipeline.status !== "failed") {
@@ -193,10 +190,8 @@ export function PublicFormPage() {
     return formatResponseDeadline(form?.responseDeadline, responseDeadlineLabels);
   }, [form?.responseDeadline, t]);
   const submitModeLabel =
-    walletRequired || (attachWallet && walletAccountAddress)
+    walletModeSelected
       ? t("publicSubmitModeWallet")
-      : usingZkLogin
-        ? t("publicSubmitModeZkLogin")
       : t("publicSubmitModeAnonymous");
   const locationStatusLabel =
     locationState === "success"
@@ -318,8 +313,8 @@ export function PublicFormPage() {
     collectSignalContext({
       form: null,
       manifestBlobId,
-      walletAddress: walletAccountAddress ?? zkLoginSession?.address,
-      walletProvider: walletProvider ?? (zkLoginConnected ? t("publicZkLoginProvider") : undefined),
+      walletAddress: walletModeSelected ? resolvedWalletAddress : undefined,
+      walletProvider: walletModeSelected ? walletProvider : undefined,
     }),
   );
 
@@ -329,15 +324,15 @@ export function PublicFormPage() {
         collectSignalContext({
           form,
           manifestBlobId,
-          walletAddress: walletAccountAddress ?? zkLoginSession?.address,
-          walletProvider: walletProvider ?? (zkLoginConnected ? t("publicZkLoginProvider") : undefined),
+          walletAddress: walletModeSelected ? resolvedWalletAddress : undefined,
+          walletProvider: walletModeSelected ? walletProvider : undefined,
         }),
       );
     }
     updateAttachedContext();
     window.addEventListener("resize", updateAttachedContext);
     return () => window.removeEventListener("resize", updateAttachedContext);
-  }, [form, manifestBlobId, walletAccountAddress, walletProvider, zkLoginConnected, zkLoginSession?.address, t]);
+  }, [form, manifestBlobId, resolvedWalletAddress, walletModeSelected, walletProvider]);
 
   function getAttachmentHint(fieldType: "screenshot" | "video") {
     const baseHint = fieldType === "screenshot" ? t("screenshotHint") : t("videoHint");
@@ -351,22 +346,47 @@ export function PublicFormPage() {
     return `${maxSizeHint} Encrypted attachments are limited to ${attachmentLimitMb}MB.`;
   }
 
-  useEffect(() => {
-    if (walletRequired) {
-      setAttachWallet(Boolean(walletAccountAddress));
-      setAttachWalletTouched(Boolean(walletAccountAddress));
-    }
-  }, [walletAccountAddress, walletRequired]);
-
-  async function handleBeginZkLogin() {
-    const fallbackReturnTo = `/f/${formId}${window.location.search || ""}`;
-    const returnTo = window.location.hash.replace(/^#/, "") || fallbackReturnTo;
-    await beginGoogleZkLogin(returnTo);
+  function handleSelectGuestMode() {
+    setAnswerAuthMode("guest");
+    setWalletChoicePending(false);
   }
 
-  function handleClearZkLogin() {
-    clearZkLoginSession();
-    setZkLoginSession(null);
+  function handleSelectGuestAndContinue() {
+    handleSelectGuestMode();
+    setPublicStep("form");
+  }
+
+  function handleSelectWalletMode() {
+    setAnswerAuthMode("sui_wallet");
+  }
+
+  function handleSelectWalletAndContinue() {
+    handleSelectWalletMode();
+    if (resolvedWalletAddress) {
+      setPublicStep("form");
+      setWalletChoicePending(false);
+      return;
+    }
+    setWalletChoicePending(true);
+  }
+
+  function handleGuestCardClick(event: MouseEvent<HTMLElement>) {
+    if ((event.target as HTMLElement).closest("button")) {
+      return;
+    }
+    setAnswerAuthMode("guest");
+    setWalletChoicePending(false);
+  }
+
+  function handleWalletCardClick(event: MouseEvent<HTMLElement>) {
+    if ((event.target as HTMLElement).closest("button")) {
+      return;
+    }
+    handleSelectWalletMode();
+  }
+
+  function handleChangeAuthMethod() {
+    setPublicStep("identity");
   }
 
   if (loading) {
@@ -425,6 +445,121 @@ export function PublicFormPage() {
           </div>
         ) : null}
       </EmptyState>
+    );
+  }
+
+  if (publicStep === "identity") {
+    const guestSelected = answerAuthMode === "guest";
+    const walletSelected = walletRequired || answerAuthMode === "sui_wallet";
+    return (
+      <section className="panel glow-panel public-identity-choice-screen" aria-label={t("publicIdentityChoiceTitle")}>
+        <div className="public-identity-choice-hero">
+          <div className="public-identity-choice-copy">
+            <div className="public-identity-choice-title-row">
+              <span className="public-identity-choice-hero-icon" aria-hidden="true">SIG</span>
+              <p className="eyebrow">{t("publicIdentityChoiceEyebrow")}</p>
+            </div>
+            <h1>{t("publicIdentityChoiceTitle")}</h1>
+            <p className="muted">
+              {walletRequired ? t("publicIdentityChoiceBodyWalletRequired") : t("publicIdentityChoiceBody")}
+            </p>
+          </div>
+          <button type="button" className="public-identity-choice-help" disabled>
+            {t("publicIdentityChoiceHelp")}
+          </button>
+        </div>
+        <div className="public-identity-choice-grid">
+          {!walletRequired ? (
+            <article
+              className={`answer-card public-identity-choice-card is-guest ${guestSelected ? "is-selected" : ""}`}
+              onClick={handleGuestCardClick}
+            >
+              <div className="public-identity-choice-card-head">
+                <span className="public-identity-choice-icon" aria-hidden="true">Anon</span>
+                <button
+                  type="button"
+                  className={`public-identity-choice-radio ${guestSelected ? "is-selected" : ""}`}
+                  aria-label={t("publicIdentityChoiceAnonymousLabel")}
+                  aria-pressed={guestSelected}
+                  onClick={handleSelectGuestMode}
+                />
+              </div>
+              <div className="public-identity-choice-card-copy">
+                <div className="public-identity-choice-heading">
+                  <strong>{t("publicIdentityChoiceAnonymousLabel")}</strong>
+                  <span className="public-identity-choice-tag">{t("publicIdentityChoiceGuestTag")}</span>
+                </div>
+                <p className="muted">{t("publicIdentityChoiceAnonymousBody")}</p>
+              </div>
+              <ul className="public-identity-choice-list">
+                <li>{t("publicIdentityChoiceGuestPoint1")}</li>
+                <li>{t("publicIdentityChoiceGuestPoint2")}</li>
+                <li>{t("publicIdentityChoiceGuestPoint3")}</li>
+              </ul>
+              <div className="public-identity-choice-terminal-spacer" aria-hidden="true" />
+              <button type="button" className="ghost-button" onClick={handleSelectGuestAndContinue}>
+                {t("publicIdentityChoiceAnonymousCta")}
+              </button>
+              <p className="muted public-identity-choice-card-note">{t("publicIdentityChoiceAnonymousReady")}</p>
+            </article>
+          ) : null}
+          <article
+            className={`answer-card public-identity-choice-card is-wallet ${resolvedWalletAddress ? "is-connected" : ""} ${walletSelected ? "is-selected" : ""}`}
+            onClick={handleWalletCardClick}
+          >
+            <div className="public-identity-choice-card-head">
+              <span className="public-identity-choice-icon is-wallet" aria-hidden="true">Sui</span>
+              <button
+                type="button"
+                className={`public-identity-choice-radio ${walletSelected ? "is-selected" : ""}`}
+                aria-label={t("publicIdentityChoiceWalletLabel")}
+                aria-pressed={walletSelected}
+                onClick={handleSelectWalletMode}
+              />
+            </div>
+            <div className="public-identity-choice-card-copy">
+              <div className="public-identity-choice-heading">
+                <strong>{t("publicIdentityChoiceWalletLabel")}</strong>
+                <span className="public-identity-choice-tag is-wallet">{t("publicIdentityChoiceWalletTag")}</span>
+              </div>
+              <p className="muted">
+                {walletRequired ? t("publicIdentityChoiceWalletBodyRequired") : t("publicIdentityChoiceWalletBody")}
+              </p>
+            </div>
+            <ul className="public-identity-choice-list is-wallet">
+              <li>{t("publicIdentityChoiceWalletPoint1")}</li>
+              <li>{t("publicIdentityChoiceWalletPoint2")}</li>
+              <li>{t("publicIdentityChoiceWalletPoint3")}</li>
+            </ul>
+            <div className="public-identity-choice-wallet-shell">
+              <WalletConnect compact />
+            </div>
+            <button
+              type="button"
+              className="primary-button"
+              onClick={handleSelectWalletAndContinue}
+              disabled={!resolvedWalletAddress}
+            >
+              {t("publicIdentityChoiceWalletCta")}
+            </button>
+            <p className="muted public-identity-choice-card-note">
+              {resolvedWalletAddress ? t("publicIdentityChoiceWalletConnected") : t("publicIdentityChoiceWalletConnectPrompt")}
+            </p>
+          </article>
+        </div>
+        <div className="public-identity-choice-footer">
+          <div className="public-identity-choice-footer-copy">
+            <span className="public-identity-choice-icon is-footer" aria-hidden="true">Safe</span>
+            <div>
+              <strong>{t("publicIdentityChoicePrivacyTitle")}</strong>
+              <p className="muted">{t("publicIdentityChoicePrivacyBody")}</p>
+            </div>
+          </div>
+          <button type="button" className="ghost-button" disabled>
+            {t("publicIdentityChoicePrivacyAction")}
+          </button>
+        </div>
+      </section>
     );
   }
 
@@ -504,9 +639,27 @@ export function PublicFormPage() {
         </div>
       </section>
       <div className="public-form-status-strip">
+        <section className="answer-card public-submit-readiness-inline">
+          <div className="public-submit-badge-grid">
+            <span className={`public-submit-badge is-${walletModeSelected ? "wallet" : "anonymous"}`}>
+              <span className="public-submit-badge-icon" aria-hidden="true">
+                {walletModeSelected ? "Sui" : "Anon"}
+              </span>
+              <span>
+                <small>{t("publicIdentityBadgeLabel")}</small>
+                <strong>{walletModeSelected ? t("publicIdentityBadgeWallet") : t("publicIdentityBadgeGuest")}</strong>
+              </span>
+            </span>
+          </div>
+          <div className="inline-actions">
+            <button type="button" className="ghost-button" onClick={handleChangeAuthMethod}>
+              {t("publicIdentityChangeAction")}
+            </button>
+          </div>
+        </section>
         <PublicSubmitReadiness
           className="public-submit-readiness-inline"
-          identityMode={walletRequired || (attachWallet && walletAccountAddress) ? "wallet" : usingZkLogin ? "zklogin" : "anonymous"}
+          identityMode={walletModeSelected ? "wallet" : "anonymous"}
           sealEnabled={Boolean(form.encryptSubmissions)}
           submitModeLabel={submitModeLabel}
           storageModeLabel={storageModeLabel}
@@ -528,56 +681,52 @@ export function PublicFormPage() {
         />
       </div>
 
-      <PublicIdentityCard
-        walletRequired={walletRequired}
-        allowedSenderTypesLabel={t("allowedSenderTypesLabel")}
-        allowedSenderTypesValue={
-          walletRequired ? t("allowedSenderTypesWalletOnly") : t("allowedSenderTypesAnonymousAndWallet")
-        }
-        requirementLabel={t("identityRequirementLabel")}
-        requirementValue={walletRequired ? t("verificationRequired") : t("verificationOptional")}
-        accountAddress={walletAccountAddress}
-        attachWallet={attachWallet}
-        deadlinePassed={deadlinePassed}
-        onAttachWalletChange={setAttachWallet}
-        onAttachWalletTouched={() => setAttachWalletTouched(true)}
-        onAccountAddressChange={setWalletAccountAddress}
-        onWalletProviderChange={setWalletProvider}
-        zkLoginEnabled={zkLoginEnabled}
-        zkLoginConnected={zkLoginConnected}
-        zkLoginAddress={zkLoginSession?.address}
-        zkLoginProviderLabel={zkLoginSession ? t("publicZkLoginProvider") : undefined}
-        onBeginZkLogin={() => void handleBeginZkLogin()}
-        onClearZkLogin={handleClearZkLogin}
-        labels={{
-          eyebrow: t("publicIdentityEyebrow"),
-          title: t("publicIdentityTitle"),
-          body: t(walletRequired ? "publicIdentityBodyWalletRequired" : "publicIdentityBody"),
-          sendMode: t("publicSendMode"),
-          walletRequired: t("publicWalletRequired"),
-          walletAttach: t("publicWalletAttach"),
-          walletRequiredConnectedHelp: t("publicWalletRequiredConnectedHelp"),
-          walletRequiredHelp: t("publicWalletRequiredHelp"),
-          walletAttachHelp: t("publicWalletAttachHelp"),
-          walletConnectOptional: t("publicWalletConnectOptional"),
-          currentMode: t("publicCurrentMode"),
-          modeWallet: t("publicModeWallet"),
-          modeAnonymous: t("publicModeAnonymous"),
-          walletModeHelpNoSignature: t("publicWalletModeHelpNoSignature"),
-          anonymousModeHelp: t("publicAnonymousModeHelp"),
-          walletUnavailable: t("publicWalletUnavailable"),
-          walletUnavailableRequired: t("publicWalletUnavailableRequired"),
-          walletRetry: t("publicWalletRetry"),
-          modeZkLogin: t("publicModeZkLogin"),
-          zkLoginTitle: t("publicZkLoginTitle"),
-          zkLoginBody: t("publicZkLoginBody"),
-          zkLoginConnect: t("publicZkLoginConnect"),
-          zkLoginDisconnect: t("publicZkLoginDisconnect"),
-          zkLoginConnectedHelp: t("publicZkLoginConnectedHelp"),
-          zkLoginOptionalHelp: t("publicZkLoginOptionalHelp"),
-          zkLoginUnavailable: t("publicZkLoginUnavailable"),
-        }}
-      />
+      {walletModeSelected ? (
+        <PublicIdentityCard
+          walletRequired
+          allowedSenderTypesLabel={t("allowedSenderTypesLabel")}
+          allowedSenderTypesValue={t("allowedSenderTypesWalletOnly")}
+          requirementLabel={t("identityRequirementLabel")}
+          requirementValue={t("verificationRequired")}
+          accountAddress={resolvedWalletAddress}
+          attachWallet
+          deadlinePassed={deadlinePassed}
+          initialWalletRequested
+          onAttachWalletChange={() => undefined}
+          onAttachWalletTouched={() => undefined}
+          onAccountAddressChange={setWalletAccountAddress}
+          onWalletProviderChange={setWalletProvider}
+          zkLoginEnabled={false}
+          labels={{
+            eyebrow: t("publicIdentityEyebrow"),
+            title: t("publicIdentityTitle"),
+            body: t("publicIdentityBodyWalletRequired"),
+            sendMode: t("publicSendMode"),
+            walletRequired: t("publicWalletRequired"),
+            walletAttach: t("publicWalletAttach"),
+            walletRequiredConnectedHelp: t("publicWalletRequiredConnectedHelp"),
+            walletRequiredHelp: t("publicWalletRequiredHelp"),
+            walletAttachHelp: t("publicWalletAttachHelp"),
+            walletConnectOptional: t("publicWalletConnectOptional"),
+            currentMode: t("publicCurrentMode"),
+            modeWallet: t("publicModeWallet"),
+            modeAnonymous: t("publicModeAnonymous"),
+            walletModeHelpNoSignature: t("publicWalletModeHelpNoSignature"),
+            anonymousModeHelp: t("publicAnonymousModeHelp"),
+            walletUnavailable: t("publicWalletUnavailable"),
+            walletUnavailableRequired: t("publicWalletUnavailableRequired"),
+            walletRetry: t("publicWalletRetry"),
+            modeZkLogin: t("publicModeZkLogin"),
+            zkLoginTitle: t("publicZkLoginTitle"),
+            zkLoginBody: t("publicZkLoginBody"),
+            zkLoginConnect: t("publicZkLoginConnect"),
+            zkLoginDisconnect: t("publicZkLoginDisconnect"),
+            zkLoginConnectedHelp: t("publicZkLoginConnectedHelp"),
+            zkLoginOptionalHelp: t("publicZkLoginOptionalHelp"),
+            zkLoginUnavailable: t("publicZkLoginUnavailable"),
+          }}
+        />
+      ) : null}
 
       {hasRecoverableDraft ? (
         <RecoverableDraftBanner

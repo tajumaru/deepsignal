@@ -27,6 +27,52 @@
 }
 
 @media (max-width: 640px) {
+  .public-identity-choice-screen {
+    gap: 1.1rem;
+    padding: 0.95rem;
+  }
+
+  .public-identity-choice-hero,
+  .public-identity-choice-footer,
+  .public-identity-choice-footer-copy {
+    grid-template-columns: 1fr;
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .public-identity-choice-help,
+  .public-identity-choice-footer .ghost-button {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .public-identity-choice-title-row {
+    gap: 0.7rem;
+  }
+
+  .public-identity-choice-hero-icon {
+    width: 2.55rem;
+    height: 2.55rem;
+  }
+
+  .public-identity-choice-grid {
+    grid-template-columns: 1fr;
+    padding: 1rem;
+  }
+
+  .public-identity-choice-card {
+    padding: 1.2rem;
+  }
+
+  .public-identity-choice-heading {
+    gap: 0.55rem;
+  }
+
+  .public-identity-choice-card .ghost-button,
+  .public-identity-choice-card .primary-button {
+    width: 100%;
+  }
+
   .voice-recorder-actions {
     grid-template-columns: 1fr;
   }

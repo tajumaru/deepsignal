@@ -39,6 +39,7 @@ export function PublishOverlay({
   onCopyBlobId,
   onClose,
 }: PublishOverlayProps) {
+  void onCopyLink;
   const [qrMarkup, setQrMarkup] = useState("");
   const isBeaconVisible = overlay.stageIndex >= publishPhases.length - 1 && isCrossDeviceShareReady;
   const activePhase = publishPhases[overlay.stageIndex];

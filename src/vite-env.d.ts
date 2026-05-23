@@ -39,6 +39,11 @@ interface ImportMetaEnv {
   readonly VITE_DEEPSIGNAL_REGISTRY_ID?: string;
   readonly VITE_DEEPSIGNAL_ADMIN_CAP_ID?: string;
   readonly VITE_DEEPSIGNAL_OWNER_CAP_ID?: string;
+  readonly VITE_ZKLOGIN_ENABLE?: string;
+  readonly VITE_ZKLOGIN_GOOGLE_CLIENT_ID?: string;
+  readonly VITE_ZKLOGIN_REDIRECT_URI?: string;
+  readonly VITE_ZKLOGIN_SALT_SERVICE_URL?: string;
+  readonly VITE_ZKLOGIN_MAX_EPOCH_OFFSET?: string;
 }
 
 interface ImportMeta {
