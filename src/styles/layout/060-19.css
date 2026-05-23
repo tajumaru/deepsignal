@@ -1,7 +1,0 @@
-.signal-composition-studio .composer-inline-section-header,
-.signal-composition-studio .composer-inline-section-description,
-.signal-composition-studio .composer-inline-section > .composer-question-stack,
-.signal-composition-studio .composer-section-empty {
-  position: relative;
-  z-index: 1;
-}

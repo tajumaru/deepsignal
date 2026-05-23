@@ -1,8 +1,0 @@
-.explore-hero-layout {
-  position: relative;
-  z-index: 1;
-  display: grid;
-  grid-template-columns: minmax(0, 1.25fr) minmax(320px, 0.95fr);
-  gap: 1rem;
-  align-items: stretch;
-}

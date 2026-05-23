@@ -1,0 +1,128 @@
+/* Global element defaults and document-level rules. Keep this free of page-specific selectors. */
+
+html,
+:root {
+  width: 100%;
+  max-width: 100%;
+  color-scheme: dark;
+  font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+  color: var(--color-text);
+  background:
+    radial-gradient(circle at top, rgba(49, 130, 206, 0.22), transparent 35%),
+    radial-gradient(circle at 20% 80%, rgba(19, 78, 74, 0.45), transparent 30%),
+    linear-gradient(180deg, var(--color-bg-start) 0%, var(--color-bg-mid) 45%, var(--color-bg-end) 100%);
+  overflow-x: hidden;
+}
+
+html,
+body,
+#root,
+.app-shell {
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  width: 100%;
+  max-width: 100%;
+  min-width: 320px;
+  min-height: 100vh;
+  min-height: 100dvh;
+  overflow-x: hidden;
+  -webkit-text-size-adjust: 100%;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+#root {
+  width: 100%;
+  max-width: 100%;
+  min-height: 100vh;
+  min-height: 100dvh;
+  overflow-x: hidden;
+}
+
+input,
+textarea,
+select {
+  width: 100%;
+  border-radius: 16px;
+  border: 1px solid rgba(128, 201, 255, 0.18);
+  background: rgba(3, 15, 26, 0.72);
+  color: var(--color-text);
+  padding: 0.85rem 0.95rem;
+  min-height: 3rem;
+  font-size: 16px;
+  line-height: 1.4;
+}
+
+body.composer-mode {
+  background:
+    radial-gradient(circle at top, rgba(49, 130, 206, 0.12), transparent 24%),
+    linear-gradient(180deg, #07111b 0%, #08131f 100%);
+}
+
+body.composer-mode .bg-orb {
+  opacity: 0.1;
+  filter: blur(24px);
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+button,
+input,
+textarea,
+select,
+.primary-button,
+.ghost-button,
+.danger-button {
+  min-width: 0;
+  max-width: 100%;
+}
+
+button,
+.primary-button,
+.ghost-button,
+.danger-button,
+input,
+select,
+textarea,
+.country-picker-trigger,
+.markdown-toolbar-button {
+  min-height: 44px;
+}
+
+pre {
+  white-space: pre-wrap;
+}

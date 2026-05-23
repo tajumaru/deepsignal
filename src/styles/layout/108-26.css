@@ -1,8 +1,0 @@
-.signal-column-status-stack {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  align-items: flex-start;
-  gap: 0.45rem 0.55rem;
-  width: 100%;
-}

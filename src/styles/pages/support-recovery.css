@@ -1,0 +1,140 @@
+/* Roadmap, manifest restore, troubleshooting, and recovery/support pages. */
+
+.grid,
+.card-grid,
+.stack,
+.summary-grid,
+.roadmap-group-grid,
+.roadmap-card-list {
+  display: grid;
+  gap: 1rem;
+}
+
+.reset-environment-panel {
+  display: grid;
+  gap: 1rem;
+  width: min(1080px, 100%);
+  margin: 0 auto;
+}
+
+.reset-environment-toast {
+  width: min(520px, 100%);
+}
+
+.reset-environment-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) minmax(17rem, 0.75fr);
+  gap: 1rem;
+  align-items: stretch;
+}
+
+.reset-environment-hero h1,
+.reset-action-card h2,
+.reset-results-panel h2,
+.reset-ios-note h2,
+.reset-all-zone h2 {
+  margin: 0;
+}
+
+.reset-environment-warning {
+  display: grid;
+  align-content: center;
+  padding: 1rem;
+  border: 1px solid rgba(255, 126, 143, 0.26);
+  border-radius: 16px;
+  background: rgba(255, 126, 143, 0.1);
+  color: #ffd7dd;
+  font-weight: 800;
+  line-height: 1.45;
+}
+
+.reset-environment-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.review-roadmap-strip {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 1rem;
+  margin-top: 0;
+}
+
+.review-roadmap-strip > div:first-child {
+  display: grid;
+  gap: 0.18rem;
+  min-width: 0;
+}
+
+.review-roadmap-strip strong {
+  color: var(--text);
+}
+
+.review-roadmap-actions {
+  justify-content: flex-end;
+  min-width: max-content;
+}
+
+.contest-flow-card,
+.contest-next-action-card,
+.contest-review-lock-card,
+.contest-roadmap-card,
+.contest-builder-quickstart,
+.contest-share-ready-card,
+.public-submit-details,
+.locked-signal-state,
+.contest-inline-success {
+  background:
+    radial-gradient(circle at top right, rgba(103, 232, 249, 0.08), transparent 28%),
+    rgba(4, 18, 31, 0.7);
+}
+
+.contest-review-lock-card,
+.contest-roadmap-card {
+  padding: 1rem;
+  border-radius: 20px;
+  border: 1px solid rgba(116, 226, 255, 0.12);
+}
+
+.review-triage-card.is-review-locked .review-stage-card,
+.review-triage-card.is-review-locked .review-field-grid,
+.review-triage-card.is-review-locked .review-select,
+.review-triage-card.is-review-locked .review-roadmap-strip {
+  opacity: 0.58;
+}
+
+.roadmap-hero {
+  background:
+    radial-gradient(circle at top right, rgba(120, 231, 255, 0.14), transparent 28%),
+    linear-gradient(180deg, rgba(4, 18, 31, 0.95), rgba(3, 13, 24, 0.95));
+}
+
+.roadmap-group-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.roadmap-column {
+  align-content: start;
+}
+
+.roadmap-card {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.roadmap-metadata-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.8rem;
+}
+
+.roadmap-metadata-grid .metadata-row {
+  min-width: 0;
+}
+
+.roadmap-preview {
+  margin-bottom: 0;
+  color: #d5eef8;
+}

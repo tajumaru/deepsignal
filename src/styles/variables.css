@@ -1,16 +1,6 @@
-html,
+/* Design tokens only: colors, radii, transitions, and shared shadows. Do not place selectors here. */
+
 :root {
-  width: 100%;
-  max-width: 100%;
-  color-scheme: dark;
-  font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
-  line-height: 1.5;
-  font-weight: 400;
-  color: var(--color-text);
-  background:
-    radial-gradient(circle at top, rgba(49, 130, 206, 0.22), transparent 35%),
-    radial-gradient(circle at 20% 80%, rgba(19, 78, 74, 0.45), transparent 30%),
-    linear-gradient(180deg, var(--color-bg-start) 0%, var(--color-bg-mid) 45%, var(--color-bg-end) 100%);
   --color-text: #ecfdff;
   --color-bg-start: #06111d;
   --color-bg-mid: #081726;
@@ -34,14 +24,4 @@ html,
   --transition-base: 200ms ease;
   --transition-smooth: 220ms ease;
   --shadow: 0 22px 60px rgba(0, 0, 0, 0.38);
-  overflow-x: hidden;
-}
-
-/* Last-mile mobile guardrails. These intentionally live at EOF. */
-html,
-body,
-#root,
-.app-shell {
-  max-width: 100%;
-  overflow-x: hidden;
 }

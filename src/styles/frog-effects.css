@@ -1,3 +1,5 @@
+/* Animation keyframes only. Rules that use animations live with their component or page module. */
+
 @keyframes walletSyncPulse {
   0%,
   100% {
