@@ -81,9 +81,14 @@ export function PublicFormPage() {
     recoveryGuidance,
     recoveryCorrupted,
     submitPipeline,
+    location,
+    locationState,
+    locationMessage,
     storageConnectionPreparing,
     visibleFieldIds,
     updateAnswer,
+    requestLocation,
+    clearLocation,
     handleSubmit,
     restoreDraft,
     discardDraft,
@@ -107,6 +112,11 @@ export function PublicFormPage() {
         fieldLabel,
         maxSize: `${Math.round(maxSizeBytes / (1024 * 1024))}MB`,
       }),
+    requiredLocationError: t("locationRequiredFriendly"),
+    locationPromptLabel: t("locationPromptLabel"),
+    locationDeniedLabel: t("locationDeniedLabel"),
+    locationUnavailableLabel: t("locationUnavailableLabel"),
+    locationFailedLabel: t("locationFailedLabel"),
   });
 
   useEffect(() => {
@@ -490,6 +500,72 @@ export function PublicFormPage() {
           <span>{progressLabel}</span>
           <small>{remainingEstimate}</small>
         </div>
+        {form.locationRequirement ? (
+          <section className={`public-location-card ${locationState === "success" ? "is-success" : ""}`} aria-live="polite">
+            <div className="public-location-card-copy">
+              <p className="eyebrow">{t("locationRequirementEyebrow")}</p>
+              <h3>{t("locationRequirementTitle")}</h3>
+              <p className="muted">
+                {form.locationRequirement === "required" ? t("locationRequirementRequiredHelp") : t("locationRequirementOptionalHelp")}
+              </p>
+            </div>
+            <div className="public-location-card-body">
+              <div className="metadata-list">
+                <div className="metadata-row">
+                  <span>{t("locationRequirementLabel")}</span>
+                  <strong>
+                    {form.locationRequirement === "required" ? t("locationRequirementRequired") : t("locationRequirementOptional")}
+                  </strong>
+                </div>
+                <div className="metadata-row">
+                  <span>{t("locationStatusLabel")}</span>
+                  <strong>
+                    {locationState === "success"
+                      ? t("locationAttached")
+                      : locationState === "requesting"
+                        ? t("locationRequesting")
+                        : locationState === "denied"
+                          ? t("locationDenied")
+                          : locationState === "unsupported"
+                            ? t("locationUnavailable")
+                            : locationState === "error"
+                              ? t("locationFailed")
+                              : t("locationNotAttached")}
+                  </strong>
+                </div>
+                {location ? (
+                  <>
+                    <div className="metadata-row">
+                      <span>{t("locationAccuracyLabel")}</span>
+                      <strong>{`${Math.round(location.accuracy)}m`}</strong>
+                    </div>
+                    <div className="metadata-row">
+                      <span>{t("locationCapturedAtLabel")}</span>
+                      <strong>{new Date(location.capturedAt).toLocaleString()}</strong>
+                    </div>
+                  </>
+                ) : null}
+              </div>
+              {locationMessage ? <p className="muted">{locationMessage}</p> : null}
+              {submitError && form.locationRequirement === "required" && !location ? <p className="error-text">{submitError}</p> : null}
+              <div className="public-location-actions">
+                <button
+                  type="button"
+                  className="ghost-button"
+                  onClick={() => void requestLocation()}
+                  disabled={deadlinePassed || locationState === "requesting"}
+                >
+                  {location ? t("locationRecapture") : t("locationAttachAction")}
+                </button>
+                {location ? (
+                  <button type="button" className="ghost-button" onClick={clearLocation} disabled={deadlinePassed || locationState === "requesting"}>
+                    {t("locationRemoveAction")}
+                  </button>
+                ) : null}
+              </div>
+            </div>
+          </section>
+        ) : null}
         {groupedFields.sections.map((section) =>
           section.fields.length ? (
             <section key={section.id} className="composer-preview-section">

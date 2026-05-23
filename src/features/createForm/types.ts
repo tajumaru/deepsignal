@@ -8,6 +8,7 @@ import type {
   FormHeaderLogo,
   FormHeaderImagePosition,
   FormIdentityPolicy,
+  FormLocationRequirement,
   FormPurpose,
   FormSchema,
   FormSection,
@@ -21,6 +22,7 @@ export type {
   FormHeaderLogo,
   FormHeaderImagePosition,
   FormIdentityPolicy,
+  FormLocationRequirement,
   FormPurpose,
   FormSchema,
   FormSection,
@@ -79,6 +81,7 @@ export interface FormBuilderValues {
   purpose: FormPurpose;
   visibility: FormVisibility;
   identityPolicy: FormIdentityPolicy;
+  locationRequirement: FormLocationRequirement;
   encryptSubmissions: boolean;
   responseDeadlinePreset: ResponseDeadlinePreset;
   responseDeadlineCustomAt: string;

@@ -23,7 +23,9 @@ import { RelatedSignalsPanel } from "../components/RelatedSignalsPanel";
 import { AdminToast } from "../features/admin/components/AdminToast";
 import { CsvExportConfirmationModal } from "../features/admin/components/CsvExportConfirmationModal";
 import { ProjectWorkspaceModal } from "../features/admin/components/ProjectWorkspaceModal";
+import { ReviewSessionModal } from "../features/admin/components/ReviewSessionModal";
 import { SignalAttachmentList } from "../features/admin/components/SignalAttachmentList";
+import { SignalTimelineSection } from "../features/admin/components/SignalTimelineSection";
 import { MailboxIcon, SignalChannelSelector, SignalStreamsNav } from "../features/admin/components/SignalStreamsNav";
 import { WorkspaceActivityLog } from "../features/admin/components/WorkspaceActivityLog";
 import { WorkspaceInsights } from "../features/admin/components/WorkspaceInsights";
@@ -2002,9 +2004,7 @@ export function AdminDashboardPage() {
 
   const selectedRecordFocusAction = !selectedRecord
     ? null
-    : selectedRecordNeedsDecrypt
-      ? null
-      : selectedRecord.submission.status === "unread"
+    : selectedRecord.submission.status === "unread"
         ? {
             eyebrow: t("nextStepLabel"),
             title: t("startReviewSessionTitle"),
@@ -2026,6 +2026,8 @@ export function AdminDashboardPage() {
               </button>
             ),
           }
+        : selectedRecordNeedsDecrypt
+          ? null
         : selectedRecord.submission.pendingOnchainRegistration
           ? {
               eyebrow: t("nextStepLabel"),
@@ -2099,6 +2101,11 @@ export function AdminDashboardPage() {
   const draftTriageStatus = activeReviewDraft?.triageStatus ?? selectedRecord?.submission.triageStatus ?? "new";
   const isReviewWorkbenchLocked = selectedRecordNeedsDecrypt;
   const isDraftOnRoadmap = ROADMAP_READY_STATUSES.has(draftTriageStatus);
+  const shouldHideLockedDetailBeforeReview = Boolean(
+    selectedRecord &&
+      selectedRecord.submission.status === "unread" &&
+      selectedRecordNeedsDecrypt,
+  );
 
   function patchReviewDraft(patch: Partial<ReviewDraft>) {
     if (!selectedRecord || isReviewWorkbenchLocked) {
@@ -2635,6 +2642,10 @@ export function AdminDashboardPage() {
         : null,
     [selectedRecord, selectedSignalTimelineEntries, t],
   );
+  const getTimelinePhaseLabel = useCallback(
+    (phase: SignalTimelineEntry["phase"]) => getSignalTimelinePhaseLabel(phase, t),
+    [t],
+  );
   const selectedSecondaryMetaItems = selectedRecord
     ? [
         selectedRecord.submission.severity
@@ -2658,6 +2669,12 @@ export function AdminDashboardPage() {
     },
   ] as const;
   const reviewSessionCurrentStep = reviewSessionStepItems.find((step) => step.id === reviewSessionStep) ?? reviewSessionStepItems[0];
+  const reviewSessionPublicResultValue =
+    selectedRecord && activeReviewDraft
+      ? getPublicDecisionLabel(buildSubmissionFromReviewDraft(selectedRecord.submission, activeReviewDraft), t)
+      : selectedRecord
+        ? getPublicDecisionLabel(selectedRecord.submission, t)
+        : "";
   const canAdvanceReviewSession =
     reviewSessionStep === 1
       ? Boolean(detailAnswers)
@@ -3841,7 +3858,7 @@ export function AdminDashboardPage() {
                       ) : null}
                     </section>
 
-                    {selectedRecordNeedsDecrypt ? (
+                    {selectedRecordNeedsDecrypt && !shouldHideLockedDetailBeforeReview ? (
                       <PrivateSignalUnlockCard
                         onUnlock={() => void handleDecrypt()}
                         onClearDebugCache={() => void handleClearDebugPolicyCache()}
@@ -3970,69 +3987,14 @@ export function AdminDashboardPage() {
 
                   {!isReviewerFocusMode ? (
                   <div className="signal-detail-sections review-secondary-sections">
-                    <section className="answer-card review-secondary-card signal-timeline-section">
-                      <WorkspaceSectionToggle
-                        eyebrow={t("signalTimelineEyebrow")}
-                        title={t("signalTimelineTitle")}
-                        detail={t("signalTimelineBody")}
-                        open={detailSectionsState.signalTimelineOpen}
-                        onToggle={() =>
-                          setDetailSectionOpen("signalTimelineOpen", !detailSectionsState.signalTimelineOpen)
-                        }
-                        trailing={
-                          <span className="signal-chip signal-chip-soft">
-                            {t("signalTimelineCount", { count: selectedSignalTimelineEntries.length })}
-                          </span>
-                        }
-                      />
-                      {detailSectionsState.signalTimelineOpen ? (
-                        <div className="signal-timeline-panel">
-                          {selectedSignalTimelineCurrentState ? (
-                            <div className={`signal-timeline-current-state is-${selectedSignalTimelineCurrentState.phase}`}>
-                              <div className="signal-timeline-current-head">
-                                <span className="signal-timeline-current-label">{t("signalTimelineCurrentStateLabel")}</span>
-                                <span className={`signal-timeline-phase-pill is-${selectedSignalTimelineCurrentState.phase}`}>
-                                  {getSignalTimelinePhaseLabel(selectedSignalTimelineCurrentState.phase, t)}
-                                </span>
-                              </div>
-                              <strong>{selectedSignalTimelineCurrentState.title}</strong>
-                              {selectedSignalTimelineCurrentState.detail ? (
-                                <p className="muted">{selectedSignalTimelineCurrentState.detail}</p>
-                              ) : null}
-                            </div>
-                          ) : null}
-                          <p className="muted signal-timeline-derived-note">{t("signalTimelineDerivedHint")}</p>
-                          <div className="signal-timeline-list" aria-label={t("signalTimelineTitle")}>
-                            {selectedSignalTimelineEntries.map((entry, index) => {
-                              const isCurrent = index === selectedSignalTimelineEntries.length - 1;
-                              return (
-                              <article
-                                key={entry.id}
-                                className={`signal-timeline-item ${isCurrent ? "is-current" : "is-past"} is-${entry.phase}`}
-                              >
-                                <span className={`signal-timeline-marker is-${entry.phase}`} aria-hidden="true" />
-                                <div className="signal-timeline-card">
-                                  <div className="signal-timeline-card-header">
-                                    <strong>{entry.title}</strong>
-                                    <div className="signal-timeline-meta">
-                                      <span className={`signal-timeline-phase-pill is-${entry.phase}`}>
-                                        {getSignalTimelinePhaseLabel(entry.phase, t)}
-                                      </span>
-                                      <time dateTime={entry.timestamp} title={formatDate(entry.timestamp)}>
-                                        {formatRelativeTime(entry.timestamp, timelineNow)}
-                                      </time>
-                                    </div>
-                                  </div>
-                                  {entry.detail ? (
-                                    <p className="muted signal-timeline-detail">{entry.detail}</p>
-                                  ) : null}
-                                </div>
-                              </article>
-                            );})}
-                          </div>
-                        </div>
-                      ) : null}
-                    </section>
+                    <SignalTimelineSection
+                      open={detailSectionsState.signalTimelineOpen}
+                      onToggle={() => setDetailSectionOpen("signalTimelineOpen", !detailSectionsState.signalTimelineOpen)}
+                      entries={selectedSignalTimelineEntries}
+                      currentState={selectedSignalTimelineCurrentState}
+                      timelineNow={timelineNow}
+                      getPhaseLabel={getTimelinePhaseLabel}
+                    />
 
                     <section className="secondary-inspector">
                       <div className="secondary-inspector-header">
@@ -4531,448 +4493,54 @@ export function AdminDashboardPage() {
 
         <div className="mobile-console-banner">{t("adminDesktopNotice")}</div>
       </section>
-      {reviewSessionOpen && selectedRecord ? (
-        <div className="modal-backdrop review-session-backdrop" role="presentation" onMouseDown={requestCloseReviewSession}>
-          <section
-            ref={reviewSessionDialogRef}
-            className="answer-card review-session-modal"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="review-session-title"
-            aria-describedby="review-session-description"
-            onMouseDown={(event) => event.stopPropagation()}
-          >
-            <div className="review-session-shell">
-              <div className="review-session-header">
-                <div>
-                  <p className="eyebrow">{t("reviewSessionEyebrow")}</p>
-                  <h3 id="review-session-title">{reviewSessionCurrentStep.title}</h3>
-                  <p id="review-session-description" className="muted">{reviewSessionCurrentStep.detail}</p>
-                </div>
-                <div className="review-session-header-actions">
-                  <span className={`save-state-pill is-${reviewStatusPillState}`}>{reviewStatusPillLabel}</span>
-                  <button
-                    type="button"
-                    className="review-session-close-button"
-                    aria-label={t("closeLabel")}
-                    title={t("closeLabel")}
-                    onClick={requestCloseReviewSession}
-                  >
-                    <svg viewBox="0 0 24 24" aria-hidden="true">
-                      <path d="M7 7 17 17" />
-                      <path d="M17 7 7 17" />
-                    </svg>
-                  </button>
-                </div>
-              </div>
-
-              <div className="review-progress-rail review-session-progress" aria-label={t("reviewProgressAriaLabel")}>
-                {reviewSessionStepItems.map((step) => {
-                  const isCompletedStep = reviewSessionStep > step.id;
-                  const isStepLocked = step.id > 1 && selectedRecordNeedsDecrypt && !detailAnswers;
-                  return (
-                  <button
-                    key={step.id}
-                    type="button"
-                    className={`review-progress-step ${reviewSessionStep === step.id ? "is-current" : isCompletedStep ? "is-complete" : ""}`}
-                    onClick={() => {
-                      if (step.id === 1 || !selectedRecordNeedsDecrypt || Boolean(detailAnswers)) {
-                        setReviewSessionStep(step.id);
-                      }
-                    }}
-                    disabled={isStepLocked}
-                  >
-                    <span className="review-progress-marker" aria-hidden="true">
-                      {isCompletedStep ? "✓" : step.id}
-                    </span>
-                    <span className="review-progress-copy">
-                      <span className="review-progress-step-label">
-                        {reviewSessionStep > step.id ? t("doneLabel") : t("stepLabel", { count: step.id })}
-                      </span>
-                      <span className="review-progress-title">{step.title}</span>
-                    </span>
-                  </button>
-                );
-                })}
-              </div>
-
-              {reviewSessionStep === 1 ? (
-                <div className="review-session-stage review-session-stage-unlock">
-                  <div className="review-session-stage-copy">
-                    <strong>{t("privateSignalLockedTitle")}</strong>
-                    <p className="muted">
-                      {t("privateSignalLockedBody")}
-                    </p>
-                  </div>
-                  <div className={`review-session-decrypt-shell ${decrypting || decryptState === "decrypting" ? "is-active" : ""} ${detailAnswers ? "is-unlocked" : ""}`}>
-                    <PrivateSignalUnlockCard
-                      onUnlock={() => void handleDecrypt()}
-                      onClearDebugCache={() => void handleClearDebugPolicyCache()}
-                      isDecrypting={decrypting || decryptInFlightRef.current}
-                      isUnlocked={Boolean(detailAnswers)}
-                      actionLabel={t("decryptSignalAction")}
-                      unlockState={decryptState}
-                      statusMessage={decryptStatusMessage}
-                      errorMessage={decryptError}
-                      diagnostics={decryptDiagnostics}
-                      disabledReason={selectedRecordUnlockDisabledReason}
-                      actionDisabled={Boolean(selectedRecordUnlockDisabledReason)}
-                      supportContent={(
-                        <>
-                          <strong>{t("sealReviewSessionTitle")}</strong>
-                          <p className="muted">
-                            {t("walletApprovalReuseNotice", { minutes: realSealSessionTtlMinutes })}
-                          </p>
-                        </>
-                      )}
-                    >
-                      {selectedRecord.submission.encryptedBlobId && !isLocalFallbackBlob(selectedRecord.submission.encryptedBlobId) ? (
-                        <StorageProof
-                          blobId={selectedRecord.submission.encryptedBlobId}
-                          proof={selectedRecord.submission.encryptedWalrusProof ?? selectedRecord.submission.walrusProof}
-                          compact
-                        />
-                      ) : null}
-                    </PrivateSignalUnlockCard>
-                  </div>
-                </div>
-              ) : null}
-
-              {reviewSessionStep === 2 ? (
-                <div className="review-session-stage review-session-stage-split">
-                  <div className="review-session-mobile-tabs" role="tablist" aria-label={t("reviewSessionSectionsAriaLabel")}>
-                    <button
-                      type="button"
-                      role="tab"
-                      id="review-session-mobile-tab-answers"
-                      aria-selected={reviewSessionMobileTab === "answers"}
-                      aria-controls="review-session-mobile-panel-answers"
-                      tabIndex={reviewSessionMobileTab === "answers" ? 0 : -1}
-                      className={`review-session-mobile-tab ${reviewSessionMobileTab === "answers" ? "is-active" : ""}`}
-                      onClick={() => setReviewSessionMobileTab("answers")}
-                    >
-                      {t("originalSignalTitle")}
-                    </button>
-                    <button
-                      type="button"
-                      role="tab"
-                      id="review-session-mobile-tab-review"
-                      aria-selected={reviewSessionMobileTab === "review"}
-                      aria-controls="review-session-mobile-panel-review"
-                      tabIndex={reviewSessionMobileTab === "review" ? 0 : -1}
-                      className={`review-session-mobile-tab ${reviewSessionMobileTab === "review" ? "is-active" : ""}`}
-                      onClick={() => setReviewSessionMobileTab("review")}
-                    >
-                      {t("reviewClassifyTitle")}
-                    </button>
-                  </div>
-
-                  <div
-                    id="review-session-mobile-panel-answers"
-                    role="tabpanel"
-                    aria-labelledby="review-session-mobile-tab-answers"
-                    className={`review-session-read-panel ${reviewSessionMobileTab === "review" ? "is-mobile-hidden" : ""}`}
-                  >
-                    <div className="review-session-stage-copy">
-                      <strong>{t("originalSignalTitle")}</strong>
-                      <p className="muted">{t("originalSignalBody")}</p>
-                    </div>
-                    <div className="review-session-answer-list">
-                      {selectedRecord.form.fields
-                        .filter((field) => !isAttachmentFieldType(field.type))
-                        .map((field, index) => (
-                          <article key={field.id} className="review-session-answer-card">
-                            <div className="review-session-question-head">
-                              <span className="review-session-question-index">Q{index + 1}</span>
-                              <strong>{field.label}</strong>
-                            </div>
-                            <div>{renderAnswerValue(field, detailAnswers?.[field.id])}</div>
-                          </article>
-                        ))}
-                      {detailAttachments.length > 0 ? (
-                        <article className="review-session-answer-card">
-                          <span>{t("attachmentsTitle")}</span>
-                          <SignalAttachmentList
-                            attachments={detailAttachments}
-                            attachmentPreviews={attachmentPreviews}
-                          />
-                        </article>
-                      ) : null}
-                    </div>
-                  </div>
-
-                  <div
-                    id="review-session-mobile-panel-review"
-                    role="tabpanel"
-                    aria-labelledby="review-session-mobile-tab-review"
-                    className={`review-stage-card ${reviewSessionMobileTab === "answers" ? "is-mobile-hidden" : ""}`}
-                  >
-                    <div className="review-stage-header">
-                      <p className="eyebrow">{t("stepLabel", { count: 2 })}</p>
-                      <strong>{t("reviewClassifyTitle")}</strong>
-                    </div>
-                    <div className="review-field-grid">
-                      <div className="review-badge-field">
-                        <span>{t("reviewStateLabel")}</span>
-                        <div className="review-badge-options" role="group" aria-label={t("reviewStateLabel")}>
-                          {[
-                            { value: "unread", label: t("statusUnread") },
-                            { value: "read", label: t("statusRead") },
-                            { value: "archived", label: t("statusArchived") },
-                          ].map((option) => {
-                            const isSelected = activeReviewDraft?.status === option.value;
-                            return (
-                              <button
-                                key={option.value}
-                                type="button"
-                                className={`review-state-badge is-status-${option.value} ${isSelected ? "is-active" : ""}`}
-                                aria-pressed={isSelected}
-                                disabled={isSelected}
-                                onClick={() => patchReviewDraft({ status: option.value as Submission["status"] })}
-                              >
-                                {option.label}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-                      <label className="review-select review-badge-field">
-                        <span>{t("triageStatusLabel")}</span>
-                        <select
-                          value={activeReviewDraft?.triageStatus ?? "new"}
-                          onChange={(event) =>
-                            patchReviewDraft({
-                              triageStatus: event.target.value as Submission["triageStatus"],
-                            })
-                          }
-                        >
-                          {TRIAGE_STATUS_OPTIONS.map((option) => (
-                            <option key={option.value} value={option.value}>
-                              {getLocalizedTriageStatusLabel(option.value, t)}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                      <div className="review-badge-field">
-                        <span>{t("priority")}</span>
-                        <div className="review-badge-options" role="group" aria-label={t("priority")}>
-                          {[
-                            { value: "low", label: t("priorityLow") },
-                            { value: "medium", label: t("priorityMedium") },
-                            { value: "high", label: t("priorityHigh") },
-                          ].map((option) => {
-                            const isSelected = activeReviewDraft?.priority === option.value;
-                            return (
-                              <button
-                                key={option.value}
-                                type="button"
-                                className={`review-state-badge is-priority-${option.value} ${isSelected ? "is-active" : ""}`}
-                                aria-pressed={isSelected}
-                                disabled={isSelected}
-                                onClick={() => patchReviewDraft({ priority: option.value as Submission["priority"] })}
-                              >
-                                {option.label}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-                      <div className="review-badge-field">
-                        <span>{t("signalValueLabel")}</span>
-                        <div className="review-badge-options" role="group" aria-label={t("signalValueLabel")}>
-                          <div className="review-star-rating" aria-label={t("signalValueRatingLabel")}>
-                            {[1, 2, 3, 4, 5].map((value) => {
-                              const currentValue = activeReviewDraft?.signalValue ?? 0;
-                              const isSelected = activeReviewDraft?.signalValue === value;
-                              const isFilled = currentValue >= value;
-                              const canToggleOffToUnscored = value === 1 && activeReviewDraft?.signalValue === 1;
-                              return (
-                                <button
-                                  key={value}
-                                  type="button"
-                                  className={`review-star-button ${isFilled ? "is-filled" : ""} ${isSelected ? "is-selected" : ""}`}
-                                  aria-label={t("signalValueRatingOption", { value })}
-                                  aria-pressed={isSelected}
-                                  disabled={isSelected && !canToggleOffToUnscored}
-                                  onClick={() => patchReviewDraft({ signalValue: canToggleOffToUnscored ? undefined : value })}
-                                >
-                                  ★
-                                </button>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              ) : null}
-
-              {reviewSessionStep === 3 ? (
-                <div className="review-session-stage">
-                  <div className="review-stage-card">
-                    <div className="review-stage-header">
-                      <p className="eyebrow">{t("stepLabel", { count: 3 })}</p>
-                      <strong>{t("reviewerNoteLabel")}</strong>
-                    </div>
-                    <p className="review-session-internal-note">{t("reviewInternalOnlyNote")}</p>
-                    <label className="review-select">
-                      <span>{t("assignedReviewerLabel")}</span>
-                      <input
-                        type="text"
-                        value={activeReviewDraft?.reviewer ?? ""}
-                        onChange={(event) => patchReviewDraft({ reviewer: event.target.value })}
-                        placeholder={t("reviewerInputPlaceholder")}
-                      />
-                    </label>
-                    <div className="review-notes-actions">
-                      <span className="signal-chip signal-chip-soft">{selectedReviewerDisplayLabel || t("unassignedLabel")}</span>
-                      {wallet.accountAddress ? (
-                        <button
-                          type="button"
-                          className="ghost-button"
-                          onClick={() => patchReviewDraft({ reviewer: wallet.accountAddress })}
-                        >
-                          {t("assignToMe")}
-                        </button>
-                      ) : null}
-                      <button
-                        type="button"
-                        className={`ghost-button ${selectedNeedsFollowUp ? "is-active" : ""}`}
-                        disabled={saving}
-                        onClick={() => void handleToggleNeedsFollowUp()}
-                      >
-                        {selectedNeedsFollowUp ? t("followUpEnabledLabel") : t("needsFollowUpLabel")}
-                      </button>
-                    </div>
-                    <label className="review-select">
-                      <span>{t("internalNote")}</span>
-                      <textarea
-                        rows={7}
-                        value={activeReviewDraft?.notes ?? ""}
-                        onChange={(event) => patchReviewDraft({ notes: event.target.value })}
-                        placeholder={t("captureReviewNotes")}
-                      />
-                    </label>
-                    <p className="review-action-helper">{t("reviewUnsavedDraftHelper")}</p>
-                  </div>
-                </div>
-              ) : null}
-
-              {reviewSessionStep === 4 ? (
-                <div className="review-session-stage">
-                  <div className="review-stage-card review-stage-card-compact-decision">
-                    <div className="review-stage-header">
-                      <p className="eyebrow">{t("publicRoadmapDecisionStep")}</p>
-                      <strong>{t("reviewPublicRoadmapDecisionTitle")}</strong>
-                    </div>
-                    <p className="muted">
-                      {t("publicRoadmapDecisionBody")}
-                    </p>
-                    <div className="review-session-decision-grid">
-                      <button
-                        type="button"
-                        className={`review-state-badge ${!isDraftOnRoadmap && draftTriageStatus !== "closed" ? "is-active" : ""}`}
-                        onClick={() => patchReviewDraft({ status: "read" })}
-                      >
-                        {t("keepInternal")}
-                      </button>
-                      <button
-                        type="button"
-                        className={`review-state-badge is-triage-planned ${isDraftOnRoadmap ? "is-active" : ""}`}
-                        onClick={() => patchReviewDraft({
-                          status: "read",
-                          triageStatus: ROADMAP_READY_STATUSES.has(draftTriageStatus) ? draftTriageStatus : "planned",
-                        })}
-                      >
-                        {t("publishToRoadmap")}
-                      </button>
-                      <button
-                        type="button"
-                        className={`review-state-badge is-triage-closed ${draftTriageStatus === "closed" ? "is-active" : ""}`}
-                        onClick={() => patchReviewDraft({ status: "read", triageStatus: "closed" })}
-                      >
-                        {t("resolveInternally")}
-                      </button>
-                      <button
-                        type="button"
-                        className={`review-state-badge is-status-archived ${draftReviewStatus === "archived" ? "is-active" : ""}`}
-                        onClick={() => patchReviewDraft({ status: "archived", triageStatus: "closed" })}
-                      >
-                        {t("archiveSignal")}
-                      </button>
-                    </div>
-                    <div className="review-result-grid review-result-grid-compact">
-                      <div className="review-result-item">
-                        <span>{t("roadmapStatusLabel")}</span>
-                        <strong>{isDraftOnRoadmap ? t("visibleOnRoadmap") : t("notOnRoadmap")}</strong>
-                      </div>
-                      <div className="review-result-item">
-                        <span>{t("publicResultLabel")}</span>
-                        <strong>{activeReviewDraft ? getPublicDecisionLabel(buildSubmissionFromReviewDraft(selectedRecord.submission, activeReviewDraft), t) : getPublicDecisionLabel(selectedRecord.submission, t)}</strong>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              ) : null}
-
-              <div className="review-session-footer">
-                {reviewSessionStep === 1 ? (
-                  <button
-                    type="button"
-                    className="ghost-button"
-                    onClick={() => {
-                      requestCloseReviewSession();
-                    }}
-                  >
-                    {t("closeLabel")}
-                  </button>
-                ) : reviewSessionStep > 1 ? (
-                  <button
-                    type="button"
-                    className="ghost-button"
-                    onClick={() =>
-                      setReviewSessionStep((current) => (Math.max(1, current - 1) as 1 | 2 | 3 | 4))
-                    }
-                  >
-                    {t("back")}
-                  </button>
-                ) : (
-                  <span aria-hidden="true" />
-                )}
-                <div className="review-session-footer-actions">
-                  {reviewSessionStep < 4 ? (
-                    <button
-                      ref={reviewSessionPrimaryActionRef}
-                      type="button"
-                      className="primary-button"
-                      disabled={!canAdvanceReviewSession}
-                      onClick={() => setReviewSessionStep((current) => (Math.min(4, current + 1) as 1 | 2 | 3 | 4))}
-                    >
-                      {t("nextStepLabel")}
-                    </button>
-                  ) : (
-                    <button
-                      ref={reviewSessionPrimaryActionRef}
-                      type="button"
-                      className={`primary-button review-save-button ${hasReviewDraftChanges ? "is-draft-ready" : ""}`}
-                      disabled={saving || !hasReviewDraftChanges}
-                      onClick={async () => {
-                        const saved = await saveActiveReviewDraft();
-                        if (saved) {
-                          forceCloseReviewSession();
-                        }
-                      }}
-                    >
-                      {saving ? t("reviewSaveSaving") : t("saveReview")}
-                    </button>
-                  )}
-                </div>
-              </div>
-            </div>
-          </section>
-        </div>
-      ) : null}
+      <ReviewSessionModal
+        open={reviewSessionOpen}
+        selectedRecord={selectedRecord}
+        dialogRef={reviewSessionDialogRef}
+        primaryActionRef={reviewSessionPrimaryActionRef}
+        onBackdropMouseDown={requestCloseReviewSession}
+        onRequestClose={requestCloseReviewSession}
+        onCompleteClose={forceCloseReviewSession}
+        reviewSessionCurrentStep={reviewSessionCurrentStep}
+        reviewSessionStepItems={reviewSessionStepItems}
+        reviewSessionStep={reviewSessionStep}
+        setReviewSessionStep={setReviewSessionStep}
+        reviewSessionMobileTab={reviewSessionMobileTab}
+        setReviewSessionMobileTab={setReviewSessionMobileTab}
+        reviewStatusPillState={reviewStatusPillState}
+        reviewStatusPillLabel={reviewStatusPillLabel}
+        selectedRecordNeedsDecrypt={selectedRecordNeedsDecrypt}
+        detailAnswers={detailAnswers}
+        decrypting={decrypting}
+        decryptState={decryptState}
+        decryptStatusMessage={decryptStatusMessage}
+        decryptError={decryptError}
+        decryptDiagnostics={decryptDiagnostics}
+        selectedRecordUnlockDisabledReason={selectedRecordUnlockDisabledReason}
+        realSealSessionTtlMinutes={realSealSessionTtlMinutes}
+        decryptInFlight={decryptInFlightRef.current}
+        onDecrypt={() => void handleDecrypt()}
+        onClearDebugCache={() => void handleClearDebugPolicyCache()}
+        activeReviewDraft={activeReviewDraft}
+        patchReviewDraft={patchReviewDraft}
+        triageOptions={TRIAGE_STATUS_OPTIONS}
+        getLocalizedTriageStatusLabel={(value) => getLocalizedTriageStatusLabel(value, t)}
+        renderAnswerValue={renderAnswerValue}
+        detailAttachments={detailAttachments}
+        attachmentPreviews={attachmentPreviews}
+        selectedReviewerDisplayLabel={selectedReviewerDisplayLabel}
+        walletAccountAddress={wallet.accountAddress}
+        selectedNeedsFollowUp={selectedNeedsFollowUp}
+        saving={saving}
+        onToggleNeedsFollowUp={() => void handleToggleNeedsFollowUp()}
+        draftTriageStatus={draftTriageStatus}
+        draftReviewStatus={draftReviewStatus}
+        isDraftOnRoadmap={isDraftOnRoadmap}
+        publicResultValue={reviewSessionPublicResultValue}
+        canAdvanceReviewSession={canAdvanceReviewSession}
+        hasReviewDraftChanges={hasReviewDraftChanges}
+        onSaveReview={saveActiveReviewDraft}
+      />
       {projectModalMode ? (
         <ProjectWorkspaceModal
           mode={projectModalMode}

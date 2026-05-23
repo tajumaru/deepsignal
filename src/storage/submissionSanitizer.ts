@@ -65,17 +65,21 @@ export function assertEncryptedSubmissionLeakGuard(
     "answers" in submission.publicPayload &&
     submission.publicPayload.answers !== undefined &&
     Object.keys(submission.publicPayload.answers).length > 0;
+  const publicPayloadHasLocation = submission.publicPayload?.location !== undefined;
+  const locationIsSafe = submission.location === undefined;
 
   if (
     !answersAreEmpty ||
     !hasEncryptedBlobId ||
     (hasStoredEncryptedPayload && !options.allowEncryptedPayload) ||
     hasUnencryptedBlobAttachment ||
+    !locationIsSafe ||
     !metadataIsSafe ||
     !aiSummaryIsSafe ||
     !embeddingIsSafe ||
     !keywordsAreSafe ||
-    publicPayloadHasAnswers
+    publicPayloadHasAnswers ||
+    publicPayloadHasLocation
   ) {
     throw new Error(ENCRYPTED_SUBMISSION_LEAK_GUARD_FAILED);
   }
@@ -99,12 +103,14 @@ export function sanitizeSubmissionForStorage(
     isEncrypted: true,
     answers: {},
     attachments,
+    location: undefined,
     publicPayload:
       attachments.length > 0 || submission.subjectPreview || submission.ratingValue !== undefined
         ? {
             ...(attachments.length > 0 ? { attachments } : {}),
             ...(submission.subjectPreview ? { subjectPreview: submission.subjectPreview } : {}),
             ...(submission.ratingValue !== undefined ? { ratingValue: submission.ratingValue } : {}),
+            location: undefined,
           }
         : undefined,
     metadata: {},

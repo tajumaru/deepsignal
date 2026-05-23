@@ -17,6 +17,7 @@ export type FieldType =
 export type FormPurpose = "bug" | "feature" | "survey" | "custom";
 export type FormVisibility = "private" | "unlisted" | "public";
 export type FormIdentityPolicy = "anonymous_allowed" | "wallet_required";
+export type FormLocationRequirement = "optional" | "required";
 export type FormHeaderImagePosition = "center" | "top" | "bottom";
 export type SubmissionCategory = "bug" | "feature" | "survey" | "general";
 export type SubmissionPriority = "low" | "medium" | "high";
@@ -110,6 +111,7 @@ export interface FormSchema {
   visibility?: FormVisibility;
   identityPolicy?: FormIdentityPolicy;
   publicExplore?: boolean;
+  locationRequirement?: FormLocationRequirement;
   createdAt: string;
   updatedAt?: string;
   ownerAddress?: string;
@@ -127,6 +129,14 @@ export interface FormSchema {
   manifestBlobId?: string;
   walrusActualCost?: WalrusActualCost;
   activityEvents?: ActivityEvent[];
+}
+
+export interface SubmissionLocation {
+  latitude: number;
+  longitude: number;
+  accuracy: number;
+  capturedAt: string;
+  source: "browser_geolocation";
 }
 
 export interface WalrusActualCost {
@@ -209,6 +219,7 @@ export interface SubmissionPublicPayload {
   attachments?: SubmissionAttachment[];
   subjectPreview?: string;
   ratingValue?: number;
+  location?: SubmissionLocation;
 }
 
 export interface RespondentMeta {
@@ -224,6 +235,7 @@ export interface Submission {
   formId: string;
   answers: Record<string, unknown>;
   attachments: SubmissionAttachment[];
+  location?: SubmissionLocation;
   publicPayload?: SubmissionPublicPayload;
   respondentMeta?: RespondentMeta;
   metadata?: Record<string, unknown>;
@@ -266,15 +278,17 @@ export interface Submission {
 
 export interface EncryptedSubmissionRecord extends Omit<
   Submission,
-  "answers" | "attachments" | "publicPayload" | "metadata" | "encryptedPayload" | "aiSummary" | "keywords" | "embedding"
+  "answers" | "attachments" | "location" | "publicPayload" | "metadata" | "encryptedPayload" | "aiSummary" | "keywords" | "embedding"
 > {
   isEncrypted: true;
   answers: Record<string, never>;
   attachments: SubmissionAttachment[];
+  location?: undefined;
   publicPayload?: {
     attachments?: SubmissionAttachment[];
     subjectPreview?: string;
     ratingValue?: number;
+    location?: undefined;
   };
   metadata?: Record<string, never>;
   encryptedBlobId: string;

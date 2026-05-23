@@ -64,6 +64,13 @@ function createEncryptedSubmission(): Submission {
         inlineData: "c2VjcmV0",
       },
     ],
+    location: {
+      latitude: 35.6762,
+      longitude: 139.6503,
+      accuracy: 18,
+      capturedAt: new Date(0).toISOString(),
+      source: "browser_geolocation",
+    },
     metadata: {
       ipAddress: "127.0.0.1",
     },
@@ -134,6 +141,10 @@ describe("saveSubmissionWithEncryption", () => {
     await saveSubmissionWithEncryption(form, createEncryptedSubmission(), fakeSealAdapter, targetStorage);
 
     expect(targetStorage.saveEncryptedPayload).toHaveBeenCalledTimes(1);
+    expect(fakeSealAdapter.encrypt).toHaveBeenCalledWith(
+      expect.stringContaining("\"location\":{\"latitude\":35.6762,\"longitude\":139.6503,\"accuracy\":18,\"capturedAt\":\"1970-01-01T00:00:00.000Z\",\"source\":\"browser_geolocation\"}"),
+      expect.anything(),
+    );
     expect(persisted).toHaveLength(1);
     const serialized = serializeSubmissionBundle(
       persisted[0] as Submission,
@@ -152,7 +163,9 @@ describe("saveSubmissionWithEncryption", () => {
     expect(rawSubmissionJson).not.toContain("private answer");
     expect(rawSubmissionJson).not.toContain("secret.pdf");
     expect(rawSubmissionJson).not.toContain("c2VjcmV0");
+    expect(rawSubmissionJson).not.toContain("\"latitude\":35.6762");
     expect(JSON.parse(rawSubmissionJson).answers).toEqual({});
+    expect(JSON.parse(rawSubmissionJson).location).toBeUndefined();
     expect(JSON.parse(rawSubmissionJson).metadata).toEqual({});
     expect(JSON.parse(rawSubmissionJson).encryptedPayload).toBeUndefined();
     expect(JSON.parse(rawSubmissionJson).attachments[0]).toMatchObject({

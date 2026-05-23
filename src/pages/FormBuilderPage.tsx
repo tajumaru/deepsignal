@@ -90,6 +90,7 @@ function FormBuilderComposer({ mode, freshStartToken, initialDisplayMode = "clas
     purpose: builder.values.purpose,
     visibility: builder.values.visibility,
     identityPolicy: builder.values.identityPolicy,
+    locationRequirement: builder.values.locationRequirement,
     encryptSubmissions: builder.values.encryptSubmissions,
     responseDeadlinePreset: builder.values.responseDeadlinePreset,
     responseDeadlineCustomAt: builder.values.responseDeadlineCustomAt,
@@ -267,6 +268,9 @@ function FormBuilderComposer({ mode, freshStartToken, initialDisplayMode = "clas
           t={t}
           title={builder.values.title}
           description={builder.values.description}
+          identityPolicy={builder.values.identityPolicy}
+          locationRequirement={builder.values.locationRequirement}
+          encryptSubmissions={builder.values.encryptSubmissions}
           headerImage={builder.values.headerImage}
           headerLogo={builder.values.headerLogo}
           responseDeadlinePreset={builder.values.responseDeadlinePreset}
@@ -331,6 +335,7 @@ function FormBuilderComposer({ mode, freshStartToken, initialDisplayMode = "clas
           sections={builder.values.sections}
           visibility={builder.values.visibility}
           identityPolicy={builder.values.identityPolicy}
+          locationRequirement={builder.values.locationRequirement}
           encryptSubmissions={builder.values.encryptSubmissions}
           mobilePane={builder.values.mobilePane}
           isReadyToPublish={builder.isReadyToPublish}
@@ -360,6 +365,7 @@ function FormBuilderComposer({ mode, freshStartToken, initialDisplayMode = "clas
           onSelectProject={handleSelectProject}
           onChangeVisibility={builder.setVisibility}
           onChangeIdentityPolicy={builder.setIdentityPolicy}
+          onChangeLocationRequirement={builder.setLocationRequirement}
           onToggleEncryptSubmissions={builder.setEncryptSubmissions}
           onRegisterOnSui={() => void publish.handleRegisterOnSui()}
           onCopyDiagnostics={() => void publish.copyDiagnostics()}

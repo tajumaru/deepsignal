@@ -3,10 +3,14 @@ import { normalizeFormVisibility } from "./explore";
 import { normalizeActivityEvent } from "./activityLog";
 import { normalizeFormPurpose } from "./formTemplates";
 import { normalizeLogicGroup, sanitizeConditionalLogicFields } from "../utils/formLogic";
-import type { FormField, FormIdentityPolicy, FormSchema, FormSection } from "../types";
+import type { FormField, FormIdentityPolicy, FormLocationRequirement, FormSchema, FormSection } from "../types";
 
 function normalizeFormIdentityPolicy(identityPolicy: unknown): FormIdentityPolicy {
   return identityPolicy === "wallet_required" ? "wallet_required" : "anonymous_allowed";
+}
+
+function normalizeFormLocationRequirement(locationRequirement: unknown): FormLocationRequirement | undefined {
+  return locationRequirement === "required" || locationRequirement === "optional" ? locationRequirement : undefined;
 }
 
 export function createEmptyAnswer(field: FormField) {
@@ -62,6 +66,7 @@ export function normalizeForm(raw: FormSchema | (Record<string, unknown> & { id:
     purpose: normalizeFormPurpose(raw.purpose),
     visibility,
     identityPolicy: normalizeFormIdentityPolicy(raw.identityPolicy),
+    locationRequirement: normalizeFormLocationRequirement(raw.locationRequirement),
     publicExplore: raw.publicExplore === true || visibility === "public",
     createdAt: typeof raw.createdAt === "string" ? raw.createdAt : new Date(0).toISOString(),
     updatedAt: typeof raw.updatedAt === "string" ? raw.updatedAt : typeof raw.createdAt === "string" ? raw.createdAt : new Date(0).toISOString(),

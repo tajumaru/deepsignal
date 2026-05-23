@@ -44,6 +44,7 @@ import {
 import type {
   FormField,
   FormIdentityPolicy,
+  FormLocationRequirement,
   FormSchema,
   FormSection,
   SealAdapter,
@@ -52,6 +53,7 @@ import type {
   StorageAdapter,
   Submission,
   SubmissionAttachment,
+  SubmissionLocation,
   WalrusBlobProof,
 } from "../types";
 
@@ -69,6 +71,14 @@ export interface SaveSubmissionWithEncryptionResult {
   sealIdentity?: string;
   walrusProof?: WalrusBlobProof;
   encryptedWalrusProof?: WalrusBlobProof;
+}
+
+export interface ResolvedSubmissionAnswers {
+  answers: Record<string, unknown>;
+  attachments: SubmissionAttachment[];
+  location?: SubmissionLocation;
+  metadata?: Submission["metadata"];
+  legacyUnencrypted: boolean;
 }
 
 const REAL_SEAL_PROJECT_REQUIRED_MESSAGE =
@@ -448,6 +458,30 @@ function normalizeFormIdentityPolicy(identityPolicy: unknown): FormIdentityPolic
   return identityPolicy === "wallet_required" ? "wallet_required" : "anonymous_allowed";
 }
 
+function normalizeFormLocationRequirement(locationRequirement: unknown): FormLocationRequirement | undefined {
+  return locationRequirement === "required" || locationRequirement === "optional" ? locationRequirement : undefined;
+}
+
+function normalizeSubmissionLocation(raw: unknown): SubmissionLocation | undefined {
+  if (!raw || typeof raw !== "object") {
+    return undefined;
+  }
+  const location = raw as Partial<SubmissionLocation>;
+  if (
+    typeof location.latitude !== "number" ||
+    !Number.isFinite(location.latitude) ||
+    typeof location.longitude !== "number" ||
+    !Number.isFinite(location.longitude) ||
+    typeof location.accuracy !== "number" ||
+    !Number.isFinite(location.accuracy) ||
+    typeof location.capturedAt !== "string" ||
+    location.source !== "browser_geolocation"
+  ) {
+    return undefined;
+  }
+  return location as SubmissionLocation;
+}
+
 export function normalizeSubmission(raw: Submission | (Record<string, unknown> & { id: string; formId: string; createdAt: string })) {
   const legacyNotes = Array.isArray(raw.notes)
     ? raw.notes
@@ -475,10 +509,12 @@ export function normalizeSubmission(raw: Submission | (Record<string, unknown> &
     formId: raw.formId,
     answers: typeof raw.answers === "object" && raw.answers ? (raw.answers as Record<string, unknown>) : {},
     attachments: normalizeSubmissionAttachments(raw.attachments),
+    location: normalizeSubmissionLocation(raw.location),
     publicPayload: publicPayload
       ? {
           ...publicPayload,
           attachments: normalizeSubmissionAttachments(publicPayload.attachments),
+          location: normalizeSubmissionLocation(publicPayload.location),
         }
       : undefined,
     respondentMeta:
@@ -584,6 +620,7 @@ export function normalizeForm(raw: FormSchema | (Record<string, unknown> & { id:
     purpose: normalizeFormPurpose(raw.purpose),
     visibility: normalizeFormVisibility(raw.visibility, raw.publicExplore),
     identityPolicy: normalizeFormIdentityPolicy(raw.identityPolicy),
+    locationRequirement: normalizeFormLocationRequirement(raw.locationRequirement),
     publicExplore: raw.publicExplore === true || normalizeFormVisibility(raw.visibility, raw.publicExplore) === "public",
     createdAt: typeof raw.createdAt === "string" ? raw.createdAt : new Date(0).toISOString(),
     updatedAt: typeof raw.updatedAt === "string" ? raw.updatedAt : typeof raw.createdAt === "string" ? raw.createdAt : new Date(0).toISOString(),
@@ -645,7 +682,7 @@ export async function resolveSubmissionAnswers(
   submission: Submission,
   seal: SealAdapter = activeSealAdapter,
   context: SealDecryptContext = {},
-) {
+): Promise<ResolvedSubmissionAnswers> {
   const encryptedPayloadBlobIds = Array.from(
     new Set(
       [
@@ -771,12 +808,14 @@ export async function resolveSubmissionAnswers(
       let parsed: {
         answers?: Record<string, unknown>;
         attachments?: Submission["attachments"];
+        location?: SubmissionLocation;
         metadata?: Submission["metadata"];
       };
       try {
         parsed = JSON.parse(decrypted) as {
           answers?: Record<string, unknown>;
           attachments?: Submission["attachments"];
+          location?: SubmissionLocation;
           metadata?: Submission["metadata"];
         };
       } catch (error) {
@@ -797,6 +836,7 @@ export async function resolveSubmissionAnswers(
           parsed.attachments === undefined
             ? submission.attachments
             : normalizeSubmissionAttachments(parsed.attachments),
+        location: normalizeSubmissionLocation(parsed.location),
         metadata: parsed.metadata,
         legacyUnencrypted: decryptedResult.legacyUnencrypted,
       };
@@ -828,6 +868,7 @@ export async function resolveSubmissionAnswers(
   return {
     answers: decryptedAnswers,
     attachments: submission.attachments,
+    location: submission.location,
     legacyUnencrypted: false,
   };
 }
@@ -908,6 +949,7 @@ export async function saveSubmissionWithEncryption(
         const payload = JSON.stringify({
           answers: submission.answers,
           attachments: submission.attachments,
+          location: submission.location,
           metadata: submission.metadata,
         });
         messages?.onPipelineStage?.("encrypting");

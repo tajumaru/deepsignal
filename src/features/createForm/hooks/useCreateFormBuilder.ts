@@ -88,6 +88,7 @@ export function useCreateFormBuilder({
   const [purpose, setPurpose] = useState(initialTemplate.purpose);
   const [visibility, setVisibility] = useState<"private" | "unlisted" | "public">("public");
   const [identityPolicy, setIdentityPolicy] = useState<"anonymous_allowed" | "wallet_required">("anonymous_allowed");
+  const [locationRequirement, setLocationRequirement] = useState<"optional" | "required">("optional");
   const [encryptSubmissions, setEncryptSubmissions] = useState(true);
   const [responseDeadlinePreset, setResponseDeadlinePreset] = useState<ResponseDeadlinePreset>("none");
   const [responseDeadlineCustomAt, setResponseDeadlineCustomAt] = useState("");
@@ -117,6 +118,7 @@ export function useCreateFormBuilder({
         purpose,
         visibility,
         identityPolicy,
+        locationRequirement,
         createOnSui,
         encryptSubmissions,
         sections,
@@ -131,6 +133,7 @@ export function useCreateFormBuilder({
       headerImage,
       headerLogo,
       identityPolicy,
+      locationRequirement,
       purpose,
       responseDeadlineCustomAt,
       responseDeadlinePreset,
@@ -145,6 +148,15 @@ export function useCreateFormBuilder({
   const isReadyToPublish = hasValidTitle && hasQuestions;
   const selectedProject = projects.find((project) => project.objectId === selectedProjectId) ?? null;
 
+  function resolveTemplateAutomation(template: ReturnType<typeof getTemplateDefinition>) {
+    return {
+      visibility: template.automation?.visibility ?? "public",
+      identityPolicy: template.automation?.identityPolicy ?? "anonymous_allowed",
+      locationRequirement: template.automation?.locationRequirement ?? "optional",
+      encryptSubmissions: template.automation?.encryptSubmissions ?? !isGuestDraftMode,
+    } as const;
+  }
+
   const resetBuilderState = useCallback(() => {
     const nextFields = createTemplateFields(initialTemplate);
     const nextSelectedProjectId = isGuestDraftMode ? "" : getSelectedProjectId();
@@ -158,6 +170,7 @@ export function useCreateFormBuilder({
     setPurpose(initialTemplate.purpose);
     setVisibility("public");
     setIdentityPolicy("anonymous_allowed");
+    setLocationRequirement("optional");
     setEncryptSubmissions(!isGuestDraftMode);
     setResponseDeadlinePreset("none");
     setResponseDeadlineCustomAt("");
@@ -197,6 +210,12 @@ export function useCreateFormBuilder({
     const template = getTemplateDefinition(draftSeed?.templateKey ?? initialTemplate.key);
     const nextFields = createTemplateFields(template);
     const idea = draftSeed?.idea?.trim() ?? "";
+    const automation = {
+      visibility: template.automation?.visibility ?? "public",
+      identityPolicy: template.automation?.identityPolicy ?? "anonymous_allowed",
+      locationRequirement: template.automation?.locationRequirement ?? "optional",
+      encryptSubmissions: template.automation?.encryptSubmissions ?? false,
+    } as const;
     setSelectedTemplateKey(template.key);
     setTitle(idea || template.title);
     setDescription(idea ? `A quick form for ${idea.toLowerCase()}.` : template.description);
@@ -205,9 +224,10 @@ export function useCreateFormBuilder({
     setFields(nextFields);
     setSections([]);
     setPurpose(normalizeFormPurpose(template.purpose));
-    setVisibility("public");
-    setIdentityPolicy("anonymous_allowed");
-    setEncryptSubmissions(false);
+    setVisibility(automation.visibility);
+    setIdentityPolicy(automation.identityPolicy);
+    setLocationRequirement(automation.locationRequirement);
+    setEncryptSubmissions(automation.encryptSubmissions);
     setResponseDeadlinePreset("none");
     setResponseDeadlineCustomAt("");
     setCurrentStep("fields");
@@ -229,6 +249,7 @@ export function useCreateFormBuilder({
       purpose?: FormBuilderValues["purpose"];
       visibility?: FormBuilderValues["visibility"];
       identityPolicy?: FormBuilderValues["identityPolicy"];
+      locationRequirement?: FormBuilderValues["locationRequirement"];
       encryptSubmissions?: boolean;
       responseDeadlinePreset?: ResponseDeadlinePreset;
       responseDeadlineCustomAt?: string;
@@ -272,6 +293,7 @@ export function useCreateFormBuilder({
     setPurpose(parsedDraft.purpose ?? initialTemplate.purpose);
     setVisibility(parsedDraft.visibility ?? "public");
     setIdentityPolicy(parsedDraft.identityPolicy === "wallet_required" ? "wallet_required" : "anonymous_allowed");
+    setLocationRequirement(parsedDraft.locationRequirement === "required" ? "required" : "optional");
     setEncryptSubmissions(parsedDraft.encryptSubmissions ?? !isGuestDraftMode);
     setResponseDeadlinePreset(parsedDraft.responseDeadlinePreset ?? "none");
     setResponseDeadlineCustomAt(parsedDraft.responseDeadlineCustomAt ?? "");
@@ -385,6 +407,7 @@ export function useCreateFormBuilder({
         purpose,
         visibility,
         identityPolicy,
+        locationRequirement,
         encryptSubmissions,
         responseDeadlinePreset,
         responseDeadlineCustomAt,
@@ -407,6 +430,7 @@ export function useCreateFormBuilder({
     headerImage,
     headerLogo,
     identityPolicy,
+    locationRequirement,
     projectState,
     purpose,
     responseDeadlineCustomAt,
@@ -441,6 +465,7 @@ export function useCreateFormBuilder({
   function applyTemplate(templateKey: string) {
     const template = getTemplateDefinition(templateKey);
     const nextFields = createTemplateFields(template);
+    const automation = resolveTemplateAutomation(template);
     startTransition(() => {
       setSelectedTemplateKey(template.key);
       setPurpose(normalizeFormPurpose(template.purpose));
@@ -449,8 +474,10 @@ export function useCreateFormBuilder({
       setHeaderImage({ url: "", alt: "", position: "center", source: "url", fileName: "" });
       setHeaderLogo({ url: "", alt: "", source: "url", fileName: "" });
       setSections([]);
-      setVisibility("public");
-      setIdentityPolicy("anonymous_allowed");
+      setVisibility(automation.visibility);
+      setIdentityPolicy(automation.identityPolicy);
+      setLocationRequirement(automation.locationRequirement);
+      setEncryptSubmissions(automation.encryptSubmissions);
       setResponseDeadlinePreset("none");
       setResponseDeadlineCustomAt("");
       replaceFields(nextFields);
@@ -491,6 +518,7 @@ export function useCreateFormBuilder({
       setPurpose("custom");
       setVisibility("public");
       setIdentityPolicy("anonymous_allowed");
+      setLocationRequirement("optional");
       setResponseDeadlinePreset("none");
       setResponseDeadlineCustomAt("");
       goToStep("info");
@@ -800,6 +828,7 @@ export function useCreateFormBuilder({
     purpose,
     visibility,
     identityPolicy,
+    locationRequirement,
     encryptSubmissions,
     responseDeadlinePreset,
     responseDeadlineCustomAt,
@@ -831,6 +860,7 @@ export function useCreateFormBuilder({
     setHeaderLogo,
     setEncryptSubmissions,
     setIdentityPolicy,
+    setLocationRequirement,
     setResponseDeadlinePreset,
     setResponseDeadlineCustomAt,
     setVisibility,

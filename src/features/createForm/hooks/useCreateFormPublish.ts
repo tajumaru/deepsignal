@@ -28,6 +28,7 @@ import type {
   FormField,
   FormHeaderImagePosition,
   FormIdentityPolicy,
+  FormLocationRequirement,
   FormPurpose,
   FormSection,
   FormVisibility,
@@ -66,6 +67,7 @@ interface UseCreateFormPublishArgs {
   purpose: FormPurpose;
   visibility: FormVisibility;
   identityPolicy: FormIdentityPolicy;
+  locationRequirement: FormLocationRequirement;
   encryptSubmissions: boolean;
   responseDeadlinePreset: "none" | "1h" | "24h" | "7d" | "30d" | "custom";
   responseDeadlineCustomAt: string;
@@ -106,6 +108,7 @@ export function useCreateFormPublish({
   purpose,
   visibility,
   identityPolicy,
+  locationRequirement,
   encryptSubmissions,
   responseDeadlinePreset,
   responseDeadlineCustomAt,
@@ -191,6 +194,7 @@ export function useCreateFormPublish({
         purpose,
         visibility,
         identityPolicy,
+        locationRequirement,
         ownerAddress: accountAddress ?? "",
         creationMode,
         projectId: selectedProject?.objectId,
@@ -222,6 +226,7 @@ export function useCreateFormPublish({
     headerImage,
     headerLogo,
     identityPolicy,
+    locationRequirement,
     purpose,
     responseDeadlineCustomAt,
     responseDeadlinePreset,
@@ -388,6 +393,7 @@ export function useCreateFormPublish({
       purpose,
       visibility,
       identityPolicy,
+      locationRequirement,
       ownerAddress: accountAddress,
       creationMode,
       projectId: selectedProject?.objectId,

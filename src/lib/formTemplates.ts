@@ -1,5 +1,36 @@
 import { makeId } from "./utils";
-import type { FieldType, FormField, FormPurpose, FormSection, SubmissionCategory } from "../types";
+import type {
+  FieldType,
+  FormField,
+  FormIdentityPolicy,
+  FormLocationRequirement,
+  FormPurpose,
+  FormSection,
+  FormVisibility,
+  SubmissionCategory,
+} from "../types";
+
+export type SignalTypeKey = "secure" | "anonymous" | "location" | "testing" | "incident" | "feedback";
+
+export interface TemplateSignalType {
+  key: SignalTypeKey;
+  icon: string;
+  label: string;
+}
+
+export interface TemplateCapabilityBadge {
+  icon: string;
+  label: string;
+}
+
+export type TemplateLibrarySection = "quick" | "advanced" | "custom";
+
+export interface TemplateAutomationPreset {
+  visibility?: FormVisibility;
+  identityPolicy?: FormIdentityPolicy;
+  locationRequirement?: FormLocationRequirement;
+  encryptSubmissions?: boolean;
+}
 
 export interface FormTemplateDefinition {
   key: string;
@@ -8,6 +39,17 @@ export interface FormTemplateDefinition {
   label: string;
   title: string;
   description: string;
+  librarySection: TemplateLibrarySection;
+  signalTypes: TemplateSignalType[];
+  cardBadges: TemplateCapabilityBadge[];
+  capabilities: TemplateCapabilityBadge[];
+  automation?: TemplateAutomationPreset;
+  featured?: {
+    eyebrow: string;
+    title: string;
+    description: string;
+    poweredBy: string;
+  };
   fields: Array<{
     type: FieldType;
     label: string;
@@ -42,16 +84,78 @@ export interface SmartTemplateDefinition {
   }>;
 }
 
-export const defaultComposerTemplateKey = "feedback";
+export const defaultComposerTemplateKey = "encrypted-report";
 
 export const formTemplates: FormTemplateDefinition[] = [
   {
+    key: "encrypted-report",
+    purpose: "bug",
+    emoji: "\uD83D\uDD10",
+    label: "Encrypted Report",
+    title: "Secure Incident Report",
+    description: "Encrypted intake for sensitive incident reports.",
+    librarySection: "advanced",
+    signalTypes: [
+      { key: "secure", icon: "\uD83D\uDD12", label: "Secure" },
+      { key: "incident", icon: "\uD83D\uDEA8", label: "Incident" },
+    ],
+    cardBadges: [
+      { icon: "\uD83D\uDD12", label: "Secure" },
+      { icon: "\uD83D\uDC38", label: "Walrus-backed" },
+    ],
+    capabilities: [
+      { icon: "\uD83D\uDD12", label: "Seal encrypted" },
+      { icon: "\uD83D\uDD76", label: "Optional anonymous" },
+      { icon: "\uD83D\uDC38", label: "Walrus-backed" },
+    ],
+    automation: {
+      visibility: "unlisted",
+      identityPolicy: "anonymous_allowed",
+      locationRequirement: "optional",
+      encryptSubmissions: true,
+    },
+    featured: {
+      eyebrow: "Featured signal",
+      title: "Secure Incident Report",
+      description: "Lead with a hardened intake for encrypted evidence, rapid triage, and responder-safe reporting.",
+      poweredBy: "Powered by Walrus Seal",
+    },
+    fields: [
+      { type: "shortText", label: "Incident summary", required: true, placeholder: "What needs attention right now?" },
+      { type: "longText", label: "What happened?", required: true, sensitive: true, placeholder: "Only the details responders need to act." },
+      { type: "longText", label: "What is the current risk?", placeholder: "People affected, systems impacted, or urgency notes" },
+      { type: "screenshot", label: "Evidence / media" },
+      {
+        type: "dropdown",
+        label: "Severity",
+        required: true,
+        options: ["Monitor", "Investigate", "Critical"],
+      },
+    ],
+  },
+  {
     key: "bug",
     purpose: "bug",
-    emoji: "\uD83D\uDC1E",
-    label: "Bug Report",
-    title: "Bug Report",
-    description: "Send a quick signal with screenshots, clips, and automatically attached device context.",
+    emoji: "\uD83D\uDEA8",
+    label: "Incident Report",
+    title: "Incident Report",
+    description: "Capture breakage, impact, and evidence.",
+    librarySection: "quick",
+    signalTypes: [{ key: "incident", icon: "\uD83D\uDEA8", label: "Incident" }],
+    cardBadges: [
+      { icon: "\uD83D\uDEA8", label: "Incident" },
+      { icon: "\uD83D\uDCF7", label: "Media-ready" },
+    ],
+    capabilities: [
+      { icon: "\uD83D\uDCF7", label: "Media-ready" },
+      { icon: "\u26A1", label: "Quick response" },
+      { icon: "\uD83D\uDD12", label: "Encrypted" },
+    ],
+    automation: {
+      identityPolicy: "anonymous_allowed",
+      locationRequirement: "optional",
+      encryptSubmissions: true,
+    },
     fields: [
       { type: "shortText", label: "What happened?", required: true, placeholder: "Example: I cannot tap Submit on iPhone" },
       { type: "longText", label: "Tell us what happened", placeholder: "A screenshot alone is okay" },
@@ -69,9 +173,25 @@ export const formTemplates: FormTemplateDefinition[] = [
     key: "feature",
     purpose: "feature",
     emoji: "\uD83D\uDCA1",
-    label: "Feature Request",
-    title: "Feature Request",
-    description: "Collect clear product ideas without making people over-explain.",
+    label: "Idea Drop",
+    title: "Idea Drop",
+    description: "Collect product ideas without heavy ceremony.",
+    librarySection: "quick",
+    signalTypes: [{ key: "feedback", icon: "\uD83D\uDCA1", label: "Feedback" }],
+    cardBadges: [
+      { icon: "\uD83D\uDCA1", label: "Ideas" },
+      { icon: "\u26A1", label: "Quick response" },
+    ],
+    capabilities: [
+      { icon: "\u26A1", label: "Quick response" },
+      { icon: "\uD83E\uDDE0", label: "Structured prompts" },
+      { icon: "\uD83D\uDC38", label: "Walrus-backed" },
+    ],
+    automation: {
+      identityPolicy: "anonymous_allowed",
+      locationRequirement: "optional",
+      encryptSubmissions: false,
+    },
     fields: [
       { type: "shortText", label: "Feature idea", required: true },
       { type: "longText", label: "What problem would this solve?", required: true, placeholder: "What is hard or slow today?" },
@@ -88,9 +208,25 @@ export const formTemplates: FormTemplateDefinition[] = [
     key: "feedback",
     purpose: "custom",
     emoji: "\u2B50",
-    label: "Feedback",
-    title: "Product Feedback",
-    description: "A lightweight form for quick opinions, reactions, and ideas.",
+    label: "Quick Reaction",
+    title: "Quick Reaction",
+    description: "Gather fast reactions and lightweight sentiment.",
+    librarySection: "quick",
+    signalTypes: [{ key: "feedback", icon: "\u2728", label: "Feedback" }],
+    cardBadges: [
+      { icon: "\u26A1", label: "Quick response" },
+      { icon: "\uD83D\uDD76", label: "Anonymous-ready" },
+    ],
+    capabilities: [
+      { icon: "\u26A1", label: "Quick response" },
+      { icon: "\uD83D\uDD76", label: "Anonymous-ready" },
+      { icon: "\uD83D\uDCF1", label: "Mobile friendly" },
+    ],
+    automation: {
+      identityPolicy: "anonymous_allowed",
+      locationRequirement: "optional",
+      encryptSubmissions: false,
+    },
     fields: [
       { type: "longText", label: "What should we improve?", required: true },
       { type: "longText", label: "What already feels good?" },
@@ -100,10 +236,26 @@ export const formTemplates: FormTemplateDefinition[] = [
   {
     key: "survey",
     purpose: "survey",
-    emoji: "\uD83D\uDCCB",
-    label: "Survey",
-    title: "Quick Survey",
-    description: "Measure sentiment fast, then dig into what worked and what did not.",
+    emoji: "\uD83D\uDCCA",
+    label: "Pulse Check",
+    title: "Pulse Check",
+    description: "Measure sentiment with a fast pulse survey.",
+    librarySection: "quick",
+    signalTypes: [{ key: "feedback", icon: "\uD83D\uDCCA", label: "Feedback" }],
+    cardBadges: [
+      { icon: "\uD83D\uDCCA", label: "Pulse" },
+      { icon: "\u26A1", label: "Quick response" },
+    ],
+    capabilities: [
+      { icon: "\uD83D\uDCCA", label: "Trend-ready" },
+      { icon: "\u26A1", label: "Quick response" },
+      { icon: "\uD83D\uDCE6", label: "Lightweight rollout" },
+    ],
+    automation: {
+      identityPolicy: "anonymous_allowed",
+      locationRequirement: "optional",
+      encryptSubmissions: false,
+    },
     fields: [
       {
         type: "rating",
@@ -122,9 +274,25 @@ export const formTemplates: FormTemplateDefinition[] = [
     key: "playtest",
     purpose: "survey",
     emoji: "\uD83C\uDFAE",
-    label: "Playtest Feedback",
-    title: "Playtest Feedback",
-    description: "Capture reactions from a fresh play session while the details are still vivid.",
+    label: "Session Debrief",
+    title: "Session Debrief",
+    description: "Capture fresh reactions from active sessions.",
+    librarySection: "advanced",
+    signalTypes: [{ key: "testing", icon: "\uD83E\uDDEA", label: "Testing" }],
+    cardBadges: [
+      { icon: "\uD83E\uDDEA", label: "Testing" },
+      { icon: "\uD83C\uDFAE", label: "Session-ready" },
+    ],
+    capabilities: [
+      { icon: "\uD83C\uDFAE", label: "Session-ready" },
+      { icon: "\uD83D\uDCF7", label: "Media-ready" },
+      { icon: "\u26A1", label: "Quick response" },
+    ],
+    automation: {
+      identityPolicy: "anonymous_allowed",
+      locationRequirement: "optional",
+      encryptSubmissions: true,
+    },
     fields: [
       { type: "shortText", label: "Build or version played" },
       { type: "longText", label: "What moment stood out most?", required: true },
@@ -137,9 +305,25 @@ export const formTemplates: FormTemplateDefinition[] = [
     key: "beta",
     purpose: "bug",
     emoji: "\uD83E\uDDEA",
-    label: "Beta Test",
-    title: "Beta Test Feedback",
-    description: "A practical template for testers sending blockers, rough edges, and environment context.",
+    label: "Field Test",
+    title: "Field Test",
+    description: "Collect blockers and rough edges in the field.",
+    librarySection: "advanced",
+    signalTypes: [{ key: "testing", icon: "\uD83E\uDDEA", label: "Testing" }],
+    cardBadges: [
+      { icon: "\uD83E\uDDEA", label: "Testing" },
+      { icon: "\uD83D\uDD12", label: "Encrypted" },
+    ],
+    capabilities: [
+      { icon: "\uD83D\uDD0D", label: "Environment context" },
+      { icon: "\uD83D\uDD12", label: "Encrypted" },
+      { icon: "\uD83D\uDCF7", label: "Media-ready" },
+    ],
+    automation: {
+      identityPolicy: "anonymous_allowed",
+      locationRequirement: "optional",
+      encryptSubmissions: true,
+    },
     fields: [
       { type: "shortText", label: "Quick summary", required: true },
       { type: "longText", label: "What broke or felt off?", required: true },
@@ -154,21 +338,117 @@ export const formTemplates: FormTemplateDefinition[] = [
     ],
   },
   {
+    key: "anonymous-drop",
+    purpose: "custom",
+    emoji: "\uD83D\uDD76",
+    label: "Anonymous Drop",
+    title: "Anonymous Drop",
+    description: "No wallet. No identity. Just signal.",
+    librarySection: "advanced",
+    signalTypes: [{ key: "anonymous", icon: "\uD83D\uDD76", label: "Anonymous" }],
+    cardBadges: [
+      { icon: "\uD83D\uDD76", label: "Anonymous" },
+      { icon: "\u26A1", label: "Guest mode" },
+    ],
+    capabilities: [
+      { icon: "\uD83D\uDD76", label: "Anonymous" },
+      { icon: "\u26A1", label: "Guest mode" },
+      { icon: "\uD83D\uDD10", label: "Metadata minimized" },
+    ],
+    automation: {
+      visibility: "public",
+      identityPolicy: "anonymous_allowed",
+      locationRequirement: "optional",
+      encryptSubmissions: true,
+    },
+    fields: [
+      { type: "shortText", label: "What should be seen?", required: true },
+      { type: "longText", label: "Share the signal", required: true, sensitive: true, placeholder: "Leave only the context that matters." },
+      { type: "screenshot", label: "Optional evidence" },
+    ],
+  },
+  {
+    key: "disaster-checkin",
+    purpose: "custom",
+    emoji: "\uD83D\uDCCD",
+    label: "Disaster Check-in",
+    title: "Disaster Check-in",
+    description: "Share emergency status with optional location.",
+    librarySection: "advanced",
+    signalTypes: [
+      { key: "location", icon: "\uD83D\uDCCD", label: "Location" },
+      { key: "secure", icon: "\uD83D\uDD12", label: "Secure" },
+    ],
+    cardBadges: [
+      { icon: "\uD83D\uDCCD", label: "Location" },
+      { icon: "\uD83D\uDD12", label: "Encrypted" },
+    ],
+    capabilities: [
+      { icon: "\uD83D\uDCCD", label: "GPS ready" },
+      { icon: "\uD83D\uDD12", label: "Encrypted" },
+      { icon: "\u23F3", label: "Time-sensitive" },
+    ],
+    automation: {
+      visibility: "unlisted",
+      identityPolicy: "anonymous_allowed",
+      locationRequirement: "required",
+      encryptSubmissions: true,
+    },
+    fields: [
+      { type: "shortText", label: "Current status", required: true, placeholder: "Safe, need support, blocked, evacuating" },
+      { type: "longText", label: "What help is needed?", placeholder: "Supplies, transport, contact, medical, shelter" },
+      { type: "shortText", label: "Nearest landmark / checkpoint", placeholder: "Optional text fallback if GPS is unavailable" },
+      { type: "confirmation", label: "I understand this check-in may be reviewed by responders", required: true },
+    ],
+  },
+  {
     key: "custom",
     purpose: "custom",
     emoji: "\u2728",
-    label: "Start from Sample",
+    label: "Guided Signal",
     title: "New Signal",
-    description: "Start with a sample question so the page never feels empty.",
+    description: "Start with one prompt, then shape your flow.",
+    librarySection: "custom",
+    signalTypes: [{ key: "feedback", icon: "\u2728", label: "Feedback" }],
+    cardBadges: [
+      { icon: "\u2728", label: "Fast scaffold" },
+      { icon: "\u2699", label: "Flexible setup" },
+    ],
+    capabilities: [
+      { icon: "\u2728", label: "Fast scaffold" },
+      { icon: "\u2699", label: "Flexible setup" },
+      { icon: "\uD83D\uDC38", label: "Walrus-backed" },
+    ],
+    automation: {
+      identityPolicy: "anonymous_allowed",
+      locationRequirement: "optional",
+      encryptSubmissions: true,
+    },
     fields: [{ type: "longText", label: "What should we improve?", required: true }],
   },
   {
     key: "blank",
     purpose: "custom",
-    emoji: "\u25A1",
-    label: "Blank",
+    emoji: "\u2728",
+    label: "Start From Scratch",
     title: "Untitled signal",
-    description: "Start from a blank composer and shape every section yourself.",
+    description: "Build a signal flow from a blank canvas.",
+    librarySection: "custom",
+    signalTypes: [{ key: "feedback", icon: "\u2728", label: "Feedback" }],
+    cardBadges: [
+      { icon: "\u2728", label: "Blank canvas" },
+      { icon: "\u2699", label: "Full control" },
+    ],
+    capabilities: [
+      { icon: "\u2728", label: "Blank canvas" },
+      { icon: "\u2699", label: "Full control" },
+      { icon: "\uD83D\uDCE6", label: "Lightweight" },
+    ],
+    automation: {
+      identityPolicy: "anonymous_allowed",
+      locationRequirement: "optional",
+      encryptSubmissions: true,
+    },
     fields: [],
   },
 ];

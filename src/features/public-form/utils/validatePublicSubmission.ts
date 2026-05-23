@@ -1,7 +1,7 @@
 import type { UploadDropzoneItem } from "../../../components/UploadDropzone";
 import { isConfirmationCheckboxField } from "../../../lib/fieldTypes";
 import { getSuiAddressValidationState } from "../../../lib/suiAddress";
-import type { FormSchema } from "../../../types";
+import type { FormSchema, SubmissionLocation } from "../../../types";
 import { isFieldRequired } from "../../../utils/formLogic";
 import type { PublicAnswers, ValidationErrors } from "../types";
 import { getUploadAnswer } from "./getUploadAnswer";
@@ -113,4 +113,15 @@ export function validatePublicSubmission({
   });
 
   return nextErrors;
+}
+
+export function validateSubmissionLocation(
+  form: FormSchema,
+  location: SubmissionLocation | undefined,
+  requiredLocationError: string,
+) {
+  if (form.locationRequirement !== "required") {
+    return "";
+  }
+  return location ? "" : requiredLocationError;
 }

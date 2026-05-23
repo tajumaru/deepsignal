@@ -15,11 +15,11 @@ import { ENCRYPTED_INLINE_ATTACHMENT_MAX_BYTES } from "../../../lib/attachmentLi
 import { makeId } from "../../../lib/utils";
 import { useRpcInfrastructure } from "../../../rpcInfrastructure";
 import { isQuotaExceededError, isRateLimitError } from "../../../storage/walrusDiagnostics";
-import type { FormSchema, Submission, SubmissionAttachment } from "../../../types";
+import type { FormSchema, Submission, SubmissionAttachment, SubmissionLocation } from "../../../types";
 import { getOrderedFields, getVisibleFieldIds } from "../../../utils/formLogic";
 import type { PublicAnswers, ValidationErrors } from "../types";
 import { getUploadAnswer } from "../utils/getUploadAnswer";
-import { validatePublicSubmission } from "../utils/validatePublicSubmission";
+import { validatePublicSubmission, validateSubmissionLocation } from "../utils/validatePublicSubmission";
 
 const REAL_SEAL_PROJECT_REQUIRED_MESSAGE =
   "Real Seal encrypted submissions require a project or form owner wallet. Connect the creator wallet or turn off Encrypt submissions.";
@@ -44,6 +44,14 @@ type WalrusRuntimeStatus = {
   canWrite: boolean;
   storageMode: string;
 };
+
+export type SubmissionLocationCaptureState =
+  | "idle"
+  | "requesting"
+  | "success"
+  | "error"
+  | "denied"
+  | "unsupported";
 
 const DEFAULT_STORAGE_RUNTIME_STATUS: StorageRuntimeStatus = {
   mode: "local-fallback",
@@ -278,6 +286,11 @@ interface UsePublicSubmissionArgs {
   suiRegistrationDeferredNotice: string;
   submitFailedLabel: string;
   attachmentTooLargeLabel: (fieldLabel: string, maxSizeBytes: number) => string;
+  requiredLocationError: string;
+  locationPromptLabel: string;
+  locationDeniedLabel: string;
+  locationUnavailableLabel: string;
+  locationFailedLabel: string;
 }
 
 export function usePublicSubmission({
@@ -294,6 +307,11 @@ export function usePublicSubmission({
   suiRegistrationDeferredNotice,
   submitFailedLabel,
   attachmentTooLargeLabel,
+  requiredLocationError,
+  locationPromptLabel,
+  locationDeniedLabel,
+  locationUnavailableLabel,
+  locationFailedLabel,
 }: UsePublicSubmissionArgs) {
   const rpcInfrastructure = useRpcInfrastructure();
   const [answers, setAnswers] = useState<PublicAnswers>(initialAnswers);
@@ -313,6 +331,9 @@ export function usePublicSubmission({
     stage: "preparing_signal",
     status: "idle",
   });
+  const [location, setLocation] = useState<SubmissionLocation | undefined>();
+  const [locationState, setLocationState] = useState<SubmissionLocationCaptureState>("idle");
+  const [locationMessage, setLocationMessage] = useState("");
   const activeAttachmentUploadsRef = useRef(new Set<string>());
 
   useEffect(() => installSignalContextCapture(), []);
@@ -351,6 +372,9 @@ export function usePublicSubmission({
     setRecoveryGuidance("");
     setRecoveryCorrupted(false);
     setSubmitPipeline({ stage: "preparing_signal", status: "idle" });
+    setLocation(undefined);
+    setLocationState("idle");
+    setLocationMessage("");
   }, [initialAnswers]);
 
   const attachmentFields = useMemo(
@@ -447,6 +471,73 @@ export function usePublicSubmission({
       }
       void uploadAttachmentImmediately(fieldId, field.label || "Attachment", Boolean(form?.encryptSubmissions || field.sensitive), attachment);
     });
+  }
+
+  const locationRequested = form?.locationRequirement === "required" || form?.locationRequirement === "optional";
+  const isGeolocationSupported =
+    typeof window !== "undefined" &&
+    window.isSecureContext &&
+    typeof navigator !== "undefined" &&
+    "geolocation" in navigator;
+
+  async function requestLocation() {
+    if (!locationRequested) {
+      return true;
+    }
+    if (!isGeolocationSupported) {
+      setLocation(undefined);
+      setLocationState("unsupported");
+      setLocationMessage(locationUnavailableLabel);
+      return false;
+    }
+    setLocationState("requesting");
+    setLocationMessage(locationPromptLabel);
+    return new Promise<boolean>((resolve) => {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const nextLocation: SubmissionLocation = {
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude,
+            accuracy: position.coords.accuracy,
+            capturedAt: new Date().toISOString(),
+            source: "browser_geolocation",
+          };
+          setLocation(nextLocation);
+          setLocationState("success");
+          setLocationMessage("");
+          setSubmitError("");
+          resolve(true);
+        },
+        (error) => {
+          setLocation(undefined);
+          if (error.code === error.PERMISSION_DENIED) {
+            setLocationState("denied");
+            setLocationMessage(locationDeniedLabel);
+          } else if (error.code === error.POSITION_UNAVAILABLE) {
+            setLocationState("error");
+            setLocationMessage(locationFailedLabel);
+          } else if (error.code === error.TIMEOUT) {
+            setLocationState("error");
+            setLocationMessage(locationFailedLabel);
+          } else {
+            setLocationState("error");
+            setLocationMessage(locationFailedLabel);
+          }
+          resolve(false);
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 12000,
+          maximumAge: 0,
+        },
+      );
+    });
+  }
+
+  function clearLocation() {
+    setLocation(undefined);
+    setLocationState("idle");
+    setLocationMessage("");
   }
 
   function updateAttachment(fieldId: string, attachmentId: string, updater: (attachment: UploadDropzoneItem) => UploadDropzoneItem) {
@@ -708,6 +799,11 @@ export function usePublicSubmission({
         focusTarget?.focus({ preventScroll: true });
       });
     }
+    const locationError = validateSubmissionLocation(currentForm, location, requiredLocationError);
+    if (locationError) {
+      setSubmitError(locationError);
+      return false;
+    }
     return Object.keys(nextErrors).length === 0;
   }
 
@@ -812,6 +908,14 @@ export function usePublicSubmission({
         }),
       );
       return;
+    }
+    if (form.locationRequirement === "required" && !location) {
+      const attached = await requestLocation();
+      if (!attached) {
+        setSubmitError(requiredLocationError);
+        setSubmitNotice("");
+        return;
+      }
     }
     if (!validate(form)) {
       return;
@@ -954,6 +1058,7 @@ export function usePublicSubmission({
         formId: form.id,
         answers: normalizedAnswers,
         attachments,
+        location,
         publicPayload: form.encryptSubmissions
           ? undefined
           : {
@@ -1104,6 +1209,9 @@ export function usePublicSubmission({
     recoveryGuidance,
     recoveryCorrupted,
     submitPipeline,
+    location,
+    locationState,
+    locationMessage,
     storageConnectionPreparing:
       Boolean(accountAddress && (walletRequired || attachWallet)) &&
       walrusRuntime.storageMode === "uploadRelay" &&
@@ -1111,6 +1219,8 @@ export function usePublicSubmission({
       (!walrusRuntime.hasClient || !walrusRuntime.hasWallet),
     visibleFieldIds,
     updateAnswer,
+    requestLocation,
+    clearLocation,
     handleSubmit,
     restoreDraft,
     discardDraft,

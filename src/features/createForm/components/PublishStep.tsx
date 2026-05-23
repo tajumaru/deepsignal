@@ -18,6 +18,7 @@ import type {
   FormHeaderImage,
   FormHeaderLogo,
   FormIdentityPolicy,
+  FormLocationRequirement,
   FormSection,
   FormVisibility,
   DisplayMode,
@@ -54,6 +55,7 @@ interface PublishStepProps {
   sections: FormSection[];
   visibility: FormVisibility;
   identityPolicy: FormIdentityPolicy;
+  locationRequirement: FormLocationRequirement;
   encryptSubmissions: boolean;
   mobilePane: MobileBuilderPane;
   isReadyToPublish: boolean;
@@ -83,6 +85,7 @@ interface PublishStepProps {
   onSelectProject: (projectId: string) => void;
   onChangeVisibility: (value: FormVisibility) => void;
   onChangeIdentityPolicy: (value: FormIdentityPolicy) => void;
+  onChangeLocationRequirement: (value: FormLocationRequirement) => void;
   onToggleEncryptSubmissions: (value: boolean) => void;
   onRegisterOnSui: () => void;
   onCopyDiagnostics: () => void;
@@ -178,6 +181,7 @@ export function PublishStep({
   sections,
   visibility,
   identityPolicy,
+  locationRequirement,
   encryptSubmissions,
   mobilePane,
   isReadyToPublish,
@@ -206,6 +210,7 @@ export function PublishStep({
   onSelectProject,
   onChangeVisibility,
   onChangeIdentityPolicy,
+  onChangeLocationRequirement,
   onToggleEncryptSubmissions,
   onRegisterOnSui,
   onCopyDiagnostics,
@@ -453,6 +458,20 @@ export function PublishStep({
                   <span>{identityPolicy === "wallet_required" ? t("verificationRequired") : t("verificationOptional")}</span>
                 </button>
               </div>
+              <div className="publish-identity-quick-switch" aria-label={t("locationRequirementTitle")}>
+                <span className="publish-visibility-label">{t("locationRequirementTitle")}</span>
+                <button
+                  type="button"
+                  className={`publish-identity-toggle is-${locationRequirement}`}
+                  onClick={() =>
+                    onChangeLocationRequirement(locationRequirement === "required" ? "optional" : "required")
+                  }
+                  aria-pressed={locationRequirement === "required"}
+                  title={t("locationRequirementHelp")}
+                >
+                  <span>{locationRequirement === "required" ? t("locationRequirementRequired") : t("locationRequirementOptional")}</span>
+                </button>
+              </div>
             </div>
           ) : null}
           {isGuestDraftMode && !savedForm ? (
@@ -607,6 +626,43 @@ export function PublishStep({
                   </p>
                   {canManageProjects && projectState ? <p className="muted">{projectState}</p> : null}
                   {canManageProjects ? <p className="muted">{t("suiRegistrationDeferredNotice")}</p> : null}
+                </section>
+
+                <section className="panel composer-settings-card composer-settings-card-visual">
+                  <div className="section-row composer-settings-visual-heading">
+                    <span className="composer-settings-visual-icon composer-settings-visual-icon-identity">
+                      <RoutingIcon type="identity" />
+                    </span>
+                    <div>
+                      <p className="eyebrow">{t("locationRequirementEyebrow")}</p>
+                      <h3>{t("locationRequirementTitle")}</h3>
+                    </div>
+                  </div>
+                  <fieldset className="composer-radio-field">
+                    <legend>{t("locationRequirementLabel")}</legend>
+                    <div className="composer-radio-options">
+                      {([
+                        ["optional", t("locationRequirementOptional")],
+                        ["required", t("locationRequirementRequired")],
+                      ] as const).map(([value, label]) => (
+                        <label
+                          key={value}
+                          className={`composer-radio-option${locationRequirement === value ? " is-selected" : ""}`}
+                        >
+                          <input
+                            type="radio"
+                            name="locationRequirement"
+                            value={value}
+                            checked={locationRequirement === value}
+                            onChange={() => onChangeLocationRequirement(value)}
+                          />
+                          <span className="composer-radio-mark" aria-hidden="true" />
+                          <span>{label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </fieldset>
+                  <p className="muted">{t("locationRequirementHelp")}</p>
                 </section>
 
                 <section className="panel composer-settings-card composer-settings-card-visual">

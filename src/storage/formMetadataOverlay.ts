@@ -14,6 +14,7 @@ type FormMetadataOverlay = Pick<
   | "ownerAddress"
   | "creationMode"
   | "encryptSubmissions"
+  | "locationRequirement"
   | "responseDeadline"
   | "responseDeadlineMode"
   | "blobId"
@@ -53,6 +54,7 @@ export function saveFormMetadataOverlay(form: FormSchema) {
     ownerAddress: form.ownerAddress,
     creationMode: form.creationMode,
     encryptSubmissions: form.encryptSubmissions,
+    locationRequirement: form.locationRequirement,
     responseDeadline: form.responseDeadline ?? null,
     responseDeadlineMode: form.responseDeadlineMode ?? "none",
     blobId: form.blobId,

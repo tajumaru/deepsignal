@@ -9,6 +9,7 @@ import type {
   FormHeaderLogo,
   FormHeaderImagePosition,
   FormIdentityPolicy,
+  FormLocationRequirement,
   FormPurpose,
   FormSchema,
   FormSection,
@@ -104,6 +105,7 @@ export function serializeDraft(
   purpose: FormPurpose,
   visibility: FormSchema["visibility"],
   identityPolicy: FormIdentityPolicy,
+  locationRequirement: FormLocationRequirement,
   createOnSui: boolean,
   encryptSubmissions: boolean,
   sections: FormSection[],
@@ -118,6 +120,7 @@ export function serializeDraft(
     purpose,
     visibility: normalizeFormVisibility(visibility),
     identityPolicy,
+    locationRequirement,
     createOnSui,
     encryptSubmissions,
     responseDeadlinePreset,
@@ -170,6 +173,7 @@ export function buildFormSchema(args: {
   purpose: FormPurpose;
   visibility: NonNullable<FormSchema["visibility"]>;
   identityPolicy: FormIdentityPolicy;
+  locationRequirement: FormLocationRequirement;
   ownerAddress: string;
   creationMode: NonNullable<FormSchema["creationMode"]>;
   projectId?: string;
@@ -215,6 +219,7 @@ export function buildFormSchema(args: {
     purpose: args.purpose,
     visibility: args.visibility,
     identityPolicy: args.identityPolicy,
+    locationRequirement: args.locationRequirement,
     publicExplore: args.visibility === "public",
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),

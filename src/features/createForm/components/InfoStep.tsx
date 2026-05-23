@@ -17,6 +17,9 @@ interface InfoStepProps {
   t: Translate;
   title: string;
   description: string;
+  identityPolicy: "anonymous_allowed" | "wallet_required";
+  locationRequirement: "optional" | "required";
+  encryptSubmissions: boolean;
   headerImage: {
     url: string;
     alt: string;
@@ -57,6 +60,9 @@ export function InfoStep({
   t,
   title,
   description,
+  identityPolicy,
+  locationRequirement,
+  encryptSubmissions,
   headerImage,
   headerLogo,
   responseDeadlinePreset,
@@ -166,11 +172,15 @@ export function InfoStep({
         <div className="section-row">
           <div>
             <p className="eyebrow">{t("contestDefaultsEyebrow")}</p>
-            <h3>{t("privateSignalReady")}</h3>
+            <h3>{t("signalPostureTitle")}</h3>
           </div>
-          <span className="signal-chip signal-chip-accent">{t("encryptSubmissionsOn")}</span>
+          <div className="signal-type-posture-row" aria-label={t("signalPostureTitle")}>
+            <span className="signal-chip signal-chip-accent">{encryptSubmissions ? "Seal on" : "Open"}</span>
+            <span className="signal-chip">{identityPolicy === "wallet_required" ? t("verificationRequired") : t("verificationOptional")}</span>
+            <span className="signal-chip">{locationRequirement === "required" ? t("locationRequirementRequired") : t("locationRequirementOptional")}</span>
+          </div>
         </div>
-        <p className="muted">{t("contestDefaultsBody")}</p>
+        <p className="muted">{t("signalPostureBody")}</p>
       </section>
 
       <div className="composer-info-grid">
