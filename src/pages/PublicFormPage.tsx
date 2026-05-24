@@ -27,6 +27,13 @@ import { isAttachmentFieldType, isConfirmationCheckboxField } from "../lib/field
 import { collectSignalContext, type AttachedSignalContext } from "../lib/signalContext";
 import type { FieldType } from "../types";
 
+function triggerHaptic(pattern: number | number[]) {
+  if (typeof navigator === "undefined" || typeof navigator.vibrate !== "function") {
+    return;
+  }
+  navigator.vibrate(pattern);
+}
+
 function hasPublicAnswerValue(field: { type: string; rows?: string[] }, value: unknown) {
   const fieldType = field.type as FieldType;
   if (isConfirmationCheckboxField(fieldType)) {
@@ -347,6 +354,7 @@ export function PublicFormPage() {
   }
 
   function handleSelectGuestMode() {
+    triggerHaptic(12);
     setAnswerAuthMode("guest");
     setWalletChoicePending(false);
   }
@@ -357,10 +365,12 @@ export function PublicFormPage() {
   }
 
   function handleSelectWalletMode() {
+    triggerHaptic(12);
     setAnswerAuthMode("sui_wallet");
   }
 
   function handleSelectWalletAndContinue() {
+    triggerHaptic([10, 24, 12]);
     handleSelectWalletMode();
     if (resolvedWalletAddress) {
       setPublicStep("form");
@@ -386,6 +396,7 @@ export function PublicFormPage() {
   }
 
   function handleChangeAuthMethod() {
+    triggerHaptic(10);
     setPublicStep("identity");
   }
 
@@ -474,8 +485,12 @@ export function PublicFormPage() {
               className={`answer-card public-identity-choice-card is-guest ${guestSelected ? "is-selected" : ""}`}
               onClick={handleGuestCardClick}
             >
-              <div className="public-identity-choice-card-head">
-                <span className="public-identity-choice-icon" aria-hidden="true">Anon</span>
+              <div className="public-identity-choice-card-head public-identity-choice-card-head-capsule">
+                <div className="public-identity-capsule-core is-guest" aria-hidden="true">
+                  <span className="public-identity-capsule-ripple" />
+                  <span className="public-identity-choice-icon">Anon</span>
+                  <span className="public-identity-capsule-status">Ready</span>
+                </div>
                 <button
                   type="button"
                   className={`public-identity-choice-radio ${guestSelected ? "is-selected" : ""}`}
@@ -485,11 +500,13 @@ export function PublicFormPage() {
                 />
               </div>
               <div className="public-identity-choice-card-copy">
-                <div className="public-identity-choice-heading">
+                <div className="public-identity-choice-heading public-identity-choice-heading-capsule">
+                  <span className="public-identity-choice-eyebrow">Signal Capsule</span>
                   <strong>{t("publicIdentityChoiceAnonymousLabel")}</strong>
                   <span className="public-identity-choice-tag">{t("publicIdentityChoiceGuestTag")}</span>
                 </div>
                 <p className="muted">{t("publicIdentityChoiceAnonymousBody")}</p>
+                <small className="public-identity-choice-subtitle">{t("publicIdentityChoiceAnonymousReady")}</small>
               </div>
               <ul className="public-identity-choice-list">
                 <li>{t("publicIdentityChoiceGuestPoint1")}</li>
@@ -497,8 +514,12 @@ export function PublicFormPage() {
                 <li>{t("publicIdentityChoiceGuestPoint3")}</li>
               </ul>
               <div className="public-identity-choice-terminal-spacer" aria-hidden="true" />
-              <button type="button" className="ghost-button" onClick={handleSelectGuestAndContinue}>
-                {t("publicIdentityChoiceAnonymousCta")}
+              <button type="button" className="ghost-button signal-capsule-action is-guest" onClick={handleSelectGuestAndContinue}>
+                <span className="signal-capsule-action-icon" aria-hidden="true">◎</span>
+                <span className="signal-capsule-action-copy">
+                  <strong>{t("publicIdentityChoiceAnonymousCta")}</strong>
+                  <small>{t("publicIdentityChoiceAnonymousReady")}</small>
+                </span>
               </button>
               <p className="muted public-identity-choice-card-note">{t("publicIdentityChoiceAnonymousReady")}</p>
             </article>
@@ -507,8 +528,12 @@ export function PublicFormPage() {
             className={`answer-card public-identity-choice-card is-wallet ${resolvedWalletAddress ? "is-connected" : ""} ${walletSelected ? "is-selected" : ""}`}
             onClick={handleWalletCardClick}
           >
-            <div className="public-identity-choice-card-head">
-              <span className="public-identity-choice-icon is-wallet" aria-hidden="true">Sui</span>
+            <div className="public-identity-choice-card-head public-identity-choice-card-head-capsule">
+              <div className="public-identity-capsule-core is-wallet" aria-hidden="true">
+                <span className="public-identity-capsule-ripple" />
+                <span className="public-identity-choice-icon is-wallet">Sui</span>
+                <span className="public-identity-capsule-status">{resolvedWalletAddress ? "Linked" : "Standby"}</span>
+              </div>
               <button
                 type="button"
                 className={`public-identity-choice-radio ${walletSelected ? "is-selected" : ""}`}
@@ -518,13 +543,17 @@ export function PublicFormPage() {
               />
             </div>
             <div className="public-identity-choice-card-copy">
-              <div className="public-identity-choice-heading">
+              <div className="public-identity-choice-heading public-identity-choice-heading-capsule">
+                <span className="public-identity-choice-eyebrow">Verified Capsule</span>
                 <strong>{t("publicIdentityChoiceWalletLabel")}</strong>
                 <span className="public-identity-choice-tag is-wallet">{t("publicIdentityChoiceWalletTag")}</span>
               </div>
               <p className="muted">
                 {walletRequired ? t("publicIdentityChoiceWalletBodyRequired") : t("publicIdentityChoiceWalletBody")}
               </p>
+              <small className="public-identity-choice-subtitle">
+                {resolvedWalletAddress ? t("publicIdentityChoiceWalletConnected") : t("publicIdentityChoiceWalletConnectPrompt")}
+              </small>
             </div>
             <ul className="public-identity-choice-list is-wallet">
               <li>{t("publicIdentityChoiceWalletPoint1")}</li>
@@ -536,11 +565,15 @@ export function PublicFormPage() {
             </div>
             <button
               type="button"
-              className="primary-button"
+              className="primary-button signal-capsule-action is-wallet"
               onClick={handleSelectWalletAndContinue}
               disabled={!resolvedWalletAddress}
             >
-              {t("publicIdentityChoiceWalletCta")}
+              <span className="signal-capsule-action-icon" aria-hidden="true">◉</span>
+              <span className="signal-capsule-action-copy">
+                <strong>{t("publicIdentityChoiceWalletCta")}</strong>
+                <small>{resolvedWalletAddress ? "Verified route armed" : "Connect wallet to arm this route"}</small>
+              </span>
             </button>
             <p className="muted public-identity-choice-card-note">
               {resolvedWalletAddress ? t("publicIdentityChoiceWalletConnected") : t("publicIdentityChoiceWalletConnectPrompt")}
@@ -766,17 +799,29 @@ export function PublicFormPage() {
               <div className="public-location-actions">
                 <button
                   type="button"
-                  className="primary-button public-location-primary-action"
-                  onClick={() => void requestLocation()}
+                  className="primary-button public-location-primary-action signal-capsule-action signal-capsule-action-location"
+                  onClick={() => {
+                    triggerHaptic([10, 18, 10]);
+                    void requestLocation();
+                  }}
                   disabled={deadlinePassed || locationState === "requesting"}
                 >
-                  {location ? t("locationRecapture") : t("locationAttachAction")}
+                  <span className="signal-capsule-action-icon" aria-hidden="true">
+                    {location ? "◎" : "⌖"}
+                  </span>
+                  <span className="signal-capsule-action-copy">
+                    <strong>{location ? t("locationRecapture") : t("locationAttachAction")}</strong>
+                    <small>{location ? t("locationReadyHelp") : locationCardHelp}</small>
+                  </span>
                 </button>
                 {location ? (
                   <button
                     type="button"
                     className="ghost-button public-location-secondary-action"
-                    onClick={clearLocation}
+                    onClick={() => {
+                      triggerHaptic(10);
+                      clearLocation();
+                    }}
                     disabled={deadlinePassed || locationState === "requesting"}
                   >
                     {t("locationRemoveAction")}
@@ -885,8 +930,19 @@ export function PublicFormPage() {
           <span>{submitReadinessLabel}</span>
           <strong>{submitModeLabel}</strong>
         </div>
-        <button type="submit" className="primary-button" disabled={submitting || deadlinePassed || storageConnectionPreparing}>
-          {submitButtonLabel}
+        <button
+          type="submit"
+          className="primary-button signal-capsule-action signal-capsule-action-submit"
+          disabled={submitting || deadlinePassed || storageConnectionPreparing}
+          onClick={() => triggerHaptic([12, 22, 16])}
+        >
+          <span className="signal-capsule-action-icon" aria-hidden="true">
+            {submitting ? "◌" : "⬢"}
+          </span>
+          <span className="signal-capsule-action-copy">
+            <strong>{submitButtonLabel}</strong>
+            <small>{submitting ? "Encrypting and transmitting signal" : "Touch to transmit through the active secure route"}</small>
+          </span>
         </button>
       </div>
     </form>

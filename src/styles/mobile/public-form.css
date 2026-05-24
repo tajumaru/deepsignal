@@ -57,11 +57,25 @@
 
   .public-identity-choice-grid {
     grid-template-columns: 1fr;
-    padding: 1rem;
+    padding: 0;
   }
 
   .public-identity-choice-card {
-    padding: 1.2rem;
+    padding: 1.15rem;
+    border-radius: 1.8rem;
+  }
+
+  .public-identity-choice-card-head-capsule {
+    align-items: center;
+  }
+
+  .public-identity-capsule-core {
+    min-width: 5rem;
+  }
+
+  .public-identity-choice-icon {
+    width: 4.85rem;
+    height: 4.85rem;
   }
 
   .public-identity-choice-heading {
@@ -71,6 +85,17 @@
   .public-identity-choice-card .ghost-button,
   .public-identity-choice-card .primary-button {
     width: 100%;
+  }
+
+  .signal-capsule-action {
+    min-height: 5.2rem;
+    padding: 0.95rem 1rem;
+    border-radius: 1.65rem;
+  }
+
+  .signal-capsule-action-icon {
+    width: 3.15rem;
+    height: 3.15rem;
   }
 
   .voice-recorder-actions {
@@ -107,6 +132,31 @@
 
   .public-form-status-strip .muted {
     min-width: 0;
+  }
+
+  .public-location-actions,
+  .public-form-actions {
+    grid-template-columns: 1fr;
+    display: grid;
+  }
+
+  .public-location-secondary-action {
+    width: 100%;
+    min-height: 3.7rem;
+    border-radius: 1.3rem;
+  }
+
+  .public-submit-bar-copy {
+    margin-right: 0;
+    width: 100%;
+  }
+
+  .signal-capsule-action-submit {
+    min-width: 100%;
+  }
+
+  .public-location-facts {
+    grid-template-columns: 1fr;
   }
 
   .public-identity-topline,
