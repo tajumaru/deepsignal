@@ -2916,11 +2916,14 @@ export function AdminDashboardPage() {
         sessionStatusLabel,
       ];
   const hasProjects = projects.length > 0;
+  const hasFormsInSelectedProject = selectedProject
+    ? selectedProjectForms.length > 0 || selectedProject.formsCount > 0
+    : accessibleForms.length > 0;
   const hasSignalsInSelectedProject = selectedProject ? selectedProject.signalsCount > 0 : false;
   const onboardingState: InboxOnboardingState =
     hasAdminAccess && !hasProjects
       ? "create-project"
-      : hasAdminAccess && hasProjects && allSignals.length === 0 && !hasSignalsInSelectedProject
+      : hasAdminAccess && hasProjects && !hasFormsInSelectedProject && allSignals.length === 0 && !hasSignalsInSelectedProject
         ? "create-signal"
         : "ready";
   const showGuidedOnboarding = hasAdminAccess && onboardingState !== "ready";
@@ -3632,6 +3635,14 @@ export function AdminDashboardPage() {
                   <span className="signal-chip signal-chip-soft">{t("unreadBadge", { count: visibleUnreadCount })}</span>
                 </div>
                 <div className="signal-workbench-controls">
+                  <button
+                    type="button"
+                    className="ghost-button"
+                    onClick={() => void loadConsole()}
+                    disabled={loading}
+                  >
+                    {loading ? t("refreshingLabel") : t("checkInbox")}
+                  </button>
                   {canUseProjectScope ? (
                     <button
                       type="button"
@@ -3880,6 +3891,8 @@ export function AdminDashboardPage() {
                         <Link
                           className="ghost-button"
                           to={getPublicFormPath(firstProjectForm.id, firstProjectForm.manifestBlobId)}
+                          target="_blank"
+                          rel="noreferrer"
                         >
                           {t("sendTestSignal")}
                         </Link>

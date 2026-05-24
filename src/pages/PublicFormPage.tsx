@@ -7,14 +7,15 @@ import { FormHeaderImage } from "../components/FormHeaderImage";
 import { RichTextContent } from "../components/RichText";
 import { CriticalFailurePanel } from "../components/CriticalFailurePanel";
 import { RecoverableDraftBanner } from "../components/RecoverableDraftBanner";
+import { WalrusRuntimeSurface } from "../components/WalrusRuntimeSurface";
 import { WalletConnect } from "../components/WalletConnect";
 import { PublicFormSuccess } from "../features/public-form/components/PublicFormSuccess";
-import { PublicIdentityCard } from "../features/public-form/components/PublicIdentityCard";
 import { PublicSubmitReadiness } from "../features/public-form/components/PublicSubmitReadiness";
 import { SignalMetaChip } from "../components/SignalMetaChip";
 import { SignalSubmissionPipeline } from "../features/public-form/components/SignalSubmissionPipeline";
 import { usePublicFormLoader } from "../features/public-form/hooks/usePublicFormLoader";
 import { usePublicSubmission, type SignalPipelineStage } from "../features/public-form/hooks/usePublicSubmission";
+import { useSuiWallet } from "../hooks/useSuiWallet";
 import { useI18n } from "../i18n";
 import {
   formatResponseDeadline,
@@ -73,9 +74,7 @@ export function PublicFormPage() {
   const { t } = useI18n();
   const { formId = "" } = useParams();
   const [searchParams] = useSearchParams();
-  const currentAccount = useCurrentAccount();
-  const [walletAccountAddress, setWalletAccountAddress] = useState<string | undefined>();
-  const [walletProvider, setWalletProvider] = useState<string | undefined>();
+  const wallet = useSuiWallet({ resolveName: false });
   const initialAnswerAuthMode = searchParams.get("identity") === "wallet" ? "sui_wallet" : searchParams.get("identity") === "guest" ? "guest" : null;
   const initialStep = searchParams.get("step") === "answer" ? "form" : "identity";
   const [publicStep, setPublicStep] = useState<"identity" | "form">(initialStep);
@@ -89,7 +88,9 @@ export function PublicFormPage() {
     missingFormMessage: t("publicFormMissingBody"),
   });
   const walletRequired = form?.identityPolicy === "wallet_required";
-  const resolvedWalletAddress = walletAccountAddress ?? currentAccount?.address ?? undefined;
+  const hasSingleAnswerMode = walletRequired;
+  const resolvedWalletAddress = wallet.accountAddress;
+  const walletProvider = wallet.walletName;
   const walletModeSelected = walletRequired || answerAuthMode === "sui_wallet";
   const attachWallet = walletModeSelected;
   const {
@@ -150,6 +151,7 @@ export function PublicFormPage() {
   useEffect(() => {
     if (walletRequired) {
       setAnswerAuthMode("sui_wallet");
+      setPublicStep("form");
     }
   }, [walletRequired]);
 
@@ -240,10 +242,10 @@ export function PublicFormPage() {
     : submitting
       ? "Submitting secure report..."
     : walletRequired
-        ? walletAccountAddress
+        ? resolvedWalletAddress
           ? "Submit Secure Report"
           : "Connect wallet to submit secure report"
-        : attachWallet && walletAccountAddress
+        : attachWallet && resolvedWalletAddress
         ? "Submit Secure Report"
         : "Submit Secure Report";
   const submissionPipelineLabels = {
@@ -396,6 +398,9 @@ export function PublicFormPage() {
   }
 
   function handleChangeAuthMethod() {
+    if (hasSingleAnswerMode) {
+      return;
+    }
     triggerHaptic(10);
     setPublicStep("identity");
   }
@@ -610,7 +615,7 @@ export function PublicFormPage() {
   }
 
   function triggerWalletReconnect() {
-    const walletButton = document.querySelector<HTMLButtonElement>(".public-identity-wallet button");
+    const walletButton = document.querySelector<HTMLButtonElement>(".public-identity-choice-wallet-shell button");
     walletButton?.click();
     walletButton?.focus();
   }
@@ -633,6 +638,11 @@ export function PublicFormPage() {
 
   return (
     <form className="panel glow-panel public-form" onSubmit={handleSubmit}>
+      {walletModeSelected ? (
+        <WalrusRuntimeSurface fallback={null}>
+          <div aria-hidden="true" style={{ display: "none" }} />
+        </WalrusRuntimeSurface>
+      ) : null}
       <FormHeaderImage
         image={form.headerImage}
         logo={form.headerLogo}
@@ -684,11 +694,13 @@ export function PublicFormPage() {
               </span>
             </span>
           </div>
-          <div className="inline-actions">
-            <button type="button" className="ghost-button" onClick={handleChangeAuthMethod}>
-              {t("publicIdentityChangeAction")}
-            </button>
-          </div>
+          {!hasSingleAnswerMode ? (
+            <div className="inline-actions">
+              <button type="button" className="ghost-button" onClick={handleChangeAuthMethod}>
+                {t("publicIdentityChangeAction")}
+              </button>
+            </div>
+          ) : null}
         </section>
         <PublicSubmitReadiness
           className="public-submit-readiness-inline"
@@ -714,53 +726,6 @@ export function PublicFormPage() {
         />
       </div>
 
-      {walletModeSelected ? (
-        <PublicIdentityCard
-          walletRequired
-          allowedSenderTypesLabel={t("allowedSenderTypesLabel")}
-          allowedSenderTypesValue={t("allowedSenderTypesWalletOnly")}
-          requirementLabel={t("identityRequirementLabel")}
-          requirementValue={t("verificationRequired")}
-          accountAddress={resolvedWalletAddress}
-          attachWallet
-          deadlinePassed={deadlinePassed}
-          initialWalletRequested
-          onAttachWalletChange={() => undefined}
-          onAttachWalletTouched={() => undefined}
-          onAccountAddressChange={setWalletAccountAddress}
-          onWalletProviderChange={setWalletProvider}
-          zkLoginEnabled={false}
-          labels={{
-            eyebrow: t("publicIdentityEyebrow"),
-            title: t("publicIdentityTitle"),
-            body: t("publicIdentityBodyWalletRequired"),
-            sendMode: t("publicSendMode"),
-            walletRequired: t("publicWalletRequired"),
-            walletAttach: t("publicWalletAttach"),
-            walletRequiredConnectedHelp: t("publicWalletRequiredConnectedHelp"),
-            walletRequiredHelp: t("publicWalletRequiredHelp"),
-            walletAttachHelp: t("publicWalletAttachHelp"),
-            walletConnectOptional: t("publicWalletConnectOptional"),
-            currentMode: t("publicCurrentMode"),
-            modeWallet: t("publicModeWallet"),
-            modeAnonymous: t("publicModeAnonymous"),
-            walletModeHelpNoSignature: t("publicWalletModeHelpNoSignature"),
-            anonymousModeHelp: t("publicAnonymousModeHelp"),
-            walletUnavailable: t("publicWalletUnavailable"),
-            walletUnavailableRequired: t("publicWalletUnavailableRequired"),
-            walletRetry: t("publicWalletRetry"),
-            modeZkLogin: t("publicModeZkLogin"),
-            zkLoginTitle: t("publicZkLoginTitle"),
-            zkLoginBody: t("publicZkLoginBody"),
-            zkLoginConnect: t("publicZkLoginConnect"),
-            zkLoginDisconnect: t("publicZkLoginDisconnect"),
-            zkLoginConnectedHelp: t("publicZkLoginConnectedHelp"),
-            zkLoginOptionalHelp: t("publicZkLoginOptionalHelp"),
-            zkLoginUnavailable: t("publicZkLoginUnavailable"),
-          }}
-        />
-      ) : null}
-
       {hasRecoverableDraft ? (
         <RecoverableDraftBanner
           title={t("recoverableDraftTitle")}
@@ -781,7 +746,7 @@ export function PublicFormPage() {
           <span>{progressLabel}</span>
           <small>{remainingEstimate}</small>
         </div>
-        {form.locationRequirement ? (
+        {form.locationRequirement === "required" ? (
           <section
             className={`public-location-card ${locationState === "success" ? "is-success" : ""} is-${locationStatusTone}`}
             aria-live="polite"
@@ -933,7 +898,7 @@ export function PublicFormPage() {
         <button
           type="submit"
           className="primary-button signal-capsule-action signal-capsule-action-submit"
-          disabled={submitting || deadlinePassed || storageConnectionPreparing}
+          disabled={submitting || deadlinePassed}
           onClick={() => triggerHaptic([12, 22, 16])}
         >
           <span className="signal-capsule-action-icon" aria-hidden="true">

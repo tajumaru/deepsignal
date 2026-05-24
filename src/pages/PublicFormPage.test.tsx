@@ -507,4 +507,42 @@ describe("PublicFormPage shared manifest restore", () => {
     );
     expect(mockSaveSubmission).not.toHaveBeenCalled();
   });
+
+  it("skips the identity choice screen when wallet-required forms only allow one answer mode", async () => {
+    const form: FormSchema = {
+      id: "form-123",
+      title: "Secure Feedback Form",
+      description: "Wallet verification is required.",
+      fields: [
+        {
+          id: "field-1",
+          type: "shortText",
+          label: "What happened?",
+          required: true,
+          sensitive: false,
+        },
+      ],
+      createdAt: "2026-05-14T00:00:00.000Z",
+      identityPolicy: "wallet_required",
+    };
+
+    mockReadManifestWithForm.mockResolvedValue({
+      manifest: {
+        version: 1,
+        formId: "form-123",
+        createdAt: "2026-05-14T00:00:00.000Z",
+        updatedAt: "2026-05-14T00:00:00.000Z",
+        formBlobId: "__bundled_form__",
+        submissions: [],
+      },
+      form,
+    });
+
+    renderPublicFormPage("/f/form-123?manifest=blob-abc");
+
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Secure Feedback Form" })).toBeInTheDocument());
+    expect(screen.queryByRole("heading", { name: "publicIdentityChoiceTitle" })).not.toBeInTheDocument();
+    expect(screen.getByText("What happened?")).toBeInTheDocument();
+    expect(screen.queryByText("publicIdentityChangeAction")).not.toBeInTheDocument();
+  });
 });

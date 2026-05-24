@@ -2,6 +2,7 @@ import { SignalMetaChip, SignalMetaRow } from "../../../components/SignalMetaChi
 import { StorageProof } from "../../../components/StorageProof";
 import { TatumFrogIcon } from "../../../components/NetworkMenu";
 import { getEncryptedPayloadAvailabilityLabel, hasDedicatedEncryptedPayloadBlob } from "../../../lib/encryptionDisplay";
+import { useRpcInfrastructure } from "../../../rpcInfrastructure";
 import { getCurrentWalrusNetwork } from "../../../lib/walrusProof";
 import { getSubmissionRespondentMeta } from "../../../lib/respondentMeta";
 import { getStorageDetailLabels, isLocalFallbackBlob } from "../../../lib/signalInbox";
@@ -24,6 +25,7 @@ export function PublicFormSuccess({
   signalReceivedLabel,
   thanksForFeedbackLabel,
 }: PublicFormSuccessProps) {
+  const rpc = useRpcInfrastructure();
   const storageLabels = getStorageDetailLabels(submitted.encryptedBlobId ?? submitted.blobId);
   const submittedRespondentMeta = getSubmissionRespondentMeta(submitted);
   const isEncryptedSubmission = Boolean(submitted.isEncrypted);
@@ -31,6 +33,8 @@ export function PublicFormSuccess({
   const storedOnWalrus = Boolean(primaryBlobId && !isLocalFallbackBlob(primaryBlobId));
   const evidenceBlobId = submitted.encryptedBlobId ?? submitted.blobId;
   const networkLabel = storedOnWalrus ? getCurrentWalrusNetwork() : "local";
+  const providerBadgeLabel = rpc.usingTatum ? "Powered by Tatum" : "Sui RPC connected";
+  const providerDetailLabel = rpc.usingTatum ? "Powered by Tatum" : rpc.providerLabel;
 
   return (
     <section className="stack">
@@ -62,7 +66,7 @@ export function PublicFormSuccess({
             <span>Certified</span>
           </div>
           <div className="signal-badge-row">
-            <span className="signal-chip signal-chip-soft">Powered by Tatum</span>
+            <span className="signal-chip signal-chip-soft">{providerBadgeLabel}</span>
             <span className="signal-chip signal-chip-soft">Walrus evidence layer</span>
           </div>
         </div>
@@ -94,7 +98,7 @@ export function PublicFormSuccess({
             </div>
             <div className="evidence-layer-item">
               <span>Provider</span>
-              <strong>Powered by Tatum</strong>
+              <strong>{providerDetailLabel}</strong>
             </div>
             {evidenceBlobId ? (
               <div className="evidence-layer-item">

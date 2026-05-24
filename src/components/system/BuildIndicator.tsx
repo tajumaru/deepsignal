@@ -1,6 +1,9 @@
 import { buildInfo } from "../../lib/buildInfo";
+import { useContext } from "react";
+import { RpcInfrastructureContext } from "../../rpcInfrastructure";
 
 export function BuildIndicator() {
+  const rpc = useContext(RpcInfrastructureContext);
   const copyBuildInfo = () => {
     if (!navigator.clipboard) {
       return;
@@ -11,7 +14,9 @@ export function BuildIndicator() {
 
   return (
     <footer className="build-indicator" aria-label="Build information">
-      <span className="build-indicator-attribution">Powered by Walrus, Seal, Sui, and Tatum RPC</span>
+      <span className="build-indicator-attribution">
+        {rpc?.usingTatum ? "Powered by Walrus, Seal, Sui, and Tatum RPC" : "Powered by Walrus, Seal, and Sui RPC"}
+      </span>
       <button
         className="build-indicator-button"
         type="button"

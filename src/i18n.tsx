@@ -2120,6 +2120,7 @@ const messages = {
     bulkDecryptToastSuccess: (params) => `${params?.count ?? 0} private signals unlocked.`,
     bulkDecryptToastPartialSuccess: (params) =>
       `${params?.count ?? 0} private signals unlocked. ${params?.failed ?? 0} still locked.`,
+    checkInbox: "Check inbox",
     inboxEmptyEyebrow: "Inbox empty",
     chooseProjectFirstTitle: "Choose a project first",
     createFirstSignalFormTitle: "Create your first signal channel",
@@ -5019,6 +5020,7 @@ const messages = {
     bulkDecryptToastSuccess: (params) => `${params?.count ?? 0} \u4ef6\u306e private signal \u3092\u5fa9\u53f7\u3057\u307e\u3057\u305f\u3002`,
     bulkDecryptToastPartialSuccess: (params) =>
       `${params?.count ?? 0} \u4ef6\u3092\u5fa9\u53f7\u3057\u307e\u3057\u305f\u3002${params?.failed ?? 0} \u4ef6\u306f\u30ed\u30c3\u30af\u4e2d\u3067\u3059\u3002`,
+    checkInbox: "\u53d7\u4fe1\u30c1\u30a7\u30c3\u30af",
     inboxEmptyEyebrow: "\u53d7\u4fe1\u7bb1\u306f\u7a7a\u3067\u3059",
     chooseProjectFirstTitle: "\u307e\u305a\u30d7\u30ed\u30b8\u30a7\u30af\u30c8\u3092\u9078\u629e\u3057\u3066\u304f\u3060\u3055\u3044",
     createFirstSignalFormTitle: "\u6700\u521d\u306e signal channel \u3092\u4f5c\u6210\u3057\u3066\u304f\u3060\u3055\u3044",

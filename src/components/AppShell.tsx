@@ -317,9 +317,6 @@ export function AppShell({
                     <NavLink to="/" onClick={closeMobileDrawer}>
                       {t("navHome")}
                     </NavLink>
-                    <CreateFormLink nav onClick={closeMobileDrawer}>
-                      <NavItemLabel icon={<CreateSignalNavIcon />}>{t("navCreateForm")}</NavItemLabel>
-                    </CreateFormLink>
                     {walletChrome.inboxNav}
                     <NavLink to="/explore" onClick={closeMobileDrawer}>
                       {t("navExplore")}

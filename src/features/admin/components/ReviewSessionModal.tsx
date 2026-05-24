@@ -127,7 +127,7 @@ export function ReviewSessionModal({
     <div className="modal-backdrop review-session-backdrop" role="presentation" onMouseDown={onBackdropMouseDown}>
       <section
         ref={dialogRef}
-        className="answer-card review-session-modal"
+        className={`answer-card review-session-modal ${reviewSessionStep === 1 && (decrypting || decryptInFlight) ? "is-decrypting" : ""}`}
         role="dialog"
         aria-modal="true"
         aria-labelledby="review-session-title"
@@ -189,7 +189,7 @@ export function ReviewSessionModal({
           </div>
 
           {reviewSessionStep === 1 ? (
-            <div className="review-session-stage review-session-stage-unlock">
+            <div className={`review-session-stage review-session-stage-unlock ${decrypting || decryptInFlight ? "is-decrypting" : ""}`}>
               <div className="review-session-stage-copy">
                 <strong>{t("privateSignalLockedTitle")}</strong>
                 <p className="muted">{t("privateSignalLockedBody")}</p>
