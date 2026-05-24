@@ -52,7 +52,7 @@ Forms, submissions, attachments, encrypted payload references, blob indexes, and
 Seal protects sensitive submissions, while the inbox still supports triage status, priority, tags, notes, signal value, GitHub links, roadmap stage, JSON export, and CSV export.
 
 **Manifests are recovery indexes, not secret stores.**  
-Walrus manifests let an operator recover the form/submission graph from blob references. They intentionally avoid private answer bodies, attachment names, owner addresses, tags, notes, and encrypted payload contents.
+Walrus manifests let an operator recover the form/submission graph from blob references. They intentionally avoid private answer bodies, attachment names, owner addresses, tags, notes, and encrypted payload contents. The current manifest also carries safe form presentation metadata such as header image/logo so recovered public links can rebuild the expected shell without exposing submission secrets.
 
 **Recovery state is mobile-safe metadata.**  
 Public draft recovery stores only lightweight answers, current recovery counters, timestamps, diagnostics, and remote Walrus attachment references. It must not persist `File`/`Blob` objects, Base64 attachment bodies, encrypted attachment payloads, or full encrypted submission envelopes in `localStorage` or IndexedDB. Attachments are uploaded to Walrus when selected; recovery keeps the returned blob reference.
@@ -75,15 +75,12 @@ This is the fastest path through the current UX.
 9. Triage the signal, set priority/tags/notes, assign roadmap stage, and export JSON or CSV.
 10. Open `/explore` or `/roadmap/:formId` and confirm that public views contain only selected roadmap-safe metadata.
 
-## Demo flow: Secure Signal Operations
+## Demo Flow Status
 
-- Anonymous or verified signals come into the Signal Operations Workspace.
-- Reviewers decrypt private payloads with Seal when the signal is protected.
-- Related Signals suggests duplicate wallet recovery, abuse, or security reports.
-- Reviewers can assign ownership, add notes, and flag needs follow-up.
-- The Signal Timeline shows the intake-to-resolution lifecycle for each report.
-- Safe metadata can be published to the roadmap without exposing private payload details.
-- Walrus keeps durable proof and storage metadata available for export and audit.
+- The repo includes seeded demo data, fixture tooling, and a hidden Secure Signal Operations workspace path used for local judging rehearsals.
+- The active app build does not currently expose a dedicated `/demo` route or a visible guided demo panel by default.
+- For the current UI, the most reliable demo path is: create a guest draft, publish it, answer through `/f/:formId`, then review and decrypt in `/admin` or `/dashboard`.
+- Demo-oriented seed helpers still exist for the inbox and insights workflows, but they should be treated as operator tooling rather than primary product navigation.
 
 ## Why Walrus / Seal / Sui
 
@@ -115,34 +112,42 @@ The Walrus manifest design is especially important. A manifest is a recovery map
 
 ### Create
 
-- Guest draft form builder at `/admin/forms/new`.
-- Field types for ratings, screenshots, videos, and sensitive answers.
+- Primary create route at `/create`, with admin alias at `/admin/forms/new`.
+- Guest draft form builder is the default when no eligible creator wallet is connected.
+- Field types include ratings, screenshots, videos, voice answers, rich text, matrix/checklist inputs, and sensitive answers.
 - Publish overlay with public link, QR sharing, Walrus status, and manifest recovery link.
 - Visibility modes: private, unlisted, and Public Explore.
+- Optional location requirement can be configured per form for public responders.
 
 ### Respond
 
 - Public form route at `/f/:formId`.
 - Wallet-optional response by default.
 - Optional respondent wallet context without wallet-gating the route.
-- Optional Google zkLogin respondent mode for wallet-optional forms.
 - Public zkLogin callback route at `/auth/zklogin/callback`.
 - Recoverable public draft behavior for interrupted responses.
+- Public responder flow supports screenshots, videos, voice capture, and optional browser geolocation attachment when the form requests it.
 
 ### Respondent Identity Modes
 
-DeepSignal currently supports three respondent identity modes on the public answer flow:
+The codebase currently contains three respondent identity modes:
 
 - `anonymous`: the responder submits without a wallet or Google identity.
 - `sui_wallet`: the responder attaches a connected Sui wallet address.
 - `zklogin`: the responder signs in with Google and DeepSignal derives a zkLogin Sui address for metadata only.
 
-Current zkLogin behavior is intentionally lightweight:
+Current status of zkLogin:
+
+- The OAuth helpers, callback route, session storage, and tests are present in the repo.
+- The active public responder UI currently keeps zkLogin disabled, so judges should not expect the Google sign-in option to appear in the default build without additional integration work.
+- `wallet_required` forms remain Sui Wallet-only in the current phase.
+
+When zkLogin is re-enabled, the intended behavior is intentionally lightweight:
 
 - DeepSignal stores the derived zkLogin address and minimal issuer metadata with the submission.
 - DeepSignal does not persist raw JWTs, OAuth access tokens, refresh tokens, ephemeral private keys, or zk proofs.
 - DeepSignal does not generate a zkLogin signature or execute an on-chain responder transaction in this phase.
-- `wallet_required` forms remain Sui Wallet-only in the current phase. zkLogin is available only on wallet-optional public responder routes.
+- zkLogin is intended only for wallet-optional public responder routes in this phase.
 
 ### Review
 
@@ -151,6 +156,8 @@ Current zkLogin behavior is intentionally lightweight:
 - Desktop-first **Encrypted Signal Inbox** with stream navigation, list view, detail panel, metadata, Walrus proof, and Seal state.
 - Owner/Admin-only **Workspace Activity** tab records local audit events for form creation, publish, update, and archive actions, with actor wallet, role snapshot, timestamp, and optional Sui transaction digest.
 - Triage status, priority, tags, notes, signal value, and GitHub issue/PR fields.
+- Workspace Insights / analytics surface summarizes inbox activity, clustering, response velocity, related patterns, and exports JSON insight snapshots.
+- Mobile review affordances exist for the inbox, detail view, navigation, and review-session surfaces, even though the review workspace remains optimized for larger screens.
 
 ### Publish Roadmap
 
@@ -269,6 +276,8 @@ npm run lint
 npm run build
 ```
 
+On Windows PowerShell, `npm run ...` may be blocked by execution policy. If that happens, use `npm.cmd run typecheck` and `npm.cmd run build`.
+
 ### CI
 
 Basic GitHub Actions CI is configured in `.github/workflows/ci.yml` for `push` and `pull_request`. It installs dependencies with `npm ci`, then runs:
@@ -299,11 +308,15 @@ Copy `.env.example` and configure the pieces needed for your demo.
 VITE_STORAGE_MODE=walrus
 VITE_WALRUS_STORAGE_MODE=uploadRelay
 VITE_WALRUS_NETWORK=mainnet
+VITE_WALRUS_PUBLISHER_URL=https://publisher.walrus-mainnet.walrus.space
 VITE_WALRUS_UPLOAD_RELAY_URL=https://upload-relay.mainnet.walrus.space
 VITE_WALRUS_AGGREGATOR_URL=https://aggregator.walrus-mainnet.walrus.space
 VITE_WALRUS_UPLOAD_RELAY_TIMEOUT_MS=90000
 VITE_WALRUS_UPLOAD_RELAY_TIP_MAX=1000000
 VITE_WALRUS_STORAGE_EPOCHS=5
+VITE_WALRUS_ESTIMATE_BASE_WAL=0.012
+VITE_WALRUS_ESTIMATE_WAL_PER_MB_EPOCH=0.0002
+VITE_WALRUS_ESTIMATE_BASE_SUI=0.015
 
 # Optional: Tatum-managed Walrus uploads without exposing x-api-key in the browser
 NEXT_PUBLIC_TATUM_STORAGE_ENABLED=false
@@ -314,12 +327,13 @@ VITE_RELEASE_STORAGE_RESET_TOKEN=
 
 VITE_SEAL_PACKAGE_ID=
 VITE_SEAL_KEY_SERVER_OBJECT_ID=
+VITE_SEAL_MODE=mock
 VITE_SEAL_SERVER_TYPE=independent
 VITE_SEAL_AGGREGATOR_URL=
 
 VITE_SUI_NETWORK=mainnet
 NEXT_PUBLIC_SUI_RPC_URL=https://sui-mainnet.gateway.tatum.io
-NEXT_PUBLIC_TATUM_ENABLED=true
+NEXT_PUBLIC_TATUM_ENABLED=false
 VITE_SUI_FULLNODE_URL=https://fullnode.mainnet.sui.io:443
 VITE_RPC_URL=https://fullnode.mainnet.sui.io:443
 TATUM_API_KEY=
@@ -332,6 +346,7 @@ VITE_OWNER_CAP_ID=
 Notes:
 
 - `VITE_WALRUS_NETWORK` accepts `testnet` or `mainnet`; keep Walrus and Sui URLs aligned with the selected network.
+- `VITE_WALRUS_STORAGE_MODE=publisher` also needs `VITE_WALRUS_PUBLISHER_URL`; `.env.example` defaults to publisher mode for a wallet-driven local/demo path.
 - `VITE_WALRUS_STORAGE_MODE` also accepts `tatum`. In that mode DeepSignal uploads through the Tatum Storage API, still keeps `blobId` as the recovery/read key, and continues to use `VITE_WALRUS_AGGREGATOR_URL` as the read fallback.
 - `NEXT_PUBLIC_SUI_RPC_URL` is the active client RPC target. Point it to Tatum for hackathon/demo infrastructure visibility, or leave the legacy `VITE_SUI_FULLNODE_URL` / `VITE_RPC_URL` values in place for the default Sui fullnode path.
 - `NEXT_PUBLIC_TATUM_ENABLED=true` turns on the Tatum RPC presentation and switchable client path.
@@ -343,7 +358,7 @@ Notes:
 - Set `VITE_RELEASE_STORAGE_RESET_TOKEN` to a new release identifier when the next deployed build should clear browser-local forms, submissions, drafts, Walrus blob indexes, and related form caches once per browser. Leave it blank for normal releases.
 - Vite client env vars in this repo now accept both `VITE_` and `NEXT_PUBLIC_` prefixes.
 - Tatum setup details and troubleshooting live in [`docs/tatum-rpc.md`](./docs/tatum-rpc.md).
-- `VITE_ZKLOGIN_ENABLE=true` turns on the Google zkLogin option in the public answer flow.
+- `VITE_ZKLOGIN_ENABLE=true` enables the underlying Google zkLogin plumbing, but the current public responder UI keeps the option disabled in the default build.
 - `VITE_ZKLOGIN_GOOGLE_CLIENT_ID` and `VITE_ZKLOGIN_REDIRECT_URI` must match the Google OAuth client configuration for the deployed public app origin.
 - `VITE_ZKLOGIN_REDIRECT_URI` should point at the SPA callback path, for example `https://your-app.example.com/auth/zklogin/callback`. DeepSignal rewrites that path into the HashRouter route automatically.
 - `VITE_ZKLOGIN_SALT_SERVICE_URL` should point to a stable salt service for production use. If it is omitted, DeepSignal falls back to a deterministic local salt strategy intended for development only.
@@ -388,6 +403,14 @@ npm run code:search -- walrus upload
 npm run code:search -- seal decrypt
 ```
 
+Useful repo-specific helpers:
+
+```bash
+npm run dev:zklogin-salt
+npm run test:zklogin
+npm run fixture:insights
+```
+
 ## Future Vision
 
 DeepSignal points toward protocol-native customer intelligence:
@@ -403,11 +426,12 @@ The MVP is intentionally narrow: collect private signals, store them on Walrus, 
 ## Known Limitations
 
 - `manifestBlobId` holders can inspect the public manifest index structure.
+- The current manifest payload includes safe presentation metadata such as form header image/logo in addition to blob references.
 - Attachment blob IDs are intentionally not stored in manifests, so restore focuses on form/submission blobs.
 - Legacy forms published before manifest references were embedded on-chain still depend on local browser cache or a saved restore link for `manifestBlobId` recovery.
 - Local fallback data is browser-local and not shared across devices.
 - Walrus delete is currently index cleanup only; uploaded blobs are not garbage-collected by this MVP.
 - Frontend wallet-gating is MVP protection and should continue evolving around the Move Project / Form / SignalReceipt registry model.
 - Real Seal decrypt requires wallet/session approval.
-- Public zkLogin is currently a metadata identity mode only. It does not yet satisfy `wallet_required` forms, produce responder-side zkLogin signatures, or execute on-chain responder transactions.
+- Public zkLogin plumbing exists, but the active responder UI currently keeps it disabled. Even when re-enabled, it is still a metadata identity mode only and does not yet satisfy `wallet_required` forms, produce responder-side zkLogin signatures, or execute on-chain responder transactions.
 - Production zkLogin deployments should provide a stable salt service. The built-in deterministic fallback exists to unblock local development, not to replace production identity infrastructure.
