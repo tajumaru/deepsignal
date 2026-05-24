@@ -1560,11 +1560,40 @@
 }
 
 .workspace-insights-panel {
+  --analysis-accent: rgba(102, 227, 255, 0.22);
+  --analysis-glow: rgba(116, 226, 255, 0.1);
+  --analysis-surface: rgba(9, 31, 48, 0.84);
+  --analysis-text: #9fd1e3;
   display: grid;
   gap: 1rem;
   background:
-    radial-gradient(circle at top right, rgba(116, 226, 255, 0.1), transparent 28%),
+    radial-gradient(circle at top right, var(--analysis-glow), transparent 28%),
     linear-gradient(180deg, rgba(6, 21, 35, 0.9), rgba(4, 16, 29, 0.94));
+}
+
+.workspace-insights-panel.analysis-tone-teal {
+  --analysis-accent: rgba(54, 219, 195, 0.24);
+  --analysis-glow: rgba(54, 219, 195, 0.14);
+}
+
+.workspace-insights-panel.analysis-tone-amber {
+  --analysis-accent: rgba(255, 191, 92, 0.24);
+  --analysis-glow: rgba(255, 191, 92, 0.12);
+}
+
+.workspace-insights-panel.analysis-tone-crimson {
+  --analysis-accent: rgba(255, 108, 132, 0.26);
+  --analysis-glow: rgba(255, 108, 132, 0.14);
+}
+
+.workspace-insights-panel.analysis-tone-violet {
+  --analysis-accent: rgba(181, 130, 255, 0.26);
+  --analysis-glow: rgba(181, 130, 255, 0.14);
+}
+
+.workspace-insights-panel.analysis-tone-slate {
+  --analysis-accent: rgba(141, 181, 205, 0.2);
+  --analysis-glow: rgba(141, 181, 205, 0.1);
 }
 
 .workspace-insights-header {
@@ -1598,6 +1627,30 @@
   font-size: 0.92rem;
 }
 
+.workspace-profile-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.38rem 0.85rem;
+  border: 1px solid var(--analysis-accent);
+  border-radius: var(--radius-pill);
+  background: rgba(3, 15, 26, 0.56);
+  color: #eefcff;
+  font-size: 0.8rem;
+  font-weight: 800;
+}
+
+.workspace-profile-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+}
+
+.workspace-profile-chip-row .signal-chip.is-active {
+  border-color: var(--analysis-accent);
+  box-shadow: 0 0 18px color-mix(in srgb, var(--analysis-accent) 70%, transparent);
+}
+
 .workspace-insights-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -1609,17 +1662,17 @@
   min-width: 0;
   gap: 0.45rem;
   padding: 1rem;
-  border: 1px solid rgba(116, 226, 255, 0.14);
+  border: 1px solid var(--analysis-accent);
   border-radius: var(--radius-card);
   background:
-    linear-gradient(180deg, rgba(9, 31, 48, 0.84), rgba(4, 18, 31, 0.72));
+    linear-gradient(180deg, var(--analysis-surface), rgba(4, 18, 31, 0.72));
   box-shadow:
     inset 0 1px 0 rgba(191, 247, 255, 0.07),
     0 12px 28px rgba(2, 10, 18, 0.18);
 }
 
 .workspace-insight-card span {
-  color: #9fd1e3;
+  color: var(--analysis-text);
   font-size: 0.78rem;
   font-weight: 800;
   text-transform: uppercase;
@@ -1657,7 +1710,7 @@
   display: grid;
   gap: 0.8rem;
   padding: 1rem;
-  border: 1px solid rgba(116, 226, 255, 0.13);
+  border: 1px solid color-mix(in srgb, var(--analysis-accent) 72%, rgba(116, 226, 255, 0.13));
   border-radius: var(--radius-card);
   background:
     radial-gradient(circle at 96% 0%, rgba(102, 227, 255, 0.08), transparent 28%),
@@ -1984,14 +2037,18 @@
   display: grid;
   gap: 0.8rem;
   padding: 1rem;
-  border: 1px solid rgba(116, 226, 255, 0.13);
+  border: 1px solid color-mix(in srgb, var(--analysis-accent) 72%, rgba(116, 226, 255, 0.13));
   border-radius: var(--radius-card);
   background:
-    radial-gradient(circle at 96% 0%, rgba(82, 208, 141, 0.1), transparent 28%),
+    radial-gradient(circle at 96% 0%, var(--analysis-glow), transparent 28%),
     linear-gradient(180deg, rgba(7, 27, 44, 0.76), rgba(4, 18, 31, 0.74));
   box-shadow:
     inset 0 1px 0 rgba(191, 247, 255, 0.06),
     0 12px 28px rgba(2, 10, 18, 0.14);
+}
+
+.workspace-profile-card-list .workspace-diagnostic-row {
+  min-height: 6.2rem;
 }
 
 .workspace-signal-summary-header {

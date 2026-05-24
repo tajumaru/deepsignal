@@ -17,6 +17,12 @@ export type FieldType =
   | "voice";
 
 export type FormPurpose = "bug" | "feature" | "survey" | "custom";
+export type AnalysisProfileId =
+  | "customer_feedback"
+  | "ai_agent_log"
+  | "incident_report"
+  | "governance_signal"
+  | "general_signal";
 export type FormVisibility = "private" | "unlisted" | "public";
 export type FormIdentityPolicy = "anonymous_allowed" | "wallet_required";
 export type FormLocationRequirement = "optional" | "required";
@@ -110,6 +116,7 @@ export interface FormSchema {
   fields: FormField[];
   sections?: FormSection[];
   purpose?: FormPurpose;
+  analysisProfileId?: AnalysisProfileId;
   visibility?: FormVisibility;
   identityPolicy?: FormIdentityPolicy;
   publicExplore?: boolean;

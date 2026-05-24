@@ -3,7 +3,7 @@ import { normalizeFormVisibility } from "./explore";
 import { normalizeActivityEvent } from "./activityLog";
 import { normalizeFormPurpose } from "./formTemplates";
 import { normalizeLogicGroup, sanitizeConditionalLogicFields } from "../utils/formLogic";
-import type { FormField, FormIdentityPolicy, FormLocationRequirement, FormSchema, FormSection } from "../types";
+import type { AnalysisProfileId, FormField, FormIdentityPolicy, FormLocationRequirement, FormSchema, FormSection } from "../types";
 
 function normalizeFormIdentityPolicy(identityPolicy: unknown): FormIdentityPolicy {
   return identityPolicy === "wallet_required" ? "wallet_required" : "anonymous_allowed";
@@ -11,6 +11,16 @@ function normalizeFormIdentityPolicy(identityPolicy: unknown): FormIdentityPolic
 
 function normalizeFormLocationRequirement(locationRequirement: unknown): FormLocationRequirement | undefined {
   return locationRequirement === "required" || locationRequirement === "optional" ? locationRequirement : undefined;
+}
+
+function normalizeAnalysisProfileId(analysisProfileId: unknown): AnalysisProfileId | undefined {
+  return analysisProfileId === "customer_feedback" ||
+    analysisProfileId === "ai_agent_log" ||
+    analysisProfileId === "incident_report" ||
+    analysisProfileId === "governance_signal" ||
+    analysisProfileId === "general_signal"
+    ? analysisProfileId
+    : undefined;
 }
 
 export function createEmptyAnswer(field: FormField) {
@@ -64,6 +74,7 @@ export function normalizeForm(raw: FormSchema | (Record<string, unknown> & { id:
     ),
     sections: Array.isArray(raw.sections) ? (raw.sections as FormSection[]) : [],
     purpose: normalizeFormPurpose(raw.purpose),
+    analysisProfileId: normalizeAnalysisProfileId(raw.analysisProfileId),
     visibility,
     identityPolicy: normalizeFormIdentityPolicy(raw.identityPolicy),
     locationRequirement: normalizeFormLocationRequirement(raw.locationRequirement),

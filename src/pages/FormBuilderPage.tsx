@@ -12,7 +12,7 @@ import { canAdmin, getAdminSurfaceAccessState, getRoleLabel } from "../lib/admin
 import { getActivityActorRole } from "../lib/activityLog";
 import { setSelectedProjectId } from "../lib/projectRegistry";
 import { shortAddress, WALRUS_UPLOAD_RELAY_URL } from "../lib/sui";
-import { initialFields, initialTemplate, showWalrusDiagnostics } from "../features/createForm/constants";
+import { getInitialFields, getInitialTemplate, showWalrusDiagnostics } from "../features/createForm/constants";
 import { BuilderToolbar } from "../features/createForm/components/BuilderToolbar";
 import { FieldsStep } from "../features/createForm/components/FieldsStep";
 import { InfoStep } from "../features/createForm/components/InfoStep";
@@ -27,7 +27,18 @@ import { useCreateFormPublish } from "../features/createForm/hooks/useCreateForm
 import type { DisplayMode } from "../features/createForm/types";
 import { getStorageRuntimeStatus, subscribeStorageRuntime } from "../storage/storageFactory";
 
-function normalizeFieldsForModeSwitch(fields: typeof initialFields) {
+function normalizeFieldsForModeSwitch(
+  fields: Array<{
+    type: string;
+    label: string;
+    helpText?: string;
+    placeholder?: string;
+    required: boolean;
+    options?: string[];
+    rows?: string[];
+    columns?: string[];
+  }>,
+) {
   return fields.map((field) => ({
     type: field.type,
     label: field.label.trim(),
@@ -51,13 +62,14 @@ interface FormBuilderComposerProps {
 }
 
 function FormBuilderComposer({ mode, freshStartToken, initialDisplayMode = "classic", draftSeed }: FormBuilderComposerProps) {
-  const { t } = useI18n();
+  const { t, language } = useI18n();
   const wallet = useSuiWallet();
   const suiClient = useSuiClient();
   const { capabilityProfile, isLoadingAccess } = useAccessControl(wallet.accountAddress);
   const { projects } = useProjectRegistry(wallet.accountAddress);
   const createFormTx = useSignAndExecuteTransaction();
   const composerShellRef = useRef<HTMLElement | null>(null);
+  const pendingTemplateScrollRef = useRef(false);
   const [isScrolled, setIsScrolled] = useState(false);
   const [storageRuntime, setStorageRuntime] = useState(() => getStorageRuntimeStatus());
   const [showPublishSuccessView, setShowPublishSuccessView] = useState(false);
@@ -66,9 +78,12 @@ function FormBuilderComposer({ mode, freshStartToken, initialDisplayMode = "clas
   const isMirrorMode = displayMode === "mirror";
   const hasAdminAccess = canAdmin(capabilityProfile);
   const isGuestDraftMode = mode === "guestDraft";
+  const localizedInitialTemplate = useMemo(() => getInitialTemplate(language), [language]);
+  const localizedInitialFields = useMemo(() => getInitialFields(language), [language]);
 
   const builder = useCreateFormBuilder({
     t,
+    language,
     projects,
     freshStartToken,
     mode: isGuestDraftMode ? "guestDraft" : "admin",
@@ -141,13 +156,13 @@ function FormBuilderComposer({ mode, freshStartToken, initialDisplayMode = "clas
     }
   }, [builder.draftSaveState, builder.isDirty, publish.savedForm, t]);
   const hasEditedCoreSignal = useMemo(() => {
-    const titleChanged = builder.values.title.trim() !== initialTemplate.title.trim();
-    const descriptionChanged = builder.values.description.trim() !== initialTemplate.description.trim();
+    const titleChanged = builder.values.title.trim() !== localizedInitialTemplate.title.trim();
+    const descriptionChanged = builder.values.description.trim() !== localizedInitialTemplate.description.trim();
     const fieldsChanged =
       JSON.stringify(normalizeFieldsForModeSwitch(builder.values.fields)) !==
-      JSON.stringify(normalizeFieldsForModeSwitch(initialFields));
+      JSON.stringify(normalizeFieldsForModeSwitch(localizedInitialFields));
     return titleChanged || descriptionChanged || fieldsChanged;
-  }, [builder.values.description, builder.values.fields, builder.values.title]);
+  }, [builder.values.description, builder.values.fields, builder.values.title, localizedInitialFields, localizedInitialTemplate.description, localizedInitialTemplate.title]);
 
   useEffect(() => {
     const unsubscribe = subscribeStorageRuntime(() => setStorageRuntime(getStorageRuntimeStatus()));
@@ -197,6 +212,23 @@ function FormBuilderComposer({ mode, freshStartToken, initialDisplayMode = "clas
     return () => window.cancelAnimationFrame(frameId);
   }, [freshStartToken]);
 
+  useEffect(() => {
+    if (builder.values.currentStep !== "template" || !pendingTemplateScrollRef.current) {
+      return;
+    }
+    pendingTemplateScrollRef.current = false;
+    const frameId = window.requestAnimationFrame(() => {
+      const quickSignalSection = document.getElementById("quick-signal-section");
+      if (!quickSignalSection) {
+        return;
+      }
+      const topbarHeight = document.querySelector<HTMLElement>(".topbar")?.getBoundingClientRect().height ?? 0;
+      const nextTop = Math.max(0, window.scrollY + quickSignalSection.getBoundingClientRect().top - topbarHeight - 24);
+      window.scrollTo({ top: nextTop, behavior: "smooth" });
+    });
+    return () => window.cancelAnimationFrame(frameId);
+  }, [builder.values.currentStep]);
+
   function handleFieldsContinue() {
     publish.setError("");
     const validation = builder.validateFieldsStep();
@@ -243,6 +275,13 @@ function FormBuilderComposer({ mode, freshStartToken, initialDisplayMode = "clas
 
   function handleContinueCurrentSignal() {
     setShowMirrorStartChoice(false);
+  }
+
+  function handleSelectStep(step: typeof builder.values.currentStep) {
+    if (step === "template") {
+      pendingTemplateScrollRef.current = true;
+    }
+    builder.goToStep(step);
   }
 
   if (!isGuestDraftMode && wallet.accountAddress && isLoadingAccess) {
@@ -361,6 +400,7 @@ function FormBuilderComposer({ mode, freshStartToken, initialDisplayMode = "clas
           selectedProject={hasAdminAccess ? builder.selectedProject : null}
           projects={hasAdminAccess ? projects : []}
           projectState={builder.values.projectState}
+          selectedTemplateKey={builder.values.selectedTemplateKey}
           onSetMobilePane={builder.setMobilePane}
           onSelectProject={handleSelectProject}
           onChangeVisibility={builder.setVisibility}
@@ -417,7 +457,7 @@ function FormBuilderComposer({ mode, freshStartToken, initialDisplayMode = "clas
           draftStateLabel={draftStateLabel || undefined}
           savedFormId={publish.savedForm?.id}
           savedManifestBlobId={publish.savedForm?.manifestBlobId}
-          onSelectStep={builder.goToStep}
+          onSelectStep={handleSelectStep}
         />
 
         <section className="panel composer-view-mode-panel" aria-label="Create Signal display mode">

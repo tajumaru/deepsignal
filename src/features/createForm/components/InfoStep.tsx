@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState, type DragEvent } from "react";
+import { lazy, Suspense, useState, type DragEvent, type FocusEvent } from "react";
 import { FormHeaderImage } from "../../../components/FormHeaderImage";
 import { toDateTimeLocalValue } from "../../../lib/responseDeadline";
 import type { FormHeaderImagePosition, ResponseDeadlinePreset, Translate } from "../types";
@@ -158,6 +158,10 @@ export function InfoStep({
     reader.readAsDataURL(file);
   }
 
+  function handleSelectAllOnFocus(event: FocusEvent<HTMLInputElement>) {
+    event.currentTarget.select();
+  }
+
   return (
     <section className="panel composer-section-card composer-step-card">
       <div className="section-row">
@@ -168,25 +172,15 @@ export function InfoStep({
         </div>
       </div>
 
-      <section className="contest-builder-quickstart contest-builder-quickstart-plain">
-        <div className="section-row">
-          <div>
-            <p className="eyebrow">{t("contestDefaultsEyebrow")}</p>
-            <h3>{t("signalPostureTitle")}</h3>
-          </div>
-          <div className="signal-type-posture-row" aria-label={t("signalPostureTitle")}>
-            <span className="signal-chip signal-chip-accent">{encryptSubmissions ? "Seal on" : "Open"}</span>
-            <span className="signal-chip">{identityPolicy === "wallet_required" ? t("verificationRequired") : t("verificationOptional")}</span>
-            <span className="signal-chip">{locationRequirement === "required" ? t("locationRequirementRequired") : t("locationRequirementOptional")}</span>
-          </div>
-        </div>
-        <p className="muted">{t("signalPostureBody")}</p>
-      </section>
-
       <div className="composer-info-grid">
         <label>
           <span>{t("formTitle")}</span>
-          <input value={title} onChange={(event) => setTitle(event.target.value)} />
+          <input
+            className="auto-select-focus-input"
+            value={title}
+            onChange={(event) => setTitle(event.target.value)}
+            onFocus={handleSelectAllOnFocus}
+          />
         </label>
 
         <label className="composer-info-intro">

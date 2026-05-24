@@ -5,6 +5,13 @@ import { getSignalPreview } from "../../../lib/signalInbox";
 import { downloadTextFile } from "../../../lib/utils";
 import { flattenAnswer } from "../../../lib/utils";
 import type { SignalSeverity } from "../../../types";
+import {
+  getAnalysisProfileLabel,
+  getAnalysisProfileShortLabel,
+  getSignalProfileId,
+  resolveAnalysisProfile,
+  resolveProfileDistribution,
+} from "./analysisProfiles";
 import type { SignalRecord } from "../hooks/useSignalInboxData";
 
 interface UnlockedSignalSummary {
@@ -371,19 +378,6 @@ function getActivityStatus(points: ReturnType<typeof buildActivityPoints>): Acti
   };
 }
 
-function getPrimaryIntelligenceCopy(cluster: SignalCluster | undefined, encryptedWaitingCount: number, t: ReturnType<typeof useI18n>["t"]) {
-  if (cluster && cluster.signalCount > 0) {
-    return t("workspaceSignalIntelligenceDetected", {
-      phrase: cluster.label,
-      area: cluster.keywords.slice(0, 2).join(" / ") || t("workspaceReviewFlowArea"),
-    });
-  }
-  if (encryptedWaitingCount > 0) {
-    return t("workspaceSignalIntelligenceLocked", { count: encryptedWaitingCount });
-  }
-  return t("workspaceSignalIntelligenceIdle");
-}
-
 function getClusterMapNodes(clusters: SignalCluster[]) {
   const fallback = [
     { key: "monitor-a", left: "18%", top: "34%", scale: 0.72, connected: true },
@@ -740,6 +734,43 @@ function buildSituationFlow(
 
 function exportInsightsSnapshotJson(input: {
   language: Language;
+  profile: {
+    id: string;
+    label: string;
+    description: string;
+    emphasis: {
+      tone: string;
+      label: string;
+      headline: string;
+      body: string;
+    };
+    metrics: Array<{
+      id: string;
+      label: string;
+      value: string;
+      detail: string;
+      tone?: string;
+    }>;
+    insightCards: Array<{
+      id: string;
+      eyebrow: string;
+      title: string;
+      body: string;
+      tone?: string;
+    }>;
+    recommendedActions: Array<{
+      id: string;
+      title: string;
+      detail: string;
+      urgency: string;
+    }>;
+  };
+  profileDistribution: Array<{
+    id: string;
+    label: string;
+    score: number;
+    signalCount: number;
+  }>;
   totalSignals: number;
   unreadSignals: number;
   needsReviewSignals: number;
@@ -766,6 +797,8 @@ function exportInsightsSnapshotJson(input: {
   const snapshot = {
     exportedAt,
     language: input.language,
+    analysisProfile: input.profile,
+    profileDistribution: input.profileDistribution,
     summary: {
       totalSignals: input.totalSignals,
       unreadSignals: input.unreadSignals,
@@ -884,6 +917,17 @@ function buildRelatedPatternSummary(records: SignalRecord[]) {
     .slice(0, 5);
 }
 
+function getActionUrgencyLabel(urgency: "now" | "next" | "watch") {
+  switch (urgency) {
+    case "now":
+      return "Now";
+    case "next":
+      return "Next";
+    default:
+      return "Watch";
+  }
+}
+
 interface WorkspaceInsightsProps {
   totalSignals: number;
   unreadSignals: number;
@@ -924,19 +968,6 @@ export function WorkspaceInsights({
   const currentVelocity = buildVelocitySnapshot(records, now - 7 * 24 * 60 * 60 * 1000, now);
   const previousVelocity = buildVelocitySnapshot(records, now - 14 * 24 * 60 * 60 * 1000, now - 7 * 24 * 60 * 60 * 1000);
   const velocityDirection = getVelocityDirection(currentVelocity, previousVelocity);
-  const registeredSignals = records.filter((record) => typeof record.submission.onchainSignalId === "number").length;
-  const pendingProofSignals = records.filter((record) => record.submission.pendingOnchainRegistration).length;
-  const consensusConfidence = primaryCluster?.confidence ?? 0;
-  const responseDistribution = totalSignals > 0 && primaryCluster
-    ? Math.round((primaryCluster.signalCount / totalSignals) * 100)
-    : 0;
-  const emergencySeverity = primaryCluster?.severity ?? (unresolvedSignals >= 4 ? "high" : unresolvedSignals >= 2 ? "medium" : "low");
-  const signalHealthState =
-    unresolvedSignals >= Math.max(4, Math.ceil(totalSignals * 0.55)) || anomalyCount > 1
-      ? "critical"
-      : unresolvedSignals >= Math.max(2, Math.ceil(totalSignals * 0.3)) || signalSummary.encryptedWaitingCount > 0 || pendingProofSignals > 0
-        ? "watch"
-        : "stable";
   const activityMonitorState = getActivityMonitorState(activityStatus, anomalyCount);
   const silenceMonitorState: MonitorState = silenceCandidates.length > 0
     ? silenceCandidates[0].tone === "estimated_silence"
@@ -949,87 +980,45 @@ export function WorkspaceInsights({
   const clusterMonitorState = getClusterMonitorState(clusters, anomalyCount, silenceCandidates);
   const situationFlow = buildSituationFlow(activityMonitorState, anomalyCount, silenceMonitorState, velocityMonitorState);
   const relatedPatterns = buildRelatedPatternSummary(records);
-  const metrics = [
-    {
-      label: t("workspaceMetricSignalHealth"),
-      value: t(
-        signalHealthState === "critical"
-          ? "workspaceSignalHealthCritical"
-          : signalHealthState === "watch"
-            ? "workspaceSignalHealthWatch"
-            : "workspaceSignalHealthStable",
-      ),
-      detail: t("workspaceMetricSignalHealthDetail", {
-        unresolved: unresolvedSignals,
-        pending: pendingProofSignals,
-      }),
-      tone: signalHealthState === "critical" ? "alert" : "cluster",
-    },
-    {
-      label: t("workspaceMetricConsensusConfidence"),
-      value: `${consensusConfidence}%`,
-      detail: t("workspaceMetricConsensusConfidenceDetail", {
-        count: primaryCluster?.signalCount ?? 0,
-      }),
-      tone: "cluster",
-    },
-    {
-      label: t("workspaceMetricEmergencySeverity"),
-      value: t(`workspaceSeverity${emergencySeverity}`),
-      detail: t("workspaceMetricEmergencySeverityDetail", {
-        encrypted: signalSummary.encryptedWaitingCount,
-      }),
-      tone: emergencySeverity === "high" ? "alert" : "cluster",
-    },
-    {
-      label: t("workspaceMetricResponseDistribution"),
-      value: `${responseDistribution}%`,
-      detail: primaryCluster
-        ? t("workspaceMetricResponseDistributionDetail", { cluster: primaryCluster.label })
-        : t("workspaceMetricResponseDistributionEmpty"),
-      tone: "cluster",
-    },
-    {
-      label: t("workspaceMetricAttentionRequired"),
-      value: Math.max(unreadSignals, needsReviewSignals).toLocaleString(),
-      detail: t("workspaceMetricAttentionRequiredDetail", { unresolved: unresolvedSignals, anomalies: anomalyCount }),
-      tone: "alert",
-    },
-    {
-      label: t("workspaceMetricActiveCluster"),
-      value: primaryCluster?.signalCount.toLocaleString() ?? "0",
-      detail: primaryCluster
-        ? t("workspaceMetricActiveClusterDetail", { cluster: primaryCluster.label })
-        : t("workspaceMetricActiveClusterEmpty"),
-      tone: "cluster",
-    },
-    {
-      label: t("workspaceMetricEstimatedSilence"),
-      value: silenceCandidates.length.toLocaleString(),
-      detail: silenceCandidates[0]
-        ? t(
-            silenceCandidates[0].detail === "estimated_silence"
-              ? "workspaceSilenceMetricEstimated"
-              : silenceCandidates[0].detail === "low_activity"
-                ? "workspaceSilenceMetricLowActivity"
-                : "workspaceSilenceMetricInactive",
-          )
-        : t("workspaceSilenceMetricNominal"),
-      tone: "cluster",
-    },
-    {
-      label: t("workspaceMetricImmutableProof"),
-      value: registeredSignals.toLocaleString(),
-      detail: t("workspaceMetricImmutableProofDetail", {
-        pending: pendingProofSignals,
-      }),
-      tone: "cluster",
-    },
-  ];
+  const analysisProfile = resolveAnalysisProfile({
+    records,
+    totalSignals,
+    unreadSignals,
+    needsReviewSignals,
+    encryptedSignals,
+    unresolvedSignals,
+    archivedSignals,
+    anomalyCount,
+    activityStatusTone: activityStatus.tone,
+    signalSummaryItems: signalSummary.items,
+    encryptedWaitingCount: signalSummary.encryptedWaitingCount,
+    clusters,
+    silenceCandidates: silenceCandidates.map((candidate) => ({
+      key: candidate.key,
+      label: candidate.label,
+      tone: candidate.tone,
+      unresolvedCount: candidate.unresolvedCount,
+      recentCount: candidate.recentCount,
+      lastSeenLabel: candidate.lastSeenLabel,
+    })),
+    relatedPatterns,
+    currentVelocity,
+  });
+  const profileDistribution = resolveProfileDistribution(records)
+    .slice(0, 4)
+    .map((entry) => ({
+      ...entry,
+      label: getAnalysisProfileLabel(entry.id),
+      signalCount: records.filter((record) => getSignalProfileId(record) === entry.id).length,
+    }))
+    .filter((entry) => entry.signalCount > 0);
   const clusterMapNodes = getClusterMapNodes(clusters);
 
   return (
-    <section className="panel workspace-insights-panel" aria-labelledby="workspace-insights-title">
+    <section
+      className={`panel workspace-insights-panel analysis-tone-${analysisProfile.emphasis.tone}`}
+      aria-labelledby="workspace-insights-title"
+    >
       <div className="workspace-insights-header">
         <div>
           <p className="eyebrow">{t("workspaceInsightsEyebrow")}</p>
@@ -1044,6 +1033,16 @@ export function WorkspaceInsights({
             onClick={() =>
               exportInsightsSnapshotJson({
                 language,
+                profile: {
+                  id: analysisProfile.id,
+                  label: analysisProfile.label,
+                  description: analysisProfile.description,
+                  emphasis: analysisProfile.emphasis,
+                  metrics: analysisProfile.metrics,
+                  insightCards: analysisProfile.insightCards,
+                  recommendedActions: analysisProfile.recommendedActions,
+                },
+                profileDistribution,
                 totalSignals,
                 unreadSignals,
                 needsReviewSignals,
@@ -1076,13 +1075,28 @@ export function WorkspaceInsights({
       <article className="workspace-signal-summary-card workspace-insights-section">
         <div className="workspace-signal-summary-header">
           <div>
-            <p className="eyebrow">{t("workspaceStateOverviewEyebrow")}</p>
-            <h3>{t("workspaceStateOverviewTitle")}</h3>
+            <p className="eyebrow">Analysis Profile</p>
+            <h3>{analysisProfile.label}</h3>
+            <p className="workspace-insights-intro">{analysisProfile.description}</p>
           </div>
+          <span className="workspace-profile-pill">{analysisProfile.emphasis.label}</span>
         </div>
+        {profileDistribution.length > 0 ? (
+          <div className="workspace-profile-chip-row" aria-label="Active signal type distribution">
+            {profileDistribution.map((profile) => (
+              <span
+                key={profile.id}
+                className={`signal-chip signal-chip-soft ${profile.id === analysisProfile.id ? "is-active" : ""}`}
+                title={`${profile.label}: ${profile.signalCount} signals`}
+              >
+                {getAnalysisProfileShortLabel(profile.id)} {profile.signalCount}
+              </span>
+            ))}
+          </div>
+        ) : null}
         <div className="workspace-insights-grid">
-          {metrics.map((metric) => (
-            <article key={metric.label} className={`workspace-insight-card is-${metric.tone}`}>
+          {analysisProfile.metrics.map((metric) => (
+            <article key={metric.id} className={`workspace-insight-card is-${metric.tone ?? "cluster"}`}>
               <span>{metric.label}</span>
               <strong>{metric.value}</strong>
               <p>{metric.detail}</p>
@@ -1109,20 +1123,22 @@ export function WorkspaceInsights({
         </div>
         <article className="workspace-signal-intelligence-card">
           <div className="workspace-signal-intelligence-copy">
-            <p className="eyebrow">{t("workspaceSignalIntelligenceEyebrow")}</p>
-            <h3>{t("workspaceSignalIntelligenceTitle")}</h3>
-            <p>{getPrimaryIntelligenceCopy(primaryCluster, signalSummary.encryptedWaitingCount, t)}</p>
+            <p className="eyebrow">Visual emphasis</p>
+            <h3>{analysisProfile.emphasis.headline}</h3>
+            <p>{analysisProfile.emphasis.body}</p>
           </div>
           <div className="workspace-signal-readout">
-            <span>{t("workspaceAnalysisConfidenceLabel")}</span>
-            <strong>{primaryCluster?.confidence ?? 0}%</strong>
+            <span>Active profile</span>
+            <strong>{analysisProfile.shortLabel}</strong>
             <small>
-              {t("workspaceAnalysisConfidenceBody")}
+              {profileDistribution.length > 1
+                ? `${profileDistribution.length} profile types detected in this view.`
+                : "One profile type is dominating the current view."}
             </small>
           </div>
           <div className="workspace-intelligence-meta">
-            <span>{t("workspaceSeverityLabel")}: {t(`workspaceSeverity${primaryCluster?.severity ?? "low"}`)}</span>
-            <span>{t("workspaceTrendLabel")}: {t(`workspaceTrend${primaryCluster?.trend ?? "steady"}`)}</span>
+            <span>Type: {analysisProfile.label}</span>
+            <span>Top cluster: {primaryCluster?.label ?? "No dominant cluster yet"}</span>
             <span>{t("workspaceEncryptedCoverage", { count: encryptedSignals, total: totalSignals })}</span>
             <span>{t("workspacePotentialAreaLabel")}: {primaryCluster?.keywords.slice(0, 2).join(" / ") || t("workspaceEncryptedIntakeArea")}</span>
             <span>{t("workspaceUnreadCountPill", { count: unreadSignals })}</span>
@@ -1131,6 +1147,44 @@ export function WorkspaceInsights({
           </div>
         </article>
       </article>
+
+      <div className="workspace-insights-section-grid">
+        <article className="workspace-review-queue-card workspace-diagnostic-card">
+          <div className="workspace-signal-summary-header">
+            <div>
+              <p className="eyebrow">Type-specific insights</p>
+              <h3>Insight cards</h3>
+            </div>
+          </div>
+          <div className="workspace-diagnostic-list workspace-profile-card-list">
+            {analysisProfile.insightCards.map((card) => (
+              <div key={card.id} className={`workspace-diagnostic-row is-${card.tone ?? "pattern"}`}>
+                <strong>{card.title}</strong>
+                <span>{card.eyebrow}</span>
+                <small>{card.body}</small>
+              </div>
+            ))}
+          </div>
+        </article>
+
+        <article className="workspace-review-queue-card workspace-diagnostic-card">
+          <div className="workspace-signal-summary-header">
+            <div>
+              <p className="eyebrow">Recommended actions</p>
+              <h3>Next operator moves</h3>
+            </div>
+          </div>
+          <div className="workspace-diagnostic-list workspace-profile-card-list">
+            {analysisProfile.recommendedActions.map((action) => (
+              <div key={action.id} className={`workspace-diagnostic-row is-${action.urgency === "now" ? "alert" : action.urgency === "next" ? "estimated_silence" : "pattern"}`}>
+                <strong>{action.title}</strong>
+                <span>{getActionUrgencyLabel(action.urgency)}</span>
+                <small>{action.detail}</small>
+              </div>
+            ))}
+          </div>
+        </article>
+      </div>
 
       <article className="workspace-sonar-card">
         <div className="workspace-signal-summary-header">

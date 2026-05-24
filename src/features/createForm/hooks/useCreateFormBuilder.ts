@@ -14,9 +14,10 @@ import {
   normalizeFormPurpose,
   smartComposerTemplates,
 } from "../../../lib/formTemplates";
+import type { Language } from "../../../i18n";
 import { normalizeFieldType } from "../../../lib/fieldTypes";
 import { getSelectedProjectId, setSelectedProjectId } from "../../../lib/projectRegistry";
-import { INITIAL_DRAFT_SNAPSHOT, initialFields, initialTemplate } from "../constants";
+import { createInitialDraftSnapshot, getInitialFields, getInitialTemplate } from "../constants";
 import type {
   BuilderStepKey,
   DisplayMode,
@@ -43,6 +44,7 @@ import {
 
 interface UseCreateFormBuilderArgs {
   t: Translate;
+  language: Language;
   projects: ProjectOption[];
   freshStartToken?: string;
   mode?: "admin" | "guestDraft";
@@ -55,12 +57,16 @@ interface UseCreateFormBuilderArgs {
 
 export function useCreateFormBuilder({
   t,
+  language,
   projects,
   freshStartToken = "",
   mode = "admin",
   startExperience = "classic",
   draftSeed,
 }: UseCreateFormBuilderArgs) {
+  const initialTemplate = useMemo(() => getInitialTemplate(language), [language]);
+  const initialFields = useMemo(() => getInitialFields(language), [language]);
+  const initialDraftSnapshot = useMemo(() => createInitialDraftSnapshot(language), [language]);
   const hasLoadedDraftRef = useRef(false);
   const previousModeRef = useRef(mode);
   const draftStorageKey = mode === "guestDraft" ? CREATE_FORM_GUEST_DRAFT_STORAGE_KEY : CREATE_FORM_DRAFT_STORAGE_KEY;
@@ -97,7 +103,7 @@ export function useCreateFormBuilder({
   const [fieldTypePickerOpen, setFieldTypePickerOpen] = useState(false);
   const [selectedProjectId, setSelectedProjectIdState] = useState(() => (isGuestDraftMode ? "" : getSelectedProjectId()));
   const [projectState, setProjectState] = useState("");
-  const [lastSavedSnapshot, setLastSavedSnapshot] = useState(INITIAL_DRAFT_SNAPSHOT);
+  const [lastSavedSnapshot, setLastSavedSnapshot] = useState(initialDraftSnapshot);
   const [draftSaveState, setDraftSaveState] = useState<DraftSaveState>("idle");
   const [hasRecoverableDraft, setHasRecoverableDraft] = useState(false);
   const [activeFieldId, setActiveFieldId] = useState(initialFields[0]?.id ?? "");
@@ -179,7 +185,7 @@ export function useCreateFormBuilder({
     setFieldTypePickerOpen(false);
     setSelectedProjectIdState(nextSelectedProjectId);
     setProjectState("");
-    setLastSavedSnapshot(INITIAL_DRAFT_SNAPSHOT);
+    setLastSavedSnapshot(initialDraftSnapshot);
     setDraftSaveState("idle");
     setHasRecoverableDraft(false);
     setActiveFieldId(nextFields[0]?.id ?? "");
@@ -187,7 +193,7 @@ export function useCreateFormBuilder({
     setDragOverFieldId(null);
     setDragOverPlacement(null);
     setPendingFocusFieldId(nextFields[0]?.id ?? "");
-  }, [isGuestDraftMode]);
+  }, [initialDraftSnapshot, initialFields, initialTemplate, isGuestDraftMode]);
 
   useEffect(() => {
     if (isGuestDraftMode) {
@@ -207,7 +213,7 @@ export function useCreateFormBuilder({
   }, [mode]);
 
   const seedGuestDraftFromIntent = useCallback(() => {
-    const template = getTemplateDefinition(draftSeed?.templateKey ?? initialTemplate.key);
+    const template = getTemplateDefinition(draftSeed?.templateKey ?? initialTemplate.key, language);
     const nextFields = createTemplateFields(template);
     const idea = draftSeed?.idea?.trim() ?? "";
     const automation = {
@@ -235,7 +241,7 @@ export function useCreateFormBuilder({
     setProjectState("");
     setActiveFieldId(nextFields[0]?.id ?? "");
     setPendingFocusFieldId(nextFields[0]?.id ?? "");
-  }, [draftSeed?.idea, draftSeed?.templateKey]);
+  }, [draftSeed?.idea, draftSeed?.templateKey, initialTemplate.key, language]);
 
   function applyStoredDraft(rawDraft: string) {
     const parsedDraft = JSON.parse(rawDraft) as {
@@ -262,7 +268,7 @@ export function useCreateFormBuilder({
       setHasRecoverableDraft(false);
       return;
     }
-    setSelectedTemplateKey(parsedDraft.selectedTemplateKey ?? initialTemplate.key);
+      setSelectedTemplateKey(parsedDraft.selectedTemplateKey ?? initialTemplate.key);
     setTitle(typeof parsedDraft.title === "string" ? parsedDraft.title : initialTemplate.title);
     setDescription(typeof parsedDraft.description === "string" ? parsedDraft.description : initialTemplate.description);
     setHeaderImage({
@@ -387,7 +393,7 @@ export function useCreateFormBuilder({
     if (!hasLoadedDraftRef.current) {
       return;
     }
-    if (draftSnapshot === INITIAL_DRAFT_SNAPSHOT) {
+    if (draftSnapshot === initialDraftSnapshot) {
       window.localStorage.removeItem(draftStorageKey);
       if (draftSaveState !== "restored") {
         setDraftSaveState("idle");
@@ -463,7 +469,7 @@ export function useCreateFormBuilder({
   }
 
   function applyTemplate(templateKey: string) {
-    const template = getTemplateDefinition(templateKey);
+    const template = getTemplateDefinition(templateKey, language);
     const nextFields = createTemplateFields(template);
     const automation = resolveTemplateAutomation(template);
     startTransition(() => {

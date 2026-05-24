@@ -259,7 +259,7 @@ export function FieldsStep({
                 {isMirrorPresentation ? "Choose the channel behavior before editing individual blocks." : t("blockLibraryBody")}
               </p>
             </div>
-            <button type="button" className="ghost-button" onClick={() => onAddSection()}>
+            <button type="button" className="ghost-button composer-pane-heading-action" onClick={() => onAddSection()}>
               {isMirrorPresentation ? "Add Flow" : t("addSection")}
             </button>
           </div>

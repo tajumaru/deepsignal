@@ -1,4 +1,4 @@
-import type { ChangeEvent, DragEvent, KeyboardEvent } from "react";
+import type { ChangeEvent, DragEvent, FocusEvent, KeyboardEvent } from "react";
 import { fieldTypeOptions } from "../lib/constants";
 import { EMOTION_SCALE_OPTIONS } from "../lib/emotionScale";
 import { useI18n } from "../i18n";
@@ -168,6 +168,10 @@ export function FormFieldEditor({
       event.preventDefault();
       onAddBelow();
     }
+  }
+
+  function handleSelectAllOnFocus(event: FocusEvent<HTMLInputElement>) {
+    event.currentTarget.select();
   }
 
   function conditionalSummary() {
@@ -389,12 +393,13 @@ export function FormFieldEditor({
 
           <input
             ref={labelRef}
-            className="question-card-inline-input composer-canvas-question-input"
+            className="question-card-inline-input composer-canvas-question-input auto-select-focus-input"
             value={field.label}
-            onFocus={() => {
+            onFocus={(event) => {
               if (!isExpanded) {
                 onToggleExpand();
               }
+              event.currentTarget.select();
             }}
             onChange={(event) => update("label", event.target.value)}
             onKeyDown={(event) => {
@@ -501,8 +506,10 @@ export function FormFieldEditor({
               <label>
                 <span>{t("placeholder")}</span>
                 <input
+                  className="auto-select-focus-input"
                   value={field.placeholder ?? ""}
                   onChange={(event) => update("placeholder", event.target.value)}
+                  onFocus={handleSelectAllOnFocus}
                   placeholder={t("placeholderExample")}
                 />
               </label>
@@ -513,8 +520,10 @@ export function FormFieldEditor({
             <label>
               <span>{t("placeholder")}</span>
               <input
+                className="auto-select-focus-input"
                 value={field.placeholder ?? ""}
                 onChange={(event) => update("placeholder", event.target.value)}
+                onFocus={handleSelectAllOnFocus}
                 placeholder={t("placeholderExample")}
               />
             </label>

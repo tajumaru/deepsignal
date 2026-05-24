@@ -2923,6 +2923,13 @@
   align-items: flex-start;
 }
 
+.composer-pane-heading-action {
+  flex: 0 0 auto;
+  min-width: 7.5rem;
+  padding-inline: 1rem;
+  white-space: nowrap;
+}
+
 .composer-library-panel,
 .composer-canvas-panel {
   display: grid;
@@ -3451,6 +3458,19 @@
 
 .question-card-inline-input:focus {
   box-shadow: none;
+}
+
+.auto-select-focus-input {
+  transition:
+    background-color var(--transition-fast),
+    box-shadow var(--transition-fast);
+}
+
+.auto-select-focus-input:focus {
+  background: rgba(120, 24, 34, 0.3);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 133, 133, 0.26),
+    0 0 0 1px rgba(120, 24, 34, 0.12);
 }
 
 .composer-draft-status {

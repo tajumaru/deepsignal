@@ -1,4 +1,6 @@
 import { useMemo, useState } from "react";
+import { useI18n } from "../../i18n";
+import type { Translate } from "../../features/createForm/types";
 import type { FormTemplateDefinition, SignalTypeKey, TemplateSignalType } from "../../lib/formTemplates";
 
 interface TemplatePickerProps {
@@ -7,16 +9,128 @@ interface TemplatePickerProps {
   onSelect: (templateKey: string) => void;
 }
 
+type TranslationKey = Parameters<Translate>[0];
+
 const LIBRARY_SECTIONS = [
-  { key: "quick", title: "Quick Signals", description: "Fast signal flows for common intake patterns." },
-  { key: "advanced", title: "Advanced Signals", description: "Higher-trust flows for security, testing, and field capture." },
-  { key: "custom", title: "Custom", description: "Start guided or compose the signal structure yourself." },
+  { key: "quick", titleKey: "templateSectionQuickTitle", descriptionKey: "templateSectionQuickDescription" },
+  { key: "advanced", titleKey: "templateSectionAdvancedTitle", descriptionKey: "templateSectionAdvancedDescription" },
+  { key: "custom", titleKey: "templateSectionCustomTitle", descriptionKey: "templateSectionCustomDescription" },
 ] as const;
 
+const TEMPLATE_COPY_KEYS = {
+  "encrypted-report": {
+    label: "templateEncryptedReportLabel",
+    description: "templateEncryptedReportDescription",
+    bestFor: "templateEncryptedReportBestFor",
+    featuredEyebrow: "templateEncryptedReportFeaturedEyebrow",
+    featuredTitle: "templateEncryptedReportFeaturedTitle",
+    featuredDescription: "templateEncryptedReportFeaturedDescription",
+    featuredPoweredBy: "templateEncryptedReportFeaturedPoweredBy",
+  },
+  bug: {
+    label: "templateBugLabel",
+    description: "templateBugDescription",
+    bestFor: "templateBugBestFor",
+  },
+  feature: {
+    label: "templateFeatureLabel",
+    description: "templateFeatureDescription",
+    bestFor: "templateFeatureBestFor",
+  },
+  feedback: {
+    label: "templateFeedbackLabel",
+    description: "templateFeedbackDescription",
+    bestFor: "templateFeedbackBestFor",
+  },
+  survey: {
+    label: "templateSurveyLabel",
+    description: "templateSurveyDescription",
+    bestFor: "templateSurveyBestFor",
+  },
+  playtest: {
+    label: "templatePlaytestLabel",
+    description: "templatePlaytestDescription",
+    bestFor: "templatePlaytestBestFor",
+  },
+  beta: {
+    label: "templateBetaLabel",
+    description: "templateBetaDescription",
+    bestFor: "templateBetaBestFor",
+  },
+  "anonymous-drop": {
+    label: "templateAnonymousDropLabel",
+    description: "templateAnonymousDropDescription",
+    bestFor: "templateAnonymousDropBestFor",
+  },
+  "disaster-checkin": {
+    label: "templateDisasterCheckinLabel",
+    description: "templateDisasterCheckinDescription",
+    bestFor: "templateDisasterCheckinBestFor",
+  },
+  custom: {
+    label: "templateCustomLabel",
+    description: "templateCustomDescription",
+    bestFor: "templateCustomBestFor",
+  },
+  blank: {
+    label: "templateBlankLabel",
+    description: "templateBlankDescription",
+    bestFor: "templateBlankBestFor",
+  },
+} as const satisfies Record<
+  string,
+  Partial<
+    Record<
+      "label" | "description" | "bestFor" | "featuredEyebrow" | "featuredTitle" | "featuredDescription" | "featuredPoweredBy",
+      TranslationKey
+    >
+  >
+>;
+
+const SIGNAL_TYPE_LABEL_KEYS: Record<SignalTypeKey, TranslationKey> = {
+  secure: "signalTypeSecure",
+  anonymous: "signalTypeAnonymous",
+  location: "signalTypeLocation",
+  testing: "signalTypeTesting",
+  incident: "signalTypeIncident",
+  feedback: "signalTypeFeedback",
+};
+
+const BADGE_LABEL_KEYS: Record<string, TranslationKey> = {
+  Secure: "templateBadgeSecure",
+  "Walrus-backed": "templateBadgeWalrusBacked",
+  "Seal encrypted": "templateBadgeSealEncrypted",
+  "Optional anonymous": "templateBadgeOptionalAnonymous",
+  Incident: "templateBadgeIncident",
+  "Media-ready": "templateBadgeMediaReady",
+  Ideas: "templateBadgeIdeas",
+  "Quick response": "templateBadgeQuickResponse",
+  "Structured prompts": "templateBadgeStructuredPrompts",
+  "Anonymous-ready": "templateBadgeAnonymousReady",
+  "Mobile friendly": "templateBadgeMobileFriendly",
+  Pulse: "templateBadgePulse",
+  "Trend-ready": "templateBadgeTrendReady",
+  "Lightweight rollout": "templateBadgeLightweightRollout",
+  Testing: "templateBadgeTesting",
+  "Session-ready": "templateBadgeSessionReady",
+  Encrypted: "templateBadgeEncrypted",
+  "Environment context": "templateBadgeEnvironmentContext",
+  Anonymous: "templateBadgeAnonymous",
+  "Guest mode": "templateBadgeGuestMode",
+  "Metadata minimized": "templateBadgeMetadataMinimized",
+  Location: "templateBadgeLocation",
+  "GPS ready": "templateBadgeGpsReady",
+  "Time-sensitive": "templateBadgeTimeSensitive",
+  "Fast scaffold": "templateBadgeFastScaffold",
+  "Flexible setup": "templateBadgeFlexibleSetup",
+  "Blank canvas": "templateBadgeBlankCanvas",
+  "Full control": "templateBadgeFullControl",
+  Lightweight: "templateBadgeLightweight",
+};
+
 export function TemplatePicker({ templates, selectedTemplateKey, onSelect }: TemplatePickerProps) {
+  const { t } = useI18n();
   const [activeFilter, setActiveFilter] = useState<SignalTypeKey | null>(null);
-  const featuredTemplate = templates.find((template) => template.featured) ?? templates[0];
-  const standardTemplates = templates.filter((template) => template.key !== featuredTemplate.key);
 
   const signalTypes = useMemo(() => {
     const seen = new Set<SignalTypeKey>();
@@ -33,72 +147,82 @@ export function TemplatePicker({ templates, selectedTemplateKey, onSelect }: Tem
     return ordered;
   }, [templates]);
 
-  const filteredFeaturedTemplate =
-    activeFilter === null || featuredTemplate.signalTypes.some((signalType) => signalType.key === activeFilter)
-      ? featuredTemplate
-      : null;
-
   const groupedTemplates = useMemo(
     () =>
       LIBRARY_SECTIONS.map((section) => ({
         ...section,
-        templates: standardTemplates.filter(
+        title: t(section.titleKey),
+        description: t(section.descriptionKey),
+        templates: templates.filter(
           (template) =>
             template.librarySection === section.key &&
             (activeFilter === null || template.signalTypes.some((signalType) => signalType.key === activeFilter)),
         ),
       })).filter((section) => section.templates.length > 0),
-    [activeFilter, standardTemplates],
+    [activeFilter, templates, t],
   );
 
   function toggleSignalFilter(signalTypeKey: SignalTypeKey) {
     setActiveFilter((current) => (current === signalTypeKey ? null : signalTypeKey));
   }
 
+  function getTemplateCopy(template: FormTemplateDefinition): {
+    label: string;
+    description: string;
+    bestFor: string;
+    featuredEyebrow: string;
+    featuredTitle: string;
+    featuredDescription: string;
+    featuredPoweredBy: string;
+  } {
+    const keys: Partial<
+      Record<
+        "label" | "description" | "bestFor" | "featuredEyebrow" | "featuredTitle" | "featuredDescription" | "featuredPoweredBy",
+        TranslationKey
+      >
+    > | null = TEMPLATE_COPY_KEYS[template.key as keyof typeof TEMPLATE_COPY_KEYS] ?? null;
+    return {
+      label: keys?.label ? t(keys.label) : template.label,
+      description: keys?.description ? t(keys.description) : template.description,
+      bestFor: keys?.bestFor ? t(keys.bestFor) : t("templateDefaultBestFor"),
+      featuredEyebrow: keys?.featuredEyebrow ? t(keys.featuredEyebrow) : template.featured?.eyebrow ?? "",
+      featuredTitle: keys?.featuredTitle ? t(keys.featuredTitle) : template.featured?.title ?? template.title,
+      featuredDescription: keys?.featuredDescription ? t(keys.featuredDescription) : template.featured?.description ?? template.description,
+      featuredPoweredBy: keys?.featuredPoweredBy ? t(keys.featuredPoweredBy) : template.featured?.poweredBy ?? "",
+    };
+  }
+
+  function getSignalTypeLabel(signalType: TemplateSignalType) {
+    const key = SIGNAL_TYPE_LABEL_KEYS[signalType.key];
+    return key ? t(key) : signalType.label;
+  }
+
+  function getBadgeLabel(label: string) {
+    const key = BADGE_LABEL_KEYS[label];
+    return key ? t(key) : label;
+  }
+
   function getPresetSummary(template: FormTemplateDefinition) {
     const summary: string[] = [];
     if (template.automation?.encryptSubmissions) {
-      summary.push("Seal on");
+      summary.push(t("templatePresetSealOn"));
     }
-    summary.push(template.automation?.identityPolicy === "wallet_required" ? "Wallet verified" : "Wallet optional");
+    summary.push(
+      template.automation?.identityPolicy === "wallet_required"
+        ? t("templatePresetWalletVerified")
+        : t("templatePresetWalletOptional"),
+    );
     if (template.automation?.locationRequirement === "required") {
-      summary.push("Location capture");
+      summary.push(t("templatePresetLocationCapture"));
     }
-    return summary.join(" • ");
-  }
-
-  function getBestFor(template: FormTemplateDefinition) {
-    switch (template.key) {
-      case "bug":
-        return "Breakage reports with screenshots or clips.";
-      case "feature":
-        return "Product suggestions and next-step ideas.";
-      case "feedback":
-        return "Short reactions from responders on any device.";
-      case "survey":
-        return "Quick sentiment checks and lightweight surveys.";
-      case "playtest":
-        return "Playtests, live sessions, and immediate debriefs.";
-      case "beta":
-        return "Field testers sending blockers and rough edges.";
-      case "anonymous-drop":
-        return "Identity-light signal collection without wallet pressure.";
-      case "disaster-checkin":
-        return "Emergency check-ins where location may matter.";
-      case "custom":
-        return "Tailoring a signal flow around one starter prompt.";
-      case "blank":
-        return "Full-control intake design from an empty canvas.";
-      default:
-        return "Secure signal intake with stronger privacy defaults.";
-    }
+    return summary.join(" / ");
   }
 
   function getFieldSummary(template: FormTemplateDefinition) {
     if (template.fields.length === 0) {
-      return "Starts blank";
+      return t("templateStartsBlank");
     }
-    return `Starts with ${template.fields.length} fields`;
+    return t("templateStartsWithFields", { count: template.fields.length });
   }
 
   function renderBadges(badges: FormTemplateDefinition["cardBadges"], className = "") {
@@ -107,7 +231,7 @@ export function TemplatePicker({ templates, selectedTemplateKey, onSelect }: Tem
         {badges.map((badge) => (
           <span key={`${badge.label}-${badge.icon}`} className="signal-template-badge">
             <span aria-hidden="true">{badge.icon}</span>
-            {badge.label}
+            {getBadgeLabel(badge.label)}
           </span>
         ))}
       </div>
@@ -116,6 +240,7 @@ export function TemplatePicker({ templates, selectedTemplateKey, onSelect }: Tem
 
   function renderTemplateCard(template: FormTemplateDefinition) {
     const active = selectedTemplateKey === template.key;
+    const copy = getTemplateCopy(template);
     const hiddenBadges = template.capabilities.filter(
       (badge) => !template.cardBadges.some((cardBadge) => cardBadge.label === badge.label),
     );
@@ -133,8 +258,8 @@ export function TemplatePicker({ templates, selectedTemplateKey, onSelect }: Tem
             {template.emoji}
           </span>
           <div className="composer-template-card-copy">
-            <strong>{template.label}</strong>
-            <span className="muted composer-template-description">{template.description}</span>
+            <strong>{copy.label}</strong>
+            <span className="muted composer-template-description">{copy.description}</span>
           </div>
         </div>
 
@@ -145,7 +270,7 @@ export function TemplatePicker({ templates, selectedTemplateKey, onSelect }: Tem
           <div className="composer-template-detail-list">
             <span>{getPresetSummary(template)}</span>
             <span>{getFieldSummary(template)}</span>
-            <span>Best for: {getBestFor(template)}</span>
+            <span>{t("templateBestForPrefix", { value: copy.bestFor })}</span>
           </div>
         </div>
       </button>
@@ -156,21 +281,24 @@ export function TemplatePicker({ templates, selectedTemplateKey, onSelect }: Tem
     <div className="composer-template-scroll">
       <div className="composer-template-filter-bar">
         <div className="composer-template-filter-copy">
-          <span className="composer-template-filter-label">Library filter</span>
+          <span className="composer-template-filter-label">{t("templateLibraryFilterLabel")}</span>
           <span className="composer-template-filter-help">
-            Filter the signal library by type.
-            {activeFilter ? ` Showing ${signalTypes.find((item) => item.key === activeFilter)?.label ?? ""}.` : " Showing all signal types."}
+            {activeFilter
+              ? t("templateLibraryFilterHelpActive", {
+                  label: getSignalTypeLabel(signalTypes.find((item) => item.key === activeFilter) ?? signalTypes[0]),
+                })
+              : t("templateLibraryFilterHelpAll")}
           </span>
         </div>
-        <div className="composer-template-signal-nav" aria-label="Filter signal library by type">
+        <div className="composer-template-signal-nav" aria-label={t("templateLibraryFilterAriaLabel")}>
           <button
             type="button"
             aria-pressed={activeFilter === null}
             className={`composer-signal-type-chip ${activeFilter === null ? "is-active" : ""}`}
             onClick={() => setActiveFilter(null)}
           >
-            <span aria-hidden="true">◌</span>
-            All
+            <span aria-hidden="true">*</span>
+            {t("templateFilterAll")}
           </button>
           {signalTypes.map((signalType) => {
             const active = activeFilter === signalType.key;
@@ -183,55 +311,32 @@ export function TemplatePicker({ templates, selectedTemplateKey, onSelect }: Tem
                 onClick={() => toggleSignalFilter(signalType.key)}
               >
                 <span aria-hidden="true">{signalType.icon}</span>
-                {signalType.label}
+                {getSignalTypeLabel(signalType)}
               </button>
             );
           })}
         </div>
       </div>
 
-      {filteredFeaturedTemplate?.featured ? (
-        <button
-          type="button"
-          className={`composer-featured-template ${selectedTemplateKey === filteredFeaturedTemplate.key ? "is-active" : ""}`}
-          onClick={() => onSelect(filteredFeaturedTemplate.key)}
-        >
-          <div className="composer-featured-template-copy">
-            <span className="composer-featured-pill">{filteredFeaturedTemplate.featured.poweredBy}</span>
-            <p className="eyebrow">{filteredFeaturedTemplate.featured.eyebrow}</p>
-            <h3>
-              <span aria-hidden="true">{filteredFeaturedTemplate.emoji}</span>
-              {filteredFeaturedTemplate.featured.title}
-            </h3>
-            <p className="muted">{filteredFeaturedTemplate.featured.description}</p>
-            {renderBadges(filteredFeaturedTemplate.cardBadges)}
-          </div>
-          <div className="composer-featured-template-meta">
-            <span className="composer-template-preset-label">Signal posture</span>
-            <strong>{getPresetSummary(filteredFeaturedTemplate)}</strong>
-            <span className="composer-template-preset-hint">Best for: {getBestFor(filteredFeaturedTemplate)}</span>
-            <span className="composer-template-preset-hint">{getFieldSummary(filteredFeaturedTemplate)}</span>
-          </div>
-        </button>
-      ) : null}
-
       <div className="composer-template-library">
         {groupedTemplates.length > 0 ? (
           groupedTemplates.map((section) => (
-            <section key={section.key} className="composer-template-library-section">
+            <section
+              key={section.key}
+              id={section.key === "quick" ? "quick-signal-section" : undefined}
+              className="composer-template-library-section"
+            >
               <div className="composer-template-library-header">
                 <p className="composer-template-library-eyebrow">{section.title}</p>
                 <p className="composer-template-library-description">{section.description}</p>
               </div>
-              <div className="composer-template-grid">
-                {section.templates.map((template) => renderTemplateCard(template))}
-              </div>
+              <div className="composer-template-grid">{section.templates.map((template) => renderTemplateCard(template))}</div>
             </section>
           ))
         ) : (
           <div className="composer-template-empty-state">
-            <strong>No templates in this filter</strong>
-            <span className="muted">Try another signal type or switch back to All.</span>
+            <strong>{t("templateEmptyStateTitle")}</strong>
+            <span className="muted">{t("templateEmptyStateBody")}</span>
           </div>
         )}
       </div>

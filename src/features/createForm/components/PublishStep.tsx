@@ -81,6 +81,7 @@ interface PublishStepProps {
   selectedProject: ProjectOption | null;
   projects: ProjectOption[];
   projectState: string;
+  selectedTemplateKey: string;
   onSetMobilePane: (pane: MobileBuilderPane) => void;
   onSelectProject: (projectId: string) => void;
   onChangeVisibility: (value: FormVisibility) => void;
@@ -206,6 +207,7 @@ export function PublishStep({
   selectedProject,
   projects,
   projectState,
+  selectedTemplateKey,
   onSetMobilePane,
   onSelectProject,
   onChangeVisibility,
@@ -234,6 +236,7 @@ export function PublishStep({
       : t("walrusMode")
     : t("localWalrusMode");
   const visibleSelectedProject = canManageProjects ? selectedProject : null;
+  const showLocationRequirementControls = selectedTemplateKey === "disaster-checkin";
   const publishReadyBody = isGuestDraftMode ? t("guestDraftPublishBody") : t("publishReadyBody");
   const isProjectEncryptedForm = Boolean(encryptSubmissions && visibleSelectedProject);
   const isPersonalEncryptedForm = Boolean(encryptSubmissions && !visibleSelectedProject);
@@ -460,20 +463,22 @@ export function PublishStep({
                   <span>{identityPolicy === "wallet_required" ? t("verificationRequired") : t("verificationOptional")}</span>
                 </button>
               </div>
-              <div className="publish-identity-quick-switch" aria-label={t("locationRequirementTitle")}>
-                <span className="publish-visibility-label">{t("locationRequirementTitle")}</span>
-                <button
-                  type="button"
-                  className={`publish-identity-toggle is-${locationRequirement}`}
-                  onClick={() =>
-                    onChangeLocationRequirement(locationRequirement === "required" ? "optional" : "required")
-                  }
-                  aria-pressed={locationRequirement === "required"}
-                  title={t("locationRequirementHelp")}
-                >
-                  <span>{locationRequirement === "required" ? t("locationRequirementRequired") : t("locationRequirementOptional")}</span>
-                </button>
-              </div>
+              {showLocationRequirementControls ? (
+                <div className="publish-identity-quick-switch" aria-label={t("locationRequirementTitle")}>
+                  <span className="publish-visibility-label">{t("locationRequirementTitle")}</span>
+                  <button
+                    type="button"
+                    className={`publish-identity-toggle is-${locationRequirement}`}
+                    onClick={() =>
+                      onChangeLocationRequirement(locationRequirement === "required" ? "optional" : "required")
+                    }
+                    aria-pressed={locationRequirement === "required"}
+                    title={t("locationRequirementHelp")}
+                  >
+                    <span>{locationRequirement === "required" ? t("locationRequirementRequired") : t("locationRequirementOptional")}</span>
+                  </button>
+                </div>
+              ) : null}
             </div>
           ) : null}
           {isGuestDraftMode && !savedForm ? (
@@ -630,42 +635,44 @@ export function PublishStep({
                   {canManageProjects ? <p className="muted">{t("suiRegistrationDeferredNotice")}</p> : null}
                 </section>
 
-                <section className="panel composer-settings-card composer-settings-card-visual">
-                  <div className="section-row composer-settings-visual-heading">
-                    <span className="composer-settings-visual-icon composer-settings-visual-icon-identity">
-                      <RoutingIcon type="identity" />
-                    </span>
-                    <div>
-                      <p className="eyebrow">{t("locationRequirementEyebrow")}</p>
-                      <h3>{t("locationRequirementTitle")}</h3>
+                {showLocationRequirementControls ? (
+                  <section className="panel composer-settings-card composer-settings-card-visual">
+                    <div className="section-row composer-settings-visual-heading">
+                      <span className="composer-settings-visual-icon composer-settings-visual-icon-identity">
+                        <RoutingIcon type="identity" />
+                      </span>
+                      <div>
+                        <p className="eyebrow">{t("locationRequirementEyebrow")}</p>
+                        <h3>{t("locationRequirementTitle")}</h3>
+                      </div>
                     </div>
-                  </div>
-                  <fieldset className="composer-radio-field">
-                    <legend>{t("locationRequirementLabel")}</legend>
-                    <div className="composer-radio-options">
-                      {([
-                        ["optional", t("locationRequirementOptional")],
-                        ["required", t("locationRequirementRequired")],
-                      ] as const).map(([value, label]) => (
-                        <label
-                          key={value}
-                          className={`composer-radio-option${locationRequirement === value ? " is-selected" : ""}`}
-                        >
-                          <input
-                            type="radio"
-                            name="locationRequirement"
-                            value={value}
-                            checked={locationRequirement === value}
-                            onChange={() => onChangeLocationRequirement(value)}
-                          />
-                          <span className="composer-radio-mark" aria-hidden="true" />
-                          <span>{label}</span>
-                        </label>
-                      ))}
-                    </div>
-                  </fieldset>
-                  <p className="muted">{t("locationRequirementHelp")}</p>
-                </section>
+                    <fieldset className="composer-radio-field">
+                      <legend>{t("locationRequirementLabel")}</legend>
+                      <div className="composer-radio-options">
+                        {([
+                          ["optional", t("locationRequirementOptional")],
+                          ["required", t("locationRequirementRequired")],
+                        ] as const).map(([value, label]) => (
+                          <label
+                            key={value}
+                            className={`composer-radio-option${locationRequirement === value ? " is-selected" : ""}`}
+                          >
+                            <input
+                              type="radio"
+                              name="locationRequirement"
+                              value={value}
+                              checked={locationRequirement === value}
+                              onChange={() => onChangeLocationRequirement(value)}
+                            />
+                            <span className="composer-radio-mark" aria-hidden="true" />
+                            <span>{label}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </fieldset>
+                    <p className="muted">{t("locationRequirementHelp")}</p>
+                  </section>
+                ) : null}
 
                 <section className="panel composer-settings-card composer-settings-card-visual">
                   <div className="section-row composer-settings-visual-heading">

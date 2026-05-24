@@ -42,6 +42,7 @@ import {
   sanitizeSubmissionForStorage,
 } from "../storage/submissionSanitizer";
 import type {
+  AnalysisProfileId,
   FormField,
   FormIdentityPolicy,
   FormLocationRequirement,
@@ -494,6 +495,16 @@ function normalizeFormLocationRequirement(locationRequirement: unknown): FormLoc
   return locationRequirement === "required" || locationRequirement === "optional" ? locationRequirement : undefined;
 }
 
+function normalizeAnalysisProfileId(analysisProfileId: unknown): AnalysisProfileId | undefined {
+  return analysisProfileId === "customer_feedback" ||
+    analysisProfileId === "ai_agent_log" ||
+    analysisProfileId === "incident_report" ||
+    analysisProfileId === "governance_signal" ||
+    analysisProfileId === "general_signal"
+    ? analysisProfileId
+    : undefined;
+}
+
 function normalizeSubmissionLocation(raw: unknown): SubmissionLocation | undefined {
   if (!raw || typeof raw !== "object") {
     return undefined;
@@ -651,6 +662,7 @@ export function normalizeForm(raw: FormSchema | (Record<string, unknown> & { id:
     ),
     sections: Array.isArray(raw.sections) ? (raw.sections as FormSection[]) : [],
     purpose: normalizeFormPurpose(raw.purpose),
+    analysisProfileId: normalizeAnalysisProfileId(raw.analysisProfileId),
     visibility: normalizeFormVisibility(raw.visibility, raw.publicExplore),
     identityPolicy: normalizeFormIdentityPolicy(raw.identityPolicy),
     locationRequirement: normalizeFormLocationRequirement(raw.locationRequirement),

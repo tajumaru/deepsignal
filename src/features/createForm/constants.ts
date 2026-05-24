@@ -1,3 +1,4 @@
+import type { Language } from "../../i18n";
 import { createTemplateFields, defaultComposerTemplateKey, getTemplateDefinition } from "../../lib/formTemplates";
 import type { BuilderStep, PublishPhase } from "./types";
 import { serializeDraft } from "./utils";
@@ -24,23 +25,37 @@ export const builderSteps: BuilderStep[] = [
   { key: "publish", title: "Step 4", description: "Preview / Publish" },
 ];
 
-export const initialTemplate = getTemplateDefinition(defaultComposerTemplateKey);
-export const initialFields = createTemplateFields(initialTemplate);
+export function getInitialTemplate(language: Language = "en") {
+  return getTemplateDefinition(defaultComposerTemplateKey, language);
+}
+
+export function getInitialFields(language: Language = "en") {
+  return createTemplateFields(getInitialTemplate(language));
+}
+
+export const initialTemplate = getInitialTemplate();
+export const initialFields = getInitialFields();
 export const initialSections = [];
 
-export const INITIAL_DRAFT_SNAPSHOT = serializeDraft(
-  initialTemplate.title,
-  initialTemplate.description,
-  { url: "", alt: "", position: "center", source: "url", fileName: "" },
-  { url: "", alt: "", source: "url", fileName: "" },
-  initialFields,
-  initialTemplate.purpose,
-  "unlisted",
-  "anonymous_allowed",
-  "optional",
-  false,
-  true,
-  initialSections,
-  "none",
-  "",
-);
+export function createInitialDraftSnapshot(language: Language = "en") {
+  const template = getInitialTemplate(language);
+  const fields = getInitialFields(language);
+  return serializeDraft(
+    template.title,
+    template.description,
+    { url: "", alt: "", position: "center", source: "url", fileName: "" },
+    { url: "", alt: "", source: "url", fileName: "" },
+    fields,
+    template.purpose,
+    "unlisted",
+    "anonymous_allowed",
+    "optional",
+    false,
+    true,
+    initialSections,
+    "none",
+    "",
+  );
+}
+
+export const INITIAL_DRAFT_SNAPSHOT = createInitialDraftSnapshot();

@@ -1,4 +1,5 @@
 import { makeId } from "./utils";
+import type { Language } from "../i18n";
 import type {
   FieldType,
   FormField,
@@ -86,6 +87,121 @@ export interface SmartTemplateDefinition {
 
 export const defaultComposerTemplateKey = "encrypted-report";
 
+type TemplateFieldDefinition = FormTemplateDefinition["fields"][number];
+
+type LocalizedTemplateOverride = {
+  title?: string;
+  description?: string;
+  fields?: Array<
+    Partial<Pick<TemplateFieldDefinition, "label" | "placeholder" | "helpText" | "validationHint" | "options">>
+  >;
+};
+
+const localizedTemplateOverrides: Partial<Record<Language, Record<string, LocalizedTemplateOverride>>> = {
+  ja: {
+    "encrypted-report": {
+      title: "セキュアインシデント報告",
+      description: "機密性の高いインシデント報告のための暗号化 intake です。",
+      fields: [
+        { label: "インシデント概要", placeholder: "いま対応が必要なことは何ですか？" },
+        { label: "何が起きましたか？", placeholder: "対応に必要な事実だけを書いてください。" },
+        { label: "現在のリスクは何ですか？", placeholder: "影響を受けている人、システム、緊急度のメモ" },
+        { label: "証跡 / メディア" },
+        { label: "重大度", options: ["監視", "調査", "重大"] },
+      ],
+    },
+    bug: {
+      title: "インシデント報告",
+      description: "不具合、影響、証跡をすばやく集めます。",
+      fields: [
+        { label: "何が起きましたか？", placeholder: "例: iPhone で Submit を押せません" },
+        { label: "発生内容を教えてください", placeholder: "スクリーンショットだけでも大丈夫です" },
+        { label: "スクリーンショット / 動画" },
+        { label: "何をすると発生しますか？", placeholder: "例: フォーム作成後に Submit を押すと発生" },
+        { label: "影響度", options: ["軽微", "深刻", "ブロッカー"] },
+      ],
+    },
+    feature: {
+      title: "アイデア Drop",
+      description: "大げさな手順なしで製品アイデアを集めます。",
+      fields: [
+        { label: "機能アイデア" },
+        { label: "どんな課題を解決しますか？", placeholder: "いま何が難しい、または遅いですか？" },
+        { label: "理想の結果はどのようなものですか？" },
+        { label: "優先度", options: ["あると良い", "重要", "最重要"] },
+      ],
+    },
+    feedback: {
+      title: "クイックリアクション",
+      description: "短い反応や軽い感想をすばやく集めます。",
+      fields: [
+        { label: "どこを改善すべきですか？" },
+        { label: "すでに良いと感じる点は何ですか？" },
+        { label: "全体の体験" },
+      ],
+    },
+    survey: {
+      title: "パルスチェック",
+      description: "短いパルス調査で温度感を測ります。",
+      fields: [
+        { label: "体験はいかがでしたか？" },
+        { label: "何を使いましたか？", options: ["検索", "フォーム", "ダッシュボード", "通知"] },
+        { label: "わかりにくい点や不足している点はありますか？" },
+      ],
+    },
+    playtest: {
+      title: "セッション振り返り",
+      description: "進行中セッションの新鮮な反応を集めます。",
+      fields: [
+        { label: "プレイしたビルド / バージョン" },
+        { label: "もっとも印象に残った瞬間は？" },
+        { label: "どこで詰まりましたか、またはストレスを感じましたか？" },
+        { label: "楽しさスコア" },
+        { label: "クリップ / キャプチャ" },
+      ],
+    },
+    beta: {
+      title: "フィールドテスト",
+      description: "現場で見つかったブロッカーや粗さを集めます。",
+      fields: [
+        { label: "概要" },
+        { label: "何が壊れていた、または違和感がありましたか？" },
+        { label: "端末 / OS / ブラウザ" },
+        { label: "影響度", options: ["軽微", "気になる", "ブロッカー"] },
+        { label: "スクリーンショット" },
+      ],
+    },
+    "anonymous-drop": {
+      title: "匿名 Drop",
+      description: "ウォレット不要、身元不要。signal だけを届けます。",
+      fields: [
+        { label: "何を見えるようにすべきですか？" },
+        { label: "signal を共有してください", placeholder: "重要な文脈だけを残してください。" },
+        { label: "任意の証跡" },
+      ],
+    },
+    "disaster-checkin": {
+      title: "災害チェックイン",
+      description: "必要に応じて位置情報つきで緊急状況を共有します。",
+      fields: [
+        { label: "現在の状況", placeholder: "安全、支援が必要、足止め中、避難中 など" },
+        { label: "どのような支援が必要ですか？", placeholder: "物資、移動、連絡、医療、避難所 など" },
+        { label: "最寄りの目印 / チェックポイント", placeholder: "GPS が使えない場合のテキスト補足" },
+        { label: "このチェックインが対応者にレビューされる可能性を理解しました" },
+      ],
+    },
+    custom: {
+      title: "新しい signal",
+      description: "1つの問いから始めて、あとから flow を整えます。",
+      fields: [{ label: "どこを改善すべきですか？" }],
+    },
+    blank: {
+      title: "無題のシグナル",
+      description: "白紙のキャンバスから signal flow を組み立てます。",
+    },
+  },
+};
+
 export const formTemplates: FormTemplateDefinition[] = [
   {
     key: "encrypted-report",
@@ -118,7 +234,7 @@ export const formTemplates: FormTemplateDefinition[] = [
       eyebrow: "Featured signal",
       title: "Secure Incident Report",
       description: "Lead with a hardened intake for encrypted evidence, rapid triage, and responder-safe reporting.",
-      poweredBy: "Powered by Walrus Seal",
+      poweredBy: "WALRUS SEAL",
     },
     fields: [
       { type: "shortText", label: "Incident summary", required: true, placeholder: "What needs attention right now?" },
@@ -588,12 +704,40 @@ export function createSmartTemplateBundle(template: SmartTemplateDefinition): {
   return { sections, fields };
 }
 
-export function getTemplateDefinition(templateKey: string) {
-  return (
-    formTemplates.find((template) => template.key === templateKey) ??
-    formTemplates.find((template) => template.key === defaultComposerTemplateKey) ??
-    formTemplates[0]
-  );
+function localizeTemplateDefinition(template: FormTemplateDefinition, language: Language): FormTemplateDefinition {
+  const override = localizedTemplateOverrides[language]?.[template.key];
+  if (!override) {
+    return {
+      ...template,
+      fields: template.fields.map((field) => ({
+        ...field,
+        options: field.options ? [...field.options] : undefined,
+      })),
+    };
+  }
+
+  return {
+    ...template,
+    title: override.title ?? template.title,
+    description: override.description ?? template.description,
+    fields: template.fields.map((field, index) => {
+      const fieldOverride = override.fields?.[index];
+      return {
+        ...field,
+        ...fieldOverride,
+        options: fieldOverride?.options ? [...fieldOverride.options] : field.options ? [...field.options] : undefined,
+      };
+    }),
+  };
+}
+
+export function getTemplateDefinition(templateKey: string, language: Language = "en") {
+  const template =
+    formTemplates.find((item) => item.key === templateKey) ??
+    formTemplates.find((item) => item.key === defaultComposerTemplateKey) ??
+    formTemplates[0];
+
+  return localizeTemplateDefinition(template, language);
 }
 
 export function normalizeFormPurpose(purpose: unknown): FormPurpose {
