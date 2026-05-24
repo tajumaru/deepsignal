@@ -449,6 +449,7 @@ export function useSignalInboxData({
   const [selectedSignalId, setSelectedSignalId] = useState("");
   const [search, setSearch] = useState("");
   const loadConsoleRunRef = useRef(0);
+  const hasLoadedOnceRef = useRef(false);
 
   useEffect(() => {
     return subscribeProjectRegistryStorageChange(() => {
@@ -639,10 +640,9 @@ export function useSignalInboxData({
   async function loadConsole(preferredSignalId?: string) {
     const runId = loadConsoleRunRef.current + 1;
     loadConsoleRunRef.current = runId;
-    setLoading(true);
+    setLoading(!hasLoadedOnceRef.current);
     setSubmissionsLoading(false);
     setLoadError("");
-    setSupplementalSignals([]);
     try {
       const initialForms = await storageAdapter.listForms();
       if (runId !== loadConsoleRunRef.current) {
@@ -691,8 +691,8 @@ export function useSignalInboxData({
       );
       const nextAccessibleForms = nextForms.filter((form) => canReviewForm(form, accountAddress, capabilityProfile));
       setForms(nextForms);
-      setSubmissionsByFormId({});
       setSelectedSignalId((current) => preferredSignalId ?? current);
+      hasLoadedOnceRef.current = true;
       setLoading(false);
 
       if (nextAccessibleForms.length === 0) {

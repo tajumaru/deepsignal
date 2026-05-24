@@ -1345,13 +1345,19 @@ export function AdminDashboardPage() {
         setLocalActivityEvents(listActivityEvents());
       }
       setActiveWorkspaceTab(tab);
-      navigate({ pathname: location.pathname, search: `?tab=${tab}` }, { replace: true });
+      const params = new URLSearchParams(location.search);
+      params.set("tab", tab);
+      navigate({ pathname: location.pathname, search: `?${params.toString()}` }, { replace: true });
     },
-    [location.pathname, navigate],
+    [location.pathname, location.search, navigate],
   );
-  const [signalViewScope, setSignalViewScope] = useState<SignalViewScope>(() =>
-    getSelectedProjectId() ? "project" : "all",
-  );
+  const [signalViewScope, setSignalViewScope] = useState<SignalViewScope>(() => {
+    const params = new URLSearchParams(location.search);
+    if (params.get("scope") === "all" || params.get("form")) {
+      return "all";
+    }
+    return getSelectedProjectId() ? "project" : "all";
+  });
   const previousSelectedProjectIdRef = useRef<string | null>(getSelectedProjectId());
   const {
     forms,
@@ -1429,19 +1435,39 @@ export function AdminDashboardPage() {
   useEffect(() => {
     const tab = new URLSearchParams(location.search).get("tab");
     if (tab === "review" || tab === "activity" || tab === "insights" || tab === "members") {
-      setActiveWorkspaceTab((current) => (current === tab ? current : tab));
-      if (tab === "activity") {
+      if (activeWorkspaceTab !== tab) {
+        setActiveWorkspaceTab(tab);
+      }
+      if (tab === "activity" && activeWorkspaceTab !== "activity") {
         setLocalActivityEvents(listActivityEvents());
       }
       return;
     }
-    setActiveWorkspaceTab("review");
-  }, [location.search]);
+    if (activeWorkspaceTab !== "review") {
+      setActiveWorkspaceTab("review");
+    }
+  }, [activeWorkspaceTab, location.search]);
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    if (params.get("scope") === "all" || params.get("form")) {
+      if (signalViewScope !== "all") {
+        setSignalViewScope("all");
+      }
+      return;
+    }
+    if (params.get("scope") === "project" && selectedProjectId && signalViewScope !== "project") {
+      setSignalViewScope("project");
+    }
+  }, [location.search, selectedProjectId, signalViewScope]);
   useEffect(() => {
     const previousProjectId = previousSelectedProjectIdRef.current;
     if (selectedProjectId !== previousProjectId) {
       previousSelectedProjectIdRef.current = selectedProjectId;
       if (selectedProjectId) {
+        const params = new URLSearchParams(location.search);
+        if (params.get("scope") === "all" || params.get("form")) {
+          return;
+        }
         setSignalViewScope("project");
         return;
       }
@@ -1449,7 +1475,7 @@ export function AdminDashboardPage() {
     if (!selectedProjectId && signalViewScope === "project") {
       setSignalViewScope("all");
     }
-  }, [selectedProjectId, signalViewScope]);
+  }, [location.search, selectedProjectId, signalViewScope]);
   const hasOwnedAccessibleForms = accessibleForms.some((form) =>
     addressesMatch(form.ownerAddress, wallet.accountAddress),
   );
@@ -2190,10 +2216,27 @@ export function AdminDashboardPage() {
     setIsReviewerFocusMode(false);
   }, [selectedRecord, detailAttachments.length, hasDuplicateLikelyRelatedSignals]);
   const reviewBasePath = location.pathname.startsWith("/admin") ? "/admin" : "/dashboard";
+  const selectedFormIdFromUrl = useMemo(() => {
+    const params = new URLSearchParams(location.search);
+    return params.get("form") ?? "";
+  }, [location.search]);
   const selectedSignalIdFromUrl = useMemo(() => {
     const params = new URLSearchParams(location.search);
     return params.get("signal") ?? "";
   }, [location.search]);
+
+  useEffect(() => {
+    if (!selectedFormIdFromUrl) {
+      return;
+    }
+    if (selectedFormId === selectedFormIdFromUrl) {
+      return;
+    }
+    if (!forms.some((form) => form.id === selectedFormIdFromUrl)) {
+      return;
+    }
+    setSelectedFormId(selectedFormIdFromUrl);
+  }, [forms, selectedFormId, selectedFormIdFromUrl, setSelectedFormId]);
 
   useEffect(() => {
     if (typeof window === "undefined" || !window.matchMedia?.(MOBILE_REVIEW_MEDIA_QUERY).matches) {
@@ -3081,6 +3124,21 @@ export function AdminDashboardPage() {
   const lockedVisibleSignalsCount = visibleSignals.filter(
     (record) => record.submission.isEncrypted && !decryptedSignalsById[record.submission.id],
   ).length;
+  const insightsRecords = useMemo(
+    () =>
+      selectedFormId === "all"
+        ? allSignals
+        : allSignals.filter((record) => record.form.id === selectedFormId),
+    [allSignals, selectedFormId],
+  );
+  const insightsCounts = useMemo(
+    () => ({
+      unread: insightsRecords.filter((record) => record.submission.status === "unread").length,
+      needsReview: insightsRecords.filter((record) => record.submission.status !== "archived").length,
+      encrypted: insightsRecords.filter((record) => record.submission.isEncrypted).length,
+    }),
+    [insightsRecords],
+  );
   const nodeDirectoryItems = useMemo(() => {
     const normalizedSearch = nodeSearch.trim().toLowerCase();
     const accessibleFormIdSet = new Set(accessibleForms.map((form) => form.id));
@@ -3278,11 +3336,11 @@ export function AdminDashboardPage() {
           <WorkspaceActivityLog events={activityEvents} />
         ) : activeWorkspaceTab === "insights" && hasAdminAccess ? (
           <WorkspaceInsights
-            totalSignals={allSignals.length}
-            unreadSignals={signalIndex.counts.unread}
-            needsReviewSignals={signalIndex.counts.needsReview}
-            encryptedSignals={signalIndex.counts.encrypted}
-            records={allSignals}
+            totalSignals={insightsRecords.length}
+            unreadSignals={insightsCounts.unread}
+            needsReviewSignals={insightsCounts.needsReview}
+            encryptedSignals={insightsCounts.encrypted}
+            records={insightsRecords}
             unlockedSignalsById={decryptedSignalsById}
           />
         ) : activeWorkspaceTab === "members" && hasAdminAccess ? (

@@ -55,6 +55,11 @@ const TroubleshootingPage = lazy(() =>
     default: module.TroubleshootingPage,
   })),
 );
+const InsightsFixturePage = lazy(() =>
+  retryLazyImport(() => import("./pages/InsightsFixturePage")).then((module) => ({
+    default: module.InsightsFixturePage,
+  })),
+);
 
 function WithWalrusRuntime({ children }: { children: ReactNode }) {
   if (REQUIRE_GLOBAL_WALRUS_RUNTIME) {
@@ -241,6 +246,7 @@ export default function App() {
               <Route path="/admin/access" element={<AccessManagementPage />} />
               <Route path="/dashboard/access" element={<AccessManagementPage />} />
               <Route path="/troubleshooting" element={<TroubleshootingPage />} />
+              <Route path="/dev/insights-fixture" element={<InsightsFixturePage />} />
               <Route
                 path="/admin/forms/new"
                 element={

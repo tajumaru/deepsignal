@@ -1,6 +1,8 @@
 import type { CSSProperties } from "react";
-import { useI18n } from "../../../i18n";
+import { useI18n, type Language } from "../../../i18n";
+import { getRelatedSignals, type RelatedSignalReason } from "../../../lib/relatedSignals";
 import { getSignalPreview } from "../../../lib/signalInbox";
+import { downloadTextFile } from "../../../lib/utils";
 import { flattenAnswer } from "../../../lib/utils";
 import type { SignalSeverity } from "../../../types";
 import type { SignalRecord } from "../hooks/useSignalInboxData";
@@ -26,11 +28,56 @@ interface SignalCluster {
   trend: "increasing" | "steady";
 }
 
-interface ActivityPoint {
+interface SilenceCandidate {
+  key: string;
+  label: string;
+  tone: "estimated_silence" | "inactive" | "low_activity";
+  detail: string;
+  unresolvedCount: number;
+  recentCount: number;
+  lastSeenLabel: string;
+}
+
+interface VelocitySnapshot {
+  count: number;
+  medianLagHours: number | null;
+  withinDayPercent: number;
+  bucketCounts: Array<{ label: string; count: number }>;
+}
+
+interface RelatedPatternSummary {
+  key: string;
   label: string;
   count: number;
-  intensity: number;
-  anomaly: boolean;
+}
+
+interface ActivityStatus {
+  label: string;
+  labelJa: string;
+  detail: string;
+  tone: "stable" | "up" | "drop" | "spike";
+}
+
+type MonitorStateTone = "stable" | "elevated" | "critical" | "recovering";
+
+interface MonitorState {
+  tone: MonitorStateTone;
+  key: "Stable" | "Elevated" | "Critical" | "Recovering";
+}
+
+interface SituationFlowStep {
+  key: string;
+  tone: MonitorStateTone;
+  titleKey: string;
+  bodyKey: string;
+}
+
+interface InsightExportClusterNode {
+  key: string;
+  left: string;
+  top: string;
+  scale: number;
+  connected: boolean;
 }
 
 function shortenSummaryText(text: string, maxLength = 88) {
@@ -222,13 +269,13 @@ function buildSignalClusters(records: SignalRecord[], items: SignalSummaryConten
       signalCount: encryptedCount,
       confidence: encryptedCount > 0 ? 71 : 48,
       severity: encryptedCount > 0 ? "medium" : "low",
-      trend: encryptedCount > 0 ? "steady" : "steady",
+      trend: "steady",
     },
   ];
 }
 
-function buildActivityPoints(records: SignalRecord[]): ActivityPoint[] {
-  const dayFormatter = new Intl.DateTimeFormat(undefined, { weekday: "short" });
+function buildActivityPoints(records: SignalRecord[], language: Language) {
+  const dayFormatter = new Intl.DateTimeFormat(language === "ja" ? "ja-JP" : "en-US", { weekday: "short" });
   const buckets = Array.from({ length: 7 }, (_, index) => {
     const date = new Date();
     date.setHours(0, 0, 0, 0);
@@ -255,11 +302,73 @@ function buildActivityPoints(records: SignalRecord[]): ActivityPoint[] {
 
   const maxCount = Math.max(...buckets.map((bucket) => bucket.count), 1);
   const average = buckets.reduce((sum, bucket) => sum + bucket.count, 0) / buckets.length;
-  return buckets.map((bucket) => ({
-    ...bucket,
-    intensity: Math.max(12, Math.round((bucket.count / maxCount) * 100)),
-    anomaly: bucket.count > 0 && bucket.count >= Math.max(2, average * 1.8),
-  }));
+  return buckets.map((bucket, index) => {
+    const previous = buckets[index - 1]?.count ?? 0;
+    const anomaly = bucket.count > 0 && bucket.count >= Math.max(2, average * 1.8);
+    const delta = bucket.count - previous;
+    let state: "stable" | "elevated" | "cooling" | "spike" = "stable";
+    if (anomaly) {
+      state = "spike";
+    } else if (delta >= 2 || (bucket.count > previous && bucket.count >= Math.max(1, average))) {
+      state = "elevated";
+    } else if (delta < 0 && previous > 0) {
+      state = "cooling";
+    }
+
+    return {
+      ...bucket,
+      intensity: Math.max(12, Math.round((bucket.count / maxCount) * 100)),
+      anomaly,
+      state,
+      reason:
+        state === "spike"
+          ? "spike"
+          : state === "elevated"
+            ? "elevated"
+            : state === "cooling"
+              ? "cooling"
+              : "stable",
+    };
+  });
+}
+
+function getActivityStatus(points: ReturnType<typeof buildActivityPoints>): ActivityStatus {
+  const counts = points.map((point) => point.count);
+  const latest = counts[counts.length - 1] ?? 0;
+  const previous = counts[counts.length - 2] ?? 0;
+  const average = counts.reduce((sum, count) => sum + count, 0) / Math.max(counts.length, 1);
+  const anomalyCount = points.filter((point) => point.anomaly).length;
+
+  if (anomalyCount > 0 || latest >= Math.max(3, average * 1.8)) {
+    return {
+      label: "Spike detected",
+      labelJa: "急増検知",
+      detail: "Pulse intensity moved above the rolling baseline.",
+      tone: "spike",
+    };
+  }
+  if (latest > previous && latest >= Math.max(1, average)) {
+    return {
+      label: "Activity up",
+      labelJa: "活動上向き",
+      detail: "Recent intake is rising without crossing anomaly range.",
+      tone: "up",
+    };
+  }
+  if (latest < previous && previous > 0) {
+    return {
+      label: "Activity drop",
+      labelJa: "活動低下",
+      detail: "Pulse flow softened compared with the prior day.",
+      tone: "drop",
+    };
+  }
+  return {
+    label: "Pulse nominal",
+    labelJa: "波形安定",
+    detail: "The last 7-day flow remains inside the expected operating band.",
+    tone: "stable",
+  };
 }
 
 function getPrimaryIntelligenceCopy(cluster: SignalCluster | undefined, encryptedWaitingCount: number, t: ReturnType<typeof useI18n>["t"]) {
@@ -275,9 +384,504 @@ function getPrimaryIntelligenceCopy(cluster: SignalCluster | undefined, encrypte
   return t("workspaceSignalIntelligenceIdle");
 }
 
+function getClusterMapNodes(clusters: SignalCluster[]) {
+  const fallback = [
+    { key: "monitor-a", left: "18%", top: "34%", scale: 0.72, connected: true },
+    { key: "monitor-b", left: "46%", top: "52%", scale: 0.58, connected: true },
+    { key: "monitor-c", left: "72%", top: "28%", scale: 0.46, connected: false },
+  ];
+
+  if (clusters.length === 0) {
+    return fallback;
+  }
+
+  return clusters.slice(0, 4).map((cluster, index) => ({
+    key: cluster.label,
+    left: ["18%", "46%", "74%", "62%"][index] ?? "50%",
+    top: ["34%", "56%", "28%", "72%"][index] ?? "50%",
+    scale: Math.max(0.5, Math.min(1.15, cluster.signalCount / 4 + 0.45)),
+    connected: index > 0,
+  }));
+}
+
 function getRecordReviewTitle(record: SignalRecord, t: ReturnType<typeof useI18n>["t"], unlockedSignalsById?: Record<string, UnlockedSignalSummary>) {
   const readableEntry = getReadableSummaryEntries(record, t, unlockedSignalsById)[0];
   return readableEntry?.answer || record.submission.subjectPreview || getSignalPreview(record.submission);
+}
+
+function getLatestTimestamp(record: SignalRecord) {
+  const updatedAt = Date.parse(record.submission.updatedAt ?? record.submission.createdAt);
+  const createdAt = Date.parse(record.submission.createdAt);
+  if (!Number.isNaN(updatedAt) && updatedAt > 0) {
+    return updatedAt;
+  }
+  return createdAt;
+}
+
+function getClusterGroupLabel(records: SignalRecord[]) {
+  const representative = [...records].sort(
+    (left, right) => getLatestTimestamp(right) - getLatestTimestamp(left),
+  )[0];
+  if (!representative) {
+    return "Signal cluster";
+  }
+
+  const preview = representative.submission.subjectPreview?.trim() || getSignalPreview(representative.submission);
+  return shortenSummaryText(preview || `${representative.form.title} ${representative.category}`, 42);
+}
+
+function formatAgeLabel(timestamp: number, now: number) {
+  const hours = Math.max(1, Math.round((now - timestamp) / (1000 * 60 * 60)));
+  if (hours < 24) {
+    return `${hours}h`;
+  }
+  const days = Math.round(hours / 24);
+  return `${days}d`;
+}
+
+function buildSilenceCandidates(records: SignalRecord[]) {
+  const now = Date.now();
+  const groups = new Map<string, SignalRecord[]>();
+
+  records.forEach((record) => {
+    const key = record.submission.clusterId?.trim() || `${record.form.id}:${record.category}`;
+    groups.set(key, [...(groups.get(key) ?? []), record]);
+  });
+
+  return [...groups.entries()]
+    .map(([key, groupedRecords]) => {
+      const lastSeenAt = Math.max(...groupedRecords.map(getLatestTimestamp));
+      const recentCount = groupedRecords.filter((record) => now - Date.parse(record.submission.createdAt) <= 3 * 24 * 60 * 60 * 1000).length;
+      const trailingWeekCount = groupedRecords.filter((record) => {
+        const age = now - Date.parse(record.submission.createdAt);
+        return age > 3 * 24 * 60 * 60 * 1000 && age <= 10 * 24 * 60 * 60 * 1000;
+      }).length;
+      const unresolvedCount = groupedRecords.filter(
+        (record) =>
+          record.submission.status !== "archived" &&
+          record.submission.triageStatus !== "fixed" &&
+          record.submission.triageStatus !== "closed",
+      ).length;
+      const ageHours = Math.max(0, (now - lastSeenAt) / (1000 * 60 * 60));
+
+      if (unresolvedCount < 2 && groupedRecords.length < 3) {
+        return null;
+      }
+
+      if (unresolvedCount >= 2 && recentCount === 0 && trailingWeekCount > 0) {
+        return {
+          key,
+          label: getClusterGroupLabel(groupedRecords),
+          tone: "estimated_silence" as const,
+          detail: "estimated_silence",
+          unresolvedCount,
+          recentCount,
+          lastSeenLabel: formatAgeLabel(lastSeenAt, now),
+        } satisfies SilenceCandidate;
+      }
+
+      if (unresolvedCount >= 3 && recentCount <= 1 && trailingWeekCount >= 2) {
+        return {
+          key,
+          label: getClusterGroupLabel(groupedRecords),
+          tone: "low_activity" as const,
+          detail: "low_activity",
+          unresolvedCount,
+          recentCount,
+          lastSeenLabel: formatAgeLabel(lastSeenAt, now),
+        } satisfies SilenceCandidate;
+      }
+
+      if (unresolvedCount > 0 && ageHours >= 120) {
+        return {
+          key,
+          label: getClusterGroupLabel(groupedRecords),
+          tone: "inactive" as const,
+          detail: "inactive",
+          unresolvedCount,
+          recentCount,
+          lastSeenLabel: formatAgeLabel(lastSeenAt, now),
+        } satisfies SilenceCandidate;
+      }
+
+      return null;
+    })
+    .filter((candidate): candidate is SilenceCandidate => Boolean(candidate))
+    .sort((left, right) => {
+      const toneRank = { estimated_silence: 0, low_activity: 1, inactive: 2 };
+      const toneDelta = toneRank[left.tone] - toneRank[right.tone];
+      if (toneDelta !== 0) {
+        return toneDelta;
+      }
+      return right.unresolvedCount - left.unresolvedCount;
+    })
+    .slice(0, 4);
+}
+
+function median(values: number[]) {
+  if (values.length === 0) {
+    return null;
+  }
+  const sorted = [...values].sort((left, right) => left - right);
+  const middle = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 0
+    ? (sorted[middle - 1] + sorted[middle]) / 2
+    : sorted[middle];
+}
+
+function buildVelocitySnapshot(records: SignalRecord[], startMs: number, endMs: number): VelocitySnapshot {
+  const lagHours = records
+    .map((record) => {
+      const createdAt = Date.parse(record.submission.createdAt);
+      const updatedAt = Date.parse(record.submission.updatedAt ?? record.submission.createdAt);
+      const reviewed =
+        (record.submission.status !== "unread" || record.submission.triageStatus !== "new") &&
+        !Number.isNaN(createdAt) &&
+        !Number.isNaN(updatedAt) &&
+        updatedAt > createdAt &&
+        updatedAt >= startMs &&
+        updatedAt < endMs;
+
+      if (!reviewed) {
+        return null;
+      }
+
+      return Math.max(0, (updatedAt - createdAt) / (1000 * 60 * 60));
+    })
+    .filter((value): value is number => value !== null);
+
+  const bucketCounts = [
+    { label: "0-6h", count: lagHours.filter((value) => value < 6).length },
+    { label: "6-24h", count: lagHours.filter((value) => value >= 6 && value < 24).length },
+    { label: "1-3d", count: lagHours.filter((value) => value >= 24 && value < 72).length },
+    { label: "3d+", count: lagHours.filter((value) => value >= 72).length },
+  ];
+
+  return {
+    count: lagHours.length,
+    medianLagHours: median(lagHours),
+    withinDayPercent: lagHours.length > 0 ? Math.round((lagHours.filter((value) => value <= 24).length / lagHours.length) * 100) : 0,
+    bucketCounts,
+  };
+}
+
+function getVelocityDirection(current: VelocitySnapshot, previous: VelocitySnapshot) {
+  if (current.count === 0 || previous.count === 0 || current.medianLagHours === null || previous.medianLagHours === null) {
+    return {
+      label: "Stable readout",
+      labelJa: "安定推移",
+      detail: "Not enough historical review movement yet.",
+      tone: "steady",
+    } as const;
+  }
+
+  if (current.medianLagHours <= previous.medianLagHours * 0.8) {
+    return {
+      label: "Accelerating",
+      labelJa: "反応加速",
+      detail: "Review reactions are landing faster than the previous window.",
+      tone: "accelerating",
+    } as const;
+  }
+
+  if (current.medianLagHours >= previous.medianLagHours * 1.2) {
+    return {
+      label: "Slowing",
+      labelJa: "反応低下",
+      detail: "Median review lag has widened versus the previous window.",
+      tone: "slowing",
+    } as const;
+  }
+
+  return {
+    label: "Stable readout",
+    labelJa: "反応安定",
+    detail: "Review velocity is holding near the previous window.",
+    tone: "steady",
+  } as const;
+}
+
+function getActivityMonitorState(
+  activityStatus: ActivityStatus,
+  anomalyCount: number,
+): MonitorState {
+  if (activityStatus.tone === "spike" || anomalyCount >= 2) {
+    return { tone: "critical", key: "Critical" };
+  }
+  if (activityStatus.tone === "up") {
+    return { tone: "elevated", key: "Elevated" };
+  }
+  if (activityStatus.tone === "drop") {
+    return { tone: "recovering", key: "Recovering" };
+  }
+  return { tone: "stable", key: "Stable" };
+}
+
+function getVelocityMonitorState(
+  current: VelocitySnapshot,
+  previous: VelocitySnapshot,
+  direction: ReturnType<typeof getVelocityDirection>,
+): MonitorState {
+  if (direction.tone === "slowing") {
+    return {
+      tone:
+        current.medianLagHours !== null &&
+        previous.medianLagHours !== null &&
+        current.medianLagHours >= previous.medianLagHours * 1.5
+          ? "critical"
+          : "elevated",
+      key:
+        current.medianLagHours !== null &&
+        previous.medianLagHours !== null &&
+        current.medianLagHours >= previous.medianLagHours * 1.5
+          ? "Critical"
+          : "Elevated",
+    };
+  }
+  if (direction.tone === "accelerating") {
+    return { tone: "recovering", key: "Recovering" };
+  }
+  return { tone: "stable", key: "Stable" };
+}
+
+function getClusterMonitorState(
+  clusters: SignalCluster[],
+  anomalyCount: number,
+  silenceCandidates: SilenceCandidate[],
+): MonitorState {
+  const primary = clusters[0];
+  if (primary?.severity === "high" && (anomalyCount > 0 || primary.signalCount >= 4)) {
+    return { tone: "critical", key: "Critical" };
+  }
+  if (primary && (primary.trend === "increasing" || silenceCandidates.length > 0)) {
+    return { tone: "elevated", key: "Elevated" };
+  }
+  if (clusters.length > 1) {
+    return { tone: "recovering", key: "Recovering" };
+  }
+  return { tone: "stable", key: "Stable" };
+}
+
+function buildSituationFlow(
+  activity: MonitorState,
+  anomalyCount: number,
+  silence: MonitorState,
+  velocity: MonitorState,
+): SituationFlowStep[] {
+  return [
+    {
+      key: "activity",
+      tone: activity.tone,
+      titleKey:
+        activity.key === "Critical"
+          ? "workspaceSituationPulseElevated"
+          : activity.key === "Elevated"
+            ? "workspaceSituationFlowRise"
+            : activity.key === "Recovering"
+              ? "workspaceSituationFlowCooling"
+              : "workspaceSituationFlowNominal",
+      bodyKey:
+        activity.key === "Critical"
+          ? "workspaceSituationPulseElevatedBody"
+          : activity.key === "Elevated"
+            ? "workspaceSituationFlowRiseBody"
+            : activity.key === "Recovering"
+              ? "workspaceSituationFlowCoolingBody"
+              : "workspaceSituationFlowNominalBody",
+    },
+    {
+      key: "anomaly",
+      tone: anomalyCount > 0 ? "critical" : "stable",
+      titleKey: anomalyCount > 0 ? "workspaceSituationSpikeDetected" : "workspaceSituationBaselineHolding",
+      bodyKey: anomalyCount > 0 ? "workspaceSituationSpikeDetectedBody" : "workspaceSituationBaselineHoldingBody",
+    },
+    {
+      key: "velocity",
+      tone: velocity.tone,
+      titleKey:
+        velocity.key === "Critical"
+          ? "workspaceSituationDelayIncreasing"
+          : velocity.key === "Elevated"
+            ? "workspaceSituationVelocitySlowing"
+            : velocity.key === "Recovering"
+              ? "workspaceSituationVelocityRecovering"
+              : "workspaceSituationVelocityStable",
+      bodyKey:
+        velocity.key === "Critical"
+          ? "workspaceSituationDelayIncreasingBody"
+          : velocity.key === "Elevated"
+            ? "workspaceSituationVelocitySlowingBody"
+            : velocity.key === "Recovering"
+              ? "workspaceSituationVelocityRecoveringBody"
+              : "workspaceSituationVelocityStableBody",
+    },
+    {
+      key: "silence",
+      tone: silence.tone,
+      titleKey:
+        silence.key === "Critical"
+          ? "workspaceSituationQuietZoneExpanding"
+          : silence.key === "Elevated"
+            ? "workspaceSituationQuietZoneWatching"
+            : silence.key === "Recovering"
+              ? "workspaceSituationQuietZoneRecovering"
+              : "workspaceSituationQuietZoneNominal",
+      bodyKey:
+        silence.key === "Critical"
+          ? "workspaceSituationQuietZoneExpandingBody"
+          : silence.key === "Elevated"
+            ? "workspaceSituationQuietZoneWatchingBody"
+            : silence.key === "Recovering"
+              ? "workspaceSituationQuietZoneRecoveringBody"
+              : "workspaceSituationQuietZoneNominalBody",
+    },
+  ];
+}
+
+function exportInsightsSnapshotJson(input: {
+  language: Language;
+  totalSignals: number;
+  unreadSignals: number;
+  needsReviewSignals: number;
+  encryptedSignals: number;
+  unresolvedSignals: number;
+  archivedSignals: number;
+  anomalyCount: number;
+  activityStatus: ActivityStatus;
+  activityMonitorState: MonitorState;
+  activityPoints: ReturnType<typeof buildActivityPoints>;
+  silenceCandidates: SilenceCandidate[];
+  silenceMonitorState: MonitorState;
+  velocityDirection: ReturnType<typeof getVelocityDirection>;
+  velocityMonitorState: MonitorState;
+  currentVelocity: VelocitySnapshot;
+  previousVelocity: VelocitySnapshot;
+  clusters: SignalCluster[];
+  clusterMonitorState: MonitorState;
+  clusterMapNodes: InsightExportClusterNode[];
+  relatedPatterns: RelatedPatternSummary[];
+  situationFlow: SituationFlowStep[];
+}) {
+  const exportedAt = new Date().toISOString();
+  const snapshot = {
+    exportedAt,
+    language: input.language,
+    summary: {
+      totalSignals: input.totalSignals,
+      unreadSignals: input.unreadSignals,
+      needsReviewSignals: input.needsReviewSignals,
+      unresolvedSignals: input.unresolvedSignals,
+      archivedSignals: input.archivedSignals,
+      encryptedSignals: input.encryptedSignals,
+      anomalyCount: input.anomalyCount,
+    },
+    state: {
+      activity: {
+        status: input.activityStatus.tone,
+        monitorState: input.activityMonitorState.tone,
+      },
+      silence: {
+        monitorState: input.silenceMonitorState.tone,
+        candidateCount: input.silenceCandidates.length,
+      },
+      velocity: {
+        direction: input.velocityDirection.tone,
+        monitorState: input.velocityMonitorState.tone,
+      },
+      cluster: {
+        monitorState: input.clusterMonitorState.tone,
+        clusterCount: input.clusters.length,
+      },
+    },
+    situationFlow: input.situationFlow.map((step) => ({
+      key: step.key,
+      tone: step.tone,
+    })),
+    activityWave: input.activityPoints.map((point) => ({
+      day: point.label,
+      count: point.count,
+      anomaly: point.anomaly,
+      state: point.state,
+      intensity: point.intensity,
+    })),
+    silenceDetection: input.silenceCandidates,
+    responseVelocity: {
+      direction: input.velocityDirection.tone,
+      current: input.currentVelocity,
+      previous: input.previousVelocity,
+    },
+    clusterAnalysis: {
+      clusters: input.clusters,
+      mapNodes: input.clusterMapNodes,
+    },
+    relatedSignalPatterns: input.relatedPatterns,
+  };
+
+  const stamp = exportedAt.replace(/[:.]/g, "-");
+  downloadTextFile(
+    `deepsignal-insights-snapshot-${stamp}.json`,
+    JSON.stringify(snapshot, null, 2),
+    "application/json",
+  );
+}
+
+function getRelatedPatternLabel(reason: RelatedSignalReason) {
+  switch (reason) {
+    case "same_channel":
+      return "same_channel";
+    case "same_category":
+      return "same_category";
+    case "same_priority":
+      return "same_priority";
+    case "same_triage":
+      return "same_triage";
+    case "same_sender_type":
+      return "same_sender_type";
+    case "shared_tags":
+      return "shared_tags";
+    case "similar_subject":
+      return "similar_subject";
+    case "similar_preview":
+      return "similar_preview";
+    default:
+      return "related_pattern";
+  }
+}
+
+function buildRelatedPatternSummary(records: SignalRecord[]) {
+  const sample = [...records]
+    .filter(
+      (record) =>
+        record.submission.status === "unread" ||
+        (record.submission.status !== "archived" &&
+          record.submission.triageStatus !== "fixed" &&
+          record.submission.triageStatus !== "closed"),
+    )
+    .sort((left, right) => Date.parse(right.submission.createdAt) - Date.parse(left.submission.createdAt))
+    .slice(0, 8);
+
+  const counts = new Map<string, number>();
+
+  sample.forEach((record) => {
+    getRelatedSignals({ selectedRecord: record, records, maxResults: 4 }).forEach((match) => {
+      match.reasons.forEach((reason) => {
+        const label = getRelatedPatternLabel(reason);
+        counts.set(label, (counts.get(label) ?? 0) + 1);
+      });
+      if (match.duplicateLikely) {
+        counts.set("possible_duplicates", (counts.get("possible_duplicates") ?? 0) + 1);
+      }
+    });
+  });
+
+  return [...counts.entries()]
+    .map(([label, count]) => ({
+      key: label,
+      label,
+      count,
+    } satisfies RelatedPatternSummary))
+    .sort((left, right) => right.count - left.count || left.label.localeCompare(right.label))
+    .slice(0, 5);
 }
 
 interface WorkspaceInsightsProps {
@@ -297,20 +901,46 @@ export function WorkspaceInsights({
   records,
   unlockedSignalsById,
 }: WorkspaceInsightsProps) {
-  const { t } = useI18n();
+  const { t, language } = useI18n();
   const signalSummary = buildSignalSummary(records, t, unlockedSignalsById);
   const clusters = buildSignalClusters(records, signalSummary.items, t);
   const primaryCluster = clusters[0];
-  const activityPoints = buildActivityPoints(records);
-  const anomalyCount = activityPoints.filter((point) => point.anomaly).length;
+  const activityPoints = buildActivityPoints(records, language);
+  const anomalyPoints = activityPoints.filter((point) => point.anomaly);
+  const anomalyCount = anomalyPoints.length;
+  const activityStatus = getActivityStatus(activityPoints);
   const attentionRecords = records
     .filter((record) => record.submission.status === "unread" || record.submission.triageStatus === "new")
     .slice(0, 3);
+  const unresolvedSignals = records.filter(
+    (record) =>
+      record.submission.status !== "archived" &&
+      record.submission.triageStatus !== "fixed" &&
+      record.submission.triageStatus !== "closed",
+  ).length;
+  const archivedSignals = records.filter((record) => record.submission.status === "archived").length;
+  const silenceCandidates = buildSilenceCandidates(records);
+  const now = Date.now();
+  const currentVelocity = buildVelocitySnapshot(records, now - 7 * 24 * 60 * 60 * 1000, now);
+  const previousVelocity = buildVelocitySnapshot(records, now - 14 * 24 * 60 * 60 * 1000, now - 7 * 24 * 60 * 60 * 1000);
+  const velocityDirection = getVelocityDirection(currentVelocity, previousVelocity);
+  const activityMonitorState = getActivityMonitorState(activityStatus, anomalyCount);
+  const silenceMonitorState: MonitorState = silenceCandidates.length > 0
+    ? silenceCandidates[0].tone === "estimated_silence"
+      ? { tone: "critical", key: "Critical" }
+      : silenceCandidates[0].tone === "low_activity"
+        ? { tone: "elevated", key: "Elevated" }
+        : { tone: "recovering", key: "Recovering" }
+    : { tone: "stable", key: "Stable" };
+  const velocityMonitorState = getVelocityMonitorState(currentVelocity, previousVelocity, velocityDirection);
+  const clusterMonitorState = getClusterMonitorState(clusters, anomalyCount, silenceCandidates);
+  const situationFlow = buildSituationFlow(activityMonitorState, anomalyCount, silenceMonitorState, velocityMonitorState);
+  const relatedPatterns = buildRelatedPatternSummary(records);
   const metrics = [
     {
       label: t("workspaceMetricAttentionRequired"),
       value: Math.max(unreadSignals, needsReviewSignals).toLocaleString(),
-      detail: t("workspaceMetricAttentionRequiredDetail", { anomalies: anomalyCount }),
+      detail: t("workspaceMetricAttentionRequiredDetail", { unresolved: unresolvedSignals, anomalies: anomalyCount }),
       tone: "alert",
     },
     {
@@ -321,7 +951,22 @@ export function WorkspaceInsights({
         : t("workspaceMetricActiveClusterEmpty"),
       tone: "cluster",
     },
+    {
+      label: t("workspaceMetricEstimatedSilence"),
+      value: silenceCandidates.length.toLocaleString(),
+      detail: silenceCandidates[0]
+        ? t(
+            silenceCandidates[0].detail === "estimated_silence"
+              ? "workspaceSilenceMetricEstimated"
+              : silenceCandidates[0].detail === "low_activity"
+                ? "workspaceSilenceMetricLowActivity"
+                : "workspaceSilenceMetricInactive",
+          )
+        : t("workspaceSilenceMetricNominal"),
+      tone: "cluster",
+    },
   ];
+  const clusterMapNodes = getClusterMapNodes(clusters);
 
   return (
     <section className="panel workspace-insights-panel" aria-labelledby="workspace-insights-title">
@@ -331,41 +976,117 @@ export function WorkspaceInsights({
           <h2 id="workspace-insights-title">{t("workspaceInsightsTitle")}</h2>
           <p className="workspace-insights-intro">{t("workspaceInsightsIntro")}</p>
         </div>
-        <span className="signal-chip signal-chip-soft">{t("workspaceSignalConsole")}</span>
+        <div className="workspace-insights-header-actions">
+          <span className="signal-chip signal-chip-soft">{t("workspaceSignalConsole")}</span>
+          <button
+            type="button"
+            className="ghost-button workspace-insights-export-button"
+            onClick={() =>
+              exportInsightsSnapshotJson({
+                language,
+                totalSignals,
+                unreadSignals,
+                needsReviewSignals,
+                encryptedSignals,
+                unresolvedSignals,
+                archivedSignals,
+                anomalyCount,
+                activityStatus,
+                activityMonitorState,
+                activityPoints,
+                silenceCandidates,
+                silenceMonitorState,
+                velocityDirection,
+                velocityMonitorState,
+                currentVelocity,
+                previousVelocity,
+                clusters,
+                clusterMonitorState,
+                clusterMapNodes,
+                relatedPatterns,
+                situationFlow,
+              })
+            }
+          >
+            {t("workspaceExportSnapshotJson")}
+          </button>
+        </div>
       </div>
-      <div className="workspace-insights-grid">
-        {metrics.map((metric) => (
-          <article key={metric.label} className={`workspace-insight-card is-${metric.tone}`}>
-            <span>{metric.label}</span>
-            <strong>{metric.value}</strong>
-            <p>{metric.detail}</p>
-          </article>
-        ))}
-      </div>
-      <article className="workspace-signal-intelligence-card">
-        <div className="workspace-signal-intelligence-copy">
-          <p className="eyebrow">{t("workspaceSignalIntelligenceEyebrow")}</p>
-          <h3>{t("workspaceSignalIntelligenceTitle")}</h3>
-          <p>{getPrimaryIntelligenceCopy(primaryCluster, signalSummary.encryptedWaitingCount, t)}</p>
+
+      <article className="workspace-signal-summary-card workspace-insights-section">
+        <div className="workspace-signal-summary-header">
+          <div>
+            <p className="eyebrow">{t("workspaceStateOverviewEyebrow")}</p>
+            <h3>{t("workspaceStateOverviewTitle")}</h3>
+          </div>
         </div>
-        <div className="workspace-signal-readout">
-          <span>{t("workspaceConfidenceLabel")}</span>
-          <strong>{primaryCluster?.confidence ?? 0}%</strong>
-          <small>{t("workspacePotentialAreaLabel")}: {primaryCluster?.keywords.slice(0, 2).join(" / ") || t("workspaceEncryptedIntakeArea")}</small>
+        <div className="workspace-insights-grid">
+          {metrics.map((metric) => (
+            <article key={metric.label} className={`workspace-insight-card is-${metric.tone}`}>
+              <span>{metric.label}</span>
+              <strong>{metric.value}</strong>
+              <p>{metric.detail}</p>
+            </article>
+          ))}
         </div>
-        <div className="workspace-intelligence-meta">
-          <span>{t("workspaceSeverityLabel")}: {t(`workspaceSeverity${primaryCluster?.severity ?? "low"}`)}</span>
-          <span>{t("workspaceTrendLabel")}: {t(`workspaceTrend${primaryCluster?.trend ?? "steady"}`)}</span>
-          <span>{t("workspaceEncryptedCoverage", { count: encryptedSignals, total: totalSignals })}</span>
+        <div className="workspace-situation-flow" aria-label={t("workspaceSituationFlowTitle")}>
+          <div className="workspace-situation-flow-header">
+            <div>
+              <p className="eyebrow">{t("workspaceSituationFlowEyebrow")}</p>
+              <h3>{t("workspaceSituationFlowTitle")}</h3>
+            </div>
+            <span className="signal-chip signal-chip-soft">{t("workspaceSituationFlowMonitoring")}</span>
+          </div>
+          <div className="workspace-situation-flow-grid">
+            {situationFlow.map((step, index) => (
+              <article key={step.key} className={`workspace-situation-step is-${step.tone}`}>
+                <span className="workspace-situation-index">{index + 1}</span>
+                <strong>{t(step.titleKey)}</strong>
+                <p>{t(step.bodyKey)}</p>
+              </article>
+            ))}
+          </div>
         </div>
+        <article className="workspace-signal-intelligence-card">
+          <div className="workspace-signal-intelligence-copy">
+            <p className="eyebrow">{t("workspaceSignalIntelligenceEyebrow")}</p>
+            <h3>{t("workspaceSignalIntelligenceTitle")}</h3>
+            <p>{getPrimaryIntelligenceCopy(primaryCluster, signalSummary.encryptedWaitingCount, t)}</p>
+          </div>
+          <div className="workspace-signal-readout">
+            <span>{t("workspaceAnalysisConfidenceLabel")}</span>
+            <strong>{primaryCluster?.confidence ?? 0}%</strong>
+            <small>
+              {t("workspaceAnalysisConfidenceBody")}
+            </small>
+          </div>
+          <div className="workspace-intelligence-meta">
+            <span>{t("workspaceSeverityLabel")}: {t(`workspaceSeverity${primaryCluster?.severity ?? "low"}`)}</span>
+            <span>{t("workspaceTrendLabel")}: {t(`workspaceTrend${primaryCluster?.trend ?? "steady"}`)}</span>
+            <span>{t("workspaceEncryptedCoverage", { count: encryptedSignals, total: totalSignals })}</span>
+            <span>{t("workspacePotentialAreaLabel")}: {primaryCluster?.keywords.slice(0, 2).join(" / ") || t("workspaceEncryptedIntakeArea")}</span>
+            <span>{t("workspaceUnreadCountPill", { count: unreadSignals })}</span>
+            <span>{t("workspaceUnresolvedCountPill", { count: unresolvedSignals })}</span>
+            <span>{t("workspaceArchivedCountPill", { count: archivedSignals })}</span>
+          </div>
+        </article>
       </article>
+
       <article className="workspace-sonar-card">
         <div className="workspace-signal-summary-header">
           <div>
-            <p className="eyebrow">{t("workspaceSignalActivityEyebrow")}</p>
-            <h3>{t("workspaceSignalActivityTitle")}</h3>
+            <p className="eyebrow">{t("workspaceActivityWaveEyebrow")}</p>
+            <h3>{t("workspaceActivityWaveTitle")}</h3>
           </div>
-          <span className="signal-chip signal-chip-soft">{t("workspaceAnomalyCount", { count: anomalyCount })}</span>
+          <div className="workspace-wave-status">
+            <span className={`workspace-monitor-state is-${activityMonitorState.tone}`}>
+              {t(`workspaceMonitorState${activityMonitorState.key}`)}
+            </span>
+            <span className={`signal-chip signal-chip-soft wave-chip is-${activityStatus.tone}`}>
+              {t(`workspaceActivityStatus${activityStatus.tone === "up" ? "Up" : activityStatus.tone === "drop" ? "Drop" : activityStatus.tone === "spike" ? "Spike" : "Stable"}`)}
+            </span>
+            <span className="workspace-wave-status-ja">{t(`workspaceActivityStatus${activityStatus.tone === "up" ? "UpJa" : activityStatus.tone === "drop" ? "DropJa" : activityStatus.tone === "spike" ? "SpikeJa" : "StableJa"}`)}</span>
+          </div>
         </div>
         <div className="workspace-sonar-wave" aria-label={t("workspaceSignalActivityTitle")}>
           {activityPoints.map((point) => (
@@ -377,16 +1098,121 @@ export function WorkspaceInsights({
             >
               <i />
               <small>{point.label}</small>
+              <em>{t(`workspaceActivityPoint${point.state === "elevated" ? "Elevated" : point.state === "cooling" ? "Cooling" : point.state === "spike" ? "Spike" : "Stable"}`)}</em>
+              <b>{t(`workspaceActivityPoint${point.reason === "elevated" ? "ElevatedBody" : point.reason === "cooling" ? "CoolingBody" : point.reason === "spike" ? "SpikeBody" : "StableBody"}`)}</b>
             </span>
           ))}
         </div>
+        <div className="workspace-wave-footer">
+          <p className="workspace-signal-summary-empty">
+            {t(`workspaceActivityStatus${activityStatus.tone === "up" ? "UpBody" : activityStatus.tone === "drop" ? "DropBody" : activityStatus.tone === "spike" ? "SpikeBody" : "StableBody"}`)}
+          </p>
+          <span className="signal-chip signal-chip-soft">{t("workspaceAnomalyCount", { count: anomalyCount })}</span>
+        </div>
       </article>
-      <div className="workspace-intelligence-lower-grid">
-        <article className="workspace-signal-summary-card">
+
+      <div className="workspace-insights-section-grid">
+        <article className="workspace-review-queue-card workspace-diagnostic-card">
+          <div className="workspace-signal-summary-header">
+            <div>
+              <p className="eyebrow">{t("workspaceAnomalyDetectionEyebrow")}</p>
+              <h3>{t("workspaceAnomalyDetectionTitle")}</h3>
+            </div>
+            <span className={`workspace-monitor-state is-${anomalyCount > 0 ? "critical" : "stable"}`}>
+              {t(`workspaceMonitorState${anomalyCount > 0 ? "Critical" : "Stable"}`)}
+            </span>
+          </div>
+          {anomalyPoints.length > 0 ? (
+            <div className="workspace-diagnostic-list">
+              {anomalyPoints.map((point) => (
+                <div key={point.label} className="workspace-diagnostic-row is-alert">
+                  <strong>{point.label}</strong>
+                  <span>{t("workspaceClusterSignalCount", { count: point.count })}</span>
+                  <small>{t("workspaceAnomalyDetectionItemBody")}</small>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="workspace-monitor-empty">
+              <strong>{t("workspaceSystemStableTitle")}</strong>
+              <span>{t("workspaceMonitoringActiveLabel")}</span>
+              <p>{t("workspaceAnomalyDetectionEmpty")}</p>
+            </div>
+          )}
+        </article>
+
+        <article className="workspace-review-queue-card workspace-diagnostic-card">
+          <div className="workspace-signal-summary-header">
+            <div>
+              <p className="eyebrow">{t("workspaceSilenceDetectionEyebrow")}</p>
+              <h3>{t("workspaceSilenceDetectionTitle")}</h3>
+            </div>
+            <div className="workspace-header-readout">
+              <span className={`workspace-monitor-state is-${silenceMonitorState.tone}`}>
+                {t(`workspaceMonitorState${silenceMonitorState.key}`)}
+              </span>
+              <span className="signal-chip signal-chip-soft">{t("workspaceQuietZonesMonitored")}</span>
+            </div>
+          </div>
+          {silenceCandidates.length > 0 ? (
+            <div className="workspace-diagnostic-list">
+              {silenceCandidates.map((candidate) => (
+                <div key={candidate.key} className={`workspace-diagnostic-row is-${candidate.tone}`}>
+                  <strong>{candidate.label}</strong>
+                  <span>{t("workspaceSilenceOpenCount", { count: candidate.unresolvedCount })}</span>
+                  <small>
+                    {t(`workspaceSilenceTone${candidate.detail === "estimated_silence" ? "Estimated" : candidate.detail === "low_activity" ? "LowActivity" : "Inactive"}`)}{" "}
+                    {t("workspaceSilenceLastSeen", { age: candidate.lastSeenLabel, count: candidate.recentCount })}
+                  </small>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="workspace-monitor-empty">
+              <strong>{t("workspaceSilenceDetectionEmptyTitle")}</strong>
+              <span>{t("workspaceSilenceMonitoringActiveLabel")}</span>
+              <p>{t("workspaceSilenceDetectionEmptyBody")}</p>
+            </div>
+          )}
+        </article>
+      </div>
+
+      <article className="workspace-signal-summary-card">
         <div className="workspace-signal-summary-header">
           <div>
-            <p className="eyebrow">{t("workspaceEmergingClustersEyebrow")}</p>
+            <p className="eyebrow">{t("workspaceClusterAnalysisEyebrow")}</p>
             <h3>{t("workspaceEmergingClustersTitle")}</h3>
+          </div>
+          <span className={`workspace-monitor-state is-${clusterMonitorState.tone}`}>
+            {t(`workspaceMonitorState${clusterMonitorState.key}`)}
+          </span>
+        </div>
+        <div className="workspace-cluster-map" aria-label="Cluster pulse map">
+          <div className="workspace-cluster-map-grid" />
+          {clusterMapNodes.map((node, index) => (
+            <div
+              key={node.key}
+              className={`workspace-cluster-node ${index === 0 ? "is-primary" : ""}`}
+              style={
+                {
+                  "--node-left": node.left,
+                  "--node-top": node.top,
+                  "--node-scale": node.scale,
+                } as CSSProperties
+              }
+            >
+              {node.connected ? <i className="workspace-cluster-link" aria-hidden="true" /> : null}
+              <span />
+              <small className="workspace-cluster-node-ring" aria-hidden="true" />
+            </div>
+          ))}
+          <div className="workspace-cluster-map-caption">
+            <strong>{clusters.length > 0 ? t("workspaceClusterPulseVisible") : t("workspaceClusterGridIdle")}</strong>
+            <p>
+              {clusters.length > 0
+                ? t("workspaceClusterPulseVisibleBody")
+                : t("workspaceClusterGridIdleBody")}
+            </p>
           </div>
         </div>
         {clusters.length > 0 ? (
@@ -415,6 +1241,78 @@ export function WorkspaceInsights({
           </p>
         ) : null}
       </article>
+
+      <div className="workspace-insights-section-grid">
+        <article className="workspace-review-queue-card workspace-diagnostic-card">
+          <div className="workspace-signal-summary-header">
+            <div>
+              <p className="eyebrow">{t("workspaceResponseVelocityEyebrow")}</p>
+              <h3>{t("workspaceResponseVelocityTitle")}</h3>
+            </div>
+            <div className="workspace-header-readout">
+              <span className={`workspace-monitor-state is-${velocityMonitorState.tone}`}>
+                {t(`workspaceMonitorState${velocityMonitorState.key}`)}
+              </span>
+              <span className={`signal-chip signal-chip-soft velocity-chip is-${velocityDirection.tone}`}>
+                {t(`workspaceVelocity${velocityDirection.tone === "accelerating" ? "Accelerating" : velocityDirection.tone === "slowing" ? "Slowing" : "Steady"}`)}
+              </span>
+            </div>
+          </div>
+          <div className="workspace-velocity-grid">
+            <div className="workspace-velocity-metric">
+              <span>{t("workspaceVelocityCurrentMedian")}</span>
+              <strong>{currentVelocity.medianLagHours === null ? "N/A" : `${Math.round(currentVelocity.medianLagHours)}h`}</strong>
+              <small>{t("workspaceVelocityCurrentMedianBody", { count: currentVelocity.count })}</small>
+            </div>
+            <div className="workspace-velocity-metric">
+              <span>{t("workspaceVelocityPreviousMedian")}</span>
+              <strong>{previousVelocity.medianLagHours === null ? "N/A" : `${Math.round(previousVelocity.medianLagHours)}h`}</strong>
+              <small>{t("workspaceVelocityPreviousMedianBody", { count: previousVelocity.count })}</small>
+            </div>
+            <div className="workspace-velocity-metric">
+              <span>{t("workspaceVelocityWithinDay")}</span>
+              <strong>{currentVelocity.withinDayPercent}%</strong>
+              <small>{t(`workspaceVelocity${velocityDirection.tone === "accelerating" ? "AcceleratingBody" : velocityDirection.tone === "slowing" ? "SlowingBody" : "SteadyBody"}`)}</small>
+            </div>
+          </div>
+          <div className="workspace-velocity-buckets" aria-label="Response velocity buckets">
+            {currentVelocity.bucketCounts.map((bucket) => (
+              <div key={bucket.label} className="workspace-velocity-bucket">
+                <strong>{bucket.count}</strong>
+                <span>{bucket.label}</span>
+              </div>
+            ))}
+          </div>
+        </article>
+
+        <article className="workspace-review-queue-card workspace-diagnostic-card">
+          <div className="workspace-signal-summary-header">
+            <div>
+              <p className="eyebrow">{t("workspaceRelatedPatternsEyebrow")}</p>
+              <h3>{t("workspaceRelatedPatternsTitle")}</h3>
+            </div>
+          </div>
+          {relatedPatterns.length > 0 ? (
+            <div className="workspace-diagnostic-list">
+              {relatedPatterns.map((pattern) => (
+                <div key={pattern.key} className="workspace-diagnostic-row is-pattern">
+                  <strong>{t(`workspaceRelatedPattern${pattern.label}`)}</strong>
+                  <span>{pattern.count}</span>
+                  <small>{t("workspaceRelatedPatternsItemBody")}</small>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="workspace-monitor-empty">
+              <strong>{t("workspaceRelatedPatternsEmptyTitle")}</strong>
+              <span>{t("workspaceRelatedPatternsMonitoringLabel")}</span>
+              <p>{t("workspaceRelatedPatternsEmptyBody")}</p>
+            </div>
+          )}
+        </article>
+      </div>
+
+      <div className="workspace-intelligence-lower-grid">
         <article className="workspace-review-queue-card">
           <div className="workspace-signal-summary-header">
             <div>

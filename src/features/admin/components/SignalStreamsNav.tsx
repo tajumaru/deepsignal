@@ -12,17 +12,19 @@ interface StreamItem {
 }
 
 const FLOW_STREAM_IDS: StreamId[] = [
+  "unread",
   "needs_review",
   "unresolved",
-  "unread",
+  "high",
+  "follow_up",
+  "pending_sui",
   "verified",
+  "encrypted",
   "anonymous",
   "published",
-  "encrypted",
-  "high",
   "archived",
 ];
-const BLOCKCHAIN_STREAM_IDS: StreamId[] = ["pending_sui", "registered_sui"];
+const BLOCKCHAIN_STREAM_IDS: StreamId[] = ["registered_sui"];
 
 export function MailboxIcon({ hasUnread }: { hasUnread: boolean }) {
   return (
@@ -129,6 +131,8 @@ function getStreamHelper(streamId: StreamId, t: ReturnType<typeof useI18n>["t"])
       return t("openTriageQueue");
     case "unread":
       return t("unreadStreamHelper");
+    case "follow_up":
+      return t("followUpEnabledLabel");
     case "verified":
       return t("verifiedStreamHelper");
     case "anonymous":
@@ -168,6 +172,8 @@ function getStreamTone(streamId: StreamId) {
       return "tone-resolved";
     case "high":
       return "tone-flagged";
+    case "follow_up":
+      return "tone-needs-review";
     case "encrypted":
       return "tone-protected";
     case "archived":
