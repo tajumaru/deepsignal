@@ -69,7 +69,6 @@ export function ProjectWorkspaceModal({
   labels,
 }: ProjectWorkspaceModalProps) {
   const dialogRef = useRef<HTMLElement | null>(null);
-  const closeButtonRef = useRef<HTMLButtonElement | null>(null);
   const selectedProject = useMemo(
     () => projects.find((project) => project.objectId === selectedProjectId) ?? null,
     [projects, selectedProjectId],
@@ -87,7 +86,7 @@ export function ProjectWorkspaceModal({
         connectInputRef.current?.focus();
         return;
       }
-      closeButtonRef.current?.focus();
+      dialogRef.current?.querySelector<HTMLElement>(FOCUSABLE_SELECTOR)?.focus();
     }, 10);
 
     function handleKeyDown(event: KeyboardEvent) {
@@ -155,9 +154,6 @@ export function ProjectWorkspaceModal({
             <p className="eyebrow">{labels.currentProject}</p>
             <h3 id="project-workspace-modal-title">{modalTitle}</h3>
           </div>
-          <button ref={closeButtonRef} type="button" className="ghost-button" onClick={onClose}>
-            {labels.close}
-          </button>
         </div>
 
         <p id="project-workspace-modal-description" className="muted">

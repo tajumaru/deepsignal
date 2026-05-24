@@ -45,6 +45,10 @@ interface SecondaryInspectorProps {
   responseDeadlineValue: string;
   walletAccessValue: string;
   pendingSuiRegistrationValue: string;
+  rpcProviderLabel: string;
+  rpcNetworkLabel: string;
+  verificationRouteLabel: string;
+  txDigest?: string;
   canDecrypt: boolean;
   relatedSignals: RelatedSignalResult[];
   selectedSignalId?: string;
@@ -81,6 +85,10 @@ export function SecondaryInspector({
   responseDeadlineValue,
   walletAccessValue,
   pendingSuiRegistrationValue,
+  rpcProviderLabel,
+  rpcNetworkLabel,
+  verificationRouteLabel,
+  txDigest,
   canDecrypt,
   relatedSignals,
   selectedSignalId,
@@ -89,6 +97,10 @@ export function SecondaryInspector({
   const respondentMeta = getSubmissionRespondentMeta(selectedRecord.submission);
   const respondentIdentityLabel = getRespondentIdentityLabel(selectedRecord.submission);
   const respondentDisplayAddress = respondentMeta.verifiedAddress ?? respondentMeta.walletAddress;
+  const submissionObjectId =
+    selectedRecord.submission.walrusProof?.objectId ??
+    selectedRecord.submission.encryptedWalrusProof?.objectId;
+  const encryptedObjectId = selectedRecord.submission.encryptedWalrusProof?.objectId;
 
   return (
     <section className="secondary-inspector">
@@ -221,7 +233,15 @@ export function SecondaryInspector({
                 </div>
                 <div className="metadata-row">
                   <span>{t("providerLabel")}</span>
-                  <strong>{t("poweredByTatum")}</strong>
+                  <strong>{rpcProviderLabel}</strong>
+                </div>
+                <div className="metadata-row">
+                  <span>{t("networkLabel")}</span>
+                  <strong>{rpcNetworkLabel}</strong>
+                </div>
+                <div className="metadata-row">
+                  <span>{t("verificationRouteLabel")}</span>
+                  <strong>{verificationRouteLabel}</strong>
                 </div>
                 <SignalMetaRow label={t("formBlobId")} type="blob" value={selectedRecord.form.blobId} emptyLabel={t("notAvailable")}>
                   {!isLocalFallbackBlob(selectedRecord.form.blobId) ? (
@@ -264,6 +284,12 @@ export function SecondaryInspector({
                   <span>{t("auditTrailLabel")}</span>
                   <strong>{privateReviewLabel}</strong>
                 </div>
+                {txDigest ? (
+                  <div className="metadata-row">
+                    <span>{t("txDigestLabel")}</span>
+                    <strong>{txDigest}</strong>
+                  </div>
+                ) : null}
               </div>
               <details
                 className="inspector-nested-detail"
@@ -288,6 +314,22 @@ export function SecondaryInspector({
                       <span>{t("signalReceiptLabel")}</span>
                       <strong>{selectedRecord.submission.onchainSignalId}</strong>
                     </div>
+                  ) : null}
+                  {submissionObjectId ? (
+                    <SignalMetaRow
+                      label={t("submissionObjectIdLabel")}
+                      type="registry"
+                      value={submissionObjectId}
+                      emptyLabel={t("notAvailable")}
+                    />
+                  ) : null}
+                  {encryptedObjectId ? (
+                    <SignalMetaRow
+                      label={t("encryptedObjectIdLabel")}
+                      type="registry"
+                      value={encryptedObjectId}
+                      emptyLabel={t("notAvailable")}
+                    />
                   ) : null}
                   <SignalMetaRow label={t("sealIdentityLabel")} type="seal" value={selectedRecord.submission.sealIdentity} emptyLabel={t("notAvailable")} />
                   {selectedRecord.submission.signalReceiptMetadataDigest ? (

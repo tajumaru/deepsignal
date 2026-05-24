@@ -63,6 +63,11 @@
     display: none;
   }
 
+  .desktop-signal-inbox-hero.signal-inbox-onboarding-hero {
+    display: block;
+    margin-inline: 0;
+  }
+
   .operations-status-rail {
     display: none;
   }
@@ -190,6 +195,27 @@
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+
+  .signal-inbox-onboarding-hero {
+    margin-inline: 0;
+  }
+
+  .signal-inbox-onboarding-layout {
+    flex-direction: column;
+  }
+
+  .signal-inbox-onboarding-actions {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .signal-inbox-onboarding-project-bar {
+    grid-template-columns: 1fr;
+  }
+
+  .signal-inbox-onboarding-empty-state {
+    min-height: 24rem;
   }
 
   .signal-channel-selector-mobile,

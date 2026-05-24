@@ -924,6 +924,19 @@ export function WorkspaceInsights({
   const currentVelocity = buildVelocitySnapshot(records, now - 7 * 24 * 60 * 60 * 1000, now);
   const previousVelocity = buildVelocitySnapshot(records, now - 14 * 24 * 60 * 60 * 1000, now - 7 * 24 * 60 * 60 * 1000);
   const velocityDirection = getVelocityDirection(currentVelocity, previousVelocity);
+  const registeredSignals = records.filter((record) => typeof record.submission.onchainSignalId === "number").length;
+  const pendingProofSignals = records.filter((record) => record.submission.pendingOnchainRegistration).length;
+  const consensusConfidence = primaryCluster?.confidence ?? 0;
+  const responseDistribution = totalSignals > 0 && primaryCluster
+    ? Math.round((primaryCluster.signalCount / totalSignals) * 100)
+    : 0;
+  const emergencySeverity = primaryCluster?.severity ?? (unresolvedSignals >= 4 ? "high" : unresolvedSignals >= 2 ? "medium" : "low");
+  const signalHealthState =
+    unresolvedSignals >= Math.max(4, Math.ceil(totalSignals * 0.55)) || anomalyCount > 1
+      ? "critical"
+      : unresolvedSignals >= Math.max(2, Math.ceil(totalSignals * 0.3)) || signalSummary.encryptedWaitingCount > 0 || pendingProofSignals > 0
+        ? "watch"
+        : "stable";
   const activityMonitorState = getActivityMonitorState(activityStatus, anomalyCount);
   const silenceMonitorState: MonitorState = silenceCandidates.length > 0
     ? silenceCandidates[0].tone === "estimated_silence"
@@ -937,6 +950,45 @@ export function WorkspaceInsights({
   const situationFlow = buildSituationFlow(activityMonitorState, anomalyCount, silenceMonitorState, velocityMonitorState);
   const relatedPatterns = buildRelatedPatternSummary(records);
   const metrics = [
+    {
+      label: t("workspaceMetricSignalHealth"),
+      value: t(
+        signalHealthState === "critical"
+          ? "workspaceSignalHealthCritical"
+          : signalHealthState === "watch"
+            ? "workspaceSignalHealthWatch"
+            : "workspaceSignalHealthStable",
+      ),
+      detail: t("workspaceMetricSignalHealthDetail", {
+        unresolved: unresolvedSignals,
+        pending: pendingProofSignals,
+      }),
+      tone: signalHealthState === "critical" ? "alert" : "cluster",
+    },
+    {
+      label: t("workspaceMetricConsensusConfidence"),
+      value: `${consensusConfidence}%`,
+      detail: t("workspaceMetricConsensusConfidenceDetail", {
+        count: primaryCluster?.signalCount ?? 0,
+      }),
+      tone: "cluster",
+    },
+    {
+      label: t("workspaceMetricEmergencySeverity"),
+      value: t(`workspaceSeverity${emergencySeverity}`),
+      detail: t("workspaceMetricEmergencySeverityDetail", {
+        encrypted: signalSummary.encryptedWaitingCount,
+      }),
+      tone: emergencySeverity === "high" ? "alert" : "cluster",
+    },
+    {
+      label: t("workspaceMetricResponseDistribution"),
+      value: `${responseDistribution}%`,
+      detail: primaryCluster
+        ? t("workspaceMetricResponseDistributionDetail", { cluster: primaryCluster.label })
+        : t("workspaceMetricResponseDistributionEmpty"),
+      tone: "cluster",
+    },
     {
       label: t("workspaceMetricAttentionRequired"),
       value: Math.max(unreadSignals, needsReviewSignals).toLocaleString(),
@@ -963,6 +1015,14 @@ export function WorkspaceInsights({
                 : "workspaceSilenceMetricInactive",
           )
         : t("workspaceSilenceMetricNominal"),
+      tone: "cluster",
+    },
+    {
+      label: t("workspaceMetricImmutableProof"),
+      value: registeredSignals.toLocaleString(),
+      detail: t("workspaceMetricImmutableProofDetail", {
+        pending: pendingProofSignals,
+      }),
       tone: "cluster",
     },
   ];

@@ -343,6 +343,14 @@ function getSignalValueStars(signalValue: Submission["signalValue"]) {
   return Array.from({ length: 5 }, (_, index) => index < signalValue);
 }
 
+function getSubmissionMetadataString(submission: Submission, key: string) {
+  if (!submission.metadata || typeof submission.metadata !== "object") {
+    return undefined;
+  }
+  const value = (submission.metadata as Record<string, unknown>)[key];
+  return typeof value === "string" && value.trim() ? value : undefined;
+}
+
 function hasSavedReviewResult(submission: Submission) {
   const assignedReviewer = getAssignedReviewer(submission);
   const reviewerNotes = getVisibleReviewerNotes(submission).trim();
@@ -376,12 +384,15 @@ function buildSignalTimelineEntries(submission: Submission, t: TranslationFn) {
   const entries: SignalTimelineEntry[] = [];
   const createdAt = submission.createdAt;
   const updatedAt = submission.updatedAt || submission.createdAt;
+  const proofTimestamp = updatedAt || createdAt;
   const noteUpdatedAt = getReviewerNoteUpdatedAt(submission);
   const assignedReviewer = getAssignedReviewer(submission);
   const reviewerNotes = getVisibleReviewerNotes(submission).trim();
   const followUpEnabled = hasNeedsFollowUp(submission);
   const isRoadmapVisible = ROADMAP_READY_STATUSES.has(submission.triageStatus);
   const isResolved = submission.status === "archived" || submission.triageStatus === "fixed" || submission.triageStatus === "closed";
+  const proofBlobId = submission.encryptedBlobId ?? submission.receiptBlobId ?? submission.blobId;
+  const txDigest = getSubmissionMetadataString(submission, "txDigest");
   let order = 0;
 
   const pushEntry = (entry: Omit<SignalTimelineEntry, "order">) => {
@@ -398,6 +409,36 @@ function buildSignalTimelineEntries(submission: Submission, t: TranslationFn) {
     timestamp: createdAt,
     phase: "intake",
   });
+
+  if (submission.isEncrypted && submission.encryptedBlobId) {
+    pushEntry({
+      id: "encrypted-payload-stored",
+      title: t("signalTimelineEncryptedPayloadStoredTitle"),
+      detail: t("signalTimelineEncryptedPayloadStoredDetail"),
+      timestamp: proofTimestamp,
+      phase: "intake",
+    });
+  }
+
+  if (proofBlobId && !isLocalFallbackBlob(proofBlobId)) {
+    pushEntry({
+      id: "walrus-proof-stored",
+      title: t("signalTimelineWalrusProofStoredTitle"),
+      detail: t("signalTimelineWalrusProofStoredDetail"),
+      timestamp: proofTimestamp,
+      phase: "published",
+    });
+  }
+
+  if (typeof submission.onchainSignalId === "number") {
+    pushEntry({
+      id: "sui-proof-registered",
+      title: t("signalTimelineSuiProofRegisteredTitle"),
+      detail: txDigest ? `${t("txDigestLabel")}: ${txDigest}` : t("registeredOnSuiLabel"),
+      timestamp: proofTimestamp,
+      phase: "published",
+    });
+  }
 
   if (
     submission.status !== "unread" ||
@@ -905,6 +946,98 @@ function WorkspaceShortcutBar({
   );
 }
 
+type InboxOnboardingState = "create-project" | "create-signal" | "ready";
+
+function SignalInboxOnboardingHero({
+  state,
+  projectName,
+  projects,
+  selectedProjectId,
+  selectProject,
+  onRevealCreateProject,
+  onRevealConnectProject,
+  highlightCreateFormCta,
+}: {
+  state: InboxOnboardingState;
+  projectName: string | null;
+  projects: Array<{ objectId: string; name: string }>;
+  selectedProjectId: string;
+  selectProject: (projectId: string) => void;
+  onRevealCreateProject: () => void;
+  onRevealConnectProject: () => void;
+  highlightCreateFormCta: boolean;
+}) {
+  const { t } = useI18n();
+  const isCreateProjectState = state === "create-project";
+  const onboardingProjectId = selectedProjectId || projects[0]?.objectId || "";
+
+  return (
+    <section className="panel glow-panel workspace-hero workspace-hero-compact desktop-signal-inbox-hero signal-inbox-onboarding-hero">
+      <div className="workspace-hero-main workspace-overview-shell signal-inbox-onboarding-layout">
+        <div className="workspace-hero-copy signal-inbox-onboarding-copy">
+          <p className="eyebrow">{t("encryptedSignalInboxLabel")}</p>
+          <h1>
+            {isCreateProjectState ? t("signalInboxOnboardingCreateProjectTitle") : t("signalInboxOnboardingCreateSignalTitle")}
+          </h1>
+          <p className="lede">
+            {isCreateProjectState ? t("signalInboxOnboardingCreateProjectBody") : t("signalInboxOnboardingCreateSignalBody")}
+          </p>
+          {!isCreateProjectState && projectName ? (
+            <div className="signal-inbox-onboarding-meta">
+              <span className="workspace-meta-item">{projectName}</span>
+            </div>
+          ) : null}
+        </div>
+
+        <aside className="workspace-action-dock signal-inbox-onboarding-actions">
+          {isCreateProjectState ? (
+            <div className="signal-inbox-onboarding-action-group">
+              <div className="signal-inbox-onboarding-action-copy">
+                <p className="eyebrow">{t("nextStepLabel")}</p>
+                <p className="signal-inbox-onboarding-next-step">{t("signalInboxOnboardingCreateProjectHint")}</p>
+              </div>
+              <button type="button" className="primary-button" onClick={onRevealCreateProject}>
+                {t("createProjectButton")}
+              </button>
+              <CreateFormLink className="signal-inbox-onboarding-secondary-action">
+                {t("signalInboxOnboardingCreateSignalWithoutProject")}
+              </CreateFormLink>
+            </div>
+          ) : (
+            <>
+              <CreateFormLink className={`primary-button ${highlightCreateFormCta ? "create-form-cta-highlight" : ""}`}>
+                {t("composeSignalCta")}
+              </CreateFormLink>
+              <div className="signal-inbox-onboarding-project-picker">
+                <span className="signal-inbox-onboarding-project-label">{t("selectedProjectLabel")}</span>
+                <div className="workspace-shortcut-bar signal-inbox-onboarding-project-bar">
+                  <div className="workspace-project-menu-shell signal-inbox-onboarding-project-shell">
+                    <select
+                      className="signal-inbox-onboarding-project-select"
+                      value={onboardingProjectId}
+                      onChange={(event) => selectProject(event.target.value)}
+                      aria-label={t("selectedProjectLabel")}
+                    >
+                      {projects.map((project) => (
+                        <option key={project.objectId} value={project.objectId}>
+                          {project.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <button type="button" className="ghost-button" onClick={onRevealCreateProject}>
+                    {t("createProjectButton")}
+                  </button>
+                </div>
+              </div>
+            </>
+          )}
+        </aside>
+      </div>
+    </section>
+  );
+}
+
 interface MobileSignalRowProps {
   record: SignalRecord;
   isSelected: boolean;
@@ -1406,7 +1539,6 @@ export function AdminDashboardPage() {
     selectedProjectId,
     selectProject,
     selectedProject,
-    localProjectFormsCount,
     manualProjectId,
     setManualProjectId,
     projectCreateName,
@@ -1414,17 +1546,11 @@ export function AdminDashboardPage() {
     highlightCreateFormCta,
     isCreatingProject,
     projectState,
-    deletingProject,
-    deletingOnchainFormIds,
-    advancedProjectSettingsRef,
     manualProjectInputRef,
     projectCreateInputRef,
-    deleteProjectBlockedReason,
     visibleOnchainForms,
     connectManualProject,
     handleCreateProject,
-    handleDeleteProject,
-    handleDeleteOnchainForm,
   } = useProjectWorkspace({
     accountAddress: wallet.accountAddress,
     capabilityProfile,
@@ -2082,8 +2208,40 @@ export function AdminDashboardPage() {
   const selectedRecordHasPayloadIssue = selectedRecord
     ? hasPrivateSignalPayloadIssue(selectedRecord.submission)
     : false;
+  const selectedRecordTxDigest = selectedRecord ? getSubmissionMetadataString(selectedRecord.submission, "txDigest") : undefined;
+  const selectedRecordRpcProviderLabel = selectedRecord
+    ? getSubmissionMetadataString(selectedRecord.submission, "rpcProvider") ?? rpc.providerLabel
+    : rpc.providerLabel;
+  const selectedRecordRpcNetworkLabel = selectedRecord
+    ? getSubmissionMetadataString(selectedRecord.submission, "network") ?? rpc.connectedNetworkLabel
+    : rpc.connectedNetworkLabel;
+  const selectedRecordVerificationRouteLabel = /tatum/i.test(selectedRecordRpcProviderLabel)
+    ? t("verifiedViaTatumSuiRpc")
+    : t("verifiedViaSuiRpc", { provider: selectedRecordRpcProviderLabel });
   const selectedReviewContextChips = selectedRecord
     ? [
+        {
+          label: t("signalJourneySignal"),
+          tone: "soft" as const,
+        },
+        {
+          label: detailAnswers || !selectedRecord.submission.isEncrypted ? t("signalJourneyAnalysis") : t("signalJourneyAnalysisLocked"),
+          tone: detailAnswers || !selectedRecord.submission.isEncrypted ? ("soft" as const) : ("warn" as const),
+        },
+        {
+          label:
+            typeof selectedRecord.submission.onchainSignalId === "number"
+              ? t("signalJourneyImmutableProof")
+              : selectedRecordStoredOnWalrus
+                ? t("signalJourneyWalrusProof")
+                : t("signalJourneyLocalRecovery"),
+          tone:
+            typeof selectedRecord.submission.onchainSignalId === "number"
+              ? ("accent" as const)
+              : selectedRecordStoredOnWalrus
+                ? ("soft" as const)
+                : ("warn" as const),
+        },
         {
           label: t("prioritySummaryLabel", { value: getLocalizedPriorityLabel(selectedRecord.submission.priority, t) }),
           tone: "soft" as const,
@@ -2757,6 +2915,15 @@ export function AdminDashboardPage() {
         formatWorkspaceCount(allSignals.length, "Signal"),
         sessionStatusLabel,
       ];
+  const hasProjects = projects.length > 0;
+  const hasSignalsInSelectedProject = selectedProject ? selectedProject.signalsCount > 0 : false;
+  const onboardingState: InboxOnboardingState =
+    hasAdminAccess && !hasProjects
+      ? "create-project"
+      : hasAdminAccess && hasProjects && allSignals.length === 0 && !hasSignalsInSelectedProject
+        ? "create-signal"
+        : "ready";
+  const showGuidedOnboarding = hasAdminAccess && onboardingState !== "ready";
   const selectedFormSubmissionCount = selectedRecord ? (submissionsByFormId[selectedRecord.form.id] ?? []).length : 0;
   const selectedFormFilteredExportCount = selectedRecord
     ? visibleSignals.filter((record) => record.form.id === selectedRecord.form.id).length
@@ -3006,26 +3173,10 @@ export function AdminDashboardPage() {
   }
 
   function openAdvancedProjectSettings() {
-    const details = advancedProjectSettingsRef.current;
-    if (details) {
-      details.open = true;
-      details.scrollIntoView({
-        behavior: "smooth",
-        block: "start",
-      });
-    }
     setProjectModalMode("select");
   }
 
   function revealProjectSettingsTools(mode: "connect" | "create") {
-    const details = advancedProjectSettingsRef.current;
-    if (details) {
-      details.open = true;
-      details.scrollIntoView({
-        behavior: "smooth",
-        block: "start",
-      });
-    }
     setProjectModalMode(mode);
   }
 
@@ -3293,46 +3444,67 @@ export function AdminDashboardPage() {
           />
         ) : null}
 
-        <section className="panel glow-panel workspace-hero workspace-hero-compact desktop-signal-inbox-hero">
-          <div className="workspace-hero-main workspace-overview-shell">
-            <div className="workspace-hero-copy">
-              <p className="eyebrow">{sessionStatusLabel}</p>
-              <h1>{hasAdminAccess && selectedProject ? selectedProject.name : t("openInboxCta")}</h1>
-              <p className="lede">{t("signalInboxFastLaneBody")}</p>
-              <div className="workspace-hero-meta">
-                {workspaceMetaItems.map((item) => (
-                  <span key={item} className="workspace-meta-item">
-                    {item}
-                  </span>
-                ))}
-                {isLoadingCapabilities ? (
-                  <span className="workspace-meta-item">{t("checkingWalletAccess")}</span>
-                ) : null}
-                <span className="workspace-meta-item">{sessionStatusLabel}</span>
+        {showGuidedOnboarding ? (
+          <SignalInboxOnboardingHero
+            state={onboardingState}
+            projectName={selectedProject?.name ?? null}
+            projects={projects}
+            selectedProjectId={selectedProjectId}
+            selectProject={selectProject}
+            onRevealCreateProject={() => revealProjectSettingsTools("create")}
+            onRevealConnectProject={() => revealProjectSettingsTools("connect")}
+            highlightCreateFormCta={highlightCreateFormCta}
+          />
+        ) : (
+          <section className="panel glow-panel workspace-hero workspace-hero-compact desktop-signal-inbox-hero">
+            <div className="workspace-hero-main workspace-overview-shell">
+              <div className="workspace-hero-copy">
+                <p className="eyebrow">{sessionStatusLabel}</p>
+                <h1>{hasAdminAccess && selectedProject ? selectedProject.name : t("openInboxCta")}</h1>
+                <p className="lede">{t("signalInboxFastLaneBody")}</p>
+                <div className="workspace-hero-meta">
+                  {workspaceMetaItems.map((item) => (
+                    <span key={item} className="workspace-meta-item">
+                      {item}
+                    </span>
+                  ))}
+                  {isLoadingCapabilities ? (
+                    <span className="workspace-meta-item">{t("checkingWalletAccess")}</span>
+                  ) : null}
+                  <span className="workspace-meta-item">{sessionStatusLabel}</span>
+                </div>
               </div>
+
+              <aside className="workspace-action-dock">
+                <WorkspaceShortcutBar
+                  className="workspace-dock-actions"
+                  hasAdminAccess={hasProjectManagementAccess}
+                  selectedProjectName={selectedProject?.name ?? null}
+                  selectedProjectId={selectedProjectId}
+                  projects={projects}
+                  highlightCreateFormCta={highlightCreateFormCta}
+                  onSelectProject={selectProject}
+                  onRevealCreateProject={() => revealProjectSettingsTools("create")}
+                  onRevealConnectProject={() => revealProjectSettingsTools("connect")}
+                />
+              </aside>
             </div>
+          </section>
+        )}
 
-            <aside className="workspace-action-dock">
-              <WorkspaceShortcutBar
-                className="workspace-dock-actions"
-                hasAdminAccess={hasProjectManagementAccess}
-                selectedProjectName={selectedProject?.name ?? null}
-                selectedProjectId={selectedProjectId}
-                projects={projects}
-                highlightCreateFormCta={highlightCreateFormCta}
-                onSelectProject={selectProject}
-                onRevealCreateProject={() => revealProjectSettingsTools("create")}
-                onRevealConnectProject={() => revealProjectSettingsTools("connect")}
-              />
-            </aside>
-          </div>
-        </section>
-
-        {hasAdminAccess ? (
+        {hasAdminAccess && !showGuidedOnboarding ? (
           <AdminWorkspaceTabs activeTab={activeWorkspaceTab} onSelectTab={setWorkspaceTab} />
         ) : null}
 
-        {activeWorkspaceTab === "activity" && hasAdminAccess ? (
+        {showGuidedOnboarding ? (
+          onboardingState === "create-signal" ? (
+            <EmptyState variant="abyss" className="signal-inbox-onboarding-empty-state">
+              <p className="eyebrow">{t("inboxEmptyEyebrow")}</p>
+              <h2>{t("signalInboxOnboardingNoSignalsTitle")}</h2>
+              <p>{t("signalInboxOnboardingNoSignalsBody")}</p>
+            </EmptyState>
+          ) : null
+        ) : activeWorkspaceTab === "activity" && hasAdminAccess ? (
           <WorkspaceActivityLog events={activityEvents} />
         ) : activeWorkspaceTab === "insights" && hasAdminAccess ? (
           <WorkspaceInsights
@@ -4187,6 +4359,10 @@ export function AdminDashboardPage() {
                           ? t("pendingSuiRegistration")
                           : t("offchainOnlyLabel"))
                       }
+                      rpcProviderLabel={selectedRecordRpcProviderLabel}
+                      rpcNetworkLabel={selectedRecordRpcNetworkLabel}
+                      verificationRouteLabel={selectedRecordVerificationRouteLabel}
+                      txDigest={selectedRecordTxDigest}
                       canDecrypt={Boolean(wallet.accountAddress)}
                       relatedSignals={relatedSignals}
                       selectedSignalId={selectedSignalId}
@@ -4206,138 +4382,6 @@ export function AdminDashboardPage() {
           </section>
           </>
         )}
-
-        {hasProjectManagementAccess && activeWorkspaceTab !== "insights" && activeWorkspaceTab !== "members" ? (
-        <details ref={advancedProjectSettingsRef} className="panel advanced-project-settings" open>
-          <summary>
-            <span>
-              <strong>{t("advancedProjectSettingsTitle")}</strong>
-              <span className="muted">{t("advancedProjectSettingsBody")}</span>
-            </span>
-          </summary>
-          <div className="advanced-project-settings-body">
-            <div className="project-registry-status">
-              <span className="signal-chip">{selectedProject ? t("projectSelectedStatus") : t("noProjectSelectedStatus")}</span>
-              <span className="signal-chip">{privateReviewLabel}</span>
-            </div>
-
-            <article className="project-registry-subpanel project-registry-subpanel-soft advanced-project-switcher">
-              <div className="project-panel-head">
-                <div>
-                  <p className="eyebrow">{t("currentProjectEyebrow")}</p>
-                  <h3>{t("createOrSwitchProjectTitle")}</h3>
-                </div>
-                <span className="signal-chip">{t("workspaceScopeLabel")}</span>
-              </div>
-              <p className="muted">{t("switchProjectBody")}</p>
-              <div className="advanced-project-actions">
-                <button type="button" className="ghost-button" onClick={() => setProjectModalMode("select")}>
-                  {t("chooseProjectButton")}
-                </button>
-                <button type="button" className="primary-button" onClick={() => setProjectModalMode("create")}>
-                  {t("createProjectButton")}
-                </button>
-                <button type="button" className="ghost-button" onClick={() => setProjectModalMode("connect")}>
-                  {t("connectExistingShort")}
-                </button>
-              </div>
-              <div className="advanced-project-current">
-                <span className="eyebrow">{t("selectedProjectLabel")}</span>
-                {selectedProject ? (
-                  <div className="advanced-project-current-card">
-                    <strong>{selectedProject.name}</strong>
-                    <span className="muted">
-                      {t("projectModalProjectStats", {
-                        forms: selectedProject.formsCount,
-                        signals: selectedProject.signalsCount,
-                      })}
-                    </span>
-                  </div>
-                ) : (
-                  <p className="muted advanced-project-empty">{t("projectModalNoProjectsSelected")}</p>
-                )}
-              </div>
-              {projectState ? <p className="muted advanced-project-feedback">{projectState}</p> : null}
-            </article>
-
-            <div className="project-registry-grid project-registry-grid-advanced">
-              {selectedProject ? (
-                <article className="project-registry-subpanel project-registry-danger">
-                  <div className="project-panel-head">
-                    <div>
-                      <p className="eyebrow">{t("dangerZoneEyebrow")}</p>
-                      <h3>{t("deleteProjectTitle")}</h3>
-                    </div>
-                    <span className="signal-chip">{t("ownerOnlyLabel")}</span>
-                  </div>
-                  <p className="muted">{t("emptyProjectsDeleteOnly")}</p>
-                  <div className="stack">
-                    <div className="workspace-hero-meta">
-                      <span className="workspace-meta-item">{t("onchainFormsCount", { count: selectedProject.formsCount })}</span>
-                      <span className="workspace-meta-item">{t("onchainSignalsCount", { count: selectedProject.signalsCount })}</span>
-                      <span className="workspace-meta-item">{t("localFormsCount", { count: localProjectFormsCount })}</span>
-                    </div>
-                    {deleteProjectBlockedReason ? (
-                      <p className="warning-text">{deleteProjectBlockedReason} {t("localFormsDifferWarningSuffix")}</p>
-                    ) : (
-                      <p className="muted">{t("projectEmptyDeleteBody")}</p>
-                    )}
-                    {visibleOnchainForms.length > 0 ? (
-                      <div className="stack onchain-form-list">
-                        <p className="muted">{t("onchainFormRecords")}</p>
-                        {visibleOnchainForms.map((form) => (
-                          <div key={form.formId} className="metadata-row onchain-form-row">
-                            <div>
-                              <strong>{t("formNumberLabel", { id: form.formId })}</strong>
-                              <p className="muted">{form.title || t("untitledForm")}</p>
-                            </div>
-                            <div className="inline-actions">
-                              <span className={`signal-chip ${form.active ? "signal-chip-accent" : "signal-chip-soft"}`}>
-                                {form.active ? t("activeLabel") : t("inactiveLabel")}
-                              </span>
-                              <button
-                                type="button"
-                                className="ghost-button"
-                                disabled={
-                                  deletingOnchainFormIds.includes(form.formId) ||
-                                  selectedProject.signalsCount > 0
-                                }
-                                onClick={() => void handleDeleteOnchainForm(form.formId)}
-                              >
-                                {deletingOnchainFormIds.includes(form.formId) ? t("deletingLabel") : t("deleteOnchainFormButton")}
-                              </button>
-                            </div>
-                          </div>
-                        ))}
-                        {selectedProject.signalsCount > 0 ? (
-                          <p className="muted">{t("deleteOnchainFormsNoSignalsOnly")}</p>
-                        ) : null}
-                      </div>
-                    ) : null}
-                    <button
-                      type="button"
-                      className="ghost-button node-directory-delete"
-                      onClick={() => void handleDeleteProject()}
-                      disabled={
-                        deletingProject ||
-                        !selectedProject.ownedOwnerCapId ||
-                        selectedProject.formsCount > 0 ||
-                        selectedProject.signalsCount > 0 ||
-                        localProjectFormsCount > 0
-                      }
-                    >
-                      {deletingProject ? t("deletingLabel") : t("deleteProjectButton")}
-                    </button>
-                  </div>
-                </article>
-              ) : null}
-            </div>
-
-            {projectState ? <p className="muted">{projectState}</p> : null}
-          </div>
-        </details>
-        ) : null}
-
         <div className="mobile-console-banner">{t("adminDesktopNotice")}</div>
       </section>
       <ReviewSessionModal

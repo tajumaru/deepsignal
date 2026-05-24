@@ -550,6 +550,14 @@ export function SignalStatusBadges({
         title: "Reviewing signal",
         Icon: ActivityIcon,
       });
+    } else {
+      badges.push({
+        key: "unresolved",
+        tone: "warning",
+        label: "Open",
+        title: "Unresolved signal",
+        Icon: WarningIcon,
+      });
     }
   }
 

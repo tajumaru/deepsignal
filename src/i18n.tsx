@@ -1365,6 +1365,22 @@ const messages = {
     workspaceMetricAttentionRequired: "Attention required",
     workspaceMetricAttentionRequiredDetail: (params) =>
       `${params?.unresolved ?? 0} unresolved signals, ${params?.anomalies ?? 0} anomaly ${Number(params?.anomalies ?? 0) === 1 ? "marker" : "markers"} in the current scan.`,
+    workspaceMetricSignalHealth: "Signal health",
+    workspaceSignalHealthStable: "Stable",
+    workspaceSignalHealthWatch: "Watch",
+    workspaceSignalHealthCritical: "Critical",
+    workspaceMetricSignalHealthDetail: (params) =>
+      `${params?.unresolved ?? 0} unresolved signals, ${params?.pending ?? 0} proof registrations still pending.`,
+    workspaceMetricConsensusConfidence: "Consensus confidence",
+    workspaceMetricConsensusConfidenceDetail: (params) =>
+      `${params?.count ?? 0} recurring signals align around the current dominant pattern.`,
+    workspaceMetricEmergencySeverity: "Emergency severity",
+    workspaceMetricEmergencySeverityDetail: (params) =>
+      `${params?.encrypted ?? 0} encrypted signals still need unlock review before the risk picture is complete.`,
+    workspaceMetricResponseDistribution: "Response distribution",
+    workspaceMetricResponseDistributionDetail: (params) =>
+      `Top response cluster currently accounts for ${params?.cluster ?? "the leading signal slice"}.`,
+    workspaceMetricResponseDistributionEmpty: "No dominant response pattern yet.",
     workspaceMetricActiveCluster: "Active signal cluster",
     workspaceMetricActiveClusterDetail: (params) => `Emerging around "${params?.cluster ?? "encrypted signal"}".`,
     workspaceMetricActiveClusterEmpty: "No active cluster detected yet.",
@@ -1373,6 +1389,9 @@ const messages = {
     workspaceSilenceMetricLowActivity: "Follow-up activity remains below the recent baseline.",
     workspaceSilenceMetricInactive: "A previously active cluster has gone quiet.",
     workspaceSilenceMetricNominal: "No cluster is currently drifting into silence.",
+    workspaceMetricImmutableProof: "Immutable proof",
+    workspaceMetricImmutableProofDetail: (params) =>
+      `${params?.pending ?? 0} signals still need Sui proof registration.`,
     workspaceSignalIntelligenceEyebrow: "AI-assisted sonar detection",
     workspaceSignalIntelligenceTitle: "Signal Intelligence",
     workspaceSignalIntelligenceDetected: (params) =>
@@ -1780,6 +1799,11 @@ const messages = {
       "This first-pass timeline is derived from saved signal fields, reviewer metadata, and timestamps already on the record.",
     signalTimelineReceivedTitle: "Signal received",
     signalTimelineReceivedDetail: "The responder submitted this signal to the inbox.",
+    signalTimelineEncryptedPayloadStoredTitle: "Encrypted payload stored",
+    signalTimelineEncryptedPayloadStoredDetail: "Seal-protected payload was written for later reviewer unlock.",
+    signalTimelineWalrusProofStoredTitle: "Walrus proof stored",
+    signalTimelineWalrusProofStoredDetail: "Blob evidence is now available on Walrus for later verification.",
+    signalTimelineSuiProofRegisteredTitle: "Sui proof registered",
     signalTimelineReviewingTitle: "Review started",
     signalTimelineAssignedReviewerTitle: (params) => `Assigned to ${params?.reviewer ?? "reviewer"}`,
     signalTimelineFollowUpEnabledTitle: "Follow-up requested",
@@ -2129,6 +2153,17 @@ const messages = {
       "Recovered from the on-chain registry snapshot. This can appear even when no local signal node exists.",
     anonymousRespondent: "Anonymous respondent",
     signalMetadataAndProofTitle: "Signal metadata and proof",
+    verificationRouteLabel: "Verification route",
+    submissionObjectIdLabel: "Submission object ID",
+    encryptedObjectIdLabel: "Encrypted object ID",
+    verifiedViaTatumSuiRpc: "Verified via Tatum Sui RPC",
+    verifiedViaSuiRpc: (params) => `Verified via ${params?.provider ?? "Sui RPC"}`,
+    signalJourneySignal: "Signal",
+    signalJourneyAnalysis: "Analysis",
+    signalJourneyAnalysisLocked: "Analysis locked",
+    signalJourneyImmutableProof: "Immutable proof",
+    signalJourneyWalrusProof: "Walrus proof",
+    signalJourneyLocalRecovery: "Local recovery",
     legacyUnencryptedResponse: "Legacy unencrypted response \u00b7 created before Seal enforcement",
     privateSignalUnlockedStatus: "Private signal unlocked",
     encryptedPrivateSignalStatus: "Encrypted private signal",
@@ -2342,6 +2377,16 @@ const messages = {
     connectProject: "Connect a project",
     connectProjectBeforeReviewDetail:
       "Create a new project or connect an existing one before you create or review private signals.",
+    signalInboxOnboardingCreateProjectTitle: "Create Your First Project",
+    signalInboxOnboardingCreateProjectBody:
+      "Signals are organized inside projects. Create a project to start collecting encrypted feedback.",
+    signalInboxOnboardingCreateProjectHint: "Recommended for organizing signals and recovery.",
+    signalInboxOnboardingCreateSignalWithoutProject: "Or create a signal without a project",
+    signalInboxOnboardingCreateSignalTitle: "Create Your First Signal",
+    signalInboxOnboardingCreateSignalBody: "Launch your first encrypted intake flow.",
+    signalInboxOnboardingNoSignalsTitle: "No signals yet",
+    signalInboxOnboardingNoSignalsBody:
+      "Publish your first signal in this project to start receiving encrypted feedback in the inbox.",
     publishProtectedFormDetail:
       "Publish one protected form for this project so reviewers have signals to read.",
     sendTestSignalToInboxDetail:
@@ -4087,6 +4132,22 @@ const messages = {
     workspaceMetricAttentionRequired: "要確認",
     workspaceMetricAttentionRequiredDetail: (params) =>
       `未解決 ${params?.unresolved ?? 0} 件、異常マーカー ${params?.anomalies ?? 0} 件を監視中。`,
+    workspaceMetricSignalHealth: "Signal health",
+    workspaceSignalHealthStable: "安定",
+    workspaceSignalHealthWatch: "監視",
+    workspaceSignalHealthCritical: "要警戒",
+    workspaceMetricSignalHealthDetail: (params) =>
+      `未解決 ${params?.unresolved ?? 0} 件、証明登録待ち ${params?.pending ?? 0} 件。`,
+    workspaceMetricConsensusConfidence: "Consensus confidence",
+    workspaceMetricConsensusConfidenceDetail: (params) =>
+      `主要パターンに整列している反復シグナル ${params?.count ?? 0} 件。`,
+    workspaceMetricEmergencySeverity: "Emergency severity",
+    workspaceMetricEmergencySeverityDetail: (params) =>
+      `暗号化されたままの要確認シグナル ${params?.encrypted ?? 0} 件。`,
+    workspaceMetricResponseDistribution: "Response distribution",
+    workspaceMetricResponseDistributionDetail: (params) =>
+      `現在のトップ反応クラスタ: ${params?.cluster ?? "主要シグナル群"}。`,
+    workspaceMetricResponseDistributionEmpty: "優勢な反応パターンはまだありません。",
     workspaceMetricActiveCluster: "アクティブクラスタ",
     workspaceMetricActiveClusterDetail: (params) =>
       `"${params?.cluster ?? "暗号化シグナル"}" 周辺で浮上中。`,
@@ -4096,6 +4157,9 @@ const messages = {
     workspaceSilenceMetricLowActivity: "直近の基準線よりフォローアップ反応が弱い状態です。",
     workspaceSilenceMetricInactive: "以前は動いていたクラスタが静かな状態に入っています。",
     workspaceSilenceMetricNominal: "沈黙に傾いているクラスタは現在ありません。",
+    workspaceMetricImmutableProof: "Immutable proof",
+    workspaceMetricImmutableProofDetail: (params) =>
+      `Sui 証明登録待ち ${params?.pending ?? 0} 件。`,
     workspaceSignalIntelligenceEyebrow: "AI支援ソナー検知",
     workspaceSignalIntelligenceTitle: "シグナルインテリジェンス",
     workspaceSignalIntelligenceDetected: (params) =>
@@ -4520,6 +4584,13 @@ const messages = {
     signalTimelineReceivedTitle: "\u53d7\u4fe1",
     signalTimelineReceivedDetail:
       "\u56de\u7b54\u8005\u304c\u3053\u306e signal \u3092 inbox \u306b\u9001\u4fe1\u3057\u307e\u3057\u305f\u3002",
+    signalTimelineEncryptedPayloadStoredTitle: "\u6697\u53f7\u5316\u30da\u30a4\u30ed\u30fc\u30c9\u3092\u4fdd\u5b58",
+    signalTimelineEncryptedPayloadStoredDetail:
+      "\u30ec\u30d3\u30e5\u30a2\u30fc\u306e\u89e3\u9664\u7528\u306b Seal \u4fdd\u8b77\u30da\u30a4\u30ed\u30fc\u30c9\u3092\u66f8\u304d\u8fbc\u307f\u307e\u3057\u305f\u3002",
+    signalTimelineWalrusProofStoredTitle: "Walrus \u8a3c\u660e\u3092\u4fdd\u5b58",
+    signalTimelineWalrusProofStoredDetail:
+      "\u5f8c\u304b\u3089\u691c\u8a3c\u3067\u304d\u308b blob \u8a3c\u8de1\u304c Walrus \u306b\u4fdd\u5b58\u3055\u308c\u307e\u3057\u305f\u3002",
+    signalTimelineSuiProofRegisteredTitle: "Sui \u8a3c\u660e\u3092\u767b\u9332",
     signalTimelineReviewingTitle: "\u30ec\u30d3\u30e5\u30fc\u958b\u59cb",
     signalTimelineAssignedReviewerTitle: (params) => `${params?.reviewer ?? "\u30ec\u30d3\u30e5\u30a2\u30fc"} \u306b\u5272\u308a\u5f53\u3066`,
     signalTimelineFollowUpEnabledTitle: "\u30d5\u30a9\u30ed\u30fc\u30a2\u30c3\u30d7\u5bfe\u5fdc",
@@ -4904,6 +4975,17 @@ const messages = {
       "\u30aa\u30f3\u30c1\u30a7\u30fc\u30f3\u30ec\u30b8\u30b9\u30c8\u30ea\u306e\u30b9\u30ca\u30c3\u30d7\u30b7\u30e7\u30c3\u30c8\u304b\u3089\u5fa9\u5143\u3057\u305f signal \u3067\u3059\u3002\u30ed\u30fc\u30ab\u30eb\u306e signal node \u304c\u306a\u304f\u3066\u3082\u8868\u793a\u3055\u308c\u308b\u3053\u3068\u304c\u3042\u308a\u307e\u3059\u3002",
     anonymousRespondent: "\u533f\u540d\u306e\u56de\u7b54\u8005",
     signalMetadataAndProofTitle: "signal \u306e\u30e1\u30bf\u30c7\u30fc\u30bf\u3068\u8a3c\u660e",
+    verificationRouteLabel: "\u691c\u8a3c\u7d4c\u8def",
+    submissionObjectIdLabel: "submission object ID",
+    encryptedObjectIdLabel: "\u6697\u53f7\u5316 object ID",
+    verifiedViaTatumSuiRpc: "Tatum Sui RPC \u7d4c\u7531\u3067\u691c\u8a3c",
+    verifiedViaSuiRpc: (params) => `${params?.provider ?? "Sui RPC"} \u7d4c\u7531\u3067\u691c\u8a3c`,
+    signalJourneySignal: "Signal",
+    signalJourneyAnalysis: "Analysis",
+    signalJourneyAnalysisLocked: "Analysis locked",
+    signalJourneyImmutableProof: "Immutable proof",
+    signalJourneyWalrusProof: "Walrus proof",
+    signalJourneyLocalRecovery: "Local recovery",
     legacyUnencryptedResponse:
       "\u904e\u53bb\u306e\u975e\u6697\u53f7\u5316\u30ec\u30b9\u30dd\u30f3\u30b9 \u00b7 Seal \u5f37\u5236\u524d\u306b\u4f5c\u6210",
     privateSignalUnlockedStatus: "\u975e\u516c\u958b\u30b7\u30b0\u30ca\u30eb\u3092\u89e3\u9664\u6e08\u307f",
@@ -5134,6 +5216,16 @@ const messages = {
     connectProject: "\u30d7\u30ed\u30b8\u30a7\u30af\u30c8\u3092\u63a5\u7d9a",
     connectProjectBeforeReviewDetail:
       "\u30d7\u30e9\u30a4\u30d9\u30fc\u30c8\u30b7\u30b0\u30ca\u30eb\u3092\u4f5c\u6210\u30fb\u30ec\u30d3\u30e5\u30fc\u3059\u308b\u524d\u306b\u3001\u65b0\u898f\u30d7\u30ed\u30b8\u30a7\u30af\u30c8\u3092\u4f5c\u6210\u3059\u308b\u304b\u65e2\u5b58\u306e\u3082\u306e\u3092\u63a5\u7d9a\u3057\u3066\u304f\u3060\u3055\u3044\u3002",
+    signalInboxOnboardingCreateProjectTitle: "Create Your First Project",
+    signalInboxOnboardingCreateProjectBody:
+      "Signals are organized inside projects. Create a project to start collecting encrypted feedback.",
+    signalInboxOnboardingCreateProjectHint: "Signals and recovery are easier to manage with a project.",
+    signalInboxOnboardingCreateSignalWithoutProject: "またはプロジェクトなしで signal を作成",
+    signalInboxOnboardingCreateSignalTitle: "Create Your First Signal",
+    signalInboxOnboardingCreateSignalBody: "Launch your first encrypted intake flow.",
+    signalInboxOnboardingNoSignalsTitle: "No signals yet",
+    signalInboxOnboardingNoSignalsBody:
+      "Publish your first signal in this project to start receiving encrypted feedback in the inbox.",
     publishProtectedFormDetail:
       "\u30ec\u30d3\u30e5\u30a2\u30fc\u304c\u8aad\u3081\u308b\u30b7\u30b0\u30ca\u30eb\u3092\u96c6\u3081\u308b\u305f\u3081\u3001\u3053\u306e\u30d7\u30ed\u30b8\u30a7\u30af\u30c8\u7528\u306e\u4fdd\u8b77\u4ed8\u304d\u30d5\u30a9\u30fc\u30e0\u30921\u3064\u516c\u958b\u3057\u3066\u304f\u3060\u3055\u3044\u3002",
     sendTestSignalToInboxDetail:

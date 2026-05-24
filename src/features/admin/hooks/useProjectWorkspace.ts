@@ -48,7 +48,6 @@ export function useProjectWorkspace({
   const [highlightCreateFormCta, setHighlightCreateFormCta] = useState(false);
   const [deletingProject, setDeletingProject] = useState(false);
   const [deletingOnchainFormIds, setDeletingOnchainFormIds] = useState<number[]>([]);
-  const advancedProjectSettingsRef = useRef<HTMLDetailsElement | null>(null);
   const manualProjectInputRef = useRef<HTMLInputElement | null>(null);
   const projectCreateInputRef = useRef<HTMLInputElement | null>(null);
   const hasAdminAccess = canAdmin(capabilityProfile);
@@ -363,7 +362,6 @@ export function useProjectWorkspace({
     setProjectState,
     deletingProject,
     deletingOnchainFormIds,
-    advancedProjectSettingsRef,
     manualProjectInputRef,
     projectCreateInputRef,
     deleteProjectBlockedReason,
