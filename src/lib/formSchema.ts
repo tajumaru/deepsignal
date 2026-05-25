@@ -3,7 +3,16 @@ import { normalizeFormVisibility } from "./explore";
 import { normalizeActivityEvent } from "./activityLog";
 import { normalizeFormPurpose } from "./formTemplates";
 import { normalizeLogicGroup, sanitizeConditionalLogicFields } from "../utils/formLogic";
-import type { AnalysisProfileId, FormField, FormIdentityPolicy, FormLocationRequirement, FormSchema, FormSection } from "../types";
+import type {
+  AnalysisProfileId,
+  AnalysisSignalType,
+  AnalysisType,
+  FormField,
+  FormIdentityPolicy,
+  FormLocationRequirement,
+  FormSchema,
+  FormSection,
+} from "../types";
 
 function normalizeFormIdentityPolicy(identityPolicy: unknown): FormIdentityPolicy {
   return identityPolicy === "wallet_required" ? "wallet_required" : "anonymous_allowed";
@@ -20,6 +29,35 @@ function normalizeAnalysisProfileId(analysisProfileId: unknown): AnalysisProfile
     analysisProfileId === "governance_signal" ||
     analysisProfileId === "general_signal"
     ? analysisProfileId
+    : undefined;
+}
+
+function normalizeSignalType(signalType: unknown): AnalysisSignalType | undefined {
+  return signalType === "feedback" ||
+    signalType === "product_voice" ||
+    signalType === "agent_log" ||
+    signalType === "operation" ||
+    signalType === "incident" ||
+    signalType === "disaster" ||
+    signalType === "safety" ||
+    signalType === "governance" ||
+    signalType === "community" ||
+    signalType === "generic"
+    ? signalType
+    : undefined;
+}
+
+function normalizeAnalysisType(analysisType: unknown): AnalysisType | undefined {
+  return analysisType === "summary" ||
+    analysisType === "risk" ||
+    analysisType === "trend" ||
+    analysisType === "action" ||
+    analysisType === "sentiment" ||
+    analysisType === "urgency" ||
+    analysisType === "anomaly" ||
+    analysisType === "silence" ||
+    analysisType === "velocity"
+    ? analysisType
     : undefined;
 }
 
@@ -75,6 +113,8 @@ export function normalizeForm(raw: FormSchema | (Record<string, unknown> & { id:
     sections: Array.isArray(raw.sections) ? (raw.sections as FormSection[]) : [],
     purpose: normalizeFormPurpose(raw.purpose),
     analysisProfileId: normalizeAnalysisProfileId(raw.analysisProfileId),
+    signalType: normalizeSignalType(raw.signalType),
+    analysisType: normalizeAnalysisType(raw.analysisType),
     visibility,
     identityPolicy: normalizeFormIdentityPolicy(raw.identityPolicy),
     locationRequirement: normalizeFormLocationRequirement(raw.locationRequirement),

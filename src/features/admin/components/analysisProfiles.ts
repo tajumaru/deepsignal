@@ -1,5 +1,10 @@
 import type { FormSchema } from "../../../types";
-import type { AnalysisProfileId, SignalSeverity } from "../../../types";
+import type {
+  AnalysisProfileId,
+  AnalysisSignalType,
+  AnalysisType,
+  SignalSeverity,
+} from "../../../types";
 import type { SignalRecord } from "../hooks/useSignalInboxData";
 
 export type AnalysisAccentTone = "teal" | "amber" | "crimson" | "violet" | "slate";
@@ -36,9 +41,15 @@ export interface AnalysisVisualEmphasis {
 
 export interface ResolvedAnalysisProfile {
   id: AnalysisProfileId;
+  signalType: AnalysisSignalType;
+  analysisType: AnalysisType;
   label: string;
   shortLabel: string;
   description: string;
+  keyFinding: string;
+  whyItMatters: string;
+  highlightedAction: string;
+  evidenceCount: number;
   metrics: AnalysisMetric[];
   insightCards: AnalysisInsightCard[];
   recommendedActions: AnalysisRecommendedAction[];
@@ -96,6 +107,52 @@ interface ProfileMatchResult {
   score: number;
 }
 
+const signalTypeLabels: Record<AnalysisSignalType, string> = {
+  feedback: "Feedback",
+  product_voice: "Product Voice",
+  agent_log: "Agent Log",
+  operation: "Operation",
+  incident: "Incident",
+  disaster: "Disaster",
+  safety: "Safety",
+  governance: "Governance",
+  community: "Community",
+  generic: "Generic",
+};
+
+const analysisTypeLabels: Record<AnalysisType, string> = {
+  summary: "Summary",
+  risk: "Risk",
+  trend: "Trend",
+  action: "Action",
+  sentiment: "Sentiment",
+  urgency: "Urgency",
+  anomaly: "Anomaly",
+  silence: "Silence",
+  velocity: "Velocity",
+};
+
+const defaultSignalTypeByProfile: Record<AnalysisProfileId, AnalysisSignalType> = {
+  customer_feedback: "feedback",
+  ai_agent_log: "agent_log",
+  incident_report: "incident",
+  governance_signal: "governance",
+  general_signal: "generic",
+};
+
+const defaultAnalysisTypeBySignalType: Record<AnalysisSignalType, AnalysisType> = {
+  feedback: "sentiment",
+  product_voice: "action",
+  agent_log: "anomaly",
+  operation: "velocity",
+  incident: "urgency",
+  disaster: "urgency",
+  safety: "risk",
+  governance: "risk",
+  community: "trend",
+  generic: "summary",
+};
+
 function clampPercent(value: number) {
   return `${Math.max(0, Math.min(100, Math.round(value)))}%`;
 }
@@ -136,6 +193,46 @@ function ratio(count: number, total: number) {
     return 0;
   }
   return (count / total) * 100;
+}
+
+function getFormAnalysisCorpus(form: Pick<FormSchema, "analysisProfileId" | "signalType" | "analysisType" | "purpose" | "title" | "description">) {
+  return [
+    form.analysisProfileId,
+    form.signalType,
+    form.analysisType,
+    form.title,
+    form.description,
+    form.purpose,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+}
+
+function sortByPriority<T extends { id: string }>(items: T[], priorities: string[]) {
+  if (priorities.length === 0) {
+    return items;
+  }
+  const ranking = new Map(priorities.map((id, index) => [id, index]));
+  return [...items].sort((left, right) => {
+    const leftRank = ranking.get(left.id) ?? Number.MAX_SAFE_INTEGER;
+    const rightRank = ranking.get(right.id) ?? Number.MAX_SAFE_INTEGER;
+    if (leftRank !== rightRank) {
+      return leftRank - rightRank;
+    }
+    return 0;
+  });
+}
+
+function uniqueById<T extends { id: string }>(items: T[]) {
+  const seen = new Set<string>();
+  return items.filter((item) => {
+    if (seen.has(item.id)) {
+      return false;
+    }
+    seen.add(item.id);
+    return true;
+  });
 }
 
 function topClusterLabel(context: AnalysisProfileContext) {
@@ -187,9 +284,15 @@ function buildDefaultProfile(context: AnalysisProfileContext): ResolvedAnalysisP
   const topCluster = context.clusters[0];
   return {
     id: "general_signal",
+    signalType: "generic",
+    analysisType: "summary",
     label: "General Signal",
     shortLabel: "General",
     description: "Balanced review profile for mixed inboxes and uncategorized signal streams.",
+    keyFinding: "Mixed signals are active across the inbox.",
+    whyItMatters: "Queue health and repeated patterns are more important than any single domain lens in this view.",
+    highlightedAction: "Start with the newest unread records in the dominant cluster.",
+    evidenceCount: context.totalSignals,
     metrics: [
       {
         id: "open-load",
@@ -283,9 +386,15 @@ function buildCustomerFeedbackProfile(context: AnalysisProfileContext): Resolved
   const painPointCount = context.clusters.filter((cluster) => cluster.severity !== "low").length;
   return {
     id: "customer_feedback",
+    signalType: "feedback",
+    analysisType: "sentiment",
     label: "Customer Feedback",
     shortLabel: "Feedback",
     description: "Tracks sentiment, recurring pain points, and repeated customer topics.",
+    keyFinding: "Customer sentiment and repeated pain points are shaping the queue.",
+    whyItMatters: "Repeated friction can quickly distort product decisions if the backlog is not grouped and answered.",
+    highlightedAction: "Bundle the most repeated complaint into one owner thread before replying item by item.",
+    evidenceCount: Math.max(sentiment.negative, context.clusters[0]?.signalCount ?? 0),
     metrics: [
       {
         id: "sentiment",
@@ -377,9 +486,15 @@ function buildAiAgentLogProfile(context: AnalysisProfileContext): ResolvedAnalys
   const timeoutPatterns = countMatches(context.records, /\b(timeout|timed out|latency|hung|stall|stalled)\b/);
   return {
     id: "ai_agent_log",
+    signalType: "agent_log",
+    analysisType: "anomaly",
     label: "AI Agent Log",
     shortLabel: "Agent Log",
     description: "Surfaces retry pressure, failure loops, and timeout-heavy operating patterns.",
+    keyFinding: "Operational instability is clustering around retries, loops, or timeouts.",
+    whyItMatters: "Repeated runtime failures compound quickly and can hide the single bottleneck that is actually blocking the system.",
+    highlightedAction: "Prioritize the cluster with repeated retries or the same error string before chasing secondary symptoms.",
+    evidenceCount: Math.max(retries, failureLoops, timeoutPatterns),
     metrics: [
       {
         id: "retries",
@@ -474,9 +589,15 @@ function buildIncidentReportProfile(context: AnalysisProfileContext): ResolvedAn
   const spread = getUniqueForms(context.records) + new Set(context.clusters.map((cluster) => cluster.label)).size;
   return {
     id: "incident_report",
+    signalType: "incident",
+    analysisType: "urgency",
     label: "Incident Report",
     shortLabel: "Incident",
     description: "Tracks urgency, spread, and anomaly pressure for incident-oriented signal streams.",
+    keyFinding: "Incident pressure is defined by urgency, spread, and anomaly movement.",
+    whyItMatters: "When high-severity reports and live spikes align, the inbox becomes an operational escalation surface instead of a passive backlog.",
+    highlightedAction: "Route the dominant high-severity incident cluster to the incident owner before working lower-severity spillover.",
+    evidenceCount: Math.max(urgentCount, context.anomalyCount, context.silenceCandidates.length),
     metrics: [
       {
         id: "urgency",
@@ -570,9 +691,15 @@ function buildGovernanceSignalProfile(context: AnalysisProfileContext): Resolved
   const spamRisk = (context.relatedPatterns.find((pattern) => pattern.label === "possible_duplicates")?.count ?? 0) + countMatches(context.records, /\b(spam|duplicate|bot|sybil)\b/);
   return {
     id: "governance_signal",
+    signalType: "governance",
+    analysisType: "risk",
     label: "Governance Signal",
     shortLabel: "Governance",
     description: "Highlights conflict signals, clustering behavior, and spam or duplicate risk.",
+    keyFinding: "Governance friction is best read through conflict, clustering, and integrity risk.",
+    whyItMatters: "Duplicate amplification or unresolved conflict can distort operator judgment and public coordination.",
+    highlightedAction: "Split conflict-heavy signals from possible duplicates before deciding whether sentiment is authentic or amplified.",
+    evidenceCount: Math.max(conflictCount, spamRisk, context.clusters[0]?.signalCount ?? 0),
     metrics: [
       {
         id: "conflict",
@@ -660,6 +787,351 @@ function buildGovernanceSignalProfile(context: AnalysisProfileContext): Resolved
   };
 }
 
+function resolveSignalTypeForForm(
+  form: Pick<FormSchema, "analysisProfileId" | "signalType" | "analysisType" | "purpose" | "title" | "description">,
+): AnalysisSignalType {
+  if (form.signalType && form.signalType in signalTypeLabels) {
+    return form.signalType;
+  }
+  const corpus = getFormAnalysisCorpus(form);
+  if (/product|roadmap|ux|usability|feature request|journey|onboarding/.test(corpus)) {
+    return "product_voice";
+  }
+  if (/feedback|customer|user|nps|csat|support|satisfaction|review/.test(corpus)) {
+    return "feedback";
+  }
+  if (/operation|ops|runbook|playbook|workflow health|response play/.test(corpus)) {
+    return "operation";
+  }
+  if (/agent|llm|trace|orchestrator|tool call|timeout|retry/.test(corpus)) {
+    return "agent_log";
+  }
+  if (/disaster|earthquake|flood|storm|evacuation|wildfire/.test(corpus)) {
+    return "disaster";
+  }
+  if (/safety|hazard|injury|medical|protection/.test(corpus)) {
+    return "safety";
+  }
+  if (/incident|outage|emergency|alert|breach|anomaly/.test(corpus)) {
+    return "incident";
+  }
+  if (/community|forum|member|participation|volunteer|responder network/.test(corpus)) {
+    return "community";
+  }
+  if (/governance|proposal|dao|vote|delegate|council|consensus/.test(corpus)) {
+    return "governance";
+  }
+  return defaultSignalTypeByProfile[resolveAnalysisProfileIdForForm(form)];
+}
+
+function resolveAnalysisTypeForForm(
+  form: Pick<FormSchema, "analysisProfileId" | "signalType" | "analysisType" | "purpose" | "title" | "description">,
+  signalType?: AnalysisSignalType,
+): AnalysisType {
+  if (form.analysisType && form.analysisType in analysisTypeLabels) {
+    return form.analysisType;
+  }
+  const corpus = getFormAnalysisCorpus(form);
+  if (/sentiment|positive|negative|mood|emotion/.test(corpus)) {
+    return "sentiment";
+  }
+  if (/action|next step|remediation|owner|follow-up|playbook/.test(corpus)) {
+    return "action";
+  }
+  if (/trend|pattern|movement|weekly|participation/.test(corpus)) {
+    return "trend";
+  }
+  if (/risk|exposure|compliance|safety/.test(corpus)) {
+    return "risk";
+  }
+  if (/urgency|urgent|severity|escalation|critical/.test(corpus)) {
+    return "urgency";
+  }
+  if (/anomaly|outlier|spike|failure loop/.test(corpus)) {
+    return "anomaly";
+  }
+  if (/silence|quiet|inactive|drop-off/.test(corpus)) {
+    return "silence";
+  }
+  if (/velocity|response lag|sla|turnaround/.test(corpus)) {
+    return "velocity";
+  }
+  return defaultAnalysisTypeBySignalType[signalType ?? resolveSignalTypeForForm(form)];
+}
+
+function resolveSignalType(records: SignalRecord[], preferredProfileId?: string | null) {
+  const counts = new Map<AnalysisSignalType, number>();
+  records.forEach((record) => {
+    const resolved = resolveSignalTypeForForm(record.form);
+    counts.set(resolved, (counts.get(resolved) ?? 0) + 1);
+  });
+  const dominant = [...counts.entries()].sort((left, right) => right[1] - left[1])[0]?.[0];
+  if (dominant) {
+    return dominant;
+  }
+  if (preferredProfileId && preferredProfileId in defaultSignalTypeByProfile) {
+    return defaultSignalTypeByProfile[preferredProfileId as AnalysisProfileId];
+  }
+  return "generic" satisfies AnalysisSignalType;
+}
+
+function resolveAnalysisType(records: SignalRecord[], signalType: AnalysisSignalType) {
+  const counts = new Map<AnalysisType, number>();
+  records.forEach((record) => {
+    const resolved = resolveAnalysisTypeForForm(record.form, resolveSignalTypeForForm(record.form));
+    counts.set(resolved, (counts.get(resolved) ?? 0) + 1);
+  });
+  return [...counts.entries()].sort((left, right) => right[1] - left[1])[0]?.[0] ?? defaultAnalysisTypeBySignalType[signalType];
+}
+
+function buildUnreadMetric(context: AnalysisProfileContext): AnalysisMetric {
+  return {
+    id: "unread-front",
+    label: "Unread",
+    value: context.unreadSignals.toLocaleString(),
+    detail: `${context.needsReviewSignals} active signals still need operator review`,
+    tone: context.unreadSignals > 0 ? "alert" : "cluster",
+  };
+}
+
+function buildAnomalyMetric(context: AnalysisProfileContext): AnalysisMetric {
+  return {
+    id: "spike-watch",
+    label: "Spike",
+    value: context.anomalyCount.toLocaleString(),
+    detail: context.activityStatusTone === "spike" ? "Live spike behavior detected in the current window" : "No live spike signature right now",
+    tone: context.anomalyCount > 0 || context.activityStatusTone === "spike" ? "alert" : "cluster",
+  };
+}
+
+function buildSilenceMetric(context: AnalysisProfileContext): AnalysisMetric {
+  return {
+    id: "silence-watch",
+    label: "Silence candidates",
+    value: context.silenceCandidates.length.toLocaleString(),
+    detail: context.silenceCandidates[0]
+      ? `${context.silenceCandidates[0].label} last moved ${context.silenceCandidates[0].lastSeenLabel} ago`
+      : "No silence candidate is standing out right now",
+    tone: context.silenceCandidates.length > 0 ? "alert" : "cluster",
+  };
+}
+
+function buildResponseLagMetric(context: AnalysisProfileContext): AnalysisMetric {
+  return {
+    id: "response-lag",
+    label: "Response lag",
+    value: formatLag(context.currentVelocity.medianLagHours),
+    detail: `${context.currentVelocity.withinDayPercent}% handled inside 24h`,
+    tone: context.currentVelocity.medianLagHours !== null && context.currentVelocity.medianLagHours > 24 ? "alert" : "cluster",
+  };
+}
+
+function buildAnalysisLensProfile(
+  baseProfile: ResolvedAnalysisProfile,
+  context: AnalysisProfileContext,
+  signalType: AnalysisSignalType,
+  analysisType: AnalysisType,
+): ResolvedAnalysisProfile {
+  const sentiment = estimateSentiment(context.records);
+  const urgentCount = getSeverityMix(context.records).high;
+  const praiseCount = sentiment.positive;
+  const negativeCount = sentiment.negative;
+  const topCluster = context.clusters[0];
+  const uxFrictionCount = countMatches(context.records, /\b(ux|ui|friction|confusing|hard to|difficult|unclear|can't find)\b/);
+  const bugSuspectCount = countMatches(context.records, /\b(bug|broken|error|issue|glitch|crash|fail)\b/);
+  const repeatedThemesCount = topCluster?.signalCount ?? 0;
+  const participationHeat = context.totalSignals;
+  const activityDirectionLabel =
+    context.activityStatusTone === "up"
+      ? "Activity up"
+      : context.activityStatusTone === "drop"
+        ? "Activity drop"
+        : context.activityStatusTone === "spike"
+          ? "Spike detected"
+          : "Pulse nominal";
+
+  let priorityMetricIds = [...baseProfile.metrics.map((metric) => metric.id)];
+  let priorityCardIds = [...baseProfile.insightCards.map((card) => card.id)];
+  let priorityActionIds = [...baseProfile.recommendedActions.map((action) => action.id)];
+  let injectedMetrics: AnalysisMetric[] = [];
+  let keyFinding = baseProfile.keyFinding;
+  let whyItMatters = baseProfile.whyItMatters;
+  let highlightedAction = baseProfile.highlightedAction;
+  let evidenceCount = Math.max(1, baseProfile.evidenceCount);
+
+  if ((signalType === "incident" || signalType === "disaster" || signalType === "safety") && analysisType === "urgency") {
+    injectedMetrics = [
+      {
+        id: "high-severity",
+        label: "High severity",
+        value: urgentCount.toLocaleString(),
+        detail: `${context.unresolvedSignals} unresolved reports still in play`,
+        tone: urgentCount > 0 ? "alert" : "cluster",
+      },
+      buildUnreadMetric(context),
+      buildAnomalyMetric(context),
+      buildSilenceMetric(context),
+      buildResponseLagMetric(context),
+    ];
+    priorityCardIds = ["urgent-front", "spread-front", "cluster-front"];
+    priorityActionIds = ["page-owners", "contain-spread", "watch-silence-incident"];
+    keyFinding = urgentCount > 0
+      ? `${urgentCount} high-severity signals remain active, with ${context.unreadSignals} unread and ${context.anomalyCount} spike indicators in the same view.`
+      : `No high-severity incident is dominating, but ${context.unreadSignals} unread signals and ${context.silenceCandidates.length} quiet zones still need a response check.`;
+    whyItMatters = "Incident triage slows down when severity, fresh unread reports, and post-spike silence are split across separate cards.";
+    highlightedAction = "Escalate the highest-severity unread cluster, then check lagging or suddenly silent segments for delayed impact.";
+    evidenceCount = urgentCount + context.unreadSignals + context.anomalyCount + context.silenceCandidates.length;
+  } else if (signalType === "feedback" && analysisType === "sentiment") {
+    injectedMetrics = [
+      {
+        id: "negative-signals",
+        label: "Negative",
+        value: negativeCount.toLocaleString(),
+        detail: `${praiseCount} positive or praise-like signals in the same window`,
+        tone: negativeCount >= praiseCount ? "alert" : "cluster",
+      },
+      {
+        id: "repeated-pain-point",
+        label: "Repeated pain point",
+        value: repeatedThemesCount.toLocaleString(),
+        detail: topCluster ? topCluster.label : "No repeated pain point cluster yet",
+        tone: repeatedThemesCount > 1 ? "alert" : "cluster",
+      },
+      {
+        id: "praise-signals",
+        label: "Praise",
+        value: praiseCount.toLocaleString(),
+        detail: praiseCount > 0 ? "Positive sentiment is still present in the stream" : "No clear praise signal is standing out",
+        tone: "cluster",
+      },
+      {
+        id: "unresolved-feedback",
+        label: "Unresolved feedback",
+        value: context.unresolvedSignals.toLocaleString(),
+        detail: `${context.unreadSignals} unread customer signals still need a first response`,
+        tone: context.unresolvedSignals > 0 ? "alert" : "cluster",
+      },
+    ];
+    priorityCardIds = ["sentiment-readout", "topic-cluster", "review-gap"];
+    priorityActionIds = ["close-negative-loop", "tag-recurring-topic", "protect-positive-signal"];
+    keyFinding = negativeCount > praiseCount
+      ? `Negative sentiment is outweighing praise, and the top pain-point cluster already covers ${repeatedThemesCount} signals.`
+      : `Praise is still visible, but ${context.unresolvedSignals} unresolved feedback items could let fresh friction compound.`;
+    whyItMatters = "Feedback becomes decision-ready when operators can separate repeated pain from one-off noise and keep praise as counterweight.";
+    highlightedAction = "Group the repeated pain point into one owner thread and answer the freshest unresolved feedback before sentiment drifts further.";
+    evidenceCount = negativeCount + praiseCount + repeatedThemesCount;
+  } else if (signalType === "product_voice" && analysisType === "action") {
+    injectedMetrics = [
+      {
+        id: "ux-friction",
+        label: "Repeated UX friction",
+        value: uxFrictionCount.toLocaleString(),
+        detail: `${context.unresolvedSignals} open product voice items still need follow-up`,
+        tone: uxFrictionCount > 0 ? "alert" : "cluster",
+      },
+      {
+        id: "bug-suspect",
+        label: "Bug suspicion",
+        value: bugSuspectCount.toLocaleString(),
+        detail: bugSuspectCount > 0 ? "Repeated bug-like language is visible" : "No bug-heavy signature is dominating",
+        tone: bugSuspectCount > 0 ? "alert" : "cluster",
+      },
+      {
+        id: "top-cluster-action",
+        label: "Top cluster",
+        value: clampPercent(topClusterShare(context)),
+        detail: topCluster ? topCluster.label : "No dominant action cluster yet",
+        tone: "cluster",
+      },
+      {
+        id: "action-pressure",
+        label: "Action pressure",
+        value: context.unreadSignals.toLocaleString(),
+        detail: "Unread product voice signals are likely hiding the next repeated friction loop",
+        tone: context.unreadSignals > 0 ? "alert" : "cluster",
+      },
+    ];
+    priorityCardIds = ["topic-cluster", "review-gap", "sentiment-readout"];
+    priorityActionIds = ["tag-recurring-topic", "close-negative-loop", "protect-positive-signal"];
+    keyFinding = topCluster
+      ? `${topCluster.label} is the clearest product voice cluster, with repeated UX friction and ${bugSuspectCount} bug-like signals nearby.`
+      : `Product voice is active, but the next action path still depends on clustering repeated friction.`;
+    whyItMatters = "Action-oriented product review works best when friction, likely bugs, and the dominant theme are surfaced together for one operator decision.";
+    highlightedAction = "Route the top repeated UX friction cluster into one product action lane and split bug-like reports into a fix-focused queue.";
+    evidenceCount = Math.max(repeatedThemesCount, uxFrictionCount + bugSuspectCount);
+  } else if (signalType === "community" && analysisType === "trend") {
+    injectedMetrics = [
+      {
+        id: "activity-direction",
+        label: "Activity movement",
+        value: activityDirectionLabel,
+        detail: context.activityStatusTone === "stable" ? "Participation is holding near baseline" : "Recent community movement changed versus the trailing window",
+        tone: context.activityStatusTone === "drop" || context.activityStatusTone === "spike" ? "alert" : "cluster",
+      },
+      {
+        id: "repeated-themes",
+        label: "Repeated themes",
+        value: repeatedThemesCount.toLocaleString(),
+        detail: topCluster ? topCluster.label : "No dominant community theme yet",
+        tone: repeatedThemesCount > 1 ? "cluster" : "cluster",
+      },
+      {
+        id: "participation-heat",
+        label: "Participation heat",
+        value: participationHeat.toLocaleString(),
+        detail: `${context.unreadSignals} unread community signals in the current view`,
+        tone: participationHeat > Math.max(3, context.unreadSignals) ? "cluster" : "alert",
+      },
+      buildSilenceMetric(context),
+    ];
+    priorityCardIds = ["cluster-front", "conflict-front", "spam-front"];
+    priorityActionIds = ["tag-coalitions", "watch-spam", "separate-conflict"];
+    keyFinding = context.activityStatusTone === "drop"
+      ? `Community participation softened while ${context.silenceCandidates.length} silence zones and ${repeatedThemesCount} repeated themes remain active.`
+      : `${activityDirectionLabel} is being shaped by ${repeatedThemesCount} repeated themes and ${context.silenceCandidates.length} quiet community zones.`;
+    whyItMatters = "Trend reading in community spaces depends on seeing movement, repeated topics, and silent pockets together before participation drifts.";
+    highlightedAction = "Tag the strongest repeated theme and check whether silence zones reflect healthy resolution or operators losing contact with the community.";
+    evidenceCount = repeatedThemesCount + context.silenceCandidates.length + context.totalSignals;
+  } else if ((signalType === "governance" && analysisType === "trend") || (signalType === "governance" && analysisType === "risk")) {
+    injectedMetrics = [buildAnomalyMetric(context), buildSilenceMetric(context), buildResponseLagMetric(context), ...baseProfile.metrics];
+    priorityCardIds = ["conflict-front", "spam-front", "cluster-front"];
+    priorityActionIds = ["separate-conflict", "watch-spam", "tag-coalitions"];
+    keyFinding = baseProfile.keyFinding;
+    whyItMatters = baseProfile.whyItMatters;
+    highlightedAction = baseProfile.highlightedAction;
+    evidenceCount = Math.max(1, context.relatedPatterns[0]?.count ?? context.unresolvedSignals);
+  } else if ((signalType === "agent_log" || signalType === "operation") && (analysisType === "anomaly" || analysisType === "velocity")) {
+    injectedMetrics = [buildResponseLagMetric(context), buildAnomalyMetric(context), buildUnreadMetric(context), ...baseProfile.metrics];
+    priorityCardIds = ["retry-pressure", "timeout-signature", "looped-errors"];
+    priorityActionIds = ["stop-loop", "timeout-bucket", "add-runbook"];
+    keyFinding = baseProfile.keyFinding;
+    whyItMatters = baseProfile.whyItMatters;
+    highlightedAction = baseProfile.highlightedAction;
+    evidenceCount = Math.max(1, context.unresolvedSignals + context.anomalyCount);
+  } else {
+    injectedMetrics = [buildUnreadMetric(context), buildResponseLagMetric(context), ...baseProfile.metrics];
+    priorityCardIds = [...baseProfile.insightCards.map((card) => card.id)];
+    priorityActionIds = [...baseProfile.recommendedActions.map((action) => action.id)];
+    keyFinding = baseProfile.keyFinding;
+    whyItMatters = baseProfile.whyItMatters;
+    highlightedAction = baseProfile.highlightedAction;
+    evidenceCount = Math.max(1, context.totalSignals);
+  }
+
+  return {
+    ...baseProfile,
+    signalType,
+    analysisType,
+    keyFinding,
+    whyItMatters,
+    highlightedAction,
+    evidenceCount,
+    metrics: uniqueById([...injectedMetrics, ...sortByPriority(baseProfile.metrics, priorityMetricIds)]).slice(0, 4),
+    insightCards: sortByPriority(baseProfile.insightCards, priorityCardIds),
+    recommendedActions: sortByPriority(baseProfile.recommendedActions, priorityActionIds),
+  };
+}
+
 const analysisProfiles: Record<AnalysisProfileId, AnalysisProfileDefinition> = {
   customer_feedback: {
     id: "customer_feedback",
@@ -731,11 +1203,13 @@ export function listAnalysisProfileDefinitions() {
   return Object.values(analysisProfiles);
 }
 
-export function resolveAnalysisProfileIdForForm(form: Pick<FormSchema, "analysisProfileId" | "purpose" | "title" | "description">) {
+export function resolveAnalysisProfileIdForForm(
+  form: Pick<FormSchema, "analysisProfileId" | "signalType" | "analysisType" | "purpose" | "title" | "description">,
+) {
   if (form.analysisProfileId && analysisProfiles[form.analysisProfileId]) {
     return form.analysisProfileId;
   }
-  const corpus = [form.title, form.description, form.purpose].filter(Boolean).join(" ").toLowerCase();
+  const corpus = getFormAnalysisCorpus(form);
   if (/agent|llm|timeout|workflow|trace|orchestrator|run log/.test(corpus)) {
     return "ai_agent_log" satisfies AnalysisProfileId;
   }
@@ -778,8 +1252,9 @@ export function resolveAnalysisProfile(
     resolveProfileDistribution(context.records)[0]?.id ??
     resolveAnalysisProfileIdForForm(context.records[0]?.form ?? { title: "", description: "" }) ??
     "general_signal";
-
-  return analysisProfiles[matchedId].resolve(context);
+  const signalType = resolveSignalType(context.records, matchedId);
+  const analysisType = resolveAnalysisType(context.records, signalType);
+  return buildAnalysisLensProfile(analysisProfiles[matchedId].resolve(context), context, signalType, analysisType);
 }
 
 export function getSignalProfileId(record: SignalRecord) {
@@ -792,4 +1267,12 @@ export function getAnalysisProfileLabel(profileId: AnalysisProfileId) {
 
 export function getAnalysisProfileShortLabel(profileId: AnalysisProfileId) {
   return analysisProfiles[profileId]?.shortLabel ?? analysisProfiles.general_signal.shortLabel;
+}
+
+export function getAnalysisSignalTypeLabel(signalType: AnalysisSignalType) {
+  return signalTypeLabels[signalType] ?? signalTypeLabels.generic;
+}
+
+export function getAnalysisTypeLabel(analysisType: AnalysisType) {
+  return analysisTypeLabels[analysisType] ?? analysisTypeLabels.summary;
 }

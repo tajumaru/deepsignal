@@ -1646,9 +1646,54 @@
   gap: 0.55rem;
 }
 
+.workspace-analysis-badge-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+}
+
 .workspace-profile-chip-row .signal-chip.is-active {
   border-color: var(--analysis-accent);
   box-shadow: 0 0 18px color-mix(in srgb, var(--analysis-accent) 70%, transparent);
+}
+
+.workspace-analysis-summary-card {
+  padding: 1rem;
+  border: 1px solid rgba(116, 226, 255, 0.12);
+  border-radius: var(--radius-card);
+  background:
+    radial-gradient(circle at top right, rgba(102, 227, 255, 0.08), transparent 32%),
+    linear-gradient(180deg, rgba(8, 27, 43, 0.78), rgba(4, 18, 31, 0.7));
+}
+
+.workspace-analysis-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.9rem;
+}
+
+.workspace-analysis-summary-grid div {
+  display: grid;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.workspace-analysis-summary-grid span {
+  color: #9fd1e3;
+  font-size: 0.78rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.workspace-analysis-summary-grid strong,
+.workspace-analysis-summary-grid p {
+  margin-bottom: 0;
+  color: #eefcff;
+  line-height: 1.55;
+}
+
+.workspace-analysis-summary-grid p {
+  color: #d7f7ff;
 }
 
 .workspace-insights-grid {
@@ -2420,6 +2465,7 @@
 }
 
 @media (max-width: 980px) {
+  .workspace-analysis-summary-grid,
   .workspace-insights-grid,
   .workspace-insights-section-grid,
   .workspace-situation-flow-grid,

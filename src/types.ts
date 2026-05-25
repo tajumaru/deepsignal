@@ -23,6 +23,27 @@ export type AnalysisProfileId =
   | "incident_report"
   | "governance_signal"
   | "general_signal";
+export type AnalysisSignalType =
+  | "feedback"
+  | "product_voice"
+  | "agent_log"
+  | "operation"
+  | "incident"
+  | "disaster"
+  | "safety"
+  | "governance"
+  | "community"
+  | "generic";
+export type AnalysisType =
+  | "summary"
+  | "risk"
+  | "trend"
+  | "action"
+  | "sentiment"
+  | "urgency"
+  | "anomaly"
+  | "silence"
+  | "velocity";
 export type FormVisibility = "private" | "unlisted" | "public";
 export type FormIdentityPolicy = "anonymous_allowed" | "wallet_required";
 export type FormLocationRequirement = "optional" | "required";
@@ -117,6 +138,8 @@ export interface FormSchema {
   sections?: FormSection[];
   purpose?: FormPurpose;
   analysisProfileId?: AnalysisProfileId;
+  signalType?: AnalysisSignalType;
+  analysisType?: AnalysisType;
   visibility?: FormVisibility;
   identityPolicy?: FormIdentityPolicy;
   publicExplore?: boolean;

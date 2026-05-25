@@ -8,6 +8,8 @@ import type { SignalSeverity } from "../../../types";
 import {
   getAnalysisProfileLabel,
   getAnalysisProfileShortLabel,
+  getAnalysisSignalTypeLabel,
+  getAnalysisTypeLabel,
   getSignalProfileId,
   resolveAnalysisProfile,
   resolveProfileDistribution,
@@ -736,8 +738,14 @@ function exportInsightsSnapshotJson(input: {
   language: Language;
   profile: {
     id: string;
+    signalType: string;
+    analysisType: string;
     label: string;
     description: string;
+    keyFinding: string;
+    whyItMatters: string;
+    highlightedAction: string;
+    evidenceCount: number;
     emphasis: {
       tone: string;
       label: string;
@@ -797,6 +805,8 @@ function exportInsightsSnapshotJson(input: {
   const snapshot = {
     exportedAt,
     language: input.language,
+    signalType: input.profile.signalType,
+    analysisType: input.profile.analysisType,
     analysisProfile: input.profile,
     profileDistribution: input.profileDistribution,
     summary: {
@@ -1035,8 +1045,14 @@ export function WorkspaceInsights({
                 language,
                 profile: {
                   id: analysisProfile.id,
+                  signalType: analysisProfile.signalType,
+                  analysisType: analysisProfile.analysisType,
                   label: analysisProfile.label,
                   description: analysisProfile.description,
+                  keyFinding: analysisProfile.keyFinding,
+                  whyItMatters: analysisProfile.whyItMatters,
+                  highlightedAction: analysisProfile.highlightedAction,
+                  evidenceCount: analysisProfile.evidenceCount,
                   emphasis: analysisProfile.emphasis,
                   metrics: analysisProfile.metrics,
                   insightCards: analysisProfile.insightCards,
@@ -1081,6 +1097,17 @@ export function WorkspaceInsights({
           </div>
           <span className="workspace-profile-pill">{analysisProfile.emphasis.label}</span>
         </div>
+        <div className="workspace-analysis-badge-row" aria-label="Active insight lens">
+          <span className="signal-chip signal-chip-soft is-active">
+            Signal Type: {getAnalysisSignalTypeLabel(analysisProfile.signalType)}
+          </span>
+          <span className="signal-chip signal-chip-soft">
+            Analysis Type: {getAnalysisTypeLabel(analysisProfile.analysisType)}
+          </span>
+          <span className="signal-chip signal-chip-soft">
+            Evidence: {analysisProfile.evidenceCount}
+          </span>
+        </div>
         {profileDistribution.length > 0 ? (
           <div className="workspace-profile-chip-row" aria-label="Active signal type distribution">
             {profileDistribution.map((profile) => (
@@ -1094,6 +1121,22 @@ export function WorkspaceInsights({
             ))}
           </div>
         ) : null}
+        <article className="workspace-analysis-summary-card">
+          <div className="workspace-analysis-summary-grid">
+            <div>
+              <span>Key Finding</span>
+              <strong>{analysisProfile.keyFinding}</strong>
+            </div>
+            <div>
+              <span>Why it matters</span>
+              <p>{analysisProfile.whyItMatters}</p>
+            </div>
+            <div>
+              <span>Recommended Action</span>
+              <p>{analysisProfile.highlightedAction}</p>
+            </div>
+          </div>
+        </article>
         <div className="workspace-insights-grid">
           {analysisProfile.metrics.map((metric) => (
             <article key={metric.id} className={`workspace-insight-card is-${metric.tone ?? "cluster"}`}>
@@ -1138,6 +1181,8 @@ export function WorkspaceInsights({
           </div>
           <div className="workspace-intelligence-meta">
             <span>Type: {analysisProfile.label}</span>
+            <span>Signal type: {getAnalysisSignalTypeLabel(analysisProfile.signalType)}</span>
+            <span>Analysis type: {getAnalysisTypeLabel(analysisProfile.analysisType)}</span>
             <span>Top cluster: {primaryCluster?.label ?? "No dominant cluster yet"}</span>
             <span>{t("workspaceEncryptedCoverage", { count: encryptedSignals, total: totalSignals })}</span>
             <span>{t("workspacePotentialAreaLabel")}: {primaryCluster?.keywords.slice(0, 2).join(" / ") || t("workspaceEncryptedIntakeArea")}</span>

@@ -43,6 +43,8 @@ import {
 } from "../storage/submissionSanitizer";
 import type {
   AnalysisProfileId,
+  AnalysisSignalType,
+  AnalysisType,
   FormField,
   FormIdentityPolicy,
   FormLocationRequirement,
@@ -505,6 +507,35 @@ function normalizeAnalysisProfileId(analysisProfileId: unknown): AnalysisProfile
     : undefined;
 }
 
+function normalizeSignalType(signalType: unknown): AnalysisSignalType | undefined {
+  return signalType === "feedback" ||
+    signalType === "product_voice" ||
+    signalType === "agent_log" ||
+    signalType === "operation" ||
+    signalType === "incident" ||
+    signalType === "disaster" ||
+    signalType === "safety" ||
+    signalType === "governance" ||
+    signalType === "community" ||
+    signalType === "generic"
+    ? signalType
+    : undefined;
+}
+
+function normalizeAnalysisType(analysisType: unknown): AnalysisType | undefined {
+  return analysisType === "summary" ||
+    analysisType === "risk" ||
+    analysisType === "trend" ||
+    analysisType === "action" ||
+    analysisType === "sentiment" ||
+    analysisType === "urgency" ||
+    analysisType === "anomaly" ||
+    analysisType === "silence" ||
+    analysisType === "velocity"
+    ? analysisType
+    : undefined;
+}
+
 function normalizeSubmissionLocation(raw: unknown): SubmissionLocation | undefined {
   if (!raw || typeof raw !== "object") {
     return undefined;
@@ -663,6 +694,8 @@ export function normalizeForm(raw: FormSchema | (Record<string, unknown> & { id:
     sections: Array.isArray(raw.sections) ? (raw.sections as FormSection[]) : [],
     purpose: normalizeFormPurpose(raw.purpose),
     analysisProfileId: normalizeAnalysisProfileId(raw.analysisProfileId),
+    signalType: normalizeSignalType(raw.signalType),
+    analysisType: normalizeAnalysisType(raw.analysisType),
     visibility: normalizeFormVisibility(raw.visibility, raw.publicExplore),
     identityPolicy: normalizeFormIdentityPolicy(raw.identityPolicy),
     locationRequirement: normalizeFormLocationRequirement(raw.locationRequirement),
