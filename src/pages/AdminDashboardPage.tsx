@@ -139,8 +139,9 @@ const MOBILE_REVIEW_MEDIA_QUERY = "(max-width: 768px)";
 const COARSE_POINTER_MEDIA_QUERY = "(pointer: coarse)";
 const NODE_LONG_PRESS_MS = 3000;
 const NODE_LONG_PRESS_MOVE_THRESHOLD = 18;
-const NODE_SWIPE_DELETE_THRESHOLD = 88;
-const NODE_SWIPE_HORIZONTAL_LEEWAY = 42;
+const NODE_SWIPE_ACTIVATION_THRESHOLD = 10;
+const NODE_SWIPE_DELETE_THRESHOLD = 64;
+const NODE_SWIPE_HORIZONTAL_LEEWAY = 56;
 const MODAL_FOCUSABLE_SELECTOR = [
   "button:not([disabled])",
   "input:not([disabled])",
@@ -1233,6 +1234,7 @@ function LongPressNodeDirectoryButton({
   onDelete: () => void;
 }) {
   const suppressClickRef = useRef(false);
+  const swipeGestureActiveRef = useRef(false);
   const swipePointerIdRef = useRef<number | null>(null);
   const swipeStartPointRef = useRef({ x: 0, y: 0 });
   const [swipeOffset, setSwipeOffset] = useState(0);
@@ -1249,6 +1251,7 @@ function LongPressNodeDirectoryButton({
     },
   });
   const resetSwipe = useCallback(() => {
+    swipeGestureActiveRef.current = false;
     swipePointerIdRef.current = null;
     swipeStartPointRef.current = { x: 0, y: 0 };
     setSwipeOffset(0);
@@ -1328,27 +1331,37 @@ function LongPressNodeDirectoryButton({
         const deltaX = event.clientX - swipeStartPointRef.current.x;
         const deltaY = event.clientY - swipeStartPointRef.current.y;
         if (deltaY <= 0) {
+          swipeGestureActiveRef.current = false;
           setSwipeOffset(0);
           return;
         }
         if (Math.abs(deltaX) > NODE_SWIPE_HORIZONTAL_LEEWAY && Math.abs(deltaX) > deltaY) {
+          swipeGestureActiveRef.current = false;
           setSwipeOffset(0);
           return;
         }
+        if (deltaY < NODE_SWIPE_ACTIVATION_THRESHOLD) {
+          setSwipeOffset(0);
+          return;
+        }
+        swipeGestureActiveRef.current = true;
         setSwipeOffset(Math.min(deltaY, NODE_SWIPE_DELETE_THRESHOLD * 1.3));
       }}
       onPointerUp={(event) => {
         const shouldDelete = swipePointerIdRef.current === event.pointerId && swipeDeleteReady;
+        const hadSwipeGesture = swipePointerIdRef.current === event.pointerId && swipeGestureActiveRef.current;
         handlers.onPointerUp(event);
         if (swipePointerIdRef.current === event.pointerId) {
           resetSwipe();
         }
+        if (hadSwipeGesture) {
+          suppressClickRef.current = true;
+          event.preventDefault();
+          event.stopPropagation();
+        }
         if (!shouldDelete) {
           return;
         }
-        suppressClickRef.current = true;
-        event.preventDefault();
-        event.stopPropagation();
         onDelete();
       }}
       onPointerCancel={(event) => {
