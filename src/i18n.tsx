@@ -425,6 +425,7 @@ const messages = {
       `${params?.count ?? 0} node${params?.count === 1 ? "" : "s"} removed from this browser's inbox. Walrus objects owned by another wallet were left intact.`,
     deleteNodeFailed: "Node deletion failed.",
     deleteVisibleNodes: (params) => `Delete Visible Nodes (${params?.count ?? 0})`,
+    bulkDeleteNodes: (params) => `Bulk Delete (${params?.count ?? 0})`,
     deleteVisibleNodesConfirm: (params) =>
       `Delete ${params?.count ?? 0} visible nodes and all submissions collected for them? This cannot be undone.`,
     deleteVisibleNodesSuccess: (params) =>
@@ -3252,6 +3253,8 @@ const messages = {
     deleteNodeFailed: "Node \u306e\u524a\u9664\u306b\u5931\u6557\u3057\u307e\u3057\u305f\u3002",
     deleteVisibleNodes: (params) =>
       `\u8868\u793a\u4e2d\u306e Node \u3092\u4e00\u62ec\u524a\u9664 (${params?.count ?? 0})`,
+    bulkDeleteNodes: (params) =>
+      `\u4e00\u62ec\u524a\u9664 (${params?.count ?? 0})`,
     deleteVisibleNodesConfirm: (params) =>
       `\u8868\u793a\u4e2d\u306e ${params?.count ?? 0} \u4ef6\u306e Node \u3068\u3001\u305d\u3053\u306b\u542b\u307e\u308c\u308b\u3059\u3079\u3066\u306e submission \u3092\u524a\u9664\u3057\u307e\u3059\u304b\uff1f \u3053\u306e\u64cd\u4f5c\u306f\u5143\u306b\u623b\u305b\u307e\u305b\u3093\u3002`,
     deleteVisibleNodesSuccess: (params) =>

@@ -24,8 +24,7 @@ import { validatePublicSubmission, validateSubmissionLocation } from "../utils/v
 
 const REAL_SEAL_PROJECT_REQUIRED_MESSAGE =
   "Real Seal encrypted submissions require a project or form owner wallet. Connect the creator wallet or turn off Encrypt submissions.";
-const STORAGE_CONNECTION_PREPARING_MESSAGE =
-  "Storage connection is still preparing. Please wait a moment and try again.";
+const STORAGE_PREPARING_MESSAGE = "Storage is preparing. Please wait a few seconds.";
 const RECOVERY_CORRUPTED_MESSAGE = "Stored recovery data could not be restored.";
 const MAX_RECOVERY_RETRIES = 3;
 const PENDING_ENCRYPTED_PAYLOADS_KEY = "deepsignal.encryptedPayloads";
@@ -218,7 +217,7 @@ function isWalrusRuntimePreparingError(error: unknown) {
 
 function getUserFacingSubmissionError(error: unknown, fallback: string) {
   if (isWalrusRuntimePreparingError(error)) {
-    return STORAGE_CONNECTION_PREPARING_MESSAGE;
+    return STORAGE_PREPARING_MESSAGE;
   }
   return error instanceof Error ? error.message : fallback;
 }
@@ -381,15 +380,28 @@ export function usePublicSubmission({
   const [locationState, setLocationState] = useState<SubmissionLocationCaptureState>("idle");
   const [locationMessage, setLocationMessage] = useState("");
   const activeAttachmentUploadsRef = useRef(new Set<string>());
+  const effectiveIdentityMode =
+    identityMode === "wallet" && !accountAddress && !walletRequired ? "anonymous" : identityMode;
+  const walletReady = effectiveIdentityMode !== "wallet" || Boolean(accountAddress);
+  const walrusClientReady = walrusRuntime.hasClient;
+  const uploadRelayReady = walrusRuntime.storageMode === "uploadRelay" && walrusRuntime.writeConfigured;
+  const canAnonymousUpload = effectiveIdentityMode === "anonymous" && uploadRelayReady;
+  const canWrite =
+    effectiveIdentityMode === "anonymous" && walrusRuntime.storageMode === "uploadRelay"
+      ? uploadRelayReady
+      : walletReady && walrusClientReady;
+  const storageConnectionPreparing =
+    effectiveIdentityMode === "anonymous" && walrusRuntime.storageMode === "uploadRelay"
+      ? !uploadRelayReady
+      : effectiveIdentityMode === "wallet" &&
+          walletReady &&
+          walrusRuntime.storageMode === "uploadRelay" &&
+          walrusRuntime.writeConfigured &&
+          !walrusClientReady;
 
   useEffect(() => installSignalContextCapture(), []);
 
   useEffect(() => {
-    if (identityMode !== "wallet" || !accountAddress) {
-      setWalrusRuntime(DEFAULT_WALRUS_RUNTIME_STATUS);
-      return undefined;
-    }
-
     let unsubscribe: (() => void) | undefined;
     let cancelled = false;
     void import("../../../lib/walrus").then(({ getWalrusMutationRuntimeStatus, subscribeWalrusRuntime }) => {
@@ -404,7 +416,7 @@ export function usePublicSubmission({
       cancelled = true;
       unsubscribe?.();
     };
-  }, [accountAddress, identityMode]);
+  }, []);
 
   useEffect(() => {
     setAnswers(initialAnswers);
@@ -870,8 +882,6 @@ export function usePublicSubmission({
     if (!form || submitting) {
       return;
     }
-    const effectiveIdentityMode =
-      identityMode === "wallet" && !accountAddress && !walletRequired ? "anonymous" : identityMode;
     if (recoveryCorrupted) {
       setSubmitError(recoveryGuidance);
       setFailure(
@@ -953,6 +963,29 @@ export function usePublicSubmission({
           step: "validation",
           noDataSubmitted: true,
           diagnostics: { formId: form.id },
+        }),
+      );
+      return;
+    }
+    if (effectiveIdentityMode === "anonymous" && walrusRuntime.storageMode === "uploadRelay" && !canAnonymousUpload) {
+      setSubmitError(STORAGE_PREPARING_MESSAGE);
+      setSubmitNotice("");
+      setFailure(
+        createCriticalFailure({
+          error: new Error(STORAGE_PREPARING_MESSAGE),
+          surface: "walrus",
+          step: "validation",
+          noDataSubmitted: true,
+          diagnostics: {
+            formId: form.id,
+            identityMode: effectiveIdentityMode,
+            walletReady,
+            walrusClientReady,
+            uploadRelayReady,
+            canAnonymousUpload,
+            canWrite,
+            walrusRuntime,
+          },
         }),
       );
       return;
@@ -1330,6 +1363,11 @@ export function usePublicSubmission({
           diagnostics: {
             walletRequired,
             attachWallet,
+            walletReady,
+            walrusClientReady,
+            uploadRelayReady,
+            canAnonymousUpload,
+            canWrite,
             walrusRuntime: latestWalrusRuntime,
             identityMode,
             rawError: getDiagnosticErrorMessage(error),
@@ -1369,11 +1407,7 @@ export function usePublicSubmission({
     location,
     locationState,
     locationMessage,
-    storageConnectionPreparing:
-      Boolean(identityMode === "wallet" && accountAddress) &&
-      walrusRuntime.storageMode === "uploadRelay" &&
-      walrusRuntime.writeConfigured &&
-      (!walrusRuntime.hasClient || !walrusRuntime.hasWallet),
+    storageConnectionPreparing,
     visibleFieldIds,
     updateAnswer,
     requestLocation,

@@ -328,7 +328,7 @@
 
   .mobile-inbox-search-row {
     display: grid;
-    grid-template-columns: minmax(0, 1.8fr) repeat(2, minmax(6.8rem, auto));
+    grid-template-columns: minmax(0, 1fr) minmax(6.8rem, auto);
     gap: 0.5rem;
     align-items: center;
   }

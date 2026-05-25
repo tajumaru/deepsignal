@@ -1170,6 +1170,19 @@
   flex-wrap: wrap;
 }
 
+.node-directory-toolbar-actions--bulk-delete {
+  justify-content: space-between;
+}
+
+.node-directory-toolbar-actions--bulk-delete .node-directory-stats {
+  flex: 1;
+  min-width: 0;
+}
+
+.node-directory-toolbar-actions--bulk-delete .node-directory-delete {
+  margin-left: auto;
+}
+
 .node-directory-list {
   display: grid;
   gap: 0.75rem;

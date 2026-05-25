@@ -249,6 +249,7 @@ interface SignalChannelSelectorProps {
   selectedFormId: string;
   onSelectForm: (formId: string) => void;
   unreadCountByFormId: Record<string, number>;
+  signalCountByFormId: Record<string, number>;
   allSignalsCount: number;
   totalUnreadCount: number;
   activeScopeLabel: string;
@@ -256,7 +257,6 @@ interface SignalChannelSelectorProps {
   responseDeadlineLabels: ResponseDeadlineLabels;
   openNodeDirectoryLabel: string;
   onOpenNodeDirectory: () => void;
-  activeNodeSummary: string;
   onExportAllFormCsv: (formId: string) => void;
   className?: string;
 }
@@ -297,6 +297,7 @@ function SignalChannelSelectorItem({
   selectedFormId,
   onSelectForm,
   unreadCountByFormId,
+  signalCountByFormId,
   allSignalsCount,
   totalUnreadCount,
   activeScopeLabel,
@@ -309,6 +310,7 @@ function SignalChannelSelectorItem({
   selectedFormId: string;
   onSelectForm: (formId: string) => void;
   unreadCountByFormId: Record<string, number>;
+  signalCountByFormId: Record<string, number>;
   allSignalsCount: number;
   totalUnreadCount: number;
   activeScopeLabel: string;
@@ -350,6 +352,7 @@ function SignalChannelSelectorItem({
       </div>
       {accessibleForms.map((form) => {
         const isSelected = selectedFormId === form.id;
+        const signalCount = signalCountByFormId[form.id] ?? 0;
         const unreadCount = unreadCountByFormId[form.id] ?? 0;
         const ownerLabel = form.ownerAddress ? shortAddress(form.ownerAddress) : t("legacyDemoForm");
         const deadlineValue = formatResponseDeadline(form.responseDeadline, responseDeadlineLabels);
@@ -372,11 +375,11 @@ function SignalChannelSelectorItem({
                   {form.title}
                   {hasWarning ? <WarningTriangle title={warningTitle} /> : null}
                 </strong>
-                <span className="form-stream-count">{form.submissionCount}</span>
+                <span className="form-stream-count">{signalCount}</span>
               </span>
               <p className="muted">
                 {t("formSignalsSummary", {
-                  count: form.submissionCount,
+                  count: signalCount,
                   inboxType: form.encryptSubmissions ? t("protectedInboxLabel") : t("openInboxLabel"),
                 })}
               </p>
@@ -392,7 +395,7 @@ function SignalChannelSelectorItem({
                 type="button"
                 className="ghost-button form-stream-export-button"
                 onClick={() => onExportAllFormCsv(form.id)}
-                disabled={form.submissionCount === 0}
+                disabled={signalCount === 0}
                 aria-label={t("exportAllFormCsvAria")}
                 title={t("exportAllFormCsvAria")}
               >
@@ -412,6 +415,7 @@ export function SignalChannelSelector({
   selectedFormId,
   onSelectForm,
   unreadCountByFormId,
+  signalCountByFormId,
   allSignalsCount,
   totalUnreadCount,
   activeScopeLabel,
@@ -419,7 +423,6 @@ export function SignalChannelSelector({
   responseDeadlineLabels,
   openNodeDirectoryLabel,
   onOpenNodeDirectory,
-  activeNodeSummary,
   onExportAllFormCsv,
   className = "",
 }: SignalChannelSelectorProps) {
@@ -429,7 +432,7 @@ export function SignalChannelSelector({
   const hasUnreadSignals = totalUnreadCount > 0;
   const unregisteredCount = accessibleForms.filter(hasUnregisteredWalrusNode).length;
   const selectedForm = accessibleForms.find((form) => form.id === selectedFormId) ?? null;
-  const selectedCount = selectedFormId === "all" ? allSignalsCount : selectedForm?.submissionCount ?? 0;
+  const selectedCount = selectedFormId === "all" ? allSignalsCount : signalCountByFormId[selectedFormId] ?? 0;
   const selectedUnreadCount = selectedFormId === "all" ? totalUnreadCount : unreadCountByFormId[selectedFormId] ?? 0;
   const selectedHasWarning =
     selectedFormId === "all" ? unregisteredCount > 0 : selectedForm ? hasUnregisteredWalrusNode(selectedForm) : false;
@@ -492,36 +495,12 @@ export function SignalChannelSelector({
               <p className="eyebrow">{t("signalInboxTitle")}</p>
               <h3>{t("formsTitle")}</h3>
             </div>
-            {hasUnreadSignals ? (
-              <span className="signal-new-count" aria-label={t("unreadBadge", { count: totalUnreadCount })}>
-                {totalUnreadCount}
-              </span>
-            ) : null}
-          </div>
-          <SignalChannelSelectorItem
-            accessibleForms={accessibleForms}
-            selectedFormId={selectedFormId}
-            onSelectForm={onSelectForm}
-            unreadCountByFormId={unreadCountByFormId}
-            allSignalsCount={allSignalsCount}
-            totalUnreadCount={totalUnreadCount}
-            activeScopeLabel={activeScopeLabel}
-            allSignalNodesLabel={allSignalNodesLabel}
-            responseDeadlineLabels={responseDeadlineLabels}
-            onExportAllFormCsv={onExportAllFormCsv}
-            closeMenu={() => setMenuOpen(false)}
-          />
-          <div className="signal-channel-menu-footer">
-            <div className="signal-node-summary">
-              <div className="signal-node-summary-copy">
-                <strong>
-                  {activeScopeLabel}
-                  {unregisteredCount > 0 ? (
-                    <WarningTriangle title={t("projectRecoveryNoticeWalrusOnlyBody", { count: unregisteredCount })} />
-                  ) : null}
-                </strong>
-                <p className="muted">{activeNodeSummary}</p>
-              </div>
+            <div className="signal-channel-menu-header-actions">
+              {hasUnreadSignals ? (
+                <span className="signal-new-count" aria-label={t("unreadBadge", { count: totalUnreadCount })}>
+                  {totalUnreadCount}
+                </span>
+              ) : null}
               <button
                 type="button"
                 className="primary-button signal-node-directory-trigger"
@@ -534,6 +513,20 @@ export function SignalChannelSelector({
               </button>
             </div>
           </div>
+          <SignalChannelSelectorItem
+            accessibleForms={accessibleForms}
+            selectedFormId={selectedFormId}
+            onSelectForm={onSelectForm}
+            unreadCountByFormId={unreadCountByFormId}
+            signalCountByFormId={signalCountByFormId}
+            allSignalsCount={allSignalsCount}
+            totalUnreadCount={totalUnreadCount}
+            activeScopeLabel={activeScopeLabel}
+            allSignalNodesLabel={allSignalNodesLabel}
+            responseDeadlineLabels={responseDeadlineLabels}
+            onExportAllFormCsv={onExportAllFormCsv}
+            closeMenu={() => setMenuOpen(false)}
+          />
         </div>
       ) : null}
     </div>

@@ -397,6 +397,143 @@ describe("PublicFormPage shared manifest restore", () => {
     expect(screen.queryByText(/sending it requires/i)).not.toBeInTheDocument();
   });
 
+  it("keeps anonymous uploadRelay submission wallet-free when the relay runtime reports no client", async () => {
+    const form: FormSchema = {
+      id: "form-123",
+      title: "Shared Feedback Form",
+      description: "Restored from a Walrus manifest link.",
+      fields: [
+        {
+          id: "field-1",
+          type: "shortText",
+          label: "What happened?",
+          required: true,
+          sensitive: false,
+        },
+      ],
+      createdAt: "2026-05-14T00:00:00.000Z",
+      identityPolicy: "anonymous_allowed",
+    };
+
+    mockGetWalrusMutationRuntimeStatus.mockReturnValue({
+      aggregatorConfigured: true,
+      writeConfigured: true,
+      hasClient: false,
+      hasWallet: false,
+      canWrite: false,
+      storageMode: "uploadRelay",
+    });
+    mockReadManifestWithForm.mockResolvedValue({
+      manifest: {
+        version: 1,
+        formId: "form-123",
+        createdAt: "2026-05-14T00:00:00.000Z",
+        updatedAt: "2026-05-14T00:00:00.000Z",
+        formBlobId: "__bundled_form__",
+        submissions: [],
+      },
+      form,
+    });
+
+    renderPublicFormPage();
+
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Shared Feedback Form" })).toBeInTheDocument());
+    fireEvent.input(screen.getByRole("textbox"), { target: { value: "Anonymous relay path still submits." } });
+    fireEvent.click(screen.getByRole("button", { name: /^Submit Secure Report/ }));
+
+    await waitFor(() => expect(mockSaveSubmission).toHaveBeenCalledTimes(1));
+    expect(screen.queryByText(/reconnect your wallet/i)).not.toBeInTheDocument();
+  });
+
+  it("disables anonymous uploadRelay submission while storage is still preparing", async () => {
+    const form: FormSchema = {
+      id: "form-123",
+      title: "Shared Feedback Form",
+      description: "Restored from a Walrus manifest link.",
+      fields: [
+        {
+          id: "field-1",
+          type: "shortText",
+          label: "What happened?",
+          required: true,
+          sensitive: false,
+        },
+      ],
+      createdAt: "2026-05-14T00:00:00.000Z",
+      identityPolicy: "anonymous_allowed",
+    };
+
+    mockGetWalrusMutationRuntimeStatus.mockReturnValue({
+      aggregatorConfigured: true,
+      writeConfigured: false,
+      hasClient: false,
+      hasWallet: false,
+      canWrite: false,
+      storageMode: "uploadRelay",
+    });
+    mockReadManifestWithForm.mockResolvedValue({
+      manifest: {
+        version: 1,
+        formId: "form-123",
+        createdAt: "2026-05-14T00:00:00.000Z",
+        updatedAt: "2026-05-14T00:00:00.000Z",
+        formBlobId: "__bundled_form__",
+        submissions: [],
+      },
+      form,
+    });
+
+    renderPublicFormPage();
+
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Shared Feedback Form" })).toBeInTheDocument());
+    expect(screen.getByText("Storage is preparing. Please wait a few seconds.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^Submit Secure Report/ })).toBeDisabled();
+    expect(mockSaveSubmission).not.toHaveBeenCalled();
+  });
+
+  it("maps anonymous uploadRelay runtime failures to a storage message instead of wallet reconnect copy", async () => {
+    const form: FormSchema = {
+      id: "form-123",
+      title: "Shared Feedback Form",
+      description: "Restored from a Walrus manifest link.",
+      fields: [
+        {
+          id: "field-1",
+          type: "shortText",
+          label: "What happened?",
+          required: true,
+          sensitive: false,
+        },
+      ],
+      createdAt: "2026-05-14T00:00:00.000Z",
+      identityPolicy: "anonymous_allowed",
+    };
+
+    mockReadManifestWithForm.mockResolvedValue({
+      manifest: {
+        version: 1,
+        formId: "form-123",
+        createdAt: "2026-05-14T00:00:00.000Z",
+        updatedAt: "2026-05-14T00:00:00.000Z",
+        formBlobId: "__bundled_form__",
+        submissions: [],
+      },
+      form,
+    });
+    mockSaveSubmission.mockRejectedValue(
+      new Error("Walrus client is not ready yet. Refresh the page and reconnect your wallet."),
+    );
+
+    renderPublicFormPage();
+
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Shared Feedback Form" })).toBeInTheDocument());
+    fireEvent.input(screen.getByRole("textbox"), { target: { value: "Anonymous relay readiness should stay storage-specific." } });
+    fireEvent.click(screen.getByRole("button", { name: /^Submit Secure Report/ }));
+
+    await waitFor(() => expect(screen.getAllByText("Storage is preparing. Please wait a few seconds.").length).toBeGreaterThan(0));
+    expect(screen.queryByText(/reconnect your wallet/i)).not.toBeInTheDocument();
+  });
+
   it("preserves failed public form input and offers draft recovery on return", async () => {
     const form: FormSchema = {
       id: "form-123",

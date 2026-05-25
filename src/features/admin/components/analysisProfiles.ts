@@ -950,7 +950,7 @@ function buildAnalysisLensProfile(
           ? "Spike detected"
           : "Pulse nominal";
 
-  let priorityMetricIds = [...baseProfile.metrics.map((metric) => metric.id)];
+  const priorityMetricIds = [...baseProfile.metrics.map((metric) => metric.id)];
   let priorityCardIds = [...baseProfile.insightCards.map((card) => card.id)];
   let priorityActionIds = [...baseProfile.recommendedActions.map((action) => action.id)];
   let injectedMetrics: AnalysisMetric[] = [];

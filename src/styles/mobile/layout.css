@@ -848,6 +848,18 @@
     flex-direction: column;
   }
 
+  .node-directory-toolbar-actions--bulk-delete {
+    width: 100%;
+    align-items: center;
+    flex-direction: row;
+    justify-content: space-between;
+  }
+
+  .node-directory-toolbar-actions--bulk-delete .node-directory-stats {
+    flex: 1;
+    min-width: 0;
+  }
+
   .node-directory-row {
     grid-template-columns: 1fr;
   }

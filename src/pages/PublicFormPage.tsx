@@ -201,7 +201,6 @@ export function PublicFormPage() {
     walletModeSelected
       ? t("publicSubmitModeWallet")
       : t("publicSubmitModeAnonymous");
-  const walletSubmitPending = walletModeSelected && !resolvedWalletAddress;
   const locationStatusLabel =
     locationState === "success"
       ? t("locationAttached")
@@ -304,8 +303,8 @@ export function PublicFormPage() {
   const submitReadinessLabel = deadlinePassed
     ? t("publicSubmitBarClosed")
     : storageConnectionPreparing
-      ? "Storage connection is still preparing."
-    : visibleErrorCount > 0
+      ? "Storage is preparing. Please wait a few seconds."
+      : visibleErrorCount > 0
       ? t("publicSubmitBarErrors", { count: visibleErrorCount })
       : requiredProgress.missing > 0
         ? t("publicSubmitBarRequired", {
@@ -968,7 +967,7 @@ export function PublicFormPage() {
         <button
           type="submit"
           className="primary-button signal-capsule-action signal-capsule-action-submit"
-          disabled={submitting || deadlinePassed || walletSubmitPending}
+          disabled={submitting || deadlinePassed || storageConnectionPreparing}
           onClick={() => triggerHaptic([12, 22, 16])}
         >
           <span className="signal-capsule-action-icon" aria-hidden="true">

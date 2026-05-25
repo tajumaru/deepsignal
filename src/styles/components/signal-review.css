@@ -303,12 +303,20 @@
     0 24px 44px rgba(0, 0, 0, 0.34);
 }
 
-.signal-channel-menu-header,
-.signal-channel-menu-footer {
+.signal-channel-menu-header {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 0.75rem;
+}
+
+.signal-channel-menu-header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 0.65rem;
+  margin-left: auto;
 }
 
 .signal-channel-menu-header h3,

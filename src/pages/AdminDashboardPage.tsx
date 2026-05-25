@@ -587,13 +587,13 @@ interface MobileInboxHeaderProps {
   selectedFormId: string;
   onSelectForm: (formId: string) => void;
   unreadCountByFormId: Record<string, number>;
+  signalCountByFormId: Record<string, number>;
   allSignalsCount: number;
   totalUnreadCount: number;
   allSignalNodesLabel: string;
   responseDeadlineLabels: ResponseDeadlineLabels;
   openNodeDirectoryLabel: string;
   onOpenNodeDirectory: () => void;
-  activeNodeSummary: string;
   onExportAllFormCsv: (formId: string) => void;
   hasAdminAccess: boolean;
   selectedProjectName: string | null;
@@ -727,31 +727,22 @@ function MobileInboxHeader(props: MobileInboxHeaderProps) {
     unreadCountLabel,
     search,
     onSearchChange,
-    streamItems,
-    selectedStreamId,
-    onSelectStream,
     sortOrder,
     onSortOrderChange,
     searchPlaceholder,
-    filterLabel,
     accessibleForms,
     selectedFormId,
     onSelectForm,
     unreadCountByFormId,
+    signalCountByFormId,
     allSignalsCount,
     totalUnreadCount,
     allSignalNodesLabel,
     responseDeadlineLabels,
     openNodeDirectoryLabel,
     onOpenNodeDirectory,
-    activeNodeSummary,
     onExportAllFormCsv,
   } = props;
-  const streamOptions: MobileFilterMenuOption[] = streamItems.map((stream) => ({
-    value: stream.id,
-    label: stream.label,
-    meta: String(stream.count),
-  }));
   const sortOptions: MobileFilterMenuOption[] = [
     { value: "default", label: getSortLabel("default", t) },
     { value: "newest", label: getSortLabel("newest", t) },
@@ -783,6 +774,7 @@ function MobileInboxHeader(props: MobileInboxHeaderProps) {
           selectedFormId={selectedFormId}
           onSelectForm={onSelectForm}
           unreadCountByFormId={unreadCountByFormId}
+          signalCountByFormId={signalCountByFormId}
           allSignalsCount={allSignalsCount}
           totalUnreadCount={totalUnreadCount}
           activeScopeLabel={activeScopeLabel}
@@ -790,7 +782,6 @@ function MobileInboxHeader(props: MobileInboxHeaderProps) {
           responseDeadlineLabels={responseDeadlineLabels}
           openNodeDirectoryLabel={openNodeDirectoryLabel}
           onOpenNodeDirectory={onOpenNodeDirectory}
-          activeNodeSummary={activeNodeSummary}
           onExportAllFormCsv={onExportAllFormCsv}
         />
       </div>
@@ -805,13 +796,6 @@ function MobileInboxHeader(props: MobileInboxHeaderProps) {
             placeholder={searchPlaceholder}
           />
         </label>
-        <MobileFilterMenu
-          srLabel={filterLabel}
-          buttonLabel={filterLabel}
-          selectedValue={selectedStreamId}
-          options={streamOptions}
-          onSelect={(value) => onSelectStream(value as StreamId)}
-        />
         <MobileFilterMenu
           srLabel={t("sortInboxSrOnly")}
           buttonLabel={t("sortInboxSrOnly")}
@@ -1561,13 +1545,13 @@ interface MobileSignalInboxProps {
   selectedFormId: string;
   onSelectForm: (formId: string) => void;
   unreadCountByFormId: Record<string, number>;
+  signalCountByFormId: Record<string, number>;
   allSignalsCount: number;
   totalUnreadCount: number;
   allSignalNodesLabel: string;
   responseDeadlineLabels: ResponseDeadlineLabels;
   openNodeDirectoryLabel: string;
   onOpenNodeDirectory: () => void;
-  activeNodeSummary: string;
   onExportAllFormCsv: (formId: string) => void;
   t: TranslationFn;
   hasAdminAccess: boolean;
@@ -1608,13 +1592,13 @@ function MobileSignalInbox({
   selectedFormId,
   onSelectForm,
   unreadCountByFormId,
+  signalCountByFormId,
   allSignalsCount,
   totalUnreadCount,
   allSignalNodesLabel,
   responseDeadlineLabels,
   openNodeDirectoryLabel,
   onOpenNodeDirectory,
-  activeNodeSummary,
   onExportAllFormCsv,
   t,
   hasAdminAccess,
@@ -1653,13 +1637,13 @@ function MobileSignalInbox({
         selectedFormId={selectedFormId}
         onSelectForm={onSelectForm}
         unreadCountByFormId={unreadCountByFormId}
+        signalCountByFormId={signalCountByFormId}
         allSignalsCount={allSignalsCount}
         totalUnreadCount={totalUnreadCount}
         allSignalNodesLabel={allSignalNodesLabel}
         responseDeadlineLabels={responseDeadlineLabels}
         openNodeDirectoryLabel={openNodeDirectoryLabel}
         onOpenNodeDirectory={onOpenNodeDirectory}
-        activeNodeSummary={activeNodeSummary}
         onExportAllFormCsv={onExportAllFormCsv}
         hasAdminAccess={hasAdminAccess}
         selectedProjectName={selectedProjectName}
@@ -1849,15 +1833,14 @@ export function AdminDashboardPage() {
   const isNodeRegistrationBusy = registerFormTx.isPending || registeringFormId !== null;
   const setWorkspaceTab = useCallback(
     (tab: WorkspaceTab) => {
-      if (tab === "activity") {
-        setLocalActivityEvents(listActivityEvents());
+      if (tab === activeWorkspaceTab) {
+        return;
       }
-      setActiveWorkspaceTab(tab);
       const params = new URLSearchParams(location.search);
       params.set("tab", tab);
       navigate({ pathname: location.pathname, search: `?${params.toString()}` }, { replace: true });
     },
-    [location.pathname, location.search, navigate],
+    [activeWorkspaceTab, location.pathname, location.search, navigate],
   );
   const [signalViewScope, setSignalViewScope] = useState<SignalViewScope>(() => {
     const params = new URLSearchParams(location.search);
@@ -1950,17 +1933,13 @@ export function AdminDashboardPage() {
 
   useEffect(() => {
     const tab = new URLSearchParams(location.search).get("tab");
-    if (tab === "review" || tab === "activity" || tab === "insights" || tab === "members") {
-      if (activeWorkspaceTab !== tab) {
-        setActiveWorkspaceTab(tab);
-      }
-      if (tab === "activity" && activeWorkspaceTab !== "activity") {
-        setLocalActivityEvents(listActivityEvents());
-      }
-      return;
+    const nextTab: WorkspaceTab =
+      tab === "review" || tab === "activity" || tab === "insights" || tab === "members" ? tab : "review";
+    if (activeWorkspaceTab !== nextTab) {
+      setActiveWorkspaceTab(nextTab);
     }
-    if (activeWorkspaceTab !== "review") {
-      setActiveWorkspaceTab("review");
+    if (nextTab === "activity") {
+      setLocalActivityEvents(listActivityEvents());
     }
   }, [activeWorkspaceTab, location.search]);
   useEffect(() => {
@@ -3794,6 +3773,16 @@ export function AdminDashboardPage() {
     }),
     [insightsRecords],
   );
+  const signalCountByFormId = useMemo(() => {
+    const counts: Record<string, number> = {};
+    accessibleForms.forEach((form) => {
+      counts[form.id] = 0;
+    });
+    allSignals.forEach((record) => {
+      counts[record.form.id] = (counts[record.form.id] ?? 0) + 1;
+    });
+    return counts;
+  }, [accessibleForms, allSignals]);
   const nodeDirectoryItems = useMemo(() => {
     const normalizedSearch = nodeSearch.trim().toLowerCase();
     const accessibleFormIdSet = new Set(accessibleForms.map((form) => form.id));
@@ -3822,7 +3811,7 @@ export function AdminDashboardPage() {
       .map((form) => ({
         id: form.id,
         title: form.title,
-        submissionCount: form.submissionCount,
+        submissionCount: signalCountByFormId[form.id] ?? 0,
         unreadCount: unreadCountByFormId[form.id] ?? 0,
         onchainFormId: form.onchainFormId,
         isOnchain: typeof form.onchainFormId === "number",
@@ -3838,6 +3827,7 @@ export function AdminDashboardPage() {
     canDeleteForm,
     canRegisterNodeOnSui,
     nodeSearch,
+    signalCountByFormId,
     signalIndex.counts.unread,
     t,
     unreadCountByFormId,
@@ -4102,13 +4092,13 @@ export function AdminDashboardPage() {
             selectedFormId={selectedFormId}
             onSelectForm={setSelectedFormId}
             unreadCountByFormId={unreadCountByFormId}
+            signalCountByFormId={signalCountByFormId}
             allSignalsCount={allSignals.length}
             totalUnreadCount={signalIndex.counts.unread}
             allSignalNodesLabel={t("allSignalNodes")}
             responseDeadlineLabels={responseDeadlineLabels}
             openNodeDirectoryLabel={t("openNodeDirectory")}
             onOpenNodeDirectory={() => setNodeDirectoryOpen(true)}
-            activeNodeSummary={t("activeNodeSummary", { count: accessibleForms.length })}
             onExportAllFormCsv={handleOpenFormAllCsvExportReview}
             t={t}
             hasAdminAccess={hasAdminAccess}
@@ -4138,6 +4128,7 @@ export function AdminDashboardPage() {
                     scrollToReviewPanel("signals");
                   }}
                   unreadCountByFormId={unreadCountByFormId}
+                  signalCountByFormId={signalCountByFormId}
                   allSignalsCount={allSignals.length}
                   totalUnreadCount={signalIndex.counts.unread}
                   activeScopeLabel={activeScopeLabel}
@@ -4145,7 +4136,6 @@ export function AdminDashboardPage() {
                   responseDeadlineLabels={responseDeadlineLabels}
                   openNodeDirectoryLabel={t("openNodeDirectory")}
                   onOpenNodeDirectory={() => setNodeDirectoryOpen(true)}
-                  activeNodeSummary={t("activeNodeSummary", { count: accessibleForms.length })}
                   onExportAllFormCsv={handleOpenFormAllCsvExportReview}
                 />
                 <div className="signal-workbench-meta">
@@ -5064,7 +5054,7 @@ export function AdminDashboardPage() {
                 onChange={(event) => setNodeSearch(event.target.value)}
                 placeholder={t("searchNodesPlaceholder")}
               />
-              <div className="node-directory-toolbar-actions">
+              <div className="node-directory-toolbar-actions node-directory-toolbar-actions--bulk-delete">
                 <div className="node-directory-stats">
                   <span className="signal-chip">
                     {t("activeNodeSummary", { count: forms.length })}
@@ -5080,7 +5070,7 @@ export function AdminDashboardPage() {
                     onClick={() => void handleDeleteVisibleNodes(deletableNodeIds)}
                     disabled={deletingVisibleNodes || deletableNodeIds.length === 0}
                   >
-                    {deletingVisibleNodes ? t("deletingLabel") : t("deleteVisibleNodes", { count: deletableNodeIds.length })}
+                    {deletingVisibleNodes ? t("deletingLabel") : t("bulkDeleteNodes", { count: deletableNodeIds.length })}
                   </button>
                 ) : null}
               </div>
