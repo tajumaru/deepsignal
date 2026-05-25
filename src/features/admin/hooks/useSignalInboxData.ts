@@ -545,6 +545,20 @@ export function useSignalInboxData({
   const [search, setSearch] = useState("");
   const loadConsoleRunRef = useRef(0);
   const hasLoadedOnceRef = useRef(false);
+  const formsRef = useRef<FormWithCount[]>([]);
+  const submissionsRef = useRef<Record<string, Submission[]>>({});
+  const lastStableFormsRef = useRef<FormWithCount[]>([]);
+
+  useEffect(() => {
+    formsRef.current = forms;
+    if (forms.length > 0) {
+      lastStableFormsRef.current = forms;
+    }
+  }, [forms]);
+
+  useEffect(() => {
+    submissionsRef.current = submissionsByFormId;
+  }, [submissionsByFormId]);
 
   useEffect(() => {
     return subscribeProjectRegistryStorageChange(() => {
@@ -776,11 +790,18 @@ export function useSignalInboxData({
       const nextForms = mergeFormsWithProjectRegistry(normalizedInitialForms, projects, hydratedSelectedProject).filter(
         (form) => !isDeletedFormTombstone(form),
       );
-      setForms(nextForms);
+      const effectiveForms =
+        nextForms.length === 0 && lastStableFormsRef.current.length > 0
+          ? lastStableFormsRef.current
+          : nextForms;
+      if (nextForms.length === 0 && lastStableFormsRef.current.length > 0) {
+        console.warn("DeepSignal preserved the previous node list because the latest refresh returned zero forms.");
+      }
+      setForms(effectiveForms);
       setSelectedSignalId((current) => preferredSignalId ?? current);
       hasLoadedOnceRef.current = true;
       setLoading(false);
-      endPerf("admin:local-shell", "ok", `${nextForms.length} forms`);
+      endPerf("admin:local-shell", "ok", `${effectiveForms.length} forms`);
 
       void measurePerf("admin:manifest-restore", async () => {
         const restoredForms: FormWithCount[] = [];
@@ -833,10 +854,10 @@ export function useSignalInboxData({
         );
       });
 
-      const nextAccessibleForms = nextForms.filter((form) => canReviewForm(form, accountAddress, capabilityProfile));
+      const nextAccessibleForms = effectiveForms.filter((form) => canReviewForm(form, accountAddress, capabilityProfile));
 
       if (nextAccessibleForms.length === 0) {
-        await hydrateOnchainSignals(nextForms, {}, runId);
+        await hydrateOnchainSignals(effectiveForms, {}, runId);
         endPerf("admin:load-console", "ok");
         return;
       }
@@ -888,13 +909,19 @@ export function useSignalInboxData({
       }
       endPerf("admin:submissions", "ok");
 
-      await measurePerf("admin:onchain-hydration", () => hydrateOnchainSignals(nextForms, nextSubmissions, runId));
+      await measurePerf("admin:onchain-hydration", () => hydrateOnchainSignals(effectiveForms, nextSubmissions, runId));
       endPerf("admin:load-console", "ok");
     } catch (error) {
       console.error("Failed to load admin console", error);
-      setForms([]);
-      setSubmissionsByFormId({});
-      setSupplementalSignals([]);
+      if (formsRef.current.length === 0) {
+        setForms([]);
+      }
+      if (Object.keys(submissionsRef.current).length === 0) {
+        setSubmissionsByFormId({});
+      }
+      if (formsRef.current.length === 0) {
+        setSupplementalSignals([]);
+      }
       setLoadError(
         error instanceof Error
           ? `Failed to load Research Lab: ${error.message}`
@@ -1255,6 +1282,35 @@ export function useSignalInboxData({
     });
   }
 
+  function applyFormRemovals(formIds: string[]) {
+    const removedIdSet = new Set(formIds.filter(Boolean));
+    if (removedIdSet.size === 0) {
+      return;
+    }
+    setForms((current) => current.filter((form) => !removedIdSet.has(form.id)));
+    setSubmissionsByFormId((current) =>
+      Object.fromEntries(
+        Object.entries(current).filter(([formId]) => !removedIdSet.has(formId)),
+      ),
+    );
+    setSupplementalSignals((current) =>
+      current.filter((record) => !removedIdSet.has(record.form.id)),
+    );
+    lastStableFormsRef.current = lastStableFormsRef.current.filter((form) => !removedIdSet.has(form.id));
+    formsRef.current = formsRef.current.filter((form) => !removedIdSet.has(form.id));
+    submissionsRef.current = Object.fromEntries(
+      Object.entries(submissionsRef.current).filter(([formId]) => !removedIdSet.has(formId)),
+    );
+    setSelectedFormId((current) => (current !== "all" && removedIdSet.has(current) ? "all" : current));
+    setSelectedSignalId((current) => {
+      if (!current) {
+        return current;
+      }
+      const matchingRecord = signalIndex.signalById[current];
+      return matchingRecord && removedIdSet.has(matchingRecord.form.id) ? "" : current;
+    });
+  }
+
   return {
     forms,
     setForms,
@@ -1278,6 +1334,7 @@ export function useSignalInboxData({
     visibleSignals,
     selectedRecord,
     applyFormUpdate,
+    applyFormRemovals,
     applySubmissionUpdate,
   };
 }

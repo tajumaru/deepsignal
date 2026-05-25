@@ -1,4 +1,7 @@
+import { useMemo, useRef } from "react";
+import { Link, useLocation } from "react-router-dom";
 import { SignalMetaChip, SignalMetaRow } from "../../../components/SignalMetaChip";
+import { FlowStepIcon } from "../../../components/SignalFlowIcons";
 import { StorageProof } from "../../../components/StorageProof";
 import { TatumFrogIcon } from "../../../components/NetworkMenu";
 import { getEncryptedPayloadAvailabilityLabel, hasDedicatedEncryptedPayloadBlob } from "../../../lib/encryptionDisplay";
@@ -25,6 +28,8 @@ export function PublicFormSuccess({
   signalReceivedLabel,
   thanksForFeedbackLabel,
 }: PublicFormSuccessProps) {
+  const location = useLocation();
+  const detailsRef = useRef<HTMLDetailsElement | null>(null);
   const rpc = useRpcInfrastructure();
   const storageLabels = getStorageDetailLabels(submitted.encryptedBlobId ?? submitted.blobId);
   const submittedRespondentMeta = getSubmissionRespondentMeta(submitted);
@@ -35,101 +40,126 @@ export function PublicFormSuccess({
   const networkLabel = storedOnWalrus ? getCurrentWalrusNetwork() : "local";
   const providerBadgeLabel = rpc.usingTatum ? "Powered by Tatum" : "Sui RPC connected";
   const providerDetailLabel = rpc.usingTatum ? "Powered by Tatum" : rpc.providerLabel;
+  const receiptJson = useMemo(() => JSON.stringify(submitted, null, 2), [submitted]);
+  const submitAnotherHref = `${location.pathname}${location.search}`;
+  const trustLabel = storedOnWalrus ? "Certified by Walrus" : "Stored locally. Remote certification unavailable.";
+  const trustToneClass = storedOnWalrus ? "is-certified" : "is-warning";
+
+  function openTechnicalDetails() {
+    if (!detailsRef.current) {
+      return;
+    }
+    detailsRef.current.open = true;
+    detailsRef.current.scrollIntoView({
+      behavior: "smooth",
+      block: "start",
+    });
+  }
 
   return (
     <section className="stack">
-      <section className="panel glow-panel success-screen">
-        <p className="eyebrow">{signalReceivedLabel}</p>
-        <h1>Your secure report is sealed and ready for review.</h1>
-        <p className="lede">
-          {isEncryptedSubmission
-            ? "Only authorized reviewers can decrypt it when they open the Review Console."
-            : "Selected reviewers can now review it in the Review Console."}
-        </p>
-        <div className="signal-success-receipt" role="list" aria-label="Signal delivery receipt">
-          <div className="signal-success-receipt-item is-complete" role="listitem">
-            <span aria-hidden="true" />
-            <strong>Report encrypted</strong>
+      <section className="panel glow-panel success-screen signal-success-scene">
+        <div className="signal-success-hero">
+          <p className="eyebrow">{signalReceivedLabel}</p>
+          <h1>Your report has been sealed.</h1>
+          <p className="lede">
+            {isEncryptedSubmission
+              ? "Authorized reviewers can decrypt and review this signal."
+              : "Authorized reviewers can review this signal."}
+          </p>
+        </div>
+
+        <div className="signal-success-status-row" role="list" aria-label="Signal delivery status">
+          <div className="signal-success-status-chip is-complete" role="listitem" title="Submission encryption complete">
+            <FlowStepIcon name="Encrypt" />
+            <strong>Encrypted</strong>
           </div>
-          <div className={`signal-success-receipt-item ${storedOnWalrus ? "is-complete" : "is-local"}`} role="listitem">
-            <span aria-hidden="true" />
-            <strong>{storedOnWalrus ? "Stored on Walrus" : "Saved to local recovery"}</strong>
+          <div
+            className={`signal-success-status-chip ${storedOnWalrus ? "is-complete" : "is-warning"}`}
+            role="listitem"
+            title={storedOnWalrus ? "Saved to Walrus storage" : "Saved with local recovery fallback"}
+          >
+            <FlowStepIcon name="Store" />
+            <strong>Saved</strong>
           </div>
-          <div className={`signal-success-receipt-item ${storedOnWalrus ? "is-complete" : "is-local"}`} role="listitem">
-            <span aria-hidden="true" />
-            <strong>{storedOnWalrus ? "Verification path ready" : "Local recovery path ready"}</strong>
+          <div
+            className={`signal-success-status-chip ${storedOnWalrus ? "is-complete" : "is-warning"}`}
+            role="listitem"
+            title={storedOnWalrus ? "Verification path ready" : "Recovery path ready"}
+          >
+            <FlowStepIcon name="Certify" />
+            <strong>Verifiable</strong>
           </div>
         </div>
-        <div className="success-stamp-row">
-          <div className="certified-stamp">
-            <TatumFrogIcon className="certified-stamp-icon" />
-            <span>Certified</span>
+
+        <section className={`signal-success-trust-strip ${trustToneClass}`} aria-label="Trust confirmation">
+          <div className="signal-success-trust-brand">
+            <TatumFrogIcon className="signal-success-trust-icon" />
+            <span>{trustLabel}</span>
           </div>
-          <div className="signal-badge-row">
+          <div className="signal-success-trust-badges">
             <span className="signal-chip signal-chip-soft">{providerBadgeLabel}</span>
-            <span className="signal-chip signal-chip-soft">Walrus evidence layer</span>
-          </div>
-        </div>
-        <p className="muted">{thanksForFeedbackLabel}</p>
-        {submitNotice ? <p className="muted">{submitNotice}</p> : null}
-        <div className="success-copy">
-          {storageLabels.map((label) => (
-            <p key={label}>{label}</p>
-          ))}
-        </div>
-        <section className="evidence-layer-card" aria-label="Evidence trust receipt">
-          <div>
-            <p className="eyebrow">Evidence / Trust Layer</p>
-            <h3>Verifiable submission receipt</h3>
-            <p className="muted">This submission can be verified later.</p>
-          </div>
-          <div className="evidence-layer-grid">
-            <div className="evidence-layer-item">
-              <span>Storage status</span>
-              <strong>{storedOnWalrus ? "Stored on Walrus" : "Local fallback preserved"}</strong>
-            </div>
-            <div className="evidence-layer-item">
-              <span>Verification status</span>
-              <strong>{storedOnWalrus ? "Verifiable" : "Recovery only"}</strong>
-            </div>
-            <div className="evidence-layer-item">
-              <span>Network</span>
-              <strong>{networkLabel}</strong>
-            </div>
-            <div className="evidence-layer-item">
-              <span>Provider</span>
-              <strong>{providerDetailLabel}</strong>
-            </div>
-            {evidenceBlobId ? (
-              <div className="evidence-layer-item">
-                <span>Blob ID</span>
-                <SignalMetaChip type="blob" value={evidenceBlobId} />
-              </div>
-            ) : null}
-          </div>
-          <div className="evidence-layer-badges">
-            <span className="evidence-layer-badge">{isEncryptedSubmission ? "Encrypted" : "Readable"}</span>
-            <span className="evidence-layer-badge">
-              {submittedRespondentMeta.isAnonymous ? "Anonymous" : "Verified sender"}
+            <span className="signal-chip signal-chip-soft">
+              {storedOnWalrus ? "Walrus evidence layer" : "Protected recovery path"}
             </span>
-            <span className="evidence-layer-badge">{storedOnWalrus ? "Immutable" : "Fallback-safe"}</span>
           </div>
-          {storedOnWalrus && evidenceBlobId ? (
-            <StorageProof
-              blobId={evidenceBlobId}
-              proof={submitted.encryptedWalrusProof ?? submitted.walrusProof}
-              label="Evidence proof"
-            />
-          ) : null}
         </section>
-        <details className="answer-card public-submit-details">
+
+        <div className="signal-success-footer">
+          <p className="muted">{thanksForFeedbackLabel}</p>
+          {submitNotice ? <p className="muted">{submitNotice}</p> : null}
+          {!storedOnWalrus
+            ? storageLabels
+                .filter((label) => label !== "Stored locally only")
+                .map((label) => (
+                  <p key={label} className="muted signal-success-subtle-note">
+                    {label === "Walrus upload failed or not configured"
+                      ? "Remote certification is currently unavailable."
+                      : label}
+                  </p>
+                ))
+            : null}
+        </div>
+
+        <div className="signal-success-actions" aria-label="Next actions">
+          <Link to="/explore" className="primary-button signal-success-action">
+            Return to Signals
+          </Link>
+          <Link to={submitAnotherHref} className="ghost-button signal-success-action">
+            Submit Another Signal
+          </Link>
+          <button type="button" className="ghost-button signal-success-action" onClick={openTechnicalDetails}>
+            View Receipt
+          </button>
+        </div>
+
+        <details ref={detailsRef} className="answer-card public-submit-details signal-success-details">
           <summary>
             <span>
-              <p className="eyebrow">Evidence layer</p>
-              <h3>Submission details</h3>
+              <p className="eyebrow">Technical details</p>
+              <h3>Receipt and verification data</h3>
             </span>
           </summary>
           <div className="metadata-list">
+            <div className="metadata-row">
+              <span>Storage status</span>
+              <strong>{storedOnWalrus ? "Certified by Walrus" : "Stored locally"}</strong>
+            </div>
+            <div className="metadata-row">
+              <span>Verification status</span>
+              <strong>{storedOnWalrus ? "Verifiable" : "Recovery ready"}</strong>
+            </div>
+            <div className="metadata-row">
+              <span>Network</span>
+              <strong>{networkLabel}</strong>
+            </div>
+            <div className="metadata-row">
+              <span>Provider</span>
+              <strong>{providerDetailLabel}</strong>
+            </div>
+            {submitted.receiptBlobId ? (
+              <SignalMetaRow label="Recovery Path" type="blob" value={submitted.receiptBlobId} />
+            ) : null}
             {submitted.onchainSignalId !== undefined ? (
               <div className="metadata-row">
                 <span>Submission receipt</span>
@@ -193,6 +223,22 @@ export function PublicFormSuccess({
                   ))
                 )}
               </div>
+            </div>
+            {storedOnWalrus && evidenceBlobId ? (
+              <div className="metadata-row signal-success-proof-row">
+                <span>Verification proof</span>
+                <div className="signal-meta-row-value">
+                  <StorageProof
+                    blobId={evidenceBlobId}
+                    proof={submitted.encryptedWalrusProof ?? submitted.walrusProof}
+                    label="Evidence proof"
+                  />
+                </div>
+              </div>
+            ) : null}
+            <div className="metadata-row signal-success-raw-receipt">
+              <span>Raw receipt data</span>
+              <pre>{receiptJson}</pre>
             </div>
           </div>
         </details>

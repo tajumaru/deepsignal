@@ -1123,6 +1123,64 @@ function WorkspaceSectionToggle({
   );
 }
 
+function NodeDirectoryActionIcon({
+  children,
+}: {
+  children: ReactNode;
+}) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className="node-directory-action-icon"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      focusable="false"
+    >
+      {children}
+    </svg>
+  );
+}
+
+function OpenBeaconActionIcon() {
+  return (
+    <NodeDirectoryActionIcon>
+      <path d="M12 4.75v14.5" />
+      <path d="M7.25 9.5 12 4.75 16.75 9.5" />
+      <path d="M6 14.25a6 6 0 0 0 12 0" />
+      <path d="M8.15 14.25a3.85 3.85 0 0 0 7.7 0" />
+    </NodeDirectoryActionIcon>
+  );
+}
+
+function RegisterNodeActionIcon() {
+  return (
+    <NodeDirectoryActionIcon>
+      <path d="m12 4.75 6.25 3.5v7L12 19.25l-6.25-4v-7Z" />
+      <path d="m12 4.75 6.25 3.5L12 11.75l-6.25-3.5" />
+      <path d="M12 11.75v7.5" />
+      <path d="M18.3 5.65h2.2" />
+      <path d="M19.4 4.55v2.2" />
+    </NodeDirectoryActionIcon>
+  );
+}
+
+function DeleteNodeActionIcon() {
+  return (
+    <NodeDirectoryActionIcon>
+      <path d="M8.25 7.25h7.5" />
+      <path d="M9.25 7.25v-1.1A1.4 1.4 0 0 1 10.65 4.75h2.7a1.4 1.4 0 0 1 1.4 1.4v1.1" />
+      <path d="M6.75 7.25h10.5" />
+      <path d="m8.2 7.25.8 10a1.4 1.4 0 0 0 1.4 1.3h3.2a1.4 1.4 0 0 0 1.4-1.3l.8-10" />
+      <path d="M10.4 10.3v4.9" />
+      <path d="M13.6 10.3v4.9" />
+    </NodeDirectoryActionIcon>
+  );
+}
+
 function MobileSignalRow({
   record,
   isSelected,
@@ -1480,6 +1538,11 @@ export function AdminDashboardPage() {
   const [saving, setSaving] = useState(false);
   const [deletingFormId, setDeletingFormId] = useState<string | null>(null);
   const [registeringFormId, setRegisteringFormId] = useState<string | null>(null);
+  const [nodeRegistrationFeedback, setNodeRegistrationFeedback] = useState<{
+    formId: string;
+    tone: "success" | "error" | "info";
+    message: string;
+  } | null>(null);
   const [deletingVisibleNodes, setDeletingVisibleNodes] = useState(false);
   const [nodeDirectoryOpen, setNodeDirectoryOpen] = useState(false);
   const [beaconFormId, setBeaconFormId] = useState<string | null>(null);
@@ -1568,6 +1631,7 @@ export function AdminDashboardPage() {
     visibleSignals,
     selectedRecord,
     applyFormUpdate,
+    applyFormRemovals,
     applySubmissionUpdate,
   } = useSignalInboxData({
     accountAddress: wallet.accountAddress,
@@ -1912,6 +1976,7 @@ export function AdminDashboardPage() {
     setDeletingFormId(formId);
     try {
       const result = await deleteNodes([formId]);
+      applyFormRemovals([formId]);
       await loadConsole();
       setToast({ tone: "success", message: getDeleteSuccessMessage(result, true) });
     } catch (error) {
@@ -1928,7 +1993,7 @@ export function AdminDashboardPage() {
     (form: FormWithCount) =>
       Boolean(
         form.projectId &&
-        !form.onchainFormId &&
+        typeof form.onchainFormId !== "number" &&
         form.manifestBlobId &&
         !isLocalFallbackBlob(form.manifestBlobId),
       ),
@@ -1941,18 +2006,38 @@ export function AdminDashboardPage() {
       return;
     }
     if (!form.projectId) {
+      setNodeRegistrationFeedback({
+        formId,
+        tone: "error",
+        message: t("registerNodeMissingProject"),
+      });
       setToast({ tone: "error", message: t("registerNodeMissingProject") });
       return;
     }
     if (!form.manifestBlobId || isLocalFallbackBlob(form.manifestBlobId)) {
+      setNodeRegistrationFeedback({
+        formId,
+        tone: "error",
+        message: t("registerNodeRequiresWalrus"),
+      });
       setToast({ tone: "error", message: t("registerNodeRequiresWalrus") });
       return;
     }
-    if (form.onchainFormId) {
+    if (typeof form.onchainFormId === "number") {
+      setNodeRegistrationFeedback({
+        formId,
+        tone: "success",
+        message: t("registerNodeAlreadyOnSui"),
+      });
       setToast({ tone: "success", message: t("registerNodeAlreadyOnSui") });
       return;
     }
 
+    setNodeRegistrationFeedback({
+      formId,
+      tone: "info",
+      message: t("registeringOnSui"),
+    });
     setRegisteringFormId(formId);
     try {
       const formMetadataDigest =
@@ -2019,9 +2104,18 @@ export function AdminDashboardPage() {
       saveFormMetadataOverlay(registeredForm);
       applyFormUpdate(registeredForm);
       appendActivityEvents(registeredForm.activityEvents.slice(-1));
-      await loadConsole(formId);
+      setNodeRegistrationFeedback({
+        formId,
+        tone: "success",
+        message: `${t("registerNodeSuccess", { title: form.title })} ${t("registryFormIdLabel")}: ${parsedFormId}`,
+      });
       setToast({ tone: "success", message: t("registerNodeSuccess", { title: form.title }) });
     } catch (error) {
+      setNodeRegistrationFeedback({
+        formId,
+        tone: "error",
+        message: error instanceof Error ? error.message : t("registerNodeFailed"),
+      });
       setToast({
         tone: "error",
         message: error instanceof Error ? error.message : t("registerNodeFailed"),
@@ -2042,6 +2136,7 @@ export function AdminDashboardPage() {
     setDeletingFormId(null);
     try {
       const result = await deleteNodes(formIds);
+      applyFormRemovals(formIds);
       await loadConsole();
       setToast({ tone: "success", message: getDeleteSuccessMessage(result) });
     } catch (error) {
@@ -2138,7 +2233,7 @@ export function AdminDashboardPage() {
     return accessibleForms.filter(
       (form) =>
         form.projectId === selectedProject.objectId &&
-        !form.onchainFormId &&
+        typeof form.onchainFormId !== "number" &&
         Boolean(form.manifestBlobId) &&
         !isLocalFallbackBlob(form.manifestBlobId),
     );
@@ -3394,7 +3489,7 @@ export function AdminDashboardPage() {
         submissionCount: form.submissionCount,
         unreadCount: unreadCountByFormId[form.id] ?? 0,
         onchainFormId: form.onchainFormId,
-        isOnchain: Boolean(form.onchainFormId),
+        isOnchain: typeof form.onchainFormId === "number",
         isLegacyDemo: !form.ownerAddress,
         canDelete: canDeleteForm(form),
         canRegisterOnSui: canRegisterNodeOnSui(form),
@@ -4653,6 +4748,12 @@ export function AdminDashboardPage() {
             <div className="node-directory-list">
               {nodeDirectoryItems.map((item) => {
                 const isSelected = selectedFormId === item.id;
+                const registrationFeedback =
+                  nodeRegistrationFeedback?.formId === item.id ? nodeRegistrationFeedback : null;
+                const shouldShowRegistrationFeedback = Boolean(
+                  registrationFeedback &&
+                    (registrationFeedback.tone !== "success" || !item.isOnchain),
+                );
                 return (
                   <div key={item.id} className={`node-directory-row ${isSelected ? "is-active" : ""}`}>
                     <button
@@ -4706,33 +4807,45 @@ export function AdminDashboardPage() {
                       <div className="node-directory-actions">
                         <button
                           type="button"
-                          className="ghost-button"
+                          className="ghost-button node-directory-action-button"
                           onClick={() => {
                             setBeaconFormId(item.id);
                             setNodeDirectoryOpen(false);
                           }}
                         >
-                          {t("openSignalBeacon")}
+                          <OpenBeaconActionIcon />
+                          <span className="node-directory-action-label">{t("openSignalBeacon")}</span>
                         </button>
                         {item.canRegisterOnSui ? (
                           <button
                             type="button"
-                            className="ghost-button"
+                            className="ghost-button node-directory-action-button"
                             onClick={() => void handleRegisterNodeOnSui(item.id)}
                             disabled={registeringFormId === item.id || deletingVisibleNodes}
                           >
-                            {registeringFormId === item.id ? t("registeringLabel") : t("registerNodeOnSui")}
+                            <RegisterNodeActionIcon />
+                            <span className="node-directory-action-label">
+                              {registeringFormId === item.id ? t("registeringLabel") : t("registerNodeOnSui")}
+                            </span>
                           </button>
                         ) : null}
                         {item.canDelete ? (
                           <button
                             type="button"
-                            className="ghost-button node-directory-delete"
+                            className="ghost-button node-directory-action-button node-directory-delete"
                             onClick={() => void handleDelete(item.id)}
                             disabled={deletingVisibleNodes || deletingFormId === item.id}
                           >
-                            {deletingFormId === item.id ? t("deletingLabel") : t("deleteNode")}
+                            <DeleteNodeActionIcon />
+                            <span className="node-directory-action-label">
+                              {deletingFormId === item.id ? t("deletingLabel") : t("deleteNode")}
+                            </span>
                           </button>
+                        ) : null}
+                        {shouldShowRegistrationFeedback && registrationFeedback ? (
+                          <p className={`node-directory-feedback is-${registrationFeedback.tone}`}>
+                            {registrationFeedback.message}
+                          </p>
                         ) : null}
                       </div>
                     ) : null}

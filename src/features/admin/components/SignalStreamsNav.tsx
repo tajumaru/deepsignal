@@ -275,7 +275,7 @@ function hasUnregisteredWalrusNode(form: FormWithCount) {
   return Boolean(
     form.projectId &&
       form.manifestBlobId &&
-      !form.onchainFormId &&
+      typeof form.onchainFormId !== "number" &&
       !isLocalFallbackBlob(form.manifestBlobId),
   );
 }
