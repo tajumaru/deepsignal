@@ -12,6 +12,7 @@ import {
   normalizeSubmission,
   storageAdapter,
 } from "../../../lib/storage";
+import { cleanupRegisteredSubmissionLocalFallback } from "../../../storage/localStorageAdapter";
 import { useI18n } from "../../../i18n";
 import { useRpcInfrastructure } from "../../../rpcInfrastructure";
 import type { Submission } from "../../../types";
@@ -127,6 +128,7 @@ export function usePendingSuiRegistration({
       updatedAt: new Date().toISOString(),
     });
     await storageAdapter.updateSubmission(registeredSubmission);
+    await cleanupRegisteredSubmissionLocalFallback(registeredSubmission);
     applySubmissionUpdate(registeredSubmission);
     return registeredSubmission;
   }

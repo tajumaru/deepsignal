@@ -193,7 +193,7 @@ export function useCreateFormBuilder({
     setDragOverFieldId(null);
     setDragOverPlacement(null);
     setPendingFocusFieldId(nextFields[0]?.id ?? "");
-  }, [initialDraftSnapshot, initialFields, initialTemplate, isGuestDraftMode]);
+  }, [initialDraftSnapshot, initialTemplate, isGuestDraftMode]);
 
   useEffect(() => {
     if (isGuestDraftMode) {
@@ -436,6 +436,7 @@ export function useCreateFormBuilder({
     headerImage,
     headerLogo,
     identityPolicy,
+    initialDraftSnapshot,
     locationRequirement,
     projectState,
     purpose,

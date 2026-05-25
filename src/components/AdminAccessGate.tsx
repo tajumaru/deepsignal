@@ -1,6 +1,6 @@
 import type { PropsWithChildren } from "react";
 import { useI18n } from "../i18n";
-import { WalletConnect } from "./WalletConnect";
+import { WalletConnectSurface } from "./WalletConnectSurface";
 
 interface AdminAccessGateProps extends PropsWithChildren {
   hasWallet: boolean;
@@ -27,7 +27,7 @@ export function AdminAccessGate({
         <h1>{t("connectWalletTitle")}</h1>
         <p>{t("walletVerifiedAccessRequired")}</p>
         <div className="inline-actions">
-          <WalletConnect />
+          <WalletConnectSurface />
         </div>
       </section>
     );

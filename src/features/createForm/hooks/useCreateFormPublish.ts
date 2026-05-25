@@ -18,8 +18,8 @@ import {
   parseCustomResponseDeadline,
 } from "../../../lib/responseDeadline";
 import { isLocalFallbackBlob } from "../../../lib/proof";
-import { publishForm } from "../services";
-import { localStorageAdapter } from "../../../storage/localStorageAdapter";
+import { publishForm, PublishFlowError } from "../services";
+import { cleanupRegisteredFormLocalFallback } from "../../../storage/localStorageAdapter";
 import { saveFormMetadataOverlay } from "../../../storage/formMetadataOverlay";
 import {
   createWalrusCostEstimate,
@@ -384,6 +384,7 @@ export function useCreateFormPublish({
     const runId = publishRunRef.current + 1;
     publishRunRef.current = runId;
     setSaving(true);
+    setSavedForm(null);
     setOverlay({ ...initialOverlayState, open: true });
 
     const form = buildFormSchema({
@@ -454,6 +455,8 @@ export function useCreateFormPublish({
       updateOverlay({ open: false });
       const message = submitError instanceof Error ? submitError.message : t("saveFailed");
       setError(message);
+      const publishFailureDiagnostics =
+        submitError instanceof PublishFlowError ? submitError.diagnostics : {};
       const nextFailure = createCriticalFailure({
         error: submitError instanceof Error ? submitError : new Error(message),
         surface:
@@ -464,9 +467,12 @@ export function useCreateFormPublish({
               : "walrus",
         step: "publish",
         noDataSubmitted: true,
+        uploadSucceeded: submitError instanceof PublishFlowError ? submitError.uploadSucceeded : false,
+        registryUpdated: submitError instanceof PublishFlowError ? submitError.registryUpdated : false,
         diagnostics: {
           selectedProjectId: selectedProject?.objectId ?? "",
           encryptSubmissions,
+          ...publishFailureDiagnostics,
         },
       });
       setFailure(nextFailure);
@@ -528,7 +534,7 @@ export function useCreateFormPublish({
           }),
         ],
       } satisfies PreparedPublishForm;
-      await localStorageAdapter.saveForm(registeredForm);
+      await cleanupRegisteredFormLocalFallback(registeredForm);
       saveFormMetadataOverlay(registeredForm);
       appendActivityEvents(registeredForm.activityEvents.slice(-1));
       setSavedForm(registeredForm);

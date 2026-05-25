@@ -5,7 +5,7 @@ import { CriticalFailurePanel } from "../../../components/CriticalFailurePanel";
 import { ShareCard } from "../../../components/ShareCard";
 import { SignalMetaRow } from "../../../components/SignalMetaChip";
 import { SuiAddressDisplay } from "../../../components/SuiAddressDisplay";
-import type { CriticalFailure } from "../../../lib/criticalFailure";
+import { hasInconsistentPublishState, type CriticalFailure } from "../../../lib/criticalFailure";
 import { LivePreview } from "../../../components/formBuilder/LivePreview";
 import { isLocalFallbackBlob } from "../../../lib/proof";
 import { SUI_NETWORK } from "../../../lib/sui";
@@ -348,6 +348,15 @@ export function PublishStep({
         : failure?.retryable
           ? [{ key: "retry", label: t("retryLabel"), onClick: focusPublishButton }]
           : [];
+  const failureGuidance = failure
+    ? hasInconsistentPublishState(failure)
+      ? t("publishIncompleteStateGuidance")
+      : failure.uploadSucceeded && !failure.registryUpdated
+        ? t("publishRecoveryPartialGuidance")
+        : failure.noDataSubmitted
+          ? t("publishFailedNoDataGuidance")
+          : undefined
+    : undefined;
 
   return (
     <section
@@ -816,6 +825,7 @@ export function PublishStep({
               title={t("publishRecoveryTitle")}
               copyLabel={t("copyDiagnostics")}
               copiedLabel={t("diagnosticsCopied")}
+              guidance={failureGuidance}
               copied={diagnosticsCopied}
               actions={failureActions}
               onCopyDiagnostics={onCopyDiagnostics}

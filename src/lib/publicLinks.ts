@@ -30,3 +30,15 @@ export function getAbsolutePublicRoadmapUrl(formId: string, manifestBlobId: stri
   const baseOrigin = origin ?? (typeof window === "undefined" ? "" : window.location.origin);
   return `${baseOrigin}${getPublicRoadmapHashPath(formId, manifestBlobId)}`;
 }
+
+export function getRepublishFormPath(formId?: string, manifestBlobId?: string) {
+  const searchParams = new URLSearchParams();
+  searchParams.set("fresh", String(Date.now()));
+  if (formId) {
+    searchParams.set("republishFormId", formId);
+  }
+  if (manifestBlobId) {
+    searchParams.set("republishManifest", manifestBlobId);
+  }
+  return `/create?${searchParams.toString()}`;
+}

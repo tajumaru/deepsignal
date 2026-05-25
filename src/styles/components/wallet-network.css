@@ -699,12 +699,19 @@
     0 0 10px rgba(53, 230, 161, 0.38);
 }
 
+.network-status-dot.is-degraded {
+  background: #f2c35d;
+  box-shadow:
+    0 0 0 1px rgba(242, 195, 93, 0.24),
+    0 0 10px rgba(242, 195, 93, 0.28);
+}
+
 .network-select-menu {
   position: absolute;
   top: calc(100% + 0.7rem);
   right: 0;
   z-index: 25;
-  width: min(100vw - 2rem, 12.75rem);
+  width: min(100vw - 2rem, 21rem);
   padding: 0.4rem;
   border-radius: var(--radius-lg);
   border-color: rgba(118, 206, 255, 0.18);
@@ -713,6 +720,11 @@
     radial-gradient(circle at top right, rgba(102, 227, 255, 0.08), transparent 34%);
   display: grid;
   gap: 0.3rem;
+}
+
+.network-select-menu-section {
+  display: grid;
+  gap: 0.32rem;
 }
 
 .network-select-option {
@@ -760,6 +772,40 @@
   line-height: 1;
   min-width: 0.7rem;
   text-align: center;
+}
+
+.network-diagnostics-section {
+  margin-top: 0.2rem;
+  padding: 0.45rem;
+  border: 1px solid rgba(118, 206, 255, 0.12);
+  border-radius: 14px;
+  background: rgba(8, 26, 43, 0.46);
+}
+
+.network-diagnostics-list {
+  gap: 0;
+}
+
+.network-diagnostics-row {
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.4rem;
+}
+
+.network-diagnostics-value {
+  display: inline-flex;
+  justify-content: flex-end;
+}
+
+.network-diagnostics-detail {
+  grid-column: 1 / -1;
+  color: #90b3c5;
+  font-size: 0.72rem;
+  line-height: 1.45;
+  word-break: break-word;
+}
+
+.network-diagnostics-actions {
+  justify-content: flex-end;
 }
 
 .network-infra-hero {

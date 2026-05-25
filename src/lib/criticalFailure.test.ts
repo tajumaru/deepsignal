@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createCriticalFailure } from "./criticalFailure";
+import { createCriticalFailure, hasInconsistentPublishState } from "./criticalFailure";
 
 describe("createCriticalFailure", () => {
   const occurredAt = new Date("2026-05-15T12:00:00.000Z");
@@ -34,6 +34,7 @@ describe("createCriticalFailure", () => {
 
     expect(failure.kind).toBe("walrus_upload_failed");
     expect(failure.retryable).toBe(true);
+    expect(failure.registryUpdated).toBe(false);
   });
 
   it("classifies Seal encryption failures", () => {
@@ -62,5 +63,18 @@ describe("createCriticalFailure", () => {
     expect(failure.uploadSucceeded).toBe(true);
     expect(failure.registryUpdated).toBe(false);
     expect(failure.noDataSubmitted).toBe(false);
+  });
+
+  it("detects inconsistent publish state when registry is updated before upload succeeds", () => {
+    const failure = createCriticalFailure({
+      error: new Error("Publish state is incomplete."),
+      surface: "walrus",
+      step: "publish",
+      uploadSucceeded: false,
+      registryUpdated: true,
+      occurredAt,
+    });
+
+    expect(hasInconsistentPublishState(failure)).toBe(true);
   });
 });

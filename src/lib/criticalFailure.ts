@@ -36,6 +36,10 @@ export interface CriticalFailure {
   diagnostics: Record<string, unknown>;
 }
 
+export function hasInconsistentPublishState(failure: Pick<CriticalFailure, "uploadSucceeded" | "registryUpdated">) {
+  return failure.registryUpdated && !failure.uploadSucceeded;
+}
+
 function normalizeMessage(error: unknown) {
   if (error instanceof Error) {
     return error.message.trim() || error.name;
@@ -132,7 +136,7 @@ export function createCriticalFailure({
   step,
   noDataSubmitted,
   uploadSucceeded = false,
-  registryUpdated = true,
+  registryUpdated = false,
   retryable,
   occurredAt = new Date(),
   diagnostics = {},

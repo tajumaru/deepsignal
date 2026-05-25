@@ -109,6 +109,30 @@ function hasNonEmptyText(value?: string) {
   return Boolean(value?.trim());
 }
 
+function matchesSubmissionIdentity(left: Submission, right: Submission) {
+  if (left.id === right.id) {
+    return true;
+  }
+  if (left.receiptBlobId && right.receiptBlobId && left.receiptBlobId === right.receiptBlobId) {
+    return true;
+  }
+  if (
+    left.signalReceiptMetadataDigest &&
+    right.signalReceiptMetadataDigest &&
+    left.signalReceiptMetadataDigest === right.signalReceiptMetadataDigest
+  ) {
+    return true;
+  }
+  if (
+    typeof left.onchainSignalId === "number" &&
+    typeof right.onchainSignalId === "number" &&
+    left.onchainSignalId === right.onchainSignalId
+  ) {
+    return true;
+  }
+  return false;
+}
+
 function getDecryptReadinessScore(submission: Submission) {
   let score = 0;
   if (hasNonEmptyText(submission.encryptedPayload)) {
@@ -166,15 +190,16 @@ function mergeSubmissionRecord(primary: Submission, secondary: Submission) {
 }
 
 function mergeSubmissionsById(primary: Submission[], secondary: Submission[]) {
-  const map = new Map<string, Submission>();
-  for (const item of secondary) {
-    map.set(item.id, item);
-  }
+  const merged: Submission[] = [...secondary];
   for (const item of primary) {
-    const current = map.get(item.id);
-    map.set(item.id, current ? mergeSubmissionRecord(item, current) : item);
+    const existingIndex = merged.findIndex((entry) => matchesSubmissionIdentity(entry, item));
+    if (existingIndex === -1) {
+      merged.push(item);
+      continue;
+    }
+    merged[existingIndex] = mergeSubmissionRecord(item, merged[existingIndex]);
   }
-  return [...map.values()];
+  return merged;
 }
 
 async function withWriteFallback<T>(walrusTask: () => Promise<T>, localTask: () => Promise<T>) {

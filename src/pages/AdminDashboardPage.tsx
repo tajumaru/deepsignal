@@ -97,6 +97,7 @@ import {
 } from "../lib/projectRegistry";
 import { isSuiRateLimitError } from "../lib/sui";
 import { clearDeepSignalPolicyCapabilityCache } from "../lib/debugCache";
+import { resetLocalEnvironment } from "../lib/resetEnvironment";
 import { formatResponseDeadline, type ResponseDeadlineLabels } from "../lib/responseDeadline";
 import { getSubmissionRespondentMeta } from "../lib/respondentMeta";
 import {
@@ -119,7 +120,7 @@ import {
 } from "../lib/storage";
 import { formatDate } from "../lib/utils";
 import { handleRateLimitedRpcFallback, useRpcInfrastructure } from "../rpcInfrastructure";
-import { localStorageAdapter } from "../storage/localStorageAdapter";
+import { cleanupRegisteredFormLocalFallback } from "../storage/localStorageAdapter";
 import { listFormBlobIndex } from "../storage/blobIndex";
 import { markDeletedFormTombstones } from "../storage/deletedFormTombstones";
 import { forcePurgeFormArtifacts } from "../storage/forcePurgeFormArtifacts";
@@ -139,6 +140,7 @@ const MODAL_FOCUSABLE_SELECTOR = [
 const ROADMAP_READY_STATUSES = new Set<Submission["triageStatus"]>(["planned", "in_progress", "fixed"]);
 const DEMO_FLOW_VISIBLE = false;
 const PROJECT_RECOVERY_NOTICE_ACK_KEY = "deepsignal.admin.projectRecoveryNoticeAck";
+const WORKSPACE_RECOVERY_TIMEOUT_MS = 4000;
 type WorkspaceTab = "review" | "activity" | "insights" | "members";
 type QuickActionId = "reviewing" | "resolve" | "publish" | "archive";
 type KeyboardShortcutAction = QuickActionId | "next" | "previous" | "search" | "help";
@@ -955,7 +957,7 @@ function SignalInboxOnboardingHero({
   selectedProjectId,
   selectProject,
   onRevealCreateProject,
-  onRevealConnectProject,
+  onRevealConnectProject: _onRevealConnectProject,
   highlightCreateFormCta,
 }: {
   state: InboxOnboardingState;
@@ -968,6 +970,7 @@ function SignalInboxOnboardingHero({
   highlightCreateFormCta: boolean;
 }) {
   const { t } = useI18n();
+  void _onRevealConnectProject;
   const isCreateProjectState = state === "create-project";
   const onboardingProjectId = selectedProjectId || projects[0]?.objectId || "";
 
@@ -1398,6 +1401,57 @@ function InboxLoadingPanel({ title, body }: { title: string; body: string }) {
   );
 }
 
+function InboxRecoveryPanel({
+  title,
+  body,
+  onRetry,
+}: {
+  title: string;
+  body: string;
+  onRetry: () => void;
+}) {
+  const [resettingState, setResettingState] = useState(false);
+
+  async function handleResetLocalState() {
+    setResettingState(true);
+    try {
+      await resetLocalEnvironment();
+    } finally {
+      window.location.assign("/");
+    }
+  }
+
+  return (
+    <section className="panel inbox-loading-panel" role="alert" aria-live="assertive">
+      <div className="inbox-loading-copy">
+        <p className="eyebrow">Encrypted Signal Inbox</p>
+        <h1>{title}</h1>
+        <p className="muted">{body}</p>
+        <p className="muted">
+          Local fallback data, registry restore, or a partial publish state may be blocking recovery. You can retry or
+          reset browser-local DeepSignal state without deleting on-chain records.
+        </p>
+      </div>
+      <div className="inline-actions">
+        <button type="button" className="primary-button" onClick={onRetry}>
+          Retry workspace
+        </button>
+        <button
+          type="button"
+          className="ghost-button"
+          onClick={() => void handleResetLocalState()}
+          disabled={resettingState}
+        >
+          {resettingState ? "Resetting local state..." : "Reset local state"}
+        </button>
+        <Link className="ghost-button" to="/">
+          Open home
+        </Link>
+      </div>
+    </section>
+  );
+}
+
 export function AdminDashboardPage() {
   const { language, t } = useI18n();
   const location = useLocation();
@@ -1408,6 +1462,7 @@ export function AdminDashboardPage() {
   const updateSignalStatusTx = useSignAndExecuteTransaction();
   const registerFormTx = useSignAndExecuteTransaction();
   const deleteNodeOnchainTx = useSignAndExecuteTransaction();
+  const [loadingRecoveryVisible, setLoadingRecoveryVisible] = useState(false);
   const {
     capabilityProfile,
     isPending: isLoadingCapabilities,
@@ -1512,6 +1567,7 @@ export function AdminDashboardPage() {
     pendingSignals,
     visibleSignals,
     selectedRecord,
+    applyFormUpdate,
     applySubmissionUpdate,
   } = useSignalInboxData({
     accountAddress: wallet.accountAddress,
@@ -1520,6 +1576,19 @@ export function AdminDashboardPage() {
     scopeProjectId: getSelectedProjectId(),
     viewScope: signalViewScope,
   });
+
+  useEffect(() => {
+    if (!loading) {
+      setLoadingRecoveryVisible(false);
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      setLoadingRecoveryVisible(true);
+    }, WORKSPACE_RECOVERY_TIMEOUT_MS);
+
+    return () => window.clearTimeout(timer);
+  }, [loading]);
   const {
     selectedPendingSignalIds,
     registeringSignalIds,
@@ -1946,8 +2015,9 @@ export function AdminDashboardPage() {
         ],
       } satisfies FormWithCount;
 
-      await localStorageAdapter.saveForm(registeredForm);
+      await cleanupRegisteredFormLocalFallback(registeredForm);
       saveFormMetadataOverlay(registeredForm);
+      applyFormUpdate(registeredForm);
       appendActivityEvents(registeredForm.activityEvents.slice(-1));
       await loadConsole(formId);
       setToast({ tone: "success", message: t("registerNodeSuccess", { title: form.title }) });
@@ -3301,6 +3371,8 @@ export function AdminDashboardPage() {
       title: t("allSignalNodes"),
       submissionCount: allSignals.length,
       unreadCount: signalIndex.counts.unread,
+      onchainFormId: undefined,
+      isOnchain: false,
       isLegacyDemo: false,
       canDelete: false,
       canRegisterOnSui: false,
@@ -3321,6 +3393,8 @@ export function AdminDashboardPage() {
         title: form.title,
         submissionCount: form.submissionCount,
         unreadCount: unreadCountByFormId[form.id] ?? 0,
+        onchainFormId: form.onchainFormId,
+        isOnchain: Boolean(form.onchainFormId),
         isLegacyDemo: !form.ownerAddress,
         canDelete: canDeleteForm(form),
         canRegisterOnSui: canRegisterNodeOnSui(form),
@@ -3343,8 +3417,21 @@ export function AdminDashboardPage() {
     [nodeDirectoryItems],
   );
 
-  if (loading) {
+  if (loading && !loadingRecoveryVisible) {
     return <InboxLoadingPanel title={t("loadingResearchLab")} body={t("loadingSignalInboxBody")} />;
+  }
+
+  if (loadingRecoveryVisible) {
+    return (
+      <InboxRecoveryPanel
+        title="Workspace recovery is taking too long."
+        body="DeepSignal stopped waiting on the spinner so you can recover the inbox state."
+        onRetry={() => {
+          setLoadingRecoveryVisible(false);
+          void loadConsole();
+        }}
+      />
+    );
   }
 
   if (loadError) {
@@ -4597,6 +4684,22 @@ export function AdminDashboardPage() {
                               ? ` / ${t("accessDeniedButton")}`
                               : ""}
                         </p>
+                        {item.id !== "all" ? (
+                          <div className="signal-badge-row signal-badge-row-compact">
+                            {item.isOnchain ? (
+                              <>
+                                <span className="signal-chip signal-chip-soft">{t("registeredOnSuiLabel")}</span>
+                                {typeof item.onchainFormId === "number" ? (
+                                  <span className="signal-chip signal-chip-soft">
+                                    {t("registryFormIdLabel")}: {item.onchainFormId}
+                                  </span>
+                                ) : null}
+                              </>
+                            ) : (
+                              <span className="signal-chip signal-chip-soft">{t("notRegisteredYet")}</span>
+                            )}
+                          </div>
+                        ) : null}
                       </div>
                     </button>
                     {item.id !== "all" && item.isAccessible ? (

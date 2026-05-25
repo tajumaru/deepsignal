@@ -35,9 +35,70 @@ function buildManifestPlugin(args: {
   gitHash: string;
   appEnvironment: string;
 }): Plugin {
+  const routeChunkMatchers = {
+    publicForm: /\/src\/pages\/PublicFormPage\.tsx$/,
+    publicRoadmap: /\/src\/pages\/PublicRoadmapPage\.tsx$/,
+    manifestRestore: /\/src\/pages\/ManifestRestorePage\.tsx$/,
+  } as const;
+
+  type RouteKey = keyof typeof routeChunkMatchers;
+
   return {
     name: "deepsignal-build-manifest",
     generateBundle(_, bundle) {
+      const chunks = Object.values(bundle).filter((entry): entry is import("rollup").OutputChunk => entry.type === "chunk");
+      const chunkByFileName = new Map(chunks.map((entry) => [`./${entry.fileName}`, entry]));
+      const entryChunk = chunks.find((entry) => entry.isEntry);
+
+      const collectChunkAssets = (
+        chunkFileName: string,
+        options: { includeDynamicImports?: boolean } = {},
+        seen = new Set<string>(),
+      ) => {
+        if (seen.has(chunkFileName)) {
+          return [];
+        }
+        seen.add(chunkFileName);
+
+        const chunk = chunkByFileName.get(chunkFileName);
+        if (!chunk) {
+          return [];
+        }
+
+        const viteMetadata = (chunk as import("rollup").OutputChunk & {
+          viteMetadata?: { importedCss?: Set<string> };
+        }).viteMetadata;
+        const dynamicImports = options.includeDynamicImports === false ? [] : chunk.dynamicImports;
+        const directAssets = [
+          chunkFileName,
+          ...chunk.imports.map((fileName) => `./${fileName}`),
+          ...dynamicImports.map((fileName) => `./${fileName}`),
+          ...(viteMetadata?.importedCss ? Array.from(viteMetadata.importedCss).map((fileName) => `./${fileName}`) : []),
+        ];
+
+        const nestedAssets = [...chunk.imports, ...dynamicImports].flatMap((fileName) =>
+          collectChunkAssets(`./${fileName}`, options, seen),
+        );
+
+        return Array.from(new Set([...directAssets, ...nestedAssets]));
+      };
+
+      const routeAssets = Object.entries(routeChunkMatchers).reduce<Record<RouteKey, string[]>>((accumulator, [key, matcher]) => {
+        const routeChunk = chunks.find((entry) => matcher.test(entry.facadeModuleId ?? ""));
+        const routeChunkAssets = routeChunk ? collectChunkAssets(`./${routeChunk.fileName}`) : [];
+        accumulator[key as RouteKey] = Array.from(
+          new Set([
+            ...(entryChunk ? collectChunkAssets(`./${entryChunk.fileName}`, { includeDynamicImports: false }) : []),
+            ...routeChunkAssets,
+          ]),
+        );
+        return accumulator;
+      }, {
+        publicForm: [],
+        publicRoadmap: [],
+        manifestRestore: [],
+      });
+
       const assets = Object.values(bundle)
         .map((entry) => entry.fileName)
         .filter((fileName) => fileName.endsWith(".js") || fileName.endsWith(".css"))
@@ -47,7 +108,7 @@ function buildManifestPlugin(args: {
       this.emitFile({
         type: "asset",
         fileName: "build.json",
-        source: `${JSON.stringify({ ...args, assets }, null, 2)}\n`,
+        source: `${JSON.stringify({ ...args, assets, routeAssets }, null, 2)}\n`,
       });
     },
   };
@@ -70,14 +131,40 @@ function moduleEntryRetryPlugin(): Plugin {
         const retryLoader = `<script type="module">
       (() => {
         const entryPath = ${JSON.stringify(entrySrc)};
-        const maxAttempts = 8;
-        const baseDelayMs = 900;
+        const maxAttempts = 3;
+        const baseDelayMs = 500;
         const statusNode = document.querySelector("[data-boot-status]");
+        const bootShell = document.querySelector(".boot-shell");
 
         function setBootStatus(message) {
           if (statusNode) {
             statusNode.textContent = message;
           }
+        }
+
+        function ensureRecoveryActions() {
+          if (!bootShell || bootShell.querySelector("[data-boot-recovery]")) {
+            return;
+          }
+          const actions = document.createElement("div");
+          actions.dataset.bootRecovery = "true";
+          actions.style.display = "flex";
+          actions.style.gap = "0.75rem";
+          actions.style.flexWrap = "wrap";
+          actions.style.justifyContent = "center";
+
+          const reloadButton = document.createElement("button");
+          reloadButton.type = "button";
+          reloadButton.textContent = "Reload";
+          reloadButton.style.padding = "0.8rem 1rem";
+          reloadButton.style.borderRadius = "999px";
+          reloadButton.style.border = "1px solid rgba(138, 223, 255, 0.28)";
+          reloadButton.style.background = "rgba(138, 223, 255, 0.14)";
+          reloadButton.style.color = "#ecfdff";
+          reloadButton.onclick = () => window.location.reload();
+
+          actions.appendChild(reloadButton);
+          bootShell.appendChild(actions);
         }
 
         function delay(ms) {
@@ -96,8 +183,8 @@ function moduleEntryRetryPlugin(): Plugin {
           } catch (error) {
             if (attempt >= maxAttempts) {
               console.error("DeepSignal module entry failed to load", error);
-              setBootStatus("Signal surface load failed. Reloading...");
-              window.setTimeout(() => window.location.reload(), 1200);
+              setBootStatus("Signal surface load failed. Retry or reopen the page.");
+              ensureRecoveryActions();
               return;
             }
 
@@ -174,6 +261,11 @@ export default defineConfig(({ mode }) => {
         : null,
     ].filter(Boolean),
     build: {
+      modulePreload: {
+        resolveDependencies(_, deps) {
+          return deps.filter((dependency) => !/assets\/mysten-sui-[^/]+\.js$/.test(dependency.replace(/\\/g, "/")));
+        },
+      },
       rollupOptions: {
         output: {
           entryFileNames: "assets/[name]-[hash].js",

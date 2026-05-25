@@ -2,7 +2,7 @@ import { createContext, lazy, Suspense, useContext, type PropsWithChildren, type
 import { retryLazyImport } from "../lib/lazyRetry";
 
 const WalletProviders = lazy(() =>
-  retryLazyImport(() => import("../providers")).then((module) => ({
+  retryLazyImport(() => import("../providers"), "wallet-providers").then((module) => ({
     default: module.WalletProviders,
   })),
 );

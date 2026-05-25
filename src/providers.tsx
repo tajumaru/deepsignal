@@ -3,7 +3,6 @@ import { JsonRpcHTTPTransport, SuiJsonRpcClient } from "@mysten/sui/jsonRpc";
 import {
   Component,
   useCallback,
-  useEffect,
   useMemo,
   useState,
   type PropsWithChildren,
@@ -12,32 +11,21 @@ import {
 import {
   createNetworkConfig,
   SuiClientProvider,
+  useCurrentAccount,
+  useCurrentWallet,
   WalletProvider,
 } from "@mysten/dapp-kit";
 import type { WalletWithRequiredFeatures } from "@mysten/wallet-standard";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { REQUIRE_GLOBAL_WALRUS_RUNTIME } from "./lib/runtimeFlags";
 import {
-  getConnectedNetworkLabel,
-  getEffectiveTatumRpcUrl,
-  getRpcProviderLabel,
-  isTatumRpcUrl,
-  SUI_DEFAULT_RPC_URL,
-  SUI_FALLBACK_RPC_URL,
   SUI_NETWORK,
-  SUI_TATUM_RPC_URL,
 } from "./lib/sui";
-import {
-  RPC_RATE_LIMIT_COOLDOWN_MS,
-  resetRateLimitedRpcFallback,
-  RpcInfrastructureContext,
-  type RpcInfrastructureContextValue,
-} from "./rpcInfrastructure";
+import { useRpcInfrastructure } from "./rpcInfrastructure";
 import WalrusRuntimeBridge from "./walrusRuntimeBridge";
+import { WalletConnectionContext, type WalletConnectionState } from "./walletStatus";
 
 const PREFERRED_WALLETS = ["Sui Wallet", "Slush", "Phantom", "OKX Wallet"];
-type RpcMode = "default" | "tatum";
-const TATUM_SELECTION_GRACE_MS = 4_000;
 
 class OptionalWalrusRuntimeBoundary extends Component<
   PropsWithChildren<{ fallback?: ReactNode }>,
@@ -79,19 +67,26 @@ export function WalrusRuntimeProvider({ children }: PropsWithChildren) {
   );
 }
 
+function WalletStatusBridge({ children }: PropsWithChildren) {
+  const account = useCurrentAccount();
+  const { currentWallet, connectionStatus, isConnected } = useCurrentWallet();
+  const value = useMemo<WalletConnectionState>(
+    () => ({
+      status: connectionStatus === "connecting" ? "connecting" : isConnected && account?.address ? "connected" : "disconnected",
+      accountAddress: account?.address ?? null,
+      walletName: currentWallet?.name ?? null,
+      isRestoringConnection: connectionStatus === "connecting",
+    }),
+    [account?.address, connectionStatus, currentWallet?.name, isConnected],
+  );
+
+  return <WalletConnectionContext.Provider value={value}>{children}</WalletConnectionContext.Provider>;
+}
+
 export function WalletProviders({ children }: PropsWithChildren) {
   const [queryClient] = useState(() => new QueryClient());
-  const tatumRpcUrl = getEffectiveTatumRpcUrl();
-  const canUseTatum = Boolean(tatumRpcUrl);
-  const [rpcMode, setRpcMode] = useState<RpcMode>(() => (canUseTatum ? "tatum" : "default"));
-  const [connectedNetworkLabel, setConnectedNetworkLabel] = useState(() => getConnectedNetworkLabel());
-  const [rateLimitedUntil, setRateLimitedUntil] = useState(0);
-  const [manualTatumSelectionUntil, setManualTatumSelectionUntil] = useState(() =>
-    canUseTatum ? Date.now() + TATUM_SELECTION_GRACE_MS : 0,
-  );
-  const fallbackRpcUrl = SUI_FALLBACK_RPC_URL || SUI_DEFAULT_RPC_URL;
-  const currentRpcUrl = rpcMode === "tatum" && tatumRpcUrl ? tatumRpcUrl : fallbackRpcUrl;
-  const displayRpcUrl = rpcMode === "tatum" && SUI_TATUM_RPC_URL ? SUI_TATUM_RPC_URL : currentRpcUrl;
+  const rpcInfrastructure = useRpcInfrastructure();
+  const currentRpcUrl = rpcInfrastructure.currentRpcUrl;
   const { networkConfig } = useMemo(
     () =>
       createNetworkConfig({
@@ -102,47 +97,6 @@ export function WalletProviders({ children }: PropsWithChildren) {
       }),
     [currentRpcUrl],
   );
-  const switchToDefault = useCallback(() => {
-    setManualTatumSelectionUntil(0);
-    setRpcMode("default");
-  }, []);
-  const clearRateLimitedState = useCallback(() => {
-    setRateLimitedUntil(0);
-  }, []);
-  const noteRateLimited = useCallback((cooldownMs = RPC_RATE_LIMIT_COOLDOWN_MS) => {
-    setRateLimitedUntil(Date.now() + Math.max(0, cooldownMs));
-  }, []);
-  const switchToTatum = useCallback(() => {
-    if (canUseTatum) {
-      resetRateLimitedRpcFallback();
-      clearRateLimitedState();
-      setManualTatumSelectionUntil(Date.now() + TATUM_SELECTION_GRACE_MS);
-      setRpcMode("tatum");
-    }
-  }, [canUseTatum, clearRateLimitedState]);
-  const setNetworkLabel = useCallback((label: string) => {
-    setConnectedNetworkLabel((current) => (current === label ? current : label));
-  }, []);
-  const isRateLimitedCooldownActive = rateLimitedUntil > Date.now();
-  const canAutoFallbackFromRateLimit = manualTatumSelectionUntil <= Date.now();
-  useEffect(() => {
-    if (!rateLimitedUntil || !isRateLimitedCooldownActive) {
-      return;
-    }
-    const timeout = window.setTimeout(() => {
-      setRateLimitedUntil((current) => (current <= Date.now() ? 0 : current));
-    }, Math.max(0, rateLimitedUntil - Date.now()));
-    return () => window.clearTimeout(timeout);
-  }, [isRateLimitedCooldownActive, rateLimitedUntil]);
-  useEffect(() => {
-    if (!manualTatumSelectionUntil || canAutoFallbackFromRateLimit) {
-      return;
-    }
-    const timeout = window.setTimeout(() => {
-      setManualTatumSelectionUntil((current) => (current <= Date.now() ? 0 : current));
-    }, Math.max(0, manualTatumSelectionUntil - Date.now()));
-    return () => window.clearTimeout(timeout);
-  }, [canAutoFallbackFromRateLimit, manualTatumSelectionUntil]);
   const createClient = useCallback(
     (
       _name: string | number,
@@ -156,67 +110,28 @@ export function WalletProviders({ children }: PropsWithChildren) {
       }),
     [],
   );
-  const rpcInfrastructure = useMemo<RpcInfrastructureContextValue>(
-    () => ({
-      mode: rpcMode,
-      network: SUI_NETWORK,
-      currentRpcUrl,
-      displayRpcUrl,
-      defaultRpcUrl: fallbackRpcUrl,
-      tatumRpcUrl: SUI_TATUM_RPC_URL && isTatumRpcUrl(SUI_TATUM_RPC_URL) ? SUI_TATUM_RPC_URL : null,
-      providerLabel: getRpcProviderLabel(displayRpcUrl),
-      usingTatum: rpcMode === "tatum" && isTatumRpcUrl(displayRpcUrl),
-      canUseTatum,
-      connectedNetworkLabel,
-      setConnectedNetworkLabel: setNetworkLabel,
-      switchToDefault,
-      switchToTatum,
-      noteRateLimited,
-      clearRateLimitedState,
-      rateLimitedUntil,
-      isRateLimitedCooldownActive,
-      canAutoFallbackFromRateLimit,
-    }),
-    [
-      canAutoFallbackFromRateLimit,
-      clearRateLimitedState,
-      canUseTatum,
-      connectedNetworkLabel,
-      currentRpcUrl,
-      fallbackRpcUrl,
-      displayRpcUrl,
-      isRateLimitedCooldownActive,
-      noteRateLimited,
-      rateLimitedUntil,
-      rpcMode,
-      setNetworkLabel,
-      switchToDefault,
-      switchToTatum,
-    ],
-  );
-
   return (
-    <RpcInfrastructureContext.Provider value={rpcInfrastructure}>
-      <QueryClientProvider client={queryClient}>
-        <SuiClientProvider
-          networks={networkConfig}
-          network={SUI_NETWORK}
-          createClient={createClient}
+    <QueryClientProvider client={queryClient}>
+      <SuiClientProvider
+        networks={networkConfig}
+        network={SUI_NETWORK}
+        createClient={createClient}
+      >
+        <WalletProvider
+          preferredWallets={PREFERRED_WALLETS}
+          walletFilter={walletFilter}
+          autoConnect
         >
-          <WalletProvider
-            preferredWallets={PREFERRED_WALLETS}
-            walletFilter={walletFilter}
-            autoConnect
-          >
+          <WalletStatusBridge>
             {REQUIRE_GLOBAL_WALRUS_RUNTIME ? (
               <OptionalWalrusRuntimeBoundary>
                 <WalrusRuntimeBridge />
               </OptionalWalrusRuntimeBoundary>
             ) : null}
             {children}
-          </WalletProvider>
-        </SuiClientProvider>
-      </QueryClientProvider>
-    </RpcInfrastructureContext.Provider>
+          </WalletStatusBridge>
+        </WalletProvider>
+      </SuiClientProvider>
+    </QueryClientProvider>
   );
 }

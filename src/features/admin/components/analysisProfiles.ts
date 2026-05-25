@@ -1,4 +1,4 @@
-import type { FormSchema, Submission } from "../../../types";
+import type { FormSchema } from "../../../types";
 import type { AnalysisProfileId, SignalSeverity } from "../../../types";
 import type { SignalRecord } from "../hooks/useSignalInboxData";
 

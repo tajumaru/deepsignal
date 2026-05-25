@@ -3,18 +3,25 @@ import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
 
+const walletSurfaceSpy = vi.fn();
+
 vi.mock("./components/AppShell", () => ({
   AppShell: ({
     children,
+    walletAvailable,
     chrome,
   }: {
     children: React.ReactNode;
+    walletAvailable?: boolean;
     chrome: "full" | "public";
-  }) => <div data-testid="app-shell" data-chrome={chrome}>{children}</div>,
+  }) => <div data-testid="app-shell" data-chrome={chrome} data-wallet-available={walletAvailable ? "yes" : "no"}>{children}</div>,
 }));
 
 vi.mock("./components/WalletSurface", () => ({
-  WalletSurface: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  WalletSurface: ({ children }: { children: React.ReactNode }) => {
+    walletSurfaceSpy();
+    return <>{children}</>;
+  },
 }));
 
 vi.mock("./components/WalrusRuntimeSurface", () => ({
@@ -40,6 +47,7 @@ vi.mock("./pages/AdminDashboardPage", () => ({
 describe("App routing", () => {
   afterEach(() => {
     document.body.innerHTML = "";
+    walletSurfaceSpy.mockClear();
   });
 
   it("redirects /signals to /explore", async () => {
@@ -73,5 +81,17 @@ describe("App routing", () => {
 
     await waitFor(() => expect(screen.getByRole("heading", { name: "Admin Route" })).toBeInTheDocument());
     expect(screen.getByTestId("app-shell")).toHaveAttribute("data-chrome", "full");
+  });
+
+  it("keeps the home route fail-open without waiting for wallet providers", async () => {
+    render(
+      <MemoryRouter initialEntries={["/"]}>
+        <App />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Landing Route" })).toBeInTheDocument());
+    expect(screen.getByTestId("app-shell")).toHaveAttribute("data-wallet-available", "no");
+    expect(walletSurfaceSpy).not.toHaveBeenCalled();
   });
 });

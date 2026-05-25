@@ -35,6 +35,7 @@ import {
   storageAdapter,
 } from "../../../lib/storage";
 import { flattenAnswer } from "../../../lib/utils";
+import { endPerf, measurePerf, startPerf } from "../../../lib/perf";
 import type { CapabilityProfile } from "../../../hooks/useAccessControl";
 import type { FormSchema, Submission } from "../../../types";
 import { localStorageAdapter } from "../../../storage/localStorageAdapter";
@@ -73,8 +74,25 @@ export interface SignalRecord {
   searchText: string;
 }
 
+function mergeFormUpdate(currentForm: FormWithCount, nextForm: FormWithCount) {
+  return {
+    ...currentForm,
+    ...nextForm,
+    submissionCount: nextForm.submissionCount ?? currentForm.submissionCount,
+  } satisfies FormWithCount;
+}
+
+type SignalIdentityTarget = {
+  submissionId?: string;
+  receiptBlobId?: string;
+  signalReceiptMetadataDigest?: string;
+  projectId?: string | null;
+  onchainSignalId?: number;
+};
+
 const ADMIN_SUBMISSION_BATCH_SIZE = 4;
 const ONCHAIN_SIGNAL_BATCH_SIZE = 4;
+const MANIFEST_RESTORE_TIMEOUT_MS = 2500;
 
 function buildOnchainShadowFormId(projectId: string, onchainFormId: number) {
   return `onchain:${projectId}:${onchainFormId}`;
@@ -96,6 +114,67 @@ function buildProjectManifestKey(projectId?: string | null, manifestBlobId?: str
     return "";
   }
   return `${projectId}:${manifestBlobId}`;
+}
+
+function buildSignalIdentityKeys(target: SignalIdentityTarget) {
+  const keys = new Set<string>();
+  if (target.submissionId) {
+    keys.add(`submission:${target.submissionId}`);
+  }
+  if (target.receiptBlobId) {
+    keys.add(`receipt:${target.receiptBlobId}`);
+  }
+  if (target.signalReceiptMetadataDigest) {
+    keys.add(`digest:${target.signalReceiptMetadataDigest}`);
+  }
+  if (target.projectId && typeof target.onchainSignalId === "number") {
+    keys.add(`onchain:${target.projectId}:${target.onchainSignalId}`);
+  }
+  return keys;
+}
+
+function matchesSignalIdentity(left: SignalIdentityTarget, right: SignalIdentityTarget) {
+  const leftKeys = buildSignalIdentityKeys(left);
+  const rightKeys = buildSignalIdentityKeys(right);
+  for (const key of leftKeys) {
+    if (rightKeys.has(key)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function buildSubmissionSignalIdentity(submission: Submission, projectId?: string | null): SignalIdentityTarget {
+  return {
+    submissionId: submission.id,
+    receiptBlobId: submission.receiptBlobId,
+    signalReceiptMetadataDigest: submission.signalReceiptMetadataDigest,
+    projectId,
+    onchainSignalId: submission.onchainSignalId,
+  };
+}
+
+function buildOnchainSignalIdentity(projectId: string, signal: OnchainProjectSignalSummary): SignalIdentityTarget {
+  return {
+    receiptBlobId: signal.walrusBlobId,
+    signalReceiptMetadataDigest: signal.metadataDigest,
+    projectId,
+    onchainSignalId: signal.signalId,
+  };
+}
+
+function patchSubmissionFromOnchainSignal(submission: Submission, signal: OnchainProjectSignalSummary) {
+  return normalizeSubmission({
+    ...submission,
+    receiptBlobId: submission.receiptBlobId ?? signal.walrusBlobId,
+    pendingOnchainRegistration: false,
+    onchainSignalId: signal.signalId,
+    signalReceiptMetadataDigest: signal.metadataDigest,
+    onchainStatus: signal.status,
+    isEncrypted: submission.isEncrypted || signal.encrypted,
+    sealIdentity: submission.sealIdentity ?? signal.sealIdentity,
+    updatedAt: new Date().toISOString(),
+  });
 }
 
 export function createShadowForm(
@@ -177,7 +256,10 @@ function mergeFormsById(primary: FormWithCount[], secondary: FormWithCount[]) {
   const formsById = new Map<string, FormWithCount>();
   const seenProjectFormKeys = new Set<string>();
   const seenProjectManifestKeys = new Set<string>();
-  [...secondary, ...primary].forEach((form) => {
+  [...primary, ...secondary].forEach((form) => {
+    if (formsById.has(form.id)) {
+      return;
+    }
     const projectFormKey = buildProjectFormKey(form.projectId, form.onchainFormId);
     if (projectFormKey && seenProjectFormKeys.has(projectFormKey)) {
       return;
@@ -195,6 +277,10 @@ function mergeFormsById(primary: FormWithCount[], secondary: FormWithCount[]) {
     }
   });
   return [...formsById.values()];
+}
+
+function isOnchainRegisteredSubmission(submission: Submission) {
+  return typeof submission.onchainSignalId === "number";
 }
 
 async function restoreProjectFormFromManifest(
@@ -257,6 +343,15 @@ async function restoreProjectFormFromManifest(
   });
 
   return persistedForm;
+}
+
+async function withTimeout<T>(task: Promise<T>, timeoutMs: number, timeoutMessage: string) {
+  return Promise.race<T>([
+    task,
+    new Promise<T>((_, reject) => {
+      window.setTimeout(() => reject(new Error(timeoutMessage)), timeoutMs);
+    }),
+  ]);
 }
 
 function mapOnchainStatusToSubmissionState(status: OnchainProjectSignalSummary["status"]) {
@@ -526,7 +621,7 @@ export function useSignalInboxData({
     }
 
     const localFormsByOnchainKey = new Map<string, FormWithCount>();
-    const localSignalKeys = new Set<string>();
+    const localSignals: Array<{ form: FormWithCount; submission: Submission }> = [];
 
     nextForms.forEach((form) => {
       if (form.projectId && typeof form.onchainFormId === "number") {
@@ -540,16 +635,41 @@ export function useSignalInboxData({
         return;
       }
       submissions.forEach((submission) => {
-        if (typeof submission.onchainSignalId === "number") {
-          localSignalKeys.add(`${form.projectId}:${submission.onchainSignalId}`);
-        }
+        localSignals.push({ form, submission });
       });
     });
 
     const candidates = activeProjects.flatMap((project) =>
       (project.onchainSignals ?? []).flatMap((signal) => {
-        const dedupeKey = `${project.objectId}:${signal.signalId}`;
-        if (localSignalKeys.has(dedupeKey)) {
+        const localMatch = localSignals.find(({ form, submission }) =>
+          matchesSignalIdentity(
+            buildSubmissionSignalIdentity(submission, form.projectId),
+            buildOnchainSignalIdentity(project.objectId, signal),
+          ),
+        );
+        if (localMatch) {
+          const previousSubmission = localMatch.submission;
+          const patchedSubmission = patchSubmissionFromOnchainSignal(previousSubmission, signal);
+          localMatch.submission = patchedSubmission;
+          nextSubmissions[localMatch.form.id] = (nextSubmissions[localMatch.form.id] ?? []).map((submission) =>
+            matchesSignalIdentity(
+              buildSubmissionSignalIdentity(submission, localMatch.form.projectId),
+              buildSubmissionSignalIdentity(previousSubmission, localMatch.form.projectId),
+            )
+              ? patchedSubmission
+              : submission,
+          );
+          setSubmissionsByFormId((current) => ({
+            ...current,
+            [localMatch.form.id]: (current[localMatch.form.id] ?? []).map((submission) =>
+              matchesSignalIdentity(
+                buildSubmissionSignalIdentity(submission, localMatch.form.projectId),
+                buildSubmissionSignalIdentity(previousSubmission, localMatch.form.projectId),
+              )
+                ? patchedSubmission
+                : submission,
+            ),
+          }));
           return [];
         }
         return [{ project, signal }];
@@ -640,11 +760,12 @@ export function useSignalInboxData({
   async function loadConsole(preferredSignalId?: string) {
     const runId = loadConsoleRunRef.current + 1;
     loadConsoleRunRef.current = runId;
+    startPerf("admin:load-console");
     setLoading(!hasLoadedOnceRef.current);
     setSubmissionsLoading(false);
     setLoadError("");
     try {
-      const initialForms = await storageAdapter.listForms();
+      const initialForms = await measurePerf("admin:local-forms", () => storageAdapter.listForms());
       if (runId !== loadConsoleRunRef.current) {
         return;
       }
@@ -652,56 +773,77 @@ export function useSignalInboxData({
       const normalizedInitialForms = initialForms
         .map((form) => ({ ...normalizeForm(form), submissionCount: 0 }))
         .filter((form) => !isDeletedFormTombstone(form));
-      const restoredForms: FormWithCount[] = [];
-      const knownProjectFormKeys = new Set(
-        normalizedInitialForms
-          .map((form) => buildProjectFormKey(form.projectId, form.onchainFormId))
-          .filter(Boolean),
-      );
-      const orderedProjects = hydratedSelectedProject
-        ? [hydratedSelectedProject, ...projects.filter((project) => project.objectId !== hydratedSelectedProject.objectId)]
-        : projects;
-
-      for (const project of orderedProjects) {
-        for (const onchainForm of project.onchainForms ?? []) {
-          const projectFormKey = buildProjectFormKey(project.objectId, onchainForm.formId);
-          if (!projectFormKey || knownProjectFormKeys.has(projectFormKey) || !onchainForm.manifestBlobId) {
-            continue;
-          }
-
-          try {
-            const restoredForm = await restoreProjectFormFromManifest(project, onchainForm);
-            if (!restoredForm) {
-              continue;
-            }
-            restoredForms.push(restoredForm);
-            knownProjectFormKeys.add(projectFormKey);
-          } catch (error) {
-            console.warn(`Failed to restore project form ${project.objectId}:${onchainForm.formId} from Walrus`, error);
-          }
-        }
-      }
-
-      const localForms = mergeFormsById(restoredForms, normalizedInitialForms).map((form) => ({
-        ...form,
-        submissionCount: 0,
-      }));
-      const nextForms = mergeFormsWithProjectRegistry(localForms, projects, hydratedSelectedProject).filter(
+      const nextForms = mergeFormsWithProjectRegistry(normalizedInitialForms, projects, hydratedSelectedProject).filter(
         (form) => !isDeletedFormTombstone(form),
       );
-      const nextAccessibleForms = nextForms.filter((form) => canReviewForm(form, accountAddress, capabilityProfile));
       setForms(nextForms);
       setSelectedSignalId((current) => preferredSignalId ?? current);
       hasLoadedOnceRef.current = true;
       setLoading(false);
+      endPerf("admin:local-shell", "ok", `${nextForms.length} forms`);
+
+      void measurePerf("admin:manifest-restore", async () => {
+        const restoredForms: FormWithCount[] = [];
+        const knownProjectFormKeys = new Set(
+          normalizedInitialForms
+            .map((form) => buildProjectFormKey(form.projectId, form.onchainFormId))
+            .filter(Boolean),
+        );
+        const orderedProjects = hydratedSelectedProject
+          ? [hydratedSelectedProject, ...projects.filter((project) => project.objectId !== hydratedSelectedProject.objectId)]
+          : projects;
+
+        for (const project of orderedProjects) {
+          for (const onchainForm of project.onchainForms ?? []) {
+            const projectFormKey = buildProjectFormKey(project.objectId, onchainForm.formId);
+            if (!projectFormKey || knownProjectFormKeys.has(projectFormKey) || !onchainForm.manifestBlobId) {
+              continue;
+            }
+
+            try {
+              const restoredForm = await withTimeout(
+                restoreProjectFormFromManifest(project, onchainForm),
+                MANIFEST_RESTORE_TIMEOUT_MS,
+                `Manifest restore timed out for ${project.objectId}:${onchainForm.formId}.`,
+              );
+              if (!restoredForm) {
+                continue;
+              }
+              restoredForms.push(restoredForm);
+              knownProjectFormKeys.add(projectFormKey);
+            } catch (error) {
+              console.warn(`Failed to restore project form ${project.objectId}:${onchainForm.formId} from Walrus`, error);
+            }
+          }
+        }
+
+        if (runId !== loadConsoleRunRef.current || restoredForms.length === 0) {
+          return;
+        }
+
+        setForms((current) =>
+          mergeFormsWithProjectRegistry(
+            mergeFormsById(restoredForms, current).map((form) => ({
+              ...form,
+              submissionCount: form.submissionCount ?? 0,
+            })),
+            projects,
+            hydratedSelectedProject,
+          ).filter((form) => !isDeletedFormTombstone(form)),
+        );
+      });
+
+      const nextAccessibleForms = nextForms.filter((form) => canReviewForm(form, accountAddress, capabilityProfile));
 
       if (nextAccessibleForms.length === 0) {
         await hydrateOnchainSignals(nextForms, {}, runId);
+        endPerf("admin:load-console", "ok");
         return;
       }
 
       setSubmissionsLoading(true);
       const nextSubmissions: Record<string, Submission[]> = {};
+      startPerf("admin:submissions");
 
       for (let index = 0; index < nextAccessibleForms.length; index += ADMIN_SUBMISSION_BATCH_SIZE) {
         const formBatch = nextAccessibleForms.slice(index, index + ADMIN_SUBMISSION_BATCH_SIZE);
@@ -744,8 +886,10 @@ export function useSignalInboxData({
           }),
         );
       }
+      endPerf("admin:submissions", "ok");
 
-      await hydrateOnchainSignals(nextForms, nextSubmissions, runId);
+      await measurePerf("admin:onchain-hydration", () => hydrateOnchainSignals(nextForms, nextSubmissions, runId));
+      endPerf("admin:load-console", "ok");
     } catch (error) {
       console.error("Failed to load admin console", error);
       setForms([]);
@@ -756,6 +900,7 @@ export function useSignalInboxData({
           ? `Failed to load Research Lab: ${error.message}`
           : "Failed to load Research Lab.",
       );
+      endPerf("admin:load-console", "failed", error instanceof Error ? error.message : String(error));
     } finally {
       if (runId === loadConsoleRunRef.current) {
         setSubmissionsLoading(false);
@@ -819,11 +964,12 @@ export function useSignalInboxData({
     };
     const unreadCountByFormId: Record<string, number> = {};
     const pendingSignalIdSet = new Set<string>();
-    const seenOnchainSignals = new Set<string>();
+    const appendedSignals: Array<{ form: FormWithCount; submission: Submission }> = [];
 
     function appendRecord(record: SignalRecord) {
       signals.push(record);
       signalById[record.submission.id] = record;
+      appendedSignals.push({ form: record.form, submission: record.submission });
 
       if (record.submission.status === "unread") {
         unreadCountByFormId[record.form.id] = (unreadCountByFormId[record.form.id] ?? 0) + 1;
@@ -867,9 +1013,6 @@ export function useSignalInboxData({
       }
       if (typeof record.submission.onchainSignalId === "number") {
         counts.registeredSui += 1;
-        if (record.form.projectId) {
-          seenOnchainSignals.add(`${record.form.projectId}:${record.submission.onchainSignalId}`);
-        }
       }
       if (record.submission.status === "archived") {
         counts.archived += 1;
@@ -881,6 +1024,17 @@ export function useSignalInboxData({
       const submissions = submissionsByFormId[form.id] ?? [];
 
       for (const submission of submissions) {
+        const registeredSupplementalSignal = supplementalSignals.find(
+          (record) =>
+            isOnchainRegisteredSubmission(record.submission) &&
+            matchesSignalIdentity(
+              buildSubmissionSignalIdentity(submission, form.projectId),
+              buildSubmissionSignalIdentity(record.submission, record.form.projectId),
+            ),
+        );
+        if (registeredSupplementalSignal && !isOnchainRegisteredSubmission(submission)) {
+          continue;
+        }
         const category = inferSignalCategory(submission);
         const record = {
           form,
@@ -905,11 +1059,13 @@ export function useSignalInboxData({
     }
 
     for (const record of supplementalSignals) {
-      if (
-        record.form.projectId &&
-        typeof record.submission.onchainSignalId === "number" &&
-        seenOnchainSignals.has(`${record.form.projectId}:${record.submission.onchainSignalId}`)
-      ) {
+      const duplicateLocalSignal = appendedSignals.find(({ form, submission }) =>
+        matchesSignalIdentity(
+          buildSubmissionSignalIdentity(submission, form.projectId),
+          buildSubmissionSignalIdentity(record.submission, record.form.projectId),
+        ),
+      );
+      if (duplicateLocalSignal && isOnchainRegisteredSubmission(duplicateLocalSignal.submission)) {
         continue;
       }
       appendRecord(record);
@@ -1076,12 +1232,27 @@ export function useSignalInboxData({
     : visibleSignals[0] ?? null;
 
   function applySubmissionUpdate(nextSubmission: Submission) {
+    const nextForm = forms.find((form) => form.id === nextSubmission.formId);
     setSubmissionsByFormId((current) => ({
       ...current,
-      [nextSubmission.formId]: (current[nextSubmission.formId] ?? []).map((submission) =>
-        submission.id === nextSubmission.id ? nextSubmission : submission,
-      ),
+      [nextSubmission.formId]: (current[nextSubmission.formId] ?? []).map((submission) => {
+        const matchesCanonicalSignal = matchesSignalIdentity(
+          buildSubmissionSignalIdentity(submission, nextForm?.projectId),
+          buildSubmissionSignalIdentity(nextSubmission, nextForm?.projectId),
+        );
+        return matchesCanonicalSignal ? nextSubmission : submission;
+      }),
     }));
+  }
+
+  function applyFormUpdate(nextForm: FormWithCount) {
+    setForms((current) => {
+      const hasMatch = current.some((form) => form.id === nextForm.id);
+      if (!hasMatch) {
+        return [nextForm, ...current];
+      }
+      return current.map((form) => (form.id === nextForm.id ? mergeFormUpdate(form, nextForm) : form));
+    });
   }
 
   return {
@@ -1106,6 +1277,7 @@ export function useSignalInboxData({
     pendingSignals,
     visibleSignals,
     selectedRecord,
+    applyFormUpdate,
     applySubmissionUpdate,
   };
 }

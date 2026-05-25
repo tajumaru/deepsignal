@@ -1,9 +1,6 @@
-import { useSuiClient } from "@mysten/dapp-kit";
 import { useEffect, useRef, useState } from "react";
-import { getConnectedNetworkLabel, isSuiRateLimitError } from "../lib/sui";
+import { SUI_NETWORK } from "../lib/sui";
 import { useRpcInfrastructure } from "../rpcInfrastructure";
-
-const INITIAL_DIAGNOSTIC_DELAY_MS = 2_500;
 
 function NetworkSignalIcon() {
   return (
@@ -41,37 +38,19 @@ export function TatumFrogIcon({ className = "" }: { className?: string }) {
   );
 }
 
-function formatLatency(latencyMs: number | null) {
-  if (latencyMs == null) {
-    return "RPC Ping -- ms";
-  }
-  return `RPC Ping ${latencyMs} ms`;
-}
-
 export function NetworkMenu() {
-  const suiClient = useSuiClient();
   const {
     canUseTatum,
     connectedNetworkLabel,
-    currentRpcUrl,
     displayRpcUrl,
-    isRateLimitedCooldownActive,
-    mode,
-    noteRateLimited,
     providerLabel,
-    setConnectedNetworkLabel,
     switchToDefault,
     switchToTatum,
     usingTatum,
   } = useRpcInfrastructure();
   const value = usingTatum ? "tatum" : "default";
-  const [latencyMs, setLatencyMs] = useState<number | null>(null);
-  const [healthy, setHealthy] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const shellRef = useRef<HTMLDivElement | null>(null);
-  const hasRunInitialDiagnosticRef = useRef(false);
-  const previousRpcModeRef = useRef(mode);
-  const previousRpcUrlRef = useRef(currentRpcUrl);
 
   useEffect(() => {
     if (!menuOpen) {
@@ -107,68 +86,6 @@ export function NetworkMenu() {
     setMenuOpen(false);
   }
 
-  useEffect(() => {
-    if (isRateLimitedCooldownActive) {
-      setHealthy(false);
-      setLatencyMs(null);
-      return;
-    }
-
-    const rpcChanged =
-      previousRpcModeRef.current !== mode ||
-      previousRpcUrlRef.current !== currentRpcUrl;
-    previousRpcModeRef.current = mode;
-    previousRpcUrlRef.current = currentRpcUrl;
-    const shouldRunInitialDiagnostic = !hasRunInitialDiagnosticRef.current;
-    if (!menuOpen && !rpcChanged && !shouldRunInitialDiagnostic) {
-      return;
-    }
-
-    let cancelled = false;
-
-    async function runDiagnostics() {
-      const startedAt = performance.now();
-
-      try {
-        const chainIdentifier = await suiClient.getChainIdentifier();
-        if (cancelled) {
-          return;
-        }
-        hasRunInitialDiagnosticRef.current = true;
-        setLatencyMs(Math.max(1, Math.round(performance.now() - startedAt)));
-        setHealthy(true);
-        setConnectedNetworkLabel(getConnectedNetworkLabel(chainIdentifier));
-      } catch (error) {
-        if (cancelled) {
-          return;
-        }
-        hasRunInitialDiagnosticRef.current = true;
-        if (isSuiRateLimitError(error)) {
-          noteRateLimited();
-        }
-        setLatencyMs(null);
-        setHealthy(false);
-      }
-    }
-
-    const timeout = window.setTimeout(() => {
-      void runDiagnostics();
-    }, rpcChanged ? 0 : INITIAL_DIAGNOSTIC_DELAY_MS);
-    return () => {
-      cancelled = true;
-      window.clearTimeout(timeout);
-    };
-  }, [
-    currentRpcUrl,
-    isRateLimitedCooldownActive,
-    menuOpen,
-    mode,
-    noteRateLimited,
-    setConnectedNetworkLabel,
-    suiClient,
-    value,
-  ]);
-
   return (
     <div ref={shellRef} className="network-select-shell" title={displayRpcUrl}>
       <button
@@ -192,38 +109,39 @@ export function NetworkMenu() {
         </span>
       </button>
       <small className="network-select-meta">
-        <span className={`network-status-dot ${healthy ? "is-online" : ""}`} aria-hidden="true" />
-        <span className="network-select-latency">{formatLatency(latencyMs)}</span>
-        <span className="network-select-network">{connectedNetworkLabel}</span>
+        <span className="network-status-dot" aria-hidden="true" />
+        <span className="network-select-network">{connectedNetworkLabel || SUI_NETWORK}</span>
       </small>
       {menuOpen ? (
         <div className="network-select-menu panel" role="menu" aria-label="Network RPC provider">
-          <button
-            type="button"
-            className={`network-select-option ${value === "default" ? "is-selected" : ""}`}
-            onClick={() => handleSelect("default")}
-            role="menuitemradio"
-            aria-checked={value === "default"}
-          >
-            <span>Default Sui RPC</span>
-            <span className="network-select-option-check" aria-hidden="true">
-              {value === "default" ? "●" : ""}
-            </span>
-          </button>
-          {canUseTatum ? (
+          <div className="network-select-menu-section">
             <button
               type="button"
-              className={`network-select-option ${value === "tatum" ? "is-selected" : ""}`}
-              onClick={() => handleSelect("tatum")}
+              className={`network-select-option ${value === "default" ? "is-selected" : ""}`}
+              onClick={() => handleSelect("default")}
               role="menuitemradio"
-              aria-checked={value === "tatum"}
+              aria-checked={value === "default"}
             >
-              <span>Tatum RPC</span>
+              <span>Default Sui RPC</span>
               <span className="network-select-option-check" aria-hidden="true">
-                {value === "tatum" ? "●" : ""}
+                {value === "default" ? "OK" : ""}
               </span>
             </button>
-          ) : null}
+            {canUseTatum ? (
+              <button
+                type="button"
+                className={`network-select-option ${value === "tatum" ? "is-selected" : ""}`}
+                onClick={() => handleSelect("tatum")}
+                role="menuitemradio"
+                aria-checked={value === "tatum"}
+              >
+                <span>Tatum RPC</span>
+                <span className="network-select-option-check" aria-hidden="true">
+                  {value === "tatum" ? "OK" : ""}
+                </span>
+              </button>
+            ) : null}
+          </div>
         </div>
       ) : null}
     </div>

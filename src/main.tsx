@@ -5,6 +5,7 @@ import App from "./App";
 import { startRuntimeBootstrap } from "./bootstrap/runtime";
 import { I18nProvider } from "./i18n";
 import { startChunkLoadRecovery } from "./lib/chunkLoadRecovery";
+import { startPerf } from "./lib/perf";
 import "./styles/index.css";
 
 function redirectLegacyPublicPathToHashRoute() {
@@ -21,6 +22,7 @@ function redirectLegacyPublicPathToHashRoute() {
 
 redirectLegacyPublicPathToHashRoute();
 startChunkLoadRecovery();
+startPerf("app:render");
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>

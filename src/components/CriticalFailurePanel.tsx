@@ -1,4 +1,4 @@
-import type { CriticalFailure } from "../lib/criticalFailure";
+import { hasInconsistentPublishState, type CriticalFailure } from "../lib/criticalFailure";
 
 export interface CriticalFailureAction {
   key: string;
@@ -39,6 +39,22 @@ export function CriticalFailurePanel({
       </div>
       <p className="error-text">{failure.message}</p>
       {guidance ? <p className="muted">{guidance}</p> : null}
+      {hasInconsistentPublishState(failure) ? (
+        <div className="metadata-list">
+          <div className="metadata-row">
+            <span>publish state</span>
+            <strong>incomplete</strong>
+          </div>
+          <div className="metadata-row">
+            <span>upload</span>
+            <strong>not confirmed</strong>
+          </div>
+          <div className="metadata-row">
+            <span>registry</span>
+            <strong>updated earlier than expected</strong>
+          </div>
+        </div>
+      ) : null}
       {failure.uploadSucceeded && !failure.registryUpdated ? (
         <div className="metadata-list">
           <div className="metadata-row">

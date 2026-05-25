@@ -4,6 +4,7 @@ import { assertEncryptedSubmissionLeakGuard, sanitizeSubmissionForStorage } from
 const FORMS_KEY = "deepsignal.forms";
 const SUBMISSIONS_KEY = "deepsignal.submissions";
 const ENCRYPTED_PAYLOADS_KEY = "deepsignal.encryptedPayloads";
+const CORRUPTED_STORAGE_PREFIX = "deepsignal.corrupted";
 
 interface StoredFileRecord {
   blobId: string;
@@ -20,15 +21,95 @@ interface StoredEncryptedPayloadRecord {
 const transientFiles = new Map<string, Blob>();
 const transientEncryptedPayloads = new Map<string, string>();
 
+function isDurableBlobId(blobId: string | undefined) {
+  return Boolean(blobId && !blobId.startsWith("local-") && !blobId.startsWith("inline:"));
+}
+
+function matchesRegisteredForm(form: FormSchema, registeredForm: FormSchema) {
+  if (form.id === registeredForm.id) {
+    return true;
+  }
+  if (form.projectId && registeredForm.projectId && form.projectId !== registeredForm.projectId) {
+    return false;
+  }
+  if (
+    isDurableBlobId(form.manifestBlobId) &&
+    isDurableBlobId(registeredForm.manifestBlobId) &&
+    form.manifestBlobId === registeredForm.manifestBlobId
+  ) {
+    return true;
+  }
+  return (
+    isDurableBlobId(form.blobId) &&
+    isDurableBlobId(registeredForm.blobId) &&
+    form.blobId === registeredForm.blobId
+  );
+}
+
+function matchesRegisteredSubmission(submission: Submission, registeredSubmission: Submission) {
+  if (submission.id === registeredSubmission.id) {
+    return true;
+  }
+  if (submission.formId !== registeredSubmission.formId) {
+    return false;
+  }
+  if (
+    typeof submission.onchainSignalId === "number" &&
+    typeof registeredSubmission.onchainSignalId === "number" &&
+    submission.onchainSignalId === registeredSubmission.onchainSignalId
+  ) {
+    return true;
+  }
+  if (
+    isDurableBlobId(submission.receiptBlobId) &&
+    isDurableBlobId(registeredSubmission.receiptBlobId) &&
+    submission.receiptBlobId === registeredSubmission.receiptBlobId
+  ) {
+    return true;
+  }
+  return Boolean(
+    submission.signalReceiptMetadataDigest &&
+      registeredSubmission.signalReceiptMetadataDigest &&
+      submission.signalReceiptMetadataDigest === registeredSubmission.signalReceiptMetadataDigest,
+  );
+}
+
+function upsertRegisteredSubmission(submissions: Submission[], registeredSubmission: Submission) {
+  const nextSubmissions = submissions.filter((submission) => !matchesRegisteredSubmission(submission, registeredSubmission));
+  return [registeredSubmission, ...nextSubmissions];
+}
+
 function findStoredFile(blobId: string) {
   return transientFiles.get(blobId) ?? null;
+}
+
+function quarantineCorruptedStorageValue(key: string, raw: string, error: unknown) {
+  try {
+    const stamp = new Date().toISOString();
+    window.localStorage.setItem(
+      `${CORRUPTED_STORAGE_PREFIX}.${key}.${stamp}`,
+      JSON.stringify({
+        key,
+        raw,
+        quarantinedAt: stamp,
+        error: error instanceof Error ? error.message : String(error),
+      }),
+    );
+    window.localStorage.removeItem(key);
+  } catch (quarantineError) {
+    console.warn("Failed to quarantine corrupted local storage state.", quarantineError);
+  }
 }
 
 function readJson<T>(key: string, fallback: T): T {
   try {
     const raw = window.localStorage.getItem(key);
     return raw ? (JSON.parse(raw) as T) : fallback;
-  } catch {
+  } catch (error) {
+    const raw = window.localStorage.getItem(key);
+    if (raw) {
+      quarantineCorruptedStorageValue(key, raw, error);
+    }
     return fallback;
   }
 }
@@ -159,3 +240,19 @@ export const localStorageAdapter: StorageAdapter = {
     return blob ? blob.text() : null;
   },
 };
+
+export async function cleanupRegisteredFormLocalFallback(registeredForm: FormSchema) {
+  const forms = readJson<FormSchema[]>(FORMS_KEY, []);
+  const nextForms = forms.filter((form) => !matchesRegisteredForm(form, registeredForm));
+  writeJson(FORMS_KEY, [registeredForm, ...nextForms]);
+}
+
+export async function cleanupRegisteredSubmissionLocalFallback(registeredSubmission: Submission) {
+  const encryptedSubmissionOptions = getEncryptedSubmissionOptions();
+  const sanitizedSubmission = sanitizeSubmissionForStorage(registeredSubmission, encryptedSubmissionOptions);
+  if (sanitizedSubmission.isEncrypted) {
+    assertEncryptedSubmissionLeakGuard(sanitizedSubmission, encryptedSubmissionOptions);
+  }
+  const submissions = readJson<Submission[]>(SUBMISSIONS_KEY, []);
+  writeJson(SUBMISSIONS_KEY, upsertRegisteredSubmission(submissions, sanitizedSubmission));
+}

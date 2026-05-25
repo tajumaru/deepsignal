@@ -1130,6 +1130,15 @@ const messages = {
     sharedLinkFailureReason: "Reason",
     expectedFormId: "Expected form id",
     actualFormId: "Actual form id",
+    walrusBlobStatus: "Manifest blob status",
+    linkedBlobStatus: "Linked blob status",
+    failedAsset: "Failed asset",
+    assetStatus: "Asset status",
+    assetProbeAttempts: "Verification attempts",
+    assetBuild: "Build",
+    assetUrl: "Asset URL",
+    assetNetworkError: "Network error",
+    republish: "Republish",
     retryGuidance: "Retry guidance",
     submissionEyebrow: "Submission observatory",
     showingSubmissionsFor: (params) =>
@@ -2084,6 +2093,11 @@ const messages = {
     publishRecoveryTitle: "Publish recovery",
     copyDiagnostics: "Copy diagnostics",
     diagnosticsCopied: "Diagnostics copied",
+    publishFailedNoDataGuidance: "Publish failed. No data was submitted.",
+    publishRecoveryPartialGuidance:
+      "Publish did not complete cleanly. The upload finished, but the registry step did not. Retry from this step when you're ready.",
+    publishIncompleteStateGuidance:
+      "Publish state is incomplete. DeepSignal detected registry metadata without a confirmed upload. Treat this signal as unpublished and republish from the draft.",
     checkingWalletCapabilities: "Checking wallet capabilities...",
     reviewConsoleCapabilityRequirement:
       "Only wallets with OwnerCap / AdminCap / ReviewerCap can open the review console.",
@@ -2756,6 +2770,14 @@ const messages = {
     projectStateSavedRegisterLater: "Saved to Walrus/local. Register on Sui later when you want an onchain form record.",
     publishResultDeferredSui: "Walrus publish completed. Sui registration is deferred until you explicitly run it.",
     publishResultLiveLocalWalrus: "Walrus publish completed. The signal is live in local/Walrus mode.",
+    publishManifestVerificationDeferred:
+      "Walrus blob is saved. Manifest verification can be retried later from the saved Blob ID without re-uploading the payload.",
+    publishManifestVerificationTimedOut:
+      "Walrus blob is saved. Manifest verification timed out, so you can continue now and retry verification or Sui registration later from the saved Blob ID.",
+    publishManifestVerificationProgressDetail:
+      "Checking the recovery manifest on Walrus without blocking Sui registration.",
+    publishManifestVerificationDeferredDetail: "Blob saved. Verification will need a later retry.",
+    publishManifestVerificationTimedOutDetail: "Blob saved. Verification timed out on the network path.",
     exploreEyebrow: "Workspace Signal Directory",
     exploreTitle: "Explore Signals",
     exploreLede: "Public signal streams available in this workspace.",
@@ -3964,6 +3986,15 @@ const messages = {
     sharedLinkFailureReason: "\u7406\u7531",
     expectedFormId: "\u60f3\u5b9a formId",
     actualFormId: "\u5b9f\u969b\u306e formId",
+    walrusBlobStatus: "Manifest Blob \u306e\u72b6\u614b",
+    linkedBlobStatus: "\u95a2\u9023 Blob \u306e\u72b6\u614b",
+    failedAsset: "\u5931\u6557\u3057\u305f asset",
+    assetStatus: "asset \u306e\u72b6\u614b",
+    assetProbeAttempts: "\u691c\u8a3c\u8a66\u884c\u56de\u6570",
+    assetBuild: "\u30d3\u30eb\u30c9",
+    assetUrl: "Asset URL",
+    assetNetworkError: "\u30cd\u30c3\u30c8\u30ef\u30fc\u30af\u30a8\u30e9\u30fc",
+    republish: "\u518d\u516c\u958b",
     retryGuidance: "\u518d\u8a66\u884c\u30ac\u30a4\u30c0\u30f3\u30b9",
     submissionEyebrow: "\u6295\u7a3f\u89b3\u6e2c\u30d3\u30e5\u30fc",
     showingSubmissionsFor: (params) =>
@@ -4983,6 +5014,11 @@ const messages = {
     publishRecoveryTitle: "\u516c\u958b\u30ea\u30ab\u30d0\u30ea\u30fc",
     copyDiagnostics: "\u8a3a\u65ad\u60c5\u5831\u3092\u30b3\u30d4\u30fc",
     diagnosticsCopied: "\u8a3a\u65ad\u60c5\u5831\u3092\u30b3\u30d4\u30fc\u3057\u307e\u3057\u305f",
+    publishFailedNoDataGuidance: "\u516c\u958b\u306b\u5931\u6557\u3057\u307e\u3057\u305f\u3002\u30c7\u30fc\u30bf\u306f\u9001\u4fe1\u3055\u308c\u3066\u3044\u307e\u305b\u3093\u3002",
+    publishRecoveryPartialGuidance:
+      "\u516c\u958b\u306f\u5b8c\u4e86\u3057\u307e\u305b\u3093\u3067\u3057\u305f\u3002\u30a2\u30c3\u30d7\u30ed\u30fc\u30c9\u306f\u7d42\u4e86\u3057\u3066\u3044\u307e\u3059\u304c\u3001registry \u66f4\u65b0\u306f\u5b8c\u4e86\u3057\u3066\u3044\u307e\u305b\u3093\u3002\u6e96\u5099\u304c\u3067\u304d\u305f\u3089\u3053\u306e\u30b9\u30c6\u30c3\u30d7\u304b\u3089\u518d\u8a66\u884c\u3057\u3066\u304f\u3060\u3055\u3044\u3002",
+    publishIncompleteStateGuidance:
+      "\u516c\u958b\u72b6\u614b\u304c\u4e0d\u5b8c\u5168\u3067\u3059\u3002DeepSignal \u306f upload \u304c\u78ba\u8a8d\u3067\u304d\u3066\u3044\u306a\u3044\u306e\u306b registry \u30e1\u30bf\u30c7\u30fc\u30bf\u304c\u5b58\u5728\u3059\u308b\u72b6\u614b\u3092\u691c\u51fa\u3057\u307e\u3057\u305f\u3002\u672a\u516c\u958b\u3068\u3057\u3066\u6271\u3044\u3001draft \u304b\u3089\u518d\u516c\u958b\u3057\u3066\u304f\u3060\u3055\u3044\u3002",
     checkingWalletCapabilities: "\u30a6\u30a9\u30ec\u30c3\u30c8\u6a29\u9650\u3092\u78ba\u8a8d\u3057\u3066\u3044\u307e\u3059...",
     reviewConsoleCapabilityRequirement:
       "\u30ec\u30d3\u30e5\u30fc\u30b3\u30f3\u30bd\u30fc\u30eb\u3092\u958b\u304f\u306b\u306f OwnerCap / AdminCap / ReviewerCap \u3092\u6301\u3064\u30a6\u30a9\u30ec\u30c3\u30c8\u304c\u5fc5\u8981\u3067\u3059\u3002",
@@ -5684,6 +5720,15 @@ const messages = {
     projectStateSavedRegisterLater: "Walrus/local \u306b\u4fdd\u5b58\u3057\u307e\u3057\u305f\u3002onchain form record \u304c\u5fc5\u8981\u306a\u3068\u304d\u306b Sui \u3078\u767b\u9332\u3067\u304d\u307e\u3059\u3002",
     publishResultDeferredSui: "Walrus \u516c\u958b\u304c\u5b8c\u4e86\u3057\u307e\u3057\u305f\u3002Sui \u767b\u9332\u306f\u660e\u793a\u7684\u306b\u5b9f\u884c\u3059\u308b\u307e\u3067\u4efb\u610f\u3067\u3059\u3002",
     publishResultLiveLocalWalrus: "Walrus/local \u30e2\u30fc\u30c9\u3067 signal \u304c\u516c\u958b\u3055\u308c\u307e\u3057\u305f\u3002",
+    publishManifestVerificationDeferred:
+      "Walrus blob \u306f\u4fdd\u5b58\u6e08\u307f\u3067\u3059\u3002manifest \u691c\u8a3c\u306f payload \u3092\u518d\u30a2\u30c3\u30d7\u30ed\u30fc\u30c9\u305b\u305a\u3001\u4fdd\u5b58\u6e08\u307f\u306e Blob ID \u304b\u3089\u3042\u3068\u3067\u518d\u8a66\u884c\u3067\u304d\u307e\u3059\u3002",
+    publishManifestVerificationTimedOut:
+      "Walrus blob \u306f\u4fdd\u5b58\u6e08\u307f\u3067\u3059\u3002manifest \u691c\u8a3c\u304c\u30bf\u30a4\u30e0\u30a2\u30a6\u30c8\u3057\u305f\u305f\u3081\u3001\u3053\u306e\u307e\u307e\u9032\u3081\u3066\u4fdd\u5b58\u6e08\u307f\u306e Blob ID \u304b\u3089\u3042\u3068\u3067\u691c\u8a3c\u3084 Sui \u767b\u9332\u3092\u518d\u958b\u3067\u304d\u307e\u3059\u3002",
+    publishManifestVerificationProgressDetail:
+      "Sui \u767b\u9332\u3092\u6b62\u3081\u305a\u306b Walrus \u4e0a\u306e recovery manifest \u3092\u78ba\u8a8d\u3057\u3066\u3044\u307e\u3059\u3002",
+    publishManifestVerificationDeferredDetail: "Blob \u306f\u4fdd\u5b58\u6e08\u307f\u3067\u3059\u3002\u691c\u8a3c\u306f\u3042\u3068\u3067\u518d\u8a66\u884c\u304c\u5fc5\u8981\u3067\u3059\u3002",
+    publishManifestVerificationTimedOutDetail:
+      "Blob \u306f\u4fdd\u5b58\u6e08\u307f\u3067\u3059\u3002\u30cd\u30c3\u30c8\u30ef\u30fc\u30af\u7d4c\u8def\u3067\u691c\u8a3c\u304c\u30bf\u30a4\u30e0\u30a2\u30a6\u30c8\u3057\u307e\u3057\u305f\u3002",
     exploreEyebrow: "\u30ef\u30fc\u30af\u30b9\u30da\u30fc\u30b9\u30fb\u30b7\u30b0\u30ca\u30eb\u30c7\u30a3\u30ec\u30af\u30c8\u30ea",
     exploreTitle: "\u30b7\u30b0\u30ca\u30eb\u3092\u63a2\u7d22",
     exploreLede: "\u3053\u306e\u30ef\u30fc\u30af\u30b9\u30da\u30fc\u30b9\u3067\u516c\u958b\u3055\u308c\u3066\u3044\u308b signal stream \u3067\u3059\u3002",

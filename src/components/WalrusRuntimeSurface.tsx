@@ -2,7 +2,7 @@ import { lazy, Suspense, type PropsWithChildren, type ReactNode } from "react";
 import { retryLazyImport } from "../lib/lazyRetry";
 
 const WalrusRuntimeProvider = lazy(() =>
-  retryLazyImport(() => import("../providers")).then((module) => ({
+  retryLazyImport(() => import("../providers"), "walrus-runtime-provider").then((module) => ({
     default: module.WalrusRuntimeProvider,
   })),
 );

@@ -10,6 +10,8 @@ const mockUseCurrentAccount = vi.fn();
 const mockReadManifestWithForm = vi.fn();
 const mockReadJsonBlobOrThrow = vi.fn();
 const mockGetWalrusMutationRuntimeStatus = vi.fn();
+const mockVerifyPublicRouteAssets = vi.fn();
+const mockVerifyWalrusBlob = vi.fn();
 const mockGetForm = vi.fn();
 const mockSaveSubmission = vi.fn();
 const mockSaveForm = vi.fn();
@@ -41,6 +43,26 @@ const mockRpcInfrastructure: RpcInfrastructureContextValue = {
 
 vi.mock("@mysten/dapp-kit", () => ({
   useCurrentAccount: () => mockUseCurrentAccount(),
+  useCurrentWallet: () => ({
+    currentWallet: null,
+    connectionStatus: "disconnected",
+    isConnected: false,
+    isConnecting: false,
+  }),
+  useDisconnectWallet: () => ({
+    mutateAsync: vi.fn(),
+    isPending: false,
+  }),
+  useSuiClientContext: () => ({
+    client: null,
+    network: "mainnet",
+    selectNetwork: vi.fn(),
+    networks: {},
+  }),
+}));
+
+vi.mock("../hooks/useSuiName", () => ({
+  useSuiName: () => ({ data: null }),
 }));
 
 vi.mock("../i18n", () => ({
@@ -69,6 +91,14 @@ vi.mock("../lib/zkloginOAuth", () => ({
 vi.mock("../lib/zkloginSession", () => ({
   loadZkLoginSession: () => mockLoadZkLoginSession(),
   clearZkLoginSession: () => mockClearZkLoginSession(),
+}));
+
+vi.mock("../lib/publicRouteAssets", () => ({
+  verifyPublicRouteAssets: (...args: unknown[]) => mockVerifyPublicRouteAssets(...args),
+}));
+
+vi.mock("../lib/walrusProof", () => ({
+  verifyWalrusBlob: (...args: unknown[]) => mockVerifyWalrusBlob(...args),
 }));
 
 vi.mock("../lib/walrus", () => ({
@@ -128,6 +158,8 @@ describe("PublicFormPage shared manifest restore", () => {
     mockReadJsonBlobOrThrow.mockReset();
     mockReadManifestWithForm.mockReset();
     mockGetWalrusMutationRuntimeStatus.mockReset();
+    mockVerifyPublicRouteAssets.mockReset();
+    mockVerifyWalrusBlob.mockReset();
     mockGetForm.mockReset();
     mockSaveSubmission.mockReset();
     mockSaveForm.mockReset();
@@ -140,6 +172,8 @@ describe("PublicFormPage shared manifest restore", () => {
       canWrite: false,
       storageMode: "uploadRelay",
     });
+    mockVerifyPublicRouteAssets.mockResolvedValue({ ok: true, failedAsset: null, assets: [] });
+    mockVerifyWalrusBlob.mockResolvedValue("verified");
     mockGetForm.mockResolvedValue(null);
     mockSaveSubmission.mockResolvedValue({ id: "submission-123", blobId: "local-submission-123" });
     mockSaveForm.mockResolvedValue(undefined);
@@ -219,6 +253,26 @@ describe("PublicFormPage shared manifest restore", () => {
     expect(mockSaveForm).not.toHaveBeenCalled();
   });
 
+  it("shows the failed module asset and republish action when a required module script cannot load", async () => {
+    mockReadManifestWithForm.mockRejectedValue(new TypeError("Importing a module script failed."));
+    mockVerifyPublicRouteAssets.mockResolvedValue({
+      ok: false,
+      failedAsset: {
+        path: "./assets/PublicFormPage-broken.js",
+        status: 503,
+        contentType: "text/plain",
+      },
+      assets: [],
+    });
+
+    renderPublicFormPage();
+
+    await waitFor(() => expect(screen.getByRole("heading", { name: "sharedLinkUnavailableTitle" })).toBeInTheDocument());
+    expect(screen.getByText("./assets/PublicFormPage-broken.js")).toBeInTheDocument();
+    expect(screen.getByText(/503/)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "republish" })).toHaveAttribute("href", expect.stringContaining("/create?"));
+  });
+
   it("shows a form mismatch error for links that point to a different manifest form", async () => {
     mockReadManifestWithForm.mockResolvedValue({
       manifest: {
@@ -276,7 +330,7 @@ describe("PublicFormPage shared manifest restore", () => {
     const answerInput = screen.getByRole("textbox");
     fireEvent.input(answerInput, { target: { value: "The shared responder path works." } });
     expect(answerInput).toHaveValue("The shared responder path works.");
-    fireEvent.click(screen.getByRole("button", { name: "Submit Secure Report" }));
+    fireEvent.click(screen.getByRole("button", { name: /^Submit Secure Report/ }));
 
     await waitFor(() => expect(mockSaveSubmission).toHaveBeenCalledTimes(1));
     expect(screen.queryByText(/sending it requires/i)).not.toBeInTheDocument();
@@ -316,7 +370,7 @@ describe("PublicFormPage shared manifest restore", () => {
 
     await waitFor(() => expect(screen.getByRole("heading", { name: "Shared Feedback Form" })).toBeInTheDocument());
     fireEvent.input(screen.getByRole("textbox"), { target: { value: "Please keep this draft." } });
-    fireEvent.click(screen.getByRole("button", { name: "Submit Secure Report" }));
+    fireEvent.click(screen.getByRole("button", { name: /^Submit Secure Report/ }));
 
     await waitFor(() => expect(screen.getAllByText("Walrus upload failed.").length).toBeGreaterThan(0));
     expect(window.localStorage.getItem("deepsignal:public-draft:form-123:blob-abc")).toContain("Please keep this draft.");
@@ -367,7 +421,7 @@ describe("PublicFormPage shared manifest restore", () => {
     fireEvent.input(screen.getByRole("textbox"), { target: { value: "Please keep this draft." } });
 
     for (let attempt = 0; attempt < 3; attempt += 1) {
-      fireEvent.click(screen.getByRole("button", { name: "Submit Secure Report" }));
+      fireEvent.click(screen.getByRole("button", { name: /^Submit Secure Report/ }));
       await waitFor(() => expect(mockSaveSubmission).toHaveBeenCalledTimes(attempt + 1));
     }
 
@@ -426,7 +480,7 @@ describe("PublicFormPage shared manifest restore", () => {
 
     await waitFor(() => expect(screen.getByRole("heading", { name: "Shared Feedback Form" })).toBeInTheDocument());
     fireEvent.input(screen.getByRole("textbox"), { target: { value: "The zkLogin responder path works." } });
-    fireEvent.click(screen.getByRole("button", { name: "Submit Secure Report" }));
+    fireEvent.click(screen.getByRole("button", { name: /^Submit Secure Report/ }));
 
     await waitFor(() => expect(mockSaveSubmission).toHaveBeenCalledTimes(1));
     const [savedSubmission] = mockSaveSubmission.mock.calls[0] as [{
@@ -500,7 +554,7 @@ describe("PublicFormPage shared manifest restore", () => {
 
     await waitFor(() => expect(screen.getByRole("heading", { name: "Secure Feedback Form" })).toBeInTheDocument());
     fireEvent.input(screen.getByRole("textbox"), { target: { value: "Wallet-required forms still reject zkLogin only." } });
-    fireEvent.click(screen.getByRole("button", { name: "Connect wallet to submit secure report" }));
+    fireEvent.click(screen.getByRole("button", { name: /^Connect wallet to submit secure report/ }));
 
     await waitFor(() =>
       expect(screen.getByText("This form requires a connected wallet before you can submit.")).toBeInTheDocument(),

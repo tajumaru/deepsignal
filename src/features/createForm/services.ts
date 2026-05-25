@@ -1,9 +1,12 @@
 import { createMetadataDigest } from "../../lib/projectRegistry";
 import { isLocalFallbackBlob } from "../../lib/proof";
 import { storageAdapter } from "../../lib/storage";
+import { verifyWalrusBlob } from "../../lib/walrusProof";
 import { saveFormMetadataOverlay } from "../../storage/formMetadataOverlay";
 import type { PreparedPublishForm, ProjectOption, Translate } from "./types";
 import { wait } from "./utils";
+
+const MANIFEST_VERIFICATION_TIMEOUT_MS = 12_000;
 
 interface PublishFormArgs {
   t: Translate;
@@ -19,11 +22,60 @@ interface PublishFormArgs {
   shouldContinue: () => boolean;
 }
 
-async function verifyPublishedPublicLink(form: PreparedPublishForm) {
+export class PublishFlowError extends Error {
+  uploadSucceeded: boolean;
+  registryUpdated: boolean;
+  diagnostics: Record<string, unknown>;
+
+  constructor(
+    message: string,
+    options: {
+      uploadSucceeded: boolean;
+      registryUpdated: boolean;
+      diagnostics?: Record<string, unknown>;
+      cause?: unknown;
+    },
+  ) {
+    super(message);
+    this.name = "PublishFlowError";
+    this.uploadSucceeded = options.uploadSucceeded;
+    this.registryUpdated = options.registryUpdated;
+    this.diagnostics = options.diagnostics ?? {};
+    if (options.cause !== undefined) {
+      Object.defineProperty(this, "cause", {
+        value: options.cause,
+        configurable: true,
+        enumerable: false,
+        writable: true,
+      });
+    }
+  }
+}
+
+type ManifestVerificationResult =
+  | { ok: true }
+  | { ok: false; timedOut: boolean; message: string };
+
+function withTimeout<T>(task: Promise<T>, timeoutMs: number, message: string) {
+  return Promise.race([
+    task,
+    new Promise<T>((_, reject) => {
+      window.setTimeout(() => {
+        reject(new Error(message));
+      }, timeoutMs);
+    }),
+  ]);
+}
+
+async function verifyPublishedManifest(form: PreparedPublishForm) {
   if (!form.manifestBlobId || isLocalFallbackBlob(form.manifestBlobId)) {
     return;
   }
   const { readJsonBlobOrThrow, readManifestWithForm } = await import("../../lib/walrus");
+  const manifestStatus = await verifyWalrusBlob(form.manifestBlobId);
+  if (manifestStatus !== "verified") {
+    throw new Error(`Published manifest verification failed: Walrus returned ${manifestStatus} for ${form.manifestBlobId}.`);
+  }
   const carrier = await readManifestWithForm(form.manifestBlobId);
   if (carrier.manifest.formId !== form.id) {
     throw new Error("Published manifest read-back failed: the manifest points to a different form.");
@@ -37,9 +89,33 @@ async function verifyPublishedPublicLink(form: PreparedPublishForm) {
   if (!carrier.manifest.formBlobId || carrier.manifest.formBlobId === "__bundled_form__") {
     throw new Error("Published manifest read-back failed: the manifest does not include a bundled form or form blob.");
   }
+  const formBlobStatus = await verifyWalrusBlob(carrier.manifest.formBlobId);
+  if (formBlobStatus !== "verified") {
+    throw new Error(
+      `Published form blob verification failed: Walrus returned ${formBlobStatus} for ${carrier.manifest.formBlobId}.`,
+    );
+  }
   const linkedForm = await readJsonBlobOrThrow<{ id?: string }>(carrier.manifest.formBlobId);
   if (linkedForm.id !== form.id) {
     throw new Error("Published manifest read-back failed: the linked form blob points to a different form.");
+  }
+}
+
+async function verifyPublishedManifestWithTimeout(form: PreparedPublishForm): Promise<ManifestVerificationResult> {
+  try {
+    await withTimeout(
+      verifyPublishedManifest(form),
+      MANIFEST_VERIFICATION_TIMEOUT_MS,
+      `Manifest verification timed out after ${Math.round(MANIFEST_VERIFICATION_TIMEOUT_MS / 1000)} seconds.`,
+    );
+    return { ok: true };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Manifest verification failed.";
+    return {
+      ok: false,
+      timedOut: message.toLowerCase().includes("timed out"),
+      message,
+    };
   }
 }
 
@@ -92,7 +168,26 @@ export async function publishForm({
   setPublishActiveStageStatus(t("walletApprovalStatus"));
   setPublishActiveStageDetail(t("walletApprovalDetail"));
 
-  const { blobId, manifestBlobId, walrusActualCost } = await saveFormPromise;
+  let walrusActualCost: PreparedPublishForm["walrusActualCost"];
+  let blobId = "";
+  let manifestBlobId = "";
+  try {
+    const savedForm = await saveFormPromise;
+    blobId = savedForm.blobId ?? "";
+    manifestBlobId = savedForm.manifestBlobId ?? "";
+    walrusActualCost = savedForm.walrusActualCost;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Publish upload failed.";
+    throw new PublishFlowError(message, {
+      uploadSucceeded: false,
+      registryUpdated: false,
+      diagnostics: {
+        formId: form.id,
+        projectId: form.projectId ?? "",
+      },
+      cause: error,
+    });
+  }
   if (!shouldContinue()) {
     return null;
   }
@@ -142,10 +237,31 @@ export async function publishForm({
 
   if (finalPersistedForm.manifestBlobId && !isLocalFallbackBlob(finalPersistedForm.manifestBlobId)) {
     setPublishActiveStageStatus(t("verifyingManifest"));
-    setPublishActiveStageDetail(t("shareLinkVerifyCopyBlocked"));
-    await verifyPublishedPublicLink(finalPersistedForm);
+    setPublishActiveStageDetail(t("publishManifestVerificationProgressDetail"));
+    const manifestVerification = await verifyPublishedManifestWithTimeout(finalPersistedForm);
     if (!shouldContinue()) {
       return null;
+    }
+    if (!manifestVerification.ok) {
+      console.warn("Manifest verification did not finish cleanly after blob upload.", {
+        formId: finalPersistedForm.id,
+        blobId: finalPersistedForm.blobId,
+        manifestBlobId: finalPersistedForm.manifestBlobId,
+        timedOut: manifestVerification.timedOut,
+        message: manifestVerification.message,
+      });
+      setPublishResultNote(
+        manifestVerification.timedOut
+          ? t("publishManifestVerificationTimedOut")
+          : t("publishManifestVerificationDeferred"),
+      );
+      setPublishActiveStageDetail(
+        manifestVerification.timedOut
+          ? t("publishManifestVerificationTimedOutDetail")
+          : t("publishManifestVerificationDeferredDetail"),
+      );
+    } else {
+      setPublishActiveStageDetail("");
     }
   }
 

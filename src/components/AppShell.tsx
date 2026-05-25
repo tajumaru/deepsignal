@@ -4,37 +4,18 @@ import { CreateFormLink } from "./CreateFormLink";
 import { NetworkMenu } from "./NetworkMenu";
 import { CreateSignalNavIcon, MoreNavIcon, NavItemLabel } from "./NavIcons";
 import { BuildIndicator } from "./system/BuildIndicator";
+import { WalletConnectSurface } from "./WalletConnectSurface";
 import { useI18n } from "../i18n";
 import { retryLazyImport } from "../lib/lazyRetry";
 import { isSignalInboxPath } from "../lib/navigation";
 
-const WalletConnect = lazy(() =>
-  retryLazyImport(() => import("./WalletConnect")).then((module) => ({ default: module.WalletConnect })),
-);
 const WalletNav = lazy(() =>
-  retryLazyImport(() => import("./WalletNav")).then((module) => ({ default: module.WalletNav })),
+  retryLazyImport(() => import("./WalletNav"), "wallet-nav").then((module) => ({ default: module.WalletNav })),
 );
 
 interface AppShellProps extends PropsWithChildren {
   walletAvailable?: boolean;
-  onWalletActivate?: () => void;
   chrome?: "full" | "public";
-}
-
-function WalletConnectPlaceholder({ onActivate }: { onActivate: () => void }) {
-  return (
-    <div className="wallet-connect-shell wallet-connect-shell-compact">
-      <div className="wallet-connect-direct panel">
-        <div className="wallet-connect-direct-copy">
-          <strong>Activate Session</strong>
-          <span>Wallet-optional public mode</span>
-        </div>
-        <button type="button" className="wallet-sync-button" onClick={onActivate}>
-          Activate Session
-        </button>
-      </div>
-    </div>
-  );
 }
 
 function MenuToggleIcon() {
@@ -47,14 +28,18 @@ function MenuToggleIcon() {
   );
 }
 
-function useWalletChrome(walletAvailable: boolean, onWalletActivate?: () => void, onNavigate?: () => void) {
+function useWalletChrome(walletAvailable: boolean, navLabLabel: string, onNavigate?: () => void) {
   const fallback = <div className="wallet-connect-shell wallet-connect-shell-compact" />;
 
   if (!walletAvailable) {
     return {
-      inboxNav: null,
+      inboxNav: (
+        <Link to="/admin" onClick={onNavigate}>
+          {navLabLabel}
+        </Link>
+      ),
       accessNav: null,
-      connect: <WalletConnectPlaceholder onActivate={() => onWalletActivate?.()} />,
+      connect: null,
     };
   }
 
@@ -70,9 +55,7 @@ function useWalletChrome(walletAvailable: boolean, onWalletActivate?: () => void
       </Suspense>
     ),
     connect: (
-      <Suspense fallback={fallback}>
-        <WalletConnect compact />
-      </Suspense>
+      <WalletConnectSurface compact fallback={fallback} />
     ),
   };
 }
@@ -107,7 +90,6 @@ function MobileAppBottomNav() {
 export function AppShell({
   children,
   walletAvailable = false,
-  onWalletActivate,
   chrome = "full",
 }: AppShellProps) {
   const { language, setLanguage, t } = useI18n();
@@ -119,7 +101,7 @@ export function AppShell({
   const moreMenuRef = useRef<HTMLDivElement | null>(null);
   const mobileMenuToggleRef = useRef<HTMLButtonElement | null>(null);
   const mobileDrawerRef = useRef<HTMLElement | null>(null);
-  const walletChrome = useWalletChrome(walletAvailable, onWalletActivate, () => setMobileDrawerOpen(false));
+  const walletChrome = useWalletChrome(walletAvailable, t("navLab"), () => setMobileDrawerOpen(false));
   const showMobileBottomNav =
     !publicChrome &&
     (location.pathname === "/explore" ||
@@ -264,8 +246,8 @@ export function AppShell({
         <div className="topbar-actions desktop-topbar-actions">
           {publicChrome ? null : (
             <div className="topbar-infra">
-              {walletAvailable ? <NetworkMenu /> : null}
-              {walletChrome.connect}
+              <NetworkMenu />
+              {walletAvailable ? walletChrome.connect : null}
             </div>
           )}
           <label className="language-switch">
@@ -349,7 +331,7 @@ export function AppShell({
                   <div className="mobile-drawer-utility-group">
                     <div className="mobile-drawer-utility-card">
                       <span className="mobile-drawer-utility-label">Network</span>
-                      {walletAvailable ? <NetworkMenu /> : <div className="mobile-drawer-utility-empty">Unavailable</div>}
+                      <NetworkMenu />
                     </div>
                     <div className="mobile-drawer-utility-card">
                       <span className="mobile-drawer-utility-label">Wallet</span>

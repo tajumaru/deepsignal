@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { WalletConnect } from "../../../components/WalletConnect";
+import { WalletConnectSurface } from "../../../components/WalletConnectSurface";
 import { useSuiWallet } from "../../../hooks/useSuiWallet";
 
 interface PublicWalletAccountPanelProps {
@@ -20,5 +20,5 @@ export function PublicWalletAccountPanel({ onAccountAddressChange, onWalletProvi
     return () => onWalletProviderChange?.(undefined);
   }, [wallet.walletName, onWalletProviderChange]);
 
-  return <WalletConnect compact />;
+  return <WalletConnectSurface compact />;
 }

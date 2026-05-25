@@ -1,7 +1,7 @@
 const reloadStorageKey = "deepsignal.chunkLoadRecovery";
 const recoveryWindowMs = 2 * 60 * 1000;
-const maxReloadsPerWindow = 4;
-const reloadDelayMs = 900;
+const maxReloadsPerWindow = 2;
+const reloadDelayMs = 350;
 
 type ReloadState = {
   startedAt: number;

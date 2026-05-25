@@ -2,14 +2,16 @@
 
 This repository is a Vite + React + TypeScript app for DeepSignal.
 
-DeepSignal is a realtime signal intelligence workspace. It collects, analyzes, visualizes, and triages live signals so operators can understand what is happening and decide what to do next.
+DeepSignal is a realtime signal intelligence workspace and signal intelligence platform. It collects, analyzes, visualizes, and triages live signals so operators can understand what is happening, why it matters, and what to do next.
 
 ## Product philosophy
 
 - DeepSignal is not a generic form app.
 - DeepSignal is not just a disaster check-in app.
 - DeepSignal is not a generic admin dashboard.
+- DeepSignal is not a wallet dashboard.
 - DeepSignal is a live signal intelligence workspace.
+- DeepSignal is a signal intelligence platform centered on operational decision-making.
 - Everything revolves around signals.
 - Projects, insights, maps, alerts, AI analysis, and workflows originate from signals.
 - Treat creator/admin surfaces as an operational `Signal Intelligence Workspace` and `Encrypted Signal Inbox`, not a CRUD back office.
@@ -17,14 +19,16 @@ DeepSignal is a realtime signal intelligence workspace. It collects, analyzes, v
 
 ## UX philosophy
 
-- Prioritize situation awareness first.
-- Prioritize signal understanding second.
-- Prioritize fast response and triage third.
-- Treat secondary settings and configuration as lower priority.
+- Prioritize in this order:
+1. Situation awareness.
+2. Signal understanding.
+3. Fast response and triage.
+4. Secondary settings and configuration.
 - Avoid interfaces where operators do not know what to do next.
 - Empty states must always point to the next useful action.
 - If no project exists, guide the user to `Create Project`.
 - If a project exists but has no signal, guide the user to `Compose Signal`.
+- If a screen is sparse, use the space to reinforce context, activity, or the next action.
 - Keep public form routes simple and accessible. They support signal collection, but they are not the whole product.
 
 ## Visual language
@@ -33,11 +37,13 @@ DeepSignal is a realtime signal intelligence workspace. It collects, analyzes, v
 - Aim for urgent but calm.
 - Make the UI feel like an intelligence dashboard with signal flow and activity.
 - Reduce dead space when it weakens situational awareness or actionability.
+- Prefer layouts that surface movement, context, and signal relationships over static administration panels.
 - Avoid generic SaaS dashboard patterns.
 - Avoid static CRUD admin layouts.
 - Avoid spreadsheet-like UI.
 - Avoid plain survey-form framing.
 - Avoid boring enterprise panels.
+- Avoid excessive blank space that makes the workspace feel empty or passive.
 
 ## AI behavior
 
@@ -55,9 +61,9 @@ DeepSignal is a realtime signal intelligence workspace. It collects, analyzes, v
 
 - Sui, Walrus, and Tatum are embedded infrastructure, not the main character of the UI.
 - Use them to support verifiable storage, durable signal history, trustworthy audit trails, and decentralized persistence.
+- Expose blockchain concepts only when they improve trust, recovery, or operator understanding.
 - Do not turn the product into a wallet dashboard.
 - Do not drift toward token, DeFi, or crypto-jargon-heavy UX.
-- Do not overexpose blockchain concepts unless they are necessary for trust, recovery, or operator understanding.
 
 ## Architecture guardrails
 

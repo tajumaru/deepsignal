@@ -5,59 +5,74 @@ import { WalletSurface } from "./components/WalletSurface";
 import { WalrusRuntimeSurface } from "./components/WalrusRuntimeSurface";
 import { isChunkLoadFailure, recoverFromChunkLoadFailure } from "./lib/chunkLoadRecovery";
 import { retryLazyImport } from "./lib/lazyRetry";
+import { copyPerfDiagnostics, endPerf, formatPerfDiagnostics } from "./lib/perf";
+import { resetLocalEnvironment } from "./lib/resetEnvironment";
 import { REQUIRE_GLOBAL_WALRUS_RUNTIME } from "./lib/runtimeFlags";
-import { LandingPage } from "./pages/LandingPage";
-import { PublicFormPage } from "./pages/PublicFormPage";
-import { ZkLoginCallbackPage } from "./pages/ZkLoginCallbackPage";
+import { RpcInfrastructureProvider } from "./RpcInfrastructureProvider";
 
 const AccessManagementPage = lazy(() =>
-  retryLazyImport(() => import("./pages/AccessManagementPage")).then((module) => ({
+  retryLazyImport(() => import("./pages/AccessManagementPage"), "route-access-management").then((module) => ({
     default: module.AccessManagementPage,
   })),
 );
 const AdminDashboardPage = lazy(() =>
-  retryLazyImport(() => import("./pages/AdminDashboardPage")).then((module) => ({
+  retryLazyImport(() => import("./pages/AdminDashboardPage"), "route-admin-dashboard").then((module) => ({
     default: module.AdminDashboardPage,
   })),
 );
 const FormBuilderPage = lazy(() =>
-  retryLazyImport(() => import("./pages/FormBuilderPage")).then((module) => ({
+  retryLazyImport(() => import("./pages/FormBuilderPage"), "route-form-builder").then((module) => ({
     default: module.FormBuilderPage,
   })),
 );
 const ManifestRestorePage = lazy(() =>
-  retryLazyImport(() => import("./pages/ManifestRestorePage")).then((module) => ({
+  retryLazyImport(() => import("./pages/ManifestRestorePage"), "route-manifest-restore").then((module) => ({
     default: module.ManifestRestorePage,
   })),
 );
 const FormSubmissionsPage = lazy(() =>
-  retryLazyImport(() => import("./pages/FormSubmissionsPage")).then((module) => ({
+  retryLazyImport(() => import("./pages/FormSubmissionsPage"), "route-form-submissions").then((module) => ({
     default: module.FormSubmissionsPage,
   })),
 );
 const PublicRoadmapPage = lazy(() =>
-  retryLazyImport(() => import("./pages/PublicRoadmapPage")).then((module) => ({
+  retryLazyImport(() => import("./pages/PublicRoadmapPage"), "route-public-roadmap").then((module) => ({
     default: module.PublicRoadmapPage,
   })),
 );
 const SubmissionDetailPage = lazy(() =>
-  retryLazyImport(() => import("./pages/SubmissionDetailPage")).then((module) => ({
+  retryLazyImport(() => import("./pages/SubmissionDetailPage"), "route-submission-detail").then((module) => ({
     default: module.SubmissionDetailPage,
   })),
 );
 const ExploreSignalsPage = lazy(() =>
-  retryLazyImport(() => import("./pages/ExploreSignalsPage")).then((module) => ({
+  retryLazyImport(() => import("./pages/ExploreSignalsPage"), "route-explore").then((module) => ({
     default: module.ExploreSignalsPage,
   })),
 );
 const TroubleshootingPage = lazy(() =>
-  retryLazyImport(() => import("./pages/TroubleshootingPage")).then((module) => ({
+  retryLazyImport(() => import("./pages/TroubleshootingPage"), "route-troubleshooting").then((module) => ({
     default: module.TroubleshootingPage,
   })),
 );
 const InsightsFixturePage = lazy(() =>
-  retryLazyImport(() => import("./pages/InsightsFixturePage")).then((module) => ({
+  retryLazyImport(() => import("./pages/InsightsFixturePage"), "route-insights-fixture").then((module) => ({
     default: module.InsightsFixturePage,
+  })),
+);
+const LandingPage = lazy(() =>
+  retryLazyImport(() => import("./pages/LandingPage"), "route-landing").then((module) => ({
+    default: module.LandingPage,
+  })),
+);
+const PublicFormPage = lazy(() =>
+  retryLazyImport(() => import("./pages/PublicFormPage"), "route-public-form").then((module) => ({
+    default: module.PublicFormPage,
+  })),
+);
+const ZkLoginCallbackPage = lazy(() =>
+  retryLazyImport(() => import("./pages/ZkLoginCallbackPage"), "route-zklogin-callback").then((module) => ({
+    default: module.ZkLoginCallbackPage,
   })),
 );
 
@@ -68,12 +83,65 @@ function WithWalrusRuntime({ children }: { children: ReactNode }) {
   return <WalrusRuntimeSurface>{children}</WalrusRuntimeSurface>;
 }
 
-function RouteFallback() {
+const WORKSPACE_RECOVERY_TIMEOUT_MS = 3200;
+
+function WorkspaceRestoreFallback({ onRetry }: { onRetry?: () => void }) {
+  const [recoveryVisible, setRecoveryVisible] = useState(false);
+  const [resettingState, setResettingState] = useState(false);
+  const [copiedDiagnostics, setCopiedDiagnostics] = useState(false);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setRecoveryVisible(true);
+    }, WORKSPACE_RECOVERY_TIMEOUT_MS);
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  async function handleResetLocalState() {
+    setResettingState(true);
+    try {
+      await resetLocalEnvironment();
+    } finally {
+      window.location.assign("/");
+    }
+  }
+
+  async function handleCopyDiagnostics() {
+    await copyPerfDiagnostics(["app:", "lazy:", "admin:", "public-form:"]);
+    setCopiedDiagnostics(true);
+    window.setTimeout(() => setCopiedDiagnostics(false), 1800);
+  }
+
   return (
     <div className="panel glow-panel route-status-panel" role="status">
       <p className="eyebrow">Signal surface</p>
       <h1>Loading workspace...</h1>
       <p className="muted">Restoring the Explore surface and local fallback data.</p>
+      {recoveryVisible ? (
+        <div className="stack">
+          <p className="muted">
+            Workspace restore is taking longer than expected. DeepSignal can continue in recovery mode even if local
+            fallback data or a publish state is broken.
+          </p>
+          <pre className="route-status-diagnostics">{formatPerfDiagnostics(["app:", "lazy:", "admin:", "public-form:"])}</pre>
+          <div className="inline-actions">
+            <button type="button" className="primary-button" onClick={() => (onRetry ? onRetry() : window.location.reload())}>
+              Retry workspace
+            </button>
+            <button type="button" className="ghost-button" onClick={() => void handleCopyDiagnostics()}>
+              {copiedDiagnostics ? "Copied diagnostics" : "Copy diagnostics"}
+            </button>
+            <button
+              type="button"
+              className="ghost-button"
+              onClick={() => void handleResetLocalState()}
+              disabled={resettingState}
+            >
+              {resettingState ? "Resetting local state..." : "Reset local state"}
+            </button>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -148,6 +216,7 @@ const BOOT_FAILSAFE_MS = 2500;
 
 function InitialBootReady({ onReady, children }: { onReady: () => void; children: ReactNode }) {
   useEffect(() => {
+    endPerf("app:render", "ok");
     onReady();
   }, [onReady]);
 
@@ -163,6 +232,14 @@ export default function App() {
     location.pathname.startsWith("/auth/zklogin/");
   const [initialRouteReady, setInitialRouteReady] = useState(false);
   const [bootDismissed, setBootDismissed] = useState(false);
+  const routeNeedsWalletSurface =
+    location.pathname === "/explore" ||
+    location.pathname === "/admin" ||
+    location.pathname === "/dashboard" ||
+    location.pathname === "/create" ||
+    location.pathname === "/troubleshooting" ||
+    location.pathname.startsWith("/admin/") ||
+    location.pathname.startsWith("/dashboard/");
 
   const dismissBootOverlay = useCallback(() => {
     document.getElementById("boot-overlay")?.remove();
@@ -211,9 +288,9 @@ export default function App() {
   }, [bootDismissed, dismissBootOverlay, initialRouteReady]);
 
   const routeSurface = (
-    <AppShell walletAvailable chrome={routeUsesPublicChrome ? "public" : "full"}>
+    <AppShell walletAvailable={routeNeedsWalletSurface} chrome={routeUsesPublicChrome ? "public" : "full"}>
       <RouteErrorBoundary resetKey={location.key}>
-        <Suspense fallback={<RouteFallback />}>
+        <Suspense fallback={<WorkspaceRestoreFallback />}>
           <InitialBootReady onReady={() => setInitialRouteReady(true)}>
             <Routes>
               <Route path="/" element={<LandingPage />} />
@@ -300,17 +377,23 @@ export default function App() {
     </AppShell>
   );
 
+  if (!routeNeedsWalletSurface) {
+    return <RpcInfrastructureProvider>{routeSurface}</RpcInfrastructureProvider>;
+  }
+
   return (
-    <WalletSurface
-      fallback={
-        <InitialBootReady onReady={() => setInitialRouteReady(true)}>
-          <AppShell walletAvailable={false} chrome={routeUsesPublicChrome ? "public" : "full"}>
-            <RouteFallback />
-          </AppShell>
-        </InitialBootReady>
-      }
-    >
-      {routeSurface}
-    </WalletSurface>
+    <RpcInfrastructureProvider>
+      <WalletSurface
+        fallback={
+          <InitialBootReady onReady={() => setInitialRouteReady(true)}>
+            <AppShell walletAvailable={false} chrome={routeUsesPublicChrome ? "public" : "full"}>
+              <WorkspaceRestoreFallback onRetry={() => window.location.reload()} />
+            </AppShell>
+          </InitialBootReady>
+        }
+      >
+        {routeSurface}
+      </WalletSurface>
+    </RpcInfrastructureProvider>
   );
 }

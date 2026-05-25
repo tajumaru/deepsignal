@@ -1,21 +1,20 @@
-import { useCurrentAccount } from "@mysten/dapp-kit";
 import { useEffect, useMemo, useState, type MouseEvent } from "react";
-import { useParams, useSearchParams } from "react-router-dom";
+import { Link, useParams, useSearchParams } from "react-router-dom";
 import { DynamicField } from "../components/DynamicField";
 import { EmptyState } from "../components/EmptyState";
 import { FormHeaderImage } from "../components/FormHeaderImage";
 import { RichTextContent } from "../components/RichText";
 import { CriticalFailurePanel } from "../components/CriticalFailurePanel";
 import { RecoverableDraftBanner } from "../components/RecoverableDraftBanner";
+import { WalletSurface } from "../components/WalletSurface";
 import { WalrusRuntimeSurface } from "../components/WalrusRuntimeSurface";
-import { WalletConnect } from "../components/WalletConnect";
+import { PublicWalletAccountPanel } from "../features/public-form/components/PublicWalletAccountPanel";
 import { PublicFormSuccess } from "../features/public-form/components/PublicFormSuccess";
 import { PublicSubmitReadiness } from "../features/public-form/components/PublicSubmitReadiness";
 import { SignalMetaChip } from "../components/SignalMetaChip";
 import { SignalSubmissionPipeline } from "../features/public-form/components/SignalSubmissionPipeline";
 import { usePublicFormLoader } from "../features/public-form/hooks/usePublicFormLoader";
 import { usePublicSubmission, type SignalPipelineStage } from "../features/public-form/hooks/usePublicSubmission";
-import { useSuiWallet } from "../hooks/useSuiWallet";
 import { useI18n } from "../i18n";
 import {
   formatResponseDeadline,
@@ -74,13 +73,14 @@ export function PublicFormPage() {
   const { t } = useI18n();
   const { formId = "" } = useParams();
   const [searchParams] = useSearchParams();
-  const wallet = useSuiWallet({ resolveName: false });
   const initialAnswerAuthMode = searchParams.get("identity") === "wallet" ? "sui_wallet" : searchParams.get("identity") === "guest" ? "guest" : null;
   const initialStep = searchParams.get("step") === "answer" ? "form" : "identity";
   const [publicStep, setPublicStep] = useState<"identity" | "form">(initialStep);
   const [answerAuthMode, setAnswerAuthMode] = useState<"guest" | "sui_wallet" | null>(initialAnswerAuthMode);
   const [walletChoicePending, setWalletChoicePending] = useState(false);
   const [submissionOverlayDismissed, setSubmissionOverlayDismissed] = useState(false);
+  const [resolvedWalletAddress, setResolvedWalletAddress] = useState<string | undefined>(undefined);
+  const [walletProvider, setWalletProvider] = useState<string | undefined>(undefined);
   const manifestBlobId = searchParams.get("manifest") ?? "";
   const { form, initialAnswers, loading, loadError, loadErrorDetail } = usePublicFormLoader({
     formId,
@@ -89,10 +89,9 @@ export function PublicFormPage() {
   });
   const walletRequired = form?.identityPolicy === "wallet_required";
   const hasSingleAnswerMode = walletRequired;
-  const resolvedWalletAddress = wallet.accountAddress;
-  const walletProvider = wallet.walletName;
   const walletModeSelected = walletRequired || answerAuthMode === "sui_wallet";
   const attachWallet = walletModeSelected;
+  const walletFallback = <div className="wallet-connect-shell wallet-connect-shell-compact" />;
   const {
     answers,
     errors,
@@ -454,10 +453,66 @@ export function PublicFormPage() {
                 <SignalMetaChip type="blob" value={loadErrorDetail.formBlobId} />
               </div>
             ) : null}
+            {loadErrorDetail.manifestStatus ? (
+              <div className="metadata-row">
+                <span>{t("walrusBlobStatus")}</span>
+                <strong>{loadErrorDetail.manifestStatus}</strong>
+              </div>
+            ) : null}
+            {loadErrorDetail.formBlobStatus ? (
+              <div className="metadata-row">
+                <span>{t("linkedBlobStatus")}</span>
+                <strong>{loadErrorDetail.formBlobStatus}</strong>
+              </div>
+            ) : null}
+            {loadErrorDetail.failedAssetPath ? (
+              <>
+                <div className="metadata-row">
+                  <span>{t("failedAsset")}</span>
+                  <strong>{loadErrorDetail.failedAssetPath}</strong>
+                </div>
+                <div className="metadata-row">
+                  <span>{t("assetStatus")}</span>
+                  <strong>
+                    {loadErrorDetail.failedAssetStatus ?? "unknown"}
+                    {loadErrorDetail.failedAssetContentType ? ` · ${loadErrorDetail.failedAssetContentType}` : ""}
+                  </strong>
+                </div>
+                <div className="metadata-row">
+                  <span>{t("assetProbeAttempts")}</span>
+                  <strong>{loadErrorDetail.failedAssetAttempts ?? 1}</strong>
+                </div>
+                {loadErrorDetail.failedAssetBuild ? (
+                  <div className="metadata-row">
+                    <span>{t("assetBuild")}</span>
+                    <strong>{loadErrorDetail.failedAssetBuild}</strong>
+                  </div>
+                ) : null}
+                {loadErrorDetail.failedAssetUrl ? (
+                  <div className="metadata-row">
+                    <span>{t("assetUrl")}</span>
+                    <strong>{loadErrorDetail.failedAssetUrl}</strong>
+                  </div>
+                ) : null}
+                {loadErrorDetail.failedAssetErrorMessage ? (
+                  <div className="metadata-row">
+                    <span>{t("assetNetworkError")}</span>
+                    <strong>{loadErrorDetail.failedAssetErrorMessage}</strong>
+                  </div>
+                ) : null}
+              </>
+            ) : null}
             <div className="metadata-row">
               <span>{t("retryGuidance")}</span>
               <strong>{retryGuidance || loadErrorDetail.guidance}</strong>
             </div>
+            {loadErrorDetail.republishPath ? (
+              <div className="inline-actions">
+                <Link className="primary-button" to={loadErrorDetail.republishPath}>
+                  {t("republish")}
+                </Link>
+              </div>
+            ) : null}
           </div>
         ) : null}
       </EmptyState>
@@ -566,7 +621,14 @@ export function PublicFormPage() {
               <li>{t("publicIdentityChoiceWalletPoint3")}</li>
             </ul>
             <div className="public-identity-choice-wallet-shell">
-              <WalletConnect compact />
+              <WalletSurface fallback={walletFallback}>
+                <WalrusRuntimeSurface fallback={walletFallback}>
+                  <PublicWalletAccountPanel
+                    onAccountAddressChange={(address) => setResolvedWalletAddress(address)}
+                    onWalletProviderChange={(provider) => setWalletProvider(provider)}
+                  />
+                </WalrusRuntimeSurface>
+              </WalletSurface>
             </div>
             <button
               type="button"

@@ -1,5 +1,3 @@
-import { getJsonRpcFullnodeUrl } from "@mysten/sui/jsonRpc";
-
 export function shortAddress(address: string) {
   return `${address.slice(0, 6)}...${address.slice(-4)}`;
 }
@@ -10,7 +8,10 @@ const requestedNetwork = String(
     "mainnet",
 ).toLowerCase();
 export const SUI_NETWORK = requestedNetwork === "mainnet" ? "mainnet" : "testnet";
-export const SUI_DEFAULT_RPC_URL = getJsonRpcFullnodeUrl(SUI_NETWORK);
+export const SUI_DEFAULT_RPC_URL =
+  SUI_NETWORK === "mainnet"
+    ? "https://fullnode.mainnet.sui.io:443"
+    : "https://fullnode.testnet.sui.io:443";
 export const SUI_TATUM_RPC_URL = import.meta.env.NEXT_PUBLIC_SUI_RPC_URL || "";
 export const SUI_FALLBACK_RPC_URL =
   import.meta.env.VITE_SUI_FULLNODE_URL ||

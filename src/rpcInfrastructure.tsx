@@ -36,6 +36,10 @@ export function useRpcInfrastructure() {
   return context;
 }
 
+export function useOptionalRpcInfrastructure() {
+  return useContext(RpcInfrastructureContext);
+}
+
 export function handleRateLimitedRpcFallback(
   rpc: RpcInfrastructureContextValue,
   error: unknown,

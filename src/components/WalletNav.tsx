@@ -14,10 +14,6 @@ export function WalletNav({ section = "all", onNavigate }: WalletNavProps) {
   const location = useLocation();
   const wallet = useSuiWallet({ resolveName: false });
 
-  if (!wallet.accountAddress) {
-    return null;
-  }
-
   const inboxActive = isSignalInboxPath(location.pathname);
   const inboxNav = (
     <Link
@@ -35,6 +31,9 @@ export function WalletNav({ section = "all", onNavigate }: WalletNavProps) {
   }
 
   if (section === "access") {
+    if (!wallet.accountAddress) {
+      return null;
+    }
     return (
       <NavLink to="/admin/access" onClick={onNavigate}>
         <NavItemLabel icon={<AccessControlNavIcon />}>{t("navAccess")}</NavItemLabel>
@@ -45,9 +44,11 @@ export function WalletNav({ section = "all", onNavigate }: WalletNavProps) {
   return (
     <>
       {inboxNav}
-      <NavLink to="/admin/access" onClick={onNavigate}>
-        <NavItemLabel icon={<AccessControlNavIcon />}>{t("navAccess")}</NavItemLabel>
-      </NavLink>
+      {wallet.accountAddress ? (
+        <NavLink to="/admin/access" onClick={onNavigate}>
+          <NavItemLabel icon={<AccessControlNavIcon />}>{t("navAccess")}</NavItemLabel>
+        </NavLink>
+      ) : null}
     </>
   );
 }

@@ -1,8 +1,14 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import type { Submission } from "../types";
-import { localStorageAdapter } from "./localStorageAdapter";
+import type { FormSchema, Submission } from "../types";
+import {
+  cleanupRegisteredFormLocalFallback,
+  cleanupRegisteredSubmissionLocalFallback,
+  localStorageAdapter,
+} from "./localStorageAdapter";
 
+const FORMS_KEY = "deepsignal.forms";
 const SUBMISSIONS_KEY = "deepsignal.submissions";
+const CORRUPTED_SUBMISSIONS_PREFIX = "deepsignal.corrupted.deepsignal.submissions.";
 
 function createEncryptedSubmission(): Submission {
   return {
@@ -39,6 +45,23 @@ function createEncryptedSubmission(): Submission {
     encryptedBlobId: "encrypted-blob-local",
     createdAt: new Date(0).toISOString(),
     updatedAt: new Date(0).toISOString(),
+  };
+}
+
+function createForm(overrides: Partial<FormSchema> = {}): FormSchema {
+  return {
+    id: "form-local",
+    title: "Local signal",
+    description: "Local provisional signal",
+    fields: [],
+    sections: [],
+    createdAt: new Date(0).toISOString(),
+    updatedAt: new Date(0).toISOString(),
+    ownerAddress: "0xowner",
+    projectId: "0xproject",
+    manifestBlobId: "walrus-manifest-1",
+    blobId: "walrus-form-1",
+    ...overrides,
   };
 }
 
@@ -104,5 +127,87 @@ describe("localStorageAdapter encrypted submission persistence", () => {
     await expect(localStorageAdapter.saveSubmission(submission)).rejects.toThrow(
       "ENCRYPTED_SUBMISSION_LEAK_GUARD_FAILED",
     );
+  });
+
+  it("quarantines corrupted local submission state and recovers with an empty list", async () => {
+    window.localStorage.setItem(SUBMISSIONS_KEY, "{not-json");
+
+    await expect(localStorageAdapter.listSubmissions("form-local")).resolves.toEqual([]);
+    expect(window.localStorage.getItem(SUBMISSIONS_KEY)).toBeNull();
+
+    const quarantineKey = Object.keys(window.localStorage).find((key) =>
+      key.startsWith(CORRUPTED_SUBMISSIONS_PREFIX),
+    );
+    expect(quarantineKey).toBeTruthy();
+    expect(window.localStorage.getItem(quarantineKey || "")).toContain("{not-json");
+  });
+
+  it("promotes a Sui-registered form and removes matching provisional local forms", async () => {
+    const draftForm = createForm({
+      id: "draft-form",
+      manifestBlobId: undefined,
+      blobId: undefined,
+    });
+    const provisionalForm = createForm();
+    const duplicateProvisionalForm = createForm({
+      id: "form-duplicate",
+      title: "Duplicate local signal",
+    });
+    await localStorageAdapter.saveForm(draftForm);
+    await localStorageAdapter.saveForm(provisionalForm);
+    await localStorageAdapter.saveForm(duplicateProvisionalForm);
+
+    await cleanupRegisteredFormLocalFallback({
+      ...provisionalForm,
+      onchainFormId: 42,
+      isOnchain: true,
+      registrationMode: "sui",
+    });
+
+    const stored = JSON.parse(window.localStorage.getItem(FORMS_KEY) || "[]") as FormSchema[];
+    expect(stored.map((form) => form.id)).toEqual(["form-local", "draft-form"]);
+    expect(stored[0]).toMatchObject({
+      onchainFormId: 42,
+      isOnchain: true,
+      registrationMode: "sui",
+    });
+  });
+
+  it("promotes a Sui-registered submission and removes matching local provisional records", async () => {
+    const draftSubmission = createEncryptedSubmission();
+    draftSubmission.id = "draft-submission";
+    draftSubmission.receiptBlobId = undefined;
+    draftSubmission.pendingOnchainRegistration = false;
+    const provisionalSubmission = {
+      ...createEncryptedSubmission(),
+      id: "submission-local",
+      receiptBlobId: "walrus-receipt-1",
+      pendingOnchainRegistration: true,
+    };
+    const duplicateProvisionalSubmission = {
+      ...createEncryptedSubmission(),
+      id: "submission-duplicate",
+      receiptBlobId: "walrus-receipt-1",
+      pendingOnchainRegistration: true,
+    };
+    await localStorageAdapter.saveSubmission(draftSubmission);
+    await localStorageAdapter.saveSubmission(provisionalSubmission);
+    await localStorageAdapter.saveSubmission(duplicateProvisionalSubmission);
+
+    await cleanupRegisteredSubmissionLocalFallback({
+      ...provisionalSubmission,
+      pendingOnchainRegistration: false,
+      onchainSignalId: 99,
+      signalReceiptMetadataDigest: "signal-digest-99",
+      onchainStatus: "new",
+    });
+
+    const stored = JSON.parse(window.localStorage.getItem(SUBMISSIONS_KEY) || "[]") as Submission[];
+    expect(stored.map((submission) => submission.id)).toEqual(["submission-local", "draft-submission"]);
+    expect(stored[0]).toMatchObject({
+      onchainSignalId: 99,
+      pendingOnchainRegistration: false,
+      signalReceiptMetadataDigest: "signal-digest-99",
+    });
   });
 });

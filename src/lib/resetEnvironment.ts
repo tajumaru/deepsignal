@@ -1,5 +1,3 @@
-import { clearSealSessionCache } from "../crypto/sealClientAdapter";
-
 export type ResetOperation =
   | "walletDisconnect"
   | "localCache"
@@ -144,6 +142,15 @@ function deleteDatabase(name: string) {
   });
 }
 
+async function clearSealSessionCacheSafely() {
+  try {
+    const module = await import("../crypto/sealClientAdapter");
+    module.clearSealSessionCache();
+  } catch (error) {
+    console.warn("Seal session cache could not be cleared eagerly.", error);
+  }
+}
+
 export async function clearLocalCache(
   messages: ResetEnvironmentMessages = DEFAULT_RESET_ENVIRONMENT_MESSAGES,
 ): Promise<ResetOperationResult> {
@@ -151,7 +158,7 @@ export async function clearLocalCache(
     if (typeof window === "undefined") {
       return createResult("localCache", "skipped", messages.browserStorageUnavailable, undefined, messages);
     }
-    clearSealSessionCache();
+    await clearSealSessionCacheSafely();
     const removedLocalKeys = window.localStorage ? removeMatchingStorageKeys(window.localStorage) : [];
     const removedSessionKeys = window.sessionStorage ? removeMatchingStorageKeys(window.sessionStorage) : [];
     const removedCount = removedLocalKeys.length + removedSessionKeys.length;

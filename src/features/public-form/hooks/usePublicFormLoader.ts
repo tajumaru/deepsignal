@@ -1,5 +1,10 @@
 import { useEffect, useState } from "react";
+import { isChunkLoadFailure } from "../../../lib/chunkLoadRecovery";
 import { createEmptyAnswer, normalizeForm } from "../../../lib/formSchema";
+import { measurePerf } from "../../../lib/perf";
+import { getRepublishFormPath } from "../../../lib/publicLinks";
+import { verifyPublicRouteAssets } from "../../../lib/publicRouteAssets";
+import { verifyWalrusBlob, type WalrusVerificationStatus } from "../../../lib/walrusProof";
 import { storage } from "../../../storage/storageFactory";
 import { upsertFormBlobIndex } from "../../../storage/blobIndex";
 import { localStorageAdapter } from "../../../storage/localStorageAdapter";
@@ -11,7 +16,8 @@ type SharedFormRestoreErrorCode =
   | "manifest_blob_unavailable"
   | "form_blob_unavailable"
   | "json_parse_failed"
-  | "form_id_mismatch";
+  | "form_id_mismatch"
+  | "module_script_failed";
 
 class SharedFormRestoreError extends Error {
   code: SharedFormRestoreErrorCode;
@@ -48,6 +54,16 @@ export interface PublicFormLoadErrorDetail {
   formBlobId?: string;
   expectedFormId?: string;
   actualFormId?: string;
+  failedAssetPath?: string;
+  failedAssetStatus?: number;
+  failedAssetContentType?: string;
+  failedAssetAttempts?: number;
+  failedAssetUrl?: string;
+  failedAssetErrorMessage?: string;
+  failedAssetBuild?: string;
+  manifestStatus?: WalrusVerificationStatus;
+  formBlobStatus?: WalrusVerificationStatus;
+  republishPath?: string;
 }
 
 function toSharedFormRestoreError(
@@ -109,6 +125,8 @@ function formatSharedFormRestoreMessage(error: unknown) {
         return "This shared form could not be restored because the Walrus JSON payload is invalid.";
       case "form_id_mismatch":
         return error.message;
+      case "module_script_failed":
+        return "This shared form could not be restored because a required public route module failed to load.";
       default:
         return error.message;
     }
@@ -126,6 +144,8 @@ function getSharedFormRestoreGuidance(error: SharedFormRestoreError) {
       return "Ask the creator to republish until Walrus storage succeeds, then open the new shared link.";
     case "json_parse_failed":
       return "Ask the creator to republish the form so the Walrus JSON payload is regenerated.";
+    case "module_script_failed":
+      return "Ask the creator to republish only after the public route assets are certified and the new shared link is ready.";
     default:
       return "Ask the creator to republish the form and share a fresh link.";
   }
@@ -145,6 +165,7 @@ function createLoadErrorDetail(
       expectedFormId: error.expectedFormId ?? context.formId,
       actualFormId: error.actualFormId,
       ...(error.blobId ? { [blobKey]: error.blobId } : {}),
+      republishPath: getRepublishFormPath(context.formId, context.manifestBlobId || undefined),
     };
   }
   return {
@@ -155,7 +176,59 @@ function createLoadErrorDetail(
       : "Open a public link that includes a Walrus manifest, or ask the creator to publish this form again.",
     manifestBlobId: context.manifestBlobId || undefined,
     expectedFormId: context.formId,
+    republishPath: getRepublishFormPath(context.formId, context.manifestBlobId || undefined),
   };
+}
+
+async function enrichLoadErrorDetail(
+  detail: PublicFormLoadErrorDetail,
+  error: unknown,
+): Promise<PublicFormLoadErrorDetail> {
+  const enrichedDetail = { ...detail };
+  if (enrichedDetail.manifestBlobId) {
+    try {
+      enrichedDetail.manifestStatus = await verifyWalrusBlob(enrichedDetail.manifestBlobId);
+    } catch {
+      // Best effort only for the public failure screen.
+    }
+  }
+  if (enrichedDetail.formBlobId) {
+    try {
+      enrichedDetail.formBlobStatus = await verifyWalrusBlob(enrichedDetail.formBlobId);
+    } catch {
+      // Best effort only for the public failure screen.
+    }
+  }
+  if (isChunkLoadFailure(error)) {
+    try {
+      const assetVerification = await measurePerf(
+        "public-form:asset-verification",
+        () => verifyPublicRouteAssets("publicForm"),
+      );
+      if (assetVerification.failedAsset) {
+        const buildLabel = [assetVerification.appVersion, assetVerification.buildTime]
+          .filter(Boolean)
+          .join(" / ");
+        enrichedDetail.code = "module_script_failed";
+        enrichedDetail.reason =
+          "A required public route module could not be confirmed from the Walrus site before the form was restored.";
+        enrichedDetail.guidance =
+          "Reload once to retry the current build. If the same asset keeps failing, ask the creator to republish after the Walrus site assets finish propagating.";
+        enrichedDetail.failedAssetPath = assetVerification.failedAsset.path;
+        enrichedDetail.failedAssetStatus = assetVerification.failedAsset.status;
+        enrichedDetail.failedAssetContentType = assetVerification.failedAsset.contentType;
+        enrichedDetail.failedAssetAttempts = assetVerification.failedAsset.attempts?.length ?? 1;
+        enrichedDetail.failedAssetUrl = assetVerification.failedAsset.url;
+        enrichedDetail.failedAssetErrorMessage = assetVerification.failedAsset.errorMessage;
+        enrichedDetail.failedAssetBuild = buildLabel || undefined;
+      }
+    } catch (assetError) {
+      if (assetError instanceof Error && assetError.message.trim()) {
+        enrichedDetail.reason = assetError.message;
+      }
+    }
+  }
+  return enrichedDetail;
 }
 
 interface UsePublicFormLoaderArgs {
@@ -193,97 +266,102 @@ export function usePublicFormLoader({
         let manifestRestoreError: unknown = null;
         if (manifestBlobId) {
           try {
-            const {
-              getWalrusMutationRuntimeStatus,
-              readJsonBlobOrThrow,
-              readManifestWithForm,
-            } = await import("../../../lib/walrus");
-            const walrusRuntime = getWalrusMutationRuntimeStatus();
-            if (!walrusRuntime.aggregatorConfigured) {
-              throw new SharedFormRestoreError(
-                "aggregator_unconfigured",
-                "Walrus aggregator URL is not configured in this build.",
-                { blobId: manifestBlobId, stage: "manifest" },
-              );
-            }
-            const carrier = await readManifestWithForm(manifestBlobId).catch((error) => {
-              throw toSharedFormRestoreError("manifest", error, manifestBlobId);
-            });
-            const manifest = carrier.manifest;
-            let restoredForm: FormSchema | null = null;
-            let restoredFormBlobId = "";
+            nextForm = await measurePerf("public-form:manifest-restore", async () => {
+              const {
+                getWalrusMutationRuntimeStatus,
+                readJsonBlobOrThrow,
+                readManifestWithForm,
+              } = await import("../../../lib/walrus");
+              const walrusRuntime = getWalrusMutationRuntimeStatus();
+              if (!walrusRuntime.aggregatorConfigured) {
+                throw new SharedFormRestoreError(
+                  "aggregator_unconfigured",
+                  "Walrus aggregator URL is not configured in this build.",
+                  { blobId: manifestBlobId, stage: "manifest" },
+                );
+              }
+              const carrier = await readManifestWithForm(manifestBlobId).catch((error) => {
+                throw toSharedFormRestoreError("manifest", error, manifestBlobId);
+              });
+              const manifest = carrier.manifest;
+              let restoredForm: FormSchema | null = null;
+              let restoredFormBlobId = "";
 
-            if (manifest.formId !== formId) {
-              throw new SharedFormRestoreError(
-                "form_id_mismatch",
-                `This shared link points to form ${manifest.formId}, but the page expected ${formId}.`,
-                {
-                  blobId: manifestBlobId,
-                  expectedFormId: formId,
-                  actualFormId: manifest.formId,
-                  stage: "manifest",
-                },
-              );
-            }
-            if (carrier.form) {
-              if (carrier.form.id !== formId) {
+              if (manifest.formId !== formId) {
                 throw new SharedFormRestoreError(
                   "form_id_mismatch",
-                  `The bundled form inside manifest ${manifestBlobId} has id ${carrier.form.id}, which does not match ${formId}.`,
+                  `This shared link points to form ${manifest.formId}, but the page expected ${formId}.`,
                   {
                     blobId: manifestBlobId,
                     expectedFormId: formId,
-                    actualFormId: carrier.form.id,
-                    stage: "form",
+                    actualFormId: manifest.formId,
+                    stage: "manifest",
                   },
                 );
               }
-              restoredForm = carrier.form;
-              restoredFormBlobId = manifestBlobId;
-            } else if (manifest.formBlobId && manifest.formBlobId !== "__bundled_form__") {
-              restoredForm = await readJsonBlobOrThrow<FormSchema>(manifest.formBlobId).catch((error) => {
-                throw toSharedFormRestoreError("form", error, manifest.formBlobId);
-              });
-              restoredFormBlobId = manifest.formBlobId;
-              if (restoredForm.id !== formId) {
+              if (carrier.form) {
+                if (carrier.form.id !== formId) {
+                  throw new SharedFormRestoreError(
+                    "form_id_mismatch",
+                    `The bundled form inside manifest ${manifestBlobId} has id ${carrier.form.id}, which does not match ${formId}.`,
+                    {
+                      blobId: manifestBlobId,
+                      expectedFormId: formId,
+                      actualFormId: carrier.form.id,
+                      stage: "form",
+                    },
+                  );
+                }
+                restoredForm = carrier.form;
+                restoredFormBlobId = manifestBlobId;
+              } else if (manifest.formBlobId && manifest.formBlobId !== "__bundled_form__") {
+                restoredForm = await readJsonBlobOrThrow<FormSchema>(manifest.formBlobId).catch((error) => {
+                  throw toSharedFormRestoreError("form", error, manifest.formBlobId);
+                });
+                restoredFormBlobId = manifest.formBlobId;
+                if (restoredForm.id !== formId) {
+                  throw new SharedFormRestoreError(
+                    "form_id_mismatch",
+                    `The linked form blob ${manifest.formBlobId} has id ${restoredForm.id}, which does not match ${formId}.`,
+                    {
+                      blobId: manifest.formBlobId,
+                      expectedFormId: formId,
+                      actualFormId: restoredForm.id,
+                      stage: "form",
+                    },
+                  );
+                }
+              } else {
                 throw new SharedFormRestoreError(
-                  "form_id_mismatch",
-                  `The linked form blob ${manifest.formBlobId} has id ${restoredForm.id}, which does not match ${formId}.`,
+                  "form_blob_unavailable",
+                  `Manifest ${manifestBlobId} does not contain a bundled form or a matching form blob for ${formId}.`,
                   {
-                    blobId: manifest.formBlobId,
+                    blobId: manifestBlobId,
                     expectedFormId: formId,
-                    actualFormId: restoredForm.id,
+                    actualFormId: manifest.formId,
                     stage: "form",
                   },
                 );
               }
-            } else {
-              throw new SharedFormRestoreError(
-                "form_blob_unavailable",
-                `Manifest ${manifestBlobId} does not contain a bundled form or a matching form blob for ${formId}.`,
-                {
-                  blobId: manifestBlobId,
-                  expectedFormId: formId,
-                  actualFormId: manifest.formId,
-                  stage: "form",
-                },
-              );
-            }
 
-            if (restoredForm) {
-              nextForm = {
+              if (!restoredForm) {
+                return null;
+              }
+
+              const restored = {
                 ...restoredForm,
                 blobId: restoredFormBlobId,
                 manifestBlobId,
               };
-              await localStorageAdapter.saveForm(nextForm);
+              await localStorageAdapter.saveForm(restored);
               upsertFormBlobIndex({
-                formId: nextForm.id,
+                formId: restored.id,
                 formBlobId: restoredFormBlobId,
                 manifestBlobId,
                 createdAt: manifest.createdAt,
               });
-            }
+              return restored;
+            });
           } catch (error) {
             manifestRestoreError = error;
           }
@@ -294,7 +372,7 @@ export function usePublicFormLoader({
         }
 
         if (!nextForm) {
-          nextForm = await storage.getForm(formId);
+          nextForm = await measurePerf("public-form:local-restore", () => storage.getForm(formId));
         }
 
         if (!nextForm && manifestRestoreError) {
@@ -309,7 +387,10 @@ export function usePublicFormLoader({
       } catch (error) {
         setForm(null);
         setInitialAnswers({});
-        const detail = createLoadErrorDetail(error, { formId, manifestBlobId });
+        const detail = await enrichLoadErrorDetail(
+          createLoadErrorDetail(error, { formId, manifestBlobId }),
+          error,
+        );
         setLoadErrorDetail(detail);
         setLoadError(
           manifestBlobId
