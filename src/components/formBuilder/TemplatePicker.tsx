@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useI18n } from "../../i18n";
 import type { Translate } from "../../features/createForm/types";
 import type { FormTemplateDefinition, SignalTypeKey, TemplateSignalType } from "../../lib/formTemplates";
@@ -131,6 +131,20 @@ const BADGE_LABEL_KEYS: Record<string, TranslationKey> = {
 export function TemplatePicker({ templates, selectedTemplateKey, onSelect }: TemplatePickerProps) {
   const { t } = useI18n();
   const [activeFilter, setActiveFilter] = useState<SignalTypeKey | null>(null);
+  const [isMobileViewport, setIsMobileViewport] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.matchMedia) {
+      return undefined;
+    }
+
+    const mediaQuery = window.matchMedia("(max-width: 900px)");
+    const syncViewport = () => setIsMobileViewport(mediaQuery.matches);
+    syncViewport();
+
+    mediaQuery.addEventListener("change", syncViewport);
+    return () => mediaQuery.removeEventListener("change", syncViewport);
+  }, []);
 
   const signalTypes = useMemo(() => {
     const seen = new Set<SignalTypeKey>();
@@ -160,6 +174,11 @@ export function TemplatePicker({ templates, selectedTemplateKey, onSelect }: Tem
         ),
       })).filter((section) => section.templates.length > 0),
     [activeFilter, templates, t],
+  );
+
+  const mobileTemplates = useMemo(
+    () => groupedTemplates.flatMap((section) => section.templates),
+    [groupedTemplates],
   );
 
   function toggleSignalFilter(signalTypeKey: SignalTypeKey) {
@@ -279,47 +298,53 @@ export function TemplatePicker({ templates, selectedTemplateKey, onSelect }: Tem
 
   return (
     <div className="composer-template-scroll">
-      <div className="composer-template-filter-bar">
-        <div className="composer-template-filter-copy">
-          <span className="composer-template-filter-label">{t("templateLibraryFilterLabel")}</span>
-          <span className="composer-template-filter-help">
-            {activeFilter
-              ? t("templateLibraryFilterHelpActive", {
-                  label: getSignalTypeLabel(signalTypes.find((item) => item.key === activeFilter) ?? signalTypes[0]),
-                })
-              : t("templateLibraryFilterHelpAll")}
-          </span>
+      {!isMobileViewport ? (
+        <div className="composer-template-filter-bar">
+          <div className="composer-template-filter-copy">
+            <span className="composer-template-filter-label">{t("templateLibraryFilterLabel")}</span>
+            <span className="composer-template-filter-help">
+              {activeFilter
+                ? t("templateLibraryFilterHelpActive", {
+                    label: getSignalTypeLabel(signalTypes.find((item) => item.key === activeFilter) ?? signalTypes[0]),
+                  })
+                : t("templateLibraryFilterHelpAll")}
+            </span>
+          </div>
+          <div className="composer-template-signal-nav" aria-label={t("templateLibraryFilterAriaLabel")}>
+            <button
+              type="button"
+              aria-pressed={activeFilter === null}
+              className={`composer-signal-type-chip ${activeFilter === null ? "is-active" : ""}`}
+              onClick={() => setActiveFilter(null)}
+            >
+              <span aria-hidden="true">*</span>
+              {t("templateFilterAll")}
+            </button>
+            {signalTypes.map((signalType) => {
+              const active = activeFilter === signalType.key;
+              return (
+                <button
+                  key={signalType.key}
+                  type="button"
+                  aria-pressed={active}
+                  className={`composer-signal-type-chip ${active ? "is-active" : ""}`}
+                  onClick={() => toggleSignalFilter(signalType.key)}
+                >
+                  <span aria-hidden="true">{signalType.icon}</span>
+                  {getSignalTypeLabel(signalType)}
+                </button>
+              );
+            })}
+          </div>
         </div>
-        <div className="composer-template-signal-nav" aria-label={t("templateLibraryFilterAriaLabel")}>
-          <button
-            type="button"
-            aria-pressed={activeFilter === null}
-            className={`composer-signal-type-chip ${activeFilter === null ? "is-active" : ""}`}
-            onClick={() => setActiveFilter(null)}
-          >
-            <span aria-hidden="true">*</span>
-            {t("templateFilterAll")}
-          </button>
-          {signalTypes.map((signalType) => {
-            const active = activeFilter === signalType.key;
-            return (
-              <button
-                key={signalType.key}
-                type="button"
-                aria-pressed={active}
-                className={`composer-signal-type-chip ${active ? "is-active" : ""}`}
-                onClick={() => toggleSignalFilter(signalType.key)}
-              >
-                <span aria-hidden="true">{signalType.icon}</span>
-                {getSignalTypeLabel(signalType)}
-              </button>
-            );
-          })}
-        </div>
-      </div>
+      ) : null}
 
       <div className="composer-template-library">
-        {groupedTemplates.length > 0 ? (
+        {isMobileViewport ? (
+          <div className="composer-template-grid composer-template-grid-mobile">
+            {mobileTemplates.map((template) => renderTemplateCard(template))}
+          </div>
+        ) : groupedTemplates.length > 0 ? (
           groupedTemplates.map((section) => (
             <section
               key={section.key}

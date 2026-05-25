@@ -870,6 +870,8 @@ export function usePublicSubmission({
     if (!form || submitting) {
       return;
     }
+    const effectiveIdentityMode =
+      identityMode === "wallet" && !accountAddress && !walletRequired ? "anonymous" : identityMode;
     if (recoveryCorrupted) {
       setSubmitError(recoveryGuidance);
       setFailure(
@@ -941,7 +943,7 @@ export function usePublicSubmission({
       );
       return;
     }
-    if (identityMode === "wallet" && !accountAddress) {
+    if (effectiveIdentityMode === "wallet" && !accountAddress) {
       setSubmitError("This form requires a connected wallet before you can submit.");
       setSubmitNotice("");
       setFailure(
@@ -955,7 +957,7 @@ export function usePublicSubmission({
       );
       return;
     }
-    if (identityMode === "zklogin" && !zkLoginSession) {
+    if (effectiveIdentityMode === "zklogin" && !zkLoginSession) {
       setSubmitError(zkLoginSessionExpiredLabel);
       setSubmitNotice("");
       setFailure(
@@ -987,7 +989,7 @@ export function usePublicSubmission({
     setDiagnosticsCopied(false);
     activatePipeline("preparing_signal", "Preparing secure upload...");
     try {
-      if (identityMode === "wallet" && accountAddress) {
+      if (effectiveIdentityMode === "wallet" && accountAddress) {
         const { waitForWalrusMutationRuntimeReady } = await import("../../../lib/walrus");
         await waitForWalrusMutationRuntimeReady({
           requireWallet: true,
@@ -1004,27 +1006,27 @@ export function usePublicSubmission({
       } = await import("../../../lib/storage");
       setStorageRuntime(getStorageRuntimeStatus());
       const signedAt = new Date().toISOString();
-      const isAnonymous = identityMode === "anonymous";
+      const isAnonymous = effectiveIdentityMode === "anonymous";
       const session = await ensureRespondentSession({
-        walletAddress: identityMode === "wallet" ? accountAddress : zkLoginSession?.address,
+        walletAddress: effectiveIdentityMode === "wallet" ? accountAddress : zkLoginSession?.address,
         isAnonymous,
       });
       const respondentMeta: Submission["respondentMeta"] = {
-        walletAddress: identityMode === "wallet" && !isAnonymous ? accountAddress : undefined,
+        walletAddress: effectiveIdentityMode === "wallet" && !isAnonymous ? accountAddress : undefined,
         chain: "sui" as const,
         sessionId: session.sessionId,
         submittedAt: signedAt,
         isAnonymous,
-        identityKind: isAnonymous ? "anonymous" : identityMode === "zklogin" ? "zklogin" : "sui_wallet",
-        identityProvider: identityMode === "zklogin" ? "google" : undefined,
+        identityKind: isAnonymous ? "anonymous" : effectiveIdentityMode === "zklogin" ? "zklogin" : "sui_wallet",
+        identityProvider: effectiveIdentityMode === "zklogin" ? "google" : undefined,
         verifiedAddress:
-          identityMode === "zklogin"
+          effectiveIdentityMode === "zklogin"
             ? zkLoginSession?.address
             : !isAnonymous
               ? accountAddress
               : undefined,
         zkLogin:
-          identityMode === "zklogin" && zkLoginSession
+          effectiveIdentityMode === "zklogin" && zkLoginSession
             ? {
                 iss: zkLoginSession.iss,
                 aud: zkLoginSession.aud,
@@ -1037,8 +1039,9 @@ export function usePublicSubmission({
       const signalContext = collectSignalContext({
         form,
         manifestBlobId,
-        walletAddress: identityMode === "wallet" ? accountAddress : zkLoginSession?.address,
-        walletProvider: identityMode === "wallet" ? walletProvider : zkLoginSession ? zkLoginProviderLabel : undefined,
+        walletAddress: effectiveIdentityMode === "wallet" ? accountAddress : zkLoginSession?.address,
+        walletProvider:
+          effectiveIdentityMode === "wallet" ? walletProvider : zkLoginSession ? zkLoginProviderLabel : undefined,
       });
       const attachments: SubmissionAttachment[] = [];
       const plainAnswers: PublicAnswers = {};

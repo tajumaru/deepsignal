@@ -1,4 +1,5 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import type { ReactNode } from "react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { RpcInfrastructureContext, type RpcInfrastructureContextValue } from "../rpcInfrastructure";
@@ -7,6 +8,7 @@ import type { FormSchema } from "../types";
 import type { ZkLoginSession } from "../lib/zkloginSession";
 
 const mockUseCurrentAccount = vi.fn();
+const mockUseCurrentWallet = vi.fn();
 const mockReadManifestWithForm = vi.fn();
 const mockReadJsonBlobOrThrow = vi.fn();
 const mockGetWalrusMutationRuntimeStatus = vi.fn();
@@ -43,12 +45,10 @@ const mockRpcInfrastructure: RpcInfrastructureContextValue = {
 
 vi.mock("@mysten/dapp-kit", () => ({
   useCurrentAccount: () => mockUseCurrentAccount(),
-  useCurrentWallet: () => ({
-    currentWallet: null,
-    connectionStatus: "disconnected",
-    isConnected: false,
-    isConnecting: false,
-  }),
+  useCurrentWallet: () => mockUseCurrentWallet(),
+  createNetworkConfig: (config: unknown) => ({ networkConfig: config }),
+  SuiClientProvider: ({ children }: { children: ReactNode }) => <>{children}</>,
+  WalletProvider: ({ children }: { children: ReactNode }) => <>{children}</>,
   useDisconnectWallet: () => ({
     mutateAsync: vi.fn(),
     isPending: false,
@@ -155,6 +155,13 @@ describe("PublicFormPage shared manifest restore", () => {
     Element.prototype.scrollIntoView = vi.fn();
     window.localStorage.clear();
     mockUseCurrentAccount.mockReturnValue(null);
+    mockUseCurrentWallet.mockReturnValue({
+      currentWallet: null,
+      connectionStatus: "disconnected",
+      isConnected: false,
+      isConnecting: false,
+      supportedIntents: [],
+    });
     mockReadJsonBlobOrThrow.mockReset();
     mockReadManifestWithForm.mockReset();
     mockGetWalrusMutationRuntimeStatus.mockReset();
@@ -221,6 +228,60 @@ describe("PublicFormPage shared manifest restore", () => {
     expect(screen.getByText("What happened?")).toBeInTheDocument();
     expect(mockGetForm).not.toHaveBeenCalled();
     expect(mockSaveForm).toHaveBeenCalledTimes(1);
+  });
+
+  it("falls back to anonymous submission when a wallet-optional form is opened in wallet mode without a connected wallet", async () => {
+    const form: FormSchema = {
+      id: "form-123",
+      title: "Shared Feedback Form",
+      description: "Restored from a Walrus manifest link.",
+      fields: [
+        {
+          id: "field-1",
+          type: "shortText",
+          label: "What happened?",
+          required: true,
+          sensitive: false,
+        },
+      ],
+      createdAt: "2026-05-14T00:00:00.000Z",
+      identityPolicy: "anonymous_allowed",
+    };
+
+    mockReadManifestWithForm.mockResolvedValue({
+      manifest: {
+        version: 1,
+        formId: "form-123",
+        createdAt: "2026-05-14T00:00:00.000Z",
+        updatedAt: "2026-05-14T00:00:00.000Z",
+        formBlobId: "__bundled_form__",
+        submissions: [],
+      },
+      form,
+    });
+
+    renderPublicFormPage("/f/form-123?manifest=blob-abc&step=answer&identity=wallet");
+
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Shared Feedback Form" })).toBeInTheDocument());
+    fireEvent.input(screen.getByRole("textbox"), { target: { value: "Anonymous fallback still submits." } });
+    fireEvent.click(screen.getByRole("button", { name: /^Submit Secure Report/ }));
+
+    await waitFor(() => expect(mockSaveSubmission).toHaveBeenCalledTimes(1));
+    const [savedSubmission] = mockSaveSubmission.mock.calls[0] as [{ respondentMeta?: unknown; metadata?: unknown }];
+    expect(savedSubmission.respondentMeta).toMatchObject({
+      isAnonymous: true,
+      identityKind: "anonymous",
+      walletAddress: undefined,
+      verifiedAddress: undefined,
+    });
+    expect(savedSubmission.metadata).toMatchObject({
+      respondentIdentity: {
+        mode: "anonymous",
+        provider: undefined,
+        verifiedAddress: undefined,
+      },
+    });
+    expect(screen.queryByText("This form requires a connected wallet before you can submit.")).not.toBeInTheDocument();
   });
 
   it("shows a detailed restore error when the shared manifest cannot be restored", async () => {
@@ -560,6 +621,70 @@ describe("PublicFormPage shared manifest restore", () => {
       expect(screen.getByText("This form requires a connected wallet before you can submit.")).toBeInTheDocument(),
     );
     expect(mockSaveSubmission).not.toHaveBeenCalled();
+  });
+
+  it("submits wallet-required forms when a Sui wallet is already connected", async () => {
+    const form: FormSchema = {
+      id: "form-123",
+      title: "Secure Feedback Form",
+      description: "Wallet verification is required.",
+      fields: [
+        {
+          id: "field-1",
+          type: "shortText",
+          label: "What happened?",
+          required: true,
+          sensitive: false,
+        },
+      ],
+      createdAt: "2026-05-14T00:00:00.000Z",
+      identityPolicy: "wallet_required",
+    };
+
+    mockUseCurrentAccount.mockReturnValue({
+      address: "0xabc123",
+    });
+    mockUseCurrentWallet.mockReturnValue({
+      currentWallet: { name: "Sui Wallet" },
+      connectionStatus: "connected",
+      isConnected: true,
+      isConnecting: false,
+      supportedIntents: [],
+    });
+    mockReadManifestWithForm.mockResolvedValue({
+      manifest: {
+        version: 1,
+        formId: "form-123",
+        createdAt: "2026-05-14T00:00:00.000Z",
+        updatedAt: "2026-05-14T00:00:00.000Z",
+        formBlobId: "__bundled_form__",
+        submissions: [],
+      },
+      form,
+    });
+
+    renderPublicFormPage("/f/form-123?manifest=blob-abc");
+
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Secure Feedback Form" })).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole("button", { name: /^Submit Secure Report/ })).toBeInTheDocument());
+    fireEvent.input(screen.getByRole("textbox"), { target: { value: "Connected wallet path now submits." } });
+    fireEvent.click(screen.getByRole("button", { name: /^Submit Secure Report/ }));
+
+    await waitFor(() => expect(mockSaveSubmission).toHaveBeenCalledTimes(1));
+    const [savedSubmission] = mockSaveSubmission.mock.calls[0] as [{ respondentMeta?: unknown; metadata?: unknown }];
+    expect(savedSubmission.respondentMeta).toMatchObject({
+      isAnonymous: false,
+      identityKind: "sui_wallet",
+      walletAddress: "0xabc123",
+      verifiedAddress: "0xabc123",
+    });
+    expect(savedSubmission.metadata).toMatchObject({
+      respondentIdentity: {
+        mode: "sui_wallet",
+        verifiedAddress: "0xabc123",
+      },
+    });
+    expect(screen.queryByText("This form requires a connected wallet before you can submit.")).not.toBeInTheDocument();
   });
 
   it("skips the identity choice screen when wallet-required forms only allow one answer mode", async () => {

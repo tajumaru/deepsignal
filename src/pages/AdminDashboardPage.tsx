@@ -2,7 +2,7 @@
   useSignAndExecuteTransaction,
   useSuiClient,
 } from "@mysten/dapp-kit";
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { CreateFormLink } from "../components/CreateFormLink";
@@ -45,6 +45,7 @@ import {
 } from "../features/admin/hooks/useSignalInboxData";
 import { useAttachmentPreviews } from "../hooks/useAttachmentPreviews";
 import { useAccessControl } from "../hooks/useAccessControl";
+import { useLongPress } from "../hooks/useLongPress";
 import { useReviewerDisplayLabel } from "../hooks/useReviewerDisplayLabel";
 import { useSuiWallet } from "../hooks/useSuiWallet";
 import { useI18n } from "../i18n";
@@ -129,6 +130,9 @@ import { deleteFormsFromLocalCache, getStorageRuntimeStatus } from "../storage/s
 import type { ActivityEvent, FormSchema, Submission } from "../types";
 
 const MOBILE_REVIEW_MEDIA_QUERY = "(max-width: 768px)";
+const COARSE_POINTER_MEDIA_QUERY = "(pointer: coarse)";
+const NODE_LONG_PRESS_MS = 3000;
+const NODE_LONG_PRESS_MOVE_THRESHOLD = 18;
 const MODAL_FOCUSABLE_SELECTOR = [
   "button:not([disabled])",
   "input:not([disabled])",
@@ -1181,6 +1185,134 @@ function DeleteNodeActionIcon() {
   );
 }
 
+function LongPressNodeDirectoryButton({
+  title,
+  unreadCount,
+  submissionCount,
+  isLegacyDemo,
+  isAccessible,
+  isOnchain,
+  onchainFormId,
+  isSelected,
+  isLongPressCapable,
+  isRegistering,
+  isRegisterDisabled,
+  t,
+  onSelect,
+  onRegister,
+}: {
+  title: string;
+  unreadCount: number;
+  submissionCount: number;
+  isLegacyDemo: boolean;
+  isAccessible: boolean;
+  isOnchain: boolean;
+  onchainFormId?: number;
+  isSelected: boolean;
+  isLongPressCapable: boolean;
+  isRegistering: boolean;
+  isRegisterDisabled: boolean;
+  t: ReturnType<typeof useI18n>["t"];
+  onSelect: () => void;
+  onRegister: () => void;
+}) {
+  const suppressClickRef = useRef(false);
+  const longPressEnabled = isAccessible && isLongPressCapable && !isOnchain && !isRegisterDisabled;
+  const { isHolding, progress, handlers } = useLongPress<HTMLButtonElement>({
+    duration: NODE_LONG_PRESS_MS,
+    enabled: longPressEnabled,
+    moveThreshold: NODE_LONG_PRESS_MOVE_THRESHOLD,
+    onComplete: () => {
+      suppressClickRef.current = true;
+      onRegister();
+    },
+  });
+  const showOverlay = isHolding || isRegistering;
+  const holdLabel = isRegistering ? t("registerNodeHoldRegistering") : t("registerNodeHoldToRegister");
+  const holdStyle = showOverlay
+    ? ({
+        ["--node-hold-progress" as "--node-hold-progress"]: String(Math.max(progress, isRegistering ? 1 : 0)),
+      } as CSSProperties)
+    : undefined;
+
+  return (
+    <button
+      type="button"
+      className={[
+        "node-directory-item",
+        isSelected ? "is-active" : "",
+        longPressEnabled ? "node-card--holdable" : "",
+        isHolding ? "node-card--holding" : "",
+        isRegistering ? "node-card--registering" : "",
+      ]
+        .filter(Boolean)
+        .join(" ")}
+      disabled={!isAccessible}
+      aria-label={longPressEnabled ? `${title} - ${holdLabel}` : title}
+      style={holdStyle}
+      onClick={(event) => {
+        if (suppressClickRef.current) {
+          suppressClickRef.current = false;
+          event.preventDefault();
+          event.stopPropagation();
+          return;
+        }
+        onSelect();
+      }}
+      {...handlers}
+    >
+      <div className="node-directory-item-main">
+        <div className="node-directory-item-heading">
+          <strong>{title}</strong>
+          {unreadCount > 0 ? (
+            <span className="node-unread-badge">
+              {t("unreadBadge", { count: unreadCount })}
+            </span>
+          ) : null}
+        </div>
+        <p className="muted">
+          {t("signalsCount", { count: submissionCount })}
+          {isLegacyDemo
+            ? ` / ${t("legacyDemoForm")}`
+            : !isAccessible
+              ? ` / ${t("accessDeniedButton")}`
+              : ""}
+        </p>
+        <div className="signal-badge-row signal-badge-row-compact">
+          {isOnchain ? (
+            <>
+              <span className="signal-chip signal-chip-soft">{t("registeredOnSuiLabel")}</span>
+              {typeof onchainFormId === "number" ? (
+                <span className="signal-chip signal-chip-soft">
+                  {t("registryFormIdLabel")}: {onchainFormId}
+                </span>
+              ) : null}
+            </>
+          ) : (
+            <span className="signal-chip signal-chip-soft">{t("notRegisteredYet")}</span>
+          )}
+        </div>
+      </div>
+      {showOverlay ? (
+        <div className="node-directory-hold-overlay" aria-hidden="true">
+          <div className="sui-hold-ripple">
+            <span className="sui-hold-ripple-wave sui-hold-ripple-wave-primary" />
+            <span className="sui-hold-ripple-wave sui-hold-ripple-wave-secondary" />
+            <span className="sui-hold-ripple-mark">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+                <path d="M12 4.5c3.7 3.05 5.55 5.72 5.55 8.01A5.55 5.55 0 0 1 12 18.06a5.55 5.55 0 0 1-5.55-5.55C6.45 10.22 8.3 7.55 12 4.5Z" />
+                <path d="M8.7 13.15a3.3 3.3 0 0 0 6.6 0" />
+              </svg>
+            </span>
+          </div>
+          <p className="sui-hold-hint">{holdLabel}</p>
+          <span className="sui-hold-progress" />
+        </div>
+      ) : null}
+    </button>
+  );
+}
+
 function MobileSignalRow({
   record,
   isSelected,
@@ -1546,6 +1678,7 @@ export function AdminDashboardPage() {
   const [deletingVisibleNodes, setDeletingVisibleNodes] = useState(false);
   const [nodeDirectoryOpen, setNodeDirectoryOpen] = useState(false);
   const [beaconFormId, setBeaconFormId] = useState<string | null>(null);
+  const [isLongPressCapable, setIsLongPressCapable] = useState(false);
   const [projectRecoveryNoticeOpen, setProjectRecoveryNoticeOpen] = useState(false);
   const [projectRecoveryNoticeAcks, setProjectRecoveryNoticeAcks] = useState<Record<string, string>>(
     () => readProjectRecoveryNoticeAcks(),
@@ -1590,6 +1723,7 @@ export function AdminDashboardPage() {
   const reviewSessionPrimaryActionRef = useRef<HTMLButtonElement | null>(null);
   const keyboardNavigationRef = useRef(false);
   const hasAdminAccess = canAdmin(capabilityProfile);
+  const isNodeRegistrationBusy = registerFormTx.isPending || registeringFormId !== null;
   const setWorkspaceTab = useCallback(
     (tab: WorkspaceTab) => {
       if (tab === "activity") {
@@ -2560,6 +2694,36 @@ export function AdminDashboardPage() {
     }
     setSelectedFormId(selectedFormIdFromUrl);
   }, [forms, selectedFormId, selectedFormIdFromUrl, setSelectedFormId]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.matchMedia) {
+      return;
+    }
+    const coarsePointerQuery = window.matchMedia(COARSE_POINTER_MEDIA_QUERY);
+    const mobileWidthQuery = window.matchMedia(MOBILE_REVIEW_MEDIA_QUERY);
+    const sync = () => {
+      setIsLongPressCapable(coarsePointerQuery.matches || mobileWidthQuery.matches);
+    };
+    sync();
+    const attach = (query: MediaQueryList) => {
+      if (typeof query.addEventListener === "function") {
+        query.addEventListener("change", sync);
+        return () => query.removeEventListener("change", sync);
+      }
+      const legacyQuery = query as MediaQueryList & {
+        addListener?: (listener: (event: MediaQueryListEvent) => void) => void;
+        removeListener?: (listener: (event: MediaQueryListEvent) => void) => void;
+      };
+      legacyQuery.addListener?.(sync);
+      return () => legacyQuery.removeListener?.(sync);
+    };
+    const detachCoarse = attach(coarsePointerQuery);
+    const detachWidth = attach(mobileWidthQuery);
+    return () => {
+      detachCoarse();
+      detachWidth();
+    };
+  }, []);
 
   useEffect(() => {
     if (typeof window === "undefined" || !window.matchMedia?.(MOBILE_REVIEW_MEDIA_QUERY).matches) {
@@ -4756,53 +4920,52 @@ export function AdminDashboardPage() {
                 );
                 return (
                   <div key={item.id} className={`node-directory-row ${isSelected ? "is-active" : ""}`}>
-                    <button
-                      type="button"
-                      className={`node-directory-item ${isSelected ? "is-active" : ""}`}
-                      disabled={!item.isAccessible}
-                      onClick={() => {
-                        if (!item.isAccessible) {
-                          return;
-                        }
-                        setSelectedFormId(item.id);
-                        setNodeDirectoryOpen(false);
-                      }}
-                    >
-                      <div className="node-directory-item-main">
-                        <div className="node-directory-item-heading">
-                          <strong>{item.title}</strong>
-                          {item.unreadCount > 0 ? (
-                            <span className="node-unread-badge">
-                              {t("unreadBadge", { count: item.unreadCount })}
-                            </span>
-                          ) : null}
-                        </div>
-                        <p className="muted">
-                          {t("signalsCount", { count: item.submissionCount })}
-                          {item.isLegacyDemo
-                            ? ` / ${t("legacyDemoForm")}`
-                            : !item.isAccessible
-                              ? ` / ${t("accessDeniedButton")}`
-                              : ""}
-                        </p>
-                        {item.id !== "all" ? (
-                          <div className="signal-badge-row signal-badge-row-compact">
-                            {item.isOnchain ? (
-                              <>
-                                <span className="signal-chip signal-chip-soft">{t("registeredOnSuiLabel")}</span>
-                                {typeof item.onchainFormId === "number" ? (
-                                  <span className="signal-chip signal-chip-soft">
-                                    {t("registryFormIdLabel")}: {item.onchainFormId}
-                                  </span>
-                                ) : null}
-                              </>
-                            ) : (
-                              <span className="signal-chip signal-chip-soft">{t("notRegisteredYet")}</span>
-                            )}
+                    {item.id === "all" ? (
+                      <button
+                        type="button"
+                        className={`node-directory-item ${isSelected ? "is-active" : ""}`}
+                        disabled={!item.isAccessible}
+                        onClick={() => {
+                          if (!item.isAccessible) {
+                            return;
+                          }
+                          setSelectedFormId(item.id);
+                          setNodeDirectoryOpen(false);
+                        }}
+                      >
+                        <div className="node-directory-item-main">
+                          <div className="node-directory-item-heading">
+                            <strong>{item.title}</strong>
+                            {item.unreadCount > 0 ? (
+                              <span className="node-unread-badge">
+                                {t("unreadBadge", { count: item.unreadCount })}
+                              </span>
+                            ) : null}
                           </div>
-                        ) : null}
-                      </div>
-                    </button>
+                          <p className="muted">{t("signalsCount", { count: item.submissionCount })}</p>
+                        </div>
+                      </button>
+                    ) : (
+                      <LongPressNodeDirectoryButton
+                        title={item.title}
+                        unreadCount={item.unreadCount}
+                        submissionCount={item.submissionCount}
+                        isLegacyDemo={item.isLegacyDemo}
+                        isAccessible={item.isAccessible}
+                        isOnchain={item.isOnchain}
+                        onchainFormId={item.onchainFormId}
+                        isSelected={isSelected}
+                        isLongPressCapable={isLongPressCapable}
+                        isRegistering={registeringFormId === item.id}
+                        isRegisterDisabled={item.isOnchain || isNodeRegistrationBusy || deletingVisibleNodes}
+                        t={t}
+                        onSelect={() => {
+                          setSelectedFormId(item.id);
+                          setNodeDirectoryOpen(false);
+                        }}
+                        onRegister={() => void handleRegisterNodeOnSui(item.id)}
+                      />
+                    )}
                     {item.id !== "all" && item.isAccessible ? (
                       <div className="node-directory-actions">
                         <button
@@ -4821,7 +4984,7 @@ export function AdminDashboardPage() {
                             type="button"
                             className="ghost-button node-directory-action-button"
                             onClick={() => void handleRegisterNodeOnSui(item.id)}
-                            disabled={registeringFormId === item.id || deletingVisibleNodes}
+                            disabled={isNodeRegistrationBusy || deletingVisibleNodes}
                           >
                             <RegisterNodeActionIcon />
                             <span className="node-directory-action-label">

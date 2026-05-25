@@ -201,6 +201,7 @@ export function PublicFormPage() {
     walletModeSelected
       ? t("publicSubmitModeWallet")
       : t("publicSubmitModeAnonymous");
+  const walletSubmitPending = walletModeSelected && !resolvedWalletAddress;
   const locationStatusLabel =
     locationState === "success"
       ? t("locationAttached")
@@ -701,9 +702,16 @@ export function PublicFormPage() {
   return (
     <form className="panel glow-panel public-form" onSubmit={handleSubmit}>
       {walletModeSelected ? (
-        <WalrusRuntimeSurface fallback={null}>
-          <div aria-hidden="true" style={{ display: "none" }} />
-        </WalrusRuntimeSurface>
+        <WalletSurface fallback={null}>
+          <WalrusRuntimeSurface fallback={null}>
+            <div aria-hidden="true" style={{ display: "none" }}>
+              <PublicWalletAccountPanel
+                onAccountAddressChange={(address) => setResolvedWalletAddress(address)}
+                onWalletProviderChange={(provider) => setWalletProvider(provider)}
+              />
+            </div>
+          </WalrusRuntimeSurface>
+        </WalletSurface>
       ) : null}
       <FormHeaderImage
         image={form.headerImage}
@@ -960,7 +968,7 @@ export function PublicFormPage() {
         <button
           type="submit"
           className="primary-button signal-capsule-action signal-capsule-action-submit"
-          disabled={submitting || deadlinePassed}
+          disabled={submitting || deadlinePassed || walletSubmitPending}
           onClick={() => triggerHaptic([12, 22, 16])}
         >
           <span className="signal-capsule-action-icon" aria-hidden="true">
