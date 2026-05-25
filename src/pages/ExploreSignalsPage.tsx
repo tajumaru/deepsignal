@@ -1,13 +1,13 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { CreateFormLink } from "../components/CreateFormLink";
-import { useSuiWallet } from "../hooks/useSuiWallet";
 import { useI18n } from "../i18n";
 import { buildExploreAiPreview, getExploreCategory, isFormPubliclyExplorable, type ExploreCategory } from "../lib/explore";
+import { normalizeForm } from "../lib/formSchema";
 import { getPublicFormPath } from "../lib/publicLinks";
 import { isResponseDeadlinePassed } from "../lib/responseDeadline";
-import { normalizeForm, normalizeSubmission, storageAdapter } from "../lib/storage";
 import { formatDate } from "../lib/utils";
+import { localStorageAdapter } from "../storage/localStorageAdapter";
 import type { FormSchema, Submission } from "../types";
 
 type ExploreCard = {
@@ -73,19 +73,6 @@ function readExploreDeletedFormIds() {
   }
 }
 
-function saveExploreDeletedFormIds(ids: Set<string>) {
-  if (typeof window === "undefined") {
-    return;
-  }
-  window.localStorage.setItem(EXPLORE_DELETED_FORMS_KEY, JSON.stringify([...ids]));
-}
-
-function rememberExploreDeletedForm(formId: string) {
-  const ids = readExploreDeletedFormIds();
-  ids.add(formId);
-  saveExploreDeletedFormIds(ids);
-}
-
 function buildExploreCard(form: FormSchema, submissions: Submission[] = []): ExploreCard {
   const updatedAt = submissions[0]?.updatedAt ?? form.updatedAt ?? form.createdAt;
   const exploreCategory = getExploreCategory(form);
@@ -106,18 +93,16 @@ function buildExploreCard(form: FormSchema, submissions: Submission[] = []): Exp
 
 export function ExploreSignalsPage() {
   const { t } = useI18n();
-  const wallet = useSuiWallet();
   const [loading, setLoading] = useState(true);
   const [cards, setCards] = useState<ExploreCard[]>([]);
   const [activeTab, setActiveTab] = useState<DiscoverTab>("trending");
-  const [deletingFormId, setDeletingFormId] = useState("");
   const loadSequenceRef = useRef(0);
 
   const loadExplore = useCallback(async () => {
     const loadSequence = loadSequenceRef.current + 1;
     loadSequenceRef.current = loadSequence;
     setLoading(true);
-    const allStorageForms = await storageAdapter.listForms();
+    const allStorageForms = await localStorageAdapter.listForms();
     if (loadSequenceRef.current !== loadSequence) {
       return;
     }
@@ -137,7 +122,7 @@ export function ExploreSignalsPage() {
         while (nextFormIndex < forms.length) {
           const form = forms[nextFormIndex];
           nextFormIndex += 1;
-          const submissions = (await storageAdapter.listSubmissions(form.id)).map((submission) => normalizeSubmission(submission));
+          const submissions = await localStorageAdapter.listSubmissions(form.id);
           if (loadSequenceRef.current !== loadSequence) {
             return;
           }
@@ -154,34 +139,6 @@ export function ExploreSignalsPage() {
   useEffect(() => {
     void loadExplore();
   }, [loadExplore]);
-
-  function canDeleteForm(form: Pick<FormSchema, "creationMode" | "ownerAddress">) {
-    return (
-      form.creationMode === "guest" &&
-      Boolean(
-        wallet.accountAddress &&
-          form.ownerAddress &&
-          form.ownerAddress.toLowerCase() === wallet.accountAddress.toLowerCase(),
-      )
-    );
-  }
-
-  async function handleDeleteForm(formId: string, title: string) {
-    if (!window.confirm(t("exploreDeleteConfirm", { title: title || t("untitledForm") }))) {
-      return;
-    }
-    setDeletingFormId(formId);
-    try {
-      rememberExploreDeletedForm(formId);
-      await storageAdapter.deleteForm(formId);
-      await loadExplore();
-    } catch (error) {
-      console.warn("Delete fell back to hiding the form from this browser.", error);
-      await loadExplore();
-    } finally {
-      setDeletingFormId("");
-    }
-  }
 
   const filteredCards = useMemo(() => {
     const next = cards.filter((card) => {
@@ -378,7 +335,6 @@ export function ExploreSignalsPage() {
             {filteredCards.map((card) => {
               const publicPath = getPublicFormPath(card.form.id, card.form.manifestBlobId);
               const creatorLabel = getCreatorLabel(card.form, t("exploreLocalCreator"));
-              const isOwnForm = canDeleteForm(card.form);
 
               return (
                 <Fragment key={card.form.id}>
@@ -471,16 +427,6 @@ export function ExploreSignalsPage() {
                     <Link className="primary-button" to={publicPath}>
                       {t("exploreOpenSignal")}
                     </Link>
-                    {isOwnForm ? (
-                      <button
-                        type="button"
-                        className="danger-button"
-                        onClick={() => void handleDeleteForm(card.form.id, card.form.title)}
-                        disabled={deletingFormId === card.form.id}
-                      >
-                        {deletingFormId === card.form.id ? t("deleting") : t("deleteForm")}
-                      </button>
-                    ) : null}
                   </div>
                   </article>
                 </Fragment>

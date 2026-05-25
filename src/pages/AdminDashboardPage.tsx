@@ -2,6 +2,7 @@
   useSignAndExecuteTransaction,
   useSuiClient,
 } from "@mysten/dapp-kit";
+import { Transaction } from "@mysten/sui/transactions";
 import type { CSSProperties, ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
@@ -127,12 +128,19 @@ import { markDeletedFormTombstones } from "../storage/deletedFormTombstones";
 import { forcePurgeFormArtifacts } from "../storage/forcePurgeFormArtifacts";
 import { saveFormMetadataOverlay } from "../storage/formMetadataOverlay";
 import { deleteFormsFromLocalCache, getStorageRuntimeStatus } from "../storage/storageFactory";
+import {
+  appendWalrusBlobDeletesToTransaction,
+  collectWalrusBlobDeleteObjectIds,
+  extractMissingWalrusDeleteObjectIds,
+} from "../storage/walrusAdapter";
 import type { ActivityEvent, FormSchema, Submission } from "../types";
 
 const MOBILE_REVIEW_MEDIA_QUERY = "(max-width: 768px)";
 const COARSE_POINTER_MEDIA_QUERY = "(pointer: coarse)";
 const NODE_LONG_PRESS_MS = 3000;
 const NODE_LONG_PRESS_MOVE_THRESHOLD = 18;
+const NODE_SWIPE_DELETE_THRESHOLD = 88;
+const NODE_SWIPE_HORIZONTAL_LEEWAY = 42;
 const MODAL_FOCUSABLE_SELECTOR = [
   "button:not([disabled])",
   "input:not([disabled])",
@@ -1197,9 +1205,13 @@ function LongPressNodeDirectoryButton({
   isLongPressCapable,
   isRegistering,
   isRegisterDisabled,
+  canDelete,
+  isDeleting,
   t,
   onSelect,
   onRegister,
+  onOpenBeacon,
+  onDelete,
 }: {
   title: string;
   unreadCount: number;
@@ -1212,12 +1224,21 @@ function LongPressNodeDirectoryButton({
   isLongPressCapable: boolean;
   isRegistering: boolean;
   isRegisterDisabled: boolean;
+  canDelete: boolean;
+  isDeleting: boolean;
   t: ReturnType<typeof useI18n>["t"];
   onSelect: () => void;
   onRegister: () => void;
+  onOpenBeacon: () => void;
+  onDelete: () => void;
 }) {
   const suppressClickRef = useRef(false);
+  const swipePointerIdRef = useRef<number | null>(null);
+  const swipeStartPointRef = useRef({ x: 0, y: 0 });
+  const [swipeOffset, setSwipeOffset] = useState(0);
+  const mobileGestureMode = isLongPressCapable;
   const longPressEnabled = isAccessible && isLongPressCapable && !isOnchain && !isRegisterDisabled;
+  const swipeEnabled = isAccessible && mobileGestureMode && canDelete && !isDeleting && !isRegistering;
   const { isHolding, progress, handlers } = useLongPress<HTMLButtonElement>({
     duration: NODE_LONG_PRESS_MS,
     enabled: longPressEnabled,
@@ -1227,13 +1248,38 @@ function LongPressNodeDirectoryButton({
       onRegister();
     },
   });
+  const resetSwipe = useCallback(() => {
+    swipePointerIdRef.current = null;
+    swipeStartPointRef.current = { x: 0, y: 0 };
+    setSwipeOffset(0);
+  }, []);
+
+  useEffect(() => {
+    if (swipeEnabled) {
+      return;
+    }
+    resetSwipe();
+  }, [resetSwipe, swipeEnabled]);
+
   const showOverlay = isHolding || isRegistering;
+  const swipeProgress = Math.max(0, Math.min(swipeOffset / NODE_SWIPE_DELETE_THRESHOLD, 1));
+  const swipeDeleteReady = swipeProgress >= 1;
   const holdLabel = isRegistering ? t("registerNodeHoldRegistering") : t("registerNodeHoldToRegister");
-  const holdStyle = showOverlay
-    ? ({
-        ["--node-hold-progress" as "--node-hold-progress"]: String(Math.max(progress, isRegistering ? 1 : 0)),
-      } as CSSProperties)
-    : undefined;
+  const nodeCardStyle =
+    showOverlay || swipeOffset > 0
+      ? ({
+          ...(showOverlay
+            ? {
+                ["--node-hold-progress" as const]: String(Math.max(progress, isRegistering ? 1 : 0)),
+              }
+            : {}),
+          ...(swipeOffset > 0
+            ? {
+                ["--node-swipe-progress" as const]: String(swipeProgress),
+              }
+            : {}),
+        } as CSSProperties)
+      : undefined;
 
   return (
     <button
@@ -1244,12 +1290,15 @@ function LongPressNodeDirectoryButton({
         longPressEnabled ? "node-card--holdable" : "",
         isHolding ? "node-card--holding" : "",
         isRegistering ? "node-card--registering" : "",
+        swipeOffset > 0 ? "node-card--swiping" : "",
+        swipeDeleteReady ? "node-card--swipe-armed" : "",
+        mobileGestureMode ? "node-card--mobile-gesture" : "",
       ]
         .filter(Boolean)
         .join(" ")}
       disabled={!isAccessible}
       aria-label={longPressEnabled ? `${title} - ${holdLabel}` : title}
-      style={holdStyle}
+      style={nodeCardStyle}
       onClick={(event) => {
         if (suppressClickRef.current) {
           suppressClickRef.current = false;
@@ -1257,9 +1306,63 @@ function LongPressNodeDirectoryButton({
           event.stopPropagation();
           return;
         }
+        if (mobileGestureMode) {
+          onOpenBeacon();
+          return;
+        }
         onSelect();
       }}
-      {...handlers}
+      onPointerDown={(event) => {
+        handlers.onPointerDown(event);
+        if (!swipeEnabled || event.pointerType === "mouse" || event.button !== 0) {
+          return;
+        }
+        swipePointerIdRef.current = event.pointerId;
+        swipeStartPointRef.current = { x: event.clientX, y: event.clientY };
+      }}
+      onPointerMove={(event) => {
+        handlers.onPointerMove(event);
+        if (swipePointerIdRef.current !== event.pointerId) {
+          return;
+        }
+        const deltaX = event.clientX - swipeStartPointRef.current.x;
+        const deltaY = event.clientY - swipeStartPointRef.current.y;
+        if (deltaY <= 0) {
+          setSwipeOffset(0);
+          return;
+        }
+        if (Math.abs(deltaX) > NODE_SWIPE_HORIZONTAL_LEEWAY && Math.abs(deltaX) > deltaY) {
+          setSwipeOffset(0);
+          return;
+        }
+        setSwipeOffset(Math.min(deltaY, NODE_SWIPE_DELETE_THRESHOLD * 1.3));
+      }}
+      onPointerUp={(event) => {
+        const shouldDelete = swipePointerIdRef.current === event.pointerId && swipeDeleteReady;
+        handlers.onPointerUp(event);
+        if (swipePointerIdRef.current === event.pointerId) {
+          resetSwipe();
+        }
+        if (!shouldDelete) {
+          return;
+        }
+        suppressClickRef.current = true;
+        event.preventDefault();
+        event.stopPropagation();
+        onDelete();
+      }}
+      onPointerCancel={(event) => {
+        handlers.onPointerCancel(event);
+        if (swipePointerIdRef.current === event.pointerId) {
+          resetSwipe();
+        }
+      }}
+      onLostPointerCapture={(event) => {
+        handlers.onLostPointerCapture(event);
+        if (swipePointerIdRef.current === event.pointerId) {
+          resetSwipe();
+        }
+      }}
     >
       <div className="node-directory-item-main">
         <div className="node-directory-item-heading">
@@ -1307,6 +1410,12 @@ function LongPressNodeDirectoryButton({
           </div>
           <p className="sui-hold-hint">{holdLabel}</p>
           <span className="sui-hold-progress" />
+        </div>
+      ) : null}
+      {swipeEnabled ? (
+        <div className="node-directory-swipe-overlay" aria-hidden="true">
+          <DeleteNodeActionIcon />
+          <span>{isDeleting ? t("deletingLabel") : t("deleteNode")}</span>
         </div>
       ) : null}
     </button>
@@ -1679,6 +1788,7 @@ export function AdminDashboardPage() {
   const [nodeDirectoryOpen, setNodeDirectoryOpen] = useState(false);
   const [beaconFormId, setBeaconFormId] = useState<string | null>(null);
   const [isLongPressCapable, setIsLongPressCapable] = useState(false);
+  const [isMobileNodeDirectory, setIsMobileNodeDirectory] = useState(false);
   const [projectRecoveryNoticeOpen, setProjectRecoveryNoticeOpen] = useState(false);
   const [projectRecoveryNoticeAcks, setProjectRecoveryNoticeAcks] = useState<Record<string, string>>(
     () => readProjectRecoveryNoticeAcks(),
@@ -1999,6 +2109,7 @@ export function AdminDashboardPage() {
       manifestBlobIds: [...selectedManifestBlobIds],
       blobIds: [...selectedFormBlobIds],
     });
+    let walrusBlobObjectIds = collectWalrusBlobDeleteObjectIds(expandedIds);
     const onchainDeleteTargets = [
       ...new Set(
         expandedIds
@@ -2008,30 +2119,68 @@ export function AdminDashboardPage() {
       ),
     ];
 
-    if (onchainDeleteTargets.length > 0) {
-      if (!selectedProject) {
-        throw new Error("Select the linked project before deleting this node.");
+    let walrusDeleteHandledInBatch = false;
+    const selectedProjectIdForDelete = onchainDeleteTargets.length > 0 ? selectedProject?.objectId ?? null : null;
+
+    if (onchainDeleteTargets.length > 0 || walrusBlobObjectIds.length > 0) {
+      if (onchainDeleteTargets.length > 0) {
+        if (!selectedProject) {
+          throw new Error("Select the linked project before deleting this node.");
+        }
+        if (selectedProject.signalsCount > 0) {
+          throw new Error(t("deleteOnchainFormsNoSignalsOnly"));
+        }
       }
-      if (selectedProject.signalsCount > 0) {
-        throw new Error(t("deleteOnchainFormsNoSignalsOnly"));
-      }
-      for (const onchainFormId of onchainDeleteTargets) {
+
+      while (true) {
         try {
-          const tx = deleteFormOnChain({
-            projectId: selectedProject.objectId,
-            formId: onchainFormId,
+          let tx = new Transaction();
+          if (selectedProjectIdForDelete) {
+            for (const onchainFormId of onchainDeleteTargets) {
+              tx = deleteFormOnChain({
+                projectId: selectedProjectIdForDelete,
+                formId: onchainFormId,
+                tx,
+              });
+            }
+          }
+          tx = appendWalrusBlobDeletesToTransaction({
+            transaction: tx,
+            blobObjectIds: walrusBlobObjectIds,
+            ownerAddress: wallet.accountAddress,
           });
+
           const result = await deleteNodeOnchainTx.mutateAsync({ transaction: tx });
           await suiClient.waitForTransaction({ digest: result.digest });
+          walrusDeleteHandledInBatch = walrusBlobObjectIds.length > 0;
+          break;
         } catch (error) {
+          const missingObjectIds = extractMissingWalrusDeleteObjectIds(error);
+          if (missingObjectIds.length > 0) {
+            const missingSet = new Set(missingObjectIds);
+            const nextWalrusBlobObjectIds = walrusBlobObjectIds.filter(
+              (blobObjectId) => !missingSet.has(blobObjectId.toLowerCase()),
+            );
+            if (nextWalrusBlobObjectIds.length !== walrusBlobObjectIds.length) {
+              walrusBlobObjectIds = nextWalrusBlobObjectIds;
+              if (walrusBlobObjectIds.length === 0 && onchainDeleteTargets.length === 0) {
+                break;
+              }
+              continue;
+            }
+          }
+
           const message = error instanceof Error ? error.message : String(error);
           if (!message.includes("find_form_index")) {
             throw error;
           }
-          console.warn(`On-chain form ${onchainFormId} was already absent during node delete. Continuing local cleanup.`);
+          console.warn("One or more on-chain forms were already absent during node delete. Continuing local cleanup.");
+          break;
         }
       }
-      await refetchProjects();
+      if (onchainDeleteTargets.length > 0) {
+        await refetchProjects();
+      }
     }
 
     const walletOwnedIds = expandedIds.filter((formId) => {
@@ -2040,7 +2189,7 @@ export function AdminDashboardPage() {
     });
     const localCacheOnlyIds = expandedIds.filter((formId) => !walletOwnedIds.includes(formId));
 
-    if (walletOwnedIds.length > 0) {
+    if (walletOwnedIds.length > 0 && !walrusDeleteHandledInBatch) {
       await storageAdapter.deleteForms(walletOwnedIds);
     }
     if (expandedIds.length > 0) {
@@ -2122,6 +2271,15 @@ export function AdminDashboardPage() {
       setDeletingFormId(null);
     }
   }
+
+  const openNodeBeacon = useCallback(
+    (formId: string) => {
+      setSelectedFormId(formId);
+      setBeaconFormId(formId);
+      setNodeDirectoryOpen(false);
+    },
+    [setSelectedFormId],
+  );
 
   const canRegisterNodeOnSui = useCallback(
     (form: FormWithCount) =>
@@ -2703,6 +2861,7 @@ export function AdminDashboardPage() {
     const mobileWidthQuery = window.matchMedia(MOBILE_REVIEW_MEDIA_QUERY);
     const sync = () => {
       setIsLongPressCapable(coarsePointerQuery.matches || mobileWidthQuery.matches);
+      setIsMobileNodeDirectory(mobileWidthQuery.matches);
     };
     sync();
     const attach = (query: MediaQueryList) => {
@@ -4835,7 +4994,7 @@ export function AdminDashboardPage() {
         <div className="node-directory-overlay" role="dialog" aria-modal="true" aria-labelledby="shortcut-help-title">
           <div className="node-directory-backdrop" onClick={() => setShowShortcutHelp(false)} />
           <section className="panel glow-panel node-directory-panel shortcut-help-panel">
-            <div className="signal-detail-heading">
+            <div className="signal-detail-heading node-directory-heading">
               <div>
                 <p className="eyebrow">{t("signalInboxTitle")}</p>
                 <h2 id="shortcut-help-title" ref={shortcutHelpHeadingRef} tabIndex={-1}>
@@ -4866,7 +5025,7 @@ export function AdminDashboardPage() {
         <div className="node-directory-overlay" role="dialog" aria-modal="true">
           <div className="node-directory-backdrop" onClick={() => setNodeDirectoryOpen(false)} />
           <section className="panel glow-panel node-directory-panel">
-            <div className="signal-detail-heading">
+            <div className="signal-detail-heading node-directory-heading">
               <div>
                 <p className="eyebrow">{t("signalNodesTitle")}</p>
                 <h2>{t("nodeDirectoryTitle")}</h2>
@@ -4874,10 +5033,15 @@ export function AdminDashboardPage() {
               </div>
               <button
                 type="button"
-                className="ghost-button"
+                className="review-session-close-button"
+                aria-label={t("closeLabel")}
+                title={t("closeLabel")}
                 onClick={() => setNodeDirectoryOpen(false)}
               >
-                {t("closeLabel")}
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M6 6l12 12" />
+                  <path d="M18 6L6 18" />
+                </svg>
               </button>
             </div>
 
@@ -4958,23 +5122,24 @@ export function AdminDashboardPage() {
                         isLongPressCapable={isLongPressCapable}
                         isRegistering={registeringFormId === item.id}
                         isRegisterDisabled={item.isOnchain || isNodeRegistrationBusy || deletingVisibleNodes}
+                        canDelete={item.canDelete}
+                        isDeleting={deletingFormId === item.id}
                         t={t}
                         onSelect={() => {
                           setSelectedFormId(item.id);
                           setNodeDirectoryOpen(false);
                         }}
                         onRegister={() => void handleRegisterNodeOnSui(item.id)}
+                        onOpenBeacon={() => openNodeBeacon(item.id)}
+                        onDelete={() => void handleDelete(item.id)}
                       />
                     )}
-                    {item.id !== "all" && item.isAccessible ? (
+                    {item.id !== "all" && item.isAccessible && !isMobileNodeDirectory ? (
                       <div className="node-directory-actions">
                         <button
                           type="button"
                           className="ghost-button node-directory-action-button"
-                          onClick={() => {
-                            setBeaconFormId(item.id);
-                            setNodeDirectoryOpen(false);
-                          }}
+                          onClick={() => openNodeBeacon(item.id)}
                         >
                           <OpenBeaconActionIcon />
                           <span className="node-directory-action-label">{t("openSignalBeacon")}</span>
@@ -5012,6 +5177,11 @@ export function AdminDashboardPage() {
                         ) : null}
                       </div>
                     ) : null}
+                    {item.id !== "all" && item.isAccessible && isMobileNodeDirectory && shouldShowRegistrationFeedback && registrationFeedback ? (
+                      <p className={`node-directory-feedback is-${registrationFeedback.tone}`}>
+                        {registrationFeedback.message}
+                      </p>
+                    ) : null}
                   </div>
                 );
               })}
@@ -5037,10 +5207,15 @@ export function AdminDashboardPage() {
               </div>
               <button
                 type="button"
-                className="ghost-button"
+                className="review-session-close-button"
+                aria-label={t("closeLabel")}
+                title={t("closeLabel")}
                 onClick={() => setBeaconFormId(null)}
               >
-                {t("closeLabel")}
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M6 6l12 12" />
+                  <path d="M18 6L6 18" />
+                </svg>
               </button>
             </div>
             <ShareCard

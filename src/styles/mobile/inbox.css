@@ -1,6 +1,27 @@
 /* Admin inbox mobile responsive overrides. */
 
 @media (max-width: 768px) {
+  .workspace-tab-nav {
+    display: flex;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .workspace-tab-nav::-webkit-scrollbar {
+    display: none;
+  }
+
+  .workspace-tab-nav button,
+  .workspace-tab-nav a {
+    flex: 0 0 auto;
+    white-space: nowrap;
+  }
+
   .desktop-signal-inbox {
     display: none;
   }

@@ -901,14 +901,11 @@ async function deleteBlobObjectsFromWalrus(blobObjectIds: Array<string | undefin
   const client = getRuntimeWalrusClient();
   const signer = createWalletSigner();
   while (remainingBlobObjectIds.length > 0) {
-    let transaction = new Transaction();
-    for (const blobObjectId of remainingBlobObjectIds) {
-      transaction = client.walrus.deleteBlobTransaction({
-        blobObjectId,
-        owner: signer.toSuiAddress(),
-        transaction,
-      });
-    }
+    const transaction = appendWalrusBlobDeletesToTransaction({
+      transaction: new Transaction(),
+      blobObjectIds: remainingBlobObjectIds,
+      ownerAddress: signer.toSuiAddress(),
+    });
 
     try {
       await signer.signAndExecuteTransaction({
@@ -917,7 +914,7 @@ async function deleteBlobObjectsFromWalrus(blobObjectIds: Array<string | undefin
       });
       return;
     } catch (error) {
-      const missingObjectIds = extractMissingObjectIdsFromDeleteError(error);
+      const missingObjectIds = extractMissingWalrusDeleteObjectIds(error);
       if (missingObjectIds.length === 0) {
         throw error;
       }
@@ -939,10 +936,37 @@ async function deleteBlobObjectsFromWalrus(blobObjectIds: Array<string | undefin
   }
 }
 
-function extractMissingObjectIdsFromDeleteError(error: unknown) {
+export function extractMissingWalrusDeleteObjectIds(error: unknown) {
   const message = getWalrusErrorMessage(error);
   const matches = [...message.matchAll(/Object\s+(0x[a-f0-9]+)\s+does not exist/gi)];
   return [...new Set(matches.map((match) => match[1]?.toLowerCase()).filter((value): value is string => Boolean(value)))];
+}
+
+export function appendWalrusBlobDeletesToTransaction(args: {
+  transaction: Transaction;
+  blobObjectIds: Array<string | undefined>;
+  ownerAddress?: string | null;
+}) {
+  const uniqueBlobObjectIds = [...new Set(args.blobObjectIds.filter((value): value is string => Boolean(value)))];
+  if (uniqueBlobObjectIds.length === 0) {
+    return args.transaction;
+  }
+
+  const client = getRuntimeWalrusClient();
+  const ownerAddress = args.ownerAddress?.trim() || runtimeContext.account?.address;
+  if (!ownerAddress) {
+    throw new Error("Wallet address is required to delete Walrus blobs.");
+  }
+
+  let transaction = args.transaction;
+  for (const blobObjectId of uniqueBlobObjectIds) {
+    transaction = client.walrus.deleteBlobTransaction({
+      blobObjectId,
+      owner: ownerAddress,
+      transaction,
+    });
+  }
+  return transaction;
 }
 
 async function cleanupSupersededWalrusObjects(blobObjectIds: Array<string | undefined>, context: string) {
@@ -1014,6 +1038,26 @@ function warnAboutPartialDelete(formId: string, missingTrackedObjects: string[])
       ", ",
     )} blob object ids are missing. This data was likely saved before delete tracking was enabled.`,
   );
+}
+
+export function collectWalrusBlobDeleteObjectIds(formIds: string[]) {
+  const uniqueIds = [...new Set(formIds)];
+  const trackedBlobObjectIds: string[] = [];
+
+  for (const id of uniqueIds) {
+    const formEntry = getFormBlobIndex(id);
+    const submissionEntries = listSubmissionBlobIndex(id);
+    const missingTrackedObjects = getMissingDeleteTargets(formEntry, submissionEntries);
+
+    trackedBlobObjectIds.push(
+      formEntry?.formBlobObjectId ?? "",
+      formEntry?.manifestBlobObjectId ?? "",
+      ...submissionEntries.map((entry) => entry.blobObjectId ?? ""),
+    );
+    warnAboutPartialDelete(id, missingTrackedObjects);
+  }
+
+  return [...new Set(trackedBlobObjectIds.filter(Boolean))];
 }
 
 async function fetchBlobTextFromWalrus(

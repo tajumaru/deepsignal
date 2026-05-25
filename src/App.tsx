@@ -233,7 +233,6 @@ export default function App() {
   const [initialRouteReady, setInitialRouteReady] = useState(false);
   const [bootDismissed, setBootDismissed] = useState(false);
   const routeNeedsWalletSurface =
-    location.pathname === "/explore" ||
     location.pathname === "/admin" ||
     location.pathname === "/dashboard" ||
     location.pathname === "/create" ||
