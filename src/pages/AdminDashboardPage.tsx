@@ -4,7 +4,7 @@
 } from "@mysten/dapp-kit";
 import { Transaction } from "@mysten/sui/transactions";
 import type { CSSProperties, ReactNode } from "react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { CreateFormLink } from "../components/CreateFormLink";
 import { AdminAccessGate } from "../components/AdminAccessGate";
@@ -28,7 +28,6 @@ import { buildSignalCardIntelligence } from "../features/admin/components/signal
 import { SignalTimelineSection } from "../features/admin/components/SignalTimelineSection";
 import { MailboxIcon, SignalChannelSelector, SignalStreamsNav } from "../features/admin/components/SignalStreamsNav";
 import { WorkspaceActivityLog } from "../features/admin/components/WorkspaceActivityLog";
-import { WorkspaceInsights } from "../features/admin/components/WorkspaceInsights";
 import { useAdminToast } from "../features/admin/hooks/useAdminToast";
 import { usePendingSuiRegistration } from "../features/admin/hooks/usePendingSuiRegistration";
 import { usePrivateSignalDecrypt } from "../features/admin/hooks/usePrivateSignalDecrypt";
@@ -158,6 +157,7 @@ const ROADMAP_READY_STATUSES = new Set<Submission["triageStatus"]>(["planned", "
 const DEMO_FLOW_VISIBLE = false;
 const PROJECT_RECOVERY_NOTICE_ACK_KEY = "deepsignal.admin.projectRecoveryNoticeAck";
 const WORKSPACE_RECOVERY_TIMEOUT_MS = 4000;
+const LazyWorkspaceInsights = lazy(() => import("../features/admin/components/WorkspaceInsights"));
 type WorkspaceTab = "review" | "activity" | "insights" | "members";
 type QuickActionId = "reviewing" | "resolve" | "publish" | "archive";
 type KeyboardShortcutAction = QuickActionId | "next" | "previous" | "search" | "help";
@@ -1753,6 +1753,20 @@ function InboxListSkeleton({ compact = false }: { compact?: boolean }) {
       <span />
       <span />
     </div>
+  );
+}
+
+function WorkspaceInsightsFallback() {
+  return (
+    <section className="panel workspace-insights-panel workspace-insights-loading" role="status" aria-live="polite">
+      <div className="workspace-insights-header">
+        <div>
+          <p className="eyebrow">Signal intelligence</p>
+          <h2>Preparing insights</h2>
+        </div>
+      </div>
+      <InboxListSkeleton />
+    </section>
   );
 }
 
@@ -3856,19 +3870,28 @@ export function AdminDashboardPage() {
   const lockedVisibleSignalsCount = visibleSignals.filter(
     (record) => record.submission.isEncrypted && !decryptedSignalsById[record.submission.id],
   ).length;
+  const shouldPrepareInsights = activeWorkspaceTab === "insights" && hasAdminAccess;
   const insightsRecords = useMemo(
-    () =>
-      selectedFormId === "all"
+    () => {
+      if (!shouldPrepareInsights) {
+        return [];
+      }
+      return selectedFormId === "all"
         ? allSignals
-        : allSignals.filter((record) => record.form.id === selectedFormId),
-    [allSignals, selectedFormId],
+        : allSignals.filter((record) => record.form.id === selectedFormId);
+    },
+    [allSignals, selectedFormId, shouldPrepareInsights],
   );
   const insightsCounts = useMemo(
-    () => ({
-      unread: insightsRecords.filter((record) => record.submission.status === "unread").length,
-      needsReview: insightsRecords.filter((record) => record.submission.status !== "archived").length,
-      encrypted: insightsRecords.filter((record) => record.submission.isEncrypted).length,
-    }),
+    () =>
+      insightsRecords.reduce(
+        (counts, record) => ({
+          unread: counts.unread + (record.submission.status === "unread" ? 1 : 0),
+          needsReview: counts.needsReview + (record.submission.status !== "archived" ? 1 : 0),
+          encrypted: counts.encrypted + (record.submission.isEncrypted ? 1 : 0),
+        }),
+        { unread: 0, needsReview: 0, encrypted: 0 },
+      ),
     [insightsRecords],
   );
   const signalCountByFormId = useMemo(() => {
@@ -4116,14 +4139,16 @@ export function AdminDashboardPage() {
         ) : activeWorkspaceTab === "activity" && hasAdminAccess ? (
           <WorkspaceActivityLog events={activityEvents} />
         ) : activeWorkspaceTab === "insights" && hasAdminAccess ? (
-          <WorkspaceInsights
-            totalSignals={insightsRecords.length}
-            unreadSignals={insightsCounts.unread}
-            needsReviewSignals={insightsCounts.needsReview}
-            encryptedSignals={insightsCounts.encrypted}
-            records={insightsRecords}
-            unlockedSignalsById={decryptedSignalsById}
-          />
+          <Suspense fallback={<WorkspaceInsightsFallback />}>
+            <LazyWorkspaceInsights
+              totalSignals={insightsRecords.length}
+              unreadSignals={insightsCounts.unread}
+              needsReviewSignals={insightsCounts.needsReview}
+              encryptedSignals={insightsCounts.encrypted}
+              records={insightsRecords}
+              unlockedSignalsById={decryptedSignalsById}
+            />
+          </Suspense>
         ) : !inboxSettling && accessibleForms.length === 0 &&
           (!hasAdminAccess ||
             !selectedProject ||

@@ -1,4 +1,4 @@
-import type { CSSProperties } from "react";
+import { useMemo, type CSSProperties } from "react";
 import { useI18n, type Language } from "../../../i18n";
 import { getRelatedSignals, type RelatedSignalReason } from "../../../lib/relatedSignals";
 import { getSignalPreview } from "../../../lib/signalInbox";
@@ -960,28 +960,52 @@ export function WorkspaceInsights({
   unlockedSignalsById,
 }: WorkspaceInsightsProps) {
   const { t, language } = useI18n();
-  const signalSummary = buildSignalSummary(records, t, unlockedSignalsById);
-  const clusters = buildSignalClusters(records, signalSummary.items, t);
+  const signalSummary = useMemo(
+    () => buildSignalSummary(records, t, unlockedSignalsById),
+    [records, t, unlockedSignalsById],
+  );
+  const clusters = useMemo(
+    () => buildSignalClusters(records, signalSummary.items, t),
+    [records, signalSummary.items, t],
+  );
   const primaryCluster = clusters[0];
-  const activityPoints = buildActivityPoints(records, language);
-  const anomalyPoints = activityPoints.filter((point) => point.anomaly);
+  const activityPoints = useMemo(() => buildActivityPoints(records, language), [records, language]);
+  const anomalyPoints = useMemo(() => activityPoints.filter((point) => point.anomaly), [activityPoints]);
   const anomalyCount = anomalyPoints.length;
-  const activityStatus = getActivityStatus(activityPoints);
-  const attentionRecords = records
-    .filter((record) => record.submission.status === "unread" || record.submission.triageStatus === "new")
-    .slice(0, 3);
-  const unresolvedSignals = records.filter(
-    (record) =>
-      record.submission.status !== "archived" &&
-      record.submission.triageStatus !== "fixed" &&
-      record.submission.triageStatus !== "closed",
-  ).length;
-  const archivedSignals = records.filter((record) => record.submission.status === "archived").length;
-  const silenceCandidates = buildSilenceCandidates(records);
-  const now = Date.now();
-  const currentVelocity = buildVelocitySnapshot(records, now - 7 * 24 * 60 * 60 * 1000, now);
-  const previousVelocity = buildVelocitySnapshot(records, now - 14 * 24 * 60 * 60 * 1000, now - 7 * 24 * 60 * 60 * 1000);
-  const velocityDirection = getVelocityDirection(currentVelocity, previousVelocity);
+  const activityStatus = useMemo(() => getActivityStatus(activityPoints), [activityPoints]);
+  const attentionRecords = useMemo(
+    () =>
+      records
+        .filter((record) => record.submission.status === "unread" || record.submission.triageStatus === "new")
+        .slice(0, 3),
+    [records],
+  );
+  const unresolvedSignals = useMemo(
+    () =>
+      records.filter(
+        (record) =>
+          record.submission.status !== "archived" &&
+          record.submission.triageStatus !== "fixed" &&
+          record.submission.triageStatus !== "closed",
+      ).length,
+    [records],
+  );
+  const archivedSignals = useMemo(
+    () => records.filter((record) => record.submission.status === "archived").length,
+    [records],
+  );
+  const silenceCandidates = useMemo(() => buildSilenceCandidates(records), [records]);
+  const velocityWindow = useMemo(() => {
+    const now = Date.now();
+    const currentVelocity = buildVelocitySnapshot(records, now - 7 * 24 * 60 * 60 * 1000, now);
+    const previousVelocity = buildVelocitySnapshot(records, now - 14 * 24 * 60 * 60 * 1000, now - 7 * 24 * 60 * 60 * 1000);
+    return {
+      currentVelocity,
+      previousVelocity,
+      velocityDirection: getVelocityDirection(currentVelocity, previousVelocity),
+    };
+  }, [records]);
+  const { currentVelocity, previousVelocity, velocityDirection } = velocityWindow;
   const activityMonitorState = getActivityMonitorState(activityStatus, anomalyCount);
   const silenceMonitorState: MonitorState = silenceCandidates.length > 0
     ? silenceCandidates[0].tone === "estimated_silence"
@@ -992,48 +1016,79 @@ export function WorkspaceInsights({
     : { tone: "stable", key: "Stable" };
   const velocityMonitorState = getVelocityMonitorState(currentVelocity, previousVelocity, velocityDirection);
   const clusterMonitorState = getClusterMonitorState(clusters, anomalyCount, silenceCandidates);
-  const situationFlow = buildSituationFlow(activityMonitorState, anomalyCount, silenceMonitorState, velocityMonitorState);
-  const relatedPatterns = buildRelatedPatternSummary(records);
-  const analysisProfile = resolveAnalysisProfile({
-    records,
-    totalSignals,
-    unreadSignals,
-    needsReviewSignals,
-    encryptedSignals,
-    unresolvedSignals,
-    archivedSignals,
-    anomalyCount,
-    activityStatusTone: activityStatus.tone,
-    signalSummaryItems: signalSummary.items,
-    encryptedWaitingCount: signalSummary.encryptedWaitingCount,
-    clusters,
-    silenceCandidates: silenceCandidates.map((candidate) => ({
-      key: candidate.key,
-      label: candidate.label,
-      tone: candidate.tone,
-      unresolvedCount: candidate.unresolvedCount,
-      recentCount: candidate.recentCount,
-      lastSeenLabel: candidate.lastSeenLabel,
-    })),
-    relatedPatterns,
-    currentVelocity,
-  });
-  const profileDistribution = resolveProfileDistribution(records)
-    .slice(0, 4)
-    .map((entry) => ({
-      ...entry,
-      label: getAnalysisProfileLabel(entry.id),
-      signalCount: records.filter((record) => getSignalProfileId(record) === entry.id).length,
-    }))
-    .filter((entry) => entry.signalCount > 0);
-  const clusterMapNodes = getClusterMapNodes(clusters);
-  const analysisExperience = buildWorkspaceAnalysisExperience({
-    records,
-    profile: analysisProfile,
-    encryptedWaitingCount: signalSummary.encryptedWaitingCount,
-    anomalyCount,
-    topClusterLabel: primaryCluster?.label ?? "No dominant cluster yet",
-  });
+  const situationFlow = useMemo(
+    () => buildSituationFlow(activityMonitorState, anomalyCount, silenceMonitorState, velocityMonitorState),
+    [activityMonitorState, anomalyCount, silenceMonitorState, velocityMonitorState],
+  );
+  const relatedPatterns = useMemo(() => buildRelatedPatternSummary(records), [records]);
+  const analysisProfile = useMemo(
+    () =>
+      resolveAnalysisProfile({
+        records,
+        totalSignals,
+        unreadSignals,
+        needsReviewSignals,
+        encryptedSignals,
+        unresolvedSignals,
+        archivedSignals,
+        anomalyCount,
+        activityStatusTone: activityStatus.tone,
+        signalSummaryItems: signalSummary.items,
+        encryptedWaitingCount: signalSummary.encryptedWaitingCount,
+        clusters,
+        silenceCandidates: silenceCandidates.map((candidate) => ({
+          key: candidate.key,
+          label: candidate.label,
+          tone: candidate.tone,
+          unresolvedCount: candidate.unresolvedCount,
+          recentCount: candidate.recentCount,
+          lastSeenLabel: candidate.lastSeenLabel,
+        })),
+        relatedPatterns,
+        currentVelocity,
+      }),
+    [
+      records,
+      totalSignals,
+      unreadSignals,
+      needsReviewSignals,
+      encryptedSignals,
+      unresolvedSignals,
+      archivedSignals,
+      anomalyCount,
+      activityStatus.tone,
+      signalSummary.items,
+      signalSummary.encryptedWaitingCount,
+      clusters,
+      silenceCandidates,
+      relatedPatterns,
+      currentVelocity,
+    ],
+  );
+  const profileDistribution = useMemo(
+    () =>
+      resolveProfileDistribution(records)
+        .slice(0, 4)
+        .map((entry) => ({
+          ...entry,
+          label: getAnalysisProfileLabel(entry.id),
+          signalCount: records.filter((record) => getSignalProfileId(record) === entry.id).length,
+        }))
+        .filter((entry) => entry.signalCount > 0),
+    [records],
+  );
+  const clusterMapNodes = useMemo(() => getClusterMapNodes(clusters), [clusters]);
+  const analysisExperience = useMemo(
+    () =>
+      buildWorkspaceAnalysisExperience({
+        records,
+        profile: analysisProfile,
+        encryptedWaitingCount: signalSummary.encryptedWaitingCount,
+        anomalyCount,
+        topClusterLabel: primaryCluster?.label ?? "No dominant cluster yet",
+      }),
+    [records, analysisProfile, signalSummary.encryptedWaitingCount, anomalyCount, primaryCluster?.label],
+  );
 
   return (
     <section
@@ -1530,3 +1585,5 @@ export function WorkspaceInsights({
     </section>
   );
 }
+
+export default WorkspaceInsights;

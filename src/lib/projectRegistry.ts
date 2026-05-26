@@ -186,6 +186,33 @@ function emitProjectRegistryStorageChange() {
   window.dispatchEvent(new Event(PROJECT_REGISTRY_STORAGE_EVENT));
 }
 
+function normalizeObjectId(value?: string | null) {
+  if (!value) {
+    return "";
+  }
+  const trimmed = value.trim().toLowerCase();
+  if (!trimmed) {
+    return "";
+  }
+  return trimmed.startsWith("0x") ? trimmed : `0x${trimmed}`;
+}
+
+function normalizeType(value?: string | null) {
+  return value?.trim().toLowerCase() ?? "";
+}
+
+function storageNamespace() {
+  return normalizeObjectId(ACCESS_CONTROL_PACKAGE_ID) || "unconfigured";
+}
+
+function recentProjectsKey() {
+  return `${RECENT_PROJECTS_KEY}:${storageNamespace()}`;
+}
+
+function selectedProjectIdKey() {
+  return `${SELECTED_PROJECT_ID_KEY}:${storageNamespace()}`;
+}
+
 export function subscribeProjectRegistryStorageChange(listener: () => void) {
   if (typeof window === "undefined") {
     return () => undefined;
@@ -194,8 +221,8 @@ export function subscribeProjectRegistryStorageChange(listener: () => void) {
   const handleStorage = (event: StorageEvent) => {
     if (
       event.key !== null &&
-      event.key !== RECENT_PROJECTS_KEY &&
-      event.key !== SELECTED_PROJECT_ID_KEY
+      event.key !== recentProjectsKey() &&
+      event.key !== selectedProjectIdKey()
     ) {
       return;
     }
@@ -208,17 +235,6 @@ export function subscribeProjectRegistryStorageChange(listener: () => void) {
     window.removeEventListener(PROJECT_REGISTRY_STORAGE_EVENT, listener);
     window.removeEventListener("storage", handleStorage);
   };
-}
-
-function normalizeObjectId(value?: string | null) {
-  if (!value) {
-    return "";
-  }
-  const trimmed = value.trim().toLowerCase();
-  if (!trimmed) {
-    return "";
-  }
-  return trimmed.startsWith("0x") ? trimmed : `0x${trimmed}`;
 }
 
 function readNestedValue(source: unknown): unknown {
@@ -587,11 +603,19 @@ export function parseSuiObjectData(response: unknown) {
 }
 
 export function isProjectObjectType(type?: string | null) {
-  return String(type ?? "").endsWith("::Project");
+  return normalizeType(type) === normalizeType(
+    ACCESS_CONTROL_PACKAGE_ID
+      ? `${ACCESS_CONTROL_PACKAGE_ID}::${PROJECT_REGISTRY_MODULE}::Project`
+      : "",
+  );
 }
 
 export function isProjectOwnerCapType(type?: string | null) {
-  return String(type ?? "").endsWith("::ProjectOwnerCap");
+  return normalizeType(type) === normalizeType(
+    ACCESS_CONTROL_PACKAGE_ID
+      ? `${ACCESS_CONTROL_PACKAGE_ID}::${PROJECT_REGISTRY_MODULE}::ProjectOwnerCap`
+      : "",
+  );
 }
 
 export function parseProjectIdFromOwnerCapFields(fields?: Record<string, unknown> | null) {
@@ -603,7 +627,7 @@ export function loadRecentProjects() {
     return [] as ProjectSummary[];
   }
   try {
-    const raw = window.localStorage.getItem(RECENT_PROJECTS_KEY);
+    const raw = window.localStorage.getItem(recentProjectsKey());
     if (!raw) {
       return [];
     }
@@ -629,7 +653,7 @@ export function saveRecentProject(project: ProjectSummary) {
     project,
     ...loadRecentProjects().filter((entry) => entry.objectId !== project.objectId),
   ].slice(0, 12);
-  window.localStorage.setItem(RECENT_PROJECTS_KEY, JSON.stringify(next));
+  window.localStorage.setItem(recentProjectsKey(), JSON.stringify(next));
   emitProjectRegistryStorageChange();
 }
 
@@ -643,12 +667,12 @@ export function removeRecentProject(projectId: string) {
   }
   const next = loadRecentProjects().filter((entry) => entry.objectId !== normalized);
   if (next.length > 0) {
-    window.localStorage.setItem(RECENT_PROJECTS_KEY, JSON.stringify(next));
+    window.localStorage.setItem(recentProjectsKey(), JSON.stringify(next));
   } else {
-    window.localStorage.removeItem(RECENT_PROJECTS_KEY);
+    window.localStorage.removeItem(recentProjectsKey());
   }
   if (getSelectedProjectId() === normalized) {
-    window.localStorage.removeItem(SELECTED_PROJECT_ID_KEY);
+    window.localStorage.removeItem(selectedProjectIdKey());
   }
   emitProjectRegistryStorageChange();
 }
@@ -657,7 +681,7 @@ export function getSelectedProjectId() {
   if (typeof window === "undefined") {
     return "";
   }
-  return normalizeObjectId(window.localStorage.getItem(SELECTED_PROJECT_ID_KEY));
+  return normalizeObjectId(window.localStorage.getItem(selectedProjectIdKey()));
 }
 
 export function setSelectedProjectId(projectId: string) {
@@ -670,14 +694,14 @@ export function setSelectedProjectId(projectId: string) {
     if (!current) {
       return;
     }
-    window.localStorage.removeItem(SELECTED_PROJECT_ID_KEY);
+    window.localStorage.removeItem(selectedProjectIdKey());
     emitProjectRegistryStorageChange();
     return;
   }
   if (current === normalized) {
     return;
   }
-  window.localStorage.setItem(SELECTED_PROJECT_ID_KEY, normalized);
+  window.localStorage.setItem(selectedProjectIdKey(), normalized);
   emitProjectRegistryStorageChange();
 }
 
