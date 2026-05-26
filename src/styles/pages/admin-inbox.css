@@ -1787,6 +1787,17 @@
   line-height: 1.6;
 }
 
+.workspace-executive-lines {
+  display: grid;
+  gap: 0.4rem;
+  margin-top: 0.45rem;
+}
+
+.workspace-executive-lines small {
+  color: #b8ebf5;
+  line-height: 1.5;
+}
+
 .workspace-signal-readout {
   display: grid;
   gap: 0.3rem;
@@ -2856,6 +2867,46 @@
   overflow: hidden;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
+}
+
+.signal-card-intelligence {
+  display: grid;
+  gap: 0.32rem;
+}
+
+.signal-card-intelligence p,
+.signal-card-analysis-meta {
+  margin-bottom: 0;
+}
+
+.signal-card-evidence,
+.signal-card-action {
+  color: #a8dcec;
+  font-size: 0.77rem;
+  line-height: 1.45;
+}
+
+.signal-card-evidence {
+  font-style: italic;
+}
+
+.signal-card-analysis-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.42rem;
+}
+
+.signal-card-analysis-meta span {
+  padding: 0.18rem 0.5rem;
+  border: 1px solid rgba(116, 226, 255, 0.12);
+  border-radius: 999px;
+  background: rgba(3, 16, 28, 0.42);
+  color: #9cc9d9;
+  font-size: 0.72rem;
+}
+
+.signal-card-secondary-line-muted {
+  opacity: 0.88;
 }
 
 .signal-card-formline,

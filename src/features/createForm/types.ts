@@ -97,6 +97,7 @@ export interface FormBuilderValues {
 }
 
 export type DraftSaveState = "idle" | "saving" | "saved" | "restored";
+export type DraftParseStatus = "idle" | "available" | "invalid";
 
 export interface FieldsStepValidationResult {
   isValid: boolean;

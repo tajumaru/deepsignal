@@ -759,6 +759,8 @@ export function useSignalInboxData({
             getVisibleReviewerNotes(submission),
             category,
             form.projectName ?? "",
+            form.signalType ?? "",
+            form.analystType ?? "",
           ]
             .join(" ")
             .toLowerCase(),
@@ -1076,6 +1078,8 @@ export function useSignalInboxData({
             getAssignedReviewer(submission) ?? "",
             getVisibleReviewerNotes(submission),
             category,
+            form.signalType ?? "",
+            form.analystType ?? "",
           ]
             .join(" ")
             .toLowerCase(),

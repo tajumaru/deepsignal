@@ -142,8 +142,13 @@ export function TemplatePicker({ templates, selectedTemplateKey, onSelect }: Tem
     const syncViewport = () => setIsMobileViewport(mediaQuery.matches);
     syncViewport();
 
-    mediaQuery.addEventListener("change", syncViewport);
-    return () => mediaQuery.removeEventListener("change", syncViewport);
+    if (typeof mediaQuery.addEventListener === "function") {
+      mediaQuery.addEventListener("change", syncViewport);
+      return () => mediaQuery.removeEventListener("change", syncViewport);
+    }
+
+    mediaQuery.addListener(syncViewport);
+    return () => mediaQuery.removeListener(syncViewport);
   }, []);
 
   const signalTypes = useMemo(() => {

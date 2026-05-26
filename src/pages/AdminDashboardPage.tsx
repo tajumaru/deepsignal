@@ -24,6 +24,7 @@ import { ReviewSessionModal } from "../features/admin/components/ReviewSessionMo
 import { SecondaryInspector } from "../features/admin/components/SecondaryInspector";
 import { SignalAttachmentList } from "../features/admin/components/SignalAttachmentList";
 import { SignalCard } from "../features/admin/components/SignalCard";
+import { buildSignalCardIntelligence } from "../features/admin/components/signalIntelligence";
 import { SignalTimelineSection } from "../features/admin/components/SignalTimelineSection";
 import { MailboxIcon, SignalChannelSelector, SignalStreamsNav } from "../features/admin/components/SignalStreamsNav";
 import { WorkspaceActivityLog } from "../features/admin/components/WorkspaceActivityLog";
@@ -4463,6 +4464,7 @@ export function AdminDashboardPage() {
                     const persistenceLabel =
                       persistenceState === "not_available" ? null : getSignalPersistenceLabel(persistenceState);
                     const hasPayloadIssue = hasPrivateSignalPayloadIssue(submission);
+                    const cardIntelligence = buildSignalCardIntelligence(record);
                     const hasNotableStatusBadge =
                       isPendingSui ||
                       isSelectedForSui ||
@@ -4492,6 +4494,15 @@ export function AdminDashboardPage() {
                             : undefined
                         }
                         persistenceState={persistenceState}
+                        urgencyScoreLabel={`${cardIntelligence.urgencyLabel} ${cardIntelligence.urgencyScore}`}
+                        signalTypeLabel={cardIntelligence.signalTypeLabel}
+                        analystTypeLabel={cardIntelligence.analystTypeLabel}
+                        shortSummary={cardIntelligence.shortSummary}
+                        evidenceQuote={cardIntelligence.evidenceQuote}
+                        recommendedAction={cardIntelligence.recommendedAction}
+                        emotionalTone={cardIntelligence.emotionalTone}
+                        verifiedLabel={cardIntelligence.verifiedLabel}
+                        locationLabel={cardIntelligence.locationLabel}
                         reviewerHint={getReviewerPresenceText(submission, wallet.accountAddress)}
                         needsFollowUp={hasNeedsFollowUp(submission)}
                         isSelectedSignal={isSelectedSignal}

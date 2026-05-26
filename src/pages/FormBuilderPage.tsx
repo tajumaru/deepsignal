@@ -507,9 +507,19 @@ function FormBuilderComposer({ mode, freshStartToken, initialDisplayMode = "clas
         {builder.hasRecoverableDraft ? (
           <RecoverableDraftBanner
             title={t("recoverableDraftTitle")}
+            description={builder.draftParseNotice || undefined}
             restoreLabel={t("restore")}
             discardLabel={t("discard")}
             onRestore={builder.restoreRecoverableDraft}
+            onDiscard={builder.discardRecoverableDraft}
+          />
+        ) : null}
+
+        {builder.draftParseStatus === "invalid" ? (
+          <RecoverableDraftBanner
+            title="Draft recovery needs attention"
+            description={builder.draftParseNotice}
+            discardLabel={t("discard")}
             onDiscard={builder.discardRecoverableDraft}
           />
         ) : null}

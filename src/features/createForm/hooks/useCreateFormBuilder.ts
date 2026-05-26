@@ -24,13 +24,13 @@ import type {
   FieldType,
   FieldsStepValidationResult,
   FormBuilderValues,
-  FormField,
   FormSection,
   IntentDraft,
   MobileBuilderPane,
   ProjectOption,
   ResponseDeadlinePreset,
   Translate,
+  DraftParseStatus,
 } from "../types";
 import type { DraftSaveState } from "../types";
 import {
@@ -39,6 +39,8 @@ import {
   CREATE_FORM_GUEST_DRAFT_STORAGE_KEY,
   createField,
   createSection,
+  parseStoredCreateFormDraft,
+  type ParsedCreateFormDraft,
   serializeDraft,
 } from "../utils";
 
@@ -106,6 +108,8 @@ export function useCreateFormBuilder({
   const [lastSavedSnapshot, setLastSavedSnapshot] = useState(initialDraftSnapshot);
   const [draftSaveState, setDraftSaveState] = useState<DraftSaveState>("idle");
   const [hasRecoverableDraft, setHasRecoverableDraft] = useState(false);
+  const [draftParseStatus, setDraftParseStatus] = useState<DraftParseStatus>("idle");
+  const [draftParseNotice, setDraftParseNotice] = useState("");
   const [activeFieldId, setActiveFieldId] = useState(initialFields[0]?.id ?? "");
   const [draggedFieldId, setDraggedFieldId] = useState<string | null>(null);
   const [dragOverFieldId, setDragOverFieldId] = useState<string | null>(null);
@@ -188,6 +192,8 @@ export function useCreateFormBuilder({
     setLastSavedSnapshot(initialDraftSnapshot);
     setDraftSaveState("idle");
     setHasRecoverableDraft(false);
+    setDraftParseStatus("idle");
+    setDraftParseNotice("");
     setActiveFieldId(nextFields[0]?.id ?? "");
     setDraggedFieldId(null);
     setDragOverFieldId(null);
@@ -210,6 +216,8 @@ export function useCreateFormBuilder({
     hasLoadedDraftRef.current = false;
     setDraftSaveState("idle");
     setHasRecoverableDraft(false);
+    setDraftParseStatus("idle");
+    setDraftParseNotice("");
   }, [mode]);
 
   const seedGuestDraftFromIntent = useCallback(() => {
@@ -243,32 +251,14 @@ export function useCreateFormBuilder({
     setPendingFocusFieldId(nextFields[0]?.id ?? "");
   }, [draftSeed?.idea, draftSeed?.templateKey, initialTemplate.key, language]);
 
-  function applyStoredDraft(rawDraft: string) {
-    const parsedDraft = JSON.parse(rawDraft) as {
-      selectedTemplateKey?: string;
-      title?: string;
-      description?: string;
-      headerImage?: Partial<FormBuilderValues["headerImage"]>;
-      headerLogo?: Partial<FormBuilderValues["headerLogo"]>;
-      fields?: FormField[];
-      sections?: FormSection[];
-      purpose?: FormBuilderValues["purpose"];
-      visibility?: FormBuilderValues["visibility"];
-      identityPolicy?: FormBuilderValues["identityPolicy"];
-      locationRequirement?: FormBuilderValues["locationRequirement"];
-      encryptSubmissions?: boolean;
-      responseDeadlinePreset?: ResponseDeadlinePreset;
-      responseDeadlineCustomAt?: string;
-      currentStep?: BuilderStepKey;
-      selectedProjectId?: string;
-      projectState?: string;
-    };
+  function applyStoredDraft(parsedDraft: ParsedCreateFormDraft) {
     if (!Array.isArray(parsedDraft.fields) || parsedDraft.fields.length === 0) {
-      window.localStorage.removeItem(draftStorageKey);
       setHasRecoverableDraft(false);
+      setDraftParseStatus("invalid");
+      setDraftParseNotice("We found local draft data, but it is incomplete. DeepSignal kept it untouched so you can continue safely.");
       return;
     }
-      setSelectedTemplateKey(parsedDraft.selectedTemplateKey ?? initialTemplate.key);
+    setSelectedTemplateKey(parsedDraft.selectedTemplateKey ?? initialTemplate.key);
     setTitle(typeof parsedDraft.title === "string" ? parsedDraft.title : initialTemplate.title);
     setDescription(typeof parsedDraft.description === "string" ? parsedDraft.description : initialTemplate.description);
     setHeaderImage({
@@ -310,6 +300,8 @@ export function useCreateFormBuilder({
     setPendingFocusFieldId(parsedDraft.fields[0]?.id ?? "");
     setDraftSaveState("restored");
     setHasRecoverableDraft(false);
+    setDraftParseStatus("available");
+    setDraftParseNotice("");
   }
 
   useEffect(() => {
@@ -325,15 +317,32 @@ export function useCreateFormBuilder({
       }
       const rawDraft = window.localStorage.getItem(draftStorageKey);
       if (!rawDraft) {
+        setDraftParseStatus("idle");
+        setDraftParseNotice("");
         if (isGuestDraftMode && startExperience !== "mirror") {
           seedGuestDraftFromIntent();
         }
         return;
       }
-      setHasRecoverableDraft(true);
+      const parsed = parseStoredCreateFormDraft(rawDraft);
+      if (parsed.status === "valid") {
+        setHasRecoverableDraft(true);
+        setDraftParseStatus("available");
+        setDraftParseNotice("");
+        return;
+      }
+      setHasRecoverableDraft(false);
+      setDraftParseStatus("invalid");
+      setDraftParseNotice(
+        "We found a local Create Signal draft, but it could not be restored safely. The saved data is still preserved until you discard it.",
+      );
     } catch (error) {
       console.warn("Failed to restore create form draft.", error);
-      window.localStorage.removeItem(draftStorageKey);
+      setHasRecoverableDraft(false);
+      setDraftParseStatus("invalid");
+      setDraftParseNotice(
+        "DeepSignal could not inspect the local draft right now. Your fallback data was left in place, and you can keep working safely.",
+      );
     }
   }, [draftSeed?.idea, draftSeed?.templateKey, draftStorageKey, freshStartToken, isGuestDraftMode, resetBuilderState, seedGuestDraftFromIntent, startExperience]);
 
@@ -423,6 +432,8 @@ export function useCreateFormBuilder({
       };
       window.localStorage.setItem(draftStorageKey, JSON.stringify(payload));
       setDraftSaveState("saved");
+      setDraftParseStatus("available");
+      setDraftParseNotice("");
     }, 500);
     return () => window.clearTimeout(timeoutId);
   }, [
@@ -794,34 +805,52 @@ export function useCreateFormBuilder({
     window.localStorage.removeItem(draftStorageKey);
     setDraftSaveState("idle");
     setHasRecoverableDraft(false);
+    setDraftParseStatus("idle");
+    setDraftParseNotice("");
   }
 
   function restoreRecoverableDraft() {
     const rawDraft = window.localStorage.getItem(draftStorageKey);
     if (!rawDraft) {
       setHasRecoverableDraft(false);
+      setDraftParseStatus("idle");
+      setDraftParseNotice("");
       if (isGuestDraftMode) {
         seedGuestDraftFromIntent();
       }
       return;
     }
-    try {
-      applyStoredDraft(rawDraft);
-    } catch (error) {
-      console.warn("Failed to restore create form draft.", error);
-      window.localStorage.removeItem(draftStorageKey);
-      setHasRecoverableDraft(false);
+    const parsed = parseStoredCreateFormDraft(rawDraft);
+    if (parsed.status === "valid") {
+      applyStoredDraft(parsed.draft);
+      return;
     }
+    console.warn("Failed to restore create form draft.", parsed.reason);
+    setHasRecoverableDraft(false);
+    setDraftParseStatus("invalid");
+    setDraftParseNotice(
+      "This draft could not be restored into the builder, but it is still preserved locally. You can keep editing or discard the broken draft explicitly.",
+    );
   }
 
   function discardRecoverableDraft() {
     window.localStorage.removeItem(draftStorageKey);
     setHasRecoverableDraft(false);
+    setDraftParseStatus("idle");
+    setDraftParseNotice("");
     if (isGuestDraftMode) {
       seedGuestDraftFromIntent();
     } else {
       resetBuilderState();
     }
+  }
+
+  function clearDraftParseNotice() {
+    if (draftParseStatus !== "invalid") {
+      return;
+    }
+    setDraftParseStatus("idle");
+    setDraftParseNotice("");
   }
 
   const values: FormBuilderValues = {
@@ -856,6 +885,8 @@ export function useCreateFormBuilder({
     draftSnapshot,
     draftSaveState,
     hasRecoverableDraft,
+    draftParseStatus,
+    draftParseNotice,
     isDirty,
     hasValidTitle,
     hasQuestions,
@@ -898,5 +929,6 @@ export function useCreateFormBuilder({
     markSaved,
     restoreRecoverableDraft,
     discardRecoverableDraft,
+    clearDraftParseNotice,
   };
 }

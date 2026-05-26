@@ -3,12 +3,19 @@ import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { AppShell } from "./components/AppShell";
 import { WalletSurface } from "./components/WalletSurface";
 import { WalrusRuntimeSurface } from "./components/WalrusRuntimeSurface";
+import {
+  CREATE_FORM_DRAFT_STORAGE_KEY,
+  CREATE_FORM_GUEST_DRAFT_STORAGE_KEY,
+  parseStoredCreateFormDraft,
+} from "./features/createForm/utils";
 import { isChunkLoadFailure, recoverFromChunkLoadFailure } from "./lib/chunkLoadRecovery";
 import { retryLazyImport } from "./lib/lazyRetry";
 import { copyPerfDiagnostics, endPerf, formatPerfDiagnostics } from "./lib/perf";
+import { getSelectedProjectId } from "./lib/projectRegistry";
 import { resetLocalEnvironment } from "./lib/resetEnvironment";
 import { REQUIRE_GLOBAL_WALRUS_RUNTIME } from "./lib/runtimeFlags";
 import { RpcInfrastructureProvider } from "./RpcInfrastructureProvider";
+import { getStorageRuntimeStatus } from "./storage/storageFactory";
 
 const AccessManagementPage = lazy(() =>
   retryLazyImport(() => import("./pages/AccessManagementPage"), "route-access-management").then((module) => ({
@@ -85,6 +92,69 @@ function WithWalrusRuntime({ children }: { children: ReactNode }) {
 
 const WORKSPACE_RECOVERY_TIMEOUT_MS = 3200;
 
+type RouteDiagnostics = {
+  routePath: string;
+  selectedProjectId: string;
+  walletConnectedState: "connected" | "disconnected" | "unknown";
+  storageMode: string;
+  localDraftParseStatus: "missing" | "valid" | "invalid" | "unavailable";
+};
+
+function readPersistedWalletConnectionState(): RouteDiagnostics["walletConnectedState"] {
+  if (typeof window === "undefined") {
+    return "unknown";
+  }
+
+  try {
+    for (let index = 0; index < window.localStorage.length; index += 1) {
+      const key = window.localStorage.key(index);
+      if (!key || !key.toLowerCase().includes("wallet")) {
+        continue;
+      }
+      const value = window.localStorage.getItem(key);
+      if (!value) {
+        continue;
+      }
+      const lowerValue = value.toLowerCase();
+      if (lowerValue.includes("connected") || lowerValue.includes("currentwallet") || lowerValue.includes("accounts")) {
+        return "connected";
+      }
+    }
+    return "disconnected";
+  } catch {
+    return "unknown";
+  }
+}
+
+function readCreateDraftParseStatus() {
+  if (typeof window === "undefined") {
+    return "unavailable" as const;
+  }
+
+  try {
+    const adminDraft = window.localStorage.getItem(CREATE_FORM_DRAFT_STORAGE_KEY);
+    const guestDraft = window.localStorage.getItem(CREATE_FORM_GUEST_DRAFT_STORAGE_KEY);
+    const rawDraft = adminDraft ?? guestDraft;
+    if (!rawDraft) {
+      return "missing" as const;
+    }
+    return parseStoredCreateFormDraft(rawDraft).status === "valid" ? "valid" : "invalid";
+  } catch {
+    return "unavailable" as const;
+  }
+}
+
+function collectRouteDiagnostics(routePath: string): RouteDiagnostics {
+  const storageRuntime = getStorageRuntimeStatus();
+  return {
+    routePath,
+    selectedProjectId: getSelectedProjectId(),
+    walletConnectedState: readPersistedWalletConnectionState(),
+    storageMode: storageRuntime.mode,
+    localDraftParseStatus: readCreateDraftParseStatus(),
+  };
+}
+
 function WorkspaceRestoreFallback({ onRetry }: { onRetry?: () => void }) {
   const [recoveryVisible, setRecoveryVisible] = useState(false);
   const [resettingState, setResettingState] = useState(false);
@@ -147,7 +217,7 @@ function WorkspaceRestoreFallback({ onRetry }: { onRetry?: () => void }) {
 }
 
 class RouteErrorBoundary extends Component<
-  { children: ReactNode; resetKey: string },
+  { children: ReactNode; resetKey: string; routePath: string },
   { error: Error | null }
 > {
   state = { error: null };
@@ -156,12 +226,16 @@ class RouteErrorBoundary extends Component<
     return { error };
   }
 
-  componentDidCatch(error: Error) {
-    console.error("DeepSignal route failed to render.", error);
+  componentDidCatch(error: Error, errorInfo: { componentStack: string }) {
+    console.error("DeepSignal route failed to render.", {
+      error,
+      routeDiagnostics: collectRouteDiagnostics(this.props.routePath),
+      componentStack: errorInfo.componentStack,
+    });
     recoverFromChunkLoadFailure(error);
   }
 
-  componentDidUpdate(prevProps: Readonly<{ children: ReactNode; resetKey: string }>) {
+  componentDidUpdate(prevProps: Readonly<{ children: ReactNode; resetKey: string; routePath: string }>) {
     if (prevProps.resetKey !== this.props.resetKey && this.state.error) {
       this.setState({ error: null });
     }
@@ -288,7 +362,7 @@ export default function App() {
 
   const routeSurface = (
     <AppShell walletAvailable={routeNeedsWalletSurface} chrome={routeUsesPublicChrome ? "public" : "full"}>
-      <RouteErrorBoundary resetKey={location.key}>
+      <RouteErrorBoundary resetKey={location.key} routePath={`${location.pathname}${location.search}${location.hash}`}>
         <Suspense fallback={<WorkspaceRestoreFallback />}>
           <InitialBootReady onReady={() => setInitialRouteReady(true)}>
             <Routes>

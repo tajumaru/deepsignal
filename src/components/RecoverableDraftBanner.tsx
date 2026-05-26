@@ -1,10 +1,10 @@
 interface RecoverableDraftBannerProps {
   title: string;
   description?: string;
-  restoreLabel: string;
-  discardLabel: string;
-  onRestore: () => void;
-  onDiscard: () => void;
+  restoreLabel?: string;
+  discardLabel?: string;
+  onRestore?: () => void;
+  onDiscard?: () => void;
 }
 
 export function RecoverableDraftBanner({
@@ -25,12 +25,16 @@ export function RecoverableDraftBanner({
         </div>
       </div>
       <div className="inline-actions">
-        <button type="button" className="primary-button" onClick={onRestore}>
-          {restoreLabel}
-        </button>
-        <button type="button" className="ghost-button" onClick={onDiscard}>
-          {discardLabel}
-        </button>
+        {restoreLabel && onRestore ? (
+          <button type="button" className="primary-button" onClick={onRestore}>
+            {restoreLabel}
+          </button>
+        ) : null}
+        {discardLabel && onDiscard ? (
+          <button type="button" className="ghost-button" onClick={onDiscard}>
+            {discardLabel}
+          </button>
+        ) : null}
       </div>
     </section>
   );

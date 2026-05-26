@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
-  INSIGHTS_FIXTURE_FORM_ID,
+  INSIGHTS_FIXTURE_ENTRY_FORM_ID,
+  INSIGHTS_FIXTURE_FORM_IDS,
   INSIGHTS_FIXTURE_PROJECT_ID,
   buildInsightsFixtureSubmissions,
   clearInsightsFixtureWorkspace,
@@ -18,28 +19,28 @@ const FIXTURE_MODES: Array<{
   expected: string;
 }> = [
   {
-    id: "stable",
-    title: "Stable Signal",
-    description: "Safe answers cluster around Tokyo / Shibuya for nominal state confirmation.",
-    expected: "System stable / Pulse nominal",
+    id: "tokyo_earthquake",
+    title: "Tokyo Earthquake Demo",
+    description: "High-urgency disaster signals with location clustering, contradictory safety states, and missing response risk.",
+    expected: "Urgency / location cluster / response gap",
   },
   {
-    id: "urgent_spike",
-    title: "Urgent Spike Signal",
-    description: "Urgent and need-heavy Shinjuku cluster for anomaly and spike verification.",
-    expected: "Anomaly / high priority / response spike",
+    id: "internal_risk",
+    title: "Internal Risk Demo",
+    description: "Emotional internal reports with escalation pressure, contradictory evidence, and affected-team clustering.",
+    expected: "Escalation risk / emotional tone / team cluster",
   },
   {
-    id: "silence",
-    title: "Silence Signal",
-    description: "Sparse Setagaya follow-up pattern for estimated silence and quiet-zone checks.",
-    expected: "Estimated silence / quiet zone / low activity",
+    id: "product_feedback",
+    title: "Product Feedback Demo",
+    description: "Repeated friction, strong sentiment, one positive momentum signal, and outlier behavior for AI analysis pickup.",
+    expected: "Friction cluster / anomaly / product opportunity",
   },
   {
     id: "combined",
-    title: "Combined Observatory",
-    description: "Loads stable, urgent spike, and silence clusters together for full Insights validation.",
-    expected: "All major Insights sections become visibly active",
+    title: "Combined Analysis Workspace",
+    description: "Loads all three analysis demos together so the reviewer can compare signalType and analystType lenses in one workspace.",
+    expected: "Signal Intelligence workspace in one pass",
   },
 ];
 
@@ -69,10 +70,10 @@ export function InsightsFixturePage() {
       const result = await seedInsightsFixtureWorkspace(mode);
       setFixtureMeta(result);
       setStatus(
-        `Fixture ready: ${result.mode} seeded with ${result.submissionCount} local signals. Open Insights in /dashboard to verify the state view.`,
+        `Fixture ready: ${result.mode} seeded with ${result.submissionCount} local signals across ${result.formIds.length} forms. Open Insights in /dashboard to verify the analysis view.`,
       );
       if (autoOpenInsights) {
-        navigate(`/dashboard?tab=insights&scope=all&form=${encodeURIComponent(INSIGHTS_FIXTURE_FORM_ID)}`);
+        navigate("/dashboard?tab=insights&scope=all");
       }
     } catch (error) {
       setStatus(
@@ -110,12 +111,12 @@ export function InsightsFixturePage() {
         <h1>Insights Signal Fixture Seeder</h1>
         <p className="lede">
           Browser-local fixture seeding for validating State Overview, Activity Wave, Anomaly Detection,
-          Silence Detection, Cluster Analysis, and Response Velocity without touching Walrus, Sui, or Seal.
+          signal-specific analysis summaries, and intelligence-first signal cards without touching Walrus, Sui, or Seal.
         </p>
         <div className="workspace-hero-meta">
           <span className="workspace-meta-item">Storage: localStorage only</span>
           <span className="workspace-meta-item">Project: {INSIGHTS_FIXTURE_PROJECT_ID}</span>
-          <span className="workspace-meta-item">Form: {INSIGHTS_FIXTURE_FORM_ID}</span>
+          <span className="workspace-meta-item">Forms: {INSIGHTS_FIXTURE_FORM_IDS.length}</span>
           <span className="workspace-meta-item">
             Current mode: {fixtureMeta?.mode ?? "none"}
           </span>
@@ -171,16 +172,14 @@ export function InsightsFixturePage() {
             <p className="eyebrow">Current fixture</p>
             <h2>Latest seeded mode</h2>
           </div>
-          <span className="signal-chip signal-chip-soft">
-            {fixtureMeta ? "Active" : "Idle"}
-          </span>
+          <span className="signal-chip signal-chip-soft">{fixtureMeta ? "Active" : "Idle"}</span>
         </div>
         {fixtureMeta ? (
           <div className="workspace-monitor-empty">
             <strong>{fixtureMeta.mode}</strong>
             <span>{fixtureMeta.submissionCount} local signals seeded</span>
             <p>
-              Seeded at {new Date(fixtureMeta.seededAt).toLocaleString()} for form {fixtureMeta.formId}.
+              Seeded at {new Date(fixtureMeta.seededAt).toLocaleString()} across {fixtureMeta.formIds.join(", ")}.
             </p>
           </div>
         ) : (
@@ -215,18 +214,18 @@ export function InsightsFixturePage() {
           </button>
           <Link
             className="ghost-button"
-            to={`/dashboard?tab=insights&scope=all&form=${encodeURIComponent(INSIGHTS_FIXTURE_FORM_ID)}`}
+            to="/dashboard?tab=insights&scope=all"
           >
-            Open isolated Insights
+            Open analysis workspace
           </Link>
           <Link
             className="ghost-button"
-            to={`/dashboard?tab=review&scope=all&form=${encodeURIComponent(INSIGHTS_FIXTURE_FORM_ID)}`}
+            to="/dashboard?tab=review&scope=all"
           >
-            Open isolated Inbox
+            Open signal inbox
           </Link>
-          <Link className="ghost-button" to={`/dashboard/forms/${INSIGHTS_FIXTURE_FORM_ID}`}>
-            Open fixture inbox
+          <Link className="ghost-button" to={`/dashboard/forms/${INSIGHTS_FIXTURE_ENTRY_FORM_ID}`}>
+            Open earthquake fixture
           </Link>
         </div>
         <p className="muted">{status}</p>

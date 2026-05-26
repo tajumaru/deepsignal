@@ -22,6 +22,15 @@ interface SignalCardProps {
   persistenceLabel: string | null;
   storageLabel?: string;
   persistenceState: SignalPersistenceState;
+  urgencyScoreLabel: string;
+  signalTypeLabel: string;
+  analystTypeLabel: string;
+  shortSummary: string;
+  evidenceQuote: string;
+  recommendedAction: string;
+  emotionalTone: string;
+  verifiedLabel: string;
+  locationLabel: string | null;
   reviewerHint: ReturnType<typeof getReviewerPresenceText>;
   needsFollowUp: boolean;
   isSelectedSignal: boolean;
@@ -54,6 +63,15 @@ export const SignalCard = forwardRef<HTMLDivElement, SignalCardProps>(function S
     persistenceLabel,
     storageLabel,
     persistenceState,
+    urgencyScoreLabel,
+    signalTypeLabel,
+    analystTypeLabel,
+    shortSummary,
+    evidenceQuote,
+    recommendedAction,
+    emotionalTone,
+    verifiedLabel,
+    locationLabel,
     reviewerHint,
     needsFollowUp,
     isSelectedSignal,
@@ -121,11 +139,20 @@ export const SignalCard = forwardRef<HTMLDivElement, SignalCardProps>(function S
         </span>
       </div>
       <div className="signal-card-secondary-line">
+        <span className={`mailbox-meta-chip priority-${submission.priority}`}>{urgencyScoreLabel}</span>
+        <span className="signal-card-triage">{signalTypeLabel}</span>
+        <span className="signal-card-triage">{analystTypeLabel}</span>
+      </div>
+      <div className="signal-card-secondary-line signal-card-secondary-line-muted">
         <span className={`mailbox-meta-chip priority-${submission.priority}`}>{priorityLabel}</span>
         <span className="signal-card-triage">{triageStatusLabel}</span>
         <span className="signal-card-form">{formTitle}</span>
       </div>
-      <p className={`signal-card-preview ${submission.isEncrypted ? "is-locked" : ""}`}>{preview}</p>
+      <p className={`signal-card-preview ${submission.isEncrypted ? "is-locked" : ""}`}>{shortSummary || preview}</p>
+      <div className="signal-card-intelligence">
+        <p className="signal-card-evidence">Evidence: "{evidenceQuote}"</p>
+        <p className="signal-card-action">Next: {recommendedAction}</p>
+      </div>
       {showCompactStateMeta ? (
         <div className="signal-card-footer">
           <div className="signal-card-mailbox-meta" aria-label={t("signalReviewStateLabel")}>
@@ -165,6 +192,11 @@ export const SignalCard = forwardRef<HTMLDivElement, SignalCardProps>(function S
           ) : null}
         </div>
       ) : null}
+      <div className="signal-card-analysis-meta">
+        <span>{emotionalTone}</span>
+        <span>{verifiedLabel}</span>
+        {locationLabel ? <span>{locationLabel}</span> : null}
+      </div>
       {isPendingSui ? (
         <div className="signal-card-actions">
           <button

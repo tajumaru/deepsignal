@@ -2,6 +2,7 @@ import type { FormSchema } from "../../../types";
 import type {
   AnalysisProfileId,
   AnalysisSignalType,
+  AnalystType,
   AnalysisType,
   SignalSeverity,
 } from "../../../types";
@@ -42,6 +43,7 @@ export interface AnalysisVisualEmphasis {
 export interface ResolvedAnalysisProfile {
   id: AnalysisProfileId;
   signalType: AnalysisSignalType;
+  analystType: AnalystType;
   analysisType: AnalysisType;
   label: string;
   shortLabel: string;
@@ -113,11 +115,20 @@ const signalTypeLabels: Record<AnalysisSignalType, string> = {
   agent_log: "Agent Log",
   operation: "Operation",
   incident: "Incident",
+  internal_report: "Internal Report",
   disaster: "Disaster",
   safety: "Safety",
   governance: "Governance",
   community: "Community",
   generic: "Generic",
+};
+
+const analystTypeLabels: Record<AnalystType, string> = {
+  risk: "Risk",
+  operations: "Operations",
+  product: "Product",
+  community: "Community",
+  executive: "Executive",
 };
 
 const analysisTypeLabels: Record<AnalysisType, string> = {
@@ -146,11 +157,26 @@ const defaultAnalysisTypeBySignalType: Record<AnalysisSignalType, AnalysisType> 
   agent_log: "anomaly",
   operation: "velocity",
   incident: "urgency",
+  internal_report: "risk",
   disaster: "urgency",
   safety: "risk",
   governance: "risk",
   community: "trend",
   generic: "summary",
+};
+
+const defaultAnalystTypeBySignalType: Record<AnalysisSignalType, AnalystType> = {
+  feedback: "product",
+  product_voice: "product",
+  agent_log: "operations",
+  operation: "operations",
+  incident: "risk",
+  internal_report: "risk",
+  disaster: "risk",
+  safety: "risk",
+  governance: "executive",
+  community: "community",
+  generic: "operations",
 };
 
 function clampPercent(value: number) {
@@ -195,10 +221,13 @@ function ratio(count: number, total: number) {
   return (count / total) * 100;
 }
 
-function getFormAnalysisCorpus(form: Pick<FormSchema, "analysisProfileId" | "signalType" | "analysisType" | "purpose" | "title" | "description">) {
+function getFormAnalysisCorpus(
+  form: Pick<FormSchema, "analysisProfileId" | "signalType" | "analystType" | "analysisType" | "purpose" | "title" | "description">,
+) {
   return [
     form.analysisProfileId,
     form.signalType,
+    form.analystType,
     form.analysisType,
     form.title,
     form.description,
@@ -285,6 +314,7 @@ function buildDefaultProfile(context: AnalysisProfileContext): ResolvedAnalysisP
   return {
     id: "general_signal",
     signalType: "generic",
+    analystType: "operations",
     analysisType: "summary",
     label: "General Signal",
     shortLabel: "General",
@@ -387,6 +417,7 @@ function buildCustomerFeedbackProfile(context: AnalysisProfileContext): Resolved
   return {
     id: "customer_feedback",
     signalType: "feedback",
+    analystType: "product",
     analysisType: "sentiment",
     label: "Customer Feedback",
     shortLabel: "Feedback",
@@ -487,6 +518,7 @@ function buildAiAgentLogProfile(context: AnalysisProfileContext): ResolvedAnalys
   return {
     id: "ai_agent_log",
     signalType: "agent_log",
+    analystType: "operations",
     analysisType: "anomaly",
     label: "AI Agent Log",
     shortLabel: "Agent Log",
@@ -590,6 +622,7 @@ function buildIncidentReportProfile(context: AnalysisProfileContext): ResolvedAn
   return {
     id: "incident_report",
     signalType: "incident",
+    analystType: "risk",
     analysisType: "urgency",
     label: "Incident Report",
     shortLabel: "Incident",
@@ -692,6 +725,7 @@ function buildGovernanceSignalProfile(context: AnalysisProfileContext): Resolved
   return {
     id: "governance_signal",
     signalType: "governance",
+    analystType: "executive",
     analysisType: "risk",
     label: "Governance Signal",
     shortLabel: "Governance",
@@ -787,8 +821,8 @@ function buildGovernanceSignalProfile(context: AnalysisProfileContext): Resolved
   };
 }
 
-function resolveSignalTypeForForm(
-  form: Pick<FormSchema, "analysisProfileId" | "signalType" | "analysisType" | "purpose" | "title" | "description">,
+export function resolveSignalTypeForForm(
+  form: Pick<FormSchema, "analysisProfileId" | "signalType" | "analystType" | "analysisType" | "purpose" | "title" | "description">,
 ): AnalysisSignalType {
   if (form.signalType && form.signalType in signalTypeLabels) {
     return form.signalType;
@@ -799,6 +833,9 @@ function resolveSignalTypeForForm(
   }
   if (/feedback|customer|user|nps|csat|support|satisfaction|review/.test(corpus)) {
     return "feedback";
+  }
+  if (/internal report|employee|manager|hr|retaliation|harassment|team lead|leadership/.test(corpus)) {
+    return "internal_report";
   }
   if (/operation|ops|runbook|playbook|workflow health|response play/.test(corpus)) {
     return "operation";
@@ -824,8 +861,8 @@ function resolveSignalTypeForForm(
   return defaultSignalTypeByProfile[resolveAnalysisProfileIdForForm(form)];
 }
 
-function resolveAnalysisTypeForForm(
-  form: Pick<FormSchema, "analysisProfileId" | "signalType" | "analysisType" | "purpose" | "title" | "description">,
+export function resolveAnalysisTypeForForm(
+  form: Pick<FormSchema, "analysisProfileId" | "signalType" | "analystType" | "analysisType" | "purpose" | "title" | "description">,
   signalType?: AnalysisSignalType,
 ): AnalysisType {
   if (form.analysisType && form.analysisType in analysisTypeLabels) {
@@ -859,6 +896,32 @@ function resolveAnalysisTypeForForm(
   return defaultAnalysisTypeBySignalType[signalType ?? resolveSignalTypeForForm(form)];
 }
 
+export function resolveAnalystTypeForForm(
+  form: Pick<FormSchema, "analysisProfileId" | "signalType" | "analystType" | "analysisType" | "purpose" | "title" | "description">,
+  signalType?: AnalysisSignalType,
+): AnalystType {
+  if (form.analystType && form.analystType in analystTypeLabels) {
+    return form.analystType;
+  }
+  const corpus = getFormAnalysisCorpus(form);
+  if (/executive|board|decision|leadership brief|c-suite|impact summary/.test(corpus)) {
+    return "executive";
+  }
+  if (/community|member|volunteer|sentiment|participation/.test(corpus)) {
+    return "community";
+  }
+  if (/product|roadmap|feature|ux|feedback|friction/.test(corpus)) {
+    return "product";
+  }
+  if (/ops|operations|response|playbook|owner|handoff|queue/.test(corpus)) {
+    return "operations";
+  }
+  if (/risk|incident|disaster|internal report|hazard|escalation|breach/.test(corpus)) {
+    return "risk";
+  }
+  return defaultAnalystTypeBySignalType[signalType ?? resolveSignalTypeForForm(form)];
+}
+
 function resolveSignalType(records: SignalRecord[], preferredProfileId?: string | null) {
   const counts = new Map<AnalysisSignalType, number>();
   records.forEach((record) => {
@@ -873,6 +936,15 @@ function resolveSignalType(records: SignalRecord[], preferredProfileId?: string 
     return defaultSignalTypeByProfile[preferredProfileId as AnalysisProfileId];
   }
   return "generic" satisfies AnalysisSignalType;
+}
+
+function resolveAnalystType(records: SignalRecord[], signalType: AnalysisSignalType) {
+  const counts = new Map<AnalystType, number>();
+  records.forEach((record) => {
+    const resolved = resolveAnalystTypeForForm(record.form, resolveSignalTypeForForm(record.form));
+    counts.set(resolved, (counts.get(resolved) ?? 0) + 1);
+  });
+  return [...counts.entries()].sort((left, right) => right[1] - left[1])[0]?.[0] ?? defaultAnalystTypeBySignalType[signalType];
 }
 
 function resolveAnalysisType(records: SignalRecord[], signalType: AnalysisSignalType) {
@@ -930,6 +1002,7 @@ function buildAnalysisLensProfile(
   baseProfile: ResolvedAnalysisProfile,
   context: AnalysisProfileContext,
   signalType: AnalysisSignalType,
+  analystType: AnalystType,
   analysisType: AnalysisType,
 ): ResolvedAnalysisProfile {
   const sentiment = estimateSentiment(context.records);
@@ -1118,9 +1191,35 @@ function buildAnalysisLensProfile(
     evidenceCount = Math.max(1, context.totalSignals);
   }
 
+  if (signalType === "disaster") {
+    priorityCardIds = ["urgent-front", "cluster-front", "spread-front"];
+    keyFinding = `Disaster signals are clustering around ${topCluster?.label ?? "a live incident zone"}, with ${urgentCount} urgent reports and ${context.unreadSignals} unread signals still entering the queue.`;
+    whyItMatters = "In disaster flows, operators need to see safety status, help demand, and silent pockets together before deciding where to send attention.";
+    highlightedAction = "Review the tightest location cluster first, confirm missing responses, then route urgent help requests to a response owner.";
+  } else if (signalType === "internal_report") {
+    keyFinding = `${negativeCount} reports carry escalation or concern language, and ${topCluster?.signalCount ?? 0} signals cluster around the same internal risk theme.`;
+    whyItMatters = "Internal reporting becomes operational when risk theme, emotional tone, and escalation pressure are visible at the same time.";
+    highlightedAction = "Escalate the highest-risk team cluster, capture the dominant emotional tone, and assign one owner before the issue fragments across private threads.";
+  } else if (signalType === "community") {
+    whyItMatters = "Community monitoring works best when mood, participation drift, and positive momentum are visible in one glance instead of separate review widgets.";
+  }
+
+  if (analystType === "executive") {
+    keyFinding = `${context.totalSignals} signals in view. ${urgentCount} high-severity. ${context.anomalyCount} anomaly spikes.`;
+    whyItMatters = "This lens compresses operator noise into impact and decision pressure so a reviewer can explain the situation in under 30 seconds.";
+    highlightedAction = baseProfile.recommendedActions[0]?.title ?? highlightedAction;
+  } else if (analystType === "operations") {
+    whyItMatters = "This lens emphasizes response order, queue movement, and the next operator move instead of passive summary language.";
+  } else if (analystType === "product") {
+    whyItMatters = "This lens highlights friction, repeated requests, and feature opportunity so signals become decision-ready product evidence.";
+  } else if (analystType === "community") {
+    whyItMatters = "This lens favors mood, participation movement, and momentum so operators can react before disengagement spreads.";
+  }
+
   return {
     ...baseProfile,
     signalType,
+    analystType,
     analysisType,
     keyFinding,
     whyItMatters,
@@ -1204,7 +1303,7 @@ export function listAnalysisProfileDefinitions() {
 }
 
 export function resolveAnalysisProfileIdForForm(
-  form: Pick<FormSchema, "analysisProfileId" | "signalType" | "analysisType" | "purpose" | "title" | "description">,
+  form: Pick<FormSchema, "analysisProfileId" | "signalType" | "analystType" | "analysisType" | "purpose" | "title" | "description">,
 ) {
   if (form.analysisProfileId && analysisProfiles[form.analysisProfileId]) {
     return form.analysisProfileId;
@@ -1253,8 +1352,9 @@ export function resolveAnalysisProfile(
     resolveAnalysisProfileIdForForm(context.records[0]?.form ?? { title: "", description: "" }) ??
     "general_signal";
   const signalType = resolveSignalType(context.records, matchedId);
+  const analystType = resolveAnalystType(context.records, signalType);
   const analysisType = resolveAnalysisType(context.records, signalType);
-  return buildAnalysisLensProfile(analysisProfiles[matchedId].resolve(context), context, signalType, analysisType);
+  return buildAnalysisLensProfile(analysisProfiles[matchedId].resolve(context), context, signalType, analystType, analysisType);
 }
 
 export function getSignalProfileId(record: SignalRecord) {
@@ -1271,6 +1371,10 @@ export function getAnalysisProfileShortLabel(profileId: AnalysisProfileId) {
 
 export function getAnalysisSignalTypeLabel(signalType: AnalysisSignalType) {
   return signalTypeLabels[signalType] ?? signalTypeLabels.generic;
+}
+
+export function getAnalystTypeLabel(analystType: AnalystType) {
+  return analystTypeLabels[analystType] ?? analystTypeLabels.operations;
 }
 
 export function getAnalysisTypeLabel(analysisType: AnalysisType) {

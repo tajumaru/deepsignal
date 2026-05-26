@@ -44,6 +44,10 @@ vi.mock("./pages/AdminDashboardPage", () => ({
   AdminDashboardPage: () => <h1>Admin Route</h1>,
 }));
 
+vi.mock("./pages/FormBuilderPage", () => ({
+  FormBuilderPage: () => <h1>Create Signal Route</h1>,
+}));
+
 describe("App routing", () => {
   afterEach(() => {
     document.body.innerHTML = "";
@@ -81,6 +85,19 @@ describe("App routing", () => {
 
     await waitFor(() => expect(screen.getByRole("heading", { name: "Admin Route" })).toBeInTheDocument());
     expect(screen.getByTestId("app-shell")).toHaveAttribute("data-chrome", "full");
+  });
+
+  it("renders the Create Signal route inside the wallet-enabled workspace chrome", async () => {
+    render(
+      <MemoryRouter initialEntries={["/create"]}>
+        <App />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Create Signal Route" })).toBeInTheDocument());
+    expect(screen.getByTestId("app-shell")).toHaveAttribute("data-chrome", "full");
+    expect(screen.getByTestId("app-shell")).toHaveAttribute("data-wallet-available", "yes");
+    expect(walletSurfaceSpy).toHaveBeenCalled();
   });
 
   it("keeps the home route fail-open without waiting for wallet providers", async () => {

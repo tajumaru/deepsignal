@@ -8,12 +8,14 @@ import type { SignalSeverity } from "../../../types";
 import {
   getAnalysisProfileLabel,
   getAnalysisProfileShortLabel,
+  getAnalystTypeLabel,
   getAnalysisSignalTypeLabel,
   getAnalysisTypeLabel,
   getSignalProfileId,
   resolveAnalysisProfile,
   resolveProfileDistribution,
 } from "./analysisProfiles";
+import { buildWorkspaceAnalysisExperience } from "./signalIntelligence";
 import type { SignalRecord } from "../hooks/useSignalInboxData";
 
 interface UnlockedSignalSummary {
@@ -739,6 +741,7 @@ function exportInsightsSnapshotJson(input: {
   profile: {
     id: string;
     signalType: string;
+    analystType: string;
     analysisType: string;
     label: string;
     description: string;
@@ -806,6 +809,7 @@ function exportInsightsSnapshotJson(input: {
     exportedAt,
     language: input.language,
     signalType: input.profile.signalType,
+    analystType: input.profile.analystType,
     analysisType: input.profile.analysisType,
     analysisProfile: input.profile,
     profileDistribution: input.profileDistribution,
@@ -1023,6 +1027,13 @@ export function WorkspaceInsights({
     }))
     .filter((entry) => entry.signalCount > 0);
   const clusterMapNodes = getClusterMapNodes(clusters);
+  const analysisExperience = buildWorkspaceAnalysisExperience({
+    records,
+    profile: analysisProfile,
+    encryptedWaitingCount: signalSummary.encryptedWaitingCount,
+    anomalyCount,
+    topClusterLabel: primaryCluster?.label ?? "No dominant cluster yet",
+  });
 
   return (
     <section
@@ -1046,6 +1057,7 @@ export function WorkspaceInsights({
                 profile: {
                   id: analysisProfile.id,
                   signalType: analysisProfile.signalType,
+                  analystType: analysisProfile.analystType,
                   analysisType: analysisProfile.analysisType,
                   label: analysisProfile.label,
                   description: analysisProfile.description,
@@ -1102,6 +1114,9 @@ export function WorkspaceInsights({
             Signal Type: {getAnalysisSignalTypeLabel(analysisProfile.signalType)}
           </span>
           <span className="signal-chip signal-chip-soft">
+            Analyst Type: {getAnalystTypeLabel(analysisProfile.analystType)}
+          </span>
+          <span className="signal-chip signal-chip-soft">
             Analysis Type: {getAnalysisTypeLabel(analysisProfile.analysisType)}
           </span>
           <span className="signal-chip signal-chip-soft">
@@ -1123,20 +1138,24 @@ export function WorkspaceInsights({
         ) : null}
         <article className="workspace-analysis-summary-card">
           <div className="workspace-analysis-summary-grid">
-            <div>
-              <span>Key Finding</span>
-              <strong>{analysisProfile.keyFinding}</strong>
-            </div>
-            <div>
-              <span>Why it matters</span>
-              <p>{analysisProfile.whyItMatters}</p>
-            </div>
-            <div>
-              <span>Recommended Action</span>
-              <p>{analysisProfile.highlightedAction}</p>
-            </div>
+            {analysisExperience.summaryEntries.map((entry) => (
+              <div key={entry.id}>
+                <span>{entry.label}</span>
+                <strong>{entry.value}</strong>
+                {entry.detail ? <p>{entry.detail}</p> : null}
+              </div>
+            ))}
           </div>
         </article>
+        <div className="workspace-insights-grid">
+          {analysisExperience.overviewCards.map((card) => (
+            <article key={card.id} className={`workspace-insight-card is-${card.tone ?? "cluster"}`}>
+              <span>{card.label}</span>
+              <strong>{card.value}</strong>
+              <p>{card.detail}</p>
+            </article>
+          ))}
+        </div>
         <div className="workspace-insights-grid">
           {analysisProfile.metrics.map((metric) => (
             <article key={metric.id} className={`workspace-insight-card is-${metric.tone ?? "cluster"}`}>
@@ -1169,6 +1188,13 @@ export function WorkspaceInsights({
             <p className="eyebrow">Visual emphasis</p>
             <h3>{analysisProfile.emphasis.headline}</h3>
             <p>{analysisProfile.emphasis.body}</p>
+            {analysisProfile.analystType === "executive" ? (
+              <div className="workspace-executive-lines">
+                {analysisExperience.executiveLines.map((line) => (
+                  <small key={line}>{line}</small>
+                ))}
+              </div>
+            ) : null}
           </div>
           <div className="workspace-signal-readout">
             <span>Active profile</span>
@@ -1182,6 +1208,7 @@ export function WorkspaceInsights({
           <div className="workspace-intelligence-meta">
             <span>Type: {analysisProfile.label}</span>
             <span>Signal type: {getAnalysisSignalTypeLabel(analysisProfile.signalType)}</span>
+            <span>Analyst type: {getAnalystTypeLabel(analysisProfile.analystType)}</span>
             <span>Analysis type: {getAnalysisTypeLabel(analysisProfile.analysisType)}</span>
             <span>Top cluster: {primaryCluster?.label ?? "No dominant cluster yet"}</span>
             <span>{t("workspaceEncryptedCoverage", { count: encryptedSignals, total: totalSignals })}</span>

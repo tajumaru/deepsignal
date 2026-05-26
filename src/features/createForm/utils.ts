@@ -19,6 +19,68 @@ import type {
 export const CREATE_FORM_DRAFT_STORAGE_KEY = "deepsignal:create-form-draft:v1";
 export const CREATE_FORM_GUEST_DRAFT_STORAGE_KEY = "deepsignal:create-form-guest-draft:v1";
 
+export interface ParsedCreateFormDraft {
+  selectedTemplateKey?: string;
+  title?: string;
+  description?: string;
+  headerImage?: Partial<FormHeaderImage> & {
+    source?: "url" | "upload";
+    fileName?: string;
+  };
+  headerLogo?: Partial<FormHeaderLogo> & {
+    source?: "url" | "upload";
+    fileName?: string;
+  };
+  fields?: FormField[];
+  sections?: FormSection[];
+  purpose?: FormPurpose;
+  visibility?: FormSchema["visibility"];
+  identityPolicy?: FormIdentityPolicy;
+  locationRequirement?: FormLocationRequirement;
+  encryptSubmissions?: boolean;
+  responseDeadlinePreset?: ResponseDeadlinePreset;
+  responseDeadlineCustomAt?: string;
+  currentStep?: "template" | "info" | "fields" | "publish";
+  selectedProjectId?: string;
+  projectState?: string;
+}
+
+export type StoredCreateFormDraftParseResult =
+  | { status: "valid"; draft: ParsedCreateFormDraft }
+  | { status: "invalid"; reason: string };
+
+export function parseStoredCreateFormDraft(rawDraft: string): StoredCreateFormDraftParseResult {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(rawDraft);
+  } catch {
+    return {
+      status: "invalid",
+      reason: "Draft JSON could not be parsed.",
+    };
+  }
+
+  if (!parsed || typeof parsed !== "object") {
+    return {
+      status: "invalid",
+      reason: "Draft payload is not an object.",
+    };
+  }
+
+  const draft = parsed as ParsedCreateFormDraft;
+  if (!Array.isArray(draft.fields) || draft.fields.length === 0) {
+    return {
+      status: "invalid",
+      reason: "Draft payload does not contain any fields.",
+    };
+  }
+
+  return {
+    status: "valid",
+    draft,
+  };
+}
+
 export function wait(ms: number) {
   return new Promise((resolve) => window.setTimeout(resolve, ms));
 }

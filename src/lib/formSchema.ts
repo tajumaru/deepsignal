@@ -6,6 +6,7 @@ import { normalizeLogicGroup, sanitizeConditionalLogicFields } from "../utils/fo
 import type {
   AnalysisProfileId,
   AnalysisSignalType,
+  AnalystType,
   AnalysisType,
   FormField,
   FormIdentityPolicy,
@@ -38,12 +39,23 @@ function normalizeSignalType(signalType: unknown): AnalysisSignalType | undefine
     signalType === "agent_log" ||
     signalType === "operation" ||
     signalType === "incident" ||
+    signalType === "internal_report" ||
     signalType === "disaster" ||
     signalType === "safety" ||
     signalType === "governance" ||
     signalType === "community" ||
     signalType === "generic"
     ? signalType
+    : undefined;
+}
+
+function normalizeAnalystType(analystType: unknown): AnalystType | undefined {
+  return analystType === "risk" ||
+    analystType === "operations" ||
+    analystType === "product" ||
+    analystType === "community" ||
+    analystType === "executive"
+    ? analystType
     : undefined;
 }
 
@@ -114,6 +126,7 @@ export function normalizeForm(raw: FormSchema | (Record<string, unknown> & { id:
     purpose: normalizeFormPurpose(raw.purpose),
     analysisProfileId: normalizeAnalysisProfileId(raw.analysisProfileId),
     signalType: normalizeSignalType(raw.signalType),
+    analystType: normalizeAnalystType(raw.analystType),
     analysisType: normalizeAnalysisType(raw.analysisType),
     visibility,
     identityPolicy: normalizeFormIdentityPolicy(raw.identityPolicy),

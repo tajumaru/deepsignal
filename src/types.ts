@@ -29,11 +29,18 @@ export type AnalysisSignalType =
   | "agent_log"
   | "operation"
   | "incident"
+  | "internal_report"
   | "disaster"
   | "safety"
   | "governance"
   | "community"
   | "generic";
+export type AnalystType =
+  | "risk"
+  | "operations"
+  | "product"
+  | "community"
+  | "executive";
 export type AnalysisType =
   | "summary"
   | "risk"
@@ -139,6 +146,7 @@ export interface FormSchema {
   purpose?: FormPurpose;
   analysisProfileId?: AnalysisProfileId;
   signalType?: AnalysisSignalType;
+  analystType?: AnalystType;
   analysisType?: AnalysisType;
   visibility?: FormVisibility;
   identityPolicy?: FormIdentityPolicy;
