@@ -17,6 +17,7 @@ import {
   removeRecentProject,
   saveRecentProject,
   setSelectedProjectId,
+  type ProjectSummary,
 } from "../../../lib/projectRegistry";
 import { useProjectRegistry } from "../../../hooks/useProjectRegistry";
 import type { CapabilityProfile } from "../../../hooks/useAccessControl";
@@ -36,12 +37,12 @@ export function useProjectWorkspace({
   loadConsole,
 }: UseProjectWorkspaceArgs) {
   const suiClient = useSuiClient();
-  const { projects, refetch: refetchProjects } = useProjectRegistry(accountAddress);
+  const { projects, refetch: refetchProjects, ownedProjectCaps } = useProjectRegistry(accountAddress);
   const createProjectTx = useSignAndExecuteTransaction();
   const deleteProjectTx = useSignAndExecuteTransaction();
   const deleteOnchainFormTx = useSignAndExecuteTransaction();
   const [selectedProjectId, setSelectedProjectIdState] = useState(() => getSelectedProjectId());
-  const [hydratedSelectedProject, setHydratedSelectedProject] = useState<ReturnType<typeof parseProjectSummary> | null>(null);
+  const [hydratedSelectedProject, setHydratedSelectedProject] = useState<ProjectSummary | null>(null);
   const [manualProjectId, setManualProjectId] = useState("");
   const [projectCreateName, setProjectCreateName] = useState("");
   const [projectState, setProjectState] = useState("");
@@ -55,20 +56,34 @@ export function useProjectWorkspace({
   const visibleProjects = hasAdminAccess ? projects : [];
   const visibleSelectedProjectId = hasAdminAccess ? selectedProjectId : "";
   const cachedSelectedProject = visibleProjects.find((project) => project.objectId === visibleSelectedProjectId) ?? null;
+  const ownerCapIdByProjectId = useMemo(
+    () => new Map(ownedProjectCaps.map((cap) => [cap.projectId, cap.objectId])),
+    [ownedProjectCaps],
+  );
   const selectedProject = useMemo(() => {
     if (!visibleSelectedProjectId) {
       return null;
     }
     if (hydratedSelectedProject?.objectId === visibleSelectedProjectId) {
+      const ownedOwnerCapId =
+        cachedSelectedProject?.ownedOwnerCapId ??
+        hydratedSelectedProject.ownedOwnerCapId ??
+        ownerCapIdByProjectId.get(hydratedSelectedProject.objectId);
       return {
-        ...(cachedSelectedProject ?? {}),
         ...hydratedSelectedProject,
-        ownedOwnerCapId: cachedSelectedProject?.ownedOwnerCapId,
+        ...(cachedSelectedProject ?? {}),
+        ownedOwnerCapId,
       };
     }
-    return cachedSelectedProject;
-  }, [cachedSelectedProject, hydratedSelectedProject, visibleSelectedProjectId]);
-  const projectMemberCount = selectedProject ? selectedProject.admins.length + 1 : 0;
+    if (cachedSelectedProject) {
+      return {
+        ...cachedSelectedProject,
+        ownedOwnerCapId: cachedSelectedProject.ownedOwnerCapId ?? ownerCapIdByProjectId.get(cachedSelectedProject.objectId),
+      };
+    }
+    return null;
+  }, [cachedSelectedProject, hydratedSelectedProject, ownerCapIdByProjectId, visibleSelectedProjectId]);
+  const projectMemberCount = selectedProject ? selectedProject.admins.length + selectedProject.reviewers.length + 1 : 0;
   const localProjectFormsCount = useMemo(
     () => forms.filter((form) => form.projectId === selectedProject?.objectId).length,
     [forms, selectedProject?.objectId],
@@ -110,7 +125,7 @@ export function useProjectWorkspace({
     return () => window.clearTimeout(timer);
   }, [highlightCreateFormCta]);
 
-  const hydrateProject = useCallback(async (projectId: string) => {
+  const hydrateProject = useCallback(async (projectId: string): Promise<ProjectSummary> => {
     const response = await suiClient.getObject({
       id: projectId,
       options: {
@@ -128,7 +143,11 @@ export function useProjectWorkspace({
       if (!linkedProjectId) {
         throw new Error("Project owner cap is missing its linked project id.");
       }
-      return hydrateProject(linkedProjectId);
+      const project = await hydrateProject(linkedProjectId);
+      return {
+        ...project,
+        ownedOwnerCapId: parsed.objectId,
+      };
     }
 
     if (!isProjectObjectType(parsed.type)) {
@@ -241,6 +260,7 @@ export function useProjectWorkspace({
         digest: result.digest,
         options: {
           showEvents: true,
+          showObjectChanges: true,
         },
       });
       const projectCreatedEvent = (confirmed.events ?? []).find((event) =>
@@ -250,7 +270,17 @@ export function useProjectWorkspace({
       if (!projectId) {
         throw new Error("Project was created, but the new project id could not be resolved.");
       }
-      const project = await hydrateProject(projectId);
+      const createdOwnerCap = (confirmed.objectChanges ?? []).find((change) => {
+        const objectType = String(("objectType" in change ? change.objectType : "") ?? "");
+        return change.type === "created" && isProjectOwnerCapType(objectType);
+      }) as { objectId?: string } | undefined;
+      const createdOwnerCapId = createdOwnerCap?.objectId;
+      const hydratedProject = await hydrateProject(projectId);
+      const project = {
+        ...hydratedProject,
+        ownedOwnerCapId: createdOwnerCapId ?? hydratedProject.ownedOwnerCapId ?? ownerCapIdByProjectId.get(projectId),
+      };
+      saveRecentProject(project);
       await refetchProjects();
       setSelectedProjectIdState(project.objectId);
       setSelectedProjectId(project.objectId);

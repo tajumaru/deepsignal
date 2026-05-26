@@ -11,10 +11,25 @@ module deepsignal::project_registry {
     const E_FORM_INACTIVE: u64 = 7;
     const E_SIGNAL_NOT_FOUND: u64 = 8;
     const E_FORM_HAS_SIGNALS: u64 = 9;
+    const E_NOT_AUTHORIZED: u64 = 10;
+    const E_PROJECT_MEMBER_ALREADY_EXISTS: u64 = 11;
+    const E_PROJECT_MEMBER_NOT_FOUND: u64 = 12;
+    const E_INVALID_ROLE: u64 = 13;
+    const E_OWNER_MEMBER_PROTECTED: u64 = 14;
+    const E_PROJECT_NOT_EMPTY: u64 = 15;
 
     const SIGNAL_STATUS_NEW: u8 = 0;
     const SIGNAL_STATUS_TRIAGED: u8 = 1;
     const SIGNAL_STATUS_ARCHIVED: u8 = 2;
+
+    const ROLE_OWNER: u8 = 0;
+    const ROLE_CO_ADMIN: u8 = 1;
+    const ROLE_REVIEWER: u8 = 2;
+
+    public struct Member has copy, drop, store {
+        addr: address,
+        role: u8,
+    }
 
     public struct Project has key {
         id: sui::object::UID,
@@ -22,6 +37,7 @@ module deepsignal::project_registry {
         name: String,
         owner: address,
         admins: vector<address>,
+        members: vector<Member>,
         forms_count: u64,
         signals_count: u64,
         next_form_id: u64,
@@ -73,6 +89,28 @@ module deepsignal::project_registry {
     public struct AdminRemoved has copy, drop {
         project_id: sui::object::ID,
         admin: address,
+        actor: address,
+    }
+
+    public struct ProjectMemberAdded has copy, drop {
+        project_id: sui::object::ID,
+        member: address,
+        role: u8,
+        actor: address,
+    }
+
+    public struct ProjectMemberRemoved has copy, drop {
+        project_id: sui::object::ID,
+        member: address,
+        role: u8,
+        actor: address,
+    }
+
+    public struct ProjectMemberRoleUpdated has copy, drop {
+        project_id: sui::object::ID,
+        member: address,
+        previous_role: u8,
+        role: u8,
         actor: address,
     }
 
@@ -141,6 +179,7 @@ module deepsignal::project_registry {
                 name,
                 owner,
                 admins: vector[],
+                members: vector[],
                 forms_count: 0,
                 signals_count: 0,
                 next_form_id: 0,
@@ -182,36 +221,37 @@ module deepsignal::project_registry {
         assert!(project.owner == sender, E_PROJECT_ADMIN_REQUIRED);
     }
 
-    fun is_project_admin_address(project: &Project, sender: address): bool {
-        if (project.owner == sender) {
-            return true
-        };
+    fun is_valid_role(role: u8): bool {
+        role == ROLE_OWNER || role == ROLE_CO_ADMIN || role == ROLE_REVIEWER
+    }
 
+    fun find_member_index(members: &vector<Member>, candidate: address): Option<u64> {
         let mut index = 0;
-        let total = vector::length(&project.admins);
+        let total = vector::length(members);
         while (index < total) {
-            if (*vector::borrow(&project.admins, index) == sender) {
-                return true
+            if (vector::borrow(members, index).addr == candidate) {
+                return option::some(index)
             };
             index = index + 1;
         };
+        option::none()
+    }
 
-        false
+    fun member_has_role(project: &Project, candidate: address, role: u8): bool {
+        let member_index = find_member_index(&project.members, candidate);
+        if (option::is_none(&member_index)) {
+            return false
+        };
+
+        vector::borrow(&project.members, *option::borrow(&member_index)).role == role
     }
 
     fun assert_project_admin(project: &Project, sender: address) {
-        assert!(is_project_admin_address(project, sender), E_PROJECT_ADMIN_REQUIRED);
+        assert!(can_manage(project, sender), E_NOT_AUTHORIZED);
     }
 
-    fun assert_project_reviewer(
-        registry: &access_control::Registry,
-        reviewer_cap: &access_control::ReviewerCap,
-        sender: address,
-    ) {
-        assert!(
-            access_control::is_reviewer(registry, sender, sui::object::id(reviewer_cap)),
-            E_PROJECT_ADMIN_REQUIRED
-        );
+    fun assert_can_review(project: &Project, sender: address) {
+        assert!(can_review(project, sender), E_NOT_AUTHORIZED);
     }
 
     fun contains_admin(admins: &vector<address>, candidate: address): bool {
@@ -224,6 +264,36 @@ module deepsignal::project_registry {
             index = index + 1;
         };
         false
+    }
+
+    public fun is_owner(project: &Project, wallet: address): bool {
+        project.owner == wallet
+    }
+
+    public fun is_co_admin(project: &Project, wallet: address): bool {
+        is_owner(project, wallet)
+            || contains_admin(&project.admins, wallet)
+            || member_has_role(project, wallet, ROLE_CO_ADMIN)
+    }
+
+    public fun is_reviewer(project: &Project, wallet: address): bool {
+        member_has_role(project, wallet, ROLE_REVIEWER)
+    }
+
+    public fun can_view(project: &Project, wallet: address): bool {
+        is_owner(project, wallet) || is_co_admin(project, wallet) || is_reviewer(project, wallet)
+    }
+
+    public fun can_review(project: &Project, wallet: address): bool {
+        is_owner(project, wallet) || is_co_admin(project, wallet) || is_reviewer(project, wallet)
+    }
+
+    public fun can_manage(project: &Project, wallet: address): bool {
+        is_owner(project, wallet) || is_co_admin(project, wallet)
+    }
+
+    public fun can_manage_members(project: &Project, wallet: address): bool {
+        is_owner(project, wallet)
     }
 
     fun namespace(project: &Project): vector<u8> {
@@ -361,6 +431,39 @@ module deepsignal::project_registry {
         });
     }
 
+    public fun add_project_member(
+        project: &mut Project,
+        owner_cap: &ProjectOwnerCap,
+        member_address: address,
+        role: u8,
+        ctx: &mut sui::tx_context::TxContext,
+    ) {
+        let sender = sui::tx_context::sender(ctx);
+        assert_project_owner(project, owner_cap, sender);
+        assert!(is_valid_role(role) && role != ROLE_OWNER, E_INVALID_ROLE);
+        assert!(member_address != project.owner, E_OWNER_MEMBER_PROTECTED);
+        assert!(!contains_admin(&project.admins, member_address), E_PROJECT_MEMBER_ALREADY_EXISTS);
+        assert!(
+            option::is_none(&find_member_index(&project.members, member_address)),
+            E_PROJECT_MEMBER_ALREADY_EXISTS,
+        );
+
+        vector::push_back(
+            &mut project.members,
+            Member {
+                addr: member_address,
+                role,
+            },
+        );
+
+        sui::event::emit(ProjectMemberAdded {
+            project_id: project.project_id,
+            member: member_address,
+            role,
+            actor: sender,
+        });
+    }
+
     public fun remove_admin(
         project: &mut Project,
         owner_cap: &ProjectOwnerCap,
@@ -388,6 +491,78 @@ module deepsignal::project_registry {
         assert!(false, E_PROJECT_ADMIN_NOT_FOUND);
     }
 
+    public fun remove_project_member(
+        project: &mut Project,
+        owner_cap: &ProjectOwnerCap,
+        member_address: address,
+        ctx: &mut sui::tx_context::TxContext,
+    ) {
+        let sender = sui::tx_context::sender(ctx);
+        assert_project_owner(project, owner_cap, sender);
+        assert!(member_address != project.owner, E_OWNER_MEMBER_PROTECTED);
+
+        let member_index = find_member_index(&project.members, member_address);
+        if (option::is_some(&member_index)) {
+            let removed = vector::swap_remove(
+                &mut project.members,
+                *option::borrow(&member_index),
+            );
+
+            sui::event::emit(ProjectMemberRemoved {
+                project_id: project.project_id,
+                member: member_address,
+                role: removed.role,
+                actor: sender,
+            });
+            return
+        };
+
+        let mut legacy_index = 0;
+        let legacy_total = vector::length(&project.admins);
+        while (legacy_index < legacy_total) {
+            if (*vector::borrow(&project.admins, legacy_index) == member_address) {
+                vector::swap_remove(&mut project.admins, legacy_index);
+                sui::event::emit(ProjectMemberRemoved {
+                    project_id: project.project_id,
+                    member: member_address,
+                    role: ROLE_CO_ADMIN,
+                    actor: sender,
+                });
+                return
+            };
+            legacy_index = legacy_index + 1;
+        };
+
+        assert!(false, E_PROJECT_MEMBER_NOT_FOUND);
+    }
+
+    public fun update_project_member_role(
+        project: &mut Project,
+        owner_cap: &ProjectOwnerCap,
+        member_address: address,
+        role: u8,
+        ctx: &mut sui::tx_context::TxContext,
+    ) {
+        let sender = sui::tx_context::sender(ctx);
+        assert_project_owner(project, owner_cap, sender);
+        assert!(is_valid_role(role) && role != ROLE_OWNER, E_INVALID_ROLE);
+        assert!(member_address != project.owner, E_OWNER_MEMBER_PROTECTED);
+
+        let member_index = find_member_index(&project.members, member_address);
+        assert!(option::is_some(&member_index), E_PROJECT_MEMBER_NOT_FOUND);
+        let member = vector::borrow_mut(&mut project.members, *option::borrow(&member_index));
+        let previous_role = member.role;
+        member.role = role;
+
+        sui::event::emit(ProjectMemberRoleUpdated {
+            project_id: project.project_id,
+            member: member_address,
+            previous_role,
+            role,
+            actor: sender,
+        });
+    }
+
     public fun delete_project(
         project: Project,
         owner_cap: ProjectOwnerCap,
@@ -395,6 +570,13 @@ module deepsignal::project_registry {
     ) {
         let sender = sui::tx_context::sender(ctx);
         assert_project_owner(&project, &owner_cap, sender);
+        assert!(
+            project.forms_count == 0
+                && project.signals_count == 0
+                && vector::length(&project.forms) == 0
+                && vector::length(&project.signals) == 0,
+            E_PROJECT_NOT_EMPTY,
+        );
 
         sui::event::emit(ProjectDeleted {
             project_id: project.project_id,
@@ -517,7 +699,7 @@ module deepsignal::project_registry {
         ctx: &mut sui::tx_context::TxContext,
     ) {
         let sender = sui::tx_context::sender(ctx);
-        assert_project_admin(project, sender);
+        assert_can_review(project, sender);
 
         let index = find_signal_index(&project.signals, signal_id);
         let signal = vector::borrow_mut(&mut project.signals, index);
@@ -558,8 +740,8 @@ module deepsignal::project_registry {
         ctx: &sui::tx_context::TxContext,
     ) {
         let sender = sui::tx_context::sender(ctx);
-        assert_project_admin(project, sender);
-        assert!(has_prefix(&namespace(project), &id), E_PROJECT_ADMIN_REQUIRED);
+        assert_can_review(project, sender);
+        assert!(has_prefix(&namespace(project), &id), E_NOT_AUTHORIZED);
     }
 
     entry fun seal_approve_project_admin(
@@ -567,29 +749,7 @@ module deepsignal::project_registry {
         project: &Project,
         ctx: &sui::tx_context::TxContext,
     ) {
-        assert_project_admin(project, sui::tx_context::sender(ctx));
-    }
-
-    entry fun seal_approve_project_signal_reviewer(
-        id: vector<u8>,
-        registry: &access_control::Registry,
-        reviewer_cap: &access_control::ReviewerCap,
-        project: &Project,
-        ctx: &sui::tx_context::TxContext,
-    ) {
-        let sender = sui::tx_context::sender(ctx);
-        assert_project_reviewer(registry, reviewer_cap, sender);
-        assert!(has_prefix(&namespace(project), &id), E_PROJECT_ADMIN_REQUIRED);
-    }
-
-    entry fun seal_approve_project_reviewer(
-        _id: vector<u8>,
-        registry: &access_control::Registry,
-        reviewer_cap: &access_control::ReviewerCap,
-        _project: &Project,
-        ctx: &sui::tx_context::TxContext,
-    ) {
-        assert_project_reviewer(registry, reviewer_cap, sui::tx_context::sender(ctx));
+        assert!(can_manage(project, sui::tx_context::sender(ctx)), E_NOT_AUTHORIZED);
     }
 
     entry fun seal_approve_owner_signal(
@@ -597,7 +757,7 @@ module deepsignal::project_registry {
         ctx: &sui::tx_context::TxContext,
     ) {
         let sender = sui::tx_context::sender(ctx);
-        assert!(has_prefix(&sender.to_bytes(), &id), E_PROJECT_ADMIN_REQUIRED);
+        assert!(has_prefix(&sender.to_bytes(), &id), E_NOT_AUTHORIZED);
     }
 
     public fun project_id(cap: &ProjectOwnerCap): sui::object::ID {
@@ -618,14 +778,26 @@ module deepsignal::project_registry {
 
     public fun project_stats(project: &Project): (u64, u64, u64) {
         (
-            vector::length(&project.admins),
+            vector::length(&project.admins) + vector::length(&project.members),
             project.forms_count,
             project.signals_count,
         )
     }
 
     public fun is_project_admin(project: &Project, wallet: address): bool {
-        is_project_admin_address(project, wallet)
+        can_manage(project, wallet)
+    }
+
+    public fun role_owner(): u8 {
+        ROLE_OWNER
+    }
+
+    public fun role_co_admin(): u8 {
+        ROLE_CO_ADMIN
+    }
+
+    public fun role_reviewer(): u8 {
+        ROLE_REVIEWER
     }
 
     public fun form_is_active(project: &Project, form_id: u64): bool {
@@ -640,6 +812,7 @@ module deepsignal::project_registry {
             name: _,
             owner: _,
             admins: _,
+            members: _,
             forms_count: _,
             signals_count: _,
             next_form_id: _,
@@ -741,7 +914,7 @@ module deepsignal::project_registry {
     }
 
     #[test]
-    #[expected_failure(abort_code = E_PROJECT_ADMIN_REQUIRED)]
+    #[expected_failure(abort_code = E_NOT_AUTHORIZED)]
     fun non_admin_cannot_create_form() {
         let owner = @0xA;
         let outsider = @0xC;
@@ -761,6 +934,212 @@ module deepsignal::project_registry {
             std::string::utf8(b"digest-1"),
             outsider_ctx,
         );
+
+        destroy_project_owner_cap(project_owner_cap);
+        destroy_project(project);
+        access_control::destroy_test_owner_cap(owner_cap);
+        access_control::destroy_test_registry(registry);
+    }
+
+    #[test]
+    fun co_admin_member_can_manage_project_operations() {
+        let owner = @0xA;
+        let co_admin = @0xB;
+        let owner_ctx = &mut sui::tx_context::new_from_hint(owner, 25, 7, 1310, 0);
+        let (registry, owner_cap) = access_control::new_test_registry(owner, owner_ctx);
+        let (mut project, project_owner_cap) = create_project_internal(
+            std::string::utf8(b"alpha"),
+            owner,
+            1310,
+            owner_ctx,
+        );
+        add_project_member(&mut project, &project_owner_cap, co_admin, ROLE_CO_ADMIN, owner_ctx);
+
+        let co_admin_ctx = &mut sui::tx_context::new_from_hint(co_admin, 26, 7, 1311, 0);
+        create_form(
+            &mut project,
+            std::string::utf8(b"field report"),
+            std::string::utf8(b"digest-co-admin"),
+            co_admin_ctx,
+        );
+        set_form_active(&mut project, 0, false, co_admin_ctx);
+
+        let (_, forms_count, _) = project_stats(&project);
+        assert!(forms_count == 1, 0);
+        assert!(!form_is_active(&project, 0), 0);
+        assert!(can_manage(&project, co_admin), 0);
+
+        destroy_project_owner_cap(project_owner_cap);
+        destroy_project(project);
+        access_control::destroy_test_owner_cap(owner_cap);
+        access_control::destroy_test_registry(registry);
+    }
+
+    #[test]
+    fun reviewer_member_can_triage_but_not_manage() {
+        let owner = @0xA;
+        let reviewer = @0xB;
+        let submitter = @0xD;
+        let owner_ctx = &mut sui::tx_context::new_from_hint(owner, 27, 7, 1320, 0);
+        let (registry, owner_cap) = access_control::new_test_registry(owner, owner_ctx);
+        let (mut project, project_owner_cap) = create_project_internal(
+            std::string::utf8(b"alpha"),
+            owner,
+            1320,
+            owner_ctx,
+        );
+        add_project_member(&mut project, &project_owner_cap, reviewer, ROLE_REVIEWER, owner_ctx);
+        create_form(
+            &mut project,
+            std::string::utf8(b"field report"),
+            std::string::utf8(b"digest-reviewer"),
+            owner_ctx,
+        );
+
+        let submitter_ctx = &mut sui::tx_context::new_from_hint(submitter, 28, 7, 1321, 0);
+        register_signal(
+            &mut project,
+            0,
+            std::string::utf8(b"blob-reviewer"),
+            std::string::utf8(b"meta-reviewer"),
+            false,
+            option::none(),
+            submitter_ctx,
+        );
+
+        let reviewer_ctx = &mut sui::tx_context::new_from_hint(reviewer, 29, 7, 1322, 0);
+        update_signal_status(&mut project, 0, SIGNAL_STATUS_TRIAGED, reviewer_ctx);
+        let signal = vector::borrow(&project.signals, 0);
+        assert!(signal.status == SIGNAL_STATUS_TRIAGED, 0);
+        assert!(can_review(&project, reviewer), 0);
+        assert!(!can_manage(&project, reviewer), 0);
+
+        destroy_project_owner_cap(project_owner_cap);
+        destroy_project(project);
+        access_control::destroy_test_owner_cap(owner_cap);
+        access_control::destroy_test_registry(registry);
+    }
+
+    #[test]
+    #[expected_failure(abort_code = E_NOT_AUTHORIZED)]
+    fun reviewer_member_cannot_create_form() {
+        let owner = @0xA;
+        let reviewer = @0xB;
+        let owner_ctx = &mut sui::tx_context::new_from_hint(owner, 30, 7, 1330, 0);
+        let (registry, owner_cap) = access_control::new_test_registry(owner, owner_ctx);
+        let (mut project, project_owner_cap) = create_project_internal(
+            std::string::utf8(b"alpha"),
+            owner,
+            1330,
+            owner_ctx,
+        );
+        add_project_member(&mut project, &project_owner_cap, reviewer, ROLE_REVIEWER, owner_ctx);
+
+        let reviewer_ctx = &mut sui::tx_context::new_from_hint(reviewer, 31, 7, 1331, 0);
+        create_form(
+            &mut project,
+            std::string::utf8(b"forbidden"),
+            std::string::utf8(b"digest-forbidden"),
+            reviewer_ctx,
+        );
+
+        destroy_project_owner_cap(project_owner_cap);
+        destroy_project(project);
+        access_control::destroy_test_owner_cap(owner_cap);
+        access_control::destroy_test_registry(registry);
+    }
+
+    #[test]
+    #[expected_failure(abort_code = E_PROJECT_MEMBER_ALREADY_EXISTS)]
+    fun duplicate_project_member_is_rejected() {
+        let owner = @0xA;
+        let reviewer = @0xB;
+        let owner_ctx = &mut sui::tx_context::new_from_hint(owner, 32, 7, 1340, 0);
+        let (registry, owner_cap) = access_control::new_test_registry(owner, owner_ctx);
+        let (mut project, project_owner_cap) = create_project_internal(
+            std::string::utf8(b"alpha"),
+            owner,
+            1340,
+            owner_ctx,
+        );
+
+        add_project_member(&mut project, &project_owner_cap, reviewer, ROLE_REVIEWER, owner_ctx);
+        add_project_member(&mut project, &project_owner_cap, reviewer, ROLE_CO_ADMIN, owner_ctx);
+
+        destroy_project_owner_cap(project_owner_cap);
+        destroy_project(project);
+        access_control::destroy_test_owner_cap(owner_cap);
+        access_control::destroy_test_registry(registry);
+    }
+
+    #[test]
+    #[expected_failure(abort_code = E_OWNER_MEMBER_PROTECTED)]
+    fun owner_cannot_be_added_as_project_member() {
+        let owner = @0xA;
+        let owner_ctx = &mut sui::tx_context::new_from_hint(owner, 33, 7, 1350, 0);
+        let (registry, owner_cap) = access_control::new_test_registry(owner, owner_ctx);
+        let (mut project, project_owner_cap) = create_project_internal(
+            std::string::utf8(b"alpha"),
+            owner,
+            1350,
+            owner_ctx,
+        );
+
+        add_project_member(&mut project, &project_owner_cap, owner, ROLE_CO_ADMIN, owner_ctx);
+
+        destroy_project_owner_cap(project_owner_cap);
+        destroy_project(project);
+        access_control::destroy_test_owner_cap(owner_cap);
+        access_control::destroy_test_registry(registry);
+    }
+
+    #[test]
+    fun legacy_admin_vector_still_grants_manage_permissions() {
+        let owner = @0xA;
+        let legacy_admin = @0xB;
+        let owner_ctx = &mut sui::tx_context::new_from_hint(owner, 34, 7, 1360, 0);
+        let (registry, owner_cap) = access_control::new_test_registry(owner, owner_ctx);
+        let (mut project, project_owner_cap) = create_project_internal(
+            std::string::utf8(b"alpha"),
+            owner,
+            1360,
+            owner_ctx,
+        );
+        add_admin(&mut project, &project_owner_cap, legacy_admin, owner_ctx);
+
+        let legacy_admin_ctx = &mut sui::tx_context::new_from_hint(legacy_admin, 35, 7, 1361, 0);
+        create_form(
+            &mut project,
+            std::string::utf8(b"legacy admin form"),
+            std::string::utf8(b"digest-legacy"),
+            legacy_admin_ctx,
+        );
+
+        assert!(can_manage(&project, legacy_admin), 0);
+
+        destroy_project_owner_cap(project_owner_cap);
+        destroy_project(project);
+        access_control::destroy_test_owner_cap(owner_cap);
+        access_control::destroy_test_registry(registry);
+    }
+
+    #[test]
+    fun legacy_admin_can_be_removed_through_member_entrypoint() {
+        let owner = @0xA;
+        let legacy_admin = @0xB;
+        let owner_ctx = &mut sui::tx_context::new_from_hint(owner, 36, 7, 1370, 0);
+        let (registry, owner_cap) = access_control::new_test_registry(owner, owner_ctx);
+        let (mut project, project_owner_cap) = create_project_internal(
+            std::string::utf8(b"alpha"),
+            owner,
+            1370,
+            owner_ctx,
+        );
+        add_admin(&mut project, &project_owner_cap, legacy_admin, owner_ctx);
+
+        remove_project_member(&mut project, &project_owner_cap, legacy_admin, owner_ctx);
+
+        assert!(!can_manage(&project, legacy_admin), 0);
 
         destroy_project_owner_cap(project_owner_cap);
         destroy_project(project);
@@ -890,7 +1269,7 @@ module deepsignal::project_registry {
     }
 
     #[test]
-    #[expected_failure(abort_code = E_PROJECT_ADMIN_REQUIRED)]
+    #[expected_failure(abort_code = E_NOT_AUTHORIZED)]
     fun non_admin_cannot_update_signal_status() {
         let owner = @0xA;
         let outsider = @0xE;
@@ -939,6 +1318,31 @@ module deepsignal::project_registry {
             std::string::utf8(b"alpha"),
             owner,
             1150,
+            owner_ctx,
+        );
+
+        delete_project(project, project_owner_cap, owner_ctx);
+
+        access_control::destroy_test_owner_cap(owner_cap);
+        access_control::destroy_test_registry(registry);
+    }
+
+    #[test]
+    #[expected_failure(abort_code = E_PROJECT_NOT_EMPTY)]
+    fun owner_cannot_delete_project_with_forms() {
+        let owner = @0xA;
+        let owner_ctx = &mut sui::tx_context::new_from_hint(owner, 37, 7, 1151, 0);
+        let (registry, owner_cap) = access_control::new_test_registry(owner, owner_ctx);
+        let (mut project, project_owner_cap) = create_project_internal(
+            std::string::utf8(b"alpha"),
+            owner,
+            1151,
+            owner_ctx,
+        );
+        create_form(
+            &mut project,
+            std::string::utf8(b"feedback"),
+            std::string::utf8(b"digest-not-empty"),
             owner_ctx,
         );
 
@@ -1083,7 +1487,7 @@ module deepsignal::project_registry {
     }
 
     #[test]
-    #[expected_failure(abort_code = E_PROJECT_ADMIN_REQUIRED)]
+    #[expected_failure(abort_code = E_NOT_AUTHORIZED)]
     fun project_signal_approval_rejects_wrong_namespace() {
         let owner = @0xA;
         let owner_ctx = &mut sui::tx_context::new_from_hint(owner, 19, 7, 1900, 0);

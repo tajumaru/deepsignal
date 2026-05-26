@@ -93,6 +93,46 @@ type SignalIdentityTarget = {
 const ADMIN_SUBMISSION_BATCH_SIZE = 4;
 const ONCHAIN_SIGNAL_BATCH_SIZE = 4;
 const MANIFEST_RESTORE_TIMEOUT_MS = 2500;
+const INBOX_BACKGROUND_TASK_TIMEOUT_MS = 1200;
+
+function scheduleInboxBackgroundTask(task: () => void) {
+  if (typeof window === "undefined") {
+    task();
+    return;
+  }
+  if ("requestIdleCallback" in window) {
+    window.requestIdleCallback(task, { timeout: INBOX_BACKGROUND_TASK_TIMEOUT_MS });
+    return;
+  }
+  globalThis.setTimeout(task, 0);
+}
+
+function buildLightweightSearchText(form: FormWithCount, submission: Submission, category: SignalCategory) {
+  return [
+    form.title,
+    getSignalSubject(submission),
+    getSignalPreview(submission),
+    submission.tags.join(" "),
+    getAssignedReviewer(submission) ?? "",
+    getVisibleReviewerNotes(submission),
+    category,
+    form.projectName ?? "",
+    form.signalType ?? "",
+    form.analystType ?? "",
+  ]
+    .join(" ")
+    .toLowerCase();
+}
+
+function matchesDeepSearch(record: SignalRecord, normalizedSearch: string) {
+  if (!normalizedSearch) {
+    return true;
+  }
+  if (record.searchText.includes(normalizedSearch)) {
+    return true;
+  }
+  return flattenAnswer(record.submission.answers).toLowerCase().includes(normalizedSearch);
+}
 
 function buildOnchainShadowFormId(projectId: string, onchainFormId: number) {
   return `onchain:${projectId}:${onchainFormId}`;
@@ -537,7 +577,7 @@ export function useSignalInboxData({
   const [submissionsByFormId, setSubmissionsByFormId] = useState<Record<string, Submission[]>>({});
   const [supplementalSignals, setSupplementalSignals] = useState<SignalRecord[]>([]);
   const [loading, setLoading] = useState(true);
-  const [, setSubmissionsLoading] = useState(false);
+  const [submissionsLoading, setSubmissionsLoading] = useState(false);
   const [loadError, setLoadError] = useState("");
   const [selectedFormId, setSelectedFormId] = useState("all");
   const [selectedStreamId, setSelectedStreamId] = useState<StreamId>("all");
@@ -749,21 +789,7 @@ export function useSignalInboxData({
           form,
           submission,
           category,
-          searchText: [
-            form.title,
-            getSignalSubject(submission),
-            getSignalPreview(submission),
-            flattenAnswer(submission.answers),
-            submission.tags.join(" "),
-            getAssignedReviewer(submission) ?? "",
-            getVisibleReviewerNotes(submission),
-            category,
-            form.projectName ?? "",
-            form.signalType ?? "",
-            form.analystType ?? "",
-          ]
-            .join(" ")
-            .toLowerCase(),
+          searchText: buildLightweightSearchText(form, submission, category),
         });
       });
     }
@@ -773,10 +799,77 @@ export function useSignalInboxData({
     }
   }
 
+  function patchLocalOnchainSignals(
+    nextForms: FormWithCount[],
+    nextSubmissions: Record<string, Submission[]>,
+    runId: number,
+  ) {
+    const activeProjects =
+      hydratedSelectedProject
+        ? [
+            hydratedSelectedProject,
+            ...projects.filter((project) => project.objectId !== hydratedSelectedProject.objectId),
+          ]
+        : projects;
+
+    if (activeProjects.length === 0 || runId !== loadConsoleRunRef.current) {
+      return;
+    }
+
+    const localSignals: Array<{ form: FormWithCount; submission: Submission }> = [];
+    Object.entries(nextSubmissions).forEach(([formId, submissions]) => {
+      const form = nextForms.find((entry) => entry.id === formId);
+      if (!form?.projectId) {
+        return;
+      }
+      submissions.forEach((submission) => {
+        localSignals.push({ form, submission });
+      });
+    });
+
+    activeProjects.forEach((project) => {
+      (project.onchainSignals ?? []).forEach((signal) => {
+        const localMatch = localSignals.find(({ form, submission }) =>
+          matchesSignalIdentity(
+            buildSubmissionSignalIdentity(submission, form.projectId),
+            buildOnchainSignalIdentity(project.objectId, signal),
+          ),
+        );
+        if (!localMatch) {
+          return;
+        }
+
+        const previousSubmission = localMatch.submission;
+        const patchedSubmission = patchSubmissionFromOnchainSignal(previousSubmission, signal);
+        localMatch.submission = patchedSubmission;
+        nextSubmissions[localMatch.form.id] = (nextSubmissions[localMatch.form.id] ?? []).map((submission) =>
+          matchesSignalIdentity(
+            buildSubmissionSignalIdentity(submission, localMatch.form.projectId),
+            buildSubmissionSignalIdentity(previousSubmission, localMatch.form.projectId),
+          )
+            ? patchedSubmission
+            : submission,
+        );
+        setSubmissionsByFormId((current) => ({
+          ...current,
+          [localMatch.form.id]: (current[localMatch.form.id] ?? []).map((submission) =>
+            matchesSignalIdentity(
+              buildSubmissionSignalIdentity(submission, localMatch.form.projectId),
+              buildSubmissionSignalIdentity(previousSubmission, localMatch.form.projectId),
+            )
+              ? patchedSubmission
+              : submission,
+          ),
+        }));
+      });
+    });
+  }
+
   async function loadConsole(preferredSignalId?: string) {
     const runId = loadConsoleRunRef.current + 1;
     loadConsoleRunRef.current = runId;
     startPerf("admin:load-console");
+    startPerf("admin:local-shell");
     setLoading(!hasLoadedOnceRef.current);
     setSubmissionsLoading(false);
     setLoadError("");
@@ -805,61 +898,65 @@ export function useSignalInboxData({
       setLoading(false);
       endPerf("admin:local-shell", "ok", `${effectiveForms.length} forms`);
 
-      void measurePerf("admin:manifest-restore", async () => {
-        const restoredForms: FormWithCount[] = [];
-        const knownProjectFormKeys = new Set(
-          normalizedInitialForms
-            .map((form) => buildProjectFormKey(form.projectId, form.onchainFormId))
-            .filter(Boolean),
-        );
-        const orderedProjects = hydratedSelectedProject
-          ? [hydratedSelectedProject, ...projects.filter((project) => project.objectId !== hydratedSelectedProject.objectId)]
-          : projects;
+      scheduleInboxBackgroundTask(() => {
+        void measurePerf("admin:manifest-restore", async () => {
+          const restoredForms: FormWithCount[] = [];
+          const knownProjectFormKeys = new Set(
+            normalizedInitialForms
+              .map((form) => buildProjectFormKey(form.projectId, form.onchainFormId))
+              .filter(Boolean),
+          );
+          const orderedProjects = hydratedSelectedProject
+            ? [hydratedSelectedProject, ...projects.filter((project) => project.objectId !== hydratedSelectedProject.objectId)]
+            : projects;
 
-        for (const project of orderedProjects) {
-          for (const onchainForm of project.onchainForms ?? []) {
-            const projectFormKey = buildProjectFormKey(project.objectId, onchainForm.formId);
-            if (!projectFormKey || knownProjectFormKeys.has(projectFormKey) || !onchainForm.manifestBlobId) {
-              continue;
-            }
-
-            try {
-              const restoredForm = await withTimeout(
-                restoreProjectFormFromManifest(project, onchainForm),
-                MANIFEST_RESTORE_TIMEOUT_MS,
-                `Manifest restore timed out for ${project.objectId}:${onchainForm.formId}.`,
-              );
-              if (!restoredForm) {
+          for (const project of orderedProjects) {
+            for (const onchainForm of project.onchainForms ?? []) {
+              const projectFormKey = buildProjectFormKey(project.objectId, onchainForm.formId);
+              if (!projectFormKey || knownProjectFormKeys.has(projectFormKey) || !onchainForm.manifestBlobId) {
                 continue;
               }
-              restoredForms.push(restoredForm);
-              knownProjectFormKeys.add(projectFormKey);
-            } catch (error) {
-              console.warn(`Failed to restore project form ${project.objectId}:${onchainForm.formId} from Walrus`, error);
+
+              try {
+                const restoredForm = await withTimeout(
+                  restoreProjectFormFromManifest(project, onchainForm),
+                  MANIFEST_RESTORE_TIMEOUT_MS,
+                  `Manifest restore timed out for ${project.objectId}:${onchainForm.formId}.`,
+                );
+                if (!restoredForm) {
+                  continue;
+                }
+                restoredForms.push(restoredForm);
+                knownProjectFormKeys.add(projectFormKey);
+              } catch (error) {
+                console.warn(`Failed to restore project form ${project.objectId}:${onchainForm.formId} from Walrus`, error);
+              }
             }
           }
-        }
 
-        if (runId !== loadConsoleRunRef.current || restoredForms.length === 0) {
-          return;
-        }
+          if (runId !== loadConsoleRunRef.current || restoredForms.length === 0) {
+            return;
+          }
 
-        setForms((current) =>
-          mergeFormsWithProjectRegistry(
-            mergeFormsById(restoredForms, current).map((form) => ({
-              ...form,
-              submissionCount: form.submissionCount ?? 0,
-            })),
-            projects,
-            hydratedSelectedProject,
-          ).filter((form) => !isDeletedFormTombstone(form)),
-        );
+          setForms((current) =>
+            mergeFormsWithProjectRegistry(
+              mergeFormsById(restoredForms, current).map((form) => ({
+                ...form,
+                submissionCount: form.submissionCount ?? 0,
+              })),
+              projects,
+              hydratedSelectedProject,
+            ).filter((form) => !isDeletedFormTombstone(form)),
+          );
+        });
       });
 
       const nextAccessibleForms = effectiveForms.filter((form) => canReviewForm(form, accountAddress, capabilityProfile));
 
       if (nextAccessibleForms.length === 0) {
-        await hydrateOnchainSignals(effectiveForms, {}, runId);
+        scheduleInboxBackgroundTask(() => {
+          void measurePerf("admin:onchain-hydration", () => hydrateOnchainSignals(effectiveForms, {}, runId));
+        });
         endPerf("admin:load-console", "ok");
         return;
       }
@@ -911,7 +1008,10 @@ export function useSignalInboxData({
       }
       endPerf("admin:submissions", "ok");
 
-      await measurePerf("admin:onchain-hydration", () => hydrateOnchainSignals(effectiveForms, nextSubmissions, runId));
+      patchLocalOnchainSignals(effectiveForms, nextSubmissions, runId);
+      scheduleInboxBackgroundTask(() => {
+        void measurePerf("admin:onchain-hydration", () => hydrateOnchainSignals(effectiveForms, nextSubmissions, runId));
+      });
       endPerf("admin:load-console", "ok");
     } catch (error) {
       console.error("Failed to load admin console", error);
@@ -1069,20 +1169,7 @@ export function useSignalInboxData({
           form,
           submission,
           category,
-          searchText: [
-            form.title,
-            getSignalSubject(submission),
-            getSignalPreview(submission),
-            flattenAnswer(submission.answers),
-            submission.tags.join(" "),
-            getAssignedReviewer(submission) ?? "",
-            getVisibleReviewerNotes(submission),
-            category,
-            form.signalType ?? "",
-            form.analystType ?? "",
-          ]
-            .join(" ")
-            .toLowerCase(),
+          searchText: buildLightweightSearchText(form, submission, category),
         } satisfies SignalRecord;
 
         appendRecord(record);
@@ -1214,7 +1301,7 @@ export function useSignalInboxData({
       if (!normalizedSearch) {
         return true;
       }
-      return record.searchText.includes(normalizedSearch);
+      return matchesDeepSearch(record, normalizedSearch);
     });
 
     if (sortOrder === "default") {
@@ -1260,7 +1347,7 @@ export function useSignalInboxData({
     ? visibleSignals.find((record) => record.submission.id === selectedSignalId) ??
       signalIndex.signalById[selectedSignalId] ??
       null
-    : visibleSignals[0] ?? null;
+    : null;
 
   function applySubmissionUpdate(nextSubmission: Submission) {
     const nextForm = forms.find((form) => form.id === nextSubmission.formId);
@@ -1321,6 +1408,7 @@ export function useSignalInboxData({
     submissionsByFormId,
     setSubmissionsByFormId,
     loading,
+    submissionsLoading,
     loadError,
     selectedFormId,
     setSelectedFormId,

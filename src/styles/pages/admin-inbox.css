@@ -67,6 +67,24 @@
   animation: inboxSkeletonSweep 1.35s ease-in-out infinite;
 }
 
+.inbox-list-skeleton {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.inbox-list-skeleton span {
+  min-height: 8.25rem;
+  border: 1px solid rgba(116, 226, 255, 0.1);
+  border-radius: 8px;
+  background:
+    linear-gradient(180deg, rgba(7, 24, 40, 0.72), rgba(4, 15, 25, 0.64));
+  opacity: 0.72;
+}
+
+.inbox-list-skeleton.is-compact span {
+  min-height: 5.75rem;
+}
+
 .wallet-inline-address .sui-address-display,
 .workspace-activity-address .sui-address-display {
   min-height: 2.25rem;
@@ -1131,6 +1149,124 @@
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 0.55rem;
+}
+
+.signal-inbox-onboarding-delete-project {
+  position: relative;
+  min-height: 2.8rem;
+  min-width: 12rem;
+  overflow: hidden;
+  isolation: isolate;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.signal-inbox-onboarding-delete-project:not(:disabled) {
+  cursor: pointer;
+}
+
+.signal-inbox-onboarding-delete-project.is-holding {
+  color: #fff4f4;
+  border-color: rgba(255, 105, 105, 0.72);
+  background:
+    radial-gradient(circle at 72% 50%, rgba(255, 109, 109, 0.32), transparent 34%),
+    linear-gradient(135deg, rgba(78, 15, 25, 0.94), rgba(20, 6, 13, 0.92));
+  box-shadow:
+    0 0 0 1px rgba(255, 119, 119, 0.24),
+    0 0 26px rgba(255, 82, 82, 0.22);
+}
+
+.signal-inbox-onboarding-delete-label {
+  position: relative;
+  z-index: 2;
+}
+
+.project-delete-hold-ripple {
+  position: absolute;
+  top: 50%;
+  right: 0.78rem;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 999px;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-50%) scale(0.72);
+  transition:
+    opacity 140ms ease,
+    transform 140ms ease;
+  z-index: 1;
+}
+
+.signal-inbox-onboarding-delete-project.is-holding .project-delete-hold-ripple {
+  opacity: 1;
+  transform: translateY(-50%) scale(1);
+}
+
+.project-delete-hold-wave,
+.project-delete-hold-mark {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+}
+
+.project-delete-hold-wave {
+  border: 1px solid rgba(255, 144, 144, 0.45);
+  background: radial-gradient(circle, rgba(255, 80, 80, 0.2), rgba(255, 80, 80, 0) 68%);
+}
+
+.project-delete-hold-wave-primary {
+  animation: projectDeleteRipple 3s linear forwards;
+}
+
+.project-delete-hold-wave-secondary {
+  animation: projectDeleteRipple 3s linear infinite;
+  animation-delay: 1s;
+  opacity: 0.55;
+}
+
+.project-delete-hold-mark {
+  display: grid;
+  place-items: center;
+  color: #fff7f7;
+  font-size: 1.05rem;
+  line-height: 1;
+  background: radial-gradient(circle, rgba(91, 10, 20, 0.95), rgba(91, 10, 20, 0.36) 70%, transparent 100%);
+  box-shadow:
+    0 0 0 1px rgba(255, 145, 145, 0.24),
+    0 0 20px rgba(255, 85, 85, 0.24);
+}
+
+.project-delete-hold-progress {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 3px;
+  background: rgba(255, 125, 125, 0.14);
+  z-index: 2;
+}
+
+.project-delete-hold-progress::after {
+  content: "";
+  display: block;
+  width: calc(var(--project-delete-hold-progress, 0) * 100%);
+  height: 100%;
+  background: linear-gradient(90deg, rgba(255, 100, 100, 0.72), rgba(255, 222, 173, 0.98));
+  box-shadow: 0 0 16px rgba(255, 93, 93, 0.46);
+  transition: width 80ms linear;
+}
+
+@keyframes projectDeleteRipple {
+  0% {
+    opacity: 0.96;
+    transform: scale(0.62);
+  }
+
+  100% {
+    opacity: 0;
+    transform: scale(1.75);
+  }
 }
 
 .signal-inbox-onboarding-project-shell {
@@ -2634,6 +2770,10 @@
 .signal-detail-sections {
   display: grid;
   gap: 0.75rem;
+}
+
+.signal-list-load-more {
+  justify-self: stretch;
 }
 
 .stream-item,

@@ -32,6 +32,7 @@ export function startPerf(name: string, detail?: string) {
   if (!store) {
     return;
   }
+  performance.mark(`${name}:start`);
   store[name] = {
     name,
     startedAt: performance.now(),
@@ -47,6 +48,7 @@ export function endPerf(name: string, status: PerfStatus = "ok", detail?: string
   }
   const current = store[name];
   if (!current) {
+    performance.mark(`${name}:end`);
     store[name] = {
       name,
       startedAt: performance.now(),
@@ -55,9 +57,21 @@ export function endPerf(name: string, status: PerfStatus = "ok", detail?: string
       status,
       detail,
     };
+    if (typeof console !== "undefined" && typeof console.debug === "function") {
+      const suffix = detail ? ` (${detail})` : "";
+      console.debug(`[DeepSignal perf] ${name}: 0ms [${status}]${suffix}`);
+    }
     return;
   }
   const endedAt = performance.now();
+  const startMark = `${name}:start`;
+  const endMark = `${name}:end`;
+  performance.mark(endMark);
+  try {
+    performance.measure(name, startMark, endMark);
+  } catch {
+    // The in-memory diagnostics remain available even if a browser clears marks.
+  }
   store[name] = {
     ...current,
     endedAt,
@@ -65,6 +79,10 @@ export function endPerf(name: string, status: PerfStatus = "ok", detail?: string
     status,
     detail: detail ?? current.detail,
   };
+  if (typeof console !== "undefined" && typeof console.debug === "function") {
+    const suffix = store[name].detail ? ` (${store[name].detail})` : "";
+    console.debug(`[DeepSignal perf] ${name}: ${store[name].durationMs}ms [${status}]${suffix}`);
+  }
 }
 
 export async function measurePerf<T>(name: string, task: () => Promise<T>, detail?: string): Promise<T> {

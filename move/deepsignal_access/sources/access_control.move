@@ -4,9 +4,7 @@ module deepsignal::access_control {
     const E_OWNER_NOT_ACTIVE: u64 = 3;
     const E_ADMIN_NOT_ACTIVE: u64 = 4;
     const E_ADMIN_ALREADY_EXISTS: u64 = 5;
-    const E_REVIEWER_ALREADY_EXISTS: u64 = 6;
     const E_ADMIN_NOT_FOUND: u64 = 7;
-    const E_REVIEWER_NOT_FOUND: u64 = 8;
 
     public struct AccessEntry has copy, drop, store {
         address: address,
@@ -18,7 +16,6 @@ module deepsignal::access_control {
         owner_address: address,
         owner_cap_id: sui::object::ID,
         admins: vector<AccessEntry>,
-        reviewers: vector<AccessEntry>,
     }
 
     public struct OwnerCap has key, store {
@@ -27,11 +24,6 @@ module deepsignal::access_control {
     }
 
     public struct AdminCap has key, store {
-        id: sui::object::UID,
-        registry_id: sui::object::ID,
-    }
-
-    public struct ReviewerCap has key, store {
         id: sui::object::UID,
         registry_id: sui::object::ID,
     }
@@ -48,7 +40,6 @@ module deepsignal::access_control {
             owner_address: sender,
             owner_cap_id,
             admins: vector[],
-            reviewers: vector[],
         };
 
         sui::transfer::share_object(registry);
@@ -192,64 +183,6 @@ module deepsignal::access_control {
         issue_admin_cap(owner_cap, registry, sui::tx_context::sender(ctx), ctx);
     }
 
-    public fun issue_reviewer_cap(
-        admin_cap: &AdminCap,
-        registry: &mut Registry,
-        recipient: address,
-        ctx: &mut sui::tx_context::TxContext,
-    ) {
-        assert_admin_authority(admin_cap, registry, sui::tx_context::sender(ctx));
-        add_reviewer_entry(registry, recipient, ctx);
-    }
-
-    public fun add_reviewer_by_owner(
-        owner_cap: &OwnerCap,
-        registry: &mut Registry,
-        recipient: address,
-        ctx: &mut sui::tx_context::TxContext,
-    ) {
-        assert_owner_authority(owner_cap, registry, sui::tx_context::sender(ctx));
-        add_reviewer_entry(registry, recipient, ctx);
-    }
-
-    fun add_reviewer_entry(
-        registry: &mut Registry,
-        recipient: address,
-        ctx: &mut sui::tx_context::TxContext,
-    ) {
-        assert!(
-            !contains_address(&registry.reviewers, recipient),
-            E_REVIEWER_ALREADY_EXISTS
-        );
-
-        let reviewer_cap_uid = sui::object::new(ctx);
-        let reviewer_cap_id = sui::object::uid_to_inner(&reviewer_cap_uid);
-
-        vector::push_back(
-            &mut registry.reviewers,
-            AccessEntry {
-                address: recipient,
-                cap_id: reviewer_cap_id,
-            },
-        );
-
-        sui::transfer::public_transfer(
-            ReviewerCap {
-                id: reviewer_cap_uid,
-                registry_id: sui::object::id(registry),
-            },
-            recipient,
-        );
-    }
-
-    public fun issue_reviewer_cap_to_sender(
-        admin_cap: &AdminCap,
-        registry: &mut Registry,
-        ctx: &mut sui::tx_context::TxContext,
-    ) {
-        issue_reviewer_cap(admin_cap, registry, sui::tx_context::sender(ctx), ctx);
-    }
-
     public fun remove_admin(
         owner_cap: &OwnerCap,
         registry: &mut Registry,
@@ -260,26 +193,6 @@ module deepsignal::access_control {
         remove_entry_by_address(&mut registry.admins, admin_address, E_ADMIN_NOT_FOUND);
     }
 
-    public fun remove_reviewer(
-        admin_cap: &AdminCap,
-        registry: &mut Registry,
-        reviewer_address: address,
-        ctx: &mut sui::tx_context::TxContext,
-    ) {
-        assert_admin_authority(admin_cap, registry, sui::tx_context::sender(ctx));
-        remove_entry_by_address(&mut registry.reviewers, reviewer_address, E_REVIEWER_NOT_FOUND);
-    }
-
-    public fun remove_reviewer_by_owner(
-        owner_cap: &OwnerCap,
-        registry: &mut Registry,
-        reviewer_address: address,
-        ctx: &mut sui::tx_context::TxContext,
-    ) {
-        assert_owner_authority(owner_cap, registry, sui::tx_context::sender(ctx));
-        remove_entry_by_address(&mut registry.reviewers, reviewer_address, E_REVIEWER_NOT_FOUND);
-    }
-
     public fun owner_registry_id(cap: &OwnerCap): sui::object::ID {
         cap.registry_id
     }
@@ -288,15 +201,10 @@ module deepsignal::access_control {
         cap.registry_id
     }
 
-    public fun reviewer_registry_id(cap: &ReviewerCap): sui::object::ID {
-        cap.registry_id
-    }
-
-    public fun stats(registry: &Registry): (u64, u64, u64) {
+    public fun stats(registry: &Registry): (u64, u64) {
         (
             1,
             vector::length(&registry.admins),
-            vector::length(&registry.reviewers),
         )
     }
 
@@ -316,14 +224,6 @@ module deepsignal::access_control {
         contains_entry(&registry.admins, wallet, cap_id)
     }
 
-    public fun is_reviewer(
-        registry: &Registry,
-        wallet: address,
-        cap_id: sui::object::ID,
-    ): bool {
-        contains_entry(&registry.reviewers, wallet, cap_id)
-    }
-
     #[test_only]
     public fun new_test_registry(
         owner: address,
@@ -340,7 +240,6 @@ module deepsignal::access_control {
                 owner_address: owner,
                 owner_cap_id,
                 admins: vector[],
-                reviewers: vector[],
             },
             OwnerCap {
                 id: owner_cap_uid,
@@ -386,7 +285,6 @@ module deepsignal::access_control {
             owner_address: _,
             owner_cap_id: _,
             admins: _,
-            reviewers: _,
         } = registry;
         sui::object::delete(id);
     }

@@ -51,11 +51,11 @@ function capabilityProfile(overrides: Partial<CapabilityProfile> = {}): Capabili
     packageId: "0xpackage",
     registryId: "0xregistry",
     hasOwnerCap: false,
-    hasAdminCap: false,
-    hasReviewerCap: true,
+    hasAdminCap: true,
+    hasReviewerCap: false,
     ownerCapIds: [],
-    adminCapIds: [],
-    reviewerCapIds: ["0xreviewer-cap"],
+    adminCapIds: ["0xadmin-cap"],
+    reviewerCapIds: [],
     ...overrides,
   };
 }
@@ -120,7 +120,7 @@ function renderDecryptHook(args?: {
           selectedRecord: args?.selectedRecord ?? record(submission("submission-1")),
           selectedSignalId: args?.selectedSignalId ?? "submission-1",
           profile: args?.profile ?? capabilityProfile(),
-          wallet: args?.wallet ?? "0xreviewer",
+          wallet: args?.wallet ?? "0xadmin",
         },
       },
     ),
@@ -140,7 +140,7 @@ describe("usePrivateSignalDecrypt", () => {
     mockedResolveSubmissionAnswers.mockReset();
   });
 
-  it("decrypts through the shared resolver with reviewer capability context", async () => {
+  it("decrypts through the shared resolver with admin capability context", async () => {
     mockedResolveSubmissionAnswers.mockResolvedValue({
       answers: { answer: "private answer" },
       attachments: [],
@@ -157,10 +157,10 @@ describe("usePrivateSignalDecrypt", () => {
       expect.objectContaining({ id: "submission-1" }),
       undefined,
       expect.objectContaining({
-        walletAddress: "0xreviewer",
+        walletAddress: "0xadmin",
         projectId: "0xproject",
         ownerAddress: "0xowner",
-        reviewerCapId: "0xreviewer-cap",
+        reviewerCapId: undefined,
       }),
     );
     expect(result.current.decryptState).toBe("decrypted");

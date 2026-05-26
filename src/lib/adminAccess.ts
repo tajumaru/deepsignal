@@ -1,8 +1,11 @@
 import type { FormSchema } from "../types";
 import type { CapabilityProfile } from "../hooks/useAccessControl";
+import type { ProjectSummary } from "./projectRegistry";
 
 export type FormAccessState = "allowed" | "legacy" | "denied";
 export type RequiredAccessRole = "admin" | "reviewer";
+
+export type ProjectPermissionRole = "owner" | "co_admin" | "reviewer";
 
 export function addressesMatch(left?: string | null, right?: string | null) {
   if (!left || !right) {
@@ -25,12 +28,58 @@ export function canAccessForm(form: FormSchema | null, currentAddress?: string |
   return getFormAccessState(form, currentAddress) !== "denied";
 }
 
+export function isProjectOwner(project: Pick<ProjectSummary, "owner"> | null | undefined, address?: string | null) {
+  return addressesMatch(project?.owner, address);
+}
+
+export function isProjectCoAdmin(
+  project: Pick<ProjectSummary, "owner" | "admins"> | null | undefined,
+  address?: string | null,
+) {
+  return Boolean(
+    isProjectOwner(project, address) ||
+      project?.admins.some((admin) => addressesMatch(admin, address)),
+  );
+}
+
+export function isProjectReviewer(
+  project: Pick<ProjectSummary, "reviewers"> | null | undefined,
+  address?: string | null,
+) {
+  return Boolean(project?.reviewers.some((reviewer) => addressesMatch(reviewer, address)));
+}
+
+export function canViewProject(
+  project: Pick<ProjectSummary, "owner" | "admins" | "reviewers"> | null | undefined,
+  address?: string | null,
+) {
+  return isProjectOwner(project, address) || isProjectCoAdmin(project, address) || isProjectReviewer(project, address);
+}
+
+export function canReviewProject(
+  project: Pick<ProjectSummary, "owner" | "admins" | "reviewers"> | null | undefined,
+  address?: string | null,
+) {
+  return canViewProject(project, address);
+}
+
+export function canManageProject(
+  project: Pick<ProjectSummary, "owner" | "admins"> | null | undefined,
+  address?: string | null,
+) {
+  return isProjectOwner(project, address) || isProjectCoAdmin(project, address);
+}
+
+export function canManageProjectMembers(project: Pick<ProjectSummary, "owner"> | null | undefined, address?: string | null) {
+  return isProjectOwner(project, address);
+}
+
 export function canAdmin(profile?: CapabilityProfile | null) {
   return Boolean(profile?.hasOwnerCap || profile?.hasAdminCap);
 }
 
 export function canReview(profile?: CapabilityProfile | null) {
-  return Boolean(profile?.hasOwnerCap || profile?.hasAdminCap || profile?.hasReviewerCap);
+  return Boolean(profile?.hasOwnerCap || profile?.hasAdminCap);
 }
 
 export function canAttemptPrivateSignalDecrypt(
@@ -52,19 +101,12 @@ export function canIssueAdmin(profile?: CapabilityProfile | null) {
   return Boolean(profile?.hasOwnerCap);
 }
 
-export function canIssueReviewer(profile?: CapabilityProfile | null) {
-  return Boolean(profile?.hasOwnerCap || profile?.hasAdminCap);
-}
-
 export function getRoleLabel(profile?: CapabilityProfile | null) {
   if (profile?.hasOwnerCap) {
     return "Owner";
   }
   if (profile?.hasAdminCap) {
     return "Admin";
-  }
-  if (profile?.hasReviewerCap) {
-    return "Reviewer";
   }
   return profile?.isConfigured ? "No access" : "Legacy owner";
 }

@@ -9,7 +9,7 @@ import { SuiJsonRpcClient, getJsonRpcFullnodeUrl } from "@mysten/sui/jsonRpc";
 import { Transaction } from "@mysten/sui/transactions";
 import { fromHex } from "@mysten/sui/utils";
 import type { SealAdapter, SealDecryptContext } from "../types";
-import { ACCESS_CONTROL_REGISTRY_ID, SUI_NETWORK } from "../lib/sui";
+import { SUI_NETWORK } from "../lib/sui";
 import { getSuiRuntimeContext } from "../suiRuntime";
 import { serializeDecryptError } from "./decryptDiagnostics";
 import {
@@ -242,12 +242,10 @@ export const sealClientAdapter: SealAdapter = {
         onStatusChange: context.onStatusChange,
       });
 
-      const reviewerCapId = normalizeOptionalSealIdentifier(context.reviewerCapId);
       const primaryApprovalPolicy = selectProjectSealApprovalPolicy({
         envelopeApprovalPolicy: envelope.approvalPolicy,
         objectId: envelope.objectId,
         projectId,
-        reviewerCapId,
       });
 
       let plaintext: Uint8Array;
@@ -257,7 +255,6 @@ export const sealClientAdapter: SealAdapter = {
           objectId: envelope.objectId,
           projectId,
           approvalPolicy: primaryApprovalPolicy,
-          reviewerCapId,
           suiClient: activeSuiClient,
           packageId: envelope.packageId,
         });
@@ -271,8 +268,7 @@ export const sealClientAdapter: SealAdapter = {
         const canRetryWithAdminPolicy =
           error instanceof NoAccessError &&
           projectId &&
-          (primaryApprovalPolicy === "project_signal_v1" ||
-            primaryApprovalPolicy === "project_signal_reviewer_v1");
+          primaryApprovalPolicy === "project_signal_v1";
 
         if (!canRetryWithAdminPolicy) {
           debugSealClientError(
@@ -290,7 +286,7 @@ export const sealClientAdapter: SealAdapter = {
           throw error;
         }
 
-        const fallbackApprovalPolicy = reviewerCapId ? "project_reviewer_v0" : "project_admin_v0";
+        const fallbackApprovalPolicy = "project_admin_v0";
         debugSealClientError(
           "primary_decrypt_retrying_admin_policy",
           {
@@ -308,7 +304,6 @@ export const sealClientAdapter: SealAdapter = {
           objectId: envelope.objectId,
           projectId,
           approvalPolicy: fallbackApprovalPolicy,
-          reviewerCapId,
           suiClient: activeSuiClient,
           packageId: envelope.packageId,
         });
@@ -359,7 +354,6 @@ async function buildSealApproveTransactionBytes({
   objectId,
   projectId,
   approvalPolicy,
-  reviewerCapId,
   suiClient: activeSuiClient,
   packageId,
 }: {
@@ -368,10 +362,7 @@ async function buildSealApproveTransactionBytes({
   approvalPolicy:
     | "project_signal_v1"
     | "project_admin_v0"
-    | "project_signal_reviewer_v1"
-    | "project_reviewer_v0"
     | "owner_wallet_v1";
-  reviewerCapId?: string;
   suiClient: SealCompatibleClient;
   packageId: string;
 }) {
@@ -389,31 +380,13 @@ async function buildSealApproveTransactionBytes({
   if (!projectId) {
     throw new Error(SEAL_PROJECT_CONTEXT_REQUIRED_MESSAGE);
   }
-  if (
-    (approvalPolicy === "project_signal_reviewer_v1" || approvalPolicy === "project_reviewer_v0") &&
-    (!ACCESS_CONTROL_REGISTRY_ID || !reviewerCapId)
-  ) {
-    throw new Error(SEAL_PERMISSION_DENIED_MESSAGE);
-  }
   tx.moveCall({
     target: `${packageId}::project_registry::${
       approvalPolicy === "project_signal_v1"
         ? "seal_approve_project_signal"
-        : approvalPolicy === "project_signal_reviewer_v1"
-          ? "seal_approve_project_signal_reviewer"
-          : approvalPolicy === "project_reviewer_v0"
-            ? "seal_approve_project_reviewer"
-            : "seal_approve_project_admin"
+        : "seal_approve_project_admin"
     }`,
-    arguments:
-      approvalPolicy === "project_signal_reviewer_v1" || approvalPolicy === "project_reviewer_v0"
-        ? [
-            tx.pure.vector("u8", fromHex(objectId)),
-            tx.object(ACCESS_CONTROL_REGISTRY_ID),
-            tx.object(reviewerCapId ?? ""),
-            tx.object(projectId),
-          ]
-        : [tx.pure.vector("u8", fromHex(objectId)), tx.object(projectId)],
+    arguments: [tx.pure.vector("u8", fromHex(objectId)), tx.object(projectId)],
   });
   return tx.build({
     client: activeSuiClient,

@@ -7,7 +7,6 @@ vi.mock("../lib/sui", () => ({
   ACCESS_CONTROL_REGISTRY_ID: "0xregistry",
   ACCESS_CONTROL_OWNER_CAP_TYPE: "0xpackage::access_control::OwnerCap",
   ACCESS_CONTROL_ADMIN_CAP_TYPE: "0xpackage::access_control::AdminCap",
-  ACCESS_CONTROL_REVIEWER_CAP_TYPE: "0xpackage::access_control::ReviewerCap",
 }));
 
 vi.mock("../rpcInfrastructure", () => ({

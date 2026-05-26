@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 interface UseLongPressOptions {
   duration: number;
+  allowMouse?: boolean;
   enabled?: boolean;
   moveThreshold?: number;
   onComplete: () => void;
@@ -12,6 +13,7 @@ interface UseLongPressOptions {
 
 export function useLongPress<T extends HTMLElement>({
   duration,
+  allowMouse = false,
   enabled = true,
   moveThreshold = 14,
   onComplete,
@@ -67,7 +69,7 @@ export function useLongPress<T extends HTMLElement>({
 
   const onPointerDown = useCallback(
     (event: ReactPointerEvent<T>) => {
-      if (!enabled || event.pointerType === "mouse" || event.button !== 0 || pointerIdRef.current !== null) {
+      if (!enabled || (!allowMouse && event.pointerType === "mouse") || event.button !== 0 || pointerIdRef.current !== null) {
         return;
       }
       pointerIdRef.current = event.pointerId;
@@ -89,7 +91,7 @@ export function useLongPress<T extends HTMLElement>({
         onComplete();
       }, duration);
     },
-    [duration, enabled, onComplete, onStart, stopFrames, tick],
+    [allowMouse, duration, enabled, onComplete, onStart, stopFrames, tick],
   );
 
   const onPointerMove = useCallback(

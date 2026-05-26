@@ -5,13 +5,13 @@
 version = 4
 
 [pinned.mainnet.MoveStdlib]
-source = { git = "https://github.com/MystenLabs/sui.git", subdir = 'crates\sui-framework\packages\move-stdlib', rev = "2f5992f189cd24445cd010ccf0aa7ff418ff93b1" }
+source = { git = "https://github.com/MystenLabs/sui.git", subdir = 'crates\sui-framework\packages\move-stdlib', rev = "73dd2c2ba6f9fdb21d7ffde2b50a3f2f0ac39bc1" }
 use_environment = "mainnet"
 manifest_digest = "C4FE4C91DE74CBF223B2E380AE40F592177D21870DC2D7EB6227D2D694E05363"
 deps = {}
 
 [pinned.mainnet.Sui]
-source = { git = "https://github.com/MystenLabs/sui.git", subdir = 'crates\sui-framework\packages\sui-framework', rev = "2f5992f189cd24445cd010ccf0aa7ff418ff93b1" }
+source = { git = "https://github.com/MystenLabs/sui.git", subdir = 'crates\sui-framework\packages\sui-framework', rev = "73dd2c2ba6f9fdb21d7ffde2b50a3f2f0ac39bc1" }
 use_environment = "mainnet"
 manifest_digest = "CD547CB1ACCE0880C835DAED2D8FFCB91D56C833AE5240D3AA5B918398263195"
 deps = { MoveStdlib = "MoveStdlib" }
@@ -19,5 +19,5 @@ deps = { MoveStdlib = "MoveStdlib" }
 [pinned.mainnet.deepsignal_access]
 source = { root = true }
 use_environment = "mainnet"
-manifest_digest = "EC6E90369603CE16A65E2F7B784DCFCA80948E3C176AD82DC6EB101BAA942A89"
-deps = { Sui = "Sui" }
+manifest_digest = "E41BBD67BE8940D26C79D78B028477EF5B33BA217A1282C78ACB344CF8A5ECF6"
+deps = { std = "MoveStdlib", sui = "Sui" }

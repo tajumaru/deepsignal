@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  parseProjectMembers,
+  parseProjectSummary,
   parseProjectFormMetadataReference,
   parseProjectForms,
   serializeProjectFormMetadataReference,
@@ -53,5 +55,38 @@ describe("project form metadata references", () => {
       formBlobId: "form-blob-abc",
       sourceFormId: "form-local-abc",
     });
+  });
+});
+
+describe("project member roles", () => {
+  it("parses co-admin and reviewer members from on-chain project fields", () => {
+    expect(
+      parseProjectMembers([
+        { addr: "0xB", role: "1" },
+        { addr: "0xC", role: "2" },
+      ]),
+    ).toEqual([
+      { address: "0xb", role: "co_admin", roleCode: 1 },
+      { address: "0xc", role: "reviewer", roleCode: 2 },
+    ]);
+  });
+
+  it("keeps legacy admins while adding member co-admins and reviewers", () => {
+    const project = parseProjectSummary("0xPROJECT", {
+      name: "Signal desk",
+      owner: "0xA",
+      admins: ["0xB"],
+      members: [
+        { addr: "0xC", role: "1" },
+        { addr: "0xD", role: "2" },
+      ],
+      forms_count: "0",
+      signals_count: "0",
+      forms: [],
+      signals: [],
+    });
+
+    expect(project?.admins).toEqual(["0xb", "0xc"]);
+    expect(project?.reviewers).toEqual(["0xd"]);
   });
 });

@@ -5,7 +5,6 @@ import {
   ACCESS_CONTROL_OWNER_CAP_TYPE,
   ACCESS_CONTROL_PACKAGE_ID,
   ACCESS_CONTROL_REGISTRY_ID,
-  ACCESS_CONTROL_REVIEWER_CAP_TYPE,
 } from "../lib/sui";
 import { useAccessRegistry } from "./useAccessRegistry";
 import { useOwnedSuiObjects } from "./useOwnedSuiObjects";
@@ -122,7 +121,6 @@ export function useAccessControl(address?: string | null, options: { enabled?: b
         [
           ACCESS_CONTROL_OWNER_CAP_TYPE,
           ACCESS_CONTROL_ADMIN_CAP_TYPE,
-          ACCESS_CONTROL_REVIEWER_CAP_TYPE,
         ]
           .map((value) => normalizeType(value))
           .filter(Boolean),
@@ -134,7 +132,6 @@ export function useAccessControl(address?: string | null, options: { enabled?: b
     structTypes: [
       ACCESS_CONTROL_OWNER_CAP_TYPE,
       ACCESS_CONTROL_ADMIN_CAP_TYPE,
-      ACCESS_CONTROL_REVIEWER_CAP_TYPE,
     ],
   });
   const ownedCapabilityEntries = useMemo(
@@ -152,7 +149,7 @@ export function useAccessControl(address?: string | null, options: { enabled?: b
     const canValidateAgainstRegistry =
       Boolean(registryId) &&
       effectiveRegistryId === registryId &&
-      Boolean(registry.owner || registry.admins.length > 0 || registry.reviewers.length > 0);
+      Boolean(registry.owner || registry.admins.length > 0);
 
     const ownedOwnerCapIds = extractCapIds(
       ownedCapabilityEntries,
@@ -164,12 +161,6 @@ export function useAccessControl(address?: string | null, options: { enabled?: b
       ACCESS_CONTROL_ADMIN_CAP_TYPE,
       effectiveRegistryId,
     );
-    const ownedReviewerCapIds = extractCapIds(
-      ownedCapabilityEntries,
-      ACCESS_CONTROL_REVIEWER_CAP_TYPE,
-      effectiveRegistryId,
-    );
-
     const ownerCapIds =
       canValidateAgainstRegistry && address
         ? ownedOwnerCapIds.filter(
@@ -186,25 +177,16 @@ export function useAccessControl(address?: string | null, options: { enabled?: b
             ),
           )
         : ownedAdminCapIds;
-    const reviewerCapIds =
-      canValidateAgainstRegistry && address
-        ? ownedReviewerCapIds.filter((capId) =>
-            findRoleEntriesForAddress(registry, "reviewer", address).some(
-              (entry) => entry.capId === capId,
-            ),
-          )
-        : ownedReviewerCapIds;
-
     return {
       isConfigured: Boolean(packageId),
       packageId,
       registryId: effectiveRegistryId,
       hasOwnerCap: ownerCapIds.length > 0,
       hasAdminCap: adminCapIds.length > 0,
-      hasReviewerCap: reviewerCapIds.length > 0,
+      hasReviewerCap: false,
       ownerCapIds,
       adminCapIds,
-      reviewerCapIds,
+      reviewerCapIds: [],
     };
   }, [address, ownedCapabilityEntries, packageId, registry, registryId]);
 

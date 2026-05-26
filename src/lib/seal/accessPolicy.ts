@@ -23,15 +23,15 @@ export function resolveAccessPolicy(
   return selectProjectSealApprovalPolicy({
     objectId: context.objectId,
     projectId: context.projectId ?? context.ownerAddress ?? "",
-    reviewerCapId: context.reviewerCapId,
     envelopeApprovalPolicy: context.envelopeApprovalPolicy,
   });
 }
 
 export function getReviewerCapIdForDecrypt(profile: SealAccessProfile) {
-  return profile.hasOwnerCap || profile.hasAdminCap ? undefined : profile.reviewerCapIds?.[0];
+  void profile;
+  return undefined;
 }
 
 export function canUseAdminSealAccess(profile: SealAccessProfile) {
-  return Boolean(profile.hasOwnerCap || profile.hasAdminCap || profile.reviewerCapIds?.length);
+  return Boolean(profile.hasOwnerCap || profile.hasAdminCap);
 }

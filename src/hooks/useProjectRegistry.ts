@@ -88,6 +88,14 @@ export function useProjectRegistry(address?: string | null) {
         .filter(Boolean),
     [expectedType, ownedObjectsQuery.data],
   );
+  const parsedOwnedProjectCaps = useMemo(
+    () =>
+      (ownedObjectsQuery.data ?? [])
+        .filter((entry) => isProjectOwnerCapType(entry.data?.type) || normalizeType(entry.data?.type) === expectedType)
+        .map((entry) => parseProjectOwnerCap(entry))
+        .filter((entry): entry is NonNullable<ReturnType<typeof parseProjectOwnerCap>> => Boolean(entry)),
+    [expectedType, ownedObjectsQuery.data],
+  );
 
   const projectQuery = useQuery({
     queryKey: ["project-registry", address ?? "", ownerCapObjectIds.join(","), rpc.mode, rpc.currentRpcUrl],
@@ -100,10 +108,7 @@ export function useProjectRegistry(address?: string | null) {
     refetchOnWindowFocus: false,
     queryFn: async () => {
       try {
-        const parsedCaps = (ownedObjectsQuery.data ?? [])
-          .filter((entry) => isProjectOwnerCapType(entry.data?.type) || normalizeType(entry.data?.type) === expectedType)
-          .map((entry) => parseProjectOwnerCap(entry))
-          .filter((entry): entry is NonNullable<ReturnType<typeof parseProjectOwnerCap>> => Boolean(entry));
+        const parsedCaps = parsedOwnedProjectCaps;
 
         const knownCapIds = new Set(parsedCaps.map((cap) => cap.objectId));
         const missingCapIds = ownerCapObjectIds.filter((objectId) => !knownCapIds.has(objectId));
@@ -213,6 +218,6 @@ export function useProjectRegistry(address?: string | null) {
     refetch: refetchProjects,
     dataUpdatedAt: Math.max(ownedObjectsQuery.dataUpdatedAt, projectQuery.dataUpdatedAt),
     projects,
-    ownedProjectCaps: projectQuery.data?.caps ?? [],
+    ownedProjectCaps: projectQuery.data?.caps ?? parsedOwnedProjectCaps,
   };
 }

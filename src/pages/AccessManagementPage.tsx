@@ -16,7 +16,7 @@ export function AccessManagementPage() {
     accessVerificationBlocked,
   } = useAccessControl(wallet.accountAddress);
   const accessState = getAdminSurfaceAccessState(
-    "reviewer",
+    "admin",
     wallet.accountAddress,
     capabilityProfile,
   );

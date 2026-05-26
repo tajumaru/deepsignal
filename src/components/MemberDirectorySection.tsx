@@ -12,8 +12,6 @@ function roleTitle(role: RegistryRoleEntry["role"]) {
       return "accessRoleOwner";
     case "admin":
       return "accessRoleAdmin";
-    case "reviewer":
-      return "accessRoleReviewer";
     default:
       return role;
   }
@@ -25,9 +23,6 @@ function profileRoleLabel(profile: CapabilityProfile, t: (key: string) => string
   }
   if (profile.hasAdminCap) {
     return t("accessRoleAdmin");
-  }
-  if (profile.hasReviewerCap) {
-    return t("accessRoleReviewer");
   }
   return profile.isConfigured ? t("accessRoleNone") : t("accessRoleLegacyOwner");
 }
@@ -70,11 +65,10 @@ export function MemberDirectorySection({
         </span>
         <span className="signal-chip">{t("ownersCount", { count: registry.owner ? 1 : 0 })}</span>
         <span className="signal-chip">{t("adminsCount", { count: registry.admins.length })}</span>
-        <span className="signal-chip">{t("reviewersCount", { count: registry.reviewers.length })}</span>
       </div>
 
       {readOnly ? (
-        <p className="muted">{t("reviewerRegistryReadOnlyHint")}</p>
+        <p className="muted">{t("adminRegistryReadOnlyHint")}</p>
       ) : null}
 
       <div className="access-role-grid" role="table" aria-label={t("accessRegistryTableLabel")}>

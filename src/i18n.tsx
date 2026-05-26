@@ -517,7 +517,7 @@ const messages = {
     customDateFuture: "Choose a custom date and time in the future.",
     attachmentDecryptFailed: "Unable to decrypt attachment.",
     reviewAccessRequiresCapability:
-      "Only wallets with OwnerCap, AdminCap, or ReviewerCap can open review screens and perform review actions.",
+      "Only wallets with OwnerCap or AdminCap can open review screens and perform review actions.",
     formResponseClosed: "This signal channel is no longer accepting new signals.",
     fields: "Questions",
     addField: "Add Question",
@@ -1265,7 +1265,7 @@ const messages = {
     accessManagementEyebrow: "Access Management",
     accessManagementTitle: "Member Access",
     accessManagementDescription:
-      "Manage owner, admin, and reviewer permissions for the Encrypted Signal Inbox.",
+      "Manage owner and admin permissions for the Encrypted Signal Inbox.",
     accessOverviewTitle: "Encrypted Signal Inbox permissions",
     accessOverviewBody:
       "Keep Research Lab focused on review, then jump into the member registry only when you need to update access.",
@@ -1296,10 +1296,12 @@ const messages = {
     actionsLabel: "Actions",
     readOnlyLabel: "Read only",
     accessRegistryTableLabel: "Access management registry",
+    adminRegistryReadOnlyHint:
+      "Only owner wallets can change admin access. Admin wallets can inspect the registry here.",
     reviewerRegistryReadOnlyHint:
       "Reviewer wallets can inspect the registry here, but only owner or admin wallets can change access.",
     memberManagementCapabilityRequired:
-      "OwnerCap, AdminCap, or ReviewerCap is required to access member management.",
+      "OwnerCap or AdminCap is required to access member management.",
     accessAddAdminRequiresOwner: "OwnerCap is required to add an admin.",
     accessAddReviewerRequiresAdmin: "OwnerCap or AdminCap is required to add a reviewer.",
     accessRemoveAdminRequiresOwner: "OwnerCap is required to remove an admin.",
@@ -2103,7 +2105,7 @@ const messages = {
       "Publish state is incomplete. DeepSignal detected registry metadata without a confirmed upload. Treat this signal as unpublished and republish from the draft.",
     checkingWalletCapabilities: "Checking wallet capabilities...",
     reviewConsoleCapabilityRequirement:
-      "Only wallets with OwnerCap / AdminCap / ReviewerCap can open the review console.",
+      "Only wallets with OwnerCap / AdminCap can open the review console.",
     contestDemoWorkspace: "Contest demo workspace",
     checkingWalletAccess: "Checking wallet access...",
     reviewButton: "Review",
@@ -2339,6 +2341,7 @@ const messages = {
     deleteOnchainFormButton: "Delete on-chain form",
     deleteOnchainFormsNoSignalsOnly: "On-chain forms can only be deleted when no on-chain signals reference this project.",
     deleteProjectButton: "Delete Project",
+    deleteProjectHoldHint: "Hold for 3 seconds to delete project",
     projectConnectedStatusLabel: "Project Connected",
     selectCreateOrConnectProject: "Select, create, or connect a project",
     privateSignalsEnabledStatusLabel: "Private Signals Enabled",
@@ -3348,7 +3351,7 @@ const messages = {
     customDateFuture: "\u30ab\u30b9\u30bf\u30e0\u65e5\u6642\u306f\u73fe\u5728\u6642\u523b\u3088\u308a\u672a\u6765\u3092\u6307\u5b9a\u3057\u3066\u304f\u3060\u3055\u3044\u3002",
     attachmentDecryptFailed: "\u6dfb\u4ed8\u3092\u5fa9\u53f7\u3067\u304d\u307e\u305b\u3093",
     reviewAccessRequiresCapability:
-      "OwnerCap / AdminCap / ReviewerCap \u3092\u6301\u3064\u30a6\u30a9\u30ec\u30c3\u30c8\u3060\u3051\u304c review \u753b\u9762\u3092\u958b\u304d\u3001review \u64cd\u4f5c\u3092\u5b9f\u884c\u3067\u304d\u307e\u3059\u3002",
+      "OwnerCap / AdminCap \u3092\u6301\u3064\u30a6\u30a9\u30ec\u30c3\u30c8\u3060\u3051\u304c review \u753b\u9762\u3092\u958b\u304d\u3001review \u64cd\u4f5c\u3092\u5b9f\u884c\u3067\u304d\u307e\u3059\u3002",
     formResponseClosed:
       "\u3053\u306e\u30b7\u30b0\u30ca\u30eb\u30c1\u30e3\u30cd\u30eb\u306f\u65b0\u3057\u3044\u30b7\u30b0\u30ca\u30eb\u3092\u53d7\u3051\u4ed8\u3051\u3066\u3044\u307e\u305b\u3093",
     fields: "\u8cea\u554f",
@@ -4129,7 +4132,7 @@ const messages = {
     accessManagementEyebrow: "アクセス管理",
     accessManagementTitle: "\u30e1\u30f3\u30d0\u30fc\u30a2\u30af\u30bb\u30b9",
     accessManagementDescription:
-      "Encrypted Signal Inbox \u306e owner / admin / reviewer \u6a29\u9650\u3092\u3053\u3053\u3067\u7ba1\u7406\u3057\u307e\u3059\u3002",
+      "Encrypted Signal Inbox \u306e owner / admin \u6a29\u9650\u3092\u3053\u3053\u3067\u7ba1\u7406\u3057\u307e\u3059\u3002",
     accessOverviewTitle: "Encrypted Signal Inbox 権限",
     accessOverviewBody:
       "Research Lab \u306f\u30ec\u30d3\u30e5\u30fc\u4e2d\u5fc3\u306b\u4fdd\u3061\u3001\u30e1\u30f3\u30d0\u30fc\u6a29\u9650\u306e\u78ba\u8a8d\u3084\u66f4\u65b0\u306f\u5fc5\u8981\u306a\u3068\u304d\u3060\u3051\u3053\u306e\u5c0e\u7dda\u304b\u3089\u958b\u3051\u308b\u3088\u3046\u306b\u3057\u307e\u3059\u3002",
@@ -4160,10 +4163,12 @@ const messages = {
     actionsLabel: "操作",
     readOnlyLabel: "読み取り専用",
     accessRegistryTableLabel: "アクセス管理レジストリ",
+    adminRegistryReadOnlyHint:
+      "管理者ウォレットはここでレジストリを確認できますが、管理者アクセスを変更できるのはオーナーウォレットのみです。",
     reviewerRegistryReadOnlyHint:
       "レビュアーウォレットはここでレジストリを確認できますが、アクセス権を変更できるのはオーナー / 管理者ウォレットのみです。",
     memberManagementCapabilityRequired:
-      "メンバー管理にアクセスするには OwnerCap / AdminCap / ReviewerCap が必要です。",
+      "メンバー管理にアクセスするには OwnerCap / AdminCap が必要です。",
     accessAddAdminRequiresOwner: "管理者を追加するには OwnerCap が必要です。",
     accessAddReviewerRequiresAdmin:
       "レビュアーを追加するには OwnerCap または AdminCap が必要です。",
@@ -5028,7 +5033,7 @@ const messages = {
       "\u516c\u958b\u72b6\u614b\u304c\u4e0d\u5b8c\u5168\u3067\u3059\u3002DeepSignal \u306f upload \u304c\u78ba\u8a8d\u3067\u304d\u3066\u3044\u306a\u3044\u306e\u306b registry \u30e1\u30bf\u30c7\u30fc\u30bf\u304c\u5b58\u5728\u3059\u308b\u72b6\u614b\u3092\u691c\u51fa\u3057\u307e\u3057\u305f\u3002\u672a\u516c\u958b\u3068\u3057\u3066\u6271\u3044\u3001draft \u304b\u3089\u518d\u516c\u958b\u3057\u3066\u304f\u3060\u3055\u3044\u3002",
     checkingWalletCapabilities: "\u30a6\u30a9\u30ec\u30c3\u30c8\u6a29\u9650\u3092\u78ba\u8a8d\u3057\u3066\u3044\u307e\u3059...",
     reviewConsoleCapabilityRequirement:
-      "\u30ec\u30d3\u30e5\u30fc\u30b3\u30f3\u30bd\u30fc\u30eb\u3092\u958b\u304f\u306b\u306f OwnerCap / AdminCap / ReviewerCap \u3092\u6301\u3064\u30a6\u30a9\u30ec\u30c3\u30c8\u304c\u5fc5\u8981\u3067\u3059\u3002",
+      "\u30ec\u30d3\u30e5\u30fc\u30b3\u30f3\u30bd\u30fc\u30eb\u3092\u958b\u304f\u306b\u306f OwnerCap / AdminCap \u3092\u6301\u3064\u30a6\u30a9\u30ec\u30c3\u30c8\u304c\u5fc5\u8981\u3067\u3059\u3002",
     contestDemoWorkspace: "\u30b3\u30f3\u30c6\u30b9\u30c8\u7528\u30c7\u30e2\u30ef\u30fc\u30af\u30b9\u30da\u30fc\u30b9",
     checkingWalletAccess: "\u30a6\u30a9\u30ec\u30c3\u30c8\u30a2\u30af\u30bb\u30b9\u3092\u78ba\u8a8d\u3057\u3066\u3044\u307e\u3059...",
     reviewButton: "\u30ec\u30d3\u30e5\u30fc",
@@ -5283,6 +5288,7 @@ const messages = {
     deleteOnchainFormsNoSignalsOnly:
       "\u30aa\u30f3\u30c1\u30a7\u30fc\u30f3 signal \u304c\u3053\u306e\u30d7\u30ed\u30b8\u30a7\u30af\u30c8\u3092\u53c2\u7167\u3057\u3066\u3044\u306a\u3044\u5834\u5408\u306e\u307f\u3001\u30aa\u30f3\u30c1\u30a7\u30fc\u30f3\u30d5\u30a9\u30fc\u30e0\u3092\u524a\u9664\u3067\u304d\u307e\u3059\u3002",
     deleteProjectButton: "\u30d7\u30ed\u30b8\u30a7\u30af\u30c8\u3092\u524a\u9664",
+    deleteProjectHoldHint: "3\u79d2\u9577\u62bc\u3057\u3067\u30d7\u30ed\u30b8\u30a7\u30af\u30c8\u3092\u524a\u9664",
     projectConnectedStatusLabel: "\u30d7\u30ed\u30b8\u30a7\u30af\u30c8\u63a5\u7d9a",
     selectCreateOrConnectProject: "\u30d7\u30ed\u30b8\u30a7\u30af\u30c8\u3092\u9078\u629e\u3001\u4f5c\u6210\u3001\u307e\u305f\u306f\u63a5\u7d9a\u3057\u3066\u304f\u3060\u3055\u3044",
     privateSignalsEnabledStatusLabel: "\u30d7\u30e9\u30a4\u30d9\u30fc\u30c8\u30b7\u30b0\u30ca\u30eb\u6709\u52b9",

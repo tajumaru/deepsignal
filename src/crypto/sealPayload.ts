@@ -188,7 +188,6 @@ export function getSealPolicyCapabilityType(policyId?: string) {
       return "Owner wallet";
     case "project_signal_reviewer_v1":
     case "project_reviewer_v0":
-      return "ReviewerCap";
     case "project_signal_v1":
     case "project_admin_v0":
       return "OwnerCap/AdminCap";
@@ -201,24 +200,23 @@ export function selectProjectSealApprovalPolicy({
   envelopeApprovalPolicy,
   objectId,
   projectId,
-  reviewerCapId,
 }: {
   envelopeApprovalPolicy?: ProjectSealApprovalPolicy | string;
   objectId: string;
   projectId: string;
-  reviewerCapId?: string;
-}): ProjectSealApprovalPolicy {
+}): Exclude<ProjectSealApprovalPolicy, "project_signal_reviewer_v1" | "project_reviewer_v0"> {
   const isProjectScopedSignal = safelyDoesSealIdMatchProject(objectId, projectId);
-  if (reviewerCapId) {
-    return isProjectScopedSignal ? "project_signal_reviewer_v1" : "project_reviewer_v0";
-  }
   if (
     envelopeApprovalPolicy === "project_signal_v1" ||
-    envelopeApprovalPolicy === "project_admin_v0" ||
-    envelopeApprovalPolicy === "project_signal_reviewer_v1" ||
-    envelopeApprovalPolicy === "project_reviewer_v0"
+    envelopeApprovalPolicy === "project_admin_v0"
   ) {
     return envelopeApprovalPolicy;
+  }
+  if (envelopeApprovalPolicy === "project_signal_reviewer_v1") {
+    return "project_signal_v1";
+  }
+  if (envelopeApprovalPolicy === "project_reviewer_v0") {
+    return "project_admin_v0";
   }
   return isProjectScopedSignal ? "project_signal_v1" : "project_admin_v0";
 }

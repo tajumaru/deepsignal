@@ -45,9 +45,6 @@ export function AccessOverviewCard({
         </span>
         <span className="signal-chip">{t("ownersCount", { count: registry.owner ? 1 : 0 })}</span>
         <span className="signal-chip">{t("adminsCount", { count: registry.admins.length })}</span>
-        <span className="signal-chip">
-          {t("reviewersCount", { count: registry.reviewers.length })}
-        </span>
       </div>
     </section>
   );

@@ -57,6 +57,8 @@ function createProject(overrides: Partial<ProjectSummary> = {}): ProjectSummary 
     name: "Project One",
     owner: "0xowner-1",
     admins: [],
+    reviewers: [],
+    members: [],
     formsCount: 1,
     signalsCount: 0,
     onchainForms: [],

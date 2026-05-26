@@ -166,24 +166,18 @@ export function buildSealDecryptPolicySnapshot(input: {
   envelope: RealSealEnvelope;
   context?: SealDecryptContext;
   approvalPolicy?: string;
-  reviewerCapId?: string;
 }) {
   const projectId = normalizeOptionalSealIdentifier(input.envelope.projectId ?? input.context?.projectId);
   const ownerAddress = normalizeOptionalSealIdentifier(input.envelope.ownerAddress ?? input.context?.ownerAddress);
-  const reviewerCapId = normalizeOptionalSealIdentifier(input.reviewerCapId ?? input.context?.reviewerCapId);
   const envelopePolicyId = input.approvalPolicy ?? input.envelope.approvalPolicy ?? input.envelope.policyId;
   const policyId = projectId
     ? selectProjectSealApprovalPolicy({
         envelopeApprovalPolicy: envelopePolicyId,
         objectId: input.envelope.objectId,
         projectId,
-        reviewerCapId,
       })
     : envelopePolicyId;
-  const policyObjectId =
-    policyId === "project_signal_reviewer_v1" || policyId === "project_reviewer_v0"
-      ? normalizeSealIdentifier(reviewerCapId)
-      : normalizeSealIdentifier(input.envelope.policyObjectId ?? projectId ?? ownerAddress ?? input.envelope.objectId);
+  const policyObjectId = normalizeSealIdentifier(input.envelope.policyObjectId ?? projectId ?? ownerAddress ?? input.envelope.objectId);
   return createSealPolicySnapshot({
     network: SUI_NETWORK,
     packageId: input.envelope.packageId,

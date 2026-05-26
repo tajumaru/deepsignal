@@ -10,6 +10,11 @@ import {
 
 export type GlobalProjectCreatorRole = "owner" | "admin";
 export type OnchainSignalStatus = "new" | "triaged" | "archived";
+export type ProjectMemberRole = "owner" | "co_admin" | "reviewer";
+
+export const PROJECT_ROLE_OWNER = 0;
+export const PROJECT_ROLE_CO_ADMIN = 1;
+export const PROJECT_ROLE_REVIEWER = 2;
 
 const RECENT_PROJECTS_KEY = "deepsignal.projectRegistry.recentProjects";
 const SELECTED_PROJECT_ID_KEY = "deepsignal.projectRegistry.selectedProjectId";
@@ -20,12 +25,20 @@ export interface ProjectSummary {
   name: string;
   owner: string;
   admins: string[];
+  reviewers: string[];
+  members: ProjectMemberSummary[];
   formsCount: number;
   signalsCount: number;
   onchainForms?: OnchainProjectFormSummary[];
   onchainSignals?: OnchainProjectSignalSummary[];
   createdAt?: string;
   ownedOwnerCapId?: string;
+}
+
+export interface ProjectMemberSummary {
+  address: string;
+  role: ProjectMemberRole;
+  roleCode: number;
 }
 
 export interface OnchainProjectFormSummary {
@@ -76,6 +89,15 @@ export interface AddProjectAdminArgs {
   projectId: string;
   ownerCapId: string;
   adminAddress: string;
+  packageId?: string;
+  tx?: Transaction;
+}
+
+export interface AddProjectMemberArgs {
+  projectId: string;
+  ownerCapId: string;
+  memberAddress: string;
+  role: Exclude<ProjectMemberRole, "owner"> | number;
   packageId?: string;
   tx?: Transaction;
 }
@@ -253,6 +275,30 @@ function readAddressVector(source: unknown) {
   return [];
 }
 
+function roleCodeToProjectMemberRole(roleCode: number): ProjectMemberRole {
+  if (roleCode === PROJECT_ROLE_CO_ADMIN) {
+    return "co_admin";
+  }
+  if (roleCode === PROJECT_ROLE_REVIEWER) {
+    return "reviewer";
+  }
+  return "owner";
+}
+
+function projectMemberRoleToCode(role: AddProjectMemberArgs["role"]) {
+  if (typeof role === "number") {
+    return role;
+  }
+  switch (role) {
+    case "co_admin":
+      return PROJECT_ROLE_CO_ADMIN;
+    case "reviewer":
+      return PROJECT_ROLE_REVIEWER;
+    default:
+      return PROJECT_ROLE_OWNER;
+  }
+}
+
 function readU64(source: unknown) {
   if (typeof source === "number" && Number.isFinite(source)) {
     return source;
@@ -299,6 +345,27 @@ function readVectorEntries(source: unknown): Record<string, unknown>[] {
     return readVectorEntries(record.fields);
   }
   return [];
+}
+
+export function parseProjectMembers(source: unknown) {
+  return readVectorEntries(source)
+    .map((entry) => {
+      const fields =
+        entry.fields && typeof entry.fields === "object"
+          ? (entry.fields as Record<string, unknown>)
+          : entry;
+      const address = normalizeObjectId(typeof fields.addr === "string" ? fields.addr : readObjectId(fields.addr));
+      const roleCode = readU64(fields.role);
+      if (!address) {
+        return null;
+      }
+      return {
+        address,
+        role: roleCodeToProjectMemberRole(roleCode),
+        roleCode,
+      } satisfies ProjectMemberSummary;
+    })
+    .filter((member): member is ProjectMemberSummary => Boolean(member));
 }
 
 export function parseProjectForms(source: unknown) {
@@ -470,11 +537,21 @@ export function parseProjectSummary(
   }
 
   const createdAtMs = readU64(fields.created_at);
+  const legacyAdmins = readAddressVector(fields.admins);
+  const members = parseProjectMembers(fields.members);
+  const memberCoAdmins = members
+    .filter((member) => member.role === "co_admin")
+    .map((member) => member.address);
+  const reviewers = members
+    .filter((member) => member.role === "reviewer")
+    .map((member) => member.address);
   return {
     objectId: normalizeObjectId(objectId),
     name,
     owner,
-    admins: readAddressVector(fields.admins),
+    admins: [...new Set([...legacyAdmins, ...memberCoAdmins])],
+    reviewers,
+    members,
     formsCount: readU64(fields.forms_count),
     signalsCount: readU64(fields.signals_count),
     onchainForms: parseProjectForms(fields.forms),
@@ -531,7 +608,14 @@ export function loadRecentProjects() {
       return [];
     }
     const parsed = JSON.parse(raw) as ProjectSummary[];
-    return Array.isArray(parsed) ? parsed : [];
+    return Array.isArray(parsed)
+      ? parsed.map((project) => ({
+          ...project,
+          admins: project.admins ?? [],
+          reviewers: project.reviewers ?? [],
+          members: project.members ?? [],
+        }))
+      : [];
   } catch {
     return [];
   }
@@ -647,15 +731,27 @@ export function createProject(args: CreateProjectArgs) {
 }
 
 export function addProjectAdmin(args: AddProjectAdminArgs) {
+  return addProjectMember({
+    projectId: args.projectId,
+    ownerCapId: args.ownerCapId,
+    memberAddress: args.adminAddress,
+    role: "co_admin",
+    packageId: args.packageId,
+    tx: args.tx,
+  });
+}
+
+export function addProjectMember(args: AddProjectMemberArgs) {
   const packageId = resolvePackageId(args.packageId);
   const tx = createOrReuseTransaction(args.tx);
 
   tx.moveCall({
-    target: `${packageId}::${PROJECT_REGISTRY_MODULE}::add_admin`,
+    target: `${packageId}::${PROJECT_REGISTRY_MODULE}::add_project_member`,
     arguments: [
       tx.object(requireValue(args.projectId, "Project object id")),
       tx.object(requireValue(args.ownerCapId, "Project owner cap id")),
-      tx.pure.address(normalizeSuiAddress(requireValue(args.adminAddress, "Admin address"))),
+      tx.pure.address(normalizeSuiAddress(requireValue(args.memberAddress, "Member address"))),
+      tx.pure.u8(projectMemberRoleToCode(args.role)),
     ],
   });
 
@@ -663,15 +759,43 @@ export function addProjectAdmin(args: AddProjectAdminArgs) {
 }
 
 export function removeProjectAdmin(args: AddProjectAdminArgs) {
+  return removeProjectMember({
+    projectId: args.projectId,
+    ownerCapId: args.ownerCapId,
+    memberAddress: args.adminAddress,
+    role: "co_admin",
+    packageId: args.packageId,
+    tx: args.tx,
+  });
+}
+
+export function removeProjectMember(args: AddProjectMemberArgs) {
   const packageId = resolvePackageId(args.packageId);
   const tx = createOrReuseTransaction(args.tx);
 
   tx.moveCall({
-    target: `${packageId}::${PROJECT_REGISTRY_MODULE}::remove_admin`,
+    target: `${packageId}::${PROJECT_REGISTRY_MODULE}::remove_project_member`,
     arguments: [
       tx.object(requireValue(args.projectId, "Project object id")),
       tx.object(requireValue(args.ownerCapId, "Project owner cap id")),
-      tx.pure.address(normalizeSuiAddress(requireValue(args.adminAddress, "Admin address"))),
+      tx.pure.address(normalizeSuiAddress(requireValue(args.memberAddress, "Member address"))),
+    ],
+  });
+
+  return tx;
+}
+
+export function updateProjectMemberRole(args: AddProjectMemberArgs) {
+  const packageId = resolvePackageId(args.packageId);
+  const tx = createOrReuseTransaction(args.tx);
+
+  tx.moveCall({
+    target: `${packageId}::${PROJECT_REGISTRY_MODULE}::update_project_member_role`,
+    arguments: [
+      tx.object(requireValue(args.projectId, "Project object id")),
+      tx.object(requireValue(args.ownerCapId, "Project owner cap id")),
+      tx.pure.address(normalizeSuiAddress(requireValue(args.memberAddress, "Member address"))),
+      tx.pure.u8(projectMemberRoleToCode(args.role)),
     ],
   });
 

@@ -9,7 +9,6 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { CreateFormLink } from "../components/CreateFormLink";
 import { AdminAccessGate } from "../components/AdminAccessGate";
 import { AdminWorkspaceTabs } from "../components/AdminWorkspaceTabs";
-import { MemberDirectorySection } from "../components/MemberDirectorySection";
 import { EmptyState } from "../components/EmptyState";
 import { FormattedAnswerValue } from "../components/FormattedAnswerValue";
 import { PrivateSignalUnlockCard } from "../components/PrivateSignalUnlockCard";
@@ -19,6 +18,7 @@ import { StorageProof } from "../components/StorageProof";
 import { AdminToast } from "../features/admin/components/AdminToast";
 import { CsvExportConfirmationModal } from "../features/admin/components/CsvExportConfirmationModal";
 import { ProjectWorkspaceModal } from "../features/admin/components/ProjectWorkspaceModal";
+import { ProjectMemberManagementSection } from "../features/admin/components/ProjectMemberManagementSection";
 import { ReviewResultCard } from "../features/admin/components/ReviewResultCard";
 import { ReviewSessionModal } from "../features/admin/components/ReviewSessionModal";
 import { SecondaryInspector } from "../features/admin/components/SecondaryInspector";
@@ -103,6 +103,7 @@ import { clearDeepSignalPolicyCapabilityCache } from "../lib/debugCache";
 import { resetLocalEnvironment } from "../lib/resetEnvironment";
 import { formatResponseDeadline, type ResponseDeadlineLabels } from "../lib/responseDeadline";
 import { getSubmissionRespondentMeta } from "../lib/respondentMeta";
+import { endPerf, startPerf } from "../lib/perf";
 import {
   getSignalPreview,
   getPrivateSignalPayloadState,
@@ -138,6 +139,8 @@ import type { ActivityEvent, FormSchema, Submission } from "../types";
 
 const MOBILE_REVIEW_MEDIA_QUERY = "(max-width: 768px)";
 const COARSE_POINTER_MEDIA_QUERY = "(pointer: coarse)";
+const INITIAL_SIGNAL_LIST_LIMIT = 20;
+const SIGNAL_LIST_PAGE_SIZE = 20;
 const NODE_LONG_PRESS_MS = 3000;
 const NODE_LONG_PRESS_MOVE_THRESHOLD = 18;
 const NODE_SWIPE_ACTIVATION_THRESHOLD = 10;
@@ -948,6 +951,51 @@ function WorkspaceShortcutBar({
 
 type InboxOnboardingState = "create-project" | "create-signal" | "ready";
 
+function HoldToDeleteProjectButton({
+  disabledReason,
+  deleting,
+  onDelete,
+}: {
+  disabledReason: string;
+  deleting: boolean;
+  onDelete: () => void;
+}) {
+  const { t } = useI18n();
+  const disabled = deleting || Boolean(disabledReason);
+  const { isHolding, progress, handlers } = useLongPress<HTMLButtonElement>({
+    duration: 3000,
+    allowMouse: true,
+    enabled: !disabled,
+    onComplete: onDelete,
+  });
+  const style = {
+    "--project-delete-hold-progress": String(progress),
+  } as CSSProperties;
+
+  return (
+    <button
+      type="button"
+      className={`danger-button signal-inbox-onboarding-delete-project ${isHolding ? "is-holding" : ""}`}
+      disabled={disabled}
+      title={disabledReason || t("deleteProjectHoldHint")}
+      aria-label={disabledReason || t("deleteProjectHoldHint")}
+      style={style}
+      {...handlers}
+      onClick={(event) => event.preventDefault()}
+    >
+      <span className="signal-inbox-onboarding-delete-label">
+        {deleting ? t("deletingLabel") : t("deleteProjectButton")}
+      </span>
+      <span className="project-delete-hold-ripple" aria-hidden="true">
+        <span className="project-delete-hold-wave project-delete-hold-wave-primary" />
+        <span className="project-delete-hold-wave project-delete-hold-wave-secondary" />
+        <span className="project-delete-hold-mark">☠</span>
+      </span>
+      <span className="project-delete-hold-progress" aria-hidden="true" />
+    </button>
+  );
+}
+
 function SignalInboxOnboardingHero({
   state,
   projectName,
@@ -956,6 +1004,9 @@ function SignalInboxOnboardingHero({
   selectProject,
   onRevealCreateProject,
   onRevealConnectProject: _onRevealConnectProject,
+  deleteProjectDisabledReason,
+  deletingProject,
+  onDeleteProject,
   highlightCreateFormCta,
 }: {
   state: InboxOnboardingState;
@@ -965,6 +1016,9 @@ function SignalInboxOnboardingHero({
   selectProject: (projectId: string) => void;
   onRevealCreateProject: () => void;
   onRevealConnectProject: () => void;
+  deleteProjectDisabledReason: string;
+  deletingProject: boolean;
+  onDeleteProject: () => void;
   highlightCreateFormCta: boolean;
 }) {
   const { t } = useI18n();
@@ -1026,6 +1080,13 @@ function SignalInboxOnboardingHero({
                       ))}
                     </select>
                   </div>
+                  {projectName ? (
+                    <HoldToDeleteProjectButton
+                      disabledReason={deleteProjectDisabledReason}
+                      deleting={deletingProject}
+                      onDelete={onDeleteProject}
+                    />
+                  ) : null}
                   <button type="button" className="ghost-button" onClick={onRevealCreateProject}>
                     {t("createProjectButton")}
                   </button>
@@ -1537,6 +1598,8 @@ interface MobileSignalInboxProps {
   sortOrder: SignalSortOrder;
   onSortOrderChange: (value: SignalSortOrder) => void;
   visibleSignals: SignalRecord[];
+  hasMoreSignals: boolean;
+  onLoadMoreSignals: () => void;
   selectedRecord: SignalRecord | null;
   unlockedSignalId?: string | null;
   onSelectSignal: (record: SignalRecord) => void;
@@ -1584,6 +1647,8 @@ function MobileSignalInbox({
   sortOrder,
   onSortOrderChange,
   visibleSignals,
+  hasMoreSignals,
+  onLoadMoreSignals,
   selectedRecord,
   unlockedSignalId,
   onSelectSignal,
@@ -1669,6 +1734,11 @@ function MobileSignalInbox({
                 t={t}
               />
             ))}
+        {hasMoreSignals ? (
+          <button type="button" className="ghost-button signal-list-load-more" onClick={onLoadMoreSignals}>
+            {t("showMoreToggle")}
+          </button>
+        ) : null}
       </div>
 
       <MobileComposeSignalButton />
@@ -1676,25 +1746,13 @@ function MobileSignalInbox({
   );
 }
 
-function InboxLoadingPanel({ title, body }: { title: string; body: string }) {
+function InboxListSkeleton({ compact = false }: { compact?: boolean }) {
   return (
-    <section className="panel inbox-loading-panel" role="status" aria-live="polite">
-      <div className="inbox-loading-copy">
-        <p className="eyebrow">Encrypted Signal Inbox</p>
-        <h1>{title}</h1>
-        <p className="muted">{body}</p>
-      </div>
-      <div className="inbox-loading-steps" aria-hidden="true">
-        <span className="is-active" />
-        <span className="is-active" />
-        <span />
-      </div>
-      <div className="inbox-loading-skeleton">
-        <span className="inbox-loading-card is-wide" />
-        <span className="inbox-loading-card" />
-        <span className="inbox-loading-card" />
-      </div>
-    </section>
+    <div className={`inbox-list-skeleton ${compact ? "is-compact" : ""}`} role="status" aria-live="polite">
+      <span />
+      <span />
+      <span />
+    </div>
   );
 }
 
@@ -1763,7 +1821,6 @@ export function AdminDashboardPage() {
   const {
     capabilityProfile,
     isPending: isLoadingCapabilities,
-    isLoadingAccess,
     ownedObjects,
     refetch: refetchAccessControl,
   } = useAccessControl(wallet.accountAddress);
@@ -1854,6 +1911,7 @@ export function AdminDashboardPage() {
   const {
     forms,
     loading,
+    submissionsLoading,
     loadError,
     selectedFormId,
     setSelectedFormId,
@@ -1881,6 +1939,42 @@ export function AdminDashboardPage() {
     scopeProjectId: getSelectedProjectId(),
     viewScope: signalViewScope,
   });
+  const [renderedSignalLimit, setRenderedSignalLimit] = useState(INITIAL_SIGNAL_LIST_LIMIT);
+  const renderedVisibleSignals = useMemo(
+    () => visibleSignals.slice(0, renderedSignalLimit),
+    [renderedSignalLimit, visibleSignals],
+  );
+  const hasMoreRenderedSignals = renderedVisibleSignals.length < visibleSignals.length;
+  const inboxSettling = loading || submissionsLoading;
+  const [showInitialListSkeleton, setShowInitialListSkeleton] = useState(false);
+
+  useEffect(() => {
+    setRenderedSignalLimit(INITIAL_SIGNAL_LIST_LIMIT);
+  }, [search, selectedFormId, selectedStreamId, signalSortOrder, signalViewScope]);
+
+  useEffect(() => {
+    if (!inboxSettling || visibleSignals.length > 0) {
+      setShowInitialListSkeleton(false);
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      setShowInitialListSkeleton(true);
+    }, 180);
+
+    return () => window.clearTimeout(timer);
+  }, [inboxSettling, visibleSignals.length]);
+
+  useEffect(() => {
+    startPerf("admin:inbox-render");
+    window.requestAnimationFrame(() => {
+      endPerf(
+        "admin:inbox-render",
+        "ok",
+        `${renderedVisibleSignals.length}/${visibleSignals.length} signals rendered`,
+      );
+    });
+  }, [renderedVisibleSignals.length, visibleSignals.length]);
 
   useEffect(() => {
     if (!loading) {
@@ -1920,11 +2014,14 @@ export function AdminDashboardPage() {
     highlightCreateFormCta,
     isCreatingProject,
     projectState,
+    deletingProject,
+    deleteProjectBlockedReason,
     manualProjectInputRef,
     projectCreateInputRef,
     visibleOnchainForms,
     connectManualProject,
     handleCreateProject,
+    handleDeleteProject,
   } = useProjectWorkspace({
     accountAddress: wallet.accountAddress,
     capabilityProfile,
@@ -3407,7 +3504,7 @@ export function AdminDashboardPage() {
       : hasAdminAccess && hasProjects && !hasFormsInSelectedProject && allSignals.length === 0 && !hasSignalsInSelectedProject
         ? "create-signal"
         : "ready";
-  const showGuidedOnboarding = hasAdminAccess && onboardingState !== "ready";
+  const showGuidedOnboarding = !inboxSettling && hasAdminAccess && onboardingState !== "ready";
   const selectedFormSubmissionCount = selectedRecord ? (submissionsByFormId[selectedRecord.form.id] ?? []).length : 0;
   const selectedFormFilteredExportCount = selectedRecord
     ? visibleSignals.filter((record) => record.form.id === selectedRecord.form.id).length
@@ -3839,10 +3936,6 @@ export function AdminDashboardPage() {
     [nodeDirectoryItems],
   );
 
-  if (loading && !loadingRecoveryVisible) {
-    return <InboxLoadingPanel title={t("loadingResearchLab")} body={t("loadingSignalInboxBody")} />;
-  }
-
   if (loadingRecoveryVisible) {
     return (
       <InboxRecoveryPanel
@@ -3870,10 +3963,6 @@ export function AdminDashboardPage() {
         </button>
       </div>
     );
-  }
-
-  if (isLoadingAccess) {
-    return <div className="panel">{t("checkingWalletCapabilities")}</div>;
   }
 
   return (
@@ -3965,6 +4054,9 @@ export function AdminDashboardPage() {
             selectProject={selectProject}
             onRevealCreateProject={() => revealProjectSettingsTools("create")}
             onRevealConnectProject={() => revealProjectSettingsTools("connect")}
+            deleteProjectDisabledReason={deleteProjectBlockedReason}
+            deletingProject={deletingProject}
+            onDeleteProject={() => void handleDeleteProject()}
             highlightCreateFormCta={highlightCreateFormCta}
           />
         ) : (
@@ -4004,11 +4096,16 @@ export function AdminDashboardPage() {
           </section>
         )}
 
-        {hasAdminAccess && !showGuidedOnboarding ? (
+        {hasAdminAccess && (!showGuidedOnboarding || selectedProject) ? (
           <AdminWorkspaceTabs activeTab={activeWorkspaceTab} onSelectTab={setWorkspaceTab} />
         ) : null}
 
-        {showGuidedOnboarding ? (
+        {activeWorkspaceTab === "members" && hasAdminAccess ? (
+          <ProjectMemberManagementSection
+            selectedProject={selectedProject}
+            onRefreshProjects={refetchProjects}
+          />
+        ) : showGuidedOnboarding ? (
           onboardingState === "create-signal" ? (
             <EmptyState variant="abyss" className="signal-inbox-onboarding-empty-state">
               <p className="eyebrow">{t("inboxEmptyEyebrow")}</p>
@@ -4027,9 +4124,7 @@ export function AdminDashboardPage() {
             records={insightsRecords}
             unlockedSignalsById={decryptedSignalsById}
           />
-        ) : activeWorkspaceTab === "members" && hasAdminAccess ? (
-          <MemberDirectorySection capabilityProfile={capabilityProfile} readOnly />
-        ) : accessibleForms.length === 0 &&
+        ) : !inboxSettling && accessibleForms.length === 0 &&
           (!hasAdminAccess ||
             !selectedProject ||
             (selectedProject.formsCount === 0 && selectedProject.signalsCount === 0)) ? (
@@ -4053,7 +4148,9 @@ export function AdminDashboardPage() {
             projectSignalsScopeLabel={signalScopeProjectLabel}
             visibleCountLabel={t("visibleSignalsLabel", { count: visibleSignals.length })}
             unreadCountLabel={t("unreadBadge", { count: visibleUnreadCount })}
-            emptyContent={(
+            emptyContent={showInitialListSkeleton ? (
+              <InboxListSkeleton compact />
+            ) : inboxSettling ? null : (
               <EmptyState variant="abyss">
                 <p className="eyebrow">{t("inboxEmptyEyebrow")}</p>
                 <h2>
@@ -4083,7 +4180,9 @@ export function AdminDashboardPage() {
             onSelectStream={setSelectedStreamId}
             sortOrder={signalSortOrder}
             onSortOrderChange={setSignalSortOrder}
-            visibleSignals={visibleSignals}
+            visibleSignals={renderedVisibleSignals}
+            hasMoreSignals={hasMoreRenderedSignals}
+            onLoadMoreSignals={() => setRenderedSignalLimit((current) => current + SIGNAL_LIST_PAGE_SIZE)}
             selectedRecord={hasExplicitSelectedRecord ? selectedRecord : null}
             unlockedSignalId={detailAnswers && selectedRecord ? selectedRecord.submission.id : null}
             onSelectSignal={handleSelectMobileSignal}
@@ -4356,7 +4455,9 @@ export function AdminDashboardPage() {
                 </section>
               ) : null}
 
-              {visibleSignals.length === 0 ? (
+              {showInitialListSkeleton && visibleSignals.length === 0 ? (
+                <InboxListSkeleton />
+              ) : visibleSignals.length === 0 && !inboxSettling ? (
                 <EmptyState className="signal-inbox-empty-state" variant="abyss">
                   <p className="eyebrow">{t("inboxEmptyEyebrow")}</p>
                   <h2>
@@ -4421,9 +4522,9 @@ export function AdminDashboardPage() {
                     }
                   </div>
                 </EmptyState>
-              ) : (
+              ) : visibleSignals.length > 0 ? (
                 <div className="signal-list">
-                  {visibleSignals.map((record) => {
+                  {renderedVisibleSignals.map((record) => {
                     const { form, submission, category } = record;
                     const storageBlobId = getSignalStorageBlobId(submission);
                     const storageLabel = getStorageBadgeLabel(storageBlobId);
@@ -4531,8 +4632,17 @@ export function AdminDashboardPage() {
                       />
                     );
                   })}
+                  {hasMoreRenderedSignals ? (
+                    <button
+                      type="button"
+                      className="ghost-button signal-list-load-more"
+                      onClick={() => setRenderedSignalLimit((current) => current + SIGNAL_LIST_PAGE_SIZE)}
+                    >
+                      {t("showMoreToggle")}
+                    </button>
+                  ) : null}
                 </div>
-              )}
+              ) : null}
             </section>
 
             <article ref={signalDetailPanelRef} className="panel signal-detail-column">
