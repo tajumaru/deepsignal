@@ -1,5 +1,5 @@
 import { useSignAndExecuteTransaction, useSuiClient } from "@mysten/dapp-kit";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { AdminAccessGate } from "../components/AdminAccessGate";
 import { RecoverableDraftBanner } from "../components/RecoverableDraftBanner";
@@ -10,9 +10,12 @@ import { useSuiWallet } from "../hooks/useSuiWallet";
 import { useI18n } from "../i18n";
 import { canAdmin, getAdminSurfaceAccessState, getRoleLabel } from "../lib/adminAccess";
 import { getActivityActorRole } from "../lib/activityLog";
+import { normalizeForm } from "../lib/formSchema";
+import { classifyFormEdit, isStructuralFormEdit, resolveFormVersion } from "../lib/formVersioning";
 import { storageAdapter } from "../lib/storage";
 import { setSelectedProjectId } from "../lib/projectRegistry";
 import { shortAddress, WALRUS_UPLOAD_RELAY_URL } from "../lib/sui";
+import { readManifestWithForm } from "../lib/walrus";
 import { getInitialFields, getInitialTemplate, showWalrusDiagnostics } from "../features/createForm/constants";
 import { BuilderToolbar } from "../features/createForm/components/BuilderToolbar";
 import { FieldsStep } from "../features/createForm/components/FieldsStep";
@@ -32,7 +35,7 @@ import {
   CREATE_FORM_GUEST_DRAFT_STORAGE_KEY,
   parseStoredCreateFormDraft,
 } from "../features/createForm/utils";
-import type { FormSchema } from "../types";
+import type { FormSchema, Submission } from "../types";
 
 type ComposerHomeSignalStatus = "draft" | "active" | "archived";
 
@@ -395,6 +398,8 @@ function normalizeFieldsForModeSwitch(
 interface FormBuilderComposerProps {
   mode: "admin" | "guestDraft";
   freshStartToken: string;
+  republishFormId?: string;
+  republishManifest?: string;
   initialDisplayMode?: DisplayMode;
   draftSeed: {
     templateKey?: string;
@@ -402,7 +407,14 @@ interface FormBuilderComposerProps {
   };
 }
 
-function FormBuilderComposer({ mode, freshStartToken, initialDisplayMode = "classic", draftSeed }: FormBuilderComposerProps) {
+function FormBuilderComposer({
+  mode,
+  freshStartToken,
+  republishFormId,
+  republishManifest,
+  initialDisplayMode = "classic",
+  draftSeed,
+}: FormBuilderComposerProps) {
   const { t, language } = useI18n();
   const wallet = useSuiWallet();
   const suiClient = useSuiClient();
@@ -416,6 +428,12 @@ function FormBuilderComposer({ mode, freshStartToken, initialDisplayMode = "clas
   const [showPublishSuccessView, setShowPublishSuccessView] = useState(false);
   const [displayMode, setDisplayMode] = useState<DisplayMode>(initialDisplayMode);
   const [showMirrorStartChoice, setShowMirrorStartChoice] = useState(false);
+  const [editingForm, setEditingForm] = useState<FormSchema | null>(null);
+  const [editSubmissions, setEditSubmissions] = useState<Submission[]>([]);
+  const [editLoadError, setEditLoadError] = useState("");
+  const [editLoadStatus, setEditLoadStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
+  const [versionModalOpen, setVersionModalOpen] = useState(false);
+  const versionConfirmRef = useRef(false);
   const isMirrorMode = displayMode === "mirror";
   const hasAdminAccess = canAdmin(capabilityProfile);
   const isGuestDraftMode = mode === "guestDraft";
@@ -452,6 +470,7 @@ function FormBuilderComposer({ mode, freshStartToken, initialDisplayMode = "clas
     responseDeadlineCustomAt: builder.values.responseDeadlineCustomAt,
     isDirty: builder.isDirty,
     selectedProject: selectedProjectForPublish,
+    editingForm,
     setProjectState: builder.setProjectState,
     signAndExecuteTransaction: async (transaction) => createFormTx.mutateAsync({ transaction }),
     waitForTransaction: async (digest) =>
@@ -466,6 +485,56 @@ function FormBuilderComposer({ mode, freshStartToken, initialDisplayMode = "clas
 
   const accessState = getAdminSurfaceAccessState("admin", wallet.accountAddress, capabilityProfile);
   const showComposerChrome = !publish.savedForm;
+  const editSubmissionCount = editSubmissions.length;
+  const editSubmissionCountsByVersion = useMemo(() => {
+    const counts = new Map<number, number>();
+    editSubmissions.forEach((submission) => {
+      const version = resolveFormVersion({ formVersion: submission.formVersion });
+      counts.set(version, (counts.get(version) ?? 0) + 1);
+    });
+    return Array.from(counts.entries()).sort(([left], [right]) => left - right);
+  }, [editSubmissions]);
+  const editCandidateForm = useMemo<FormSchema | null>(() => {
+    if (!editingForm) {
+      return null;
+    }
+    return {
+      ...editingForm,
+      title: builder.values.title,
+      description: builder.values.description,
+      headerImage: builder.values.headerImage.url ? builder.values.headerImage : undefined,
+      headerLogo: builder.values.headerLogo.url ? builder.values.headerLogo : undefined,
+      fields: builder.values.fields,
+      sections: builder.values.sections,
+      purpose: builder.values.purpose,
+      visibility: builder.values.visibility,
+      identityPolicy: builder.values.identityPolicy,
+      locationRequirement: builder.values.locationRequirement,
+      encryptSubmissions: builder.values.encryptSubmissions,
+      publicExplore: builder.values.visibility === "public",
+      updatedAt: new Date().toISOString(),
+    };
+  }, [
+    builder.values.description,
+    builder.values.encryptSubmissions,
+    builder.values.fields,
+    builder.values.headerImage,
+    builder.values.headerLogo,
+    builder.values.identityPolicy,
+    builder.values.locationRequirement,
+    builder.values.purpose,
+    builder.values.sections,
+    builder.values.title,
+    builder.values.visibility,
+    editingForm,
+  ]);
+  const editDiff = useMemo(
+    () => (editingForm && editCandidateForm ? classifyFormEdit(editingForm, editCandidateForm) : null),
+    [editCandidateForm, editingForm],
+  );
+  const willPublishNewVersion = Boolean(
+    editingForm && editSubmissionCount > 0 && editCandidateForm && isStructuralFormEdit(editingForm, editCandidateForm),
+  );
 
   const completedSteps = useMemo(
     () =>
@@ -512,6 +581,61 @@ function FormBuilderComposer({ mode, freshStartToken, initialDisplayMode = "clas
       unsubscribe();
     };
   }, []);
+
+  useEffect(() => {
+    if (!republishFormId && !republishManifest) {
+      setEditingForm(null);
+      setEditSubmissions([]);
+      setEditLoadStatus("idle");
+      setEditLoadError("");
+      return;
+    }
+
+    let cancelled = false;
+    setEditLoadStatus("loading");
+    setEditLoadError("");
+
+    async function loadFormForEdit() {
+      try {
+        let nextForm: FormSchema | null = null;
+        if (republishManifest) {
+          const carrier = await readManifestWithForm(republishManifest);
+          nextForm = carrier.form ? normalizeForm(carrier.form) : null;
+        }
+        if (!nextForm && republishFormId) {
+          nextForm = await storageAdapter.getForm(republishFormId);
+        }
+        if (!nextForm) {
+          throw new Error("The published signal could not be restored into the builder.");
+        }
+        const normalizedForm = normalizeForm(nextForm);
+        const submissions = await storageAdapter.listSubmissions(normalizedForm.id).catch(() => []);
+        if (cancelled) {
+          return;
+        }
+        setEditingForm(normalizedForm);
+        setEditSubmissions(submissions);
+        builder.applyFormForEdit(normalizedForm);
+        setEditLoadStatus("ready");
+      } catch (error) {
+        if (cancelled) {
+          return;
+        }
+        const message = error instanceof Error ? error.message : "Failed to restore the published signal.";
+        setEditingForm(null);
+        setEditSubmissions([]);
+        setEditLoadError(message);
+        setEditLoadStatus("error");
+      }
+    }
+
+    void loadFormForEdit();
+    return () => {
+      cancelled = true;
+    };
+    // The edit loader should run only when the requested published form changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [republishFormId, republishManifest]);
 
   useEffect(() => {
     if (publish.overlay.open) {
@@ -626,12 +750,30 @@ function FormBuilderComposer({ mode, freshStartToken, initialDisplayMode = "clas
     builder.goToStep(step);
   }
 
+  function handleBuilderSubmit(event: FormEvent<HTMLFormElement>) {
+    if (willPublishNewVersion && !versionConfirmRef.current) {
+      event.preventDefault();
+      setVersionModalOpen(true);
+      return;
+    }
+    versionConfirmRef.current = false;
+    void publish.handleSubmit(event);
+  }
+
+  function confirmPublishNewVersion() {
+    versionConfirmRef.current = true;
+    setVersionModalOpen(false);
+    window.setTimeout(() => {
+      document.getElementById("create-form")?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    }, 0);
+  }
+
   if (!isGuestDraftMode && wallet.accountAddress && isLoadingAccess) {
     return <div className="panel">{t("checkingWalletCapabilities")}</div>;
   }
 
   const builderForm = (
-    <form id="create-form" className="composer-stage composer-step-stage" onSubmit={publish.handleSubmit}>
+    <form id="create-form" className="composer-stage composer-step-stage" onSubmit={handleBuilderSubmit}>
       {builder.values.currentStep === "template" ? (
         isMirrorMode ? (
           <IntentStartStep onApplyDraft={handleApplyIntentDraft} />
@@ -877,6 +1019,81 @@ function FormBuilderComposer({ mode, freshStartToken, initialDisplayMode = "clas
           </section>
         ) : null}
 
+        {editLoadStatus === "loading" ? (
+          <section className="panel composer-version-panel" aria-live="polite">
+            <p className="eyebrow">Signal Version</p>
+            <strong>Restoring published signal...</strong>
+            <span className="muted">DeepSignal is loading the current form and response counts before editing.</span>
+          </section>
+        ) : null}
+
+        {editLoadStatus === "error" ? (
+          <section className="panel composer-version-panel" aria-live="assertive">
+            <p className="eyebrow">Signal Version</p>
+            <strong>Published signal could not be restored</strong>
+            <span className="muted">{editLoadError}</span>
+          </section>
+        ) : null}
+
+        {editingForm ? (
+          <section className="panel composer-version-panel" aria-live="polite">
+            <div>
+              <p className="eyebrow">Signal Version</p>
+              <strong>
+                Editing v{resolveFormVersion(editingForm)}
+                {editSubmissionCount > 0 ? ` with ${editSubmissionCount} response${editSubmissionCount === 1 ? "" : "s"}` : ""}
+              </strong>
+              <span className="muted">
+                {editSubmissionCount === 0
+                  ? "No responses yet. Question structure can still be updated in place."
+                  : willPublishNewVersion
+                    ? "New version として公開します"
+                    : editDiff?.classification === "none"
+                      ? "No version-impacting changes yet."
+                    : "Light edits will save on the current version."}
+              </span>
+            </div>
+            {editSubmissionCountsByVersion.length ? (
+              <div className="composer-version-counts" aria-label="Response counts by version">
+                {editSubmissionCountsByVersion.map(([version, count]) => (
+                  <span key={version} className="composer-version-pill">
+                    v{version}: {count}
+                  </span>
+                ))}
+              </div>
+            ) : null}
+          </section>
+        ) : null}
+
+        {versionModalOpen ? (
+          <div className="composer-modal" role="dialog" aria-modal="true" aria-labelledby="version-up-title">
+            <div className="composer-modal-backdrop" onClick={() => setVersionModalOpen(false)} />
+            <div className="composer-modal-panel">
+              <p className="eyebrow">Signal Version</p>
+              <h2 id="version-up-title">New version として公開します</h2>
+              <p className="muted">
+                Existing v{resolveFormVersion(editingForm ?? undefined)} responses will remain attached to their
+                original question structure. This publish creates the next version for future responses.
+              </p>
+              <div className="composer-version-counts" aria-label="Current response counts by version">
+                {editSubmissionCountsByVersion.map(([version, count]) => (
+                  <span key={version} className="composer-version-pill">
+                    v{version}: {count}
+                  </span>
+                ))}
+              </div>
+              <div className="composer-modal-actions">
+                <button type="button" className="ghost-button" onClick={() => setVersionModalOpen(false)}>
+                  Cancel
+                </button>
+                <button type="button" className="primary-button" onClick={confirmPublishNewVersion}>
+                  Publish new version
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
         {isMirrorMode ? (
           <div className="composer-mirror-layout">
             <div className="composer-mirror-builder">{builderForm}</div>
@@ -933,6 +1150,8 @@ export function FormBuilderPage({ initialSurface = "home" }: { initialSurface?: 
   const searchParams = new URLSearchParams(location.search);
   const requestedGuestDraftMode = searchParams.get("mode") === "guestDraft";
   const freshStartToken = searchParams.get("fresh") ?? "";
+  const republishFormId = searchParams.get("republishFormId") ?? undefined;
+  const republishManifest = searchParams.get("republishManifest") ?? undefined;
   const requestedComposer = searchParams.get("composer") === "1";
   const initialDisplayMode: DisplayMode = searchParams.get("preview") === "mirror" ? "mirror" : "classic";
   const draftSeed = {
@@ -941,7 +1160,7 @@ export function FormBuilderPage({ initialSurface = "home" }: { initialSurface?: 
   };
   const hasAdminAccess = canAdmin(capabilityProfile);
 
-  if (initialSurface === "home" && !freshStartToken && !requestedComposer) {
+  if (initialSurface === "home" && !freshStartToken && !requestedComposer && !republishFormId && !republishManifest) {
     return <ComposerHomePage />;
   }
 
@@ -958,9 +1177,11 @@ export function FormBuilderPage({ initialSurface = "home" }: { initialSurface?: 
 
   return (
     <FormBuilderComposer
-      key={`${mode}:${freshStartToken || "restored"}`}
+      key={`${mode}:${freshStartToken || republishFormId || republishManifest || "restored"}`}
       mode={mode}
       freshStartToken={freshStartToken}
+      republishFormId={republishFormId}
+      republishManifest={republishManifest}
       initialDisplayMode={initialDisplayMode}
       draftSeed={draftSeed}
     />

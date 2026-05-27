@@ -1256,6 +1256,10 @@ export function usePublicSubmission({
       const submission: Submission = {
         id: makeId("submission"),
         formId: form.id,
+        formVersion: form.formVersion,
+        formBlobId: form.blobId,
+        schemaHash: form.schemaHash,
+        manifestBlobId: form.manifestBlobId,
         projectId: form.projectId,
         answers: normalizedAnswers,
         attachments,
@@ -1319,6 +1323,10 @@ export function usePublicSubmission({
       await pausePipelineStep();
       const savedSubmission = {
         ...submission,
+        formVersion: result.formVersion ?? submission.formVersion,
+        formBlobId: result.formBlobId ?? submission.formBlobId,
+        schemaHash: result.schemaHash ?? submission.schemaHash,
+        manifestBlobId: result.manifestBlobId ?? submission.manifestBlobId,
         isEncrypted: Boolean(form.encryptSubmissions),
         blobId: result.blobId,
         answerBlobId: result.answerBlobId ?? result.blobId,

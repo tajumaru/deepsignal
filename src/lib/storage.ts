@@ -30,6 +30,7 @@ import {
 import { formatAnswerText } from "./answerFormatting";
 import { normalizeFormVisibility } from "./explore";
 import { normalizeActivityEvent } from "./activityLog";
+import { LEGACY_SCHEMA_HASH, computeSchemaHash, resolveFormVersion } from "./formVersioning";
 import { isResponseDeadlinePassed } from "./responseDeadline";
 import { enrichSubmissionWithTriage } from "./signalTriage";
 import { SUI_NETWORK } from "./sui";
@@ -70,6 +71,10 @@ export { DEFAULT_ATTACHMENT_MAX_BYTES, ENCRYPTED_INLINE_ATTACHMENT_MAX_BYTES };
 
 export interface SaveSubmissionWithEncryptionResult {
   id: string;
+  formVersion?: number;
+  formBlobId?: string;
+  schemaHash?: string;
+  manifestBlobId?: string;
   blobId?: string;
   answerBlobId?: string;
   encryptedBlobId?: string;
@@ -600,6 +605,10 @@ export function normalizeSubmission(raw: Submission | (Record<string, unknown> &
   return {
     id: raw.id,
     formId: raw.formId,
+    formVersion: resolveFormVersion(raw),
+    formBlobId: typeof raw.formBlobId === "string" ? raw.formBlobId : undefined,
+    schemaHash: typeof raw.schemaHash === "string" && raw.schemaHash.trim() ? raw.schemaHash : LEGACY_SCHEMA_HASH,
+    manifestBlobId: typeof raw.manifestBlobId === "string" ? raw.manifestBlobId : undefined,
     projectId: typeof raw.projectId === "string" ? raw.projectId : undefined,
     answers: typeof raw.answers === "object" && raw.answers ? (raw.answers as Record<string, unknown>) : {},
     attachments: normalizeSubmissionAttachments(raw.attachments),
@@ -694,8 +703,10 @@ export function normalizeForm(raw: FormSchema | (Record<string, unknown> & { id:
   const rawFields = Array.isArray(raw.fields) ? (raw.fields as FormField[]) : [];
   const defaultMatrixRows = ["UI", "UX", "Performance"];
   const defaultMatrixColumns = ["Poor", "Okay", "Good"];
-  return {
+  const normalizedForm = {
     ...raw,
+    baseFormId: typeof raw.baseFormId === "string" ? raw.baseFormId : raw.id,
+    formVersion: resolveFormVersion(raw),
     title: typeof raw.title === "string" ? raw.title : "",
     description: typeof raw.description === "string" ? raw.description : "",
     fields: sanitizeConditionalLogicFields(
@@ -765,6 +776,14 @@ export function normalizeForm(raw: FormSchema | (Record<string, unknown> & { id:
           .map((event) => normalizeActivityEvent(event as Record<string, unknown>))
           .filter((event): event is NonNullable<ReturnType<typeof normalizeActivityEvent>> => Boolean(event))
       : undefined,
+  } satisfies Omit<FormSchema, "schemaHash"> & { schemaHash?: string };
+
+  return {
+    ...normalizedForm,
+    schemaHash:
+      typeof raw.schemaHash === "string" && raw.schemaHash.trim()
+        ? raw.schemaHash
+        : computeSchemaHash(normalizedForm),
   } satisfies FormSchema;
 }
 
@@ -1000,6 +1019,14 @@ export async function saveSubmissionWithEncryption(
   }
 
   const isFullyEncrypted = form.encryptSubmissions === true;
+  const formVersion = resolveFormVersion(form);
+  const schemaHash = form.schemaHash || computeSchemaHash(form);
+  const submissionVersionMetadata = {
+    formVersion,
+    formBlobId: form.blobId,
+    schemaHash,
+    manifestBlobId: form.manifestBlobId,
+  };
   const subjectPreview = isFullyEncrypted ? "Private signal" : getSubjectPreview(form, submission.answers);
   const ratingValue = isFullyEncrypted ? undefined : getRatingValue(form, submission.answers);
   const priority =
@@ -1010,6 +1037,7 @@ export async function saveSubmissionWithEncryption(
         : inferPriorityFromTemplateAnswers(normalizeFormPurpose(form.purpose), form.fields, submission.answers);
   const baseSubmission: Submission = {
     ...submission,
+    ...submissionVersionMetadata,
     category: submission.category ?? getSubmissionCategoryFromPurpose(normalizeFormPurpose(form.purpose)),
     status: coerceStatus(submission.status),
     priority,
@@ -1091,6 +1119,7 @@ export async function saveSubmissionWithEncryption(
         const saved = await targetStorage.saveEncryptedSubmission(metadataSubmission);
         return {
           ...saved,
+          ...submissionVersionMetadata,
           encryptedBlobId: saved.encryptedBlobId ?? saved.blobId,
           encryptedPayload,
           sealIdentity,
@@ -1119,6 +1148,7 @@ export async function saveSubmissionWithEncryption(
         const saved = await targetStorage.saveSubmission(metadataSubmission);
         return {
           ...saved,
+          ...submissionVersionMetadata,
           encryptedBlobId: encryptedBlobId ?? saved.blobId,
           encryptedPayload,
           sealIdentity,
@@ -1141,6 +1171,7 @@ export async function saveSubmissionWithEncryption(
       const saved = await targetStorage.saveSubmission(metadataSubmission);
       return {
         ...saved,
+        ...submissionVersionMetadata,
         encryptedBlobId: encryptedBlobId ?? saved.blobId,
         encryptedPayload,
         sealIdentity,
@@ -1169,5 +1200,9 @@ export async function saveSubmissionWithEncryption(
     sealIdentity: undefined,
   };
   messages?.onPipelineStage?.("uploading_to_walrus");
-  return targetStorage.saveSubmission(standardSubmission);
+  const saved = await targetStorage.saveSubmission(standardSubmission);
+  return {
+    ...saved,
+    ...submissionVersionMetadata,
+  };
 }

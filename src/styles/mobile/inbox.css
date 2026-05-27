@@ -77,7 +77,38 @@
 
   .mobile-detail-back-button {
     display: inline-flex;
-    margin-bottom: 0.75rem;
+    width: 1.2rem;
+    min-width: 1.2rem;
+    height: 1.2rem;
+    min-height: 1.2rem;
+    margin: 0;
+    padding: 0;
+    justify-content: center;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+    font-size: 0;
+  }
+
+  .mobile-detail-back-button::before {
+    content: "<";
+    font-size: 1rem;
+    font-weight: 800;
+    line-height: 1;
+  }
+
+  .desktop-signal-inbox.has-selected-signal .signal-detail-hero {
+    display: flex;
+    align-items: baseline;
+    gap: 0.3rem;
+  }
+
+  .desktop-signal-inbox.has-selected-signal .signal-detail-hero .signal-detail-heading {
+    margin: 0;
+  }
+
+  .desktop-signal-inbox.has-selected-signal .signal-detail-hero .eyebrow {
+    line-height: 1;
   }
 
   .desktop-signal-inbox-hero {

@@ -169,10 +169,14 @@ export async function publishForm({
   setPublishActiveStageDetail(t("walletApprovalDetail"));
 
   let walrusActualCost: PreparedPublishForm["walrusActualCost"];
+  let formVersion = form.formVersion;
+  let schemaHash = form.schemaHash;
   let blobId = "";
   let manifestBlobId = "";
   try {
     const savedForm = await saveFormPromise;
+    formVersion = savedForm.formVersion ?? formVersion;
+    schemaHash = savedForm.schemaHash ?? schemaHash;
     blobId = savedForm.blobId ?? "";
     manifestBlobId = savedForm.manifestBlobId ?? "";
     walrusActualCost = savedForm.walrusActualCost;
@@ -217,6 +221,8 @@ export async function publishForm({
 
   const finalForm = {
     ...form,
+    formVersion,
+    schemaHash,
     blobId,
     manifestBlobId,
     walrusActualCost,

@@ -68,6 +68,7 @@ import {
 } from "../lib/activityLog";
 import { getTriageStatusLabel, TRIAGE_STATUS_OPTIONS } from "../lib/signalOps";
 import { getRelatedSignals } from "../lib/relatedSignals";
+import { loadVersionedFormSchemas, type VersionedFormSchemas } from "../lib/formVersionSchemas";
 import {
   getAssignedReviewer,
   getReviewerNoteUpdatedAt,
@@ -102,6 +103,12 @@ import { clearDeepSignalPolicyCapabilityCache } from "../lib/debugCache";
 import { resetLocalEnvironment } from "../lib/resetEnvironment";
 import { formatResponseDeadline, type ResponseDeadlineLabels } from "../lib/responseDeadline";
 import { getSubmissionRespondentMeta } from "../lib/respondentMeta";
+import {
+  getSubmissionVersionCounts,
+  getSubmissionVersion,
+  matchesSubmissionVersion,
+  type SubmissionVersionFilter,
+} from "../lib/submissionVersioning";
 import { endPerf, startPerf } from "../lib/perf";
 import {
   getSignalPreview,
@@ -109,11 +116,8 @@ import {
   getSignalPersistenceLabel,
   getSignalPersistenceState,
   getSignalSubject,
-  getSignalStorageState,
   hasPrivateSignalPayloadIssue,
-  getStorageBadgeLabel,
   getWalletAccessLabel,
-  getSignalStorageBlobId,
   isOnchainRecoveredSignal,
   isLocalFallbackBlob,
 } from "../lib/signalInbox";
@@ -1152,6 +1156,7 @@ function WorkspaceSectionToggle({
   open,
   onToggle,
   trailing,
+  hideCopy = false,
 }: {
   eyebrow?: string;
   title: string;
@@ -1159,19 +1164,23 @@ function WorkspaceSectionToggle({
   open: boolean;
   onToggle: () => void;
   trailing?: ReactNode;
+  hideCopy?: boolean;
 }) {
   return (
     <button
       type="button"
-      className={`workspace-section-toggle ${open ? "is-open" : ""}`}
+      className={`workspace-section-toggle ${open ? "is-open" : ""} ${hideCopy ? "has-hidden-copy" : ""}`}
       aria-expanded={open}
+      aria-label={title}
       onClick={onToggle}
     >
-      <span className="workspace-section-toggle-copy">
-        {eyebrow ? <span className="eyebrow">{eyebrow}</span> : null}
-        <strong>{title}</strong>
-        {detail ? <span className="muted">{detail}</span> : null}
-      </span>
+      {!hideCopy ? (
+        <span className="workspace-section-toggle-copy">
+          {eyebrow ? <span className="eyebrow">{eyebrow}</span> : null}
+          <strong>{title}</strong>
+          {detail ? <span className="muted">{detail}</span> : null}
+        </span>
+      ) : null}
       <span className="workspace-section-toggle-side">
         {trailing}
         <span className="workspace-section-toggle-icon" aria-hidden="true">
@@ -1853,6 +1862,8 @@ export function AdminDashboardPage() {
   const [nodeSearch, setNodeSearch] = useState("");
   const [csvExportScope, setCsvExportScope] = useState<ResponsesCsvExportScope>("filtered");
   const [csvSortOrder, setCsvSortOrder] = useState<ResponsesCsvSortOrder>("createdAtDesc");
+  const [selectedVersion, setSelectedVersion] = useState<SubmissionVersionFilter>("all");
+  const [versionedFormsByFormId, setVersionedFormsByFormId] = useState<Record<string, VersionedFormSchemas>>({});
   const [signalSortOrder, setSignalSortOrder] = useState<SignalSortOrder>("default");
   const [excludedCsvPiiFields, setExcludedCsvPiiFields] = useState<ExportPiiField[]>([]);
   const [pendingCsvExportMetadata, setPendingCsvExportMetadata] = useState<ExportMetadata | null>(null);
@@ -1889,6 +1900,7 @@ export function AdminDashboardPage() {
   const reviewSessionDialogRef = useRef<HTMLElement | null>(null);
   const reviewSessionPrimaryActionRef = useRef<HTMLButtonElement | null>(null);
   const keyboardNavigationRef = useRef(false);
+  const isClearingMobileSignalSelectionRef = useRef(false);
   const hasAdminAccess = canAdmin(capabilityProfile);
   const isNodeRegistrationBusy = registerFormTx.isPending || registeringFormId !== null;
   const setWorkspaceTab = useCallback(
@@ -1929,8 +1941,8 @@ export function AdminDashboardPage() {
     signalIndex,
     allSignals,
     pendingSignals,
-    visibleSignals,
-    selectedRecord,
+    visibleSignals: unversionedVisibleSignals,
+    selectedRecord: selectedRecordFromInbox,
     applyFormUpdate,
     applyFormRemovals,
     applySubmissionUpdate,
@@ -1941,6 +1953,18 @@ export function AdminDashboardPage() {
     scopeProjectId: getSelectedProjectId(),
     viewScope: signalViewScope,
   });
+  const versionCounts = useMemo(
+    () => getSubmissionVersionCounts(allSignals.map((record) => record.submission)),
+    [allSignals],
+  );
+  const visibleSignals = useMemo(
+    () => unversionedVisibleSignals.filter((record) => matchesSubmissionVersion(record.submission, selectedVersion)),
+    [selectedVersion, unversionedVisibleSignals],
+  );
+  const selectedRecord =
+    selectedRecordFromInbox && matchesSubmissionVersion(selectedRecordFromInbox.submission, selectedVersion)
+      ? selectedRecordFromInbox
+      : visibleSignals[0] ?? null;
   const [renderedSignalLimit, setRenderedSignalLimit] = useState(INITIAL_SIGNAL_LIST_LIMIT);
   const renderedVisibleSignals = useMemo(
     () => visibleSignals.slice(0, renderedSignalLimit),
@@ -1952,7 +1976,7 @@ export function AdminDashboardPage() {
 
   useEffect(() => {
     setRenderedSignalLimit(INITIAL_SIGNAL_LIST_LIMIT);
-  }, [search, selectedFormId, selectedStreamId, signalSortOrder, signalViewScope]);
+  }, [search, selectedFormId, selectedStreamId, selectedVersion, signalSortOrder, signalViewScope]);
 
   useEffect(() => {
     if (!inboxSettling || visibleSignals.length > 0) {
@@ -2754,9 +2778,6 @@ export function AdminDashboardPage() {
   const selectedRecordPayloadState = selectedRecord
     ? getPrivateSignalPayloadState(selectedRecord.submission)
     : "available";
-  const selectedRecordHasPayloadIssue = selectedRecord
-    ? hasPrivateSignalPayloadIssue(selectedRecord.submission)
-    : false;
   const selectedRecordTxDigest = selectedRecord ? getSubmissionMetadataString(selectedRecord.submission, "txDigest") : undefined;
   const selectedRecordRpcProviderLabel = selectedRecord
     ? getSubmissionMetadataString(selectedRecord.submission, "rpcProvider") ?? rpc.providerLabel
@@ -2767,71 +2788,6 @@ export function AdminDashboardPage() {
   const selectedRecordVerificationRouteLabel = /tatum/i.test(selectedRecordRpcProviderLabel)
     ? t("verifiedViaTatumSuiRpc")
     : t("verifiedViaSuiRpc", { provider: selectedRecordRpcProviderLabel });
-  const selectedReviewContextChips = selectedRecord
-    ? [
-        {
-          label: t("signalJourneySignal"),
-          tone: "soft" as const,
-        },
-        {
-          label: detailAnswers || !selectedRecord.submission.isEncrypted ? t("signalJourneyAnalysis") : t("signalJourneyAnalysisLocked"),
-          tone: detailAnswers || !selectedRecord.submission.isEncrypted ? ("soft" as const) : ("warn" as const),
-        },
-        {
-          label:
-            typeof selectedRecord.submission.onchainSignalId === "number"
-              ? t("signalJourneyImmutableProof")
-              : selectedRecordStoredOnWalrus
-                ? t("signalJourneyWalrusProof")
-                : t("signalJourneyLocalRecovery"),
-          tone:
-            typeof selectedRecord.submission.onchainSignalId === "number"
-              ? ("accent" as const)
-              : selectedRecordStoredOnWalrus
-                ? ("soft" as const)
-                : ("warn" as const),
-        },
-        {
-          label: t("prioritySummaryLabel", { value: getLocalizedPriorityLabel(selectedRecord.submission.priority, t) }),
-          tone: "soft" as const,
-        },
-        {
-          label: selectedRecord.submission.isEncrypted ? t("encryptedSignals") : t("readableLabel"),
-          tone: selectedRecord.submission.isEncrypted ? ("accent" as const) : ("soft" as const),
-        },
-        {
-          label: selectedRecordStoredOnWalrus ? t("storedOnWalrus") : t("localFallbackLabel"),
-          tone: selectedRecordStoredOnWalrus ? ("soft" as const) : ("accent" as const),
-        },
-        {
-          label: detailAnswers
-            ? t("privateSignalUnlockStepUnlocked")
-            : selectedRecord.submission.isEncrypted
-              ? t("awaitingUnlockLabel")
-              : t("readyForReviewLabel"),
-          tone: detailAnswers
-            ? ("soft" as const)
-            : selectedRecord.submission.isEncrypted
-              ? ("warn" as const)
-              : ("soft" as const),
-        },
-        isSelectedRecordOnRoadmap && selectedRoadmapUrl
-          ? {
-              label: t("roadmapLinkedLabel"),
-              tone: "accent" as const,
-            }
-          : null,
-        selectedRecordHasPayloadIssue
-          ? {
-              label:
-                selectedRecordPayloadState === "missing_onchain_payload_reference"
-                  ? t("privateSignalPayloadMissingStatus")
-                  : t("encryptedPayloadMissingLabel"),
-              tone: "warn" as const,
-            }
-          : null,
-      ].filter((chip): chip is { label: string; tone: "soft" | "accent" | "warn" } => Boolean(chip))
-    : [];
   const selectedRecordUnlockDisabledReason = detailAnswers
     ? undefined
     : !selectedRecord?.submission.isEncrypted
@@ -2978,11 +2934,15 @@ export function AdminDashboardPage() {
 
   useEffect(() => {
     if (selectedSignalIdFromUrl) {
+      if (isClearingMobileSignalSelectionRef.current && !selectedSignalId) {
+        return;
+      }
       if (selectedSignalIdFromUrl !== selectedSignalId) {
         setSelectedSignalId(selectedSignalIdFromUrl);
       }
       return;
     }
+    isClearingMobileSignalSelectionRef.current = false;
     if (
       selectedSignalId &&
       typeof window !== "undefined" &&
@@ -3031,6 +2991,7 @@ export function AdminDashboardPage() {
   }
 
   function handleReturnToSignals() {
+    isClearingMobileSignalSelectionRef.current = true;
     setSelectedSignalId("");
     syncMobileSignalUrl(null);
     window.requestAnimationFrame(() => {
@@ -3508,7 +3469,11 @@ export function AdminDashboardPage() {
         ? "create-signal"
         : "ready";
   const showGuidedOnboarding = !inboxSettling && hasAdminAccess && onboardingState !== "ready";
-  const selectedFormSubmissionCount = selectedRecord ? (submissionsByFormId[selectedRecord.form.id] ?? []).length : 0;
+  const selectedFormSubmissionCount = selectedRecord
+    ? (submissionsByFormId[selectedRecord.form.id] ?? []).filter((submission) =>
+        matchesSubmissionVersion(submission, selectedVersion),
+      ).length
+    : 0;
   const selectedFormFilteredExportCount = selectedRecord
     ? visibleSignals.filter((record) => record.form.id === selectedRecord.form.id).length
     : 0;
@@ -3539,6 +3504,9 @@ export function AdminDashboardPage() {
     : null;
   const selectedNeedsFollowUp = selectedRecord ? hasNeedsFollowUp(selectedRecord.submission) : false;
   const selectedReviewerNoteUpdatedAt = selectedRecord ? getReviewerNoteUpdatedAt(selectedRecord.submission) : undefined;
+  const selectedRecordVersionedForm = selectedRecord
+    ? versionedFormsByFormId[selectedRecord.form.id]?.[getSubmissionVersion(selectedRecord.submission)] ?? selectedRecord.form
+    : null;
   const selectedSavedReviewer = selectedRecord ? getAssignedReviewer(selectedRecord.submission) ?? "" : "";
   const selectedHasSavedReviewResult = selectedRecord ? hasSavedReviewResult(selectedRecord.submission) : false;
   const selectedSavedReviewerDisplayLabel = useReviewerDisplayLabel(selectedSavedReviewer);
@@ -3616,6 +3584,7 @@ export function AdminDashboardPage() {
       tags: [...(search.trim() ? [search.trim()] : []), ...(selectedStreamId === "follow_up" ? [NEEDS_FOLLOW_UP_TAG] : [])],
       triageStatus: undefined,
       dateRange: {},
+      formVersion: selectedVersion,
     };
   }
 
@@ -3623,9 +3592,9 @@ export function AdminDashboardPage() {
     if (!selectedRecord) {
       return [];
     }
-    const allFormResponses = (submissionsByFormId[selectedRecord.form.id] ?? []).map((submission) =>
-      normalizeSubmission(submission),
-    );
+    const allFormResponses = (submissionsByFormId[selectedRecord.form.id] ?? [])
+      .map((submission) => normalizeSubmission(submission))
+      .filter((submission) => matchesSubmissionVersion(submission, selectedVersion));
     if (csvExportScope === "selected") {
       return allFormResponses.filter((submission) => submission.id === selectedRecord.submission.id);
     }
@@ -3651,12 +3620,13 @@ export function AdminDashboardPage() {
       : undefined;
   }
 
-  function handleOpenCsvExportReview() {
+  async function handleOpenCsvExportReview() {
     if (!selectedRecord || csvExportCount === 0) {
       setToast({ tone: "error", message: t("noResponsesMatchCurrentFilters") });
       return;
     }
     const responses = getCsvExportResponses();
+    const versionedForms = await loadVersionedFormSchemas(selectedRecord.form);
     const options: ExportResponsesToCsvOptions = {
       language,
       now: new Date(),
@@ -3666,6 +3636,7 @@ export function AdminDashboardPage() {
       exportedBy: wallet.accountAddress ?? "",
       filterSnapshot: getCsvFilterSnapshot(),
       responseOverrides: getCsvResponseOverrides(),
+      versionedForms,
     };
     const metadata = buildExportMetadata(selectedRecord.form, responses, options);
     setPendingCsvExportForm(selectedRecord.form);
@@ -3674,7 +3645,7 @@ export function AdminDashboardPage() {
     setPendingCsvExportOptions({ ...options, metadata });
   }
 
-  function handleOpenFormAllCsvExportReview(formId: string) {
+  async function handleOpenFormAllCsvExportReview(formId: string) {
     const form = accessibleForms.find((item) => item.id === formId);
     if (!form) {
       return;
@@ -3684,6 +3655,7 @@ export function AdminDashboardPage() {
       setToast({ tone: "error", message: t("noResponsesMatchCurrentFilters") });
       return;
     }
+    const versionedForms = await loadVersionedFormSchemas(form);
     const options: ExportResponsesToCsvOptions = {
       language,
       now: new Date(),
@@ -3698,7 +3670,9 @@ export function AdminDashboardPage() {
         tags: [],
         triageStatus: undefined,
         dateRange: {},
+        formVersion: "all",
       },
+      versionedForms,
     };
     const metadata = buildExportMetadata(form, responses, options);
     setPendingCsvExportForm(form);
@@ -3853,12 +3827,44 @@ export function AdminDashboardPage() {
       if (!shouldPrepareInsights) {
         return [];
       }
-      return selectedFormId === "all"
+      const scopedRecords = selectedFormId === "all"
         ? allSignals
         : allSignals.filter((record) => record.form.id === selectedFormId);
+      return scopedRecords.filter((record) => matchesSubmissionVersion(record.submission, selectedVersion));
     },
-    [allSignals, selectedFormId, shouldPrepareInsights],
+    [allSignals, selectedFormId, selectedVersion, shouldPrepareInsights],
   );
+  useEffect(() => {
+    if (!shouldPrepareInsights || insightsRecords.length === 0) {
+      return;
+    }
+    let cancelled = false;
+    const formsToLoad = Array.from(
+      new Map(insightsRecords.map((record) => [record.form.id, record.form])).values(),
+    ).filter((form) => !versionedFormsByFormId[form.id]);
+    if (formsToLoad.length === 0) {
+      return;
+    }
+
+    void Promise.all(
+      formsToLoad.map(async (form) => ({
+        formId: form.id,
+        schemas: await loadVersionedFormSchemas(form),
+      })),
+    ).then((entries) => {
+      if (cancelled) {
+        return;
+      }
+      setVersionedFormsByFormId((current) => ({
+        ...current,
+        ...Object.fromEntries(entries.map((entry) => [entry.formId, entry.schemas])),
+      }));
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [insightsRecords, shouldPrepareInsights, versionedFormsByFormId]);
   const insightsCounts = useMemo(
     () =>
       insightsRecords.reduce(
@@ -4124,6 +4130,7 @@ export function AdminDashboardPage() {
               encryptedSignals={insightsCounts.encrypted}
               records={insightsRecords}
               unlockedSignalsById={decryptedSignalsById}
+              versionedFormsByFormId={versionedFormsByFormId}
             />
           </Suspense>
         ) : !inboxSettling && accessibleForms.length === 0 &&
@@ -4369,6 +4376,27 @@ export function AdminDashboardPage() {
                   <div className="signal-column-status-stack">
                     <span className="signal-chip signal-chip-soft">{t("resultsLabel", { count: visibleSignals.length })}</span>
                     <span className="signal-chip signal-chip-soft">{t("pendingSuiResultsLabel", { count: pendingSignals.length })}</span>
+                    {versionCounts.length > 1 ? (
+                      <label className="review-sort-control">
+                        <span className="sr-only">Form version</span>
+                        <select
+                          value={selectedVersion}
+                          onChange={(event) => {
+                            const value = event.target.value;
+                            setSelectedVersion(value === "all" ? "all" : Number(value));
+                            setSelectedSignalId("");
+                          }}
+                          aria-label="Form version"
+                        >
+                          <option value="all">All versions</option>
+                          {versionCounts.map(([version, count]) => (
+                            <option key={version} value={version}>
+                              v{version} ({count})
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    ) : null}
                     {hasAdminAccess ? (
                       <div className="bulk-decrypt-toolbar" aria-live="polite">
                         <button
@@ -4424,7 +4452,7 @@ export function AdminDashboardPage() {
                 </div>
               </div>
               {hasAdminAccess ? (
-                <section className="answer-card answer-card-plain">
+                <section className="answer-card answer-card-plain optional-proof-queue-panel">
                   <div className="section-row">
                     <div>
                       <p className="eyebrow">{t("pendingSuiRegistrationEyebrow")}</p>
@@ -4444,12 +4472,23 @@ export function AdminDashboardPage() {
                       <button
                         type="button"
                         className="ghost-button sui-register-button"
+                        aria-label={
+                          registeringSignalIds.length > 0
+                            ? t("registeringOnSui")
+                            : t("registerSelectedOnSui", { count: selectedPendingVisibleCount })
+                        }
+                        title={
+                          registeringSignalIds.length > 0
+                            ? t("registeringOnSui")
+                            : t("registerSelectedOnSui", { count: selectedPendingVisibleCount })
+                        }
                         disabled={selectedPendingSignalIds.length === 0 || registeringSignalIds.length > 0}
                         onClick={() => void handleRegisterPendingSignals()}
                       >
-                        {registeringSignalIds.length > 0
-                          ? t("registeringOnSui")
-                          : t("registerSelectedOnSui", { count: selectedPendingVisibleCount })}
+                        <span className="sui-register-mark" aria-hidden="true">SUI</span>
+                        <span className="sui-register-count" aria-hidden="true">
+                          {registeringSignalIds.length > 0 ? "..." : selectedPendingVisibleCount}
+                        </span>
                       </button>
                     </div>
                   </div>
@@ -4527,11 +4566,8 @@ export function AdminDashboardPage() {
               ) : visibleSignals.length > 0 ? (
                 <div className="signal-list">
                   {renderedVisibleSignals.map((record) => {
-                    const { form, submission, category } = record;
-                    const storageBlobId = getSignalStorageBlobId(submission);
-                    const storageLabel = getStorageBadgeLabel(storageBlobId);
+                    const { form, submission } = record;
                     const persistenceState = getSignalPersistenceState(submission);
-                    const storageState = getSignalStorageState(submission);
                     const isOnchainRecoverySnapshot = isOnchainRecoveredSignal(submission);
                     const subject = isOnchainRecoverySnapshot
                       ? t("onchainRecoverySnapshotTitle")
@@ -4544,7 +4580,6 @@ export function AdminDashboardPage() {
                     const isAnonymousSignal = getSubmissionRespondentMeta(submission).isAnonymous;
                     const isPendingSui = Boolean(submission.pendingOnchainRegistration);
                     const isSelectedForSui = selectedPendingSignalIds.includes(submission.id);
-                    const isLocalOnlySignal = storageState === "local_only";
                     const isSelectedSignal = selectedRecord?.submission.id === submission.id;
                     const isUnlockedSignal = Boolean(decryptedSignalsById[submission.id]) || (isSelectedSignal && Boolean(detailAnswers));
                     const readStateLabel =
@@ -4568,12 +4603,6 @@ export function AdminDashboardPage() {
                       persistenceState === "not_available" ? null : getSignalPersistenceLabel(persistenceState);
                     const hasPayloadIssue = hasPrivateSignalPayloadIssue(submission);
                     const cardIntelligence = buildSignalCardIntelligence(record);
-                    const hasNotableStatusBadge =
-                      isPendingSui ||
-                      isSelectedForSui ||
-                      isLocalOnlySignal ||
-                      submission.attachments.length > 0 ||
-                      hasPayloadIssue;
                     return (
                       <SignalCard
                         key={submission.id}
@@ -4582,7 +4611,6 @@ export function AdminDashboardPage() {
                         }}
                         t={t}
                         submission={submission}
-                        category={category}
                         formTitle={form.title}
                         subject={subject}
                         preview={preview}
@@ -4591,11 +4619,6 @@ export function AdminDashboardPage() {
                         lockStateLabel={lockStateLabel}
                         readStateLabel={readStateLabel}
                         persistenceLabel={persistenceLabel}
-                        storageLabel={
-                          storageState === "local_only" || storageState === "walrus_synced"
-                            ? storageLabel
-                            : undefined
-                        }
                         persistenceState={persistenceState}
                         urgencyScoreLabel={`${cardIntelligence.urgencyLabel} ${cardIntelligence.urgencyScore}`}
                         signalTypeLabel={cardIntelligence.signalTypeLabel}
@@ -4603,11 +4626,6 @@ export function AdminDashboardPage() {
                         shortSummary={cardIntelligence.shortSummary}
                         evidenceQuote={cardIntelligence.evidenceQuote}
                         recommendedAction={cardIntelligence.recommendedAction}
-                        emotionalTone={cardIntelligence.emotionalTone}
-                        verifiedLabel={cardIntelligence.verifiedLabel}
-                        locationLabel={cardIntelligence.locationLabel}
-                        reviewerHint={getReviewerPresenceText(submission, wallet.accountAddress)}
-                        needsFollowUp={hasNeedsFollowUp(submission)}
                         isSelectedSignal={isSelectedSignal}
                         isPendingSui={isPendingSui}
                         isSelectedForSui={isSelectedForSui}
@@ -4615,7 +4633,6 @@ export function AdminDashboardPage() {
                         isUnlockedSignal={isUnlockedSignal}
                         isOnchainRecoverySnapshot={isOnchainRecoverySnapshot}
                         hasPayloadIssue={hasPayloadIssue}
-                        hasNotableStatusBadge={hasNotableStatusBadge}
                         isRegistering={isRegisteringSignal(submission.id)}
                         onSelect={() => {
                           handleSelectDesktopSignal(submission.id);
@@ -4672,63 +4689,9 @@ export function AdminDashboardPage() {
                     <div className="signal-detail-heading">
                     <div>
                       <p className="eyebrow">{t("reviewConsoleEyebrow")}</p>
-                      <h2>{getSignalSubject(selectedRecord.submission)}</h2>
-                      <p className="muted">
-                        {selectedRecord.form.title} / {formatDate(selectedRecord.submission.createdAt)}
-                      </p>
-                      <p className="muted">{t("reviewConsoleBody")}</p>
                     </div>
                     </div>
 
-                    <div className="signal-detail-meta-row signal-badge-row-compact">
-                      <span className={`pill status-${selectedRecord.submission.status}`}>
-                      {selectedRecord.submission.status}
-                      </span>
-                      <span className={`pill priority-${selectedRecord.submission.priority}`}>
-                      {selectedRecord.submission.priority}
-                      </span>
-                      <span className="pill">{getTriageStatusLabel(selectedRecord.submission.triageStatus)}</span>
-                      <span className={`signal-chip ${detailAnswers ? "signal-chip-accent" : ""}`}>
-                        {detailAnswers
-                          ? t("privateSignalUnlockedStatus")
-                          : selectedRecord.submission.isEncrypted
-                            ? t("encryptedPrivateSignalStatus")
-                            : t("openSubmissionLabel")}
-                      </span>
-                      {selectedRecordHasPayloadIssue ? (
-                        <span className="signal-chip">
-                          {t("privateSignalPayloadMissingStatus")}
-                        </span>
-                      ) : null}
-                      {selectedReviewerPresence ? (
-                        <span className="signal-chip">
-                          {selectedReviewerDisplayLabel || selectedReviewerPresence.fullLabel}
-                        </span>
-                      ) : null}
-                      {selectedNeedsFollowUp ? (
-                        <span className="signal-chip signal-chip-accent">{t("needsFollowUpLabel")}</span>
-                      ) : null}
-                    </div>
-                    <section className="answer-card review-trust-summary-card">
-                      {selectedReviewContextChips.length > 0 ? (
-                        <div className="signal-badge-row signal-badge-row-compact" aria-label="Review context">
-                          {selectedReviewContextChips.map((chip) => (
-                            <span
-                              key={chip.label}
-                              className={`signal-chip ${
-                                chip.tone === "warn"
-                                  ? "signal-chip-warn"
-                                  : chip.tone === "accent"
-                                    ? "signal-chip-accent"
-                                    : "signal-chip-soft"
-                              }`}
-                            >
-                              {chip.label}
-                            </span>
-                          ))}
-                        </div>
-                      ) : null}
-                    </section>
                   </section>
 
                   {selectedRecordFocusAction ? (
@@ -4751,9 +4714,7 @@ export function AdminDashboardPage() {
                   >
                     <section className="answer-card original-signal-section">
                       <WorkspaceSectionToggle
-                        eyebrow={t("originalSignalTitle")}
-                        title={t("originalSignalTitle")}
-                        detail={t("originalSignalBody")}
+                        title={t("feedbackBodyLabel")}
                         open={detailSectionsState.originalSignalOpen}
                         onToggle={() =>
                           setDetailSectionOpen("originalSignalOpen", !detailSectionsState.originalSignalOpen)
@@ -4761,8 +4722,6 @@ export function AdminDashboardPage() {
                         trailing={
                           detailAnswers ? (
                             <span className="signal-chip signal-chip-soft">{t("privateSignalUnlockedStatus")}</span>
-                          ) : selectedRecordNeedsDecrypt ? (
-                            <span className="signal-chip">{t("encryptedPrivateSignalStatus")}</span>
                           ) : null
                         }
                       />
@@ -4771,7 +4730,6 @@ export function AdminDashboardPage() {
                           <div className="original-signal-block original-signal-body-block">
                             <div className="section-row">
                               <div>
-                                <p className="eyebrow">{t("feedbackBodyLabel")}</p>
                                 <h4>{t("submittedFeedbackTitle")}</h4>
                               </div>
                             </div>
@@ -4780,7 +4738,7 @@ export function AdminDashboardPage() {
                               {detailLegacyUnencrypted ? (
                                 <p className="warning-text">{t("legacyUnencryptedResponse")}</p>
                               ) : (
-                                <div className="signal-badge-row signal-badge-row-compact">
+                                <div className="signal-badge-row signal-badge-row-compact original-signal-proof-row">
                                   <span className="signal-chip signal-chip-accent">{t("sealEncryptedCreatorAdminOnly")}</span>
                                   {selectedRecordEncryptedBlobStoredOnWalrus && selectedRecordEncryptedBlobId ? (
                                     <>
@@ -4796,7 +4754,7 @@ export function AdminDashboardPage() {
                                   ) : null}
                                 </div>
                               )}
-                              {selectedRecord.form.fields
+                              {(selectedRecordVersionedForm ?? selectedRecord.form).fields
                                 .filter((field) => !isAttachmentFieldType(field.type))
                                 .map((field, index) => (
                                   <div key={field.id} className="answer-line" data-question-index={`Q${index + 1}`}>
@@ -4818,6 +4776,12 @@ export function AdminDashboardPage() {
                                 </div>
                                 <strong>{t("encryptedPrivateSignalStatus")}</strong>
                                 <p>{t("requiresReviewerAccessDecryptHint")}</p>
+                                {detailAttachments.length > 0 ? (
+                                  <div className="locked-signal-attachment-state">
+                                    <span className="signal-chip signal-chip-soft">{t("attachments")}</span>
+                                    <span>{t("attachmentsHiddenUntilUnlocked")}</span>
+                                  </div>
+                                ) : null}
                               </div>
                               <div className="locked-signal-skeleton" aria-hidden="true">
                                 <span />
@@ -4829,17 +4793,15 @@ export function AdminDashboardPage() {
                             <p className="muted">{t("noResponseContentYet")}</p>
                           )}
                           </div>
-                          {!isReviewerFocusMode ? (
+                          {!isReviewerFocusMode && !selectedRecordNeedsDecrypt ? (
                             <div className="original-signal-block">
                               <WorkspaceSectionToggle
                                 eyebrow={t("attachments")}
                                 title={t("attachments")}
                                 detail={
-                                  selectedRecordNeedsDecrypt
-                                    ? t("attachmentsHiddenUntilUnlocked")
-                                    : detailAttachments.length === 0
-                                      ? t("noAttachments")
-                                      : undefined
+                                  detailAttachments.length === 0
+                                    ? t("noAttachments")
+                                    : undefined
                                 }
                                 open={detailSectionsState.attachmentsOpen}
                                 onToggle={() =>
@@ -4852,9 +4814,7 @@ export function AdminDashboardPage() {
                                 }
                               />
                               {detailSectionsState.attachmentsOpen ? (
-                                selectedRecordNeedsDecrypt ? (
-                                  <p className="muted">{t("attachmentsHiddenUntilUnlocked")}</p>
-                                ) : detailAttachments.length === 0 ? (
+                                detailAttachments.length === 0 ? (
                                   <p className="muted">{t("noAttachments")}</p>
                                 ) : (
                                   <SignalAttachmentList
@@ -4992,6 +4952,7 @@ export function AdminDashboardPage() {
       <ReviewSessionModal
         open={reviewSessionOpen}
         selectedRecord={selectedRecord}
+        selectedRecordForm={selectedRecordVersionedForm}
         dialogRef={reviewSessionDialogRef}
         primaryActionRef={reviewSessionPrimaryActionRef}
         onBackdropMouseDown={requestCloseReviewSession}

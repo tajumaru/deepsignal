@@ -2,6 +2,8 @@ import type { Language } from "../i18n";
 import type { FormSchema, Submission } from "../types";
 import { formatAnswerText } from "./answerFormatting";
 import { getSubmissionRespondentMeta } from "./respondentMeta";
+import { getSubmissionVersion } from "./submissionVersioning";
+import type { VersionedFormSchemas } from "./formVersionSchemas";
 import { downloadTextFile } from "./utils";
 
 const CSV_MIME_TYPE = "text/csv;charset=utf-8";
@@ -28,6 +30,7 @@ export interface ExportFilterSnapshot {
     from?: string;
     to?: string;
   };
+  formVersion?: "all" | number;
 }
 
 export interface ExportResponsesToCsvOptions {
@@ -40,6 +43,7 @@ export interface ExportResponsesToCsvOptions {
   exportedBy?: string;
   filterSnapshot?: ExportFilterSnapshot;
   metadata?: ExportMetadata;
+  versionedForms?: VersionedFormSchemas;
 }
 
 export interface ExportMetadata {
@@ -70,6 +74,12 @@ export interface ExportAuditLogEntry {
 interface ResponseExportRowSource {
   submission: Submission;
   answers: Record<string, unknown>;
+}
+
+interface QuestionColumn {
+  header: string;
+  version: number;
+  field: FormSchema["fields"][number];
 }
 
 function answerLooksEncrypted(value: unknown) {
@@ -117,6 +127,35 @@ function makeUniqueHeaders(headers: string[]) {
     seen.set(normalized, nextCount);
     return nextCount === 1 ? normalized : `${normalized} (${nextCount})`;
   });
+}
+
+function getVersionsInResponses(form: FormSchema, responses: Submission[], versionedForms?: VersionedFormSchemas) {
+  const versions = Array.from(new Set(responses.map((submission) => getSubmissionVersion(submission))));
+  if (versions.length === 0) {
+    versions.push(getSubmissionVersion({ formVersion: form.formVersion }));
+  }
+  return versions.sort((left, right) => left - right).map((version) => ({
+    version,
+    form: versionedForms?.[version] ?? form,
+  }));
+}
+
+function buildQuestionColumns(
+  form: FormSchema,
+  responses: Submission[],
+  options: ExportResponsesToCsvOptions = {},
+): QuestionColumn[] {
+  const versionForms = getVersionsInResponses(form, responses, options.versionedForms);
+  const includeVersionPrefix = versionForms.length > 1;
+  const columns = versionForms.flatMap(({ version, form: versionForm }) =>
+    versionForm.fields.map((field) => ({
+      header: includeVersionPrefix ? `v${version}: ${field.label || field.id}` : field.label || field.id,
+      version,
+      field,
+    })),
+  );
+  const uniqueHeaders = makeUniqueHeaders(columns.map((column) => column.header));
+  return columns.map((column, index) => ({ ...column, header: uniqueHeaders[index] }));
 }
 
 export function sanitizeCsvCell(value: unknown) {
@@ -177,13 +216,21 @@ function formatAnswerForCsv(
   return formatAnswerText(field, value, language);
 }
 
-export function buildColumns(form: FormSchema, options: ExportResponsesToCsvOptions = {}) {
-  const questionHeaders = makeUniqueHeaders(form.fields.map((field) => field.label || field.id));
+export function buildColumns(
+  form: FormSchema,
+  responses: Submission[] = [],
+  options: ExportResponsesToCsvOptions = {},
+) {
+  const questionHeaders = buildQuestionColumns(form, responses, options).map((column) => column.header);
   const columns = [
     "formTitle",
     "exportedAt",
     "responseCount",
     "responseId",
+    "formVersion",
+    "schemaHash",
+    "formBlobId",
+    "manifestBlobId",
     "submittedAt",
     "createdAt",
   ];
@@ -227,7 +274,7 @@ export function buildExportMetadata(
       !excludedPiiFields.includes("decryptedAnswers") && hasUnlockedAnswerOverride(options.responseOverrides),
     includedAttachmentInfo: !excludedPiiFields.includes("attachments"),
     filterSnapshot: options.filterSnapshot ?? {},
-    columns: buildColumns(form, options),
+    columns: buildColumns(form, responses, options),
   };
 }
 
@@ -243,6 +290,7 @@ export function buildRows(
   const omitAttachments = isExcluded(options.excludedPiiFields, "attachments");
   const omitNotes = isExcluded(options.excludedPiiFields, "notes");
   const omitDecryptedAnswers = isExcluded(options.excludedPiiFields, "decryptedAnswers");
+  const questionColumns = buildQuestionColumns(form, responses, options);
 
   return sortedResponses.map((submission) => {
     const override = options.responseOverrides?.[submission.id];
@@ -264,6 +312,10 @@ export function buildRows(
       metadata.exportedAt,
       metadata.responseCount,
       submission.id,
+      getSubmissionVersion(submission),
+      submission.schemaHash ?? "",
+      submission.formBlobId ?? "",
+      submission.manifestBlobId ?? "",
       respondentMeta.submittedAt,
       submission.createdAt,
     ];
@@ -290,7 +342,14 @@ export function buildRows(
       row.push(submission.notes);
     }
 
-    row.push(...form.fields.map((field) => formatAnswerForCsv(field, { submission, answers }, language)));
+    const submissionVersion = getSubmissionVersion(submission);
+    row.push(
+      ...questionColumns.map((column) =>
+        column.version === submissionVersion
+          ? formatAnswerForCsv(column.field, { submission, answers }, language)
+          : "",
+      ),
+    );
     return row;
   });
 }

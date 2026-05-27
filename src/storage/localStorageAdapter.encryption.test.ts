@@ -5,9 +5,11 @@ import {
   cleanupRegisteredSubmissionLocalFallback,
   localStorageAdapter,
 } from "./localStorageAdapter";
+import { readLocalFormVersionSchemas } from "./localFormVersions";
 
 const FORMS_KEY = "deepsignal.forms";
 const SUBMISSIONS_KEY = "deepsignal.submissions";
+const LOCAL_FORM_VERSION_SCHEMAS_KEY = "deepsignal.formVersionSchemas";
 const CORRUPTED_SUBMISSIONS_PREFIX = "deepsignal.corrupted.deepsignal.submissions.";
 
 function createEncryptedSubmission(): Submission {
@@ -171,6 +173,60 @@ describe("localStorageAdapter encrypted submission persistence", () => {
       isOnchain: true,
       registrationMode: "sui",
     });
+  });
+
+  it("preserves local form schemas by version when answered forms are structurally edited", async () => {
+    const v1Form = createForm({
+      fields: [
+        {
+          id: "impact",
+          type: "shortText",
+          label: "Impact",
+          required: true,
+          sensitive: false,
+        },
+      ],
+      formVersion: 1,
+    });
+    await localStorageAdapter.saveForm(v1Form);
+    await localStorageAdapter.saveSubmission({
+      ...createEncryptedSubmission(),
+      isEncrypted: false,
+      encryptedBlobId: undefined,
+      answers: {
+        impact: "Checkout blocked",
+      },
+      formVersion: 1,
+      schemaHash: "schema:v1",
+    });
+
+    const v2Result = await localStorageAdapter.saveForm({
+      ...v1Form,
+      fields: [
+        ...v1Form.fields,
+        {
+          id: "severity",
+          type: "rating",
+          label: "Severity",
+          required: false,
+          sensitive: false,
+        },
+      ],
+    });
+
+    expect(v2Result.formVersion).toBe(2);
+    const schemas = readLocalFormVersionSchemas("form-local");
+    expect(schemas[1]?.fields.map((field) => field.id)).toEqual(["impact"]);
+    expect(schemas[2]?.fields.map((field) => field.id)).toEqual(["impact", "severity"]);
+  });
+
+  it("removes local form version schemas when a form is deleted", async () => {
+    await localStorageAdapter.saveForm(createForm({ formVersion: 1 }));
+    expect(window.localStorage.getItem(LOCAL_FORM_VERSION_SCHEMAS_KEY)).toContain("form-local");
+
+    await localStorageAdapter.deleteForm("form-local");
+
+    expect(readLocalFormVersionSchemas("form-local")).toEqual({});
   });
 
   it("promotes a Sui-registered submission and removes matching local provisional records", async () => {

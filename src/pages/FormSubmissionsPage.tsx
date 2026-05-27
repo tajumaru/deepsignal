@@ -23,6 +23,7 @@ import { formatAnswerText } from "../lib/answerFormatting";
 import { isAttachmentFieldType, isLongTextLikeField } from "../lib/fieldTypes";
 import { canAttemptPrivateSignalDecrypt, getReviewAccessState } from "../lib/adminAccess";
 import { exportSubmissionJson, exportSummaryJson } from "../lib/export";
+import { loadVersionedFormSchemas, type VersionedFormSchemas } from "../lib/formVersionSchemas";
 import {
   buildExportMetadata,
   exportResponsesToCsv,
@@ -36,6 +37,12 @@ import { getPublicFormPath, getPublicRoadmapPath } from "../lib/publicLinks";
 import { clearDeepSignalPolicyCapabilityCache } from "../lib/debugCache";
 import { formatResponseDeadline, type ResponseDeadlineLabels } from "../lib/responseDeadline";
 import { getRespondentDisplayLabel, getRespondentIdentityLabel, getSubmissionRespondentMeta } from "../lib/respondentMeta";
+import {
+  getSubmissionVersionCounts,
+  getSubmissionVersion,
+  matchesSubmissionVersion,
+  type SubmissionVersionFilter,
+} from "../lib/submissionVersioning";
 import {
   getAssignedReviewer,
   getReviewerNoteUpdatedAt,
@@ -62,7 +69,7 @@ import {
   normalizeSubmission,
   storageAdapter,
 } from "../lib/storage";
-import { buildSurveySummary } from "../lib/surveySummary";
+import { buildVersionedSurveySummary } from "../lib/surveySummary";
 import { formatDate, flattenAnswer } from "../lib/utils";
 import { useRpcInfrastructure } from "../rpcInfrastructure";
 import type { FormSchema, Submission } from "../types";
@@ -167,6 +174,7 @@ export function FormSubmissionsPage() {
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [selectedSignalId, setSelectedSignalId] = useState(submissionId);
   const [selectedStreamId, setSelectedStreamId] = useState<StreamId>("all");
+  const [selectedVersion, setSelectedVersion] = useState<SubmissionVersionFilter>("all");
   const [search, setSearch] = useState("");
   const [unlockInteractionNotice, setUnlockInteractionNotice] = useState("");
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
@@ -183,6 +191,7 @@ export function FormSubmissionsPage() {
   const [pendingCsvExportMetadata, setPendingCsvExportMetadata] = useState<ExportMetadata | null>(null);
   const [pendingCsvExportResponses, setPendingCsvExportResponses] = useState<Submission[]>([]);
   const [pendingCsvExportOptions, setPendingCsvExportOptions] = useState<ExportResponsesToCsvOptions | null>(null);
+  const [versionedForms, setVersionedForms] = useState<VersionedFormSchemas>({});
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState<{ tone: "success" | "error"; message: string } | null>(null);
   const saveQueueRef = useRef(Promise.resolve());
@@ -204,6 +213,22 @@ export function FormSubmissionsPage() {
   }, [formId, submissionId]);
 
   useEffect(() => {
+    if (!form) {
+      setVersionedForms({});
+      return;
+    }
+    let cancelled = false;
+    void loadVersionedFormSchemas(form).then((schemas) => {
+      if (!cancelled) {
+        setVersionedForms(schemas);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [form]);
+
+  useEffect(() => {
     if (!toast) {
       return;
     }
@@ -211,9 +236,14 @@ export function FormSubmissionsPage() {
     return () => window.clearTimeout(timer);
   }, [toast]);
 
+  const versionCounts = useMemo(() => getSubmissionVersionCounts(submissions), [submissions]);
+  const versionedSubmissions = useMemo(
+    () => submissions.filter((submission) => matchesSubmissionVersion(submission, selectedVersion)),
+    [selectedVersion, submissions],
+  );
   const visibleSignals = useMemo(() => {
     const normalizedSearch = search.trim().toLowerCase();
-    return submissions.filter((submission) => {
+    return versionedSubmissions.filter((submission) => {
       if (!matchesStream(submission, selectedStreamId)) {
         return false;
       }
@@ -233,10 +263,9 @@ export function FormSubmissionsPage() {
         .toLowerCase();
       return searchable.includes(normalizedSearch);
     });
-  }, [search, selectedStreamId, submissions]);
+  }, [search, selectedStreamId, versionedSubmissions]);
   const selectedSubmission =
     visibleSignals.find((submission) => submission.id === selectedSignalId) ??
-    submissions.find((submission) => submission.id === selectedSignalId) ??
     visibleSignals[0] ??
     null;
   const selectedRecord = useMemo(
@@ -245,14 +274,14 @@ export function FormSubmissionsPage() {
         ? {
             form: {
               ...form,
-              submissionCount: submissions.length,
+              submissionCount: versionedSubmissions.length,
             },
             submission: selectedSubmission,
             category: inferSignalCategory(selectedSubmission),
             searchText: "",
           }
         : null,
-    [form, selectedSubmission, submissions.length],
+    [form, selectedSubmission, versionedSubmissions.length],
   );
   const {
     detailAnswers,
@@ -306,13 +335,13 @@ export function FormSubmissionsPage() {
         ? selectedSubmission
           ? 1
           : 0
-        : submissions.length;
+        : versionedSubmissions.length;
   const csvExportScopeLabel =
     csvExportScope === "filtered"
       ? t("filteredExportCount", { count: visibleSignals.length })
       : csvExportScope === "selected"
         ? t("selectedResponsesCount", { count: selectedSubmission ? 1 : 0 })
-      : t("allResponsesCount", { count: submissions.length });
+      : t("allResponsesCount", { count: versionedSubmissions.length });
   const submissionMetrics = useMemo(() => {
     const next = {
       unread: 0,
@@ -334,7 +363,7 @@ export function FormSubmissionsPage() {
       visibleUnread: 0,
     };
 
-    for (const submission of submissions) {
+    for (const submission of versionedSubmissions) {
       const category = inferSignalCategory(submission);
       if (submission.status === "unread") {
         next.unread += 1;
@@ -391,12 +420,12 @@ export function FormSubmissionsPage() {
     }
 
     return next;
-  }, [submissions, visibleSignals]);
+  }, [versionedSubmissions, visibleSignals]);
 
   const streamItems = useMemo(
     () =>
       [
-        { id: "all", label: t("allSignals"), count: submissions.length },
+        { id: "all", label: t("allSignals"), count: versionedSubmissions.length },
         { id: "unread", label: t("unreadSignals"), count: submissionMetrics.unread },
         { id: "encrypted", label: t("encryptedSignals"), count: submissionMetrics.encrypted },
         { id: "high", label: t("highPrioritySignals"), count: submissionMetrics.high },
@@ -409,12 +438,12 @@ export function FormSubmissionsPage() {
         { id: "survey", label: t("surveys"), count: submissionMetrics.survey },
         { id: "archived", label: t("archivedSignals"), count: submissionMetrics.archived },
       ] satisfies Array<{ id: StreamId; label: string; count: number }>,
-    [submissionMetrics, submissions.length, t],
+    [submissionMetrics, versionedSubmissions.length, t],
   );
 
   const summaryCards = useMemo(
     () => [
-      { label: "Total signals", value: submissions.length },
+      { label: "Total signals", value: versionedSubmissions.length },
       { label: "New signals", value: submissionMetrics.newSignals },
       { label: "Planned", value: submissionMetrics.planned },
       { label: "Fixed", value: submissionMetrics.fixed },
@@ -428,12 +457,12 @@ export function FormSubmissionsPage() {
             : (submissionMetrics.signalValueTotal / submissionMetrics.signalValueCount).toFixed(1),
       },
     ],
-    [submissionMetrics, submissions.length],
+    [submissionMetrics, versionedSubmissions.length],
   );
 
   const surveySummary = useMemo(
-    () => (form ? buildSurveySummary(form, submissions) : null),
-    [form, submissions],
+    () => (form ? buildVersionedSurveySummary(form, versionedSubmissions, versionedForms) : null),
+    [form, versionedForms, versionedSubmissions],
   );
   const showSurveySummary = useMemo(
     () => Boolean(form && (form.purpose === "survey" || submissionMetrics.survey > 0)),
@@ -687,6 +716,7 @@ export function FormSubmissionsPage() {
           ? selectedStreamId
           : undefined,
       dateRange: {},
+      formVersion: selectedVersion,
     };
   }
 
@@ -694,7 +724,7 @@ export function FormSubmissionsPage() {
     if (csvExportScope === "selected") {
       return selectedSubmission ? [selectedSubmission] : [];
     }
-    return csvExportScope === "filtered" ? visibleSignals : submissions;
+    return csvExportScope === "filtered" ? visibleSignals : versionedSubmissions;
   }
 
   function getCsvResponseOverrides() {
@@ -726,6 +756,7 @@ export function FormSubmissionsPage() {
       exportedBy: wallet.accountAddress ?? "",
       filterSnapshot: getCsvFilterSnapshot(),
       responseOverrides: getCsvResponseOverrides(),
+      versionedForms,
     };
     const metadata = buildExportMetadata(form, responses, options);
     setPendingCsvExportResponses(responses);
@@ -742,6 +773,7 @@ export function FormSubmissionsPage() {
           excludedPiiFields: next,
           now: new Date(pendingCsvExportMetadata.exportedAt),
           metadata: undefined,
+          versionedForms,
         };
         const nextMetadata = buildExportMetadata(form, pendingCsvExportResponses, nextOptions);
         setPendingCsvExportMetadata(nextMetadata);
@@ -786,7 +818,10 @@ export function FormSubmissionsPage() {
   }
 
   const access = getReviewAccessState(form, wallet.accountAddress, capabilityProfile);
-  const activeForm = form as FormSchema;
+  const selectedSubmissionForm = selectedSubmission
+    ? versionedForms[getSubmissionVersion(selectedSubmission)] ?? form
+    : form;
+  const activeForm = selectedSubmissionForm as FormSchema;
   const resolvedDetailAnswers = detailAnswers ?? {};
   const isDecryptInteractionLocked = decrypting || decryptInFlightRef.current;
   const activeUnlockSubmissionId = activeDecryptSubmissionId;
@@ -1145,6 +1180,16 @@ export function FormSubmissionsPage() {
             <strong>{sealRuntimeLabel}</strong>
           </div>
           <div className="metadata-row">
+            <span>Form version</span>
+            <strong>v{selectedSubmission.formVersion ?? 1}</strong>
+          </div>
+          {selectedSubmission.schemaHash ? (
+            <div className="metadata-row">
+              <span>Schema hash</span>
+              <strong>{selectedSubmission.schemaHash}</strong>
+            </div>
+          ) : null}
+          <div className="metadata-row">
             <span>{t("submissionBlobIdLabel")}</span>
             <div className="signal-meta-row-value">
               {selectedSubmission.blobId ? (
@@ -1455,6 +1500,29 @@ export function FormSubmissionsPage() {
               </div>
             </div>
 
+            {versionCounts.length > 1 ? (
+              <div className="signal-sidebar-section">
+                <label className="review-select export-select">
+                  <span>Form version</span>
+                  <select
+                    value={selectedVersion}
+                    onChange={(event) => {
+                      const value = event.target.value;
+                      setSelectedVersion(value === "all" ? "all" : Number(value));
+                      setSelectedSignalId("");
+                    }}
+                  >
+                    <option value="all">All versions ({submissions.length})</option>
+                    {versionCounts.map(([version, count]) => (
+                      <option key={version} value={version}>
+                        v{version} ({count})
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+            ) : null}
+
             <div className="signal-sidebar-section stack">
               <div className="wallet-status-card">
                 <p className="eyebrow">{t("formBlobId")}</p>
@@ -1520,7 +1588,7 @@ export function FormSubmissionsPage() {
                 <p className="muted">
                   {t("unreadCountSummary", {
                     count: submissionMetrics.visibleUnread,
-                    scope: t("totalCountLabel", { count: submissions.length }),
+                    scope: t("totalCountLabel", { count: versionedSubmissions.length }),
                   })}
                 </p>
               </div>

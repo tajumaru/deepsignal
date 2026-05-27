@@ -509,6 +509,46 @@
   box-shadow: 0 10px 22px rgba(52, 211, 153, 0.12);
 }
 
+.sui-register-button {
+  gap: 0.5rem;
+  min-width: 0;
+  padding-inline: 0.78rem;
+}
+
+.sui-register-mark {
+  display: inline-grid;
+  width: 2.25rem;
+  height: 2.25rem;
+  place-items: center;
+  border: 1px solid rgba(125, 245, 255, 0.42);
+  border-radius: 999px 999px 999px 44%;
+  background:
+    radial-gradient(circle at 34% 24%, rgba(255, 255, 255, 0.42), transparent 24%),
+    linear-gradient(145deg, rgba(91, 225, 255, 0.94), rgba(42, 178, 255, 0.74) 52%, rgba(52, 211, 153, 0.74));
+  color: #022033;
+  font-size: 0.68rem;
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.34),
+    0 0 18px rgba(74, 222, 255, 0.22);
+}
+
+.sui-register-count {
+  display: inline-grid;
+  min-width: 1.38rem;
+  height: 1.38rem;
+  place-items: center;
+  border: 1px solid rgba(216, 255, 243, 0.28);
+  border-radius: 999px;
+  background: rgba(2, 20, 30, 0.42);
+  color: #eafff8;
+  font-size: 0.78rem;
+  font-weight: 900;
+  line-height: 1;
+}
+
 .pending-sui-select-all-button.is-active:not(:disabled) {
   border-color: rgba(126, 232, 255, 0.34);
   background:

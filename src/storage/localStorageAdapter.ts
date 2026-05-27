@@ -1,5 +1,7 @@
 import type { FormSchema, StorageAdapter, Submission } from "../types";
 import { assertEncryptedSubmissionLeakGuard, sanitizeSubmissionForStorage } from "./submissionSanitizer";
+import { computeSchemaHash, resolveFormVersion } from "../lib/formVersioning";
+import { removeLocalFormVersionSchemas, upsertLocalFormVersionSchema } from "./localFormVersions";
 
 const FORMS_KEY = "deepsignal.forms";
 const SUBMISSIONS_KEY = "deepsignal.submissions";
@@ -131,11 +133,38 @@ function getEncryptedSubmissionOptions() {
 export const localStorageAdapter: StorageAdapter = {
   async saveForm(form) {
     const forms = readJson<FormSchema[]>(FORMS_KEY, []);
+    const submissions = readJson<Submission[]>(SUBMISSIONS_KEY, []);
+    const existingForm = forms.find((item) => item.id === form.id);
+    const currentVersion = resolveFormVersion(existingForm ?? form);
+    const nextSchemaHash = computeSchemaHash(form);
+    const hasExistingResponses = submissions.some((submission) => submission.formId === form.id);
+    const shouldCreateNewVersion = Boolean(
+      existingForm?.schemaHash &&
+        hasExistingResponses &&
+        existingForm.schemaHash !== nextSchemaHash &&
+        resolveFormVersion(form) <= currentVersion,
+    );
+    const persistedForm = {
+      ...form,
+      baseFormId: form.baseFormId ?? existingForm?.baseFormId ?? form.id,
+      formVersion: shouldCreateNewVersion ? currentVersion + 1 : resolveFormVersion(form),
+      schemaHash: nextSchemaHash,
+    };
     const nextForms = forms.filter((item) => item.id !== form.id);
-    const blobId = form.blobId ?? `local-form-${form.id}`;
-    nextForms.unshift({ ...form, blobId });
+    const blobId = persistedForm.blobId ?? `local-form-${persistedForm.id}`;
+    const storedForm = { ...persistedForm, blobId };
+    upsertLocalFormVersionSchema(existingForm);
+    upsertLocalFormVersionSchema(storedForm);
+    nextForms.unshift(storedForm);
     writeJson(FORMS_KEY, nextForms);
-    return { id: form.id, blobId, manifestBlobId: form.manifestBlobId, tatumStorage: form.tatumStorage };
+    return {
+      id: persistedForm.id,
+      formVersion: persistedForm.formVersion,
+      schemaHash: persistedForm.schemaHash,
+      blobId,
+      manifestBlobId: persistedForm.manifestBlobId,
+      tatumStorage: persistedForm.tatumStorage,
+    };
   },
 
   async getForm(id) {
@@ -166,6 +195,7 @@ export const localStorageAdapter: StorageAdapter = {
       SUBMISSIONS_KEY,
       submissions.filter((submission) => !targetIds.has(submission.formId)),
     );
+    removeLocalFormVersionSchemas(targetIds);
   },
 
   async saveSubmission(submission) {
@@ -266,6 +296,7 @@ export const localStorageAdapter: StorageAdapter = {
 export async function cleanupRegisteredFormLocalFallback(registeredForm: FormSchema) {
   const forms = readJson<FormSchema[]>(FORMS_KEY, []);
   const nextForms = forms.filter((form) => !matchesRegisteredForm(form, registeredForm));
+  upsertLocalFormVersionSchema(registeredForm);
   writeJson(FORMS_KEY, [registeredForm, ...nextForms]);
 }
 

@@ -9,6 +9,7 @@ import { getEncryptedPayloadAvailabilityLabel, hasDedicatedEncryptedPayloadBlob 
 import type { RelatedSignalResult } from "../../../lib/relatedSignals";
 import { getRespondentIdentityLabel, getSubmissionRespondentMeta } from "../../../lib/respondentMeta";
 import { getSignalSyncSummary, isLocalFallbackBlob } from "../../../lib/signalInbox";
+import { getSubmissionVersion } from "../../../lib/submissionVersioning";
 import { formatDate } from "../../../lib/utils";
 import type { SignalRecord } from "../hooks/useSignalInboxData";
 import type { ResponsesCsvExportScope, ResponsesCsvSortOrder } from "../../../lib/exportResponses";
@@ -243,6 +244,16 @@ export function SecondaryInspector({
                   <span>{t("verificationRouteLabel")}</span>
                   <strong>{verificationRouteLabel}</strong>
                 </div>
+                <div className="metadata-row">
+                  <span>Form version</span>
+                  <strong>v{getSubmissionVersion(selectedRecord.submission)}</strong>
+                </div>
+                {selectedRecord.submission.schemaHash ? (
+                  <div className="metadata-row">
+                    <span>Schema hash</span>
+                    <strong>{selectedRecord.submission.schemaHash}</strong>
+                  </div>
+                ) : null}
                 <SignalMetaRow label={t("formBlobId")} type="blob" value={selectedRecord.form.blobId} emptyLabel={t("notAvailable")}>
                   {!isLocalFallbackBlob(selectedRecord.form.blobId) ? (
                     <BlobLink
@@ -468,12 +479,6 @@ export function SecondaryInspector({
             />
           </div>
         </details>
-      </div>
-
-      <div className="inspector-utility-links">
-        <Link className="ghost-button" to={`/dashboard?tab=review&form=${encodeURIComponent(selectedRecord.form.id)}`}>
-          {t("reviewSubmissions")}
-        </Link>
       </div>
     </section>
   );

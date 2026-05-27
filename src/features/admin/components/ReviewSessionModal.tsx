@@ -8,7 +8,7 @@ import { isLocalFallbackBlob } from "../../../lib/signalInbox";
 import type { AttachmentPreviewState } from "../../../hooks/useAttachmentPreviews";
 import type { SignalRecord } from "../hooks/useSignalInboxData";
 import { SignalAttachmentList } from "./SignalAttachmentList";
-import type { Submission } from "../../../types";
+import type { FormSchema, Submission } from "../../../types";
 
 type ReviewSessionStep = 1 | 2 | 3 | 4;
 type ReviewSessionMobileTab = "answers" | "review";
@@ -21,6 +21,7 @@ type ReviewDraftLike = Pick<Submission, "status" | "triageStatus" | "priority" |
 interface ReviewSessionModalProps {
   open: boolean;
   selectedRecord: SignalRecord | null;
+  selectedRecordForm: FormSchema | null;
   dialogRef: Ref<HTMLElement>;
   primaryActionRef: Ref<HTMLButtonElement>;
   onBackdropMouseDown: () => void;
@@ -71,6 +72,7 @@ interface ReviewSessionModalProps {
 export function ReviewSessionModal({
   open,
   selectedRecord,
+  selectedRecordForm,
   dialogRef,
   primaryActionRef,
   onBackdropMouseDown,
@@ -119,7 +121,7 @@ export function ReviewSessionModal({
 }: ReviewSessionModalProps) {
   const { t } = useI18n();
 
-  if (!open || !selectedRecord) {
+  if (!open || !selectedRecord || !selectedRecordForm) {
     return null;
   }
 
@@ -268,7 +270,7 @@ export function ReviewSessionModal({
                   <p className="muted">{t("originalSignalBody")}</p>
                 </div>
                 <div className="review-session-answer-list">
-                  {selectedRecord.form.fields
+                  {selectedRecordForm.fields
                     .filter((field) => !isAttachmentFieldType(field.type))
                     .map((field, index) => (
                       <article key={field.id} className="review-session-answer-card">
@@ -513,9 +515,7 @@ export function ReviewSessionModal({
 
           <div className="review-session-footer">
             {reviewSessionStep === 1 ? (
-              <button type="button" className="ghost-button" onClick={onRequestClose}>
-                {t("closeLabel")}
-              </button>
+              <span aria-hidden="true" />
             ) : reviewSessionStep > 1 ? (
               <button
                 type="button"

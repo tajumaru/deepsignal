@@ -643,33 +643,7 @@ export default defineConfig(({ mode }) => {
             if (normalizedId.includes("/@scure/")) {
               return "scure";
             }
-            if (normalizedId.includes("/@mysten/sui/dist/keypairs/")) {
-              return "mysten-sui-keypairs";
-            }
-            if (normalizedId.includes("/@mysten/sui/dist/zklogin/")) {
-              return "mysten-sui-zklogin";
-            }
-            if (normalizedId.includes("/@mysten/sui/dist/multisig/")) {
-              return "mysten-sui-multisig";
-            }
-            if (normalizedId.includes("/@mysten/sui/dist/verify/")) {
-              return "mysten-sui-verify";
-            }
-            if (normalizedId.includes("/@mysten/sui/dist/cryptography/")) {
-              return "mysten-sui-crypto";
-            }
-            if (
-              normalizedId.includes("/@mysten/sui/dist/bcs/") ||
-              normalizedId.includes("/@mysten/sui/dist/transactions/")
-            ) {
-              return "mysten-sui-tx";
-            }
-            if (normalizedId.includes("/@mysten/sui/dist/client/") || normalizedId.includes("/@mysten/sui/dist/jsonRpc/")) {
-              return "mysten-sui-client";
-            }
-            if (
-              normalizedId.includes("/@mysten/sui/")
-            ) {
+            if (normalizedId.includes("/@mysten/sui/")) {
               return "mysten-sui";
             }
             if (normalizedId.includes("/@tanstack/")) {

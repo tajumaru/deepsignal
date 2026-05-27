@@ -2,6 +2,7 @@ import { sanitizeConditionalLogicFields } from "../../utils/formLogic";
 import { hasChoiceOptions, isConfirmationCheckboxField, isMatrixFieldType, normalizeFieldType } from "../../lib/fieldTypes";
 import { makeId } from "../../lib/utils";
 import { normalizeFormVisibility } from "../../lib/explore";
+import { computeSchemaHash } from "../../lib/formVersioning";
 import type {
   FieldType,
   FormField,
@@ -246,8 +247,10 @@ export function buildFormSchema(args: {
 }): FormSchema {
   const normalizedHeaderImage = normalizeHeaderImage(args.headerImage);
   const normalizedHeaderLogo = normalizeHeaderLogo(args.headerLogo);
-  return {
+  const formWithoutHash = {
     id: makeId("form"),
+    baseFormId: "",
+    formVersion: 1,
     title: args.title.trim(),
     description: args.description.trim(),
     headerImage: normalizedHeaderImage,
@@ -294,6 +297,12 @@ export function buildFormSchema(args: {
     responseDeadline: args.responseDeadline ?? null,
     responseDeadlineMode: args.responseDeadlineMode ?? "none",
     registrationMode: "walrus",
+  } satisfies Omit<FormSchema, "schemaHash">;
+
+  return {
+    ...formWithoutHash,
+    baseFormId: formWithoutHash.id,
+    schemaHash: computeSchemaHash(formWithoutHash),
   };
 }
 

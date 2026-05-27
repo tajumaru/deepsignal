@@ -1,5 +1,7 @@
 import { flattenAnswer } from "./utils";
 import { EMOTION_SCALE_OPTIONS, type EmotionScaleValue } from "./emotionScale";
+import { getSubmissionVersion } from "./submissionVersioning";
+import type { VersionedFormSchemas } from "./formVersionSchemas";
 import type { FormField, FormSchema, Submission } from "../types";
 
 function countAnswer(map: Record<string, number>, value: string) {
@@ -128,5 +130,58 @@ export function buildSurveySummary(form: FormSchema, submissions: Submission[]) 
     choiceCounts,
     yesNoDistributions,
     emotionDistributions,
+  };
+}
+
+export function buildVersionedSurveySummary(
+  form: FormSchema,
+  submissions: Submission[],
+  versionedForms: VersionedFormSchemas = {},
+) {
+  const versions = Array.from(new Set(submissions.map((submission) => getSubmissionVersion(submission)))).sort(
+    (left, right) => left - right,
+  );
+  if (versions.length <= 1) {
+    return buildSurveySummary(versionedForms[versions[0]] ?? form, submissions);
+  }
+
+  const summaries = versions.map((version) => {
+    const versionSubmissions = submissions.filter((submission) => getSubmissionVersion(submission) === version);
+    return {
+      version,
+      summary: buildSurveySummary(versionedForms[version] ?? form, versionSubmissions),
+    };
+  });
+  const submissionCount = summaries.reduce((sum, entry) => sum + entry.summary.submissionCount, 0);
+  const encryptedPendingCount = summaries.reduce((sum, entry) => sum + entry.summary.encryptedPendingCount, 0);
+  const ratingTotal = summaries.reduce(
+    (sum, entry) => sum + (entry.summary.averageRating ?? 0) * entry.summary.submissionCount,
+    0,
+  );
+  const ratingCount = summaries.reduce(
+    (sum, entry) => sum + (entry.summary.averageRating == null ? 0 : entry.summary.submissionCount),
+    0,
+  );
+
+  return {
+    submissionCount,
+    encryptedPendingCount,
+    averageRating: ratingCount === 0 ? null : Number((ratingTotal / ratingCount).toFixed(2)),
+    choiceCounts: Object.fromEntries(
+      summaries.flatMap((entry) =>
+        Object.entries(entry.summary.choiceCounts).map(([label, counts]) => [`v${entry.version}: ${label}`, counts]),
+      ),
+    ),
+    yesNoDistributions: Object.fromEntries(
+      summaries.flatMap((entry) =>
+        Object.entries(entry.summary.yesNoDistributions).map(([label, counts]) => [`v${entry.version}: ${label}`, counts]),
+      ),
+    ),
+    emotionDistributions: summaries.flatMap((entry) =>
+      entry.summary.emotionDistributions.map((distribution) => ({
+        ...distribution,
+        fieldLabel: `v${entry.version}: ${distribution.fieldLabel}`,
+      })),
+    ),
   };
 }

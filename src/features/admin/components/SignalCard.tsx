@@ -1,8 +1,6 @@
 import { forwardRef } from "react";
-import { SignalStatusBadges } from "../../../components/SignalStatusBadges";
 import { useI18n } from "../../../i18n";
-import { getReviewerPresenceText } from "../../../lib/reviewCollaboration";
-import type { SignalCategory, SignalPersistenceState } from "../../../lib/signalInbox";
+import type { SignalPersistenceState } from "../../../lib/signalInbox";
 import { formatDate } from "../../../lib/utils";
 import type { Submission } from "../../../types";
 
@@ -11,7 +9,6 @@ type TranslationFn = ReturnType<typeof useI18n>["t"];
 interface SignalCardProps {
   t: TranslationFn;
   submission: Submission;
-  category: SignalCategory;
   formTitle: string;
   subject: string;
   preview: string;
@@ -20,7 +17,6 @@ interface SignalCardProps {
   lockStateLabel: string;
   readStateLabel: string;
   persistenceLabel: string | null;
-  storageLabel?: string;
   persistenceState: SignalPersistenceState;
   urgencyScoreLabel: string;
   signalTypeLabel: string;
@@ -28,11 +24,6 @@ interface SignalCardProps {
   shortSummary: string;
   evidenceQuote: string;
   recommendedAction: string;
-  emotionalTone: string;
-  verifiedLabel: string;
-  locationLabel: string | null;
-  reviewerHint: ReturnType<typeof getReviewerPresenceText>;
-  needsFollowUp: boolean;
   isSelectedSignal: boolean;
   isPendingSui: boolean;
   isSelectedForSui: boolean;
@@ -40,7 +31,6 @@ interface SignalCardProps {
   isUnlockedSignal: boolean;
   isOnchainRecoverySnapshot: boolean;
   hasPayloadIssue: boolean;
-  hasNotableStatusBadge: boolean;
   isRegistering: boolean;
   onSelect: () => void;
   onKeySelect: () => void;
@@ -52,7 +42,6 @@ export const SignalCard = forwardRef<HTMLDivElement, SignalCardProps>(function S
   {
     t,
     submission,
-    category,
     formTitle,
     subject,
     preview,
@@ -61,7 +50,6 @@ export const SignalCard = forwardRef<HTMLDivElement, SignalCardProps>(function S
     lockStateLabel,
     readStateLabel,
     persistenceLabel,
-    storageLabel,
     persistenceState,
     urgencyScoreLabel,
     signalTypeLabel,
@@ -69,18 +57,12 @@ export const SignalCard = forwardRef<HTMLDivElement, SignalCardProps>(function S
     shortSummary,
     evidenceQuote,
     recommendedAction,
-    emotionalTone,
-    verifiedLabel,
-    locationLabel,
-    reviewerHint,
-    needsFollowUp,
     isSelectedSignal,
     isPendingSui,
     isSelectedForSui,
     isUnlockedSignal,
     isOnchainRecoverySnapshot,
     hasPayloadIssue,
-    hasNotableStatusBadge,
     isRegistering,
     onSelect,
     onKeySelect,
@@ -174,29 +156,8 @@ export const SignalCard = forwardRef<HTMLDivElement, SignalCardProps>(function S
               <span className="mailbox-meta-chip mailbox-meta-chip-subtle">{t("privateSignalPayloadMissingStatus")}</span>
             ) : null}
           </div>
-          {hasNotableStatusBadge ? (
-            <div className="signal-badge-row signal-badge-row-compact">
-              <SignalStatusBadges
-                submission={submission}
-                category={category}
-                pendingSui={isPendingSui}
-                selectedForSui={isSelectedForSui}
-                payloadIssue={hasPayloadIssue}
-                storageLabel={storageLabel}
-                persistenceState={persistenceState}
-                density="notable"
-                reviewerHint={reviewerHint}
-                needsFollowUp={needsFollowUp}
-              />
-            </div>
-          ) : null}
         </div>
       ) : null}
-      <div className="signal-card-analysis-meta">
-        <span>{emotionalTone}</span>
-        <span>{verifiedLabel}</span>
-        {locationLabel ? <span>{locationLabel}</span> : null}
-      </div>
       {isPendingSui ? (
         <div className="signal-card-actions">
           <button

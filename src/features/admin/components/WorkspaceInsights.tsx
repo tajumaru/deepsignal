@@ -2,9 +2,11 @@ import { useMemo, type CSSProperties } from "react";
 import { useI18n, type Language } from "../../../i18n";
 import { getRelatedSignals, type RelatedSignalReason } from "../../../lib/relatedSignals";
 import { getSignalPreview } from "../../../lib/signalInbox";
+import type { VersionedFormSchemas } from "../../../lib/formVersionSchemas";
+import { getSubmissionVersion } from "../../../lib/submissionVersioning";
 import { downloadTextFile } from "../../../lib/utils";
 import { flattenAnswer } from "../../../lib/utils";
-import type { SignalSeverity } from "../../../types";
+import type { FormSchema, SignalSeverity } from "../../../types";
 import {
   getAnalysisProfileLabel,
   getAnalysisProfileShortLabel,
@@ -108,6 +110,7 @@ function getReadableSummaryEntries(
   record: SignalRecord,
   t: ReturnType<typeof useI18n>["t"],
   unlockedSignalsById?: Record<string, UnlockedSignalSummary>,
+  versionedFormsByFormId?: Record<string, VersionedFormSchemas>,
 ) {
   const answers =
     unlockedSignalsById?.[record.submission.id]
@@ -120,7 +123,10 @@ function getReadableSummaryEntries(
     return [];
   }
 
-  const entries = record.form.fields
+  const formForSubmission =
+    versionedFormsByFormId?.[record.form.id]?.[getSubmissionVersion(record.submission)] ??
+    (record.form as FormSchema);
+  const entries = formForSubmission.fields
     .map((field) => ({
       question: field.label.trim() || field.id,
       answer: normalizeReadableAnswer(answers[field.id]),
@@ -139,6 +145,7 @@ function buildSignalSummary(
   records: SignalRecord[],
   t: ReturnType<typeof useI18n>["t"],
   unlockedSignalsById?: Record<string, UnlockedSignalSummary>,
+  versionedFormsByFormId?: Record<string, VersionedFormSchemas>,
 ) {
   const encryptedWaitingCount = records.filter(
     (record) =>
@@ -150,7 +157,7 @@ function buildSignalSummary(
   const questionTotals = new Map<string, number>();
 
   records.forEach((record) => {
-    const entries = getReadableSummaryEntries(record, t, unlockedSignalsById);
+    const entries = getReadableSummaryEntries(record, t, unlockedSignalsById, versionedFormsByFormId);
     const countedQuestions = new Set<string>();
     entries.forEach((entry) => {
       const question = entry.question.trim();
@@ -949,6 +956,7 @@ interface WorkspaceInsightsProps {
   encryptedSignals: number;
   records: SignalRecord[];
   unlockedSignalsById?: Record<string, UnlockedSignalSummary>;
+  versionedFormsByFormId?: Record<string, VersionedFormSchemas>;
 }
 
 export function WorkspaceInsights({
@@ -958,11 +966,12 @@ export function WorkspaceInsights({
   encryptedSignals,
   records,
   unlockedSignalsById,
+  versionedFormsByFormId,
 }: WorkspaceInsightsProps) {
   const { t, language } = useI18n();
   const signalSummary = useMemo(
-    () => buildSignalSummary(records, t, unlockedSignalsById),
-    [records, t, unlockedSignalsById],
+    () => buildSignalSummary(records, t, unlockedSignalsById, versionedFormsByFormId),
+    [records, t, unlockedSignalsById, versionedFormsByFormId],
   );
   const clusters = useMemo(
     () => buildSignalClusters(records, signalSummary.items, t),

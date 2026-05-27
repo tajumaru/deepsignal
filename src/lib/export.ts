@@ -2,6 +2,7 @@ import type { FormSchema, Submission } from "../types";
 import { formatAnswerText } from "./answerFormatting";
 import { parseRealSealEnvelope } from "../crypto/sealPayload";
 import { getSubmissionRespondentMeta } from "./respondentMeta";
+import { getSubmissionVersion } from "./submissionVersioning";
 import { downloadTextFile } from "./utils";
 
 export type ExportEncryptionStatus = "seal_encrypted" | "legacy_unencrypted" | "public";
@@ -89,6 +90,10 @@ export function exportSubmissionJson(form: FormSchema, submission: Submission) {
         },
         metadata: {
           encryptionStatus,
+          formVersion: getSubmissionVersion(submission),
+          schemaHash: submission.schemaHash ?? "",
+          formBlobId: submission.formBlobId ?? "",
+          manifestBlobId: submission.manifestBlobId ?? "",
           includesAttachmentsMetadata: submission.attachments.length > 0,
           privateDataWarning: PRIVATE_EXPORT_CONFIRMATION,
         },
@@ -106,6 +111,10 @@ export function exportSubmissionsCsv(form: FormSchema, submissions: Submission[]
   }
   const columns = [
     "submissionId",
+    "formVersion",
+    "schemaHash",
+    "formBlobId",
+    "manifestBlobId",
     "encryptionStatus",
     "createdAt",
     "status",
@@ -127,6 +136,10 @@ export function exportSubmissionsCsv(form: FormSchema, submissions: Submission[]
     const respondentMeta = getSubmissionRespondentMeta(submission);
     const base = [
       submission.id,
+      getSubmissionVersion(submission),
+      submission.schemaHash ?? "",
+      submission.formBlobId ?? "",
+      submission.manifestBlobId ?? "",
       getSubmissionEncryptionStatus(submission),
       submission.createdAt,
       submission.status,

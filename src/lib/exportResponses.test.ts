@@ -62,10 +62,10 @@ describe("responses CSV export", () => {
 
     const [header, row] = csv.split("\r\n");
     expect(header).toBe(
-      '"formTitle","exportedAt","responseCount","responseId","submittedAt","createdAt","respondentAddress","respondentIdentity","identityProvider","isAnonymous","walrusBlobId","storageBlobId","attachments","tags","priority","triageStatus","status","notes","Comment","Score","Comment (2)"',
+      '"formTitle","exportedAt","responseCount","responseId","formVersion","schemaHash","formBlobId","manifestBlobId","submittedAt","createdAt","respondentAddress","respondentIdentity","identityProvider","isAnonymous","walrusBlobId","storageBlobId","attachments","tags","priority","triageStatus","status","notes","Comment","Score","Comment (2)"',
     );
     expect(row).toContain(
-      '"Feedback","2026-05-16T12:00:00.000Z","1","response-1","2026-05-16T01:02:03.000Z","2026-05-16T01:02:03.000Z","0xabc","sui_wallet","","false","walrus-blob-1","walrus-blob-1"',
+      '"Feedback","2026-05-16T12:00:00.000Z","1","response-1","1","","","","2026-05-16T01:02:03.000Z","2026-05-16T01:02:03.000Z","0xabc","sui_wallet","","false","walrus-blob-1","walrus-blob-1"',
     );
     expect(row).toContain('"日本語, comma, and ""quotes""\nsecond line"');
     expect(row.endsWith(',"5",""')).toBe(true);
@@ -87,7 +87,7 @@ describe("responses CSV export", () => {
     ]);
 
     expect(csv).toContain(
-      '"response-locked","2026-05-16T02:00:00.000Z","2026-05-16T01:02:03.000Z","","anonymous","","true","encrypted-blob-1","encrypted-blob-1"',
+      '"response-locked","1","","","","2026-05-16T02:00:00.000Z","2026-05-16T01:02:03.000Z","","anonymous","","true","encrypted-blob-1","encrypted-blob-1"',
     );
     expect(csv).toContain('"[encrypted]","[encrypted]","[encrypted]"');
   });
@@ -113,8 +113,41 @@ describe("responses CSV export", () => {
     ]);
 
     expect(csv).toContain(
-      '"response-zklogin","2026-05-16T02:30:00.000Z","2026-05-16T01:02:03.000Z","0xzklogin123","zklogin","google","false"',
+      '"response-zklogin","1","","","","2026-05-16T02:30:00.000Z","2026-05-16T01:02:03.000Z","0xzklogin123","zklogin","google","false"',
     );
+  });
+
+  it("uses each response version schema for mixed-version exports", () => {
+    const v1Form = {
+      ...form,
+      formVersion: 1,
+      fields: [{ id: "q1", type: "shortText", label: "Legacy question", required: false, sensitive: false }],
+    } satisfies FormSchema;
+    const v2Form = {
+      ...form,
+      formVersion: 2,
+      fields: [{ id: "q9", type: "shortText", label: "Current question", required: false, sensitive: false }],
+    } satisfies FormSchema;
+    const csv = buildResponsesCsv(
+      v2Form,
+      [
+        makeSubmission({ id: "v1-response", formVersion: 1, answers: { q1: "old answer" } }),
+        makeSubmission({ id: "v2-response", formVersion: 2, answers: { q9: "new answer" } }),
+      ],
+      {
+        sortOrder: "createdAtAsc",
+        versionedForms: {
+          1: v1Form,
+          2: v2Form,
+        },
+      },
+    );
+
+    const [header, firstRow, secondRow] = csv.split("\r\n");
+    expect(header).toContain('"v1: Legacy question"');
+    expect(header).toContain('"v2: Current question"');
+    expect(firstRow).toContain('"old answer",""');
+    expect(secondRow).toContain('"","new answer"');
   });
 
   it("includes readable attachment summaries and triage metadata", () => {

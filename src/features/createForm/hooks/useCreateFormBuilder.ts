@@ -14,6 +14,7 @@ import {
   normalizeFormPurpose,
   smartComposerTemplates,
 } from "../../../lib/formTemplates";
+import { toDateTimeLocalValue } from "../../../lib/responseDeadline";
 import type { Language } from "../../../i18n";
 import { normalizeFieldType } from "../../../lib/fieldTypes";
 import { getSelectedProjectId, setSelectedProjectId } from "../../../lib/projectRegistry";
@@ -43,6 +44,7 @@ import {
   type ParsedCreateFormDraft,
   serializeDraft,
 } from "../utils";
+import type { FormSchema } from "../../../types";
 
 interface UseCreateFormBuilderArgs {
   t: Translate;
@@ -543,6 +545,86 @@ export function useCreateFormBuilder({
     });
   }
 
+  function applyFormForEdit(form: FormSchema) {
+    const nextHeaderImage = {
+      url: form.headerImage?.url ?? "",
+      alt: form.headerImage?.alt ?? "",
+      position: form.headerImage?.position ?? "center",
+      source: form.headerImage?.source ?? "url",
+      fileName: form.headerImage?.fileName ?? "",
+    };
+    const nextHeaderLogo = {
+      url: form.headerLogo?.url ?? "",
+      alt: form.headerLogo?.alt ?? "",
+      source: form.headerLogo?.source ?? "url",
+      fileName: form.headerLogo?.fileName ?? "",
+    };
+    const nextFields = sanitizeConditionalLogicFields(
+      (form.fields.length ? form.fields : initialFields).map((field) => ({
+        ...field,
+        type: normalizeFieldType(field.type),
+      })),
+    );
+    const nextSections = Array.isArray(form.sections) ? form.sections : [];
+    const nextPurpose = normalizeFormPurpose(form.purpose);
+    const nextVisibility = form.visibility ?? "public";
+    const nextIdentityPolicy = form.identityPolicy === "wallet_required" ? "wallet_required" : "anonymous_allowed";
+    const nextLocationRequirement = form.locationRequirement === "required" ? "required" : "optional";
+    const nextDeadlinePreset = form.responseDeadline ? "custom" : "none";
+    const nextDeadlineCustomAt = form.responseDeadline ? toDateTimeLocalValue(form.responseDeadline) : "";
+    const nextSelectedProjectId = isGuestDraftMode ? "" : form.projectId ?? "";
+    const nextSnapshot = serializeDraft(
+      form.title,
+      form.description ?? "",
+      nextHeaderImage,
+      nextHeaderLogo,
+      nextFields,
+      nextPurpose,
+      nextVisibility,
+      nextIdentityPolicy,
+      nextLocationRequirement,
+      Boolean(nextSelectedProjectId),
+      form.encryptSubmissions ?? !isGuestDraftMode,
+      nextSections,
+      nextDeadlinePreset,
+      nextDeadlineCustomAt,
+    );
+
+    startTransition(() => {
+      hasLoadedDraftRef.current = true;
+      window.localStorage.removeItem(draftStorageKey);
+      setSelectedTemplateKey("published-edit");
+      setTitle(form.title);
+      setDescription(form.description ?? "");
+      setHeaderImage(nextHeaderImage);
+      setHeaderLogo(nextHeaderLogo);
+      setFields(nextFields);
+      setSections(nextSections);
+      setPurpose(nextPurpose);
+      setVisibility(nextVisibility);
+      setIdentityPolicy(nextIdentityPolicy);
+      setLocationRequirement(nextLocationRequirement);
+      setEncryptSubmissions(form.encryptSubmissions ?? !isGuestDraftMode);
+      setResponseDeadlinePreset(nextDeadlinePreset);
+      setResponseDeadlineCustomAt(nextDeadlineCustomAt);
+      setCurrentStep("info");
+      setMobilePane("editor");
+      setFieldTypePickerOpen(false);
+      setSelectedProjectIdState(nextSelectedProjectId);
+      setProjectState(form.projectName ? `Linked to ${form.projectName}` : "");
+      setLastSavedSnapshot(nextSnapshot);
+      setDraftSaveState("idle");
+      setHasRecoverableDraft(false);
+      setDraftParseStatus("idle");
+      setDraftParseNotice("");
+      setActiveFieldId(nextFields[0]?.id ?? "");
+      setDraggedFieldId(null);
+      setDragOverFieldId(null);
+      setDragOverPlacement(null);
+      setPendingFocusFieldId(nextFields[0]?.id ?? "");
+    });
+  }
+
   function updateField(index: number, nextField: typeof fields[number]) {
     setFields((current) => {
       const previousField = current[index];
@@ -914,6 +996,7 @@ export function useCreateFormBuilder({
     moveStep,
     applyTemplate,
     applyIntentDraft,
+    applyFormForEdit,
     updateField,
     insertField,
     duplicateFieldAt,

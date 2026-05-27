@@ -49,6 +49,7 @@ import {
   writeSubmissionRemoteIndexLog,
 } from "./submissionDelivery";
 import { getTatumStorageWriteUrl, isTatumStorageEnabled, uploadWithTatum } from "./tatumStorage";
+import { LEGACY_SCHEMA_HASH, computeSchemaHash, resolveFormVersion } from "../lib/formVersioning";
 import type {
   EncryptedSubmissionRecord,
   FormSchema,
@@ -1299,20 +1300,95 @@ function extractEmbeddedEncryptedPayload(value: string) {
 }
 
 function createManifest(
-  form: Pick<FormSchema, "id" | "createdAt" | "headerImage" | "headerLogo">,
+  form: Pick<FormSchema, "id" | "createdAt" | "headerImage" | "headerLogo" | "formVersion" | "schemaHash"> & {
+    title?: string;
+  },
   formBlobId: string,
   submissions: SignalManifest["submissions"],
   updatedAt: string,
+  previousVersions: SignalManifest["versions"] = [],
 ): SignalManifest {
+  const currentVersion = resolveFormVersion(form);
+  const previousVersion = previousVersions.find((version) => version.version === currentVersion);
+  const schemaHash = form.schemaHash || previousVersion?.schemaHash || computeSchemaHash({ ...form, fields: [], sections: [] });
+  const versionFormBlobId =
+    formBlobId === bundledFormPointer && previousVersion?.formBlobId
+      ? previousVersion.formBlobId
+      : formBlobId;
+  const versions = [
+    ...previousVersions.filter((version) => version.version !== currentVersion),
+    {
+      version: currentVersion,
+      formBlobId: versionFormBlobId,
+      schemaHash,
+      createdAt: form.createdAt,
+      publishedAt: updatedAt,
+      titleSnapshot: form.title ?? previousVersion?.titleSnapshot,
+    },
+  ].sort((left, right) => left.version - right.version);
   return {
-    version: 1,
+    version: 2,
     formId: form.id,
     createdAt: form.createdAt,
     updatedAt,
     formBlobId,
+    currentVersion,
+    versions,
     headerImage: form.headerImage,
     headerLogo: form.headerLogo,
-    submissions: submissions.sort((left, right) => right.createdAt.localeCompare(left.createdAt)),
+    submissions: submissions
+      .map((submission) => ({
+        ...submission,
+        formVersion: submission.formVersion ?? currentVersion,
+        formBlobId: submission.formBlobId ?? versionFormBlobId,
+        schemaHash: submission.schemaHash ?? schemaHash,
+      }))
+      .sort((left, right) => right.createdAt.localeCompare(left.createdAt)),
+  };
+}
+
+function normalizeManifest(
+  manifest: SignalManifest,
+  options: { carrierBlobId: string; form?: FormSchema | null } | null,
+): SignalManifest {
+  const form = options?.form ?? null;
+  const currentVersion = manifest.currentVersion ?? resolveFormVersion(form ?? {});
+  const formBlobId =
+    manifest.formBlobId === bundledFormPointer && options?.carrierBlobId
+      ? options.carrierBlobId
+      : manifest.formBlobId;
+  const schemaHash = form?.schemaHash || manifest.versions?.find((version) => version.version === currentVersion)?.schemaHash || LEGACY_SCHEMA_HASH;
+  const versions = (manifest.versions?.length
+    ? manifest.versions
+    : [
+        {
+          version: currentVersion,
+          formBlobId,
+          schemaHash,
+          createdAt: manifest.createdAt,
+          publishedAt: manifest.updatedAt,
+          titleSnapshot: form?.title,
+        },
+      ]).map((version) => ({
+        ...version,
+        version: resolveFormVersion({ formVersion: version.version }),
+        formBlobId: !version.formBlobId || version.formBlobId === bundledFormPointer ? formBlobId : version.formBlobId,
+        schemaHash: version.schemaHash || schemaHash,
+        createdAt: version.createdAt || manifest.createdAt,
+        publishedAt: version.publishedAt || manifest.updatedAt,
+      }));
+
+  return {
+    ...manifest,
+    version: 2,
+    currentVersion,
+    versions,
+    submissions: manifest.submissions.map((submission) => ({
+      ...submission,
+      formVersion: submission.formVersion ?? currentVersion,
+      formBlobId: submission.formBlobId ?? formBlobId,
+      schemaHash: submission.schemaHash ?? schemaHash,
+    })),
   };
 }
 
@@ -1357,20 +1433,20 @@ async function readManifestCarrier(blobId: string) {
   const payload = await readJsonBlobOrThrow<unknown>(blobId);
   if (isFormBundle(payload)) {
     return {
-      manifest: payload.manifest,
+      manifest: normalizeManifest(payload.manifest, { carrierBlobId: blobId, form: payload.form }),
       form: payload.form,
     };
   }
 
   if (isSubmissionBundle(payload)) {
     return {
-      manifest: payload.manifest,
+      manifest: normalizeManifest(payload.manifest, { carrierBlobId: blobId, form: payload.form ?? null }),
       form: payload.form ?? null,
     };
   }
 
   return {
-    manifest: payload as SignalManifest,
+    manifest: normalizeManifest(payload as SignalManifest, { carrierBlobId: blobId, form: null }),
     form: null as FormSchema | null,
   };
 }
@@ -1800,7 +1876,14 @@ async function saveSubmissionRecord(
     listSubmissionBlobIndex(sanitizedSubmission.formId).map((item) => [item.submissionId, item.blobObjectId]),
   );
   const nextManifestEntries = [
-    { submissionId: sanitizedSubmission.id, blobId: "", createdAt: sanitizedSubmission.createdAt },
+    {
+      submissionId: sanitizedSubmission.id,
+      blobId: "",
+      createdAt: sanitizedSubmission.createdAt,
+      formVersion: sanitizedSubmission.formVersion,
+      formBlobId: sanitizedSubmission.formBlobId,
+      schemaHash: sanitizedSubmission.schemaHash,
+    },
     ...manifest.submissions.filter((item) => item.submissionId !== sanitizedSubmission.id),
   ];
   const nextManifest = createManifest(
@@ -1809,10 +1892,14 @@ async function saveSubmissionRecord(
       createdAt: manifest.createdAt,
       headerImage: form?.headerImage ?? manifest.headerImage,
       headerLogo: form?.headerLogo ?? manifest.headerLogo,
+      formVersion: manifest.currentVersion,
+      schemaHash: manifest.versions?.find((version) => version.version === manifest.currentVersion)?.schemaHash,
+      title: form?.title ?? manifest.versions?.find((version) => version.version === manifest.currentVersion)?.titleSnapshot,
     },
     form ? bundledFormPointer : manifest.formBlobId,
     nextManifestEntries,
     new Date().toISOString(),
+    manifest.versions,
   );
   const bundle = await writeSubmissionBundle(sanitizedSubmission, nextManifest, form, encryptedSubmissionOptions);
   nextManifest.submissions[0].blobId = bundle.blobId;
@@ -1872,7 +1959,7 @@ async function saveSubmissionRecord(
     tatumStorage: bundle.tatumStorage,
     ...(allowEmbeddedEncryptedPayload ? { encryptedBlobId: bundle.blobId, encryptedPayload: undefined } : {}),
   });
-  if (!allowEmbeddedEncryptedPayload) {
+  if (!allowEmbeddedEncryptedPayload && manifest.version < 2) {
     await cleanupSupersededWalrusObjects([
       entry.manifestBlobObjectId,
       form ? entry.formBlobObjectId : undefined,
@@ -1904,18 +1991,58 @@ async function saveSubmissionRecord(
 
 export const walrusAdapter: StorageAdapter = {
   async saveForm(form: FormSchema) {
-    const manifest = createManifest(form, bundledFormPointer, [], form.createdAt);
-    const { blobId, blobObjectId, walrusActualCost, tatumStorage } = await writeFormBundle(form, manifest);
+    let previousManifest: SignalManifest | null = null;
+    try {
+      previousManifest = (await loadManifestOrThrow(form.id)).manifest;
+    } catch (error) {
+      console.warn("[deepsignal] existing manifest could not be loaded before form publish; continuing with a fresh manifest", {
+        formId: form.id,
+        errorName: error instanceof Error ? error.name : typeof error,
+        errorMessage: error instanceof Error ? error.message : String(error),
+      });
+    }
+    const previousVersions = previousManifest?.versions ?? [];
+    const previousCurrentVersion = previousManifest?.currentVersion ?? 1;
+    const currentVersionRecord = previousVersions.find((version) => version.version === previousCurrentVersion);
+    const nextSchemaHash = computeSchemaHash(form);
+    const hasExistingResponses = Boolean(previousManifest?.submissions.length);
+    const shouldCreateNewVersion = Boolean(
+      hasExistingResponses &&
+        currentVersionRecord?.schemaHash &&
+        currentVersionRecord.schemaHash !== nextSchemaHash &&
+        resolveFormVersion(form) <= previousCurrentVersion,
+    );
+    const publishForm = {
+      ...form,
+      formVersion: shouldCreateNewVersion ? previousCurrentVersion + 1 : resolveFormVersion(form),
+      schemaHash: nextSchemaHash,
+    } satisfies FormSchema;
+    const manifest = createManifest(
+      publishForm,
+      bundledFormPointer,
+      previousManifest?.submissions ?? [],
+      new Date().toISOString(),
+      previousVersions,
+    );
+    const { blobId, blobObjectId, walrusActualCost, tatumStorage } = await writeFormBundle(publishForm, manifest);
     upsertFormBlobIndex({
-      formId: form.id,
+      formId: publishForm.id,
       formBlobId: blobId,
       formBlobObjectId: blobObjectId,
       manifestBlobId: blobId,
       manifestBlobObjectId: blobObjectId,
-      createdAt: form.createdAt,
+      createdAt: publishForm.createdAt,
     });
-    await localStorageAdapter.saveForm({ ...form, blobId, manifestBlobId: blobId, walrusActualCost, tatumStorage });
-    return { id: form.id, blobId, manifestBlobId: blobId, walrusActualCost, tatumStorage };
+    await localStorageAdapter.saveForm({ ...publishForm, blobId, manifestBlobId: blobId, walrusActualCost, tatumStorage });
+    return {
+      id: publishForm.id,
+      formVersion: publishForm.formVersion,
+      schemaHash: publishForm.schemaHash,
+      blobId,
+      manifestBlobId: blobId,
+      walrusActualCost,
+      tatumStorage,
+    };
   },
 
   async getForm(id) {
@@ -2080,7 +2207,14 @@ export const walrusAdapter: StorageAdapter = {
       manifest.submissions.find((item) => item.submissionId === sanitizedSubmission.id)?.createdAt ??
       sanitizedSubmission.createdAt;
     const nextManifestEntries = [
-      { submissionId: sanitizedSubmission.id, blobId: "", createdAt: existingCreatedAt },
+      {
+        submissionId: sanitizedSubmission.id,
+        blobId: "",
+        createdAt: existingCreatedAt,
+        formVersion: sanitizedSubmission.formVersion,
+        formBlobId: sanitizedSubmission.formBlobId,
+        schemaHash: sanitizedSubmission.schemaHash,
+      },
       ...manifest.submissions.filter((item) => item.submissionId !== sanitizedSubmission.id),
     ];
     const nextManifest = createManifest(
@@ -2089,10 +2223,14 @@ export const walrusAdapter: StorageAdapter = {
         createdAt: manifest.createdAt,
         headerImage: form?.headerImage ?? manifest.headerImage,
         headerLogo: form?.headerLogo ?? manifest.headerLogo,
+        formVersion: manifest.currentVersion,
+        schemaHash: manifest.versions?.find((version) => version.version === manifest.currentVersion)?.schemaHash,
+        title: form?.title ?? manifest.versions?.find((version) => version.version === manifest.currentVersion)?.titleSnapshot,
       },
       form ? bundledFormPointer : manifest.formBlobId,
       nextManifestEntries,
       new Date().toISOString(),
+      manifest.versions,
     );
     const bundle = await writeSubmissionBundle(sanitizedSubmission, nextManifest, form);
     nextManifest.submissions[0].blobId = bundle.blobId;
@@ -2124,12 +2262,14 @@ export const walrusAdapter: StorageAdapter = {
       walrusProof: bundle.walrusProof,
       tatumStorage: bundle.tatumStorage,
     });
-    await cleanupSupersededWalrusObjects(
-      [entry.manifestBlobObjectId, form ? entry.formBlobObjectId : undefined].filter(
-        (objectId) => objectId && !preservedCleanupObjectIds.has(objectId),
-      ),
-      `updating submission ${sanitizedSubmission.id}`,
-    );
+    if (manifest.version < 2) {
+      await cleanupSupersededWalrusObjects(
+        [entry.manifestBlobObjectId, form ? entry.formBlobObjectId : undefined].filter(
+          (objectId) => objectId && !preservedCleanupObjectIds.has(objectId),
+        ),
+        `updating submission ${sanitizedSubmission.id}`,
+      );
+    }
   },
 
   async saveEncryptedPayload(payload) {

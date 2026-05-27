@@ -44,6 +44,7 @@ import type {
 } from "../types";
 import type { ActivityActorRole } from "../../../types";
 import { buildFormSchema } from "../utils";
+import type { FormSchema } from "../../../types";
 
 interface UseCreateFormPublishArgs {
   t: Translate;
@@ -76,6 +77,7 @@ interface UseCreateFormPublishArgs {
   responseDeadlineCustomAt: string;
   isDirty: boolean;
   selectedProject: ProjectOption | null;
+  editingForm?: FormSchema | null;
   setProjectState: (value: string) => void;
   signAndExecuteTransaction: (transaction: CreateFormTransaction) => Promise<{ digest: string }>;
   waitForTransaction: (digest: string) => Promise<TransactionConfirmation>;
@@ -117,6 +119,7 @@ export function useCreateFormPublish({
   responseDeadlineCustomAt,
   isDirty,
   selectedProject,
+  editingForm,
   setProjectState,
   signAndExecuteTransaction,
   waitForTransaction,
@@ -387,7 +390,7 @@ export function useCreateFormPublish({
     setSavedForm(null);
     setOverlay({ ...initialOverlayState, open: true });
 
-    const form = buildFormSchema({
+    const builtForm = buildFormSchema({
       title,
       description,
       headerImage,
@@ -406,30 +409,56 @@ export function useCreateFormPublish({
       responseDeadline,
       responseDeadlineMode,
     });
+    const form = editingForm
+      ? {
+          ...builtForm,
+          id: editingForm.id,
+          baseFormId: editingForm.baseFormId ?? editingForm.id,
+          formVersion: editingForm.formVersion ?? builtForm.formVersion,
+          createdAt: editingForm.createdAt,
+          blobId: editingForm.blobId,
+          manifestBlobId: editingForm.manifestBlobId,
+          onchainFormId: editingForm.onchainFormId,
+          isOnchain: editingForm.isOnchain,
+          registrationMode: editingForm.registrationMode ?? builtForm.registrationMode,
+          projectId: selectedProject?.objectId ?? editingForm.projectId,
+          projectName: selectedProject?.name ?? editingForm.projectName,
+        }
+      : builtForm;
     const auditTimestamp = new Date().toISOString();
-    const publishActivityEvents = [
-      createActivityEvent({
-        form,
-        actorAddress: accountAddress,
-        actorRole,
-        action: "form_created",
-        createdAt: auditTimestamp,
-      }),
-      createActivityEvent({
-        form,
-        actorAddress: accountAddress,
-        actorRole,
-        action: "form_published",
-        createdAt: auditTimestamp,
-      }),
-    ];
+    const publishActivityEvents = editingForm
+      ? [
+          createActivityEvent({
+            form,
+            actorAddress: accountAddress,
+            actorRole,
+            action: "form_updated",
+            createdAt: auditTimestamp,
+          }),
+        ]
+      : [
+          createActivityEvent({
+            form,
+            actorAddress: accountAddress,
+            actorRole,
+            action: "form_created",
+            createdAt: auditTimestamp,
+          }),
+          createActivityEvent({
+            form,
+            actorAddress: accountAddress,
+            actorRole,
+            action: "form_published",
+            createdAt: auditTimestamp,
+          }),
+        ];
 
     try {
       const finalForm = await publishForm({
         t,
         form: {
           ...form,
-          activityEvents: publishActivityEvents,
+          activityEvents: [...(editingForm?.activityEvents ?? []), ...publishActivityEvents],
         },
         selectedProject,
         setPublishStageIndex: (stageIndex) => updateOverlay({ stageIndex }),

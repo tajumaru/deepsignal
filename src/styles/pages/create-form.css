@@ -4640,6 +4640,43 @@
   background: rgba(7, 21, 34, 0.96);
 }
 
+.composer-modal-actions,
+.composer-version-panel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.composer-version-panel > div:first-child {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.composer-version-counts {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.composer-version-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2rem;
+  padding: 0.3rem 0.65rem;
+  border: 1px solid rgba(116, 226, 255, 0.18);
+  background: rgba(8, 28, 42, 0.68);
+  color: #d7faff;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.composer-modal-panel .composer-version-counts {
+  margin: 1rem 0;
+}
+
 .composer-section-preset-row {
   display: flex;
   gap: 0.65rem;

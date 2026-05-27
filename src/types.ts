@@ -137,6 +137,9 @@ export interface FormHeaderLogo {
 
 export interface FormSchema {
   id: string;
+  baseFormId?: string;
+  formVersion?: number;
+  schemaHash?: string;
   title: string;
   description: string;
   headerImage?: FormHeaderImage;
@@ -213,12 +216,24 @@ export interface SignalManifest {
   createdAt: string;
   updatedAt: string;
   formBlobId: string;
+  currentVersion?: number;
+  versions?: Array<{
+    version: number;
+    formBlobId: string;
+    schemaHash: string;
+    createdAt: string;
+    publishedAt: string;
+    titleSnapshot?: string;
+  }>;
   headerImage?: FormHeaderImage;
   headerLogo?: FormHeaderLogo;
   submissions: Array<{
     submissionId: string;
     blobId: string;
     createdAt: string;
+    formVersion?: number;
+    formBlobId?: string;
+    schemaHash?: string;
   }>;
 }
 
@@ -306,6 +321,10 @@ export interface RespondentMeta {
 export interface Submission {
   id: string;
   formId: string;
+  formVersion?: number;
+  formBlobId?: string;
+  schemaHash?: string;
+  manifestBlobId?: string;
   projectId?: string;
   answers: Record<string, unknown>;
   attachments: SubmissionAttachment[];
@@ -383,7 +402,15 @@ export interface EncryptedSubmissionRecord extends Omit<
 export interface StorageAdapter {
   saveForm(
     form: FormSchema,
-  ): Promise<{ id: string; blobId?: string; manifestBlobId?: string; walrusActualCost?: WalrusActualCost; tatumStorage?: TatumStorageRecord }>;
+  ): Promise<{
+    id: string;
+    formVersion?: number;
+    schemaHash?: string;
+    blobId?: string;
+    manifestBlobId?: string;
+    walrusActualCost?: WalrusActualCost;
+    tatumStorage?: TatumStorageRecord;
+  }>;
   getForm(id: string): Promise<FormSchema | null>;
   listForms(): Promise<FormSchema[]>;
   deleteForm(id: string): Promise<void>;

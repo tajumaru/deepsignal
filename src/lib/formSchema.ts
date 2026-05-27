@@ -1,6 +1,7 @@
 import { hasChoiceOptions, isAttachmentFieldType, isConfirmationCheckboxField, normalizeFieldType } from "./fieldTypes";
 import { normalizeFormVisibility } from "./explore";
 import { normalizeActivityEvent } from "./activityLog";
+import { computeSchemaHash, resolveFormVersion } from "./formVersioning";
 import { normalizeFormPurpose } from "./formTemplates";
 import { normalizeLogicGroup, sanitizeConditionalLogicFields } from "../utils/formLogic";
 import type {
@@ -93,8 +94,10 @@ export function normalizeForm(raw: FormSchema | (Record<string, unknown> & { id:
   const defaultMatrixColumns = ["Poor", "Okay", "Good"];
   const visibility = normalizeFormVisibility(raw.visibility, raw.publicExplore);
 
-  return {
+  const normalizedForm = {
     ...raw,
+    baseFormId: typeof raw.baseFormId === "string" ? raw.baseFormId : raw.id,
+    formVersion: resolveFormVersion(raw),
     title: typeof raw.title === "string" ? raw.title : "",
     description: typeof raw.description === "string" ? raw.description : "",
     fields: sanitizeConditionalLogicFields(
@@ -163,5 +166,13 @@ export function normalizeForm(raw: FormSchema | (Record<string, unknown> & { id:
           .map((event) => normalizeActivityEvent(event as Record<string, unknown>))
           .filter((event): event is NonNullable<ReturnType<typeof normalizeActivityEvent>> => Boolean(event))
       : undefined,
+  } satisfies Omit<FormSchema, "schemaHash"> & { schemaHash?: string };
+
+  return {
+    ...normalizedForm,
+    schemaHash:
+      typeof raw.schemaHash === "string" && raw.schemaHash.trim()
+        ? raw.schemaHash
+        : computeSchemaHash(normalizedForm),
   } satisfies FormSchema;
 }
