@@ -1,6 +1,39 @@
 /* Composer and builder responsive overrides. */
 
 @media (max-width: 900px) {
+  .composer-home-hero,
+  .composer-home-grid,
+  .composer-home-draft-card,
+  .composer-home-signal-card {
+    grid-template-columns: 1fr;
+  }
+
+  .composer-home-command,
+  .composer-home-card-actions {
+    justify-items: stretch;
+    justify-content: stretch;
+  }
+
+  .composer-home-primary-cta,
+  .composer-home-draft-card .primary-button,
+  .composer-home-card-actions .ghost-button {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .composer-home-signal-meta {
+    grid-template-columns: 1fr;
+  }
+
+  .composer-home-section-heading {
+    align-items: flex-start;
+  }
+
+  .composer-shell textarea,
+  .composer-modal textarea {
+    resize: none;
+  }
+
   .quick-create,
   .quick-create-compact {
     grid-template-columns: 1fr;

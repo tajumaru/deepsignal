@@ -306,6 +306,7 @@ export interface RespondentMeta {
 export interface Submission {
   id: string;
   formId: string;
+  projectId?: string;
   answers: Record<string, unknown>;
   attachments: SubmissionAttachment[];
   location?: SubmissionLocation;
@@ -341,6 +342,13 @@ export interface Submission {
   signalReceiptMetadataDigest?: string;
   onchainStatus?: "new" | "triaged" | "archived";
   pendingOnchainRegistration?: boolean;
+  answerBlobId?: string;
+  remoteIndexBlobId?: string;
+  remoteIndexTarget?: string;
+  remoteIndexUpdated?: boolean;
+  remoteIndexReadBack?: boolean;
+  ownerReadable?: boolean;
+  remoteSyncStatus?: "remote_synced" | "sync_pending" | "local_only";
   subjectPreview?: string;
   ratingValue?: number;
   createdAt: string;
@@ -382,13 +390,32 @@ export interface StorageAdapter {
   deleteForms(ids: string[]): Promise<void>;
   saveSubmission(
     submission: Submission,
-  ): Promise<{ id: string; blobId?: string; walrusProof?: WalrusBlobProof; tatumStorage?: TatumStorageRecord }>;
+  ): Promise<{
+    id: string;
+    blobId?: string;
+    answerBlobId?: string;
+    remoteIndexBlobId?: string;
+    remoteIndexTarget?: string;
+    remoteIndexUpdated?: boolean;
+    remoteIndexReadBack?: boolean;
+    ownerReadable?: boolean;
+    remoteSyncStatus?: "remote_synced" | "sync_pending" | "local_only";
+    walrusProof?: WalrusBlobProof;
+    tatumStorage?: TatumStorageRecord;
+  }>;
   saveEncryptedSubmission?(
     submission: Submission,
   ): Promise<{
     id: string;
     blobId?: string;
     encryptedBlobId?: string;
+    answerBlobId?: string;
+    remoteIndexBlobId?: string;
+    remoteIndexTarget?: string;
+    remoteIndexUpdated?: boolean;
+    remoteIndexReadBack?: boolean;
+    ownerReadable?: boolean;
+    remoteSyncStatus?: "remote_synced" | "sync_pending" | "local_only";
     walrusProof?: WalrusBlobProof;
     tatumStorage?: TatumStorageRecord;
   }>;

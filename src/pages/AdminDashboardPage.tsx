@@ -1568,16 +1568,6 @@ function MobileSignalRow({
   );
 }
 
-function MobileComposeSignalButton() {
-  const { t } = useI18n();
-  return (
-    <CreateFormLink className="mobile-compose-signal-button">
-      <span aria-hidden="true">+</span>
-      <span>{t("composeSignalCta")}</span>
-    </CreateFormLink>
-  );
-}
-
 interface MobileSignalInboxProps {
   title: string;
   sessionLabel: string;
@@ -1740,8 +1730,6 @@ function MobileSignalInbox({
           </button>
         ) : null}
       </div>
-
-      <MobileComposeSignalButton />
     </section>
   );
 }
@@ -2989,16 +2977,17 @@ export function AdminDashboardPage() {
   }, []);
 
   useEffect(() => {
-    if (typeof window === "undefined" || !window.matchMedia?.(MOBILE_REVIEW_MEDIA_QUERY).matches) {
-      return;
-    }
     if (selectedSignalIdFromUrl) {
       if (selectedSignalIdFromUrl !== selectedSignalId) {
         setSelectedSignalId(selectedSignalIdFromUrl);
       }
       return;
     }
-    if (selectedSignalId) {
+    if (
+      selectedSignalId &&
+      typeof window !== "undefined" &&
+      window.matchMedia?.(MOBILE_REVIEW_MEDIA_QUERY).matches
+    ) {
       setSelectedSignalId("");
     }
   }, [selectedSignalId, selectedSignalIdFromUrl, setSelectedSignalId]);
@@ -3593,18 +3582,6 @@ export function AdminDashboardPage() {
     (phase: SignalTimelineEntry["phase"]) => getSignalTimelinePhaseLabel(phase, t),
     [t],
   );
-  const selectedSecondaryMetaItems = selectedRecord
-    ? [
-        selectedRecord.submission.severity
-          ? t("severityLabel", { value: selectedRecord.submission.severity ?? t("mediumLabel") })
-          : null,
-        typeof selectedRecord.submission.ratingValue === "number"
-          ? t("ratingLabel", { value: selectedRecord.submission.ratingValue })
-          : null,
-        t("signalsInThisFormLabel", { count: selectedFormSubmissionCount }),
-        selectedRecordEncryptedBlobStoredOnWalrus ? t("storageWalrus") : null,
-      ].filter((item): item is string => Boolean(item))
-    : [];
   const reviewSessionStepItems = [
     { id: 1, title: t("reviewUnlockSignalTitle"), detail: t("reviewUnlockSignalDetail") },
     { id: 2, title: t("reviewReadAndClassifyTitle"), detail: t("reviewReadAndClassifyDetail") },
@@ -4701,21 +4678,6 @@ export function AdminDashboardPage() {
                       </p>
                       <p className="muted">{t("reviewConsoleBody")}</p>
                     </div>
-                    <div className="inline-actions signal-detail-utility-actions">
-                      <Link
-                        className="ghost-button"
-                        to={`/dashboard/forms/${selectedRecord.form.id}/submissions/${selectedRecord.submission.id}`}
-                      >
-                        {t("openFormInbox")}
-                      </Link>
-                      <button
-                        type="button"
-                        className={`ghost-button ${isReviewerFocusMode ? "is-active" : ""}`}
-                        onClick={() => setIsReviewerFocusMode((current) => !current)}
-                      >
-                        {isReviewerFocusMode ? t("showMoreToggle") : t("focusReviewToggle")}
-                      </button>
-                    </div>
                     </div>
 
                     <div className="signal-detail-meta-row signal-badge-row-compact">
@@ -4747,30 +4709,6 @@ export function AdminDashboardPage() {
                         <span className="signal-chip signal-chip-accent">{t("needsFollowUpLabel")}</span>
                       ) : null}
                     </div>
-                    {selectedSecondaryMetaItems.length > 0 && !isReviewerFocusMode ? (
-                      <details
-                        className="inspector-panel signal-detail-header-details"
-                        open={detailSectionsState.headerDetailsOpen}
-                        onToggle={(event) => {
-                          setDetailSectionOpen("headerDetailsOpen", (event.currentTarget as HTMLDetailsElement).open);
-                        }}
-                      >
-                        <summary>
-                          <span>
-                            <p className="eyebrow">{t("moreDetailsLabel")}</p>
-                            <strong>{t("secondaryMetadataTitle")}</strong>
-                          </span>
-                          <span className="inspector-summary">{selectedSecondaryMetaItems.length}</span>
-                        </summary>
-                        <div className="inspector-panel-body">
-                          <div className="signal-badge-row signal-badge-row-compact">
-                            {selectedSecondaryMetaItems.map((item) => (
-                              <span key={item} className="signal-chip signal-chip-soft">{item}</span>
-                            ))}
-                          </div>
-                        </div>
-                      </details>
-                    ) : null}
                     <section className="answer-card review-trust-summary-card">
                       {selectedReviewContextChips.length > 0 ? (
                         <div className="signal-badge-row signal-badge-row-compact" aria-label="Review context">
@@ -5201,14 +5139,6 @@ export function AdminDashboardPage() {
                 placeholder={t("searchNodesPlaceholder")}
               />
               <div className="node-directory-toolbar-actions node-directory-toolbar-actions--bulk-delete">
-                <div className="node-directory-stats">
-                  <span className="signal-chip">
-                    {t("activeNodeSummary", { count: forms.length })}
-                  </span>
-                  <span className="signal-chip">
-                    {t("signalsCount", { count: allSignals.length })}
-                  </span>
-                </div>
                 {deletableNodeIds.length > 0 ? (
                   <button
                     type="button"
@@ -5348,7 +5278,7 @@ export function AdminDashboardPage() {
         <div className="node-directory-overlay" role="dialog" aria-modal="true">
           <div className="node-directory-backdrop" onClick={() => setBeaconFormId(null)} />
           <section className="panel glow-panel node-directory-panel beacon-overlay-panel">
-            <div className="signal-detail-heading">
+            <div className="signal-detail-heading node-directory-heading">
               <div>
                 <p className="eyebrow">{t("signalBeaconLabel")}</p>
                 <h2>{selectedBeaconForm.title}</h2>

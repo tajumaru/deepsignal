@@ -380,6 +380,7 @@ export function usePublicSubmission({
   const [locationState, setLocationState] = useState<SubmissionLocationCaptureState>("idle");
   const [locationMessage, setLocationMessage] = useState("");
   const activeAttachmentUploadsRef = useRef(new Set<string>());
+  const lastFormResetKeyRef = useRef<string | null>(null);
   const effectiveIdentityMode =
     identityMode === "wallet" && !accountAddress && !walletRequired ? "anonymous" : identityMode;
   const walletReady = effectiveIdentityMode !== "wallet" || Boolean(accountAddress);
@@ -402,6 +403,17 @@ export function usePublicSubmission({
   useEffect(() => installSignalContextCapture(), []);
 
   useEffect(() => {
+    if (!canWrite) {
+      return;
+    }
+    void import("../../../storage/storageFactory")
+      .then(({ retryPendingSubmissionSync }) => retryPendingSubmissionSync())
+      .catch((error) => {
+        console.warn("[public submission] pending remote sync retry failed to start", error);
+      });
+  }, [canWrite]);
+
+  useEffect(() => {
     let unsubscribe: (() => void) | undefined;
     let cancelled = false;
     void import("../../../lib/walrus").then(({ getWalrusMutationRuntimeStatus, subscribeWalrusRuntime }) => {
@@ -418,7 +430,13 @@ export function usePublicSubmission({
     };
   }, []);
 
+  const formResetKey = form ? `${form.id}:${manifestBlobId || "direct"}` : "no-form";
+
   useEffect(() => {
+    if (lastFormResetKeyRef.current === formResetKey) {
+      return;
+    }
+    lastFormResetKeyRef.current = formResetKey;
     setAnswers(initialAnswers);
     setErrors({});
     setSubmitted(null);
@@ -433,7 +451,7 @@ export function usePublicSubmission({
     setLocation(undefined);
     setLocationState("idle");
     setLocationMessage("");
-  }, [initialAnswers]);
+  }, [formResetKey, initialAnswers]);
 
   const attachmentFields = useMemo(
     () =>
@@ -1238,6 +1256,7 @@ export function usePublicSubmission({
       const submission: Submission = {
         id: makeId("submission"),
         formId: form.id,
+        projectId: form.projectId,
         answers: normalizedAnswers,
         attachments,
         location,
@@ -1302,19 +1321,82 @@ export function usePublicSubmission({
         ...submission,
         isEncrypted: Boolean(form.encryptSubmissions),
         blobId: result.blobId,
+        answerBlobId: result.answerBlobId ?? result.blobId,
         encryptedBlobId: "encryptedBlobId" in result ? result.encryptedBlobId : undefined,
         encryptedWalrusProof: "encryptedWalrusProof" in result ? result.encryptedWalrusProof : undefined,
         encryptedPayload: undefined,
         sealIdentity: "sealIdentity" in result ? result.sealIdentity : undefined,
-        receiptBlobId: result.blobId ?? undefined,
+        receiptBlobId: result.answerBlobId ?? result.blobId ?? undefined,
+        remoteIndexBlobId: result.remoteIndexBlobId,
+        remoteIndexTarget: result.remoteIndexTarget,
+        remoteIndexUpdated: result.remoteIndexUpdated,
+        remoteIndexReadBack: result.remoteIndexReadBack,
+        ownerReadable: result.ownerReadable,
+        remoteSyncStatus: result.remoteSyncStatus,
         walrusProof: result.walrusProof,
       } satisfies Submission;
+      const remoteDelivered =
+        result.remoteSyncStatus === "remote_synced" &&
+        result.remoteIndexUpdated === true &&
+        result.remoteIndexReadBack === true &&
+        result.ownerReadable === true &&
+        !isLocalFallbackBlob(result.answerBlobId ?? result.blobId);
+      const walrusManifestBundleSaved =
+        result.remoteIndexTarget === "walrus-manifest-bundle" &&
+        result.remoteIndexUpdated === true &&
+        !isLocalFallbackBlob(result.answerBlobId ?? result.blobId);
+      const externalIndexAccepted =
+        result.remoteIndexTarget === "google-apps-script-drive" &&
+        result.remoteIndexUpdated === true &&
+        !isLocalFallbackBlob(result.answerBlobId ?? result.blobId);
       const notices = [];
       if (manifestBlobId && isLocalFallbackBlob(savedSubmission.encryptedBlobId ?? savedSubmission.blobId)) {
         notices.push(localFallbackNotice);
       }
+      if (!remoteDelivered && walrusManifestBundleSaved) {
+        notices.push(
+          "Signal evidence was saved to Walrus, but owner inbox delivery is pending because the submission relay is not configured.",
+        );
+      }
+      if (!remoteDelivered && externalIndexAccepted) {
+        notices.push(
+          "Signal evidence was saved to Walrus and handed to the Google Drive relay; owner inbox confirmation is pending.",
+        );
+      }
       if (form.projectId) {
         notices.push(suiRegistrationDeferredNotice);
+      }
+      if (!remoteDelivered && !walrusManifestBundleSaved && !externalIndexAccepted) {
+        const message =
+          "Signal was saved as a pending delivery, but it is not yet readable from the owner inbox. Keep this page available until remote sync completes or retry from this device.";
+        setSubmitted(null);
+        setSubmitNotice(notices.join(" "));
+        setSubmitError(message);
+        failPipeline(message);
+        setFailure(
+          createCriticalFailure({
+            error: new Error(message),
+            surface: "walrus",
+            step: "generating_manifest",
+            retryable: true,
+            diagnostics: {
+              formId: form.id,
+              projectId: form.projectId,
+              submissionId: submission.id,
+              answerBlobId: savedSubmission.answerBlobId,
+              remoteIndexBlobId: savedSubmission.remoteIndexBlobId,
+              remoteIndexTarget: savedSubmission.remoteIndexTarget,
+              remoteIndexUpdated: savedSubmission.remoteIndexUpdated,
+              remoteIndexReadBack: savedSubmission.remoteIndexReadBack,
+              ownerReadable: savedSubmission.ownerReadable,
+              remoteSyncStatus: savedSubmission.remoteSyncStatus,
+              localFallback: isLocalFallbackBlob(savedSubmission.encryptedBlobId ?? savedSubmission.blobId),
+            },
+          }),
+        );
+        clearDraft();
+        clearRecoveryRetryState();
+        return;
       }
       setSubmitted(savedSubmission);
       setSubmitNotice(notices.join(" "));

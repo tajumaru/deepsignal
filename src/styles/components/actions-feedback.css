@@ -9,7 +9,7 @@
   background:
     linear-gradient(90deg, rgba(102, 227, 255, 0.04), rgba(85, 170, 255, 0.015)),
     rgba(4, 15, 25, 0.24);
-  color: rgba(174, 238, 255, 0.54);
+  color: rgba(255, 222, 89, 0.78);
   font-family: "Consolas", "SFMono-Regular", "Roboto Mono", monospace;
   font-size: 0.62rem;
   line-height: 1.2;
@@ -20,7 +20,7 @@
   text-overflow: ellipsis;
   opacity: 0.52;
   pointer-events: auto;
-  text-shadow: 0 0 8px rgba(102, 227, 255, 0.2);
+  text-shadow: 0 0 8px rgba(255, 206, 74, 0.28);
   transition:
     opacity var(--transition-fast),
     color var(--transition-fast),
@@ -29,7 +29,7 @@
 
 .build-indicator-button:hover,
 .build-indicator-button:focus-visible {
-  color: rgba(211, 250, 255, 0.78);
+  color: rgba(255, 238, 148, 0.95);
   background:
     linear-gradient(90deg, rgba(102, 227, 255, 0.07), rgba(85, 170, 255, 0.025)),
     rgba(4, 15, 25, 0.34);

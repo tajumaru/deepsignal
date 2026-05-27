@@ -199,7 +199,7 @@ export function ProjectMemberManagementSection({
                 </span>
               </span>
               <span className="access-role-value access-role-cell access-role-cell-role" role="cell" data-label="Role">
-                Owner
+                Owner / Co-admin
               </span>
               <span className="access-role-value access-role-cell access-role-cell-status" role="cell" data-label="Status">
                 <span className="signal-chip signal-chip-accent">Active</span>

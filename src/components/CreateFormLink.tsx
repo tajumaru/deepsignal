@@ -1,10 +1,11 @@
 import { useState, type MouseEvent, type ReactNode } from "react";
-import { Link, NavLink, useNavigate } from "react-router-dom";
+import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import { preloadWalletProviders } from "./walletPreload";
 
 interface CreateFormLinkProps {
   children: ReactNode;
   className?: string;
+  fresh?: boolean;
   nav?: boolean;
   onClick?: () => void;
 }
@@ -20,10 +21,12 @@ function createFreshFormTarget() {
   };
 }
 
-export function CreateFormLink({ children, className, nav = false, onClick }: CreateFormLinkProps) {
+export function CreateFormLink({ children, className, fresh = true, nav = false, onClick }: CreateFormLinkProps) {
   const navigate = useNavigate();
+  const location = useLocation();
   const [isPressing, setIsPressing] = useState(false);
   const resolvedClassName = `${className ?? ""} ${isPressing ? "is-pressing" : ""}`.trim();
+  const target = fresh ? createFreshFormTarget() : { pathname: "/create" };
 
   function handleClick(event: MouseEvent<HTMLAnchorElement>) {
     preloadWalletProviders();
@@ -33,14 +36,16 @@ export function CreateFormLink({ children, className, nav = false, onClick }: Cr
     event.preventDefault();
     setIsPressing(true);
     onClick?.();
-    navigate(createFreshFormTarget());
+    navigate(target);
   }
 
   if (nav) {
     return (
       <NavLink
-        className={resolvedClassName}
-        to="/create"
+        className={({ isActive }) =>
+          `${resolvedClassName} ${isActive || location.pathname === "/compose" ? "active" : ""}`.trim()
+        }
+        to={target}
         onClick={handleClick}
         onBlur={() => setIsPressing(false)}
         onFocus={preloadWalletProviders}
@@ -57,7 +62,7 @@ export function CreateFormLink({ children, className, nav = false, onClick }: Cr
   return (
     <Link
       className={resolvedClassName}
-      to="/create"
+      to={target}
       onClick={handleClick}
       onBlur={() => setIsPressing(false)}
       onFocus={preloadWalletProviders}

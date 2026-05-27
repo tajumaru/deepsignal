@@ -224,7 +224,7 @@ export function InsightsFixturePage() {
           >
             Open signal inbox
           </Link>
-          <Link className="ghost-button" to={`/dashboard/forms/${INSIGHTS_FIXTURE_ENTRY_FORM_ID}`}>
+          <Link className="ghost-button" to={`/dashboard?tab=review&form=${encodeURIComponent(INSIGHTS_FIXTURE_ENTRY_FORM_ID)}`}>
             Open earthquake fixture
           </Link>
         </div>

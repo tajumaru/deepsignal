@@ -1,5 +1,4 @@
 import { createPortal } from "react-dom";
-import { TatumFrogIcon } from "../../../components/NetworkMenu";
 import { PipelineStageIcon } from "../../../components/SignalFlowIcons";
 import {
   SIGNAL_PIPELINE_STAGES,
@@ -8,12 +7,30 @@ import {
 } from "../hooks/usePublicSubmission";
 
 const PIPELINE_LABELS: Record<SignalPipelineStage, string> = {
-  preparing_signal: "Preparing secure report",
-  encrypting: "Encrypting",
-  uploading_to_walrus: "Sending evidence to Walrus",
-  confirming_blob: "Confirming blob receipt",
-  generating_manifest: "Generating manifest",
-  signal_secured: "Report certified",
+  preparing_signal: "Preparing Signal",
+  encrypting: "Encrypting payload",
+  uploading_to_walrus: "Sealing to Walrus",
+  confirming_blob: "Verifying route",
+  generating_manifest: "Preparing recovery path",
+  signal_secured: "Signal secured",
+};
+
+const RELAY_NODE_LABELS: Record<SignalPipelineStage, string> = {
+  preparing_signal: "Device",
+  encrypting: "Encrypt",
+  uploading_to_walrus: "Seal",
+  confirming_blob: "Walrus",
+  generating_manifest: "Verify",
+  signal_secured: "Secured",
+};
+
+const RELAY_WAITING_MESSAGES: Record<SignalPipelineStage, string> = {
+  preparing_signal: "Your signal is moving through the secure relay.",
+  encrypting: "Encrypting and sealing your report...",
+  uploading_to_walrus: "Sealing payload to Walrus secure storage...",
+  confirming_blob: "Verifying route integrity...",
+  generating_manifest: "Preparing recovery path...",
+  signal_secured: "Signal secured.",
 };
 
 interface SignalSubmissionPipelineProps {
@@ -43,6 +60,12 @@ export function SignalSubmissionPipeline({ pipeline, visible, onClose, labels }:
 
   const activeIndex = SIGNAL_PIPELINE_STAGES.indexOf(pipeline.stage);
   const failed = pipeline.status === "failed";
+  const complete = pipeline.status === "complete";
+  const activeStageLabel = labels.stages[pipeline.stage] ?? PIPELINE_LABELS[pipeline.stage];
+  const transitTitle = failed ? labels.statusNeedsAttention : complete ? "Signal Secured" : "Signal in Secure Transit";
+  const transitMessage = failed
+    ? pipeline.message || "Transmission paused. Review the route status and retry when ready."
+    : pipeline.message || RELAY_WAITING_MESSAGES[pipeline.stage];
 
   const dialog = (
     <div className="publish-overlay signal-submission-overlay" role="dialog" aria-modal="true" aria-labelledby="signal-submission-title">
@@ -58,25 +81,22 @@ export function SignalSubmissionPipeline({ pipeline, visible, onClose, labels }:
         <div className="signal-submission-overlay-hero">
           <div className="publish-overlay-copy">
             <p className="eyebrow">{labels.eyebrow}</p>
-            <h2 id="signal-submission-title">{failed ? labels.statusNeedsAttention : labels.title}</h2>
-            <p className="muted publish-overlay-intro">{labels.intro}</p>
+            <h2 id="signal-submission-title">{transitTitle}</h2>
+            <p className="muted publish-overlay-intro">
+              {failed
+                ? "The relay path needs attention before the signal can finish transmission."
+                : "Do not close this screen until transmission completes."}
+            </p>
           </div>
-          <div className="signal-submission-courier" aria-hidden="true">
-            <TatumFrogIcon className="signal-submission-courier-icon" />
-            <span>Frog courier relaying your report</span>
+          <div className="signal-submission-relay-status" aria-hidden="true">
+            <span>Secure Relay</span>
+            <strong>{activeStageLabel}</strong>
           </div>
-          <span className="signal-submission-pipeline-pill">
-            {failed
-              ? labels.statusNeedsAttention
-              : pipeline.status === "complete"
-                ? labels.statusComplete
-                : labels.statusInProgress}
-          </span>
         </div>
-        <div className={`signal-submission-pipeline ${failed ? "is-failed" : ""}`}>
+        <div className={`signal-submission-pipeline ${failed ? "is-failed" : ""} ${complete ? "is-complete" : ""}`}>
           <div className="signal-submission-pipeline-header">
-            <span>{labels.terminalHeader}</span>
-            <strong>{failed ? labels.terminalFailed : labels.terminalActive}</strong>
+            <span>Relay Path</span>
+            <strong>{failed ? labels.terminalFailed : complete ? labels.statusComplete : labels.terminalActive}</strong>
           </div>
           <div className="signal-submission-steps" role="list">
             {SIGNAL_PIPELINE_STAGES.map((stage, index) => {
@@ -98,16 +118,25 @@ export function SignalSubmissionPipeline({ pipeline, visible, onClose, labels }:
                   } ${isFailed ? "is-failed" : ""}`}
                   role="listitem"
                 >
+                  {index > 0 ? (
+                    <span
+                      className={`signal-submission-edge ${isDone ? "is-done" : ""} ${
+                        isActive || isFailed ? "is-current" : ""
+                      }`}
+                      aria-hidden="true"
+                    />
+                  ) : null}
                   <span className="signal-submission-step-icon" aria-hidden="true">
                     <PipelineStageIcon stage={stage} />
                   </span>
+                  <span className="signal-submission-node-label">{RELAY_NODE_LABELS[stage]}</span>
                   <span>{labels.stages[stage] ?? PIPELINE_LABELS[stage]}</span>
                   <small>{statusText}</small>
                 </div>
               );
             })}
           </div>
-          {pipeline.message ? <p className="signal-submission-pipeline-message">{pipeline.message}</p> : null}
+          <p className="signal-submission-pipeline-message">{transitMessage}</p>
         </div>
         {failed && onClose ? (
           <div className="signal-submission-overlay-actions">

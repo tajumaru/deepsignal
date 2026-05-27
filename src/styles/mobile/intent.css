@@ -28,9 +28,12 @@
 
   .intent-start-card-creative .intent-textarea {
     min-height: 96px;
+    max-height: 34svh;
     padding: 0.75rem 0;
     font-size: 1.05rem;
     line-height: 1.35;
+    resize: none;
+    overflow-y: auto;
   }
 
   .intent-add-question-button,
@@ -106,7 +109,7 @@
   }
 
   .mobile-inbox-search-row {
-    grid-template-columns: minmax(0, 1.55fr) repeat(2, minmax(6.2rem, auto));
+    grid-template-columns: minmax(0, 1fr) minmax(6.2rem, auto);
   }
 
   .mobile-inbox-search,

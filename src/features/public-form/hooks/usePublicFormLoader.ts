@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { isChunkLoadFailure } from "../../../lib/chunkLoadRecovery";
 import { createEmptyAnswer, normalizeForm } from "../../../lib/formSchema";
 import { measurePerf } from "../../../lib/perf";
@@ -255,6 +255,11 @@ export function usePublicFormLoader({
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [loadErrorDetail, setLoadErrorDetail] = useState<PublicFormLoadErrorDetail | null>(null);
+  const missingFormMessageRef = useRef(missingFormMessage);
+
+  useEffect(() => {
+    missingFormMessageRef.current = missingFormMessage;
+  }, [missingFormMessage]);
 
   useEffect(() => {
     async function load() {
@@ -396,7 +401,7 @@ export function usePublicFormLoader({
           manifestBlobId
             ? `${detail.reason} ${detail.guidance}`
             : `This form is not available in this browser yet. ${
-                error instanceof Error ? error.message : missingFormMessage
+                error instanceof Error ? error.message : missingFormMessageRef.current
               }`,
         );
       } finally {
@@ -404,7 +409,7 @@ export function usePublicFormLoader({
       }
     }
     void load();
-  }, [formId, manifestBlobId, missingFormMessage]);
+  }, [formId, manifestBlobId]);
 
   return { form, initialAnswers, loading, loadError, loadErrorDetail };
 }

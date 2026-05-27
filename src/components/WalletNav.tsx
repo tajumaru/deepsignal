@@ -2,7 +2,7 @@ import { Link, NavLink, useLocation } from "react-router-dom";
 import { useSuiWallet } from "../hooks/useSuiWallet";
 import { useI18n } from "../i18n";
 import { isSignalInboxPath } from "../lib/navigation";
-import { AccessControlNavIcon, NavItemLabel, SignalInboxNavIcon } from "./NavIcons";
+import { NavItemLabel } from "./NavIcons";
 
 interface WalletNavProps {
   section?: "all" | "inbox" | "access";
@@ -22,7 +22,7 @@ export function WalletNav({ section = "all", onNavigate }: WalletNavProps) {
       to="/admin"
       onClick={onNavigate}
     >
-      <NavItemLabel icon={<SignalInboxNavIcon />}>{t("navLab")}</NavItemLabel>
+      <NavItemLabel>{t("navLab")}</NavItemLabel>
     </Link>
   );
 
@@ -36,7 +36,7 @@ export function WalletNav({ section = "all", onNavigate }: WalletNavProps) {
     }
     return (
       <NavLink to="/admin/access" onClick={onNavigate}>
-        <NavItemLabel icon={<AccessControlNavIcon />}>{t("navAccess")}</NavItemLabel>
+        <NavItemLabel>{t("navAccess")}</NavItemLabel>
       </NavLink>
     );
   }
@@ -46,7 +46,7 @@ export function WalletNav({ section = "all", onNavigate }: WalletNavProps) {
       {inboxNav}
       {wallet.accountAddress ? (
         <NavLink to="/admin/access" onClick={onNavigate}>
-          <NavItemLabel icon={<AccessControlNavIcon />}>{t("navAccess")}</NavItemLabel>
+          <NavItemLabel>{t("navAccess")}</NavItemLabel>
         </NavLink>
       ) : null}
     </>

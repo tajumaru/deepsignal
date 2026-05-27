@@ -177,9 +177,27 @@ export const localStorageAdapter: StorageAdapter = {
     }
     const nextSubmissions = submissions.filter((item) => item.id !== sanitizedSubmission.id);
     const blobId = sanitizedSubmission.blobId ?? `local-submission-${sanitizedSubmission.id}`;
-    nextSubmissions.unshift({ ...sanitizedSubmission, blobId });
+    const storedSubmission = {
+      ...sanitizedSubmission,
+      blobId,
+      answerBlobId: sanitizedSubmission.answerBlobId ?? blobId,
+      remoteIndexUpdated: sanitizedSubmission.remoteIndexUpdated ?? false,
+      remoteIndexReadBack: sanitizedSubmission.remoteIndexReadBack ?? false,
+      ownerReadable: sanitizedSubmission.ownerReadable ?? false,
+      remoteSyncStatus: sanitizedSubmission.remoteSyncStatus ?? "local_only",
+    } satisfies Submission;
+    nextSubmissions.unshift(storedSubmission);
     writeJson(SUBMISSIONS_KEY, nextSubmissions);
-    return { id: sanitizedSubmission.id, blobId, tatumStorage: sanitizedSubmission.tatumStorage };
+    return {
+      id: sanitizedSubmission.id,
+      blobId,
+      answerBlobId: storedSubmission.answerBlobId,
+      remoteIndexUpdated: storedSubmission.remoteIndexUpdated,
+      remoteIndexReadBack: storedSubmission.remoteIndexReadBack,
+      ownerReadable: storedSubmission.ownerReadable,
+      remoteSyncStatus: storedSubmission.remoteSyncStatus,
+      tatumStorage: sanitizedSubmission.tatumStorage,
+    };
   },
 
   async listSubmissions(formId) {

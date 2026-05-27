@@ -67,7 +67,7 @@ export function ManifestRestorePage() {
         })),
       );
 
-      navigate(`/dashboard/forms/${form.id}`, { replace: true });
+      navigate(`/dashboard?tab=review&form=${encodeURIComponent(form.id)}`, { replace: true });
     }
 
     void restore();

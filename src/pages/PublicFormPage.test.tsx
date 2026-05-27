@@ -22,6 +22,7 @@ const mockIsZkLoginEnabled = vi.fn();
 const mockBeginGoogleZkLogin = vi.fn();
 const mockLoadZkLoginSession = vi.fn();
 const mockClearZkLoginSession = vi.fn();
+let mockLanguage = "en";
 const mockRpcInfrastructure: RpcInfrastructureContextValue = {
   mode: "default",
   network: "mainnet",
@@ -70,6 +71,9 @@ vi.mock("../i18n", () => ({
     t: (key: string) => {
       if (key === "loadingPublicForm") {
         return "Loading public form...";
+      }
+      if (key === "publicFormMissingBody") {
+        return `Missing public form (${mockLanguage})`;
       }
       if (key === "publicDefaultBody") {
         return "Public form";
@@ -152,6 +156,7 @@ describe("PublicFormPage shared manifest restore", () => {
   });
 
   beforeEach(() => {
+    mockLanguage = "en";
     Element.prototype.scrollIntoView = vi.fn();
     window.localStorage.clear();
     mockUseCurrentAccount.mockReturnValue(null);
@@ -395,6 +400,55 @@ describe("PublicFormPage shared manifest restore", () => {
 
     await waitFor(() => expect(mockSaveSubmission).toHaveBeenCalledTimes(1));
     expect(screen.queryByText(/sending it requires/i)).not.toBeInTheDocument();
+  });
+
+  it("preserves typed answers when public page language text changes", async () => {
+    const form: FormSchema = {
+      id: "form-123",
+      title: "Shared Feedback Form",
+      description: "Restored from a Walrus manifest link.",
+      fields: [
+        {
+          id: "field-1",
+          type: "shortText",
+          label: "What happened?",
+          required: true,
+          sensitive: false,
+        },
+      ],
+      createdAt: "2026-05-14T00:00:00.000Z",
+    };
+
+    mockReadManifestWithForm.mockResolvedValue({
+      manifest: {
+        version: 1,
+        formId: "form-123",
+        createdAt: "2026-05-14T00:00:00.000Z",
+        updatedAt: "2026-05-14T00:00:00.000Z",
+        formBlobId: "__bundled_form__",
+        submissions: [],
+      },
+      form,
+    });
+
+    const view = renderPublicFormPage();
+
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Shared Feedback Form" })).toBeInTheDocument());
+    fireEvent.input(screen.getByRole("textbox"), { target: { value: "Keep this draft through language switch." } });
+
+    mockLanguage = "ja";
+    view.rerender(
+      <RpcInfrastructureContext.Provider value={mockRpcInfrastructure}>
+        <MemoryRouter initialEntries={["/f/form-123?manifest=blob-abc&step=answer&identity=anonymous"]}>
+          <Routes>
+            <Route path="/f/:formId" element={<PublicFormPage />} />
+          </Routes>
+        </MemoryRouter>
+      </RpcInfrastructureContext.Provider>,
+    );
+
+    expect(screen.getByRole("textbox")).toHaveValue("Keep this draft through language switch.");
+    expect(mockReadManifestWithForm).toHaveBeenCalledTimes(1);
   });
 
   it("keeps anonymous uploadRelay submission wallet-free when the relay runtime reports no client", async () => {

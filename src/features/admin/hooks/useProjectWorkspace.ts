@@ -83,7 +83,9 @@ export function useProjectWorkspace({
     }
     return null;
   }, [cachedSelectedProject, hydratedSelectedProject, ownerCapIdByProjectId, visibleSelectedProjectId]);
-  const projectMemberCount = selectedProject ? selectedProject.admins.length + selectedProject.reviewers.length + 1 : 0;
+  const projectMemberCount = selectedProject
+    ? new Set([selectedProject.owner, ...selectedProject.admins, ...selectedProject.reviewers]).size
+    : 0;
   const localProjectFormsCount = useMemo(
     () => forms.filter((form) => form.projectId === selectedProject?.objectId).length,
     [forms, selectedProject?.objectId],

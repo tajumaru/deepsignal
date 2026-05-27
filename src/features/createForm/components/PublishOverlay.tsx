@@ -196,21 +196,6 @@ export function PublishOverlay({
               <code>{displayedBlobId}</code>
               <span>{overlay.blobCopied ? t("copied") : t("copyBlobId")}</span>
             </button>
-            <div className="publish-blob-actions">
-              <button
-                type="button"
-                className="ghost-button"
-                onClick={() => void onCopyBlobId()}
-                disabled={overlay.stageIndex < 3 || !overlay.blobId}
-              >
-                {overlay.blobCopied ? t("copied") : t("copyBlobId")}
-              </button>
-              <span className="publish-storage-note">
-                {overlay.storageMode === "walrus"
-                  ? t("immutableWalrusBlobConfirmed")
-                  : t("storedLocallyWalrusUnavailable")}
-              </span>
-            </div>
           </div>
 
           <div className={`publish-active-panel ${overlay.stageIndex >= publishPhases.length - 1 ? "is-visible" : ""}`}>

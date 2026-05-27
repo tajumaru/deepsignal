@@ -45,7 +45,11 @@ export function SubmissionDetailPage() {
   }, [formId, submissionId]);
 
   if (resolvedForm?.id) {
-    return <Navigate to={`/dashboard/forms/${resolvedForm.id}/submissions/${submissionId}`} replace />;
+    const params = new URLSearchParams({ tab: "review", form: resolvedForm.id });
+    if (submissionId) {
+      params.set("signal", submissionId);
+    }
+    return <Navigate to={`/dashboard?${params.toString()}`} replace />;
   }
 
   if (loading) {

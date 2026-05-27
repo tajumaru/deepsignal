@@ -2079,6 +2079,13 @@
     0 10px 24px rgba(57, 178, 225, 0.16);
 }
 
+.workspace-sonar-wave span.is-empty i {
+  min-height: 0.18rem;
+  height: 0.18rem;
+  background: rgba(126, 162, 178, 0.24);
+  box-shadow: 0 0 0 1px rgba(126, 162, 178, 0.08);
+}
+
 .workspace-sonar-wave span.is-anomaly i {
   background:
     linear-gradient(180deg, rgba(255, 161, 175, 0.96), rgba(255, 126, 143, 0.74));

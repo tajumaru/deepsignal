@@ -42,6 +42,11 @@ import { localStorageAdapter } from "../../../storage/localStorageAdapter";
 import { upsertFormBlobIndex } from "../../../storage/blobIndex";
 import { isDeletedFormTombstone } from "../../../storage/deletedFormTombstones";
 import { saveFormMetadataOverlay } from "../../../storage/formMetadataOverlay";
+import {
+  fetchRemoteSubmissionIndex,
+  getRemoteSubmissionIndexSource,
+  writeOwnerSubmissionIndexFetchLog,
+} from "../../../storage/submissionDelivery";
 
 export interface FormWithCount extends FormSchema {
   submissionCount: number;
@@ -94,6 +99,22 @@ const ADMIN_SUBMISSION_BATCH_SIZE = 4;
 const ONCHAIN_SIGNAL_BATCH_SIZE = 4;
 const MANIFEST_RESTORE_TIMEOUT_MS = 2500;
 const INBOX_BACKGROUND_TASK_TIMEOUT_MS = 1200;
+
+function getViewerRole(capabilityProfile: CapabilityProfile, accountAddress?: string | null) {
+  if (!accountAddress) {
+    return "disconnected";
+  }
+  if (capabilityProfile.hasOwnerCap) {
+    return "owner";
+  }
+  if (capabilityProfile.hasAdminCap) {
+    return "admin";
+  }
+  if (capabilityProfile.hasReviewerCap) {
+    return "reviewer";
+  }
+  return capabilityProfile.isConfigured ? "none" : "legacy";
+}
 
 function scheduleInboxBackgroundTask(task: () => void) {
   if (typeof window === "undefined") {
@@ -394,6 +415,53 @@ async function withTimeout<T>(task: Promise<T>, timeoutMs: number, timeoutMessag
   ]);
 }
 
+async function loadRemoteIndexedSubmissions(form: FormWithCount) {
+  const indexEntries = await fetchRemoteSubmissionIndex({
+    formId: form.id,
+    projectId: form.projectId,
+  });
+  if (indexEntries.length === 0) {
+    return { indexEntries, submissions: [] as Submission[] };
+  }
+  const submissions = await Promise.all(
+    indexEntries.map(async (entry) => {
+      const payload = await fetchJsonBlob<unknown>(entry.answerBlobId);
+      const submission = unwrapWalrusSubmissionPayload(
+        payload,
+        {
+          signalId: Number(entry.signalId) || 0,
+          formId: form.onchainFormId ?? 0,
+          walrusBlobId: entry.answerBlobId,
+          metadataDigest: "",
+          encrypted: false,
+          status: "new",
+          createdAt: entry.createdAt,
+        },
+        form.id,
+      );
+      const normalized: Submission | null = submission
+        ? (normalizeSubmission({
+            ...submission,
+            formId: form.id,
+            projectId: form.projectId,
+            answerBlobId: entry.answerBlobId,
+            receiptBlobId: submission.receiptBlobId ?? entry.answerBlobId,
+            remoteIndexTarget: getRemoteSubmissionIndexSource(),
+            remoteIndexUpdated: true,
+            remoteIndexReadBack: true,
+            ownerReadable: true,
+            remoteSyncStatus: entry.status === "remote_synced" ? "remote_synced" : "sync_pending",
+          }) as Submission)
+        : null;
+      return normalized;
+    }),
+  );
+  return {
+    indexEntries,
+    submissions: submissions.filter((submission): submission is Submission => submission !== null),
+  };
+}
+
 function mapOnchainStatusToSubmissionState(status: OnchainProjectSignalSummary["status"]) {
   if (status === "archived") {
     return {
@@ -573,6 +641,7 @@ export function useSignalInboxData({
   const { projects, dataUpdatedAt: projectsUpdatedAt } = useProjectRegistry(accountAddress);
   const [selectedProjectId, setSelectedProjectId] = useState(() => getSelectedProjectId());
   const [hydratedSelectedProject, setHydratedSelectedProject] = useState<ProjectSummary | null>(null);
+  const [selectedProjectHydrating, setSelectedProjectHydrating] = useState(false);
   const [forms, setForms] = useState<FormWithCount[]>([]);
   const [submissionsByFormId, setSubmissionsByFormId] = useState<Record<string, Submission[]>>({});
   const [supplementalSignals, setSupplementalSignals] = useState<SignalRecord[]>([]);
@@ -609,10 +678,12 @@ export function useSignalInboxData({
   useEffect(() => {
     if (!selectedProjectId) {
       setHydratedSelectedProject(null);
+      setSelectedProjectHydrating(false);
       return;
     }
 
     let cancelled = false;
+    setSelectedProjectHydrating(true);
 
     const refreshSelectedProject = async () => {
       try {
@@ -627,16 +698,19 @@ export function useSignalInboxData({
         if (!parsed || !isProjectObjectType(parsed.type)) {
           if (!cancelled) {
             setHydratedSelectedProject(null);
+            setSelectedProjectHydrating(false);
           }
           return;
         }
         const project = parseProjectSummary(parsed.objectId, parsed.fields);
         if (!cancelled) {
           setHydratedSelectedProject(project);
+          setSelectedProjectHydrating(false);
         }
       } catch {
         if (!cancelled) {
           setHydratedSelectedProject(null);
+          setSelectedProjectHydrating(false);
         }
       }
     };
@@ -866,6 +940,11 @@ export function useSignalInboxData({
   }
 
   async function loadConsole(preferredSignalId?: string) {
+    if (selectedProjectId && selectedProjectHydrating) {
+      setLoading(true);
+      setLoadError("");
+      return;
+    }
     const runId = loadConsoleRunRef.current + 1;
     loadConsoleRunRef.current = runId;
     startPerf("admin:load-console");
@@ -954,6 +1033,21 @@ export function useSignalInboxData({
       const nextAccessibleForms = effectiveForms.filter((form) => canReviewForm(form, accountAddress, capabilityProfile));
 
       if (nextAccessibleForms.length === 0) {
+        writeOwnerSubmissionIndexFetchLog({
+          event: "owner_submission_index_fetch",
+          viewerRole: getViewerRole(capabilityProfile, accountAddress),
+          selectedProjectId: selectedProjectId || null,
+          remoteIndexSource: projects.some((project) => (project.onchainSignals ?? []).length > 0)
+            ? "sui.projectRegistry"
+            : "none",
+          remoteIndexEntryCount: 0,
+          answerBlobFetchCount: 0,
+          visibleSubmissionCount: 0,
+          localFallbackCount: 0,
+          filteredOutCount: effectiveForms.length,
+          filterReasons: { access_denied: effectiveForms.length },
+          walletConnectedState: accountAddress ? "connected" : "disconnected",
+        });
         scheduleInboxBackgroundTask(() => {
           void measurePerf("admin:onchain-hydration", () => hydrateOnchainSignals(effectiveForms, {}, runId));
         });
@@ -970,15 +1064,45 @@ export function useSignalInboxData({
         const batchResults = await Promise.all(
           formBatch.map(async (form) => {
             try {
-              const raw = await storageAdapter.listSubmissions(form.id);
+              const [raw, remoteIndexed] = await Promise.all([
+                storageAdapter.listSubmissions(form.id),
+                loadRemoteIndexedSubmissions(form).catch((error) => {
+                  console.warn(`Failed to load remote submission index for form ${form.id}`, error);
+                  return { indexEntries: [], submissions: [] as Submission[] };
+                }),
+              ]);
+              const normalizedLocal: Submission[] = raw.map((submission) => normalizeSubmission(submission) as Submission);
+              const merged: Submission[] = [...normalizedLocal];
+              remoteIndexed.submissions.forEach((remoteSubmission) => {
+                const existingIndex = merged.findIndex((submission) =>
+                  matchesSignalIdentity(
+                    buildSubmissionSignalIdentity(submission, form.projectId),
+                    buildSubmissionSignalIdentity(remoteSubmission, form.projectId),
+                  ),
+                );
+                if (existingIndex === -1) {
+                  merged.push(remoteSubmission);
+                  return;
+                }
+                merged[existingIndex] = {
+                  ...merged[existingIndex],
+                  ...remoteSubmission,
+                  answers:
+                    Object.keys(remoteSubmission.answers).length > 0
+                      ? remoteSubmission.answers
+                      : merged[existingIndex].answers,
+                };
+              });
               return {
                 formId: form.id,
-                submissions: raw.map((submission) => normalizeSubmission(submission)),
+                remoteIndexEntryCount: remoteIndexed.indexEntries.length,
+                submissions: merged,
               };
             } catch (error) {
               console.error(`Failed to load submissions for form ${form.id}`, error);
               return {
                 formId: form.id,
+                remoteIndexEntryCount: 0,
                 submissions: [] as Submission[],
               };
             }
@@ -1007,6 +1131,37 @@ export function useSignalInboxData({
         );
       }
       endPerf("admin:submissions", "ok");
+
+      const loadedSubmissions = Object.values(nextSubmissions).flat();
+      const remoteIndexEntryCount = Object.values(nextSubmissions).reduce(
+        (count, submissions) => count + submissions.filter((submission) => submission.remoteIndexUpdated).length,
+        0,
+      );
+      const localFallbackCount = loadedSubmissions.filter((submission) =>
+        isLocalFallbackBlob(submission.answerBlobId ?? submission.receiptBlobId ?? submission.blobId),
+      ).length;
+      const remoteIndexedCount = remoteIndexEntryCount;
+      writeOwnerSubmissionIndexFetchLog({
+        event: "owner_submission_index_fetch",
+        viewerRole: getViewerRole(capabilityProfile, accountAddress),
+        selectedProjectId: selectedProjectId || null,
+        remoteIndexSource:
+          remoteIndexedCount > 0
+            ? "submission.remoteIndex"
+            : projects.some((project) => (project.onchainSignals ?? []).length > 0)
+              ? "sui.projectRegistry"
+              : "local-cache",
+        remoteIndexEntryCount: remoteIndexedCount,
+        answerBlobFetchCount: loadedSubmissions.filter((submission) => submission.answerBlobId || submission.receiptBlobId || submission.blobId).length,
+        visibleSubmissionCount: loadedSubmissions.length,
+        localFallbackCount,
+        filteredOutCount: effectiveForms.length - nextAccessibleForms.length,
+        filterReasons: {
+          access_denied: effectiveForms.length - nextAccessibleForms.length,
+          local_only: localFallbackCount,
+        },
+        walletConnectedState: accountAddress ? "connected" : "disconnected",
+      });
 
       patchLocalOnchainSignals(effectiveForms, nextSubmissions, runId);
       scheduleInboxBackgroundTask(() => {
@@ -1048,7 +1203,9 @@ export function useSignalInboxData({
     capabilityProfile.hasAdminCap,
     capabilityProfile.hasReviewerCap,
     capabilityProfile.isConfigured,
+    hydratedSelectedProject?.objectId,
     projectsUpdatedAt,
+    selectedProjectHydrating,
   ]);
 
   const accessibleForms = useMemo(

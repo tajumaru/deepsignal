@@ -435,7 +435,7 @@ export function SecondaryInspector({
             <div className="review-secondary-links inspector-related-links">
               <Link
                 className="review-inline-link"
-                to={`/dashboard/forms/${selectedRecord.form.id}/submissions/${selectedRecord.submission.id}`}
+                to={`/dashboard?tab=review&form=${encodeURIComponent(selectedRecord.form.id)}&signal=${encodeURIComponent(selectedRecord.submission.id)}`}
               >
                 {t("reviewThreadLabel")}
               </Link>
@@ -471,7 +471,7 @@ export function SecondaryInspector({
       </div>
 
       <div className="inspector-utility-links">
-        <Link className="ghost-button" to={`/dashboard/forms/${selectedRecord.form.id}`}>
+        <Link className="ghost-button" to={`/dashboard?tab=review&form=${encodeURIComponent(selectedRecord.form.id)}`}>
           {t("reviewSubmissions")}
         </Link>
       </div>

@@ -44,6 +44,10 @@ import {
   assertEncryptedSubmissionLeakGuard,
   sanitizeSubmissionForStorage,
 } from "./submissionSanitizer";
+import {
+  buildSubmissionIndexEntry,
+  writeSubmissionRemoteIndexLog,
+} from "./submissionDelivery";
 import { getTatumStorageWriteUrl, isTatumStorageEnabled, uploadWithTatum } from "./tatumStorage";
 import type {
   EncryptedSubmissionRecord,
@@ -84,6 +88,20 @@ type UploadKind =
   | "manifest"
   | "encrypted-payload"
   | "attachment";
+type SubmissionSaveResult = {
+  id: string;
+  blobId?: string;
+  encryptedBlobId?: string;
+  answerBlobId?: string;
+  remoteIndexBlobId?: string;
+  remoteIndexTarget?: string;
+  remoteIndexUpdated?: boolean;
+  remoteIndexReadBack?: boolean;
+  ownerReadable?: boolean;
+  remoteSyncStatus?: "remote_synced" | "sync_pending" | "local_only";
+  walrusProof?: WalrusBlobProof;
+  tatumStorage?: TatumStorageRecord;
+};
 type WalrusRuntimeContext = {
   account: WalletAccount | null;
   wallet: WalletWithRequiredFeatures | null;
@@ -100,6 +118,9 @@ export type WalrusBlobReadErrorCode =
 const publisherUrl = import.meta.env.VITE_WALRUS_PUBLISHER_URL?.replace(/\/$/, "");
 const aggregatorUrl = WALRUS_AGGREGATOR_URL.replace(/\/$/, "");
 const uploadRelayUrl = WALRUS_UPLOAD_RELAY_URL.replace(/\/$/, "");
+const submissionRelayUrl = String(import.meta.env.VITE_DEEPSIGNAL_SUBMISSION_RELAY_URL || "").replace(/\/$/, "");
+const submissionRelayMode = String(import.meta.env.VITE_DEEPSIGNAL_SUBMISSION_RELAY_MODE || "full").toLowerCase();
+const submissionRelayIsAppsScript = submissionRelayUrl.includes("script.google.com/macros/");
 const fallbackAggregatorUrls = String(import.meta.env.VITE_WALRUS_FALLBACK_AGGREGATOR_URLS || "")
   .split(",")
   .map((url) => url.trim().replace(/\/$/, ""))
@@ -1375,6 +1396,165 @@ function createSubmissionBundle(
   };
 }
 
+function getSubmissionProjectId(submission: Submission) {
+  return submission.projectId ?? (typeof submission.metadata?.projectId === "string" ? submission.metadata.projectId : "");
+}
+
+function getSubmitterMode(submission: Submission) {
+  const identityKind = submission.respondentMeta?.identityKind;
+  if (identityKind === "zklogin") {
+    return "zkLogin" as const;
+  }
+  if (identityKind === "sui_wallet") {
+    return "wallet" as const;
+  }
+  return "anonymous" as const;
+}
+
+function createRemoteIndexLog(
+  submission: Submission,
+  overrides: Partial<Parameters<typeof writeSubmissionRemoteIndexLog>[0]>,
+) {
+  const submitterMode = getSubmitterMode(submission);
+  writeSubmissionRemoteIndexLog({
+    event: "submission_remote_index_write",
+    submissionId: submission.id,
+    projectId: getSubmissionProjectId(submission) || null,
+    formId: submission.formId,
+    signalId: typeof submission.onchainSignalId === "number" ? String(submission.onchainSignalId) : submission.id,
+    answerBlobId: submission.answerBlobId ?? submission.receiptBlobId ?? submission.blobId ?? null,
+    submitterMode,
+    submitterWallet:
+      submitterMode === "anonymous"
+        ? null
+        : submission.respondentMeta?.verifiedAddress ?? submission.respondentMeta?.walletAddress ?? null,
+    anonymousSessionId: submitterMode === "anonymous" ? submission.respondentMeta?.sessionId ?? null : null,
+    remoteIndexTarget: null,
+    remoteIndexWriteSuccess: false,
+    remoteIndexReadBackSuccess: false,
+    ownerReadable: false,
+    storageMode: walrusStorageMode,
+    fallbackUsed: false,
+    syncPending: true,
+    ...overrides,
+  });
+}
+
+async function saveSubmissionThroughRelay(submission: Submission): Promise<SubmissionSaveResult | null> {
+  if (!submissionRelayUrl || submissionRelayMode === "index") {
+    return null;
+  }
+
+  const response = await fetch(`${submissionRelayUrl}/v1/submissions`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      submission,
+      indexEntry: buildSubmissionIndexEntry(
+        submission,
+        submission.answerBlobId ?? submission.receiptBlobId ?? submission.blobId ?? "",
+        "remote_synced",
+      ),
+    }),
+  });
+  const payload = await parseResponseBody(response) as Partial<SubmissionSaveResult> & {
+    error?: string;
+    message?: string;
+  } | null;
+  if (!response.ok) {
+    throw new Error(payload?.error || payload?.message || `Submission relay failed: ${response.status}`);
+  }
+  if (!payload?.answerBlobId || !payload.remoteIndexUpdated || !payload.remoteIndexReadBack || !payload.ownerReadable) {
+    throw new Error("Submission relay did not confirm owner-readable remote index delivery.");
+  }
+  return {
+    id: payload.id ?? submission.id,
+    blobId: payload.blobId ?? payload.answerBlobId,
+    answerBlobId: payload.answerBlobId,
+    remoteIndexBlobId: payload.remoteIndexBlobId,
+    remoteIndexTarget: payload.remoteIndexTarget ?? submissionRelayUrl,
+    remoteIndexUpdated: true,
+    remoteIndexReadBack: true,
+    ownerReadable: true,
+    remoteSyncStatus: "remote_synced",
+    walrusProof: payload.walrusProof,
+    tatumStorage: payload.tatumStorage,
+  };
+}
+
+async function registerSubmissionIndexThroughRelay(args: {
+  submission: Submission;
+  answerBlobId: string;
+}): Promise<SubmissionSaveResult | null> {
+  if (!submissionRelayUrl || submissionRelayMode !== "index") {
+    return null;
+  }
+
+  const relayBody = JSON.stringify({
+    submission: args.submission,
+    indexEntry: buildSubmissionIndexEntry(args.submission, args.answerBlobId, "remote_synced"),
+  });
+
+  if (submissionRelayIsAppsScript) {
+    await fetch(submissionRelayUrl, {
+      method: "POST",
+      headers: { "content-type": "text/plain;charset=utf-8" },
+      body: relayBody,
+      mode: "no-cors",
+    });
+    return {
+      id: args.submission.id,
+      blobId: args.answerBlobId,
+      answerBlobId: args.answerBlobId,
+      remoteIndexTarget: "google-apps-script-drive",
+      remoteIndexUpdated: true,
+      remoteIndexReadBack: false,
+      ownerReadable: false,
+      remoteSyncStatus: "sync_pending",
+    };
+  }
+
+  const response = await fetch(`${submissionRelayUrl}/v1/submissions-index`, {
+    method: "POST",
+    headers: { "content-type": "text/plain;charset=utf-8" },
+    body: relayBody,
+  });
+  const payload = await parseResponseBody(response) as Partial<SubmissionSaveResult> & {
+    error?: string;
+    message?: string;
+  } | null;
+  if (!response.ok) {
+    throw new Error(payload?.error || payload?.message || `Submission index relay failed: ${response.status}`);
+  }
+  if (!payload?.remoteIndexUpdated || !payload.remoteIndexReadBack || !payload.ownerReadable) {
+    throw new Error("Submission index relay did not confirm owner-readable index delivery.");
+  }
+  return {
+    id: payload.id ?? args.submission.id,
+    blobId: args.answerBlobId,
+    answerBlobId: args.answerBlobId,
+    remoteIndexBlobId: payload.remoteIndexBlobId,
+    remoteIndexTarget: payload.remoteIndexTarget ?? submissionRelayUrl,
+    remoteIndexUpdated: true,
+    remoteIndexReadBack: true,
+    ownerReadable: true,
+    remoteSyncStatus: "remote_synced",
+  };
+}
+
+async function verifyRemoteIndexReadBack(bundleBlobId: string, submissionId: string) {
+  try {
+    const carrier = await readManifestCarrier(bundleBlobId);
+    return Boolean(
+      carrier.manifest?.submissions.some(
+        (entry) => entry.submissionId === submissionId && entry.blobId === bundleBlobId,
+      ),
+    );
+  } catch {
+    return false;
+  }
+}
+
 export function serializeSubmissionBundle(
   submission: Submission | EncryptedSubmissionRecord,
   manifest: SignalManifest,
@@ -1536,6 +1716,34 @@ async function saveSubmissionRecord(
   if (sanitizedSubmission.isEncrypted) {
     assertEncryptedSubmissionLeakGuard(sanitizedSubmission, encryptedSubmissionOptions);
   }
+  const relaySaved = await saveSubmissionThroughRelay(sanitizedSubmission as Submission);
+  if (relaySaved) {
+    await localStorageAdapter.saveSubmission({
+      ...sanitizedSubmission,
+      blobId: relaySaved.blobId,
+      answerBlobId: relaySaved.answerBlobId,
+      receiptBlobId: relaySaved.answerBlobId ?? relaySaved.blobId,
+      remoteIndexBlobId: relaySaved.remoteIndexBlobId,
+      remoteIndexTarget: relaySaved.remoteIndexTarget,
+      remoteIndexUpdated: true,
+      remoteIndexReadBack: true,
+      ownerReadable: true,
+      remoteSyncStatus: "remote_synced",
+      walrusProof: relaySaved.walrusProof,
+      tatumStorage: relaySaved.tatumStorage,
+      ...(allowEmbeddedEncryptedPayload ? { encryptedBlobId: relaySaved.encryptedBlobId ?? relaySaved.blobId, encryptedPayload: undefined } : {}),
+    });
+    createRemoteIndexLog(sanitizedSubmission as Submission, {
+      answerBlobId: relaySaved.answerBlobId ?? relaySaved.blobId ?? null,
+      remoteIndexTarget: relaySaved.remoteIndexTarget ?? submissionRelayUrl,
+      remoteIndexWriteSuccess: true,
+      remoteIndexReadBackSuccess: true,
+      ownerReadable: true,
+      fallbackUsed: false,
+      syncPending: false,
+    });
+    return relaySaved;
+  }
   const { entry, manifest, form } = await loadManifestOrThrow(submission.formId);
   if (!entry?.manifestBlobId || !manifest) {
     if (sanitizedSubmission.isEncrypted) {
@@ -1548,6 +1756,12 @@ async function saveSubmissionRecord(
     await localStorageAdapter.saveSubmission({
       ...sanitizedSubmission,
       blobId,
+      answerBlobId: blobId,
+      receiptBlobId: blobId,
+      remoteIndexUpdated: false,
+      remoteIndexReadBack: false,
+      ownerReadable: false,
+      remoteSyncStatus: "sync_pending",
       walrusProof,
       tatumStorage,
       ...(allowEmbeddedEncryptedPayload ? { encryptedBlobId: blobId, encryptedPayload: undefined } : {}),
@@ -1559,13 +1773,27 @@ async function saveSubmissionRecord(
       blobObjectId,
       createdAt: sanitizedSubmission.createdAt,
     });
+    createRemoteIndexLog(sanitizedSubmission as Submission, {
+      answerBlobId: blobId,
+      remoteIndexTarget: "missing-form-manifest",
+      remoteIndexWriteSuccess: false,
+      remoteIndexReadBackSuccess: false,
+      ownerReadable: false,
+      syncPending: true,
+    });
     return {
       id: sanitizedSubmission.id,
       blobId,
+      answerBlobId: blobId,
+      remoteIndexTarget: "missing-form-manifest",
+      remoteIndexUpdated: false,
+      remoteIndexReadBack: false,
+      ownerReadable: false,
+      remoteSyncStatus: "sync_pending",
       walrusProof,
       tatumStorage,
       ...(allowEmbeddedEncryptedPayload ? { encryptedBlobId: blobId } : {}),
-    };
+    } satisfies SubmissionSaveResult;
   }
 
   const existingSubmissionObjectIds = Object.fromEntries(
@@ -1588,6 +1816,25 @@ async function saveSubmissionRecord(
   );
   const bundle = await writeSubmissionBundle(sanitizedSubmission, nextManifest, form, encryptedSubmissionOptions);
   nextManifest.submissions[0].blobId = bundle.blobId;
+  const readBackSuccess = await verifyRemoteIndexReadBack(bundle.blobId, sanitizedSubmission.id);
+  let indexRelaySaved: SubmissionSaveResult | null = null;
+  try {
+    indexRelaySaved = await registerSubmissionIndexThroughRelay({
+      submission: sanitizedSubmission as Submission,
+      answerBlobId: bundle.blobId,
+    });
+  } catch (error) {
+    console.warn("[deepsignal] submission index relay registration failed", {
+      submissionId: sanitizedSubmission.id,
+      errorName: error instanceof Error ? error.name : typeof error,
+      errorMessage: error instanceof Error ? error.message : String(error),
+    });
+  }
+  const remoteIndexTarget = indexRelaySaved?.remoteIndexTarget ?? "walrus-manifest-bundle";
+  const remoteIndexBlobId = indexRelaySaved?.remoteIndexBlobId ?? bundle.blobId;
+  const remoteIndexReadBack = indexRelaySaved?.remoteIndexReadBack ?? readBackSuccess;
+  const ownerReadable = indexRelaySaved?.ownerReadable ?? false;
+  const remoteSyncStatus = indexRelaySaved?.remoteSyncStatus ?? "sync_pending";
 
   upsertFormBlobIndex({
     formId: sanitizedSubmission.formId,
@@ -1613,6 +1860,14 @@ async function saveSubmissionRecord(
   await localStorageAdapter.saveSubmission({
     ...sanitizedSubmission,
     blobId: bundle.blobId,
+    answerBlobId: bundle.blobId,
+    receiptBlobId: bundle.blobId,
+    remoteIndexBlobId,
+    remoteIndexTarget,
+    remoteIndexUpdated: true,
+    remoteIndexReadBack,
+    ownerReadable,
+    remoteSyncStatus,
     walrusProof: bundle.walrusProof,
     tatumStorage: bundle.tatumStorage,
     ...(allowEmbeddedEncryptedPayload ? { encryptedBlobId: bundle.blobId, encryptedPayload: undefined } : {}),
@@ -1623,13 +1878,28 @@ async function saveSubmissionRecord(
       form ? entry.formBlobObjectId : undefined,
     ], `saving submission ${sanitizedSubmission.id}`);
   }
+  createRemoteIndexLog(sanitizedSubmission as Submission, {
+    answerBlobId: bundle.blobId,
+    remoteIndexTarget,
+    remoteIndexWriteSuccess: true,
+    remoteIndexReadBackSuccess: remoteIndexReadBack,
+    ownerReadable,
+    syncPending: remoteSyncStatus !== "remote_synced",
+  });
   return {
     id: sanitizedSubmission.id,
     blobId: bundle.blobId,
+    answerBlobId: bundle.blobId,
+    remoteIndexBlobId,
+    remoteIndexTarget,
+    remoteIndexUpdated: true,
+    remoteIndexReadBack,
+    ownerReadable,
+    remoteSyncStatus,
     walrusProof: bundle.walrusProof,
     tatumStorage: bundle.tatumStorage,
     ...(allowEmbeddedEncryptedPayload ? { encryptedBlobId: bundle.blobId } : {}),
-  };
+  } satisfies SubmissionSaveResult;
 }
 
 export const walrusAdapter: StorageAdapter = {

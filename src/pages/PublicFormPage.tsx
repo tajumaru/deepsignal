@@ -78,6 +78,7 @@ export function PublicFormPage() {
   const [answerAuthMode, setAnswerAuthMode] = useState<"guest" | "sui_wallet" | null>(initialAnswerAuthMode);
   const [walletChoicePending, setWalletChoicePending] = useState(false);
   const [submissionOverlayDismissed, setSubmissionOverlayDismissed] = useState(false);
+  const [publicFormExpanded, setPublicFormExpanded] = useState(false);
   const [resolvedWalletAddress, setResolvedWalletAddress] = useState<string | undefined>(undefined);
   const [walletProvider, setWalletProvider] = useState<string | undefined>(undefined);
   const manifestBlobId = searchParams.get("manifest") ?? "";
@@ -231,17 +232,37 @@ export function PublicFormPage() {
     : form?.locationRequirement === "required"
       ? t("locationActionRequiredHelp")
       : t("locationActionOptionalHelp");
-  const submitButtonLabel = deadlinePassed
-    ? t("publicSubmissionClosed")
-    : submitting
-      ? "Submitting secure report..."
-    : walletRequired
-        ? resolvedWalletAddress
-          ? "Submit Secure Report"
-          : "Connect wallet to submit secure report"
-        : attachWallet && resolvedWalletAddress
-        ? "Submit Secure Report"
-        : "Submit Secure Report";
+  const submitLaunchState = submitting
+    ? "loading"
+    : submitted || submitPipeline.status === "complete"
+      ? "success"
+      : submitError || failure || submitPipeline.status === "failed"
+        ? "error"
+        : deadlinePassed || storageConnectionPreparing
+          ? "disabled"
+          : "idle";
+  const submitButtonLabel =
+    submitLaunchState === "loading"
+      ? "SENDING SECURE SIGNAL"
+      : submitLaunchState === "success"
+        ? "SIGNAL TRANSMITTED"
+        : submitLaunchState === "error"
+          ? "TRANSMISSION FAILED"
+          : deadlinePassed
+            ? t("publicSubmissionClosed")
+            : "LAUNCH SECURE SIGNAL";
+  const submitButtonSubLabel =
+    submitLaunchState === "loading"
+      ? t("publicSubmitEncryptingSignal")
+      : submitLaunchState === "success"
+        ? "Secure route confirmed"
+        : submitLaunchState === "error"
+          ? "Review the route status and retry"
+          : storageConnectionPreparing
+            ? "Secure route is preparing"
+            : walletRequired && !resolvedWalletAddress
+              ? t("publicSubmitConnectWalletSecureReport")
+              : "Transmit through the active secure route";
   const submissionPipelineLabels = {
     eyebrow: t("publicSubmissionOverlayEyebrow"),
     title: t("publicSubmissionOverlayTitle"),
@@ -255,10 +276,10 @@ export function PublicFormPage() {
     statusNeedsAttention: t("publicSubmissionStatusNeedsAttention"),
     done: t("publicSubmissionOverlayDone"),
     stages: {
-      preparing_signal: t("publicSubmissionStagePreparing"),
-      encrypting: t("publicSubmissionStageEncrypting"),
-      uploading_to_walrus: t("publicSubmissionStageUploading"),
-      confirming_blob: t("publicSubmissionStageConfirming"),
+      preparing_signal: "Preparing Signal",
+      encrypting: "Encrypting payload",
+      uploading_to_walrus: "Sealing to Walrus",
+      confirming_blob: "Verifying route",
       generating_manifest: t("publicSubmissionStageManifest"),
       signal_secured: t("publicSubmissionStageSecured"),
     } satisfies Record<SignalPipelineStage, string>,
@@ -283,14 +304,19 @@ export function PublicFormPage() {
   }, [answers, form, visibleFieldIds]);
   const progressLabel =
     requiredProgress.total > 0
-      ? `${requiredProgress.completed} of ${requiredProgress.total} completed`
-      : "Ready when you are";
+      ? t("publicSubmitBarRequired", {
+          completed: requiredProgress.completed,
+          total: requiredProgress.total,
+        })
+      : t("publicProgressReady");
   const remainingEstimate =
     requiredProgress.missing > 1
-      ? `~${Math.min(3, Math.max(1, Math.ceil(requiredProgress.missing / 2)))} min remaining`
+      ? t("publicProgressMinutesRemaining", {
+          minutes: Math.min(3, Math.max(1, Math.ceil(requiredProgress.missing / 2))),
+        })
       : requiredProgress.missing === 1
-        ? "~1 min remaining"
-        : "Ready to send";
+        ? t("publicProgressMinuteRemaining")
+        : t("publicSubmitBarReady");
   const visibleErrorCount = useMemo(
     () => Object.entries(errors).filter(([fieldId, message]) => visibleFieldIds.has(fieldId) && Boolean(message)).length,
     [errors, visibleFieldIds],
@@ -686,7 +712,7 @@ export function PublicFormPage() {
           : [];
 
   return (
-    <form className="panel glow-panel public-form" onSubmit={handleSubmit}>
+    <form className={`panel glow-panel public-form ${publicFormExpanded ? "is-expanded" : ""}`} onSubmit={handleSubmit}>
       {walletModeSelected ? (
         <WalletSurface fallback={null}>
           <WalrusRuntimeSurface fallback={null}>
@@ -699,29 +725,52 @@ export function PublicFormPage() {
           </WalrusRuntimeSurface>
         </WalletSurface>
       ) : null}
-      <FormHeaderImage
-        image={form.headerImage}
-        logo={form.headerLogo}
-        className="public-form-header-image"
-        fallbackTitle={form.title}
-      />
+      <div className="public-form-header-frame">
+        <FormHeaderImage
+          image={form.headerImage}
+          logo={form.headerLogo}
+          className="public-form-header-image"
+          fallbackTitle={form.title}
+          signalId={form.id}
+        />
+        <button
+          type="button"
+          className="public-form-size-toggle"
+          aria-pressed={publicFormExpanded}
+          aria-label={publicFormExpanded ? t("publicFormSizeToggleShrink") : t("publicFormSizeToggleExpand")}
+          title={publicFormExpanded ? t("publicFormSizeToggleShrink") : t("publicFormSizeToggleExpand")}
+          onClick={() => setPublicFormExpanded((expanded) => !expanded)}
+        >
+          {publicFormExpanded ? (
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M9 4H4v5" />
+              <path d="M4 4l6 6" />
+              <path d="M15 20h5v-5" />
+              <path d="M20 20l-6-6" />
+            </svg>
+          ) : (
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M15 4h5v5" />
+              <path d="M20 4l-6 6" />
+              <path d="M9 20H4v-5" />
+              <path d="M4 20l6-6" />
+            </svg>
+          )}
+        </button>
+      </div>
       <section className={`public-trust-header ${deadlinePassed ? "is-expired" : ""}`} aria-label={t("publicFormStatusSummary")}>
-        <div className="public-trust-copy">
-          <p className="eyebrow">Secure reporting workflow</p>
-          <h1>{form.title}</h1>
-          <RichTextContent value={form.description ?? ""} className="lede rich-text-content" fallback={t("publicDefaultBody")} />
+        <div className="public-trust-heading-row">
+          <div className="public-trust-copy">
+            <p className="eyebrow">Secure reporting workflow</p>
+            <h1>{form.title}</h1>
+            <RichTextContent value={form.description ?? ""} className="lede rich-text-content" fallback={t("publicDefaultBody")} />
+          </div>
+          <span className={`public-form-status-badge public-form-deadline-badge ${deadlinePassed ? "is-expired" : "is-live"}`}>
+            <span>{t("publicResponseWindow")}</span>
+            <strong>{deadlinePassed ? t("publicDeadlineClosedBadge") : deadlineLabel}</strong>
+          </span>
         </div>
         <div className="public-trust-footer">
-          <div className="public-form-status-badges">
-            <span className={`public-form-status-badge ${deadlinePassed ? "is-expired" : "is-live"}`}>
-              <span>{t("publicResponseWindow")}</span>
-              <strong>{deadlinePassed ? t("publicDeadlineClosedBadge") : deadlineLabel}</strong>
-            </span>
-            <span className="public-form-status-badge is-private">
-              <span>Evidence layer</span>
-              <strong>{form.encryptSubmissions ? "Seal + Walrus active" : "Protected review mode"}</strong>
-            </span>
-          </div>
           <p className="muted">
             {deadlinePassed
               ? t("publicDeadlineClosedHelp")
@@ -902,16 +951,24 @@ export function PublicFormPage() {
         </div>
         <button
           type="submit"
-          className="primary-button signal-capsule-action signal-capsule-action-submit"
+          className={`primary-button signal-capsule-action signal-capsule-action-submit is-${submitLaunchState}`}
           disabled={submitting || deadlinePassed || storageConnectionPreparing}
           onClick={() => triggerHaptic([12, 22, 16])}
+          aria-live="polite"
         >
-          <span className="signal-capsule-action-icon" aria-hidden="true">
-            {submitting ? "◌" : "⬢"}
+          <span className="signal-launch-core signal-capsule-action-icon" aria-hidden="true">
+            <span className="signal-launch-core-ring" />
+            <span className="signal-launch-core-mark" />
           </span>
           <span className="signal-capsule-action-copy">
             <strong>{submitButtonLabel}</strong>
-            <small>{submitting ? "Encrypting and transmitting signal" : "Touch to transmit through the active secure route"}</small>
+            <small>{submitButtonSubLabel}</small>
+          </span>
+          <span className="signal-launch-vector" aria-hidden="true">
+            <span className="signal-launch-particle" />
+            <span className="signal-launch-particle" />
+            <span className="signal-launch-particle" />
+            <span className="signal-launch-arrow" />
           </span>
         </button>
       </div>
@@ -920,14 +977,20 @@ export function PublicFormPage() {
 }
 
 function AttachedSignalContextPanel({ context }: { context: AttachedSignalContext }) {
+  const { t } = useI18n();
   const compactRows = [
-    ["Device", `${context.device.type} / ${context.os}`],
-    ["Browser", `${context.browser} ${context.browserVersion}`],
-    ["Viewport", `${context.viewport.width} x ${context.viewport.height} @${context.dpr}x`],
-    ["Page", context.pageName],
-    ["Wallet", context.wallet.connected ? `${context.wallet.provider ?? "Wallet"} ${context.wallet.address ?? ""}` : "Not connected"],
-    ["Network", context.chain],
-    ["Locale", `${context.locale} / ${context.timezone}`],
+    [t("attachedSignalContextDevice"), `${context.device.type} / ${context.os}`],
+    [t("attachedSignalContextBrowser"), `${context.browser} ${context.browserVersion}`],
+    [t("attachedSignalContextViewport"), `${context.viewport.width} x ${context.viewport.height} @${context.dpr}x`],
+    [t("attachedSignalContextPage"), context.pageName],
+    [
+      t("attachedSignalContextWallet"),
+      context.wallet.connected
+        ? `${context.wallet.provider ?? t("attachedSignalContextWalletFallback")} ${context.wallet.address ?? ""}`
+        : t("attachedSignalContextWalletNotConnected"),
+    ],
+    [t("attachedSignalContextNetwork"), context.chain],
+    [t("attachedSignalContextLocale"), `${context.locale} / ${context.timezone}`],
   ];
   const capturedIssueCount = context.consoleErrors.length + context.networkErrors.length;
 
@@ -935,23 +998,23 @@ function AttachedSignalContextPanel({ context }: { context: AttachedSignalContex
     <details className="attached-signal-context">
       <summary>
         <span>
-          <strong>Attached Signal Context</strong>
-          <small>Device, page, wallet mode, and recent errors are attached automatically.</small>
+          <strong>{t("attachedSignalContextTitle")}</strong>
+          <small>{t("attachedSignalContextDescription")}</small>
         </span>
         <span className="attached-signal-context-count">
-          {capturedIssueCount > 0 ? `${capturedIssueCount} recent issue${capturedIssueCount === 1 ? "" : "s"}` : "Auto-attached"}
+          {capturedIssueCount > 0 ? t("attachedSignalContextIssueCount", { count: capturedIssueCount }) : t("attachedSignalContextAutoAttached")}
         </span>
       </summary>
       <div className="attached-signal-context-grid">
         {compactRows.map(([label, value]) => (
           <div key={label} className="metadata-row">
             <span>{label}</span>
-            <strong>{value || "unknown"}</strong>
+            <strong>{value || t("unknown")}</strong>
           </div>
         ))}
         <div className="metadata-row">
           <span>URL</span>
-          <strong>{context.url || "unknown"}</strong>
+          <strong>{context.url || t("unknown")}</strong>
         </div>
       </div>
     </details>

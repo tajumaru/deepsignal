@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useRef, useState, type PropsWithChildren } from "react";
 import { Link, NavLink, useLocation } from "react-router-dom";
 import { CreateFormLink } from "./CreateFormLink";
-import { CreateSignalNavIcon, MoreNavIcon, NavItemLabel } from "./NavIcons";
+import { NavItemLabel } from "./NavIcons";
 import { BuildIndicator } from "./system/BuildIndicator";
 import { WalletConnectSurface } from "./WalletConnectSurface";
 import { useI18n } from "../i18n";
@@ -78,7 +78,7 @@ function MobileAppBottomNav() {
         <span aria-hidden="true">Ex</span>
         <span>{t("navExplore")}</span>
       </NavLink>
-      <CreateFormLink>
+      <CreateFormLink fresh={false}>
         <span aria-hidden="true">+</span>
         <span>{t("composeSignalCta")}</span>
       </CreateFormLink>
@@ -124,6 +124,8 @@ export function AppShell({
   const showMobileBottomNav =
     !publicChrome &&
     (location.pathname === "/explore" ||
+      location.pathname === "/create" ||
+      location.pathname === "/compose" ||
       location.pathname === "/admin" ||
       location.pathname.startsWith("/admin/") ||
       location.pathname === "/dashboard" ||
@@ -214,7 +216,7 @@ export function AppShell({
               </span>
               <strong>DeepSignal</strong>
             </Link>
-            <CreateFormLink className="mobile-header-cta" onClick={() => setMobileDrawerOpen(false)}>
+            <CreateFormLink fresh={false} className="mobile-header-cta" onClick={() => setMobileDrawerOpen(false)}>
               <span aria-hidden="true">+</span>
               <span>{t("composeSignalCta")}</span>
             </CreateFormLink>
@@ -233,8 +235,8 @@ export function AppShell({
           <nav className="topnav desktop-topnav" aria-label="Primary navigation">
             <div className="topnav-row topnav-row-primary">
               <NavLink to="/">{t("navHome")}</NavLink>
-              <CreateFormLink nav>
-                <NavItemLabel icon={<CreateSignalNavIcon />}>{t("navCreateForm")}</NavItemLabel>
+              <CreateFormLink nav fresh={false}>
+                <NavItemLabel>{t("navCreateForm")}</NavItemLabel>
               </CreateFormLink>
               {walletChrome.inboxNav}
             </div>
@@ -249,7 +251,7 @@ export function AppShell({
                   aria-haspopup="menu"
                   aria-expanded={moreMenuOpen}
                 >
-                  <NavItemLabel icon={<MoreNavIcon />}>{t("navMore")}</NavItemLabel>
+                  <NavItemLabel>{t("navMore")}</NavItemLabel>
                 </button>
                 {moreMenuOpen ? (
                   <div className="topnav-more-inline" role="menu" aria-label={t("navMore")}>
@@ -306,7 +308,7 @@ export function AppShell({
                     <strong>DeepSignal</strong>
                     <p>{t("brandTagline")}</p>
                   </div>
-                  <CreateFormLink className="mobile-drawer-cta" onClick={closeMobileDrawer}>
+                  <CreateFormLink fresh={false} className="mobile-drawer-cta" onClick={closeMobileDrawer}>
                     <span aria-hidden="true">+</span>
                     <span>{t("composeSignalCta")}</span>
                   </CreateFormLink>
@@ -330,7 +332,7 @@ export function AppShell({
                         onClick={() => setMobileMoreOpen((current) => !current)}
                         aria-expanded={mobileMoreOpen}
                       >
-                        <NavItemLabel icon={<MoreNavIcon />}>{t("navMore")}</NavItemLabel>
+                        <NavItemLabel>{t("navMore")}</NavItemLabel>
                       </button>
                       {mobileMoreOpen ? (
                         <NavLink

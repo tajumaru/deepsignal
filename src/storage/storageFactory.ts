@@ -18,6 +18,12 @@ import {
 import { isLikelyWalletCancelError } from "../crypto/sealPayload";
 import type { FormSchema, StorageAdapter, Submission } from "../types";
 import { WALRUS_AGGREGATOR_URL, WALRUS_UPLOAD_RELAY_URL } from "../lib/sui";
+import {
+  enqueuePendingSubmission,
+  listPendingSubmissions,
+  removePendingSubmission,
+  writeSubmissionRemoteIndexLog,
+} from "./submissionDelivery";
 
 type RuntimeMode = "walrus" | "local-fallback";
 type RuntimeStatus = {
@@ -173,7 +179,14 @@ function mergeSubmissionRecord(primary: Submission, secondary: Submission) {
     tags: metadataPreferred.tags.length > 0 ? metadataPreferred.tags : decryptPreferred.tags,
     encryptedBlobId: decryptPreferred.encryptedBlobId ?? metadataPreferred.encryptedBlobId,
     encryptedPayload: decryptPreferred.encryptedPayload ?? metadataPreferred.encryptedPayload,
+    answerBlobId: decryptPreferred.answerBlobId ?? metadataPreferred.answerBlobId,
     receiptBlobId: decryptPreferred.receiptBlobId ?? metadataPreferred.receiptBlobId,
+    remoteIndexBlobId: metadataPreferred.remoteIndexBlobId ?? decryptPreferred.remoteIndexBlobId,
+    remoteIndexTarget: metadataPreferred.remoteIndexTarget ?? decryptPreferred.remoteIndexTarget,
+    remoteIndexUpdated: metadataPreferred.remoteIndexUpdated ?? decryptPreferred.remoteIndexUpdated,
+    remoteIndexReadBack: metadataPreferred.remoteIndexReadBack ?? decryptPreferred.remoteIndexReadBack,
+    ownerReadable: metadataPreferred.ownerReadable ?? decryptPreferred.ownerReadable,
+    remoteSyncStatus: metadataPreferred.remoteSyncStatus ?? decryptPreferred.remoteSyncStatus,
     blobId: decryptPreferred.blobId ?? metadataPreferred.blobId,
     tatumStorage: decryptPreferred.tatumStorage ?? metadataPreferred.tatumStorage,
     signalReceiptMetadataDigest:
@@ -319,17 +332,58 @@ const hybridWalrusStorage: StorageAdapter = {
     }
     return withWriteFallback(
       () => walrusAdapter.saveSubmission(submission),
-      () => localStorageAdapter.saveSubmission(submission),
+      () => {
+        const pendingSubmission = {
+          ...submission,
+          remoteIndexUpdated: false,
+          remoteIndexReadBack: false,
+          ownerReadable: false,
+          remoteSyncStatus: "local_only" as const,
+        };
+        enqueuePendingSubmission(pendingSubmission);
+        writeSubmissionRemoteIndexLog({
+          event: "submission_remote_index_write",
+          submissionId: submission.id,
+          projectId: submission.projectId ?? null,
+          formId: submission.formId,
+          signalId: typeof submission.onchainSignalId === "number" ? String(submission.onchainSignalId) : submission.id,
+          answerBlobId: null,
+          submitterMode:
+            submission.respondentMeta?.identityKind === "zklogin"
+              ? "zkLogin"
+              : submission.respondentMeta?.identityKind === "sui_wallet"
+                ? "wallet"
+                : "anonymous",
+          submitterWallet: submission.respondentMeta?.verifiedAddress ?? submission.respondentMeta?.walletAddress ?? null,
+          anonymousSessionId: submission.respondentMeta?.sessionId ?? null,
+          remoteIndexTarget: null,
+          remoteIndexWriteSuccess: false,
+          remoteIndexReadBackSuccess: false,
+          ownerReadable: false,
+          storageMode: "local-fallback",
+          fallbackUsed: true,
+          syncPending: true,
+        });
+        return localStorageAdapter.saveSubmission(pendingSubmission);
+      },
     );
   },
   async saveEncryptedSubmission(submission) {
     const saveLocalEncryptedSubmission = async () => {
+      const pendingSubmission = {
+        ...submission,
+        remoteIndexUpdated: false,
+        remoteIndexReadBack: false,
+        ownerReadable: false,
+        remoteSyncStatus: "local_only" as const,
+      };
+      enqueuePendingSubmission(pendingSubmission);
       if (!submission.encryptedPayload) {
-        return localStorageAdapter.saveSubmission(submission);
+        return localStorageAdapter.saveSubmission(pendingSubmission);
       }
       const encryptedPayload = await localStorageAdapter.saveEncryptedPayload(submission.encryptedPayload);
       const saved = await localStorageAdapter.saveSubmission({
-        ...submission,
+        ...pendingSubmission,
         encryptedBlobId: encryptedPayload.blobId,
         encryptedPayload: undefined,
       });
@@ -424,6 +478,53 @@ export function getStorageRuntimeStageLabel() {
 export function subscribeStorageRuntime(listener: () => void) {
   listeners.add(listener);
   return () => listeners.delete(listener);
+}
+
+export async function retryPendingSubmissionSync() {
+  const pending = listPendingSubmissions();
+  if (pending.length === 0) {
+    return { attempted: 0, synced: 0 };
+  }
+  let synced = 0;
+  for (const submission of pending) {
+    try {
+      const result = await walrusAdapter.saveSubmission({
+        ...submission,
+        remoteSyncStatus: "sync_pending",
+      });
+      const remoteSynced =
+        result.remoteSyncStatus === "remote_synced" &&
+        result.remoteIndexUpdated === true &&
+        result.remoteIndexReadBack === true &&
+        result.ownerReadable === true;
+      if (!remoteSynced) {
+        continue;
+      }
+      await localStorageAdapter.saveSubmission({
+        ...submission,
+        blobId: result.blobId,
+        answerBlobId: result.answerBlobId ?? result.blobId,
+        receiptBlobId: result.answerBlobId ?? result.blobId,
+        remoteIndexBlobId: result.remoteIndexBlobId,
+        remoteIndexTarget: result.remoteIndexTarget,
+        remoteIndexUpdated: true,
+        remoteIndexReadBack: true,
+        ownerReadable: true,
+        remoteSyncStatus: "remote_synced",
+        walrusProof: result.walrusProof,
+        tatumStorage: result.tatumStorage,
+      });
+      removePendingSubmission(submission.id);
+      synced += 1;
+    } catch (error) {
+      console.warn("[deepsignal] pending submission remote sync retry failed", {
+        submissionId: submission.id,
+        errorName: error instanceof Error ? error.name : typeof error,
+        errorMessage: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+  return { attempted: pending.length, synced };
 }
 
 export function getBlobViewerUrl(blobId?: string) {

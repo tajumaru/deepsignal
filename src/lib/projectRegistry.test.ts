@@ -71,7 +71,7 @@ describe("project member roles", () => {
     ]);
   });
 
-  it("keeps legacy admins while adding member co-admins and reviewers", () => {
+  it("keeps the creator as a co-admin while adding legacy admins, member co-admins, and reviewers", () => {
     const project = parseProjectSummary("0xPROJECT", {
       name: "Signal desk",
       owner: "0xA",
@@ -86,7 +86,7 @@ describe("project member roles", () => {
       signals: [],
     });
 
-    expect(project?.admins).toEqual(["0xb", "0xc"]);
+    expect(project?.admins).toEqual(["0xa", "0xb", "0xc"]);
     expect(project?.reviewers).toEqual(["0xd"]);
   });
 });

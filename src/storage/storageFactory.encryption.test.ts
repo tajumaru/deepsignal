@@ -88,6 +88,54 @@ describe("storageFactory encrypted fallback persistence", () => {
     expect(rawJson).not.toContain("c2VjcmV0");
     expect(stored[0]?.answers).toEqual({});
     expect(stored[0]?.metadata).toEqual({});
+    expect(stored[0]?.remoteSyncStatus).toBe("local_only");
+    expect(stored[0]?.remoteIndexUpdated).toBe(false);
+  });
+
+  it("marks local fallback submissions as pending owner delivery instead of remote synced", async () => {
+    vi.doMock("./walrusAdapter", () => ({
+      walrusAdapter: {
+        saveForm: vi.fn(),
+        getForm: vi.fn(),
+        listForms: vi.fn(),
+        deleteForm: vi.fn(),
+        deleteForms: vi.fn(),
+        saveSubmission: vi.fn(async () => {
+          throw new Error("Walrus upload failed.");
+        }),
+        listSubmissions: vi.fn(),
+        updateSubmission: vi.fn(),
+        saveEncryptedPayload: vi.fn(),
+        readEncryptedPayload: vi.fn(),
+        uploadFile: vi.fn(),
+        readFileBlob: vi.fn(),
+        readFileText: vi.fn(),
+      },
+      getWalrusBlobUrl: vi.fn(() => null),
+    }));
+
+    const { storage } = await import("./storageFactory");
+    const submission = {
+      ...createEncryptedSubmission(),
+      id: "submission-local-only",
+      formId: "form-local-only",
+      isEncrypted: false,
+      encryptedBlobId: undefined,
+      answers: { message: "plain local fallback" },
+      metadata: { source: "test" },
+    } satisfies Submission;
+    const result = await storage.saveSubmission(submission);
+
+    expect(result.remoteSyncStatus).toBe("local_only");
+    expect(result.remoteIndexUpdated).toBe(false);
+    const rawJson = window.localStorage.getItem(SUBMISSIONS_KEY) || "[]";
+    const stored = JSON.parse(rawJson) as Submission[];
+    expect(stored[0]).toMatchObject({
+      id: "submission-local-only",
+      remoteSyncStatus: "local_only",
+      remoteIndexUpdated: false,
+      ownerReadable: false,
+    });
   });
 
   it("rejects production fallback for encrypted payload reads and writes", async () => {

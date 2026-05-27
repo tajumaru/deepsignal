@@ -6,9 +6,10 @@ interface FormHeaderImageProps {
   logo?: FormHeaderLogo;
   className?: string;
   fallbackTitle?: string;
+  signalId?: string;
 }
 
-export function FormHeaderImage({ image, logo, className = "" }: FormHeaderImageProps) {
+export function FormHeaderImage({ image, logo, className = "", signalId }: FormHeaderImageProps) {
   const url = image?.url.trim();
   const logoUrl = logo?.url.trim();
   const [failedUrl, setFailedUrl] = useState("");
@@ -38,6 +39,7 @@ export function FormHeaderImage({ image, logo, className = "" }: FormHeaderImage
           <span className="form-header-shape form-header-shape-disc" />
         </div>
       )}
+      {signalId ? <figcaption className="form-header-signal-id">{`SIGNAL ID ${signalId}`}</figcaption> : null}
       <div className={`form-header-logo ${showLogoImage ? "has-logo-image" : "has-default-logo"}`}>
         {showLogoImage ? (
           <img

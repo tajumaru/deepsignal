@@ -1,6 +1,15 @@
 /* App shell, topbar, and shared narrow viewport overrides. */
 
 @media (max-width: 900px) {
+  @supports (min-height: 100svh) {
+    html,
+    body,
+    #root,
+    .app-shell {
+      min-height: 100svh;
+    }
+  }
+
   .hero-layout,
   .builder-layout,
   .detail-layout,
@@ -116,6 +125,11 @@
     width: 100%;
     max-width: 100%;
     overflow-x: hidden;
+  }
+
+  .composer-shell {
+    min-height: auto;
+    overscroll-behavior-y: contain;
   }
 
   .inbox-header-actions,

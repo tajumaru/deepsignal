@@ -237,6 +237,22 @@ function CsvFileIcon() {
   );
 }
 
+function NodeDirectoryTriggerIcon() {
+  return (
+    <svg className="node-directory-trigger-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path d="M6.5 7.5h5" />
+      <path d="M12.5 7.5h5" />
+      <path d="M6.5 12h5" />
+      <path d="M12.5 12h5" />
+      <path d="M6.5 16.5h5" />
+      <path d="M12.5 16.5h5" />
+      <circle cx="4.4" cy="7.5" r="0.8" />
+      <circle cx="4.4" cy="12" r="0.8" />
+      <circle cx="4.4" cy="16.5" r="0.8" />
+    </svg>
+  );
+}
+
 interface SignalStreamsNavProps {
   streamItems: StreamItem[];
   selectedStreamId: StreamId;
@@ -504,12 +520,15 @@ export function SignalChannelSelector({
               <button
                 type="button"
                 className="primary-button signal-node-directory-trigger"
+                aria-label={openNodeDirectoryLabel}
+                title={openNodeDirectoryLabel}
                 onClick={() => {
                   onOpenNodeDirectory();
                   setMenuOpen(false);
                 }}
               >
-                {openNodeDirectoryLabel}
+                <NodeDirectoryTriggerIcon />
+                <span className="sr-only">{openNodeDirectoryLabel}</span>
               </button>
             </div>
           </div>

@@ -1,14 +1,12 @@
 import { useMemo, useRef } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { SignalMetaChip, SignalMetaRow } from "../../../components/SignalMetaChip";
-import { FlowStepIcon } from "../../../components/SignalFlowIcons";
 import { StorageProof } from "../../../components/StorageProof";
-import { TatumFrogIcon } from "../../../components/NetworkMenu";
 import { getEncryptedPayloadAvailabilityLabel, hasDedicatedEncryptedPayloadBlob } from "../../../lib/encryptionDisplay";
 import { useRpcInfrastructure } from "../../../rpcInfrastructure";
 import { getCurrentWalrusNetwork } from "../../../lib/walrusProof";
 import { getSubmissionRespondentMeta } from "../../../lib/respondentMeta";
-import { getStorageDetailLabels, isLocalFallbackBlob } from "../../../lib/signalInbox";
+import { isLocalFallbackBlob } from "../../../lib/signalInbox";
 import type { Submission } from "../../../types";
 
 interface PublicFormSuccessProps {
@@ -22,28 +20,27 @@ interface PublicFormSuccessProps {
 
 export function PublicFormSuccess({
   submitted,
-  submitNotice,
   notAvailableLabel,
   pendingSuiRegistrationLabel,
   signalReceivedLabel,
-  thanksForFeedbackLabel,
 }: PublicFormSuccessProps) {
   const location = useLocation();
   const detailsRef = useRef<HTMLDetailsElement | null>(null);
   const rpc = useRpcInfrastructure();
-  const storageLabels = getStorageDetailLabels(submitted.encryptedBlobId ?? submitted.blobId);
   const submittedRespondentMeta = getSubmissionRespondentMeta(submitted);
   const isEncryptedSubmission = Boolean(submitted.isEncrypted);
   const primaryBlobId = submitted.encryptedBlobId ?? submitted.blobId;
   const storedOnWalrus = Boolean(primaryBlobId && !isLocalFallbackBlob(primaryBlobId));
+  const remoteDelivered =
+    submitted.remoteSyncStatus === "remote_synced" &&
+    submitted.remoteIndexUpdated === true &&
+    submitted.remoteIndexReadBack === true &&
+    submitted.ownerReadable === true;
   const evidenceBlobId = submitted.encryptedBlobId ?? submitted.blobId;
   const networkLabel = storedOnWalrus ? getCurrentWalrusNetwork() : "local";
-  const providerBadgeLabel = rpc.usingTatum ? "Powered by Tatum" : "Sui RPC connected";
   const providerDetailLabel = rpc.usingTatum ? "Powered by Tatum" : rpc.providerLabel;
   const receiptJson = useMemo(() => JSON.stringify(submitted, null, 2), [submitted]);
   const submitAnotherHref = `${location.pathname}${location.search}`;
-  const trustLabel = storedOnWalrus ? "Certified by Walrus" : "Stored locally. Remote certification unavailable.";
-  const trustToneClass = storedOnWalrus ? "is-certified" : "is-warning";
 
   function openTechnicalDetails() {
     if (!detailsRef.current) {
@@ -63,62 +60,12 @@ export function PublicFormSuccess({
           <p className="eyebrow">{signalReceivedLabel}</p>
           <h1>Your report has been sealed.</h1>
           <p className="lede">
-            {isEncryptedSubmission
+            {!remoteDelivered
+              ? "This signal is saved, but owner inbox delivery is still pending."
+              : isEncryptedSubmission
               ? "Authorized reviewers can decrypt and review this signal."
               : "Authorized reviewers can review this signal."}
           </p>
-        </div>
-
-        <div className="signal-success-status-row" role="list" aria-label="Signal delivery status">
-          <div className="signal-success-status-chip is-complete" role="listitem" title="Submission encryption complete">
-            <FlowStepIcon name="Encrypt" />
-            <strong>Encrypted</strong>
-          </div>
-          <div
-            className={`signal-success-status-chip ${storedOnWalrus ? "is-complete" : "is-warning"}`}
-            role="listitem"
-            title={storedOnWalrus ? "Saved to Walrus storage" : "Saved with local recovery fallback"}
-          >
-            <FlowStepIcon name="Store" />
-            <strong>Saved</strong>
-          </div>
-          <div
-            className={`signal-success-status-chip ${storedOnWalrus ? "is-complete" : "is-warning"}`}
-            role="listitem"
-            title={storedOnWalrus ? "Verification path ready" : "Recovery path ready"}
-          >
-            <FlowStepIcon name="Certify" />
-            <strong>Verifiable</strong>
-          </div>
-        </div>
-
-        <section className={`signal-success-trust-strip ${trustToneClass}`} aria-label="Trust confirmation">
-          <div className="signal-success-trust-brand">
-            <TatumFrogIcon className="signal-success-trust-icon" />
-            <span>{trustLabel}</span>
-          </div>
-          <div className="signal-success-trust-badges">
-            <span className="signal-chip signal-chip-soft">{providerBadgeLabel}</span>
-            <span className="signal-chip signal-chip-soft">
-              {storedOnWalrus ? "Walrus evidence layer" : "Protected recovery path"}
-            </span>
-          </div>
-        </section>
-
-        <div className="signal-success-footer">
-          <p className="muted">{thanksForFeedbackLabel}</p>
-          {submitNotice ? <p className="muted">{submitNotice}</p> : null}
-          {!storedOnWalrus
-            ? storageLabels
-                .filter((label) => label !== "Stored locally only")
-                .map((label) => (
-                  <p key={label} className="muted signal-success-subtle-note">
-                    {label === "Walrus upload failed or not configured"
-                      ? "Remote certification is currently unavailable."
-                      : label}
-                  </p>
-                ))
-            : null}
         </div>
 
         <div className="signal-success-actions" aria-label="Next actions">
@@ -147,8 +94,11 @@ export function PublicFormSuccess({
             </div>
             <div className="metadata-row">
               <span>Verification status</span>
-              <strong>{storedOnWalrus ? "Verifiable" : "Recovery ready"}</strong>
+              <strong>{remoteDelivered ? "Owner-readable" : "Sync pending"}</strong>
             </div>
+            {submitted.remoteIndexTarget ? (
+              <SignalMetaRow label="Remote index" type="manifest" value={submitted.remoteIndexBlobId ?? submitted.remoteIndexTarget} />
+            ) : null}
             <div className="metadata-row">
               <span>Network</span>
               <strong>{networkLabel}</strong>

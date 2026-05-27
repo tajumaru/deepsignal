@@ -946,31 +946,6 @@
     display: none;
   }
 
-  .mobile-compose-signal-button {
-    position: fixed;
-    right: max(1rem, env(safe-area-inset-right, 0px));
-    bottom: calc(72px + env(safe-area-inset-bottom, 0px));
-    z-index: 22;
-    display: inline-grid;
-    place-items: center;
-    width: 3.75rem;
-    min-width: 3.75rem;
-    height: 3.75rem;
-    min-height: 3.75rem;
-    border-radius: var(--radius-pill);
-    border: 3px solid rgba(225, 255, 255, 0.92);
-    background:
-      radial-gradient(circle at 35% 28%, rgba(255, 255, 255, 0.7), transparent 24%),
-      linear-gradient(135deg, #7afff1, #44e389 72%);
-    color: #02111a;
-    font-size: 2.15rem;
-    font-weight: 900;
-    box-shadow:
-      0 18px 38px rgba(0, 0, 0, 0.42),
-      0 0 0 6px rgba(102, 227, 255, 0.1),
-      0 0 34px rgba(82, 208, 141, 0.42);
-  }
-
   .mobile-inbox-bottom-nav {
     position: fixed;
     left: 0;

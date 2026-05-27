@@ -328,7 +328,7 @@ function buildActivityPoints(records: SignalRecord[], language: Language) {
 
     return {
       ...bucket,
-      intensity: Math.max(12, Math.round((bucket.count / maxCount) * 100)),
+      intensity: bucket.count > 0 ? Math.max(12, Math.round((bucket.count / maxCount) * 100)) : 0,
       anomaly,
       state,
       reason:
@@ -1093,6 +1093,48 @@ export function WorkspaceInsights({
       }),
     [records, analysisProfile, signalSummary.encryptedWaitingCount, anomalyCount, primaryCluster?.label],
   );
+  const activityWaveCard = (
+    <article className="workspace-sonar-card">
+      <div className="workspace-signal-summary-header">
+        <div>
+          <p className="eyebrow">{t("workspaceActivityWaveEyebrow")}</p>
+          <h3>{t("workspaceActivityWaveTitle")}</h3>
+        </div>
+        <div className="workspace-wave-status">
+          <span className={`workspace-monitor-state is-${activityMonitorState.tone}`}>
+            {t(`workspaceMonitorState${activityMonitorState.key}`)}
+          </span>
+          <span className={`signal-chip signal-chip-soft wave-chip is-${activityStatus.tone}`}>
+            {t(`workspaceActivityStatus${activityStatus.tone === "up" ? "Up" : activityStatus.tone === "drop" ? "Drop" : activityStatus.tone === "spike" ? "Spike" : "Stable"}`)}
+          </span>
+          <span className="workspace-wave-status-ja">{t(`workspaceActivityStatus${activityStatus.tone === "up" ? "UpJa" : activityStatus.tone === "drop" ? "DropJa" : activityStatus.tone === "spike" ? "SpikeJa" : "StableJa"}`)}</span>
+        </div>
+      </div>
+      <div className="workspace-sonar-wave" aria-label={t("workspaceSignalActivityTitle")}>
+        {activityPoints.map((point) => (
+          <span
+            key={point.label}
+            className={[point.count === 0 ? "is-empty" : undefined, point.anomaly ? "is-anomaly" : undefined]
+              .filter(Boolean)
+              .join(" ")}
+            style={{ "--density": `${point.intensity}%` } as CSSProperties}
+            title={`${point.label}: ${point.count}`}
+          >
+            <i />
+            <small>{point.label}</small>
+            <em>{t(`workspaceActivityPoint${point.state === "elevated" ? "Elevated" : point.state === "cooling" ? "Cooling" : point.state === "spike" ? "Spike" : "Stable"}`)}</em>
+            <b>{t(`workspaceActivityPoint${point.reason === "elevated" ? "ElevatedBody" : point.reason === "cooling" ? "CoolingBody" : point.reason === "spike" ? "SpikeBody" : "StableBody"}`)}</b>
+          </span>
+        ))}
+      </div>
+      <div className="workspace-wave-footer">
+        <p className="workspace-signal-summary-empty">
+          {t(`workspaceActivityStatus${activityStatus.tone === "up" ? "UpBody" : activityStatus.tone === "drop" ? "DropBody" : activityStatus.tone === "spike" ? "SpikeBody" : "StableBody"}`)}
+        </p>
+        <span className="signal-chip signal-chip-soft">{t("workspaceAnomalyCount", { count: anomalyCount })}</span>
+      </div>
+    </article>
+  );
 
   return (
     <section
@@ -1158,6 +1200,8 @@ export function WorkspaceInsights({
           </button>
         </div>
       </div>
+
+      {activityWaveCard}
 
       <article className="workspace-signal-summary-card workspace-insights-section">
         <div className="workspace-signal-summary-header">
@@ -1316,45 +1360,6 @@ export function WorkspaceInsights({
           </div>
         </article>
       </div>
-
-      <article className="workspace-sonar-card">
-        <div className="workspace-signal-summary-header">
-          <div>
-            <p className="eyebrow">{t("workspaceActivityWaveEyebrow")}</p>
-            <h3>{t("workspaceActivityWaveTitle")}</h3>
-          </div>
-          <div className="workspace-wave-status">
-            <span className={`workspace-monitor-state is-${activityMonitorState.tone}`}>
-              {t(`workspaceMonitorState${activityMonitorState.key}`)}
-            </span>
-            <span className={`signal-chip signal-chip-soft wave-chip is-${activityStatus.tone}`}>
-              {t(`workspaceActivityStatus${activityStatus.tone === "up" ? "Up" : activityStatus.tone === "drop" ? "Drop" : activityStatus.tone === "spike" ? "Spike" : "Stable"}`)}
-            </span>
-            <span className="workspace-wave-status-ja">{t(`workspaceActivityStatus${activityStatus.tone === "up" ? "UpJa" : activityStatus.tone === "drop" ? "DropJa" : activityStatus.tone === "spike" ? "SpikeJa" : "StableJa"}`)}</span>
-          </div>
-        </div>
-        <div className="workspace-sonar-wave" aria-label={t("workspaceSignalActivityTitle")}>
-          {activityPoints.map((point) => (
-            <span
-              key={point.label}
-              className={point.anomaly ? "is-anomaly" : undefined}
-              style={{ "--density": `${point.intensity}%` } as CSSProperties}
-              title={`${point.label}: ${point.count}`}
-            >
-              <i />
-              <small>{point.label}</small>
-              <em>{t(`workspaceActivityPoint${point.state === "elevated" ? "Elevated" : point.state === "cooling" ? "Cooling" : point.state === "spike" ? "Spike" : "Stable"}`)}</em>
-              <b>{t(`workspaceActivityPoint${point.reason === "elevated" ? "ElevatedBody" : point.reason === "cooling" ? "CoolingBody" : point.reason === "spike" ? "SpikeBody" : "StableBody"}`)}</b>
-            </span>
-          ))}
-        </div>
-        <div className="workspace-wave-footer">
-          <p className="workspace-signal-summary-empty">
-            {t(`workspaceActivityStatus${activityStatus.tone === "up" ? "UpBody" : activityStatus.tone === "drop" ? "DropBody" : activityStatus.tone === "spike" ? "SpikeBody" : "StableBody"}`)}
-          </p>
-          <span className="signal-chip signal-chip-soft">{t("workspaceAnomalyCount", { count: anomalyCount })}</span>
-        </div>
-      </article>
 
       <div className="workspace-insights-section-grid">
         <article className="workspace-review-queue-card workspace-diagnostic-card">

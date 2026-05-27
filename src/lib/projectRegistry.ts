@@ -558,6 +558,7 @@ export function parseProjectSummary(
   const memberCoAdmins = members
     .filter((member) => member.role === "co_admin")
     .map((member) => member.address);
+  const coAdmins = [...new Set([owner, ...legacyAdmins, ...memberCoAdmins])];
   const reviewers = members
     .filter((member) => member.role === "reviewer")
     .map((member) => member.address);
@@ -565,7 +566,7 @@ export function parseProjectSummary(
     objectId: normalizeObjectId(objectId),
     name,
     owner,
-    admins: [...new Set([...legacyAdmins, ...memberCoAdmins])],
+    admins: coAdmins,
     reviewers,
     members,
     formsCount: readU64(fields.forms_count),
@@ -635,7 +636,7 @@ export function loadRecentProjects() {
     return Array.isArray(parsed)
       ? parsed.map((project) => ({
           ...project,
-          admins: project.admins ?? [],
+          admins: [...new Set([project.owner, ...(project.admins ?? [])].filter(Boolean))],
           reviewers: project.reviewers ?? [],
           members: project.members ?? [],
         }))

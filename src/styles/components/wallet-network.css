@@ -1018,7 +1018,44 @@
 }
 
 .signal-node-directory-trigger {
+  width: 3rem;
+  min-width: 3rem;
   min-height: 3rem;
+  padding: 0;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 50%;
+  border-color: rgba(116, 226, 255, 0.18);
+  background:
+    radial-gradient(circle at 50% 18%, rgba(116, 226, 255, 0.12), transparent 44%),
+    linear-gradient(180deg, rgba(8, 31, 48, 0.88), rgba(3, 17, 30, 0.92));
+  color: #c6f7ff;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    inset 0 0 0 1px rgba(116, 226, 255, 0.04);
+}
+
+.signal-node-directory-trigger:hover,
+.signal-node-directory-trigger:focus-visible {
+  border-color: rgba(116, 226, 255, 0.32);
+  background:
+    radial-gradient(circle at 50% 18%, rgba(116, 226, 255, 0.18), transparent 48%),
+    linear-gradient(180deg, rgba(10, 39, 58, 0.96), rgba(4, 20, 35, 0.96));
+  color: #effcff;
+  box-shadow:
+    0 0 0 1px rgba(116, 226, 255, 0.08),
+    0 12px 26px rgba(2, 10, 18, 0.24),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.node-directory-trigger-icon {
+  width: 1.18rem;
+  height: 1.18rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .signal-meta-chip-sui-address .sui-address-display {

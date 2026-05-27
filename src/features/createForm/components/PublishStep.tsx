@@ -879,11 +879,6 @@ export function PublishStep({
               </section>
 
               <div className="composer-link-grid">
-                <div className="composer-success-cta-row">
-                  <Link className="primary-button" to={`/dashboard/forms/${savedForm.id}`}>
-                    {t("signalInboxTitle")}
-                  </Link>
-                </div>
                 {isLocalOnlyForm ? (
                   <p className="warning-text">
                     {t("doNotShareLocalUrl")}
@@ -892,7 +887,7 @@ export function PublishStep({
                 {!showFocusedSuccessCard ? (
                   <>
                     <p>
-                      {t("adminPage")}: <Link to={`/dashboard/forms/${savedForm.id}`}>{t("adminPageCta")}</Link>
+                      {t("adminPage")}: <Link to={`/dashboard?tab=review&form=${encodeURIComponent(savedForm.id)}`}>{t("adminPageCta")}</Link>
                     </p>
                     <div className="metadata-list">
                       <div className="metadata-row">

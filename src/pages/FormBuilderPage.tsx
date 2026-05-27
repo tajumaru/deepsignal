@@ -1,6 +1,6 @@
 import { useSignAndExecuteTransaction, useSuiClient } from "@mysten/dapp-kit";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { AdminAccessGate } from "../components/AdminAccessGate";
 import { RecoverableDraftBanner } from "../components/RecoverableDraftBanner";
 import { FieldTypePicker } from "../components/formBuilder/FieldTypePicker";
@@ -10,6 +10,7 @@ import { useSuiWallet } from "../hooks/useSuiWallet";
 import { useI18n } from "../i18n";
 import { canAdmin, getAdminSurfaceAccessState, getRoleLabel } from "../lib/adminAccess";
 import { getActivityActorRole } from "../lib/activityLog";
+import { storageAdapter } from "../lib/storage";
 import { setSelectedProjectId } from "../lib/projectRegistry";
 import { shortAddress, WALRUS_UPLOAD_RELAY_URL } from "../lib/sui";
 import { getInitialFields, getInitialTemplate, showWalrusDiagnostics } from "../features/createForm/constants";
@@ -26,6 +27,346 @@ import { useCreateFormBuilder } from "../features/createForm/hooks/useCreateForm
 import { useCreateFormPublish } from "../features/createForm/hooks/useCreateFormPublish";
 import type { DisplayMode } from "../features/createForm/types";
 import { getStorageRuntimeStatus, subscribeStorageRuntime } from "../storage/storageFactory";
+import {
+  CREATE_FORM_DRAFT_STORAGE_KEY,
+  CREATE_FORM_GUEST_DRAFT_STORAGE_KEY,
+  parseStoredCreateFormDraft,
+} from "../features/createForm/utils";
+import type { FormSchema } from "../types";
+
+type ComposerHomeSignalStatus = "draft" | "active" | "archived";
+
+interface ComposerHomeSignal {
+  id: string;
+  title: string;
+  status: ComposerHomeSignalStatus;
+  responseCount?: number;
+  lastEdited?: string;
+  lastActivity?: string;
+  href: string;
+}
+
+interface ComposerHomeDraft {
+  key: string;
+  title: string;
+  mode: "admin" | "guestDraft";
+  fieldCount: number;
+  step: string;
+}
+
+interface ComposerHomeState {
+  drafts: ComposerHomeDraft[];
+  signals: ComposerHomeSignal[];
+  error: string;
+}
+
+function formatRelativeSignalTime(value?: string) {
+  if (!value) {
+    return "Activity unavailable";
+  }
+  const date = new Date(value);
+  const time = date.getTime();
+  if (!Number.isFinite(time)) {
+    return "Activity unavailable";
+  }
+  const deltaMs = Date.now() - time;
+  const deltaMinutes = Math.max(0, Math.floor(deltaMs / 60000));
+  if (deltaMinutes < 1) {
+    return "Just now";
+  }
+  if (deltaMinutes < 60) {
+    return `${deltaMinutes}m ago`;
+  }
+  const deltaHours = Math.floor(deltaMinutes / 60);
+  if (deltaHours < 24) {
+    return `${deltaHours}h ago`;
+  }
+  const deltaDays = Math.floor(deltaHours / 24);
+  if (deltaDays < 8) {
+    return `${deltaDays}d ago`;
+  }
+  return date.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+}
+
+function getFormStatus(form: FormSchema): ComposerHomeSignalStatus {
+  if (form.activityEvents?.some((event) => event.action === "form_archived")) {
+    return "archived";
+  }
+  return "active";
+}
+
+function getLatestFormActivity(form: FormSchema, submissions: Array<{ createdAt: string; updatedAt?: string }>) {
+  return [form.updatedAt, form.createdAt, ...submissions.map((submission) => submission.updatedAt ?? submission.createdAt)]
+    .filter((value): value is string => Boolean(value))
+    .sort((left, right) => right.localeCompare(left))[0];
+}
+
+function readComposerHomeDrafts(): ComposerHomeDraft[] {
+  if (typeof window === "undefined") {
+    return [];
+  }
+
+  return [
+    { key: CREATE_FORM_DRAFT_STORAGE_KEY, mode: "admin" as const },
+    { key: CREATE_FORM_GUEST_DRAFT_STORAGE_KEY, mode: "guestDraft" as const },
+  ].flatMap(({ key, mode }) => {
+    try {
+      const rawDraft = window.localStorage.getItem(key);
+      if (!rawDraft) {
+        return [];
+      }
+      const parsed = parseStoredCreateFormDraft(rawDraft);
+      if (parsed.status !== "valid") {
+        return [];
+      }
+      const title = parsed.draft.title?.trim() || "Untitled signal draft";
+      return [
+        {
+          key,
+          mode,
+          title,
+          fieldCount: parsed.draft.fields?.length ?? 0,
+          step: parsed.draft.currentStep ?? "fields",
+        },
+      ];
+    } catch {
+      return [];
+    }
+  });
+}
+
+function createNewSignalTarget() {
+  return {
+    pathname: "/create",
+    search: `?fresh=${Date.now()}`,
+  };
+}
+
+function ComposerHomeSignalCard({ signal }: { signal: ComposerHomeSignal }) {
+  return (
+    <article className="composer-home-signal-card">
+      <div className="composer-home-card-main">
+        <span className={`composer-home-status is-${signal.status}`}>{signal.status}</span>
+        <h3>{signal.title}</h3>
+        <dl className="composer-home-signal-meta">
+          <div>
+            <dt>Responses</dt>
+            <dd>{signal.responseCount === undefined ? "Unavailable" : signal.responseCount}</dd>
+          </div>
+          <div>
+            <dt>Last edited</dt>
+            <dd>{formatRelativeSignalTime(signal.lastEdited)}</dd>
+          </div>
+          <div>
+            <dt>Last activity</dt>
+            <dd>{formatRelativeSignalTime(signal.lastActivity)}</dd>
+          </div>
+        </dl>
+      </div>
+      <div className="composer-home-card-actions">
+        <Link className="ghost-button" to={signal.href}>
+          Open
+        </Link>
+      </div>
+    </article>
+  );
+}
+
+function ComposerHomeDraftCard({ draft }: { draft: ComposerHomeDraft }) {
+  return (
+    <article className="composer-home-draft-card">
+      <div>
+        <span className="composer-home-status is-draft">draft</span>
+        <h3>{draft.title}</h3>
+        <p className="muted">
+          {draft.fieldCount} signal blocks / last composer step: {draft.step}
+        </p>
+      </div>
+      <Link className="primary-button" to={{ pathname: "/create", search: draft.mode === "guestDraft" ? "?composer=1&mode=guestDraft" : "?composer=1" }}>
+        Resume Draft
+      </Link>
+    </article>
+  );
+}
+
+function ComposerHomePage() {
+  const navigate = useNavigate();
+  const [state, setState] = useState<ComposerHomeState>({ drafts: [], signals: [], error: "" });
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadComposerHome() {
+      setLoading(true);
+      const drafts = readComposerHomeDrafts();
+      try {
+        const forms = await storageAdapter.listForms();
+        const signals = await Promise.all(
+          forms.map(async (form) => {
+            try {
+              const submissions = await storageAdapter.listSubmissions(form.id);
+              return {
+                id: form.id,
+                title: form.title?.trim() || "Untitled signal",
+                status: getFormStatus(form),
+                responseCount: submissions.length,
+                lastEdited: form.updatedAt ?? form.createdAt,
+                lastActivity: getLatestFormActivity(form, submissions),
+                href: `/admin?tab=review&form=${encodeURIComponent(form.id)}`,
+              } satisfies ComposerHomeSignal;
+            } catch {
+              return {
+                id: form.id,
+                title: form.title?.trim() || "Untitled signal",
+                status: getFormStatus(form),
+                lastEdited: form.updatedAt ?? form.createdAt,
+                lastActivity: form.updatedAt ?? form.createdAt,
+                href: `/admin?tab=review&form=${encodeURIComponent(form.id)}`,
+              } satisfies ComposerHomeSignal;
+            }
+          }),
+        );
+        if (!cancelled) {
+          setState({
+            drafts,
+            signals: signals.sort((left, right) => (right.lastActivity ?? "").localeCompare(left.lastActivity ?? "")),
+            error: "",
+          });
+        }
+      } catch (error) {
+        console.warn("Failed to load Composer Home.", error);
+        if (!cancelled) {
+          setState({
+            drafts,
+            signals: [],
+            error: "Signal registry is unavailable. Local drafts are still safe, and you can start a new signal.",
+          });
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    }
+
+    void loadComposerHome();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const activeSignals = state.signals.filter((signal) => signal.status === "active");
+  const recentSignals = state.signals.slice(0, 6);
+  const hasSignals = state.signals.length > 0;
+  const hasDrafts = state.drafts.length > 0;
+
+  return (
+    <section className="composer-home-shell">
+      <section className="composer-home-hero panel glow-panel">
+        <div className="composer-home-hero-copy">
+          <p className="eyebrow">Signal Intelligence Workspace</p>
+          <h1>Composer Home</h1>
+          <p className="muted">
+            Control live signal channels, resume local drafts, and open a new signal only when the next intake path is clear.
+          </p>
+        </div>
+        <div className="composer-home-command">
+          <div className="composer-home-pulse" aria-hidden="true">
+            <span />
+            <span />
+            <span />
+          </div>
+          <button type="button" className="primary-button composer-home-primary-cta" onClick={() => navigate(createNewSignalTarget())}>
+            + Compose Signal
+          </button>
+        </div>
+      </section>
+
+      <section className="composer-home-grid" aria-busy={loading}>
+        <div className="composer-home-main">
+          <section className="composer-home-section">
+            <div className="composer-home-section-heading">
+              <div>
+                <p className="eyebrow">Continue Draft</p>
+                <h2>Drafts waiting in this browser</h2>
+              </div>
+              <span>{hasDrafts ? `${state.drafts.length} ready` : "No draft"}</span>
+            </div>
+            {loading ? <div className="composer-home-loading panel">Restoring draft telemetry...</div> : null}
+            {!loading && hasDrafts ? (
+              <div className="composer-home-draft-list">
+                {state.drafts.map((draft) => (
+                  <ComposerHomeDraftCard key={draft.key} draft={draft} />
+                ))}
+              </div>
+            ) : null}
+            {!loading && !hasDrafts ? (
+              <div className="composer-home-empty panel">
+                <strong>No local draft detected.</strong>
+                <p className="muted">Open a new signal when you are ready to define the channel, privacy posture, and response flow.</p>
+              </div>
+            ) : null}
+          </section>
+
+          <section className="composer-home-section">
+            <div className="composer-home-section-heading">
+              <div>
+                <p className="eyebrow">Active Signals</p>
+                <h2>Live channels</h2>
+              </div>
+              <span>{activeSignals.length} active</span>
+            </div>
+            <div className="composer-home-signal-list">
+              {loading ? <div className="composer-home-loading panel">Scanning active signal registry...</div> : null}
+              {!loading && activeSignals.length > 0
+                ? activeSignals.map((signal) => <ComposerHomeSignalCard key={signal.id} signal={signal} />)
+                : null}
+              {!loading && activeSignals.length === 0 ? (
+                <div className="composer-home-empty panel">
+                  <strong>No active signal channels yet.</strong>
+                  <p className="muted">Compose the first signal to open collection and give operators something actionable to review.</p>
+                  <button type="button" className="primary-button" onClick={() => navigate(createNewSignalTarget())}>
+                    Open New Signal
+                  </button>
+                </div>
+              ) : null}
+            </div>
+          </section>
+        </div>
+
+        <aside className="composer-home-side">
+          <section className="composer-home-section panel">
+            <div className="composer-home-section-heading">
+              <div>
+                <p className="eyebrow">Recent Signals</p>
+                <h2>Latest activity</h2>
+              </div>
+            </div>
+            {state.error ? <p className="composer-home-warning">{state.error}</p> : null}
+            {loading ? <div className="composer-home-loading">Loading recent signal activity...</div> : null}
+            {!loading && recentSignals.length > 0 ? (
+              <div className="composer-home-recent-list">
+                {recentSignals.map((signal) => (
+                  <Link key={signal.id} to={signal.href} className="composer-home-recent-row">
+                    <span className={`composer-home-status is-${signal.status}`}>{signal.status}</span>
+                    <strong>{signal.title}</strong>
+                    <small>{formatRelativeSignalTime(signal.lastActivity)}</small>
+                  </Link>
+                ))}
+              </div>
+            ) : null}
+            {!loading && !hasSignals ? (
+              <div className="composer-home-empty composer-home-empty-compact">
+                <strong>Workspace is clear.</strong>
+                <p className="muted">New signals will appear here after publish through Walrus or local fallback storage.</p>
+              </div>
+            ) : null}
+          </section>
+        </aside>
+      </section>
+    </section>
+  );
+}
 
 function normalizeFieldsForModeSwitch(
   fields: Array<{
@@ -124,6 +465,7 @@ function FormBuilderComposer({ mode, freshStartToken, initialDisplayMode = "clas
   });
 
   const accessState = getAdminSurfaceAccessState("admin", wallet.accountAddress, capabilityProfile);
+  const showComposerChrome = !publish.savedForm;
 
   const completedSteps = useMemo(
     () =>
@@ -446,42 +788,46 @@ function FormBuilderComposer({ mode, freshStartToken, initialDisplayMode = "clas
           onPick={(type) => builder.insertField(type)}
         />
 
-        <BuilderToolbar
-          t={t}
-          isScrolled={isScrolled}
-          currentStep={builder.values.currentStep}
-          completedSteps={completedSteps}
-          capabilityConfigured={!isGuestDraftMode && capabilityProfile.isConfigured}
-          accessRoleLabel={isGuestDraftMode ? t("guestDraftRole") : getRoleLabel(capabilityProfile)}
-          adminCapLabel={!isGuestDraftMode && hasAdminAccess && capabilityProfile.adminCapIds[0] ? shortAddress(capabilityProfile.adminCapIds[0]) : undefined}
-          draftStateLabel={draftStateLabel || undefined}
-          savedFormId={publish.savedForm?.id}
-          savedManifestBlobId={publish.savedForm?.manifestBlobId}
-          onSelectStep={handleSelectStep}
-        />
+        {showComposerChrome ? (
+          <>
+            <BuilderToolbar
+              t={t}
+              isScrolled={isScrolled}
+              currentStep={builder.values.currentStep}
+              completedSteps={completedSteps}
+              capabilityConfigured={!isGuestDraftMode && capabilityProfile.isConfigured}
+              accessRoleLabel={isGuestDraftMode ? t("guestDraftRole") : getRoleLabel(capabilityProfile)}
+              adminCapLabel={!isGuestDraftMode && hasAdminAccess && capabilityProfile.adminCapIds[0] ? shortAddress(capabilityProfile.adminCapIds[0]) : undefined}
+              draftStateLabel={draftStateLabel || undefined}
+              savedFormId={publish.savedForm?.id}
+              savedManifestBlobId={publish.savedForm?.manifestBlobId}
+              onSelectStep={handleSelectStep}
+            />
 
-        <section className="panel composer-view-mode-panel" aria-label="Create Signal display mode">
-          <div>
-            <p className="eyebrow">Display Mode</p>
-            <strong>{isMirrorMode ? "Mirror Preview Mode" : "Classic Builder"}</strong>
-          </div>
-          <div className="composer-view-mode-toggle" role="group" aria-label="Switch Create Signal display mode">
-            <button
-              type="button"
-              className={displayMode === "classic" ? "is-active" : ""}
-              onClick={() => switchDisplayMode("classic")}
-            >
-              Classic
-            </button>
-            <button
-              type="button"
-              className={displayMode === "mirror" ? "is-active" : ""}
-              onClick={() => switchDisplayMode("mirror")}
-            >
-              Mirror
-            </button>
-          </div>
-        </section>
+            <section className="panel composer-view-mode-panel" aria-label="Create Signal display mode">
+              <div>
+                <p className="eyebrow">Display Mode</p>
+                <strong>{isMirrorMode ? "Mirror Preview Mode" : "Classic Builder"}</strong>
+              </div>
+              <div className="composer-view-mode-toggle" role="group" aria-label="Switch Create Signal display mode">
+                <button
+                  type="button"
+                  className={displayMode === "classic" ? "is-active" : ""}
+                  onClick={() => switchDisplayMode("classic")}
+                >
+                  Classic
+                </button>
+                <button
+                  type="button"
+                  className={displayMode === "mirror" ? "is-active" : ""}
+                  onClick={() => switchDisplayMode("mirror")}
+                >
+                  Mirror
+                </button>
+              </div>
+            </section>
+          </>
+        ) : null}
 
         {isMirrorMode && showMirrorStartChoice ? (
           <section className="panel mirror-start-choice-panel" aria-live="polite">
@@ -579,7 +925,7 @@ function FormBuilderComposer({ mode, freshStartToken, initialDisplayMode = "clas
   );
 }
 
-export function FormBuilderPage() {
+export function FormBuilderPage({ initialSurface = "home" }: { initialSurface?: "home" | "composer" }) {
   const wallet = useSuiWallet();
   const location = useLocation();
   const { t } = useI18n();
@@ -587,12 +933,17 @@ export function FormBuilderPage() {
   const searchParams = new URLSearchParams(location.search);
   const requestedGuestDraftMode = searchParams.get("mode") === "guestDraft";
   const freshStartToken = searchParams.get("fresh") ?? "";
+  const requestedComposer = searchParams.get("composer") === "1";
   const initialDisplayMode: DisplayMode = searchParams.get("preview") === "mirror" ? "mirror" : "classic";
   const draftSeed = {
     templateKey: searchParams.get("template") ?? undefined,
     idea: searchParams.get("idea") ?? undefined,
   };
   const hasAdminAccess = canAdmin(capabilityProfile);
+
+  if (initialSurface === "home" && !freshStartToken && !requestedComposer) {
+    return <ComposerHomePage />;
+  }
 
   if (!requestedGuestDraftMode && wallet.accountAddress && isLoadingAccess) {
     return <div className="panel">{t("checkingWalletCapabilities")}</div>;

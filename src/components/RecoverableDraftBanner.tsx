@@ -31,7 +31,7 @@ export function RecoverableDraftBanner({
           </button>
         ) : null}
         {discardLabel && onDiscard ? (
-          <button type="button" className="ghost-button" onClick={onDiscard}>
+          <button type="button" className="danger-button" onClick={onDiscard}>
             {discardLabel}
           </button>
         ) : null}

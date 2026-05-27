@@ -1,5 +1,5 @@
 import { Component, lazy, Suspense, useCallback, useEffect, useState, type ReactNode } from "react";
-import { Navigate, Route, Routes, useLocation } from "react-router-dom";
+import { Navigate, Route, Routes, useLocation, useParams } from "react-router-dom";
 import { AppShell } from "./components/AppShell";
 import { WalletSurface } from "./components/WalletSurface";
 import { WalrusRuntimeSurface } from "./components/WalrusRuntimeSurface";
@@ -38,11 +38,6 @@ const FormBuilderPage = lazy(() =>
 const ManifestRestorePage = lazy(() =>
   retryLazyImport(() => import("./pages/ManifestRestorePage"), "route-manifest-restore").then((module) => ({
     default: module.ManifestRestorePage,
-  })),
-);
-const FormSubmissionsPage = lazy(() =>
-  retryLazyImport(() => import("./pages/FormSubmissionsPage"), "route-form-submissions").then((module) => ({
-    default: module.FormSubmissionsPage,
   })),
 );
 const PublicRoadmapPage = lazy(() =>
@@ -85,6 +80,18 @@ const ZkLoginCallbackPage = lazy(() =>
     default: module.ZkLoginCallbackPage,
   })),
 );
+
+function LegacyFormInboxRedirect({ basePath }: { basePath: "/admin" | "/dashboard" }) {
+  const { formId = "", submissionId = "" } = useParams();
+  const params = new URLSearchParams({ tab: "review" });
+  if (formId) {
+    params.set("form", formId);
+  }
+  if (submissionId) {
+    params.set("signal", submissionId);
+  }
+  return <Navigate to={`${basePath}?${params.toString()}`} replace />;
+}
 
 function prefetchExploreRoute() {
   void retryLazyImport(() => import("./pages/ExploreSignalsPage"), "prefetch-route-explore").catch(() => undefined);
@@ -134,7 +141,7 @@ function getRouteId(routePath: string) {
   if (pathname === "/explore" || pathname === "/signals") {
     return "explore";
   }
-  if (pathname === "/create") {
+  if (pathname === "/create" || pathname === "/compose") {
     return "create-signal";
   }
   if (pathname === "/admin" || pathname.startsWith("/admin/") || pathname === "/dashboard" || pathname.startsWith("/dashboard/")) {
@@ -484,6 +491,7 @@ export default function App() {
     location.pathname === "/admin" ||
     location.pathname === "/dashboard" ||
     location.pathname === "/create" ||
+    location.pathname === "/compose" ||
     location.pathname === "/troubleshooting" ||
     location.pathname.startsWith("/admin/") ||
     location.pathname.startsWith("/dashboard/");
@@ -572,6 +580,14 @@ export default function App() {
                 }
               />
               <Route
+                path="/compose"
+                element={
+                  <WithWalrusRuntime>
+                    <FormBuilderPage />
+                  </WithWalrusRuntime>
+                }
+              />
+              <Route
                 path="/admin"
                 element={
                   <WithWalrusRuntime>
@@ -595,41 +611,25 @@ export default function App() {
                 path="/admin/forms/new"
                 element={
                   <WithWalrusRuntime>
-                    <FormBuilderPage />
+                    <FormBuilderPage initialSurface="composer" />
                   </WithWalrusRuntime>
                 }
               />
               <Route
                 path="/admin/forms/:formId"
-                element={
-                  <WithWalrusRuntime>
-                    <FormSubmissionsPage />
-                  </WithWalrusRuntime>
-                }
+                element={<LegacyFormInboxRedirect basePath="/admin" />}
               />
               <Route
                 path="/dashboard/forms/:formId"
-                element={
-                  <WithWalrusRuntime>
-                    <FormSubmissionsPage />
-                  </WithWalrusRuntime>
-                }
+                element={<LegacyFormInboxRedirect basePath="/dashboard" />}
               />
               <Route
                 path="/admin/forms/:formId/submissions/:submissionId"
-                element={
-                  <WithWalrusRuntime>
-                    <FormSubmissionsPage />
-                  </WithWalrusRuntime>
-                }
+                element={<LegacyFormInboxRedirect basePath="/admin" />}
               />
               <Route
                 path="/dashboard/forms/:formId/submissions/:submissionId"
-                element={
-                  <WithWalrusRuntime>
-                    <FormSubmissionsPage />
-                  </WithWalrusRuntime>
-                }
+                element={<LegacyFormInboxRedirect basePath="/dashboard" />}
               />
               <Route path="/admin/submissions/:submissionId" element={<SubmissionDetailPage />} />
               <Route path="/f/:formId" element={<PublicFormPage />} />

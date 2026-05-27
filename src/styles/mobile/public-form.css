@@ -152,7 +152,22 @@
   }
 
   .signal-capsule-action-submit {
+    grid-template-columns: auto minmax(0, 1fr) auto;
     min-width: 100%;
+  }
+
+  .signal-capsule-action-submit .signal-launch-vector {
+    width: 3.15rem;
+  }
+
+  .signal-capsule-action-submit .signal-capsule-action-copy strong {
+    font-size: 0.88rem;
+    line-height: 1.18;
+  }
+
+  .signal-capsule-action-submit .signal-capsule-action-copy small {
+    font-size: 0.68rem;
+    line-height: 1.3;
   }
 
   .public-location-facts {
@@ -190,6 +205,69 @@
     grid-template-columns: 1fr;
   }
 
+  .signal-submission-steps {
+    gap: 0.2rem;
+  }
+
+  .signal-submission-step {
+    grid-template-columns: 3.2rem minmax(0, 1fr) auto;
+    justify-items: start;
+    align-items: center;
+    min-height: 4.6rem;
+    padding: 0.35rem 0;
+    text-align: left;
+  }
+
+  .signal-submission-step .signal-submission-node-label {
+    grid-column: 2 / span 2;
+  }
+
+  .signal-submission-step > span:not(.signal-submission-edge):not(.signal-submission-step-icon):not(.signal-submission-node-label) {
+    grid-column: 2;
+  }
+
+  .signal-submission-step small {
+    grid-column: 3;
+    grid-row: 2 / span 2;
+    align-self: center;
+    max-width: 6rem;
+    text-align: right;
+  }
+
+  .signal-submission-edge {
+    top: auto;
+    right: auto;
+    left: 1.48rem;
+    bottom: calc(50% + 1.5rem);
+    width: 0.16rem;
+    height: calc(100% - 0.45rem);
+  }
+
+  .signal-submission-edge::after {
+    background: linear-gradient(180deg, rgba(34, 211, 238, 0), rgba(125, 211, 252, 0.94), rgba(34, 211, 238, 0));
+  }
+
+  .signal-submission-edge.is-current::after {
+    animation-name: signal-relay-beam-mobile;
+  }
+
+  @keyframes signal-relay-beam-mobile {
+    0% {
+      transform: translateY(-52%) scaleY(0.34);
+      opacity: 0;
+    }
+
+    25%,
+    75% {
+      opacity: 0.9;
+    }
+
+    100% {
+      transform: translateY(52%) scaleY(0.34);
+      opacity: 0;
+    }
+  }
+
   .evidence-layer-grid,
   .review-trust-summary-grid {
     grid-template-columns: 1fr;
@@ -204,6 +282,7 @@
     display: grid;
   }
 
+  .signal-submission-relay-status,
   .signal-submission-courier {
     display: none;
   }

@@ -30,8 +30,18 @@
     min-height: 8rem;
   }
 
+  .workspace-sonar-card .wave-chip,
+  .workspace-sonar-card .workspace-wave-status-ja {
+    display: none;
+  }
+
   .workspace-sonar-wave small {
     font-size: 0.68rem;
+  }
+
+  .workspace-sonar-wave em,
+  .workspace-sonar-wave b {
+    display: none;
   }
 
   .workspace-signal-answer-card {

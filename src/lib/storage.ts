@@ -71,9 +71,16 @@ export { DEFAULT_ATTACHMENT_MAX_BYTES, ENCRYPTED_INLINE_ATTACHMENT_MAX_BYTES };
 export interface SaveSubmissionWithEncryptionResult {
   id: string;
   blobId?: string;
+  answerBlobId?: string;
   encryptedBlobId?: string;
   encryptedPayload?: string;
   sealIdentity?: string;
+  remoteIndexBlobId?: string;
+  remoteIndexTarget?: string;
+  remoteIndexUpdated?: boolean;
+  remoteIndexReadBack?: boolean;
+  ownerReadable?: boolean;
+  remoteSyncStatus?: "remote_synced" | "sync_pending" | "local_only";
   walrusProof?: WalrusBlobProof;
   encryptedWalrusProof?: WalrusBlobProof;
 }
@@ -593,6 +600,7 @@ export function normalizeSubmission(raw: Submission | (Record<string, unknown> &
   return {
     id: raw.id,
     formId: raw.formId,
+    projectId: typeof raw.projectId === "string" ? raw.projectId : undefined,
     answers: typeof raw.answers === "object" && raw.answers ? (raw.answers as Record<string, unknown>) : {},
     attachments: normalizeSubmissionAttachments(raw.attachments),
     location: normalizeSubmissionLocation(raw.location),
@@ -655,6 +663,18 @@ export function normalizeSubmission(raw: Submission | (Record<string, unknown> &
         ? raw.onchainStatus
         : undefined,
     pendingOnchainRegistration: Boolean(raw.pendingOnchainRegistration),
+    answerBlobId: typeof raw.answerBlobId === "string" ? raw.answerBlobId : undefined,
+    remoteIndexBlobId: typeof raw.remoteIndexBlobId === "string" ? raw.remoteIndexBlobId : undefined,
+    remoteIndexTarget: typeof raw.remoteIndexTarget === "string" ? raw.remoteIndexTarget : undefined,
+    remoteIndexUpdated: typeof raw.remoteIndexUpdated === "boolean" ? raw.remoteIndexUpdated : undefined,
+    remoteIndexReadBack: typeof raw.remoteIndexReadBack === "boolean" ? raw.remoteIndexReadBack : undefined,
+    ownerReadable: typeof raw.ownerReadable === "boolean" ? raw.ownerReadable : undefined,
+    remoteSyncStatus:
+      raw.remoteSyncStatus === "remote_synced" ||
+      raw.remoteSyncStatus === "sync_pending" ||
+      raw.remoteSyncStatus === "local_only"
+        ? raw.remoteSyncStatus
+        : undefined,
     subjectPreview: typeof raw.subjectPreview === "string" ? raw.subjectPreview : undefined,
     ratingValue:
       typeof raw.ratingValue === "number"

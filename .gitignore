@@ -27,3 +27,4 @@ vite.config.js.timestamp-*.mjs
 /.ci-verify
 /.move-cache
 /ci-run-verify
+/scripts/google-drive-submission-index-relay.mjs
