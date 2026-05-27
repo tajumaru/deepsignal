@@ -53,6 +53,7 @@ export interface OwnerSubmissionIndexFetchLog {
 
 const PENDING_QUEUE_KEY = "deepsignal.submissionDelivery.pendingQueue";
 const submissionRelayUrl = String(import.meta.env.VITE_DEEPSIGNAL_SUBMISSION_RELAY_URL || "").replace(/\/$/, "");
+const submissionRelayIsAppsScript = submissionRelayUrl.includes("script.google.com/macros/");
 
 function normalizeSubmitterMode(submission: Submission): SubmitterMode {
   const identityKind = submission.respondentMeta?.identityKind;
@@ -148,6 +149,9 @@ export async function fetchRemoteSubmissionIndex(args: {
   if (args.projectId) {
     searchParams.set("projectId", args.projectId);
   }
+  if (submissionRelayIsAppsScript) {
+    return fetchAppsScriptSubmissionIndex(searchParams, args.formId);
+  }
   const response = await fetch(`${submissionRelayUrl}/v1/submissions-index?${searchParams.toString()}`);
   if (!response.ok) {
     throw new Error(`Remote submission index fetch failed: ${response.status}`);
@@ -157,4 +161,71 @@ export async function fetchRemoteSubmissionIndex(args: {
   return Array.isArray(entries)
     ? entries.filter((entry) => entry.formId === args.formId && entry.answerBlobId)
     : [];
+}
+
+function normalizeIndexEntries(payload: { entries?: unknown } | SubmissionIndexEntry[] | null, formId: string) {
+  const rawEntries = Array.isArray(payload) ? payload : payload?.entries;
+  if (!Array.isArray(rawEntries)) {
+    return [] as SubmissionIndexEntry[];
+  }
+  return rawEntries.reduce<SubmissionIndexEntry[]>((entries, raw) => {
+    if (!raw || typeof raw !== "object") {
+      return entries;
+    }
+    const entry = raw as Partial<SubmissionIndexEntry>;
+    if (
+      typeof entry.submissionId !== "string" ||
+      typeof entry.projectId !== "string" ||
+      typeof entry.formId !== "string" ||
+      typeof entry.signalId !== "string" ||
+      typeof entry.answerBlobId !== "string" ||
+      typeof entry.createdAt !== "string" ||
+      entry.formId !== formId
+    ) {
+      return entries;
+    }
+    entries.push({
+      submissionId: entry.submissionId,
+      projectId: entry.projectId,
+      formId: entry.formId,
+      signalId: entry.signalId,
+      answerBlobId: entry.answerBlobId,
+      createdAt: entry.createdAt,
+      submitterMode:
+        entry.submitterMode === "wallet" || entry.submitterMode === "zkLogin" ? entry.submitterMode : "anonymous",
+      submitterWallet: entry.submitterWallet ?? null,
+      anonymousSessionId: entry.anonymousSessionId ?? null,
+      status: entry.status === "sync_pending" || entry.status === "local_only" ? entry.status : "remote_synced",
+    });
+    return entries;
+  }, []);
+}
+
+function fetchAppsScriptSubmissionIndex(searchParams: URLSearchParams, formId: string) {
+  return new Promise<SubmissionIndexEntry[]>((resolve, reject) => {
+    const callbackName = `__deepsignalIndex_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+    const script = document.createElement("script");
+    const cleanup = () => {
+      delete (window as unknown as Record<string, unknown>)[callbackName];
+      script.remove();
+      window.clearTimeout(timeoutId);
+    };
+    const timeoutId = window.setTimeout(() => {
+      cleanup();
+      reject(new Error("Remote submission index fetch timed out."));
+    }, 10000);
+
+    (window as unknown as Record<string, unknown>)[callbackName] = (payload: { entries?: unknown } | SubmissionIndexEntry[] | null) => {
+      cleanup();
+      resolve(normalizeIndexEntries(payload, formId));
+    };
+    searchParams.set("callback", callbackName);
+    script.src = `${submissionRelayUrl}?${searchParams.toString()}`;
+    script.async = true;
+    script.onerror = () => {
+      cleanup();
+      reject(new Error("Remote submission index JSONP fetch failed."));
+    };
+    document.head.appendChild(script);
+  });
 }

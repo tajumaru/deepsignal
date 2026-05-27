@@ -22,7 +22,7 @@ import { REQUIRE_GLOBAL_WALRUS_RUNTIME } from "./lib/runtimeFlags";
 import {
   SUI_NETWORK,
 } from "./lib/sui";
-import { logRouteLifecycle } from "./lib/routeDiagnostics";
+import { logRouteLifecycle, setDeepSignalDebugReadiness } from "./lib/routeDiagnostics";
 import { endPerf, markPerfMilestone } from "./lib/perf";
 import { useRpcInfrastructure } from "./rpcInfrastructure";
 import WalrusRuntimeBridge from "./walrusRuntimeBridge";
@@ -64,6 +64,7 @@ function walletFilter(wallet: WalletWithRequiredFeatures) {
 
 export function WalrusRuntimeProvider({ children }: PropsWithChildren) {
   useEffect(() => {
+    setDeepSignalDebugReadiness({ walrusRuntimeProvider: "ready" });
     endPerf("provider:walrus-runtime", "ok");
     markPerfMilestone("provider:walrus-runtime:ready");
   }, []);
@@ -90,6 +91,12 @@ function WalletStatusBridge({ children }: PropsWithChildren) {
 
   useEffect(() => {
     logRouteLifecycle("wallet-provider:status", { ...value });
+    setDeepSignalDebugReadiness({
+      walletProvider: value.status,
+      walletAccountAddress: value.accountAddress ? "present" : "absent",
+      walletName: value.walletName,
+      walletRestoringConnection: value.isRestoringConnection,
+    });
   }, [value]);
 
   return <WalletConnectionContext.Provider value={value}>{children}</WalletConnectionContext.Provider>;
@@ -103,6 +110,11 @@ export function WalletProviders({ children }: PropsWithChildren) {
     logRouteLifecycle("wallet-provider:ready", {
       currentRpcUrl,
       hasRpcInfrastructure: Boolean(rpcInfrastructure),
+    });
+    setDeepSignalDebugReadiness({
+      walletProviderShell: "ready",
+      walletRpcProvider: rpcInfrastructure.providerLabel,
+      walletRpcMode: rpcInfrastructure.mode,
     });
     endPerf("provider:wallet", "ok");
     markPerfMilestone("provider:wallet:ready");

@@ -14,6 +14,7 @@ import {
   RpcInfrastructureContext,
   type RpcInfrastructureContextValue,
 } from "./rpcInfrastructure";
+import { setDeepSignalDebugReadiness } from "./lib/routeDiagnostics";
 
 type RpcMode = "default" | "tatum";
 const TATUM_SELECTION_GRACE_MS = 4_000;
@@ -111,6 +112,15 @@ export function RpcInfrastructureProvider({ children }: PropsWithChildren) {
       switchToTatum,
     ],
   );
+
+  useEffect(() => {
+    setDeepSignalDebugReadiness({
+      rpcInfrastructureProvider: "ready",
+      rpcMode,
+      rpcProviderLabel: rpcInfrastructure.providerLabel,
+      rateLimited: isRateLimitedCooldownActive,
+    });
+  }, [isRateLimitedCooldownActive, rpcInfrastructure.providerLabel, rpcMode]);
 
   return <RpcInfrastructureContext.Provider value={rpcInfrastructure}>{children}</RpcInfrastructureContext.Provider>;
 }

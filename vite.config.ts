@@ -23,7 +23,14 @@ function formatBuildTime(date = new Date()) {
 
 function getGitHash() {
   try {
-    return execSync("git rev-parse --short HEAD", { encoding: "utf8" }).trim();
+    const hash = execSync("git rev-parse --short HEAD", { encoding: "utf8" }).trim();
+    try {
+      execSync("git diff --quiet -- .", { stdio: "ignore" });
+      execSync("git diff --cached --quiet -- .", { stdio: "ignore" });
+      return hash;
+    } catch {
+      return `${hash}-dirty`;
+    }
   } catch {
     return "local";
   }
@@ -36,10 +43,18 @@ function buildManifestPlugin(args: {
   appEnvironment: string;
 }): Plugin {
   const routeChunkMatchers = {
+    admin: /\/src\/pages\/AdminDashboardPage\.tsx$/,
+    create: /\/src\/pages\/FormBuilderPage\.tsx$/,
+    access: /\/src\/pages\/AccessManagementPage\.tsx$/,
     explore: /\/src\/pages\/ExploreSignalsPage\.tsx$/,
     publicForm: /\/src\/pages\/PublicFormPage\.tsx$/,
     publicRoadmap: /\/src\/pages\/PublicRoadmapPage\.tsx$/,
     manifestRestore: /\/src\/pages\/ManifestRestorePage\.tsx$/,
+    submissionDetail: /\/src\/pages\/SubmissionDetailPage\.tsx$/,
+    troubleshooting: /\/src\/pages\/TroubleshootingPage\.tsx$/,
+    insightsFixture: /\/src\/pages\/InsightsFixturePage\.tsx$/,
+    landing: /\/src\/pages\/LandingPage\.tsx$/,
+    zkloginCallback: /\/src\/pages\/ZkLoginCallbackPage\.tsx$/,
   } as const;
 
   type RouteKey = keyof typeof routeChunkMatchers;
@@ -95,10 +110,18 @@ function buildManifestPlugin(args: {
         );
         return accumulator;
       }, {
+        admin: [],
+        create: [],
+        access: [],
         explore: [],
         publicForm: [],
         publicRoadmap: [],
         manifestRestore: [],
+        submissionDetail: [],
+        troubleshooting: [],
+        insightsFixture: [],
+        landing: [],
+        zkloginCallback: [],
       });
 
       const assets = Object.values(bundle)
@@ -117,24 +140,112 @@ function buildManifestPlugin(args: {
 }
 
 const stableRouteChunkNames = new Set([
+  "AccessManagementPage",
+  "AdminDashboardPage",
   "ExploreSignalsPage",
+  "FormBuilderPage",
+  "InsightsFixturePage",
+  "LandingPage",
+  "ManifestRestorePage",
+  "PublicFormPage",
+  "PublicRoadmapPage",
+  "SubmissionDetailPage",
+  "TroubleshootingPage",
+  "ZkLoginCallbackPage",
 ]);
 
 const legacyRouteChunkAliases: Record<string, string[]> = {
+  AccessManagementPage: [
+    "assets/AccessManagementPage.js",
+    "assets/AccessManagementPage-CSeuxvX2.js",
+    "assets/AccessManagementPage-CAPTb-az.js",
+    "assets/AccessManagementPage-jVe5Mcsa.js",
+  ],
+  AdminDashboardPage: [
+    "assets/AdminDashboardPage.js",
+    "assets/AdminDashboardPage-Bbo7vv5M.js",
+    "assets/AdminDashboardPage-DfHbkZAu.js",
+    "assets/AdminDashboardPage-BtVfnsTy.js",
+    "assets/AdminDashboardPage-B0lmleJK.js",
+  ],
   ExploreSignalsPage: [
     "assets/ExploreSignalsPage.js",
     "assets/ExploreSignalsPage-BPg7Mrle.js",
     "assets/ExploreSignalsPage-BN9oWPM0.js",
   ],
+  FormBuilderPage: [
+    "assets/FormBuilderPage.js",
+    "assets/FormBuilderPage-bcqJbN29.js",
+    "assets/FormBuilderPage-D5n4eR7-.js",
+    "assets/FormBuilderPage-Dlmy74MG.js",
+  ],
+  InsightsFixturePage: [
+    "assets/InsightsFixturePage.js",
+    "assets/InsightsFixturePage-DuhWu7pb.js",
+    "assets/InsightsFixturePage-BIkiBFcv.js",
+    "assets/InsightsFixturePage-BT4tfiPt.js",
+  ],
+  LandingPage: [
+    "assets/LandingPage.js",
+    "assets/LandingPage-Cdsd6Oo8.js",
+    "assets/LandingPage-rXbw_nLO.js",
+    "assets/LandingPage-BCD0HegF.js",
+  ],
+  ManifestRestorePage: [
+    "assets/ManifestRestorePage.js",
+    "assets/ManifestRestorePage-CzUbBjXs.js",
+    "assets/ManifestRestorePage-Du989zCe.js",
+    "assets/ManifestRestorePage-BUveDc6H.js",
+  ],
+  PublicFormPage: [
+    "assets/PublicFormPage.js",
+    "assets/PublicFormPage-BclHuSj0.js",
+    "assets/PublicFormPage-D2OorI5I.js",
+    "assets/PublicFormPage-DX-F7Xcc.js",
+  ],
+  PublicRoadmapPage: [
+    "assets/PublicRoadmapPage.js",
+    "assets/PublicRoadmapPage-B0hW9juC.js",
+    "assets/PublicRoadmapPage-1t86ItGQ.js",
+    "assets/PublicRoadmapPage-COCCj_b1.js",
+  ],
+  SubmissionDetailPage: [
+    "assets/SubmissionDetailPage.js",
+    "assets/SubmissionDetailPage-DNed8nR4.js",
+    "assets/SubmissionDetailPage-kg2K8htr.js",
+    "assets/SubmissionDetailPage-FLd6ARUR.js",
+  ],
+  TroubleshootingPage: [
+    "assets/TroubleshootingPage.js",
+    "assets/TroubleshootingPage-y87iuIVb.js",
+    "assets/TroubleshootingPage-jgex8ydS.js",
+    "assets/TroubleshootingPage-BKCuiI4R.js",
+  ],
+  ZkLoginCallbackPage: [
+    "assets/ZkLoginCallbackPage.js",
+    "assets/ZkLoginCallbackPage-Cgdj0iMR.js",
+    "assets/ZkLoginCallbackPage-DlL65jfs.js",
+    "assets/ZkLoginCallbackPage-DQEJpkvt.js",
+  ],
+};
+
+const routeChunkExportNames: Record<string, string> = {
+  AccessManagementPage: "AccessManagementPage",
+  AdminDashboardPage: "AdminDashboardPage",
+  ExploreSignalsPage: "ExploreSignalsPage",
+  FormBuilderPage: "FormBuilderPage",
+  InsightsFixturePage: "InsightsFixturePage",
+  LandingPage: "LandingPage",
+  ManifestRestorePage: "ManifestRestorePage",
+  PublicFormPage: "PublicFormPage",
+  PublicRoadmapPage: "PublicRoadmapPage",
+  SubmissionDetailPage: "SubmissionDetailPage",
+  TroubleshootingPage: "TroubleshootingPage",
+  ZkLoginCallbackPage: "ZkLoginCallbackPage",
 };
 
 function stableRouteChunkFileName(chunkInfo: { name: string; facadeModuleId: string | null; isDynamicEntry: boolean }) {
-  const normalizedFacade = chunkInfo.facadeModuleId?.replace(/\\/g, "/") ?? "";
-  if (
-    chunkInfo.isDynamicEntry &&
-    stableRouteChunkNames.has(chunkInfo.name) &&
-    normalizedFacade.endsWith(`/src/pages/${chunkInfo.name}.tsx`)
-  ) {
+  if (chunkInfo.isDynamicEntry && stableRouteChunkNames.has(chunkInfo.name)) {
     return `assets/${chunkInfo.name}.js`;
   }
   return "assets/[name]-[hash].js";
@@ -163,37 +274,43 @@ function legacyRouteChunkAliasPlugin(): Plugin {
         }
       }
 
-      const fallbackSource = `const reload = () => {
+      const createFallbackSource = (chunkName: string) => {
+        const exportName = routeChunkExportNames[chunkName] ?? "RouteChunk";
+        return `const reload = () => {
   try {
     const url = new URL(window.location.href);
-    url.searchParams.set("explore-static-retry", String(Date.now()));
+    url.searchParams.set("route-chunk-retry", String(Date.now()));
+    url.searchParams.set("missing-route-chunk", ${JSON.stringify(chunkName)});
     window.location.replace(url.toString());
   } catch {
     window.location.reload();
   }
 };
 window.setTimeout(reload, 0);
-export function ExploreSignalsPage() {
+export function ${exportName}() {
   return null;
 }
-export default ExploreSignalsPage;
+export default ${exportName};
 `;
+      };
 
-      for (const alias of legacyRouteChunkAliases.ExploreSignalsPage) {
-        if (bundle[alias] || emittedAliases.has(alias)) {
-          continue;
+      for (const [chunkName, aliases] of Object.entries(legacyRouteChunkAliases)) {
+        for (const alias of aliases) {
+          if (bundle[alias] || emittedAliases.has(alias)) {
+            continue;
+          }
+          this.emitFile({
+            type: "asset",
+            fileName: alias,
+            source: createFallbackSource(chunkName),
+          });
         }
-        this.emitFile({
-          type: "asset",
-          fileName: alias,
-          source: fallbackSource,
-        });
       }
     },
   };
 }
 
-function moduleEntryRetryPlugin(): Plugin {
+function moduleEntryRetryPlugin(args: { appVersion: string; buildTime: string; gitHash: string }): Plugin {
   return {
     name: "deepsignal-module-entry-retry",
     apply: "build",
@@ -212,8 +329,10 @@ function moduleEntryRetryPlugin(): Plugin {
         const entryPath = ${JSON.stringify(entrySrc)};
         const maxAttempts = 3;
         const baseDelayMs = 500;
+        const retryStorageKey = "deepsignal.moduleEntryRetry";
         const statusNode = document.querySelector("[data-boot-status]");
         const bootShell = document.querySelector(".boot-shell");
+        const failures = [];
 
         function setBootStatus(message) {
           if (statusNode) {
@@ -221,10 +340,86 @@ function moduleEntryRetryPlugin(): Plugin {
           }
         }
 
-        function ensureRecoveryActions() {
+        function getRetryState() {
+          try {
+            const parsed = JSON.parse(window.sessionStorage.getItem(retryStorageKey) || "{}");
+            return {
+              count: Number.isFinite(parsed.count) ? parsed.count : 0,
+              startedAt: Number.isFinite(parsed.startedAt) ? parsed.startedAt : Date.now(),
+            };
+          } catch {
+            return { count: 0, startedAt: Date.now() };
+          }
+        }
+
+        function rememberRetryState(state) {
+          try {
+            window.sessionStorage.setItem(retryStorageKey, JSON.stringify(state));
+          } catch {
+            // Diagnostics are best effort when Safari private mode blocks storage.
+          }
+        }
+
+        function getDiagnostics(error) {
+          const entryUrl = new URL(entryPath, window.location.href).toString();
+          const chunkUrl = String(error?.message || error || "").match(/https?:\\/\\/[^\\s)'"]+/)?.[0] || entryUrl;
+          return {
+            errorName: error?.name || "Error",
+            errorMessage: error?.message || String(error || "Unknown module entry failure"),
+            stack: error?.stack || "",
+            routePath: window.location.hash?.replace(/^#/, "") || window.location.pathname + window.location.search,
+            routeId: window.location.hash?.startsWith("#/f/") ? "public-form" : window.location.hash?.startsWith("#/admin") ? "admin" : window.location.hash?.startsWith("#/explore") ? "explore" : "boot",
+            buildVersion: ${JSON.stringify(args.appVersion)},
+            buildTime: ${JSON.stringify(args.buildTime)},
+            gitHash: ${JSON.stringify(args.gitHash)},
+            userAgent: navigator.userAgent,
+            chunkUrl,
+            providerReadiness: window.__DEEPSIGNAL_DEBUG__?.providerReadiness || {},
+            storageMode: "unknown-before-react",
+            selectedProjectId: "unknown-before-react",
+            failures: failures.map((failure) => ({
+              errorName: failure.errorName,
+              errorMessage: failure.errorMessage,
+              chunkUrl: failure.chunkUrl,
+              recordedAt: failure.recordedAt,
+            })),
+            recordedAt: new Date().toISOString(),
+          };
+        }
+
+        async function clearLocalAppCache() {
+          try {
+            window.sessionStorage.removeItem(retryStorageKey);
+            window.sessionStorage.removeItem("deepsignal.chunkLoadRecovery");
+            window.sessionStorage.removeItem("deepsignal.mixedBuildRecovery");
+            window.sessionStorage.removeItem("deepsignal.observedBuildAssets");
+          } catch {
+            // Best effort only.
+          }
+          try {
+            if ("caches" in window) {
+              const keys = await window.caches.keys();
+              await Promise.all(keys.map((key) => window.caches.delete(key)));
+            }
+          } catch {
+            // Cache cleanup is best effort; the cache-busted navigation is the recovery path.
+          }
+          try {
+            if ("serviceWorker" in navigator) {
+              const registrations = await navigator.serviceWorker.getRegistrations();
+              await Promise.all(registrations.map((registration) => registration.unregister()));
+            }
+          } catch {
+            // Service worker cleanup is best effort.
+          }
+        }
+
+        function ensureRecoveryActions(error) {
           if (!bootShell || bootShell.querySelector("[data-boot-recovery]")) {
             return;
           }
+          const diagnostics = getDiagnostics(error);
+          console.error("DeepSignal module entry failed to load.", diagnostics);
           const actions = document.createElement("div");
           actions.dataset.bootRecovery = "true";
           actions.style.display = "flex";
@@ -234,16 +429,63 @@ function moduleEntryRetryPlugin(): Plugin {
 
           const reloadButton = document.createElement("button");
           reloadButton.type = "button";
-          reloadButton.textContent = "Reload";
+          reloadButton.textContent = "Retry signal surface";
           reloadButton.style.padding = "0.8rem 1rem";
           reloadButton.style.borderRadius = "999px";
           reloadButton.style.border = "1px solid rgba(138, 223, 255, 0.28)";
           reloadButton.style.background = "rgba(138, 223, 255, 0.14)";
           reloadButton.style.color = "#ecfdff";
-          reloadButton.onclick = () => window.location.reload();
+          reloadButton.onclick = () => {
+            const state = getRetryState();
+            const nextState = { startedAt: state.startedAt, count: state.count + 1 };
+            rememberRetryState(nextState);
+            const url = new URL(window.location.href);
+            url.searchParams.set(nextState.count > 1 ? "module-cache-clear" : "module-retry", String(Date.now()));
+            if (nextState.count > 1) {
+              void clearLocalAppCache().finally(() => window.location.replace(url.toString()));
+            } else {
+              window.location.replace(url.toString());
+            }
+          };
+
+          const hardRefreshButton = document.createElement("button");
+          hardRefreshButton.type = "button";
+          hardRefreshButton.textContent = "Hard refresh / clear local app cache";
+          hardRefreshButton.style.padding = "0.8rem 1rem";
+          hardRefreshButton.style.borderRadius = "999px";
+          hardRefreshButton.style.border = "1px solid rgba(255, 255, 255, 0.22)";
+          hardRefreshButton.style.background = "rgba(255, 255, 255, 0.08)";
+          hardRefreshButton.style.color = "#ecfdff";
+          hardRefreshButton.onclick = () => {
+            const url = new URL(window.location.href);
+            url.searchParams.set("hard-refresh", String(Date.now()));
+            void clearLocalAppCache().finally(() => window.location.replace(url.toString()));
+          };
+
+          const details = document.createElement("details");
+          details.open = true;
+          details.style.width = "100%";
+          details.style.maxWidth = "44rem";
+          details.style.textAlign = "left";
+          const summary = document.createElement("summary");
+          summary.textContent = "Load diagnostics";
+          const pre = document.createElement("pre");
+          pre.textContent = JSON.stringify(diagnostics, null, 2);
+          pre.style.whiteSpace = "pre-wrap";
+          pre.style.overflowWrap = "anywhere";
+          pre.style.maxHeight = "18rem";
+          pre.style.overflow = "auto";
+          pre.style.padding = "0.85rem";
+          pre.style.border = "1px solid rgba(138, 223, 255, 0.24)";
+          pre.style.borderRadius = "0.75rem";
+          pre.style.background = "rgba(0, 0, 0, 0.28)";
+          details.appendChild(summary);
+          details.appendChild(pre);
 
           actions.appendChild(reloadButton);
+          actions.appendChild(hardRefreshButton);
           bootShell.appendChild(actions);
+          bootShell.appendChild(details);
         }
 
         function delay(ms) {
@@ -260,10 +502,10 @@ function moduleEntryRetryPlugin(): Plugin {
           try {
             await import(url.toString());
           } catch (error) {
+            failures.push(getDiagnostics(error));
             if (attempt >= maxAttempts) {
-              console.error("DeepSignal module entry failed to load", error);
-              setBootStatus("Signal surface load failed. Retry or reopen the page.");
-              ensureRecoveryActions();
+              setBootStatus("Signal surface load failed. App update or asset propagation issue detected.");
+              ensureRecoveryActions(error);
               return;
             }
 
@@ -328,7 +570,7 @@ export default defineConfig(({ mode }) => {
         gitHash,
         appEnvironment,
       }),
-      moduleEntryRetryPlugin(),
+      moduleEntryRetryPlugin({ appVersion, buildTime, gitHash }),
       legacyRouteChunkAliasPlugin(),
       process.env.ANALYZE === "true"
         ? visualizer({
@@ -392,10 +634,41 @@ export default defineConfig(({ mode }) => {
             if (normalizedId.includes("/@mysten/seal/")) {
               return "mysten-seal";
             }
+            if (normalizedId.includes("/@noble/curves/")) {
+              return "noble-curves";
+            }
+            if (normalizedId.includes("/@noble/hashes/")) {
+              return "noble-hashes";
+            }
+            if (normalizedId.includes("/@scure/")) {
+              return "scure";
+            }
+            if (normalizedId.includes("/@mysten/sui/dist/keypairs/")) {
+              return "mysten-sui-keypairs";
+            }
+            if (normalizedId.includes("/@mysten/sui/dist/zklogin/")) {
+              return "mysten-sui-zklogin";
+            }
+            if (normalizedId.includes("/@mysten/sui/dist/multisig/")) {
+              return "mysten-sui-multisig";
+            }
+            if (normalizedId.includes("/@mysten/sui/dist/verify/")) {
+              return "mysten-sui-verify";
+            }
+            if (normalizedId.includes("/@mysten/sui/dist/cryptography/")) {
+              return "mysten-sui-crypto";
+            }
             if (
-              normalizedId.includes("/@mysten/sui/") ||
-              normalizedId.includes("/@scure/") ||
-              normalizedId.includes("/@noble/")
+              normalizedId.includes("/@mysten/sui/dist/bcs/") ||
+              normalizedId.includes("/@mysten/sui/dist/transactions/")
+            ) {
+              return "mysten-sui-tx";
+            }
+            if (normalizedId.includes("/@mysten/sui/dist/client/") || normalizedId.includes("/@mysten/sui/dist/jsonRpc/")) {
+              return "mysten-sui-client";
+            }
+            if (
+              normalizedId.includes("/@mysten/sui/")
             ) {
               return "mysten-sui";
             }

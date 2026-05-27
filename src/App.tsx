@@ -1,4 +1,4 @@
-import { Component, lazy, Suspense, useCallback, useEffect, useState, type ReactNode } from "react";
+import { Component, lazy, Suspense, useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { Navigate, Route, Routes, useLocation, useParams } from "react-router-dom";
 import { AppShell } from "./components/AppShell";
 import { WalletSurface } from "./components/WalletSurface";
@@ -8,78 +8,96 @@ import {
   CREATE_FORM_GUEST_DRAFT_STORAGE_KEY,
   parseStoredCreateFormDraft,
 } from "./features/createForm/utils";
-import { getChunkFailureUrl, isChunkLoadFailure, recoverFromChunkLoadFailure } from "./lib/chunkLoadRecovery";
+import {
+  clearChunkLoadRecoveryState,
+  clearRuntimeCaches,
+  getChunkFailureUrl,
+  isChunkLoadFailure,
+  recoverFromChunkLoadFailure,
+} from "./lib/chunkLoadRecovery";
 import { buildInfo } from "./lib/buildInfo";
+import {
+  getMixedBuildStatus,
+  recordBuildAsset,
+  clearBuildAssetRecoveryState,
+  recoverFromMixedBuildAssets,
+  type BuildAssetRecord,
+} from "./lib/buildAssetDiagnostics";
 import { retryLazyImport } from "./lib/lazyRetry";
 import { copyPerfDiagnostics, endPerf, markPerfMilestone } from "./lib/perf";
 import { getSelectedProjectId } from "./lib/projectRegistry";
 import { resetLocalEnvironment } from "./lib/resetEnvironment";
-import { formatRouteLifecycleDiagnostics, logRouteLifecycle } from "./lib/routeDiagnostics";
+import { formatRouteLifecycleDiagnostics, logRouteLifecycle, setDeepSignalDebugReadiness } from "./lib/routeDiagnostics";
 import { REQUIRE_GLOBAL_WALRUS_RUNTIME } from "./lib/runtimeFlags";
 import { scheduleIdleTask } from "./lib/scheduleIdleTask";
 import { RpcInfrastructureProvider } from "./RpcInfrastructureProvider";
 import { getStorageRuntimeStatus } from "./storage/storageFactory";
 
-const AccessManagementPage = lazy(() =>
-  retryLazyImport(() => import("./pages/AccessManagementPage"), "route-access-management").then((module) => ({
-    default: module.AccessManagementPage,
-  })),
-);
-const AdminDashboardPage = lazy(() =>
-  retryLazyImport(() => import("./pages/AdminDashboardPage"), "route-admin-dashboard").then((module) => ({
-    default: module.AdminDashboardPage,
-  })),
-);
-const FormBuilderPage = lazy(() =>
-  retryLazyImport(() => import("./pages/FormBuilderPage"), "route-form-builder").then((module) => ({
-    default: module.FormBuilderPage,
-  })),
-);
-const ManifestRestorePage = lazy(() =>
-  retryLazyImport(() => import("./pages/ManifestRestorePage"), "route-manifest-restore").then((module) => ({
-    default: module.ManifestRestorePage,
-  })),
-);
-const PublicRoadmapPage = lazy(() =>
-  retryLazyImport(() => import("./pages/PublicRoadmapPage"), "route-public-roadmap").then((module) => ({
-    default: module.PublicRoadmapPage,
-  })),
-);
-const SubmissionDetailPage = lazy(() =>
-  retryLazyImport(() => import("./pages/SubmissionDetailPage"), "route-submission-detail").then((module) => ({
-    default: module.SubmissionDetailPage,
-  })),
-);
-const ExploreSignalsPage = lazy(() =>
-  retryLazyImport(() => import("./pages/ExploreSignalsPage"), "route-explore").then((module) => ({
-    default: module.ExploreSignalsPage,
-  })),
-);
-const TroubleshootingPage = lazy(() =>
-  retryLazyImport(() => import("./pages/TroubleshootingPage"), "route-troubleshooting").then((module) => ({
-    default: module.TroubleshootingPage,
-  })),
-);
-const InsightsFixturePage = lazy(() =>
-  retryLazyImport(() => import("./pages/InsightsFixturePage"), "route-insights-fixture").then((module) => ({
-    default: module.InsightsFixturePage,
-  })),
-);
-const LandingPage = lazy(() =>
-  retryLazyImport(() => import("./pages/LandingPage"), "route-landing").then((module) => ({
-    default: module.LandingPage,
-  })),
-);
-const PublicFormPage = lazy(() =>
-  retryLazyImport(() => import("./pages/PublicFormPage"), "route-public-form").then((module) => ({
-    default: module.PublicFormPage,
-  })),
-);
-const ZkLoginCallbackPage = lazy(() =>
-  retryLazyImport(() => import("./pages/ZkLoginCallbackPage"), "route-zklogin-callback").then((module) => ({
-    default: module.ZkLoginCallbackPage,
-  })),
-);
+function createRouteComponents(retryNonce = 0) {
+  void retryNonce;
+  return {
+    AccessManagementPage: lazy(() =>
+      retryLazyImport(() => import("./pages/AccessManagementPage"), "route-access-management").then((module) => ({
+        default: module.AccessManagementPage,
+      })),
+    ),
+    AdminDashboardPage: lazy(() =>
+      retryLazyImport(() => import("./pages/AdminDashboardPage"), "route-admin-dashboard").then((module) => ({
+        default: module.AdminDashboardPage,
+      })),
+    ),
+    FormBuilderPage: lazy(() =>
+      retryLazyImport(() => import("./pages/FormBuilderPage"), "route-form-builder").then((module) => ({
+        default: module.FormBuilderPage,
+      })),
+    ),
+    ManifestRestorePage: lazy(() =>
+      retryLazyImport(() => import("./pages/ManifestRestorePage"), "route-manifest-restore").then((module) => ({
+        default: module.ManifestRestorePage,
+      })),
+    ),
+    PublicRoadmapPage: lazy(() =>
+      retryLazyImport(() => import("./pages/PublicRoadmapPage"), "route-public-roadmap").then((module) => ({
+        default: module.PublicRoadmapPage,
+      })),
+    ),
+    SubmissionDetailPage: lazy(() =>
+      retryLazyImport(() => import("./pages/SubmissionDetailPage"), "route-submission-detail").then((module) => ({
+        default: module.SubmissionDetailPage,
+      })),
+    ),
+    ExploreSignalsPage: lazy(() =>
+      retryLazyImport(() => import("./pages/ExploreSignalsPage"), "route-explore").then((module) => ({
+        default: module.ExploreSignalsPage,
+      })),
+    ),
+    TroubleshootingPage: lazy(() =>
+      retryLazyImport(() => import("./pages/TroubleshootingPage"), "route-troubleshooting").then((module) => ({
+        default: module.TroubleshootingPage,
+      })),
+    ),
+    InsightsFixturePage: lazy(() =>
+      retryLazyImport(() => import("./pages/InsightsFixturePage"), "route-insights-fixture").then((module) => ({
+        default: module.InsightsFixturePage,
+      })),
+    ),
+    LandingPage: lazy(() =>
+      retryLazyImport(() => import("./pages/LandingPage"), "route-landing").then((module) => ({
+        default: module.LandingPage,
+      })),
+    ),
+    PublicFormPage: lazy(() =>
+      retryLazyImport(() => import("./pages/PublicFormPage"), "route-public-form").then((module) => ({
+        default: module.PublicFormPage,
+      })),
+    ),
+    ZkLoginCallbackPage: lazy(() =>
+      retryLazyImport(() => import("./pages/ZkLoginCallbackPage"), "route-zklogin-callback").then((module) => ({
+        default: module.ZkLoginCallbackPage,
+      })),
+    ),
+  };
+}
 
 function LegacyFormInboxRedirect({ basePath }: { basePath: "/admin" | "/dashboard" }) {
   const { formId = "", submissionId = "" } = useParams();
@@ -127,11 +145,40 @@ type RouteErrorDiagnostics = {
   buildVersion: string;
   buildTime: string;
   gitHash: string;
+  rootBuildVersion: string;
+  rootBuildTime: string;
+  rootGitHash: string;
+  mixedBuildAssetsDetected: boolean;
+  observedBuildAssets: BuildAssetRecord[];
   userAgent: string;
+  providerReadiness: Record<string, unknown>;
+  storageMode: string;
+  selectedProjectId: string;
   routeDiagnostics: RouteDiagnostics;
   routeLifecycle: string;
   recordedAt: string;
 };
+
+function getProviderReadiness() {
+  if (typeof window === "undefined") {
+    return {};
+  }
+  return window.__DEEPSIGNAL_DEBUG__?.providerReadiness ?? {};
+}
+
+function getLastFailedImportChunkUrl() {
+  if (typeof window === "undefined") {
+    return null;
+  }
+  const failedImports = window.__DEEPSIGNAL_DEBUG__?.failedImports ?? [];
+  for (let index = failedImports.length - 1; index >= 0; index -= 1) {
+    const chunkUrl = failedImports[index]?.chunkUrl;
+    if (chunkUrl) {
+      return chunkUrl;
+    }
+  }
+  return null;
+}
 
 function getRouteId(routePath: string) {
   const pathname = routePath.split(/[?#]/)[0] || "/";
@@ -297,14 +344,39 @@ function WorkspaceRestoreFallback({ onRetry }: { onRetry?: () => void }) {
   );
 }
 
+function MixedBuildRecoveryScreen({ observed }: { observed: BuildAssetRecord[] }) {
+  return (
+    <div className="panel glow-panel route-status-panel" role="alert">
+      <p className="eyebrow">Signal surface recovery</p>
+      <h1>Refreshing DeepSignal assets...</h1>
+      <p className="muted">
+        This session loaded files from more than one build. DeepSignal is clearing stale route state and reopening the
+        current signal workspace with a fresh asset request.
+      </p>
+      <div className="inline-actions">
+        <button type="button" className="primary-button" onClick={() => window.location.reload()}>
+          Reload now
+        </button>
+      </div>
+      {shouldShowRouteDiagnostics(typeof window === "undefined" ? "/" : `${window.location.pathname}${window.location.search}`) ? (
+        <details className="route-diagnostics-panel" open>
+          <summary>Build diagnostics</summary>
+          <pre className="route-status-diagnostics">{JSON.stringify(observed, null, 2)}</pre>
+        </details>
+      ) : null}
+    </div>
+  );
+}
+
 class RouteErrorBoundary extends Component<
-  { children: ReactNode; resetKey: string; routePath: string },
-  { error: Error | null; diagnostics: RouteErrorDiagnostics | null; diagnosticsCopied: boolean }
+  { children: ReactNode; resetKey: string; routePath: string; onRetryRoute: () => void },
+  { error: Error | null; diagnostics: RouteErrorDiagnostics | null; diagnosticsCopied: boolean; retryCount: number }
 > {
-  state: { error: Error | null; diagnostics: RouteErrorDiagnostics | null; diagnosticsCopied: boolean } = {
+  state: { error: Error | null; diagnostics: RouteErrorDiagnostics | null; diagnosticsCopied: boolean; retryCount: number } = {
     error: null,
     diagnostics: null,
     diagnosticsCopied: false,
+    retryCount: 0,
   };
 
   static getDerivedStateFromError(error: Error) {
@@ -312,9 +384,12 @@ class RouteErrorBoundary extends Component<
   }
 
   componentDidCatch(error: Error, errorInfo: { componentStack: string }) {
-    const chunkUrl = getChunkFailureUrl(error);
+    const chunkUrl = getChunkFailureUrl(error) ?? getLastFailedImportChunkUrl();
     const userAgent = typeof navigator === "undefined" ? "unknown" : navigator.userAgent;
     const pathname = typeof window === "undefined" ? this.props.routePath.split(/[?#]/)[0] || "/" : window.location.pathname;
+    recordBuildAsset(`route-error:${getRouteId(this.props.routePath)}`, buildInfo);
+    const mixedBuildStatus = getMixedBuildStatus();
+    const routeDiagnostics = collectRouteDiagnostics(this.props.routePath);
     const boundaryDiagnostics = {
       routePath: this.props.routePath,
       routeId: getRouteId(this.props.routePath),
@@ -326,8 +401,16 @@ class RouteErrorBoundary extends Component<
       buildVersion: buildInfo.appVersion,
       buildTime: buildInfo.buildTime,
       gitHash: buildInfo.gitHash,
+      rootBuildVersion: mixedBuildStatus.root.appVersion,
+      rootBuildTime: mixedBuildStatus.root.buildTime,
+      rootGitHash: mixedBuildStatus.root.gitHash,
+      mixedBuildAssetsDetected: mixedBuildStatus.detected,
+      observedBuildAssets: mixedBuildStatus.observed,
       userAgent,
-      routeDiagnostics: collectRouteDiagnostics(this.props.routePath),
+      providerReadiness: getProviderReadiness(),
+      storageMode: routeDiagnostics.storageMode,
+      selectedProjectId: routeDiagnostics.selectedProjectId,
+      routeDiagnostics,
       routeLifecycle: formatRouteLifecycleDiagnostics(),
       componentStack: errorInfo.componentStack,
       recordedAt: new Date().toISOString(),
@@ -349,28 +432,59 @@ class RouteErrorBoundary extends Component<
       buildVersion: buildInfo.appVersion,
       buildTime: buildInfo.buildTime,
       gitHash: buildInfo.gitHash,
+      rootBuildVersion: mixedBuildStatus.root.appVersion,
+      rootBuildTime: mixedBuildStatus.root.buildTime,
+      rootGitHash: mixedBuildStatus.root.gitHash,
+      mixedBuildAssetsDetected: mixedBuildStatus.detected,
+      observedBuildAssets: mixedBuildStatus.observed,
       userAgent,
       componentStack: errorInfo.componentStack,
     });
+    if (mixedBuildStatus.detected) {
+      logRouteLifecycle("mixed_build_assets_detected", {
+        routePath: this.props.routePath,
+        root: mixedBuildStatus.root,
+        observed: mixedBuildStatus.observed,
+        reason: mixedBuildStatus.reason,
+      });
+    }
     this.setState({ diagnostics: boundaryDiagnostics, diagnosticsCopied: false });
-    recoverFromChunkLoadFailure(error);
+    if (!recoverFromMixedBuildAssets(mixedBuildStatus)) {
+      recoverFromChunkLoadFailure(error);
+    }
   }
 
-  componentDidUpdate(prevProps: Readonly<{ children: ReactNode; resetKey: string; routePath: string }>) {
+  componentDidUpdate(prevProps: Readonly<{ children: ReactNode; resetKey: string; routePath: string; onRetryRoute: () => void }>) {
     if (prevProps.resetKey !== this.props.resetKey && this.state.error) {
-      this.setState({ error: null, diagnostics: null, diagnosticsCopied: false });
+      this.setState({ error: null, diagnostics: null, diagnosticsCopied: false, retryCount: 0 });
     }
   }
 
   handleRetry = () => {
-    const { error } = this.state;
-    if (error && isChunkLoadFailure(error)) {
-      recoverFromChunkLoadFailure(error);
-      window.location.reload();
-      return;
+    const nextRetryCount = this.state.retryCount + 1;
+    if (nextRetryCount >= 2) {
+      clearChunkLoadRecoveryState();
+      clearBuildAssetRecoveryState();
     }
 
-    this.setState({ error: null, diagnostics: null, diagnosticsCopied: false });
+    logRouteLifecycle("route:error-boundary-retry", {
+      routePath: this.props.routePath,
+      retryCount: nextRetryCount,
+      clearedStaleRecoveryState: nextRetryCount >= 2,
+      chunkFailure: isChunkLoadFailure(this.state.error),
+    });
+    this.props.onRetryRoute();
+    this.setState({ error: null, diagnostics: null, diagnosticsCopied: false, retryCount: nextRetryCount });
+  }
+
+  handleHardRefresh = async () => {
+    clearChunkLoadRecoveryState();
+    clearBuildAssetRecoveryState();
+    await clearRuntimeCaches();
+    const nextUrl = new URL(window.location.href);
+    nextUrl.searchParams.set("hard-refresh", String(Date.now()));
+    nextUrl.searchParams.set("build", buildInfo.appVersion);
+    window.location.replace(nextUrl.toString());
   }
 
   handleCopyDiagnostics = async () => {
@@ -378,10 +492,27 @@ class RouteErrorBoundary extends Component<
       this.state.diagnostics ?? {
         errorName: this.state.error?.name ?? "unknown",
         errorMessage: this.state.error?.message ?? "unknown",
+        errorStack: this.state.error?.stack ?? "",
+        componentStack: "",
         routePath: this.props.routePath,
         routeId: getRouteId(this.props.routePath),
+        pathname: typeof window === "undefined" ? this.props.routePath.split(/[?#]/)[0] || "/" : window.location.pathname,
+        chunkUrl: getChunkFailureUrl(this.state.error) ?? getLastFailedImportChunkUrl(),
         buildVersion: buildInfo.appVersion,
+        buildTime: buildInfo.buildTime,
+        gitHash: buildInfo.gitHash,
+        rootBuildVersion: buildInfo.appVersion,
+        rootBuildTime: buildInfo.buildTime,
+        rootGitHash: buildInfo.gitHash,
+        mixedBuildAssetsDetected: false,
+        observedBuildAssets: [],
         userAgent: typeof navigator === "undefined" ? "unknown" : navigator.userAgent,
+        providerReadiness: getProviderReadiness(),
+        storageMode: collectRouteDiagnostics(this.props.routePath).storageMode,
+        selectedProjectId: collectRouteDiagnostics(this.props.routePath).selectedProjectId,
+        routeDiagnostics: collectRouteDiagnostics(this.props.routePath),
+        routeLifecycle: formatRouteLifecycleDiagnostics(),
+        recordedAt: new Date().toISOString(),
       },
       null,
       2,
@@ -401,14 +532,15 @@ class RouteErrorBoundary extends Component<
       const chunkFailure = isChunkLoadFailure(this.state.error);
       const diagnostics = this.state.diagnostics;
       const showDiagnostics = shouldShowRouteDiagnostics(this.props.routePath);
+      const headline = chunkFailure ? "App update detected, refresh required." : "Explore hit an unexpected fault.";
 
       return (
         <div className="panel glow-panel route-status-panel" role="alert">
           <p className="eyebrow">Signal surface</p>
-          <h1>{chunkFailure ? "Explore could not open cleanly." : "Explore hit an unexpected fault."}</h1>
+          <h1>{headline}</h1>
           <p className="muted">
             {chunkFailure
-              ? "Refresh the page to retry the current chunk. Local fallback data is still preserved."
+              ? "A route chunk could not be loaded, usually because Safari has an older asset cached while a newer build is active. Local fallback data is still preserved."
               : "Retry the route to restore the workspace. Local fallback data is still preserved."}
           </p>
           <p className="muted route-error-summary">
@@ -416,7 +548,10 @@ class RouteErrorBoundary extends Component<
           </p>
           <div className="inline-actions">
             <button type="button" className="primary-button" onClick={this.handleRetry}>
-              {chunkFailure ? "Retry chunk" : "Retry route"}
+              {this.state.retryCount === 0 ? "Retry surface" : "Retry after clearing stale markers"}
+            </button>
+            <button type="button" className="ghost-button" onClick={() => void this.handleHardRefresh()}>
+              Hard refresh / clear local app cache
             </button>
             <button type="button" className="ghost-button" onClick={() => void this.handleCopyDiagnostics()}>
               {this.state.diagnosticsCopied ? "Copied diagnostics" : "Copy diagnostics"}
@@ -436,12 +571,26 @@ class RouteErrorBoundary extends Component<
                 <dd>
                   v{diagnostics.buildVersion} build {diagnostics.buildTime} {diagnostics.gitHash}
                 </dd>
+                <dt>mixed build</dt>
+                <dd>{diagnostics.mixedBuildAssetsDetected ? "mixed_build_assets_detected" : "no"}</dd>
+                <dt>root build</dt>
+                <dd>
+                  v{diagnostics.rootBuildVersion} build {diagnostics.rootBuildTime} {diagnostics.rootGitHash}
+                </dd>
                 <dt>pathname</dt>
                 <dd>{diagnostics.pathname}</dd>
                 <dt>failed chunk URL</dt>
                 <dd>{diagnostics.chunkUrl ?? "n/a"}</dd>
                 <dt>userAgent</dt>
                 <dd>{diagnostics.userAgent}</dd>
+                <dt>storageMode</dt>
+                <dd>{diagnostics.storageMode}</dd>
+                <dt>selectedProjectId</dt>
+                <dd>{diagnostics.selectedProjectId || "n/a"}</dd>
+                <dt>provider readiness</dt>
+                <dd>
+                  <pre className="route-status-diagnostics">{JSON.stringify(diagnostics.providerReadiness, null, 2)}</pre>
+                </dd>
               </dl>
               <p className="eyebrow">componentStack</p>
               <pre className="route-status-diagnostics">{diagnostics.componentStack || "n/a"}</pre>
@@ -487,6 +636,22 @@ export default function App() {
     location.pathname.startsWith("/auth/zklogin/");
   const [initialRouteReady, setInitialRouteReady] = useState(false);
   const [bootDismissed, setBootDismissed] = useState(false);
+  const [mixedBuildStatus, setMixedBuildStatus] = useState(() => getMixedBuildStatus());
+  const [routeRetryNonce, setRouteRetryNonce] = useState(0);
+  const {
+    AccessManagementPage,
+    AdminDashboardPage,
+    FormBuilderPage,
+    ManifestRestorePage,
+    PublicRoadmapPage,
+    SubmissionDetailPage,
+    ExploreSignalsPage,
+    TroubleshootingPage,
+    InsightsFixturePage,
+    LandingPage,
+    PublicFormPage,
+    ZkLoginCallbackPage,
+  } = useMemo(() => createRouteComponents(routeRetryNonce), [routeRetryNonce]);
   const routeNeedsWalletSurface =
     location.pathname === "/admin" ||
     location.pathname === "/dashboard" ||
@@ -503,6 +668,27 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    const status = recordBuildAsset(`route:${getRouteId(`${location.pathname}${location.search}${location.hash}`)}`);
+    setMixedBuildStatus(status);
+    if (status.detected) {
+      logRouteLifecycle("mixed_build_assets_detected", {
+        routePath: `${location.pathname}${location.search}${location.hash}`,
+        root: status.root,
+        observed: status.observed,
+        reason: status.reason,
+      });
+      recoverFromMixedBuildAssets(status);
+    }
+  }, [location.hash, location.pathname, location.search]);
+
+  useEffect(() => {
+    const storageRuntime = getStorageRuntimeStatus();
+    setDeepSignalDebugReadiness({
+      routeProviderGuard: "ready",
+      workspaceProjectProvider: getSelectedProjectId() ? "selected" : "empty",
+      storageProvider: storageRuntime.mode,
+      storageNotice: storageRuntime.notice,
+    });
     logRouteLifecycle("route:enter", {
       routePath: `${location.pathname}${location.search}${location.hash}`,
       walletSurface: routeNeedsWalletSurface,
@@ -564,10 +750,19 @@ export default function App() {
 
   const routeSurface = (
     <AppShell walletAvailable={routeNeedsWalletSurface} chrome={routeUsesPublicChrome ? "public" : "full"}>
-      <RouteErrorBoundary resetKey={location.key} routePath={`${location.pathname}${location.search}${location.hash}`}>
-        <Suspense fallback={<WorkspaceRestoreFallback />}>
+      <RouteErrorBoundary
+        resetKey={`${location.key}:${routeRetryNonce}`}
+        routePath={`${location.pathname}${location.search}${location.hash}`}
+        onRetryRoute={() => setRouteRetryNonce((value) => value + 1)}
+      >
+        {mixedBuildStatus.detected ? (
           <InitialBootReady routePath={`${location.pathname}${location.search}${location.hash}`} onReady={() => setInitialRouteReady(true)}>
-            <Routes>
+            <MixedBuildRecoveryScreen observed={mixedBuildStatus.observed} />
+          </InitialBootReady>
+        ) : (
+          <Suspense fallback={<WorkspaceRestoreFallback />}>
+            <InitialBootReady routePath={`${location.pathname}${location.search}${location.hash}`} onReady={() => setInitialRouteReady(true)}>
+              <Routes>
               <Route path="/" element={<LandingPage />} />
               <Route path="/explore" element={<ExploreSignalsPage />} />
               <Route path="/signals" element={<Navigate to="/explore" replace />} />
@@ -637,9 +832,10 @@ export default function App() {
               <Route path="/m/:manifestBlobId" element={<ManifestRestorePage />} />
               <Route path="/auth/zklogin/callback" element={<ZkLoginCallbackPage />} />
               <Route path="*" element={<Navigate to="/" replace />} />
-            </Routes>
-          </InitialBootReady>
-        </Suspense>
+              </Routes>
+            </InitialBootReady>
+          </Suspense>
+        )}
       </RouteErrorBoundary>
     </AppShell>
   );

@@ -1,9 +1,14 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
 
-const walletSurfaceSpy = vi.fn();
+const { walletSurfaceSpy, routeFailures } = vi.hoisted(() => ({
+  walletSurfaceSpy: vi.fn(),
+  routeFailures: {
+    explore: null as Error | null,
+  },
+}));
 
 vi.mock("./components/AppShell", () => ({
   AppShell: ({
@@ -37,7 +42,12 @@ vi.mock("./pages/PublicFormPage", () => ({
 }));
 
 vi.mock("./pages/ExploreSignalsPage", () => ({
-  ExploreSignalsPage: () => <h1>Explore Route</h1>,
+  ExploreSignalsPage: () => {
+    if (routeFailures.explore) {
+      throw routeFailures.explore;
+    }
+    return <h1>Explore Route</h1>;
+  },
 }));
 
 vi.mock("./pages/AdminDashboardPage", () => ({
@@ -52,6 +62,9 @@ describe("App routing", () => {
   afterEach(() => {
     document.body.innerHTML = "";
     walletSurfaceSpy.mockClear();
+    routeFailures.explore = null;
+    window.sessionStorage.clear();
+    window.localStorage.clear();
   });
 
   it("redirects /signals to /explore", async () => {
@@ -110,5 +123,91 @@ describe("App routing", () => {
     await waitFor(() => expect(screen.getByRole("heading", { name: "Landing Route" })).toBeInTheDocument());
     expect(screen.getByTestId("app-shell")).toHaveAttribute("data-wallet-available", "no");
     expect(walletSurfaceSpy).not.toHaveBeenCalled();
+  });
+
+  it("shows app-update diagnostics when a route chunk import fails", async () => {
+    routeFailures.explore = new TypeError(
+      "Failed to fetch dynamically imported module: https://deepsignal.wal.app/assets/ExploreSignalsPage.js",
+    );
+    Object.defineProperty(window.navigator, "userAgent", {
+      value: "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 Version/17.5 Mobile/15E148 Safari/604.1",
+      configurable: true,
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/explore"]}>
+        <App />
+      </MemoryRouter>,
+    );
+
+    await screen.findByRole("heading", { name: "App update detected, refresh required." });
+    expect(screen.getAllByText(/ExploreSignalsPage\.js/).length).toBeGreaterThan(0);
+    expect(screen.getByText(/iPhone OS 17_5/)).toBeInTheDocument();
+  });
+
+  it("surfaces provider missing errors with provider readiness diagnostics", async () => {
+    routeFailures.explore = new Error("useI18n must be used within I18nProvider");
+    window.__DEEPSIGNAL_DEBUG__ = {
+      providerReadiness: { i18nProvider: "missing", rpcInfrastructureProvider: "ready" },
+      routeTimings: [],
+      hydrationTimings: [],
+      failedImports: [],
+      currentProjectId: "",
+      cacheRestoreSource: "unknown",
+      browserCapabilities: {},
+      updatedAt: new Date().toISOString(),
+    };
+
+    render(
+      <MemoryRouter initialEntries={["/explore"]}>
+        <App />
+      </MemoryRouter>,
+    );
+
+    await screen.findByRole("heading", { name: "Explore hit an unexpected fault." });
+    expect(screen.getByText("useI18n must be used within I18nProvider")).toBeInTheDocument();
+    expect(screen.getByText(/i18nProvider/)).toBeInTheDocument();
+  });
+
+  it("detects stale build asset mismatch before rendering route surfaces", async () => {
+    window.sessionStorage.setItem(
+      "deepsignal.observedBuildAssets",
+      JSON.stringify([
+        {
+          source: "route-error:explore",
+          appVersion: "stale",
+          buildTime: "stale-time",
+          gitHash: "stale-hash",
+          recordedAt: new Date().toISOString(),
+        },
+      ]),
+    );
+
+    render(
+      <MemoryRouter initialEntries={["/explore"]}>
+        <App />
+      </MemoryRouter>,
+    );
+
+    await screen.findByRole("heading", { name: "Refreshing DeepSignal assets..." });
+    expect(screen.getByText(/stale-hash/)).toBeInTheDocument();
+  });
+
+  it("remounts the failed route on first retry without looping through window reload", async () => {
+    routeFailures.explore = new Error("first render failed");
+
+    render(
+      <MemoryRouter initialEntries={["/explore"]}>
+        <App />
+      </MemoryRouter>,
+    );
+
+    await screen.findByRole("heading", { name: "Explore hit an unexpected fault." });
+    const urlBeforeRetry = window.location.href;
+    routeFailures.explore = null;
+    fireEvent.click(screen.getByRole("button", { name: "Retry surface" }));
+
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Explore Route" })).toBeInTheDocument());
+    expect(window.location.href).toBe(urlBeforeRetry);
   });
 });

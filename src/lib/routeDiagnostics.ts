@@ -1,4 +1,5 @@
 import { formatPerfDiagnostics } from "./perf";
+import { buildInfo } from "./buildInfo";
 import { getSelectedProjectId } from "./projectRegistry";
 
 type DiagnosticDetails = Record<string, unknown>;
@@ -28,6 +29,9 @@ declare global {
         label: string;
         message: string;
         chunkUrl?: string | null;
+        buildVersion?: string;
+        buildTime?: string;
+        gitHash?: string;
       }>;
       currentProjectId: string;
       cacheRestoreSource: string;
@@ -156,6 +160,9 @@ export function recordFailedImport(label: string, error: unknown, chunkUrl?: str
     label,
     message: error instanceof Error ? error.message : String(error ?? "unknown"),
     chunkUrl,
+    buildVersion: buildInfo.appVersion,
+    buildTime: buildInfo.buildTime,
+    gitHash: buildInfo.gitHash,
   });
   if (state.failedImports.length > 40) {
     state.failedImports.shift();

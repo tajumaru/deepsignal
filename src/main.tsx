@@ -1,9 +1,8 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
-import { HashRouter } from "react-router-dom";
-import App from "./App";
+import { AppRoot } from "./AppRoot";
 import { startRuntimeBootstrap } from "./bootstrap/runtime";
-import { I18nProvider } from "./i18n";
+import { startBuildAssetDiagnostics } from "./lib/buildAssetDiagnostics";
 import { startChunkLoadRecovery } from "./lib/chunkLoadRecovery";
 import { startFirstPaintInstrumentation, startPerf } from "./lib/perf";
 import "./styles/index.css";
@@ -21,17 +20,14 @@ function redirectLegacyPublicPathToHashRoute() {
 }
 
 redirectLegacyPublicPathToHashRoute();
+startBuildAssetDiagnostics();
 startChunkLoadRecovery();
 startPerf("app:render");
 startFirstPaintInstrumentation();
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <I18nProvider>
-      <HashRouter>
-        <App />
-      </HashRouter>
-    </I18nProvider>
+    <AppRoot />
   </React.StrictMode>,
 );
 

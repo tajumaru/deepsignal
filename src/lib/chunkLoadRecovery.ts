@@ -72,7 +72,16 @@ export function getChunkFailureUrl(error: unknown) {
   return source.match(/https?:\/\/[^\s)'"]+/)?.[0] ?? source.match(/\.\/assets\/[^\s)'"]+/)?.[0] ?? null;
 }
 
-async function clearRuntimeCaches() {
+export function clearChunkLoadRecoveryState() {
+  try {
+    window.sessionStorage.removeItem(reloadStorageKey);
+  } catch {
+    // Best effort only.
+  }
+  reloadScheduled = false;
+}
+
+export async function clearRuntimeCaches() {
   try {
     if ("caches" in window) {
       const keys = await window.caches.keys();
