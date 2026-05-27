@@ -3,6 +3,7 @@ import { JsonRpcHTTPTransport, SuiJsonRpcClient } from "@mysten/sui/jsonRpc";
 import {
   Component,
   useCallback,
+  useEffect,
   useMemo,
   useState,
   type PropsWithChildren,
@@ -21,6 +22,7 @@ import { REQUIRE_GLOBAL_WALRUS_RUNTIME } from "./lib/runtimeFlags";
 import {
   SUI_NETWORK,
 } from "./lib/sui";
+import { logRouteLifecycle } from "./lib/routeDiagnostics";
 import { useRpcInfrastructure } from "./rpcInfrastructure";
 import WalrusRuntimeBridge from "./walrusRuntimeBridge";
 import { WalletConnectionContext, type WalletConnectionState } from "./walletStatus";
@@ -80,6 +82,10 @@ function WalletStatusBridge({ children }: PropsWithChildren) {
     [account?.address, connectionStatus, currentWallet?.name, isConnected],
   );
 
+  useEffect(() => {
+    logRouteLifecycle("wallet-provider:status", { ...value });
+  }, [value]);
+
   return <WalletConnectionContext.Provider value={value}>{children}</WalletConnectionContext.Provider>;
 }
 
@@ -87,6 +93,12 @@ export function WalletProviders({ children }: PropsWithChildren) {
   const [queryClient] = useState(() => new QueryClient());
   const rpcInfrastructure = useRpcInfrastructure();
   const currentRpcUrl = rpcInfrastructure.currentRpcUrl;
+  useEffect(() => {
+    logRouteLifecycle("wallet-provider:ready", {
+      currentRpcUrl,
+      hasRpcInfrastructure: Boolean(rpcInfrastructure),
+    });
+  }, [currentRpcUrl, rpcInfrastructure]);
   const { networkConfig } = useMemo(
     () =>
       createNetworkConfig({

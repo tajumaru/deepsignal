@@ -106,9 +106,13 @@ function readJson<T>(key: string, fallback: T): T {
     const raw = window.localStorage.getItem(key);
     return raw ? (JSON.parse(raw) as T) : fallback;
   } catch (error) {
-    const raw = window.localStorage.getItem(key);
-    if (raw) {
-      quarantineCorruptedStorageValue(key, raw, error);
+    try {
+      const raw = window.localStorage.getItem(key);
+      if (raw) {
+        quarantineCorruptedStorageValue(key, raw, error);
+      }
+    } catch {
+      // Some mobile privacy modes can throw on localStorage access itself.
     }
     return fallback;
   }

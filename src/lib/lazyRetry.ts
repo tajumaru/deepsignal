@@ -1,5 +1,6 @@
 import { recoverFromChunkLoadFailure } from "./chunkLoadRecovery";
 import { endPerf, startPerf } from "./perf";
+import { recordFailedImport } from "./routeDiagnostics";
 
 const lazyImportAttempts = 3;
 const lazyImportBaseDelayMs = 450;
@@ -20,6 +21,7 @@ export async function retryLazyImport<T>(loader: () => Promise<T>, label = "anon
       return result;
     } catch (error) {
       lastError = error;
+      recordFailedImport(label, error);
       if (attempt === lazyImportAttempts) {
         break;
       }

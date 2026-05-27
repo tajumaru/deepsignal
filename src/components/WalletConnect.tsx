@@ -19,7 +19,7 @@ export function WalletConnect({ compact = false }: WalletConnectProps) {
       return;
     }
 
-    function handlePointerDown(event: MouseEvent) {
+    function handlePointerDown(event: PointerEvent) {
       if (!shellRef.current?.contains(event.target as Node)) {
         setMenuOpen(false);
       }
@@ -31,10 +31,10 @@ export function WalletConnect({ compact = false }: WalletConnectProps) {
       }
     }
 
-    window.addEventListener("mousedown", handlePointerDown);
+    window.addEventListener("pointerdown", handlePointerDown);
     window.addEventListener("keydown", handleEscape);
     return () => {
-      window.removeEventListener("mousedown", handlePointerDown);
+      window.removeEventListener("pointerdown", handlePointerDown);
       window.removeEventListener("keydown", handleEscape);
     };
   }, [menuOpen]);
@@ -74,7 +74,12 @@ export function WalletConnect({ compact = false }: WalletConnectProps) {
       <div
         className={`wallet-sync-button ${wallet.isConnected ? "is-synced" : ""} ${wallet.isConnecting ? "is-syncing" : ""}`}
       >
-        <ConnectWalletButton wallet={wallet} compact={compact} onConnectedPress={handleToggleMenu} />
+        <ConnectWalletButton
+          wallet={wallet}
+          compact={compact}
+          onConnectedPress={handleToggleMenu}
+          connectedMenuOpen={menuOpen}
+        />
         {wallet.accountAddress && !compact ? (
           <SuiAddressDisplay
             address={wallet.accountAddress}

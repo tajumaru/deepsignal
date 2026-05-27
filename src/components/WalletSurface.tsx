@@ -1,5 +1,6 @@
-import { createContext, lazy, Suspense, useContext, type PropsWithChildren, type ReactNode } from "react";
+import { createContext, lazy, Suspense, useContext, useEffect, type PropsWithChildren, type ReactNode } from "react";
 import { retryLazyImport } from "../lib/lazyRetry";
+import { logRouteLifecycle } from "../lib/routeDiagnostics";
 
 const WalletProviders = lazy(() =>
   retryLazyImport(() => import("../providers"), "wallet-providers").then((module) => ({
@@ -19,6 +20,10 @@ interface WalletSurfaceProps extends PropsWithChildren {
 
 export function WalletSurface({ children, fallback }: WalletSurfaceProps) {
   const hasWalletSurface = useContext(WalletSurfaceContext);
+
+  useEffect(() => {
+    logRouteLifecycle(hasWalletSurface ? "wallet-surface:reuse" : "wallet-surface:mount-requested");
+  }, [hasWalletSurface]);
 
   if (hasWalletSurface) {
     return <>{children}</>;

@@ -5,6 +5,11 @@
   --color-bg-start: #06111d;
   --color-bg-mid: #081726;
   --color-bg-end: #04101b;
+  --app-bg-base: var(--color-bg-end);
+  --app-bg-image:
+    radial-gradient(circle at top, rgba(49, 130, 206, 0.22), transparent 35%),
+    radial-gradient(circle at 20% 80%, rgba(19, 78, 74, 0.45), transparent 30%),
+    linear-gradient(180deg, var(--color-bg-start) 0%, var(--color-bg-mid) 45%, var(--color-bg-end) 100%);
   --panel: rgba(7, 24, 40, 0.78);
   --panel-strong: rgba(7, 24, 40, 0.92);
   --line: rgba(116, 226, 255, 0.22);

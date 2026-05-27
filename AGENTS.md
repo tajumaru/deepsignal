@@ -94,6 +94,9 @@ DeepSignal is a realtime signal intelligence workspace and signal intelligence p
 - Always run `npm run typecheck` after TypeScript changes.
 - Run `npm run build` before finishing larger changes.
 - If behavior changes affect storage, crypto, wallet gating, or public routes, sanity-check both the admin flow and the wallet-optional public flow.
+- Never fix only fallback copy for route failures. Identify and document the real thrown runtime error.
+- Treat intermittent Explore failures as initialization-order bugs first, especially on mobile Safari.
+- Verify cold-load behavior on iPhone Safari before release when Explore/mobile initialization changes.
 
 ## Anti-patterns
 

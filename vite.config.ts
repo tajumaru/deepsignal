@@ -36,6 +36,7 @@ function buildManifestPlugin(args: {
   appEnvironment: string;
 }): Plugin {
   const routeChunkMatchers = {
+    explore: /\/src\/pages\/ExploreSignalsPage\.tsx$/,
     publicForm: /\/src\/pages\/PublicFormPage\.tsx$/,
     publicRoadmap: /\/src\/pages\/PublicRoadmapPage\.tsx$/,
     manifestRestore: /\/src\/pages\/ManifestRestorePage\.tsx$/,
@@ -94,6 +95,7 @@ function buildManifestPlugin(args: {
         );
         return accumulator;
       }, {
+        explore: [],
         publicForm: [],
         publicRoadmap: [],
         manifestRestore: [],
@@ -110,6 +112,83 @@ function buildManifestPlugin(args: {
         fileName: "build.json",
         source: `${JSON.stringify({ ...args, assets, routeAssets }, null, 2)}\n`,
       });
+    },
+  };
+}
+
+const stableRouteChunkNames = new Set([
+  "ExploreSignalsPage",
+]);
+
+const legacyRouteChunkAliases: Record<string, string[]> = {
+  ExploreSignalsPage: [
+    "assets/ExploreSignalsPage.js",
+    "assets/ExploreSignalsPage-BPg7Mrle.js",
+    "assets/ExploreSignalsPage-BN9oWPM0.js",
+  ],
+};
+
+function stableRouteChunkFileName(chunkInfo: { name: string; facadeModuleId: string | null; isDynamicEntry: boolean }) {
+  const normalizedFacade = chunkInfo.facadeModuleId?.replace(/\\/g, "/") ?? "";
+  if (
+    chunkInfo.isDynamicEntry &&
+    stableRouteChunkNames.has(chunkInfo.name) &&
+    normalizedFacade.endsWith(`/src/pages/${chunkInfo.name}.tsx`)
+  ) {
+    return `assets/${chunkInfo.name}.js`;
+  }
+  return "assets/[name]-[hash].js";
+}
+
+function legacyRouteChunkAliasPlugin(): Plugin {
+  return {
+    name: "deepsignal-legacy-route-chunk-aliases",
+    generateBundle(_, bundle) {
+      const emittedAliases = new Set<string>();
+      for (const entry of Object.values(bundle)) {
+        if (entry.type !== "chunk") {
+          continue;
+        }
+        const aliases = legacyRouteChunkAliases[entry.name] ?? [];
+        for (const alias of aliases) {
+          if (bundle[alias]) {
+            continue;
+          }
+          emittedAliases.add(alias);
+          this.emitFile({
+            type: "asset",
+            fileName: alias,
+            source: entry.code,
+          });
+        }
+      }
+
+      const fallbackSource = `const reload = () => {
+  try {
+    const url = new URL(window.location.href);
+    url.searchParams.set("explore-static-retry", String(Date.now()));
+    window.location.replace(url.toString());
+  } catch {
+    window.location.reload();
+  }
+};
+window.setTimeout(reload, 0);
+export function ExploreSignalsPage() {
+  return null;
+}
+export default ExploreSignalsPage;
+`;
+
+      for (const alias of legacyRouteChunkAliases.ExploreSignalsPage) {
+        if (bundle[alias] || emittedAliases.has(alias)) {
+          continue;
+        }
+        this.emitFile({
+          type: "asset",
+          fileName: alias,
+          source: fallbackSource,
+        });
+      }
     },
   };
 }
@@ -250,6 +329,7 @@ export default defineConfig(({ mode }) => {
         appEnvironment,
       }),
       moduleEntryRetryPlugin(),
+      legacyRouteChunkAliasPlugin(),
       process.env.ANALYZE === "true"
         ? visualizer({
             emitFile: true,
@@ -269,7 +349,7 @@ export default defineConfig(({ mode }) => {
       rollupOptions: {
         output: {
           entryFileNames: "assets/[name]-[hash].js",
-          chunkFileNames: "assets/[name]-[hash].js",
+          chunkFileNames: stableRouteChunkFileName,
           assetFileNames(assetInfo) {
             const name = assetInfo.name ?? "";
             if (name.endsWith(".css")) {

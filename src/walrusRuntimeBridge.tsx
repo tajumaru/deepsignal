@@ -7,6 +7,7 @@ import { walrus } from "@mysten/walrus";
 import walrusWasmUrl from "@mysten/walrus-wasm/web/walrus_wasm_bg.wasm?url";
 import { useEffect, useMemo, type PropsWithChildren } from "react";
 import { WALRUS_UPLOAD_RELAY_URL } from "./lib/sui";
+import { logRouteLifecycle } from "./lib/routeDiagnostics";
 import { WalrusDiagnosticError, getWalrusErrorMessage } from "./storage/walrusDiagnostics";
 import { setWalrusRuntimeContext } from "./storage/walrusAdapter";
 import { setSuiRuntimeContext } from "./suiRuntime";
@@ -48,9 +49,19 @@ function WalrusRuntimeBridgeInner() {
   const { client, config, network } = useSuiClientContext();
   const rpcUrl = config?.url ?? null;
   const currentNetwork = network ?? null;
-  const stableSupportedIntents = useMemo(() => [...supportedIntents], [supportedIntents]);
+  const stableSupportedIntents = useMemo(
+    () => (Array.isArray(supportedIntents) ? [...supportedIntents] : []),
+    [supportedIntents],
+  );
   const walrusClient = useMemo(
     () => {
+      if (!client) {
+        logRouteLifecycle("walrus-runtime:client-pending", {
+          rpcUrl,
+          network: currentNetwork,
+        });
+        return null;
+      }
       const walrusEnabledClient = client.$extend(
         walrus({
           wasmUrl: walrusWasmUrl,
@@ -133,7 +144,7 @@ function WalrusRuntimeBridgeInner() {
       };
       return walrusEnabledClient;
     },
-    [client],
+    [client, currentNetwork, rpcUrl],
   );
   const runtimeContext = useMemo(
     () => ({

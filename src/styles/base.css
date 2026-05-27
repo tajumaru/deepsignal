@@ -4,16 +4,17 @@ html,
 :root {
   width: 100%;
   max-width: 100%;
+  min-height: 100%;
+  min-height: 100dvh;
   color-scheme: dark;
   font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
   line-height: 1.5;
   font-weight: 400;
   color: var(--color-text);
-  background:
-    radial-gradient(circle at top, rgba(49, 130, 206, 0.22), transparent 35%),
-    radial-gradient(circle at 20% 80%, rgba(19, 78, 74, 0.45), transparent 30%),
-    linear-gradient(180deg, var(--color-bg-start) 0%, var(--color-bg-mid) 45%, var(--color-bg-end) 100%);
+  background-color: var(--app-bg-base);
+  background-image: var(--app-bg-image);
   overflow-x: hidden;
+  overscroll-behavior-y: none;
 }
 
 html,
@@ -29,14 +30,30 @@ body,
 }
 
 body {
+  position: relative;
   margin: 0;
   width: 100%;
   max-width: 100%;
   min-width: 320px;
+  min-height: 100%;
   min-height: 100vh;
   min-height: 100dvh;
+  background-color: var(--app-bg-base);
+  background-image: var(--app-bg-image);
   overflow-x: hidden;
+  overscroll-behavior-y: none;
   -webkit-text-size-adjust: 100%;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-color: var(--app-bg-base);
+  background-image: var(--app-bg-image);
+  transform: translateZ(0);
 }
 
 a {
@@ -56,10 +73,15 @@ button {
 }
 
 #root {
+  position: relative;
   width: 100%;
   max-width: 100%;
+  min-height: 100%;
   min-height: 100vh;
   min-height: 100dvh;
+  background-color: var(--app-bg-base);
+  background-image: var(--app-bg-image);
+  isolation: isolate;
   overflow-x: hidden;
 }
 

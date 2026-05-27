@@ -6,16 +6,22 @@ interface ConnectWalletButtonProps {
   wallet: SuiWalletState;
   compact?: boolean;
   onConnectedPress?: () => void;
+  connectedMenuOpen?: boolean;
 }
 
-export function ConnectWalletButton({ wallet, compact = false, onConnectedPress }: ConnectWalletButtonProps) {
+export function ConnectWalletButton({
+  wallet,
+  compact = false,
+  onConnectedPress,
+  connectedMenuOpen = false,
+}: ConnectWalletButtonProps) {
   if (wallet.status === "connected") {
     return (
       <button
         type="button"
         className="wallet-sync-toggle"
         onClick={onConnectedPress}
-        aria-expanded={undefined}
+        aria-expanded={connectedMenuOpen}
         aria-haspopup="menu"
       >
         <WalletStatus

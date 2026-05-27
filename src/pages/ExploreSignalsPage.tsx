@@ -6,6 +6,12 @@ import { buildExploreAiPreview, getExploreCategory, isFormPubliclyExplorable, ty
 import { normalizeForm } from "../lib/formSchema";
 import { getPublicFormPath } from "../lib/publicLinks";
 import { isResponseDeadlinePassed } from "../lib/responseDeadline";
+import {
+  logRouteLifecycle,
+  setDeepSignalBrowserCapabilities,
+  setDeepSignalCacheRestoreSource,
+  setDeepSignalDebugReadiness,
+} from "../lib/routeDiagnostics";
 import { formatDate } from "../lib/utils";
 import { localStorageAdapter } from "../storage/localStorageAdapter";
 import type { FormSchema, Submission } from "../types";
@@ -19,24 +25,101 @@ type ExploreCard = {
 };
 
 type DiscoverTab = "trending" | "new" | "active" | "ai" | "governance" | "anonymous" | "encrypted";
+type ExploreReadiness = {
+  workspaceReady: boolean;
+  providerReady: boolean;
+  routeHydrated: boolean;
+  storageHydrated: boolean;
+};
 
 const EXPLORE_DELETED_FORMS_KEY = "deepsignal.exploreDeletedForms";
 const EXPLORE_SUBMISSION_LOAD_CONCURRENCY = 4;
+const EXPLORE_ROUTE_HYDRATION_RETRY_MS = 1600;
 
 const DISCOVER_TABS: DiscoverTab[] = ["trending", "new", "active", "ai", "governance", "anonymous", "encrypted"];
+const INITIAL_READINESS: ExploreReadiness = {
+  workspaceReady: false,
+  providerReady: false,
+  routeHydrated: false,
+  storageHydrated: false,
+};
+
+function allReadinessReady(readiness: ExploreReadiness) {
+  return readiness.workspaceReady && readiness.providerReady && readiness.routeHydrated && readiness.storageHydrated;
+}
+
+function getNavigatorUserAgent() {
+  return typeof navigator === "undefined" ? "unknown" : navigator.userAgent;
+}
+
+function getBrowserCapabilities() {
+  if (typeof window === "undefined") {
+    return {
+      requestIdleCallback: false,
+      indexedDB: false,
+      localStorage: false,
+      cryptoSubtle: false,
+      bigInt: false,
+      visibilityState: "unknown",
+    };
+  }
+
+  let localStorageAvailable = false;
+  try {
+    const key = "deepsignal.explore.storageProbe";
+    window.localStorage.setItem(key, "1");
+    window.localStorage.removeItem(key);
+    localStorageAvailable = true;
+  } catch {
+    localStorageAvailable = false;
+  }
+
+  return {
+    requestIdleCallback: "requestIdleCallback" in window,
+    indexedDB: "indexedDB" in window,
+    localStorage: localStorageAvailable,
+    cryptoSubtle: Boolean(window.crypto?.subtle),
+    bigInt: typeof BigInt === "function",
+    visibilityState: document.visibilityState,
+  };
+}
+
+function scheduleAfterPaint(callback: () => void) {
+  if (typeof window === "undefined") {
+    callback();
+    return () => undefined;
+  }
+  const raf = window.requestAnimationFrame ?? ((handler: FrameRequestCallback) => window.setTimeout(() => handler(performance.now()), 16));
+  const cancelRaf = window.cancelAnimationFrame ?? window.clearTimeout;
+  const id = raf(() => callback());
+  return () => cancelRaf(id);
+}
+
+function getStableIsoDate(value: unknown, fallback = new Date(0).toISOString()) {
+  if (typeof value !== "string" || !value.trim()) {
+    return fallback;
+  }
+  return Number.isFinite(new Date(value).getTime()) ? value : fallback;
+}
+
+function compareIsoDateDesc(left: string, right: string) {
+  const leftTime = new Date(left).getTime();
+  const rightTime = new Date(right).getTime();
+  return (Number.isFinite(rightTime) ? rightTime : 0) - (Number.isFinite(leftTime) ? leftTime : 0);
+}
 
 function getCreatorLabel(form: FormSchema, localCreatorLabel: string) {
-  if (form.projectName?.trim()) {
+  if (typeof form.projectName === "string" && form.projectName.trim()) {
     return form.projectName.trim();
   }
-  if (form.ownerAddress) {
+  if (typeof form.ownerAddress === "string" && form.ownerAddress) {
     return `${form.ownerAddress.slice(0, 6)}…${form.ownerAddress.slice(-4)}`;
   }
   return localCreatorLabel;
 }
 
 function matchesKeyword(form: FormSchema, keywords: string[]) {
-  const haystack = [form.title, form.description, form.projectName]
+  const haystack = [form?.title, form?.description, form?.projectName]
     .filter(Boolean)
     .join(" ")
     .toLowerCase();
@@ -67,25 +150,47 @@ function readExploreDeletedFormIds() {
   try {
     const raw = window.localStorage.getItem(EXPLORE_DELETED_FORMS_KEY);
     const ids = raw ? (JSON.parse(raw) as string[]) : [];
+    setDeepSignalCacheRestoreSource(raw ? "localStorage:exploreDeletedForms" : "localStorage:empty");
     return new Set(ids.filter((id) => typeof id === "string" && id.trim()));
-  } catch {
+  } catch (error) {
+    logRouteLifecycle("explore:deleted-cache:parse-failed", { error });
+    try {
+      window.localStorage.removeItem(EXPLORE_DELETED_FORMS_KEY);
+      setDeepSignalCacheRestoreSource("localStorage:exploreDeletedForms-reset");
+      const retryRaw = window.localStorage.getItem(EXPLORE_DELETED_FORMS_KEY);
+      const retryIds = retryRaw ? (JSON.parse(retryRaw) as string[]) : [];
+      return new Set(retryIds.filter((id) => typeof id === "string" && id.trim()));
+    } catch (retryError) {
+      logRouteLifecycle("explore:deleted-cache:retry-failed", { error: retryError });
+    }
     return new Set<string>();
   }
 }
 
 function buildExploreCard(form: FormSchema, submissions: Submission[] = []): ExploreCard {
-  const updatedAt = submissions[0]?.updatedAt ?? form.updatedAt ?? form.createdAt;
+  const safeSubmissions = Array.isArray(submissions) ? submissions.filter(Boolean) : [];
+  const latestSubmission = safeSubmissions
+    .filter(Boolean)
+    .sort((left, right) =>
+      compareIsoDateDesc(
+        getStableIsoDate(left.updatedAt ?? left.createdAt),
+        getStableIsoDate(right.updatedAt ?? right.createdAt),
+      ),
+    )[0];
+  const updatedAt = getStableIsoDate(latestSubmission?.updatedAt ?? latestSubmission?.createdAt ?? form.updatedAt ?? form.createdAt);
   const exploreCategory = getExploreCategory(form);
-  const roadmapCount = submissions.filter((submission) =>
-    submission.triageStatus === "planned" ||
-    submission.triageStatus === "in_progress" ||
-    submission.triageStatus === "fixed",
-  ).length;
+  const roadmapCount = safeSubmissions
+    .filter(Boolean)
+    .filter((submission) =>
+      submission.triageStatus === "planned" ||
+      submission.triageStatus === "in_progress" ||
+      submission.triageStatus === "fixed",
+    ).length;
 
   return {
     form,
     category: exploreCategory,
-    signalCount: submissions.length,
+    signalCount: safeSubmissions.length,
     updatedAt,
     roadmapCount,
   };
@@ -95,53 +200,179 @@ export function ExploreSignalsPage() {
   const { t } = useI18n();
   const [loading, setLoading] = useState(true);
   const [cards, setCards] = useState<ExploreCard[]>([]);
+  const [loadIssue, setLoadIssue] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<DiscoverTab>("trending");
+  const [readiness, setReadiness] = useState<ExploreReadiness>(INITIAL_READINESS);
   const loadSequenceRef = useRef(0);
+  const hydrationRetryRef = useRef(0);
+  const loadRetryRef = useRef(0);
+  const readinessReadyRef = useRef(false);
+  const readyToRenderExplore = allReadinessReady(readiness);
 
   const loadExplore = useCallback(async () => {
+    if (!readyToRenderExplore) {
+      logRouteLifecycle("explore:load:deferred", { readiness });
+      return;
+    }
     const loadSequence = loadSequenceRef.current + 1;
     loadSequenceRef.current = loadSequence;
     setLoading(true);
-    const allStorageForms = await localStorageAdapter.listForms();
-    if (loadSequenceRef.current !== loadSequence) {
-      return;
-    }
+    setLoadIssue(null);
+    logRouteLifecycle("explore:load:start", { sequence: loadSequence });
+    try {
+      const allStorageForms = await localStorageAdapter.listForms();
+      if (loadSequenceRef.current !== loadSequence) {
+        logRouteLifecycle("explore:load:stale", { sequence: loadSequence, stage: "forms" });
+        return;
+      }
 
-    const deletedFormIds = readExploreDeletedFormIds();
-    const allForms: FormSchema[] = allStorageForms
-      .filter((form) => !deletedFormIds.has(form.id))
-      .map((form) => normalizeForm(form));
-    const forms = allForms.filter((form) => isFormPubliclyExplorable(form));
-    setCards(forms.map((form) => buildExploreCard(form)));
-    setLoading(false);
-
-    let nextFormIndex = 0;
-    const workerCount = Math.min(EXPLORE_SUBMISSION_LOAD_CONCURRENCY, forms.length);
-    await Promise.all(
-      Array.from({ length: workerCount }, async () => {
-        while (nextFormIndex < forms.length) {
-          const form = forms[nextFormIndex];
-          nextFormIndex += 1;
-          const submissions = await localStorageAdapter.listSubmissions(form.id);
-          if (loadSequenceRef.current !== loadSequence) {
-            return;
+      const deletedFormIds = readExploreDeletedFormIds();
+      const normalizedForms = (Array.isArray(allStorageForms) ? allStorageForms : [])
+        .filter((form): form is FormSchema => Boolean(form && typeof form === "object" && typeof form.id === "string"))
+        .filter((form) => !deletedFormIds.has(form.id))
+        .reduce<FormSchema[]>((nextForms, form) => {
+          try {
+            nextForms.push(normalizeForm(form));
+          } catch (error) {
+            logRouteLifecycle("explore:form:normalize-failed", { formId: form.id, error });
           }
-          setCards((currentCards) =>
-            currentCards.map((card) =>
-              card.form.id === form.id ? buildExploreCard(form, submissions) : card,
-            ),
-          );
-        }
-      }),
-    );
+          return nextForms;
+        }, []);
+      const forms = normalizedForms.filter((form) => isFormPubliclyExplorable(form));
+      setCards(forms.map((form) => buildExploreCard(form)));
+      setLoading(false);
+      loadRetryRef.current = 0;
+      logRouteLifecycle("explore:load:forms-ready", { sequence: loadSequence, formCount: forms.length });
+
+      let nextFormIndex = 0;
+      const workerCount = Math.min(EXPLORE_SUBMISSION_LOAD_CONCURRENCY, forms.length);
+      await Promise.allSettled(
+        Array.from({ length: workerCount }, async (_, workerIndex) => {
+          while (nextFormIndex < forms.length) {
+            const form = forms[nextFormIndex];
+            nextFormIndex += 1;
+            if (!form) {
+              continue;
+            }
+            try {
+              const rawSubmissions = await localStorageAdapter.listSubmissions(form.id);
+              const submissions = Array.isArray(rawSubmissions)
+                ? rawSubmissions.filter((submission): submission is Submission => Boolean(submission && typeof submission === "object"))
+                : [];
+              if (loadSequenceRef.current !== loadSequence) {
+                logRouteLifecycle("explore:load:stale", { sequence: loadSequence, stage: "submissions", workerIndex });
+                return;
+              }
+              setCards((currentCards) =>
+                currentCards.map((card) =>
+                  card.form.id === form.id ? buildExploreCard(form, submissions) : card,
+                ),
+              );
+            } catch (error) {
+              logRouteLifecycle("explore:submissions:load-failed", { sequence: loadSequence, formId: form.id, workerIndex, error });
+            }
+          }
+        }),
+      );
+      logRouteLifecycle("explore:load:complete", { sequence: loadSequence, formCount: forms.length });
+    } catch (error) {
+      logRouteLifecycle("explore:load:failed", { sequence: loadSequence, error });
+      if (loadRetryRef.current < 1) {
+        loadRetryRef.current += 1;
+        logRouteLifecycle("explore:load:retry", { sequence: loadSequence, retry: loadRetryRef.current });
+        window.setTimeout(() => void loadExplore(), 250);
+        return;
+      }
+      if (loadSequenceRef.current === loadSequence) {
+        setLoadIssue(error instanceof Error ? error.message : "Explore data could not be loaded.");
+        setLoading(false);
+      }
+    }
+  }, [readiness, readyToRenderExplore]);
+
+  useEffect(() => {
+    logRouteLifecycle("explore:mount", { userAgent: getNavigatorUserAgent() });
+    return () => {
+      loadSequenceRef.current += 1;
+      logRouteLifecycle("explore:unmount");
+    };
   }, []);
 
   useEffect(() => {
-    void loadExplore();
-  }, [loadExplore]);
+    let cancelled = false;
+    const cancelAfterPaint = scheduleAfterPaint(() => {
+      if (cancelled) {
+        return;
+      }
+
+      const capabilities = getBrowserCapabilities();
+      setDeepSignalBrowserCapabilities(capabilities);
+      setReadiness({
+        routeHydrated: true,
+        storageHydrated: true,
+        providerReady: true,
+        workspaceReady: true,
+      });
+      readinessReadyRef.current = true;
+      setDeepSignalDebugReadiness({
+        route: "explore",
+        workspaceReady: true,
+        providerReady: true,
+        routeHydrated: true,
+        storageHydrated: true,
+        localStorageAvailable: capabilities.localStorage,
+        walletSession: "not-required",
+        walrusClient: "not-required",
+        inboxState: "local-fallback",
+        streams: "local-forms",
+      });
+      logRouteLifecycle("explore:hydration:ready", capabilities);
+    });
+
+    const retryTimer = window.setTimeout(() => {
+      if (cancelled || readinessReadyRef.current || hydrationRetryRef.current >= 1) {
+        return;
+      }
+      hydrationRetryRef.current += 1;
+      logRouteLifecycle("explore:hydration:retry", { retry: hydrationRetryRef.current });
+      const capabilities = getBrowserCapabilities();
+      setDeepSignalBrowserCapabilities(capabilities);
+      setReadiness({
+        routeHydrated: true,
+        storageHydrated: true,
+        providerReady: true,
+        workspaceReady: true,
+      });
+      readinessReadyRef.current = true;
+    }, EXPLORE_ROUTE_HYDRATION_RETRY_MS);
+
+    return () => {
+      cancelled = true;
+      cancelAfterPaint();
+      window.clearTimeout(retryTimer);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (readyToRenderExplore) {
+      void loadExplore();
+    }
+  }, [loadExplore, readyToRenderExplore]);
+
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      logRouteLifecycle("explore:visibilitychange", { visibilityState: document.visibilityState });
+      if (document.visibilityState === "visible" && readyToRenderExplore && cards.length === 0 && !loading) {
+        void loadExplore();
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
+  }, [cards.length, loadExplore, loading, readyToRenderExplore]);
 
   const filteredCards = useMemo(() => {
-    const next = cards.filter((card) => {
+    const safeCards = Array.isArray(cards) ? cards.filter((card) => card?.form?.id) : [];
+    const next = safeCards.filter((card) => {
       if (activeTab === "ai") {
         return matchesKeyword(card.form, ["ai", "agent", "model", "llm", "automation"]);
       }
@@ -166,12 +397,12 @@ export function ExploreSignalsPage() {
       const rightUpdated = new Date(right.updatedAt).getTime();
 
       if (activeTab === "new") {
-        return rightUpdated - leftUpdated;
+        return (Number.isFinite(rightUpdated) ? rightUpdated : 0) - (Number.isFinite(leftUpdated) ? leftUpdated : 0);
       }
 
-      const leftScore = left.signalCount * 3 + left.roadmapCount * 2 + (Date.now() - leftUpdated < 1000 * 60 * 60 * 24 ? 8 : 0);
-      const rightScore = right.signalCount * 3 + right.roadmapCount * 2 + (Date.now() - rightUpdated < 1000 * 60 * 60 * 24 ? 8 : 0);
-      return rightScore - leftScore || rightUpdated - leftUpdated;
+      const leftScore = left.signalCount * 3 + left.roadmapCount * 2 + (Number.isFinite(leftUpdated) && Date.now() - leftUpdated < 1000 * 60 * 60 * 24 ? 8 : 0);
+      const rightScore = right.signalCount * 3 + right.roadmapCount * 2 + (Number.isFinite(rightUpdated) && Date.now() - rightUpdated < 1000 * 60 * 60 * 24 ? 8 : 0);
+      return rightScore - leftScore || (Number.isFinite(rightUpdated) ? rightUpdated : 0) - (Number.isFinite(leftUpdated) ? leftUpdated : 0);
     });
 
     return sorted;
@@ -201,7 +432,7 @@ export function ExploreSignalsPage() {
   }
 
   function getLocalizedPurposeLabel(form: FormSchema) {
-    switch (form.purpose) {
+    switch (form?.purpose) {
       case "bug":
         return t("explorePurposeBug");
       case "feature":
@@ -229,7 +460,7 @@ export function ExploreSignalsPage() {
   }
 
   function getLocalizedDeadlineLabel(form: Pick<FormSchema, "responseDeadline">) {
-    if (typeof form.responseDeadline !== "number" || !Number.isFinite(form.responseDeadline)) {
+    if (!form || typeof form.responseDeadline !== "number" || !Number.isFinite(form.responseDeadline)) {
       return t("exploreNoDeadline");
     }
     if (isResponseDeadlinePassed(form.responseDeadline)) {
@@ -256,6 +487,26 @@ export function ExploreSignalsPage() {
         channelSuffix: t("explorePreviewChannelSuffix"),
       },
     });
+  }
+
+  if (!readyToRenderExplore) {
+    return (
+      <section className="explore-shell">
+        <section className="panel glow-panel explore-hero explore-hero-compact">
+          <div className="explore-hero-bar">
+            <div className="explore-hero-copy">
+              <p className="eyebrow">{t("exploreEyebrow")}</p>
+              <h1>{t("exploreTitle")}</h1>
+              <p className="lede">{t("exploreLede")}</p>
+              <p className="muted explore-hero-note">{t("exploreScanningWorkspace")}</p>
+            </div>
+            <div className="explore-hero-summary">
+              <span className="signal-chip signal-chip-accent">{t("exploreRefreshingFeed")}</span>
+            </div>
+          </div>
+        </section>
+      </section>
+    );
   }
 
   return (
@@ -317,6 +568,11 @@ export function ExploreSignalsPage() {
           <section className="explore-empty-minimal">
             <h2>{t("exploreEmptyTitle")}</h2>
             <div className="explore-empty-copy">
+              {loadIssue ? (
+                <p className="muted">
+                  Explore recovered without clearing local fallback data. Diagnostic: {loadIssue}
+                </p>
+              ) : null}
               <p className="muted">
                 {t("exploreEmptyPrivateCopy")}
               </p>

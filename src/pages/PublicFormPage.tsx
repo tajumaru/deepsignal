@@ -10,7 +10,6 @@ import { WalletSurface } from "../components/WalletSurface";
 import { WalrusRuntimeSurface } from "../components/WalrusRuntimeSurface";
 import { PublicWalletAccountPanel } from "../features/public-form/components/PublicWalletAccountPanel";
 import { PublicFormSuccess } from "../features/public-form/components/PublicFormSuccess";
-import { PublicSubmitReadiness } from "../features/public-form/components/PublicSubmitReadiness";
 import { SignalMetaChip } from "../components/SignalMetaChip";
 import { SignalSubmissionPipeline } from "../features/public-form/components/SignalSubmissionPipeline";
 import { usePublicFormLoader } from "../features/public-form/hooks/usePublicFormLoader";
@@ -88,7 +87,6 @@ export function PublicFormPage() {
     missingFormMessage: t("publicFormMissingBody"),
   });
   const walletRequired = form?.identityPolicy === "wallet_required";
-  const hasSingleAnswerMode = walletRequired;
   const walletModeSelected = walletRequired || answerAuthMode === "sui_wallet";
   const attachWallet = walletModeSelected;
   const walletFallback = <div className="wallet-connect-shell wallet-connect-shell-compact" />;
@@ -233,9 +231,6 @@ export function PublicFormPage() {
     : form?.locationRequirement === "required"
       ? t("locationActionRequiredHelp")
       : t("locationActionOptionalHelp");
-  const storageModeLabel = form?.encryptSubmissions
-    ? "Evidence layer active"
-    : "Protected review delivery";
   const submitButtonLabel = deadlinePassed
     ? t("publicSubmissionClosed")
     : submitting
@@ -394,14 +389,6 @@ export function PublicFormPage() {
       return;
     }
     handleSelectWalletMode();
-  }
-
-  function handleChangeAuthMethod() {
-    if (hasSingleAnswerMode) {
-      return;
-    }
-    triggerHaptic(10);
-    setPublicStep("identity");
   }
 
   if (loading) {
@@ -724,12 +711,6 @@ export function PublicFormPage() {
           <h1>{form.title}</h1>
           <RichTextContent value={form.description ?? ""} className="lede rich-text-content" fallback={t("publicDefaultBody")} />
         </div>
-        <div className="public-trust-list" role="list">
-          <span role="listitem">Anonymous or verified submissions</span>
-          <span role="listitem">{form.encryptSubmissions ? "Encrypted before upload" : "Protected reviewer workflow"}</span>
-          <span role="listitem">{form.encryptSubmissions ? "Only authorized reviewers can unlock evidence" : "Selected reviewers can inspect submissions"}</span>
-          <span role="listitem">{walletRequired ? "Wallet verification required" : "Wallet verification optional"}</span>
-        </div>
         <div className="public-trust-footer">
           <div className="public-form-status-badges">
             <span className={`public-form-status-badge ${deadlinePassed ? "is-expired" : "is-live"}`}>
@@ -750,51 +731,6 @@ export function PublicFormPage() {
           </p>
         </div>
       </section>
-      <div className="public-form-status-strip">
-        <section className="answer-card public-submit-readiness-inline">
-          <div className="public-submit-badge-grid">
-            <span className={`public-submit-badge is-${walletModeSelected ? "wallet" : "anonymous"}`}>
-              <span className="public-submit-badge-icon" aria-hidden="true">
-                {walletModeSelected ? "Sui" : "Anon"}
-              </span>
-              <span>
-                <small>{t("publicIdentityBadgeLabel")}</small>
-                <strong>{walletModeSelected ? t("publicIdentityBadgeWallet") : t("publicIdentityBadgeGuest")}</strong>
-              </span>
-            </span>
-          </div>
-          {!hasSingleAnswerMode ? (
-            <div className="inline-actions">
-              <button type="button" className="ghost-button" onClick={handleChangeAuthMethod}>
-                {t("publicIdentityChangeAction")}
-              </button>
-            </div>
-          ) : null}
-        </section>
-        <PublicSubmitReadiness
-          className="public-submit-readiness-inline"
-          identityMode={walletModeSelected ? "wallet" : "anonymous"}
-          sealEnabled={Boolean(form.encryptSubmissions)}
-          submitModeLabel={submitModeLabel}
-          storageModeLabel={storageModeLabel}
-          labels={{
-            summary: t("publicReadinessSummary"),
-            deliveryMode: t("publicReadinessDeliveryMode"),
-            anonymous: t("publicReadinessAnonymous"),
-            suiWallet: t("publicReadinessSuiWallet"),
-            zkLogin: t("publicZkLoginProvider"),
-            storageTarget: t("publicReadinessStorageTarget"),
-            walrus: t("publicReadinessWalrus"),
-            walrusIcon: t("publicReadinessWalrusIcon"),
-            seal: t("publicReadinessSeal"),
-            sealOn: t("publicReadinessSealOn"),
-            sealOff: t("publicReadinessSealOff"),
-            attachments: t("publicReadinessAttachments"),
-            attachmentsHelp: t("publicReadinessAttachmentsHelp"),
-          }}
-        />
-      </div>
-
       {hasRecoverableDraft ? (
         <RecoverableDraftBanner
           title={t("recoverableDraftTitle")}

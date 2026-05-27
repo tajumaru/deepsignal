@@ -146,7 +146,7 @@ export function ShareCard({ formId, blobId, createdAt, manifestBlobId }: ShareCa
     return () => window.clearTimeout(timeoutId);
   }, [qrMarkup]);
 
-  async function verifyManifestBeforeCopy() {
+  async function verifyManifestBeforeShare() {
     if (!manifestBlobId) {
       return;
     }
@@ -178,12 +178,37 @@ export function ShareCard({ formId, blobId, createdAt, manifestBlobId }: ShareCa
     setShareLinkError("");
     setVerifyingShareLink(true);
     try {
-      await verifyManifestBeforeCopy();
+      await verifyManifestBeforeShare();
       await navigator.clipboard.writeText(absoluteUrl);
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1800);
     } catch (error) {
       console.error(error);
+      setShareLinkError(error instanceof Error ? error.message : t("shareLinkVerifyCopyBlocked"));
+    } finally {
+      setVerifyingShareLink(false);
+    }
+  }
+
+  async function handleXShare() {
+    if (!absoluteUrl) {
+      setShareLinkError(t("shareLinkMissingFormCopyBlocked"));
+      return;
+    }
+    const popup = window.open("about:blank", "_blank");
+    if (!popup) {
+      setShareLinkError(t("shareLinkVerifyCopyBlocked"));
+      return;
+    }
+    popup.opener = null;
+    setShareLinkError("");
+    setVerifyingShareLink(true);
+    try {
+      await verifyManifestBeforeShare();
+      popup.location.href = xShareUrl;
+    } catch (error) {
+      console.error(error);
+      popup.close();
       setShareLinkError(error instanceof Error ? error.message : t("shareLinkVerifyCopyBlocked"));
     } finally {
       setVerifyingShareLink(false);
@@ -289,17 +314,17 @@ export function ShareCard({ formId, blobId, createdAt, manifestBlobId }: ShareCa
               <ShareActionIcon type="open" />
               <span className="sr-only">{t("openTransmissionLink")}</span>
             </a>
-            <a
+            <button
+              type="button"
               className="ghost-button beacon-action-button x-share-button"
-              href={xShareUrl}
-              target="_blank"
-              rel="noreferrer"
+              onClick={() => void handleXShare()}
+              disabled={verifyingShareLink || !absoluteUrl}
               aria-label={t("shareToX")}
               title={t("shareToX")}
             >
               <ShareActionIcon type="x" />
               <span className="sr-only">{t("shareToX")}</span>
-            </a>
+            </button>
           </div>
         </div>
         {shareLinkError ? <p className="error-text">{shareLinkError}</p> : null}

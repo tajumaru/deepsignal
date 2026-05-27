@@ -1007,13 +1007,17 @@ export function WorkspaceInsights({
   }, [records]);
   const { currentVelocity, previousVelocity, velocityDirection } = velocityWindow;
   const activityMonitorState = getActivityMonitorState(activityStatus, anomalyCount);
-  const silenceMonitorState: MonitorState = silenceCandidates.length > 0
-    ? silenceCandidates[0].tone === "estimated_silence"
-      ? { tone: "critical", key: "Critical" }
-      : silenceCandidates[0].tone === "low_activity"
-        ? { tone: "elevated", key: "Elevated" }
-        : { tone: "recovering", key: "Recovering" }
-    : { tone: "stable", key: "Stable" };
+  const silenceMonitorState: MonitorState = useMemo(
+    () =>
+      silenceCandidates.length > 0
+        ? silenceCandidates[0].tone === "estimated_silence"
+          ? { tone: "critical", key: "Critical" }
+          : silenceCandidates[0].tone === "low_activity"
+            ? { tone: "elevated", key: "Elevated" }
+            : { tone: "recovering", key: "Recovering" }
+        : { tone: "stable", key: "Stable" },
+    [silenceCandidates],
+  );
   const velocityMonitorState = getVelocityMonitorState(currentVelocity, previousVelocity, velocityDirection);
   const clusterMonitorState = getClusterMonitorState(clusters, anomalyCount, silenceCandidates);
   const situationFlow = useMemo(

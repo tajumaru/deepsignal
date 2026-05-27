@@ -134,12 +134,20 @@
 }
 
 .wallet-sync-toggle {
-  display: contents;
+  grid-column: 1 / 3;
+  width: 100%;
+  min-width: 0;
+  display: inline-grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 0.8rem;
   border: 0;
   padding: 0;
   background: transparent;
   color: inherit;
   text-align: left;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
 }
 
 .wallet-connect-shell-compact .wallet-connect-direct {
