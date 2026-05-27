@@ -6,6 +6,7 @@ import { buildExploreAiPreview, getExploreCategory, isFormPubliclyExplorable, ty
 import { normalizeForm } from "../lib/formSchema";
 import { getPublicFormPath } from "../lib/publicLinks";
 import { isResponseDeadlinePassed } from "../lib/responseDeadline";
+import { endPerf, markPerfMilestone, startPerf } from "../lib/perf";
 import {
   logRouteLifecycle,
   setDeepSignalBrowserCapabilities,
@@ -218,6 +219,7 @@ export function ExploreSignalsPage() {
     loadSequenceRef.current = loadSequence;
     setLoading(true);
     setLoadIssue(null);
+    startPerf("explore:cache-restore");
     logRouteLifecycle("explore:load:start", { sequence: loadSequence });
     try {
       const allStorageForms = await localStorageAdapter.listForms();
@@ -242,6 +244,8 @@ export function ExploreSignalsPage() {
       setCards(forms.map((form) => buildExploreCard(form)));
       setLoading(false);
       loadRetryRef.current = 0;
+      endPerf("explore:cache-restore", "ok", `${forms.length} forms`);
+      markPerfMilestone("explore:ready", `${forms.length} forms`);
       logRouteLifecycle("explore:load:forms-ready", { sequence: loadSequence, formCount: forms.length });
 
       let nextFormIndex = 0;
@@ -276,6 +280,7 @@ export function ExploreSignalsPage() {
       );
       logRouteLifecycle("explore:load:complete", { sequence: loadSequence, formCount: forms.length });
     } catch (error) {
+      endPerf("explore:cache-restore", "failed", error instanceof Error ? error.message : String(error));
       logRouteLifecycle("explore:load:failed", { sequence: loadSequence, error });
       if (loadRetryRef.current < 1) {
         loadRetryRef.current += 1;

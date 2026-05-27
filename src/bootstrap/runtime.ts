@@ -1,4 +1,5 @@
 import { startBuildUpdateCheck } from "../lib/buildUpdate";
+import { scheduleIdleTask, type IdleTaskCleanup } from "../lib/scheduleIdleTask";
 import {
   applyReleaseStorageReset,
   rememberCurrentAppVersion,
@@ -8,46 +9,7 @@ import {
 const buildUpdateIdleFallbackMs = 8000;
 const releaseStorageResetDelayMs = 12000;
 
-type Cleanup = () => void;
-
-function scheduleIdleTask(task: () => void, fallbackDelayMs: number): Cleanup {
-  if (typeof window === "undefined") {
-    return () => undefined;
-  }
-
-  let completed = false;
-  let idleHandle: number | undefined;
-
-  const runTask = () => {
-    if (completed) {
-      return;
-    }
-    completed = true;
-
-    if (idleHandle !== undefined && "cancelIdleCallback" in window) {
-      window.cancelIdleCallback(idleHandle);
-    }
-    if (timeoutHandle !== undefined) {
-      window.clearTimeout(timeoutHandle);
-    }
-
-    task();
-  };
-
-  if ("requestIdleCallback" in window) {
-    idleHandle = window.requestIdleCallback(() => runTask());
-  }
-  const timeoutHandle = window.setTimeout(runTask, fallbackDelayMs);
-  return () => {
-    completed = true;
-    if (idleHandle !== undefined && "cancelIdleCallback" in window) {
-      window.cancelIdleCallback(idleHandle);
-    }
-    if (timeoutHandle !== undefined) {
-      window.clearTimeout(timeoutHandle);
-    }
-  };
-}
+type Cleanup = IdleTaskCleanup;
 
 function startIdleMaintenance(): Cleanup {
   const stopBuildUpdateCheck = scheduleIdleTask(() => {

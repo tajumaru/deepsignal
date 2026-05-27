@@ -1,16 +1,19 @@
 import { lazy, Suspense, useEffect, useRef, useState, type PropsWithChildren } from "react";
 import { Link, NavLink, useLocation } from "react-router-dom";
 import { CreateFormLink } from "./CreateFormLink";
-import { NetworkMenu } from "./NetworkMenu";
 import { CreateSignalNavIcon, MoreNavIcon, NavItemLabel } from "./NavIcons";
 import { BuildIndicator } from "./system/BuildIndicator";
 import { WalletConnectSurface } from "./WalletConnectSurface";
 import { useI18n } from "../i18n";
 import { retryLazyImport } from "../lib/lazyRetry";
 import { isSignalInboxPath } from "../lib/navigation";
+import { scheduleIdleTask } from "../lib/scheduleIdleTask";
 
 const WalletNav = lazy(() =>
   retryLazyImport(() => import("./WalletNav"), "wallet-nav").then((module) => ({ default: module.WalletNav })),
+);
+const NetworkMenu = lazy(() =>
+  retryLazyImport(() => import("./NetworkMenu"), "network-menu").then((module) => ({ default: module.NetworkMenu })),
 );
 
 interface AppShellProps extends PropsWithChildren {
@@ -84,6 +87,22 @@ function MobileAppBottomNav() {
         <span>{t("navMobileSettings")}</span>
       </NavLink>
     </nav>
+  );
+}
+
+function DeferredNetworkMenu() {
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => scheduleIdleTask(() => setReady(true), 2200), []);
+
+  if (!ready) {
+    return <div className="network-select-shell network-select-shell-placeholder" aria-hidden="true" />;
+  }
+
+  return (
+    <Suspense fallback={<div className="network-select-shell network-select-shell-placeholder" aria-hidden="true" />}>
+      <NetworkMenu />
+    </Suspense>
   );
 }
 
@@ -246,7 +265,7 @@ export function AppShell({
         <div className="topbar-actions desktop-topbar-actions">
           {publicChrome ? null : (
             <div className="topbar-infra">
-              <NetworkMenu />
+              <DeferredNetworkMenu />
               {walletAvailable ? walletChrome.connect : null}
             </div>
           )}
@@ -331,7 +350,7 @@ export function AppShell({
                   <div className="mobile-drawer-utility-group">
                     <div className="mobile-drawer-utility-card">
                       <span className="mobile-drawer-utility-label">Network</span>
-                      <NetworkMenu />
+                      <DeferredNetworkMenu />
                     </div>
                     <div className="mobile-drawer-utility-card">
                       <span className="mobile-drawer-utility-label">Wallet</span>

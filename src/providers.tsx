@@ -23,6 +23,7 @@ import {
   SUI_NETWORK,
 } from "./lib/sui";
 import { logRouteLifecycle } from "./lib/routeDiagnostics";
+import { endPerf, markPerfMilestone } from "./lib/perf";
 import { useRpcInfrastructure } from "./rpcInfrastructure";
 import WalrusRuntimeBridge from "./walrusRuntimeBridge";
 import { WalletConnectionContext, type WalletConnectionState } from "./walletStatus";
@@ -62,6 +63,11 @@ function walletFilter(wallet: WalletWithRequiredFeatures) {
 }
 
 export function WalrusRuntimeProvider({ children }: PropsWithChildren) {
+  useEffect(() => {
+    endPerf("provider:walrus-runtime", "ok");
+    markPerfMilestone("provider:walrus-runtime:ready");
+  }, []);
+
   return (
     <OptionalWalrusRuntimeBoundary fallback={children}>
       <WalrusRuntimeBridge>{children}</WalrusRuntimeBridge>
@@ -98,6 +104,8 @@ export function WalletProviders({ children }: PropsWithChildren) {
       currentRpcUrl,
       hasRpcInfrastructure: Boolean(rpcInfrastructure),
     });
+    endPerf("provider:wallet", "ok");
+    markPerfMilestone("provider:wallet:ready");
   }, [currentRpcUrl, rpcInfrastructure]);
   const { networkConfig } = useMemo(
     () =>

@@ -1,12 +1,14 @@
 import { createContext, lazy, Suspense, useContext, useEffect, type PropsWithChildren, type ReactNode } from "react";
 import { retryLazyImport } from "../lib/lazyRetry";
+import { startPerf } from "../lib/perf";
 import { logRouteLifecycle } from "../lib/routeDiagnostics";
 
-const WalletProviders = lazy(() =>
-  retryLazyImport(() => import("../providers"), "wallet-providers").then((module) => ({
+const WalletProviders = lazy(() => {
+  startPerf("provider:wallet");
+  return retryLazyImport(() => import("../providers"), "wallet-providers").then((module) => ({
     default: module.WalletProviders,
-  })),
-);
+  }));
+});
 
 function WalletSurfaceFallback() {
   return <div className="panel">Loading wallet...</div>;

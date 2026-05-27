@@ -3,7 +3,6 @@ import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { AppShell } from "./components/AppShell";
 import { WalletSurface } from "./components/WalletSurface";
 import { WalrusRuntimeSurface } from "./components/WalrusRuntimeSurface";
-import { ExploreSignalsPage } from "./pages/ExploreSignalsPage";
 import {
   CREATE_FORM_DRAFT_STORAGE_KEY,
   CREATE_FORM_GUEST_DRAFT_STORAGE_KEY,
@@ -12,11 +11,12 @@ import {
 import { getChunkFailureUrl, isChunkLoadFailure, recoverFromChunkLoadFailure } from "./lib/chunkLoadRecovery";
 import { buildInfo } from "./lib/buildInfo";
 import { retryLazyImport } from "./lib/lazyRetry";
-import { copyPerfDiagnostics, endPerf } from "./lib/perf";
+import { copyPerfDiagnostics, endPerf, markPerfMilestone } from "./lib/perf";
 import { getSelectedProjectId } from "./lib/projectRegistry";
 import { resetLocalEnvironment } from "./lib/resetEnvironment";
 import { formatRouteLifecycleDiagnostics, logRouteLifecycle } from "./lib/routeDiagnostics";
 import { REQUIRE_GLOBAL_WALRUS_RUNTIME } from "./lib/runtimeFlags";
+import { scheduleIdleTask } from "./lib/scheduleIdleTask";
 import { RpcInfrastructureProvider } from "./RpcInfrastructureProvider";
 import { getStorageRuntimeStatus } from "./storage/storageFactory";
 
@@ -55,6 +55,11 @@ const SubmissionDetailPage = lazy(() =>
     default: module.SubmissionDetailPage,
   })),
 );
+const ExploreSignalsPage = lazy(() =>
+  retryLazyImport(() => import("./pages/ExploreSignalsPage"), "route-explore").then((module) => ({
+    default: module.ExploreSignalsPage,
+  })),
+);
 const TroubleshootingPage = lazy(() =>
   retryLazyImport(() => import("./pages/TroubleshootingPage"), "route-troubleshooting").then((module) => ({
     default: module.TroubleshootingPage,
@@ -80,6 +85,10 @@ const ZkLoginCallbackPage = lazy(() =>
     default: module.ZkLoginCallbackPage,
   })),
 );
+
+function prefetchExploreRoute() {
+  void retryLazyImport(() => import("./pages/ExploreSignalsPage"), "prefetch-route-explore").catch(() => undefined);
+}
 
 function WithWalrusRuntime({ children }: { children: ReactNode }) {
   if (REQUIRE_GLOBAL_WALRUS_RUNTIME) {
@@ -451,11 +460,13 @@ const BOOT_MIN_VISIBLE_MS = 1250;
 const BOOT_EXIT_DURATION_MS = 380;
 const BOOT_FAILSAFE_MS = 2500;
 
-function InitialBootReady({ onReady, children }: { onReady: () => void; children: ReactNode }) {
+function InitialBootReady({ onReady, routePath, children }: { onReady: () => void; routePath: string; children: ReactNode }) {
   useEffect(() => {
     endPerf("app:render", "ok");
+    markPerfMilestone("route:interactive", routePath);
+    markPerfMilestone("workspace:ready", routePath);
     onReady();
-  }, [onReady]);
+  }, [onReady, routePath]);
 
   return <>{children}</>;
 }
@@ -495,6 +506,13 @@ export default function App() {
       });
     };
   }, [location.hash, location.pathname, location.search, routeNeedsWalletSurface, routeUsesPublicChrome]);
+
+  useEffect(() => {
+    if (location.pathname !== "/") {
+      return undefined;
+    }
+    return scheduleIdleTask(() => prefetchExploreRoute(), 3500);
+  }, [location.pathname]);
 
   useEffect(() => {
     const failsafe = window.setTimeout(dismissBootOverlay, BOOT_FAILSAFE_MS);
@@ -540,7 +558,7 @@ export default function App() {
     <AppShell walletAvailable={routeNeedsWalletSurface} chrome={routeUsesPublicChrome ? "public" : "full"}>
       <RouteErrorBoundary resetKey={location.key} routePath={`${location.pathname}${location.search}${location.hash}`}>
         <Suspense fallback={<WorkspaceRestoreFallback />}>
-          <InitialBootReady onReady={() => setInitialRouteReady(true)}>
+          <InitialBootReady routePath={`${location.pathname}${location.search}${location.hash}`} onReady={() => setInitialRouteReady(true)}>
             <Routes>
               <Route path="/" element={<LandingPage />} />
               <Route path="/explore" element={<ExploreSignalsPage />} />
@@ -634,7 +652,7 @@ export default function App() {
     <RpcInfrastructureProvider>
       <WalletSurface
         fallback={
-          <InitialBootReady onReady={() => setInitialRouteReady(true)}>
+          <InitialBootReady routePath={`${location.pathname}${location.search}${location.hash}`} onReady={() => setInitialRouteReady(true)}>
             <AppShell walletAvailable={false} chrome={routeUsesPublicChrome ? "public" : "full"}>
               <WorkspaceRestoreFallback onRetry={() => window.location.reload()} />
             </AppShell>

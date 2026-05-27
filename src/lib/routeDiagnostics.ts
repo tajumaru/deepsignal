@@ -86,6 +86,14 @@ function getDebugState() {
     browserCapabilities: {},
     updatedAt: new Date().toISOString(),
   };
+  window.__DEEPSIGNAL_DEBUG__.providerReadiness ??= {};
+  window.__DEEPSIGNAL_DEBUG__.routeTimings ??= [];
+  window.__DEEPSIGNAL_DEBUG__.hydrationTimings ??= [];
+  window.__DEEPSIGNAL_DEBUG__.failedImports ??= [];
+  window.__DEEPSIGNAL_DEBUG__.currentProjectId ??= "";
+  window.__DEEPSIGNAL_DEBUG__.cacheRestoreSource ??= "unknown";
+  window.__DEEPSIGNAL_DEBUG__.browserCapabilities ??= {};
+  window.__DEEPSIGNAL_DEBUG__.updatedAt ??= new Date().toISOString();
   return window.__DEEPSIGNAL_DEBUG__;
 }
 

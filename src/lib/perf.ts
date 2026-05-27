@@ -9,9 +9,16 @@ type PerfEntry = {
   detail?: string;
 };
 
+type PerfMilestone = {
+  name: string;
+  at: number;
+  detail?: string;
+};
+
 declare global {
   interface Window {
     __DEEPSIGNAL_PERF__?: Record<string, PerfEntry>;
+    __DEEPSIGNAL_PERF_MILESTONES__?: PerfMilestone[];
   }
 }
 
@@ -27,6 +34,22 @@ function roundMs(value: number) {
   return Math.max(0, Math.round(value));
 }
 
+function syncDebugPerformance() {
+  if (typeof window === "undefined") {
+    return;
+  }
+  const debugWindow = window as unknown as {
+    __DEEPSIGNAL_DEBUG__?: Record<string, unknown>;
+  };
+  const debugState = debugWindow.__DEEPSIGNAL_DEBUG__ ?? {};
+  debugWindow.__DEEPSIGNAL_DEBUG__ = debugState;
+  debugState.performance = {
+    spans: window.__DEEPSIGNAL_PERF__ ?? {},
+    milestones: window.__DEEPSIGNAL_PERF_MILESTONES__ ?? [],
+  };
+  debugState.updatedAt = new Date().toISOString();
+}
+
 export function startPerf(name: string, detail?: string) {
   const store = getPerfStore();
   if (!store) {
@@ -39,6 +62,7 @@ export function startPerf(name: string, detail?: string) {
     status: "pending",
     detail,
   };
+  syncDebugPerformance();
 }
 
 export function endPerf(name: string, status: PerfStatus = "ok", detail?: string) {
@@ -57,6 +81,7 @@ export function endPerf(name: string, status: PerfStatus = "ok", detail?: string
       status,
       detail,
     };
+    syncDebugPerformance();
     if (typeof console !== "undefined" && typeof console.debug === "function") {
       const suffix = detail ? ` (${detail})` : "";
       console.debug(`[DeepSignal perf] ${name}: 0ms [${status}]${suffix}`);
@@ -79,10 +104,69 @@ export function endPerf(name: string, status: PerfStatus = "ok", detail?: string
     status,
     detail: detail ?? current.detail,
   };
+  syncDebugPerformance();
   if (typeof console !== "undefined" && typeof console.debug === "function") {
     const suffix = store[name].detail ? ` (${store[name].detail})` : "";
     console.debug(`[DeepSignal perf] ${name}: ${store[name].durationMs}ms [${status}]${suffix}`);
   }
+}
+
+export function markPerfMilestone(name: string, detail?: string) {
+  if (typeof window === "undefined") {
+    return;
+  }
+  const milestone = {
+    name,
+    at: roundMs(performance.now()),
+    detail,
+  };
+  window.__DEEPSIGNAL_PERF_MILESTONES__ ??= [];
+  window.__DEEPSIGNAL_PERF_MILESTONES__.push(milestone);
+  if (window.__DEEPSIGNAL_PERF_MILESTONES__.length > 80) {
+    window.__DEEPSIGNAL_PERF_MILESTONES__.shift();
+  }
+  performance.mark(name);
+  syncDebugPerformance();
+  if (typeof console !== "undefined" && typeof console.debug === "function") {
+    const suffix = detail ? ` (${detail})` : "";
+    console.debug(`[DeepSignal perf] ${name}: ${milestone.at}ms${suffix}`);
+  }
+}
+
+export function startFirstPaintInstrumentation() {
+  if (typeof window === "undefined") {
+    return () => undefined;
+  }
+
+  let observer: PerformanceObserver | null = null;
+  let rafHandle = 0;
+
+  const paintEntries = performance.getEntriesByType("paint");
+  for (const entry of paintEntries) {
+    markPerfMilestone(`paint:${entry.name}`, `${Math.round(entry.startTime)}ms`);
+  }
+
+  if ("PerformanceObserver" in window) {
+    try {
+      observer = new PerformanceObserver((list) => {
+        for (const entry of list.getEntries()) {
+          markPerfMilestone(`paint:${entry.name}`, `${Math.round(entry.startTime)}ms`);
+        }
+      });
+      observer.observe({ type: "paint", buffered: true });
+    } catch {
+      observer = null;
+    }
+  }
+
+  rafHandle = window.requestAnimationFrame(() => {
+    markPerfMilestone("paint:first-frame");
+  });
+
+  return () => {
+    observer?.disconnect();
+    window.cancelAnimationFrame(rafHandle);
+  };
 }
 
 export async function measurePerf<T>(name: string, task: () => Promise<T>, detail?: string): Promise<T> {
@@ -112,7 +196,12 @@ export function formatPerfDiagnostics(prefixes: string[] = []) {
       return `${entry.name}: ${duration}ms [${entry.status}]${suffix}`;
     });
 
-  return rows.length > 0 ? rows.join("\n") : "no startup spans recorded";
+  const milestoneRows = (window.__DEEPSIGNAL_PERF_MILESTONES__ ?? []).map((entry) => {
+    const suffix = entry.detail ? ` (${entry.detail})` : "";
+    return `${entry.name}: ${entry.at}ms${suffix}`;
+  });
+  const spanText = rows.length > 0 ? rows.join("\n") : "no startup spans recorded";
+  return [spanText, milestoneRows.length > 0 ? milestoneRows.join("\n") : "no startup milestones recorded"].join("\n\n");
 }
 
 export async function copyPerfDiagnostics(prefixes: string[] = []) {
