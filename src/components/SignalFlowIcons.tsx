@@ -79,28 +79,21 @@ export function FlowStepIcon({ name }: { name: FlowStepIconName }) {
 
 export function PipelineStageIcon({ stage }: { stage: SignalPipelineStage }) {
   switch (stage) {
-    case "preparing_signal":
+    case "idle":
+    case "preparing":
       return <FlowStepIcon name="Submit" />;
-    case "encrypting":
+    case "local_preserved":
       return <FlowStepIcon name="Encrypt" />;
-    case "uploading_to_walrus":
+    case "walrus_uploading":
       return <FlowStepIcon name="Store" />;
-    case "confirming_blob":
+    case "inbox_syncing":
       return (
         <SignalGlyph>
           <circle cx="12" cy="12" r="7.25" />
           <path d="m8.75 12.1 2.1 2.15 4.4-4.5" />
         </SignalGlyph>
       );
-    case "generating_manifest":
-      return (
-        <SignalGlyph>
-          <path d="M7.25 5.25h6.8l2.7 2.7v10.8a1.5 1.5 0 0 1-1.5 1.5h-8a1.5 1.5 0 0 1-1.5-1.5v-12a1.5 1.5 0 0 1 1.5-1.5Z" />
-          <path d="M13.95 5.25v3h2.8" />
-          <path d="M8.75 11.1h6.5M8.75 14.25h6.5" />
-        </SignalGlyph>
-      );
-    case "signal_secured":
+    case "completed":
       return (
         <SignalGlyph>
           <path d="M12 4.5 17.6 6.9v4.4c0 3.45-2.2 6.58-5.6 7.45-3.4-.87-5.6-4-5.6-7.45V6.9Z" />

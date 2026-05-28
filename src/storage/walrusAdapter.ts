@@ -38,6 +38,7 @@ import {
   WALRUS_AGGREGATOR_URL,
   WALRUS_UPLOAD_RELAY_URL,
 } from "../lib/sui";
+import { TatumStorageClientError } from "./tatumClient";
 import { createWalrusBlobProof } from "../lib/walrusProof";
 import {
   EMBEDDED_ENCRYPTED_PAYLOAD_BLOB_ID,
@@ -896,12 +897,34 @@ async function uploadBodyWithSdk(body: Blob | File, kind: UploadKind): Promise<U
 
 async function uploadBodyWithTatum(body: Blob | File, kind: UploadKind): Promise<UploadResult> {
   assertTatumEnv();
-  const result = await uploadWithTatum(body, kind);
-  return {
-    blobId: result.blobId,
-    walrusProof: result.walrusProof,
-    tatumStorage: result.tatumStorage,
-  };
+  try {
+    const result = await uploadWithTatum(body, kind);
+    return {
+      blobId: result.blobId,
+      walrusProof: result.walrusProof,
+      tatumStorage: result.tatumStorage,
+    };
+  } catch (error) {
+    const tatumDiagnostics = error instanceof TatumStorageClientError ? error.diagnostics : null;
+    throw new WalrusDiagnosticError(
+      error instanceof Error ? error.message : "Tatum storage upload failed.",
+      {
+        provider: "tatum",
+        stage: "upload-relay",
+        source: "tatum",
+        category: "storage_unavailable",
+        blobId: tatumDiagnostics?.blobId,
+        cid: tatumDiagnostics?.cid,
+        jobId: tatumDiagnostics?.jobId,
+        uploadStatus: tatumDiagnostics?.status,
+        status: tatumDiagnostics?.httpStatus,
+        errorName: error instanceof Error ? error.name : typeof error,
+        causeMessage: getWalrusCauseMessage(error),
+        responseBody: tatumDiagnostics?.responseBody ?? getWalrusErrorResponseBody(error),
+      },
+      error,
+    );
+  }
 }
 
 async function uploadBody(body: Blob | File, kind: UploadKind): Promise<UploadResult> {
@@ -997,6 +1020,10 @@ async function cleanupSupersededWalrusObjects(blobObjectIds: Array<string | unde
   } catch (error) {
     console.warn(`Walrus cleanup skipped after ${context}.`, error);
   }
+}
+
+export function shouldCleanupSupersededManifestObjects(manifest: Pick<SignalManifest, "version"> | null | undefined) {
+  return Boolean(manifest && manifest.version < 2);
 }
 
 export function getPreservedCleanupObjectIdsForSubmissionUpdate(
@@ -1347,7 +1374,7 @@ function createManifest(
   };
 }
 
-function normalizeManifest(
+export function normalizeManifest(
   manifest: SignalManifest,
   options: { carrierBlobId: string; form?: FormSchema | null } | null,
 ): SignalManifest {
@@ -1381,6 +1408,7 @@ function normalizeManifest(
   return {
     ...manifest,
     version: 2,
+    formBlobId,
     currentVersion,
     versions,
     submissions: manifest.submissions.map((submission) => ({
@@ -1959,7 +1987,7 @@ async function saveSubmissionRecord(
     tatumStorage: bundle.tatumStorage,
     ...(allowEmbeddedEncryptedPayload ? { encryptedBlobId: bundle.blobId, encryptedPayload: undefined } : {}),
   });
-  if (!allowEmbeddedEncryptedPayload && manifest.version < 2) {
+  if (!allowEmbeddedEncryptedPayload && shouldCleanupSupersededManifestObjects(manifest)) {
     await cleanupSupersededWalrusObjects([
       entry.manifestBlobObjectId,
       form ? entry.formBlobObjectId : undefined,
@@ -2262,7 +2290,7 @@ export const walrusAdapter: StorageAdapter = {
       walrusProof: bundle.walrusProof,
       tatumStorage: bundle.tatumStorage,
     });
-    if (manifest.version < 2) {
+    if (shouldCleanupSupersededManifestObjects(manifest)) {
       await cleanupSupersededWalrusObjects(
         [entry.manifestBlobObjectId, form ? entry.formBlobObjectId : undefined].filter(
           (objectId) => objectId && !preservedCleanupObjectIds.has(objectId),

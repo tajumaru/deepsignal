@@ -1,6 +1,7 @@
 import type { FormSchema, Submission } from "../types";
 import { formatAnswerText } from "./answerFormatting";
 import { parseRealSealEnvelope } from "../crypto/sealPayload";
+import type { VersionedFormSchemas } from "./formVersionSchemas";
 import { getSubmissionRespondentMeta } from "./respondentMeta";
 import { getSubmissionVersion } from "./submissionVersioning";
 import { downloadTextFile } from "./utils";
@@ -70,19 +71,46 @@ function getFormattedSubmissionAnswers(form: FormSchema, submission: Submission)
   );
 }
 
-export function exportSubmissionJson(form: FormSchema, submission: Submission) {
+function getSubmissionSchema(form: FormSchema, submission: Submission, versionedForms?: VersionedFormSchemas) {
+  return versionedForms?.[getSubmissionVersion(submission)] ?? form;
+}
+
+function getVersionedFieldColumns(form: FormSchema, submissions: Submission[], versionedForms?: VersionedFormSchemas) {
+  const versions = Array.from(new Set(submissions.map((submission) => getSubmissionVersion(submission)))).sort(
+    (left, right) => left - right,
+  );
+  const forms = versions.map((version) => ({
+    version,
+    form: versionedForms?.[version] ?? form,
+  }));
+  const useVersionPrefix = forms.length > 1;
+  return forms.flatMap(({ version, form: versionForm }) =>
+    versionForm.fields.map((field) => ({
+      version,
+      field,
+      label: useVersionPrefix ? `v${version}: ${field.label}` : field.label,
+    })),
+  );
+}
+
+export function exportSubmissionJson(
+  form: FormSchema,
+  submission: Submission,
+  options: { versionedForms?: VersionedFormSchemas } = {},
+) {
   if (!confirmPrivateExport([submission])) {
     return;
   }
+  const submissionForm = getSubmissionSchema(form, submission, options.versionedForms);
   const encryptionStatus = getSubmissionEncryptionStatus(submission);
   downloadTextFile(
-    `deepsignal-${form.id}-${submission.id}.json`,
+    `deepsignal-${submissionForm.id}-${submission.id}.json`,
     JSON.stringify(
       {
-        form,
+        form: submissionForm,
         submission: {
           ...submission,
-          formattedAnswers: getFormattedSubmissionAnswers(form, submission),
+          formattedAnswers: getFormattedSubmissionAnswers(submissionForm, submission),
           metadata: {
             ...(submission.metadata ?? {}),
             encryptionStatus,
@@ -105,10 +133,15 @@ export function exportSubmissionJson(form: FormSchema, submission: Submission) {
   );
 }
 
-export function exportSubmissionsCsv(form: FormSchema, submissions: Submission[]) {
+export function exportSubmissionsCsv(
+  form: FormSchema,
+  submissions: Submission[],
+  options: { versionedForms?: VersionedFormSchemas } = {},
+) {
   if (!confirmPrivateExport(submissions)) {
     return;
   }
+  const fieldColumns = getVersionedFieldColumns(form, submissions, options.versionedForms);
   const columns = [
     "submissionId",
     "formVersion",
@@ -129,7 +162,7 @@ export function exportSubmissionsCsv(form: FormSchema, submissions: Submission[]
     "notes",
     "githubIssueUrl",
     "githubPrUrl",
-    ...form.fields.map((field) => field.label),
+    ...fieldColumns.map((column) => column.label),
   ];
 
   const rows = submissions.map((submission) => {
@@ -155,7 +188,10 @@ export function exportSubmissionsCsv(form: FormSchema, submissions: Submission[]
       submission.githubIssueUrl ?? "",
       submission.githubPrUrl ?? "",
     ];
-    const answers = form.fields.map((field) => formatAnswerText(field, submission.answers[field.id], "en"));
+    const submissionVersion = getSubmissionVersion(submission);
+    const answers = fieldColumns.map(({ version, field }) =>
+      version === submissionVersion ? formatAnswerText(field, submission.answers[field.id], "en") : "",
+    );
     return [...base, ...answers];
   });
 

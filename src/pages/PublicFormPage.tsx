@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type MouseEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { DynamicField } from "../components/DynamicField";
 import { EmptyState } from "../components/EmptyState";
@@ -6,6 +6,7 @@ import { FormHeaderImage } from "../components/FormHeaderImage";
 import { RichTextContent } from "../components/RichText";
 import { CriticalFailurePanel } from "../components/CriticalFailurePanel";
 import { RecoverableDraftBanner } from "../components/RecoverableDraftBanner";
+import { LocalRecoveryCenter } from "../components/LocalRecoveryCenter";
 import { WalletSurface } from "../components/WalletSurface";
 import { WalrusRuntimeSurface } from "../components/WalrusRuntimeSurface";
 import { PublicWalletAccountPanel } from "../features/public-form/components/PublicWalletAccountPanel";
@@ -24,6 +25,8 @@ import { DEFAULT_ATTACHMENT_MAX_BYTES, ENCRYPTED_INLINE_ATTACHMENT_MAX_BYTES } f
 import { getOrderedFields, getVisibleFieldIds, isFieldRequired } from "../utils/formLogic";
 import { isAttachmentFieldType, isConfirmationCheckboxField } from "../lib/fieldTypes";
 import { collectSignalContext, type AttachedSignalContext } from "../lib/signalContext";
+import { isZkLoginEnabled } from "../lib/zkloginOAuth";
+import { loadZkLoginSession } from "../lib/zkloginSession";
 import type { FieldType } from "../types";
 
 function triggerHaptic(pattern: number | number[]) {
@@ -88,7 +91,9 @@ export function PublicFormPage() {
     missingFormMessage: t("publicFormMissingBody"),
   });
   const walletRequired = form?.identityPolicy === "wallet_required";
+  const zkLoginSession = !walletRequired && isZkLoginEnabled() ? loadZkLoginSession() : null;
   const walletModeSelected = walletRequired || answerAuthMode === "sui_wallet";
+  const identityMode = walletModeSelected ? "wallet" : zkLoginSession ? "zklogin" : "anonymous";
   const attachWallet = walletModeSelected;
   const walletFallback = <div className="wallet-connect-shell wallet-connect-shell-compact" />;
   const {
@@ -104,6 +109,7 @@ export function PublicFormPage() {
     recoveryGuidance,
     recoveryCorrupted,
     submitPipeline,
+    signalFailureState,
     location,
     locationState,
     locationMessage,
@@ -124,8 +130,8 @@ export function PublicFormPage() {
     walletProvider,
     attachWallet,
     walletRequired,
-    zkLoginSession: null,
-    identityMode: walletModeSelected ? "wallet" : "anonymous",
+    zkLoginSession,
+    identityMode,
     manifestBlobId,
     requiredFieldError: t("requiredFieldError"),
     responseDeadlinePassedLabel: t("formResponseClosed"),
@@ -241,16 +247,6 @@ export function PublicFormPage() {
         : deadlinePassed || storageConnectionPreparing
           ? "disabled"
           : "idle";
-  const submitButtonLabel =
-    submitLaunchState === "loading"
-      ? "SENDING SECURE SIGNAL"
-      : submitLaunchState === "success"
-        ? "SIGNAL TRANSMITTED"
-        : submitLaunchState === "error"
-          ? "TRANSMISSION FAILED"
-          : deadlinePassed
-            ? t("publicSubmissionClosed")
-            : "LAUNCH SECURE SIGNAL";
   const submitButtonSubLabel =
     submitLaunchState === "loading"
       ? t("publicSubmitEncryptingSignal")
@@ -276,12 +272,12 @@ export function PublicFormPage() {
     statusNeedsAttention: t("publicSubmissionStatusNeedsAttention"),
     done: t("publicSubmissionOverlayDone"),
     stages: {
-      preparing_signal: "Preparing Signal",
-      encrypting: "Encrypting payload",
-      uploading_to_walrus: "Sealing to Walrus",
-      confirming_blob: "Verifying route",
-      generating_manifest: t("publicSubmissionStageManifest"),
-      signal_secured: t("publicSubmissionStageSecured"),
+      idle: "Ready",
+      preparing: "Preparing signal",
+      local_preserved: "Local preserved",
+      walrus_uploading: "Uploading to Walrus",
+      inbox_syncing: "Syncing inbox",
+      completed: "Signal sent",
     } satisfies Record<SignalPipelineStage, string>,
   };
   const attachmentMaxBytes = form?.encryptSubmissions
@@ -710,6 +706,7 @@ export function PublicFormPage() {
         : failure?.retryable
           ? [{ key: "retry", label: t("retryLabel"), onClick: retrySubmit, disabled: storageConnectionPreparing }]
           : [];
+  const preservedLocally = signalFailureState === "offline_preserved" || signalFailureState === "sync_failed";
 
   return (
     <form className={`panel glow-panel public-form ${publicFormExpanded ? "is-expanded" : ""}`} onSubmit={handleSubmit}>
@@ -943,36 +940,141 @@ export function PublicFormPage() {
           onCopyDiagnostics={copyDiagnostics}
         />
       ) : null}
+      <LocalRecoveryCenter formId={form.id} />
       {submitError && !failure ? <p className="error-text">{submitError}</p> : null}
       <div className="public-form-actions">
         <div className="public-submit-bar-copy" aria-live="polite">
           <span>{submitReadinessLabel}</span>
           <strong>{submitModeLabel}</strong>
         </div>
-        <button
-          type="submit"
-          className={`primary-button signal-capsule-action signal-capsule-action-submit is-${submitLaunchState}`}
+        <HoldToSendButton
+          state={submitLaunchState}
           disabled={submitting || deadlinePassed || storageConnectionPreparing}
-          onClick={() => triggerHaptic([12, 22, 16])}
-          aria-live="polite"
-        >
-          <span className="signal-launch-core signal-capsule-action-icon" aria-hidden="true">
-            <span className="signal-launch-core-ring" />
-            <span className="signal-launch-core-mark" />
-          </span>
-          <span className="signal-capsule-action-copy">
-            <strong>{submitButtonLabel}</strong>
-            <small>{submitButtonSubLabel}</small>
-          </span>
-          <span className="signal-launch-vector" aria-hidden="true">
-            <span className="signal-launch-particle" />
-            <span className="signal-launch-particle" />
-            <span className="signal-launch-particle" />
-            <span className="signal-launch-arrow" />
-          </span>
-        </button>
+          label={
+            submitted || submitPipeline.status === "complete"
+              ? "Signal sent"
+              : preservedLocally
+                ? "Signal preserved locally"
+                : deadlinePassed
+                  ? t("publicSubmissionClosed")
+                  : "Hold to send signal"
+          }
+          subLabel={
+            preservedLocally
+              ? "Retry when storage is reachable"
+              : submitLaunchState === "error"
+                ? "Release and hold again to retry"
+                : submitButtonSubLabel
+          }
+          onComplete={() => {
+            triggerHaptic([12, 22, 16]);
+            retrySubmit();
+          }}
+        />
       </div>
     </form>
+  );
+}
+
+function HoldToSendButton({
+  state,
+  disabled,
+  label,
+  subLabel,
+  onComplete,
+}: {
+  state: "idle" | "loading" | "success" | "error" | "disabled";
+  disabled: boolean;
+  label: string;
+  subLabel: string;
+  onComplete: () => void;
+}) {
+  const holdMs = 1100;
+  const [holding, setHolding] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const startRef = useRef(0);
+  const frameRef = useRef<number | null>(null);
+
+  function stop(reset = true) {
+    setHolding(false);
+    if (frameRef.current !== null) {
+      window.cancelAnimationFrame(frameRef.current);
+      frameRef.current = null;
+    }
+    if (reset) {
+      setProgress(0);
+    }
+  }
+
+  function tick() {
+    const elapsed = performance.now() - startRef.current;
+    const nextProgress = Math.min(100, (elapsed / holdMs) * 100);
+    setProgress(nextProgress);
+    if (nextProgress >= 100) {
+      stop(false);
+      setProgress(100);
+      onComplete();
+      window.setTimeout(() => setProgress(0), 520);
+      return;
+    }
+    frameRef.current = window.requestAnimationFrame(tick);
+  }
+
+  function start() {
+    if (disabled || state === "loading" || state === "success") {
+      return;
+    }
+    setHolding(true);
+    startRef.current = performance.now();
+    frameRef.current = window.requestAnimationFrame(tick);
+  }
+
+  useEffect(() => () => stop(), []);
+
+  return (
+    <button
+      type="button"
+      className={`primary-button signal-capsule-action signal-capsule-action-submit hold-signal-button is-${state} ${holding ? "is-holding" : ""}`}
+      disabled={disabled}
+      style={{ "--hold-progress": `${progress}%` } as CSSProperties}
+      onPointerDown={start}
+      onPointerUp={() => stop()}
+      onPointerLeave={() => stop()}
+      onPointerCancel={() => stop()}
+      onClick={() => {
+        if (!disabled && state !== "loading" && state !== "success" && progress < 100) {
+          onComplete();
+        }
+      }}
+      onKeyDown={(event) => {
+        if (event.key === " " || event.key === "Enter") {
+          event.preventDefault();
+          start();
+        }
+      }}
+      onKeyUp={() => stop()}
+      aria-live="polite"
+      aria-label={label}
+    >
+      <span className="signal-launch-core signal-capsule-action-icon" aria-hidden="true">
+        <span className="signal-launch-core-ring" />
+        <span className="signal-launch-core-progress" />
+        <span className="signal-launch-core-drop">
+          <span>SUI</span>
+        </span>
+        <span className="signal-launch-core-mark" />
+      </span>
+      <span className="signal-capsule-action-copy">
+        <strong>{label}</strong>
+        <small>{subLabel}</small>
+      </span>
+      <span className="signal-launch-vector" aria-hidden="true">
+        <span className="signal-launch-particle" />
+        <span className="signal-launch-particle" />
+        <span className="signal-launch-particle" />
+        <span className="signal-launch-arrow" />
+      </span>
+    </button>
   );
 }
 

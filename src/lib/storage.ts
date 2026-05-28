@@ -684,6 +684,9 @@ export function normalizeSubmission(raw: Submission | (Record<string, unknown> &
       raw.remoteSyncStatus === "local_only"
         ? raw.remoteSyncStatus
         : undefined,
+    revokeRequested: raw.revokeRequested === true ? true : undefined,
+    revokeRequestedAt: typeof raw.revokeRequestedAt === "string" ? raw.revokeRequestedAt : undefined,
+    revokeReason: typeof raw.revokeReason === "string" ? raw.revokeReason : undefined,
     subjectPreview: typeof raw.subjectPreview === "string" ? raw.subjectPreview : undefined,
     ratingValue:
       typeof raw.ratingValue === "number"

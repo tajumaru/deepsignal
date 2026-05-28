@@ -7,12 +7,17 @@ export type WalrusFailureStage =
   | "unknown";
 
 export interface WalrusFailureDetails {
+  provider?: "walrus" | "tatum";
   stage: WalrusFailureStage;
   digest?: string;
+  blobId?: string;
+  cid?: string;
+  jobId?: string;
+  uploadStatus?: string;
   lastRpcError?: string;
   timeoutMs?: number;
   category?: "quota_exceeded" | "rate_limited" | "storage_unavailable";
-  source?: "upload-relay" | "rpc" | "walrus-sdk" | "browser-storage" | "unknown";
+  source?: "upload-relay" | "rpc" | "walrus-sdk" | "browser-storage" | "tatum" | "unknown";
   status?: number;
   errorName?: string;
   causeMessage?: string;

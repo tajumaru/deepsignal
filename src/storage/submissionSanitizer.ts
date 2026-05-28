@@ -28,6 +28,14 @@ function sanitizeEncryptedSubmissionAttachments(attachments: SubmissionAttachmen
   return attachments.map((attachment) => createAttachmentMarker(attachment));
 }
 
+function attachmentsMatch(left: SubmissionAttachment[] | undefined, right: SubmissionAttachment[]) {
+  return Boolean(
+    left &&
+      left.length === right.length &&
+      left.every((attachment, index) => attachment.blobId === right[index]?.blobId),
+  );
+}
+
 export function assertEncryptedSubmissionAttachments(attachments: SubmissionAttachment[]) {
   const hasUnencryptedAttachment = attachments.some((attachment) => attachment.encrypted !== true);
   if (hasUnencryptedAttachment) {
@@ -93,10 +101,10 @@ export function sanitizeSubmissionForStorage(
     return submission;
   }
 
-  const sourceAttachments =
-    submission.publicPayload?.attachments && submission.publicPayload.attachments.length > 0
-      ? submission.publicPayload.attachments
-      : submission.attachments;
+  const publicAttachments = submission.publicPayload?.attachments;
+  const sourceAttachments = attachmentsMatch(publicAttachments, submission.attachments)
+    ? publicAttachments ?? []
+    : submission.attachments;
   const attachments = sanitizeEncryptedSubmissionAttachments(sourceAttachments);
   const redactedSubmission: EncryptedSubmissionRecord = {
     ...submission,

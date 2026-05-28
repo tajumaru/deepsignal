@@ -72,6 +72,9 @@ export function PublicFormSuccess({
           <Link to="/explore" className="primary-button signal-success-action">
             Return to Signals
           </Link>
+          <Link to="/my-responses" className="ghost-button signal-success-action">
+            View My Responses
+          </Link>
           <Link to={submitAnotherHref} className="ghost-button signal-success-action">
             Submit Another Signal
           </Link>
@@ -79,6 +82,10 @@ export function PublicFormSuccess({
             View Receipt
           </button>
         </div>
+        <p className="muted signal-success-history-note">
+          A local read-only receipt was saved on this device. Anonymous submission history exists only in this
+          browser storage and cannot be recovered if localStorage is cleared.
+        </p>
 
         <details ref={detailsRef} className="answer-card public-submit-details signal-success-details">
           <summary>

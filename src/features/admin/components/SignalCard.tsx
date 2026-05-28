@@ -74,6 +74,7 @@ export const SignalCard = forwardRef<HTMLDivElement, SignalCardProps>(function S
   const showCompactStateMeta =
     submission.isEncrypted ||
     submission.status === "archived" ||
+    submission.revokeRequested ||
     isOnchainRecoverySnapshot ||
     hasPayloadIssue ||
     (persistenceLabel !== null && persistenceState !== "walrus_synced");
@@ -145,6 +146,9 @@ export const SignalCard = forwardRef<HTMLDivElement, SignalCardProps>(function S
             ) : null}
             {submission.status === "archived" ? (
               <span className="mailbox-meta-chip mailbox-meta-chip-subtle status-read">{readStateLabel}</span>
+            ) : null}
+            {submission.revokeRequested ? (
+              <span className="mailbox-meta-chip mailbox-meta-chip-subtle is-revoke-requested">Revoke requested</span>
             ) : null}
             {isOnchainRecoverySnapshot ? (
               <span className="mailbox-meta-chip mailbox-meta-chip-subtle">{t("onchainRecoverySnapshotLabel")}</span>

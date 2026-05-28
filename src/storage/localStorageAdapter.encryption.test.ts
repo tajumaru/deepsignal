@@ -220,6 +220,57 @@ describe("localStorageAdapter encrypted submission persistence", () => {
     expect(schemas[2]?.fields.map((field) => field.id)).toEqual(["impact", "severity"]);
   });
 
+  it("fills missing submission version metadata from the cached local form", async () => {
+    await localStorageAdapter.saveForm(
+      createForm({
+        formVersion: 3,
+        schemaHash: "schema:v1:local-v3",
+        blobId: "local-form-v3",
+        manifestBlobId: "local-manifest-v3",
+      }),
+    );
+
+    await localStorageAdapter.saveSubmission({
+      ...createEncryptedSubmission(),
+      isEncrypted: false,
+      encryptedBlobId: undefined,
+      answers: {
+        message: "local response",
+      },
+    });
+
+    const cachedForm = await localStorageAdapter.getForm("form-local");
+    const [stored] = await localStorageAdapter.listSubmissions("form-local");
+    expect(stored).toMatchObject({
+      formVersion: 3,
+      formBlobId: "local-form-v3",
+      schemaHash: cachedForm?.schemaHash,
+      manifestBlobId: "local-manifest-v3",
+    });
+  });
+
+  it("preserves explicit submission version metadata over cached form metadata", async () => {
+    await localStorageAdapter.saveForm(createForm({ formVersion: 3, schemaHash: "schema:v1:local-v3" }));
+
+    await localStorageAdapter.saveSubmission({
+      ...createEncryptedSubmission(),
+      isEncrypted: false,
+      encryptedBlobId: undefined,
+      formVersion: 2,
+      formBlobId: "walrus-form-v2",
+      schemaHash: "schema:v1:explicit-v2",
+      manifestBlobId: "walrus-manifest-v2",
+    });
+
+    const [stored] = await localStorageAdapter.listSubmissions("form-local");
+    expect(stored).toMatchObject({
+      formVersion: 2,
+      formBlobId: "walrus-form-v2",
+      schemaHash: "schema:v1:explicit-v2",
+      manifestBlobId: "walrus-manifest-v2",
+    });
+  });
+
   it("removes local form version schemas when a form is deleted", async () => {
     await localStorageAdapter.saveForm(createForm({ formVersion: 1 }));
     expect(window.localStorage.getItem(LOCAL_FORM_VERSION_SCHEMAS_KEY)).toContain("form-local");

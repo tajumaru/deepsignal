@@ -259,6 +259,152 @@
   color: #d9f8ff;
 }
 
+.public-form .field-block {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(116, 226, 255, 0.14);
+  box-shadow:
+    inset 0 0 0 1px rgba(149, 242, 255, 0.035),
+    0 0 22px rgba(102, 227, 255, 0.045);
+}
+
+.public-form .field-block::before,
+.public-form .field-block::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+  opacity: 0;
+}
+
+.public-form .field-block::before {
+  inset: -35%;
+  background:
+    radial-gradient(circle at 22% 20%, rgba(125, 245, 255, 0.18), transparent 18%),
+    radial-gradient(circle at 74% 78%, rgba(52, 211, 153, 0.12), transparent 20%),
+    radial-gradient(circle, rgba(215, 255, 255, 0.12) 0 1px, transparent 1px 100%);
+  background-size: auto, auto, 23px 29px;
+  transform: translate3d(-2%, 3%, 0);
+  animation: publicQuestionParticles 8s linear infinite;
+}
+
+.public-form .field-block::after {
+  inset: auto 1rem 1rem auto;
+  width: 5.5rem;
+  height: 5.5rem;
+  border-radius: 999px;
+  border: 1px solid rgba(125, 245, 255, 0.24);
+  transform: scale(0.62);
+  animation: publicQuestionRipple 2.8s ease-out infinite;
+}
+
+.public-form .field-block:focus-within::before,
+.public-form .field-block:hover::before,
+.public-form .field-block:focus-within::after,
+.public-form .field-block:hover::after {
+  opacity: 1;
+}
+
+.hold-signal-button {
+  --hold-progress: 0%;
+  position: relative;
+  touch-action: none;
+  user-select: none;
+}
+
+.hold-signal-button .signal-launch-core {
+  position: relative;
+  border-radius: 999px;
+  background:
+    radial-gradient(circle at 50% 38%, rgba(215, 255, 255, 0.9), rgba(102, 227, 255, 0.34) 32%, rgba(12, 42, 60, 0.86) 68%);
+}
+
+.signal-launch-core-progress {
+  position: absolute;
+  inset: -0.45rem;
+  border-radius: 999px;
+  background: conic-gradient(rgba(125, 245, 255, 0.95) var(--hold-progress), rgba(125, 245, 255, 0.12) 0);
+  mask: radial-gradient(circle, transparent 58%, black 60%);
+  -webkit-mask: radial-gradient(circle, transparent 58%, black 60%);
+}
+
+.signal-launch-core-drop {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  width: 54%;
+  height: 62%;
+  border-radius: 58% 58% 60% 60%;
+  background:
+    radial-gradient(circle at 40% 28%, rgba(255, 255, 255, 0.95), transparent 16%),
+    linear-gradient(180deg, #dffbff 0%, #73ddff 48%, #1f9fe8 100%);
+  clip-path: polygon(50% 0%, 66% 18%, 82% 41%, 89% 61%, 85% 78%, 72% 92%, 50% 100%, 28% 92%, 15% 78%, 11% 61%, 18% 41%, 34% 18%);
+  box-shadow:
+    0 0 0 1px rgba(220, 252, 255, 0.48),
+    0 0 20px rgba(102, 227, 255, 0.78),
+    inset 0 -0.35rem 0.7rem rgba(3, 78, 162, 0.28);
+}
+
+.signal-launch-core-drop span {
+  color: rgba(2, 35, 70, 0.86);
+  font-size: 0.46rem;
+  font-weight: 900;
+  letter-spacing: 0;
+  line-height: 1;
+  transform: translateY(0.14rem);
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.42);
+}
+
+.hold-signal-button.is-holding .signal-launch-core-ring {
+  animation: holdSignalRing 1.1s linear infinite;
+}
+
+.local-recovery-center {
+  display: grid;
+  gap: 0.9rem;
+  padding: 1rem;
+  border: 1px solid rgba(255, 211, 128, 0.22);
+  border-radius: 8px;
+  background:
+    linear-gradient(180deg, rgba(35, 24, 7, 0.58), rgba(8, 19, 28, 0.72)),
+    rgba(255, 211, 128, 0.05);
+}
+
+.local-recovery-center h3 {
+  margin: 0;
+}
+
+.local-recovery-list {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.local-recovery-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 0.6rem;
+  align-items: center;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid rgba(255, 211, 128, 0.16);
+  border-radius: 8px;
+  background: rgba(2, 11, 21, 0.46);
+}
+
+@keyframes publicQuestionParticles {
+  from { transform: translate3d(-2%, 3%, 0); }
+  to { transform: translate3d(2%, -3%, 0); }
+}
+
+@keyframes publicQuestionRipple {
+  0% { opacity: 0; transform: scale(0.4); }
+  35% { opacity: 0.58; }
+  100% { opacity: 0; transform: scale(1.35); }
+}
+
+@keyframes holdSignalRing {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
 .public-identity-wallet .wallet-sync-copy {
   display: none;
 }
@@ -2736,6 +2882,88 @@
 
 .signal-success-status-chip.is-warning .signal-flow-icon {
   color: #ffd978;
+}
+
+.signal-success-history-note {
+  max-width: 720px;
+}
+
+.submitted-history-page {
+  width: min(1120px, calc(100vw - 32px));
+  margin: 0 auto;
+  padding: 32px 0 56px;
+}
+
+.submitted-history-hero {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.submitted-history-list {
+  display: grid;
+  gap: 12px;
+}
+
+.submitted-history-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  text-decoration: none;
+  color: inherit;
+}
+
+.submitted-history-row:hover {
+  border-color: rgba(102, 227, 255, 0.44);
+  transform: translateY(-1px);
+}
+
+.submitted-history-row h2,
+.submitted-revoke-card h2 {
+  margin: 0;
+}
+
+.submitted-history-row-meta {
+  display: grid;
+  gap: 4px;
+  justify-items: end;
+  min-width: 150px;
+  color: var(--muted-text);
+}
+
+.submitted-history-row-meta strong {
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+}
+
+.submitted-privacy-card,
+.submitted-revoke-card {
+  border-color: rgba(251, 191, 36, 0.22);
+}
+
+.submitted-revoke-card {
+  display: grid;
+  gap: 16px;
+}
+
+@media (max-width: 720px) {
+  .submitted-history-page {
+    width: min(100% - 20px, 1120px);
+    padding-top: 18px;
+  }
+
+  .submitted-history-hero,
+  .submitted-history-row {
+    display: grid;
+  }
+
+  .submitted-history-row-meta {
+    justify-items: start;
+    min-width: 0;
+  }
 }
 
 .signal-success-trust-strip {

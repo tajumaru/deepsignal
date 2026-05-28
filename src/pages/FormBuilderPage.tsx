@@ -1,4 +1,5 @@
 import { useSignAndExecuteTransaction, useSuiClient } from "@mysten/dapp-kit";
+import "../styles/pages/create-form.css";
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { AdminAccessGate } from "../components/AdminAccessGate";
@@ -147,7 +148,7 @@ function createNewSignalTarget() {
 
 function ComposerHomeSignalCard({ signal }: { signal: ComposerHomeSignal }) {
   return (
-    <article className="composer-home-signal-card">
+    <Link className="composer-home-signal-card" to={signal.href}>
       <div className="composer-home-card-main">
         <span className={`composer-home-status is-${signal.status}`}>{signal.status}</span>
         <h3>{signal.title}</h3>
@@ -166,29 +167,24 @@ function ComposerHomeSignalCard({ signal }: { signal: ComposerHomeSignal }) {
           </div>
         </dl>
       </div>
-      <div className="composer-home-card-actions">
-        <Link className="ghost-button" to={signal.href}>
-          Open
-        </Link>
-      </div>
-    </article>
+    </Link>
   );
 }
 
 function ComposerHomeDraftCard({ draft }: { draft: ComposerHomeDraft }) {
   return (
-    <article className="composer-home-draft-card">
+    <Link
+      className="composer-home-draft-card"
+      to={{ pathname: "/create", search: draft.mode === "guestDraft" ? "?composer=1&mode=guestDraft" : "?composer=1" }}
+    >
       <div>
-        <span className="composer-home-status is-draft">draft</span>
+        <span className="composer-home-status is-draft">unpublished</span>
         <h3>{draft.title}</h3>
         <p className="muted">
           {draft.fieldCount} signal blocks / last composer step: {draft.step}
         </p>
       </div>
-      <Link className="primary-button" to={{ pathname: "/create", search: draft.mode === "guestDraft" ? "?composer=1&mode=guestDraft" : "?composer=1" }}>
-        Resume Draft
-      </Link>
-    </article>
+    </Link>
   );
 }
 
@@ -232,7 +228,7 @@ function ComposerHomePage() {
         if (!cancelled) {
           setState({
             drafts,
-            signals: signals.sort((left, right) => (right.lastActivity ?? "").localeCompare(left.lastActivity ?? "")),
+            signals: signals.sort((left, right) => (right.lastEdited ?? "").localeCompare(left.lastEdited ?? "")),
             error: "",
           });
         }
@@ -258,19 +254,21 @@ function ComposerHomePage() {
     };
   }, []);
 
-  const activeSignals = state.signals.filter((signal) => signal.status === "active");
-  const recentSignals = state.signals.slice(0, 6);
   const hasSignals = state.signals.length > 0;
   const hasDrafts = state.drafts.length > 0;
 
   return (
     <section className="composer-home-shell">
+      <button type="button" className="primary-button composer-home-primary-cta" onClick={() => navigate(createNewSignalTarget())}>
+        + 新しいシグナルを作成
+      </button>
+
       <section className="composer-home-hero panel glow-panel">
         <div className="composer-home-hero-copy">
           <p className="eyebrow">Signal Intelligence Workspace</p>
           <h1>Composer Home</h1>
           <p className="muted">
-            Control live signal channels, resume local drafts, and open a new signal only when the next intake path is clear.
+            新規作成と再編集を一瞬で選べる、シグナル作成のホーム画面です。
           </p>
         </div>
         <div className="composer-home-command">
@@ -279,93 +277,57 @@ function ComposerHomePage() {
             <span />
             <span />
           </div>
-          <button type="button" className="primary-button composer-home-primary-cta" onClick={() => navigate(createNewSignalTarget())}>
-            + Compose Signal
-          </button>
         </div>
       </section>
 
       <section className="composer-home-grid" aria-busy={loading}>
-        <div className="composer-home-main">
-          <section className="composer-home-section">
-            <div className="composer-home-section-heading">
-              <div>
-                <p className="eyebrow">Continue Draft</p>
-                <h2>Drafts waiting in this browser</h2>
-              </div>
-              <span>{hasDrafts ? `${state.drafts.length} ready` : "No draft"}</span>
+        <section className="composer-home-section composer-home-signals-section">
+          <div className="composer-home-section-heading">
+            <div>
+              <p className="eyebrow">Edit Existing Signals</p>
+              <h2>作成済みシグナル</h2>
             </div>
-            {loading ? <div className="composer-home-loading panel">Restoring draft telemetry...</div> : null}
-            {!loading && hasDrafts ? (
-              <div className="composer-home-draft-list">
-                {state.drafts.map((draft) => (
-                  <ComposerHomeDraftCard key={draft.key} draft={draft} />
-                ))}
-              </div>
-            ) : null}
-            {!loading && !hasDrafts ? (
-              <div className="composer-home-empty panel">
-                <strong>No local draft detected.</strong>
-                <p className="muted">Open a new signal when you are ready to define the channel, privacy posture, and response flow.</p>
-              </div>
-            ) : null}
-          </section>
-
-          <section className="composer-home-section">
-            <div className="composer-home-section-heading">
-              <div>
-                <p className="eyebrow">Active Signals</p>
-                <h2>Live channels</h2>
-              </div>
-              <span>{activeSignals.length} active</span>
-            </div>
-            <div className="composer-home-signal-list">
-              {loading ? <div className="composer-home-loading panel">Scanning active signal registry...</div> : null}
-              {!loading && activeSignals.length > 0
-                ? activeSignals.map((signal) => <ComposerHomeSignalCard key={signal.id} signal={signal} />)
-                : null}
-              {!loading && activeSignals.length === 0 ? (
-                <div className="composer-home-empty panel">
-                  <strong>No active signal channels yet.</strong>
-                  <p className="muted">Compose the first signal to open collection and give operators something actionable to review.</p>
-                  <button type="button" className="primary-button" onClick={() => navigate(createNewSignalTarget())}>
-                    Open New Signal
-                  </button>
-                </div>
-              ) : null}
-            </div>
-          </section>
-        </div>
-
-        <aside className="composer-home-side">
-          <section className="composer-home-section panel">
-            <div className="composer-home-section-heading">
-              <div>
-                <p className="eyebrow">Recent Signals</p>
-                <h2>Latest activity</h2>
-              </div>
-            </div>
-            {state.error ? <p className="composer-home-warning">{state.error}</p> : null}
-            {loading ? <div className="composer-home-loading">Loading recent signal activity...</div> : null}
-            {!loading && recentSignals.length > 0 ? (
-              <div className="composer-home-recent-list">
-                {recentSignals.map((signal) => (
-                  <Link key={signal.id} to={signal.href} className="composer-home-recent-row">
-                    <span className={`composer-home-status is-${signal.status}`}>{signal.status}</span>
-                    <strong>{signal.title}</strong>
-                    <small>{formatRelativeSignalTime(signal.lastActivity)}</small>
-                  </Link>
-                ))}
-              </div>
-            ) : null}
+            <span>{hasSignals ? `${state.signals.length} signals` : "No signals"}</span>
+          </div>
+          {state.error ? <p className="composer-home-warning">{state.error}</p> : null}
+          <div className="composer-home-signal-list">
+            {loading ? <div className="composer-home-loading panel">Scanning signal registry...</div> : null}
+            {!loading && hasSignals ? state.signals.map((signal) => <ComposerHomeSignalCard key={signal.id} signal={signal} />) : null}
             {!loading && !hasSignals ? (
-              <div className="composer-home-empty composer-home-empty-compact">
-                <strong>Workspace is clear.</strong>
-                <p className="muted">New signals will appear here after publish through Walrus or local fallback storage.</p>
+              <div className="composer-home-empty panel">
+                <strong>作成済みシグナルはまだありません。</strong>
+                <p className="muted">最初のシグナルを作成すると、ここからすぐ再編集できます。</p>
+                <button type="button" className="primary-button" onClick={() => navigate(createNewSignalTarget())}>
+                  + 新しいシグナルを作成
+                </button>
               </div>
             ) : null}
-          </section>
-        </aside>
+          </div>
+        </section>
+
+        <section className="composer-home-section composer-home-drafts-section">
+          <div className="composer-home-section-heading">
+            <div>
+              <p className="eyebrow">未公開の下書き</p>
+              <h2>このブラウザで保存中</h2>
+            </div>
+            <span>{hasDrafts ? `${state.drafts.length} drafts` : "No draft"}</span>
+          </div>
+          {loading ? <div className="composer-home-loading panel">Restoring unpublished drafts...</div> : null}
+          {!loading && hasDrafts ? (
+            <div className="composer-home-draft-list">
+              {state.drafts.map((draft) => (
+                <ComposerHomeDraftCard key={draft.key} draft={draft} />
+              ))}
+            </div>
+          ) : null}
+          {!loading && !hasDrafts ? (
+            <div className="composer-home-empty panel">
+              <strong>未公開の下書きはありません。</strong>
+              <p className="muted">下書きが保存されると、公開前の作業だけがここに表示されます。</p>
+            </div>
+          ) : null}
+        </section>
       </section>
     </section>
   );

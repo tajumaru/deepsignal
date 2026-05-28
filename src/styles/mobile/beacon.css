@@ -255,6 +255,10 @@
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
+  .beacon-action-panel .primary-button.beacon-action-button {
+    grid-column: 1 / -1;
+  }
+
   .beacon-action-panel .beacon-action-button,
   .beacon-action-panel .beacon-open-link {
     width: 100%;
@@ -270,6 +274,15 @@
 
 @media (max-width: 390px) {
   .beacon-action-panel {
-    grid-template-columns: minmax(0, 1fr);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .beacon-action-panel .primary-button.beacon-action-button,
+  .beacon-action-panel .beacon-copy-blob-button {
+    grid-column: 1 / -1;
+  }
+
+  .beacon-action-panel .beacon-open-link {
+    grid-column: auto;
   }
 }

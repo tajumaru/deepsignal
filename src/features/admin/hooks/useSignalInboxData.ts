@@ -99,6 +99,7 @@ const ADMIN_SUBMISSION_BATCH_SIZE = 4;
 const ONCHAIN_SIGNAL_BATCH_SIZE = 4;
 const MANIFEST_RESTORE_TIMEOUT_MS = 2500;
 const INBOX_BACKGROUND_TASK_TIMEOUT_MS = 1200;
+const REMOTE_SUBMISSION_INDEX_TIMEOUT_MS = 750;
 
 function getViewerRole(capabilityProfile: CapabilityProfile, accountAddress?: string | null) {
   if (!accountAddress) {
@@ -1064,13 +1065,15 @@ export function useSignalInboxData({
         const batchResults = await Promise.all(
           formBatch.map(async (form) => {
             try {
-              const [raw, remoteIndexed] = await Promise.all([
-                storageAdapter.listSubmissions(form.id),
-                loadRemoteIndexedSubmissions(form).catch((error) => {
+              const raw = await storageAdapter.listSubmissions(form.id);
+              const remoteIndexed = await withTimeout(
+                loadRemoteIndexedSubmissions(form),
+                REMOTE_SUBMISSION_INDEX_TIMEOUT_MS,
+                `Remote submission index fetch timed out for ${form.id}.`,
+              ).catch((error) => {
                   console.warn(`Failed to load remote submission index for form ${form.id}`, error);
                   return { indexEntries: [], submissions: [] as Submission[] };
-                }),
-              ]);
+                });
               const normalizedLocal: Submission[] = raw.map((submission) => normalizeSubmission(submission) as Submission);
               const merged: Submission[] = [...normalizedLocal];
               remoteIndexed.submissions.forEach((remoteSubmission) => {

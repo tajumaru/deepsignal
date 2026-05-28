@@ -58,6 +58,10 @@ vi.mock("./pages/FormBuilderPage", () => ({
   FormBuilderPage: () => <h1>Create Signal Route</h1>,
 }));
 
+vi.mock("./pages/MyResponsesPage", () => ({
+  MyResponsesPage: () => <h1>My Responses Route</h1>,
+}));
+
 describe("App routing", () => {
   afterEach(() => {
     document.body.innerHTML = "";
@@ -121,6 +125,19 @@ describe("App routing", () => {
     );
 
     await waitFor(() => expect(screen.getByRole("heading", { name: "Landing Route" })).toBeInTheDocument());
+    expect(screen.getByTestId("app-shell")).toHaveAttribute("data-wallet-available", "no");
+    expect(walletSurfaceSpy).not.toHaveBeenCalled();
+  });
+
+  it("keeps My Responses wallet-optional on the full chrome", async () => {
+    render(
+      <MemoryRouter initialEntries={["/my-responses"]}>
+        <App />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => expect(screen.getByRole("heading", { name: "My Responses Route" })).toBeInTheDocument());
+    expect(screen.getByTestId("app-shell")).toHaveAttribute("data-chrome", "full");
     expect(screen.getByTestId("app-shell")).toHaveAttribute("data-wallet-available", "no");
     expect(walletSurfaceSpy).not.toHaveBeenCalled();
   });

@@ -1,6 +1,7 @@
 import { Component, lazy, Suspense, useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { Navigate, Route, Routes, useLocation, useParams } from "react-router-dom";
 import { AppShell } from "./components/AppShell";
+import { LocalRecoveryCenter } from "./components/LocalRecoveryCenter";
 import { WalletSurface } from "./components/WalletSurface";
 import { WalrusRuntimeSurface } from "./components/WalrusRuntimeSurface";
 import {
@@ -11,6 +12,7 @@ import {
 import {
   clearChunkLoadRecoveryState,
   clearRuntimeCaches,
+  getChunkLoadRecoverySnapshot,
   getChunkFailureUrl,
   isChunkLoadFailure,
   recoverFromChunkLoadFailure,
@@ -64,6 +66,16 @@ function createRouteComponents(retryNonce = 0) {
     SubmissionDetailPage: lazy(() =>
       retryLazyImport(() => import("./pages/SubmissionDetailPage"), "route-submission-detail").then((module) => ({
         default: module.SubmissionDetailPage,
+      })),
+    ),
+    SubmittedHistoryPage: lazy(() =>
+      retryLazyImport(() => import("./pages/SubmittedHistoryPage"), "route-submitted-history").then((module) => ({
+        default: module.SubmittedHistoryPage,
+      })),
+    ),
+    MyResponsesPage: lazy(() =>
+      retryLazyImport(() => import("./pages/MyResponsesPage"), "route-my-responses").then((module) => ({
+        default: module.MyResponsesPage,
       })),
     ),
     ExploreSignalsPage: lazy(() =>
@@ -130,6 +142,8 @@ type RouteDiagnostics = {
   selectedProjectId: string;
   walletConnectedState: "connected" | "disconnected" | "unknown";
   storageMode: string;
+  providerState: Record<string, unknown>;
+  hydrationPhase: string;
   localDraftParseStatus: "missing" | "valid" | "invalid" | "unavailable";
 };
 
@@ -152,10 +166,13 @@ type RouteErrorDiagnostics = {
   observedBuildAssets: BuildAssetRecord[];
   userAgent: string;
   providerReadiness: Record<string, unknown>;
+  providerState: Record<string, unknown>;
+  hydrationPhase: string;
   storageMode: string;
   selectedProjectId: string;
   routeDiagnostics: RouteDiagnostics;
   routeLifecycle: string;
+  chunkRecovery: ReturnType<typeof getChunkLoadRecoverySnapshot>;
   recordedAt: string;
 };
 
@@ -202,6 +219,9 @@ function getRouteId(routePath: string) {
   }
   if (pathname.startsWith("/m/")) {
     return "manifest-restore";
+  }
+  if (pathname === "/my-responses" || pathname.startsWith("/my-responses/")) {
+    return "my-responses";
   }
   return pathname.replace(/^\/+/, "") || "unknown";
 }
@@ -270,11 +290,14 @@ function readCreateDraftParseStatus() {
 
 function collectRouteDiagnostics(routePath: string): RouteDiagnostics {
   const storageRuntime = getStorageRuntimeStatus();
+  const providerState = getProviderReadiness();
   return {
     routePath,
     selectedProjectId: getSelectedProjectId(),
     walletConnectedState: readPersistedWalletConnectionState(),
     storageMode: storageRuntime.mode,
+    providerState,
+    hydrationPhase: typeof providerState.hydrationPhase === "string" ? providerState.hydrationPhase : "unknown",
     localDraftParseStatus: readCreateDraftParseStatus(),
   };
 }
@@ -338,10 +361,73 @@ function WorkspaceRestoreFallback({ onRetry }: { onRetry?: () => void }) {
               {resettingState ? "Resetting local state..." : "Reset local state"}
             </button>
           </div>
+          <LocalRecoveryCenter />
         </div>
       ) : null}
     </div>
   );
+}
+
+function ProviderReadinessBarrier({ children, routePath, enabled = true }: { children: ReactNode; routePath: string; enabled?: boolean }) {
+  const [ready, setReady] = useState(!enabled);
+  const [phase, setPhase] = useState("booting");
+
+  useEffect(() => {
+    if (!enabled) {
+      setPhase("ready");
+      setReady(true);
+      setDeepSignalDebugReadiness({ hydrationPhase: "ready", routePath });
+      return undefined;
+    }
+
+    let cancelled = false;
+    setReady(false);
+    const steps: Array<[string, () => Promise<void> | void]> = [
+      ["router_hydrating", () => undefined],
+      ["storage_hydrating", () => { void window.localStorage.getItem("deepsignal.storage.probe"); }],
+      ["project_hydrating", () => { void getSelectedProjectId(); }],
+      ["providers_ready", () => undefined],
+    ];
+
+    async function run() {
+      for (const [nextPhase, task] of steps) {
+        if (cancelled) {
+          return;
+        }
+        setPhase(nextPhase);
+        setDeepSignalDebugReadiness({ hydrationPhase: nextPhase, routePath });
+        logRouteLifecycle("hydration:phase", { phase: nextPhase, routePath });
+        try {
+          await task();
+        } catch (error) {
+          setDeepSignalDebugReadiness({
+            hydrationPhase: `${nextPhase}:storage-limited`,
+            hydrationError: error instanceof Error ? error.message : String(error),
+          });
+        }
+        await new Promise((resolve) => window.requestAnimationFrame(resolve));
+      }
+      if (!cancelled) {
+        setPhase("ready");
+        setDeepSignalDebugReadiness({ hydrationPhase: "ready", routePath });
+        setReady(true);
+      }
+    }
+
+    void run();
+    return () => {
+      cancelled = true;
+    };
+  }, [enabled, routePath]);
+
+  if (!ready) {
+    return (
+      <WorkspaceRestoreFallback />
+    );
+  }
+
+  void phase;
+  return <>{children}</>;
 }
 
 function MixedBuildRecoveryScreen({ observed }: { observed: BuildAssetRecord[] }) {
@@ -408,10 +494,13 @@ class RouteErrorBoundary extends Component<
       observedBuildAssets: mixedBuildStatus.observed,
       userAgent,
       providerReadiness: getProviderReadiness(),
+      providerState: routeDiagnostics.providerState,
+      hydrationPhase: routeDiagnostics.hydrationPhase,
       storageMode: routeDiagnostics.storageMode,
       selectedProjectId: routeDiagnostics.selectedProjectId,
       routeDiagnostics,
       routeLifecycle: formatRouteLifecycleDiagnostics(),
+      chunkRecovery: getChunkLoadRecoverySnapshot(),
       componentStack: errorInfo.componentStack,
       recordedAt: new Date().toISOString(),
     };
@@ -508,10 +597,13 @@ class RouteErrorBoundary extends Component<
         observedBuildAssets: [],
         userAgent: typeof navigator === "undefined" ? "unknown" : navigator.userAgent,
         providerReadiness: getProviderReadiness(),
+        providerState: collectRouteDiagnostics(this.props.routePath).providerState,
+        hydrationPhase: collectRouteDiagnostics(this.props.routePath).hydrationPhase,
         storageMode: collectRouteDiagnostics(this.props.routePath).storageMode,
         selectedProjectId: collectRouteDiagnostics(this.props.routePath).selectedProjectId,
         routeDiagnostics: collectRouteDiagnostics(this.props.routePath),
         routeLifecycle: formatRouteLifecycleDiagnostics(),
+        chunkRecovery: getChunkLoadRecoverySnapshot(),
         recordedAt: new Date().toISOString(),
       },
       null,
@@ -551,7 +643,7 @@ class RouteErrorBoundary extends Component<
               {this.state.retryCount === 0 ? "Retry surface" : "Retry after clearing stale markers"}
             </button>
             <button type="button" className="ghost-button" onClick={() => void this.handleHardRefresh()}>
-              Hard refresh / clear local app cache
+              Clear app cache and reload
             </button>
             <button type="button" className="ghost-button" onClick={() => void this.handleCopyDiagnostics()}>
               {this.state.diagnosticsCopied ? "Copied diagnostics" : "Copy diagnostics"}
@@ -587,6 +679,8 @@ class RouteErrorBoundary extends Component<
                 <dd>{diagnostics.storageMode}</dd>
                 <dt>selectedProjectId</dt>
                 <dd>{diagnostics.selectedProjectId || "n/a"}</dd>
+                <dt>hydration phase</dt>
+                <dd>{diagnostics.hydrationPhase}</dd>
                 <dt>provider readiness</dt>
                 <dd>
                   <pre className="route-status-diagnostics">{JSON.stringify(diagnostics.providerReadiness, null, 2)}</pre>
@@ -645,6 +739,8 @@ export default function App() {
     ManifestRestorePage,
     PublicRoadmapPage,
     SubmissionDetailPage,
+    SubmittedHistoryPage,
+    MyResponsesPage,
     ExploreSignalsPage,
     TroubleshootingPage,
     InsightsFixturePage,
@@ -658,6 +754,10 @@ export default function App() {
     location.pathname === "/create" ||
     location.pathname === "/compose" ||
     location.pathname === "/troubleshooting" ||
+    location.pathname === "/submitted" ||
+    location.pathname.startsWith("/submitted/") ||
+    location.pathname === "/my-submissions" ||
+    location.pathname.startsWith("/my-submissions/") ||
     location.pathname.startsWith("/admin/") ||
     location.pathname.startsWith("/dashboard/");
 
@@ -762,6 +862,7 @@ export default function App() {
         ) : (
           <Suspense fallback={<WorkspaceRestoreFallback />}>
             <InitialBootReady routePath={`${location.pathname}${location.search}${location.hash}`} onReady={() => setInitialRouteReady(true)}>
+              <ProviderReadinessBarrier routePath={`${location.pathname}${location.search}${location.hash}`} enabled={!routeUsesPublicChrome}>
               <Routes>
               <Route path="/" element={<LandingPage />} />
               <Route path="/explore" element={<ExploreSignalsPage />} />
@@ -827,12 +928,19 @@ export default function App() {
                 element={<LegacyFormInboxRedirect basePath="/dashboard" />}
               />
               <Route path="/admin/submissions/:submissionId" element={<SubmissionDetailPage />} />
+              <Route path="/submitted" element={<SubmittedHistoryPage />} />
+              <Route path="/submitted/:submissionId" element={<SubmittedHistoryPage />} />
+              <Route path="/my-submissions" element={<SubmittedHistoryPage />} />
+              <Route path="/my-submissions/:submissionId" element={<SubmittedHistoryPage />} />
+              <Route path="/my-responses" element={<MyResponsesPage />} />
+              <Route path="/my-responses/:submissionId" element={<MyResponsesPage />} />
               <Route path="/f/:formId" element={<PublicFormPage />} />
               <Route path="/roadmap/:formId" element={<PublicRoadmapPage />} />
               <Route path="/m/:manifestBlobId" element={<ManifestRestorePage />} />
               <Route path="/auth/zklogin/callback" element={<ZkLoginCallbackPage />} />
               <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
+              </ProviderReadinessBarrier>
             </InitialBootReady>
           </Suspense>
         )}

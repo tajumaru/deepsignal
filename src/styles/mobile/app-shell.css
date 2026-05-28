@@ -52,6 +52,22 @@
     border-top: 1px solid rgba(116, 226, 255, 0.12);
   }
 
+  .project-members-role-grid .access-role-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .project-members-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .project-members-project-chip {
+    grid-column: 1 / -1;
+  }
+
+  .project-member-status-card {
+    padding: 0.8rem;
+  }
+
   .access-role-row:not(.access-role-row-header) {
     padding: 0.9rem;
     border-radius: var(--radius-lg);

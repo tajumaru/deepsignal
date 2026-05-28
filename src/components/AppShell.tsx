@@ -242,6 +242,7 @@ export function AppShell({
             </div>
             <div className="topnav-row topnav-row-secondary">
               <NavLink to="/explore">{t("navExplore")}</NavLink>
+              <NavLink to="/my-responses">{t("navMyResponses")}</NavLink>
               {walletChrome.accessNav}
               <div ref={moreMenuRef} className={`topnav-more ${moreMenuOpen ? "is-open" : ""}`}>
                 <button
@@ -323,6 +324,9 @@ export function AppShell({
                     {walletChrome.inboxNav}
                     <NavLink to="/explore" onClick={closeMobileDrawer}>
                       {t("navExplore")}
+                    </NavLink>
+                    <NavLink to="/my-responses" onClick={closeMobileDrawer}>
+                      {t("navMyResponses")}
                     </NavLink>
                     {walletChrome.accessNav}
                     <div className="mobile-drawer-more">

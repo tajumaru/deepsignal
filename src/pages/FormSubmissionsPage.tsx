@@ -194,8 +194,10 @@ export function FormSubmissionsPage() {
   const [versionedForms, setVersionedForms] = useState<VersionedFormSchemas>({});
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState<{ tone: "success" | "error"; message: string } | null>(null);
+  const [freshSignalIds, setFreshSignalIds] = useState<Set<string>>(() => new Set());
   const saveQueueRef = useRef(Promise.resolve());
   const previousSelectedSubmissionIdRef = useRef<string | null>(null);
+  const previousSubmissionIdsRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     async function loadInbox() {
@@ -264,6 +266,12 @@ export function FormSubmissionsPage() {
       return searchable.includes(normalizedSearch);
     });
   }, [search, selectedStreamId, versionedSubmissions]);
+  const anonymousSignalNumbers = useMemo(() => {
+    const anonymous = [...versionedSubmissions]
+      .sort((left, right) => left.createdAt.localeCompare(right.createdAt))
+      .filter((submission) => getSubmissionRespondentMeta(submission).isAnonymous);
+    return new Map(anonymous.map((submission, index) => [submission.id, index + 1]));
+  }, [versionedSubmissions]);
   const selectedSubmission =
     visibleSignals.find((submission) => submission.id === selectedSignalId) ??
     visibleSignals[0] ??
@@ -469,8 +477,12 @@ export function FormSubmissionsPage() {
     [form, submissionMetrics.survey],
   );
   const hasRatingQuestion = useMemo(
-    () => Boolean(form?.fields.some((field) => field.type === "rating")),
-    [form],
+    () => {
+      const forms = Object.values(versionedForms);
+      const schemas = forms.length > 0 ? forms : form ? [form] : [];
+      return schemas.some((schema) => schema.fields.some((field) => field.type === "rating"));
+    },
+    [form, versionedForms],
   );
   const selectedSubmissionEncryptedBlobId = selectedSubmission?.encryptedBlobId;
   const selectedSubmissionEncryptedBlobStoredOnWalrus = Boolean(
@@ -554,6 +566,19 @@ export function FormSubmissionsPage() {
   };
 
   useEffect(() => {
+    const previousIds = previousSubmissionIdsRef.current;
+    const nextIds = new Set(submissions.map((submission) => submission.id));
+    const newIds = submissions.filter((submission) => !previousIds.has(submission.id)).map((submission) => submission.id);
+    previousSubmissionIdsRef.current = nextIds;
+    if (previousIds.size === 0 || newIds.length === 0) {
+      return;
+    }
+    setFreshSignalIds(new Set(newIds));
+    const timer = window.setTimeout(() => setFreshSignalIds(new Set()), 2200);
+    return () => window.clearTimeout(timer);
+  }, [submissions]);
+
+  useEffect(() => {
     if (!selectedSubmission) {
       setNotesDraft("");
       setReviewerDraft("");
@@ -585,6 +610,14 @@ export function FormSubmissionsPage() {
     }
     setSaveError("");
   }, [selectedSubmission, setDecryptDiagnostics, setDecryptError]);
+
+  function getSignalStreamActor(submission: Submission) {
+    const meta = getSubmissionRespondentMeta(submission);
+    if (meta.isAnonymous) {
+      return `Anonymous Signal #${anonymousSignalNumbers.get(submission.id) ?? 1}`;
+    }
+    return getRespondentDisplayLabel(submission);
+  }
 
   function applySubmissionUpdate(nextSubmission: Submission) {
     setSubmissions((current) =>
@@ -939,6 +972,20 @@ export function FormSubmissionsPage() {
               </div>
             ))}
             {renderAttachmentCards(detailAttachments)}
+            <details className="signal-raw-answer-panel">
+              <summary>Raw answer / timestamp / attachment</summary>
+              <div className="metadata-list">
+                <div className="metadata-row">
+                  <span>Timestamp</span>
+                  <strong>{formatDate(selectedSubmission.createdAt)}</strong>
+                </div>
+                <div className="metadata-row">
+                  <span>Attachments</span>
+                  <strong>{detailAttachments.length}</strong>
+                </div>
+              </div>
+              <pre className="route-status-diagnostics">{JSON.stringify(resolvedDetailAnswers, null, 2)}</pre>
+            </details>
             {activeForm.fields.length > previewAnswerFields.length ? (
               <p className="muted">Open Answers to view the full response.</p>
             ) : null}
@@ -1128,7 +1175,7 @@ export function FormSubmissionsPage() {
             <button
               type="button"
               className="ghost-button"
-              onClick={() => exportSubmissionJson(form, selectedSubmission)}
+              onClick={() => exportSubmissionJson(activeForm, selectedSubmission)}
             >
               {t("exportJson")}
             </button>
@@ -1181,7 +1228,7 @@ export function FormSubmissionsPage() {
           </div>
           <div className="metadata-row">
             <span>Form version</span>
-            <strong>v{selectedSubmission.formVersion ?? 1}</strong>
+            <strong>v{getSubmissionVersion(selectedSubmission)}</strong>
           </div>
           {selectedSubmission.schemaHash ? (
             <div className="metadata-row">
@@ -1619,7 +1666,7 @@ export function FormSubmissionsPage() {
                     <strong>{unlockInteractionNotice}</strong>
                   </div>
                 ) : null}
-              <div className="signal-list" aria-busy={isDecryptInteractionLocked}>
+              <div className={`signal-list signal-stream-feed ${freshSignalIds.size > 0 ? "has-new-signal" : ""}`} aria-busy={isDecryptInteractionLocked}>
                 {visibleSignals.map((submission) => {
                   const category = inferSignalCategory(submission);
                   const isSelected = selectedSubmission?.id === submission.id;
@@ -1628,7 +1675,7 @@ export function FormSubmissionsPage() {
                     <button
                       key={submission.id}
                       type="button"
-                      className={`signal-card ${isSelected ? "is-active" : ""} ${submission.status === "unread" ? "is-unread" : "is-read"} ${isDecryptInteractionLocked ? "is-locked" : ""} ${isActiveUnlockTarget ? "is-unlocking" : ""}`}
+                      className={`signal-card signal-stream-card ${isSelected ? "is-active" : ""} ${submission.status === "unread" ? "is-unread" : "is-read"} ${isDecryptInteractionLocked ? "is-locked" : ""} ${isActiveUnlockTarget ? "is-unlocking" : ""} ${freshSignalIds.has(submission.id) ? "is-new-arrival" : ""}`}
                       onClick={() => void handleSelect(submission)}
                       aria-disabled={isDecryptInteractionLocked}
                     >
@@ -1639,7 +1686,7 @@ export function FormSubmissionsPage() {
                           <span className="signal-card-time">{formatDate(submission.createdAt)}</span>
                         </span>
                       </div>
-                      <p className="signal-card-form">{form.title}</p>
+                      <p className="signal-card-form">{getSignalStreamActor(submission)} / {form.title}</p>
                       <p className="signal-card-preview">{getSignalPreview(submission)}</p>
                       <div className="signal-badge-row">
                         <SignalStatusBadges
@@ -1661,14 +1708,10 @@ export function FormSubmissionsPage() {
                           <span className="signal-chip">Severity {submission.severity}</span>
                         ) : null}
                         {getSubmissionRespondentMeta(submission).isAnonymous ? (
-                          <span className="signal-chip">Anonymous respondent</span>
+                          <span className="signal-chip">{getSignalStreamActor(submission)}</span>
                         ) : (
                           <>
-                            <SignalMetaChip
-                              type="contributor"
-                              value={getRespondentDisplayLabel(submission)}
-                              interactive={false}
-                            />
+                            <SignalMetaChip type="contributor" value={getSignalStreamActor(submission)} interactive={false} />
                             <span className="signal-chip">{getRespondentIdentityLabel(submission)}</span>
                           </>
                         )}
@@ -1746,7 +1789,7 @@ export function FormSubmissionsPage() {
                   {renderSignalDetailCard()}
                   {renderReviewTriageCard()}
                 </div>
-                {renderReviewSecondaryPanels()}
+            {renderReviewSecondaryPanels()}
 
 
               </>

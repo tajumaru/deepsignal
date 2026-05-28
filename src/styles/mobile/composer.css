@@ -3,20 +3,20 @@
 @media (max-width: 900px) {
   .composer-home-hero,
   .composer-home-grid,
+  .composer-home-draft-list,
+  .composer-home-signal-list,
   .composer-home-draft-card,
   .composer-home-signal-card {
     grid-template-columns: 1fr;
   }
 
-  .composer-home-command,
-  .composer-home-card-actions {
+  .composer-home-command {
     justify-items: stretch;
     justify-content: stretch;
   }
 
   .composer-home-primary-cta,
-  .composer-home-draft-card .primary-button,
-  .composer-home-card-actions .ghost-button {
+  .composer-home-shell > .composer-home-primary-cta {
     width: 100%;
     justify-content: center;
   }

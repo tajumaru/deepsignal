@@ -1,6 +1,6 @@
 import type { FormSchema, StorageAdapter, Submission } from "../types";
 import { assertEncryptedSubmissionLeakGuard, sanitizeSubmissionForStorage } from "./submissionSanitizer";
-import { computeSchemaHash, resolveFormVersion } from "../lib/formVersioning";
+import { LEGACY_SCHEMA_HASH, computeSchemaHash, resolveFormVersion } from "../lib/formVersioning";
 import { removeLocalFormVersionSchemas, upsertLocalFormVersionSchema } from "./localFormVersions";
 
 const FORMS_KEY = "deepsignal.forms";
@@ -130,6 +130,18 @@ function getEncryptedSubmissionOptions() {
   };
 }
 
+function attachLocalSubmissionVersionMetadata(submission: Submission, forms: FormSchema[]): Submission {
+  const form = forms.find((item) => item.id === submission.formId);
+  const schemaHash = form?.schemaHash || (form ? computeSchemaHash(form) : LEGACY_SCHEMA_HASH);
+  return {
+    ...submission,
+    formVersion: submission.formVersion ?? resolveFormVersion(form ?? submission),
+    formBlobId: submission.formBlobId ?? form?.blobId,
+    schemaHash: submission.schemaHash ?? schemaHash,
+    manifestBlobId: submission.manifestBlobId ?? form?.manifestBlobId,
+  };
+}
+
 export const localStorageAdapter: StorageAdapter = {
   async saveForm(form) {
     const forms = readJson<FormSchema[]>(FORMS_KEY, []);
@@ -200,8 +212,10 @@ export const localStorageAdapter: StorageAdapter = {
 
   async saveSubmission(submission) {
     const submissions = readJson<Submission[]>(SUBMISSIONS_KEY, []);
+    const forms = readJson<FormSchema[]>(FORMS_KEY, []);
     const encryptedSubmissionOptions = getEncryptedSubmissionOptions();
-    const sanitizedSubmission = sanitizeSubmissionForStorage(submission, encryptedSubmissionOptions);
+    const versionedSubmission = attachLocalSubmissionVersionMetadata(submission, forms);
+    const sanitizedSubmission = sanitizeSubmissionForStorage(versionedSubmission, encryptedSubmissionOptions);
     if (sanitizedSubmission.isEncrypted) {
       assertEncryptedSubmissionLeakGuard(sanitizedSubmission, encryptedSubmissionOptions);
     }
@@ -226,6 +240,10 @@ export const localStorageAdapter: StorageAdapter = {
       remoteIndexReadBack: storedSubmission.remoteIndexReadBack,
       ownerReadable: storedSubmission.ownerReadable,
       remoteSyncStatus: storedSubmission.remoteSyncStatus,
+      formVersion: storedSubmission.formVersion,
+      formBlobId: storedSubmission.formBlobId,
+      schemaHash: storedSubmission.schemaHash,
+      manifestBlobId: storedSubmission.manifestBlobId,
       tatumStorage: sanitizedSubmission.tatumStorage,
     };
   },
@@ -239,8 +257,21 @@ export const localStorageAdapter: StorageAdapter = {
 
   async updateSubmission(submission) {
     const submissions = readJson<Submission[]>(SUBMISSIONS_KEY, []);
+    const forms = readJson<FormSchema[]>(FORMS_KEY, []);
     const encryptedSubmissionOptions = getEncryptedSubmissionOptions();
-    const sanitizedSubmission = sanitizeSubmissionForStorage(submission, encryptedSubmissionOptions);
+    const existingSubmission = submissions.find((item) => item.id === submission.id);
+    const versionedSubmission = attachLocalSubmissionVersionMetadata(
+      {
+        ...existingSubmission,
+        ...submission,
+        formVersion: submission.formVersion ?? existingSubmission?.formVersion,
+        formBlobId: submission.formBlobId ?? existingSubmission?.formBlobId,
+        schemaHash: submission.schemaHash ?? existingSubmission?.schemaHash,
+        manifestBlobId: submission.manifestBlobId ?? existingSubmission?.manifestBlobId,
+      },
+      forms,
+    );
+    const sanitizedSubmission = sanitizeSubmissionForStorage(versionedSubmission, encryptedSubmissionOptions);
     if (sanitizedSubmission.isEncrypted) {
       assertEncryptedSubmissionLeakGuard(sanitizedSubmission, encryptedSubmissionOptions);
     }

@@ -195,11 +195,16 @@ export type WalrusNetwork = "testnet" | "mainnet";
 export type TatumStorageStatus = "PENDING" | "UPLOADING" | "CERTIFIED" | "FAILED" | string;
 
 export interface TatumStorageRecord {
+  provider?: "tatum";
   jobId?: string;
   blobId?: string;
+  cid?: string;
+  quiltId?: string;
+  quiltPatchId?: string;
   fileId?: string;
   status?: TatumStorageStatus;
   downloadUrl?: string;
+  noRenewal?: boolean;
 }
 
 export interface WalrusBlobProof {
@@ -368,6 +373,9 @@ export interface Submission {
   remoteIndexReadBack?: boolean;
   ownerReadable?: boolean;
   remoteSyncStatus?: "remote_synced" | "sync_pending" | "local_only";
+  revokeRequested?: boolean;
+  revokeRequestedAt?: string;
+  revokeReason?: string;
   subjectPreview?: string;
   ratingValue?: number;
   createdAt: string;

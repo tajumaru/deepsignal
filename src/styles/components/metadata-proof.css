@@ -1193,6 +1193,13 @@
   letter-spacing: 0.02em;
 }
 
+.beacon-status-detail {
+  max-width: 22ch;
+  color: #9fd1e3;
+  font-size: 0.72rem;
+  line-height: 1.35;
+}
+
 .beacon-copy-value-status {
   color: #74dff5;
   font-size: 0.62rem;
@@ -1240,6 +1247,13 @@
   border-color: rgba(151, 235, 255, 0.22);
   background: rgba(5, 24, 38, 0.62);
   color: #d9f9ff;
+}
+
+.beacon-action-panel .x-share-button,
+.beacon-action-panel .beacon-open-link {
+  border-color: rgba(151, 235, 255, 0.14);
+  background: rgba(5, 20, 32, 0.48);
+  color: #bfe8f2;
 }
 
 @media (hover: hover) and (pointer: fine) {

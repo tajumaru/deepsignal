@@ -18,11 +18,83 @@
 }
 
 @media (max-width: 640px) {
+  .workspace-insights-panel {
+    gap: 1rem;
+    padding: 0.92rem;
+    overflow-x: hidden;
+  }
+
+  .workspace-insights-header,
+  .workspace-signal-summary-header,
+  .workspace-situation-flow-header,
+  .workspace-wave-footer {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .workspace-insights-header h2 {
+    font-size: clamp(1.28rem, 7vw, 1.62rem);
+    line-height: 1.14;
+  }
+
+  .workspace-insights-header h2,
+  .workspace-insights-header .eyebrow,
+  .workspace-insights-intro,
+  .workspace-signal-summary-header h3,
+  .workspace-signal-intelligence-copy h3,
+  .workspace-signal-intelligence-copy p,
+  .workspace-insight-card span,
+  .workspace-insight-card strong,
+  .workspace-insight-card p,
+  .workspace-analysis-summary-grid span,
+  .workspace-analysis-summary-grid strong,
+  .workspace-analysis-summary-grid p,
+  .workspace-diagnostic-row strong,
+  .workspace-diagnostic-row small,
+  .workspace-situation-step strong,
+  .workspace-situation-step p {
+    max-width: 100%;
+    overflow-wrap: normal;
+    word-break: keep-all;
+  }
+
   .workspace-signal-intelligence-card,
   .workspace-sonar-card,
   .workspace-signal-summary-card,
   .workspace-review-queue-card {
-    padding: 0.9rem;
+    padding: 1rem;
+    border-radius: 20px;
+  }
+
+  .workspace-analysis-summary-card,
+  .workspace-insight-card,
+  .workspace-situation-flow,
+  .workspace-diagnostic-row,
+  .workspace-monitor-empty,
+  .workspace-signal-answer-card {
+    border-radius: 18px;
+  }
+
+  .workspace-insight-card,
+  .workspace-analysis-summary-card,
+  .workspace-situation-flow {
+    padding: 1rem;
+  }
+
+  .workspace-profile-pill,
+  .workspace-monitor-state,
+  .workspace-header-readout {
+    justify-self: start;
+  }
+
+  .workspace-intelligence-meta {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.45rem;
+  }
+
+  .workspace-intelligence-meta span {
+    border-radius: 14px;
   }
 
   .workspace-sonar-wave {

@@ -72,17 +72,33 @@ function isLocalFallbackBlob(blobId?: string | null) {
   return Boolean(blobId && blobId.startsWith("local-"));
 }
 
+function getMyResponseStorageMode({
+  runtimeMode,
+  walrusStorageMode,
+  blobId,
+}: {
+  runtimeMode: "walrus" | "local-fallback";
+  walrusStorageMode: string;
+  blobId?: string | null;
+}) {
+  if (runtimeMode === "local-fallback" || isLocalFallbackBlob(blobId)) {
+    return "local" as const;
+  }
+  return walrusStorageMode === "uploadRelay" ? "uploadRelay" as const : "walrus" as const;
+}
+
 export const SIGNAL_PIPELINE_STAGES = [
-  "preparing_signal",
-  "encrypting",
-  "uploading_to_walrus",
-  "confirming_blob",
-  "generating_manifest",
-  "signal_secured",
+  "idle",
+  "preparing",
+  "local_preserved",
+  "walrus_uploading",
+  "inbox_syncing",
+  "completed",
 ] as const;
 
 export type SignalPipelineStage = (typeof SIGNAL_PIPELINE_STAGES)[number];
 export type SignalPipelineStatus = "idle" | "active" | "failed" | "complete";
+export type SignalFailureState = "upload_failed" | "sync_failed" | "offline_preserved" | null;
 
 export interface SignalPipelineState {
   stage: SignalPipelineStage;
@@ -372,10 +388,12 @@ export function usePublicSubmission({
   const [recoveryCorrupted, setRecoveryCorrupted] = useState(false);
   const [storageRuntime, setStorageRuntime] = useState<StorageRuntimeStatus>(DEFAULT_STORAGE_RUNTIME_STATUS);
   const [walrusRuntime, setWalrusRuntime] = useState<WalrusRuntimeStatus>(DEFAULT_WALRUS_RUNTIME_STATUS);
+  const [walrusRuntimeReady, setWalrusRuntimeReady] = useState(false);
   const [submitPipeline, setSubmitPipeline] = useState<SignalPipelineState>({
-    stage: "preparing_signal",
+    stage: "idle",
     status: "idle",
   });
+  const [signalFailureState, setSignalFailureState] = useState<SignalFailureState>(null);
   const [location, setLocation] = useState<SubmissionLocation | undefined>();
   const [locationState, setLocationState] = useState<SubmissionLocationCaptureState>("idle");
   const [locationMessage, setLocationMessage] = useState("");
@@ -387,18 +405,14 @@ export function usePublicSubmission({
   const walrusClientReady = walrusRuntime.hasClient;
   const uploadRelayReady = walrusRuntime.storageMode === "uploadRelay" && walrusRuntime.writeConfigured;
   const canAnonymousUpload = effectiveIdentityMode === "anonymous" && uploadRelayReady;
-  const canWrite =
-    effectiveIdentityMode === "anonymous" && walrusRuntime.storageMode === "uploadRelay"
-      ? uploadRelayReady
-      : walletReady && walrusClientReady;
+  const canWrite = uploadRelayReady || (walletReady && walrusClientReady);
   const storageConnectionPreparing =
-    effectiveIdentityMode === "anonymous" && walrusRuntime.storageMode === "uploadRelay"
+    walrusRuntimeReady && effectiveIdentityMode === "anonymous" && walrusRuntime.storageMode === "uploadRelay"
       ? !uploadRelayReady
-      : effectiveIdentityMode === "wallet" &&
+      : walrusRuntimeReady &&
+          effectiveIdentityMode === "wallet" &&
           walletReady &&
-          walrusRuntime.storageMode === "uploadRelay" &&
-          walrusRuntime.writeConfigured &&
-          !walrusClientReady;
+          !canWrite;
 
   useEffect(() => installSignalContextCapture(), []);
 
@@ -417,11 +431,17 @@ export function usePublicSubmission({
     let unsubscribe: (() => void) | undefined;
     let cancelled = false;
     void import("../../../lib/walrus").then(({ getWalrusMutationRuntimeStatus, subscribeWalrusRuntime }) => {
-      if (cancelled) {
+      if (cancelled || typeof window === "undefined") {
         return;
       }
       setWalrusRuntime(getWalrusMutationRuntimeStatus());
-      unsubscribe = subscribeWalrusRuntime(() => setWalrusRuntime(getWalrusMutationRuntimeStatus()));
+      setWalrusRuntimeReady(true);
+      unsubscribe = subscribeWalrusRuntime(() => {
+        if (!cancelled && typeof window !== "undefined") {
+          setWalrusRuntime(getWalrusMutationRuntimeStatus());
+          setWalrusRuntimeReady(true);
+        }
+      });
     });
 
     return () => {
@@ -447,7 +467,8 @@ export function usePublicSubmission({
     setHasRecoverableDraft(false);
     setRecoveryGuidance("");
     setRecoveryCorrupted(false);
-    setSubmitPipeline({ stage: "preparing_signal", status: "idle" });
+    setSubmitPipeline({ stage: "idle", status: "idle" });
+    setSignalFailureState(null);
     setLocation(undefined);
     setLocationState("idle");
     setLocationMessage("");
@@ -835,7 +856,8 @@ export function usePublicSubmission({
     setSubmitNotice("");
     setFailure(null);
     setDiagnosticsCopied(false);
-    setSubmitPipeline({ stage: "preparing_signal", status: "idle" });
+    setSubmitPipeline({ stage: "idle", status: "idle" });
+    setSignalFailureState(null);
   }
 
   async function copyDiagnostics() {
@@ -985,7 +1007,12 @@ export function usePublicSubmission({
       );
       return;
     }
-    if (effectiveIdentityMode === "anonymous" && walrusRuntime.storageMode === "uploadRelay" && !canAnonymousUpload) {
+    if (
+      walrusRuntimeReady &&
+      effectiveIdentityMode === "anonymous" &&
+      walrusRuntime.storageMode === "uploadRelay" &&
+      !canAnonymousUpload
+    ) {
       setSubmitError(STORAGE_PREPARING_MESSAGE);
       setSubmitNotice("");
       setFailure(
@@ -1038,7 +1065,10 @@ export function usePublicSubmission({
     setSubmitNotice("");
     setFailure(null);
     setDiagnosticsCopied(false);
-    activatePipeline("preparing_signal", "Preparing secure upload...");
+    setSignalFailureState(null);
+    activatePipeline("preparing", "Preparing signal...");
+    let historySubmission: Submission | null = null;
+    const historyStartedAt = new Date().toISOString();
     try {
       if (effectiveIdentityMode === "wallet" && accountAddress) {
         const { waitForWalrusMutationRuntimeReady } = await import("../../../lib/walrus");
@@ -1055,8 +1085,13 @@ export function usePublicSubmission({
         saveSubmissionWithEncryption,
         storageAdapter,
       } = await import("../../../lib/storage");
+      const { saveSubmittedHistoryEntry } = await import("../../../storage/submittedHistory");
+      const {
+        buildMyResponseHistoryEntry,
+        upsertMyResponseHistoryEntry,
+      } = await import("../../../storage/myResponseHistory");
       setStorageRuntime(getStorageRuntimeStatus());
-      const signedAt = new Date().toISOString();
+      const signedAt = historyStartedAt;
       const isAnonymous = effectiveIdentityMode === "anonymous";
       const session = await ensureRespondentSession({
         walletAddress: effectiveIdentityMode === "wallet" ? accountAddress : zkLoginSession?.address,
@@ -1295,16 +1330,36 @@ export function usePublicSubmission({
         createdAt: signedAt,
         updatedAt: signedAt,
       };
+      historySubmission = submission;
+      upsertMyResponseHistoryEntry(
+        buildMyResponseHistoryEntry({
+          form,
+          submission,
+          status: "pending",
+          storageMode: getMyResponseStorageMode({
+            runtimeMode: getStorageRuntimeStatus().mode,
+            walrusStorageMode: walrusRuntime.storageMode,
+          }),
+        }),
+      );
 
       activatePipeline(
-        form.encryptSubmissions ? "encrypting" : "preparing_signal",
+        "preparing",
         form.encryptSubmissions ? "Encrypting response..." : "Preparing secure upload...",
       );
+      const { enqueuePendingSubmission } = await import("../../../storage/submissionDelivery");
+      enqueuePendingSubmission({
+        ...submission,
+        remoteIndexUpdated: false,
+        remoteIndexReadBack: false,
+        ownerReadable: false,
+        remoteSyncStatus: "local_only",
+      });
       const result = await saveSubmissionWithEncryption(form, submission, undefined, storageAdapter, {
         responseDeadlinePassed: responseDeadlinePassedLabel,
         onPipelineStage(stage) {
           activatePipeline(
-            stage,
+            stage === "encrypting" ? "preparing" : "walrus_uploading",
             stage === "encrypting"
               ? "Encrypting response..."
               : "Storing securely...",
@@ -1312,12 +1367,12 @@ export function usePublicSubmission({
         },
       });
       activatePipeline(
-        "confirming_blob",
+        isLocalFallbackBlob(result.blobId) ? "local_preserved" : "walrus_uploading",
         isLocalFallbackBlob(result.blobId) ? "Signal saved in local recovery." : "Verifying secure storage...",
       );
       await pausePipelineStep();
       activatePipeline(
-        "generating_manifest",
+        "inbox_syncing",
         isLocalFallbackBlob(result.blobId) ? "Preparing local recovery path..." : "Preparing recovery path...",
       );
       await pausePipelineStep();
@@ -1343,6 +1398,12 @@ export function usePublicSubmission({
         remoteSyncStatus: result.remoteSyncStatus,
         walrusProof: result.walrusProof,
       } satisfies Submission;
+      historySubmission = savedSubmission;
+      const responseStorageMode = getMyResponseStorageMode({
+        runtimeMode: getStorageRuntimeStatus().mode,
+        walrusStorageMode: walrusRuntime.storageMode,
+        blobId: savedSubmission.answerBlobId ?? savedSubmission.blobId,
+      });
       const remoteDelivered =
         result.remoteSyncStatus === "remote_synced" &&
         result.remoteIndexUpdated === true &&
@@ -1376,10 +1437,22 @@ export function usePublicSubmission({
       }
       if (!remoteDelivered && !walrusManifestBundleSaved && !externalIndexAccepted) {
         const message =
-          "Signal was saved as a pending delivery, but it is not yet readable from the owner inbox. Keep this page available until remote sync completes or retry from this device.";
+          isLocalFallbackBlob(savedSubmission.encryptedBlobId ?? savedSubmission.blobId)
+            ? "Signal preserved locally. Retry when storage is reachable to finish Walrus upload and inbox sync."
+            : "Signal was saved as a pending delivery, but it is not yet readable from the owner inbox. Keep this page available until remote sync completes or retry from this device.";
         setSubmitted(null);
         setSubmitNotice(notices.join(" "));
         setSubmitError(message);
+        setSignalFailureState(isLocalFallbackBlob(savedSubmission.encryptedBlobId ?? savedSubmission.blobId) ? "offline_preserved" : "sync_failed");
+        upsertMyResponseHistoryEntry(
+          buildMyResponseHistoryEntry({
+            form,
+            submission: savedSubmission,
+            status: isLocalFallbackBlob(savedSubmission.encryptedBlobId ?? savedSubmission.blobId) ? "local-only" : "pending",
+            storageMode: responseStorageMode,
+            errorMessage: message,
+          }),
+        );
         failPipeline(message);
         setFailure(
           createCriticalFailure({
@@ -1402,17 +1475,54 @@ export function usePublicSubmission({
             },
           }),
         );
-        clearDraft();
-        clearRecoveryRetryState();
+        return;
+      }
+      if (!remoteDelivered) {
+        const message =
+          "Signal preserved locally. Walrus evidence exists, but inbox confirmation is still pending; retry from this device to complete sync.";
+        setSubmitted(null);
+        setSubmitNotice(notices.join(" "));
+        setSubmitError(message);
+        setSignalFailureState("sync_failed");
+        upsertMyResponseHistoryEntry(
+          buildMyResponseHistoryEntry({
+            form,
+            submission: savedSubmission,
+            status: "pending",
+            storageMode: responseStorageMode,
+            errorMessage: message,
+          }),
+        );
+        failPipeline(message);
+        enqueuePendingSubmission(savedSubmission);
         return;
       }
       setSubmitted(savedSubmission);
+      upsertMyResponseHistoryEntry(
+        buildMyResponseHistoryEntry({
+          form,
+          submission: savedSubmission,
+          status: "submitted",
+          storageMode: responseStorageMode,
+        }),
+      );
+      saveSubmittedHistoryEntry({
+        form,
+        submission: savedSubmission,
+        storageMode: getStorageRuntimeStatus().mode,
+        walletAddress: effectiveIdentityMode === "wallet" ? accountAddress : undefined,
+      });
       setSubmitNotice(notices.join(" "));
       clearDraft();
       clearRecoveryRetryState();
       setFailure(null);
-      setSubmitPipeline({ stage: "signal_secured", status: "complete", message: "Signal secured." });
+      setSubmitPipeline({ stage: "completed", status: "complete", message: "Signal sent." });
     } catch (error) {
+      const {
+        buildFailedMyResponseDraft,
+        buildMyResponseHistoryEntry,
+        upsertMyResponseHistoryEntry,
+      } = await import("../../../storage/myResponseHistory");
       const latestWalrusRuntime = await import("../../../lib/walrus")
         .then(({ getWalrusMutationRuntimeStatus }) => getWalrusMutationRuntimeStatus())
         .catch(() => walrusRuntime);
@@ -1428,6 +1538,34 @@ export function usePublicSubmission({
         });
       }
       const message = getUserFacingSubmissionError(error, submitFailedLabel);
+      const failedStorageMode = getMyResponseStorageMode({
+        runtimeMode: storageRuntime.mode,
+        walrusStorageMode: latestWalrusRuntime.storageMode,
+        blobId: historySubmission?.answerBlobId ?? historySubmission?.blobId,
+      });
+      if (historySubmission) {
+        upsertMyResponseHistoryEntry(
+          buildMyResponseHistoryEntry({
+            form,
+            submission: historySubmission,
+            status: "failed",
+            storageMode: failedStorageMode,
+            errorMessage: message,
+          }),
+        );
+      } else {
+        upsertMyResponseHistoryEntry(
+          buildFailedMyResponseDraft({
+            form,
+            submissionId: makeId("submission_failed"),
+            answers,
+            submittedAt: historyStartedAt,
+            status: "failed",
+            storageMode: failedStorageMode,
+            errorMessage: message,
+          }),
+        );
+      }
       const recoveryFailure = recordRecoveryFailure(error, message);
       const displayMessage = recoveryFailure.corrupted ? RECOVERY_CORRUPTED_MESSAGE : message;
       const retryable =
@@ -1435,6 +1573,7 @@ export function usePublicSubmission({
           ? false
           : undefined;
       setSubmitError(message);
+      setSignalFailureState(message.toLowerCase().includes("upload") || message.toLowerCase().includes("walrus") ? "upload_failed" : "offline_preserved");
       failPipeline(displayMessage);
       if (!recoveryFailure.corrupted) {
         persistDraft(answers);
@@ -1494,6 +1633,7 @@ export function usePublicSubmission({
     recoveryGuidance,
     recoveryCorrupted,
     submitPipeline,
+    signalFailureState,
     location,
     locationState,
     locationMessage,

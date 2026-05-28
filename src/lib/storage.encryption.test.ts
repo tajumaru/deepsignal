@@ -212,6 +212,110 @@ describe("saveSubmissionWithEncryption", () => {
     });
   });
 
+  it("attaches form version metadata to standard saved submissions", async () => {
+    const persisted: Submission[] = [];
+    const versionedForm: FormSchema = {
+      ...form,
+      encryptSubmissions: false,
+      formVersion: 3,
+      schemaHash: "schema:v1:versioned",
+      blobId: "walrus-form-v3",
+      manifestBlobId: "walrus-manifest-v3",
+    };
+    const targetStorage: StorageAdapter = {
+      saveForm: vi.fn(),
+      getForm: vi.fn(),
+      listForms: vi.fn(),
+      deleteForm: vi.fn(),
+      deleteForms: vi.fn(),
+      saveSubmission: vi.fn(async (submission: Submission) => {
+        persisted.push(submission);
+        return { id: submission.id, blobId: "submission-blob" };
+      }),
+      listSubmissions: vi.fn(),
+      updateSubmission: vi.fn(),
+      saveEncryptedPayload: vi.fn(),
+      readEncryptedPayload: vi.fn(),
+      uploadFile: vi.fn(),
+      readFileBlob: vi.fn(),
+      readFileText: vi.fn(),
+    };
+    const result = await saveSubmissionWithEncryption(
+      versionedForm,
+      {
+        ...createEncryptedSubmission(),
+        isEncrypted: false,
+        attachments: [],
+        publicPayload: undefined,
+      },
+      fakeSealAdapter,
+      targetStorage,
+    );
+
+    expect(persisted[0]).toMatchObject({
+      formVersion: 3,
+      formBlobId: "walrus-form-v3",
+      schemaHash: "schema:v1:versioned",
+      manifestBlobId: "walrus-manifest-v3",
+    });
+    expect(result).toMatchObject({
+      formVersion: 3,
+      formBlobId: "walrus-form-v3",
+      schemaHash: "schema:v1:versioned",
+      manifestBlobId: "walrus-manifest-v3",
+    });
+  });
+
+  it("attaches form version metadata to single-call encrypted saved submissions", async () => {
+    const persisted: Submission[] = [];
+    const versionedForm: FormSchema = {
+      ...form,
+      formVersion: 4,
+      schemaHash: "schema:v1:encrypted-versioned",
+      blobId: "walrus-form-v4",
+      manifestBlobId: "walrus-manifest-v4",
+    };
+    const targetStorage: StorageAdapter = {
+      saveForm: vi.fn(),
+      getForm: vi.fn(),
+      listForms: vi.fn(),
+      deleteForm: vi.fn(),
+      deleteForms: vi.fn(),
+      saveSubmission: vi.fn(),
+      saveEncryptedSubmission: vi.fn(async (submission: Submission) => {
+        persisted.push(submission);
+        return { id: submission.id, blobId: "submission-blob", encryptedBlobId: "submission-blob" };
+      }),
+      listSubmissions: vi.fn(),
+      updateSubmission: vi.fn(),
+      saveEncryptedPayload: vi.fn(),
+      readEncryptedPayload: vi.fn(),
+      uploadFile: vi.fn(),
+      readFileBlob: vi.fn(),
+      readFileText: vi.fn(),
+    };
+
+    const result = await saveSubmissionWithEncryption(
+      versionedForm,
+      createEncryptedSubmission(),
+      fakeSealAdapter,
+      targetStorage,
+    );
+
+    expect(persisted[0]).toMatchObject({
+      formVersion: 4,
+      formBlobId: "walrus-form-v4",
+      schemaHash: "schema:v1:encrypted-versioned",
+      manifestBlobId: "walrus-manifest-v4",
+    });
+    expect(result).toMatchObject({
+      formVersion: 4,
+      formBlobId: "walrus-form-v4",
+      schemaHash: "schema:v1:encrypted-versioned",
+      manifestBlobId: "walrus-manifest-v4",
+    });
+  });
+
   it("fails closed when an encrypted submission contains an unencrypted attachment", async () => {
     const targetStorage: StorageAdapter = {
       saveForm: vi.fn(),

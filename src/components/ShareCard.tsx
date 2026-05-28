@@ -347,6 +347,9 @@ export function ShareCard({ formId, blobId, createdAt, manifestBlobId }: ShareCa
           <div>
             <span>{t("status")}</span>
             <strong>{signalStatus}</strong>
+            {absoluteUrl ? (
+              <small className="beacon-status-detail">Signal is live. Ready to receive encrypted responses.</small>
+            ) : null}
           </div>
         </div>
         <div className="beacon-action-panel" aria-label={t("transmissionLinkLabel")}>
@@ -363,7 +366,7 @@ export function ShareCard({ formId, blobId, createdAt, manifestBlobId }: ShareCa
           </button>
           <button
             type="button"
-            className="ghost-button beacon-action-button"
+            className="ghost-button beacon-action-button beacon-copy-blob-button"
             onClick={() => void handleCopyBlobId()}
             disabled={!blobId}
             aria-label={blobCopied ? t("copied") : t("copyBlobId")}

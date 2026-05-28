@@ -1,5 +1,5 @@
-import "@mysten/dapp-kit/dist/index.css";
 import { JsonRpcHTTPTransport, SuiJsonRpcClient } from "@mysten/sui/jsonRpc";
+import dappKitStylesheetUrl from "@mysten/dapp-kit/dist/index.css?url";
 import {
   Component,
   useCallback,
@@ -106,6 +106,19 @@ export function WalletProviders({ children }: PropsWithChildren) {
   const [queryClient] = useState(() => new QueryClient());
   const rpcInfrastructure = useRpcInfrastructure();
   const currentRpcUrl = rpcInfrastructure.currentRpcUrl;
+  useEffect(() => {
+    const existingStylesheet = document.querySelector<HTMLLinkElement>(
+      `link[data-deepsignal-wallet-stylesheet="${dappKitStylesheetUrl}"]`,
+    );
+    if (existingStylesheet) {
+      return;
+    }
+    const stylesheet = document.createElement("link");
+    stylesheet.rel = "stylesheet";
+    stylesheet.href = dappKitStylesheetUrl;
+    stylesheet.dataset.deepsignalWalletStylesheet = dappKitStylesheetUrl;
+    document.head.appendChild(stylesheet);
+  }, []);
   useEffect(() => {
     logRouteLifecycle("wallet-provider:ready", {
       currentRpcUrl,

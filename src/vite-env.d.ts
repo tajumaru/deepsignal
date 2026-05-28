@@ -25,6 +25,9 @@ interface ImportMetaEnv {
   readonly NEXT_PUBLIC_TATUM_STORAGE_ENABLED?: string;
   readonly VITE_TATUM_PROXY_ENABLED?: string;
   readonly VITE_TATUM_PROXY_PATH?: string;
+  readonly VITE_TATUM_STORAGE_ENABLED?: string;
+  readonly VITE_TATUM_STORAGE_BASE_URL?: string;
+  readonly VITE_TATUM_API_KEY?: string;
   readonly VITE_TATUM_STORAGE_API_URL?: string;
   readonly VITE_TATUM_STORAGE_PROXY_ENABLED?: string;
   readonly VITE_TATUM_STORAGE_PROXY_PATH?: string;

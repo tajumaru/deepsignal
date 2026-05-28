@@ -144,6 +144,52 @@ describe("publishForm", () => {
     expect(mockDeleteFormsFromLocalCache).not.toHaveBeenCalled();
   });
 
+  it("returns and overlays version metadata from the storage publish result", async () => {
+    mockSaveForm.mockResolvedValue({
+      formVersion: 2,
+      schemaHash: "schema:v1:published",
+      blobId: "manifest-blob-v2",
+      manifestBlobId: "manifest-blob-v2",
+    });
+    mockVerifyWalrusBlob.mockResolvedValue("failed");
+
+    const result = await publishForm({
+      t: createTranslate(),
+      form: createFormFixture({
+        formVersion: 1,
+        schemaHash: "schema:v1:draft",
+        blobId: "draft-blob",
+        manifestBlobId: "draft-manifest",
+      }),
+      selectedProject: null,
+      setPublishStageIndex: vi.fn(),
+      setPublishBlobId: vi.fn(),
+      setPublishStorageMode: vi.fn(),
+      setPublishResultNote: vi.fn(),
+      setPublishActiveStageStatus: vi.fn(),
+      setPublishActiveStageDetail: vi.fn(),
+      setProjectState: vi.fn(),
+      shouldContinue: () => true,
+    });
+
+    expect(result).toMatchObject({
+      formVersion: 2,
+      schemaHash: "schema:v1:published",
+      blobId: "manifest-blob-v2",
+      manifestBlobId: "manifest-blob-v2",
+      registrationMode: "walrus",
+      isOnchain: false,
+    });
+    expect(mockSaveFormMetadataOverlay).toHaveBeenCalledWith(
+      expect.objectContaining({
+        formVersion: 2,
+        schemaHash: "schema:v1:published",
+        blobId: "manifest-blob-v2",
+        manifestBlobId: "manifest-blob-v2",
+      }),
+    );
+  });
+
   it("reports upload failure before any registry update", async () => {
     mockSaveForm.mockRejectedValue(new Error("Walrus upload failed: relay returned 503"));
 

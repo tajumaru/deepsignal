@@ -320,6 +320,8 @@ VITE_WALRUS_ESTIMATE_BASE_SUI=0.015
 
 # Optional: Tatum-managed Walrus uploads without exposing x-api-key in the browser
 NEXT_PUBLIC_TATUM_STORAGE_ENABLED=false
+VITE_TATUM_STORAGE_ENABLED=false
+VITE_TATUM_STORAGE_BASE_URL=/api/tatum/storage
 VITE_TATUM_STORAGE_API_URL=https://api.tatum.io
 VITE_TATUM_STORAGE_UPLOAD_TIMEOUT_MS=120000
 VITE_TATUM_STORAGE_POLL_INTERVAL_MS=2000
@@ -347,10 +349,10 @@ Notes:
 
 - `VITE_WALRUS_NETWORK` accepts `testnet` or `mainnet`; keep Walrus and Sui URLs aligned with the selected network.
 - `VITE_WALRUS_STORAGE_MODE=publisher` also needs `VITE_WALRUS_PUBLISHER_URL`; `.env.example` defaults to publisher mode for a wallet-driven local/demo path.
-- `VITE_WALRUS_STORAGE_MODE` also accepts `tatum`. In that mode DeepSignal uploads through the Tatum Storage API, still keeps `blobId` as the recovery/read key, and continues to use `VITE_WALRUS_AGGREGATOR_URL` as the read fallback.
+- `VITE_WALRUS_STORAGE_MODE` also accepts `tatum`, but it is experimental and only becomes a write candidate when `VITE_TATUM_STORAGE_ENABLED=true` and `VITE_TATUM_STORAGE_BASE_URL` points at a relay/server path. DeepSignal still keeps `blobId` as the recovery/read key and continues to use `VITE_WALRUS_AGGREGATOR_URL` as the read fallback.
 - `NEXT_PUBLIC_SUI_RPC_URL` is the active client RPC target. Point it to Tatum for hackathon/demo infrastructure visibility, or leave the legacy `VITE_SUI_FULLNODE_URL` / `VITE_RPC_URL` values in place for the default Sui fullnode path.
 - `NEXT_PUBLIC_TATUM_ENABLED=true` turns on the Tatum RPC presentation and switchable client path.
-- `NEXT_PUBLIC_TATUM_STORAGE_ENABLED=true` turns on the Tatum Storage API path. For local `vite dev` / `vite preview`, `TATUM_API_KEY` also enables a `/api/tatum/storage` proxy so the storage API key stays server-side.
+- `VITE_TATUM_STORAGE_ENABLED=true` turns on the experimental Tatum Storage candidate. Keep `TATUM_API_KEY` server-side in the relay; do not use `VITE_TATUM_API_KEY`, because Vite would expose it to browsers.
 - `TATUM_API_KEY` is optional. When present during `vite dev` or `vite preview`, DeepSignal proxies RPC calls through a local `/api/tatum/sui-rpc` path so the secret does not need to be exposed in the browser bundle.
 - `VITE_ADMIN_CAP_ID` and `VITE_OWNER_CAP_ID` are optional helper envs for operator tooling and manual transaction flows.
 - Normal app access discovers active cap objects from the connected wallet.

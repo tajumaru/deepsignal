@@ -81,6 +81,19 @@ export function clearChunkLoadRecoveryState() {
   reloadScheduled = false;
 }
 
+export function getChunkLoadRecoverySnapshot() {
+  if (typeof window === "undefined") {
+    return { count: 0, limit: maxReloadsPerWindow, windowMs: recoveryWindowMs };
+  }
+  const state = readReloadState(Date.now());
+  return {
+    count: state.count,
+    limit: maxReloadsPerWindow,
+    windowMs: recoveryWindowMs,
+    buildId: state.buildId,
+  };
+}
+
 export async function clearRuntimeCaches() {
   try {
     if ("caches" in window) {

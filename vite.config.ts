@@ -57,6 +57,21 @@ function buildManifestPlugin(args: {
     zkloginCallback: /\/src\/pages\/ZkLoginCallbackPage\.tsx$/,
   } as const;
 
+  const routeChunkFilePrefixes: Record<keyof typeof routeChunkMatchers, string> = {
+    access: "AccessManagementPage",
+    admin: "AdminDashboardPage",
+    create: "FormBuilderPage",
+    explore: "ExploreSignalsPage",
+    insightsFixture: "InsightsFixturePage",
+    landing: "LandingPage",
+    manifestRestore: "ManifestRestorePage",
+    publicForm: "PublicFormPage",
+    publicRoadmap: "PublicRoadmapPage",
+    submissionDetail: "SubmissionDetailPage",
+    troubleshooting: "TroubleshootingPage",
+    zkloginCallback: "ZkLoginCallbackPage",
+  };
+
   type RouteKey = keyof typeof routeChunkMatchers;
 
   return {
@@ -65,6 +80,7 @@ function buildManifestPlugin(args: {
       const chunks = Object.values(bundle).filter((entry): entry is import("rollup").OutputChunk => entry.type === "chunk");
       const chunkByFileName = new Map(chunks.map((entry) => [`./${entry.fileName}`, entry]));
       const entryChunk = chunks.find((entry) => entry.isEntry);
+      const entryAsset = entryChunk ? `./${entryChunk.fileName}` : null;
 
       const collectChunkAssets = (
         chunkFileName: string,
@@ -100,9 +116,12 @@ function buildManifestPlugin(args: {
       };
 
       const routeAssets = Object.entries(routeChunkMatchers).reduce<Record<RouteKey, string[]>>((accumulator, [key, matcher]) => {
-        const routeChunk = chunks.find((entry) => matcher.test(entry.facadeModuleId ?? ""));
+        const routeKey = key as RouteKey;
+        const routeChunk =
+          chunks.find((entry) => matcher.test((entry.facadeModuleId ?? "").replace(/\\/g, "/"))) ??
+          chunks.find((entry) => entry.fileName.split("/").pop()?.startsWith(`${routeChunkFilePrefixes[routeKey]}-`));
         const routeChunkAssets = routeChunk ? collectChunkAssets(`./${routeChunk.fileName}`) : [];
-        accumulator[key as RouteKey] = Array.from(
+        accumulator[routeKey] = Array.from(
           new Set([
             ...(entryChunk ? collectChunkAssets(`./${entryChunk.fileName}`, { includeDynamicImports: false }) : []),
             ...routeChunkAssets,
@@ -133,179 +152,8 @@ function buildManifestPlugin(args: {
       this.emitFile({
         type: "asset",
         fileName: "build.json",
-        source: `${JSON.stringify({ ...args, assets, routeAssets }, null, 2)}\n`,
+        source: `${JSON.stringify({ ...args, assets, entryAsset, routeAssets }, null, 2)}\n`,
       });
-    },
-  };
-}
-
-const stableRouteChunkNames = new Set([
-  "AccessManagementPage",
-  "AdminDashboardPage",
-  "ExploreSignalsPage",
-  "FormBuilderPage",
-  "InsightsFixturePage",
-  "LandingPage",
-  "ManifestRestorePage",
-  "PublicFormPage",
-  "PublicRoadmapPage",
-  "SubmissionDetailPage",
-  "TroubleshootingPage",
-  "ZkLoginCallbackPage",
-]);
-
-const legacyRouteChunkAliases: Record<string, string[]> = {
-  AccessManagementPage: [
-    "assets/AccessManagementPage.js",
-    "assets/AccessManagementPage-CSeuxvX2.js",
-    "assets/AccessManagementPage-CAPTb-az.js",
-    "assets/AccessManagementPage-jVe5Mcsa.js",
-  ],
-  AdminDashboardPage: [
-    "assets/AdminDashboardPage.js",
-    "assets/AdminDashboardPage-Bbo7vv5M.js",
-    "assets/AdminDashboardPage-DfHbkZAu.js",
-    "assets/AdminDashboardPage-BtVfnsTy.js",
-    "assets/AdminDashboardPage-B0lmleJK.js",
-  ],
-  ExploreSignalsPage: [
-    "assets/ExploreSignalsPage.js",
-    "assets/ExploreSignalsPage-BPg7Mrle.js",
-    "assets/ExploreSignalsPage-BN9oWPM0.js",
-  ],
-  FormBuilderPage: [
-    "assets/FormBuilderPage.js",
-    "assets/FormBuilderPage-bcqJbN29.js",
-    "assets/FormBuilderPage-D5n4eR7-.js",
-    "assets/FormBuilderPage-Dlmy74MG.js",
-  ],
-  InsightsFixturePage: [
-    "assets/InsightsFixturePage.js",
-    "assets/InsightsFixturePage-DuhWu7pb.js",
-    "assets/InsightsFixturePage-BIkiBFcv.js",
-    "assets/InsightsFixturePage-BT4tfiPt.js",
-  ],
-  LandingPage: [
-    "assets/LandingPage.js",
-    "assets/LandingPage-Cdsd6Oo8.js",
-    "assets/LandingPage-rXbw_nLO.js",
-    "assets/LandingPage-BCD0HegF.js",
-  ],
-  ManifestRestorePage: [
-    "assets/ManifestRestorePage.js",
-    "assets/ManifestRestorePage-CzUbBjXs.js",
-    "assets/ManifestRestorePage-Du989zCe.js",
-    "assets/ManifestRestorePage-BUveDc6H.js",
-  ],
-  PublicFormPage: [
-    "assets/PublicFormPage.js",
-    "assets/PublicFormPage-BclHuSj0.js",
-    "assets/PublicFormPage-D2OorI5I.js",
-    "assets/PublicFormPage-DX-F7Xcc.js",
-  ],
-  PublicRoadmapPage: [
-    "assets/PublicRoadmapPage.js",
-    "assets/PublicRoadmapPage-B0hW9juC.js",
-    "assets/PublicRoadmapPage-1t86ItGQ.js",
-    "assets/PublicRoadmapPage-COCCj_b1.js",
-  ],
-  SubmissionDetailPage: [
-    "assets/SubmissionDetailPage.js",
-    "assets/SubmissionDetailPage-DNed8nR4.js",
-    "assets/SubmissionDetailPage-kg2K8htr.js",
-    "assets/SubmissionDetailPage-FLd6ARUR.js",
-  ],
-  TroubleshootingPage: [
-    "assets/TroubleshootingPage.js",
-    "assets/TroubleshootingPage-y87iuIVb.js",
-    "assets/TroubleshootingPage-jgex8ydS.js",
-    "assets/TroubleshootingPage-BKCuiI4R.js",
-  ],
-  ZkLoginCallbackPage: [
-    "assets/ZkLoginCallbackPage.js",
-    "assets/ZkLoginCallbackPage-Cgdj0iMR.js",
-    "assets/ZkLoginCallbackPage-DlL65jfs.js",
-    "assets/ZkLoginCallbackPage-DQEJpkvt.js",
-  ],
-};
-
-const routeChunkExportNames: Record<string, string> = {
-  AccessManagementPage: "AccessManagementPage",
-  AdminDashboardPage: "AdminDashboardPage",
-  ExploreSignalsPage: "ExploreSignalsPage",
-  FormBuilderPage: "FormBuilderPage",
-  InsightsFixturePage: "InsightsFixturePage",
-  LandingPage: "LandingPage",
-  ManifestRestorePage: "ManifestRestorePage",
-  PublicFormPage: "PublicFormPage",
-  PublicRoadmapPage: "PublicRoadmapPage",
-  SubmissionDetailPage: "SubmissionDetailPage",
-  TroubleshootingPage: "TroubleshootingPage",
-  ZkLoginCallbackPage: "ZkLoginCallbackPage",
-};
-
-function stableRouteChunkFileName(chunkInfo: { name: string; facadeModuleId: string | null; isDynamicEntry: boolean }) {
-  if (chunkInfo.isDynamicEntry && stableRouteChunkNames.has(chunkInfo.name)) {
-    return `assets/${chunkInfo.name}.js`;
-  }
-  return "assets/[name]-[hash].js";
-}
-
-function legacyRouteChunkAliasPlugin(): Plugin {
-  return {
-    name: "deepsignal-legacy-route-chunk-aliases",
-    generateBundle(_, bundle) {
-      const emittedAliases = new Set<string>();
-      for (const entry of Object.values(bundle)) {
-        if (entry.type !== "chunk") {
-          continue;
-        }
-        const aliases = legacyRouteChunkAliases[entry.name] ?? [];
-        for (const alias of aliases) {
-          if (bundle[alias]) {
-            continue;
-          }
-          emittedAliases.add(alias);
-          this.emitFile({
-            type: "asset",
-            fileName: alias,
-            source: entry.code,
-          });
-        }
-      }
-
-      const createFallbackSource = (chunkName: string) => {
-        const exportName = routeChunkExportNames[chunkName] ?? "RouteChunk";
-        return `const reload = () => {
-  try {
-    const url = new URL(window.location.href);
-    url.searchParams.set("route-chunk-retry", String(Date.now()));
-    url.searchParams.set("missing-route-chunk", ${JSON.stringify(chunkName)});
-    window.location.replace(url.toString());
-  } catch {
-    window.location.reload();
-  }
-};
-window.setTimeout(reload, 0);
-export function ${exportName}() {
-  return null;
-}
-export default ${exportName};
-`;
-      };
-
-      for (const [chunkName, aliases] of Object.entries(legacyRouteChunkAliases)) {
-        for (const alias of aliases) {
-          if (bundle[alias] || emittedAliases.has(alias)) {
-            continue;
-          }
-          this.emitFile({
-            type: "asset",
-            fileName: alias,
-            source: createFallbackSource(chunkName),
-          });
-        }
-      }
     },
   };
 }
@@ -333,6 +181,21 @@ function moduleEntryRetryPlugin(args: { appVersion: string; buildTime: string; g
         const statusNode = document.querySelector("[data-boot-status]");
         const bootShell = document.querySelector(".boot-shell");
         const failures = [];
+        let latestEntryPathPromise = null;
+
+        function redirectLegacyPublicPathToHashRoute() {
+          if (window.location.hash) {
+            return;
+          }
+          const { pathname, search } = window.location;
+          const legacyRoutePrefixes = ["/f/", "/roadmap/", "/m/", "/auth/zklogin/"];
+          if (!legacyRoutePrefixes.some((prefix) => pathname.startsWith(prefix))) {
+            return;
+          }
+          window.history.replaceState(null, "", "/#" + pathname + search);
+        }
+
+        redirectLegacyPublicPathToHashRoute();
 
         function setBootStatus(message) {
           if (statusNode) {
@@ -377,6 +240,7 @@ function moduleEntryRetryPlugin(args: { appVersion: string; buildTime: string; g
             providerReadiness: window.__DEEPSIGNAL_DEBUG__?.providerReadiness || {},
             storageMode: "unknown-before-react",
             selectedProjectId: "unknown-before-react",
+            latestEntryPathResolved: latestEntryPathPromise ? "requested" : "not-requested",
             failures: failures.map((failure) => ({
               errorName: failure.errorName,
               errorMessage: failure.errorMessage,
@@ -492,8 +356,29 @@ function moduleEntryRetryPlugin(args: { appVersion: string; buildTime: string; g
           return new Promise((resolve) => window.setTimeout(resolve, ms));
         }
 
+        async function getLatestEntryPath() {
+          if (!latestEntryPathPromise) {
+            latestEntryPathPromise = fetch(new URL("./build.json", window.location.href).toString(), {
+              cache: "no-store",
+              headers: { "cache-control": "no-cache" },
+            })
+              .then(async (response) => {
+                if (!response.ok || !response.headers.get("content-type")?.includes("application/json")) {
+                  return null;
+                }
+                const manifest = await response.json();
+                return typeof manifest.entryAsset === "string" && manifest.entryAsset.endsWith(".js")
+                  ? manifest.entryAsset
+                  : null;
+              })
+              .catch(() => null);
+          }
+          return latestEntryPathPromise;
+        }
+
         async function loadEntry(attempt = 1) {
-          const url = new URL(entryPath, window.location.href);
+          const latestEntryPath = attempt > 1 ? await getLatestEntryPath() : null;
+          const url = new URL(latestEntryPath || entryPath, window.location.href);
           if (attempt > 1) {
             url.searchParams.set("module-retry", String(Date.now()));
             setBootStatus("Retrying signal surface load...");
@@ -571,7 +456,6 @@ export default defineConfig(({ mode }) => {
         appEnvironment,
       }),
       moduleEntryRetryPlugin({ appVersion, buildTime, gitHash }),
-      legacyRouteChunkAliasPlugin(),
       process.env.ANALYZE === "true"
         ? visualizer({
             emitFile: true,
@@ -585,13 +469,16 @@ export default defineConfig(({ mode }) => {
     build: {
       modulePreload: {
         resolveDependencies(_, deps) {
-          return deps.filter((dependency) => !/assets\/mysten-sui-[^/]+\.js$/.test(dependency.replace(/\\/g, "/")));
+          return deps.filter((dependency) => {
+            const normalizedDependency = dependency.replace(/\\/g, "/");
+            return !/assets\/mysten-(sui|wallet|walrus)-[^/]+\.(js|css)$/.test(normalizedDependency);
+          });
         },
       },
       rollupOptions: {
         output: {
           entryFileNames: "assets/[name]-[hash].js",
-          chunkFileNames: stableRouteChunkFileName,
+          chunkFileNames: "assets/[name]-[hash].js",
           assetFileNames(assetInfo) {
             const name = assetInfo.name ?? "";
             if (name.endsWith(".css")) {

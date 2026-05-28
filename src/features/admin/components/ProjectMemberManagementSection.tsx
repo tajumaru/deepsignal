@@ -139,10 +139,18 @@ export function ProjectMemberManagementSection({
       </div>
 
       {selectedProject ? (
-        <div className="access-management-summary">
-          <span className="signal-chip">Project: {selectedProject.name}</span>
-          <span className="signal-chip">Co-admins: {selectedProject.admins.length}</span>
-          <span className="signal-chip">Reviewers: {selectedProject.reviewers.length}</span>
+        <div className="access-management-summary project-members-summary">
+          <span className="signal-chip project-members-project-chip">Project: {selectedProject.name}</span>
+          <article className="project-member-status-card">
+            <span>Co-admins</span>
+            <strong>{selectedProject.admins.length}</strong>
+            <small>Active</small>
+          </article>
+          <article className="project-member-status-card">
+            <span>Reviewers</span>
+            <strong>{selectedProject.reviewers.length}</strong>
+            <small>Active</small>
+          </article>
         </div>
       ) : (
         <p className="muted">Create or select a project before adding project members.</p>
@@ -183,7 +191,7 @@ export function ProjectMemberManagementSection({
 
       {status ? <p className="muted">{status}</p> : null}
 
-      <div className="access-role-grid" role="table" aria-label="Project members">
+      <div className="access-role-grid project-members-role-grid" role="table" aria-label="Project members">
         <div className="access-role-row access-role-row-header" role="row">
           <span className="access-role-cell access-role-cell-address" role="columnheader">Address</span>
           <span className="access-role-cell access-role-cell-role" role="columnheader">Role</span>

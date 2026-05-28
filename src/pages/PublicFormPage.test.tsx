@@ -7,6 +7,8 @@ import { PublicFormPage } from "./PublicFormPage";
 import type { FormSchema } from "../types";
 import type { ZkLoginSession } from "../lib/zkloginSession";
 
+const SUBMIT_SIGNAL_BUTTON = /^(Hold to send signal|Signal preserved locally|Signal sent)/;
+
 const mockUseCurrentAccount = vi.fn();
 const mockUseCurrentWallet = vi.fn();
 const mockReadManifestWithForm = vi.fn();
@@ -269,7 +271,7 @@ describe("PublicFormPage shared manifest restore", () => {
 
     await waitFor(() => expect(screen.getByRole("heading", { name: "Shared Feedback Form" })).toBeInTheDocument());
     fireEvent.input(screen.getByRole("textbox"), { target: { value: "Anonymous fallback still submits." } });
-    fireEvent.click(screen.getByRole("button", { name: /^Submit Secure Report/ }));
+    fireEvent.click(screen.getByRole("button", { name: SUBMIT_SIGNAL_BUTTON }));
 
     await waitFor(() => expect(mockSaveSubmission).toHaveBeenCalledTimes(1));
     const [savedSubmission] = mockSaveSubmission.mock.calls[0] as [{ respondentMeta?: unknown; metadata?: unknown }];
@@ -396,7 +398,7 @@ describe("PublicFormPage shared manifest restore", () => {
     const answerInput = screen.getByRole("textbox");
     fireEvent.input(answerInput, { target: { value: "The shared responder path works." } });
     expect(answerInput).toHaveValue("The shared responder path works.");
-    fireEvent.click(screen.getByRole("button", { name: /^Submit Secure Report/ }));
+    fireEvent.click(screen.getByRole("button", { name: SUBMIT_SIGNAL_BUTTON }));
 
     await waitFor(() => expect(mockSaveSubmission).toHaveBeenCalledTimes(1));
     expect(screen.queryByText(/sending it requires/i)).not.toBeInTheDocument();
@@ -493,7 +495,7 @@ describe("PublicFormPage shared manifest restore", () => {
 
     await waitFor(() => expect(screen.getByRole("heading", { name: "Shared Feedback Form" })).toBeInTheDocument());
     fireEvent.input(screen.getByRole("textbox"), { target: { value: "Anonymous relay path still submits." } });
-    fireEvent.click(screen.getByRole("button", { name: /^Submit Secure Report/ }));
+    fireEvent.click(screen.getByRole("button", { name: SUBMIT_SIGNAL_BUTTON }));
 
     await waitFor(() => expect(mockSaveSubmission).toHaveBeenCalledTimes(1));
     expect(screen.queryByText(/reconnect your wallet/i)).not.toBeInTheDocument();
@@ -541,7 +543,7 @@ describe("PublicFormPage shared manifest restore", () => {
 
     await waitFor(() => expect(screen.getByRole("heading", { name: "Shared Feedback Form" })).toBeInTheDocument());
     expect(screen.getByText("Storage is preparing. Please wait a few seconds.")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /^Submit Secure Report/ })).toBeDisabled();
+    expect(screen.getByRole("button", { name: SUBMIT_SIGNAL_BUTTON })).toBeDisabled();
     expect(mockSaveSubmission).not.toHaveBeenCalled();
   });
 
@@ -582,7 +584,7 @@ describe("PublicFormPage shared manifest restore", () => {
 
     await waitFor(() => expect(screen.getByRole("heading", { name: "Shared Feedback Form" })).toBeInTheDocument());
     fireEvent.input(screen.getByRole("textbox"), { target: { value: "Anonymous relay readiness should stay storage-specific." } });
-    fireEvent.click(screen.getByRole("button", { name: /^Submit Secure Report/ }));
+    fireEvent.click(screen.getByRole("button", { name: SUBMIT_SIGNAL_BUTTON }));
 
     await waitFor(() => expect(screen.getAllByText("Storage is preparing. Please wait a few seconds.").length).toBeGreaterThan(0));
     expect(screen.queryByText(/reconnect your wallet/i)).not.toBeInTheDocument();
@@ -622,7 +624,7 @@ describe("PublicFormPage shared manifest restore", () => {
 
     await waitFor(() => expect(screen.getByRole("heading", { name: "Shared Feedback Form" })).toBeInTheDocument());
     fireEvent.input(screen.getByRole("textbox"), { target: { value: "Please keep this draft." } });
-    fireEvent.click(screen.getByRole("button", { name: /^Submit Secure Report/ }));
+    fireEvent.click(screen.getByRole("button", { name: SUBMIT_SIGNAL_BUTTON }));
 
     await waitFor(() => expect(screen.getAllByText("Walrus upload failed.").length).toBeGreaterThan(0));
     expect(window.localStorage.getItem("deepsignal:public-draft:form-123:blob-abc")).toContain("Please keep this draft.");
@@ -673,7 +675,7 @@ describe("PublicFormPage shared manifest restore", () => {
     fireEvent.input(screen.getByRole("textbox"), { target: { value: "Please keep this draft." } });
 
     for (let attempt = 0; attempt < 3; attempt += 1) {
-      fireEvent.click(screen.getByRole("button", { name: /^Submit Secure Report/ }));
+      fireEvent.click(screen.getByRole("button", { name: SUBMIT_SIGNAL_BUTTON }));
       await waitFor(() => expect(mockSaveSubmission).toHaveBeenCalledTimes(attempt + 1));
     }
 
@@ -732,7 +734,7 @@ describe("PublicFormPage shared manifest restore", () => {
 
     await waitFor(() => expect(screen.getByRole("heading", { name: "Shared Feedback Form" })).toBeInTheDocument());
     fireEvent.input(screen.getByRole("textbox"), { target: { value: "The zkLogin responder path works." } });
-    fireEvent.click(screen.getByRole("button", { name: /^Submit Secure Report/ }));
+    fireEvent.click(screen.getByRole("button", { name: SUBMIT_SIGNAL_BUTTON }));
 
     await waitFor(() => expect(mockSaveSubmission).toHaveBeenCalledTimes(1));
     const [savedSubmission] = mockSaveSubmission.mock.calls[0] as [{
@@ -806,7 +808,7 @@ describe("PublicFormPage shared manifest restore", () => {
 
     await waitFor(() => expect(screen.getByRole("heading", { name: "Secure Feedback Form" })).toBeInTheDocument());
     fireEvent.input(screen.getByRole("textbox"), { target: { value: "Wallet-required forms still reject zkLogin only." } });
-    fireEvent.click(screen.getByRole("button", { name: /^Connect wallet to submit secure report/ }));
+    fireEvent.click(screen.getByRole("button", { name: SUBMIT_SIGNAL_BUTTON }));
 
     await waitFor(() =>
       expect(screen.getByText("This form requires a connected wallet before you can submit.")).toBeInTheDocument(),
@@ -857,9 +859,9 @@ describe("PublicFormPage shared manifest restore", () => {
     renderPublicFormPage("/f/form-123?manifest=blob-abc");
 
     await waitFor(() => expect(screen.getByRole("heading", { name: "Secure Feedback Form" })).toBeInTheDocument());
-    await waitFor(() => expect(screen.getByRole("button", { name: /^Submit Secure Report/ })).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole("button", { name: SUBMIT_SIGNAL_BUTTON })).toBeInTheDocument());
     fireEvent.input(screen.getByRole("textbox"), { target: { value: "Connected wallet path now submits." } });
-    fireEvent.click(screen.getByRole("button", { name: /^Submit Secure Report/ }));
+    fireEvent.click(screen.getByRole("button", { name: SUBMIT_SIGNAL_BUTTON }));
 
     await waitFor(() => expect(mockSaveSubmission).toHaveBeenCalledTimes(1));
     const [savedSubmission] = mockSaveSubmission.mock.calls[0] as [{ respondentMeta?: unknown; metadata?: unknown }];

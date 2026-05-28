@@ -32,6 +32,15 @@ declare global {
         buildVersion?: string;
         buildTime?: string;
         gitHash?: string;
+        probe?: {
+          bodyHash?: string;
+          contentLength?: string;
+          contentType?: string;
+          ok: boolean;
+          snippet?: string;
+          status?: number;
+          url: string;
+        };
       }>;
       currentProjectId: string;
       cacheRestoreSource: string;
@@ -166,6 +175,31 @@ export function recordFailedImport(label: string, error: unknown, chunkUrl?: str
   });
   if (state.failedImports.length > 40) {
     state.failedImports.shift();
+  }
+  state.updatedAt = new Date().toISOString();
+}
+
+export function recordFailedImportProbe(
+  label: string,
+  probe: {
+    bodyHash?: string;
+    contentLength?: string;
+    contentType?: string;
+    ok: boolean;
+    snippet?: string;
+    status?: number;
+    url: string;
+  },
+) {
+  if (typeof window === "undefined") {
+    return;
+  }
+  const state = getDebugState();
+  for (let index = state.failedImports.length - 1; index >= 0; index -= 1) {
+    if (state.failedImports[index].label === label) {
+      state.failedImports[index].probe = probe;
+      break;
+    }
   }
   state.updatedAt = new Date().toISOString();
 }

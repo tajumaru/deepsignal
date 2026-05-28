@@ -7,30 +7,30 @@ import {
 } from "../hooks/usePublicSubmission";
 
 const PIPELINE_LABELS: Record<SignalPipelineStage, string> = {
-  preparing_signal: "Preparing Signal",
-  encrypting: "Encrypting payload",
-  uploading_to_walrus: "Sealing to Walrus",
-  confirming_blob: "Verifying route",
-  generating_manifest: "Preparing recovery path",
-  signal_secured: "Signal secured",
+  idle: "Ready",
+  preparing: "Preparing",
+  local_preserved: "Local preserved",
+  walrus_uploading: "Walrus upload",
+  inbox_syncing: "Inbox sync",
+  completed: "Signal sent",
 };
 
 const RELAY_NODE_LABELS: Record<SignalPipelineStage, string> = {
-  preparing_signal: "Device",
-  encrypting: "Encrypt",
-  uploading_to_walrus: "Seal",
-  confirming_blob: "Walrus",
-  generating_manifest: "Verify",
-  signal_secured: "Secured",
+  idle: "Hold",
+  preparing: "Device",
+  local_preserved: "Local",
+  walrus_uploading: "Walrus",
+  inbox_syncing: "Inbox",
+  completed: "Sent",
 };
 
 const RELAY_WAITING_MESSAGES: Record<SignalPipelineStage, string> = {
-  preparing_signal: "Your signal is moving through the secure relay.",
-  encrypting: "Encrypting and sealing your report...",
-  uploading_to_walrus: "Sealing payload to Walrus secure storage...",
-  confirming_blob: "Verifying route integrity...",
-  generating_manifest: "Preparing recovery path...",
-  signal_secured: "Signal secured.",
+  idle: "Hold to send this signal.",
+  preparing: "Preparing your signal...",
+  local_preserved: "Local recovery copy is preserved on this device.",
+  walrus_uploading: "Uploading signal evidence to Walrus...",
+  inbox_syncing: "Syncing the owner inbox index...",
+  completed: "Signal sent.",
 };
 
 interface SignalSubmissionPipelineProps {
