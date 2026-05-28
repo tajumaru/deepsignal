@@ -1018,7 +1018,10 @@
 }
 
 .workspace-hero-compact .workspace-overview-shell {
-  gap: 0.9rem;
+  display: grid;
+  grid-template-columns: minmax(18rem, 0.9fr) minmax(30rem, 1.35fr);
+  gap: 1.6rem;
+  align-items: center;
 }
 
 .workspace-action-dock {
@@ -1035,7 +1038,8 @@
 }
 
 .workspace-hero-compact .workspace-action-dock {
-  min-width: min(100%, 420px);
+  min-width: 0;
+  width: 100%;
   gap: 0;
   padding: 0;
   border-radius: 0;
@@ -1300,6 +1304,19 @@
   max-width: 30rem;
 }
 
+.signal-inbox-empty-state .inline-actions {
+  width: min(100%, 26rem);
+  margin-top: 0.35rem;
+  justify-content: center;
+  position: relative;
+  z-index: 1;
+}
+
+.signal-inbox-empty-state .primary-button,
+.signal-inbox-empty-state .ghost-button {
+  flex: 1 1 11rem;
+}
+
 .workspace-dock-actions {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1328,10 +1345,14 @@
   margin-bottom: 0.15rem;
 }
 
+.workspace-shortcut-bar.workspace-dock-actions {
+  display: grid;
+}
+
 .workspace-hero-compact .workspace-dock-actions {
-  grid-template-columns: repeat(4, minmax(0, auto));
-  justify-content: flex-end;
-  gap: 0.45rem;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  justify-content: stretch;
+  gap: 0.85rem;
 }
 
 .workspace-dock-actions .primary-button,
@@ -1346,14 +1367,173 @@
 
 .workspace-hero-compact .workspace-dock-actions .primary-button,
 .workspace-hero-compact .workspace-dock-actions .ghost-button {
-  width: auto;
-  min-height: 2.5rem;
-  padding: 0.52rem 0.85rem;
-  white-space: nowrap;
+  width: 100%;
+  white-space: normal;
 }
 
 .workspace-hero-compact .workspace-dock-actions .ghost-button:last-child {
   grid-column: auto;
+}
+
+.workspace-dock-actions .workspace-action-card {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-rows: auto minmax(0, 1fr);
+  align-items: end;
+  min-height: 9.4rem;
+  padding: 1.05rem 1rem 1rem;
+  overflow: hidden;
+  text-align: left;
+  border-radius: 18px;
+  border: 1px solid rgba(116, 226, 255, 0.2);
+  background:
+    radial-gradient(circle at 12% 18%, rgba(98, 218, 255, 0.14), transparent 32%),
+    linear-gradient(145deg, rgba(7, 28, 45, 0.9), rgba(3, 15, 27, 0.95));
+  box-shadow:
+    inset 0 1px 0 rgba(219, 251, 255, 0.06),
+    0 14px 34px rgba(0, 0, 0, 0.2);
+  color: #f5fdff;
+}
+
+.workspace-dock-actions .workspace-action-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(90deg, transparent, rgba(116, 226, 255, 0.05), transparent),
+    radial-gradient(circle at 22% 36%, rgba(116, 226, 255, 0.08), transparent 18%);
+  opacity: 0.72;
+}
+
+.workspace-dock-actions .workspace-action-card:hover,
+.workspace-dock-actions .workspace-action-card:focus-visible,
+.workspace-dock-actions .workspace-action-card-primary {
+  border-color: rgba(44, 216, 255, 0.72);
+  background:
+    radial-gradient(circle at 14% 18%, rgba(37, 207, 255, 0.2), transparent 36%),
+    linear-gradient(145deg, rgba(9, 52, 74, 0.9), rgba(4, 19, 32, 0.94));
+  box-shadow:
+    inset 0 1px 0 rgba(219, 251, 255, 0.1),
+    0 0 0 1px rgba(44, 216, 255, 0.1),
+    0 18px 42px rgba(0, 208, 255, 0.12);
+}
+
+.workspace-dock-actions .workspace-action-card-icon {
+  position: relative;
+  z-index: 1;
+  grid-column: 1 / -1;
+  align-self: start;
+  display: inline-grid;
+  place-items: center;
+  width: 2.6rem;
+  height: 2.6rem;
+  margin-bottom: 1.15rem;
+  border-radius: 14px;
+  border: 1px solid rgba(116, 226, 255, 0.28);
+  background: rgba(13, 60, 82, 0.58);
+  color: #67e8f9;
+  box-shadow:
+    inset 0 0 14px rgba(87, 216, 255, 0.18),
+    0 0 20px rgba(25, 199, 255, 0.14);
+  font-size: 1rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.workspace-dock-actions .workspace-action-card-compose .workspace-action-card-icon::before,
+.workspace-dock-actions .workspace-action-card-compose .workspace-action-card-icon::after {
+  content: "";
+  position: absolute;
+  border-radius: 999px;
+  background: currentColor;
+}
+
+.workspace-dock-actions .workspace-action-card-compose .workspace-action-card-icon::before {
+  width: 1.15rem;
+  height: 0.18rem;
+}
+
+.workspace-dock-actions .workspace-action-card-compose .workspace-action-card-icon::after {
+  width: 0.18rem;
+  height: 1.15rem;
+}
+
+.workspace-dock-actions .workspace-action-card-project .workspace-action-card-icon::before,
+.workspace-dock-actions .workspace-action-card-project .workspace-action-card-icon::after,
+.workspace-dock-actions .workspace-action-card-connect .workspace-action-card-icon::before,
+.workspace-dock-actions .workspace-action-card-connect .workspace-action-card-icon::after {
+  content: "";
+  position: absolute;
+  border: 2px solid currentColor;
+}
+
+.workspace-dock-actions .workspace-action-card-project .workspace-action-card-icon::before,
+.workspace-dock-actions .workspace-action-card-connect .workspace-action-card-icon::before {
+  top: 0.82rem;
+  left: 0.75rem;
+  width: 0.8rem;
+  height: 0.45rem;
+  border-bottom: 0;
+  border-radius: 4px 4px 0 0;
+}
+
+.workspace-dock-actions .workspace-action-card-project .workspace-action-card-icon::after,
+.workspace-dock-actions .workspace-action-card-connect .workspace-action-card-icon::after {
+  left: 0.62rem;
+  bottom: 0.72rem;
+  width: 1.32rem;
+  height: 0.9rem;
+  border-radius: 4px;
+}
+
+.workspace-dock-actions .workspace-action-card-current .workspace-action-card-icon {
+  border-radius: 999px;
+  color: #20f2ff;
+}
+
+.workspace-dock-actions .workspace-action-card-copy {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  min-width: 0;
+  gap: 0.28rem;
+}
+
+.workspace-dock-actions .workspace-action-card-copy strong {
+  min-width: 0;
+  color: #f4fbff;
+  font-size: clamp(1rem, 1.2vw, 1.25rem);
+  line-height: 1.18;
+  word-break: keep-all;
+  overflow-wrap: normal;
+}
+
+.workspace-dock-actions .workspace-action-card-copy span {
+  min-width: 0;
+  color: rgba(190, 222, 233, 0.82);
+  font-size: 0.88rem;
+  line-height: 1.35;
+  word-break: keep-all;
+  overflow-wrap: normal;
+}
+
+.workspace-dock-actions .workspace-action-card-arrow {
+  position: relative;
+  z-index: 1;
+  align-self: end;
+  width: 0.82rem;
+  height: 0.82rem;
+  margin: 0.3rem 0.2rem 0.3rem 0.6rem;
+  border-top: 2px solid currentColor;
+  border-right: 2px solid currentColor;
+  color: #93edff;
+  transform: rotate(45deg);
+}
+
+.workspace-dock-actions .workspace-action-card .mobile-inbox-filter-caret {
+  display: none;
 }
 
 .workspace-project-menu-shell {
@@ -1380,6 +1560,27 @@
 
 .workspace-project-menu-trigger .mobile-inbox-filter-caret {
   flex: 0 0 auto;
+}
+
+.workspace-dock-actions .workspace-project-menu-shell {
+  min-width: 0;
+  max-width: none;
+  width: 100%;
+}
+
+.workspace-dock-actions .workspace-project-menu-trigger.workspace-action-card {
+  display: grid;
+}
+
+.workspace-dock-actions .workspace-project-menu-trigger.workspace-action-card span {
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+}
+
+.workspace-dock-actions .workspace-project-menu-trigger.workspace-action-card .workspace-action-card-copy,
+.workspace-dock-actions .workspace-project-menu-trigger.workspace-action-card .workspace-action-card-copy span {
+  min-width: 0;
 }
 
 .workspace-project-menu {
@@ -5720,6 +5921,25 @@ pre,
   gap: 0.4rem;
   flex-wrap: wrap;
 }
+
+@media (max-width: 900px) {
+  .desktop-signal-inbox:not(.has-selected-signal) {
+    display: none;
+  }
+
+  .mobile-signal-inbox {
+    display: grid;
+  }
+
+  .mobile-signal-inbox.is-detail-open {
+    display: none;
+  }
+
+  .mobile-inbox-bottom-nav {
+    display: grid;
+  }
+}
+
 /* v0.11 Living Signal Core stream motion */
 .signal-stream-feed {
   position: relative;

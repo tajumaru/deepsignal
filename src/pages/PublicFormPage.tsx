@@ -93,7 +93,8 @@ export function PublicFormPage() {
   const walletRequired = form?.identityPolicy === "wallet_required";
   const zkLoginSession = !walletRequired && isZkLoginEnabled() ? loadZkLoginSession() : null;
   const walletModeSelected = walletRequired || answerAuthMode === "sui_wallet";
-  const identityMode = walletModeSelected ? "wallet" : zkLoginSession ? "zklogin" : "anonymous";
+  const walletIdentityReady = walletRequired || (answerAuthMode === "sui_wallet" && Boolean(resolvedWalletAddress));
+  const identityMode = walletIdentityReady ? "wallet" : zkLoginSession ? "zklogin" : "anonymous";
   const attachWallet = walletModeSelected;
   const walletFallback = <div className="wallet-connect-shell wallet-connect-shell-compact" />;
   const {

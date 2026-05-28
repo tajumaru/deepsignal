@@ -31,6 +31,19 @@ function MenuToggleIcon() {
   );
 }
 
+function PencilIcon() {
+  return (
+    <svg className="mobile-compose-fab-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path d="M4 20h4.8L19.3 9.5a2.1 2.1 0 0 0 0-3L17.5 4.7a2.1 2.1 0 0 0-3 0L4 15.2V20Z" />
+      <path d="m13.4 5.8 4.8 4.8" />
+    </svg>
+  );
+}
+
+function isComposerRoute(pathname: string) {
+  return pathname === "/create" || pathname === "/compose" || pathname === "/admin/forms/new";
+}
+
 function useWalletChrome(walletAvailable: boolean, navLabLabel: string, onNavigate?: () => void) {
   const fallback = <div className="wallet-connect-shell wallet-connect-shell-compact" />;
 
@@ -63,30 +76,43 @@ function useWalletChrome(walletAvailable: boolean, navLabLabel: string, onNaviga
   };
 }
 
-function MobileAppBottomNav() {
+interface MobileAppBottomNavProps {
+  showComposeShortcut: boolean;
+}
+
+function MobileAppBottomNav({ showComposeShortcut }: MobileAppBottomNavProps) {
   const location = useLocation();
   const { t } = useI18n();
   const inboxActive = isSignalInboxPath(location.pathname);
+  const navClassName = ({ isActive }: { isActive: boolean }) => (isActive ? "is-active" : undefined);
 
   return (
-    <nav className="mobile-inbox-bottom-nav" aria-label="Mobile workspace navigation">
-      <Link className={inboxActive ? "is-active" : undefined} to="/dashboard">
-        <span aria-hidden="true">In</span>
-        <span>{t("navMobileInbox")}</span>
-      </Link>
-      <NavLink to="/explore">
-        <span aria-hidden="true">Ex</span>
-        <span>{t("navExplore")}</span>
-      </NavLink>
-      <CreateFormLink fresh={false}>
-        <span aria-hidden="true">+</span>
-        <span>{t("composeSignalCta")}</span>
-      </CreateFormLink>
-      <NavLink to="/admin/access">
-        <span aria-hidden="true">Set</span>
-        <span>{t("navMobileSettings")}</span>
-      </NavLink>
-    </nav>
+    <>
+      {showComposeShortcut ? (
+        <CreateFormLink fresh={false} className="mobile-compose-fab">
+          <PencilIcon />
+          <span className="sr-only">{t("composeSignalCta")}</span>
+        </CreateFormLink>
+      ) : null}
+      <nav className="mobile-inbox-bottom-nav" aria-label="Mobile workspace navigation">
+        <Link className={inboxActive ? "is-active" : undefined} to="/dashboard">
+          <span aria-hidden="true">In</span>
+          <span>{t("navMobileInbox")}</span>
+        </Link>
+        <NavLink className={navClassName} to="/explore">
+          <span aria-hidden="true">Ex</span>
+          <span>{t("navExplore")}</span>
+        </NavLink>
+        <NavLink className={navClassName} to="/my-responses">
+          <span aria-hidden="true">Me</span>
+          <span>{t("navMobileMyResponses")}</span>
+        </NavLink>
+        <NavLink className={navClassName} to="/admin/access">
+          <span aria-hidden="true">Set</span>
+          <span>{t("navMobileSettings")}</span>
+        </NavLink>
+      </nav>
+    </>
   );
 }
 
@@ -121,11 +147,13 @@ export function AppShell({
   const mobileMenuToggleRef = useRef<HTMLButtonElement | null>(null);
   const mobileDrawerRef = useRef<HTMLElement | null>(null);
   const walletChrome = useWalletChrome(walletAvailable, t("navLab"), () => setMobileDrawerOpen(false));
+  const showComposeShortcut = !isComposerRoute(location.pathname);
   const showMobileBottomNav =
     !publicChrome &&
     (location.pathname === "/explore" ||
       location.pathname === "/create" ||
       location.pathname === "/compose" ||
+      location.pathname === "/my-responses" ||
       location.pathname === "/admin" ||
       location.pathname.startsWith("/admin/") ||
       location.pathname === "/dashboard" ||
@@ -216,10 +244,6 @@ export function AppShell({
               </span>
               <strong>DeepSignal</strong>
             </Link>
-            <CreateFormLink fresh={false} className="mobile-header-cta" onClick={() => setMobileDrawerOpen(false)}>
-              <span aria-hidden="true">+</span>
-              <span>{t("composeSignalCta")}</span>
-            </CreateFormLink>
           </div>
         )}
         <Link className="brand desktop-topbar-brand" to="/">
@@ -309,10 +333,6 @@ export function AppShell({
                     <strong>DeepSignal</strong>
                     <p>{t("brandTagline")}</p>
                   </div>
-                  <CreateFormLink fresh={false} className="mobile-drawer-cta" onClick={closeMobileDrawer}>
-                    <span aria-hidden="true">+</span>
-                    <span>{t("composeSignalCta")}</span>
-                  </CreateFormLink>
                 </div>
 
                 <div className="mobile-drawer-section">
@@ -382,7 +402,7 @@ export function AppShell({
         </>
       )}
       <main className="page-wrap">{children}</main>
-      {showMobileBottomNav ? <MobileAppBottomNav /> : null}
+      {showMobileBottomNav ? <MobileAppBottomNav showComposeShortcut={showComposeShortcut} /> : null}
       <BuildIndicator />
     </div>
   );

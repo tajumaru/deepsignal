@@ -69,17 +69,44 @@ export function WorkspaceShortcutBar({
 
   return (
     <div className={`workspace-shortcut-bar ${className}`.trim()}>
-      <CreateFormLink className={`primary-button ${highlightCreateFormCta ? "create-form-cta-highlight" : ""}`}>
-        {t("composeSignalCta")}
+      <CreateFormLink
+        className={`primary-button workspace-action-card workspace-action-card-primary workspace-action-card-compose ${
+          highlightCreateFormCta ? "create-form-cta-highlight" : ""
+        }`}
+      >
+        <span className="workspace-action-card-icon" aria-hidden="true" />
+        <span className="workspace-action-card-copy">
+          <strong>{t("composeSignalCta")}</strong>
+          <span>{t("composeSignalCtaDetail")}</span>
+        </span>
+        <span className="workspace-action-card-arrow" aria-hidden="true" />
       </CreateFormLink>
       {hasAdminAccess ? (
         <>
-          <button type="button" className="ghost-button" onClick={onRevealCreateProject}>
-            {t("createProjectButton")}
+          <button
+            type="button"
+            className="ghost-button workspace-action-card workspace-action-card-project"
+            onClick={onRevealCreateProject}
+          >
+            <span className="workspace-action-card-icon" aria-hidden="true" />
+            <span className="workspace-action-card-copy">
+              <strong>{t("createProjectButton")}</strong>
+              <span>{t("createProjectButtonDetail")}</span>
+            </span>
+            <span className="workspace-action-card-arrow" aria-hidden="true" />
           </button>
           {!selectedProjectName ? (
-            <button type="button" className="ghost-button" onClick={onRevealConnectProject}>
-              {t("connectExistingShort")}
+            <button
+              type="button"
+              className="ghost-button workspace-action-card workspace-action-card-connect"
+              onClick={onRevealConnectProject}
+            >
+              <span className="workspace-action-card-icon" aria-hidden="true" />
+              <span className="workspace-action-card-copy">
+                <strong>{t("connectExistingShort")}</strong>
+                <span>{t("connectExistingShortDetail")}</span>
+              </span>
+              <span className="workspace-action-card-arrow" aria-hidden="true" />
             </button>
           ) : null}
         </>
@@ -88,13 +115,22 @@ export function WorkspaceShortcutBar({
         <div ref={projectMenuRef} className={`workspace-project-menu-shell ${projectMenuOpen ? "is-open" : ""}`}>
           <button
             type="button"
-            className={`ghost-button workspace-project-menu-trigger ${projectMenuOpen ? "is-open" : ""}`}
+            className={`ghost-button workspace-project-menu-trigger workspace-action-card workspace-action-card-current ${
+              projectMenuOpen ? "is-open" : ""
+            }`}
             onClick={() => setProjectMenuOpen((current) => !current)}
             aria-haspopup="menu"
             aria-expanded={projectMenuOpen}
             aria-label={t("selectedProjectLabel")}
           >
-            <span>{selectedProjectName ?? t("chooseProjectButton")}</span>
+            <span className="workspace-action-card-icon" aria-hidden="true">
+              {selectedProjectName ? selectedProjectName.slice(0, 1).toUpperCase() : "D"}
+            </span>
+            <span className="workspace-action-card-copy">
+              <strong>{selectedProjectName ?? t("chooseProjectButton")}</strong>
+              <span>{selectedProjectName ? t("openProjectDetail") : t("chooseProjectDetail")}</span>
+            </span>
+            <span className="workspace-action-card-arrow" aria-hidden="true" />
             <MobileFilterCaret />
           </button>
           {projectMenuOpen ? (

@@ -936,14 +936,17 @@
   }
 
   .workspace-hero-compact .workspace-dock-actions {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: minmax(0, 1fr);
     justify-content: stretch;
   }
 
   .workspace-hero-compact .workspace-dock-actions .primary-button,
   .workspace-hero-compact .workspace-dock-actions .ghost-button,
-  .workspace-project-menu-shell {
+  .workspace-project-menu-shell,
+  .workspace-dock-actions .workspace-action-card {
     width: 100%;
+    max-width: 100%;
+    min-width: 0;
   }
 
   .workspace-hero-controls .ghost-button {

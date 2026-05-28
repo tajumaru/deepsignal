@@ -73,6 +73,7 @@ export function useCreateFormBuilder({
   const initialDraftSnapshot = useMemo(() => createInitialDraftSnapshot(language), [language]);
   const hasLoadedDraftRef = useRef(false);
   const previousModeRef = useRef(mode);
+  const suppressDraftAutosaveRef = useRef(false);
   const draftStorageKey = mode === "guestDraft" ? CREATE_FORM_GUEST_DRAFT_STORAGE_KEY : CREATE_FORM_DRAFT_STORAGE_KEY;
   const isGuestDraftMode = mode === "guestDraft";
   const labelRefs = useRef<Record<string, HTMLInputElement | null>>({});
@@ -402,6 +403,13 @@ export function useCreateFormBuilder({
 
   useEffect(() => {
     if (!hasLoadedDraftRef.current) {
+      return;
+    }
+    if (suppressDraftAutosaveRef.current) {
+      window.localStorage.removeItem(draftStorageKey);
+      if (draftSnapshot === initialDraftSnapshot) {
+        suppressDraftAutosaveRef.current = false;
+      }
       return;
     }
     if (draftSnapshot === initialDraftSnapshot) {
@@ -884,6 +892,7 @@ export function useCreateFormBuilder({
 
   function markSaved() {
     setLastSavedSnapshot(draftSnapshot);
+    suppressDraftAutosaveRef.current = false;
     window.localStorage.removeItem(draftStorageKey);
     setDraftSaveState("idle");
     setHasRecoverableDraft(false);
@@ -916,6 +925,7 @@ export function useCreateFormBuilder({
   }
 
   function discardRecoverableDraft() {
+    suppressDraftAutosaveRef.current = true;
     window.localStorage.removeItem(draftStorageKey);
     setHasRecoverableDraft(false);
     setDraftParseStatus("idle");

@@ -419,6 +419,10 @@
     0 0 18px rgba(102, 227, 255, 0.08);
 }
 
+.mobile-compose-fab {
+  display: none;
+}
+
 .mobile-drawer-backdrop {
   position: fixed;
   inset: 0;

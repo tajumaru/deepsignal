@@ -1,6 +1,5 @@
 import { useSignAndExecuteTransaction, useSuiClient } from "@mysten/dapp-kit";
-import "../styles/pages/create-form.css";
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { AdminAccessGate } from "../components/AdminAccessGate";
 import { RecoverableDraftBanner } from "../components/RecoverableDraftBanner";
@@ -146,52 +145,148 @@ function createNewSignalTarget() {
   };
 }
 
-function ComposerHomeSignalCard({ signal }: { signal: ComposerHomeSignal }) {
+function ComposerHomeGlyph({ children, className = "" }: { children: ReactNode; className?: string }) {
   return (
-    <Link className="composer-home-signal-card" to={signal.href}>
+    <svg
+      viewBox="0 0 24 24"
+      className={className ? `composer-home-icon ${className}` : "composer-home-icon"}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      focusable="false"
+    >
+      {children}
+    </svg>
+  );
+}
+
+function ComposerHomeSectionIcon({ type }: { type: "drafts" | "signals" }) {
+  if (type === "drafts") {
+    return (
+      <ComposerHomeGlyph>
+        <path d="M8.25 5.25h5.7l3.8 3.85v9.65a2 2 0 0 1-2 2H8.25a2 2 0 0 1-2-2V7.25a2 2 0 0 1 2-2Z" />
+        <path d="M13.75 5.5V9.3h3.75" />
+        <path d="M8.9 14.1h6.2" />
+        <path d="M8.9 17.1h4.7" />
+      </ComposerHomeGlyph>
+    );
+  }
+
+  return (
+    <ComposerHomeGlyph>
+      <circle cx="7.5" cy="7.75" r="2.35" />
+      <circle cx="16.5" cy="16.25" r="2.35" />
+      <path d="M9.6 8.85c2.5.7 4 2.3 4.75 5" />
+      <path d="M6.1 10.05c-.7 1.95-.25 3.85 1.15 5.25" />
+      <path d="M7.25 15.3H11" />
+    </ComposerHomeGlyph>
+  );
+}
+
+function ComposerHomeArrowIcon() {
+  return (
+    <ComposerHomeGlyph>
+      <path d="m9 5.75 6.25 6.25L9 18.25" />
+    </ComposerHomeGlyph>
+  );
+}
+
+function ComposerHomeDocumentIcon() {
+  return (
+    <ComposerHomeGlyph>
+      <path d="M7.25 4.75h6.4l3.1 3.25v11.25h-9.5Z" />
+      <path d="M13.45 4.95v3.3h3.05" />
+      <path d="M9.45 12.25h5.1" />
+      <path d="M9.45 15.35h3.7" />
+    </ComposerHomeGlyph>
+  );
+}
+
+function getComposerHomeSignalInitials(title: string) {
+  const words = title
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+  if (words.length >= 2) {
+    return words
+      .slice(0, 2)
+      .map((word) => word[0])
+      .join("")
+      .toUpperCase();
+  }
+  return (title.trim().slice(0, 2) || "DS").toUpperCase();
+}
+
+function getComposerHomeStatusLabel(status: ComposerHomeSignalStatus, t: ReturnType<typeof useI18n>["t"]) {
+  switch (status) {
+    case "active":
+      return t("composerHomeStatusActive");
+    case "archived":
+      return t("composerHomeStatusArchived");
+    case "draft":
+      return t("composerHomeStatusDraft");
+  }
+}
+
+function ComposerHomeSignalCard({ signal }: { signal: ComposerHomeSignal }) {
+  const { t } = useI18n();
+
+  return (
+    <Link className="composer-home-signal-card" to={signal.href} aria-label={t("composerHomeEditSignalAria", { title: signal.title })}>
+      <span className={`composer-home-signal-avatar is-${signal.status}`}>{getComposerHomeSignalInitials(signal.title)}</span>
       <div className="composer-home-card-main">
-        <span className={`composer-home-status is-${signal.status}`}>{signal.status}</span>
+        <span className={`composer-home-status is-${signal.status}`}>{getComposerHomeStatusLabel(signal.status, t)}</span>
         <h3>{signal.title}</h3>
+        <p className="muted">{t("composerHomeLastEdited", { time: formatRelativeSignalTime(signal.lastEdited) })}</p>
         <dl className="composer-home-signal-meta">
           <div>
-            <dt>Responses</dt>
+            <dt>{t("composerHomeResponses")}</dt>
             <dd>{signal.responseCount === undefined ? "Unavailable" : signal.responseCount}</dd>
           </div>
           <div>
-            <dt>Last edited</dt>
-            <dd>{formatRelativeSignalTime(signal.lastEdited)}</dd>
-          </div>
-          <div>
-            <dt>Last activity</dt>
+            <dt>{t("composerHomeLastActivity")}</dt>
             <dd>{formatRelativeSignalTime(signal.lastActivity)}</dd>
           </div>
         </dl>
       </div>
+      <span className="composer-home-card-arrow">
+        <ComposerHomeArrowIcon />
+      </span>
     </Link>
   );
 }
 
 function ComposerHomeDraftCard({ draft }: { draft: ComposerHomeDraft }) {
+  const { t } = useI18n();
+
   return (
     <Link
       className="composer-home-draft-card"
       to={{ pathname: "/create", search: draft.mode === "guestDraft" ? "?composer=1&mode=guestDraft" : "?composer=1" }}
+      aria-label={t("composerHomeResumeDraftAria", { title: draft.title })}
     >
-      <div>
-        <span className="composer-home-status is-draft">unpublished</span>
+      <span className="composer-home-draft-icon">
+        <ComposerHomeDocumentIcon />
+      </span>
+      <div className="composer-home-card-main">
+        <span className="composer-home-status is-draft">{t("composerHomeStatusUnpublished")}</span>
         <h3>{draft.title}</h3>
-        <p className="muted">
-          {draft.fieldCount} signal blocks / last composer step: {draft.step}
-        </p>
+        <p className="muted">{t("composerHomeDraftMeta", { count: draft.fieldCount, step: draft.step })}</p>
       </div>
+      <span className="composer-home-draft-action">{t("composerHomeResumeEditing")}</span>
     </Link>
   );
 }
 
 function ComposerHomePage() {
   const navigate = useNavigate();
+  const { t } = useI18n();
   const [state, setState] = useState<ComposerHomeState>({ drafts: [], signals: [], error: "" });
   const [loading, setLoading] = useState(true);
+  const [signalViewMode, setSignalViewMode] = useState<"list" | "cards">("cards");
 
   useEffect(() => {
     let cancelled = false;
@@ -211,7 +306,7 @@ function ComposerHomePage() {
                 responseCount: submissions.length,
                 lastEdited: form.updatedAt ?? form.createdAt,
                 lastActivity: getLatestFormActivity(form, submissions),
-                href: `/admin?tab=review&form=${encodeURIComponent(form.id)}`,
+                href: `/create?republishFormId=${encodeURIComponent(form.id)}`,
               } satisfies ComposerHomeSignal;
             } catch {
               return {
@@ -220,7 +315,7 @@ function ComposerHomePage() {
                 status: getFormStatus(form),
                 lastEdited: form.updatedAt ?? form.createdAt,
                 lastActivity: form.updatedAt ?? form.createdAt,
-                href: `/admin?tab=review&form=${encodeURIComponent(form.id)}`,
+                href: `/create?republishFormId=${encodeURIComponent(form.id)}`,
               } satisfies ComposerHomeSignal;
             }
           }),
@@ -259,59 +354,34 @@ function ComposerHomePage() {
 
   return (
     <section className="composer-home-shell">
-      <button type="button" className="primary-button composer-home-primary-cta" onClick={() => navigate(createNewSignalTarget())}>
-        + 新しいシグナルを作成
-      </button>
-
-      <section className="composer-home-hero panel glow-panel">
+      <section className="composer-home-hero">
         <div className="composer-home-hero-copy">
-          <p className="eyebrow">Signal Intelligence Workspace</p>
-          <h1>Composer Home</h1>
-          <p className="muted">
-            新規作成と再編集を一瞬で選べる、シグナル作成のホーム画面です。
-          </p>
+          <p className="eyebrow">{t("composerHomeEyebrow")}</p>
+          <h1>{t("composerHomeTitle")}</h1>
+          <p className="muted">{t("composerHomeBody")}</p>
         </div>
-        <div className="composer-home-command">
-          <div className="composer-home-pulse" aria-hidden="true">
-            <span />
-            <span />
-            <span />
-          </div>
-        </div>
+        <button type="button" className="composer-home-create-card" onClick={() => navigate(createNewSignalTarget())}>
+          <span className="composer-home-create-plus">+</span>
+          <span>
+            <strong>{t("composerHomeCreateSignal")}</strong>
+            <small>{t("composerHomeCreateSignalHelp")}</small>
+          </span>
+          <span className="composer-home-create-arrow" aria-hidden="true">
+            <ComposerHomeArrowIcon />
+          </span>
+        </button>
       </section>
 
       <section className="composer-home-grid" aria-busy={loading}>
-        <section className="composer-home-section composer-home-signals-section">
-          <div className="composer-home-section-heading">
-            <div>
-              <p className="eyebrow">Edit Existing Signals</p>
-              <h2>作成済みシグナル</h2>
-            </div>
-            <span>{hasSignals ? `${state.signals.length} signals` : "No signals"}</span>
-          </div>
-          {state.error ? <p className="composer-home-warning">{state.error}</p> : null}
-          <div className="composer-home-signal-list">
-            {loading ? <div className="composer-home-loading panel">Scanning signal registry...</div> : null}
-            {!loading && hasSignals ? state.signals.map((signal) => <ComposerHomeSignalCard key={signal.id} signal={signal} />) : null}
-            {!loading && !hasSignals ? (
-              <div className="composer-home-empty panel">
-                <strong>作成済みシグナルはまだありません。</strong>
-                <p className="muted">最初のシグナルを作成すると、ここからすぐ再編集できます。</p>
-                <button type="button" className="primary-button" onClick={() => navigate(createNewSignalTarget())}>
-                  + 新しいシグナルを作成
-                </button>
-              </div>
-            ) : null}
-          </div>
-        </section>
-
         <section className="composer-home-section composer-home-drafts-section">
           <div className="composer-home-section-heading">
-            <div>
-              <p className="eyebrow">未公開の下書き</p>
-              <h2>このブラウザで保存中</h2>
+            <div className="composer-home-section-title">
+              <span className="composer-home-section-icon">
+                <ComposerHomeSectionIcon type="drafts" />
+              </span>
+              <h2>{t("composerHomeDraftsTitle")}</h2>
             </div>
-            <span>{hasDrafts ? `${state.drafts.length} drafts` : "No draft"}</span>
+            <span>{hasDrafts ? t("composerHomeDraftCount", { count: state.drafts.length }) : t("composerHomeNoDraft")}</span>
           </div>
           {loading ? <div className="composer-home-loading panel">Restoring unpublished drafts...</div> : null}
           {!loading && hasDrafts ? (
@@ -323,10 +393,56 @@ function ComposerHomePage() {
           ) : null}
           {!loading && !hasDrafts ? (
             <div className="composer-home-empty panel">
-              <strong>未公開の下書きはありません。</strong>
-              <p className="muted">下書きが保存されると、公開前の作業だけがここに表示されます。</p>
+              <strong>{t("composerHomeNoDraftsTitle")}</strong>
+              <p className="muted">{t("composerHomeNoDraftsBody")}</p>
             </div>
           ) : null}
+        </section>
+
+        <section className="composer-home-section composer-home-signals-section">
+          <div className="composer-home-section-heading">
+            <div className="composer-home-section-title">
+              <span className="composer-home-section-icon">
+                <ComposerHomeSectionIcon type="signals" />
+              </span>
+              <h2>{t("composerHomeSignalsTitle")}</h2>
+            </div>
+            <div className="composer-home-list-tools">
+              <span>{t("composerHomeSortLatestEdited")}</span>
+              <div className="composer-home-view-toggle" role="group" aria-label={t("composerHomeSignalsTitle")}>
+                <button
+                  type="button"
+                  className={signalViewMode === "list" ? "is-active" : ""}
+                  aria-label={t("composerHomeListView")}
+                  aria-pressed={signalViewMode === "list"}
+                  title={t("composerHomeListView")}
+                  onClick={() => setSignalViewMode("list")}
+                />
+                <button
+                  type="button"
+                  className={signalViewMode === "cards" ? "is-active" : ""}
+                  aria-label={t("composerHomeCardView")}
+                  aria-pressed={signalViewMode === "cards"}
+                  title={t("composerHomeCardView")}
+                  onClick={() => setSignalViewMode("cards")}
+                />
+              </div>
+            </div>
+          </div>
+          {state.error ? <p className="composer-home-warning">{state.error}</p> : null}
+          <div className={`composer-home-signal-list is-${signalViewMode}`}>
+            {loading ? <div className="composer-home-loading panel">Scanning signal registry...</div> : null}
+            {!loading && hasSignals ? state.signals.map((signal) => <ComposerHomeSignalCard key={signal.id} signal={signal} />) : null}
+            {!loading && !hasSignals ? (
+              <div className="composer-home-empty panel">
+                <strong>{t("composerHomeNoSignalsTitle")}</strong>
+                <p className="muted">{t("composerHomeNoSignalsBody")}</p>
+                <button type="button" className="primary-button" onClick={() => navigate(createNewSignalTarget())}>
+                  + {t("composerHomeCreateSignal")}
+                </button>
+              </div>
+            ) : null}
+          </div>
         </section>
       </section>
     </section>

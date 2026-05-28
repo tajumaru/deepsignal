@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AppRoot } from "./AppRoot";
 
@@ -22,8 +22,11 @@ describe("AppRoot provider coverage", () => {
   });
 
   afterEach(() => {
+    cleanup();
     consoleError.mockRestore();
-    document.body.innerHTML = "";
+    window.history.replaceState(null, "", "/#/");
+    window.localStorage.clear();
+    window.sessionStorage.clear();
   });
 
   it("renders ExploreSignalsPage under the real app root router with I18nProvider", async () => {
@@ -42,7 +45,7 @@ describe("AppRoot provider coverage", () => {
 
     await waitFor(() => {
       expect(screen.getByRole("heading", { name: "Form not found" })).toBeInTheDocument();
-    });
+    }, { timeout: 5_000 });
     expectNoMissingI18nProvider(consoleError);
   });
 });

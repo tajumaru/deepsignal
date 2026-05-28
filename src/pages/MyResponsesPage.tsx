@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
 import { FormattedAnswerValue } from "../components/FormattedAnswerValue";
 import { SignalMetaRow } from "../components/SignalMetaChip";
+import { useI18n } from "../i18n";
 import { formatDate } from "../lib/utils";
 import {
   getMyResponseHistoryEntry,
@@ -11,29 +12,29 @@ import {
 } from "../storage/myResponseHistory";
 import type { FormField } from "../types";
 
-function getStatusLabel(status: MyResponseHistoryEntry["status"]) {
+function getStatusLabel(status: MyResponseHistoryEntry["status"], t: (key: string) => string) {
   switch (status) {
     case "submitted":
-      return "Submitted";
+      return t("myResponsesStatusSubmitted");
     case "failed":
-      return "Failed";
+      return t("myResponsesStatusFailed");
     case "local-only":
-      return "Local only";
+      return t("myResponsesStatusLocalOnly");
     case "pending":
     default:
-      return "Pending";
+      return t("myResponsesStatusPending");
   }
 }
 
-function getStorageLabel(storageMode: MyResponseHistoryEntry["storageMode"]) {
+function getStorageLabel(storageMode: MyResponseHistoryEntry["storageMode"], t: (key: string) => string) {
   switch (storageMode) {
     case "uploadRelay":
-      return "Upload relay";
+      return t("myResponsesStorageUploadRelay");
     case "walrus":
-      return "Walrus";
+      return t("myResponsesStorageWalrus");
     case "local":
     default:
-      return "Local";
+      return t("myResponsesStorageLocal");
   }
 }
 
@@ -42,12 +43,13 @@ function getFormVersion(entry: MyResponseHistoryEntry) {
 }
 
 export function MyResponsesPage() {
+  const { t } = useI18n();
   const { submissionId = "" } = useParams();
   const navigate = useNavigate();
   const [entries, setEntries] = useState<MyResponseHistoryEntry[]>(() => listMyResponseHistory());
   const selectedEntry = useMemo(
     () => (submissionId ? getMyResponseHistoryEntry(submissionId) : null),
-    [submissionId, entries],
+    [submissionId],
   );
 
   useEffect(() => {
@@ -74,54 +76,54 @@ export function MyResponsesPage() {
       <section className="stack my-responses-page">
         <div className="panel glow-panel my-responses-hero">
           <div>
-            <p className="eyebrow">Local sender history</p>
-            <h1>My Responses</h1>
-            <p className="lede">A device-local copy of the response you sent.</p>
+            <p className="eyebrow">{t("myResponsesDetailEyebrow")}</p>
+            <h1>{t("myResponsesTitle")}</h1>
+            <p className="lede">{t("myResponsesDetailLede")}</p>
           </div>
           <Link to="/my-responses" className="ghost-button">
-            Back to My Responses
+            {t("myResponsesBack")}
           </Link>
         </div>
 
         <section className="answer-card my-response-detail-card">
           <div className="section-row">
             <div>
-              <p className="eyebrow">Response detail</p>
+              <p className="eyebrow">{t("myResponsesResponseDetail")}</p>
               <h2>{selectedEntry.formTitle}</h2>
               {selectedEntry.projectName ? <p className="muted">{selectedEntry.projectName}</p> : null}
             </div>
             <div className="my-response-badge-row">
-              <span className={`my-response-badge is-${selectedEntry.status}`}>{getStatusLabel(selectedEntry.status)}</span>
+              <span className={`my-response-badge is-${selectedEntry.status}`}>{getStatusLabel(selectedEntry.status, t)}</span>
               <span className={`my-response-badge is-storage-${selectedEntry.storageMode}`}>
-                {getStorageLabel(selectedEntry.storageMode)}
+                {getStorageLabel(selectedEntry.storageMode, t)}
               </span>
             </div>
           </div>
 
           <div className="metadata-list">
             <div className="metadata-row">
-              <span>Submitted at</span>
+              <span>{t("myResponsesSubmittedAt")}</span>
               <strong>{formatDate(selectedEntry.submittedAt)}</strong>
             </div>
             <div className="metadata-row">
-              <span>Signal</span>
+              <span>{t("myResponsesSignal")}</span>
               <strong>{selectedEntry.formTitle}</strong>
             </div>
             <div className="metadata-row">
-              <span>Storage status</span>
-              <strong>{getStatusLabel(selectedEntry.status)}</strong>
+              <span>{t("myResponsesStorageStatus")}</span>
+              <strong>{getStatusLabel(selectedEntry.status, t)}</strong>
             </div>
             <div className="metadata-row">
-              <span>Form version</span>
+              <span>{t("myResponsesFormVersion")}</span>
               <strong>v{getFormVersion(selectedEntry)}</strong>
             </div>
             <div className="metadata-row">
-              <span>Schema hash</span>
-              <strong>{selectedEntry.schemaHash ?? "Not available"}</strong>
+              <span>{t("myResponsesSchemaHash")}</span>
+              <strong>{selectedEntry.schemaHash ?? t("myResponsesNotAvailable")}</strong>
             </div>
             {selectedEntry.errorMessage ? (
               <div className="metadata-row">
-                <span>Error</span>
+                <span>{t("myResponsesError")}</span>
                 <strong>{selectedEntry.errorMessage}</strong>
               </div>
             ) : null}
@@ -131,8 +133,8 @@ export function MyResponsesPage() {
         <section className="answer-card">
           <div className="section-row">
             <div>
-              <p className="eyebrow">Answer snapshot</p>
-              <h2>Response content</h2>
+              <p className="eyebrow">{t("myResponsesAnswerSnapshot")}</p>
+              <h2>{t("myResponsesContent")}</h2>
             </div>
           </div>
           {answerEntries.length > 0 ? (
@@ -142,34 +144,49 @@ export function MyResponsesPage() {
                 return (
                   <div key={fieldId} className="answer-line" data-question-index={`Q${index + 1}`}>
                     <strong>{field?.label ?? fieldId}</strong>
-                    <FormattedAnswerValue field={field} value={value} emptyLabel="No answer" showCountryIso />
+                    <FormattedAnswerValue field={field} value={value} emptyLabel={t("myResponsesNoAnswer")} showCountryIso />
                   </div>
                 );
               })}
             </div>
           ) : (
-            <p className="muted">No answer body was stored in this local history entry.</p>
+            <p className="muted">{t("myResponsesNoAnswerBody")}</p>
           )}
         </section>
 
         <details className="answer-card my-response-technical-details">
           <summary>
             <span>
-              <strong>Technical details</strong>
-              <small>Blob references and recovery metadata saved on this device.</small>
+              <strong>{t("myResponsesTechnicalDetails")}</strong>
+              <small>{t("myResponsesTechnicalDetailsBody")}</small>
             </span>
           </summary>
           <div className="metadata-list">
-            <SignalMetaRow label="Form blob" type="blob" value={selectedEntry.formBlobId} emptyLabel="Not available" />
-            <SignalMetaRow label="Manifest" type="manifest" value={selectedEntry.manifestBlobId} emptyLabel="Not available" />
-            <SignalMetaRow label="Submission blob" type="blob" value={selectedEntry.submissionBlobId} emptyLabel="Not available" />
+            <SignalMetaRow
+              label={t("myResponsesFormBlob")}
+              type="blob"
+              value={selectedEntry.formBlobId}
+              emptyLabel={t("myResponsesNotAvailable")}
+            />
+            <SignalMetaRow
+              label={t("myResponsesManifest")}
+              type="manifest"
+              value={selectedEntry.manifestBlobId}
+              emptyLabel={t("myResponsesNotAvailable")}
+            />
+            <SignalMetaRow
+              label={t("myResponsesSubmissionBlob")}
+              type="blob"
+              value={selectedEntry.submissionBlobId}
+              emptyLabel={t("myResponsesNotAvailable")}
+            />
             <div className="metadata-row">
-              <span>Submission ID</span>
+              <span>{t("myResponsesSubmissionId")}</span>
               <strong>{selectedEntry.submissionId}</strong>
             </div>
             {selectedEntry.projectId ? (
               <div className="metadata-row">
-                <span>Project ID</span>
+                <span>{t("myResponsesProjectId")}</span>
                 <strong>{selectedEntry.projectId}</strong>
               </div>
             ) : null}
@@ -178,18 +195,16 @@ export function MyResponsesPage() {
 
         <section className="answer-card my-response-history-actions">
           <div>
-            <p className="eyebrow">Local history control</p>
-            <h2>Hide from my history</h2>
-            <p className="muted">
-              This only hides the device-local entry. It does not revoke a response or delete Walrus evidence.
-            </p>
+            <p className="eyebrow">{t("myResponsesLocalHistoryControl")}</p>
+            <h2>{t("myResponsesHideTitle")}</h2>
+            <p className="muted">{t("myResponsesHideBody")}</p>
           </div>
           <div className="inline-actions">
             <button type="button" className="ghost-button" onClick={() => handleHide(selectedEntry)}>
-              Hide from my history
+              {t("myResponsesHideAction")}
             </button>
             <button type="button" className="ghost-button" disabled>
-              Revoke response
+              {t("myResponsesRevokeResponse")}
             </button>
           </div>
         </section>
@@ -201,18 +216,18 @@ export function MyResponsesPage() {
     <section className="stack my-responses-page">
       <div className="panel glow-panel my-responses-hero">
         <div>
-          <p className="eyebrow">Sender-side history</p>
-          <h1>My Responses</h1>
-          <p className="lede">Responses sent from this device, separate from the operator Inbox.</p>
+          <p className="eyebrow">{t("myResponsesEyebrow")}</p>
+          <h1>{t("myResponsesTitle")}</h1>
+          <p className="lede">{t("myResponsesLede")}</p>
         </div>
       </div>
 
       {entries.length === 0 ? (
         <section className="answer-card my-responses-empty">
-          <h2>No responses sent yet.</h2>
-          <p className="muted">When you send a signal from this browser, its local receipt will appear here.</p>
+          <h2>{t("myResponsesEmptyTitle")}</h2>
+          <p className="muted">{t("myResponsesEmptyBody")}</p>
           <Link to="/explore" className="primary-button">
-            Explore Signals
+            {t("myResponsesExploreSignals")}
           </Link>
         </section>
       ) : (
@@ -220,18 +235,18 @@ export function MyResponsesPage() {
           {entries.map((entry) => (
             <article key={entry.submissionId} className="answer-card my-response-card">
               <div className="my-response-card-main">
-                <p className="eyebrow">Signal title</p>
+                <p className="eyebrow">{t("myResponsesSignalTitle")}</p>
                 <h2>{entry.formTitle}</h2>
                 <p className="muted">{entry.answerSummary}</p>
               </div>
               <div className="my-response-card-meta">
                 <span>{formatDate(entry.submittedAt)}</span>
-                <span className={`my-response-badge is-${entry.status}`}>{getStatusLabel(entry.status)}</span>
-                <span className={`my-response-badge is-storage-${entry.storageMode}`}>{getStorageLabel(entry.storageMode)}</span>
+                <span className={`my-response-badge is-${entry.status}`}>{getStatusLabel(entry.status, t)}</span>
+                <span className={`my-response-badge is-storage-${entry.storageMode}`}>{getStorageLabel(entry.storageMode, t)}</span>
                 <span>v{getFormVersion(entry)}</span>
               </div>
               <Link to={`/my-responses/${entry.submissionId}`} className="primary-button">
-                View response
+                {t("myResponsesViewResponse")}
               </Link>
             </article>
           ))}

@@ -270,7 +270,9 @@ describe("PublicFormPage shared manifest restore", () => {
     renderPublicFormPage("/f/form-123?manifest=blob-abc&step=answer&identity=wallet");
 
     await waitFor(() => expect(screen.getByRole("heading", { name: "Shared Feedback Form" })).toBeInTheDocument());
-    fireEvent.input(screen.getByRole("textbox"), { target: { value: "Anonymous fallback still submits." } });
+    const answerInput = screen.getByRole("textbox");
+    fireEvent.change(answerInput, { target: { value: "Anonymous fallback still submits." } });
+    await waitFor(() => expect(answerInput).toHaveValue("Anonymous fallback still submits."));
     fireEvent.click(screen.getByRole("button", { name: SUBMIT_SIGNAL_BUTTON }));
 
     await waitFor(() => expect(mockSaveSubmission).toHaveBeenCalledTimes(1));

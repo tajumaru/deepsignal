@@ -1,6 +1,6 @@
 /* Admin inbox mobile responsive overrides. */
 
-@media (max-width: 768px) {
+@media (max-width: 900px) {
   .workspace-tab-nav {
     display: flex;
     width: 100%;
@@ -118,6 +118,36 @@
   .desktop-signal-inbox-hero.signal-inbox-onboarding-hero {
     display: block;
     margin-inline: 0;
+  }
+
+  .workspace-hero-compact .workspace-overview-shell {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .workspace-hero-compact .workspace-action-dock,
+  .workspace-shortcut-bar.workspace-dock-actions,
+  .workspace-dock-actions .workspace-action-card,
+  .workspace-dock-actions .workspace-project-menu-shell {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  .workspace-shortcut-bar.workspace-dock-actions,
+  .workspace-hero-compact .workspace-dock-actions {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    justify-content: stretch;
+  }
+
+  .workspace-dock-actions .workspace-action-card {
+    min-height: 7.5rem;
+    padding: 0.9rem;
+  }
+
+  .desktop-signal-inbox-hero .workspace-action-dock {
+    display: none;
   }
 
   .operations-status-rail {
@@ -268,6 +298,18 @@
 
   .signal-inbox-onboarding-empty-state {
     min-height: 24rem;
+  }
+
+  .signal-inbox-empty-state .inline-actions {
+    width: 100%;
+    max-width: 22rem;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .signal-inbox-empty-state .primary-button,
+  .signal-inbox-empty-state .ghost-button {
+    width: 100%;
+    min-width: 0;
   }
 
   .signal-channel-selector-mobile,
@@ -1074,9 +1116,40 @@
     box-shadow: 0 0 9px rgba(102, 227, 255, 0.18);
   }
 
-  .mobile-inbox-bottom-nav a:nth-child(3) > span:first-child {
-    background: rgba(82, 208, 141, 0.16);
-    color: #c8ffdf;
+  .mobile-compose-fab {
+    position: fixed;
+    right: max(1rem, env(safe-area-inset-right, 0px));
+    bottom: calc(5.35rem + env(safe-area-inset-bottom, 0px));
+    z-index: 22;
+    display: inline-grid;
+    place-items: center;
+    width: 3.35rem;
+    height: 3.35rem;
+    border: 1px solid rgba(122, 255, 241, 0.5);
+    border-radius: 999px;
+    background:
+      radial-gradient(circle at 35% 18%, rgba(255, 255, 255, 0.28), transparent 28%),
+      linear-gradient(135deg, #7afff1, #52d08d);
+    color: #02111a;
+    box-shadow:
+      0 18px 36px rgba(0, 0, 0, 0.38),
+      0 0 22px rgba(82, 208, 141, 0.24),
+      inset 0 1px 0 rgba(255, 255, 255, 0.34);
+    text-decoration: none;
+  }
+
+  .mobile-compose-fab.is-pressing {
+    transform: translateY(1px) scale(0.98);
+  }
+
+  .mobile-compose-fab-icon {
+    width: 1.35rem;
+    height: 1.35rem;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
   }
 
   .has-mobile-bottom-nav .page-wrap {

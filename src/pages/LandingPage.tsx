@@ -1,4 +1,3 @@
-import "../styles/pages/landing.css";
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { Link } from "react-router-dom";
 import { CreateFormLink } from "../components/CreateFormLink";

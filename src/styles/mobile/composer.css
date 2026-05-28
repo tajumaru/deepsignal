@@ -4,25 +4,46 @@
   .composer-home-hero,
   .composer-home-grid,
   .composer-home-draft-list,
-  .composer-home-signal-list,
-  .composer-home-draft-card,
-  .composer-home-signal-card {
+  .composer-home-signal-list {
     grid-template-columns: 1fr;
   }
 
-  .composer-home-command {
-    justify-items: stretch;
-    justify-content: stretch;
+  .composer-home-create-card {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    min-width: 0;
+  }
+
+  .composer-home-draft-card {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .composer-home-draft-action {
+    grid-column: 1 / -1;
+    width: 100%;
+    text-align: center;
+  }
+
+  .composer-home-signal-card {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    min-width: 0;
+  }
+
+  .composer-home-signal-list.is-list .composer-home-signal-card {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+
+  .composer-home-signal-list.is-list .composer-home-signal-meta {
+    grid-column: 2 / -1;
+    justify-content: start;
   }
 
   .composer-home-primary-cta,
   .composer-home-shell > .composer-home-primary-cta {
-    width: 100%;
     justify-content: center;
   }
 
   .composer-home-signal-meta {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .composer-home-section-heading {
@@ -156,6 +177,51 @@
 }
 
 @media (max-width: 640px) {
+  .composer-home-shell {
+    width: 100%;
+    max-width: 100%;
+    padding-inline: 0;
+  }
+
+  .composer-home-create-card,
+  .composer-home-draft-card,
+  .composer-home-signal-card {
+    gap: 0.7rem;
+    padding: 0.82rem;
+    border-radius: 16px;
+  }
+
+  .composer-home-create-card,
+  .composer-home-signal-card,
+  .composer-home-signal-list.is-list .composer-home-signal-card {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .composer-home-create-plus,
+  .composer-home-draft-icon,
+  .composer-home-signal-avatar {
+    display: none;
+  }
+
+  .composer-home-card-main,
+  .composer-home-card-main h3,
+  .composer-home-card-main p,
+  .composer-home-create-card strong,
+  .composer-home-create-card small {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .composer-home-signal-list.is-list .composer-home-signal-meta,
+  .composer-home-signal-meta {
+    grid-column: 1 / -1;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .composer-home-list-tools {
+    display: none;
+  }
+
   .composer-template-filter-bar {
     display: none;
   }

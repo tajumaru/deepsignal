@@ -144,6 +144,10 @@ function getDeadlineTone(form: Pick<FormSchema, "responseDeadline">) {
   return "scheduled";
 }
 
+function getMetricCaption(label: string, count: number) {
+  return label.replace(String(count), "").replace(/^[\s:：-]+|[\s:：-]+$/g, "") || label;
+}
+
 function readExploreDeletedFormIds() {
   if (typeof window === "undefined") {
     return new Set<string>();
@@ -416,6 +420,9 @@ export function ExploreSignalsPage() {
   const heroCountLabel = loading
     ? t("exploreScanningWorkspace")
     : t("exploreSignalsInView", { count: filteredCards.length });
+  const heroCountCaption = loading ? t("exploreRefreshingFeed") : getMetricCaption(heroCountLabel, filteredCards.length);
+  const listedCountLabel = t("exploreListedHere", { count: cards.length });
+  const listedCountCaption = getMetricCaption(listedCountLabel, cards.length);
 
   function getDiscoverTabLabel(tab: DiscoverTab) {
     switch (tab) {
@@ -494,6 +501,25 @@ export function ExploreSignalsPage() {
     });
   }
 
+  function getDiscoverTabIcon(tab: DiscoverTab) {
+    switch (tab) {
+      case "trending":
+        return "↗";
+      case "new":
+        return "☆";
+      case "active":
+        return "⌁";
+      case "ai":
+        return "✣";
+      case "governance":
+        return "◇";
+      case "anonymous":
+        return "◌";
+      case "encrypted":
+        return "▣";
+    }
+  }
+
   if (!readyToRenderExplore) {
     return (
       <section className="explore-shell">
@@ -522,6 +548,11 @@ export function ExploreSignalsPage() {
         <div className="explore-dataflow" aria-hidden="true" />
         <div className="explore-radar-sweep" aria-hidden="true" />
         <div className="explore-grid-glow" aria-hidden="true" />
+        <div className="explore-radar-display" aria-hidden="true">
+          <span className="explore-radar-core" />
+          <span className="explore-radar-beam" />
+          <span className="explore-radar-link" />
+        </div>
         <div className="explore-node-field" aria-hidden="true">
           <span className="explore-node node-a" />
           <span className="explore-node node-b" />
@@ -542,8 +573,16 @@ export function ExploreSignalsPage() {
             </p>
           </div>
           <div className="explore-hero-summary">
-            <span className="signal-chip signal-chip-accent">{heroCountLabel}</span>
-            <span className="signal-chip">{t("exploreListedHere", { count: cards.length })}</span>
+            <div className="explore-summary-card">
+              <span className="explore-summary-icon" aria-hidden="true">◎</span>
+              <strong>{loading ? "..." : filteredCards.length}</strong>
+              <span>{heroCountCaption}</span>
+            </div>
+            <div className="explore-summary-card">
+              <span className="explore-summary-icon" aria-hidden="true">▤</span>
+              <strong>{cards.length}</strong>
+              <span>{listedCountCaption}</span>
+            </div>
           </div>
         </div>
       </section>
@@ -560,12 +599,17 @@ export function ExploreSignalsPage() {
                 aria-selected={activeTab === tab}
                 onClick={() => setActiveTab(tab)}
               >
+                <span className="explore-tab-icon" aria-hidden="true">{getDiscoverTabIcon(tab)}</span>
                 {getDiscoverTabLabel(tab)}
               </button>
             ))}
           </div>
           <div className="explore-feed-meta">
             <span>{loading ? t("exploreRefreshingFeed") : t("exploreVisibleCount", { count: filteredCards.length })}</span>
+            <span className="explore-sort-chip">
+              <span>{t("exploreSortBy")}</span>
+              <strong>{activeTab === "new" ? t("exploreTabNew") : t("exploreTabTrending")}</strong>
+            </span>
           </div>
         </div>
 
@@ -686,7 +730,8 @@ export function ExploreSignalsPage() {
 
                   <div className="inline-actions">
                     <Link className="primary-button" to={publicPath}>
-                      {t("exploreOpenSignal")}
+                      <span>{t("exploreOpenSignal")}</span>
+                      <span aria-hidden="true">→</span>
                     </Link>
                   </div>
                   </article>

@@ -2,7 +2,6 @@
   useSignAndExecuteTransaction,
   useSuiClient,
 } from "@mysten/dapp-kit";
-import "../styles/pages/admin-inbox.css";
 import { Transaction } from "@mysten/sui/transactions";
 import type { CSSProperties, ReactNode } from "react";
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -1599,7 +1598,6 @@ export function AdminDashboardPage() {
     submissionsByFormId,
     signalIndex,
     allSignals,
-    pendingSignals,
     visibleSignals: unversionedVisibleSignals,
     selectedRecord: selectedRecordFromInbox,
     applyFormUpdate,
@@ -2718,6 +2716,7 @@ export function AdminDashboardPage() {
               };
   const firstProjectForm = selectedProjectForms[0] ?? null;
   const firstVisibleForm = accessibleForms[0] ?? null;
+  const emptyInboxActionForm = firstProjectForm ?? firstVisibleForm;
 
   const draftReviewStatus = activeReviewDraft?.status ?? selectedRecord?.submission.status ?? "unread";
   const draftTriageStatus = activeReviewDraft?.triageStatus ?? selectedRecord?.submission.triageStatus ?? "new";
@@ -4173,47 +4172,29 @@ export function AdminDashboardPage() {
                       ? t("chooseProjectFirstBody")
                       : accessibleForms.length === 0
                         ? t("createFirstSignalFormBody")
-                        : t("sendTestSignalToStartReviewBody")}
+                      : t("sendTestSignalToStartReviewBody")}
                   </p>
                   <div className="inline-actions">
-                    {!hasAdminAccess && firstVisibleForm ? (
-                      <Link
-                        className="primary-button"
-                        to={getPublicFormPath(firstVisibleForm.id, firstVisibleForm.manifestBlobId)}
-                      >
-                        {t("openPublicLink")}
-                      </Link>
-                    ) : !selectedProject ? null : selectedProjectForms.length === 0 ? (
+                    {selectedProject && selectedProjectForms.length === 0 ? (
                       <CreateFormLink className="primary-button">
                         {t("createSignalForm")}
                       </CreateFormLink>
-                    ) : firstProjectForm ? (
+                    ) : emptyInboxActionForm ? (
                       <>
                         <Link
                           className="primary-button"
-                          to={getPublicFormPath(firstProjectForm.id, firstProjectForm.manifestBlobId)}
+                          to={getPublicFormPath(emptyInboxActionForm.id, emptyInboxActionForm.manifestBlobId)}
                         >
                           {t("openPublicLink")}
                         </Link>
                         <Link
                           className="ghost-button"
-                          to={getPublicFormPath(firstProjectForm.id, firstProjectForm.manifestBlobId)}
+                          to={getPublicFormPath(emptyInboxActionForm.id, emptyInboxActionForm.manifestBlobId)}
                           target="_blank"
                           rel="noreferrer"
                         >
                           {t("sendTestSignal")}
                         </Link>
-                        <button
-                          type="button"
-                          className="ghost-button"
-                          onClick={() => {
-                            setSelectedFormId("all");
-                            setSelectedStreamId("all");
-                            setSearch("");
-                          }}
-                        >
-                          {t("returnToAdminInbox")}
-                        </button>
                       </>
                     ) : null
                     }

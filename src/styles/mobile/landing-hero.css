@@ -1,9 +1,55 @@
 /* Landing hero responsive and reduced-motion overrides. */
 
 @media (max-width: 640px) {
+  .landing-hero-console,
+  .landing-hero-grid,
+  .landing-sonar-column,
+  .landing-hero-app-preview,
+  .landing-hero-intel-grid,
+  .landing-hero-module {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  .landing-hero-console {
+    overflow: hidden;
+  }
+
+  .landing-hero-grid {
+    gap: 0.9rem;
+    padding: 0.9rem;
+    overflow: hidden;
+  }
+
+  .landing-hero-copy {
+    position: relative;
+    z-index: 3;
+    gap: 0.7rem;
+  }
+
   .landing-hero-title {
-    font-size: clamp(2.7rem, 15vw, 3.9rem);
-    line-height: 0.96;
+    max-width: 8.5ch;
+    font-size: clamp(2.45rem, 12vw, 3.25rem);
+    line-height: 0.98;
+    letter-spacing: 0;
+  }
+
+  .landing-hero-subcopy,
+  .landing-tagline,
+  .landing-hero-proofline {
+    font-size: 0.9rem;
+    line-height: 1.55;
+  }
+
+  .landing-hero-trust-badges {
+    gap: 0.42rem;
+  }
+
+  .landing-hero-trust-badge {
+    min-width: 0;
+    padding-inline: 0.62rem;
+    overflow-wrap: anywhere;
   }
 
   .landing-hero-system-topline {
@@ -19,6 +65,19 @@
   .landing-hero-global-traces,
   .landing-hero-grid::after {
     display: none;
+  }
+
+  .landing-sonar-column {
+    z-index: 1;
+    overflow: hidden;
+  }
+
+  .landing-hero-app-preview {
+    justify-self: stretch;
+    min-height: 0;
+    gap: 0.62rem;
+    padding: 0.78rem;
+    border-radius: 24px;
   }
 
   .landing-hero-copy::after {
@@ -42,6 +101,7 @@
       "anon"
       "live";
     gap: 0.55rem;
+    padding: 0;
   }
 
   .landing-hero-system-links {
@@ -52,14 +112,60 @@
     grid-template-columns: 1fr;
     min-height: auto;
     margin: 0;
+    padding: 0.9rem;
+  }
+
+  .landing-hero-core-header {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.24rem;
   }
 
   .landing-hero-core-visual {
-    min-height: 170px;
+    min-height: 128px;
+  }
+
+  .landing-hero-core-ring-1 {
+    width: min(9.4rem, 58vw);
+    height: min(9.4rem, 58vw);
+  }
+
+  .landing-hero-core-ring-2 {
+    width: min(5.7rem, 36vw);
+    height: min(5.7rem, 36vw);
+  }
+
+  .landing-hero-core-node {
+    width: 2.1rem;
+    height: 2.1rem;
+  }
+
+  .landing-hero-core-copy {
+    gap: 0.36rem;
+  }
+
+  .landing-hero-core-copy h2 {
+    font-size: clamp(1.55rem, 9vw, 2.25rem);
+    line-height: 1.06;
   }
 
   .landing-hero-create-preview {
     grid-column: 1;
+    padding: 0.65rem;
+  }
+
+  .landing-hero-create-pipeline {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .landing-hero-create-pipeline span {
+    padding-inline: 0.32rem;
+    font-size: 0.62rem;
+  }
+
+  .landing-hero-core-bars {
+    min-height: 2.4rem;
+    gap: 0.24rem;
   }
 
   .landing-hero-routing,
@@ -68,6 +174,16 @@
   .landing-hero-anon,
   .landing-hero-live {
     margin: 0;
+    min-height: 0;
+    padding: 0.78rem;
+  }
+
+  .landing-hero-module-title span,
+  .landing-hero-module-title strong,
+  .landing-hero-live-feed span,
+  .landing-hero-hash-stack span {
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .landing-signal-section-shell {
