@@ -7,7 +7,7 @@ import {
 import { useContext, useEffect, useState } from "react";
 import { RpcInfrastructureContext } from "../../rpcInfrastructure";
 
-export function BuildIndicator() {
+export function BuildIndicator({ compact = false }: { compact?: boolean }) {
   const rpc = useContext(RpcInfrastructureContext);
   const [notice, setNotice] = useState<BuildUpdateNotice | null>(null);
   const [updating, setUpdating] = useState(false);
@@ -36,10 +36,12 @@ export function BuildIndicator() {
   };
 
   return (
-    <footer className="build-indicator" aria-label="Build information">
-      <span className="build-indicator-attribution">
-        {rpc?.usingTatum ? "Powered by Walrus, Seal, Sui, and Tatum RPC" : "Powered by Walrus, Seal, and Sui RPC"}
-      </span>
+    <footer className={`build-indicator${compact ? " build-indicator-compact" : ""}`} aria-label="Build information">
+      {compact ? null : (
+        <span className="build-indicator-attribution">
+          {rpc?.usingTatum ? "Powered by Walrus, Seal, Sui, and Tatum RPC" : "Powered by Walrus, Seal, and Sui RPC"}
+        </span>
+      )}
       <button
         className="build-indicator-button"
         type="button"

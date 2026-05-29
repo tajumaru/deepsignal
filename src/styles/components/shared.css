@@ -36,6 +36,24 @@
   font-weight: 700;
 }
 
+.build-indicator-compact {
+  right: max(0.5rem, env(safe-area-inset-right, 0px));
+  bottom: max(0.45rem, env(safe-area-inset-bottom, 0px));
+  opacity: 0.58;
+}
+
+.build-indicator-compact:hover,
+.build-indicator-compact:focus-within {
+  opacity: 1;
+}
+
+.build-indicator-compact .build-indicator-button {
+  max-width: min(54vw, 13rem);
+  min-height: 1.7rem;
+  padding: 0.24rem 0.52rem;
+  font-size: 0.62rem;
+}
+
 .build-update-banner {
   position: fixed;
   right: max(0.85rem, env(safe-area-inset-right, 0px));

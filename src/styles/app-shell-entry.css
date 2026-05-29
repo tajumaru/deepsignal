@@ -1,0 +1,10 @@
+/*
+  Full operator shell styles.
+  Loaded with AppShell so public routes can avoid wallet/admin chrome CSS until needed.
+*/
+
+@import "./layout.css";
+@import "./components/shared.css";
+@import "./components/actions-feedback.css";
+@import "./mobile/navigation.css";
+@import "./mobile/app-shell.css";

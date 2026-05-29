@@ -2,9 +2,22 @@ import { Link } from "react-router-dom";
 import { useI18n } from "../i18n";
 import { BuildIndicator } from "./system/BuildIndicator";
 import type { PropsWithChildren } from "react";
+import "../styles/public-shell-entry.css";
+
+function shouldShowPublicBuildIndicator() {
+  if (import.meta.env.DEV || typeof window === "undefined") {
+    return import.meta.env.DEV;
+  }
+
+  const searchParams = new URLSearchParams(window.location.search);
+  const hashQuery = window.location.hash.includes("?") ? window.location.hash.split("?").slice(1).join("?") : "";
+  const hashParams = new URLSearchParams(hashQuery);
+  return searchParams.has("debugBuild") || hashParams.has("debugBuild");
+}
 
 export function PublicAppShell({ children }: PropsWithChildren) {
   const { language, setLanguage, t } = useI18n();
+  const showBuildIndicator = shouldShowPublicBuildIndicator();
 
   return (
     <div className="app-shell public-app-shell">
@@ -32,7 +45,7 @@ export function PublicAppShell({ children }: PropsWithChildren) {
         </div>
       </header>
       <main className="page-wrap">{children}</main>
-      <BuildIndicator />
+      {showBuildIndicator ? <BuildIndicator compact /> : null}
     </div>
   );
 }

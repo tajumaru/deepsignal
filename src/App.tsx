@@ -1,7 +1,6 @@
 import { lazy, Suspense, useEffect, useMemo, useState, type ReactNode } from "react";
 import { Navigate, Route, Routes, useLocation, useParams } from "react-router-dom";
 import { InitialBootReady, useBootOverlay } from "./bootstrap/useBootOverlay";
-import { PublicAppShell } from "./components/PublicAppShell";
 import { WalletSurface } from "./components/WalletSurface";
 import { WalrusRuntimeSurface } from "./components/WalrusRuntimeSurface";
 import {
@@ -18,6 +17,7 @@ import { retryLazyImport } from "./lib/lazyRetry";
 import { logRouteLifecycle, setDeepSignalDebugReadiness } from "./lib/routeDiagnostics";
 import { REQUIRE_GLOBAL_WALRUS_RUNTIME } from "./lib/runtimeFlags";
 import { scheduleIdleTask } from "./lib/scheduleIdleTask";
+import { useI18n } from "./i18n";
 import { RpcInfrastructureProvider } from "./RpcInfrastructureProvider";
 import { ProviderReadinessBarrier, WorkspaceRestoreFallback } from "./routes/ProviderReadinessBarrier";
 import { MixedBuildRecoveryScreen, RouteErrorBoundary } from "./routes/RouteErrorBoundary";
@@ -26,6 +26,11 @@ import { getRouteId } from "./routes/routeDiagnostics";
 const AppShell = lazy(() =>
   retryLazyImport(() => import("./components/AppShell"), "app-shell").then((module) => ({
     default: module.AppShell,
+  })),
+);
+const PublicAppShell = lazy(() =>
+  retryLazyImport(() => import("./components/PublicAppShell"), "public-app-shell").then((module) => ({
+    default: module.PublicAppShell,
   })),
 );
 
@@ -129,6 +134,7 @@ function WithWalrusRuntime({ children }: { children: ReactNode }) {
 }
 
 function BuildUpdateBanner() {
+  const { t } = useI18n();
   const [notice, setNotice] = useState<BuildUpdateNotice | null>(null);
   const [updating, setUpdating] = useState(false);
 
@@ -154,30 +160,34 @@ function BuildUpdateBanner() {
   return (
     <aside className="build-update-banner" role="status" aria-live="polite">
       <div className="build-update-copy">
-        <strong>{notice.reason === "chunk_load_failure" ? "DeepSignal needs an update" : "New DeepSignal version"}</strong>
-        <p>Update to the latest build. Your local fallback data stays on this device.</p>
+        <strong>
+          {notice.reason === "chunk_load_failure"
+            ? t("buildUpdateChunkFailureTitle")
+            : t("buildUpdateAvailableTitle")}
+        </strong>
+        <p>{t("buildUpdateBody")}</p>
         {notice.chunkFailure ? (
           <details className="build-update-details">
-            <summary>Diagnostics</summary>
-            <dl className="build-update-diagnostics" aria-label="Chunk load diagnostics">
-              <dt>failed chunk</dt>
+            <summary>{t("buildUpdateDiagnostics")}</summary>
+            <dl className="build-update-diagnostics" aria-label={t("buildUpdateDiagnostics")}>
+              <dt>{t("buildUpdateFailedChunk")}</dt>
               <dd>{notice.chunkFailure.chunkUrl ?? "unknown"}</dd>
-              <dt>current build</dt>
+              <dt>{t("buildUpdateCurrentBuild")}</dt>
               <dd>
                 v{notice.chunkFailure.buildVersion} build {notice.chunkFailure.buildTime} {notice.chunkFailure.gitHash}
               </dd>
-              <dt>retry</dt>
+              <dt>{t("buildUpdateRetry")}</dt>
               <dd>
                 {notice.chunkFailure.retryCount}/{notice.chunkFailure.retryLimit}
               </dd>
-              <dt>mixed build</dt>
+              <dt>{t("buildUpdateMixedBuild")}</dt>
               <dd>{notice.chunkFailure.mixedBuildAssetsDetected ? notice.chunkFailure.mixedBuildReason ?? "detected" : "no"}</dd>
             </dl>
           </details>
         ) : null}
       </div>
       <button type="button" className="primary-button" onClick={() => void handleUpdate()} disabled={updating}>
-        {updating ? "Updating..." : "Update DeepSignal"}
+        {updating ? t("buildUpdateUpdating") : t("buildUpdateAction")}
       </button>
     </aside>
   );
@@ -389,7 +399,11 @@ export default function App() {
   );
 
   if (routeUsesPublicChrome) {
-    return <RpcInfrastructureProvider>{publicRouteSurface}</RpcInfrastructureProvider>;
+    return (
+      <RpcInfrastructureProvider>
+        <Suspense fallback={<WorkspaceRestoreFallback />}>{publicRouteSurface}</Suspense>
+      </RpcInfrastructureProvider>
+    );
   }
 
   const routeSurface = (

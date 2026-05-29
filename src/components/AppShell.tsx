@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect, useRef, useState, type PropsWithChildren } from "react";
 import { Link, NavLink, useLocation } from "react-router-dom";
+import "../styles/app-shell-entry.css";
 import { CreateFormLink } from "./CreateFormLink";
 import { NavItemLabel } from "./NavIcons";
 import { BuildIndicator } from "./system/BuildIndicator";
@@ -85,7 +86,6 @@ function MobileAppBottomNav({ showComposeShortcut }: MobileAppBottomNavProps) {
   const location = useLocation();
   const { t } = useI18n();
   const inboxActive = isSignalInboxPath(location.pathname);
-  const exploreActive = location.pathname === "/explore";
   const navClassName = ({ isActive }: { isActive: boolean }) => (isActive ? "is-active" : undefined);
 
   return (
@@ -93,7 +93,7 @@ function MobileAppBottomNav({ showComposeShortcut }: MobileAppBottomNavProps) {
       {showComposeShortcut ? (
         <CreateFormLink
           fresh={false}
-          className={`mobile-compose-fab${exploreActive ? " mobile-explore-compose-fab" : ""}`}
+          className="mobile-compose-fab"
         >
           <PencilIcon />
           <span className="sr-only">{t("composeSignalCta")}</span>

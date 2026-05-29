@@ -1,0 +1,8 @@
+/*
+  Lightweight public shell styles.
+  Keep this separate from AppShell chrome so public form, roadmap, and recovery routes do not load wallet/admin navigation CSS.
+*/
+
+@import "./layout.css";
+@import "./components/shared.css";
+@import "./components/actions-feedback.css";

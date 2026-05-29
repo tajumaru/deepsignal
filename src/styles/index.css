@@ -1,13 +1,9 @@
 /*
   DeepSignal global style entrypoint.
-  Keep startup CSS to tokens, global defaults, shell layout, and shared controls.
+  Keep startup CSS to tokens and global defaults.
   Route/page-specific CSS is imported by lazy page modules so public, LP, admin, and composer surfaces do not all ride the first load.
+  Shell CSS is owned by app-shell-entry.css and public-shell-entry.css.
 */
 
 @import "./variables.css";
 @import "./base.css";
-@import "./layout.css";
-@import "./components/shared.css";
-@import "./components/actions-feedback.css";
-@import "./mobile/navigation.css";
-@import "./mobile/app-shell.css";
