@@ -26,6 +26,7 @@ import { loadZkLoginSession } from "../lib/zkloginSession";
 import type { FieldType } from "../types";
 import { retryLazyImport } from "../lib/lazyRetry";
 import "../styles/components/forms-content.css";
+import "../styles/components/metadata-proof.css";
 import "../styles/pages/public-flows.css";
 import "../styles/mobile/layout.css";
 import "../styles/mobile/public-form.css";

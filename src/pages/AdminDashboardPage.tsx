@@ -7,6 +7,7 @@ import "../styles/components/metadata-proof.css";
 import "../styles/components/signal-review.css";
 import "../styles/components/wallet-network.css";
 import "../styles/pages/admin-inbox.css";
+import "../styles/pages/admin-intelligence-timeline.css";
 import "../styles/mobile/layout.css";
 import "../styles/mobile/workspace.css";
 import "../styles/mobile/wallet.css";
@@ -264,6 +265,11 @@ interface InboxTimelineModel {
   unreadCount: number;
   generatedFromCount: number;
   hasTrendData: boolean;
+}
+
+interface TimelineComparisonWindow {
+  previousRecords: SignalRecord[];
+  recentRecords: SignalRecord[];
 }
 
 function readProjectRecoveryNoticeAcks() {
@@ -681,7 +687,8 @@ function getRecordTimestamp(record: SignalRecord, key: "createdAt" | "updatedAt"
   return record.submission[key] || fallback;
 }
 
-function extractTrendTopics(record: SignalRecord) {
+function extractTrendTopics(record: SignalRecord, options: { includeFallbackText?: boolean } = {}) {
+  const includeFallbackText = options.includeFallbackText ?? true;
   const topics = new Set<string>();
   (record.submission.keywords ?? []).forEach((keyword) => {
     const normalized = keyword.trim().toLowerCase();
@@ -698,15 +705,17 @@ function extractTrendTopics(record: SignalRecord) {
       topics.add(normalized);
     }
   });
-  const fallbackText = `${record.form.title} ${record.submission.subjectPreview ?? ""} ${record.submission.aiSummary ?? ""}`;
-  fallbackText
-    .toLowerCase()
-    .match(/[a-z][a-z0-9-]{3,}/g)
-    ?.forEach((word) => {
-      if (!TOPIC_STOP_WORDS.has(word)) {
-        topics.add(word);
-      }
-    });
+  if (includeFallbackText) {
+    const fallbackText = `${record.form.title} ${record.submission.subjectPreview ?? ""} ${record.submission.aiSummary ?? ""}`;
+    fallbackText
+      .toLowerCase()
+      .match(/[a-z][a-z0-9-]{3,}/g)
+      ?.forEach((word) => {
+        if (!TOPIC_STOP_WORDS.has(word)) {
+          topics.add(word);
+        }
+      });
+  }
   return [...topics].slice(0, 8);
 }
 
@@ -752,18 +761,18 @@ function averageSentiment(records: SignalRecord[]) {
   return records.reduce((sum, record) => sum + getSentimentScore(record.submission), 0) / records.length;
 }
 
-function countTopics(records: SignalRecord[]) {
+function countTopics(records: SignalRecord[], options?: { includeFallbackText?: boolean }) {
   const counts = new Map<string, number>();
   records.forEach((record) => {
-    extractTrendTopics(record).forEach((topic) => {
+    extractTrendTopics(record, options).forEach((topic) => {
       counts.set(topic, (counts.get(topic) ?? 0) + 1);
     });
   });
   return counts;
 }
 
-function getTopTopic(records: SignalRecord[]) {
-  return [...countTopics(records).entries()].sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]))[0] ?? null;
+function getTopTopic(records: SignalRecord[], options?: { includeFallbackText?: boolean }) {
+  return [...countTopics(records, options).entries()].sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]))[0] ?? null;
 }
 
 function countRiskSignals(records: SignalRecord[]) {
@@ -778,14 +787,41 @@ function countRiskSignals(records: SignalRecord[]) {
   }).length;
 }
 
+function getTimelineComparisonWindow(sorted: SignalRecord[]): TimelineComparisonWindow {
+  if (sorted.length === 0) {
+    return { previousRecords: [], recentRecords: [] };
+  }
+
+  const latestTimestamp = Date.parse(getRecordTimestamp(sorted[sorted.length - 1], "createdAt"));
+  if (Number.isFinite(latestTimestamp)) {
+    const windowMs = 7 * 24 * 60 * 60 * 1000;
+    const recentStart = latestTimestamp - windowMs;
+    const previousStart = recentStart - windowMs;
+    const recentRecords = sorted.filter((record) => {
+      const timestamp = Date.parse(getRecordTimestamp(record, "createdAt"));
+      return Number.isFinite(timestamp) && timestamp > recentStart && timestamp <= latestTimestamp;
+    });
+    const previousRecords = sorted.filter((record) => {
+      const timestamp = Date.parse(getRecordTimestamp(record, "createdAt"));
+      return Number.isFinite(timestamp) && timestamp > previousStart && timestamp <= recentStart;
+    });
+    if (recentRecords.length > 0 && previousRecords.length > 0) {
+      return { previousRecords, recentRecords };
+    }
+  }
+
+  const recentSize = Math.min(5, sorted.length);
+  const recentRecords = sorted.slice(-recentSize);
+  const previousRecords = sorted.slice(Math.max(0, sorted.length - recentSize * 2), sorted.length - recentSize);
+  return { previousRecords, recentRecords };
+}
+
 function buildInboxTimelineModel(records: SignalRecord[], t: TranslationFn): InboxTimelineModel {
   const sorted = [...records].sort(
     (left, right) => Date.parse(getRecordTimestamp(left, "createdAt")) - Date.parse(getRecordTimestamp(right, "createdAt")),
   );
   const latestRecord = sorted[sorted.length - 1] ?? null;
-  const midpoint = Math.max(1, Math.floor(sorted.length / 2));
-  const previousRecords = sorted.slice(0, midpoint);
-  const recentRecords = sorted.slice(midpoint);
+  const { previousRecords, recentRecords } = getTimelineComparisonWindow(sorted);
   const latestCreatedAt = latestRecord ? getRecordTimestamp(latestRecord, "createdAt") : new Date().toISOString();
   const recentCount = recentRecords.length || sorted.length;
   const previousCount = previousRecords.length;
@@ -798,16 +834,19 @@ function buildInboxTimelineModel(records: SignalRecord[], t: TranslationFn): Inb
   const previousSentiment = averageSentiment(previousRecords);
   const sentimentDelta = recentSentiment - previousSentiment;
   const sentimentTitle = getSentimentLabel(sentimentDelta, recentSentiment, t);
-  const recentTopicCounts = countTopics(recentRecords.length > 0 ? recentRecords : sorted);
-  const previousTopicCounts = countTopics(previousRecords);
+  const recentTopicCounts = countTopics(recentRecords.length > 0 ? recentRecords : sorted, { includeFallbackText: false });
+  const previousTopicCounts = countTopics(previousRecords, { includeFallbackText: false });
   const risingTopic =
     [...recentTopicCounts.entries()].sort((left, right) => {
       const leftDelta = left[1] - (previousTopicCounts.get(left[0]) ?? 0);
       const rightDelta = right[1] - (previousTopicCounts.get(right[0]) ?? 0);
       return rightDelta - leftDelta || right[1] - left[1] || left[0].localeCompare(right[0]);
-    })[0] ?? getTopTopic(sorted);
+    }).find(([topic, count]) => count >= 2 && count > (previousTopicCounts.get(topic) ?? 0)) ?? getTopTopic(sorted, { includeFallbackText: false });
+  const hasRealTopic = Boolean(risingTopic && risingTopic[1] >= 2);
   const positiveCount = sorted.filter((record) => getSentimentScore(record.submission) > 0).length;
   const riskCount = countRiskSignals(sorted);
+  const hasSentimentDelta = Math.abs(sentimentDelta) >= 0.35;
+  const hasRiskSignal = riskCount > 0;
   const latestRiskRecord =
     [...sorted].reverse().find((record) => countRiskSignals([record]) > 0) ?? latestRecord;
 
@@ -854,17 +893,18 @@ function buildInboxTimelineModel(records: SignalRecord[], t: TranslationFn): Inb
   ].sort((left, right) => Date.parse(right.timestamp) - Date.parse(left.timestamp));
 
   const trendCards: InboxTrendCard[] = [
-    {
+    hasRealTopic && risingTopic
+      ? {
       id: "rising-topic",
       label: t("inboxTrendRisingTopicLabel"),
-      title: risingTopic ? risingTopic[0] : t("inboxTrendNoTopicTitle"),
-      value: risingTopic ? t("inboxTrendSignalCount", { count: risingTopic[1] }) : t("inboxTrendNoDataValue"),
-      detail: risingTopic
-        ? t("inboxTrendRisingTopicDetail", { topic: risingTopic[0], count: risingTopic[1] })
-        : t("inboxTrendNoTopicDetail"),
+      title: risingTopic[0],
+      value: t("inboxTrendSignalCount", { count: risingTopic[1] }),
+      detail: t("inboxTrendRisingTopicDetail", { topic: risingTopic[0], count: risingTopic[1] }),
       tone: "topic",
-    },
-    {
+    }
+      : null,
+    hasSentimentDelta
+      ? {
       id: "positive-trend",
       label: t("inboxTrendPositiveLabel"),
       title: positiveCount > 0 ? t("inboxTrendPositiveTitle") : t("inboxTrendPositiveQuietTitle"),
@@ -874,18 +914,21 @@ function buildInboxTimelineModel(records: SignalRecord[], t: TranslationFn): Inb
           ? t("inboxTrendPositiveRisingDetail")
           : t("inboxTrendPositiveDetail", { count: positiveCount }),
       tone: "positive",
-    },
-    {
+    }
+      : null,
+    hasRiskSignal
+      ? {
       id: "emerging-risk",
       label: t("inboxTrendRiskLabel"),
-      title: riskCount > 0 ? t("inboxTrendRiskTitle") : t("inboxTrendRiskQuietTitle"),
+      title: t("inboxTrendRiskTitle"),
       value: t("inboxTrendSignalCount", { count: riskCount }),
       detail: latestRiskRecord
         ? compactTimelineText(latestRiskRecord.submission.aiSummary || latestRiskRecord.submission.subjectPreview || t("inboxTrendRiskFallback"))
         : t("inboxTrendRiskQuietDetail"),
       tone: "risk",
-    },
-  ];
+    }
+      : null,
+  ].filter((card): card is InboxTrendCard => Boolean(card));
 
   return {
     events,
@@ -894,10 +937,10 @@ function buildInboxTimelineModel(records: SignalRecord[], t: TranslationFn): Inb
       growthDelta > 0
         ? t("inboxTimelineGrowthPill", { delta: growthDelta })
         : t("inboxTimelineGrowthSteadyPill"),
-    activeTrendLabel: risingTopic && sorted.length > 0 ? risingTopic[0] : t("inboxTimelineNoActiveTrend"),
+    activeTrendLabel: hasRealTopic && risingTopic && sorted.length > 0 ? risingTopic[0] : t("inboxTimelineNoActiveTrend"),
     unreadCount: sorted.filter((record) => record.submission.status === "unread").length,
     generatedFromCount: sorted.length,
-    hasTrendData: sorted.length >= 2,
+    hasTrendData: sorted.length >= 5 && trendCards.length > 0,
   };
 }
 
@@ -1035,9 +1078,21 @@ function SignalIntelligenceCenter({
 function SelectedSignalIntelligenceCard({
   record,
   t,
+  createFollowUpHref,
+  actionDisabled,
+  isMarkingEmergingRisk,
+  isPublishingToRoadmap,
+  onMarkEmergingRisk,
+  onPublishToRoadmap,
 }: {
   record: SignalRecord;
   t: TranslationFn;
+  createFollowUpHref: string;
+  actionDisabled: boolean;
+  isMarkingEmergingRisk: boolean;
+  isPublishingToRoadmap: boolean;
+  onMarkEmergingRisk: () => void;
+  onPublishToRoadmap: () => void;
 }) {
   const aiSummary = record.submission.aiSummary?.trim() || t("selectedSignalAiSummaryPending");
   const followUp = hasNeedsFollowUp(record.submission)
@@ -1065,6 +1120,29 @@ function SelectedSignalIntelligenceCard({
         <article>
           <span>{t("selectedSignalFollowUpLabel")}</span>
           <p>{followUp}</p>
+        </article>
+      </div>
+      <div className="selected-signal-next-action-grid" aria-label={t("selectedSignalNextActionsLabel")}>
+        <article className="selected-signal-next-action-card">
+          <span>{t("selectedSignalCreateFollowUpTitle")}</span>
+          <p>{t("selectedSignalCreateFollowUpDetail")}</p>
+          <Link className="ghost-button" to={createFollowUpHref}>
+            {t("selectedSignalCreateFollowUpCta")}
+          </Link>
+        </article>
+        <article className="selected-signal-next-action-card is-risk">
+          <span>{t("selectedSignalMarkEmergingRiskTitle")}</span>
+          <p>{t("selectedSignalMarkEmergingRiskDetail")}</p>
+          <button type="button" className="ghost-button" disabled={actionDisabled || isMarkingEmergingRisk} onClick={onMarkEmergingRisk}>
+            {isMarkingEmergingRisk ? t("selectedSignalEmergingRiskMarked") : t("selectedSignalMarkEmergingRiskCta")}
+          </button>
+        </article>
+        <article className="selected-signal-next-action-card is-roadmap">
+          <span>{t("selectedSignalPublishRoadmapTitle")}</span>
+          <p>{t("selectedSignalPublishRoadmapDetail")}</p>
+          <button type="button" className="ghost-button" disabled={actionDisabled || isPublishingToRoadmap} onClick={onPublishToRoadmap}>
+            {isPublishingToRoadmap ? t("publishedLabel") : t("selectedSignalPublishRoadmapCta")}
+          </button>
         </article>
       </div>
     </section>
@@ -2909,6 +2987,9 @@ export function AdminDashboardPage() {
   const selectedRoadmapUrl = selectedRecord
     ? getPublicRoadmapPath(selectedRecord.form.id, selectedRecord.form.manifestBlobId)
     : "";
+  const selectedFollowUpCreateHref = selectedRecord
+    ? `/create?composer=1&followUpSignal=${encodeURIComponent(selectedRecord.submission.id)}`
+    : "/create?composer=1";
   const relatedSignals = useMemo(
     () =>
       getRelatedSignals({
@@ -3414,6 +3495,32 @@ export function AdminDashboardPage() {
       },
       { announce: true },
     );
+  }
+
+  async function handleMarkSelectedEmergingRisk() {
+    if (!selectedRecord || isReviewWorkbenchLocked) {
+      return;
+    }
+    await updateSubmission(
+      {
+        ...selectedRecord.submission,
+        status: "read",
+        priority: "high",
+        triageStatus:
+          selectedRecord.submission.triageStatus === "new"
+            ? "investigating"
+            : selectedRecord.submission.triageStatus,
+        tags: setNeedsFollowUpTag(selectedRecord.submission.tags, true),
+      },
+      { announce: true },
+    );
+  }
+
+  async function handlePublishSelectedToRoadmap() {
+    if (!selectedRecord || isReviewWorkbenchLocked) {
+      return;
+    }
+    await handleQuickAction(selectedRecord, "publish");
   }
 
   const shortcutItems = useMemo(
@@ -5076,7 +5183,18 @@ export function AdminDashboardPage() {
 
                   {!isReviewerFocusMode ? (
                   <div className="signal-detail-sections review-secondary-sections">
-                    <SelectedSignalIntelligenceCard record={selectedRecord} t={t} />
+                    <SelectedSignalIntelligenceCard
+                      record={selectedRecord}
+                      t={t}
+                      createFollowUpHref={selectedFollowUpCreateHref}
+                      actionDisabled={saving || isReviewWorkbenchLocked}
+                      isMarkingEmergingRisk={
+                        hasNeedsFollowUp(selectedRecord.submission) && selectedRecord.submission.priority === "high"
+                      }
+                      isPublishingToRoadmap={isSelectedRecordOnRoadmap}
+                      onMarkEmergingRisk={() => void handleMarkSelectedEmergingRisk()}
+                      onPublishToRoadmap={() => void handlePublishSelectedToRoadmap()}
+                    />
                     <SignalTimelineSection
                       open={detailSectionsState.signalTimelineOpen}
                       onToggle={() => setDetailSectionOpen("signalTimelineOpen", !detailSectionsState.signalTimelineOpen)}
