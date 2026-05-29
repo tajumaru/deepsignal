@@ -12,9 +12,11 @@ import { retryLazyImport } from "./lib/lazyRetry";
 import { logRouteLifecycle, setDeepSignalDebugReadiness } from "./lib/routeDiagnostics";
 import { scheduleIdleTask } from "./lib/scheduleIdleTask";
 import { RpcInfrastructureProvider } from "./RpcInfrastructureProvider";
-import { AppRoutes, PublicAppRoutes } from "./routes/AppRoutes";
+import { AppRoutes } from "./routes/AppRoutes";
+import { createAppRouteComponents, type AppRouteComponents } from "./routes/appRouteComponents";
 import { ProviderReadinessBarrier, WorkspaceRestoreFallback } from "./routes/ProviderReadinessBarrier";
-import { createRouteComponents } from "./routes/routeComponents";
+import { PublicAppRoutes } from "./routes/PublicAppRoutes";
+import { createPublicRouteComponents, type PublicRouteComponents } from "./routes/publicRouteComponents";
 import { MixedBuildRecoveryScreen, RouteErrorBoundary } from "./routes/RouteErrorBoundary";
 import { getRouteId } from "./routes/routeDiagnostics";
 
@@ -105,6 +107,97 @@ function AppRouteRuntimeEffects({ enabled }: { enabled: boolean }) {
   return null;
 }
 
+function PublicRouteSurface({
+  components,
+  locationKey,
+  mixedBuildStatus,
+  onRetryRoute,
+  onRouteReady,
+  routePath,
+  routeRetryNonce,
+}: {
+  components: PublicRouteComponents;
+  locationKey: string;
+  mixedBuildStatus: ReturnType<typeof getMixedBuildStatus>;
+  onRetryRoute: () => void;
+  onRouteReady: () => void;
+  routePath: string;
+  routeRetryNonce: number;
+}) {
+  return (
+    <PublicAppShell>
+      <BuildUpdateBanner />
+      <RouteErrorBoundary
+        resetKey={`${locationKey}:${routeRetryNonce}`}
+        routePath={routePath}
+        onRetryRoute={onRetryRoute}
+      >
+        {mixedBuildStatus.detected ? (
+          <RouteReady routePath={routePath} onReady={onRouteReady}>
+            <MixedBuildRecoveryScreen observed={mixedBuildStatus.observed} />
+          </RouteReady>
+        ) : (
+          <Suspense fallback={<WorkspaceRestoreFallback />}>
+            <RouteReady routePath={routePath} onReady={onRouteReady}>
+              <PublicAppRoutes components={components} />
+            </RouteReady>
+          </Suspense>
+        )}
+      </RouteErrorBoundary>
+    </PublicAppShell>
+  );
+}
+
+function PrivateRouteSurface({
+  components,
+  locationKey,
+  mixedBuildStatus,
+  onRetryRoute,
+  onRouteReady,
+  routeNeedsWalletSurface,
+  routeNeedsWorkspaceBoot,
+  routePath,
+  routeRetryNonce,
+}: {
+  components: AppRouteComponents;
+  locationKey: string;
+  mixedBuildStatus: ReturnType<typeof getMixedBuildStatus>;
+  onRetryRoute: () => void;
+  onRouteReady: () => void;
+  routeNeedsWalletSurface: boolean;
+  routeNeedsWorkspaceBoot: boolean;
+  routePath: string;
+  routeRetryNonce: number;
+}) {
+  return (
+    <Suspense fallback={<WorkspaceRestoreFallback />}>
+      <AppShell walletAvailable={routeNeedsWalletSurface} chrome="full">
+        <BuildUpdateBanner />
+        <AppRouteRuntimeEffects enabled={routeNeedsWorkspaceBoot} />
+        <RouteErrorBoundary
+          resetKey={`${locationKey}:${routeRetryNonce}`}
+          routePath={routePath}
+          onRetryRoute={onRetryRoute}
+        >
+          {mixedBuildStatus.detected ? (
+            <RouteReady routePath={routePath} onReady={onRouteReady}>
+              <MixedBuildRecoveryScreen observed={mixedBuildStatus.observed} />
+            </RouteReady>
+          ) : (
+            <Suspense fallback={<WorkspaceRestoreFallback />}>
+              <RouteReady routePath={routePath} onReady={onRouteReady}>
+                <ProviderReadinessBarrier routePath={routePath} enabled={routeNeedsWorkspaceBoot}>
+                  <AppRoutes components={components} />
+                </ProviderReadinessBarrier>
+              </RouteReady>
+            </Suspense>
+          )}
+        </RouteErrorBoundary>
+      </AppShell>
+    </Suspense>
+  );
+}
+
 export default function App() {
   const location = useLocation();
   const routeIsLanding = location.pathname === "/";
@@ -117,8 +210,9 @@ export default function App() {
   const [bootDismissed, setBootDismissed] = useState(false);
   const [mixedBuildStatus, setMixedBuildStatus] = useState(() => getMixedBuildStatus());
   const [routeRetryNonce, setRouteRetryNonce] = useState(0);
-  const routeComponents = useMemo(() => createRouteComponents(routeRetryNonce), [routeRetryNonce]);
-  const { LandingPage } = routeComponents;
+  const appRouteComponents = useMemo(() => createAppRouteComponents(routeRetryNonce), [routeRetryNonce]);
+  const publicRouteComponents = useMemo(() => createPublicRouteComponents(routeRetryNonce), [routeRetryNonce]);
+  const { LandingPage } = appRouteComponents;
   const routeNeedsWalletSurface =
     location.pathname === "/admin" ||
     location.pathname === "/dashboard" ||
@@ -195,63 +289,36 @@ export default function App() {
     );
   }
 
-  const publicRouteSurface = (
-    <PublicAppShell>
-      <BuildUpdateBanner />
-      <RouteErrorBoundary
-        resetKey={`${location.key}:${routeRetryNonce}`}
-        routePath={routePath}
-        onRetryRoute={() => setRouteRetryNonce((value) => value + 1)}
-      >
-        {mixedBuildStatus.detected ? (
-          <RouteReady routePath={routePath} onReady={() => setInitialRouteReady(true)}>
-            <MixedBuildRecoveryScreen observed={mixedBuildStatus.observed} />
-          </RouteReady>
-        ) : (
-          <Suspense fallback={<WorkspaceRestoreFallback />}>
-            <RouteReady routePath={routePath} onReady={() => setInitialRouteReady(true)}>
-              <PublicAppRoutes components={routeComponents} />
-            </RouteReady>
-          </Suspense>
-        )}
-      </RouteErrorBoundary>
-    </PublicAppShell>
-  );
-
   if (routeUsesPublicChrome) {
     return (
       <RpcInfrastructureProvider>
-        <Suspense fallback={<WorkspaceRestoreFallback />}>{publicRouteSurface}</Suspense>
+        <Suspense fallback={<WorkspaceRestoreFallback />}>
+          <PublicRouteSurface
+            components={publicRouteComponents}
+            locationKey={location.key}
+            mixedBuildStatus={mixedBuildStatus}
+            onRetryRoute={() => setRouteRetryNonce((value) => value + 1)}
+            onRouteReady={() => setInitialRouteReady(true)}
+            routePath={routePath}
+            routeRetryNonce={routeRetryNonce}
+          />
+        </Suspense>
       </RpcInfrastructureProvider>
     );
   }
 
   const routeSurface = (
-    <Suspense fallback={<WorkspaceRestoreFallback />}>
-      <AppShell walletAvailable={routeNeedsWalletSurface} chrome="full">
-        <BuildUpdateBanner />
-        <AppRouteRuntimeEffects enabled={routeNeedsWorkspaceBoot} />
-        <RouteErrorBoundary
-          resetKey={`${location.key}:${routeRetryNonce}`}
-          routePath={routePath}
-          onRetryRoute={() => setRouteRetryNonce((value) => value + 1)}
-        >
-          {mixedBuildStatus.detected ? (
-            <RouteReady routePath={routePath} onReady={() => setInitialRouteReady(true)}>
-              <MixedBuildRecoveryScreen observed={mixedBuildStatus.observed} />
-            </RouteReady>
-          ) : (
-            <Suspense fallback={<WorkspaceRestoreFallback />}>
-              <RouteReady routePath={routePath} onReady={() => setInitialRouteReady(true)}>
-                <ProviderReadinessBarrier routePath={routePath} enabled={routeNeedsWorkspaceBoot}>
-                  <AppRoutes components={routeComponents} />
-                </ProviderReadinessBarrier>
-              </RouteReady>
-            </Suspense>
-          )}
-        </RouteErrorBoundary>
-      </AppShell>
-    </Suspense>
+    <PrivateRouteSurface
+      components={appRouteComponents}
+      locationKey={location.key}
+      mixedBuildStatus={mixedBuildStatus}
+      onRetryRoute={() => setRouteRetryNonce((value) => value + 1)}
+      onRouteReady={() => setInitialRouteReady(true)}
+      routeNeedsWalletSurface={routeNeedsWalletSurface}
+      routeNeedsWorkspaceBoot={routeNeedsWorkspaceBoot}
+      routePath={routePath}
+      routeRetryNonce={routeRetryNonce}
+    />
   );
 
   if (!routeNeedsWalletSurface) {

@@ -94,6 +94,9 @@ DeepSignal is a realtime signal intelligence workspace and signal intelligence p
 - Run available checks before finalizing when possible.
 - Always run `npm run typecheck` after TypeScript changes.
 - Run `npm run build` before finishing larger changes.
+- After build changes that affect routing, bundling, or public routes, inspect `dist/index.html` and the generated public route chunks.
+- Public form initial static imports must not include `WalletNav`, `WalletConnectSurface`, `AdminDashboardPage`, `FormBuilderPage`, `TipTap`, or Mysten/Sui/Walrus/Seal runtime chunks.
+- Vite dynamic import map string references to those chunks are acceptable when they are not initial static imports and only point to on-demand paths.
 - If behavior changes affect storage, crypto, wallet gating, or public routes, sanity-check both the admin flow and the wallet-optional public flow.
 - Never fix only fallback copy for route failures. Identify and document the real thrown runtime error.
 - Treat intermittent Explore failures as initialization-order bugs first, especially on mobile Safari.

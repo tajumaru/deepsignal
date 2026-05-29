@@ -1,7 +1,7 @@
 import { lazy } from "react";
 import { retryLazyImport } from "../lib/lazyRetry";
 
-export function createRouteComponents(retryNonce = 0) {
+export function createAppRouteComponents(retryNonce = 0) {
   void retryNonce;
   return {
     AccessManagementPage: lazy(() =>
@@ -22,16 +22,6 @@ export function createRouteComponents(retryNonce = 0) {
     FormBuilderPage: lazy(() =>
       retryLazyImport(() => import("../pages/FormBuilderPage"), "route-form-builder").then((module) => ({
         default: module.FormBuilderPage,
-      })),
-    ),
-    ManifestRestorePage: lazy(() =>
-      retryLazyImport(() => import("../pages/ManifestRestorePage"), "route-manifest-restore").then((module) => ({
-        default: module.ManifestRestorePage,
-      })),
-    ),
-    PublicRoadmapPage: lazy(() =>
-      retryLazyImport(() => import("../pages/PublicRoadmapPage"), "route-public-roadmap").then((module) => ({
-        default: module.PublicRoadmapPage,
       })),
     ),
     SubmissionDetailPage: lazy(() =>
@@ -64,17 +54,7 @@ export function createRouteComponents(retryNonce = 0) {
         default: module.InsightsFixturePage,
       })),
     ),
-    PublicFormPage: lazy(() =>
-      retryLazyImport(() => import("../pages/PublicFormPage"), "route-public-form").then((module) => ({
-        default: module.PublicFormPage,
-      })),
-    ),
-    ZkLoginCallbackPage: lazy(() =>
-      retryLazyImport(() => import("../pages/ZkLoginCallbackPage"), "route-zklogin-callback").then((module) => ({
-        default: module.ZkLoginCallbackPage,
-      })),
-    ),
   };
 }
 
-export type AppRouteComponents = ReturnType<typeof createRouteComponents>;
+export type AppRouteComponents = ReturnType<typeof createAppRouteComponents>;

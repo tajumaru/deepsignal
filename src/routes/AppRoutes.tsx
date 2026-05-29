@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { Navigate, Route, Routes, useParams } from "react-router-dom";
 import { WalrusRuntimeSurface } from "../components/WalrusRuntimeSurface";
 import { REQUIRE_GLOBAL_WALRUS_RUNTIME } from "../lib/runtimeFlags";
-import type { AppRouteComponents } from "./routeComponents";
+import type { AppRouteComponents } from "./appRouteComponents";
 
 function LegacyFormInboxRedirect({ basePath }: { basePath: "/admin" | "/dashboard" }) {
   const { formId = "", submissionId = "" } = useParams();
@@ -21,24 +21,6 @@ function WithWalrusRuntime({ children }: { children: ReactNode }) {
     return <>{children}</>;
   }
   return <WalrusRuntimeSurface>{children}</WalrusRuntimeSurface>;
-}
-
-export function PublicAppRoutes({
-  components,
-}: {
-  components: Pick<AppRouteComponents, "PublicFormPage" | "PublicRoadmapPage" | "ManifestRestorePage" | "ZkLoginCallbackPage">;
-}) {
-  const { PublicFormPage, PublicRoadmapPage, ManifestRestorePage, ZkLoginCallbackPage } = components;
-
-  return (
-    <Routes>
-      <Route path="/f/:formId" element={<PublicFormPage />} />
-      <Route path="/roadmap/:formId" element={<PublicRoadmapPage />} />
-      <Route path="/m/:manifestBlobId" element={<ManifestRestorePage />} />
-      <Route path="/auth/zklogin/callback" element={<ZkLoginCallbackPage />} />
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
-  );
 }
 
 export function AppRoutes({ components }: { components: AppRouteComponents }) {
