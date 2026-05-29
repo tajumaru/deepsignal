@@ -1,4 +1,15 @@
 import { useSignAndExecuteTransaction, useSuiClient } from "@mysten/dapp-kit";
+import "../styles/components/forms-content.css";
+import "../styles/components/metadata-proof.css";
+import "../styles/components/wallet-network.css";
+import "../styles/pages/create-form.css";
+import "../styles/mobile/layout.css";
+import "../styles/mobile/workspace.css";
+import "../styles/mobile/wallet.css";
+import "../styles/mobile/composer.css";
+import "../styles/mobile/composer-review.css";
+import "../styles/mobile/publish.css";
+import "../styles/mobile/matrix.css";
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { AdminAccessGate } from "../components/AdminAccessGate";

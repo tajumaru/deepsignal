@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import "../styles/pages/demo-mode.css";
+import "../styles/mobile/layout.css";
+import "../styles/mobile/demo.css";
 import { demoForm, demoSubmissions, createDemoLiveSubmission, seedDemoWorkspace } from "../demo/demoData";
 import { buildExportMetadata, exportResponsesToCsv } from "../lib/exportResponses";
 import { localStorageAdapter } from "../storage/localStorageAdapter";

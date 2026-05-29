@@ -5,7 +5,6 @@ import { measurePerf } from "../../../lib/perf";
 import { getRepublishFormPath } from "../../../lib/publicLinks";
 import { verifyPublicRouteAssets } from "../../../lib/publicRouteAssets";
 import { verifyWalrusBlob, type WalrusVerificationStatus } from "../../../lib/walrusProof";
-import { storage } from "../../../storage/storageFactory";
 import { upsertFormBlobIndex } from "../../../storage/blobIndex";
 import { localStorageAdapter } from "../../../storage/localStorageAdapter";
 import type { FormSchema } from "../../../types";
@@ -377,7 +376,7 @@ export function usePublicFormLoader({
         }
 
         if (!nextForm) {
-          nextForm = await measurePerf("public-form:local-restore", () => storage.getForm(formId));
+          nextForm = await measurePerf("public-form:local-restore", () => localStorageAdapter.getForm(formId));
         }
 
         if (!nextForm && manifestRestoreError) {

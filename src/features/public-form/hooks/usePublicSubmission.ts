@@ -13,6 +13,7 @@ import { ensureRespondentSession } from "../../../lib/respondentSession";
 import { collectSignalContext, installSignalContextCapture } from "../../../lib/signalContext";
 import { ENCRYPTED_INLINE_ATTACHMENT_MAX_BYTES } from "../../../lib/attachmentLimits";
 import { makeId } from "../../../lib/utils";
+import { scheduleIdleTask } from "../../../lib/scheduleIdleTask";
 import type { ZkLoginSession } from "../../../lib/zkloginSession";
 import { useRpcInfrastructure } from "../../../rpcInfrastructure";
 import { isQuotaExceededError, isRateLimitError } from "../../../storage/walrusDiagnostics";
@@ -430,22 +431,25 @@ export function usePublicSubmission({
   useEffect(() => {
     let unsubscribe: (() => void) | undefined;
     let cancelled = false;
-    void import("../../../lib/walrus").then(({ getWalrusMutationRuntimeStatus, subscribeWalrusRuntime }) => {
-      if (cancelled || typeof window === "undefined") {
-        return;
-      }
-      setWalrusRuntime(getWalrusMutationRuntimeStatus());
-      setWalrusRuntimeReady(true);
-      unsubscribe = subscribeWalrusRuntime(() => {
-        if (!cancelled && typeof window !== "undefined") {
-          setWalrusRuntime(getWalrusMutationRuntimeStatus());
-          setWalrusRuntimeReady(true);
+    const cancelIdleTask = scheduleIdleTask(() => {
+      void import("../../../lib/walrus").then(({ getWalrusMutationRuntimeStatus, subscribeWalrusRuntime }) => {
+        if (cancelled || typeof window === "undefined") {
+          return;
         }
+        setWalrusRuntime(getWalrusMutationRuntimeStatus());
+        setWalrusRuntimeReady(true);
+        unsubscribe = subscribeWalrusRuntime(() => {
+          if (!cancelled && typeof window !== "undefined") {
+            setWalrusRuntime(getWalrusMutationRuntimeStatus());
+            setWalrusRuntimeReady(true);
+          }
+        });
       });
-    });
+    }, 1800);
 
     return () => {
       cancelled = true;
+      cancelIdleTask();
       unsubscribe?.();
     };
   }, []);

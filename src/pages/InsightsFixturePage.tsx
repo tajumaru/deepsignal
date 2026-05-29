@@ -1,5 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import "../styles/pages/admin-inbox.css";
+import "../styles/mobile/layout.css";
+import "../styles/mobile/workspace.css";
+import "../styles/mobile/signal.css";
 import {
   INSIGHTS_FIXTURE_ENTRY_FORM_ID,
   INSIGHTS_FIXTURE_FORM_IDS,

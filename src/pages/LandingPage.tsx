@@ -3,6 +3,12 @@ import { Link } from "react-router-dom";
 import { CreateFormLink } from "../components/CreateFormLink";
 import { FlowStepIcon, type FlowStepIconName } from "../components/SignalFlowIcons";
 import { useI18n } from "../i18n";
+import "../styles/pages/landing.css";
+import "../styles/frog-effects.css";
+import "../styles/mobile/layout.css";
+import "../styles/mobile/landing.css";
+import "../styles/mobile/landing-hero.css";
+import "../styles/mobile/landing-live.css";
 
 function UseCaseIcon({ kind }: { kind: "company" | "dao" | "hackathon" | "research" | "incident" }) {
   switch (kind) {

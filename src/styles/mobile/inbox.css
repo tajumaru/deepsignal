@@ -18,8 +18,17 @@
 
   .workspace-tab-nav button,
   .workspace-tab-nav a {
-    flex: 0 0 auto;
+    flex: 1 1 0;
+    min-width: 0;
+    padding-inline: 0.45rem;
+    font-size: 0.9rem;
+    line-height: 1.15;
+    text-align: center;
     white-space: nowrap;
+  }
+
+  .workspace-tab-nav {
+    gap: 0.22rem;
   }
 
   .desktop-signal-inbox {
@@ -1160,7 +1169,7 @@
 
   .mobile-explore-compose-fab {
     right: auto;
-    left: calc(100vw - 4.38rem - env(safe-area-inset-right, 0px));
+    left: min(18.95rem, calc(100vw - 4.38rem - env(safe-area-inset-right, 0px)));
     bottom: calc(6.05rem + env(safe-area-inset-bottom, 0px));
     width: 3rem;
     height: 3rem;

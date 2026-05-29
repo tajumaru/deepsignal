@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import "../styles/pages/public-flows.css";
+import "../styles/mobile/layout.css";
+import "../styles/mobile/public-form.css";
 import { ContestGuidedFlow } from "../components/ContestGuidedFlow";
 import { EmptyState } from "../components/EmptyState";
 import { RichTextContent } from "../components/RichText";

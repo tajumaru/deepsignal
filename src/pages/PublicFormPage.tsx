@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { DynamicField } from "../components/DynamicField";
 import { EmptyState } from "../components/EmptyState";
@@ -9,7 +9,6 @@ import { RecoverableDraftBanner } from "../components/RecoverableDraftBanner";
 import { LocalRecoveryCenter } from "../components/LocalRecoveryCenter";
 import { WalletSurface } from "../components/WalletSurface";
 import { WalrusRuntimeSurface } from "../components/WalrusRuntimeSurface";
-import { PublicWalletAccountPanel } from "../features/public-form/components/PublicWalletAccountPanel";
 import { PublicFormSuccess } from "../features/public-form/components/PublicFormSuccess";
 import { SignalMetaChip } from "../components/SignalMetaChip";
 import { SignalSubmissionPipeline } from "../features/public-form/components/SignalSubmissionPipeline";
@@ -28,6 +27,20 @@ import { collectSignalContext, type AttachedSignalContext } from "../lib/signalC
 import { isZkLoginEnabled } from "../lib/zkloginOAuth";
 import { loadZkLoginSession } from "../lib/zkloginSession";
 import type { FieldType } from "../types";
+import { retryLazyImport } from "../lib/lazyRetry";
+import "../styles/components/forms-content.css";
+import "../styles/components/wallet-network.css";
+import "../styles/pages/public-flows.css";
+import "../styles/mobile/layout.css";
+import "../styles/mobile/public-form.css";
+import "../styles/mobile/beacon.css";
+import "../styles/mobile/intent.css";
+
+const LazyPublicWalletAccountPanel = lazy(() =>
+  retryLazyImport(() => import("../features/public-form/components/PublicWalletAccountPanel"), "public-wallet-account").then(
+    (module) => ({ default: module.PublicWalletAccountPanel }),
+  ),
+);
 
 function triggerHaptic(pattern: number | number[]) {
   if (typeof navigator === "undefined" || typeof navigator.vibrate !== "function") {
@@ -630,16 +643,20 @@ export function PublicFormPage() {
               <li>{t("publicIdentityChoiceWalletPoint2")}</li>
               <li>{t("publicIdentityChoiceWalletPoint3")}</li>
             </ul>
-            <div className="public-identity-choice-wallet-shell">
-              <WalletSurface fallback={walletFallback}>
-                <WalrusRuntimeSurface fallback={walletFallback}>
-                  <PublicWalletAccountPanel
-                    onAccountAddressChange={(address) => setResolvedWalletAddress(address)}
-                    onWalletProviderChange={(provider) => setWalletProvider(provider)}
-                  />
-                </WalrusRuntimeSurface>
-              </WalletSurface>
-            </div>
+            {walletSelected || walletRequired ? (
+              <div className="public-identity-choice-wallet-shell">
+                <WalletSurface fallback={walletFallback}>
+                  <WalrusRuntimeSurface fallback={walletFallback}>
+                    <Suspense fallback={walletFallback}>
+                      <LazyPublicWalletAccountPanel
+                        onAccountAddressChange={(address) => setResolvedWalletAddress(address)}
+                        onWalletProviderChange={(provider) => setWalletProvider(provider)}
+                      />
+                    </Suspense>
+                  </WalrusRuntimeSurface>
+                </WalletSurface>
+              </div>
+            ) : null}
             <button
               type="button"
               className="primary-button signal-capsule-action is-wallet"
@@ -715,10 +732,12 @@ export function PublicFormPage() {
         <WalletSurface fallback={null}>
           <WalrusRuntimeSurface fallback={null}>
             <div aria-hidden="true" style={{ display: "none" }}>
-              <PublicWalletAccountPanel
-                onAccountAddressChange={(address) => setResolvedWalletAddress(address)}
-                onWalletProviderChange={(provider) => setWalletProvider(provider)}
-              />
+              <Suspense fallback={null}>
+                <LazyPublicWalletAccountPanel
+                  onAccountAddressChange={(address) => setResolvedWalletAddress(address)}
+                  onWalletProviderChange={(provider) => setWalletProvider(provider)}
+                />
+              </Suspense>
             </div>
           </WalrusRuntimeSurface>
         </WalletSurface>

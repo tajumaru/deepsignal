@@ -1,5 +1,8 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import "../styles/pages/support-recovery.css";
+import "../styles/pages/public-flows.css";
+import "../styles/mobile/layout.css";
 import { EmptyState } from "../components/EmptyState";
 import { localStorageAdapter } from "../storage/localStorageAdapter";
 import { replaceSubmissionBlobIndex, upsertFormBlobIndex } from "../storage/blobIndex";

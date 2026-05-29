@@ -24,7 +24,7 @@ import {
   type RouteDiagnostics,
 } from "./routeDiagnostics";
 
-export const LAST_EXPLORE_ERROR_KEY = "deepsignal:lastExploreError";
+const LAST_EXPLORE_ERROR_KEY = "deepsignal:lastExploreError";
 
 type RouteErrorDiagnostics = {
   errorName: string;
@@ -56,7 +56,7 @@ type RouteErrorDiagnostics = {
   recordedAt: string;
 };
 
-export function safeWriteLocalStorage(key: string, value: string) {
+function safeWriteLocalStorage(key: string, value: string) {
   try {
     window.localStorage.setItem(key, value);
   } catch {
@@ -64,7 +64,7 @@ export function safeWriteLocalStorage(key: string, value: string) {
   }
 }
 
-export function getLastFailedImportChunkUrl() {
+function getLastFailedImportChunkUrl() {
   if (typeof window === "undefined") {
     return null;
   }
@@ -277,7 +277,7 @@ export class RouteErrorBoundary extends Component<
     if (this.state.error) {
       const chunkFailure = isChunkLoadFailure(this.state.error);
       const diagnostics = this.state.diagnostics;
-      const showDiagnostics = shouldShowRouteDiagnostics(this.props.routePath);
+      const showDiagnostics = chunkFailure || shouldShowRouteDiagnostics(this.props.routePath);
       const headline = chunkFailure ? "App update detected, refresh required." : "Explore hit an unexpected fault.";
 
       return (
@@ -329,6 +329,10 @@ export class RouteErrorBoundary extends Component<
                 <dd>{diagnostics.hash || "none"}</dd>
                 <dt>failed chunk URL</dt>
                 <dd>{diagnostics.chunkUrl ?? "n/a"}</dd>
+                <dt>chunk retry</dt>
+                <dd>
+                  {diagnostics.chunkRecovery.count}/{diagnostics.chunkRecovery.limit}
+                </dd>
                 <dt>userAgent</dt>
                 <dd>{diagnostics.userAgent}</dd>
                 <dt>storageMode</dt>

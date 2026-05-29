@@ -1,5 +1,10 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
+import "../styles/pages/explore.css";
+import "../styles/mobile/layout.css";
+import "../styles/mobile/workspace.css";
+import "../styles/mobile/signal.css";
+import "../styles/mobile/lifecycle.css";
 import { CreateFormLink } from "../components/CreateFormLink";
 import { useI18n } from "../i18n";
 import { buildExploreAiPreview, getExploreCategory, isFormPubliclyExplorable, type ExploreCategory } from "../lib/explore";

@@ -1,4 +1,5 @@
 import { buildInfo } from "./buildInfo";
+import type { ChunkLoadFailureDiagnostics } from "./chunkLoadRecovery";
 
 export type BuildManifest = {
   appVersion?: string;
@@ -18,6 +19,7 @@ export type BuildUpdateNotice = {
   latestBuild: BuildManifest;
   detectedAt: string;
   mixedBuildAssetsDetected?: boolean;
+  chunkFailure?: ChunkLoadFailureDiagnostics;
 };
 
 export type BuildUpdateDiagnostics = {
@@ -32,6 +34,7 @@ export type BuildUpdateDiagnostics = {
   updateSucceeded: boolean;
   mixedBuildAssetsDetected: boolean;
   reason?: BuildUpdateReason;
+  chunkFailure?: ChunkLoadFailureDiagnostics;
 };
 
 const updateCheckDelayMs = 4500;
@@ -116,6 +119,7 @@ function publishNotice(notice: BuildUpdateNotice) {
     updateSucceeded: false,
     mixedBuildAssetsDetected: Boolean(notice.mixedBuildAssetsDetected),
     reason: notice.reason,
+    chunkFailure: notice.chunkFailure,
   });
   window.dispatchEvent(new CustomEvent<BuildUpdateNotice>(updateNoticeEvent, { detail: notice }));
 }
@@ -123,7 +127,7 @@ function publishNotice(notice: BuildUpdateNotice) {
 function createNotice(
   reason: BuildUpdateReason,
   latestBuild: BuildManifest = currentBuildManifest(),
-  options: { mixedBuildAssetsDetected?: boolean } = {},
+  options: { mixedBuildAssetsDetected?: boolean; chunkFailure?: ChunkLoadFailureDiagnostics } = {},
 ): BuildUpdateNotice {
   const currentBuild = currentBuildManifest();
   return {
@@ -134,13 +138,14 @@ function createNotice(
     latestBuild,
     detectedAt: new Date().toISOString(),
     mixedBuildAssetsDetected: options.mixedBuildAssetsDetected,
+    chunkFailure: options.chunkFailure,
   };
 }
 
 export function requestBuildUpdateNotice(
   reason: BuildUpdateReason,
   latestBuild?: BuildManifest,
-  options: { mixedBuildAssetsDetected?: boolean } = {},
+  options: { mixedBuildAssetsDetected?: boolean; chunkFailure?: ChunkLoadFailureDiagnostics } = {},
 ) {
   if (typeof window === "undefined") {
     return;
@@ -318,6 +323,7 @@ export async function updateDeepSignalToLatest(notice?: BuildUpdateNotice) {
     updateSucceeded: false,
     mixedBuildAssetsDetected: Boolean(notice?.mixedBuildAssetsDetected),
     reason: notice?.reason,
+    chunkFailure: notice?.chunkFailure,
   };
   publishDiagnostics(initialDiagnostics);
 

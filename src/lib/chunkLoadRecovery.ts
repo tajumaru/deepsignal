@@ -1,5 +1,6 @@
 import { buildInfo } from "./buildInfo";
 import { requestBuildUpdateNotice } from "./buildUpdate";
+import { getMixedBuildStatus } from "./buildAssetDiagnostics";
 
 const reloadStorageKey = "deepsignal.chunkLoadRecovery";
 const recoveryWindowMs = 2 * 60 * 1000;
@@ -16,6 +17,26 @@ type VitePreloadErrorEvent = Event & {
 };
 
 let reloadScheduled = false;
+
+export type ChunkLoadFailureDiagnostics = {
+  chunkUrl: string | null;
+  buildVersion: string;
+  buildTime: string;
+  gitHash: string;
+  retryCount: number;
+  retryLimit: number;
+  mixedBuildAssetsDetected: boolean;
+  mixedBuildReason?: string;
+  errorName: string;
+  errorMessage: string;
+  recordedAt: string;
+};
+
+declare global {
+  interface Window {
+    __DEEPSIGNAL_CHUNK_LOAD_FAILURE__?: ChunkLoadFailureDiagnostics;
+  }
+}
 
 function currentBuildId() {
   return [buildInfo.appVersion, buildInfo.buildTime, buildInfo.gitHash].filter(Boolean).join("|");
@@ -97,6 +118,32 @@ export function getChunkLoadRecoverySnapshot() {
   };
 }
 
+export function getLastChunkLoadFailureDiagnostics() {
+  if (typeof window === "undefined") {
+    return null;
+  }
+  return window.__DEEPSIGNAL_CHUNK_LOAD_FAILURE__ ?? null;
+}
+
+function rememberChunkLoadFailureDiagnostics(error: unknown, retryCount: number): ChunkLoadFailureDiagnostics {
+  const mixedBuildStatus = getMixedBuildStatus();
+  const diagnostics: ChunkLoadFailureDiagnostics = {
+    chunkUrl: getChunkFailureUrl(error),
+    buildVersion: buildInfo.appVersion,
+    buildTime: buildInfo.buildTime,
+    gitHash: buildInfo.gitHash,
+    retryCount,
+    retryLimit: maxReloadsPerWindow,
+    mixedBuildAssetsDetected: mixedBuildStatus.detected,
+    mixedBuildReason: mixedBuildStatus.reason,
+    errorName: error instanceof Error ? error.name : "Error",
+    errorMessage: error instanceof Error ? error.message : String(error ?? "Unknown chunk load failure"),
+    recordedAt: new Date().toISOString(),
+  };
+  window.__DEEPSIGNAL_CHUNK_LOAD_FAILURE__ = diagnostics;
+  return diagnostics;
+}
+
 export async function clearRuntimeCaches() {
   try {
     if ("caches" in window) {
@@ -134,15 +181,20 @@ export function recoverFromChunkLoadFailure(error: unknown) {
 
   const now = Date.now();
   const state = readReloadState(now);
+  const nextRetryCount = Math.min(state.count + 1, maxReloadsPerWindow);
+  const diagnostics = rememberChunkLoadFailureDiagnostics(error, nextRetryCount);
   if (state.count >= maxReloadsPerWindow) {
-    console.warn("DeepSignal chunk load recovery limit reached.", error);
+    console.warn("DeepSignal chunk load recovery limit reached.", diagnostics, error);
     return false;
   }
 
   reloadScheduled = true;
-  rememberReloadState({ startedAt: state.startedAt, count: state.count + 1, buildId: currentBuildId() });
-  console.warn("DeepSignal chunk load failed; manual update is required.", error);
-  requestBuildUpdateNotice("chunk_load_failure", buildInfo);
+  rememberReloadState({ startedAt: state.startedAt, count: nextRetryCount, buildId: currentBuildId() });
+  console.warn("DeepSignal chunk load failed; manual update is required.", diagnostics, error);
+  requestBuildUpdateNotice("chunk_load_failure", buildInfo, {
+    mixedBuildAssetsDetected: diagnostics.mixedBuildAssetsDetected,
+    chunkFailure: diagnostics,
+  });
 
   return true;
 }

@@ -2,6 +2,20 @@
   useSignAndExecuteTransaction,
   useSuiClient,
 } from "@mysten/dapp-kit";
+import "../styles/components/forms-content.css";
+import "../styles/components/metadata-proof.css";
+import "../styles/components/signal-review.css";
+import "../styles/components/wallet-network.css";
+import "../styles/pages/admin-inbox.css";
+import "../styles/mobile/layout.css";
+import "../styles/mobile/workspace.css";
+import "../styles/mobile/wallet.css";
+import "../styles/mobile/signal.css";
+import "../styles/mobile/signal-timeline.css";
+import "../styles/mobile/review.css";
+import "../styles/mobile/review-session.css";
+import "../styles/mobile/private-signal.css";
+import "../styles/mobile/inbox.css";
 import type { CSSProperties, ReactNode } from "react";
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";

@@ -24,6 +24,18 @@
   backdrop-filter: blur(12px);
 }
 
+.build-indicator-update {
+  pointer-events: auto;
+  min-height: 1.8rem;
+  padding: 0.28rem 0.62rem;
+  border: 1px solid rgba(116, 226, 255, 0.28);
+  border-radius: var(--radius-pill);
+  background: rgba(116, 226, 255, 0.12);
+  color: #ecfdff;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
 .build-update-banner {
   position: fixed;
   right: max(0.85rem, env(safe-area-inset-right, 0px));
@@ -72,6 +84,26 @@
   min-height: 2.25rem;
   padding: 0.55rem 0.75rem;
   white-space: nowrap;
+}
+
+.build-update-diagnostics {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 0.12rem 0.45rem;
+  margin: 0.35rem 0 0;
+  color: rgba(224, 250, 255, 0.78);
+  font-size: 0.72rem;
+}
+
+.build-update-diagnostics dt {
+  color: rgba(151, 222, 238, 0.78);
+  font-weight: 700;
+}
+
+.build-update-diagnostics dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
 }
 
 @media (max-width: 620px) {

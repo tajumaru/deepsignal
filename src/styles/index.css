@@ -1,7 +1,7 @@
 /*
-  DeepSignal style entrypoint.
-  Import order is intentionally broad and stable: tokens, global defaults, layout, shared components, page surfaces, animations, then responsive overrides.
-  Keep new rules in the narrowest matching module so future UI changes do not rely on distant cascade side effects.
+  DeepSignal global style entrypoint.
+  Keep startup CSS to tokens, global defaults, shell layout, and shared controls.
+  Route/page-specific CSS is imported by lazy page modules so public, LP, admin, and composer surfaces do not all ride the first load.
 */
 
 @import "./variables.css";
@@ -9,16 +9,5 @@
 @import "./layout.css";
 @import "./components/shared.css";
 @import "./components/actions-feedback.css";
-@import "./components/forms-content.css";
-@import "./components/metadata-proof.css";
-@import "./components/wallet-network.css";
-@import "./components/signal-review.css";
-@import "./pages/landing.css";
-@import "./pages/explore.css";
-@import "./pages/create-form.css";
-@import "./pages/admin-inbox.css";
-@import "./pages/public-flows.css";
-@import "./pages/support-recovery.css";
-@import "./pages/demo-mode.css";
-@import "./frog-effects.css";
-@import "./mobile.css";
+@import "./mobile/navigation.css";
+@import "./mobile/app-shell.css";

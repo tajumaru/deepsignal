@@ -18,7 +18,6 @@ import { retryLazyImport } from "./lib/lazyRetry";
 import { logRouteLifecycle, setDeepSignalDebugReadiness } from "./lib/routeDiagnostics";
 import { REQUIRE_GLOBAL_WALRUS_RUNTIME } from "./lib/runtimeFlags";
 import { scheduleIdleTask } from "./lib/scheduleIdleTask";
-import { LandingPage } from "./pages/LandingPage";
 import { RpcInfrastructureProvider } from "./RpcInfrastructureProvider";
 import { ProviderReadinessBarrier, WorkspaceRestoreFallback } from "./routes/ProviderReadinessBarrier";
 import { MixedBuildRecoveryScreen, RouteErrorBoundary } from "./routes/RouteErrorBoundary";
@@ -30,6 +29,11 @@ function createRouteComponents(retryNonce = 0) {
     AccessManagementPage: lazy(() =>
       retryLazyImport(() => import("./pages/AccessManagementPage"), "route-access-management").then((module) => ({
         default: module.AccessManagementPage,
+      })),
+    ),
+    LandingPage: lazy(() =>
+      retryLazyImport(() => import("./pages/LandingPage"), "route-landing").then((module) => ({
+        default: module.LandingPage,
       })),
     ),
     AdminDashboardPage: lazy(() =>
@@ -144,8 +148,23 @@ function BuildUpdateBanner() {
   return (
     <aside className="build-update-banner" role="status" aria-live="polite">
       <div>
-        <strong>New version available</strong>
-        <p>DeepSignal has been updated. Load the latest version.</p>
+        <strong>{notice.reason === "chunk_load_failure" ? "Load failure diagnostics captured" : "New version available"}</strong>
+        <p>
+          DeepSignal has been updated. Load the latest version. Current v{notice.currentBuild.appVersion ?? "unknown"} - latest v
+          {notice.latestBuild.appVersion ?? "unknown"}.
+        </p>
+        {notice.chunkFailure ? (
+          <dl className="build-update-diagnostics" aria-label="Chunk load diagnostics">
+            <dt>failed chunk</dt>
+            <dd>{notice.chunkFailure.chunkUrl ?? "unknown"}</dd>
+            <dt>retry</dt>
+            <dd>
+              {notice.chunkFailure.retryCount}/{notice.chunkFailure.retryLimit}
+            </dd>
+            <dt>mixed build</dt>
+            <dd>{notice.chunkFailure.mixedBuildAssetsDetected ? notice.chunkFailure.mixedBuildReason ?? "detected" : "no"}</dd>
+          </dl>
+        ) : null}
       </div>
       <button type="button" className="primary-button" onClick={() => void handleUpdate()} disabled={updating}>
         {updating ? "Updating..." : "Update DeepSignal"}
@@ -236,6 +255,7 @@ export default function App() {
     InsightsFixturePage,
     PublicFormPage,
     ZkLoginCallbackPage,
+    LandingPage,
   } = useMemo(() => createRouteComponents(routeRetryNonce), [routeRetryNonce]);
   const routeNeedsWalletSurface =
     location.pathname === "/admin" ||
@@ -301,9 +321,11 @@ export default function App() {
       <RpcInfrastructureProvider>
         <AppShell walletAvailable={false} chrome="full">
           <BuildUpdateBanner />
-          <InitialBootReady routePath={`${location.pathname}${location.search}${location.hash}`} onReady={() => setInitialRouteReady(true)}>
-            <LandingPage />
-          </InitialBootReady>
+          <Suspense fallback={<WorkspaceRestoreFallback />}>
+            <InitialBootReady routePath={`${location.pathname}${location.search}${location.hash}`} onReady={() => setInitialRouteReady(true)}>
+              <LandingPage />
+            </InitialBootReady>
+          </Suspense>
         </AppShell>
       </RpcInfrastructureProvider>
     );

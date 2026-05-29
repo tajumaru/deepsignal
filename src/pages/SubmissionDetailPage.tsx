@@ -1,5 +1,10 @@
 import { useEffect, useState } from "react";
 import { Navigate, useParams } from "react-router-dom";
+import "../styles/components/metadata-proof.css";
+import "../styles/pages/admin-inbox.css";
+import "../styles/mobile/layout.css";
+import "../styles/mobile/workspace.css";
+import "../styles/mobile/signal.css";
 import { AdminAccessGate } from "../components/AdminAccessGate";
 import { EmptyState } from "../components/EmptyState";
 import { useAccessControl } from "../hooks/useAccessControl";
