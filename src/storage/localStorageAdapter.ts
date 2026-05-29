@@ -229,6 +229,8 @@ export const localStorageAdapter: StorageAdapter = {
       remoteIndexReadBack: sanitizedSubmission.remoteIndexReadBack ?? false,
       ownerReadable: sanitizedSubmission.ownerReadable ?? false,
       remoteSyncStatus: sanitizedSubmission.remoteSyncStatus ?? "local_only",
+      deliveryStatus: sanitizedSubmission.deliveryStatus ?? "stored_local",
+      deliveryStatuses: sanitizedSubmission.deliveryStatuses ?? [sanitizedSubmission.deliveryStatus ?? "stored_local"],
     } satisfies Submission;
     nextSubmissions.unshift(storedSubmission);
     writeJson(SUBMISSIONS_KEY, nextSubmissions);

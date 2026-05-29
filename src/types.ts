@@ -57,6 +57,7 @@ export type FormLocationRequirement = "optional" | "required";
 export type FormHeaderImagePosition = "center" | "top" | "bottom";
 export type SubmissionCategory = "bug" | "feature" | "survey" | "general";
 export type SubmissionPriority = "low" | "medium" | "high";
+export type SubmissionDeliveryStatus = "stored_local" | "stored_walrus" | "inbox_pending" | "inbox_synced";
 export type SignalSeverity = "low" | "medium" | "high";
 export type ConditionalLogicOperator =
   | "equals"
@@ -373,6 +374,8 @@ export interface Submission {
   remoteIndexReadBack?: boolean;
   ownerReadable?: boolean;
   remoteSyncStatus?: "remote_synced" | "sync_pending" | "local_only";
+  deliveryStatus?: SubmissionDeliveryStatus;
+  deliveryStatuses?: SubmissionDeliveryStatus[];
   revokeRequested?: boolean;
   revokeRequestedAt?: string;
   revokeReason?: string;

@@ -1632,6 +1632,14 @@ export function AdminDashboardPage() {
   const [showInitialListSkeleton, setShowInitialListSkeleton] = useState(false);
 
   useEffect(() => {
+    void import("../storage/storageFactory")
+      .then(({ retryPendingSubmissionSync }) => retryPendingSubmissionSync())
+      .catch((error) => {
+        console.warn("[admin workspace] pending inbox sync retry failed to start", error);
+      });
+  }, []);
+
+  useEffect(() => {
     setRenderedSignalLimit(INITIAL_SIGNAL_LIST_LIMIT);
   }, [search, selectedFormId, selectedStreamId, selectedVersion, signalSortOrder, signalViewScope]);
 
@@ -1923,6 +1931,14 @@ export function AdminDashboardPage() {
             ownerAddress: wallet.accountAddress,
           });
 
+          console.info("[DeepSignal Sui write]", {
+            action: "delete_signal_node",
+            actionLabel: t("deleteFormConfirm"),
+            origin: "delete-node-confirmed-button",
+            projectId: selectedProjectIdForDelete,
+            onchainFormIds: onchainDeleteTargets,
+            walrusBlobObjectIds,
+          });
           const result = await deleteNodeOnchainTx.mutateAsync({ transaction: tx });
           await suiClient.waitForTransaction({ digest: result.digest });
           walrusDeleteHandledInBatch = walrusBlobObjectIds.length > 0;
@@ -2132,6 +2148,13 @@ export function AdminDashboardPage() {
         projectId: form.projectId,
         title: form.title,
         metadataDigest: metadataReference,
+      });
+      console.info("[DeepSignal Sui write]", {
+        action: "register_signal_node",
+        actionLabel: t("registerOnSui"),
+        origin: "register-node-button",
+        projectId: form.projectId,
+        formId: form.id,
       });
       const result = await registerFormTx.mutateAsync({ transaction: tx });
       const confirmed = await suiClient.waitForTransaction({
@@ -2700,7 +2723,12 @@ export function AdminDashboardPage() {
                   type="button"
                   className="ghost-button"
                   disabled={isRegisteringSignal(selectedRecord.submission.id)}
-                  onClick={() => void handleRegisterPendingSignals([selectedRecord.submission.id])}
+                  onClick={() =>
+                    void handleRegisterPendingSignals([selectedRecord.submission.id], {
+                      actionLabel: t("registerOnSui"),
+                      origin: "selected-signal-next-step-button",
+                    })
+                  }
                 >
                   {isRegisteringSignal(selectedRecord.submission.id) ? t("registeringStatus") : t("registerOnSui")}
                 </button>
@@ -2766,6 +2794,15 @@ export function AdminDashboardPage() {
             projectId,
             signalId: normalized.onchainSignalId ?? 0,
             status: nextOnchainStatus,
+          });
+          console.info("[DeepSignal Sui write]", {
+            action: "update_signal_status",
+            actionLabel: "Review & Triage save",
+            origin: "review-save-status-sync",
+            projectId,
+            signalId: normalized.id,
+            onchainSignalId: normalized.onchainSignalId,
+            nextOnchainStatus,
           });
           const result = await updateSignalStatusTx.mutateAsync({ transaction: tx });
           await suiClient.waitForTransaction({ digest: result.digest });
@@ -4138,7 +4175,12 @@ export function AdminDashboardPage() {
                             : t("registerSelectedOnSui", { count: selectedPendingVisibleCount })
                         }
                         disabled={selectedPendingSignalIds.length === 0 || registeringSignalIds.length > 0}
-                        onClick={() => void handleRegisterPendingSignals()}
+                        onClick={() =>
+                          void handleRegisterPendingSignals(undefined, {
+                            actionLabel: t("registerSelectedOnSui", { count: selectedPendingVisibleCount }),
+                            origin: "pending-sui-bulk-register-button",
+                          })
+                        }
                       >
                         <span className="sui-register-mark" aria-hidden="true">SUI</span>
                         <span className="sui-register-count" aria-hidden="true">
@@ -4283,7 +4325,10 @@ export function AdminDashboardPage() {
                           togglePendingSelection(submission.id);
                         }}
                         onRegisterPending={() => {
-                          void handleRegisterPendingSignals([submission.id]);
+                          void handleRegisterPendingSignals([submission.id], {
+                            actionLabel: t("registerOnSui"),
+                            origin: "signal-card-register-button",
+                          });
                         }}
                       />
                     );
@@ -4548,7 +4593,10 @@ export function AdminDashboardPage() {
                       storageMode={storageRuntime.mode}
                       isRegisteringSelectedSignal={isRegisteringSignal(selectedRecord.submission.id)}
                       onRegisterSelectedSignal={() => {
-                        void handleRegisterPendingSignals([selectedRecord.submission.id]);
+                        void handleRegisterPendingSignals([selectedRecord.submission.id], {
+                          actionLabel: t("registerOnSui"),
+                          origin: "signal-detail-register-button",
+                        });
                       }}
                       detailLegacyUnencrypted={detailLegacyUnencrypted}
                       detailAnswersPresent={Boolean(detailAnswers)}

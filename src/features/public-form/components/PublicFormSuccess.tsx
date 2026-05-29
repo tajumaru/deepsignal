@@ -20,6 +20,7 @@ interface PublicFormSuccessProps {
 
 export function PublicFormSuccess({
   submitted,
+  submitNotice,
   notAvailableLabel,
   pendingSuiRegistrationLabel,
   signalReceivedLabel,
@@ -61,11 +62,12 @@ export function PublicFormSuccess({
           <h1>Your report has been sealed.</h1>
           <p className="lede">
             {!remoteDelivered
-              ? "This signal is saved, but owner inbox delivery is still pending."
+              ? "Your signal is safely stored. Inbox synchronization will retry automatically."
               : isEncryptedSubmission
               ? "Authorized reviewers can decrypt and review this signal."
               : "Authorized reviewers can review this signal."}
           </p>
+          {!remoteDelivered && submitNotice ? <p className="muted">{submitNotice}</p> : null}
         </div>
 
         <div className="signal-success-actions" aria-label="Next actions">
@@ -75,9 +77,11 @@ export function PublicFormSuccess({
           <Link to="/my-responses" className="ghost-button signal-success-action">
             View My Responses
           </Link>
-          <Link to={submitAnotherHref} className="ghost-button signal-success-action">
-            Submit Another Signal
-          </Link>
+          {remoteDelivered ? (
+            <Link to={submitAnotherHref} className="ghost-button signal-success-action">
+              Submit Another Signal
+            </Link>
+          ) : null}
           <button type="button" className="ghost-button signal-success-action" onClick={openTechnicalDetails}>
             View Receipt
           </button>

@@ -684,6 +684,33 @@ export function normalizeSubmission(raw: Submission | (Record<string, unknown> &
       raw.remoteSyncStatus === "local_only"
         ? raw.remoteSyncStatus
         : undefined,
+    deliveryStatus:
+      raw.deliveryStatus === "stored_local" ||
+      raw.deliveryStatus === "stored_walrus" ||
+      raw.deliveryStatus === "inbox_pending" ||
+      raw.deliveryStatus === "inbox_synced"
+        ? raw.deliveryStatus
+        : raw.remoteSyncStatus === "remote_synced"
+          ? "inbox_synced"
+          : raw.remoteSyncStatus === "sync_pending"
+            ? "inbox_pending"
+            : raw.remoteSyncStatus === "local_only"
+              ? "stored_local"
+              : undefined,
+    deliveryStatuses: Array.isArray(raw.deliveryStatuses)
+      ? raw.deliveryStatuses.filter(
+          (status): status is NonNullable<Submission["deliveryStatus"]> =>
+            status === "stored_local" ||
+            status === "stored_walrus" ||
+            status === "inbox_pending" ||
+            status === "inbox_synced",
+        )
+      : raw.deliveryStatus === "stored_local" ||
+          raw.deliveryStatus === "stored_walrus" ||
+          raw.deliveryStatus === "inbox_pending" ||
+          raw.deliveryStatus === "inbox_synced"
+        ? [raw.deliveryStatus]
+        : undefined,
     revokeRequested: raw.revokeRequested === true ? true : undefined,
     revokeRequestedAt: typeof raw.revokeRequestedAt === "string" ? raw.revokeRequestedAt : undefined,
     revokeReason: typeof raw.revokeReason === "string" ? raw.revokeReason : undefined,

@@ -101,12 +101,18 @@ export const SignalCard = forwardRef<HTMLDivElement, SignalCardProps>(function S
           onClick={(event) => {
             event.stopPropagation();
           }}
+          onKeyDown={(event) => {
+            event.stopPropagation();
+          }}
         >
           <input
             type="checkbox"
             checked={isSelectedForSui}
             onChange={onTogglePending}
             onClick={(event) => {
+              event.stopPropagation();
+            }}
+            onKeyDown={(event) => {
               event.stopPropagation();
             }}
             aria-label={t("selectForSui")}
@@ -172,6 +178,9 @@ export const SignalCard = forwardRef<HTMLDivElement, SignalCardProps>(function S
               event.preventDefault();
               event.stopPropagation();
               onRegisterPending();
+            }}
+            onKeyDown={(event) => {
+              event.stopPropagation();
             }}
           >
             {isRegistering ? t("registeringStatus") : t("registerOnSui")}

@@ -403,7 +403,12 @@ function moduleEntryRetryPlugin(args: { appVersion: string; buildTime: string; g
       })();
     </script>`;
 
-        return html.replace(match[0], retryLoader);
+        const withoutEntryScript = html.replace(match[0], "");
+        if (withoutEntryScript.includes("</body>")) {
+          return withoutEntryScript.replace("</body>", `${retryLoader}\n  </body>`);
+        }
+
+        return `${withoutEntryScript}\n${retryLoader}`;
       },
     },
   };

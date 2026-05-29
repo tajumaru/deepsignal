@@ -192,6 +192,15 @@
     display: none;
   }
 
+  .composer-template-grid.composer-template-grid-mobile {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(10rem, 100%), 1fr));
+    overflow: visible;
+    overscroll-behavior: auto;
+    scroll-snap-type: none;
+    touch-action: pan-y;
+  }
+
   .composer-template-signal-nav {
     overflow-x: auto;
     flex-wrap: nowrap;

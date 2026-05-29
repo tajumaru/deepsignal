@@ -491,6 +491,8 @@ export async function retryPendingSubmissionSync() {
       const result = await walrusAdapter.saveSubmission({
         ...submission,
         remoteSyncStatus: "sync_pending",
+        deliveryStatus: "inbox_pending",
+        deliveryStatuses: ["stored_local", "stored_walrus", "inbox_pending"],
       });
       const remoteSynced =
         result.remoteSyncStatus === "remote_synced" &&
@@ -511,6 +513,8 @@ export async function retryPendingSubmissionSync() {
         remoteIndexReadBack: true,
         ownerReadable: true,
         remoteSyncStatus: "remote_synced",
+        deliveryStatus: "inbox_synced",
+        deliveryStatuses: ["stored_local", "stored_walrus", "inbox_synced"],
         walrusProof: result.walrusProof,
         tatumStorage: result.tatumStorage,
       });

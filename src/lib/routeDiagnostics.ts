@@ -1,9 +1,9 @@
 import { formatPerfDiagnostics } from "./perf";
 import { buildInfo } from "./buildInfo";
-import { getSelectedProjectId } from "./projectRegistry";
 
 type DiagnosticDetails = Record<string, unknown>;
 type ReadinessState = Record<string, unknown>;
+const SELECTED_PROJECT_ID_KEY = "deepsignal.projectRegistry.selectedProjectId";
 
 declare global {
   interface Window {
@@ -119,8 +119,16 @@ function updateDeepSignalDebug(
   if (state[key].length > 80) {
     state[key].shift();
   }
-  state.currentProjectId = getSelectedProjectId();
+  state.currentProjectId = readSelectedProjectId();
   state.updatedAt = new Date().toISOString();
+}
+
+function readSelectedProjectId() {
+  try {
+    return window.localStorage.getItem(SELECTED_PROJECT_ID_KEY) ?? "";
+  } catch {
+    return "";
+  }
 }
 
 export function setDeepSignalDebugReadiness(details: ReadinessState) {
@@ -132,7 +140,7 @@ export function setDeepSignalDebugReadiness(details: ReadinessState) {
     ...state.providerReadiness,
     ...sanitizeDetails(details),
   };
-  state.currentProjectId = getSelectedProjectId();
+  state.currentProjectId = readSelectedProjectId();
   state.updatedAt = new Date().toISOString();
 }
 
@@ -142,7 +150,7 @@ export function setDeepSignalCacheRestoreSource(source: string) {
   }
   const state = getDebugState();
   state.cacheRestoreSource = source;
-  state.currentProjectId = getSelectedProjectId();
+  state.currentProjectId = readSelectedProjectId();
   state.updatedAt = new Date().toISOString();
 }
 
@@ -155,7 +163,7 @@ export function setDeepSignalBrowserCapabilities(details: ReadinessState) {
     ...state.browserCapabilities,
     ...sanitizeDetails(details),
   };
-  state.currentProjectId = getSelectedProjectId();
+  state.currentProjectId = readSelectedProjectId();
   state.updatedAt = new Date().toISOString();
 }
 

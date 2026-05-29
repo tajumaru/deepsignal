@@ -1238,6 +1238,10 @@ export function FormBuilderPage({ initialSurface = "home" }: { initialSurface?: 
   };
   const hasAdminAccess = canAdmin(capabilityProfile);
 
+  if (!requestedGuestDraftMode && !wallet.accountAddress) {
+    return <AdminAccessGate hasWallet={false} access="allowed" />;
+  }
+
   if (initialSurface === "home" && !freshStartToken && !requestedComposer && !republishFormId && !republishManifest) {
     return <ComposerHomePage />;
   }

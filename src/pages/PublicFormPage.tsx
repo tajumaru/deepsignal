@@ -924,7 +924,7 @@ export function PublicFormPage() {
 
       <SignalSubmissionPipeline
         pipeline={submitPipeline}
-        visible={submitting || (submitPipeline.status === "failed" && !submissionOverlayDismissed)}
+        visible={submitting || ((submitPipeline.status === "failed" || submitPipeline.status === "pending") && !submissionOverlayDismissed)}
         labels={submissionPipelineLabels}
         onClose={() => setSubmissionOverlayDismissed(true)}
       />

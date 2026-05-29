@@ -26,6 +26,11 @@ interface UsePendingSuiRegistrationArgs {
   setToast: Dispatch<SetStateAction<AdminToastState | null>>;
 }
 
+interface RegisterPendingSignalsOptions {
+  origin?: string;
+  actionLabel?: string;
+}
+
 export function usePendingSuiRegistration({
   allSignals,
   pendingSignalIdSet,
@@ -71,7 +76,7 @@ export function usePendingSuiRegistration({
     });
   }
 
-  async function registerSubmissionRecordOnSui(record: SignalRecord) {
+  async function registerSubmissionRecordOnSui(record: SignalRecord, options: Required<RegisterPendingSignalsOptions>) {
     const { form, submission } = record;
     if (
       !form.projectId ||
@@ -101,6 +106,15 @@ export function usePendingSuiRegistration({
       metadataDigest: signalReceiptMetadataDigest,
       encrypted: submission.isEncrypted,
       sealIdentity: submission.sealIdentity ?? null,
+    });
+    console.info("[DeepSignal Sui write]", {
+      action: "register_signal_receipt",
+      actionLabel: options.actionLabel,
+      origin: options.origin,
+      projectId: form.projectId,
+      formId: form.id,
+      onchainFormId: form.onchainFormId,
+      signalId: submission.id,
     });
     const result = await registerSignalReceiptTx.mutateAsync({ transaction: tx });
     const confirmed = await suiClient.waitForTransaction({
@@ -133,7 +147,9 @@ export function usePendingSuiRegistration({
     return registeredSubmission;
   }
 
-  async function handleRegisterPendingSignals(targetSignalIds?: string[]) {
+  async function handleRegisterPendingSignals(targetSignalIds?: string[], options: RegisterPendingSignalsOptions = {}) {
+    const actionLabel = options.actionLabel ?? t("registerOnSui");
+    const origin = options.origin ?? "pending-sui-registration";
     const nextTargetIds = (targetSignalIds ?? selectedPendingSignalIds).filter(Boolean);
     if (nextTargetIds.length === 0) {
       setToast({ tone: "error", message: t("selectPendingSignalFirst") });
@@ -153,13 +169,30 @@ export function usePendingSuiRegistration({
       return;
     }
 
+    const confirmed =
+      typeof window === "undefined" ||
+      window.confirm(
+        `${actionLabel}\n\nRegister ${targetRecords.length} pending signal${
+          targetRecords.length === 1 ? "" : "s"
+        } on Sui? This will request a wallet transaction.`,
+      );
+    if (!confirmed) {
+      console.info("[DeepSignal Sui write cancelled]", {
+        action: "register_signal_receipt",
+        actionLabel,
+        origin,
+        count: targetRecords.length,
+      });
+      return;
+    }
+
     setRegisteringSignalIds((current) => [...new Set([...current, ...targetRecords.map((record) => record.submission.id)])]);
     const successes: string[] = [];
     const failures: string[] = [];
 
     for (const record of targetRecords) {
       try {
-        await registerSubmissionRecordOnSui(record);
+        await registerSubmissionRecordOnSui(record, { actionLabel, origin });
         successes.push(record.submission.id);
       } catch (error) {
         console.warn("register_signal failed from admin dashboard", error);

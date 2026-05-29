@@ -1,7 +1,6 @@
 import { Component, lazy, Suspense, useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { Navigate, Route, Routes, useLocation, useParams } from "react-router-dom";
 import { AppShell } from "./components/AppShell";
-import { LocalRecoveryCenter } from "./components/LocalRecoveryCenter";
 import { WalletSurface } from "./components/WalletSurface";
 import { WalrusRuntimeSurface } from "./components/WalrusRuntimeSurface";
 import {
@@ -27,13 +26,18 @@ import {
 } from "./lib/buildAssetDiagnostics";
 import { retryLazyImport } from "./lib/lazyRetry";
 import { copyPerfDiagnostics, endPerf, markPerfMilestone } from "./lib/perf";
-import { getSelectedProjectId } from "./lib/projectRegistry";
 import { resetLocalEnvironment } from "./lib/resetEnvironment";
 import { formatRouteLifecycleDiagnostics, logRouteLifecycle, setDeepSignalDebugReadiness } from "./lib/routeDiagnostics";
 import { REQUIRE_GLOBAL_WALRUS_RUNTIME } from "./lib/runtimeFlags";
 import { scheduleIdleTask } from "./lib/scheduleIdleTask";
+import { LandingPage } from "./pages/LandingPage";
 import { RpcInfrastructureProvider } from "./RpcInfrastructureProvider";
-import { getStorageRuntimeStatus } from "./storage/storageFactory";
+
+const LocalRecoveryCenter = lazy(() =>
+  retryLazyImport(() => import("./components/LocalRecoveryCenter"), "local-recovery-center").then((module) => ({
+    default: module.LocalRecoveryCenter,
+  })),
+);
 
 function createRouteComponents(retryNonce = 0) {
   void retryNonce;
@@ -93,11 +97,6 @@ function createRouteComponents(retryNonce = 0) {
         default: module.InsightsFixturePage,
       })),
     ),
-    LandingPage: lazy(() =>
-      retryLazyImport(() => import("./pages/LandingPage"), "route-landing").then((module) => ({
-        default: module.LandingPage,
-      })),
-    ),
     PublicFormPage: lazy(() =>
       retryLazyImport(() => import("./pages/PublicFormPage"), "route-public-form").then((module) => ({
         default: module.PublicFormPage,
@@ -139,6 +138,8 @@ const LAST_EXPLORE_ERROR_KEY = "deepsignal:lastExploreError";
 
 type RouteDiagnostics = {
   routePath: string;
+  browserPathname: string;
+  browserHash: string;
   selectedProjectId: string;
   walletConnectedState: "connected" | "disconnected" | "unknown";
   storageMode: string;
@@ -155,6 +156,7 @@ type RouteErrorDiagnostics = {
   routeId: string;
   routePath: string;
   pathname: string;
+  hash: string;
   chunkUrl: string | null;
   buildVersion: string;
   buildTime: string;
@@ -270,6 +272,26 @@ function readPersistedWalletConnectionState(): RouteDiagnostics["walletConnected
   }
 }
 
+function readSelectedProjectIdFromStorage() {
+  if (typeof window === "undefined") {
+    return "";
+  }
+  try {
+    return window.localStorage.getItem("deepsignal.projectRegistry.selectedProjectId") ?? "";
+  } catch {
+    return "";
+  }
+}
+
+function readStorageRuntimeStatusSnapshot() {
+  const requireWalrus = String(import.meta.env.VITE_REQUIRE_WALRUS).toLowerCase() === "true";
+  const walrusRequested = requireWalrus || import.meta.env.VITE_STORAGE_MODE === "walrus";
+  return {
+    mode: walrusRequested ? "walrus" : "local-fallback",
+    notice: null as string | null,
+  };
+}
+
 function readCreateDraftParseStatus() {
   if (typeof window === "undefined") {
     return "unavailable" as const;
@@ -289,11 +311,15 @@ function readCreateDraftParseStatus() {
 }
 
 function collectRouteDiagnostics(routePath: string): RouteDiagnostics {
-  const storageRuntime = getStorageRuntimeStatus();
+  const storageRuntime = readStorageRuntimeStatusSnapshot();
   const providerState = getProviderReadiness();
+  const browserPathname = typeof window === "undefined" ? routePath.split(/[?#]/)[0] || "/" : window.location.pathname;
+  const browserHash = typeof window === "undefined" ? "" : window.location.hash;
   return {
     routePath,
-    selectedProjectId: getSelectedProjectId(),
+    browserPathname,
+    browserHash,
+    selectedProjectId: readSelectedProjectIdFromStorage(),
     walletConnectedState: readPersistedWalletConnectionState(),
     storageMode: storageRuntime.mode,
     providerState,
@@ -361,7 +387,9 @@ function WorkspaceRestoreFallback({ onRetry }: { onRetry?: () => void }) {
               {resettingState ? "Resetting local state..." : "Reset local state"}
             </button>
           </div>
-          <LocalRecoveryCenter />
+          <Suspense fallback={null}>
+            <LocalRecoveryCenter />
+          </Suspense>
         </div>
       ) : null}
     </div>
@@ -385,7 +413,7 @@ function ProviderReadinessBarrier({ children, routePath, enabled = true }: { chi
     const steps: Array<[string, () => Promise<void> | void]> = [
       ["router_hydrating", () => undefined],
       ["storage_hydrating", () => { void window.localStorage.getItem("deepsignal.storage.probe"); }],
-      ["project_hydrating", () => { void getSelectedProjectId(); }],
+      ["project_hydrating", () => { void readSelectedProjectIdFromStorage(); }],
       ["providers_ready", () => undefined],
     ];
 
@@ -473,6 +501,7 @@ class RouteErrorBoundary extends Component<
     const chunkUrl = getChunkFailureUrl(error) ?? getLastFailedImportChunkUrl();
     const userAgent = typeof navigator === "undefined" ? "unknown" : navigator.userAgent;
     const pathname = typeof window === "undefined" ? this.props.routePath.split(/[?#]/)[0] || "/" : window.location.pathname;
+    const hash = typeof window === "undefined" ? "" : window.location.hash;
     recordBuildAsset(`route-error:${getRouteId(this.props.routePath)}`, buildInfo);
     const mixedBuildStatus = getMixedBuildStatus();
     const routeDiagnostics = collectRouteDiagnostics(this.props.routePath);
@@ -480,6 +509,7 @@ class RouteErrorBoundary extends Component<
       routePath: this.props.routePath,
       routeId: getRouteId(this.props.routePath),
       pathname,
+      hash,
       errorName: error.name,
       errorMessage: error.message,
       errorStack: error.stack ?? "",
@@ -671,6 +701,8 @@ class RouteErrorBoundary extends Component<
                 </dd>
                 <dt>pathname</dt>
                 <dd>{diagnostics.pathname}</dd>
+                <dt>hash</dt>
+                <dd>{diagnostics.hash || "none"}</dd>
                 <dt>failed chunk URL</dt>
                 <dd>{diagnostics.chunkUrl ?? "n/a"}</dd>
                 <dt>userAgent</dt>
@@ -721,8 +753,65 @@ function InitialBootReady({ onReady, routePath, children }: { onReady: () => voi
   return <>{children}</>;
 }
 
+function AppRouteRuntimeEffects({ enabled }: { enabled: boolean }) {
+  useEffect(() => {
+    if (!enabled) {
+      setDeepSignalDebugReadiness({
+        routeProviderGuard: "deferred",
+        workspaceProjectProvider: "deferred",
+        storageProvider: "deferred",
+        storageNotice: null,
+      });
+      return undefined;
+    }
+
+    let cancelled = false;
+    void Promise.all([import("./lib/projectRegistry"), import("./storage/storageFactory")])
+      .then(([projectRegistry, storageFactory]) => {
+        if (cancelled) {
+          return;
+        }
+        const storageRuntime = storageFactory.getStorageRuntimeStatus();
+        setDeepSignalDebugReadiness({
+          routeProviderGuard: "ready",
+          workspaceProjectProvider: projectRegistry.getSelectedProjectId() ? "selected" : "empty",
+          storageProvider: storageRuntime.mode,
+          storageNotice: storageRuntime.notice,
+        });
+      })
+      .catch((error) => {
+        console.warn("[app] route runtime diagnostics failed to start", error);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [enabled]);
+
+  useEffect(() => {
+    if (!enabled) {
+      return undefined;
+    }
+
+    function retryPendingInboxSync() {
+      void import("./storage/storageFactory")
+        .then(({ retryPendingSubmissionSync }) => retryPendingSubmissionSync())
+        .catch((error) => {
+          console.warn("[app] pending inbox sync retry failed to start", error);
+        });
+    }
+
+    retryPendingInboxSync();
+    window.addEventListener("online", retryPendingInboxSync);
+    return () => window.removeEventListener("online", retryPendingInboxSync);
+  }, [enabled]);
+
+  return null;
+}
+
 export default function App() {
   const location = useLocation();
+  const routeIsLanding = location.pathname === "/";
   const routeUsesPublicChrome =
     location.pathname.startsWith("/f/") ||
     location.pathname.startsWith("/roadmap/") ||
@@ -744,7 +833,6 @@ export default function App() {
     ExploreSignalsPage,
     TroubleshootingPage,
     InsightsFixturePage,
-    LandingPage,
     PublicFormPage,
     ZkLoginCallbackPage,
   } = useMemo(() => createRouteComponents(routeRetryNonce), [routeRetryNonce]);
@@ -760,6 +848,7 @@ export default function App() {
     location.pathname.startsWith("/my-submissions/") ||
     location.pathname.startsWith("/admin/") ||
     location.pathname.startsWith("/dashboard/");
+  const routeNeedsWorkspaceBoot = !routeIsLanding && !routeUsesPublicChrome;
 
   const dismissBootOverlay = useCallback(() => {
     document.getElementById("boot-overlay")?.remove();
@@ -782,15 +871,12 @@ export default function App() {
   }, [location.hash, location.pathname, location.search]);
 
   useEffect(() => {
-    const storageRuntime = getStorageRuntimeStatus();
-    setDeepSignalDebugReadiness({
-      routeProviderGuard: "ready",
-      workspaceProjectProvider: getSelectedProjectId() ? "selected" : "empty",
-      storageProvider: storageRuntime.mode,
-      storageNotice: storageRuntime.notice,
-    });
     logRouteLifecycle("route:enter", {
       routePath: `${location.pathname}${location.search}${location.hash}`,
+      pathname: location.pathname,
+      hash: location.hash || "",
+      browserPathname: typeof window === "undefined" ? location.pathname : window.location.pathname,
+      browserHash: typeof window === "undefined" ? location.hash : window.location.hash,
       walletSurface: routeNeedsWalletSurface,
       publicChrome: routeUsesPublicChrome,
     });
@@ -828,11 +914,11 @@ export default function App() {
 
     const startedAt = window.__DEEPSIGNAL_BOOT_STARTED_AT__ ?? performance.now();
     const elapsed = performance.now() - startedAt;
-    const delay = Math.max(0, BOOT_MIN_VISIBLE_MS - elapsed);
+    const delay = routeIsLanding ? 0 : Math.max(0, BOOT_MIN_VISIBLE_MS - elapsed);
     let exitTimer = 0;
 
     const finalize = window.setTimeout(() => {
-      if (bootStatus) {
+      if (bootStatus && !routeIsLanding) {
         bootStatus.textContent = "Opening encrypted signal workspace...";
       }
       bootOverlay.setAttribute("data-state", "exiting");
@@ -846,10 +932,23 @@ export default function App() {
       window.clearTimeout(finalize);
       window.clearTimeout(exitTimer);
     };
-  }, [bootDismissed, dismissBootOverlay, initialRouteReady]);
+  }, [bootDismissed, dismissBootOverlay, initialRouteReady, routeIsLanding]);
+
+  if (routeIsLanding) {
+    return (
+      <RpcInfrastructureProvider>
+        <AppShell walletAvailable={false} chrome="full">
+          <InitialBootReady routePath={`${location.pathname}${location.search}${location.hash}`} onReady={() => setInitialRouteReady(true)}>
+            <LandingPage />
+          </InitialBootReady>
+        </AppShell>
+      </RpcInfrastructureProvider>
+    );
+  }
 
   const routeSurface = (
     <AppShell walletAvailable={routeNeedsWalletSurface} chrome={routeUsesPublicChrome ? "public" : "full"}>
+      <AppRouteRuntimeEffects enabled={routeNeedsWorkspaceBoot} />
       <RouteErrorBoundary
         resetKey={`${location.key}:${routeRetryNonce}`}
         routePath={`${location.pathname}${location.search}${location.hash}`}
@@ -862,7 +961,7 @@ export default function App() {
         ) : (
           <Suspense fallback={<WorkspaceRestoreFallback />}>
             <InitialBootReady routePath={`${location.pathname}${location.search}${location.hash}`} onReady={() => setInitialRouteReady(true)}>
-              <ProviderReadinessBarrier routePath={`${location.pathname}${location.search}${location.hash}`} enabled={!routeUsesPublicChrome}>
+              <ProviderReadinessBarrier routePath={`${location.pathname}${location.search}${location.hash}`} enabled={routeNeedsWorkspaceBoot}>
               <Routes>
               <Route path="/" element={<LandingPage />} />
               <Route path="/explore" element={<ExploreSignalsPage />} />

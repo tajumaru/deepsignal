@@ -200,6 +200,14 @@ export function FormSubmissionsPage() {
   const previousSubmissionIdsRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
+    void import("../storage/storageFactory")
+      .then(({ retryPendingSubmissionSync }) => retryPendingSubmissionSync())
+      .catch((error) => {
+        console.warn("[admin inbox] pending inbox sync retry failed to start", error);
+      });
+  }, []);
+
+  useEffect(() => {
     async function loadInbox() {
       const [nextForm, rawSubmissions] = await Promise.all([
         storageAdapter.getForm(formId),

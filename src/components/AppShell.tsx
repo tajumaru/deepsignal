@@ -8,6 +8,7 @@ import { useI18n } from "../i18n";
 import { retryLazyImport } from "../lib/lazyRetry";
 import { isSignalInboxPath } from "../lib/navigation";
 import { scheduleIdleTask } from "../lib/scheduleIdleTask";
+import { useOptionalRpcInfrastructure } from "../rpcInfrastructure";
 
 const WalletNav = lazy(() =>
   retryLazyImport(() => import("./WalletNav"), "wallet-nav").then((module) => ({ default: module.WalletNav })),
@@ -118,10 +119,11 @@ function MobileAppBottomNav({ showComposeShortcut }: MobileAppBottomNavProps) {
 
 function DeferredNetworkMenu() {
   const [ready, setReady] = useState(false);
+  const rpcInfrastructure = useOptionalRpcInfrastructure();
 
   useEffect(() => scheduleIdleTask(() => setReady(true), 2200), []);
 
-  if (!ready) {
+  if (!ready || !rpcInfrastructure) {
     return <div className="network-select-shell network-select-shell-placeholder" aria-hidden="true" />;
   }
 
@@ -238,15 +240,15 @@ export function AppShell({
             >
               <MenuToggleIcon />
             </button>
-            <Link className="mobile-brand" to="/" onClick={() => setMobileDrawerOpen(false)}>
+            <a className="mobile-brand" href="/" onClick={() => setMobileDrawerOpen(false)}>
               <span className="brand-mark" aria-hidden="true">
                 <img src="/deepsignal-mark.svg" alt="" />
               </span>
               <strong>DeepSignal</strong>
-            </Link>
+            </a>
           </div>
         )}
-        <Link className="brand desktop-topbar-brand" to="/">
+        <a className="brand desktop-topbar-brand" href="/">
           <span className="brand-mark" aria-hidden="true">
             <img src="/deepsignal-mark.svg" alt="" />
           </span>
@@ -254,11 +256,11 @@ export function AppShell({
             <strong>DeepSignal</strong>
             <p>{t("brandTagline")}</p>
           </div>
-        </Link>
+        </a>
         {publicChrome ? null : (
           <nav className="topnav desktop-topnav" aria-label="Primary navigation">
             <div className="topnav-row topnav-row-primary">
-              <NavLink to="/">{t("navHome")}</NavLink>
+              <a href="/">{t("navHome")}</a>
               <CreateFormLink nav fresh={false}>
                 <NavItemLabel>{t("navCreateForm")}</NavItemLabel>
               </CreateFormLink>
@@ -338,9 +340,9 @@ export function AppShell({
                 <div className="mobile-drawer-section">
                   <span className="mobile-drawer-section-label">Secure Inbox</span>
                   <nav className="mobile-drawer-nav" aria-label="Mobile navigation">
-                    <NavLink to="/" onClick={closeMobileDrawer}>
+                    <a href="/" onClick={closeMobileDrawer}>
                       {t("navHome")}
-                    </NavLink>
+                    </a>
                     {walletChrome.inboxNav}
                     <NavLink to="/explore" onClick={closeMobileDrawer}>
                       {t("navExplore")}

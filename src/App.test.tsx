@@ -34,7 +34,14 @@ vi.mock("./components/WalrusRuntimeSurface", () => ({
 }));
 
 vi.mock("./pages/LandingPage", () => ({
-  LandingPage: () => <h1>Landing Route</h1>,
+  LandingPage: () => (
+    <main>
+      <h1>CREATE SIGNALS</h1>
+      <p>Private by default Permanent by design</p>
+      <a href="/#/dashboard">Open Inbox</a>
+      <a href="/#/create">Create Signal</a>
+    </main>
+  ),
 }));
 
 vi.mock("./pages/PublicFormPage", () => ({
@@ -117,14 +124,18 @@ describe("App routing", () => {
     expect(walletSurfaceSpy).toHaveBeenCalled();
   });
 
-  it("keeps the home route fail-open without waiting for wallet providers", async () => {
+  it("renders the public landing hero immediately without waiting for wallet providers", async () => {
     render(
       <MemoryRouter initialEntries={["/"]}>
         <App />
       </MemoryRouter>,
     );
 
-    await waitFor(() => expect(screen.getByRole("heading", { name: "Landing Route" })).toBeInTheDocument());
+    expect(screen.getByRole("heading", { name: "CREATE SIGNALS" })).toBeInTheDocument();
+    expect(screen.getByText("Private by default Permanent by design")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Open Inbox" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Create Signal" })).toBeInTheDocument();
+    expect(screen.queryByText(/Loading encrypted signal workspace/i)).not.toBeInTheDocument();
     expect(screen.getByTestId("app-shell")).toHaveAttribute("data-wallet-available", "no");
     expect(walletSurfaceSpy).not.toHaveBeenCalled();
   });

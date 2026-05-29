@@ -97,7 +97,7 @@ export const SIGNAL_PIPELINE_STAGES = [
 ] as const;
 
 export type SignalPipelineStage = (typeof SIGNAL_PIPELINE_STAGES)[number];
-export type SignalPipelineStatus = "idle" | "active" | "failed" | "complete";
+export type SignalPipelineStatus = "idle" | "active" | "pending" | "failed" | "complete";
 export type SignalFailureState = "upload_failed" | "sync_failed" | "offline_preserved" | null;
 
 export interface SignalPipelineState {
@@ -917,6 +917,14 @@ export function usePublicSubmission({
     }));
   }
 
+  function pendingPipeline(message: string) {
+    setSubmitPipeline({
+      stage: "inbox_syncing",
+      status: "pending",
+      message,
+    });
+  }
+
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
     if (!form || submitting) {
@@ -1354,6 +1362,8 @@ export function usePublicSubmission({
         remoteIndexReadBack: false,
         ownerReadable: false,
         remoteSyncStatus: "local_only",
+        deliveryStatus: "stored_local",
+        deliveryStatuses: ["stored_local"],
       });
       const result = await saveSubmissionWithEncryption(form, submission, undefined, storageAdapter, {
         responseDeadlinePassed: responseDeadlinePassedLabel,
@@ -1396,6 +1406,22 @@ export function usePublicSubmission({
         remoteIndexReadBack: result.remoteIndexReadBack,
         ownerReadable: result.ownerReadable,
         remoteSyncStatus: result.remoteSyncStatus,
+        deliveryStatus: isLocalFallbackBlob(result.answerBlobId ?? result.blobId)
+          ? "stored_local"
+          : result.remoteSyncStatus === "remote_synced" &&
+              result.remoteIndexUpdated === true &&
+              result.remoteIndexReadBack === true &&
+              result.ownerReadable === true
+            ? "inbox_synced"
+            : "inbox_pending",
+        deliveryStatuses: isLocalFallbackBlob(result.answerBlobId ?? result.blobId)
+          ? ["stored_local"]
+          : result.remoteSyncStatus === "remote_synced" &&
+              result.remoteIndexUpdated === true &&
+              result.remoteIndexReadBack === true &&
+              result.ownerReadable === true
+            ? ["stored_local", "stored_walrus", "inbox_synced"]
+            : ["stored_local", "stored_walrus", "inbox_pending"],
         walrusProof: result.walrusProof,
       } satisfies Submission;
       historySubmission = savedSubmission;
@@ -1435,7 +1461,11 @@ export function usePublicSubmission({
       if (form.projectId) {
         notices.push(suiRegistrationDeferredNotice);
       }
-      if (!remoteDelivered && !walrusManifestBundleSaved && !externalIndexAccepted) {
+      const walrusEvidenceExists = Boolean(
+        !isLocalFallbackBlob(savedSubmission.answerBlobId ?? savedSubmission.blobId) &&
+          (savedSubmission.answerBlobId || savedSubmission.blobId || savedSubmission.encryptedBlobId),
+      );
+      if (!remoteDelivered && !walrusEvidenceExists && !walrusManifestBundleSaved && !externalIndexAccepted) {
         const message =
           isLocalFallbackBlob(savedSubmission.encryptedBlobId ?? savedSubmission.blobId)
             ? "Signal preserved locally. Retry when storage is reachable to finish Walrus upload and inbox sync."
@@ -1479,36 +1509,55 @@ export function usePublicSubmission({
       }
       if (!remoteDelivered) {
         const message =
-          "Signal preserved locally. Walrus evidence exists, but inbox confirmation is still pending; retry from this device to complete sync.";
-        setSubmitted(null);
-        setSubmitNotice(notices.join(" "));
-        setSubmitError(message);
-        setSignalFailureState("sync_failed");
+          "Your signal is safely stored. Inbox synchronization will retry automatically.";
+        const pendingSubmission = {
+          ...savedSubmission,
+          deliveryStatus: "inbox_pending" as const,
+          deliveryStatuses: ["stored_local" as const, "stored_walrus" as const, "inbox_pending" as const],
+          remoteSyncStatus: savedSubmission.remoteSyncStatus ?? ("sync_pending" as const),
+        };
+        setSubmitted(pendingSubmission);
+        setSubmitNotice([message, ...notices].join(" "));
+        setSubmitError("");
+        setSignalFailureState(null);
         upsertMyResponseHistoryEntry(
           buildMyResponseHistoryEntry({
             form,
-            submission: savedSubmission,
+            submission: pendingSubmission,
             status: "pending",
             storageMode: responseStorageMode,
-            errorMessage: message,
           }),
         );
-        failPipeline(message);
-        enqueuePendingSubmission(savedSubmission);
+        saveSubmittedHistoryEntry({
+          form,
+          submission: pendingSubmission,
+          storageMode: getStorageRuntimeStatus().mode,
+          walletAddress: effectiveIdentityMode === "wallet" ? accountAddress : undefined,
+        });
+        clearDraft();
+        clearRecoveryRetryState();
+        setFailure(null);
+        pendingPipeline(message);
+        enqueuePendingSubmission(pendingSubmission);
         return;
       }
-      setSubmitted(savedSubmission);
+      const syncedSubmission = {
+        ...savedSubmission,
+        deliveryStatus: "inbox_synced" as const,
+        deliveryStatuses: ["stored_local" as const, "stored_walrus" as const, "inbox_synced" as const],
+      };
+      setSubmitted(syncedSubmission);
       upsertMyResponseHistoryEntry(
         buildMyResponseHistoryEntry({
           form,
-          submission: savedSubmission,
+          submission: syncedSubmission,
           status: "submitted",
           storageMode: responseStorageMode,
         }),
       );
       saveSubmittedHistoryEntry({
         form,
-        submission: savedSubmission,
+        submission: syncedSubmission,
         storageMode: getStorageRuntimeStatus().mode,
         walletAddress: effectiveIdentityMode === "wallet" ? accountAddress : undefined,
       });
