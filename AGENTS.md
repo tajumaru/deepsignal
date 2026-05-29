@@ -73,6 +73,7 @@ DeepSignal is a realtime signal intelligence workspace and signal intelligence p
 - Seal encryption code lives in `src/crypto`. Keep encryption adapters, payload helpers, and mode selection there.
 - Always preserve the `localStorage` fallback path. Walrus and Seal are progressive capabilities; the app must still function in local/demo mode when env vars are missing or remote writes fail.
 - Maintain the storage/crypto adapter pattern. Prefer extending adapters and factories over scattering Walrus or Seal conditionals across unrelated UI code.
+- DeepSignal build updates must be user-initiated. Do not add automatic reload loops for version, chunk, MIME, mixed-build, service worker, or cache recovery. Surface `Update DeepSignal`, guard the attempt with sessionStorage, update/wake waiting service workers when present, prune only DeepSignal Cache Storage entries and temporary diagnostics, and never delete local fallback data, drafts, submitted answers, or inbox cache during update recovery.
 
 ## Implementation guidance
 

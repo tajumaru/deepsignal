@@ -122,21 +122,27 @@
 }
 
 .emotion-rating-button {
+  --emotion-accent: #7be0ff;
   position: relative;
   display: grid;
   justify-items: center;
-  gap: 0.28rem;
-  min-height: 5.1rem;
-  padding: 0.72rem 0.42rem 0.62rem;
+  align-content: center;
+  gap: 0.42rem;
+  min-width: 56px;
+  min-height: 5.35rem;
+  padding: 0.78rem 0.48rem 0.68rem;
   border-radius: 1rem;
-  border: 1px solid rgba(116, 226, 255, 0.12);
+  border: 1px solid color-mix(in srgb, var(--emotion-accent) 24%, transparent);
   background:
-    radial-gradient(circle at top, rgba(123, 224, 255, 0.07), transparent 52%),
+    radial-gradient(circle at 50% 6%, color-mix(in srgb, var(--emotion-accent) 18%, transparent), transparent 54%),
+    radial-gradient(circle at 50% 110%, color-mix(in srgb, var(--emotion-accent) 10%, transparent), transparent 52%),
     linear-gradient(180deg, rgba(6, 22, 36, 0.82), rgba(4, 17, 30, 0.9));
   color: #cfe5ee;
+  opacity: 0.74;
   transform: scale(1);
   transition:
-    transform 220ms cubic-bezier(0.22, 1.4, 0.36, 1),
+    transform 210ms cubic-bezier(0.2, 1.45, 0.34, 1),
+    opacity 180ms ease,
     border-color 180ms ease,
     box-shadow 220ms ease,
     background 220ms ease,
@@ -150,63 +156,210 @@
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  background: linear-gradient(180deg, rgba(226, 250, 255, 0.05), transparent 38%);
-  opacity: 0.8;
+  background:
+    linear-gradient(180deg, rgba(226, 250, 255, 0.08), transparent 38%),
+    radial-gradient(circle at 50% 10%, color-mix(in srgb, var(--emotion-accent) 14%, transparent), transparent 42%);
+  opacity: 0.72;
+  pointer-events: none;
+}
+
+.emotion-rating-button::before {
+  content: "";
+  position: absolute;
+  inset: 50%;
+  width: 1rem;
+  height: 1rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--emotion-accent) 28%, transparent);
+  opacity: 0;
+  transform: translate(-50%, -50%) scale(0);
   pointer-events: none;
 }
 
 .emotion-rating-button:hover:not(:disabled),
 .emotion-rating-button:focus-visible {
-  transform: scale(1.03);
-  border-color: rgba(123, 224, 255, 0.24);
+  opacity: 0.96;
+  transform: scale(1.06);
+  border-color: color-mix(in srgb, var(--emotion-accent) 45%, transparent);
   background:
-    radial-gradient(circle at top, rgba(123, 224, 255, 0.1), transparent 54%),
+    radial-gradient(circle at 50% 6%, color-mix(in srgb, var(--emotion-accent) 24%, transparent), transparent 56%),
+    radial-gradient(circle at 50% 110%, color-mix(in srgb, var(--emotion-accent) 15%, transparent), transparent 54%),
     linear-gradient(180deg, rgba(7, 25, 41, 0.88), rgba(4, 17, 30, 0.94));
-  box-shadow: 0 8px 18px rgba(21, 110, 152, 0.12);
+  box-shadow:
+    0 10px 24px color-mix(in srgb, var(--emotion-accent) 14%, transparent),
+    inset 0 0 0 1px rgba(232, 252, 255, 0.05);
   outline: none;
 }
 
 .emotion-rating-button:active:not(:disabled) {
-  transform: scale(1.05);
+  transform: scale(0.98);
 }
 
 .emotion-rating-button.is-selected {
-  border-color: rgba(123, 224, 255, 0.34);
+  opacity: 1;
+  transform: scale(1.12);
+  border-color: color-mix(in srgb, var(--emotion-accent) 76%, white 10%);
   background:
-    radial-gradient(circle at top, rgba(123, 224, 255, 0.16), transparent 58%),
+    radial-gradient(circle at 50% 4%, color-mix(in srgb, var(--emotion-accent) 34%, transparent), transparent 58%),
+    radial-gradient(circle at 50% 108%, color-mix(in srgb, var(--emotion-accent) 22%, transparent), transparent 54%),
     linear-gradient(180deg, rgba(8, 29, 44, 0.96), rgba(5, 20, 33, 0.96));
   color: #effcff;
   box-shadow:
-    0 10px 24px rgba(28, 148, 201, 0.14),
-    inset 0 0 0 1px rgba(194, 245, 255, 0.06);
-  animation: emotion-select-spring 420ms cubic-bezier(0.18, 1.42, 0.4, 1);
+    0 0 0 2px color-mix(in srgb, var(--emotion-accent) 58%, transparent),
+    0 14px 32px color-mix(in srgb, var(--emotion-accent) 22%, transparent),
+    0 0 30px color-mix(in srgb, var(--emotion-accent) 24%, transparent),
+    inset 0 0 0 1px rgba(239, 252, 255, 0.1);
+  animation: emotion-select-spring 260ms cubic-bezier(0.18, 1.38, 0.38, 1);
 }
 
-.emotion-rating-emoji {
-  font-size: clamp(1.6rem, 2.45vw, 2rem);
-  line-height: 1;
-  filter: saturate(0.94);
+.emotion-rating-button.is-selected::before {
+  animation: emotion-ripple 520ms ease-out;
+}
+
+.emotion-rating-button.is-selected::after {
+  opacity: 1;
+}
+
+.emotion-rating-icon {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 2.55rem;
+  height: 2.55rem;
+  border-radius: 999px;
+  background:
+    radial-gradient(circle at 35% 24%, rgba(255, 255, 255, 0.72), transparent 16%),
+    radial-gradient(circle at 50% 118%, color-mix(in srgb, var(--emotion-accent) 44%, transparent), transparent 58%),
+    color-mix(in srgb, var(--emotion-accent) 18%, rgba(7, 26, 42, 0.96));
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--emotion-accent) 38%, transparent),
+    0 0 18px color-mix(in srgb, var(--emotion-accent) 22%, transparent);
+}
+
+.emotion-rating-face {
+  position: relative;
+  width: 1.62rem;
+  height: 1.34rem;
+}
+
+.emotion-rating-eye {
+  position: absolute;
+  top: 0.24rem;
+  width: 0.28rem;
+  height: 0.28rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--emotion-accent) 42%, #effcff);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--emotion-accent) 50%, transparent);
+}
+
+.emotion-rating-eye-left {
+  left: 0.38rem;
+}
+
+.emotion-rating-eye-right {
+  right: 0.38rem;
+}
+
+.emotion-rating-mouth {
+  position: absolute;
+  left: 50%;
+  bottom: 0.08rem;
+  width: 0.78rem;
+  height: 0.36rem;
+  border: 2px solid color-mix(in srgb, var(--emotion-accent) 48%, #effcff);
+  border-top: 0;
+  border-radius: 0 0 999px 999px;
+  transform: translateX(-50%);
+}
+
+.emotion-rating-button[data-tone="1"] .emotion-rating-eye {
+  width: 0.44rem;
+  height: 0.12rem;
+  border-radius: 999px;
+}
+
+.emotion-rating-button[data-tone="1"] .emotion-rating-eye-left {
+  transform: rotate(24deg);
+}
+
+.emotion-rating-button[data-tone="1"] .emotion-rating-eye-right {
+  transform: rotate(-24deg);
+}
+
+.emotion-rating-button[data-tone="1"] .emotion-rating-mouth,
+.emotion-rating-button[data-tone="2"] .emotion-rating-mouth {
+  border-top: 2px solid color-mix(in srgb, var(--emotion-accent) 48%, #effcff);
+  border-bottom: 0;
+  border-radius: 999px 999px 0 0;
+  bottom: 0.02rem;
+}
+
+.emotion-rating-button[data-tone="2"] .emotion-rating-eye {
+  height: 0.14rem;
+  border-radius: 999px;
+}
+
+.emotion-rating-button[data-tone="3"] .emotion-rating-mouth {
+  width: 0.72rem;
+  height: 0;
+  border-width: 2px 0 0;
+  border-radius: 999px;
+  bottom: 0.22rem;
+}
+
+.emotion-rating-button[data-tone="4"] .emotion-rating-mouth {
+  width: 0.86rem;
+  height: 0.42rem;
+}
+
+.emotion-rating-button[data-tone="5"] .emotion-rating-eye {
+  top: 0.15rem;
+  width: 0.42rem;
+  height: 0.42rem;
+  border-radius: 0;
+  clip-path: polygon(50% 0, 61% 34%, 98% 34%, 68% 55%, 79% 91%, 50% 68%, 21% 91%, 32% 55%, 2% 34%, 39% 34%);
+}
+
+.emotion-rating-button[data-tone="5"] .emotion-rating-mouth {
+  width: 0.92rem;
+  height: 0.44rem;
 }
 
 .emotion-rating-text {
+  position: relative;
+  z-index: 1;
   font-size: 0.74rem;
   line-height: 1.2;
   text-align: center;
   font-weight: 600;
-  letter-spacing: -0.01em;
+  letter-spacing: 0;
+  overflow-wrap: anywhere;
 }
 
 @keyframes emotion-select-spring {
   0% {
-    transform: scale(0.92);
+    transform: scale(0.94);
   }
 
-  58% {
-    transform: scale(1.12);
+  62% {
+    transform: scale(1.16);
   }
 
   100% {
-    transform: scale(1);
+    transform: scale(1.12);
+  }
+}
+
+@keyframes emotion-ripple {
+  0% {
+    opacity: 0.52;
+    transform: translate(-50%, -50%) scale(0);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(10);
   }
 }
 

@@ -24,6 +24,71 @@
   backdrop-filter: blur(12px);
 }
 
+.build-update-banner {
+  position: fixed;
+  right: max(0.85rem, env(safe-area-inset-right, 0px));
+  bottom: calc(max(0.85rem, env(safe-area-inset-bottom, 0px)) + 2.1rem);
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  width: min(92vw, 28rem);
+  padding: 0.82rem 0.9rem;
+  border: 1px solid rgba(116, 226, 255, 0.26);
+  border-radius: var(--radius-md);
+  background:
+    linear-gradient(135deg, rgba(8, 31, 48, 0.96), rgba(5, 18, 30, 0.96));
+  box-shadow:
+    0 18px 42px rgba(0, 0, 0, 0.28),
+    inset 0 1px 0 rgba(220, 252, 255, 0.06);
+  color: #ecfdff;
+  backdrop-filter: blur(16px);
+}
+
+.build-update-banner div {
+  display: grid;
+  min-width: 0;
+  gap: 0.16rem;
+}
+
+.build-update-banner strong,
+.build-update-banner p {
+  min-width: 0;
+  margin: 0;
+  line-height: 1.25;
+}
+
+.build-update-banner strong {
+  font-size: 0.9rem;
+}
+
+.build-update-banner p {
+  color: var(--text-soft);
+  font-size: 0.78rem;
+}
+
+.build-update-banner .primary-button {
+  flex: 0 0 auto;
+  min-height: 2.25rem;
+  padding: 0.55rem 0.75rem;
+  white-space: nowrap;
+}
+
+@media (max-width: 620px) {
+  .build-update-banner {
+    right: max(0.7rem, env(safe-area-inset-right, 0px));
+    left: max(0.7rem, env(safe-area-inset-left, 0px));
+    bottom: max(0.7rem, env(safe-area-inset-bottom, 0px));
+    width: auto;
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .build-update-banner .primary-button {
+    width: 100%;
+  }
+}
+
 .bg-orb {
   position: fixed;
   inset: auto;
@@ -227,7 +292,7 @@ h2 {
 
 .emotion-rating-grid {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(5.9rem, 1fr));
   gap: 0.55rem;
 }
 

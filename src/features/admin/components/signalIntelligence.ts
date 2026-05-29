@@ -1,4 +1,4 @@
-import { flattenAnswer } from "../../../lib/utils";
+import { formatAnswerText } from "../../../lib/answerFormatting";
 import { getSubmissionRespondentMeta, isVerifiedSignal } from "../../../lib/respondentMeta";
 import type { Submission, SubmissionLocation } from "../../../types";
 import type { SignalRecord } from "../hooks/useSignalInboxData";
@@ -55,9 +55,20 @@ function compact(text: string, maxLength = 160) {
   return `${normalized.slice(0, maxLength - 3).trim()}...`;
 }
 
-function firstReadableAnswer(submission: Submission) {
-  for (const value of Object.values(submission.answers ?? {})) {
-    const answer = compact(flattenAnswer(value), 180);
+function firstReadableAnswer(record: SignalRecord) {
+  const knownFieldIds = new Set<string>();
+  for (const field of record.form.fields) {
+    knownFieldIds.add(field.id);
+    const answer = compact(formatAnswerText(field, record.submission.answers?.[field.id], "en"), 180);
+    if (answer && answer.toLowerCase() !== "no answer") {
+      return answer;
+    }
+  }
+  for (const [fieldId, value] of Object.entries(record.submission.answers ?? {})) {
+    if (knownFieldIds.has(fieldId)) {
+      continue;
+    }
+    const answer = compact(formatAnswerText(undefined, value, "en"), 180);
     if (answer && answer.toLowerCase() !== "no answer") {
       return answer;
     }
@@ -66,7 +77,7 @@ function firstReadableAnswer(submission: Submission) {
 }
 
 function getEvidenceQuote(record: SignalRecord) {
-  const text = firstReadableAnswer(record.submission) || record.submission.subjectPreview || record.submission.aiSummary || "Signal content unavailable.";
+  const text = firstReadableAnswer(record) || record.submission.subjectPreview || record.submission.aiSummary || "Signal content unavailable.";
   return compact(text, 144);
 }
 
@@ -172,7 +183,7 @@ export function buildSignalCardIntelligence(record: SignalRecord): SignalCardInt
     urgencyLabel: getUrgencyBand(urgencyScore),
     signalTypeLabel: getAnalysisSignalTypeLabel(signalType),
     analystTypeLabel: getAnalystTypeLabel(analystType),
-    shortSummary: compact(record.submission.aiSummary || firstReadableAnswer(record.submission) || record.submission.subjectPreview || "Signal pending analysis.", 112),
+    shortSummary: compact(record.submission.aiSummary || firstReadableAnswer(record) || record.submission.subjectPreview || "Signal pending analysis.", 112),
     evidenceQuote: getEvidenceQuote(record),
     recommendedAction: buildRecommendedAction(record, urgencyScore),
     emotionalTone: getEmotionLabel(record.submission.emotion),

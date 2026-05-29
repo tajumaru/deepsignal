@@ -1,4 +1,4 @@
-import type { ChangeEvent, DragEvent, FocusEvent, KeyboardEvent } from "react";
+import type { ChangeEvent, CSSProperties, DragEvent, FocusEvent, KeyboardEvent } from "react";
 import { fieldTypeOptions } from "../lib/constants";
 import { EMOTION_SCALE_OPTIONS } from "../lib/emotionScale";
 import { useI18n } from "../i18n";
@@ -303,7 +303,11 @@ export function FormFieldEditor({
     if (field.type === "emotionRating") {
       return (
         <div className="composer-canvas-emotion-rating" aria-hidden="true">
-          <span>{EMOTION_SCALE_OPTIONS.map((option) => option.emoji).join(" ")}</span>
+          <div className="composer-emotion-signal-preview">
+            {EMOTION_SCALE_OPTIONS.map((option) => (
+              <span key={option.value} data-tone={option.value} style={{ "--emotion-accent": option.accent } as CSSProperties} />
+            ))}
+          </div>
           <small className="muted">{t("chooseEmotionRating")}</small>
         </div>
       );

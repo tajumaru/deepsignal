@@ -1335,12 +1335,12 @@
   .star-button,
   .emotion-rating-button {
     min-width: 44px;
-    min-height: 44px;
+    min-height: 56px;
     font-size: 1.24rem;
   }
 
   .emotion-rating-button {
-    min-height: 4.6rem;
+    min-height: 4.95rem;
     padding: 0.64rem 0.38rem 0.54rem;
   }
 

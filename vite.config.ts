@@ -154,6 +154,30 @@ function buildManifestPlugin(args: {
         fileName: "build.json",
         source: `${JSON.stringify({ ...args, assets, entryAsset, routeAssets }, null, 2)}\n`,
       });
+      this.emitFile({
+        type: "asset",
+        fileName: "version.json",
+        source: `${JSON.stringify({ ...args }, null, 2)}\n`,
+      });
+      this.emitFile({
+        type: "asset",
+        fileName: "_headers",
+        source: [
+          "/",
+          "  Cache-Control: no-store, no-cache, must-revalidate, max-age=0",
+          "/index.html",
+          "  Cache-Control: no-store, no-cache, must-revalidate, max-age=0",
+          "/build.json",
+          "  Cache-Control: no-store, no-cache, must-revalidate, max-age=0",
+          "/version.json",
+          "  Cache-Control: no-store, no-cache, must-revalidate, max-age=0",
+          "/service-worker.js",
+          "  Cache-Control: no-store, no-cache, must-revalidate, max-age=0",
+          "/assets/*",
+          "  Cache-Control: public, max-age=31536000, immutable",
+          "",
+        ].join("\n"),
+      });
     },
   };
 }
@@ -251,19 +275,60 @@ function moduleEntryRetryPlugin(args: { appVersion: string; buildTime: string; g
           };
         }
 
-        async function clearLocalAppCache() {
+        async function updateDeepSignal() {
+          let latestBuild = {
+            appVersion: ${JSON.stringify(args.appVersion)},
+            buildTime: ${JSON.stringify(args.buildTime)},
+            gitHash: ${JSON.stringify(args.gitHash)},
+          };
           try {
-            window.sessionStorage.removeItem(retryStorageKey);
-            window.sessionStorage.removeItem("deepsignal.chunkLoadRecovery");
-            window.sessionStorage.removeItem("deepsignal.mixedBuildRecovery");
-            window.sessionStorage.removeItem("deepsignal.observedBuildAssets");
+            const response = await fetch(new URL("./build.json", window.location.href).toString(), {
+              cache: "no-store",
+              headers: { "cache-control": "no-cache" },
+            });
+            if (response.ok && response.headers.get("content-type")?.includes("application/json")) {
+              latestBuild = await response.json();
+            }
+          } catch {
+            // Keep the embedded build metadata as a fallback.
+          }
+
+          const latestBuildVersion = [
+            latestBuild.appVersion || "unknown",
+            latestBuild.buildTime || "unknown",
+            latestBuild.gitHash || "unknown",
+          ].join("|");
+          try {
+            window.sessionStorage.setItem("deepsignal.buildUpdate.attempt", JSON.stringify({
+              currentBuildVersion: [
+                ${JSON.stringify(args.appVersion)},
+                ${JSON.stringify(args.buildTime)},
+                ${JSON.stringify(args.gitHash)},
+              ].join("|"),
+              latestBuildVersion,
+              attemptedAt: Date.now(),
+            }));
+            [
+              retryStorageKey,
+              "deepsignal.chunkLoadRecovery",
+              "deepsignal.mixedBuildRecovery",
+              "deepsignal.observedBuildAssets",
+              "deepsignal:lastExploreError",
+            ].forEach((key) => window.sessionStorage.removeItem(key));
           } catch {
             // Best effort only.
           }
+          let cacheNamesBefore = [];
+          let cacheNamesAfter = [];
           try {
             if ("caches" in window) {
-              const keys = await window.caches.keys();
-              await Promise.all(keys.map((key) => window.caches.delete(key)));
+              cacheNamesBefore = await window.caches.keys();
+              await Promise.all(
+                cacheNamesBefore
+                  .filter((key) => key.toLowerCase().includes("deepsignal"))
+                  .map((key) => window.caches.delete(key)),
+              );
+              cacheNamesAfter = await window.caches.keys();
             }
           } catch {
             // Cache cleanup is best effort; the cache-busted navigation is the recovery path.
@@ -271,11 +336,36 @@ function moduleEntryRetryPlugin(args: { appVersion: string; buildTime: string; g
           try {
             if ("serviceWorker" in navigator) {
               const registrations = await navigator.serviceWorker.getRegistrations();
-              await Promise.all(registrations.map((registration) => registration.unregister()));
+              await Promise.all(registrations.map(async (registration) => {
+                await registration.update().catch(() => undefined);
+                if (registration.waiting) {
+                  registration.waiting.postMessage({ type: "SKIP_WAITING" });
+                }
+              }));
             }
           } catch {
             // Service worker cleanup is best effort.
           }
+          console.info("[DeepSignal update]", {
+            currentBuildVersion: [
+              ${JSON.stringify(args.appVersion)},
+              ${JSON.stringify(args.buildTime)},
+              ${JSON.stringify(args.gitHash)},
+            ].join("|"),
+            latestBuildVersion,
+            buildTime: latestBuild.buildTime || "unknown",
+            gitHash: latestBuild.gitHash || "unknown",
+            serviceWorkerControllerState: navigator.serviceWorker?.controller?.state || "none",
+            cacheNamesBefore,
+            cacheNamesAfter,
+            updateAttempted: true,
+            updateSucceeded: false,
+            mixedBuildAssetsDetected: false,
+          });
+          const nextUrl = new URL("/", window.location.origin);
+          nextUrl.searchParams.set("v", latestBuild.appVersion || ${JSON.stringify(args.appVersion)});
+          nextUrl.searchParams.set("t", String(Date.now()));
+          window.location.replace(nextUrl.toString());
         }
 
         function ensureRecoveryActions(error) {
@@ -291,39 +381,23 @@ function moduleEntryRetryPlugin(args: { appVersion: string; buildTime: string; g
           actions.style.flexWrap = "wrap";
           actions.style.justifyContent = "center";
 
-          const reloadButton = document.createElement("button");
-          reloadButton.type = "button";
-          reloadButton.textContent = "Retry signal surface";
-          reloadButton.style.padding = "0.8rem 1rem";
-          reloadButton.style.borderRadius = "999px";
-          reloadButton.style.border = "1px solid rgba(138, 223, 255, 0.28)";
-          reloadButton.style.background = "rgba(138, 223, 255, 0.14)";
-          reloadButton.style.color = "#ecfdff";
-          reloadButton.onclick = () => {
-            const state = getRetryState();
-            const nextState = { startedAt: state.startedAt, count: state.count + 1 };
-            rememberRetryState(nextState);
-            const url = new URL(window.location.href);
-            url.searchParams.set(nextState.count > 1 ? "module-cache-clear" : "module-retry", String(Date.now()));
-            if (nextState.count > 1) {
-              void clearLocalAppCache().finally(() => window.location.replace(url.toString()));
-            } else {
-              window.location.replace(url.toString());
-            }
-          };
+          const title = document.createElement("div");
+          title.style.width = "100%";
+          title.style.textAlign = "center";
+          title.innerHTML = "<strong>New version available</strong><br><span>DeepSignal has been updated. Load the latest version.</span>";
 
-          const hardRefreshButton = document.createElement("button");
-          hardRefreshButton.type = "button";
-          hardRefreshButton.textContent = "Hard refresh / clear local app cache";
-          hardRefreshButton.style.padding = "0.8rem 1rem";
-          hardRefreshButton.style.borderRadius = "999px";
-          hardRefreshButton.style.border = "1px solid rgba(255, 255, 255, 0.22)";
-          hardRefreshButton.style.background = "rgba(255, 255, 255, 0.08)";
-          hardRefreshButton.style.color = "#ecfdff";
-          hardRefreshButton.onclick = () => {
-            const url = new URL(window.location.href);
-            url.searchParams.set("hard-refresh", String(Date.now()));
-            void clearLocalAppCache().finally(() => window.location.replace(url.toString()));
+          const updateButton = document.createElement("button");
+          updateButton.type = "button";
+          updateButton.textContent = "Update DeepSignal";
+          updateButton.style.padding = "0.8rem 1rem";
+          updateButton.style.borderRadius = "999px";
+          updateButton.style.border = "1px solid rgba(138, 223, 255, 0.28)";
+          updateButton.style.background = "rgba(138, 223, 255, 0.14)";
+          updateButton.style.color = "#ecfdff";
+          updateButton.onclick = () => {
+            updateButton.disabled = true;
+            updateButton.textContent = "Updating...";
+            void updateDeepSignal();
           };
 
           const details = document.createElement("details");
@@ -346,8 +420,8 @@ function moduleEntryRetryPlugin(args: { appVersion: string; buildTime: string; g
           details.appendChild(summary);
           details.appendChild(pre);
 
-          actions.appendChild(reloadButton);
-          actions.appendChild(hardRefreshButton);
+          actions.appendChild(title);
+          actions.appendChild(updateButton);
           bootShell.appendChild(actions);
           bootShell.appendChild(details);
         }

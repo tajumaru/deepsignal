@@ -478,32 +478,34 @@ export function DynamicField({
           <div className="emotion-rating-grid">
             {EMOTION_SCALE_OPTIONS.map((option) => {
               const active = String(value ?? "") === String(option.value);
+              const optionLabel = t(option.labelKey);
               return (
                 <button
                   key={option.value}
                   type="button"
                   className={`emotion-rating-button ${active ? "is-selected" : ""}`}
-                  aria-label={t("emotionScaleSelected", { emoji: option.emoji, label: t(option.labelKey) })}
-                  aria-pressed={active}
+                  aria-label={`${optionLabel} (${t("ratingValue", { score: option.value })})`}
+                  aria-checked={active}
                   data-tone={option.value}
+                  role="radio"
+                  style={{ "--emotion-accent": option.accent } as CSSProperties}
                   disabled={disabled}
                   onClick={() => onChange(String(option.value))}
                 >
-                  <span className="emotion-rating-emoji" aria-hidden="true">
-                    {option.emoji}
+                  <span className="emotion-rating-icon" aria-hidden="true">
+                    <span className="emotion-rating-face">
+                      <span className="emotion-rating-eye emotion-rating-eye-left" />
+                      <span className="emotion-rating-eye emotion-rating-eye-right" />
+                      <span className="emotion-rating-mouth" />
+                    </span>
                   </span>
-                  <span className="emotion-rating-text">{t(option.labelKey)}</span>
+                  <span className="emotion-rating-text">{optionLabel}</span>
                 </button>
               );
             })}
           </div>
           <span className="emotion-rating-label">
-            {selectedEmotion
-              ? t("emotionScaleSelected", {
-                  emoji: selectedEmotion.emoji,
-                  label: t(selectedEmotion.labelKey),
-                })
-              : t("chooseEmotionRating")}
+            {selectedEmotion ? t(selectedEmotion.labelKey) : t("chooseEmotionRating")}
           </span>
         </div>
       ) : null}

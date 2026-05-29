@@ -5,6 +5,15 @@ import { formatCountryAnswerText } from "./countries";
 import { isConfirmationCheckboxField, normalizeFieldType } from "./fieldTypes";
 import { flattenAnswer } from "./utils";
 
+function formatRatingAnswerText(value: unknown) {
+  const numericValue =
+    typeof value === "number" ? value : typeof value === "string" ? Number(value) : NaN;
+  if (!Number.isInteger(numericValue) || numericValue < 1 || numericValue > 5) {
+    return "";
+  }
+  return `${"★".repeat(numericValue)}${"☆".repeat(5 - numericValue)}`;
+}
+
 function formatDateAnswerText(value: string, language: Language) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
     return value;
@@ -21,6 +30,12 @@ function formatDateAnswerText(value: string, language: Language) {
 
 export function formatAnswerText(field: FormField | undefined, value: unknown, language: Language) {
   const fieldType = field ? normalizeFieldType(field.type) : undefined;
+  if (fieldType === "rating") {
+    const ratingText = formatRatingAnswerText(value);
+    if (ratingText) {
+      return ratingText;
+    }
+  }
   if (fieldType === "emotionRating") {
     const option = getEmotionScaleOption(value);
     if (option) {

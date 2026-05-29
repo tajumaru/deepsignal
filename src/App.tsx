@@ -1,43 +1,28 @@
-import { Component, lazy, Suspense, useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { lazy, Suspense, useEffect, useMemo, useState, type ReactNode } from "react";
 import { Navigate, Route, Routes, useLocation, useParams } from "react-router-dom";
+import { InitialBootReady, useBootOverlay } from "./bootstrap/useBootOverlay";
 import { AppShell } from "./components/AppShell";
 import { WalletSurface } from "./components/WalletSurface";
 import { WalrusRuntimeSurface } from "./components/WalrusRuntimeSurface";
 import {
-  CREATE_FORM_DRAFT_STORAGE_KEY,
-  CREATE_FORM_GUEST_DRAFT_STORAGE_KEY,
-  parseStoredCreateFormDraft,
-} from "./features/createForm/utils";
-import {
-  clearChunkLoadRecoveryState,
-  clearRuntimeCaches,
-  getChunkLoadRecoverySnapshot,
-  getChunkFailureUrl,
-  isChunkLoadFailure,
-  recoverFromChunkLoadFailure,
-} from "./lib/chunkLoadRecovery";
-import { buildInfo } from "./lib/buildInfo";
-import {
   getMixedBuildStatus,
   recordBuildAsset,
-  clearBuildAssetRecoveryState,
   recoverFromMixedBuildAssets,
-  type BuildAssetRecord,
 } from "./lib/buildAssetDiagnostics";
+import {
+  subscribeToBuildUpdateNotices,
+  updateDeepSignalToLatest,
+  type BuildUpdateNotice,
+} from "./lib/buildUpdate";
 import { retryLazyImport } from "./lib/lazyRetry";
-import { copyPerfDiagnostics, endPerf, markPerfMilestone } from "./lib/perf";
-import { resetLocalEnvironment } from "./lib/resetEnvironment";
-import { formatRouteLifecycleDiagnostics, logRouteLifecycle, setDeepSignalDebugReadiness } from "./lib/routeDiagnostics";
+import { logRouteLifecycle, setDeepSignalDebugReadiness } from "./lib/routeDiagnostics";
 import { REQUIRE_GLOBAL_WALRUS_RUNTIME } from "./lib/runtimeFlags";
 import { scheduleIdleTask } from "./lib/scheduleIdleTask";
 import { LandingPage } from "./pages/LandingPage";
 import { RpcInfrastructureProvider } from "./RpcInfrastructureProvider";
-
-const LocalRecoveryCenter = lazy(() =>
-  retryLazyImport(() => import("./components/LocalRecoveryCenter"), "local-recovery-center").then((module) => ({
-    default: module.LocalRecoveryCenter,
-  })),
-);
+import { ProviderReadinessBarrier, WorkspaceRestoreFallback } from "./routes/ProviderReadinessBarrier";
+import { MixedBuildRecoveryScreen, RouteErrorBoundary } from "./routes/RouteErrorBoundary";
+import { getRouteId } from "./routes/routeDiagnostics";
 
 function createRouteComponents(retryNonce = 0) {
   void retryNonce;
@@ -133,624 +118,40 @@ function WithWalrusRuntime({ children }: { children: ReactNode }) {
   return <WalrusRuntimeSurface>{children}</WalrusRuntimeSurface>;
 }
 
-const WORKSPACE_RECOVERY_TIMEOUT_MS = 3200;
-const LAST_EXPLORE_ERROR_KEY = "deepsignal:lastExploreError";
+function BuildUpdateBanner() {
+  const [notice, setNotice] = useState<BuildUpdateNotice | null>(null);
+  const [updating, setUpdating] = useState(false);
 
-type RouteDiagnostics = {
-  routePath: string;
-  browserPathname: string;
-  browserHash: string;
-  selectedProjectId: string;
-  walletConnectedState: "connected" | "disconnected" | "unknown";
-  storageMode: string;
-  providerState: Record<string, unknown>;
-  hydrationPhase: string;
-  localDraftParseStatus: "missing" | "valid" | "invalid" | "unavailable";
-};
+  useEffect(() => subscribeToBuildUpdateNotices(setNotice), []);
 
-type RouteErrorDiagnostics = {
-  errorName: string;
-  errorMessage: string;
-  errorStack: string;
-  componentStack: string;
-  routeId: string;
-  routePath: string;
-  pathname: string;
-  hash: string;
-  chunkUrl: string | null;
-  buildVersion: string;
-  buildTime: string;
-  gitHash: string;
-  rootBuildVersion: string;
-  rootBuildTime: string;
-  rootGitHash: string;
-  mixedBuildAssetsDetected: boolean;
-  observedBuildAssets: BuildAssetRecord[];
-  userAgent: string;
-  providerReadiness: Record<string, unknown>;
-  providerState: Record<string, unknown>;
-  hydrationPhase: string;
-  storageMode: string;
-  selectedProjectId: string;
-  routeDiagnostics: RouteDiagnostics;
-  routeLifecycle: string;
-  chunkRecovery: ReturnType<typeof getChunkLoadRecoverySnapshot>;
-  recordedAt: string;
-};
-
-function getProviderReadiness() {
-  if (typeof window === "undefined") {
-    return {};
-  }
-  return window.__DEEPSIGNAL_DEBUG__?.providerReadiness ?? {};
-}
-
-function getLastFailedImportChunkUrl() {
-  if (typeof window === "undefined") {
+  if (!notice) {
     return null;
   }
-  const failedImports = window.__DEEPSIGNAL_DEBUG__?.failedImports ?? [];
-  for (let index = failedImports.length - 1; index >= 0; index -= 1) {
-    const chunkUrl = failedImports[index]?.chunkUrl;
-    if (chunkUrl) {
-      return chunkUrl;
+
+  async function handleUpdate() {
+    if (!notice) {
+      return;
     }
-  }
-  return null;
-}
-
-function getRouteId(routePath: string) {
-  const pathname = routePath.split(/[?#]/)[0] || "/";
-  if (pathname === "/" || pathname === "") {
-    return "landing";
-  }
-  if (pathname === "/explore" || pathname === "/signals") {
-    return "explore";
-  }
-  if (pathname === "/create" || pathname === "/compose") {
-    return "create-signal";
-  }
-  if (pathname === "/admin" || pathname.startsWith("/admin/") || pathname === "/dashboard" || pathname.startsWith("/dashboard/")) {
-    return "admin";
-  }
-  if (pathname.startsWith("/f/")) {
-    return "public-form";
-  }
-  if (pathname.startsWith("/roadmap/")) {
-    return "public-roadmap";
-  }
-  if (pathname.startsWith("/m/")) {
-    return "manifest-restore";
-  }
-  if (pathname === "/my-responses" || pathname.startsWith("/my-responses/")) {
-    return "my-responses";
-  }
-  return pathname.replace(/^\/+/, "") || "unknown";
-}
-
-function shouldShowRouteDiagnostics(routePath: string) {
-  if (import.meta.env.MODE !== "production") {
-    return true;
-  }
-  if (typeof window === "undefined") {
-    return false;
-  }
-  return new URLSearchParams(window.location.search).get("debug") === "1" || routePath.includes("debug=1");
-}
-
-function safeWriteLocalStorage(key: string, value: string) {
-  try {
-    window.localStorage.setItem(key, value);
-  } catch {
-    // Diagnostics are best effort. The route fallback should still render if storage is blocked.
-  }
-}
-
-function readPersistedWalletConnectionState(): RouteDiagnostics["walletConnectedState"] {
-  if (typeof window === "undefined") {
-    return "unknown";
-  }
-
-  try {
-    for (let index = 0; index < window.localStorage.length; index += 1) {
-      const key = window.localStorage.key(index);
-      if (!key || !key.toLowerCase().includes("wallet")) {
-        continue;
-      }
-      const value = window.localStorage.getItem(key);
-      if (!value) {
-        continue;
-      }
-      const lowerValue = value.toLowerCase();
-      if (lowerValue.includes("connected") || lowerValue.includes("currentwallet") || lowerValue.includes("accounts")) {
-        return "connected";
-      }
-    }
-    return "disconnected";
-  } catch {
-    return "unknown";
-  }
-}
-
-function readSelectedProjectIdFromStorage() {
-  if (typeof window === "undefined") {
-    return "";
-  }
-  try {
-    return window.localStorage.getItem("deepsignal.projectRegistry.selectedProjectId") ?? "";
-  } catch {
-    return "";
-  }
-}
-
-function readStorageRuntimeStatusSnapshot() {
-  const requireWalrus = String(import.meta.env.VITE_REQUIRE_WALRUS).toLowerCase() === "true";
-  const walrusRequested = requireWalrus || import.meta.env.VITE_STORAGE_MODE === "walrus";
-  return {
-    mode: walrusRequested ? "walrus" : "local-fallback",
-    notice: null as string | null,
-  };
-}
-
-function readCreateDraftParseStatus() {
-  if (typeof window === "undefined") {
-    return "unavailable" as const;
-  }
-
-  try {
-    const adminDraft = window.localStorage.getItem(CREATE_FORM_DRAFT_STORAGE_KEY);
-    const guestDraft = window.localStorage.getItem(CREATE_FORM_GUEST_DRAFT_STORAGE_KEY);
-    const rawDraft = adminDraft ?? guestDraft;
-    if (!rawDraft) {
-      return "missing" as const;
-    }
-    return parseStoredCreateFormDraft(rawDraft).status === "valid" ? "valid" : "invalid";
-  } catch {
-    return "unavailable" as const;
-  }
-}
-
-function collectRouteDiagnostics(routePath: string): RouteDiagnostics {
-  const storageRuntime = readStorageRuntimeStatusSnapshot();
-  const providerState = getProviderReadiness();
-  const browserPathname = typeof window === "undefined" ? routePath.split(/[?#]/)[0] || "/" : window.location.pathname;
-  const browserHash = typeof window === "undefined" ? "" : window.location.hash;
-  return {
-    routePath,
-    browserPathname,
-    browserHash,
-    selectedProjectId: readSelectedProjectIdFromStorage(),
-    walletConnectedState: readPersistedWalletConnectionState(),
-    storageMode: storageRuntime.mode,
-    providerState,
-    hydrationPhase: typeof providerState.hydrationPhase === "string" ? providerState.hydrationPhase : "unknown",
-    localDraftParseStatus: readCreateDraftParseStatus(),
-  };
-}
-
-function WorkspaceRestoreFallback({ onRetry }: { onRetry?: () => void }) {
-  const [recoveryVisible, setRecoveryVisible] = useState(false);
-  const [resettingState, setResettingState] = useState(false);
-  const [copiedDiagnostics, setCopiedDiagnostics] = useState(false);
-
-  useEffect(() => {
-    const timer = window.setTimeout(() => {
-      setRecoveryVisible(true);
-    }, WORKSPACE_RECOVERY_TIMEOUT_MS);
-    return () => window.clearTimeout(timer);
-  }, []);
-
-  async function handleResetLocalState() {
-    setResettingState(true);
+    setUpdating(true);
     try {
-      await resetLocalEnvironment();
-    } finally {
-      window.location.assign("/");
+      await updateDeepSignalToLatest(notice);
+    } catch (error) {
+      setUpdating(false);
+      console.warn("[DeepSignal update] update action failed", error);
     }
-  }
-
-  async function handleCopyDiagnostics() {
-    try {
-      await navigator.clipboard.writeText(formatRouteLifecycleDiagnostics());
-    } catch {
-      await copyPerfDiagnostics(["app:", "lazy:", "admin:", "public-form:"]);
-    }
-    setCopiedDiagnostics(true);
-    window.setTimeout(() => setCopiedDiagnostics(false), 1800);
   }
 
   return (
-    <div className="panel glow-panel route-status-panel" role="status">
-      <p className="eyebrow">Signal surface</p>
-      <h1>Loading workspace...</h1>
-      <p className="muted">Restoring the Explore surface and local fallback data.</p>
-      {recoveryVisible ? (
-        <div className="stack">
-          <p className="muted">
-            Workspace restore is taking longer than expected. DeepSignal can continue in recovery mode even if local
-            fallback data or a publish state is broken.
-          </p>
-          <pre className="route-status-diagnostics">{formatRouteLifecycleDiagnostics()}</pre>
-          <div className="inline-actions">
-            <button type="button" className="primary-button" onClick={() => (onRetry ? onRetry() : window.location.reload())}>
-              Retry workspace
-            </button>
-            <button type="button" className="ghost-button" onClick={() => void handleCopyDiagnostics()}>
-              {copiedDiagnostics ? "Copied diagnostics" : "Copy diagnostics"}
-            </button>
-            <button
-              type="button"
-              className="ghost-button"
-              onClick={() => void handleResetLocalState()}
-              disabled={resettingState}
-            >
-              {resettingState ? "Resetting local state..." : "Reset local state"}
-            </button>
-          </div>
-          <Suspense fallback={null}>
-            <LocalRecoveryCenter />
-          </Suspense>
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-function ProviderReadinessBarrier({ children, routePath, enabled = true }: { children: ReactNode; routePath: string; enabled?: boolean }) {
-  const [ready, setReady] = useState(!enabled);
-  const [phase, setPhase] = useState("booting");
-
-  useEffect(() => {
-    if (!enabled) {
-      setPhase("ready");
-      setReady(true);
-      setDeepSignalDebugReadiness({ hydrationPhase: "ready", routePath });
-      return undefined;
-    }
-
-    let cancelled = false;
-    setReady(false);
-    const steps: Array<[string, () => Promise<void> | void]> = [
-      ["router_hydrating", () => undefined],
-      ["storage_hydrating", () => { void window.localStorage.getItem("deepsignal.storage.probe"); }],
-      ["project_hydrating", () => { void readSelectedProjectIdFromStorage(); }],
-      ["providers_ready", () => undefined],
-    ];
-
-    async function run() {
-      for (const [nextPhase, task] of steps) {
-        if (cancelled) {
-          return;
-        }
-        setPhase(nextPhase);
-        setDeepSignalDebugReadiness({ hydrationPhase: nextPhase, routePath });
-        logRouteLifecycle("hydration:phase", { phase: nextPhase, routePath });
-        try {
-          await task();
-        } catch (error) {
-          setDeepSignalDebugReadiness({
-            hydrationPhase: `${nextPhase}:storage-limited`,
-            hydrationError: error instanceof Error ? error.message : String(error),
-          });
-        }
-        await new Promise((resolve) => window.requestAnimationFrame(resolve));
-      }
-      if (!cancelled) {
-        setPhase("ready");
-        setDeepSignalDebugReadiness({ hydrationPhase: "ready", routePath });
-        setReady(true);
-      }
-    }
-
-    void run();
-    return () => {
-      cancelled = true;
-    };
-  }, [enabled, routePath]);
-
-  if (!ready) {
-    return (
-      <WorkspaceRestoreFallback />
-    );
-  }
-
-  void phase;
-  return <>{children}</>;
-}
-
-function MixedBuildRecoveryScreen({ observed }: { observed: BuildAssetRecord[] }) {
-  return (
-    <div className="panel glow-panel route-status-panel" role="alert">
-      <p className="eyebrow">Signal surface recovery</p>
-      <h1>Refreshing DeepSignal assets...</h1>
-      <p className="muted">
-        This session loaded files from more than one build. DeepSignal is clearing stale route state and reopening the
-        current signal workspace with a fresh asset request.
-      </p>
-      <div className="inline-actions">
-        <button type="button" className="primary-button" onClick={() => window.location.reload()}>
-          Reload now
-        </button>
+    <aside className="build-update-banner" role="status" aria-live="polite">
+      <div>
+        <strong>New version available</strong>
+        <p>DeepSignal has been updated. Load the latest version.</p>
       </div>
-      {shouldShowRouteDiagnostics(typeof window === "undefined" ? "/" : `${window.location.pathname}${window.location.search}`) ? (
-        <details className="route-diagnostics-panel" open>
-          <summary>Build diagnostics</summary>
-          <pre className="route-status-diagnostics">{JSON.stringify(observed, null, 2)}</pre>
-        </details>
-      ) : null}
-    </div>
+      <button type="button" className="primary-button" onClick={() => void handleUpdate()} disabled={updating}>
+        {updating ? "Updating..." : "Update DeepSignal"}
+      </button>
+    </aside>
   );
-}
-
-class RouteErrorBoundary extends Component<
-  { children: ReactNode; resetKey: string; routePath: string; onRetryRoute: () => void },
-  { error: Error | null; diagnostics: RouteErrorDiagnostics | null; diagnosticsCopied: boolean; retryCount: number }
-> {
-  state: { error: Error | null; diagnostics: RouteErrorDiagnostics | null; diagnosticsCopied: boolean; retryCount: number } = {
-    error: null,
-    diagnostics: null,
-    diagnosticsCopied: false,
-    retryCount: 0,
-  };
-
-  static getDerivedStateFromError(error: Error) {
-    return { error };
-  }
-
-  componentDidCatch(error: Error, errorInfo: { componentStack: string }) {
-    const chunkUrl = getChunkFailureUrl(error) ?? getLastFailedImportChunkUrl();
-    const userAgent = typeof navigator === "undefined" ? "unknown" : navigator.userAgent;
-    const pathname = typeof window === "undefined" ? this.props.routePath.split(/[?#]/)[0] || "/" : window.location.pathname;
-    const hash = typeof window === "undefined" ? "" : window.location.hash;
-    recordBuildAsset(`route-error:${getRouteId(this.props.routePath)}`, buildInfo);
-    const mixedBuildStatus = getMixedBuildStatus();
-    const routeDiagnostics = collectRouteDiagnostics(this.props.routePath);
-    const boundaryDiagnostics = {
-      routePath: this.props.routePath,
-      routeId: getRouteId(this.props.routePath),
-      pathname,
-      hash,
-      errorName: error.name,
-      errorMessage: error.message,
-      errorStack: error.stack ?? "",
-      chunkUrl,
-      buildVersion: buildInfo.appVersion,
-      buildTime: buildInfo.buildTime,
-      gitHash: buildInfo.gitHash,
-      rootBuildVersion: mixedBuildStatus.root.appVersion,
-      rootBuildTime: mixedBuildStatus.root.buildTime,
-      rootGitHash: mixedBuildStatus.root.gitHash,
-      mixedBuildAssetsDetected: mixedBuildStatus.detected,
-      observedBuildAssets: mixedBuildStatus.observed,
-      userAgent,
-      providerReadiness: getProviderReadiness(),
-      providerState: routeDiagnostics.providerState,
-      hydrationPhase: routeDiagnostics.hydrationPhase,
-      storageMode: routeDiagnostics.storageMode,
-      selectedProjectId: routeDiagnostics.selectedProjectId,
-      routeDiagnostics,
-      routeLifecycle: formatRouteLifecycleDiagnostics(),
-      chunkRecovery: getChunkLoadRecoverySnapshot(),
-      componentStack: errorInfo.componentStack,
-      recordedAt: new Date().toISOString(),
-    };
-    const diagnosticsText = JSON.stringify(boundaryDiagnostics, null, 2);
-    if (boundaryDiagnostics.routeId === "explore") {
-      safeWriteLocalStorage(LAST_EXPLORE_ERROR_KEY, diagnosticsText);
-    }
-    console.error("DeepSignal route failed to render.", {
-      error,
-      ...boundaryDiagnostics,
-    });
-    logRouteLifecycle("route:error-boundary", {
-      routePath: this.props.routePath,
-      error,
-      errorName: error.name,
-      errorMessage: error.message,
-      chunkUrl,
-      buildVersion: buildInfo.appVersion,
-      buildTime: buildInfo.buildTime,
-      gitHash: buildInfo.gitHash,
-      rootBuildVersion: mixedBuildStatus.root.appVersion,
-      rootBuildTime: mixedBuildStatus.root.buildTime,
-      rootGitHash: mixedBuildStatus.root.gitHash,
-      mixedBuildAssetsDetected: mixedBuildStatus.detected,
-      observedBuildAssets: mixedBuildStatus.observed,
-      userAgent,
-      componentStack: errorInfo.componentStack,
-    });
-    if (mixedBuildStatus.detected) {
-      logRouteLifecycle("mixed_build_assets_detected", {
-        routePath: this.props.routePath,
-        root: mixedBuildStatus.root,
-        observed: mixedBuildStatus.observed,
-        reason: mixedBuildStatus.reason,
-      });
-    }
-    this.setState({ diagnostics: boundaryDiagnostics, diagnosticsCopied: false });
-    if (!recoverFromMixedBuildAssets(mixedBuildStatus)) {
-      recoverFromChunkLoadFailure(error);
-    }
-  }
-
-  componentDidUpdate(prevProps: Readonly<{ children: ReactNode; resetKey: string; routePath: string; onRetryRoute: () => void }>) {
-    if (prevProps.resetKey !== this.props.resetKey && this.state.error) {
-      this.setState({ error: null, diagnostics: null, diagnosticsCopied: false, retryCount: 0 });
-    }
-  }
-
-  handleRetry = () => {
-    const nextRetryCount = this.state.retryCount + 1;
-    if (nextRetryCount >= 2) {
-      clearChunkLoadRecoveryState();
-      clearBuildAssetRecoveryState();
-    }
-
-    logRouteLifecycle("route:error-boundary-retry", {
-      routePath: this.props.routePath,
-      retryCount: nextRetryCount,
-      clearedStaleRecoveryState: nextRetryCount >= 2,
-      chunkFailure: isChunkLoadFailure(this.state.error),
-    });
-    this.props.onRetryRoute();
-    this.setState({ error: null, diagnostics: null, diagnosticsCopied: false, retryCount: nextRetryCount });
-  }
-
-  handleHardRefresh = async () => {
-    clearChunkLoadRecoveryState();
-    clearBuildAssetRecoveryState();
-    await clearRuntimeCaches();
-    const nextUrl = new URL(window.location.href);
-    nextUrl.searchParams.set("hard-refresh", String(Date.now()));
-    nextUrl.searchParams.set("build", buildInfo.appVersion);
-    window.location.replace(nextUrl.toString());
-  }
-
-  handleCopyDiagnostics = async () => {
-    const diagnosticsText = JSON.stringify(
-      this.state.diagnostics ?? {
-        errorName: this.state.error?.name ?? "unknown",
-        errorMessage: this.state.error?.message ?? "unknown",
-        errorStack: this.state.error?.stack ?? "",
-        componentStack: "",
-        routePath: this.props.routePath,
-        routeId: getRouteId(this.props.routePath),
-        pathname: typeof window === "undefined" ? this.props.routePath.split(/[?#]/)[0] || "/" : window.location.pathname,
-        chunkUrl: getChunkFailureUrl(this.state.error) ?? getLastFailedImportChunkUrl(),
-        buildVersion: buildInfo.appVersion,
-        buildTime: buildInfo.buildTime,
-        gitHash: buildInfo.gitHash,
-        rootBuildVersion: buildInfo.appVersion,
-        rootBuildTime: buildInfo.buildTime,
-        rootGitHash: buildInfo.gitHash,
-        mixedBuildAssetsDetected: false,
-        observedBuildAssets: [],
-        userAgent: typeof navigator === "undefined" ? "unknown" : navigator.userAgent,
-        providerReadiness: getProviderReadiness(),
-        providerState: collectRouteDiagnostics(this.props.routePath).providerState,
-        hydrationPhase: collectRouteDiagnostics(this.props.routePath).hydrationPhase,
-        storageMode: collectRouteDiagnostics(this.props.routePath).storageMode,
-        selectedProjectId: collectRouteDiagnostics(this.props.routePath).selectedProjectId,
-        routeDiagnostics: collectRouteDiagnostics(this.props.routePath),
-        routeLifecycle: formatRouteLifecycleDiagnostics(),
-        chunkRecovery: getChunkLoadRecoverySnapshot(),
-        recordedAt: new Date().toISOString(),
-      },
-      null,
-      2,
-    );
-
-    try {
-      await navigator.clipboard.writeText(diagnosticsText);
-    } catch {
-      safeWriteLocalStorage(LAST_EXPLORE_ERROR_KEY, diagnosticsText);
-    }
-    this.setState({ diagnosticsCopied: true });
-    window.setTimeout(() => this.setState({ diagnosticsCopied: false }), 1800);
-  }
-
-  render() {
-    if (this.state.error) {
-      const chunkFailure = isChunkLoadFailure(this.state.error);
-      const diagnostics = this.state.diagnostics;
-      const showDiagnostics = shouldShowRouteDiagnostics(this.props.routePath);
-      const headline = chunkFailure ? "App update detected, refresh required." : "Explore hit an unexpected fault.";
-
-      return (
-        <div className="panel glow-panel route-status-panel" role="alert">
-          <p className="eyebrow">Signal surface</p>
-          <h1>{headline}</h1>
-          <p className="muted">
-            {chunkFailure
-              ? "A route chunk could not be loaded, usually because Safari has an older asset cached while a newer build is active. Local fallback data is still preserved."
-              : "Retry the route to restore the workspace. Local fallback data is still preserved."}
-          </p>
-          <p className="muted route-error-summary">
-            Diagnostic: {this.state.error.name || "Error"} - {this.state.error.message || "No error message reported."}
-          </p>
-          <div className="inline-actions">
-            <button type="button" className="primary-button" onClick={this.handleRetry}>
-              {this.state.retryCount === 0 ? "Retry surface" : "Retry after clearing stale markers"}
-            </button>
-            <button type="button" className="ghost-button" onClick={() => void this.handleHardRefresh()}>
-              Clear app cache and reload
-            </button>
-            <button type="button" className="ghost-button" onClick={() => void this.handleCopyDiagnostics()}>
-              {this.state.diagnosticsCopied ? "Copied diagnostics" : "Copy diagnostics"}
-            </button>
-          </div>
-          {showDiagnostics && diagnostics ? (
-            <details className="route-diagnostics-panel" open>
-              <summary>Route diagnostics</summary>
-              <dl>
-                <dt>error.name</dt>
-                <dd>{diagnostics.errorName}</dd>
-                <dt>error.message</dt>
-                <dd>{diagnostics.errorMessage}</dd>
-                <dt>route id</dt>
-                <dd>{diagnostics.routeId}</dd>
-                <dt>build version</dt>
-                <dd>
-                  v{diagnostics.buildVersion} build {diagnostics.buildTime} {diagnostics.gitHash}
-                </dd>
-                <dt>mixed build</dt>
-                <dd>{diagnostics.mixedBuildAssetsDetected ? "mixed_build_assets_detected" : "no"}</dd>
-                <dt>root build</dt>
-                <dd>
-                  v{diagnostics.rootBuildVersion} build {diagnostics.rootBuildTime} {diagnostics.rootGitHash}
-                </dd>
-                <dt>pathname</dt>
-                <dd>{diagnostics.pathname}</dd>
-                <dt>hash</dt>
-                <dd>{diagnostics.hash || "none"}</dd>
-                <dt>failed chunk URL</dt>
-                <dd>{diagnostics.chunkUrl ?? "n/a"}</dd>
-                <dt>userAgent</dt>
-                <dd>{diagnostics.userAgent}</dd>
-                <dt>storageMode</dt>
-                <dd>{diagnostics.storageMode}</dd>
-                <dt>selectedProjectId</dt>
-                <dd>{diagnostics.selectedProjectId || "n/a"}</dd>
-                <dt>hydration phase</dt>
-                <dd>{diagnostics.hydrationPhase}</dd>
-                <dt>provider readiness</dt>
-                <dd>
-                  <pre className="route-status-diagnostics">{JSON.stringify(diagnostics.providerReadiness, null, 2)}</pre>
-                </dd>
-              </dl>
-              <p className="eyebrow">componentStack</p>
-              <pre className="route-status-diagnostics">{diagnostics.componentStack || "n/a"}</pre>
-              <p className="eyebrow">error.stack</p>
-              <pre className="route-status-diagnostics">{diagnostics.errorStack || "n/a"}</pre>
-            </details>
-          ) : null}
-        </div>
-      );
-    }
-
-    return this.props.children;
-  }
-}
-
-declare global {
-  interface Window {
-    __DEEPSIGNAL_BOOT_STARTED_AT__?: number;
-  }
-}
-
-const BOOT_MIN_VISIBLE_MS = 1250;
-const BOOT_EXIT_DURATION_MS = 380;
-const BOOT_FAILSAFE_MS = 2500;
-
-function InitialBootReady({ onReady, routePath, children }: { onReady: () => void; routePath: string; children: ReactNode }) {
-  useEffect(() => {
-    endPerf("app:render", "ok");
-    markPerfMilestone("route:interactive", routePath);
-    markPerfMilestone("workspace:ready", routePath);
-    onReady();
-  }, [onReady, routePath]);
-
-  return <>{children}</>;
 }
 
 function AppRouteRuntimeEffects({ enabled }: { enabled: boolean }) {
@@ -850,11 +251,12 @@ export default function App() {
     location.pathname.startsWith("/dashboard/");
   const routeNeedsWorkspaceBoot = !routeIsLanding && !routeUsesPublicChrome;
 
-  const dismissBootOverlay = useCallback(() => {
-    document.getElementById("boot-overlay")?.remove();
-    document.body.classList.remove("booting");
-    setBootDismissed(true);
-  }, []);
+  useBootOverlay({
+    bootDismissed,
+    initialRouteReady,
+    routeIsLanding,
+    setBootDismissed,
+  });
 
   useEffect(() => {
     const status = recordBuildAsset(`route:${getRouteId(`${location.pathname}${location.search}${location.hash}`)}`);
@@ -894,50 +296,11 @@ export default function App() {
     return scheduleIdleTask(() => prefetchExploreRoute(), 3500);
   }, [location.pathname]);
 
-  useEffect(() => {
-    const failsafe = window.setTimeout(dismissBootOverlay, BOOT_FAILSAFE_MS);
-
-    return () => window.clearTimeout(failsafe);
-  }, [dismissBootOverlay]);
-
-  useEffect(() => {
-    if (!initialRouteReady || bootDismissed) {
-      return undefined;
-    }
-
-    const bootOverlay = document.getElementById("boot-overlay");
-    const bootStatus = document.querySelector<HTMLElement>("[data-boot-status]");
-    if (!bootOverlay) {
-      dismissBootOverlay();
-      return undefined;
-    }
-
-    const startedAt = window.__DEEPSIGNAL_BOOT_STARTED_AT__ ?? performance.now();
-    const elapsed = performance.now() - startedAt;
-    const delay = routeIsLanding ? 0 : Math.max(0, BOOT_MIN_VISIBLE_MS - elapsed);
-    let exitTimer = 0;
-
-    const finalize = window.setTimeout(() => {
-      if (bootStatus && !routeIsLanding) {
-        bootStatus.textContent = "Opening encrypted signal workspace...";
-      }
-      bootOverlay.setAttribute("data-state", "exiting");
-
-      exitTimer = window.setTimeout(() => {
-        dismissBootOverlay();
-      }, BOOT_EXIT_DURATION_MS);
-    }, delay);
-
-    return () => {
-      window.clearTimeout(finalize);
-      window.clearTimeout(exitTimer);
-    };
-  }, [bootDismissed, dismissBootOverlay, initialRouteReady, routeIsLanding]);
-
   if (routeIsLanding) {
     return (
       <RpcInfrastructureProvider>
         <AppShell walletAvailable={false} chrome="full">
+          <BuildUpdateBanner />
           <InitialBootReady routePath={`${location.pathname}${location.search}${location.hash}`} onReady={() => setInitialRouteReady(true)}>
             <LandingPage />
           </InitialBootReady>
@@ -948,6 +311,7 @@ export default function App() {
 
   const routeSurface = (
     <AppShell walletAvailable={routeNeedsWalletSurface} chrome={routeUsesPublicChrome ? "public" : "full"}>
+      <BuildUpdateBanner />
       <AppRouteRuntimeEffects enabled={routeNeedsWorkspaceBoot} />
       <RouteErrorBoundary
         resetKey={`${location.key}:${routeRetryNonce}`}
@@ -1057,6 +421,7 @@ export default function App() {
         fallback={
           <InitialBootReady routePath={`${location.pathname}${location.search}${location.hash}`} onReady={() => setInitialRouteReady(true)}>
             <AppShell walletAvailable={false} chrome={routeUsesPublicChrome ? "public" : "full"}>
+              <BuildUpdateBanner />
               <WorkspaceRestoreFallback onRetry={() => window.location.reload()} />
             </AppShell>
           </InitialBootReady>

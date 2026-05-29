@@ -1,9 +1,9 @@
 import { buildInfo } from "./buildInfo";
+import { requestBuildUpdateNotice } from "./buildUpdate";
 
 const reloadStorageKey = "deepsignal.chunkLoadRecovery";
 const recoveryWindowMs = 2 * 60 * 1000;
-const maxReloadsPerWindow = 4;
-const reloadDelayMs = 350;
+const maxReloadsPerWindow = 1;
 
 type ReloadState = {
   startedAt: number;
@@ -62,6 +62,9 @@ export function isChunkLoadFailure(error: unknown) {
     text.includes("failed to fetch dynamically imported module") ||
     text.includes("importing a module script failed") ||
     text.includes("error loading dynamically imported module") ||
+    text.includes("failed to load module script") ||
+    text.includes("mime type") ||
+    text.includes("disallowed mime type") ||
     text.includes("unable to preload css") ||
     text.includes("vite:preloaderror")
   );
@@ -101,7 +104,7 @@ export async function clearRuntimeCaches() {
       await Promise.all(keys.filter((key) => key.toLowerCase().includes("deepsignal")).map((key) => window.caches.delete(key)));
     }
   } catch {
-    // Cache cleanup is best effort; the cache-busted reload below is the important recovery path.
+    // Cache cleanup is best effort.
   }
 
   try {
@@ -113,11 +116,14 @@ export async function clearRuntimeCaches() {
             const scope = registration.scope.toLowerCase();
             return scope.includes("deepsignal") || scope.includes(window.location.host.toLowerCase());
           })
-          .map((registration) => registration.unregister()),
+          .map(async (registration) => {
+            await registration.update().catch(() => undefined);
+            registration.waiting?.postMessage({ type: "SKIP_WAITING" });
+          }),
       );
     }
   } catch {
-    // Service worker cleanup is best effort and should never block recovery.
+    // Service worker update is best effort and should never block recovery.
   }
 }
 
@@ -135,16 +141,8 @@ export function recoverFromChunkLoadFailure(error: unknown) {
 
   reloadScheduled = true;
   rememberReloadState({ startedAt: state.startedAt, count: state.count + 1, buildId: currentBuildId() });
-  console.warn("DeepSignal chunk load failed; reloading with a fresh request.", error);
-
-  window.setTimeout(() => {
-    void clearRuntimeCaches().finally(() => {
-      const nextUrl = new URL(window.location.href);
-      nextUrl.searchParams.set("chunk-retry", String(Date.now()));
-      nextUrl.searchParams.set("build", buildInfo.appVersion);
-      window.location.replace(nextUrl.toString());
-    });
-  }, reloadDelayMs);
+  console.warn("DeepSignal chunk load failed; manual update is required.", error);
+  requestBuildUpdateNotice("chunk_load_failure", buildInfo);
 
   return true;
 }

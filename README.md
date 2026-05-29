@@ -357,7 +357,9 @@ Notes:
 - `VITE_ADMIN_CAP_ID` and `VITE_OWNER_CAP_ID` are optional helper envs for operator tooling and manual transaction flows.
 - Normal app access discovers active cap objects from the connected wallet.
 - `VITE_SEAL_AGGREGATOR_URL` is needed when the configured Seal key server is a committee server.
-- Set `VITE_RELEASE_STORAGE_RESET_TOKEN` to a new release identifier when the next deployed build should clear browser-local forms, submissions, drafts, Walrus blob indexes, and related form caches once per browser. Leave it blank for normal releases.
+- `VITE_RELEASE_STORAGE_RESET_TOKEN` is retained only for one-time release diagnostics cleanup. It must not clear browser-local forms, submissions, drafts, Walrus blob indexes, inbox cache, or other user data.
+- Deployed builds emit `build.json` and `version.json` with `appVersion`, `buildTime`, and `gitHash`. The app fetches build metadata with `cache: "no-store"` and shows **Update DeepSignal** when a newer build, failed chunk import, MIME mismatch, or mixed-build asset state is detected. Updates run only after the user clicks the button.
+- Build update recovery updates any existing service worker registration, sends `SKIP_WAITING` to a waiting worker, prunes only DeepSignal-named Cache Storage entries, removes temporary diagnostics keys, and navigates to `/?v=<version>&t=<timestamp>`. It must not delete local fallback data, drafts, submitted answers, or inbox cache.
 - Vite client env vars in this repo now accept both `VITE_` and `NEXT_PUBLIC_` prefixes.
 - Tatum setup details and troubleshooting live in [`docs/tatum-rpc.md`](./docs/tatum-rpc.md).
 - `VITE_ZKLOGIN_ENABLE=true` enables the underlying Google zkLogin plumbing, but the current public responder UI keeps the option disabled in the default build.

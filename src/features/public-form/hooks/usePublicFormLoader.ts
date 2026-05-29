@@ -213,7 +213,7 @@ async function enrichLoadErrorDetail(
         enrichedDetail.reason =
           "A required public route module could not be confirmed from the Walrus site before the form was restored.";
         enrichedDetail.guidance =
-          "Reload once to retry the current build. If the same asset keeps failing, ask the creator to republish after the Walrus site assets finish propagating.";
+          "Use Update DeepSignal to load the latest build. If the same asset keeps failing, ask the creator to republish after the Walrus site assets finish propagating.";
         enrichedDetail.failedAssetPath = assetVerification.failedAsset.path;
         enrichedDetail.failedAssetStatus = assetVerification.failedAsset.status;
         enrichedDetail.failedAssetContentType = assetVerification.failedAsset.contentType;

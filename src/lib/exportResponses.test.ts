@@ -68,7 +68,7 @@ describe("responses CSV export", () => {
       '"Feedback","2026-05-16T12:00:00.000Z","1","response-1","1","","","","2026-05-16T01:02:03.000Z","2026-05-16T01:02:03.000Z","0xabc","sui_wallet","","false","walrus-blob-1","walrus-blob-1"',
     );
     expect(row).toContain('"日本語, comma, and ""quotes""\nsecond line"');
-    expect(row.endsWith(',"5",""')).toBe(true);
+    expect(row.endsWith(',"★★★★★",""')).toBe(true);
   });
 
   it("marks locked encrypted answers without requiring decrypt logic during export", () => {

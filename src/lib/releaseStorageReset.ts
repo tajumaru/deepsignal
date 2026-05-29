@@ -3,31 +3,7 @@ import { buildInfo } from "./buildInfo";
 const RESET_TOKEN_KEY = "deepsignal.releaseStorageReset.appliedToken";
 const LAST_SEEN_APP_VERSION_KEY = "deepsignal.releaseStorageReset.lastSeenAppVersion";
 
-const FORM_STORAGE_KEYS = [
-  "deepsignal.forms",
-  "deepsignal.submissions",
-  "deepsignal.files",
-  "deepsignal.encryptedPayloads",
-  "deepsignal.walrus.index",
-  "deepsignal.formMetadataOverlays",
-  "deepsignal.exportAuditLog.v1",
-  "deepsignal.exploreDeletedForms",
-  "deepsignal:create-form-draft:v1",
-  "deepsignal:create-form-guest-draft:v1",
-];
-
-const FORM_STORAGE_PREFIXES = ["deepsignal:public-draft:"];
-
-function removePrefixedStorageKeys(storage: Storage, prefixes: string[]) {
-  const keysToRemove: string[] = [];
-  for (let index = 0; index < storage.length; index += 1) {
-    const key = storage.key(index);
-    if (key && prefixes.some((prefix) => key.startsWith(prefix))) {
-      keysToRemove.push(key);
-    }
-  }
-  keysToRemove.forEach((key) => storage.removeItem(key));
-}
+const RELEASE_DIAGNOSTIC_STORAGE_KEYS = ["deepsignal:lastExploreError"];
 
 function currentAppVersion() {
   return String(buildInfo.appVersion ?? "").trim();
@@ -90,8 +66,7 @@ export function applyReleaseStorageReset() {
       return;
     }
 
-    FORM_STORAGE_KEYS.forEach((key) => window.localStorage.removeItem(key));
-    removePrefixedStorageKeys(window.localStorage, FORM_STORAGE_PREFIXES);
+    RELEASE_DIAGNOSTIC_STORAGE_KEYS.forEach((key) => window.localStorage.removeItem(key));
     window.localStorage.setItem(RESET_TOKEN_KEY, resetToken);
     rememberCurrentAppVersion();
   } catch (error) {

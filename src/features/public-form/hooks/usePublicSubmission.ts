@@ -1424,9 +1424,11 @@ export function usePublicSubmission({
             : ["stored_local", "stored_walrus", "inbox_pending"],
         walrusProof: result.walrusProof,
       } satisfies Submission;
+      const latestStorageRuntime = getStorageRuntimeStatus();
+      setStorageRuntime(latestStorageRuntime);
       historySubmission = savedSubmission;
       const responseStorageMode = getMyResponseStorageMode({
-        runtimeMode: getStorageRuntimeStatus().mode,
+        runtimeMode: latestStorageRuntime.mode,
         walrusStorageMode: walrusRuntime.storageMode,
         blobId: savedSubmission.answerBlobId ?? savedSubmission.blobId,
       });
@@ -1488,7 +1490,9 @@ export function usePublicSubmission({
           createCriticalFailure({
             error: new Error(message),
             surface: "walrus",
-            step: "generating_manifest",
+            step: isLocalFallbackBlob(savedSubmission.encryptedBlobId ?? savedSubmission.blobId)
+              ? "uploading_to_walrus"
+              : "generating_manifest",
             retryable: true,
             diagnostics: {
               formId: form.id,
@@ -1502,6 +1506,10 @@ export function usePublicSubmission({
               ownerReadable: savedSubmission.ownerReadable,
               remoteSyncStatus: savedSubmission.remoteSyncStatus,
               localFallback: isLocalFallbackBlob(savedSubmission.encryptedBlobId ?? savedSubmission.blobId),
+              storageMode: latestStorageRuntime.mode,
+              walrusStorageMode: walrusRuntime.storageMode,
+              walrusFailureNotice: latestStorageRuntime.notice,
+              walrusFailureDiagnostics: latestStorageRuntime.diagnostics,
             },
           }),
         );

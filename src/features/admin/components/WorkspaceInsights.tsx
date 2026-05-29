@@ -5,7 +5,7 @@ import { getSignalPreview } from "../../../lib/signalInbox";
 import type { VersionedFormSchemas } from "../../../lib/formVersionSchemas";
 import { getSubmissionVersion } from "../../../lib/submissionVersioning";
 import { downloadTextFile } from "../../../lib/utils";
-import { flattenAnswer } from "../../../lib/utils";
+import { formatAnswerText } from "../../../lib/answerFormatting";
 import type { FormSchema, SignalSeverity } from "../../../types";
 import {
   getAnalysisProfileLabel,
@@ -101,14 +101,19 @@ function shortenSummaryText(text: string, maxLength = 88) {
   return `${normalized.slice(0, maxLength - 3).trim()}...`;
 }
 
-function normalizeReadableAnswer(value: unknown) {
-  const answer = flattenAnswer(value).trim().replace(/\s+/g, " ");
+function normalizeReadableAnswer(
+  value: unknown,
+  language: Language,
+  field?: FormSchema["fields"][number],
+) {
+  const answer = formatAnswerText(field, value, language).trim().replace(/\s+/g, " ");
   return answer && answer.toLowerCase() !== "no answer" ? answer : "";
 }
 
 function getReadableSummaryEntries(
   record: SignalRecord,
   t: ReturnType<typeof useI18n>["t"],
+  language: Language,
   unlockedSignalsById?: Record<string, UnlockedSignalSummary>,
   versionedFormsByFormId?: Record<string, VersionedFormSchemas>,
 ) {
@@ -129,7 +134,7 @@ function getReadableSummaryEntries(
   const entries = formForSubmission.fields
     .map((field) => ({
       question: field.label.trim() || field.id,
-      answer: normalizeReadableAnswer(answers[field.id]),
+      answer: normalizeReadableAnswer(answers[field.id], language, field),
     }))
     .filter((entry) => entry.answer);
 
@@ -137,13 +142,14 @@ function getReadableSummaryEntries(
     return entries;
   }
 
-  const preview = normalizeReadableAnswer(getSignalPreview(record.submission));
+  const preview = normalizeReadableAnswer(getSignalPreview(record.submission), language);
   return preview ? [{ question: t("workspaceSignalFallbackQuestion"), answer: preview }] : [];
 }
 
 function buildSignalSummary(
   records: SignalRecord[],
   t: ReturnType<typeof useI18n>["t"],
+  language: Language,
   unlockedSignalsById?: Record<string, UnlockedSignalSummary>,
   versionedFormsByFormId?: Record<string, VersionedFormSchemas>,
 ) {
@@ -157,7 +163,7 @@ function buildSignalSummary(
   const questionTotals = new Map<string, number>();
 
   records.forEach((record) => {
-    const entries = getReadableSummaryEntries(record, t, unlockedSignalsById, versionedFormsByFormId);
+    const entries = getReadableSummaryEntries(record, t, language, unlockedSignalsById, versionedFormsByFormId);
     const countedQuestions = new Set<string>();
     entries.forEach((entry) => {
       const question = entry.question.trim();
@@ -409,8 +415,13 @@ function getClusterMapNodes(clusters: SignalCluster[]) {
   }));
 }
 
-function getRecordReviewTitle(record: SignalRecord, t: ReturnType<typeof useI18n>["t"], unlockedSignalsById?: Record<string, UnlockedSignalSummary>) {
-  const readableEntry = getReadableSummaryEntries(record, t, unlockedSignalsById)[0];
+function getRecordReviewTitle(
+  record: SignalRecord,
+  t: ReturnType<typeof useI18n>["t"],
+  language: Language,
+  unlockedSignalsById?: Record<string, UnlockedSignalSummary>,
+) {
+  const readableEntry = getReadableSummaryEntries(record, t, language, unlockedSignalsById)[0];
   return readableEntry?.answer || record.submission.subjectPreview || getSignalPreview(record.submission);
 }
 
@@ -970,8 +981,8 @@ export function WorkspaceInsights({
 }: WorkspaceInsightsProps) {
   const { t, language } = useI18n();
   const signalSummary = useMemo(
-    () => buildSignalSummary(records, t, unlockedSignalsById, versionedFormsByFormId),
-    [records, t, unlockedSignalsById, versionedFormsByFormId],
+    () => buildSignalSummary(records, t, language, unlockedSignalsById, versionedFormsByFormId),
+    [records, t, language, unlockedSignalsById, versionedFormsByFormId],
   );
   const clusters = useMemo(
     () => buildSignalClusters(records, signalSummary.items, t),
@@ -1585,7 +1596,7 @@ export function WorkspaceInsights({
                 <div key={record.submission.id} className="workspace-review-queue-item">
                   <span />
                   <div>
-                    <strong>{shortenSummaryText(getRecordReviewTitle(record, t, unlockedSignalsById), 76)}</strong>
+                    <strong>{shortenSummaryText(getRecordReviewTitle(record, t, language, unlockedSignalsById), 76)}</strong>
                     <small>
                       {record.submission.isEncrypted
                         ? t("workspaceQueueEncryptedSimilar", { count: Math.max(1, primaryCluster?.signalCount ?? 1) })

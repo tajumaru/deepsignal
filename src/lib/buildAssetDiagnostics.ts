@@ -1,4 +1,5 @@
 import { buildInfo, type BuildInfo } from "./buildInfo";
+import { requestBuildUpdateNotice } from "./buildUpdate";
 
 const observedBuildsKey = "deepsignal.observedBuildAssets";
 const mixedBuildReloadKey = "deepsignal.mixedBuildRecovery";
@@ -131,26 +132,6 @@ export function getMixedBuildStatus(): MixedBuildStatus {
   };
 }
 
-async function clearBuildRecoveryCaches() {
-  try {
-    window.sessionStorage.removeItem("deepsignal.chunkLoadRecovery");
-    window.sessionStorage.removeItem("deepsignal:lastExploreError");
-    window.sessionStorage.removeItem(observedBuildsKey);
-    window.localStorage.removeItem("deepsignal:lastExploreError");
-  } catch {
-    // Best effort only.
-  }
-
-  try {
-    if ("caches" in window) {
-      const keys = await window.caches.keys();
-      await Promise.all(keys.map((key) => window.caches.delete(key)));
-    }
-  } catch {
-    // The cache-busted reload below is the important recovery path.
-  }
-}
-
 export function clearBuildAssetRecoveryState() {
   if (typeof window === "undefined") {
     return;
@@ -176,7 +157,7 @@ export function recoverFromMixedBuildAssets(status = getMixedBuildStatus()) {
     }
     window.sessionStorage.setItem(mixedBuildReloadKey, rootId);
   } catch {
-    // If session storage is blocked, still try one recovery reload.
+    // If session storage is blocked, still surface the manual update action.
   }
 
   console.warn("mixed_build_assets_detected", {
@@ -184,15 +165,7 @@ export function recoverFromMixedBuildAssets(status = getMixedBuildStatus()) {
     observed: status.observed,
     reason: status.reason,
   });
-
-  window.setTimeout(() => {
-    void clearBuildRecoveryCaches().finally(() => {
-      const nextUrl = new URL(window.location.href);
-      nextUrl.searchParams.set("mixed-build-retry", String(Date.now()));
-      nextUrl.searchParams.set("build", buildInfo.appVersion);
-      window.location.replace(nextUrl.toString());
-    });
-  }, 600);
+  requestBuildUpdateNotice("mixed_build_assets", status.root, { mixedBuildAssetsDetected: true });
 
   return true;
 }

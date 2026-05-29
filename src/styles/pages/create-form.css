@@ -1318,9 +1318,32 @@
   letter-spacing: 0.18em;
 }
 
-.mirror-emotion-preview span {
+.mirror-emotion-preview > span {
   font-size: 1.55rem;
   letter-spacing: 0.12em;
+}
+
+.composer-emotion-signal-preview {
+  display: flex;
+  align-items: center;
+  gap: 0.42rem;
+  flex-wrap: wrap;
+}
+
+.composer-emotion-signal-preview span {
+  --emotion-accent: #7be0ff;
+  display: inline-block;
+  width: 1.24rem;
+  height: 1.24rem;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--emotion-accent) 48%, transparent);
+  background:
+    radial-gradient(circle at 35% 25%, rgba(255, 255, 255, 0.78), transparent 16%),
+    radial-gradient(circle at center, color-mix(in srgb, var(--emotion-accent) 56%, transparent), transparent 64%),
+    rgba(5, 22, 35, 0.82);
+  box-shadow:
+    0 0 12px color-mix(in srgb, var(--emotion-accent) 22%, transparent),
+    inset 0 0 0 1px rgba(239, 252, 255, 0.06);
 }
 
 .mirror-upload-icon,
@@ -4108,11 +4131,6 @@
   display: grid;
   gap: 0.35rem;
   color: #dffaff;
-}
-
-.composer-canvas-emotion-rating span {
-  font-size: 1.35rem;
-  letter-spacing: 0.12em;
 }
 
 .composer-country-preview {

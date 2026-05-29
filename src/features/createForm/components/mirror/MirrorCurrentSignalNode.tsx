@@ -1,4 +1,6 @@
+import type { CSSProperties } from "react";
 import { useI18n } from "../../../../i18n";
+import { EMOTION_SCALE_OPTIONS } from "../../../../lib/emotionScale";
 import { isLongTextLikeField } from "../../../../lib/fieldTypes";
 import type { MirrorPreviewState } from "./types";
 import { getFieldPreviewHint, getNodePreviewArtifacts, mediaFieldTypes } from "./utils";
@@ -8,7 +10,7 @@ export function MirrorCurrentSignalNode({ state }: { state: MirrorPreviewState }
   const field = state.activeField;
   const label = field?.label?.trim() || t("askPlaceholder");
   const hint = getFieldPreviewHint(field, t("placeholderExample"));
-  const { options, matrixRows, matrixColumns, emotionPreview } = getNodePreviewArtifacts(field);
+  const { options, matrixRows, matrixColumns } = getNodePreviewArtifacts(field);
   const previewRows = matrixRows.length ? matrixRows : [t("mirrorMatrixRowSignalQuality"), t("mirrorMatrixRowUrgency")];
   const previewColumns = matrixColumns.length ? matrixColumns : [t("mirrorMatrixColumnLow"), t("mirrorMatrixColumnMedium"), t("mirrorMatrixColumnHigh")];
 
@@ -113,7 +115,11 @@ export function MirrorCurrentSignalNode({ state }: { state: MirrorPreviewState }
 
         {field.type === "emotionRating" ? (
           <div className="mirror-emotion-preview" aria-hidden="true">
-            <span>{emotionPreview}</span>
+            <div className="composer-emotion-signal-preview">
+              {EMOTION_SCALE_OPTIONS.map((option) => (
+                <span key={option.value} data-tone={option.value} style={{ "--emotion-accent": option.accent } as CSSProperties} />
+              ))}
+            </div>
             <small>{t("chooseEmotionRating")}</small>
           </div>
         ) : null}

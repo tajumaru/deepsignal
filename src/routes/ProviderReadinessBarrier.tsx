@@ -1,0 +1,144 @@
+import { lazy, Suspense, useEffect, useState, type ReactNode } from "react";
+import { copyPerfDiagnostics } from "../lib/perf";
+import { resetLocalEnvironment } from "../lib/resetEnvironment";
+import { formatRouteLifecycleDiagnostics, logRouteLifecycle, setDeepSignalDebugReadiness } from "../lib/routeDiagnostics";
+import { retryLazyImport } from "../lib/lazyRetry";
+import { readSelectedProjectIdFromStorage } from "./routeDiagnostics";
+
+const LocalRecoveryCenter = lazy(() =>
+  retryLazyImport(() => import("../components/LocalRecoveryCenter"), "local-recovery-center").then((module) => ({
+    default: module.LocalRecoveryCenter,
+  })),
+);
+
+export const WORKSPACE_RECOVERY_TIMEOUT_MS = 3200;
+
+export function WorkspaceRestoreFallback({ onRetry }: { onRetry?: () => void }) {
+  const [recoveryVisible, setRecoveryVisible] = useState(false);
+  const [resettingState, setResettingState] = useState(false);
+  const [copiedDiagnostics, setCopiedDiagnostics] = useState(false);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setRecoveryVisible(true);
+    }, WORKSPACE_RECOVERY_TIMEOUT_MS);
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  async function handleResetLocalState() {
+    setResettingState(true);
+    try {
+      await resetLocalEnvironment();
+    } finally {
+      window.location.assign("/");
+    }
+  }
+
+  async function handleCopyDiagnostics() {
+    try {
+      await navigator.clipboard.writeText(formatRouteLifecycleDiagnostics());
+    } catch {
+      await copyPerfDiagnostics(["app:", "lazy:", "admin:", "public-form:"]);
+    }
+    setCopiedDiagnostics(true);
+    window.setTimeout(() => setCopiedDiagnostics(false), 1800);
+  }
+
+  return (
+    <div className="panel glow-panel route-status-panel" role="status">
+      <p className="eyebrow">Signal surface</p>
+      <h1>Loading workspace...</h1>
+      <p className="muted">Restoring the Explore surface and local fallback data.</p>
+      {recoveryVisible ? (
+        <div className="stack">
+          <p className="muted">
+            Workspace restore is taking longer than expected. DeepSignal can continue in recovery mode even if local
+            fallback data or a publish state is broken.
+          </p>
+          <pre className="route-status-diagnostics">{formatRouteLifecycleDiagnostics()}</pre>
+          <div className="inline-actions">
+            <button type="button" className="primary-button" onClick={() => (onRetry ? onRetry() : window.location.reload())}>
+              Retry workspace
+            </button>
+            <button type="button" className="ghost-button" onClick={() => void handleCopyDiagnostics()}>
+              {copiedDiagnostics ? "Copied diagnostics" : "Copy diagnostics"}
+            </button>
+            <button
+              type="button"
+              className="ghost-button"
+              onClick={() => void handleResetLocalState()}
+              disabled={resettingState}
+            >
+              {resettingState ? "Resetting local state..." : "Reset local state"}
+            </button>
+          </div>
+          <Suspense fallback={null}>
+            <LocalRecoveryCenter />
+          </Suspense>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+export function ProviderReadinessBarrier({ children, routePath, enabled = true }: { children: ReactNode; routePath: string; enabled?: boolean }) {
+  const [ready, setReady] = useState(!enabled);
+  const [phase, setPhase] = useState("booting");
+
+  useEffect(() => {
+    if (!enabled) {
+      setPhase("ready");
+      setReady(true);
+      setDeepSignalDebugReadiness({ hydrationPhase: "ready", routePath });
+      return undefined;
+    }
+
+    let cancelled = false;
+    setReady(false);
+    const steps: Array<[string, () => Promise<void> | void]> = [
+      ["router_hydrating", () => undefined],
+      ["storage_hydrating", () => { void window.localStorage.getItem("deepsignal.storage.probe"); }],
+      ["project_hydrating", () => { void readSelectedProjectIdFromStorage(); }],
+      ["providers_ready", () => undefined],
+    ];
+
+    async function run() {
+      for (const [nextPhase, task] of steps) {
+        if (cancelled) {
+          return;
+        }
+        setPhase(nextPhase);
+        setDeepSignalDebugReadiness({ hydrationPhase: nextPhase, routePath });
+        logRouteLifecycle("hydration:phase", { phase: nextPhase, routePath });
+        try {
+          await task();
+        } catch (error) {
+          setDeepSignalDebugReadiness({
+            hydrationPhase: `${nextPhase}:storage-limited`,
+            hydrationError: error instanceof Error ? error.message : String(error),
+          });
+        }
+        await new Promise((resolve) => window.requestAnimationFrame(resolve));
+      }
+      if (!cancelled) {
+        setPhase("ready");
+        setDeepSignalDebugReadiness({ hydrationPhase: "ready", routePath });
+        setReady(true);
+      }
+    }
+
+    void run();
+    return () => {
+      cancelled = true;
+    };
+  }, [enabled, routePath]);
+
+  if (!ready) {
+    return (
+      <WorkspaceRestoreFallback />
+    );
+  }
+
+  void phase;
+  return <>{children}</>;
+}
