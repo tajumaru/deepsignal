@@ -362,7 +362,7 @@ function moduleEntryRetryPlugin(args: { appVersion: string; buildTime: string; g
             updateSucceeded: false,
             mixedBuildAssetsDetected: false,
           });
-          const nextUrl = new URL("/", window.location.origin);
+          const nextUrl = new URL(window.location.href);
           nextUrl.searchParams.set("v", latestBuild.appVersion || ${JSON.stringify(args.appVersion)});
           nextUrl.searchParams.set("t", String(Date.now()));
           window.location.replace(nextUrl.toString());

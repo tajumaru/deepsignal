@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import "../styles/components/wallet-network.css";
 import { SUI_NETWORK } from "../lib/sui";
 import { useRpcInfrastructure } from "../rpcInfrastructure";
 

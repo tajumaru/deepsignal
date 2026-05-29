@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useMemo, useState, type ReactNode } from "react";
 import { Navigate, Route, Routes, useLocation, useParams } from "react-router-dom";
 import { InitialBootReady, useBootOverlay } from "./bootstrap/useBootOverlay";
-import { AppShell } from "./components/AppShell";
+import { PublicAppShell } from "./components/PublicAppShell";
 import { WalletSurface } from "./components/WalletSurface";
 import { WalrusRuntimeSurface } from "./components/WalrusRuntimeSurface";
 import {
@@ -22,6 +22,12 @@ import { RpcInfrastructureProvider } from "./RpcInfrastructureProvider";
 import { ProviderReadinessBarrier, WorkspaceRestoreFallback } from "./routes/ProviderReadinessBarrier";
 import { MixedBuildRecoveryScreen, RouteErrorBoundary } from "./routes/RouteErrorBoundary";
 import { getRouteId } from "./routes/routeDiagnostics";
+
+const AppShell = lazy(() =>
+  retryLazyImport(() => import("./components/AppShell"), "app-shell").then((module) => ({
+    default: module.AppShell,
+  })),
+);
 
 function createRouteComponents(retryNonce = 0) {
   void retryNonce;
@@ -147,29 +153,49 @@ function BuildUpdateBanner() {
 
   return (
     <aside className="build-update-banner" role="status" aria-live="polite">
-      <div>
-        <strong>{notice.reason === "chunk_load_failure" ? "Load failure diagnostics captured" : "New version available"}</strong>
-        <p>
-          DeepSignal has been updated. Load the latest version. Current v{notice.currentBuild.appVersion ?? "unknown"} - latest v
-          {notice.latestBuild.appVersion ?? "unknown"}.
-        </p>
+      <div className="build-update-copy">
+        <strong>{notice.reason === "chunk_load_failure" ? "DeepSignal needs an update" : "New DeepSignal version"}</strong>
+        <p>Update to the latest build. Your local fallback data stays on this device.</p>
         {notice.chunkFailure ? (
-          <dl className="build-update-diagnostics" aria-label="Chunk load diagnostics">
-            <dt>failed chunk</dt>
-            <dd>{notice.chunkFailure.chunkUrl ?? "unknown"}</dd>
-            <dt>retry</dt>
-            <dd>
-              {notice.chunkFailure.retryCount}/{notice.chunkFailure.retryLimit}
-            </dd>
-            <dt>mixed build</dt>
-            <dd>{notice.chunkFailure.mixedBuildAssetsDetected ? notice.chunkFailure.mixedBuildReason ?? "detected" : "no"}</dd>
-          </dl>
+          <details className="build-update-details">
+            <summary>Diagnostics</summary>
+            <dl className="build-update-diagnostics" aria-label="Chunk load diagnostics">
+              <dt>failed chunk</dt>
+              <dd>{notice.chunkFailure.chunkUrl ?? "unknown"}</dd>
+              <dt>current build</dt>
+              <dd>
+                v{notice.chunkFailure.buildVersion} build {notice.chunkFailure.buildTime} {notice.chunkFailure.gitHash}
+              </dd>
+              <dt>retry</dt>
+              <dd>
+                {notice.chunkFailure.retryCount}/{notice.chunkFailure.retryLimit}
+              </dd>
+              <dt>mixed build</dt>
+              <dd>{notice.chunkFailure.mixedBuildAssetsDetected ? notice.chunkFailure.mixedBuildReason ?? "detected" : "no"}</dd>
+            </dl>
+          </details>
         ) : null}
       </div>
       <button type="button" className="primary-button" onClick={() => void handleUpdate()} disabled={updating}>
         {updating ? "Updating..." : "Update DeepSignal"}
       </button>
     </aside>
+  );
+}
+
+function RouteReady({
+  children,
+  routePath,
+  onReady,
+}: {
+  children: ReactNode;
+  routePath: string;
+  onReady: () => void;
+}) {
+  return (
+    <InitialBootReady routePath={routePath} onReady={onReady}>
+      {children}
+    </InitialBootReady>
   );
 }
 
@@ -316,121 +342,148 @@ export default function App() {
     return scheduleIdleTask(() => prefetchExploreRoute(), 3500);
   }, [location.pathname]);
 
+  const routePath = `${location.pathname}${location.search}${location.hash}`;
+
   if (routeIsLanding) {
     return (
       <RpcInfrastructureProvider>
-        <AppShell walletAvailable={false} chrome="full">
-          <BuildUpdateBanner />
-          <Suspense fallback={<WorkspaceRestoreFallback />}>
-            <InitialBootReady routePath={`${location.pathname}${location.search}${location.hash}`} onReady={() => setInitialRouteReady(true)}>
+        <Suspense fallback={<WorkspaceRestoreFallback />}>
+          <AppShell walletAvailable={false} chrome="full">
+            <BuildUpdateBanner />
+            <RouteReady routePath={routePath} onReady={() => setInitialRouteReady(true)}>
               <LandingPage />
-            </InitialBootReady>
-          </Suspense>
-        </AppShell>
+            </RouteReady>
+          </AppShell>
+        </Suspense>
       </RpcInfrastructureProvider>
     );
   }
 
-  const routeSurface = (
-    <AppShell walletAvailable={routeNeedsWalletSurface} chrome={routeUsesPublicChrome ? "public" : "full"}>
+  const publicRouteSurface = (
+    <PublicAppShell>
       <BuildUpdateBanner />
-      <AppRouteRuntimeEffects enabled={routeNeedsWorkspaceBoot} />
       <RouteErrorBoundary
         resetKey={`${location.key}:${routeRetryNonce}`}
-        routePath={`${location.pathname}${location.search}${location.hash}`}
+        routePath={routePath}
         onRetryRoute={() => setRouteRetryNonce((value) => value + 1)}
       >
         {mixedBuildStatus.detected ? (
-          <InitialBootReady routePath={`${location.pathname}${location.search}${location.hash}`} onReady={() => setInitialRouteReady(true)}>
+          <RouteReady routePath={routePath} onReady={() => setInitialRouteReady(true)}>
             <MixedBuildRecoveryScreen observed={mixedBuildStatus.observed} />
-          </InitialBootReady>
+          </RouteReady>
         ) : (
           <Suspense fallback={<WorkspaceRestoreFallback />}>
-            <InitialBootReady routePath={`${location.pathname}${location.search}${location.hash}`} onReady={() => setInitialRouteReady(true)}>
-              <ProviderReadinessBarrier routePath={`${location.pathname}${location.search}${location.hash}`} enabled={routeNeedsWorkspaceBoot}>
+            <RouteReady routePath={routePath} onReady={() => setInitialRouteReady(true)}>
               <Routes>
-              <Route path="/" element={<LandingPage />} />
-              <Route path="/explore" element={<ExploreSignalsPage />} />
-              <Route path="/signals" element={<Navigate to="/explore" replace />} />
-              <Route
-                path="/create"
-                element={
-                  <WithWalrusRuntime>
-                    <FormBuilderPage />
-                  </WithWalrusRuntime>
-                }
-              />
-              <Route
-                path="/compose"
-                element={
-                  <WithWalrusRuntime>
-                    <FormBuilderPage />
-                  </WithWalrusRuntime>
-                }
-              />
-              <Route
-                path="/admin"
-                element={
-                  <WithWalrusRuntime>
-                    <AdminDashboardPage />
-                  </WithWalrusRuntime>
-                }
-              />
-              <Route
-                path="/dashboard"
-                element={
-                  <WithWalrusRuntime>
-                    <AdminDashboardPage />
-                  </WithWalrusRuntime>
-                }
-              />
-              <Route path="/admin/access" element={<AccessManagementPage />} />
-              <Route path="/dashboard/access" element={<AccessManagementPage />} />
-              <Route path="/troubleshooting" element={<TroubleshootingPage />} />
-              <Route path="/dev/insights-fixture" element={<InsightsFixturePage />} />
-              <Route
-                path="/admin/forms/new"
-                element={
-                  <WithWalrusRuntime>
-                    <FormBuilderPage initialSurface="composer" />
-                  </WithWalrusRuntime>
-                }
-              />
-              <Route
-                path="/admin/forms/:formId"
-                element={<LegacyFormInboxRedirect basePath="/admin" />}
-              />
-              <Route
-                path="/dashboard/forms/:formId"
-                element={<LegacyFormInboxRedirect basePath="/dashboard" />}
-              />
-              <Route
-                path="/admin/forms/:formId/submissions/:submissionId"
-                element={<LegacyFormInboxRedirect basePath="/admin" />}
-              />
-              <Route
-                path="/dashboard/forms/:formId/submissions/:submissionId"
-                element={<LegacyFormInboxRedirect basePath="/dashboard" />}
-              />
-              <Route path="/admin/submissions/:submissionId" element={<SubmissionDetailPage />} />
-              <Route path="/submitted" element={<SubmittedHistoryPage />} />
-              <Route path="/submitted/:submissionId" element={<SubmittedHistoryPage />} />
-              <Route path="/my-submissions" element={<SubmittedHistoryPage />} />
-              <Route path="/my-submissions/:submissionId" element={<SubmittedHistoryPage />} />
-              <Route path="/my-responses" element={<MyResponsesPage />} />
-              <Route path="/my-responses/:submissionId" element={<MyResponsesPage />} />
-              <Route path="/f/:formId" element={<PublicFormPage />} />
-              <Route path="/roadmap/:formId" element={<PublicRoadmapPage />} />
-              <Route path="/m/:manifestBlobId" element={<ManifestRestorePage />} />
-              <Route path="/auth/zklogin/callback" element={<ZkLoginCallbackPage />} />
-              <Route path="*" element={<Navigate to="/" replace />} />
+                <Route path="/f/:formId" element={<PublicFormPage />} />
+                <Route path="/roadmap/:formId" element={<PublicRoadmapPage />} />
+                <Route path="/m/:manifestBlobId" element={<ManifestRestorePage />} />
+                <Route path="/auth/zklogin/callback" element={<ZkLoginCallbackPage />} />
+                <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
-              </ProviderReadinessBarrier>
-            </InitialBootReady>
+            </RouteReady>
           </Suspense>
         )}
       </RouteErrorBoundary>
-    </AppShell>
+    </PublicAppShell>
+  );
+
+  if (routeUsesPublicChrome) {
+    return <RpcInfrastructureProvider>{publicRouteSurface}</RpcInfrastructureProvider>;
+  }
+
+  const routeSurface = (
+    <Suspense fallback={<WorkspaceRestoreFallback />}>
+      <AppShell walletAvailable={routeNeedsWalletSurface} chrome="full">
+        <BuildUpdateBanner />
+        <AppRouteRuntimeEffects enabled={routeNeedsWorkspaceBoot} />
+        <RouteErrorBoundary
+          resetKey={`${location.key}:${routeRetryNonce}`}
+          routePath={routePath}
+          onRetryRoute={() => setRouteRetryNonce((value) => value + 1)}
+        >
+          {mixedBuildStatus.detected ? (
+            <RouteReady routePath={routePath} onReady={() => setInitialRouteReady(true)}>
+              <MixedBuildRecoveryScreen observed={mixedBuildStatus.observed} />
+            </RouteReady>
+          ) : (
+            <Suspense fallback={<WorkspaceRestoreFallback />}>
+              <RouteReady routePath={routePath} onReady={() => setInitialRouteReady(true)}>
+                <ProviderReadinessBarrier routePath={routePath} enabled={routeNeedsWorkspaceBoot}>
+                  <Routes>
+                    <Route path="/" element={<LandingPage />} />
+                    <Route path="/explore" element={<ExploreSignalsPage />} />
+                    <Route path="/signals" element={<Navigate to="/explore" replace />} />
+                    <Route
+                      path="/create"
+                      element={
+                        <WithWalrusRuntime>
+                          <FormBuilderPage />
+                        </WithWalrusRuntime>
+                      }
+                    />
+                    <Route
+                      path="/compose"
+                      element={
+                        <WithWalrusRuntime>
+                          <FormBuilderPage />
+                        </WithWalrusRuntime>
+                      }
+                    />
+                    <Route
+                      path="/admin"
+                      element={
+                        <WithWalrusRuntime>
+                          <AdminDashboardPage />
+                        </WithWalrusRuntime>
+                      }
+                    />
+                    <Route
+                      path="/dashboard"
+                      element={
+                        <WithWalrusRuntime>
+                          <AdminDashboardPage />
+                        </WithWalrusRuntime>
+                      }
+                    />
+                    <Route path="/admin/access" element={<AccessManagementPage />} />
+                    <Route path="/dashboard/access" element={<AccessManagementPage />} />
+                    <Route path="/troubleshooting" element={<TroubleshootingPage />} />
+                    <Route path="/dev/insights-fixture" element={<InsightsFixturePage />} />
+                    <Route
+                      path="/admin/forms/new"
+                      element={
+                        <WithWalrusRuntime>
+                          <FormBuilderPage initialSurface="composer" />
+                        </WithWalrusRuntime>
+                      }
+                    />
+                    <Route path="/admin/forms/:formId" element={<LegacyFormInboxRedirect basePath="/admin" />} />
+                    <Route path="/dashboard/forms/:formId" element={<LegacyFormInboxRedirect basePath="/dashboard" />} />
+                    <Route
+                      path="/admin/forms/:formId/submissions/:submissionId"
+                      element={<LegacyFormInboxRedirect basePath="/admin" />}
+                    />
+                    <Route
+                      path="/dashboard/forms/:formId/submissions/:submissionId"
+                      element={<LegacyFormInboxRedirect basePath="/dashboard" />}
+                    />
+                    <Route path="/admin/submissions/:submissionId" element={<SubmissionDetailPage />} />
+                    <Route path="/submitted" element={<SubmittedHistoryPage />} />
+                    <Route path="/submitted/:submissionId" element={<SubmittedHistoryPage />} />
+                    <Route path="/my-submissions" element={<SubmittedHistoryPage />} />
+                    <Route path="/my-submissions/:submissionId" element={<SubmittedHistoryPage />} />
+                    <Route path="/my-responses" element={<MyResponsesPage />} />
+                    <Route path="/my-responses/:submissionId" element={<MyResponsesPage />} />
+                    <Route path="*" element={<Navigate to="/" replace />} />
+                  </Routes>
+                </ProviderReadinessBarrier>
+              </RouteReady>
+            </Suspense>
+          )}
+        </RouteErrorBoundary>
+      </AppShell>
+    </Suspense>
   );
 
   if (!routeNeedsWalletSurface) {
@@ -441,12 +494,14 @@ export default function App() {
     <RpcInfrastructureProvider>
       <WalletSurface
         fallback={
-          <InitialBootReady routePath={`${location.pathname}${location.search}${location.hash}`} onReady={() => setInitialRouteReady(true)}>
-            <AppShell walletAvailable={false} chrome={routeUsesPublicChrome ? "public" : "full"}>
-              <BuildUpdateBanner />
-              <WorkspaceRestoreFallback onRetry={() => window.location.reload()} />
-            </AppShell>
-          </InitialBootReady>
+          <Suspense fallback={<WorkspaceRestoreFallback />}>
+            <RouteReady routePath={routePath} onReady={() => setInitialRouteReady(true)}>
+              <AppShell walletAvailable={false} chrome="full">
+                <BuildUpdateBanner />
+                <WorkspaceRestoreFallback onRetry={() => window.location.reload()} />
+              </AppShell>
+            </RouteReady>
+          </Suspense>
         }
       >
         {routeSurface}

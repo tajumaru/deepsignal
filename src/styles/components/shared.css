@@ -63,6 +63,10 @@
   gap: 0.16rem;
 }
 
+.build-update-copy {
+  flex: 1 1 auto;
+}
+
 .build-update-banner strong,
 .build-update-banner p {
   min-width: 0;
@@ -86,6 +90,18 @@
   white-space: nowrap;
 }
 
+.build-update-details {
+  margin-top: 0.28rem;
+}
+
+.build-update-details summary {
+  width: max-content;
+  cursor: pointer;
+  color: rgba(151, 222, 238, 0.88);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
 .build-update-diagnostics {
   display: grid;
   grid-template-columns: max-content minmax(0, 1fr);
@@ -104,6 +120,14 @@
   min-width: 0;
   margin: 0;
   overflow-wrap: anywhere;
+}
+
+.public-app-shell .topbar-public {
+  justify-content: space-between;
+}
+
+.public-app-shell .page-wrap {
+  width: min(100%, 1280px);
 }
 
 @media (max-width: 620px) {

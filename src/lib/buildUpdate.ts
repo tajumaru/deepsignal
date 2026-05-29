@@ -343,7 +343,7 @@ export async function updateDeepSignalToLatest(notice?: BuildUpdateNotice) {
     cacheNamesAfter,
   });
 
-  const nextUrl = new URL("/", window.location.origin);
+  const nextUrl = new URL(window.location.href);
   nextUrl.searchParams.set("v", normalizeBuildValue(latestBuild.appVersion));
   nextUrl.searchParams.set("t", String(Date.now()));
   window.location.replace(nextUrl.toString());

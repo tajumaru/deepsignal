@@ -1,4 +1,5 @@
 import { lazy, Suspense, type ReactNode } from "react";
+import "../styles/components/wallet-network.css";
 import { retryLazyImport } from "../lib/lazyRetry";
 
 const WalletConnect = lazy(() =>
