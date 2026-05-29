@@ -1032,17 +1032,29 @@ function SignalIntelligenceCenter({
   t: TranslationFn;
 }) {
   const empty = model.generatedFromCount === 0;
-  const cards = empty
-    ? [
-        { id: "live-trends", label: t("intelligenceCenterLiveTrendsTitle"), detail: t("intelligenceCenterLiveTrendsEmpty") },
-        { id: "ai-insights", label: t("intelligenceCenterAiInsightsTitle"), detail: t("intelligenceCenterAiInsightsEmpty") },
-        { id: "follow-up", label: t("intelligenceCenterFollowUpTitle"), detail: t("intelligenceCenterFollowUpEmpty") },
-      ]
-    : [
-        { id: "live-trends", label: t("intelligenceCenterLiveTrendsTitle"), detail: model.activeTrendLabel },
-        { id: "ai-insights", label: t("intelligenceCenterAiInsightsTitle"), detail: model.events.find((event) => event.id === "ai-summary")?.detail ?? t("inboxTimelineAiSummaryPendingDetail") },
-        { id: "follow-up", label: t("intelligenceCenterFollowUpTitle"), detail: model.unreadCount > 0 ? t("intelligenceCenterFollowUpUnread", { count: model.unreadCount }) : t("intelligenceCenterFollowUpStable") },
-      ];
+  const intelligencePlaceholders = [
+    {
+      id: "live-trends",
+      label: t("intelligenceCenterLiveTrendsTitle"),
+      detail: empty ? t("intelligenceCenterLiveTrendsEmpty") : model.activeTrendLabel,
+    },
+    {
+      id: "ai-insights",
+      label: t("intelligenceCenterAiInsightsTitle"),
+      detail: empty
+        ? t("intelligenceCenterAiInsightsEmpty")
+        : model.events.find((event) => event.id === "ai-summary")?.detail ?? t("inboxTimelineAiSummaryPendingDetail"),
+    },
+    {
+      id: "follow-up",
+      label: t("intelligenceCenterFollowUpTitle"),
+      detail: empty
+        ? t("intelligenceCenterFollowUpEmpty")
+        : model.unreadCount > 0
+          ? t("intelligenceCenterFollowUpUnread", { count: model.unreadCount })
+          : t("intelligenceCenterFollowUpStable"),
+    },
+  ];
 
   return (
     <section className={`signal-intelligence-center ${empty ? "is-empty" : ""}`}>
@@ -1058,9 +1070,22 @@ function SignalIntelligenceCenter({
         <span>{t("inboxActivityUnread", { count: model.unreadCount })}</span>
         <span>{model.responseGrowthLabel}</span>
       </div>
+      {empty ? (
+        <article className="signal-intelligence-readiness-card">
+          <span>{t("intelligenceReadinessLabel")}</span>
+          <strong>{t("intelligenceReadinessTitle")}</strong>
+          <p>{t("intelligenceReadinessBody")}</p>
+          <ul>
+            <li>{t("intelligenceCenterLiveTrendsTitle")}</li>
+            <li>{t("intelligenceCenterAiInsightsTitle")}</li>
+            <li>{t("intelligenceCenterFollowUpTitle")}</li>
+            <li>{t("intelligenceCenterSignalEvolutionTitle")}</li>
+          </ul>
+        </article>
+      ) : null}
       <div className="signal-intelligence-center-card-grid">
-        {cards.map((card) => (
-          <article key={card.id} className={`signal-intelligence-center-card ${empty ? "is-disabled" : ""}`}>
+        {intelligencePlaceholders.map((card) => (
+          <article key={card.id} className={`signal-intelligence-center-card ${empty ? "is-waiting" : ""}`}>
             <strong>{card.label}</strong>
             <p>{card.detail}</p>
           </article>

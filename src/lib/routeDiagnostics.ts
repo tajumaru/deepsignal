@@ -5,6 +5,26 @@ type DiagnosticDetails = Record<string, unknown>;
 type ReadinessState = Record<string, unknown>;
 const SELECTED_PROJECT_ID_KEY = "deepsignal.projectRegistry.selectedProjectId";
 
+export type ChunkProbe = {
+  bodyEmpty?: boolean;
+  bodyHash?: string;
+  bodyLooksLikeHtml?: boolean;
+  contentLength?: string;
+  contentType?: string;
+  ok: boolean;
+  snippet?: string;
+  status?: number;
+  truncated?: boolean;
+  url: string;
+};
+
+export type ChunkDependencyProbe = {
+  dependencies: ChunkProbe[];
+  failedCount: number;
+  parentUrl: string;
+  totalCount: number;
+};
+
 declare global {
   interface Window {
     __DEEPSIGNAL_ROUTE_EVENTS__?: Array<{
@@ -32,15 +52,8 @@ declare global {
         buildVersion?: string;
         buildTime?: string;
         gitHash?: string;
-        probe?: {
-          bodyHash?: string;
-          contentLength?: string;
-          contentType?: string;
-          ok: boolean;
-          snippet?: string;
-          status?: number;
-          url: string;
-        };
+        dependencyProbe?: ChunkDependencyProbe;
+        probe?: ChunkProbe;
       }>;
       currentProjectId: string;
       cacheRestoreSource: string;
@@ -189,15 +202,7 @@ export function recordFailedImport(label: string, error: unknown, chunkUrl?: str
 
 export function recordFailedImportProbe(
   label: string,
-  probe: {
-    bodyHash?: string;
-    contentLength?: string;
-    contentType?: string;
-    ok: boolean;
-    snippet?: string;
-    status?: number;
-    url: string;
-  },
+  probe: ChunkProbe,
 ) {
   if (typeof window === "undefined") {
     return;
@@ -206,6 +211,20 @@ export function recordFailedImportProbe(
   for (let index = state.failedImports.length - 1; index >= 0; index -= 1) {
     if (state.failedImports[index].label === label) {
       state.failedImports[index].probe = probe;
+      break;
+    }
+  }
+  state.updatedAt = new Date().toISOString();
+}
+
+export function recordFailedImportDependencyProbe(label: string, dependencyProbe: ChunkDependencyProbe) {
+  if (typeof window === "undefined") {
+    return;
+  }
+  const state = getDebugState();
+  for (let index = state.failedImports.length - 1; index >= 0; index -= 1) {
+    if (state.failedImports[index].label === label) {
+      state.failedImports[index].dependencyProbe = dependencyProbe;
       break;
     }
   }

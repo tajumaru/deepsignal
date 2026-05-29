@@ -2,7 +2,13 @@ import { recoverFromChunkLoadFailure } from "./chunkLoadRecovery";
 import { buildInfo, type BuildInfo } from "./buildInfo";
 import { recordBuildAsset } from "./buildAssetDiagnostics";
 import { endPerf, startPerf } from "./perf";
-import { recordFailedImport, recordFailedImportProbe } from "./routeDiagnostics";
+import {
+  recordFailedImport,
+  recordFailedImportDependencyProbe,
+  recordFailedImportProbe,
+  type ChunkDependencyProbe,
+  type ChunkProbe,
+} from "./routeDiagnostics";
 
 const lazyImportAttempts = 3;
 const lazyImportBaseDelayMs = 450;
@@ -14,16 +20,6 @@ function wait(ms: number) {
 type BuildManifest = {
   assets?: string[];
   routeAssets?: Partial<Record<RouteAssetKey, string[]>>;
-};
-
-type ChunkProbe = {
-  bodyHash?: string;
-  contentLength?: string;
-  contentType?: string;
-  ok: boolean;
-  snippet?: string;
-  status?: number;
-  url: string;
 };
 
 type RouteAssetKey =
@@ -165,6 +161,23 @@ function hashSnippet(value: string) {
   return Math.abs(hash).toString(16);
 }
 
+function isJavaScriptLikeContent(contentType: string) {
+  return contentType.includes("javascript") || contentType.includes("ecmascript") || contentType.includes("application/x-javascript");
+}
+
+function responseBodyLooksWrong(body: string) {
+  const prefix = body.slice(0, 240).replace(/\s+/g, " ");
+  return {
+    bodyLooksLikeGatewayError: /upstream connect error|reset before headers|service unavailable/i.test(prefix),
+    bodyLooksLikeHtml: /^<!doctype html/i.test(prefix) || /^<html/i.test(prefix),
+  };
+}
+
+function getContentLengthMismatch(contentLength: string, body: string) {
+  const parsedLength = Number(contentLength);
+  return Number.isFinite(parsedLength) && parsedLength >= 0 && parsedLength !== body.length;
+}
+
 async function probeChunk(url: string): Promise<ChunkProbe> {
   try {
     const response = await fetch(appendCacheBust(url, 0), {
@@ -175,20 +188,26 @@ async function probeChunk(url: string): Promise<ChunkProbe> {
     const snippet = body.slice(0, 180).replace(/\s+/g, " ");
     const contentType = response.headers.get("content-type") || "";
     const contentLength = response.headers.get("content-length") || String(body.length);
-    const bodyLooksLikeHtml = /^<!doctype html/i.test(body) || /^<html/i.test(body);
-    const bodyLooksLikeGatewayError = body.includes("upstream connect error") || body.includes("reset before headers");
+    const { bodyLooksLikeGatewayError, bodyLooksLikeHtml } = responseBodyLooksWrong(body);
+    const bodyEmpty = body.length === 0;
+    const truncated = getContentLengthMismatch(contentLength, body);
     const ok =
       response.ok &&
-      (contentType.includes("javascript") || contentType.includes("ecmascript") || contentType.includes("application/x-javascript")) &&
+      (isJavaScriptLikeContent(contentType) || url.split("?")[0].endsWith(".css")) &&
       !bodyLooksLikeHtml &&
-      !bodyLooksLikeGatewayError;
+      !bodyLooksLikeGatewayError &&
+      !bodyEmpty &&
+      !truncated;
     return {
+      bodyEmpty,
       bodyHash: hashSnippet(snippet),
+      bodyLooksLikeHtml,
       contentLength,
       contentType,
       ok,
       snippet,
       status: response.status,
+      truncated,
       url,
     };
   } catch (error) {
@@ -198,6 +217,70 @@ async function probeChunk(url: string): Promise<ChunkProbe> {
       url,
     };
   }
+}
+
+function extractDependencyUrls(sourceUrl: string, source: string) {
+  const dependencies = new Set<string>();
+  const quotedAssetPattern = /["'](\.\/[^"']+\.(?:js|css|wasm)(?:\?[^"']*)?)["']/g;
+  for (const match of source.matchAll(quotedAssetPattern)) {
+    const value = match[1];
+    try {
+      dependencies.add(new URL(value, sourceUrl).toString());
+    } catch {
+      // Keep diagnostics best effort; malformed references are not expected in Vite output.
+    }
+  }
+  return [...dependencies];
+}
+
+async function probeChunkDependencyTree(parentUrl: string): Promise<ChunkDependencyProbe> {
+  const pending = [parentUrl];
+  const seen = new Set<string>();
+  const dependencies: ChunkProbe[] = [];
+  const maxDependencies = 120;
+
+  while (pending.length > 0 && seen.size < maxDependencies) {
+    const currentUrl = pending.shift();
+    if (!currentUrl || seen.has(currentUrl)) {
+      continue;
+    }
+    seen.add(currentUrl);
+
+    const probe = await probeChunk(currentUrl);
+    if (currentUrl !== parentUrl) {
+      dependencies.push(probe);
+    }
+
+    if (!probe.ok || !currentUrl.split("?")[0].endsWith(".js")) {
+      continue;
+    }
+
+    try {
+      const response = await fetch(appendCacheBust(currentUrl, 1), {
+        cache: "no-store",
+        headers: { "cache-control": "no-cache" },
+      });
+      if (!response.ok || !isJavaScriptLikeContent(response.headers.get("content-type") || "")) {
+        continue;
+      }
+      const source = await response.text();
+      for (const dependencyUrl of extractDependencyUrls(currentUrl, source)) {
+        if (!seen.has(dependencyUrl)) {
+          pending.push(dependencyUrl);
+        }
+      }
+    } catch {
+      // The parent probe already captured the fetch failure. Dependency walking is diagnostic only.
+    }
+  }
+
+  const failedCount = dependencies.filter((probe) => !probe.ok).length;
+  return {
+    dependencies,
+    failedCount,
+    parentUrl,
+    totalCount: dependencies.length,
+  };
 }
 
 async function importCacheBustedRouteChunk<T>(label: string, chunkUrl: string, attempt: number): Promise<T | null> {
@@ -243,11 +326,15 @@ export async function retryLazyImport<T>(loader: () => Promise<T>, label = "anon
       if (expectedChunkUrl) {
         const probe = await probeChunk(expectedChunkUrl);
         recordFailedImportProbe(label, probe);
+        const dependencyProbe = await probeChunkDependencyTree(expectedChunkUrl);
+        recordFailedImportDependencyProbe(label, dependencyProbe);
         console.warn("[DeepSignal route chunk probe]", {
           label,
           attempt,
           errorName: error instanceof Error ? error.name : "Error",
           errorMessage: error instanceof Error ? error.message : String(error),
+          dependencyFailures: dependencyProbe.dependencies.filter((dependency) => !dependency.ok),
+          dependencyTotal: dependencyProbe.totalCount,
           ...probe,
         });
       }

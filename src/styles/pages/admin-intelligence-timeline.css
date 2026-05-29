@@ -178,6 +178,8 @@
 }
 
 .signal-intelligence-center {
+  position: relative;
+  overflow: hidden;
   display: grid;
   gap: 0.85rem;
   min-height: 100%;
@@ -189,9 +191,33 @@
     linear-gradient(180deg, rgba(7, 25, 40, 0.82), rgba(4, 16, 28, 0.68));
 }
 
+.signal-intelligence-center > * {
+  position: relative;
+  z-index: 1;
+}
+
 .signal-intelligence-center.is-empty {
   align-content: start;
   border-color: rgba(116, 226, 255, 0.08);
+  background:
+    radial-gradient(circle at 50% 26%, rgba(116, 226, 255, 0.08), transparent 34%),
+    linear-gradient(180deg, rgba(7, 25, 40, 0.82), rgba(4, 16, 28, 0.68));
+}
+
+.signal-intelligence-center.is-empty::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    repeating-radial-gradient(
+      circle at 50% 30%,
+      rgba(116, 226, 255, 0.075) 0 1px,
+      transparent 1px 54px
+    ),
+    linear-gradient(115deg, transparent 0 46%, rgba(116, 226, 255, 0.055) 48%, transparent 52% 100%);
+  opacity: 0.55;
+  mask-image: radial-gradient(circle at 50% 28%, #000 0 42%, transparent 76%);
 }
 
 .signal-intelligence-center-head {
@@ -243,16 +269,69 @@
   gap: 0.65rem;
 }
 
+.signal-intelligence-readiness-card {
+  display: grid;
+  gap: 0.42rem;
+  padding: 0.95rem;
+  border: 1px solid rgba(116, 226, 255, 0.16);
+  border-radius: 14px;
+  background:
+    radial-gradient(circle at top right, rgba(116, 226, 255, 0.12), transparent 34%),
+    linear-gradient(180deg, rgba(8, 30, 48, 0.72), rgba(4, 17, 29, 0.58));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.055),
+    0 16px 32px rgba(0, 0, 0, 0.16);
+}
+
+.signal-intelligence-readiness-card span {
+  color: #9df4ff;
+  font-size: 0.74rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.signal-intelligence-readiness-card strong {
+  color: #f3fdff;
+  font-size: 1.05rem;
+  line-height: 1.15;
+}
+
+.signal-intelligence-readiness-card p {
+  margin: 0;
+  color: #b7d7e5;
+  font-size: 0.86rem;
+  line-height: 1.4;
+}
+
+.signal-intelligence-readiness-card ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.36rem;
+  margin: 0;
+  padding: 0.1rem 0 0;
+  list-style: none;
+}
+
+.signal-intelligence-readiness-card li {
+  padding: 0.18rem 0.45rem;
+  border: 1px solid rgba(116, 226, 255, 0.1);
+  border-radius: var(--radius-pill);
+  background: rgba(116, 226, 255, 0.055);
+  color: #d6f8ff;
+  font-size: 0.68rem;
+  font-weight: 850;
+}
+
 .signal-intelligence-center-card,
 .selected-signal-intelligence-grid article,
 .selected-signal-next-action-card {
   padding: 0.72rem;
 }
 
-.signal-intelligence-center-card.is-disabled {
-  border-color: rgba(148, 163, 184, 0.09);
-  background: rgba(4, 17, 29, 0.26);
-  opacity: 0.78;
+.signal-intelligence-center-card.is-waiting {
+  border-color: rgba(116, 226, 255, 0.085);
+  background: rgba(4, 17, 29, 0.32);
 }
 
 .signal-intelligence-center-card strong,

@@ -1,7 +1,7 @@
 {
   "name": "deepsignal-walrus-feedback-lab",
   "private": true,
-  "version": "0.11.5",
+  "version": "0.11.6",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -17,6 +17,7 @@
     "fixture:insights": "node -e \"console.log('Open the running app at /#/dev/insights-fixture to seed browser-local Insights fixtures.')\"",
     "version:set": "tsx scripts/set-version.ts",
     "version:build": "tsx scripts/set-version.ts --build",
+    "verify:dist-assets": "node scripts/verify-dist-chunk-dependencies.mjs",
     "code:index": "tsx scripts/index-code.ts",
     "code:search": "tsx scripts/search-code.ts"
   },

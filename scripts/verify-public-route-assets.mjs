@@ -9,6 +9,23 @@ function isJavaScriptAsset(assetPath) {
   return assetPath.endsWith(".js");
 }
 
+function isJavaScriptLikeContent(contentType) {
+  return (
+    contentType.includes("javascript") ||
+    contentType.includes("ecmascript") ||
+    contentType.includes("application/x-javascript")
+  );
+}
+
+function bodyLooksWrong(body) {
+  const prefix = body.slice(0, 240).replace(/\s+/g, " ");
+  return (
+    /^<!doctype html/i.test(prefix) ||
+    /^<html/i.test(prefix) ||
+    /upstream connect error|service unavailable|reset before headers/i.test(prefix)
+  );
+}
+
 function extractIndexAssetPaths(html) {
   const paths = new Set();
   const attributePattern = /\b(?:src|href)=["']([^"']+\.js(?:\?[^"']*)?)["']/g;
@@ -28,6 +45,24 @@ function extractIndexAssetPaths(html) {
     paths.add(value.startsWith("/") ? `.${value}` : value);
   }
   return [...paths];
+}
+
+function extractChunkDependencyUrls(url, source) {
+  const urls = new Set();
+  const quotedAssetPattern = /["'](\.\/[^"']+\.(?:js|css|wasm)(?:\?[^"']*)?)["']/g;
+  for (const match of source.matchAll(quotedAssetPattern)) {
+    try {
+      urls.add(new URL(match[1], url).toString());
+    } catch {
+      // Ignore malformed emitted references; concrete fetch failures are reported below.
+    }
+  }
+  return [...urls];
+}
+
+function assetPathFromUrl(url) {
+  const parsed = new URL(url);
+  return `.${parsed.pathname}`;
 }
 
 async function fetchText(url, options = {}) {
@@ -53,15 +88,8 @@ async function fetchAssetWithRetry(url, attempts = 3) {
     const result = await fetchText(url);
     results.push(result);
     const prefix = result.body.slice(0, 160).replace(/\s+/g, " ");
-    const isJsContent =
-      result.contentType.includes("javascript") ||
-      result.contentType.includes("ecmascript") ||
-      result.contentType.includes("application/x-javascript");
-    const bodyLooksWrong =
-      /^<!doctype html/i.test(prefix) ||
-      /^<html/i.test(prefix) ||
-      /upstream connect error|service unavailable/i.test(prefix);
-    if (result.status === 200 && isJsContent && !bodyLooksWrong) {
+    const isJsContent = isJavaScriptLikeContent(result.contentType);
+    if (result.status === 200 && isJsContent && !bodyLooksWrong(result.body) && result.body.length > 0) {
       return { result, attempts: results };
     }
     await new Promise((resolve) => setTimeout(resolve, 750 * attempt));
@@ -82,31 +110,45 @@ if (indexResponse.status !== 200 || /^<!doctype html/i.test(indexResponse.body) 
 }
 const routeAssets = Object.values(manifest.routeAssets || {}).flat();
 const indexAssets = extractIndexAssetPaths(indexResponse.body);
-const jsAssets = [...new Set([...routeAssets, ...(manifest.assets || []), ...indexAssets].filter((assetPath) => isJavaScriptAsset(assetPath)))].sort();
+const seedJsAssets = [...new Set([...routeAssets, ...(manifest.assets || []), ...indexAssets].filter((assetPath) => isJavaScriptAsset(assetPath)))].sort();
+const jsAssets = new Set(seedJsAssets);
+const pendingUrls = seedJsAssets.map((assetPath) => absoluteAssetUrl(assetPath));
+const inspectedUrls = new Set();
+const maxDependencyAssets = 500;
 
 const failures = [];
-console.log(`Verifying ${jsAssets.length} public route JS assets from ${origin}`);
+console.log(`Verifying ${seedJsAssets.length} public route JS assets from ${origin}`);
 console.log(`Build: v${manifest.appVersion || "unknown"} ${manifest.buildTime || "unknown"} ${manifest.gitHash || "unknown"}`);
 
-for (const assetPath of jsAssets) {
-  const url = absoluteAssetUrl(assetPath);
+while (pendingUrls.length > 0 && inspectedUrls.size < maxDependencyAssets) {
+  const url = pendingUrls.shift();
+  if (!url || inspectedUrls.has(url)) {
+    continue;
+  }
+  inspectedUrls.add(url);
+  const assetPath = assetPathFromUrl(url);
+  jsAssets.add(assetPath);
   try {
     const { result, attempts } = await fetchAssetWithRetry(url);
     const prefix = result.body.slice(0, 80).replace(/\s+/g, " ");
-    const checkedPrefix = result.body.slice(0, 160).replace(/\s+/g, " ");
-    const isJsContent =
-      result.contentType.includes("javascript") ||
-      result.contentType.includes("ecmascript") ||
-      result.contentType.includes("application/x-javascript");
-    const bodyLooksWrong =
-      /^<!doctype html/i.test(checkedPrefix) ||
-      /^<html/i.test(checkedPrefix) ||
-      /upstream connect error|service unavailable/i.test(checkedPrefix);
-    const ok = result.status === 200 && isJsContent && !bodyLooksWrong;
+    const isJsContent = isJavaScriptLikeContent(result.contentType);
+    const wrongBody = bodyLooksWrong(result.body);
+    const ok = result.status === 200 && isJsContent && !wrongBody && result.body.length > 0;
     const retryNote = attempts.length > 1 ? ` after ${attempts.length} attempts` : "";
     console.log(`${ok ? "OK " : "BAD"} ${result.status} ${result.contentType || "no-content-type"} ${assetPath} ${result.body.length}${retryNote} ${prefix}`);
     if (!ok) {
       failures.push({ assetPath, ...result, prefix });
+      continue;
+    }
+
+    for (const dependencyUrl of extractChunkDependencyUrls(url, result.body)) {
+      if (new URL(dependencyUrl).origin !== new URL(origin).origin) {
+        continue;
+      }
+      const dependencyPath = assetPathFromUrl(dependencyUrl);
+      if (dependencyPath.endsWith(".js") && !inspectedUrls.has(dependencyUrl)) {
+        pendingUrls.push(dependencyUrl);
+      }
     }
   } catch (error) {
     console.log(`BAD ERR ${assetPath} ${error?.message ?? String(error)}`);
@@ -114,9 +156,18 @@ for (const assetPath of jsAssets) {
   }
 }
 
+if (inspectedUrls.size >= maxDependencyAssets) {
+  failures.push({
+    assetPath: "dependency traversal",
+    status: "LIMIT",
+    contentType: "",
+    body: `Stopped after ${maxDependencyAssets} assets.`,
+  });
+}
+
 if (failures.length > 0) {
   console.error(`Public asset verification failed for ${failures.length} assets.`);
   process.exit(1);
 }
 
-console.log("Public asset verification passed.");
+console.log(`Public asset verification passed. Traversed ${jsAssets.size} JS assets including nested dependencies.`);

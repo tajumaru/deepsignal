@@ -2,7 +2,9 @@ import { defineConfig } from "vitest/config";
 import react from "@vitejs/plugin-react";
 import { visualizer } from "rollup-plugin-visualizer";
 import { execSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { existsSync, readFileSync, readdirSync, unlinkSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadEnv, type Plugin } from "vite";
 
@@ -79,6 +81,7 @@ function buildManifestPlugin(args: {
     generateBundle(_, bundle) {
       const chunks = Object.values(bundle).filter((entry): entry is import("rollup").OutputChunk => entry.type === "chunk");
       const chunkByFileName = new Map(chunks.map((entry) => [`./${entry.fileName}`, entry]));
+      const bundleAssetNames = new Set(Object.values(bundle).map((entry) => `./${entry.fileName}`));
       const entryChunk = chunks.find((entry) => entry.isEntry);
       const entryAsset = entryChunk ? `./${entryChunk.fileName}` : null;
 
@@ -106,7 +109,7 @@ function buildManifestPlugin(args: {
           ...chunk.imports.map((fileName) => `./${fileName}`),
           ...dynamicImports.map((fileName) => `./${fileName}`),
           ...(viteMetadata?.importedCss ? Array.from(viteMetadata.importedCss).map((fileName) => `./${fileName}`) : []),
-        ];
+        ].filter((assetPath) => bundleAssetNames.has(assetPath));
 
         const nestedAssets = [...chunk.imports, ...dynamicImports].flatMap((fileName) =>
           collectChunkAssets(`./${fileName}`, options, seen),
@@ -178,6 +181,101 @@ function buildManifestPlugin(args: {
           "",
         ].join("\n"),
       });
+    },
+    closeBundle() {
+      const distDir = join(process.cwd(), "dist");
+      const assetsDir = join(distDir, "assets");
+      const manifestPath = join(process.cwd(), "dist", "build.json");
+      if (!existsSync(manifestPath)) {
+        return;
+      }
+
+      const replaceChunkReferences = (oldName: string, newName: string) => {
+        const replaceReferences = (filePath: string) => {
+          if (!existsSync(filePath)) {
+            return;
+          }
+          const source = readFileSync(filePath, "utf8");
+          if (source.includes(oldName)) {
+            writeFileSync(filePath, source.split(oldName).join(newName));
+          }
+        };
+
+        if (existsSync(assetsDir)) {
+          for (const fileName of readdirSync(assetsDir)) {
+            if (fileName.endsWith(".js")) {
+              replaceReferences(join(assetsDir, fileName));
+            }
+          }
+        }
+        replaceReferences(join(distDir, "index.html"));
+        replaceReferences(manifestPath);
+      };
+
+      const saltAndRenameChunk = (fileName: string | undefined, label: string) => {
+        if (!fileName || !existsSync(assetsDir) || !fileName.endsWith(".js")) {
+          return;
+        }
+        const oldName = fileName.split("/").pop();
+        if (!oldName) {
+          return;
+        }
+        const oldPath = join(assetsDir, oldName);
+        if (!existsSync(oldPath)) {
+          return;
+        }
+        const stem = oldName.replace(/\.js$/, "");
+        const prefix = stem.slice(0, stem.lastIndexOf("-"));
+        if (!prefix) {
+          return;
+        }
+        const saltedCode = `${readFileSync(oldPath, "utf8")}\n/* deepsignal-${label}-build:${args.buildTime}:${args.gitHash} */\n`;
+        const saltedHash = createHash("sha256").update(saltedCode).digest("base64url").slice(0, 8);
+        const newName = `${prefix}-${saltedHash}.js`;
+        if (newName === oldName) {
+          return;
+        }
+        writeFileSync(join(assetsDir, newName), saltedCode);
+        unlinkSync(oldPath);
+        replaceChunkReferences(oldName, newName);
+      };
+
+      if (existsSync(assetsDir)) {
+        const manifestBeforeSalt = JSON.parse(readFileSync(manifestPath, "utf8")) as {
+          entryAsset?: string | null;
+          routeAssets?: Record<string, string[]>;
+        };
+        saltAndRenameChunk(manifestBeforeSalt.entryAsset ?? undefined, "entry");
+        saltAndRenameChunk(
+          readdirSync(assetsDir).find((fileName) => /^mysten-sui-[\w-]+\.js$/.test(fileName)),
+          "mysten-sui",
+        );
+        for (const [routeKey, filePrefix] of [
+          ["admin", "AdminDashboardPage"],
+          ["create", "FormBuilderPage"],
+        ] as const) {
+          const routeChunk = manifestBeforeSalt.routeAssets?.[routeKey]?.find((assetPath) =>
+            assetPath.split("/").pop()?.startsWith(`${filePrefix}-`),
+          );
+          saltAndRenameChunk(routeChunk, `route-${routeKey}`);
+        }
+      }
+
+      const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as {
+        assets?: string[];
+        routeAssets?: Record<string, string[]>;
+      };
+      const assetExists = (assetPath: string) => existsSync(join(process.cwd(), "dist", assetPath.replace(/^\.\//, "")));
+      const filterExistingAssets = (assetPaths: string[] | undefined) =>
+        Array.from(new Set((assetPaths ?? []).filter((assetPath) => assetExists(assetPath))));
+
+      manifest.assets = filterExistingAssets(manifest.assets);
+      if (manifest.routeAssets) {
+        manifest.routeAssets = Object.fromEntries(
+          Object.entries(manifest.routeAssets).map(([key, assetPaths]) => [key, filterExistingAssets(assetPaths)]),
+        );
+      }
+      writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
     },
   };
 }

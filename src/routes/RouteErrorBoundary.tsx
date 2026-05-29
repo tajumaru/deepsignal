@@ -16,6 +16,7 @@ import {
 } from "../lib/buildAssetDiagnostics";
 import { updateDeepSignalToLatest } from "../lib/buildUpdate";
 import { formatRouteLifecycleDiagnostics, logRouteLifecycle } from "../lib/routeDiagnostics";
+import type { ChunkDependencyProbe, ChunkProbe } from "../lib/routeDiagnostics";
 import {
   collectRouteDiagnostics,
   getProviderReadiness,
@@ -53,6 +54,14 @@ type RouteErrorDiagnostics = {
   routeDiagnostics: RouteDiagnostics;
   routeLifecycle: string;
   chunkRecovery: ReturnType<typeof getChunkLoadRecoverySnapshot>;
+  failedImportDiagnostics: Array<{
+    at: number;
+    label: string;
+    message: string;
+    chunkUrl?: string | null;
+    probe?: ChunkProbe;
+    dependencyProbe?: ChunkDependencyProbe;
+  }>;
   recordedAt: string;
 };
 
@@ -151,6 +160,7 @@ export class RouteErrorBoundary extends Component<
       routeDiagnostics,
       routeLifecycle: formatRouteLifecycleDiagnostics(),
       chunkRecovery: getChunkLoadRecoverySnapshot(),
+      failedImportDiagnostics: window.__DEEPSIGNAL_DEBUG__?.failedImports?.slice(-5) ?? [],
       componentStack: errorInfo.componentStack,
       recordedAt: new Date().toISOString(),
     };
@@ -258,6 +268,7 @@ export class RouteErrorBoundary extends Component<
         routeDiagnostics: collectRouteDiagnostics(this.props.routePath),
         routeLifecycle: formatRouteLifecycleDiagnostics(),
         chunkRecovery: getChunkLoadRecoverySnapshot(),
+        failedImportDiagnostics: window.__DEEPSIGNAL_DEBUG__?.failedImports?.slice(-5) ?? [],
         recordedAt: new Date().toISOString(),
       },
       null,
@@ -279,6 +290,9 @@ export class RouteErrorBoundary extends Component<
       const diagnostics = this.state.diagnostics;
       const showDiagnostics = chunkFailure || shouldShowRouteDiagnostics(this.props.routePath);
       const headline = chunkFailure ? "App update detected, refresh required." : "Explore hit an unexpected fault.";
+      const failedImportDiagnostics = diagnostics?.failedImportDiagnostics ?? [];
+      const latestFailedImport = failedImportDiagnostics[failedImportDiagnostics.length - 1];
+      const dependencyFailures = latestFailedImport?.dependencyProbe?.dependencies.filter((probe: ChunkProbe) => !probe.ok) ?? [];
 
       return (
         <div className="panel glow-panel route-status-panel" role="alert">
@@ -329,6 +343,12 @@ export class RouteErrorBoundary extends Component<
                 <dd>{diagnostics.hash || "none"}</dd>
                 <dt>failed chunk URL</dt>
                 <dd>{diagnostics.chunkUrl ?? "n/a"}</dd>
+                <dt>dependency failures</dt>
+                <dd>
+                  {latestFailedImport?.dependencyProbe
+                    ? `${dependencyFailures.length}/${latestFailedImport.dependencyProbe.totalCount}`
+                    : "not probed"}
+                </dd>
                 <dt>chunk retry</dt>
                 <dd>
                   {diagnostics.chunkRecovery.count}/{diagnostics.chunkRecovery.limit}
@@ -346,6 +366,22 @@ export class RouteErrorBoundary extends Component<
                   <pre className="route-status-diagnostics">{JSON.stringify(diagnostics.providerReadiness, null, 2)}</pre>
                 </dd>
               </dl>
+              {latestFailedImport?.probe || latestFailedImport?.dependencyProbe ? (
+                <>
+                  <p className="eyebrow">chunk probe</p>
+                  <pre className="route-status-diagnostics">
+                    {JSON.stringify(
+                      {
+                        parent: latestFailedImport.probe ?? null,
+                        dependencies: latestFailedImport.dependencyProbe ?? null,
+                        failedDependencies: dependencyFailures,
+                      },
+                      null,
+                      2,
+                    )}
+                  </pre>
+                </>
+              ) : null}
               <p className="eyebrow">componentStack</p>
               <pre className="route-status-diagnostics">{diagnostics.componentStack || "n/a"}</pre>
               <p className="eyebrow">error.stack</p>
