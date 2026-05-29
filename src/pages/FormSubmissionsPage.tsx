@@ -201,7 +201,7 @@ export function FormSubmissionsPage() {
 
   useEffect(() => {
     void import("../storage/storageFactory")
-      .then(({ retryPendingSubmissionSync }) => retryPendingSubmissionSync())
+      .then(({ retryPendingSubmissionSync }) => retryPendingSubmissionSync({ allowWalletPrompt: false }))
       .catch((error) => {
         console.warn("[admin inbox] pending inbox sync retry failed to start", error);
       });

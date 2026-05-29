@@ -1633,7 +1633,7 @@ export function AdminDashboardPage() {
 
   useEffect(() => {
     void import("../storage/storageFactory")
-      .then(({ retryPendingSubmissionSync }) => retryPendingSubmissionSync())
+      .then(({ retryPendingSubmissionSync }) => retryPendingSubmissionSync({ allowWalletPrompt: false }))
       .catch((error) => {
         console.warn("[admin workspace] pending inbox sync retry failed to start", error);
       });

@@ -1,8 +1,6 @@
-import {
-  CREATE_FORM_DRAFT_STORAGE_KEY,
-  CREATE_FORM_GUEST_DRAFT_STORAGE_KEY,
-  parseStoredCreateFormDraft,
-} from "../features/createForm/utils";
+import { readCreateDraftParseStatus, type CreateDraftParseStatus } from "./createDraftDiagnostics";
+
+export { readCreateDraftParseStatus } from "./createDraftDiagnostics";
 
 export type RouteDiagnostics = {
   routePath: string;
@@ -13,7 +11,7 @@ export type RouteDiagnostics = {
   storageMode: string;
   providerState: Record<string, unknown>;
   hydrationPhase: string;
-  localDraftParseStatus: "missing" | "valid" | "invalid" | "unavailable";
+  localDraftParseStatus: CreateDraftParseStatus;
 };
 
 export function getProviderReadiness() {
@@ -106,24 +104,6 @@ export function readStorageRuntimeStatusSnapshot() {
     mode: walrusRequested ? "walrus" : "local-fallback",
     notice: null as string | null,
   };
-}
-
-export function readCreateDraftParseStatus() {
-  if (typeof window === "undefined") {
-    return "unavailable" as const;
-  }
-
-  try {
-    const adminDraft = window.localStorage.getItem(CREATE_FORM_DRAFT_STORAGE_KEY);
-    const guestDraft = window.localStorage.getItem(CREATE_FORM_GUEST_DRAFT_STORAGE_KEY);
-    const rawDraft = adminDraft ?? guestDraft;
-    if (!rawDraft) {
-      return "missing" as const;
-    }
-    return parseStoredCreateFormDraft(rawDraft).status === "valid" ? "valid" : "invalid";
-  } catch {
-    return "unavailable" as const;
-  }
 }
 
 export function collectRouteDiagnostics(routePath: string): RouteDiagnostics {

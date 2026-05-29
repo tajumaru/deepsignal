@@ -480,10 +480,20 @@ export function subscribeStorageRuntime(listener: () => void) {
   return () => listeners.delete(listener);
 }
 
-export async function retryPendingSubmissionSync() {
+export async function retryPendingSubmissionSync({
+  allowWalletPrompt = true,
+}: {
+  allowWalletPrompt?: boolean;
+} = {}) {
   const pending = listPendingSubmissions();
   if (pending.length === 0) {
     return { attempted: 0, synced: 0 };
+  }
+  if (!allowWalletPrompt) {
+    console.info("[deepsignal] skipped automatic pending submission sync; explicit wallet approval is required", {
+      pendingCount: pending.length,
+    });
+    return { attempted: 0, synced: 0, skipped: pending.length };
   }
   let synced = 0;
   for (const submission of pending) {

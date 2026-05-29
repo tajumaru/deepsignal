@@ -22,27 +22,7 @@ function formatBeaconValue(value: string, headLength = 10, tailLength = 10) {
   return `${value.slice(0, headLength)}...${value.slice(-tailLength)}`;
 }
 
-function ShareActionIcon({ type }: { type: "copy" | "open" | "signal" | "x" }) {
-  if (type === "copy") {
-    return (
-      <svg viewBox="0 0 24 24" role="img" aria-hidden="true" focusable="false">
-        <path d="M8 8h10v12H8z" />
-        <path d="M6 16H4V4h10v2" />
-      </svg>
-    );
-  }
-
-  if (type === "signal") {
-    return (
-      <svg viewBox="0 0 24 24" role="img" aria-hidden="true" focusable="false">
-        <path d="M12 4v16" />
-        <path d="M5 8c4.2 2.8 9.8 2.8 14 0" />
-        <path d="M5 16c4.2-2.8 9.8-2.8 14 0" />
-        <path d="M8 12h8" />
-      </svg>
-    );
-  }
-
+function ShareActionIcon({ type }: { type: "open" | "x" }) {
   if (type === "x") {
     return (
       <svg viewBox="0 0 24 24" role="img" aria-hidden="true" focusable="false">
@@ -119,7 +99,6 @@ function getBeaconRarity(seed: number) {
 
 export function ShareCard({ formId, blobId, createdAt, manifestBlobId }: ShareCardProps) {
   const { t } = useI18n();
-  const [copied, setCopied] = useState(false);
   const [blobCopied, setBlobCopied] = useState(false);
   const [qrMarkup, setQrMarkup] = useState("");
   const [beaconLocked, setBeaconLocked] = useState(false);
@@ -195,26 +174,6 @@ export function ShareCard({ formId, blobId, createdAt, manifestBlobId }: ShareCa
     const linkedForm = await readJsonBlobOrThrow<{ id?: string }>(carrier.manifest.formBlobId);
     if (linkedForm.id !== formId) {
       throw new Error(t("shareLinkMismatchCopyBlocked"));
-    }
-  }
-
-  async function handleCopy() {
-    if (!absoluteUrl) {
-      setShareLinkError(t("shareLinkMissingFormCopyBlocked"));
-      return;
-    }
-    setShareLinkError("");
-    setVerifyingShareLink(true);
-    try {
-      await verifyManifestBeforeShare();
-      await navigator.clipboard.writeText(absoluteUrl);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 1800);
-    } catch (error) {
-      console.error(error);
-      setShareLinkError(error instanceof Error ? error.message : t("shareLinkVerifyCopyBlocked"));
-    } finally {
-      setVerifyingShareLink(false);
     }
   }
 
@@ -353,28 +312,6 @@ export function ShareCard({ formId, blobId, createdAt, manifestBlobId }: ShareCa
           </div>
         </div>
         <div className="beacon-action-panel" aria-label={t("transmissionLinkLabel")}>
-          <button
-            type="button"
-            className="primary-button beacon-action-button"
-            onClick={() => void handleCopy()}
-            disabled={verifyingShareLink}
-            aria-label={verifyingShareLink ? t("verifyingManifest") : copied ? t("copied") : t("copyTransmissionLink")}
-            title={verifyingShareLink ? t("verifyingManifest") : copied ? t("copied") : t("copyTransmissionLink")}
-          >
-            <ShareActionIcon type="signal" />
-            <span>{verifyingShareLink ? t("verifyingManifest") : copied ? t("copied") : t("copyLink")}</span>
-          </button>
-          <button
-            type="button"
-            className="ghost-button beacon-action-button beacon-copy-blob-button"
-            onClick={() => void handleCopyBlobId()}
-            disabled={!blobId}
-            aria-label={blobCopied ? t("copied") : t("copyBlobId")}
-            title={blobCopied ? t("copied") : t("copyBlobId")}
-          >
-            <ShareActionIcon type="copy" />
-            <span>{blobCopied ? t("copied") : t("copyBlobId")}</span>
-          </button>
           <button
             type="button"
             className="ghost-button beacon-action-button x-share-button"

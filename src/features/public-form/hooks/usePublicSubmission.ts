@@ -421,7 +421,7 @@ export function usePublicSubmission({
       return;
     }
     void import("../../../storage/storageFactory")
-      .then(({ retryPendingSubmissionSync }) => retryPendingSubmissionSync())
+      .then(({ retryPendingSubmissionSync }) => retryPendingSubmissionSync({ allowWalletPrompt: false }))
       .catch((error) => {
         console.warn("[public submission] pending remote sync retry failed to start", error);
       });

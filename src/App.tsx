@@ -196,7 +196,7 @@ function AppRouteRuntimeEffects({ enabled }: { enabled: boolean }) {
 
     function retryPendingInboxSync() {
       void import("./storage/storageFactory")
-        .then(({ retryPendingSubmissionSync }) => retryPendingSubmissionSync())
+        .then(({ retryPendingSubmissionSync }) => retryPendingSubmissionSync({ allowWalletPrompt: false }))
         .catch((error) => {
           console.warn("[app] pending inbox sync retry failed to start", error);
         });
