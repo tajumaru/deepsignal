@@ -2,7 +2,6 @@
   useSignAndExecuteTransaction,
   useSuiClient,
 } from "@mysten/dapp-kit";
-import { Transaction } from "@mysten/sui/transactions";
 import type { CSSProperties, ReactNode } from "react";
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
@@ -88,26 +87,15 @@ import {
   setNeedsFollowUpTag,
 } from "../lib/reviewCollaboration";
 import { exportSubmissionJson } from "../lib/export";
-import {
-  buildExportMetadata,
-  exportResponsesToCsv,
-  type ExportMetadata,
-  type ExportResponsesToCsvOptions,
-  type ExportPiiField,
-  type ResponsesCsvExportScope,
-  type ResponsesCsvSortOrder,
+import type {
+  ExportMetadata,
+  ExportResponsesToCsvOptions,
+  ExportPiiField,
+  ResponsesCsvExportScope,
+  ResponsesCsvSortOrder,
 } from "../lib/exportResponses";
 import { getPublicFormPath, getPublicRoadmapPath } from "../lib/publicLinks";
-import {
-  createFormOnChain,
-  createMetadataDigest,
-  deleteFormOnChain,
-  getSelectedProjectId,
-  serializeProjectFormMetadataReference,
-  triageStatusToOnchainStatus,
-  updateSignalStatusOnChain,
-} from "../lib/projectRegistry";
-import { isSuiRateLimitError } from "../lib/sui";
+import { ACCESS_CONTROL_PACKAGE_ID, isSuiRateLimitError } from "../lib/sui";
 import { clearDeepSignalPolicyCapabilityCache } from "../lib/debugCache";
 import { formatResponseDeadline, type ResponseDeadlineLabels } from "../lib/responseDeadline";
 import { getSubmissionRespondentMeta } from "../lib/respondentMeta";
@@ -141,11 +129,6 @@ import { markDeletedFormTombstones } from "../storage/deletedFormTombstones";
 import { forcePurgeFormArtifacts } from "../storage/forcePurgeFormArtifacts";
 import { saveFormMetadataOverlay } from "../storage/formMetadataOverlay";
 import { deleteFormsFromLocalCache, getStorageRuntimeStatus } from "../storage/storageFactory";
-import {
-  appendWalrusBlobDeletesToTransaction,
-  collectWalrusBlobDeleteObjectIds,
-  extractMissingWalrusDeleteObjectIds,
-} from "../storage/walrusAdapter";
 import type { ActivityEvent, FormSchema, Submission } from "../types";
 
 const MOBILE_REVIEW_MEDIA_QUERY = "(max-width: 768px)";
@@ -170,6 +153,46 @@ const DEMO_FLOW_VISIBLE = false;
 const PROJECT_RECOVERY_NOTICE_ACK_KEY = "deepsignal.admin.projectRecoveryNoticeAck";
 const WORKSPACE_RECOVERY_TIMEOUT_MS = 4000;
 const LazyWorkspaceInsights = lazy(() => import("../features/admin/components/WorkspaceInsights"));
+
+function loadCsvExportModule() {
+  return import("../lib/exportResponses");
+}
+
+function loadProjectRegistryWriteModule() {
+  return import("../lib/projectRegistry");
+}
+
+function loadSuiTransactionModule() {
+  return import("@mysten/sui/transactions");
+}
+
+function loadWalrusDeleteModule() {
+  return import("../storage/walrusAdapter");
+}
+
+function normalizeProjectObjectId(value?: string | null) {
+  if (!value) {
+    return "";
+  }
+  const trimmed = value.trim().toLowerCase();
+  if (!trimmed) {
+    return "";
+  }
+  return trimmed.startsWith("0x") ? trimmed : `0x${trimmed}`;
+}
+
+function getSelectedProjectIdSnapshot() {
+  if (typeof window === "undefined") {
+    return "";
+  }
+  const namespace = normalizeProjectObjectId(ACCESS_CONTROL_PACKAGE_ID) || "unconfigured";
+  try {
+    return normalizeProjectObjectId(window.localStorage.getItem(`deepsignal.projectRegistry.selectedProjectId:${namespace}`));
+  } catch {
+    return "";
+  }
+}
+
 type WorkspaceTab = "review" | "activity" | "insights" | "members";
 type QuickActionId = "reviewing" | "resolve" | "publish" | "archive";
 type KeyboardShortcutAction = QuickActionId | "next" | "previous" | "search" | "help";
@@ -1577,9 +1600,9 @@ export function AdminDashboardPage() {
     if (params.get("scope") === "all" || params.get("form")) {
       return "all";
     }
-    return getSelectedProjectId() ? "project" : "all";
+    return getSelectedProjectIdSnapshot() ? "project" : "all";
   });
-  const previousSelectedProjectIdRef = useRef<string | null>(getSelectedProjectId());
+  const previousSelectedProjectIdRef = useRef<string | null>(getSelectedProjectIdSnapshot());
   const {
     forms,
     loading,
@@ -1607,7 +1630,7 @@ export function AdminDashboardPage() {
     accountAddress: wallet.accountAddress,
     capabilityProfile,
     sortOrder: signalSortOrder,
-    scopeProjectId: getSelectedProjectId(),
+    scopeProjectId: getSelectedProjectIdSnapshot(),
     viewScope: signalViewScope,
   });
   const versionCounts = useMemo(
@@ -1890,6 +1913,11 @@ export function AdminDashboardPage() {
       manifestBlobIds: [...selectedManifestBlobIds],
       blobIds: [...selectedFormBlobIds],
     });
+    const {
+      appendWalrusBlobDeletesToTransaction,
+      collectWalrusBlobDeleteObjectIds,
+      extractMissingWalrusDeleteObjectIds,
+    } = await loadWalrusDeleteModule();
     let walrusBlobObjectIds = collectWalrusBlobDeleteObjectIds(expandedIds);
     const onchainDeleteTargets = [
       ...new Set(
@@ -1915,6 +1943,8 @@ export function AdminDashboardPage() {
 
       while (true) {
         try {
+          const { Transaction } = await loadSuiTransactionModule();
+          const { deleteFormOnChain } = await loadProjectRegistryWriteModule();
           let tx = new Transaction();
           if (selectedProjectIdForDelete) {
             for (const onchainFormId of onchainDeleteTargets) {
@@ -2121,6 +2151,11 @@ export function AdminDashboardPage() {
     });
     setRegisteringFormId(formId);
     try {
+      const {
+        createFormOnChain,
+        createMetadataDigest,
+        serializeProjectFormMetadataReference,
+      } = await loadProjectRegistryWriteModule();
       const formMetadataDigest =
         form.formMetadataDigest ??
         await createMetadataDigest({
@@ -2778,10 +2813,13 @@ export function AdminDashboardPage() {
         await storageAdapter.updateSubmission(normalized);
         const signalRecord = signalIndex.signalById[normalized.id];
         const projectId = signalRecord?.form.projectId;
-        const nextOnchainStatus =
+        const onchainStatusModule =
           projectId && typeof normalized.onchainSignalId === "number"
-            ? triageStatusToOnchainStatus(normalized.triageStatus, normalized.status)
-            : undefined;
+            ? await loadProjectRegistryWriteModule()
+            : null;
+        const nextOnchainStatus = onchainStatusModule
+          ? onchainStatusModule.triageStatusToOnchainStatus(normalized.triageStatus, normalized.status)
+          : undefined;
         const needsOnchainSync =
           Boolean(projectId) &&
           typeof normalized.onchainSignalId === "number" &&
@@ -2789,8 +2827,8 @@ export function AdminDashboardPage() {
           nextOnchainStatus !== undefined &&
           normalized.onchainStatus !== nextOnchainStatus;
 
-        if (needsOnchainSync && projectId && nextOnchainStatus) {
-          const tx = updateSignalStatusOnChain({
+        if (needsOnchainSync && projectId && nextOnchainStatus && onchainStatusModule) {
+          const tx = onchainStatusModule.updateSignalStatusOnChain({
             projectId,
             signalId: normalized.onchainSignalId ?? 0,
             status: nextOnchainStatus,
@@ -3331,6 +3369,7 @@ export function AdminDashboardPage() {
       responseOverrides: getCsvResponseOverrides(),
       versionedForms,
     };
+    const { buildExportMetadata } = await loadCsvExportModule();
     const metadata = buildExportMetadata(selectedRecord.form, responses, options);
     setPendingCsvExportForm(selectedRecord.form);
     setPendingCsvExportResponses(responses);
@@ -3367,6 +3406,7 @@ export function AdminDashboardPage() {
       },
       versionedForms,
     };
+    const { buildExportMetadata } = await loadCsvExportModule();
     const metadata = buildExportMetadata(form, responses, options);
     setPendingCsvExportForm(form);
     setPendingCsvExportResponses(responses);
@@ -3374,7 +3414,8 @@ export function AdminDashboardPage() {
     setPendingCsvExportOptions({ ...options, metadata });
   }
 
-  function handleToggleCsvPiiField(field: ExportPiiField) {
+  async function handleToggleCsvPiiField(field: ExportPiiField) {
+    const { buildExportMetadata } = await loadCsvExportModule();
     setExcludedCsvPiiFields((current) => {
       const next = current.includes(field) ? current.filter((item) => item !== field) : [...current, field];
       if (pendingCsvExportMetadata && pendingCsvExportForm && pendingCsvExportOptions) {
@@ -3392,11 +3433,12 @@ export function AdminDashboardPage() {
     });
   }
 
-  function handleConfirmCsvExport() {
+  async function handleConfirmCsvExport() {
     if (!pendingCsvExportForm || !pendingCsvExportOptions) {
       return;
     }
     try {
+      const { exportResponsesToCsv } = await loadCsvExportModule();
       const result = exportResponsesToCsv(pendingCsvExportForm, pendingCsvExportResponses, pendingCsvExportOptions);
       if (result?.exported) {
         setPendingCsvExportMetadata(null);

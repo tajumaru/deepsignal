@@ -528,7 +528,7 @@ export function SignalChannelSelector({
                 }}
               >
                 <NodeDirectoryTriggerIcon />
-                <span className="sr-only">{openNodeDirectoryLabel}</span>
+                <span>{openNodeDirectoryLabel}</span>
               </button>
             </div>
           </div>

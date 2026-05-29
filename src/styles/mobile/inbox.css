@@ -318,10 +318,16 @@
   }
 
   .signal-channel-selector-mobile .signal-channel-menu {
+    position: static;
+    top: auto;
     left: 0;
     right: 0;
     width: 100%;
-    max-height: min(64vh, 34rem);
+    max-height: min(42dvh, calc(100dvh - 16rem), 24rem);
+    margin-top: 0.55rem;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
   }
 
   .mobile-inbox-icon-button {

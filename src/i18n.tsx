@@ -1723,7 +1723,7 @@ const messages = {
     demoFlowStep6: "Step 6: Publish safe metadata to the roadmap.",
     activeNodeSummary: (params) =>
       `${params?.count ?? 0} ${Number(params?.count ?? 0) === 1 ? "active node" : "active nodes"}`,
-    openNodeDirectory: "Open Node Directory",
+    openNodeDirectory: "Manage Channels",
     nodeDirectoryTitle: "Node Directory",
     nodeDirectoryDescription:
       "Compact node routing for creator-owned signal forms, with unread counts and quick context switching.",
@@ -4715,7 +4715,7 @@ const messages = {
     demoFlowStep6:
       "Step 6: roadmap \u306b\u5b89\u5168\u306a metadata \u3092\u516c\u958b\u3057\u307e\u3059\u3002",
     activeNodeSummary: (params) => `${params?.count ?? 0} \u4ef6\u306e\u30a2\u30af\u30c6\u30a3\u30d6\u30ce\u30fc\u30c9`,
-    openNodeDirectory: "\u30ce\u30fc\u30c9\u4e00\u89a7\u3092\u958b\u304f",
+    openNodeDirectory: "\u30c1\u30e3\u30f3\u30cd\u30eb\u7ba1\u7406",
     nodeDirectoryTitle: "\u30ce\u30fc\u30c9\u4e00\u89a7",
     nodeDirectoryDescription:
       "creator \u6240\u6709\u306e signal form \u3092\u30b3\u30f3\u30d1\u30af\u30c8\u306b\u7ba1\u7406\u3057\u3001\u672a\u8aad\u6570\u3068\u5207\u308a\u66ff\u3048\u3092\u307e\u3068\u3081\u3066\u78ba\u8a8d\u3067\u304d\u307e\u3059\u3002",

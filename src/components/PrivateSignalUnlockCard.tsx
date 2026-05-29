@@ -3,7 +3,7 @@ import { useId, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import type { DecryptDiagnosticContext } from "../crypto/decryptDiagnostics";
 import { useI18n } from "../i18n";
-import { sanitizeCsvCell } from "../lib/exportResponses";
+import { sanitizeCsvCell } from "../lib/csv";
 import {
   didResetFullySucceed,
   RESET_CONFIRMATION_MESSAGE,

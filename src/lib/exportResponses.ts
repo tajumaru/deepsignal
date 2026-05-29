@@ -1,6 +1,7 @@
 import type { Language } from "../i18n";
 import type { FormSchema, Submission } from "../types";
 import { formatAnswerText } from "./answerFormatting";
+import { sanitizeCsvCell } from "./csv";
 import { getSubmissionRespondentMeta } from "./respondentMeta";
 import { getSubmissionVersion } from "./submissionVersioning";
 import type { VersionedFormSchemas } from "./formVersionSchemas";
@@ -10,6 +11,8 @@ const CSV_MIME_TYPE = "text/csv;charset=utf-8";
 const CSV_BOM = "\uFEFF";
 const EXPORT_AUDIT_LOG_KEY = "deepsignal.exportAuditLog.v1";
 const MAX_AUDIT_LOG_ENTRIES = 100;
+
+export { sanitizeCsvCell } from "./csv";
 
 interface ResponseExportOverride {
   answers?: Record<string, unknown>;
@@ -156,12 +159,6 @@ function buildQuestionColumns(
   );
   const uniqueHeaders = makeUniqueHeaders(columns.map((column) => column.header));
   return columns.map((column, index) => ({ ...column, header: uniqueHeaders[index] }));
-}
-
-export function sanitizeCsvCell(value: unknown) {
-  const text = String(value ?? "");
-  const safeText = /^[\t\r\n ]*[=+\-@]/.test(text) ? `'${text}` : text;
-  return `"${safeText.replace(/"/g, '""')}"`;
 }
 
 function getSubmissionTime(submission: Submission) {
