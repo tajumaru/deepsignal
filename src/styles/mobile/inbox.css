@@ -245,6 +245,63 @@
     -webkit-backdrop-filter: blur(18px);
   }
 
+  .mobile-signal-inbox .inbox-timeline-overview {
+    margin: 0.62rem 0 0.1rem;
+    padding: 0.56rem 0.62rem;
+    border-radius: 14px;
+  }
+
+  .mobile-signal-inbox .inbox-timeline-overview-head {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .mobile-signal-inbox .inbox-timeline-overview-head .signal-chip {
+    justify-self: start;
+  }
+
+  .mobile-signal-inbox .inbox-timeline-event-strip,
+  .mobile-signal-inbox .inbox-trend-card-grid {
+    display: flex;
+    gap: 0.55rem;
+    margin-inline: -0.12rem;
+    padding: 0.05rem 0.12rem 0.28rem;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .mobile-signal-inbox .inbox-timeline-event-strip::-webkit-scrollbar,
+  .mobile-signal-inbox .inbox-trend-card-grid::-webkit-scrollbar {
+    display: none;
+  }
+
+  .mobile-signal-inbox .inbox-timeline-event,
+  .mobile-signal-inbox .inbox-trend-card {
+    flex: 0 0 min(82vw, 17.5rem);
+  }
+
+  .mobile-signal-inbox .inbox-timeline-event-meta {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .mobile-signal-inbox .inbox-timeline-overview.is-compact {
+    gap: 0.38rem;
+  }
+
+  .mobile-signal-inbox .inbox-activity-chip-row {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .mobile-signal-inbox .inbox-activity-chip-row span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
   .mobile-inbox-header-bar,
   .mobile-inbox-channel-row,
   .mobile-inbox-search-row,
@@ -1031,7 +1088,13 @@
   }
 
   .desktop-signal-inbox.has-selected-signal .review-secondary-sections {
-    display: none;
+    display: grid;
+  }
+
+  .desktop-signal-inbox.has-selected-signal .signal-intelligence-center,
+  .desktop-signal-inbox.has-selected-signal .selected-signal-intelligence-grid,
+  .desktop-signal-inbox.has-selected-signal .signal-intelligence-center-metrics {
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .mobile-inbox-bottom-nav {

@@ -238,6 +238,34 @@ interface SignalTimelineCurrentState {
   phase: SignalTimelineEntry["phase"];
 }
 
+interface InboxTimelineEvent {
+  id: string;
+  label: string;
+  title: string;
+  detail: string;
+  timestamp: string;
+  tone: "intake" | "analysis" | "positive" | "risk";
+}
+
+interface InboxTrendCard {
+  id: "rising-topic" | "positive-trend" | "emerging-risk";
+  label: string;
+  title: string;
+  value: string;
+  detail: string;
+  tone: "topic" | "positive" | "risk";
+}
+
+interface InboxTimelineModel {
+  events: InboxTimelineEvent[];
+  trendCards: InboxTrendCard[];
+  responseGrowthLabel: string;
+  activeTrendLabel: string;
+  unreadCount: number;
+  generatedFromCount: number;
+  hasTrendData: boolean;
+}
+
 function readProjectRecoveryNoticeAcks() {
   if (typeof window === "undefined") {
     return {} as Record<string, string>;
@@ -610,6 +638,437 @@ function getSignalTimelineCurrentState(submission: Submission, entries: SignalTi
     detail: `${t("reviewStateLabel")}: ${getLocalizedSubmissionStatusLabel(submission.status, t)}`,
     phase: "intake",
   };
+}
+
+const TOPIC_STOP_WORDS = new Set([
+  "about",
+  "after",
+  "again",
+  "also",
+  "and",
+  "are",
+  "but",
+  "can",
+  "for",
+  "from",
+  "has",
+  "have",
+  "into",
+  "need",
+  "needs",
+  "not",
+  "our",
+  "signal",
+  "still",
+  "that",
+  "the",
+  "this",
+  "with",
+  "without",
+  "you",
+]);
+
+function compactTimelineText(text: string, maxLength = 96) {
+  const normalized = text.replace(/\s+/g, " ").trim();
+  if (!normalized) {
+    return "";
+  }
+  return normalized.length <= maxLength ? normalized : `${normalized.slice(0, maxLength - 3).trim()}...`;
+}
+
+function getRecordTimestamp(record: SignalRecord, key: "createdAt" | "updatedAt") {
+  const fallback = record.submission.createdAt;
+  return record.submission[key] || fallback;
+}
+
+function extractTrendTopics(record: SignalRecord) {
+  const topics = new Set<string>();
+  (record.submission.keywords ?? []).forEach((keyword) => {
+    const normalized = keyword.trim().toLowerCase();
+    if (normalized) {
+      topics.add(normalized);
+    }
+  });
+  if (record.submission.clusterId?.trim()) {
+    topics.add(record.submission.clusterId.trim().toLowerCase());
+  }
+  record.submission.tags.forEach((tag) => {
+    const normalized = tag.trim().toLowerCase();
+    if (normalized && normalized !== NEEDS_FOLLOW_UP_TAG) {
+      topics.add(normalized);
+    }
+  });
+  const fallbackText = `${record.form.title} ${record.submission.subjectPreview ?? ""} ${record.submission.aiSummary ?? ""}`;
+  fallbackText
+    .toLowerCase()
+    .match(/[a-z][a-z0-9-]{3,}/g)
+    ?.forEach((word) => {
+      if (!TOPIC_STOP_WORDS.has(word)) {
+        topics.add(word);
+      }
+    });
+  return [...topics].slice(0, 8);
+}
+
+function getSentimentScore(submission: Submission) {
+  const corpus = `${submission.emotion ?? ""} ${submission.aiSummary ?? ""} ${submission.subjectPreview ?? ""}`.toLowerCase();
+  let score = 0;
+  if (/(hopeful|happy|excited|positive|praise|love|good|great|thanks|resolved|momentum)/.test(corpus)) {
+    score += 1;
+  }
+  if (/(urgent|fear|fearful|angry|frustrated|concerned|anxious|drained|guarded|risk|blocked|critical|panic|retaliation)/.test(corpus)) {
+    score -= 1;
+  }
+  if (typeof submission.ratingValue === "number") {
+    if (submission.ratingValue >= 4) {
+      score += 1;
+    } else if (submission.ratingValue <= 2) {
+      score -= 1;
+    }
+  }
+  return score;
+}
+
+function getSentimentLabel(delta: number, average: number, t: TranslationFn) {
+  if (delta >= 0.35) {
+    return t("inboxTimelineSentimentImprovingTitle");
+  }
+  if (delta <= -0.35) {
+    return t("inboxTimelineSentimentSofteningTitle");
+  }
+  if (average > 0.25) {
+    return t("inboxTimelineSentimentPositiveTitle");
+  }
+  if (average < -0.25) {
+    return t("inboxTimelineSentimentRiskTitle");
+  }
+  return t("inboxTimelineSentimentSteadyTitle");
+}
+
+function averageSentiment(records: SignalRecord[]) {
+  if (records.length === 0) {
+    return 0;
+  }
+  return records.reduce((sum, record) => sum + getSentimentScore(record.submission), 0) / records.length;
+}
+
+function countTopics(records: SignalRecord[]) {
+  const counts = new Map<string, number>();
+  records.forEach((record) => {
+    extractTrendTopics(record).forEach((topic) => {
+      counts.set(topic, (counts.get(topic) ?? 0) + 1);
+    });
+  });
+  return counts;
+}
+
+function getTopTopic(records: SignalRecord[]) {
+  return [...countTopics(records).entries()].sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]))[0] ?? null;
+}
+
+function countRiskSignals(records: SignalRecord[]) {
+  return records.filter((record) => {
+    const corpus = `${record.submission.emotion ?? ""} ${record.submission.aiSummary ?? ""} ${record.submission.subjectPreview ?? ""}`.toLowerCase();
+    return (
+      record.submission.priority === "high" ||
+      record.submission.severity === "high" ||
+      hasNeedsFollowUp(record.submission) ||
+      /(risk|urgent|critical|blocked|failure|fails|unsafe|retaliation|missing|abuse|trapped)/.test(corpus)
+    );
+  }).length;
+}
+
+function buildInboxTimelineModel(records: SignalRecord[], t: TranslationFn): InboxTimelineModel {
+  const sorted = [...records].sort(
+    (left, right) => Date.parse(getRecordTimestamp(left, "createdAt")) - Date.parse(getRecordTimestamp(right, "createdAt")),
+  );
+  const latestRecord = sorted[sorted.length - 1] ?? null;
+  const midpoint = Math.max(1, Math.floor(sorted.length / 2));
+  const previousRecords = sorted.slice(0, midpoint);
+  const recentRecords = sorted.slice(midpoint);
+  const latestCreatedAt = latestRecord ? getRecordTimestamp(latestRecord, "createdAt") : new Date().toISOString();
+  const recentCount = recentRecords.length || sorted.length;
+  const previousCount = previousRecords.length;
+  const growthDelta = Math.max(0, recentCount - previousCount);
+  const summaryRecords = sorted.filter((record) => record.submission.aiSummary?.trim());
+  const latestSummaryRecord = [...summaryRecords].sort(
+    (left, right) => Date.parse(getRecordTimestamp(right, "updatedAt")) - Date.parse(getRecordTimestamp(left, "updatedAt")),
+  )[0] ?? null;
+  const recentSentiment = averageSentiment(recentRecords.length > 0 ? recentRecords : sorted);
+  const previousSentiment = averageSentiment(previousRecords);
+  const sentimentDelta = recentSentiment - previousSentiment;
+  const sentimentTitle = getSentimentLabel(sentimentDelta, recentSentiment, t);
+  const recentTopicCounts = countTopics(recentRecords.length > 0 ? recentRecords : sorted);
+  const previousTopicCounts = countTopics(previousRecords);
+  const risingTopic =
+    [...recentTopicCounts.entries()].sort((left, right) => {
+      const leftDelta = left[1] - (previousTopicCounts.get(left[0]) ?? 0);
+      const rightDelta = right[1] - (previousTopicCounts.get(right[0]) ?? 0);
+      return rightDelta - leftDelta || right[1] - left[1] || left[0].localeCompare(right[0]);
+    })[0] ?? getTopTopic(sorted);
+  const positiveCount = sorted.filter((record) => getSentimentScore(record.submission) > 0).length;
+  const riskCount = countRiskSignals(sorted);
+  const latestRiskRecord =
+    [...sorted].reverse().find((record) => countRiskSignals([record]) > 0) ?? latestRecord;
+
+  const events: InboxTimelineEvent[] = [
+    {
+      id: "response-growth",
+      label: t("inboxTimelineResponseGrowthLabel"),
+      title: t("inboxTimelineResponseGrowthTitle", { count: sorted.length }),
+      detail:
+        growthDelta > 0
+          ? t("inboxTimelineResponseGrowthDetail", { recent: recentCount, delta: growthDelta })
+          : t("inboxTimelineResponseSteadyDetail", { recent: recentCount }),
+      timestamp: latestCreatedAt,
+      tone: "intake" as const,
+    },
+    latestSummaryRecord
+      ? {
+          id: "ai-summary",
+          label: t("inboxTimelineAiSummaryLabel"),
+          title: t("inboxTimelineAiSummaryTitle", { count: summaryRecords.length }),
+          detail: compactTimelineText(latestSummaryRecord.submission.aiSummary ?? t("inboxTimelineAiSummaryFallback")),
+          timestamp: getRecordTimestamp(latestSummaryRecord, "updatedAt"),
+          tone: "analysis" as const,
+        }
+      : {
+          id: "ai-summary",
+          label: t("inboxTimelineAiSummaryLabel"),
+          title: t("inboxTimelineAiSummaryPendingTitle"),
+          detail: t("inboxTimelineAiSummaryPendingDetail"),
+          timestamp: latestCreatedAt,
+          tone: "analysis" as const,
+        },
+    {
+      id: "sentiment",
+      label: t("inboxTimelineSentimentLabel"),
+      title: sentimentTitle,
+      detail: t("inboxTimelineSentimentDetail", {
+        positive: positiveCount,
+        risk: riskCount,
+      }),
+      timestamp: latestRecord ? getRecordTimestamp(latestRecord, "updatedAt") : latestCreatedAt,
+      tone: recentSentiment >= 0 ? "positive" as const : "risk" as const,
+    },
+  ].sort((left, right) => Date.parse(right.timestamp) - Date.parse(left.timestamp));
+
+  const trendCards: InboxTrendCard[] = [
+    {
+      id: "rising-topic",
+      label: t("inboxTrendRisingTopicLabel"),
+      title: risingTopic ? risingTopic[0] : t("inboxTrendNoTopicTitle"),
+      value: risingTopic ? t("inboxTrendSignalCount", { count: risingTopic[1] }) : t("inboxTrendNoDataValue"),
+      detail: risingTopic
+        ? t("inboxTrendRisingTopicDetail", { topic: risingTopic[0], count: risingTopic[1] })
+        : t("inboxTrendNoTopicDetail"),
+      tone: "topic",
+    },
+    {
+      id: "positive-trend",
+      label: t("inboxTrendPositiveLabel"),
+      title: positiveCount > 0 ? t("inboxTrendPositiveTitle") : t("inboxTrendPositiveQuietTitle"),
+      value: t("inboxTrendSignalCount", { count: positiveCount }),
+      detail:
+        sentimentDelta > 0
+          ? t("inboxTrendPositiveRisingDetail")
+          : t("inboxTrendPositiveDetail", { count: positiveCount }),
+      tone: "positive",
+    },
+    {
+      id: "emerging-risk",
+      label: t("inboxTrendRiskLabel"),
+      title: riskCount > 0 ? t("inboxTrendRiskTitle") : t("inboxTrendRiskQuietTitle"),
+      value: t("inboxTrendSignalCount", { count: riskCount }),
+      detail: latestRiskRecord
+        ? compactTimelineText(latestRiskRecord.submission.aiSummary || latestRiskRecord.submission.subjectPreview || t("inboxTrendRiskFallback"))
+        : t("inboxTrendRiskQuietDetail"),
+      tone: "risk",
+    },
+  ];
+
+  return {
+    events,
+    trendCards,
+    responseGrowthLabel:
+      growthDelta > 0
+        ? t("inboxTimelineGrowthPill", { delta: growthDelta })
+        : t("inboxTimelineGrowthSteadyPill"),
+    activeTrendLabel: risingTopic && sorted.length > 0 ? risingTopic[0] : t("inboxTimelineNoActiveTrend"),
+    unreadCount: sorted.filter((record) => record.submission.status === "unread").length,
+    generatedFromCount: sorted.length,
+    hasTrendData: sorted.length >= 2,
+  };
+}
+
+function InboxTimelineOverview({
+  model,
+  t,
+  compact = false,
+}: {
+  model: InboxTimelineModel;
+  t: TranslationFn;
+  compact?: boolean;
+}) {
+  if (compact) {
+    return (
+      <section className="inbox-timeline-overview is-compact" aria-label={t("inboxActivityTitle")}>
+        <div className="inbox-timeline-overview-head">
+          <div>
+            <p className="eyebrow">{t("inboxActivityEyebrow")}</p>
+            <h3>{t("inboxActivityTitle")}</h3>
+          </div>
+        </div>
+        <div className="inbox-activity-chip-row">
+          <span>{t("inboxActivityResponses", { count: model.generatedFromCount })}</span>
+          <span>{t("inboxActivityUnread", { count: model.unreadCount })}</span>
+          <span>{model.activeTrendLabel}</span>
+          <span>{model.responseGrowthLabel}</span>
+        </div>
+        {model.generatedFromCount === 0 ? (
+          <p className="muted inbox-timeline-derived-note">{t("inboxActivityInsufficientData")}</p>
+        ) : null}
+      </section>
+    );
+  }
+
+  return (
+    <section className="inbox-timeline-overview" aria-label={t("inboxTimelineOverviewTitle")}>
+      <div className="inbox-timeline-overview-head">
+        <div>
+          <p className="eyebrow">{t("inboxTimelineOverviewEyebrow")}</p>
+          <h3>{t("inboxTimelineOverviewTitle")}</h3>
+          <p className="muted">{t("inboxTimelineOverviewBody", { count: model.generatedFromCount })}</p>
+        </div>
+        <span className="signal-chip signal-chip-soft">{model.responseGrowthLabel}</span>
+      </div>
+
+      <div className="inbox-timeline-event-strip">
+        {model.events.map((event) => (
+          <article key={event.id} className={`inbox-timeline-event is-${event.tone}`}>
+            <div className="inbox-timeline-event-meta">
+              <span>{event.label}</span>
+              <time dateTime={event.timestamp} title={formatDate(event.timestamp)}>
+                {formatDate(event.timestamp)}
+              </time>
+            </div>
+            <strong>{event.title}</strong>
+            <p>{event.detail}</p>
+          </article>
+        ))}
+      </div>
+
+      {model.hasTrendData ? (
+        <div className="inbox-trend-card-grid" aria-label={t("inboxTrendCardsTitle")}>
+          {model.trendCards.map((card) => (
+            <article key={card.id} className={`inbox-trend-card is-${card.tone}`}>
+              <span className="inbox-trend-card-label">{card.label}</span>
+              <strong>{card.title}</strong>
+              <span className="inbox-trend-card-value">{card.value}</span>
+              <p>{card.detail}</p>
+            </article>
+          ))}
+        </div>
+      ) : null}
+      <p className="muted inbox-timeline-derived-note">{t("inboxTimelineOverviewDerivedHint")}</p>
+    </section>
+  );
+}
+
+function SignalIntelligenceCenter({
+  model,
+  t,
+}: {
+  model: InboxTimelineModel;
+  t: TranslationFn;
+}) {
+  const empty = model.generatedFromCount === 0;
+  const cards = empty
+    ? [
+        { id: "live-trends", label: t("intelligenceCenterLiveTrendsTitle"), detail: t("intelligenceCenterLiveTrendsEmpty") },
+        { id: "ai-insights", label: t("intelligenceCenterAiInsightsTitle"), detail: t("intelligenceCenterAiInsightsEmpty") },
+        { id: "follow-up", label: t("intelligenceCenterFollowUpTitle"), detail: t("intelligenceCenterFollowUpEmpty") },
+      ]
+    : [
+        { id: "live-trends", label: t("intelligenceCenterLiveTrendsTitle"), detail: model.activeTrendLabel },
+        { id: "ai-insights", label: t("intelligenceCenterAiInsightsTitle"), detail: model.events.find((event) => event.id === "ai-summary")?.detail ?? t("inboxTimelineAiSummaryPendingDetail") },
+        { id: "follow-up", label: t("intelligenceCenterFollowUpTitle"), detail: model.unreadCount > 0 ? t("intelligenceCenterFollowUpUnread", { count: model.unreadCount }) : t("intelligenceCenterFollowUpStable") },
+      ];
+
+  return (
+    <section className={`signal-intelligence-center ${empty ? "is-empty" : ""}`}>
+      <div className="signal-intelligence-center-head">
+        <p className="eyebrow">{t("signalIntelligenceEyebrow")}</p>
+        <h2>{t("signalIntelligenceCenterTitle")}</h2>
+        <p className="muted">
+          {empty ? t("signalIntelligenceCenterEmptyBody") : t("signalIntelligenceCenterBody", { count: model.generatedFromCount })}
+        </p>
+      </div>
+      <div className="signal-intelligence-center-metrics">
+        <span>{t("inboxActivityResponses", { count: model.generatedFromCount })}</span>
+        <span>{t("inboxActivityUnread", { count: model.unreadCount })}</span>
+        <span>{model.responseGrowthLabel}</span>
+      </div>
+      <div className="signal-intelligence-center-card-grid">
+        {cards.map((card) => (
+          <article key={card.id} className={`signal-intelligence-center-card ${empty ? "is-disabled" : ""}`}>
+            <strong>{card.label}</strong>
+            <p>{card.detail}</p>
+          </article>
+        ))}
+      </div>
+      {!empty && model.hasTrendData ? (
+        <div className="signal-intelligence-center-trends">
+          {model.trendCards.map((card) => (
+            <article key={card.id} className={`inbox-trend-card is-${card.tone}`}>
+              <span className="inbox-trend-card-label">{card.label}</span>
+              <strong>{card.title}</strong>
+              <p>{card.detail}</p>
+            </article>
+          ))}
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+function SelectedSignalIntelligenceCard({
+  record,
+  t,
+}: {
+  record: SignalRecord;
+  t: TranslationFn;
+}) {
+  const aiSummary = record.submission.aiSummary?.trim() || t("selectedSignalAiSummaryPending");
+  const followUp = hasNeedsFollowUp(record.submission)
+    ? t("selectedSignalFollowUpRequested")
+    : record.submission.priority === "high" || record.submission.severity === "high"
+      ? t("selectedSignalFollowUpSuggested")
+      : t("selectedSignalFollowUpStable");
+  const trendLabel = record.submission.clusterId || record.submission.keywords?.[0] || record.category;
+
+  return (
+    <section className="answer-card selected-signal-intelligence-card">
+      <div className="signal-detail-group-header">
+        <p className="eyebrow">{t("signalIntelligenceEyebrow")}</p>
+        <h3>{t("selectedSignalIntelligenceTitle")}</h3>
+      </div>
+      <div className="selected-signal-intelligence-grid">
+        <article>
+          <span>{t("selectedSignalTrendDetectionLabel")}</span>
+          <strong>{trendLabel}</strong>
+        </article>
+        <article>
+          <span>{t("selectedSignalAiSummaryLabel")}</span>
+          <p>{aiSummary}</p>
+        </article>
+        <article>
+          <span>{t("selectedSignalFollowUpLabel")}</span>
+          <p>{followUp}</p>
+        </article>
+      </div>
+    </section>
+  );
 }
 
 type TranslationFn = ReturnType<typeof useI18n>["t"];
@@ -1367,6 +1826,7 @@ interface MobileSignalInboxProps {
   sortOrder: SignalSortOrder;
   onSortOrderChange: (value: SignalSortOrder) => void;
   visibleSignals: SignalRecord[];
+  timelineModel: InboxTimelineModel;
   hasMoreSignals: boolean;
   onLoadMoreSignals: () => void;
   selectedRecord: SignalRecord | null;
@@ -1416,6 +1876,7 @@ function MobileSignalInbox({
   sortOrder,
   onSortOrderChange,
   visibleSignals,
+  timelineModel,
   hasMoreSignals,
   onLoadMoreSignals,
   selectedRecord,
@@ -1488,6 +1949,8 @@ function MobileSignalInbox({
         onRevealCreateProject={onRevealCreateProject}
         onRevealConnectProject={onRevealConnectProject}
       />
+
+      <InboxTimelineOverview model={timelineModel} t={t} compact />
 
       <div className="mobile-signal-list" aria-live="polite">
         {visibleSignals.length === 0
@@ -1654,6 +2117,10 @@ export function AdminDashboardPage() {
   const visibleSignals = useMemo(
     () => unversionedVisibleSignals.filter((record) => matchesSubmissionVersion(record.submission, selectedVersion)),
     [selectedVersion, unversionedVisibleSignals],
+  );
+  const inboxTimelineModel = useMemo(
+    () => buildInboxTimelineModel(visibleSignals, t),
+    [visibleSignals, t],
   );
   const selectedRecord =
     selectedRecordFromInbox && matchesSubmissionVersion(selectedRecordFromInbox.submission, selectedVersion)
@@ -3939,6 +4406,7 @@ export function AdminDashboardPage() {
             sortOrder={signalSortOrder}
             onSortOrderChange={setSignalSortOrder}
             visibleSignals={renderedVisibleSignals}
+            timelineModel={inboxTimelineModel}
             hasMoreSignals={hasMoreRenderedSignals}
             onLoadMoreSignals={() => setRenderedSignalLimit((current) => current + SIGNAL_LIST_PAGE_SIZE)}
             selectedRecord={hasExplicitSelectedRecord ? selectedRecord : null}
@@ -4199,6 +4667,7 @@ export function AdminDashboardPage() {
                   />
                 </div>
               </div>
+              <InboxTimelineOverview model={inboxTimelineModel} t={t} compact />
               {hasAdminAccess ? (
                 <section className="answer-card answer-card-plain optional-proof-queue-panel">
                   <div className="section-row">
@@ -4404,16 +4873,7 @@ export function AdminDashboardPage() {
 
             <article ref={signalDetailPanelRef} className="panel signal-detail-column">
               {!selectedRecord ? (
-                <EmptyState
-                  className="signal-detail-empty-state"
-                  variant="abyss"
-                  animated={false}
-                  showVisual={false}
-                >
-                  <p className="eyebrow">{t("signalDetailTitle")}</p>
-                  <h2>{t("noSignalSelectedTitle")}</h2>
-                  <p>{t("noSignalSelectedBody")}</p>
-                </EmptyState>
+                <SignalIntelligenceCenter model={inboxTimelineModel} t={t} />
               ) : (
                 <>
                   <section className="answer-card signal-detail-hero">
@@ -4616,6 +5076,7 @@ export function AdminDashboardPage() {
 
                   {!isReviewerFocusMode ? (
                   <div className="signal-detail-sections review-secondary-sections">
+                    <SelectedSignalIntelligenceCard record={selectedRecord} t={t} />
                     <SignalTimelineSection
                       open={detailSectionsState.signalTimelineOpen}
                       onToggle={() => setDetailSectionOpen("signalTimelineOpen", !detailSectionsState.signalTimelineOpen)}
