@@ -1,42 +1,5 @@
 /* Buttons, chips, badges, pills, empty states, and feedback controls shared across pages. */
 
-.build-indicator-button {
-  display: inline-flex;
-  max-width: min(80vw, 34rem);
-  padding: 0.22rem 0.38rem;
-  border: 0;
-  border-radius: var(--radius-sm);
-  background:
-    linear-gradient(90deg, rgba(102, 227, 255, 0.04), rgba(85, 170, 255, 0.015)),
-    rgba(4, 15, 25, 0.24);
-  color: rgba(255, 222, 89, 0.78);
-  font-family: "Consolas", "SFMono-Regular", "Roboto Mono", monospace;
-  font-size: 0.62rem;
-  line-height: 1.2;
-  letter-spacing: 0.04em;
-  text-align: right;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  opacity: 0.52;
-  pointer-events: auto;
-  text-shadow: 0 0 8px rgba(255, 206, 74, 0.28);
-  transition:
-    opacity var(--transition-fast),
-    color var(--transition-fast),
-    background var(--transition-fast);
-}
-
-.build-indicator-button:hover,
-.build-indicator-button:focus-visible {
-  color: rgba(255, 238, 148, 0.95);
-  background:
-    linear-gradient(90deg, rgba(102, 227, 255, 0.07), rgba(85, 170, 255, 0.025)),
-    rgba(4, 15, 25, 0.34);
-  opacity: 0.82;
-  outline: none;
-}
-
 .info-pills {
   display: flex;
   gap: 0.75rem;

@@ -3,8 +3,9 @@ import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
 
-const { walletSurfaceSpy, routeFailures } = vi.hoisted(() => ({
+const { walletSurfaceSpy, walrusRuntimeSurfaceSpy, routeFailures } = vi.hoisted(() => ({
   walletSurfaceSpy: vi.fn(),
+  walrusRuntimeSurfaceSpy: vi.fn(),
   routeFailures: {
     explore: null as Error | null,
   },
@@ -22,6 +23,16 @@ vi.mock("./components/AppShell", () => ({
   }) => <div data-testid="app-shell" data-chrome={chrome} data-wallet-available={walletAvailable ? "yes" : "no"}>{children}</div>,
 }));
 
+vi.mock("./components/PublicAppShell", () => ({
+  PublicAppShell: ({ children }: { children: React.ReactNode }) => (
+    <div data-testid="app-shell" data-chrome="public" data-wallet-available="no">{children}</div>
+  ),
+}));
+
+vi.mock("./components/system/BuildUpdateBanner", () => ({
+  BuildUpdateBanner: () => null,
+}));
+
 vi.mock("./components/WalletSurface", () => ({
   WalletSurface: ({ children }: { children: React.ReactNode }) => {
     walletSurfaceSpy();
@@ -30,7 +41,10 @@ vi.mock("./components/WalletSurface", () => ({
 }));
 
 vi.mock("./components/WalrusRuntimeSurface", () => ({
-  WalrusRuntimeSurface: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  WalrusRuntimeSurface: ({ children }: { children: React.ReactNode }) => {
+    walrusRuntimeSurfaceSpy();
+    return <>{children}</>;
+  },
 }));
 
 vi.mock("./pages/LandingPage", () => ({
@@ -73,6 +87,7 @@ describe("App routing", () => {
   afterEach(() => {
     document.body.innerHTML = "";
     walletSurfaceSpy.mockClear();
+    walrusRuntimeSurfaceSpy.mockClear();
     routeFailures.explore = null;
     window.sessionStorage.clear();
     window.localStorage.clear();
@@ -98,6 +113,8 @@ describe("App routing", () => {
 
     await waitFor(() => expect(screen.getByRole("heading", { name: "Public Form Route" })).toBeInTheDocument());
     expect(screen.getByTestId("app-shell")).toHaveAttribute("data-chrome", "public");
+    expect(walletSurfaceSpy).not.toHaveBeenCalled();
+    expect(walrusRuntimeSurfaceSpy).not.toHaveBeenCalled();
   });
 
   it("renders the admin dashboard route on the full chrome", async () => {
@@ -131,7 +148,7 @@ describe("App routing", () => {
       </MemoryRouter>,
     );
 
-    expect(screen.getByRole("heading", { name: "CREATE SIGNALS" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "CREATE SIGNALS" })).toBeInTheDocument();
     expect(screen.getByText("Private by default Permanent by design")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Open Inbox" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Create Signal" })).toBeInTheDocument();
@@ -217,7 +234,7 @@ describe("App routing", () => {
       </MemoryRouter>,
     );
 
-    await screen.findByRole("heading", { name: "Refreshing DeepSignal assets..." });
+    await screen.findByRole("heading", { name: "New version available" });
     expect(screen.getByText(/stale-hash/)).toBeInTheDocument();
   });
 

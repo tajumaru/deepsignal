@@ -1,12 +1,11 @@
 import { useMemo, useRef } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { SignalMetaChip, SignalMetaRow } from "../../../components/SignalMetaChip";
-import { StorageProof } from "../../../components/StorageProof";
+import { PublicSignalMetaChip, PublicSignalMetaRow } from "../../../components/PublicSignalMeta";
+import { PublicStorageProof } from "../../../components/PublicStorageProof";
 import { getEncryptedPayloadAvailabilityLabel, hasDedicatedEncryptedPayloadBlob } from "../../../lib/encryptionDisplay";
 import { useRpcInfrastructure } from "../../../rpcInfrastructure";
 import { getCurrentWalrusNetwork } from "../../../lib/walrusProof";
 import { getSubmissionRespondentMeta } from "../../../lib/respondentMeta";
-import { isLocalFallbackBlob } from "../../../lib/signalInbox";
 import type { Submission } from "../../../types";
 
 interface PublicFormSuccessProps {
@@ -16,6 +15,19 @@ interface PublicFormSuccessProps {
   pendingSuiRegistrationLabel: string;
   signalReceivedLabel: string;
   thanksForFeedbackLabel: string;
+}
+
+function isPublicLocalFallbackBlob(blobId?: string | null) {
+  if (!blobId) {
+    return false;
+  }
+  return (
+    blobId.startsWith("local-") ||
+    blobId.startsWith("todo-") ||
+    blobId.startsWith("walrus-form-") ||
+    blobId.startsWith("walrus-submission-") ||
+    blobId.startsWith("walrus-file-")
+  );
 }
 
 export function PublicFormSuccess({
@@ -31,7 +43,7 @@ export function PublicFormSuccess({
   const submittedRespondentMeta = getSubmissionRespondentMeta(submitted);
   const isEncryptedSubmission = Boolean(submitted.isEncrypted);
   const primaryBlobId = submitted.encryptedBlobId ?? submitted.blobId;
-  const storedOnWalrus = Boolean(primaryBlobId && !isLocalFallbackBlob(primaryBlobId));
+  const storedOnWalrus = Boolean(primaryBlobId && !isPublicLocalFallbackBlob(primaryBlobId));
   const remoteDelivered =
     submitted.remoteSyncStatus === "remote_synced" &&
     submitted.remoteIndexUpdated === true &&
@@ -108,7 +120,7 @@ export function PublicFormSuccess({
               <strong>{remoteDelivered ? "Owner-readable" : "Sync pending"}</strong>
             </div>
             {submitted.remoteIndexTarget ? (
-              <SignalMetaRow label="Remote index" type="manifest" value={submitted.remoteIndexBlobId ?? submitted.remoteIndexTarget} />
+              <PublicSignalMetaRow label="Remote index" type="manifest" value={submitted.remoteIndexBlobId ?? submitted.remoteIndexTarget} />
             ) : null}
             <div className="metadata-row">
               <span>Network</span>
@@ -119,7 +131,7 @@ export function PublicFormSuccess({
               <strong>{providerDetailLabel}</strong>
             </div>
             {submitted.receiptBlobId ? (
-              <SignalMetaRow label="Recovery Path" type="blob" value={submitted.receiptBlobId} />
+              <PublicSignalMetaRow label="Recovery Path" type="blob" value={submitted.receiptBlobId} />
             ) : null}
             {submitted.onchainSignalId !== undefined ? (
               <div className="metadata-row">
@@ -127,17 +139,17 @@ export function PublicFormSuccess({
                 <strong>{submitted.onchainSignalId}</strong>
               </div>
             ) : null}
-            <SignalMetaRow label="Blob ID" type="blob" value={submitted.blobId}>
-              <StorageProof blobId={submitted.blobId} proof={submitted.walrusProof} compact />
-            </SignalMetaRow>
+            <PublicSignalMetaRow label="Blob ID" type="blob" value={submitted.blobId}>
+              <PublicStorageProof blobId={submitted.blobId} proof={submitted.walrusProof} compact />
+            </PublicSignalMetaRow>
             {hasDedicatedEncryptedPayloadBlob(submitted) ? (
-              <SignalMetaRow label="Encrypted evidence blob" type="seal" value={submitted.encryptedBlobId}>
-                <StorageProof
+              <PublicSignalMetaRow label="Encrypted evidence blob" type="seal" value={submitted.encryptedBlobId}>
+                <PublicStorageProof
                   blobId={submitted.encryptedBlobId}
                   proof={submitted.encryptedWalrusProof ?? submitted.walrusProof}
                   compact
                 />
-              </SignalMetaRow>
+              </PublicSignalMetaRow>
             ) : null}
             {submitted.isEncrypted && !hasDedicatedEncryptedPayloadBlob(submitted) ? (
               <div className="metadata-row">
@@ -145,7 +157,7 @@ export function PublicFormSuccess({
                 <strong>{getEncryptedPayloadAvailabilityLabel(submitted)}</strong>
               </div>
             ) : null}
-            <SignalMetaRow label="Seal Identity" type="seal" value={submitted.sealIdentity} emptyLabel={notAvailableLabel} />
+            <PublicSignalMetaRow label="Seal Identity" type="seal" value={submitted.sealIdentity} emptyLabel={notAvailableLabel} />
             <div className="metadata-row">
               <span>Submission mode</span>
               <strong>{submittedRespondentMeta.isAnonymous ? "Anonymous" : "Wallet verified"}</strong>
@@ -169,9 +181,9 @@ export function PublicFormSuccess({
                         <strong>Embedded in private signal</strong>
                       ) : (
                         <>
-                          <SignalMetaChip type="blob" value={attachment.blobId} />
+                          <PublicSignalMetaChip type="blob" value={attachment.blobId} />
                           <div className="signal-meta-row-value">
-                            <StorageProof
+                            <PublicStorageProof
                               blobId={attachment.blobId}
                               proof={attachment.walrusProof}
                               fallbackSize={attachment.size}
@@ -189,7 +201,7 @@ export function PublicFormSuccess({
               <div className="metadata-row signal-success-proof-row">
                 <span>Verification proof</span>
                 <div className="signal-meta-row-value">
-                  <StorageProof
+                  <PublicStorageProof
                     blobId={evidenceBlobId}
                     proof={submitted.encryptedWalrusProof ?? submitted.walrusProof}
                     label="Evidence proof"

@@ -4,11 +4,11 @@ import { createEmptyAnswer, normalizeForm } from "../../../lib/formSchema";
 import { measurePerf } from "../../../lib/perf";
 import { getRepublishFormPath } from "../../../lib/publicLinks";
 import { verifyPublicRouteAssets } from "../../../lib/publicRouteAssets";
-import { verifyWalrusBlob, type WalrusVerificationStatus } from "../../../lib/walrusProof";
-import { upsertFormBlobIndex } from "../../../storage/blobIndex";
 import { localStorageAdapter } from "../../../storage/localStorageAdapter";
 import type { FormSchema } from "../../../types";
 import type { PublicAnswers } from "../types";
+
+type WalrusVerificationStatus = "idle" | "verifying" | "verified" | "not-found" | "failed";
 
 type SharedFormRestoreErrorCode =
   | "aggregator_unconfigured"
@@ -186,6 +186,7 @@ async function enrichLoadErrorDetail(
   const enrichedDetail = { ...detail };
   if (enrichedDetail.manifestBlobId) {
     try {
+      const { verifyWalrusBlob } = await import("../../../lib/walrusProof");
       enrichedDetail.manifestStatus = await verifyWalrusBlob(enrichedDetail.manifestBlobId);
     } catch {
       // Best effort only for the public failure screen.
@@ -193,6 +194,7 @@ async function enrichLoadErrorDetail(
   }
   if (enrichedDetail.formBlobId) {
     try {
+      const { verifyWalrusBlob } = await import("../../../lib/walrusProof");
       enrichedDetail.formBlobStatus = await verifyWalrusBlob(enrichedDetail.formBlobId);
     } catch {
       // Best effort only for the public failure screen.
@@ -358,6 +360,7 @@ export function usePublicFormLoader({
                 manifestBlobId,
               };
               await localStorageAdapter.saveForm(restored);
+              const { upsertFormBlobIndex } = await import("../../../storage/blobIndex");
               upsertFormBlobIndex({
                 formId: restored.id,
                 formBlobId: restoredFormBlobId,

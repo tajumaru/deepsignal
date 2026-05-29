@@ -1,25 +1,20 @@
 import { lazy, Suspense, useEffect, useMemo, useState, type ReactNode } from "react";
-import { Navigate, Route, Routes, useLocation, useParams } from "react-router-dom";
+import { useLocation } from "react-router-dom";
 import { InitialBootReady, useBootOverlay } from "./bootstrap/useBootOverlay";
+import { BuildUpdateBanner } from "./components/system/BuildUpdateBanner";
 import { WalletSurface } from "./components/WalletSurface";
-import { WalrusRuntimeSurface } from "./components/WalrusRuntimeSurface";
 import {
   getMixedBuildStatus,
   recordBuildAsset,
   recoverFromMixedBuildAssets,
 } from "./lib/buildAssetDiagnostics";
-import {
-  subscribeToBuildUpdateNotices,
-  updateDeepSignalToLatest,
-  type BuildUpdateNotice,
-} from "./lib/buildUpdate";
 import { retryLazyImport } from "./lib/lazyRetry";
 import { logRouteLifecycle, setDeepSignalDebugReadiness } from "./lib/routeDiagnostics";
-import { REQUIRE_GLOBAL_WALRUS_RUNTIME } from "./lib/runtimeFlags";
 import { scheduleIdleTask } from "./lib/scheduleIdleTask";
-import { useI18n } from "./i18n";
 import { RpcInfrastructureProvider } from "./RpcInfrastructureProvider";
+import { AppRoutes, PublicAppRoutes } from "./routes/AppRoutes";
 import { ProviderReadinessBarrier, WorkspaceRestoreFallback } from "./routes/ProviderReadinessBarrier";
+import { createRouteComponents } from "./routes/routeComponents";
 import { MixedBuildRecoveryScreen, RouteErrorBoundary } from "./routes/RouteErrorBoundary";
 import { getRouteId } from "./routes/routeDiagnostics";
 
@@ -34,163 +29,8 @@ const PublicAppShell = lazy(() =>
   })),
 );
 
-function createRouteComponents(retryNonce = 0) {
-  void retryNonce;
-  return {
-    AccessManagementPage: lazy(() =>
-      retryLazyImport(() => import("./pages/AccessManagementPage"), "route-access-management").then((module) => ({
-        default: module.AccessManagementPage,
-      })),
-    ),
-    LandingPage: lazy(() =>
-      retryLazyImport(() => import("./pages/LandingPage"), "route-landing").then((module) => ({
-        default: module.LandingPage,
-      })),
-    ),
-    AdminDashboardPage: lazy(() =>
-      retryLazyImport(() => import("./pages/AdminDashboardPage"), "route-admin-dashboard").then((module) => ({
-        default: module.AdminDashboardPage,
-      })),
-    ),
-    FormBuilderPage: lazy(() =>
-      retryLazyImport(() => import("./pages/FormBuilderPage"), "route-form-builder").then((module) => ({
-        default: module.FormBuilderPage,
-      })),
-    ),
-    ManifestRestorePage: lazy(() =>
-      retryLazyImport(() => import("./pages/ManifestRestorePage"), "route-manifest-restore").then((module) => ({
-        default: module.ManifestRestorePage,
-      })),
-    ),
-    PublicRoadmapPage: lazy(() =>
-      retryLazyImport(() => import("./pages/PublicRoadmapPage"), "route-public-roadmap").then((module) => ({
-        default: module.PublicRoadmapPage,
-      })),
-    ),
-    SubmissionDetailPage: lazy(() =>
-      retryLazyImport(() => import("./pages/SubmissionDetailPage"), "route-submission-detail").then((module) => ({
-        default: module.SubmissionDetailPage,
-      })),
-    ),
-    SubmittedHistoryPage: lazy(() =>
-      retryLazyImport(() => import("./pages/SubmittedHistoryPage"), "route-submitted-history").then((module) => ({
-        default: module.SubmittedHistoryPage,
-      })),
-    ),
-    MyResponsesPage: lazy(() =>
-      retryLazyImport(() => import("./pages/MyResponsesPage"), "route-my-responses").then((module) => ({
-        default: module.MyResponsesPage,
-      })),
-    ),
-    ExploreSignalsPage: lazy(() =>
-      retryLazyImport(() => import("./pages/ExploreSignalsPage"), "route-explore").then((module) => ({
-        default: module.ExploreSignalsPage,
-      })),
-    ),
-    TroubleshootingPage: lazy(() =>
-      retryLazyImport(() => import("./pages/TroubleshootingPage"), "route-troubleshooting").then((module) => ({
-        default: module.TroubleshootingPage,
-      })),
-    ),
-    InsightsFixturePage: lazy(() =>
-      retryLazyImport(() => import("./pages/InsightsFixturePage"), "route-insights-fixture").then((module) => ({
-        default: module.InsightsFixturePage,
-      })),
-    ),
-    PublicFormPage: lazy(() =>
-      retryLazyImport(() => import("./pages/PublicFormPage"), "route-public-form").then((module) => ({
-        default: module.PublicFormPage,
-      })),
-    ),
-    ZkLoginCallbackPage: lazy(() =>
-      retryLazyImport(() => import("./pages/ZkLoginCallbackPage"), "route-zklogin-callback").then((module) => ({
-        default: module.ZkLoginCallbackPage,
-      })),
-    ),
-  };
-}
-
-function LegacyFormInboxRedirect({ basePath }: { basePath: "/admin" | "/dashboard" }) {
-  const { formId = "", submissionId = "" } = useParams();
-  const params = new URLSearchParams({ tab: "review" });
-  if (formId) {
-    params.set("form", formId);
-  }
-  if (submissionId) {
-    params.set("signal", submissionId);
-  }
-  return <Navigate to={`${basePath}?${params.toString()}`} replace />;
-}
-
 function prefetchExploreRoute() {
   void retryLazyImport(() => import("./pages/ExploreSignalsPage"), "prefetch-route-explore").catch(() => undefined);
-}
-
-function WithWalrusRuntime({ children }: { children: ReactNode }) {
-  if (REQUIRE_GLOBAL_WALRUS_RUNTIME) {
-    return <>{children}</>;
-  }
-  return <WalrusRuntimeSurface>{children}</WalrusRuntimeSurface>;
-}
-
-function BuildUpdateBanner() {
-  const { t } = useI18n();
-  const [notice, setNotice] = useState<BuildUpdateNotice | null>(null);
-  const [updating, setUpdating] = useState(false);
-
-  useEffect(() => subscribeToBuildUpdateNotices(setNotice), []);
-
-  if (!notice) {
-    return null;
-  }
-
-  async function handleUpdate() {
-    if (!notice) {
-      return;
-    }
-    setUpdating(true);
-    try {
-      await updateDeepSignalToLatest(notice);
-    } catch (error) {
-      setUpdating(false);
-      console.warn("[DeepSignal update] update action failed", error);
-    }
-  }
-
-  return (
-    <aside className="build-update-banner" role="status" aria-live="polite">
-      <div className="build-update-copy">
-        <strong>
-          {notice.reason === "chunk_load_failure"
-            ? t("buildUpdateChunkFailureTitle")
-            : t("buildUpdateAvailableTitle")}
-        </strong>
-        <p>{t("buildUpdateBody")}</p>
-        {notice.chunkFailure ? (
-          <details className="build-update-details">
-            <summary>{t("buildUpdateDiagnostics")}</summary>
-            <dl className="build-update-diagnostics" aria-label={t("buildUpdateDiagnostics")}>
-              <dt>{t("buildUpdateFailedChunk")}</dt>
-              <dd>{notice.chunkFailure.chunkUrl ?? "unknown"}</dd>
-              <dt>{t("buildUpdateCurrentBuild")}</dt>
-              <dd>
-                v{notice.chunkFailure.buildVersion} build {notice.chunkFailure.buildTime} {notice.chunkFailure.gitHash}
-              </dd>
-              <dt>{t("buildUpdateRetry")}</dt>
-              <dd>
-                {notice.chunkFailure.retryCount}/{notice.chunkFailure.retryLimit}
-              </dd>
-              <dt>{t("buildUpdateMixedBuild")}</dt>
-              <dd>{notice.chunkFailure.mixedBuildAssetsDetected ? notice.chunkFailure.mixedBuildReason ?? "detected" : "no"}</dd>
-            </dl>
-          </details>
-        ) : null}
-      </div>
-      <button type="button" className="primary-button" onClick={() => void handleUpdate()} disabled={updating}>
-        {updating ? t("buildUpdateUpdating") : t("buildUpdateAction")}
-      </button>
-    </aside>
-  );
 }
 
 function RouteReady({
@@ -277,22 +117,8 @@ export default function App() {
   const [bootDismissed, setBootDismissed] = useState(false);
   const [mixedBuildStatus, setMixedBuildStatus] = useState(() => getMixedBuildStatus());
   const [routeRetryNonce, setRouteRetryNonce] = useState(0);
-  const {
-    AccessManagementPage,
-    AdminDashboardPage,
-    FormBuilderPage,
-    ManifestRestorePage,
-    PublicRoadmapPage,
-    SubmissionDetailPage,
-    SubmittedHistoryPage,
-    MyResponsesPage,
-    ExploreSignalsPage,
-    TroubleshootingPage,
-    InsightsFixturePage,
-    PublicFormPage,
-    ZkLoginCallbackPage,
-    LandingPage,
-  } = useMemo(() => createRouteComponents(routeRetryNonce), [routeRetryNonce]);
+  const routeComponents = useMemo(() => createRouteComponents(routeRetryNonce), [routeRetryNonce]);
+  const { LandingPage } = routeComponents;
   const routeNeedsWalletSurface =
     location.pathname === "/admin" ||
     location.pathname === "/dashboard" ||
@@ -384,13 +210,7 @@ export default function App() {
         ) : (
           <Suspense fallback={<WorkspaceRestoreFallback />}>
             <RouteReady routePath={routePath} onReady={() => setInitialRouteReady(true)}>
-              <Routes>
-                <Route path="/f/:formId" element={<PublicFormPage />} />
-                <Route path="/roadmap/:formId" element={<PublicRoadmapPage />} />
-                <Route path="/m/:manifestBlobId" element={<ManifestRestorePage />} />
-                <Route path="/auth/zklogin/callback" element={<ZkLoginCallbackPage />} />
-                <Route path="*" element={<Navigate to="/" replace />} />
-              </Routes>
+              <PublicAppRoutes components={routeComponents} />
             </RouteReady>
           </Suspense>
         )}
@@ -424,73 +244,7 @@ export default function App() {
             <Suspense fallback={<WorkspaceRestoreFallback />}>
               <RouteReady routePath={routePath} onReady={() => setInitialRouteReady(true)}>
                 <ProviderReadinessBarrier routePath={routePath} enabled={routeNeedsWorkspaceBoot}>
-                  <Routes>
-                    <Route path="/" element={<LandingPage />} />
-                    <Route path="/explore" element={<ExploreSignalsPage />} />
-                    <Route path="/signals" element={<Navigate to="/explore" replace />} />
-                    <Route
-                      path="/create"
-                      element={
-                        <WithWalrusRuntime>
-                          <FormBuilderPage />
-                        </WithWalrusRuntime>
-                      }
-                    />
-                    <Route
-                      path="/compose"
-                      element={
-                        <WithWalrusRuntime>
-                          <FormBuilderPage />
-                        </WithWalrusRuntime>
-                      }
-                    />
-                    <Route
-                      path="/admin"
-                      element={
-                        <WithWalrusRuntime>
-                          <AdminDashboardPage />
-                        </WithWalrusRuntime>
-                      }
-                    />
-                    <Route
-                      path="/dashboard"
-                      element={
-                        <WithWalrusRuntime>
-                          <AdminDashboardPage />
-                        </WithWalrusRuntime>
-                      }
-                    />
-                    <Route path="/admin/access" element={<AccessManagementPage />} />
-                    <Route path="/dashboard/access" element={<AccessManagementPage />} />
-                    <Route path="/troubleshooting" element={<TroubleshootingPage />} />
-                    <Route path="/dev/insights-fixture" element={<InsightsFixturePage />} />
-                    <Route
-                      path="/admin/forms/new"
-                      element={
-                        <WithWalrusRuntime>
-                          <FormBuilderPage initialSurface="composer" />
-                        </WithWalrusRuntime>
-                      }
-                    />
-                    <Route path="/admin/forms/:formId" element={<LegacyFormInboxRedirect basePath="/admin" />} />
-                    <Route path="/dashboard/forms/:formId" element={<LegacyFormInboxRedirect basePath="/dashboard" />} />
-                    <Route
-                      path="/admin/forms/:formId/submissions/:submissionId"
-                      element={<LegacyFormInboxRedirect basePath="/admin" />}
-                    />
-                    <Route
-                      path="/dashboard/forms/:formId/submissions/:submissionId"
-                      element={<LegacyFormInboxRedirect basePath="/dashboard" />}
-                    />
-                    <Route path="/admin/submissions/:submissionId" element={<SubmissionDetailPage />} />
-                    <Route path="/submitted" element={<SubmittedHistoryPage />} />
-                    <Route path="/submitted/:submissionId" element={<SubmittedHistoryPage />} />
-                    <Route path="/my-submissions" element={<SubmittedHistoryPage />} />
-                    <Route path="/my-submissions/:submissionId" element={<SubmittedHistoryPage />} />
-                    <Route path="/my-responses" element={<MyResponsesPage />} />
-                    <Route path="/my-responses/:submissionId" element={<MyResponsesPage />} />
-                    <Route path="*" element={<Navigate to="/" replace />} />
-                  </Routes>
+                  <AppRoutes components={routeComponents} />
                 </ProviderReadinessBarrier>
               </RouteReady>
             </Suspense>

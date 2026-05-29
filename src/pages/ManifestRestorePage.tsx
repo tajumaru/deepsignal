@@ -6,7 +6,6 @@ import "../styles/mobile/layout.css";
 import { EmptyState } from "../components/EmptyState";
 import { localStorageAdapter } from "../storage/localStorageAdapter";
 import { replaceSubmissionBlobIndex, upsertFormBlobIndex } from "../storage/blobIndex";
-import { fetchJsonBlob, readManifest } from "../lib/walrus";
 import type { FormSchema, Submission } from "../types";
 
 export function ManifestRestorePage() {
@@ -17,6 +16,7 @@ export function ManifestRestorePage() {
 
   useEffect(() => {
     async function restore() {
+      const { fetchJsonBlob, readManifest } = await import("../lib/walrus");
       const manifest = await readManifest(manifestBlobId);
       if (!manifest) {
         setError("Manifest blob could not be loaded.");

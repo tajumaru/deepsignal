@@ -1,0 +1,208 @@
+/* Build version and update recovery surfaces shared by app and public shells. */
+
+.build-indicator {
+  position: fixed;
+  right: max(0.75rem, env(safe-area-inset-right, 0px));
+  bottom: max(0.55rem, env(safe-area-inset-bottom, 0px));
+  z-index: 2;
+  pointer-events: none;
+  display: grid;
+  justify-items: end;
+  gap: 0.35rem;
+}
+
+.build-indicator-attribution {
+  max-width: min(90vw, 34rem);
+  padding: 0.28rem 0.55rem;
+  border: 1px solid rgba(116, 226, 255, 0.16);
+  border-radius: var(--radius-pill);
+  background: rgba(4, 15, 25, 0.48);
+  color: rgba(196, 245, 255, 0.72);
+  font-size: 0.68rem;
+  text-align: right;
+  pointer-events: auto;
+  backdrop-filter: blur(12px);
+}
+
+.build-indicator-button,
+.build-indicator-update {
+  pointer-events: auto;
+}
+
+.build-indicator-button {
+  display: inline-flex;
+  max-width: min(80vw, 34rem);
+  padding: 0.22rem 0.38rem;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background:
+    linear-gradient(90deg, rgba(102, 227, 255, 0.04), rgba(85, 170, 255, 0.015)),
+    rgba(4, 15, 25, 0.24);
+  color: rgba(255, 222, 89, 0.78);
+  font-family: "Consolas", "SFMono-Regular", "Roboto Mono", monospace;
+  font-size: 0.62rem;
+  line-height: 1.2;
+  letter-spacing: 0.04em;
+  text-align: right;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  opacity: 0.52;
+  text-shadow: 0 0 8px rgba(255, 206, 74, 0.28);
+  transition:
+    opacity var(--transition-fast),
+    color var(--transition-fast),
+    background var(--transition-fast);
+}
+
+.build-indicator-button:hover,
+.build-indicator-button:focus-visible {
+  color: rgba(255, 238, 148, 0.95);
+  background:
+    linear-gradient(90deg, rgba(102, 227, 255, 0.07), rgba(85, 170, 255, 0.025)),
+    rgba(4, 15, 25, 0.34);
+  opacity: 0.82;
+  outline: none;
+}
+
+.build-indicator-update {
+  min-height: 1.8rem;
+  padding: 0.28rem 0.62rem;
+  border: 1px solid rgba(116, 226, 255, 0.28);
+  border-radius: var(--radius-pill);
+  background: rgba(116, 226, 255, 0.12);
+  color: #ecfdff;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.build-indicator-compact {
+  right: max(0.5rem, env(safe-area-inset-right, 0px));
+  bottom: max(0.45rem, env(safe-area-inset-bottom, 0px));
+  opacity: 0.58;
+}
+
+.build-indicator-compact:hover,
+.build-indicator-compact:focus-within {
+  opacity: 1;
+}
+
+.build-indicator-compact .build-indicator-button {
+  max-width: min(54vw, 13rem);
+  min-height: 1.7rem;
+  padding: 0.24rem 0.52rem;
+  font-size: 0.62rem;
+}
+
+.build-update-banner {
+  position: fixed;
+  right: max(0.85rem, env(safe-area-inset-right, 0px));
+  bottom: calc(max(0.85rem, env(safe-area-inset-bottom, 0px)) + 2.1rem);
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  width: min(92vw, 28rem);
+  padding: 0.82rem 0.9rem;
+  border: 1px solid rgba(116, 226, 255, 0.26);
+  border-radius: var(--radius-md);
+  background:
+    linear-gradient(135deg, rgba(8, 31, 48, 0.96), rgba(5, 18, 30, 0.96));
+  box-shadow:
+    0 18px 42px rgba(0, 0, 0, 0.28),
+    inset 0 1px 0 rgba(220, 252, 255, 0.06);
+  color: #ecfdff;
+  backdrop-filter: blur(16px);
+}
+
+.build-update-banner div {
+  display: grid;
+  min-width: 0;
+  gap: 0.16rem;
+}
+
+.build-update-copy {
+  flex: 1 1 auto;
+}
+
+.build-update-banner strong,
+.build-update-banner p {
+  min-width: 0;
+  margin: 0;
+  line-height: 1.25;
+}
+
+.build-update-banner strong {
+  font-size: 0.9rem;
+}
+
+.build-update-banner p {
+  color: var(--text-soft);
+  font-size: 0.78rem;
+}
+
+.build-update-banner .primary-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  min-height: 2.25rem;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius-pill);
+  background: linear-gradient(135deg, #0ea5c6, #3b82f6);
+  color: white;
+  white-space: nowrap;
+}
+
+.build-update-banner .primary-button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.build-update-details {
+  margin-top: 0.28rem;
+}
+
+.build-update-details summary {
+  width: max-content;
+  cursor: pointer;
+  color: rgba(151, 222, 238, 0.88);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.build-update-diagnostics {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 0.12rem 0.45rem;
+  margin: 0.35rem 0 0;
+  color: rgba(224, 250, 255, 0.78);
+  font-size: 0.72rem;
+}
+
+.build-update-diagnostics dt {
+  color: rgba(151, 222, 238, 0.78);
+  font-weight: 700;
+}
+
+.build-update-diagnostics dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 620px) {
+  .build-update-banner {
+    right: max(0.7rem, env(safe-area-inset-right, 0px));
+    left: max(0.7rem, env(safe-area-inset-left, 0px));
+    bottom: max(0.7rem, env(safe-area-inset-bottom, 0px));
+    width: auto;
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .build-update-banner .primary-button {
+    width: 100%;
+  }
+}

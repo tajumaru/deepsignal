@@ -7,10 +7,7 @@ import { RichTextContent } from "../components/RichText";
 import { CriticalFailurePanel } from "../components/CriticalFailurePanel";
 import { RecoverableDraftBanner } from "../components/RecoverableDraftBanner";
 import { LocalRecoveryCenter } from "../components/LocalRecoveryCenter";
-import { WalletSurface } from "../components/WalletSurface";
-import { WalrusRuntimeSurface } from "../components/WalrusRuntimeSurface";
-import { PublicFormSuccess } from "../features/public-form/components/PublicFormSuccess";
-import { SignalMetaChip } from "../components/SignalMetaChip";
+import { PublicSignalMetaChip } from "../components/PublicSignalMeta";
 import { SignalSubmissionPipeline } from "../features/public-form/components/SignalSubmissionPipeline";
 import { usePublicFormLoader } from "../features/public-form/hooks/usePublicFormLoader";
 import { usePublicSubmission, type SignalPipelineStage } from "../features/public-form/hooks/usePublicSubmission";
@@ -29,7 +26,6 @@ import { loadZkLoginSession } from "../lib/zkloginSession";
 import type { FieldType } from "../types";
 import { retryLazyImport } from "../lib/lazyRetry";
 import "../styles/components/forms-content.css";
-import "../styles/components/wallet-network.css";
 import "../styles/pages/public-flows.css";
 import "../styles/mobile/layout.css";
 import "../styles/mobile/public-form.css";
@@ -40,6 +36,21 @@ const LazyPublicWalletAccountPanel = lazy(() =>
   retryLazyImport(() => import("../features/public-form/components/PublicWalletAccountPanel"), "public-wallet-account").then(
     (module) => ({ default: module.PublicWalletAccountPanel }),
   ),
+);
+const LazyPublicFormSuccess = lazy(() =>
+  retryLazyImport(() => import("../features/public-form/components/PublicFormSuccess"), "public-form-success").then(
+    (module) => ({ default: module.PublicFormSuccess }),
+  ),
+);
+const LazyWalletSurface = lazy(() =>
+  retryLazyImport(() => import("../components/WalletSurface"), "public-wallet-surface").then((module) => ({
+    default: module.WalletSurface,
+  })),
+);
+const LazyWalrusRuntimeSurface = lazy(() =>
+  retryLazyImport(() => import("../components/WalrusRuntimeSurface"), "public-walrus-runtime-surface").then((module) => ({
+    default: module.WalrusRuntimeSurface,
+  })),
 );
 
 function triggerHaptic(pattern: number | number[]) {
@@ -467,13 +478,13 @@ export function PublicFormPage() {
             {loadErrorDetail.manifestBlobId ? (
               <div className="metadata-row">
                 <span>{t("manifestBlobId")}</span>
-                <SignalMetaChip type="manifest" value={loadErrorDetail.manifestBlobId} />
+                <PublicSignalMetaChip type="manifest" value={loadErrorDetail.manifestBlobId} />
               </div>
             ) : null}
             {loadErrorDetail.formBlobId ? (
               <div className="metadata-row">
                 <span>{t("formBlobId")}</span>
-                <SignalMetaChip type="blob" value={loadErrorDetail.formBlobId} />
+                <PublicSignalMetaChip type="blob" value={loadErrorDetail.formBlobId} />
               </div>
             ) : null}
             {loadErrorDetail.manifestStatus ? (
@@ -645,16 +656,16 @@ export function PublicFormPage() {
             </ul>
             {walletSelected || walletRequired ? (
               <div className="public-identity-choice-wallet-shell">
-                <WalletSurface fallback={walletFallback}>
-                  <WalrusRuntimeSurface fallback={walletFallback}>
+                <LazyWalletSurface fallback={walletFallback}>
+                  <LazyWalrusRuntimeSurface fallback={walletFallback}>
                     <Suspense fallback={walletFallback}>
                       <LazyPublicWalletAccountPanel
                         onAccountAddressChange={(address) => setResolvedWalletAddress(address)}
                         onWalletProviderChange={(provider) => setWalletProvider(provider)}
                       />
                     </Suspense>
-                  </WalrusRuntimeSurface>
-                </WalletSurface>
+                  </LazyWalrusRuntimeSurface>
+                </LazyWalletSurface>
               </div>
             ) : null}
             <button
@@ -692,14 +703,16 @@ export function PublicFormPage() {
 
   if (submitted) {
     return (
-      <PublicFormSuccess
-        submitted={submitted}
-        submitNotice={submitNotice}
-        notAvailableLabel={t("notAvailable")}
-        pendingSuiRegistrationLabel={t("pendingSuiRegistration")}
-        signalReceivedLabel={t("signalReceived")}
-        thanksForFeedbackLabel={t("thanksForFeedback")}
-      />
+      <Suspense fallback={<div className="panel">{t("loading")}</div>}>
+        <LazyPublicFormSuccess
+          submitted={submitted}
+          submitNotice={submitNotice}
+          notAvailableLabel={t("notAvailable")}
+          pendingSuiRegistrationLabel={t("pendingSuiRegistration")}
+          signalReceivedLabel={t("signalReceived")}
+          thanksForFeedbackLabel={t("thanksForFeedback")}
+        />
+      </Suspense>
     );
   }
 
@@ -729,8 +742,8 @@ export function PublicFormPage() {
   return (
     <form className={`panel glow-panel public-form ${publicFormExpanded ? "is-expanded" : ""}`} onSubmit={handleSubmit}>
       {walletModeSelected ? (
-        <WalletSurface fallback={null}>
-          <WalrusRuntimeSurface fallback={null}>
+        <LazyWalletSurface fallback={null}>
+          <LazyWalrusRuntimeSurface fallback={null}>
             <div aria-hidden="true" style={{ display: "none" }}>
               <Suspense fallback={null}>
                 <LazyPublicWalletAccountPanel
@@ -739,8 +752,8 @@ export function PublicFormPage() {
                 />
               </Suspense>
             </div>
-          </WalrusRuntimeSurface>
-        </WalletSurface>
+          </LazyWalrusRuntimeSurface>
+        </LazyWalletSurface>
       ) : null}
       <div className="public-form-header-frame">
         <FormHeaderImage

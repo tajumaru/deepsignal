@@ -16,7 +16,6 @@ import { makeId } from "../../../lib/utils";
 import { scheduleIdleTask } from "../../../lib/scheduleIdleTask";
 import type { ZkLoginSession } from "../../../lib/zkloginSession";
 import { useRpcInfrastructure } from "../../../rpcInfrastructure";
-import { isQuotaExceededError, isRateLimitError } from "../../../storage/walrusDiagnostics";
 import type { FormSchema, Submission, SubmissionAttachment, SubmissionLocation } from "../../../types";
 import { getOrderedFields, getVisibleFieldIds } from "../../../utils/formLogic";
 import type { PublicAnswers, PublicVoiceAnswerDraft, ValidationErrors } from "../types";
@@ -254,6 +253,34 @@ function getDiagnosticErrorMessage(error: unknown): string {
   return error.message;
 }
 
+function isPublicQuotaExceededError(error: unknown) {
+  if (error instanceof DOMException && (error.name === "QuotaExceededError" || error.code === 22)) {
+    return true;
+  }
+  if (error instanceof Error && error.name === "QuotaExceededError") {
+    return true;
+  }
+  const message = getDiagnosticErrorMessage(error).toLowerCase();
+  return (
+    message.includes("quota exceeded") ||
+    message.includes("storage quota") ||
+    message.includes("webkit storage") ||
+    message.includes("exceeded the quota")
+  );
+}
+
+function isPublicRateLimitError(error: unknown) {
+  const status =
+    typeof error === "object" && error !== null && "status" in error
+      ? (error as { status?: unknown }).status
+      : undefined;
+  if (status === 429) {
+    return true;
+  }
+  const message = getDiagnosticErrorMessage(error).toLowerCase();
+  return message.includes("rate limit") || message.includes("too many requests") || message.includes("status 429");
+}
+
 function getStoredRecoveryRetryCount(key: string) {
   if (!key) {
     return 0;
@@ -268,14 +295,14 @@ function getStoredRecoveryRetryCount(key: string) {
 function classifyRecoveryStorageError(error: unknown, message: string) {
   const diagnosticMessage = getDiagnosticErrorMessage(error);
   const lower = `${message} ${diagnosticMessage}`.toLowerCase();
-  if (isQuotaExceededError(error) || lower.includes("quota")) {
+  if (isPublicQuotaExceededError(error) || lower.includes("quota")) {
     return {
       category: "quota_exceeded",
       guidance:
         "The storage quota has been exceeded. Free up browser storage or Walrus capacity, then discard this recovery before starting again.",
     };
   }
-  if (isRateLimitError(error)) {
+  if (isPublicRateLimitError(error)) {
     return {
       category: "rate_limited",
       guidance: "The storage service is rate limiting requests. Wait a few minutes before trying again.",
@@ -322,7 +349,7 @@ function buildRecoveryDiagnostics({
     browser: typeof navigator !== "undefined" ? navigator.userAgent : "unknown",
     quotaExceptionName: error instanceof Error ? error.name : undefined,
     quotaExceptionMessage: rawError,
-    quotaRelated: error ? isQuotaExceededError(error) : undefined,
+    quotaRelated: error ? isPublicQuotaExceededError(error) : undefined,
   };
 }
 

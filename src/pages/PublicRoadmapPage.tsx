@@ -7,15 +7,12 @@ import { ContestGuidedFlow } from "../components/ContestGuidedFlow";
 import { EmptyState } from "../components/EmptyState";
 import { RichTextContent } from "../components/RichText";
 import { getPublicFormPath } from "../lib/publicLinks";
-import { SignalMetaRow } from "../components/SignalMetaChip";
+import { PublicSignalMetaRow } from "../components/PublicSignalMeta";
 import { getSubmissionRespondentMeta } from "../lib/respondentMeta";
 import { PUBLIC_ROADMAP_TRIAGE_STATUSES, getTriageStatusLabel } from "../lib/signalOps";
-import { getSignalPreview, inferSignalCategory } from "../lib/signalInbox";
-import { normalizeForm, normalizeSubmission, storageAdapter } from "../lib/storage";
-import { formatDate } from "../lib/utils";
-import { upsertFormBlobIndex } from "../storage/blobIndex";
+import { normalizeForm } from "../lib/formSchema";
+import { flattenAnswer, formatDate } from "../lib/utils";
 import { localStorageAdapter } from "../storage/localStorageAdapter";
-import { fetchJsonBlob, readManifest } from "../lib/walrus";
 import type { FormSchema, Submission } from "../types";
 
 const ROADMAP_GROUPS = [
@@ -23,6 +20,32 @@ const ROADMAP_GROUPS = [
   { key: "in_progress", label: "In Progress" },
   { key: "fixed", label: "Fixed Signals" },
 ] as const;
+
+function getPublicSignalPreview(submission: Submission) {
+  if (submission.isEncrypted) {
+    return "Encrypted Signal";
+  }
+  for (const value of Object.values(submission.answers ?? {})) {
+    const preview = flattenAnswer(value).trim();
+    if (preview) {
+      return preview;
+    }
+  }
+  return submission.subjectPreview?.trim() || `Signal ${submission.id.slice(0, 8)}`;
+}
+
+function inferPublicSignalCategory(submission: Submission) {
+  switch (submission.category) {
+    case "bug":
+      return "Bug";
+    case "feature":
+      return "Feature";
+    case "survey":
+      return "Survey";
+    default:
+      return "General";
+  }
+}
 
 export function PublicRoadmapPage() {
   const { formId = "" } = useParams();
@@ -35,8 +58,9 @@ export function PublicRoadmapPage() {
 
   useEffect(() => {
     async function loadRoadmap() {
-      let nextForm = await storageAdapter.getForm(formId);
+      let nextForm = await localStorageAdapter.getForm(formId);
       if (!nextForm && manifestBlobId) {
+        const { fetchJsonBlob, readManifest } = await import("../lib/walrus");
         const manifest = await readManifest(manifestBlobId);
         if (manifest?.formBlobId) {
           const restoredForm = await fetchJsonBlob<FormSchema>(manifest.formBlobId);
@@ -47,6 +71,7 @@ export function PublicRoadmapPage() {
               manifestBlobId,
             };
             await localStorageAdapter.saveForm(nextForm);
+            const { upsertFormBlobIndex } = await import("../storage/blobIndex");
             upsertFormBlobIndex({
               formId: nextForm.id,
               formBlobId: manifest.formBlobId,
@@ -56,11 +81,10 @@ export function PublicRoadmapPage() {
           }
         }
       }
-      const rawSubmissions = await storageAdapter.listSubmissions(formId);
+      const rawSubmissions = await localStorageAdapter.listSubmissions(formId);
       setForm(nextForm ? normalizeForm(nextForm) : null);
       setSubmissions(
         rawSubmissions
-          .map((submission) => normalizeSubmission(submission))
           .filter((submission) => PUBLIC_ROADMAP_TRIAGE_STATUSES.includes(submission.triageStatus)),
       );
       setLoading(false);
@@ -127,9 +151,14 @@ export function PublicRoadmapPage() {
           </Link>
         </div>
         <div className="roadmap-metadata-grid">
-          <SignalMetaRow label="Channel blob" type="blob" value={form.blobId} />
-          <SignalMetaRow label="Manifest" type="manifest" value={form.manifestBlobId} />
-          <SignalMetaRow label="Contributor owner" type="contributor" value={form.ownerAddress} emptyLabel="Legacy demo form" />
+          <PublicSignalMetaRow label="Channel blob" type="blob" value={form.blobId} />
+          <PublicSignalMetaRow label="Manifest" type="manifest" value={form.manifestBlobId} />
+          <PublicSignalMetaRow
+            label="Contributor owner"
+            type="contributor"
+            value={form.ownerAddress}
+            emptyLabel="Legacy demo form"
+          />
         </div>
       </div>
 
@@ -155,7 +184,7 @@ export function PublicRoadmapPage() {
                       <span className={`pill priority-${submission.priority}`}>{submission.priority}</span>
                     </div>
                     <div className="pill-row">
-                      <span className="signal-chip">{inferSignalCategory(submission)}</span>
+                      <span className="signal-chip">{inferPublicSignalCategory(submission)}</span>
                       <span className="signal-chip">{formatDate(submission.createdAt)}</span>
                       <span className="signal-chip">
                         {getSubmissionRespondentMeta(submission).isAnonymous ? "Anonymous respondent" : "Wallet respondent"}
@@ -174,7 +203,7 @@ export function PublicRoadmapPage() {
                       </div>
                     ) : null}
                     {!submission.isEncrypted ? (
-                      <p className="roadmap-preview">{getSignalPreview(submission)}</p>
+                      <p className="roadmap-preview">{getPublicSignalPreview(submission)}</p>
                     ) : (
                       <p className="muted">Encrypted signal: public roadmap shows metadata only.</p>
                     )}

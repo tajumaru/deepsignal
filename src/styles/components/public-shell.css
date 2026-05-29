@@ -1,0 +1,185 @@
+/* Minimal shell CSS for wallet-optional public routes. */
+
+.public-app-shell {
+  position: relative;
+  width: 100%;
+  max-width: 100%;
+  min-height: 100vh;
+  min-height: 100dvh;
+  overflow-x: hidden;
+}
+
+.public-app-shell .topbar-public {
+  position: sticky;
+  top: env(safe-area-inset-top, 0px);
+  z-index: 10;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  width: auto;
+  max-width: none;
+  margin:
+    max(1rem, env(safe-area-inset-top, 0px))
+    max(1rem, env(safe-area-inset-right, 0px))
+    0
+    max(1rem, env(safe-area-inset-left, 0px));
+  padding: 1.1rem 1.45rem;
+  border: 1px solid rgba(72, 169, 233, 0.12);
+  border-radius: var(--radius-panel);
+  background:
+    linear-gradient(180deg, rgba(3, 12, 24, 0.92), rgba(2, 9, 18, 0.88)),
+    radial-gradient(circle at top left, rgba(86, 218, 255, 0.05), transparent 34%);
+  box-shadow:
+    inset 0 1px 0 rgba(153, 238, 255, 0.04),
+    0 0 0 1px rgba(149, 242, 255, 0.03),
+    0 0 22px rgba(74, 184, 255, 0.05),
+    var(--shadow);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+
+.public-app-shell .page-wrap {
+  width: min(100%, 1280px);
+  max-width: none;
+  margin: 0 auto;
+  padding:
+    1rem max(1rem, env(safe-area-inset-right, 0px))
+    calc(2rem + env(safe-area-inset-bottom, 0px))
+    max(1rem, env(safe-area-inset-left, 0px));
+}
+
+.public-app-shell .brand {
+  display: flex;
+  align-items: center;
+  flex: 1 1 auto;
+  gap: 0.9rem;
+  min-width: 0;
+}
+
+.public-app-shell .brand-copy {
+  min-width: 0;
+}
+
+.public-app-shell .brand strong {
+  display: block;
+  font-size: 1rem;
+}
+
+.public-app-shell .brand p {
+  margin: 0.1rem 0 0;
+  color: var(--text-soft);
+  font-size: 0.88rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.public-app-shell .brand-mark {
+  display: grid;
+  place-items: center;
+  width: 3rem;
+  height: 3rem;
+  overflow: hidden;
+  flex: 0 0 auto;
+  border: 1px solid rgba(149, 242, 255, 0.18);
+  border-radius: 15px;
+  background:
+    linear-gradient(180deg, rgba(9, 23, 36, 0.92), rgba(2, 7, 13, 0.96));
+  box-shadow:
+    inset 0 1px 0 rgba(231, 253, 255, 0.08),
+    0 0 14px rgba(102, 227, 255, 0.1);
+}
+
+.public-app-shell .brand-mark img {
+  display: block;
+  width: 92%;
+  height: 92%;
+  object-fit: contain;
+}
+
+.public-app-shell .topbar-actions,
+.public-app-shell .language-switch {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-width: 0;
+}
+
+.public-app-shell .topbar-actions {
+  flex: 1 1 18rem;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  margin-left: auto;
+}
+
+.public-app-shell .language-switch {
+  color: var(--text-soft);
+}
+
+.public-app-shell .language-switch select {
+  min-height: 2.5rem;
+  border-radius: 12px;
+}
+
+.public-app-shell .primary-button,
+.public-app-shell .ghost-button,
+.public-app-shell .danger-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.8rem;
+  padding: 0.75rem 1.05rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius-pill);
+  transition: var(--transition-fast);
+}
+
+.public-app-shell .primary-button {
+  background: linear-gradient(135deg, #0ea5c6, #3b82f6);
+  color: white;
+}
+
+.public-app-shell .ghost-button {
+  border-color: rgba(102, 227, 255, 0.18);
+  background: rgba(102, 227, 255, 0.08);
+  color: var(--accent-strong);
+}
+
+.public-app-shell .danger-button {
+  border-color: rgba(255, 126, 143, 0.22);
+  background: rgba(255, 126, 143, 0.12);
+  color: #ffc4ce;
+}
+
+.public-app-shell .primary-button:disabled,
+.public-app-shell .ghost-button:disabled,
+.public-app-shell .danger-button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+@media (max-width: 620px) {
+  .public-app-shell .topbar-public {
+    gap: 0.55rem;
+    padding: 0.72rem;
+  }
+
+  .public-app-shell .brand {
+    width: auto;
+  }
+
+  .public-app-shell .brand-copy p,
+  .public-app-shell .language-switch span {
+    display: none;
+  }
+
+  .public-app-shell .topbar-actions {
+    width: auto;
+  }
+
+  .public-app-shell .language-switch select {
+    min-width: 6.5rem;
+  }
+}
