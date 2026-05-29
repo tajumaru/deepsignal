@@ -52,8 +52,13 @@ export interface OwnerSubmissionIndexFetchLog {
 }
 
 const PENDING_QUEUE_KEY = "deepsignal.submissionDelivery.pendingQueue";
+const REMOTE_SUBMISSION_INDEX_CACHE_TTL_MS = 15000;
 const submissionRelayUrl = String(import.meta.env.VITE_DEEPSIGNAL_SUBMISSION_RELAY_URL || "").replace(/\/$/, "");
 const submissionRelayIsAppsScript = submissionRelayUrl.includes("script.google.com/macros/");
+const remoteSubmissionIndexRequests = new Map<string, {
+  expiresAt: number;
+  promise: Promise<SubmissionIndexEntry[]>;
+}>();
 
 function normalizeSubmitterMode(submission: Submission): SubmitterMode {
   const identityKind = submission.respondentMeta?.identityKind;
@@ -145,13 +150,32 @@ export async function fetchRemoteSubmissionIndex(args: {
   if (!submissionRelayUrl) {
     return [] as SubmissionIndexEntry[];
   }
+  const cacheKey = `${args.projectId || ""}\u0000${args.formId}`;
+  const cached = remoteSubmissionIndexRequests.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.promise;
+  }
   const searchParams = new URLSearchParams({ formId: args.formId });
   if (args.projectId) {
     searchParams.set("projectId", args.projectId);
   }
-  if (submissionRelayIsAppsScript) {
-    return fetchAppsScriptSubmissionIndex(searchParams, args.formId);
-  }
+  const promise = submissionRelayIsAppsScript
+    ? fetchAppsScriptSubmissionIndex(searchParams, args.formId)
+    : fetchHttpSubmissionIndex(searchParams, args.formId);
+  remoteSubmissionIndexRequests.set(cacheKey, {
+    expiresAt: Date.now() + REMOTE_SUBMISSION_INDEX_CACHE_TTL_MS,
+    promise,
+  });
+  promise.catch(() => {
+    const current = remoteSubmissionIndexRequests.get(cacheKey);
+    if (current?.promise === promise) {
+      remoteSubmissionIndexRequests.delete(cacheKey);
+    }
+  });
+  return promise;
+}
+
+async function fetchHttpSubmissionIndex(searchParams: URLSearchParams, formId: string) {
   const response = await fetch(`${submissionRelayUrl}/v1/submissions-index?${searchParams.toString()}`);
   if (!response.ok) {
     throw new Error(`Remote submission index fetch failed: ${response.status}`);
@@ -159,7 +183,7 @@ export async function fetchRemoteSubmissionIndex(args: {
   const payload = await response.json() as { entries?: SubmissionIndexEntry[] } | SubmissionIndexEntry[];
   const entries = Array.isArray(payload) ? payload : payload.entries;
   return Array.isArray(entries)
-    ? entries.filter((entry) => entry.formId === args.formId && entry.answerBlobId)
+    ? entries.filter((entry) => entry.formId === formId && entry.answerBlobId)
     : [];
 }
 

@@ -411,9 +411,17 @@ async function withTimeout<T>(task: Promise<T>, timeoutMs: number, timeoutMessag
   return Promise.race<T>([
     task,
     new Promise<T>((_, reject) => {
-      window.setTimeout(() => reject(new Error(timeoutMessage)), timeoutMs);
+      window.setTimeout(() => {
+        const error = new Error(timeoutMessage);
+        error.name = "TimeoutError";
+        reject(error);
+      }, timeoutMs);
     }),
   ]);
+}
+
+function isTimeoutError(error: unknown) {
+  return error instanceof Error && error.name === "TimeoutError";
 }
 
 async function loadRemoteIndexedSubmissions(form: FormWithCount) {
@@ -1071,7 +1079,9 @@ export function useSignalInboxData({
                 REMOTE_SUBMISSION_INDEX_TIMEOUT_MS,
                 `Remote submission index fetch timed out for ${form.id}.`,
               ).catch((error) => {
-                  console.warn(`Failed to load remote submission index for form ${form.id}`, error);
+                  if (!isTimeoutError(error)) {
+                    console.warn(`Failed to load remote submission index for form ${form.id}`, error);
+                  }
                   return { indexEntries: [], submissions: [] as Submission[] };
                 });
               const normalizedLocal: Submission[] = raw.map((submission) => normalizeSubmission(submission) as Submission);

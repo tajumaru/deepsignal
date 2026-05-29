@@ -443,6 +443,10 @@ export function ExploreSignalsPage() {
     }
   }
 
+  function getDiscoverTabMobileLabel(tab: DiscoverTab) {
+    return tab === "governance" ? t("exploreTabGovernanceShort") : getDiscoverTabLabel(tab);
+  }
+
   function getLocalizedPurposeLabel(form: FormSchema) {
     switch (form?.purpose) {
       case "bug":
@@ -589,18 +593,20 @@ export function ExploreSignalsPage() {
 
       <section className="panel glow-panel explore-discovery-panel">
         <div className="explore-discovery-bar">
+          <div className="explore-stream-console-label">{t("exploreStreamConsoleLabel")}</div>
           <div className="explore-tab-row" role="tablist" aria-label={t("exploreTabsAria")}>
             {DISCOVER_TABS.map((tab) => (
               <button
                 key={tab}
                 type="button"
-                className={`explore-tab ${activeTab === tab ? "is-active" : ""}`}
+                className={`explore-tab explore-tab-${tab} ${activeTab === tab ? "is-active" : ""}`}
                 role="tab"
                 aria-selected={activeTab === tab}
                 onClick={() => setActiveTab(tab)}
               >
                 <span className="explore-tab-icon" aria-hidden="true">{getDiscoverTabIcon(tab)}</span>
-                {getDiscoverTabLabel(tab)}
+                <span className="explore-tab-label">{getDiscoverTabLabel(tab)}</span>
+                <span className="explore-tab-label-mobile">{getDiscoverTabMobileLabel(tab)}</span>
               </button>
             ))}
           </div>

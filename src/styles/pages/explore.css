@@ -1026,6 +1026,11 @@
   font-size: 1rem;
 }
 
+.explore-stream-console-label,
+.explore-tab-label-mobile {
+  display: none;
+}
+
 .explore-tab.is-active {
   border-color: #14e7ff;
   background: rgba(13, 120, 149, 0.24);

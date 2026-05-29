@@ -85,12 +85,16 @@ function MobileAppBottomNav({ showComposeShortcut }: MobileAppBottomNavProps) {
   const location = useLocation();
   const { t } = useI18n();
   const inboxActive = isSignalInboxPath(location.pathname);
+  const exploreActive = location.pathname === "/explore";
   const navClassName = ({ isActive }: { isActive: boolean }) => (isActive ? "is-active" : undefined);
 
   return (
     <>
       {showComposeShortcut ? (
-        <CreateFormLink fresh={false} className="mobile-compose-fab">
+        <CreateFormLink
+          fresh={false}
+          className={`mobile-compose-fab${exploreActive ? " mobile-explore-compose-fab" : ""}`}
+        >
           <PencilIcon />
           <span className="sr-only">{t("composeSignalCta")}</span>
         </CreateFormLink>

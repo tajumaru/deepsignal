@@ -678,6 +678,10 @@
     min-height: auto;
   }
 
+  .explore-hero-compact {
+    padding: 0.9rem 1rem 0.95rem;
+  }
+
   .explore-card-head,
   .explore-terminal-line,
   .explore-feed-card-top,
@@ -691,8 +695,60 @@
     text-align: left;
   }
 
+  .explore-hero-bar {
+    gap: 0.65rem;
+  }
+
+  .explore-hero-copy {
+    gap: 0.5rem;
+  }
+
+  .explore-hero-copy .eyebrow {
+    font-size: 0.68rem;
+    letter-spacing: 0.16em;
+  }
+
   .explore-hero-copy h1 {
-    font-size: clamp(2.2rem, 13vw, 3rem);
+    font-size: clamp(1.8rem, 8.4vw, 2.15rem);
+    line-height: 1.08;
+  }
+
+  .explore-hero-copy .lede {
+    font-size: 0.88rem;
+    line-height: 1.55;
+  }
+
+  .explore-hero-note {
+    display: none;
+  }
+
+  .explore-hero-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+    min-width: 0;
+  }
+
+  .explore-summary-card {
+    min-height: 60px;
+    padding: 0.56rem 0.7rem;
+    gap: 0.1rem 0.45rem;
+  }
+
+  .explore-summary-card strong {
+    font-size: 1.25rem;
+  }
+
+  .explore-summary-card span:last-child {
+    font-size: 0.72rem;
+  }
+
+  .explore-summary-icon {
+    font-size: 1rem;
+  }
+
+  .explore-summary-card + .explore-summary-card {
+    border-top: 0;
+    border-left: 1px solid rgba(91, 212, 255, 0.08);
   }
 
   .explore-discovery-panel,
