@@ -286,6 +286,31 @@
   gap: 0.58rem;
 }
 
+.selected-signal-next-action-grid.is-quiet {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.selected-signal-next-action-card.is-secondary {
+  padding: 0.58rem 0.68rem;
+  border-color: rgba(148, 163, 184, 0.08);
+  background: rgba(4, 17, 29, 0.22);
+}
+
+.selected-signal-next-action-card.is-secondary span {
+  color: #8fb9c6;
+}
+
+.selected-signal-next-action-card.is-secondary p {
+  color: #8faebe;
+}
+
+.selected-signal-next-action-card.is-primary {
+  border-color: rgba(116, 226, 255, 0.18);
+  background:
+    radial-gradient(circle at top right, rgba(116, 226, 255, 0.1), transparent 36%),
+    rgba(4, 17, 29, 0.52);
+}
+
 .selected-signal-next-action-card.is-risk {
   border-color: rgba(255, 126, 143, 0.18);
   background: rgba(43, 17, 25, 0.24);

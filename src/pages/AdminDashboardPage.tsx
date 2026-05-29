@@ -776,15 +776,21 @@ function getTopTopic(records: SignalRecord[], options?: { includeFallbackText?: 
 }
 
 function countRiskSignals(records: SignalRecord[]) {
-  return records.filter((record) => {
-    const corpus = `${record.submission.emotion ?? ""} ${record.submission.aiSummary ?? ""} ${record.submission.subjectPreview ?? ""}`.toLowerCase();
-    return (
-      record.submission.priority === "high" ||
-      record.submission.severity === "high" ||
-      hasNeedsFollowUp(record.submission) ||
-      /(risk|urgent|critical|blocked|failure|fails|unsafe|retaliation|missing|abuse|trapped)/.test(corpus)
-    );
-  }).length;
+  return records.filter((record) => isRiskSignal(record)).length;
+}
+
+function hasRiskKeyword(submission: Submission) {
+  const corpus = `${submission.emotion ?? ""} ${submission.aiSummary ?? ""} ${submission.subjectPreview ?? ""}`.toLowerCase();
+  return /(risk|urgent|critical|blocked|failure|fails|unsafe|retaliation|missing|abuse|trapped)/.test(corpus);
+}
+
+function isRiskSignal(record: SignalRecord) {
+  return (
+    record.submission.priority === "high" ||
+    record.submission.severity === "high" ||
+    hasNeedsFollowUp(record.submission) ||
+    hasRiskKeyword(record.submission)
+  );
 }
 
 function getTimelineComparisonWindow(sorted: SignalRecord[]): TimelineComparisonWindow {
@@ -1080,6 +1086,9 @@ function SelectedSignalIntelligenceCard({
   t,
   createFollowUpHref,
   actionDisabled,
+  followUpProminent,
+  showEmergingRiskAction,
+  showRoadmapAction,
   isMarkingEmergingRisk,
   isPublishingToRoadmap,
   onMarkEmergingRisk,
@@ -1089,6 +1098,9 @@ function SelectedSignalIntelligenceCard({
   t: TranslationFn;
   createFollowUpHref: string;
   actionDisabled: boolean;
+  followUpProminent: boolean;
+  showEmergingRiskAction: boolean;
+  showRoadmapAction: boolean;
   isMarkingEmergingRisk: boolean;
   isPublishingToRoadmap: boolean;
   onMarkEmergingRisk: () => void;
@@ -1122,28 +1134,35 @@ function SelectedSignalIntelligenceCard({
           <p>{followUp}</p>
         </article>
       </div>
-      <div className="selected-signal-next-action-grid" aria-label={t("selectedSignalNextActionsLabel")}>
-        <article className="selected-signal-next-action-card">
+      <div
+        className={`selected-signal-next-action-grid ${followUpProminent ? "has-primary-action" : "is-quiet"}`}
+        aria-label={t("selectedSignalNextActionsLabel")}
+      >
+        <article className={`selected-signal-next-action-card ${followUpProminent ? "is-primary" : "is-secondary"}`}>
           <span>{t("selectedSignalCreateFollowUpTitle")}</span>
           <p>{t("selectedSignalCreateFollowUpDetail")}</p>
           <Link className="ghost-button" to={createFollowUpHref}>
             {t("selectedSignalCreateFollowUpCta")}
           </Link>
         </article>
-        <article className="selected-signal-next-action-card is-risk">
-          <span>{t("selectedSignalMarkEmergingRiskTitle")}</span>
-          <p>{t("selectedSignalMarkEmergingRiskDetail")}</p>
-          <button type="button" className="ghost-button" disabled={actionDisabled || isMarkingEmergingRisk} onClick={onMarkEmergingRisk}>
-            {isMarkingEmergingRisk ? t("selectedSignalEmergingRiskMarked") : t("selectedSignalMarkEmergingRiskCta")}
-          </button>
-        </article>
-        <article className="selected-signal-next-action-card is-roadmap">
-          <span>{t("selectedSignalPublishRoadmapTitle")}</span>
-          <p>{t("selectedSignalPublishRoadmapDetail")}</p>
-          <button type="button" className="ghost-button" disabled={actionDisabled || isPublishingToRoadmap} onClick={onPublishToRoadmap}>
-            {isPublishingToRoadmap ? t("publishedLabel") : t("selectedSignalPublishRoadmapCta")}
-          </button>
-        </article>
+        {showEmergingRiskAction ? (
+          <article className="selected-signal-next-action-card is-risk">
+            <span>{t("selectedSignalMarkEmergingRiskTitle")}</span>
+            <p>{t("selectedSignalMarkEmergingRiskDetail")}</p>
+            <button type="button" className="ghost-button" disabled={actionDisabled || isMarkingEmergingRisk} onClick={onMarkEmergingRisk}>
+              {isMarkingEmergingRisk ? t("selectedSignalEmergingRiskMarked") : t("selectedSignalMarkEmergingRiskCta")}
+            </button>
+          </article>
+        ) : null}
+        {showRoadmapAction ? (
+          <article className="selected-signal-next-action-card is-roadmap">
+            <span>{t("selectedSignalPublishRoadmapTitle")}</span>
+            <p>{t("selectedSignalPublishRoadmapDetail")}</p>
+            <button type="button" className="ghost-button" disabled={actionDisabled || isPublishingToRoadmap} onClick={onPublishToRoadmap}>
+              {isPublishingToRoadmap ? t("publishedLabel") : t("selectedSignalPublishRoadmapCta")}
+            </button>
+          </article>
+        ) : null}
       </div>
     </section>
   );
@@ -3821,6 +3840,20 @@ export function AdminDashboardPage() {
   const selectedReviewer = activeReviewDraft?.reviewer ?? (selectedRecord ? getAssignedReviewer(selectedRecord.submission) ?? "" : "");
   const selectedReviewerDisplayLabel = useReviewerDisplayLabel(selectedReviewer);
   const selectedNeedsFollowUp = selectedRecord ? hasNeedsFollowUp(selectedRecord.submission) : false;
+  const selectedHasRiskKeyword = selectedRecord ? hasRiskKeyword(selectedRecord.submission) : false;
+  const selectedFollowUpProminent = Boolean(
+    selectedRecord &&
+      (selectedNeedsFollowUp ||
+        selectedRecord.submission.priority === "high" ||
+        selectedRecord.submission.severity === "high" ||
+        selectedRecord.submission.status === "unread"),
+  );
+  const selectedShowEmergingRiskAction = Boolean(
+    selectedRecord &&
+      (selectedRecord.submission.priority === "high" ||
+        selectedRecord.submission.severity === "high" ||
+        selectedHasRiskKeyword),
+  );
   const selectedReviewerNoteUpdatedAt = selectedRecord ? getReviewerNoteUpdatedAt(selectedRecord.submission) : undefined;
   const selectedRecordVersionedForm = selectedRecord
     ? versionedFormsByFormId[selectedRecord.form.id]?.[getSubmissionVersion(selectedRecord.submission)] ?? selectedRecord.form
@@ -3829,6 +3862,9 @@ export function AdminDashboardPage() {
   const selectedHasSavedReviewResult = selectedRecord ? hasSavedReviewResult(selectedRecord.submission) : false;
   const selectedSavedReviewerDisplayLabel = useReviewerDisplayLabel(selectedSavedReviewer);
   const selectedPublicDecisionLabel = selectedRecord ? getPublicDecisionLabel(selectedRecord.submission, t) : "";
+  const selectedShowRoadmapAction = Boolean(
+    selectedRecord && selectedHasSavedReviewResult && selectedPublicDecisionLabel && selectedRoadmapUrl,
+  );
   const selectedSignalValueStars = selectedRecord ? getSignalValueStars(selectedRecord.submission.signalValue) : null;
   const selectedReviewResultItems = selectedRecord
     ? [
@@ -5188,6 +5224,9 @@ export function AdminDashboardPage() {
                       t={t}
                       createFollowUpHref={selectedFollowUpCreateHref}
                       actionDisabled={saving || isReviewWorkbenchLocked}
+                      followUpProminent={selectedFollowUpProminent}
+                      showEmergingRiskAction={selectedShowEmergingRiskAction}
+                      showRoadmapAction={selectedShowRoadmapAction}
                       isMarkingEmergingRisk={
                         hasNeedsFollowUp(selectedRecord.submission) && selectedRecord.submission.priority === "high"
                       }
