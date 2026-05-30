@@ -34,13 +34,11 @@ export class NoopMemoryAdapter implements MemoryAdapter {
     return noopRuntimeStatus;
   }
 
-  async rememberReviewMemory(record: ReviewMemoryRecord) {
-    void record;
+  async rememberReviewMemory(_record: ReviewMemoryRecord) {
     return skippedWrite;
   }
 
-  async recallReviewMemory(query: ReviewMemoryRecallQuery) {
-    void query;
+  async recallReviewMemory(_query: ReviewMemoryRecallQuery) {
     return skippedRecall;
   }
 }
