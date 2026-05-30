@@ -1,7 +1,7 @@
 {
   "name": "deepsignal-walrus-feedback-lab",
   "private": true,
-  "version": "0.11.6",
+  "version": "0.12.1",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -9,6 +9,7 @@
     "dev:drive-index-relay": "node scripts/google-drive-submission-index-relay.mjs",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "test": "vitest run",
+    "test:e2e": "playwright test",
     "test:zklogin": "vitest run src/lib/zkloginAddress.test.ts src/lib/zkloginOAuth.test.ts src/lib/zkloginSession.test.ts src/lib/respondentMeta.test.ts src/lib/exportResponses.test.ts src/pages/ZkLoginCallbackPage.test.tsx src/pages/PublicFormPage.test.tsx --exclude ci-run-verify/** --exclude .ci-run-verify/**",
     "typecheck": "tsc -b",
     "check": "npm run typecheck && npm run lint",
@@ -40,6 +41,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.26.0",
+    "@playwright/test": "^1.60.0",
     "@testing-library/dom": "^10.4.1",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",

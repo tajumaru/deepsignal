@@ -2,6 +2,9 @@
 /dist/assets
 /dist
 /node_modules
+/.playwright-browsers
+/test-results
+/playwright-report
 *.tsbuildinfo
 vite.config.js
 vite.config.d.ts

@@ -1032,7 +1032,7 @@ export function LandingPage() {
             </div>
 
             <div className="cta-row landing-hero-actions landing-hero-actions-secondary">
-              <Link className="landing-hero-text-link" to="/explore">
+              <Link className="landing-hero-text-link" to="/dashboard?tab=review&scope=all&demo=intelligence&mockAdmin=1">
                 {t("landingHeroDemo")}
               </Link>
               <span className="landing-hero-proofline">{t("landingHeroContestProofline")}</span>

@@ -4,6 +4,16 @@ import App from "./App";
 import { I18nProvider } from "./i18n";
 import { setDeepSignalDebugReadiness } from "./lib/routeDiagnostics";
 
+function redirectDirectWorkspacePathToHashRoute() {
+  if (typeof window === "undefined" || window.location.hash) {
+    return;
+  }
+  const { pathname, search } = window.location;
+  if (pathname === "/admin" || pathname.startsWith("/admin/")) {
+    window.history.replaceState(null, "", `/#${pathname}${search}`);
+  }
+}
+
 export function AppProviders({ children }: { children: ReactNode }) {
   useEffect(() => {
     setDeepSignalDebugReadiness({ i18nProvider: "ready" });
@@ -13,6 +23,8 @@ export function AppProviders({ children }: { children: ReactNode }) {
 }
 
 export function AppRoot() {
+  redirectDirectWorkspacePathToHashRoute();
+
   return (
     <AppProviders>
       <HashRouter>

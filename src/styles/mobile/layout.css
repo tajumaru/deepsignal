@@ -770,6 +770,21 @@
     opacity: 0.45;
   }
 
+  .explore-dataflow {
+    inset-inline: 0;
+    width: 100%;
+  }
+
+  .explore-radar-display {
+    left: 58%;
+    width: min(72vw, 280px);
+    max-width: 100%;
+  }
+
+  .explore-radar-beam {
+    width: 32%;
+  }
+
   .explore-tab-row,
   .explore-filter-row {
     display: grid;

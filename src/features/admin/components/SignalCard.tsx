@@ -30,6 +30,8 @@ interface SignalCardProps {
   isAnonymousSignal: boolean;
   isUnlockedSignal: boolean;
   isOnchainRecoverySnapshot: boolean;
+  isDemoSignal?: boolean;
+  isDemoJustArrived?: boolean;
   hasPayloadIssue: boolean;
   isRegistering: boolean;
   onSelect: () => void;
@@ -62,6 +64,8 @@ export const SignalCard = forwardRef<HTMLDivElement, SignalCardProps>(function S
     isSelectedForSui,
     isUnlockedSignal,
     isOnchainRecoverySnapshot,
+    isDemoSignal = false,
+    isDemoJustArrived = false,
     hasPayloadIssue,
     isRegistering,
     onSelect,
@@ -75,13 +79,14 @@ export const SignalCard = forwardRef<HTMLDivElement, SignalCardProps>(function S
     submission.isEncrypted ||
     submission.status === "archived" ||
     submission.revokeRequested ||
+    isDemoSignal ||
     isOnchainRecoverySnapshot ||
     hasPayloadIssue ||
     (persistenceLabel !== null && persistenceState !== "walrus_synced");
 
   return (
     <div
-      className={`signal-card ${isSelectedSignal ? "is-active" : ""} ${submission.status === "unread" ? "is-unread" : "is-read"} ${isPendingSui ? "has-select-checkbox" : ""} ${isSelectedForSui ? "is-selected-for-sui" : ""}`}
+      className={`signal-card ${isSelectedSignal ? "is-active" : ""} ${submission.status === "unread" ? "is-unread" : "is-read"} ${isPendingSui ? "has-select-checkbox" : ""} ${isSelectedForSui ? "is-selected-for-sui" : ""} ${isDemoJustArrived ? "is-demo-just-arrived" : ""}`}
       role="button"
       tabIndex={0}
       aria-current={isSelectedSignal ? "true" : undefined}
@@ -124,6 +129,8 @@ export const SignalCard = forwardRef<HTMLDivElement, SignalCardProps>(function S
         <strong>{subject}</strong>
         <span className="signal-card-topline-meta">
           {isSelectedSignal ? <span className="signal-card-selection-badge">{t("selectedLabel")}</span> : null}
+          {isDemoSignal ? <span className="signal-card-selection-badge is-demo">{t("demoBadgeLabel")}</span> : null}
+          {isDemoJustArrived ? <span className="signal-card-selection-badge is-just-arrived">{t("demoJustArrivedLabel")}</span> : null}
           <span className="signal-card-time">{formatDate(submission.createdAt)}</span>
         </span>
       </div>
@@ -158,6 +165,9 @@ export const SignalCard = forwardRef<HTMLDivElement, SignalCardProps>(function S
             ) : null}
             {isOnchainRecoverySnapshot ? (
               <span className="mailbox-meta-chip mailbox-meta-chip-subtle">{t("onchainRecoverySnapshotLabel")}</span>
+            ) : null}
+            {isDemoSignal ? (
+              <span className="mailbox-meta-chip mailbox-meta-chip-subtle">{t("demoSignalNotStoredLabel")}</span>
             ) : null}
             {persistenceLabel && persistenceState !== "walrus_synced" ? (
               <span className="mailbox-meta-chip mailbox-meta-chip-subtle">{persistenceLabel}</span>

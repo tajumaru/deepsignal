@@ -28,6 +28,7 @@ interface UseProjectWorkspaceArgs {
   capabilityProfile: CapabilityProfile;
   forms: FormWithCount[];
   loadConsole: () => Promise<void>;
+  mockProject?: ProjectSummary | null;
 }
 
 export function useProjectWorkspace({
@@ -35,6 +36,7 @@ export function useProjectWorkspace({
   capabilityProfile,
   forms,
   loadConsole,
+  mockProject = null,
 }: UseProjectWorkspaceArgs) {
   const suiClient = useSuiClient();
   const { projects, refetch: refetchProjects, ownedProjectCaps } = useProjectRegistry(accountAddress);
@@ -53,8 +55,9 @@ export function useProjectWorkspace({
   const projectCreateInputRef = useRef<HTMLInputElement | null>(null);
   const hasAdminAccess = canAdmin(capabilityProfile);
 
-  const visibleProjects = hasAdminAccess ? projects : [];
-  const visibleSelectedProjectId = hasAdminAccess ? selectedProjectId : "";
+  const sourceProjects = mockProject ? [mockProject] : projects;
+  const visibleProjects = hasAdminAccess ? sourceProjects : [];
+  const visibleSelectedProjectId = mockProject && hasAdminAccess ? mockProject.objectId : hasAdminAccess ? selectedProjectId : "";
   const cachedSelectedProject = visibleProjects.find((project) => project.objectId === visibleSelectedProjectId) ?? null;
   const ownerCapIdByProjectId = useMemo(
     () => new Map(ownedProjectCaps.map((cap) => [cap.projectId, cap.objectId])),
@@ -104,6 +107,10 @@ export function useProjectWorkspace({
   const visibleOnchainForms = selectedProject?.onchainForms ?? [];
 
   useEffect(() => {
+    if (mockProject) {
+      setSelectedProjectIdState(mockProject.objectId);
+      return;
+    }
     if (!hasAdminAccess) {
       return;
     }
@@ -115,7 +122,7 @@ export function useProjectWorkspace({
       setSelectedProjectIdState(projects[0].objectId);
       setSelectedProjectId(projects[0].objectId);
     }
-  }, [hasAdminAccess, projects, selectedProjectId]);
+  }, [hasAdminAccess, mockProject, projects, selectedProjectId]);
 
   useEffect(() => {
     if (!highlightCreateFormCta) {
@@ -165,6 +172,10 @@ export function useProjectWorkspace({
   }, [suiClient]);
 
   useEffect(() => {
+    if (mockProject) {
+      setHydratedSelectedProject(mockProject);
+      return;
+    }
     if (!hasAdminAccess || !visibleSelectedProjectId) {
       setHydratedSelectedProject(null);
       return;
@@ -196,7 +207,7 @@ export function useProjectWorkspace({
       cancelled = true;
       window.removeEventListener("focus", handleFocus);
     };
-  }, [hasAdminAccess, hydrateProject, visibleSelectedProjectId]);
+  }, [hasAdminAccess, hydrateProject, mockProject, visibleSelectedProjectId]);
 
   async function connectManualProject() {
     if (!hasAdminAccess) {

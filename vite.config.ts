@@ -310,7 +310,7 @@ function moduleEntryRetryPlugin(args: { appVersion: string; buildTime: string; g
             return;
           }
           const { pathname, search } = window.location;
-          const legacyRoutePrefixes = ["/f/", "/roadmap/", "/m/", "/auth/zklogin/"];
+          const legacyRoutePrefixes = ["/admin", "/f/", "/roadmap/", "/m/", "/auth/zklogin/"];
           if (!legacyRoutePrefixes.some((prefix) => pathname.startsWith(prefix))) {
             return;
           }

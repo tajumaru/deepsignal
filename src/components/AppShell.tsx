@@ -153,7 +153,12 @@ export function AppShell({
   const mobileMenuToggleRef = useRef<HTMLButtonElement | null>(null);
   const mobileDrawerRef = useRef<HTMLElement | null>(null);
   const walletChrome = useWalletChrome(walletAvailable, t("navLab"), () => setMobileDrawerOpen(false));
-  const showComposeShortcut = !isComposerRoute(location.pathname);
+  const isAdminWorkspaceRoute =
+    location.pathname === "/admin" ||
+    location.pathname.startsWith("/admin/") ||
+    location.pathname === "/dashboard" ||
+    location.pathname.startsWith("/dashboard/");
+  const showComposeShortcut = !isComposerRoute(location.pathname) && !isAdminWorkspaceRoute;
   const showMobileBottomNav =
     !publicChrome &&
     (location.pathname === "/explore" ||

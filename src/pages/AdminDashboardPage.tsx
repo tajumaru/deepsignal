@@ -56,6 +56,7 @@ import { useAdminToast } from "../features/admin/hooks/useAdminToast";
 import { usePendingSuiRegistration } from "../features/admin/hooks/usePendingSuiRegistration";
 import { usePrivateSignalDecrypt } from "../features/admin/hooks/usePrivateSignalDecrypt";
 import { useProjectWorkspace } from "../features/admin/hooks/useProjectWorkspace";
+import { createMockAdminWorkspaceData, useMockAdminMode } from "../features/admin/mockAdmin";
 import {
   useReviewWorkspace,
   type ReviewSaveStatus,
@@ -267,6 +268,317 @@ interface InboxTimelineModel {
   hasTrendData: boolean;
 }
 
+const DEMO_SIGNAL_VOLUME_OPTIONS = [0, 3, 5, 20, 100] as const;
+
+type DemoSignalVolume = (typeof DEMO_SIGNAL_VOLUME_OPTIONS)[number];
+type DemoSignalScenario = "safari_incident" | "product_feedback" | "disaster_checkin";
+
+const DEMO_SIGNAL_METADATA_FLAG = "deepSignalDemoOnly";
+
+const DEMO_SIGNAL_SCENARIOS: Record<
+  DemoSignalScenario,
+  {
+    label: string;
+    formTitle: string;
+    clusterId: string;
+    category: Submission["category"];
+    keywords: string[];
+    summaries: string[];
+    subjects: string[];
+    answers: string[];
+  }
+> = {
+  safari_incident: {
+    label: "Safari Incident",
+    formTitle: "Safari Incident Signal",
+    clusterId: "Mobile Safari",
+    category: "bug",
+    keywords: ["Mobile Safari", "chunk failure", "module script failed", "blank screen", "reload loop", "wallet restore delay"],
+    subjects: [
+      "Mobile Safari blank screen",
+      "Module script failed on iPhone",
+      "Chunk failure after reload",
+      "Wallet restore delay",
+      "Safari reload loop",
+    ],
+    summaries: [
+      "Mobile Safari users report blank screens after loading the review workspace.",
+      "Several responses mention module script failures and chunk loading errors on iPhone Safari.",
+      "Reload loops are appearing after users attempt to recover the session.",
+      "Wallet restore takes longer on Safari when the workspace resumes.",
+      "Mobile Safari loading complaints are increasing.",
+    ],
+    answers: [
+      "Mobile Safari shows a blank screen after the loading spinner finishes.",
+      "I see a module script failed message and then the page stays empty.",
+      "The page enters a reload loop after the chunk failure.",
+      "Wallet restore eventually works, but Safari delays the workspace for a long time.",
+      "The review screen does not recover cleanly on iPhone Safari.",
+    ],
+  },
+  product_feedback: {
+    label: "Product Feedback",
+    formTitle: "Product Feedback Signal",
+    clusterId: "Product Feedback",
+    category: "feature",
+    keywords: ["love the UI", "mobile layout", "export request", "dashboard complexity", "follow-up request"],
+    subjects: [
+      "Love the UI",
+      "Mobile layout feedback",
+      "Export request",
+      "Dashboard complexity",
+      "Follow-up request",
+    ],
+    summaries: [
+      "Users like the signal intelligence UI and want more guided follow-up actions.",
+      "Mobile layout feedback is increasing around compact review controls.",
+      "Export requests are appearing from operators who want review snapshots.",
+      "Some operators find the dashboard complex during first-time triage.",
+      "Follow-up request patterns are emerging from active reviewers.",
+    ],
+    answers: [
+      "I love the UI and the signal cards make review feel much faster.",
+      "The mobile layout is useful, but some controls could stack more clearly.",
+      "Please add an export option for selected signal groups.",
+      "The dashboard is powerful, but new reviewers need clearer next steps.",
+      "It would help if DeepSignal suggested follow-up signals automatically.",
+    ],
+  },
+  disaster_checkin: {
+    label: "Disaster Check-in",
+    formTitle: "Disaster Check-in Signal",
+    clusterId: "Disaster Check-in",
+    category: "general",
+    keywords: ["safe", "need supplies", "location unavailable", "emergency", "family check-in"],
+    subjects: [
+      "Safe check-in",
+      "Need supplies",
+      "Location unavailable",
+      "Emergency report",
+      "Family check-in",
+    ],
+    summaries: [
+      "Several responders are safe, but supply needs are starting to cluster.",
+      "Supply requests are increasing across recent check-ins.",
+      "Location unavailable reports may require manual follow-up.",
+      "Emergency language appears in a small number of high-priority responses.",
+      "Family check-in requests are appearing in the current scope.",
+    ],
+    answers: [
+      "We are safe and checking in from the community center.",
+      "We need water, batteries, and basic medical supplies.",
+      "Location is unavailable on this phone, but we are near the school.",
+      "This is an emergency. We need immediate contact.",
+      "Please help confirm whether my family has checked in.",
+    ],
+  },
+};
+
+function getDemoSimulationStage(demoSignalVolume: DemoSignalVolume, t: TranslationFn) {
+  if (demoSignalVolume >= 100) {
+    return {
+      index: 4,
+      label: t("demoSimulationStageEvolution"),
+      title: t("demoSimulationHeroEvolutionTitle"),
+      body: t("demoSimulationHeroEvolutionBody"),
+    };
+  }
+
+  if (demoSignalVolume >= 20) {
+    return {
+      index: 3,
+      label: t("demoSimulationStageInsights"),
+      title: t("demoSimulationHeroInsightsTitle"),
+      body: t("demoSimulationHeroInsightsBody"),
+    };
+  }
+
+  if (demoSignalVolume >= 5) {
+    return {
+      index: 2,
+      label: t("demoSimulationStageTrends"),
+      title: t("demoSimulationHeroTrendsTitle"),
+      body: t("demoSimulationHeroTrendsBody"),
+    };
+  }
+
+  if (demoSignalVolume >= 3) {
+    return {
+      index: 1,
+      label: t("demoSimulationStageLearning"),
+      title: t("demoSimulationHeroLearningTitle"),
+      body: t("demoSimulationHeroLearningBody"),
+    };
+  }
+
+  return {
+    index: 0,
+    label: t("demoSimulationStageMonitoring"),
+    title: t("demoSimulationHeroMonitoringTitle"),
+    body: t("demoSimulationHeroMonitoringBody"),
+  };
+}
+
+function isDemoSignalSubmission(submission?: Submission | null) {
+  return Boolean(submission?.metadata?.[DEMO_SIGNAL_METADATA_FLAG]);
+}
+
+function isDemoSignalRecord(record?: SignalRecord | null) {
+  return isDemoSignalSubmission(record?.submission);
+}
+
+function getDemoSignalVolume(count: number): DemoSignalVolume {
+  if (count >= 100) {
+    return 100;
+  }
+  if (count >= 20) {
+    return 20;
+  }
+  if (count >= 5) {
+    return 5;
+  }
+  if (count >= 3) {
+    return 3;
+  }
+  return 0;
+}
+
+function buildDemoSignalRecords(scenarioId: DemoSignalScenario, totalCount: number, startIndex = 0): SignalRecord[] {
+  const scenario = DEMO_SIGNAL_SCENARIOS[scenarioId];
+  const now = Date.now();
+  const reviewProfiles: Array<{
+    priority: Submission["priority"];
+    severity: Submission["severity"];
+    status: Submission["status"];
+    triageStatus: Submission["triageStatus"];
+    signalValue: number;
+    emotion: string;
+    tags: string[];
+  }> = [
+    {
+      priority: "high",
+      severity: "high",
+      status: "unread",
+      triageStatus: "investigating",
+      signalValue: 5,
+      emotion: "urgent",
+      tags: [NEEDS_FOLLOW_UP_TAG, "priority-high"],
+    },
+    {
+      priority: "medium",
+      severity: "medium",
+      status: "unread",
+      triageStatus: "new",
+      signalValue: 4,
+      emotion: scenarioId === "product_feedback" ? "positive" : "concerned",
+      tags: ["needs-review"],
+    },
+    {
+      priority: "low",
+      severity: "low",
+      status: "read",
+      triageStatus: "closed",
+      signalValue: 2,
+      emotion: scenarioId === "product_feedback" ? "mixed" : "stable",
+      tags: ["low-priority"],
+    },
+    {
+      priority: "medium",
+      severity: "low",
+      status: "read",
+      triageStatus: "investigating",
+      signalValue: 3,
+      emotion: "watching",
+      tags: ["under-review"],
+    },
+    {
+      priority: "high",
+      severity: "medium",
+      status: "unread",
+      triageStatus: "new",
+      signalValue: 4,
+      emotion: scenarioId === "disaster_checkin" ? "urgent" : "frustrated",
+      tags: [NEEDS_FOLLOW_UP_TAG],
+    },
+  ];
+  const form: FormWithCount = {
+    id: `demo-generator:${scenarioId}`,
+    title: scenario.formTitle,
+    description: "Demo-only generated signals for the current review session.",
+    fields: [
+      { id: "summary", type: "longText", label: "Signal detail", required: false, sensitive: false },
+      { id: "environment", type: "shortText", label: "Environment", required: false, sensitive: false },
+    ],
+    createdAt: new Date(now).toISOString(),
+    updatedAt: new Date(now).toISOString(),
+    creationMode: "admin",
+    submissionCount: totalCount,
+    signalType: scenario.category === "bug" ? "incident" : scenario.category === "feature" ? "product_voice" : "operation",
+    analystType: "operations",
+  };
+
+  return Array.from({ length: totalCount }, (_, offset) => {
+    const index = startIndex + offset;
+    const subject = scenario.subjects[index % scenario.subjects.length];
+    const answer = scenario.answers[index % scenario.answers.length];
+    const summary = scenario.summaries[index % scenario.summaries.length];
+    const createdAt = new Date(now - index * 45_000).toISOString();
+    const profile = reviewProfiles[(index * 7 + scenario.keywords.length) % reviewProfiles.length];
+    const signalValueOffset = (index + scenario.clusterId.length) % 3 === 0 ? -1 : 0;
+    const signalValue = Math.min(5, Math.max(1, profile.signalValue + signalValueOffset));
+    const submission: Submission = {
+      id: `demo-signal-${scenarioId}-${index + 1}`,
+      formId: form.id,
+      formVersion: 1,
+      answers: {
+        summary: answer,
+        environment: scenarioId === "safari_incident" ? "iPhone Safari" : scenario.label,
+      },
+      attachments: [],
+      metadata: {
+        [DEMO_SIGNAL_METADATA_FLAG]: true,
+        scenario: scenarioId,
+      },
+      category: scenario.category,
+      aiSummary: summary,
+      severity: profile.severity,
+      emotion: profile.emotion,
+      keywords: scenario.keywords,
+      clusterId: scenario.clusterId,
+      status: profile.status,
+      priority: profile.priority,
+      triageStatus: profile.triageStatus,
+      tags: ["demo-only", scenario.clusterId.toLowerCase().replace(/\s+/g, "-"), ...profile.tags],
+      notes: profile.tags.includes(NEEDS_FOLLOW_UP_TAG)
+        ? "Demo review: follow-up recommended for the current operator workflow."
+        : "Demo review: no persistent review action will be saved.",
+      signalValue,
+      isEncrypted: false,
+      subjectPreview: subject,
+      ratingValue: scenarioId === "product_feedback" ? signalValue : undefined,
+      createdAt,
+      updatedAt: createdAt,
+    };
+
+    return {
+      form,
+      submission,
+      category: scenario.category === "bug" ? "Bug" : scenario.category === "feature" ? "Feature" : "General",
+      searchText: [
+        scenario.formTitle,
+        subject,
+        answer,
+        summary,
+        scenario.keywords.join(" "),
+        scenario.clusterId,
+        "demo",
+      ]
+        .join(" ")
+        .toLowerCase(),
+    };
+  });
+}
+
 interface TimelineComparisonWindow {
   previousRecords: SignalRecord[];
   recentRecords: SignalRecord[];
@@ -435,14 +747,21 @@ function getPublicDecisionLabel(submission: Submission, t: TranslationFn) {
 }
 
 function getSignalValueSummary(signalValue: Submission["signalValue"], t: TranslationFn) {
-  return typeof signalValue === "number" ? `${signalValue}/5` : t("notScored");
+  if (typeof signalValue !== "number") {
+    return t("notScored");
+  }
+  const normalizedValue = signalValue > 5 ? signalValue / 20 : signalValue;
+  const clampedValue = Math.min(5, Math.max(1, normalizedValue));
+  return Number.isInteger(clampedValue) ? `${clampedValue}/5` : `${clampedValue.toFixed(1)}/5`;
 }
 
 function getSignalValueStars(signalValue: Submission["signalValue"]) {
   if (typeof signalValue !== "number" || signalValue < 1) {
     return null;
   }
-  return Array.from({ length: 5 }, (_, index) => index < signalValue);
+  const normalizedValue = signalValue > 5 ? signalValue / 20 : signalValue;
+  const filledStars = Math.min(5, Math.max(1, Math.round(normalizedValue)));
+  return Array.from({ length: 5 }, (_, index) => index < filledStars);
 }
 
 function getSubmissionMetadataString(submission: Submission, key: string) {
@@ -950,14 +1269,96 @@ function buildInboxTimelineModel(records: SignalRecord[], t: TranslationFn): Inb
   };
 }
 
+function buildDemoSimulationTimelineModel(baseModel: InboxTimelineModel, demoSignalVolume: DemoSignalVolume, t: TranslationFn): InboxTimelineModel {
+  const now = new Date().toISOString();
+  const demoTrendUnlocked = demoSignalVolume >= 5;
+  const demoAiUnlocked = demoSignalVolume >= 20;
+  const demoEvolutionUnlocked = demoSignalVolume >= 100;
+  const trendCards: InboxTrendCard[] = [];
+
+  if (demoTrendUnlocked) {
+    trendCards.push({
+      id: "rising-topic",
+      label: t("inboxTrendRisingTopicLabel"),
+      title: "Mobile Safari",
+      value: t("inboxTrendSignalCount", { count: demoSignalVolume }),
+      detail: t("demoSimulationRisingTopicDetail"),
+      tone: "topic",
+    });
+  }
+
+  if (demoAiUnlocked) {
+    trendCards.push({
+      id: "positive-trend",
+      label: t("intelligenceCenterAiInsightsTitle"),
+      title: t("demoSimulationAiInsightTitle"),
+      value: t("inboxTrendSignalCount", { count: demoSignalVolume }),
+      detail: t("demoSimulationAiInsightDetail"),
+      tone: "positive",
+    });
+  }
+
+  if (demoEvolutionUnlocked) {
+    trendCards.push({
+      id: "emerging-risk",
+      label: t("intelligenceCenterSignalEvolutionTitle"),
+      title: t("demoSimulationSignalEvolutionTitle"),
+      value: t("inboxTrendSignalCount", { count: demoSignalVolume }),
+      detail: t("demoSimulationSignalEvolutionDetail"),
+      tone: "risk",
+    });
+  }
+
+  return {
+    ...baseModel,
+    events: [
+      {
+        id: "response-growth",
+        label: t("inboxTimelineResponseGrowthLabel"),
+        title: t("inboxTimelineResponseGrowthTitle", { count: demoSignalVolume }),
+        detail:
+          demoSignalVolume === 0
+            ? t("intelligenceUnlockMonitoringWaiting")
+            : t("demoSimulationResponseGrowthDetail", { count: demoSignalVolume }),
+        timestamp: now,
+        tone: "intake",
+      },
+      {
+        id: "ai-summary",
+        label: t("inboxTimelineAiSummaryLabel"),
+        title: demoAiUnlocked ? t("intelligenceUnlockAiUnlocked") : t("inboxTimelineAiSummaryPendingTitle"),
+        detail: demoAiUnlocked ? t("demoSimulationAiInsightDetail") : t("inboxTimelineAiSummaryPendingDetail"),
+        timestamp: now,
+        tone: "analysis",
+      },
+    ],
+    trendCards,
+    responseGrowthLabel: demoSignalVolume === 0 ? t("inboxTimelineGrowthSteadyPill") : t("demoSimulationCountPill", { count: demoSignalVolume }),
+    activeTrendLabel: demoTrendUnlocked ? "Mobile Safari" : t("inboxTimelineNoActiveTrend"),
+    unreadCount: demoSignalVolume,
+    generatedFromCount: demoSignalVolume,
+    hasTrendData: demoTrendUnlocked,
+  };
+}
+
 function InboxTimelineOverview({
   model,
   t,
   compact = false,
+  demoSignalCount = 0,
+  realSignalCount,
+  demoGenerating = false,
+  demoIngestTarget = null,
+  demoArrivalAlert = null,
 }: {
   model: InboxTimelineModel;
   t: TranslationFn;
   compact?: boolean;
+  demoSignalCount?: number;
+  realSignalCount?: number;
+  demoGenerating?: boolean;
+  demoIngestTarget?: 5 | 20 | 100 | null;
+  demoArrivalAlert?: string | null;
 }) {
   if (compact) {
     return (
@@ -970,10 +1371,36 @@ function InboxTimelineOverview({
         </div>
         <div className="inbox-activity-chip-row">
           <span>{t("inboxActivityResponses", { count: model.generatedFromCount })}</span>
+          {demoSignalCount > 0 ? (
+            <>
+              <span>{t("demoActivityDemoCount", { count: demoSignalCount })}</span>
+              <span>{t("demoActivityRealCount", { count: realSignalCount ?? Math.max(0, model.generatedFromCount - demoSignalCount) })}</span>
+            </>
+          ) : null}
           <span>{t("inboxActivityUnread", { count: model.unreadCount })}</span>
           <span>{model.activeTrendLabel}</span>
           <span>{model.responseGrowthLabel}</span>
         </div>
+        {demoGenerating && demoIngestTarget ? (
+          <div className="inbox-demo-receiving" role="status" aria-live="polite">
+            <div>
+              <span>{t("demoReceivingSignalsLabel")}</span>
+              <strong>{t("demoReceivedProgress", { count: demoSignalCount, target: demoIngestTarget })}</strong>
+            </div>
+            <span className="inbox-demo-receiving-track">
+              <span
+                className="inbox-demo-receiving-fill"
+                style={{ width: `${Math.min(100, Math.round((demoSignalCount / demoIngestTarget) * 100))}%` }}
+              />
+            </span>
+          </div>
+        ) : null}
+        {demoArrivalAlert ? (
+          <div className="inbox-demo-arrival-alert" role="status" aria-live="polite">
+            <strong>{t("demoSignalArrivedTitle")}</strong>
+            <span>{demoArrivalAlert}</span>
+          </div>
+        ) : null}
         {model.generatedFromCount === 0 ? (
           <p className="muted inbox-timeline-derived-note">{t("inboxActivityInsufficientData")}</p>
         ) : null}
@@ -1027,48 +1454,260 @@ function InboxTimelineOverview({
 function SignalIntelligenceCenter({
   model,
   t,
+  demoSimulationEnabled,
+  demoSignalVolume,
+  demoScenario,
+  demoSignalCount,
+  realSignalCount,
+  demoGenerating,
+  demoIngestTarget,
+  demoUnlockAlert,
+  onDemoScenarioChange,
+  onGenerateDemoSignals,
+  onCancelDemoIngest,
+  onResetDemoSignals,
 }: {
   model: InboxTimelineModel;
   t: TranslationFn;
+  demoSimulationEnabled: boolean;
+  demoSignalVolume: DemoSignalVolume;
+  demoScenario: DemoSignalScenario;
+  demoSignalCount: number;
+  realSignalCount: number;
+  demoGenerating: boolean;
+  demoIngestTarget: 5 | 20 | 100 | null;
+  demoUnlockAlert: string | null;
+  onDemoScenarioChange: (scenario: DemoSignalScenario) => void;
+  onGenerateDemoSignals: (targetCount: 5 | 20 | 100) => void;
+  onCancelDemoIngest: () => void;
+  onResetDemoSignals: () => void;
 }) {
-  const empty = model.generatedFromCount === 0;
+  const effectiveModel = demoSimulationEnabled ? buildDemoSimulationTimelineModel(model, demoSignalVolume, t) : model;
+  const empty = effectiveModel.generatedFromCount === 0;
+  const demoStage = getDemoSimulationStage(demoSignalVolume, t);
+  const demoStepOptions = DEMO_SIGNAL_VOLUME_OPTIONS.map((volume) => ({
+    volume,
+    label:
+      volume === 0
+        ? t("demoSimulationStageMonitoring")
+        : volume === 3
+          ? t("demoSimulationStageLearning")
+          : volume === 5
+            ? t("demoSimulationStageTrends")
+            : volume === 20
+              ? t("demoSimulationStageInsights")
+              : t("demoSimulationStageEvolution"),
+  }));
+  const unlockStages = [
+    {
+      id: "monitoring",
+      label: t("intelligenceUnlockMonitoringLabel"),
+      threshold: 0,
+      unlocked: true,
+      detail: empty ? t("intelligenceUnlockMonitoringWaiting") : t("intelligenceUnlockMonitoringActive"),
+      current: demoSimulationEnabled && demoSignalVolume < 5,
+    },
+    {
+      id: "trend-detection",
+      label: t("selectedSignalTrendDetectionLabel"),
+      threshold: 5,
+      unlocked: effectiveModel.hasTrendData,
+      detail: effectiveModel.hasTrendData
+        ? t("intelligenceUnlockTrendUnlocked")
+        : t("intelligenceUnlockTrendLocked", { count: Math.max(0, 5 - effectiveModel.generatedFromCount) }),
+      current: demoSimulationEnabled && demoSignalVolume >= 5 && demoSignalVolume < 20,
+    },
+    {
+      id: "ai-insights",
+      label: t("intelligenceCenterAiInsightsTitle"),
+      threshold: 20,
+      unlocked: effectiveModel.generatedFromCount >= 20,
+      detail:
+        effectiveModel.generatedFromCount >= 20
+          ? t("intelligenceUnlockAiUnlocked")
+          : t("intelligenceUnlockAiLocked", { count: Math.max(0, 20 - effectiveModel.generatedFromCount) }),
+      current: demoSimulationEnabled && demoSignalVolume >= 20 && demoSignalVolume < 100,
+    },
+    {
+      id: "signal-evolution",
+      label: t("intelligenceCenterSignalEvolutionTitle"),
+      threshold: 100,
+      unlocked: effectiveModel.generatedFromCount >= 100,
+      detail:
+        effectiveModel.generatedFromCount >= 100
+          ? t("intelligenceUnlockEvolutionUnlocked")
+          : t("intelligenceUnlockEvolutionLocked", { count: Math.max(0, 100 - effectiveModel.generatedFromCount) }),
+      current: demoSimulationEnabled && demoSignalVolume >= 100,
+    },
+  ];
   const intelligencePlaceholders = [
     {
       id: "live-trends",
       label: t("intelligenceCenterLiveTrendsTitle"),
-      detail: empty ? t("intelligenceCenterLiveTrendsEmpty") : model.activeTrendLabel,
+      detail: empty ? t("intelligenceCenterLiveTrendsEmpty") : effectiveModel.activeTrendLabel,
+      unlocked: effectiveModel.hasTrendData,
     },
     {
       id: "ai-insights",
       label: t("intelligenceCenterAiInsightsTitle"),
       detail: empty
         ? t("intelligenceCenterAiInsightsEmpty")
-        : model.events.find((event) => event.id === "ai-summary")?.detail ?? t("inboxTimelineAiSummaryPendingDetail"),
+        : effectiveModel.events.find((event) => event.id === "ai-summary")?.detail ?? t("inboxTimelineAiSummaryPendingDetail"),
+      unlocked: effectiveModel.generatedFromCount >= 20,
     },
     {
       id: "follow-up",
       label: t("intelligenceCenterFollowUpTitle"),
       detail: empty
         ? t("intelligenceCenterFollowUpEmpty")
-        : model.unreadCount > 0
-          ? t("intelligenceCenterFollowUpUnread", { count: model.unreadCount })
+        : demoSimulationEnabled && effectiveModel.generatedFromCount >= 100
+          ? t("demoSimulationFollowUpQuestion")
+          : effectiveModel.unreadCount > 0
+          ? t("intelligenceCenterFollowUpUnread", { count: effectiveModel.unreadCount })
           : t("intelligenceCenterFollowUpStable"),
+      unlocked: effectiveModel.generatedFromCount >= 100 || (!demoSimulationEnabled && !empty && effectiveModel.unreadCount > 0),
     },
   ];
 
   return (
-    <section className={`signal-intelligence-center ${empty ? "is-empty" : ""}`}>
+    <section className={`signal-intelligence-center ${empty ? "is-empty" : ""} ${demoSimulationEnabled ? "is-demo-simulation" : ""}`}>
       <div className="signal-intelligence-center-head">
         <p className="eyebrow">{t("signalIntelligenceEyebrow")}</p>
         <h2>{t("signalIntelligenceCenterTitle")}</h2>
         <p className="muted">
-          {empty ? t("signalIntelligenceCenterEmptyBody") : t("signalIntelligenceCenterBody", { count: model.generatedFromCount })}
+          {demoSimulationEnabled
+            ? t("demoSimulationDisclosure")
+            : empty
+              ? t("signalIntelligenceCenterEmptyBody")
+              : t("signalIntelligenceCenterBody", { count: effectiveModel.generatedFromCount })}
         </p>
       </div>
+      <div className="demo-simulation-control" aria-label={t("demoSimulationTitle")}>
+        <div className="demo-simulation-toggle-row">
+          <div>
+            <strong>{t("demoGeneratorTitle")}</strong>
+            <span>{t("demoGeneratorBody")}</span>
+          </div>
+          <span className={`demo-generator-state ${demoSimulationEnabled ? "is-active" : ""}`}>
+            {demoSimulationEnabled ? t("demoModeActiveLabel") : t("demoModeReadyLabel")}
+          </span>
+        </div>
+        <div className="demo-generator-controls">
+          <label>
+            <span>{t("demoScenarioLabel")}</span>
+            <select
+              value={demoScenario}
+              onChange={(event) => onDemoScenarioChange(event.target.value as DemoSignalScenario)}
+              disabled={demoGenerating}
+            >
+              {(Object.keys(DEMO_SIGNAL_SCENARIOS) as DemoSignalScenario[]).map((scenarioId) => (
+                <option key={scenarioId} value={scenarioId}>
+                  {DEMO_SIGNAL_SCENARIOS[scenarioId].label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <div className="demo-generator-actions" aria-label={t("demoGeneratorTitle")}>
+            <button type="button" onClick={() => onGenerateDemoSignals(5)} disabled={demoGenerating}>
+              {t("demoGenerateFive")}
+            </button>
+            <button type="button" onClick={() => onGenerateDemoSignals(20)} disabled={demoGenerating}>
+              {t("demoGenerateTwenty")}
+            </button>
+            <button type="button" onClick={() => onGenerateDemoSignals(100)} disabled={demoGenerating}>
+              {t("demoGenerateHundred")}
+            </button>
+            {demoGenerating ? (
+              <button type="button" className="is-secondary" onClick={onCancelDemoIngest}>
+                {t("demoCancelIngest")}
+              </button>
+            ) : null}
+            <button type="button" className="is-secondary" onClick={onResetDemoSignals} disabled={demoSignalCount === 0 && !demoGenerating}>
+              {t("demoReset")}
+            </button>
+          </div>
+          {demoGenerating && demoIngestTarget ? (
+            <div className="demo-ingest-status" role="status" aria-live="polite">
+              <div className="demo-ingest-status-head">
+                <span>{t("demoIngestingLabel")}</span>
+                <strong>{t("demoIngestProgress", { count: demoSignalCount, target: demoIngestTarget })}</strong>
+              </div>
+              <span className="demo-ingest-progress-track">
+                <span
+                  className="demo-ingest-progress-fill"
+                  style={{ width: `${Math.min(100, Math.round((demoSignalCount / demoIngestTarget) * 100))}%` }}
+                />
+              </span>
+            </div>
+          ) : null}
+          <p>{t("demoGeneratorDisclosure")}</p>
+        </div>
+        {demoSimulationEnabled ? (
+          <div className="demo-simulation-volume-control">
+            <article className={`demo-simulation-stage-hero ${demoSignalVolume >= 100 ? "is-evolution" : ""}`}>
+              {demoUnlockAlert ? (
+                <div className="demo-unlock-alert" role="status" aria-live="polite">
+                  {demoUnlockAlert}
+                </div>
+              ) : null}
+              <span>{t("demoSimulationStageCounter", { stage: demoStage.index })}</span>
+              <strong>{demoStage.title}</strong>
+              <em>{t("demoSimulationSignalVolumeValue", { count: demoSignalCount })}</em>
+              <p>{demoStage.body}</p>
+              {demoSignalVolume >= 100 ? (
+                <div className="demo-simulation-follow-up-callout">
+                  <span>{t("selectedSignalFollowUpLabel")}</span>
+                  <strong>“{t("demoSimulationFollowUpQuestion")}”</strong>
+                  <button type="button" disabled>
+                    {t("demoSimulationCreateFollowUpCta")}
+                  </button>
+                </div>
+              ) : null}
+            </article>
+            <div className="demo-simulation-volume-head">
+              <span>{t("demoSimulationProgressTitle")}</span>
+              <strong>{t("demoSignalMixLabel", { demo: demoSignalCount, real: realSignalCount })}</strong>
+            </div>
+            <div className="demo-simulation-volume-options" role="group" aria-label={t("demoSimulationProgressTitle")}>
+              {demoStepOptions.map((step) => (
+                <span
+                  key={step.volume}
+                  className={step.volume === demoSignalVolume ? "is-active" : ""}
+                >
+                  <span>{step.volume}</span>
+                  <strong>{step.label}</strong>
+                </span>
+              ))}
+            </div>
+          </div>
+        ) : null}
+      </div>
       <div className="signal-intelligence-center-metrics">
-        <span>{t("inboxActivityResponses", { count: model.generatedFromCount })}</span>
-        <span>{t("inboxActivityUnread", { count: model.unreadCount })}</span>
-        <span>{model.responseGrowthLabel}</span>
+        <span>{t("inboxActivityResponses", { count: effectiveModel.generatedFromCount })}</span>
+        <span>{t("inboxActivityUnread", { count: effectiveModel.unreadCount })}</span>
+        <span>{effectiveModel.responseGrowthLabel}</span>
+      </div>
+      <div className="intelligence-unlock-panel" aria-label={t("intelligenceUnlockTitle")}>
+        <div className="intelligence-unlock-panel-head">
+          <strong>{t("intelligenceUnlockTitle")}</strong>
+          <span>{t("intelligenceUnlockSignalCount", { count: effectiveModel.generatedFromCount })}</span>
+        </div>
+        <div className="intelligence-unlock-stage-list">
+          {unlockStages.map((stage) => (
+            <article
+              key={stage.id}
+              className={`intelligence-unlock-stage ${stage.unlocked ? "is-unlocked" : "is-locked"} ${stage.current ? "is-current" : ""}`}
+            >
+              <span className="intelligence-unlock-stage-marker" aria-hidden="true">
+                {stage.unlocked ? "✓" : stage.threshold}
+              </span>
+              <div>
+                <strong>{stage.label}</strong>
+                <p>{stage.detail}</p>
+              </div>
+            </article>
+          ))}
+        </div>
       </div>
       {empty ? (
         <article className="signal-intelligence-readiness-card">
@@ -1085,15 +1724,21 @@ function SignalIntelligenceCenter({
       ) : null}
       <div className="signal-intelligence-center-card-grid">
         {intelligencePlaceholders.map((card) => (
-          <article key={card.id} className={`signal-intelligence-center-card ${empty ? "is-waiting" : ""}`}>
+          <article
+            key={card.id}
+            className={`signal-intelligence-center-card ${empty ? "is-waiting" : ""} ${card.unlocked ? "is-unlocked" : "is-locked"}`}
+          >
+            <span className="signal-intelligence-card-status">
+              {card.unlocked ? t("demoSimulationUnlockedStatus") : t("demoSimulationLockedStatus")}
+            </span>
             <strong>{card.label}</strong>
             <p>{card.detail}</p>
           </article>
         ))}
       </div>
-      {!empty && model.hasTrendData ? (
+      {!empty && effectiveModel.hasTrendData ? (
         <div className="signal-intelligence-center-trends">
-          {model.trendCards.map((card) => (
+          {effectiveModel.trendCards.map((card) => (
             <article key={card.id} className={`inbox-trend-card is-${card.tone}`}>
               <span className="inbox-trend-card-label">{card.label}</span>
               <strong>{card.title}</strong>
@@ -1131,6 +1776,7 @@ function SelectedSignalIntelligenceCard({
   onMarkEmergingRisk: () => void;
   onPublishToRoadmap: () => void;
 }) {
+  const isDemoSignal = isDemoSignalRecord(record);
   const aiSummary = record.submission.aiSummary?.trim() || t("selectedSignalAiSummaryPending");
   const followUp = hasNeedsFollowUp(record.submission)
     ? t("selectedSignalFollowUpRequested")
@@ -1165,10 +1811,16 @@ function SelectedSignalIntelligenceCard({
       >
         <article className={`selected-signal-next-action-card ${followUpProminent ? "is-primary" : "is-secondary"}`}>
           <span>{t("selectedSignalCreateFollowUpTitle")}</span>
-          <p>{t("selectedSignalCreateFollowUpDetail")}</p>
-          <Link className="ghost-button" to={createFollowUpHref}>
-            {t("selectedSignalCreateFollowUpCta")}
-          </Link>
+          <p>{isDemoSignal ? t("demoFollowUpCtaDetail") : t("selectedSignalCreateFollowUpDetail")}</p>
+          {isDemoSignal || actionDisabled ? (
+            <button type="button" className="ghost-button" disabled>
+              {isDemoSignal ? t("demoSimulationCreateFollowUpCta") : t("selectedSignalCreateFollowUpCta")}
+            </button>
+          ) : (
+            <Link className="ghost-button" to={createFollowUpHref}>
+              {t("selectedSignalCreateFollowUpCta")}
+            </Link>
+          )}
         </article>
         {showEmergingRiskAction ? (
           <article className="selected-signal-next-action-card is-risk">
@@ -1231,6 +1883,9 @@ interface MobileInboxHeaderProps {
   onExportAllFormCsv: (formId: string) => void;
   hasAdminAccess: boolean;
   selectedProjectName: string | null;
+  selectedProjectId: string;
+  projects: Array<{ objectId: string; name: string; formsCount: number; signalsCount: number }>;
+  onSelectProject: (projectId: string) => void;
   highlightCreateFormCta: boolean;
   onOpenProjectSettings: () => void;
   onJumpToReview: () => void;
@@ -1299,7 +1954,7 @@ function MobileFilterMenu({
     };
   }, [menuOpen]);
 
-  const selectedOption = options.find((option) => option.value === selectedValue) ?? options[0];
+  const selectedOption = options.find((option) => option.value === selectedValue);
 
   return (
     <div ref={shellRef} className={`mobile-inbox-filter-menu ${menuOpen ? "is-open" : ""} ${className}`.trim()}>
@@ -1376,6 +2031,10 @@ function MobileInboxHeader(props: MobileInboxHeaderProps) {
     openNodeDirectoryLabel,
     onOpenNodeDirectory,
     onExportAllFormCsv,
+    hasAdminAccess,
+    selectedProjectId,
+    projects,
+    onSelectProject,
   } = props;
   const sortOptions: MobileFilterMenuOption[] = [
     { value: "default", label: getSortLabel("default", t) },
@@ -1386,6 +2045,14 @@ function MobileInboxHeader(props: MobileInboxHeaderProps) {
   ];
   const scopeActionLabel =
     viewScope === "project" ? allSignalsScopeLabel : projectSignalsScopeLabel;
+  const projectOptions: MobileFilterMenuOption[] = projects.map((project) => ({
+    value: project.objectId,
+    label: project.name,
+    meta: t("projectModalProjectStats", {
+      forms: project.formsCount,
+      signals: project.signalsCount,
+    }),
+  }));
 
   return (
     <header className="mobile-inbox-header">
@@ -1400,6 +2067,19 @@ function MobileInboxHeader(props: MobileInboxHeaderProps) {
         </div>
         <span className="mobile-inbox-count-pill">{unreadCountLabel}</span>
       </div>
+
+      {hasAdminAccess && projectOptions.length > 1 ? (
+        <div className="mobile-inbox-project-row">
+          <MobileFilterMenu
+            srLabel={t("selectedProjectLabel")}
+            buttonLabel={t("chooseProjectButton")}
+            selectedValue={selectedProjectId}
+            options={projectOptions}
+            onSelect={onSelectProject}
+            className="mobile-inbox-project-menu"
+          />
+        </div>
+      ) : null}
 
       <div className="mobile-inbox-channel-row">
         <SignalChannelSelector
@@ -1459,6 +2139,7 @@ interface MobileSignalRowProps {
   record: SignalRecord;
   isSelected: boolean;
   isUnlocked: boolean;
+  isDemoJustArrived: boolean;
   onSelect: () => void;
   onQuickAction: (record: SignalRecord, action: QuickActionId) => void;
   t: TranslationFn;
@@ -1845,10 +2526,12 @@ function MobileSignalRow({
   record,
   isSelected,
   isUnlocked,
+  isDemoJustArrived,
   onSelect,
   t,
 }: MobileSignalRowProps) {
   const { submission } = record;
+  const isDemoSignal = isDemoSignalSubmission(submission);
   const title = getSignalSubject(submission);
   const persistenceState = getSignalPersistenceState(submission);
   const priorityLabel =
@@ -1879,16 +2562,14 @@ function MobileSignalRow({
   });
 
   return (
-    <article
-      className={`mobile-signal-row ${isSelected ? "is-active" : ""} ${submission.status === "unread" ? "is-unread" : "is-read"}`}
+    <button
+      type="button"
+      className={`mobile-signal-row ${isSelected ? "is-active" : ""} ${submission.status === "unread" ? "is-unread" : "is-read"} ${isDemoJustArrived ? "is-demo-just-arrived" : ""}`}
+      aria-current={isSelected ? "true" : undefined}
+      aria-label={ariaLabel}
+      onClick={onSelect}
     >
-      <button
-        type="button"
-        className="mobile-signal-row-main"
-        aria-current={isSelected ? "true" : undefined}
-        aria-label={ariaLabel}
-        onClick={onSelect}
-      >
+      <span className="mobile-signal-row-main">
         <span className="mobile-signal-avatar" aria-hidden="true">
           {getSignalInitials(title)}
           <span className={`mobile-signal-status-dot status-${submission.status}`} />
@@ -1898,6 +2579,10 @@ function MobileSignalRow({
           <span className="mobile-signal-title-line">
             {submission.status === "unread" ? <span className="mobile-unread-dot" aria-hidden="true" /> : null}
             <strong>{title}</strong>
+            {isDemoSignal ? <span className="mobile-signal-mini-badge">{t("demoBadgeLabel")}</span> : null}
+            {isDemoJustArrived ? (
+              <span className="mobile-signal-mini-badge is-just-arrived">{t("demoJustArrivedLabel")}</span>
+            ) : null}
           </span>
           <span className={`mobile-signal-preview ${submission.isEncrypted ? "is-locked" : ""}`}>{preview}</span>
           <span className="mobile-signal-source-line">
@@ -1918,13 +2603,13 @@ function MobileSignalRow({
             </span>
           ) : null}
         </span>
-      </button>
+      </span>
 
       <span className="mobile-signal-side">
         <time>{formatDate(submission.createdAt)}</time>
         <span className={`mobile-priority-badge priority-${submission.priority}`}>{priorityLabel}</span>
       </span>
-    </article>
+    </button>
   );
 }
 
@@ -1949,6 +2634,11 @@ interface MobileSignalInboxProps {
   onSortOrderChange: (value: SignalSortOrder) => void;
   visibleSignals: SignalRecord[];
   timelineModel: InboxTimelineModel;
+  demoSignalCount: number;
+  demoGenerating: boolean;
+  demoIngestTarget: 5 | 20 | 100 | null;
+  demoArrivalAlert: string | null;
+  demoJustArrivedSignalIds: Set<string>;
   hasMoreSignals: boolean;
   onLoadMoreSignals: () => void;
   selectedRecord: SignalRecord | null;
@@ -1971,6 +2661,9 @@ interface MobileSignalInboxProps {
   t: TranslationFn;
   hasAdminAccess: boolean;
   selectedProjectName: string | null;
+  selectedProjectId: string;
+  projects: Array<{ objectId: string; name: string; formsCount: number; signalsCount: number }>;
+  onSelectProject: (projectId: string) => void;
   highlightCreateFormCta: boolean;
   onOpenProjectSettings: () => void;
   onJumpToReview: () => void;
@@ -1999,6 +2692,11 @@ function MobileSignalInbox({
   onSortOrderChange,
   visibleSignals,
   timelineModel,
+  demoSignalCount,
+  demoGenerating,
+  demoIngestTarget,
+  demoArrivalAlert,
+  demoJustArrivedSignalIds,
   hasMoreSignals,
   onLoadMoreSignals,
   selectedRecord,
@@ -2021,6 +2719,9 @@ function MobileSignalInbox({
   t,
   hasAdminAccess,
   selectedProjectName,
+  selectedProjectId,
+  projects,
+  onSelectProject,
   highlightCreateFormCta,
   onOpenProjectSettings,
   onJumpToReview,
@@ -2065,14 +2766,15 @@ function MobileSignalInbox({
         onExportAllFormCsv={onExportAllFormCsv}
         hasAdminAccess={hasAdminAccess}
         selectedProjectName={selectedProjectName}
+        selectedProjectId={selectedProjectId}
+        projects={projects}
+        onSelectProject={onSelectProject}
         highlightCreateFormCta={highlightCreateFormCta}
         onOpenProjectSettings={onOpenProjectSettings}
         onJumpToReview={onJumpToReview}
         onRevealCreateProject={onRevealCreateProject}
         onRevealConnectProject={onRevealConnectProject}
       />
-
-      <InboxTimelineOverview model={timelineModel} t={t} compact />
 
       <div className="mobile-signal-list" aria-live="polite">
         {visibleSignals.length === 0
@@ -2083,6 +2785,7 @@ function MobileSignalInbox({
                 record={record}
                 isSelected={selectedRecord?.submission.id === record.submission.id}
                 isUnlocked={unlockedSignalId === record.submission.id}
+                isDemoJustArrived={isDemoSignalRecord(record) && demoJustArrivedSignalIds.has(record.submission.id)}
                 onSelect={() => onSelectSignal(record)}
                 onQuickAction={onQuickAction}
                 t={t}
@@ -2094,6 +2797,16 @@ function MobileSignalInbox({
           </button>
         ) : null}
       </div>
+
+      <InboxTimelineOverview
+        model={timelineModel}
+        t={t}
+        compact
+        demoSignalCount={demoSignalCount}
+        demoGenerating={demoGenerating}
+        demoIngestTarget={demoIngestTarget}
+        demoArrivalAlert={demoArrivalAlert}
+      />
     </section>
   );
 }
@@ -2103,6 +2816,12 @@ export function AdminDashboardPage() {
   const location = useLocation();
   const navigate = useNavigate();
   const wallet = useSuiWallet();
+  const mockAdmin = useMockAdminMode(location.search);
+  const mockAdminData = useMemo(
+    () => (mockAdmin.enabled ? createMockAdminWorkspaceData() : null),
+    [mockAdmin.enabled],
+  );
+  const activeAccountAddress = mockAdminData?.accountAddress ?? wallet.accountAddress;
   const suiClient = useSuiClient();
   const rpc = useRpcInfrastructure();
   const updateSignalStatusTx = useSignAndExecuteTransaction();
@@ -2110,11 +2829,13 @@ export function AdminDashboardPage() {
   const deleteNodeOnchainTx = useSignAndExecuteTransaction();
   const [loadingRecoveryVisible, setLoadingRecoveryVisible] = useState(false);
   const {
-    capabilityProfile,
+    capabilityProfile: accessCapabilityProfile,
     isPending: isLoadingCapabilities,
-    ownedObjects,
+    ownedObjects: accessOwnedObjects,
     refetch: refetchAccessControl,
-  } = useAccessControl(wallet.accountAddress);
+  } = useAccessControl(activeAccountAddress, { enabled: !mockAdmin.enabled });
+  const capabilityProfile = mockAdminData?.capabilityProfile ?? accessCapabilityProfile;
+  const ownedObjects = mockAdminData?.ownedObjects ?? accessOwnedObjects;
   const storageRuntime = getStorageRuntimeStatus();
   const responseDeadlineLabels: ResponseDeadlineLabels = {
     noLimit: t("responseDeadlineNone"),
@@ -2139,6 +2860,9 @@ export function AdminDashboardPage() {
   const [projectRecoveryNoticeAcks, setProjectRecoveryNoticeAcks] = useState<Record<string, string>>(
     () => readProjectRecoveryNoticeAcks(),
   );
+  const [projectRecoveryNoticeDismissedProjects, setProjectRecoveryNoticeDismissedProjects] = useState<
+    Record<string, true>
+  >({});
   const [nodeSearch, setNodeSearch] = useState("");
   const [csvExportScope, setCsvExportScope] = useState<ResponsesCsvExportScope>("filtered");
   const [csvSortOrder, setCsvSortOrder] = useState<ResponsesCsvSortOrder>("createdAtDesc");
@@ -2155,6 +2879,13 @@ export function AdminDashboardPage() {
   const [isReviewerFocusMode, setIsReviewerFocusMode] = useState(false);
   const [isRunningDemoFlow, setIsRunningDemoFlow] = useState(false);
   const [isDemoGuideOpen, setIsDemoGuideOpen] = useState(true);
+  const [demoSignalScenario, setDemoSignalScenario] = useState<DemoSignalScenario>("safari_incident");
+  const [demoSignalRecords, setDemoSignalRecords] = useState<SignalRecord[]>([]);
+  const [demoSignalsGenerating, setDemoSignalsGenerating] = useState(false);
+  const [demoIngestTarget, setDemoIngestTarget] = useState<5 | 20 | 100 | null>(null);
+  const [demoUnlockAlert, setDemoUnlockAlert] = useState<string | null>(null);
+  const [demoArrivalAlert, setDemoArrivalAlert] = useState<string | null>(null);
+  const [demoJustArrivedSignalIds, setDemoJustArrivedSignalIds] = useState<Set<string>>(new Set());
   const [detailSectionsState, setDetailSectionsState] = useState<DetailWorkspaceSectionsState>({
     originalSignalOpen: true,
     attachmentsOpen: false,
@@ -2181,6 +2912,9 @@ export function AdminDashboardPage() {
   const reviewSessionPrimaryActionRef = useRef<HTMLButtonElement | null>(null);
   const keyboardNavigationRef = useRef(false);
   const isClearingMobileSignalSelectionRef = useRef(false);
+  const demoIngestTimerRefs = useRef<number[]>([]);
+  const demoArrivalTimerRefs = useRef<number[]>([]);
+  const demoUnlockedThresholdsRef = useRef<Set<number>>(new Set());
   const hasAdminAccess = canAdmin(capabilityProfile);
   const isNodeRegistrationBusy = registerFormTx.isPending || registeringFormId !== null;
   const setWorkspaceTab = useCallback(
@@ -2226,28 +2960,44 @@ export function AdminDashboardPage() {
     applyFormRemovals,
     applySubmissionUpdate,
   } = useSignalInboxData({
-    accountAddress: wallet.accountAddress,
+    accountAddress: activeAccountAddress,
     capabilityProfile,
     sortOrder: signalSortOrder,
     scopeProjectId: getSelectedProjectIdSnapshot(),
     viewScope: signalViewScope,
+    mockAdminData,
   });
   const versionCounts = useMemo(
     () => getSubmissionVersionCounts(allSignals.map((record) => record.submission)),
     [allSignals],
   );
-  const visibleSignals = useMemo(
+  const realVisibleSignals = useMemo(
     () => unversionedVisibleSignals.filter((record) => matchesSubmissionVersion(record.submission, selectedVersion)),
     [selectedVersion, unversionedVisibleSignals],
+  );
+  const visibleSignals = useMemo(
+    () => [...demoSignalRecords, ...realVisibleSignals],
+    [demoSignalRecords, realVisibleSignals],
   );
   const inboxTimelineModel = useMemo(
     () => buildInboxTimelineModel(visibleSignals, t),
     [visibleSignals, t],
   );
+  const demoSignalCount = demoSignalRecords.length;
+  const realSignalCount = realVisibleSignals.length;
+  const intelligenceDemoSimulationEnabled = demoSignalCount > 0 || demoSignalsGenerating;
+  const demoSignalVolume = getDemoSignalVolume(demoSignalCount);
+  const isIntelligenceDemoRoute = new URLSearchParams(location.search).get("demo") === "intelligence";
   const selectedRecord =
-    selectedRecordFromInbox && matchesSubmissionVersion(selectedRecordFromInbox.submission, selectedVersion)
-      ? selectedRecordFromInbox
-      : visibleSignals[0] ?? null;
+    isIntelligenceDemoRoute && !selectedSignalId
+      ? null
+      :
+    selectedSignalId && visibleSignals.some((record) => record.submission.id === selectedSignalId)
+      ? visibleSignals.find((record) => record.submission.id === selectedSignalId) ?? null
+      : selectedRecordFromInbox && matchesSubmissionVersion(selectedRecordFromInbox.submission, selectedVersion)
+        ? selectedRecordFromInbox
+        : visibleSignals[0] ?? null;
+  const selectedRecordIsDemo = isDemoSignalRecord(selectedRecord);
   const [renderedSignalLimit, setRenderedSignalLimit] = useState(INITIAL_SIGNAL_LIST_LIMIT);
   const renderedVisibleSignals = useMemo(
     () => visibleSignals.slice(0, renderedSignalLimit),
@@ -2267,7 +3017,186 @@ export function AdminDashboardPage() {
 
   useEffect(() => {
     setRenderedSignalLimit(INITIAL_SIGNAL_LIST_LIMIT);
-  }, [search, selectedFormId, selectedStreamId, selectedVersion, signalSortOrder, signalViewScope]);
+  }, [search, selectedFormId, selectedStreamId, selectedVersion, signalSortOrder, signalViewScope, demoSignalCount]);
+
+  const clearDemoIngestTimers = useCallback(() => {
+    demoIngestTimerRefs.current.forEach((timerId) => window.clearTimeout(timerId));
+    demoIngestTimerRefs.current = [];
+  }, []);
+
+  const clearDemoArrivalTimers = useCallback(() => {
+    demoArrivalTimerRefs.current.forEach((timerId) => window.clearTimeout(timerId));
+    demoArrivalTimerRefs.current = [];
+  }, []);
+
+  const markDemoSignalsArrived = useCallback(
+    (records: SignalRecord[]) => {
+      const arrivedIds = records.map((record) => record.submission.id);
+      if (arrivedIds.length === 0) {
+        return;
+      }
+      setDemoJustArrivedSignalIds((current) => {
+        const next = new Set(current);
+        arrivedIds.forEach((id) => next.add(id));
+        return next;
+      });
+      setDemoArrivalAlert(
+        arrivedIds.length === 1
+          ? t("demoSignalArrivedBody")
+          : t("demoSignalsArrivedBody", { count: arrivedIds.length }),
+      );
+      const alertTimer = window.setTimeout(() => setDemoArrivalAlert(null), 3600);
+      const badgeTimer = window.setTimeout(() => {
+        setDemoJustArrivedSignalIds((current) => {
+          const next = new Set(current);
+          arrivedIds.forEach((id) => next.delete(id));
+          return next;
+        });
+      }, 5000);
+      demoArrivalTimerRefs.current.push(alertTimer, badgeTimer);
+    },
+    [t],
+  );
+
+  const handleDemoIngestCount = useCallback(
+    (nextCount: number, targetCount: 5 | 20 | 100) => {
+      if (nextCount >= 5 && !demoUnlockedThresholdsRef.current.has(5)) {
+        demoUnlockedThresholdsRef.current.add(5);
+        setDemoUnlockAlert(t("intelligenceUnlockTrendUnlocked"));
+      }
+      if (nextCount >= 20 && !demoUnlockedThresholdsRef.current.has(20)) {
+        demoUnlockedThresholdsRef.current.add(20);
+        setDemoUnlockAlert(t("intelligenceUnlockAiUnlocked"));
+      }
+      if (nextCount >= 100 && !demoUnlockedThresholdsRef.current.has(100)) {
+        demoUnlockedThresholdsRef.current.add(100);
+        setDemoUnlockAlert(t("intelligenceUnlockEvolutionUnlocked"));
+      }
+      if (nextCount >= targetCount) {
+        const timerId = window.setTimeout(() => setDemoUnlockAlert(null), 1600);
+        demoIngestTimerRefs.current.push(timerId);
+      }
+    },
+    [t],
+  );
+
+  const handleCancelDemoIngest = useCallback(() => {
+    clearDemoIngestTimers();
+    setDemoSignalsGenerating(false);
+    setDemoIngestTarget(null);
+  }, [clearDemoIngestTimers]);
+
+  const handleGenerateDemoSignals = useCallback(
+    (targetCount: 5 | 20 | 100) => {
+      clearDemoIngestTimers();
+      clearDemoArrivalTimers();
+      const nextRecords = buildDemoSignalRecords(demoSignalScenario, targetCount);
+      const currentCount = demoSignalRecords.length;
+      const prefersReducedMotion =
+        typeof window !== "undefined" &&
+        window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+
+      setDemoSignalsGenerating(true);
+      setDemoIngestTarget(targetCount);
+      setDemoUnlockAlert(null);
+      setDemoArrivalAlert(null);
+      setDemoJustArrivedSignalIds(new Set());
+      demoUnlockedThresholdsRef.current = new Set([5, 20, 100].filter((threshold) => currentCount >= threshold));
+
+      if (currentCount >= targetCount) {
+        setDemoSignalRecords(nextRecords);
+        setDemoSignalsGenerating(false);
+        setDemoIngestTarget(null);
+        return;
+      }
+
+      setDemoSignalRecords(nextRecords.slice(0, currentCount));
+
+      const fullPlan =
+        targetCount === 5
+          ? [1, 2, 3, 4, 5]
+          : targetCount === 20
+            ? [1, 2, 3, 4, 5, 8, 12, 16, 20]
+            : [1, 2, 3, 4, 5, 10, 15, 20, 40, 60, 80, 100];
+      const plan = fullPlan.filter((count) => count > currentCount);
+      const reducedPlan = [5, 20, targetCount]
+        .filter((count, index, counts) => count > currentCount && count <= targetCount && counts.indexOf(count) === index);
+      const countsToApply = prefersReducedMotion ? reducedPlan : plan;
+
+      let elapsed = 0;
+      let lastAppliedCount = currentCount;
+      countsToApply.forEach((count, index) => {
+        const delay = prefersReducedMotion
+          ? 140
+          : targetCount === 5
+            ? 250
+            : targetCount === 20
+              ? count <= 5
+                ? 250
+                : 360
+              : count <= 5
+                ? 250
+                : count <= 20
+                  ? 520
+                  : 820;
+        elapsed += index === 0 ? 80 : delay;
+        const timerId = window.setTimeout(() => {
+          const arrivedRecords = nextRecords.slice(lastAppliedCount, count);
+          lastAppliedCount = count;
+          setDemoSignalRecords(nextRecords.slice(0, count));
+          markDemoSignalsArrived(arrivedRecords);
+          handleDemoIngestCount(count, targetCount);
+          if (count >= targetCount) {
+            setDemoSignalsGenerating(false);
+            setDemoIngestTarget(null);
+          }
+        }, elapsed);
+        demoIngestTimerRefs.current.push(timerId);
+      });
+
+      if (countsToApply.length === 0) {
+        setDemoSignalsGenerating(false);
+        setDemoIngestTarget(null);
+      };
+    },
+    [clearDemoArrivalTimers, clearDemoIngestTimers, demoSignalRecords.length, demoSignalScenario, handleDemoIngestCount, markDemoSignalsArrived],
+  );
+
+  const handleResetDemoSignals = useCallback(() => {
+    clearDemoIngestTimers();
+    clearDemoArrivalTimers();
+    setDemoSignalRecords([]);
+    setDemoSignalsGenerating(false);
+    setDemoIngestTarget(null);
+    setDemoUnlockAlert(null);
+    setDemoArrivalAlert(null);
+    setDemoJustArrivedSignalIds(new Set());
+    demoUnlockedThresholdsRef.current = new Set();
+    if (selectedSignalId?.startsWith("demo-signal-")) {
+      setSelectedSignalId("");
+    }
+  }, [clearDemoArrivalTimers, clearDemoIngestTimers, selectedSignalId, setSelectedSignalId]);
+
+  const handleDemoScenarioChange = useCallback((scenario: DemoSignalScenario) => {
+    clearDemoIngestTimers();
+    clearDemoArrivalTimers();
+    setDemoSignalScenario(scenario);
+    setDemoSignalRecords([]);
+    setDemoSignalsGenerating(false);
+    setDemoIngestTarget(null);
+    setDemoUnlockAlert(null);
+    setDemoArrivalAlert(null);
+    setDemoJustArrivedSignalIds(new Set());
+    demoUnlockedThresholdsRef.current = new Set();
+    if (selectedSignalId?.startsWith("demo-signal-")) {
+      setSelectedSignalId("");
+    }
+  }, [clearDemoArrivalTimers, clearDemoIngestTimers, selectedSignalId, setSelectedSignalId]);
+
+  useEffect(() => () => {
+    clearDemoIngestTimers();
+    clearDemoArrivalTimers();
+  }, [clearDemoArrivalTimers, clearDemoIngestTimers]);
 
   useEffect(() => {
     if (!inboxSettling || visibleSignals.length > 0) {
@@ -2340,10 +3269,11 @@ export function AdminDashboardPage() {
     handleCreateProject,
     handleDeleteProject,
   } = useProjectWorkspace({
-    accountAddress: wallet.accountAddress,
+    accountAddress: activeAccountAddress,
     capabilityProfile,
     forms,
     loadConsole,
+    mockProject: mockAdminData?.project ?? null,
   });
 
   useEffect(() => {
@@ -2387,15 +3317,15 @@ export function AdminDashboardPage() {
     }
   }, [location.search, selectedProjectId, signalViewScope]);
   const hasOwnedAccessibleForms = accessibleForms.some((form) =>
-    addressesMatch(form.ownerAddress, wallet.accountAddress),
+    addressesMatch(form.ownerAddress, activeAccountAddress),
   );
   const hasProjectManagementAccess =
     hasAdminAccess ||
     hasOwnedAccessibleForms ||
     projects.some(
       (project) =>
-        addressesMatch(project.owner, wallet.accountAddress) ||
-        project.admins.some((adminAddress) => addressesMatch(adminAddress, wallet.accountAddress)),
+        addressesMatch(project.owner, activeAccountAddress) ||
+        project.admins.some((adminAddress) => addressesMatch(adminAddress, activeAccountAddress)),
     );
   const {
     detailAnswers,
@@ -2419,7 +3349,7 @@ export function AdminDashboardPage() {
     handleDecryptRecords,
     realSealSessionTtlMinutes,
   } = usePrivateSignalDecrypt({
-    accountAddress: wallet.accountAddress,
+    accountAddress: activeAccountAddress,
     capabilityProfile,
     ownedCapabilityObjects: ownedObjects,
     selectedRecord,
@@ -2451,9 +3381,9 @@ export function AdminDashboardPage() {
   });
   const roleLabel = getRoleLabel(capabilityProfile);
   const activityActorRole = getActivityActorRole(capabilityProfile);
-  const accessState = wallet.accountAddress ? "allowed" : "denied";
+  const accessState = activeAccountAddress ? "allowed" : "denied";
   const privateReviewLabel = t("privateReviewEnabled");
-  const sessionStatusLabel = wallet.accountAddress ? t("secureSessionActive") : t("secureSessionStandby");
+  const sessionStatusLabel = activeAccountAddress ? t("secureSessionActive") : t("secureSessionStandby");
 
   async function handleClearDebugPolicyCache() {
     const result = await clearDeepSignalPolicyCapabilityCache();
@@ -2561,7 +3491,7 @@ export function AdminDashboardPage() {
           tx = appendWalrusBlobDeletesToTransaction({
             transaction: tx,
             blobObjectIds: walrusBlobObjectIds,
-            ownerAddress: wallet.accountAddress,
+            ownerAddress: activeAccountAddress,
           });
 
           console.info("[DeepSignal Sui write]", {
@@ -2607,7 +3537,7 @@ export function AdminDashboardPage() {
 
     const walletOwnedIds = expandedIds.filter((formId) => {
       const form = formsById.get(formId);
-      return addressesMatch(form?.ownerAddress, wallet.accountAddress);
+      return addressesMatch(form?.ownerAddress, activeAccountAddress);
     });
     const localCacheOnlyIds = expandedIds.filter((formId) => !walletOwnedIds.includes(formId));
 
@@ -2628,7 +3558,7 @@ export function AdminDashboardPage() {
         ? [
             createActivityEvent({
               form,
-              actorAddress: wallet.accountAddress,
+              actorAddress: activeAccountAddress,
               actorRole: activityActorRole,
               action: "form_archived",
             }),
@@ -2818,7 +3748,7 @@ export function AdminDashboardPage() {
           ...(form.activityEvents ?? []),
           createActivityEvent({
             form,
-            actorAddress: wallet.accountAddress,
+            actorAddress: activeAccountAddress,
             actorRole: activityActorRole,
             action: "form_updated",
             txDigest: result.digest,
@@ -2988,6 +3918,10 @@ export function AdminDashboardPage() {
       return;
     }
     setProjectRecoveryNoticeOpen(false);
+    setProjectRecoveryNoticeDismissedProjects((current) => ({
+      ...current,
+      [selectedProject.objectId]: true,
+    }));
     setProjectRecoveryNoticeAcks((current) => {
       const next = {
         ...current,
@@ -3000,6 +3934,14 @@ export function AdminDashboardPage() {
 
   useEffect(() => {
     if (!selectedProject) {
+      setProjectRecoveryNoticeOpen(false);
+      return;
+    }
+    if (selectedRecord) {
+      setProjectRecoveryNoticeOpen(false);
+      return;
+    }
+    if (projectRecoveryNoticeDismissedProjects[selectedProject.objectId]) {
       setProjectRecoveryNoticeOpen(false);
       return;
     }
@@ -3021,7 +3963,14 @@ export function AdminDashboardPage() {
       return;
     }
     setProjectRecoveryNoticeOpen(true);
-  }, [latestProjectRecoveryNoticeAt, projectRecoveryNoticeAcks, selectedProject, shouldExplainProjectRecovery]);
+  }, [
+    latestProjectRecoveryNoticeAt,
+    projectRecoveryNoticeAcks,
+    projectRecoveryNoticeDismissedProjects,
+    selectedRecord,
+    selectedProject,
+    shouldExplainProjectRecovery,
+  ]);
   const attachmentPreviews = useAttachmentPreviews(detailAttachments, {
     enabled:
       detailAttachments.length > 0 &&
@@ -3048,7 +3997,7 @@ export function AdminDashboardPage() {
     ? ROADMAP_READY_STATUSES.has(selectedRecord.submission.triageStatus)
     : false;
   const selectedRecordNeedsDecrypt = Boolean(
-    selectedRecord?.submission.isEncrypted && !detailAnswers,
+    selectedRecord?.submission.isEncrypted && !selectedRecordIsDemo && !detailAnswers,
   );
   const reviewSaveStatusLabel: Record<ReviewSaveStatus, string> = {
     idle: t("reviewSaveReadyToSave"),
@@ -3094,6 +4043,7 @@ export function AdminDashboardPage() {
   );
   const selectedRecordStoredOnWalrus = Boolean(
     selectedRecord &&
+      !selectedRecordIsDemo &&
       !isLocalFallbackBlob(selectedRecord.submission.encryptedBlobId ?? selectedRecord.submission.blobId),
   );
   const selectedRecordPayloadState = selectedRecord
@@ -3117,7 +4067,7 @@ export function AdminDashboardPage() {
         ? t("privateSignalPayloadMissingOnchainDisabled")
         : selectedRecordPayloadState === "missing_payload"
           ? t("privateSignalPayloadMissingDisabled")
-      : !canAttemptPrivateSignalDecrypt(selectedRecord.form, wallet.accountAddress, capabilityProfile)
+      : !canAttemptPrivateSignalDecrypt(selectedRecord.form, activeAccountAddress, capabilityProfile)
         ? t("privateSignalUnlockDisabled")
         : undefined;
   const hasDuplicateLikelyRelatedSignals = relatedSignals.some((signal) => signal.duplicateLikely);
@@ -3330,6 +4280,17 @@ export function AdminDashboardPage() {
 
   const selectedRecordFocusAction = !selectedRecord
     ? null
+    : selectedRecordIsDemo
+      ? {
+          eyebrow: t("demoModeActiveLabel"),
+          title: t("demoSignalSelectedTitle"),
+          detail: t("demoSignalSelectedDetail"),
+          cta: (
+            <button type="button" className="ghost-button" onClick={handleResetDemoSignals}>
+              {t("demoReset")}
+            </button>
+          ),
+        }
     : selectedRecord.submission.status === "unread"
         ? {
             eyebrow: t("nextStepLabel"),
@@ -3405,6 +4366,24 @@ export function AdminDashboardPage() {
   }
 
   const updateSubmission = useCallback(async (nextSubmission: Submission, options: { announce?: boolean } = {}) => {
+    if (isDemoSignalSubmission(nextSubmission)) {
+      setDemoSignalRecords((current) =>
+        current.map((record) =>
+          record.submission.id === nextSubmission.id
+            ? {
+                ...record,
+                submission: {
+                  ...nextSubmission,
+                  updatedAt: new Date().toISOString(),
+                },
+              }
+            : record,
+        ),
+      );
+      setSelectedSignalId(nextSubmission.id);
+      return true;
+    }
+
     const normalized = normalizeSubmission({
       ...nextSubmission,
       updatedAt: new Date().toISOString(),
@@ -3496,6 +4475,9 @@ export function AdminDashboardPage() {
 
   const handleQuickAction = useCallback(
     async (record: SignalRecord, action: QuickActionId) => {
+      if (isDemoSignalRecord(record)) {
+        return;
+      }
       const nextSubmission = buildQuickActionSubmission(record.submission, action);
       const saved = await updateSubmission(nextSubmission, { announce: true });
       if (!saved) {
@@ -3808,8 +4790,8 @@ export function AdminDashboardPage() {
   );
   const canDeleteForm = useCallback(
     (form: Pick<FormSchema, "ownerAddress">) =>
-      hasAdminAccess || !capabilityProfile.isConfigured || addressesMatch(form.ownerAddress, wallet.accountAddress),
-    [wallet.accountAddress, capabilityProfile.isConfigured, hasAdminAccess],
+      hasAdminAccess || !capabilityProfile.isConfigured || addressesMatch(form.ownerAddress, activeAccountAddress),
+    [activeAccountAddress, capabilityProfile.isConfigured, hasAdminAccess],
   );
   const workspaceMetaItems = hasAdminAccess
     ? [
@@ -3840,9 +4822,9 @@ export function AdminDashboardPage() {
       ).length
     : 0;
   const selectedFormFilteredExportCount = selectedRecord
-    ? visibleSignals.filter((record) => record.form.id === selectedRecord.form.id).length
+    ? visibleSignals.filter((record) => record.form.id === selectedRecord.form.id && !isDemoSignalRecord(record)).length
     : 0;
-  const selectedFormSelectedExportCount = selectedRecord ? 1 : 0;
+  const selectedFormSelectedExportCount = selectedRecord && !selectedRecordIsDemo ? 1 : 0;
   const csvExportCount =
     csvExportScope === "filtered"
       ? selectedFormFilteredExportCount
@@ -3888,7 +4870,7 @@ export function AdminDashboardPage() {
   const selectedSavedReviewerDisplayLabel = useReviewerDisplayLabel(selectedSavedReviewer);
   const selectedPublicDecisionLabel = selectedRecord ? getPublicDecisionLabel(selectedRecord.submission, t) : "";
   const selectedShowRoadmapAction = Boolean(
-    selectedRecord && selectedHasSavedReviewResult && selectedPublicDecisionLabel && selectedRoadmapUrl,
+    selectedRecord && !selectedRecordIsDemo && selectedHasSavedReviewResult && selectedPublicDecisionLabel && selectedRoadmapUrl,
   );
   const selectedSignalValueStars = selectedRecord ? getSignalValueStars(selectedRecord.submission.signalValue) : null;
   const selectedReviewResultItems = selectedRecord
@@ -3981,7 +4963,7 @@ export function AdminDashboardPage() {
     if (csvExportScope === "filtered") {
       const filteredResponseIds = new Set(
         visibleSignals
-          .filter((record) => record.form.id === selectedRecord.form.id)
+          .filter((record) => record.form.id === selectedRecord.form.id && !isDemoSignalRecord(record))
           .map((record) => record.submission.id),
       );
       return allFormResponses.filter((submission) => filteredResponseIds.has(submission.id));
@@ -4013,7 +4995,7 @@ export function AdminDashboardPage() {
       scope: csvExportScope,
       sortOrder: csvSortOrder,
       excludedPiiFields: excludedCsvPiiFields,
-      exportedBy: wallet.accountAddress ?? "",
+      exportedBy: activeAccountAddress ?? "",
       filterSnapshot: getCsvFilterSnapshot(),
       responseOverrides: getCsvResponseOverrides(),
       versionedForms,
@@ -4043,7 +5025,7 @@ export function AdminDashboardPage() {
       scope: "all",
       sortOrder: csvSortOrder,
       excludedPiiFields: excludedCsvPiiFields,
-      exportedBy: wallet.accountAddress ?? "",
+      exportedBy: activeAccountAddress ?? "",
       filterSnapshot: {
         searchQuery: "",
         status: undefined,
@@ -4198,9 +5180,9 @@ export function AdminDashboardPage() {
           record.submission.isEncrypted &&
           !decryptedSignalsById[record.submission.id] &&
           !hasPrivateSignalPayloadIssue(record.submission) &&
-          canAttemptPrivateSignalDecrypt(record.form, wallet.accountAddress, capabilityProfile),
+          canAttemptPrivateSignalDecrypt(record.form, activeAccountAddress, capabilityProfile),
       ),
-    [wallet.accountAddress, capabilityProfile, decryptedSignalsById, visibleSignals],
+    [activeAccountAddress, capabilityProfile, decryptedSignalsById, visibleSignals],
   );
   const lockedVisibleSignalsCount = visibleSignals.filter(
     (record) => record.submission.isEncrypted && !decryptedSignalsById[record.submission.id],
@@ -4357,12 +5339,13 @@ export function AdminDashboardPage() {
 
   return (
     <AdminAccessGate
-      hasWallet={Boolean(wallet.accountAddress)}
+      hasWallet={Boolean(activeAccountAddress)}
       access={accessState}
       deniedBody={capabilityProfile.isConfigured ? t("reviewConsoleCapabilityRequirement") : undefined}
     >
       <section className="stack">
         <AdminToast toast={toast} />
+        {mockAdmin.enabled ? <div className="mock-admin-badge">MOCK ADMIN</div> : null}
         {projectRecoveryNoticeOpen && selectedProject ? (
           <div className="node-directory-overlay" role="dialog" aria-modal="true" aria-labelledby="project-recovery-notice-title">
             <div className="node-directory-backdrop" />
@@ -4575,6 +5558,11 @@ export function AdminDashboardPage() {
             onSortOrderChange={setSignalSortOrder}
             visibleSignals={renderedVisibleSignals}
             timelineModel={inboxTimelineModel}
+            demoSignalCount={demoSignalRecords.length}
+            demoGenerating={demoSignalsGenerating}
+            demoIngestTarget={demoIngestTarget}
+            demoArrivalAlert={demoArrivalAlert}
+            demoJustArrivedSignalIds={demoJustArrivedSignalIds}
             hasMoreSignals={hasMoreRenderedSignals}
             onLoadMoreSignals={() => setRenderedSignalLimit((current) => current + SIGNAL_LIST_PAGE_SIZE)}
             selectedRecord={hasExplicitSelectedRecord ? selectedRecord : null}
@@ -4597,6 +5585,9 @@ export function AdminDashboardPage() {
             t={t}
             hasAdminAccess={hasAdminAccess}
             selectedProjectName={selectedProject?.name ?? null}
+            selectedProjectId={selectedProjectId}
+            projects={projects}
+            onSelectProject={selectProject}
             highlightCreateFormCta={highlightCreateFormCta}
             onOpenProjectSettings={openAdvancedProjectSettings}
             onJumpToReview={jumpToReviewWorkspace}
@@ -4835,7 +5826,16 @@ export function AdminDashboardPage() {
                   />
                 </div>
               </div>
-              <InboxTimelineOverview model={inboxTimelineModel} t={t} compact />
+              <InboxTimelineOverview
+                model={inboxTimelineModel}
+                t={t}
+                compact
+                demoSignalCount={demoSignalCount}
+                realSignalCount={realSignalCount}
+                demoGenerating={demoSignalsGenerating}
+                demoIngestTarget={demoIngestTarget}
+                demoArrivalAlert={demoArrivalAlert}
+              />
               {hasAdminAccess ? (
                 <section className="answer-card answer-card-plain optional-proof-queue-panel">
                   <div className="section-row">
@@ -4950,6 +5950,7 @@ export function AdminDashboardPage() {
                         ? t("encryptedPrivateSignalUnlockHint")
                         : getSignalPreview(submission);
                     const isAnonymousSignal = getSubmissionRespondentMeta(submission).isAnonymous;
+                    const isDemoSignal = isDemoSignalSubmission(submission);
                     const isPendingSui = Boolean(submission.pendingOnchainRegistration);
                     const isSelectedForSui = selectedPendingSignalIds.includes(submission.id);
                     const isSelectedSignal = selectedRecord?.submission.id === submission.id;
@@ -5004,6 +6005,8 @@ export function AdminDashboardPage() {
                         isAnonymousSignal={isAnonymousSignal}
                         isUnlockedSignal={isUnlockedSignal}
                         isOnchainRecoverySnapshot={isOnchainRecoverySnapshot}
+                        isDemoSignal={isDemoSignal}
+                        isDemoJustArrived={isDemoSignal && demoJustArrivedSignalIds.has(submission.id)}
                         hasPayloadIssue={hasPayloadIssue}
                         isRegistering={isRegisteringSignal(submission.id)}
                         onSelect={() => {
@@ -5041,7 +6044,22 @@ export function AdminDashboardPage() {
 
             <article ref={signalDetailPanelRef} className="panel signal-detail-column">
               {!selectedRecord ? (
-                <SignalIntelligenceCenter model={inboxTimelineModel} t={t} />
+                <SignalIntelligenceCenter
+                  model={inboxTimelineModel}
+                  t={t}
+                  demoSimulationEnabled={intelligenceDemoSimulationEnabled}
+                  demoSignalVolume={demoSignalVolume}
+                  demoScenario={demoSignalScenario}
+                  demoSignalCount={demoSignalCount}
+                  realSignalCount={realSignalCount}
+                  demoGenerating={demoSignalsGenerating}
+                  demoIngestTarget={demoIngestTarget}
+                  demoUnlockAlert={demoUnlockAlert}
+                  onDemoScenarioChange={handleDemoScenarioChange}
+                  onGenerateDemoSignals={handleGenerateDemoSignals}
+                  onCancelDemoIngest={handleCancelDemoIngest}
+                  onResetDemoSignals={handleResetDemoSignals}
+                />
               ) : (
                 <>
                   <section className="answer-card signal-detail-hero">
@@ -5055,6 +6073,9 @@ export function AdminDashboardPage() {
                     <div className="signal-detail-heading">
                     <div>
                       <p className="eyebrow">{t("reviewConsoleEyebrow")}</p>
+                      {selectedRecordIsDemo ? (
+                        <span className="signal-chip signal-chip-soft demo-signal-detail-badge">{t("demoSignalNotStoredLabel")}</span>
+                      ) : null}
                     </div>
                     </div>
 
@@ -5248,9 +6269,9 @@ export function AdminDashboardPage() {
                       record={selectedRecord}
                       t={t}
                       createFollowUpHref={selectedFollowUpCreateHref}
-                      actionDisabled={saving || isReviewWorkbenchLocked}
+                      actionDisabled={saving || isReviewWorkbenchLocked || selectedRecordIsDemo}
                       followUpProminent={selectedFollowUpProminent}
-                      showEmergingRiskAction={selectedShowEmergingRiskAction}
+                      showEmergingRiskAction={!selectedRecordIsDemo && selectedShowEmergingRiskAction}
                       showRoadmapAction={selectedShowRoadmapAction}
                       isMarkingEmergingRisk={
                         hasNeedsFollowUp(selectedRecord.submission) && selectedRecord.submission.priority === "high"
@@ -5268,6 +6289,7 @@ export function AdminDashboardPage() {
                       getPhaseLabel={getTimelinePhaseLabel}
                     />
 
+                    {!selectedRecordIsDemo ? (
                     <SecondaryInspector
                       t={t}
                       selectedRecord={selectedRecord}
@@ -5303,7 +6325,7 @@ export function AdminDashboardPage() {
                       selectedRecordStoredOnWalrus={selectedRecordStoredOnWalrus}
                       privateReviewLabel={privateReviewLabel}
                       responseDeadlineValue={formatResponseDeadline(selectedRecord.form.responseDeadline, responseDeadlineLabels)}
-                      walletAccessValue={getWalletAccessLabel(selectedRecord.form, wallet.accountAddress)}
+                      walletAccessValue={getWalletAccessLabel(selectedRecord.form, activeAccountAddress)}
                       pendingSuiRegistrationValue={
                         selectedRecord.submission.onchainStatus ??
                         (selectedRecord.submission.pendingOnchainRegistration
@@ -5314,7 +6336,7 @@ export function AdminDashboardPage() {
                       rpcNetworkLabel={selectedRecordRpcNetworkLabel}
                       verificationRouteLabel={selectedRecordVerificationRouteLabel}
                       txDigest={selectedRecordTxDigest}
-                      canDecrypt={Boolean(wallet.accountAddress)}
+                      canDecrypt={Boolean(activeAccountAddress)}
                       relatedSignals={relatedSignals}
                       selectedSignalId={selectedSignalId}
                       onSelectRelatedRecord={(record) => {
@@ -5324,6 +6346,7 @@ export function AdminDashboardPage() {
                         handleSelectDesktopSignal(record.submission.id, { scrollIntoView: true });
                       }}
                     />
+                    ) : null}
                   </div>
                   ) : null}
                 </>
@@ -5372,7 +6395,7 @@ export function AdminDashboardPage() {
         detailAttachments={detailAttachments}
         attachmentPreviews={attachmentPreviews}
         selectedReviewerDisplayLabel={selectedReviewerDisplayLabel}
-        walletAccountAddress={wallet.accountAddress}
+        walletAccountAddress={activeAccountAddress}
         selectedNeedsFollowUp={selectedNeedsFollowUp}
         saving={saving}
         onToggleNeedsFollowUp={() => void handleToggleNeedsFollowUp()}

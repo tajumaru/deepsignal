@@ -197,6 +197,34 @@
     padding: 1.05rem;
   }
 
+  .landing-principles-shell {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.9rem;
+    overflow: hidden;
+  }
+
+  .landing-principle,
+  .landing-principle-private,
+  .landing-principle-encrypted,
+  .landing-principle-permanent {
+    width: 100%;
+    margin: 0;
+    justify-items: start;
+    text-align: left;
+  }
+
+  .landing-principle h2 {
+    max-width: 100%;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    font-size: clamp(2.05rem, 13vw, 3.1rem);
+  }
+
+  .landing-principle p {
+    max-width: 100%;
+    overflow-wrap: anywhere;
+  }
+
   .landing-final-cta-shell {
     min-height: 18rem;
   }

@@ -47,6 +47,7 @@ import {
   getRemoteSubmissionIndexSource,
   writeOwnerSubmissionIndexFetchLog,
 } from "../../../storage/submissionDelivery";
+import type { MockAdminWorkspaceData } from "../mockAdmin";
 
 export interface FormWithCount extends FormSchema {
   submissionCount: number;
@@ -637,6 +638,7 @@ interface UseSignalInboxDataArgs {
   sortOrder?: SignalSortOrder;
   scopeProjectId?: string | null;
   viewScope?: SignalViewScope;
+  mockAdminData?: MockAdminWorkspaceData | null;
 }
 
 export function useSignalInboxData({
@@ -645,6 +647,7 @@ export function useSignalInboxData({
   sortOrder = "default",
   scopeProjectId = null,
   viewScope = "all",
+  mockAdminData = null,
 }: UseSignalInboxDataArgs) {
   const suiClient = useSuiClient();
   const { projects, dataUpdatedAt: projectsUpdatedAt } = useProjectRegistry(accountAddress);
@@ -949,6 +952,33 @@ export function useSignalInboxData({
   }
 
   async function loadConsole(preferredSignalId?: string) {
+    if (mockAdminData) {
+      const runId = loadConsoleRunRef.current + 1;
+      loadConsoleRunRef.current = runId;
+      const mockForms = mockAdminData.forms.map((form) => ({
+        ...normalizeForm(form),
+        submissionCount: mockAdminData.submissionsByFormId[form.id]?.length ?? 0,
+      }));
+      setLoading(false);
+      setSubmissionsLoading(false);
+      setLoadError("");
+      setForms(mockForms);
+      setSubmissionsByFormId(
+        Object.fromEntries(
+          Object.entries(mockAdminData.submissionsByFormId).map(([formId, submissions]) => [
+            formId,
+            submissions.map((submission) => normalizeSubmission(submission) as Submission),
+          ]),
+        ),
+      );
+      setSupplementalSignals([]);
+      setSelectedProjectId(mockAdminData.project.objectId);
+      setSelectedSignalId((current) => preferredSignalId ?? current);
+      hasLoadedOnceRef.current = true;
+      endPerf("admin:load-console", "ok", `mock:${runId}`);
+      return;
+    }
+
     if (selectedProjectId && selectedProjectHydrating) {
       setLoading(true);
       setLoadError("");
@@ -1219,6 +1249,7 @@ export function useSignalInboxData({
     hydratedSelectedProject?.objectId,
     projectsUpdatedAt,
     selectedProjectHydrating,
+    mockAdminData,
   ]);
 
   const accessibleForms = useMemo(
