@@ -273,7 +273,8 @@ const DEMO_SIGNAL_VOLUME_OPTIONS = [0, 3, 5, 20, 100] as const;
 type DemoSignalVolume = (typeof DEMO_SIGNAL_VOLUME_OPTIONS)[number];
 type DemoSignalScenario = "safari_incident" | "product_feedback" | "disaster_checkin";
 type DemoIntelligenceViewMode = "executive" | "developer";
-type DemoIntelligenceAlertLevel = "Observation" | "Emerging Pattern" | "Action Recommended" | "Critical Signal";
+type IntelligenceAlertLevel = "Observation" | "Emerging Pattern" | "Action Recommended" | "Critical Signal";
+type IntelligenceConfidenceLabel = "High" | "Medium" | "Low";
 type DemoIntelligenceEventType =
   | "trend_unlocked"
   | "insights_unlocked"
@@ -287,6 +288,19 @@ interface DemoIntelligenceEvent {
   count?: number;
 }
 
+interface IntelligenceBrief {
+  alertLevel: IntelligenceAlertLevel;
+  title: string;
+  topTopic: string;
+  topTopicCount: number;
+  totalSignals: number;
+  evidenceCount: number;
+  confidence: IntelligenceConfidenceLabel;
+  insight: string;
+  recommendedAction: string;
+  generatedAt: string;
+}
+
 interface DemoIntelligenceOutcome {
   topTopic: string;
   topTopicCount: number;
@@ -297,7 +311,7 @@ interface DemoIntelligenceOutcome {
   evidenceCount: number;
   followUpQuestion: string;
   followUpShort: string;
-  confidenceLabel: "High" | "Medium" | "Low";
+  confidenceLabel: IntelligenceConfidenceLabel;
   contribution: string;
   derivedFrom: string[];
   fallbackUsed: boolean;
@@ -325,7 +339,7 @@ const DEMO_SIGNAL_SCENARIOS: Record<
       followUpShort: string;
       contribution: string;
     };
-    alertLevel: DemoIntelligenceAlertLevel;
+    alertLevel: IntelligenceAlertLevel;
   }
 > = {
   safari_incident: {
@@ -496,7 +510,7 @@ function getDemoScenarioOutcome(scenarioId?: string | null) {
   return DEMO_SIGNAL_SCENARIOS[normalizeDemoScenarioId(scenarioId)].outcome;
 }
 
-function getDemoScenarioAlertLevel(scenarioId?: string | null): DemoIntelligenceAlertLevel {
+function getDemoScenarioAlertLevel(scenarioId?: string | null): IntelligenceAlertLevel {
   return DEMO_SIGNAL_SCENARIOS[normalizeDemoScenarioId(scenarioId)].alertLevel;
 }
 
@@ -733,6 +747,83 @@ function buildDemoIntelligenceOutcome(
     contribution: matchedRule?.contribution ?? fallback.contribution,
     derivedFrom: [...sourceSet],
     fallbackUsed: false,
+  };
+}
+
+function buildDemoIntelligenceBrief(demoSignals: SignalRecord[], scenarioId: DemoSignalScenario): IntelligenceBrief {
+  const outcome = buildDemoIntelligenceOutcome(demoSignals, scenarioId);
+  return {
+    alertLevel: getDemoScenarioAlertLevel(scenarioId),
+    title: outcome.insightShort,
+    topTopic: outcome.topTopic,
+    topTopicCount: outcome.topTopicCount,
+    totalSignals: outcome.totalSignals,
+    evidenceCount: outcome.evidenceCount,
+    confidence: outcome.confidenceLabel,
+    insight: outcome.insight,
+    recommendedAction: outcome.followUpQuestion,
+    generatedAt: new Date().toISOString(),
+  };
+}
+
+function getRecommendedActionFromTimeline(model: InboxTimelineModel, records: SignalRecord[], t: TranslationFn) {
+  const riskCount = countRiskSignals(records);
+  if (riskCount > 0) {
+    return t("realBriefRecommendedActionRisk");
+  }
+  if (model.unreadCount > 0) {
+    return t("realBriefRecommendedActionUnread", { count: model.unreadCount });
+  }
+  if (model.hasTrendData) {
+    return t("realBriefRecommendedActionTrend", { topic: model.activeTrendLabel });
+  }
+  return t("realBriefRecommendedActionMonitor");
+}
+
+function getRealBriefAlertLevel(model: InboxTimelineModel, records: SignalRecord[]): IntelligenceAlertLevel {
+  if (records.some((record) => record.submission.severity === "high" || record.submission.priority === "high")) {
+    return "Critical Signal";
+  }
+  if (records.some((record) => hasNeedsFollowUp(record.submission))) {
+    return "Action Recommended";
+  }
+  if (model.hasTrendData) {
+    return "Emerging Pattern";
+  }
+  return "Observation";
+}
+
+function buildRealIntelligenceBrief(records: SignalRecord[], t: TranslationFn): IntelligenceBrief | null {
+  if (records.length === 0) {
+    return null;
+  }
+
+  const model = buildInboxTimelineModel(records, t);
+  const topTopic = model.activeTrendLabel === t("inboxTimelineNoActiveTrend")
+    ? getTopTopic(records, { includeFallbackText: false })?.[0] ?? t("realBriefTopTopicFallback")
+    : model.activeTrendLabel;
+  const topicCount = getTopTopic(records, { includeFallbackText: false })?.[1] ?? (model.hasTrendData ? records.length : 0);
+  const latestAnalysisEvent = model.events.find((event) => event.id === "ai-summary");
+  const riskCount = countRiskSignals(records);
+  const evidenceCount = Math.max(topicCount, riskCount, model.hasTrendData ? records.length : 0);
+  const confidence: IntelligenceConfidenceLabel =
+    evidenceCount >= 20 || evidenceCount / records.length >= 0.5
+      ? "High"
+      : evidenceCount >= 5 || model.hasTrendData
+        ? "Medium"
+        : "Low";
+
+  return {
+    alertLevel: getRealBriefAlertLevel(model, records),
+    title: latestAnalysisEvent?.detail ? compactTimelineText(latestAnalysisEvent.detail) : model.activeTrendLabel,
+    topTopic,
+    topTopicCount: topicCount,
+    totalSignals: records.length,
+    evidenceCount,
+    confidence,
+    insight: latestAnalysisEvent?.detail ?? t("realBriefInsightFallback", { count: records.length }),
+    recommendedAction: getRecommendedActionFromTimeline(model, records, t),
+    generatedAt: new Date().toISOString(),
   };
 }
 
@@ -1740,8 +1831,7 @@ function InboxTimelineOverview({
   demoScenario = DEFAULT_DEMO_SIGNAL_SCENARIO,
   demoOutcome = getDemoFallbackOutcome(demoScenario),
   demoIntelligenceViewMode = "executive",
-  demoBriefAvailable = false,
-  demoAlertLevel = getDemoScenarioAlertLevel(demoScenario),
+  latestBrief = null,
   onOpenDemoBrief,
 }: {
   model: InboxTimelineModel;
@@ -1756,8 +1846,7 @@ function InboxTimelineOverview({
   demoScenario?: DemoSignalScenario;
   demoOutcome?: DemoIntelligenceOutcome;
   demoIntelligenceViewMode?: DemoIntelligenceViewMode;
-  demoBriefAvailable?: boolean;
-  demoAlertLevel?: DemoIntelligenceAlertLevel;
+  latestBrief?: IntelligenceBrief | null;
   onOpenDemoBrief?: () => void;
 }) {
   const liveFeedEvents = demoEventFeed.slice(-8);
@@ -1842,16 +1931,18 @@ function InboxTimelineOverview({
             <span>{demoArrivalAlert}</span>
           </div>
         ) : null}
-        {demoBriefAvailable ? (
-          <article className={`latest-intelligence-card is-${demoAlertLevel.toLowerCase().replace(/\s+/g, "-")}`}>
+        {latestBrief ? (
+          <article className={`latest-intelligence-card is-${(latestBrief?.alertLevel ?? "Observation").toLowerCase().replace(/\s+/g, "-")}`}>
             <div>
               <span>{t("latestIntelligenceTitle")}</span>
-              <strong>{effectiveDemoOutcome.insightShort}</strong>
-              <small>{t("latestIntelligenceMeta", { level: demoAlertLevel, count: effectiveDemoOutcome.evidenceCount })}</small>
+              <strong>{latestBrief?.title ?? effectiveDemoOutcome.insightShort}</strong>
+              <small>{t("latestIntelligenceMeta", { level: latestBrief?.alertLevel ?? "Observation", count: latestBrief?.evidenceCount ?? effectiveDemoOutcome.evidenceCount })}</small>
             </div>
-            <button type="button" onClick={onOpenDemoBrief}>
-              {t("latestIntelligenceOpenBrief")}
-            </button>
+            {onOpenDemoBrief ? (
+              <button type="button" onClick={onOpenDemoBrief}>
+                {t("latestIntelligenceOpenBrief")}
+              </button>
+            ) : null}
           </article>
         ) : null}
         {!demoGenerating && showDeveloperDemoFeed && liveFeedEvents.length > 0 ? (
@@ -1946,11 +2037,13 @@ function SignalIntelligenceCenter({
   model,
   t,
   demoSimulationEnabled,
+  demoControlsEnabled,
   demoSignalVolume,
   demoScenario,
   demoSignalCount,
   realSignalCount,
   demoOutcome,
+  intelligenceBrief,
   demoIntelligenceViewMode,
   demoGenerating,
   demoIngestTarget,
@@ -1964,11 +2057,13 @@ function SignalIntelligenceCenter({
   model: InboxTimelineModel;
   t: TranslationFn;
   demoSimulationEnabled: boolean;
+  demoControlsEnabled: boolean;
   demoSignalVolume: DemoSignalVolume;
   demoScenario: DemoSignalScenario;
   demoSignalCount: number;
   realSignalCount: number;
   demoOutcome: DemoIntelligenceOutcome;
+  intelligenceBrief: IntelligenceBrief | null;
   demoIntelligenceViewMode: DemoIntelligenceViewMode;
   demoGenerating: boolean;
   demoIngestTarget: 5 | 20 | 100 | null;
@@ -2083,6 +2178,7 @@ function SignalIntelligenceCenter({
               : t("signalIntelligenceCenterBody", { count: effectiveModel.generatedFromCount })}
         </p>
       </div>
+      {demoControlsEnabled ? (
       <div className="demo-simulation-control" aria-label={t("demoSimulationTitle")}>
         <div className="demo-simulation-toggle-row">
           <div>
@@ -2093,6 +2189,7 @@ function SignalIntelligenceCenter({
             {demoSimulationEnabled ? t("demoModeActiveLabel") : t("demoModeReadyLabel")}
           </span>
         </div>
+        <p className="demo-only-disclosure">{t("demoModeOnlyDisclosure")}</p>
         <div className="demo-generator-controls">
           <label>
             <span>{t("demoScenarioLabel")}</span>
@@ -2199,14 +2296,14 @@ function SignalIntelligenceCenter({
           </div>
         ) : null}
       </div>
+      ) : null}
       {demoSimulationEnabled && demoIntelligenceViewMode === "executive" ? (
-        <DemoExecutiveBriefCard
+        <ExecutiveBriefCard
           t={t}
-          demoOutcome={demoOutcome}
+          brief={intelligenceBrief ?? buildDemoIntelligenceBrief([], demoScenario)}
           demoSignalCount={demoSignalCount}
           realSignalCount={realSignalCount}
-          observedCount={effectiveModel.generatedFromCount}
-          alertLevel={getDemoScenarioAlertLevel(demoScenario)}
+          mixLabel={t("demoSignalMixLabel", { demo: demoSignalCount, real: realSignalCount })}
         />
       ) : null}
       {isDeveloperDemoMode ? (
@@ -2330,58 +2427,49 @@ function SignalIntelligenceCenter({
   );
 }
 
-function DemoExecutiveBriefCard({
+function ExecutiveBriefCard({
   t,
-  demoOutcome,
+  brief,
   demoSignalCount,
   realSignalCount,
-  observedCount,
-  alertLevel,
+  mixLabel,
 }: {
   t: TranslationFn;
-  demoOutcome: DemoIntelligenceOutcome;
+  brief: IntelligenceBrief;
   demoSignalCount: number;
   realSignalCount: number;
-  observedCount: number;
-  alertLevel: DemoIntelligenceAlertLevel;
+  mixLabel?: string;
 }) {
-  const issueDetectedValue =
-    observedCount >= 20
-      ? demoOutcome.insightShort
-      : observedCount >= 5
-        ? t("executiveIssueDetectedFromTopic", { topic: demoOutcome.topTopic })
-        : t("executiveIssueDetectedMonitoring");
-
   return (
     <article className="executive-brief-card" aria-label={t("executiveBriefTitle")}>
       <div className="executive-brief-head">
         <span>{t("executiveBriefTitle")}</span>
-        <strong>{t("demoSignalMixLabel", { demo: demoSignalCount, real: realSignalCount })}</strong>
+        <strong>{mixLabel ?? t("intelligenceSignalMixLabel", { demo: demoSignalCount, real: realSignalCount })}</strong>
       </div>
-      <span className={`executive-brief-level is-${alertLevel.toLowerCase().replace(/\s+/g, "-")}`}>
-        {alertLevel}
+      <span className={`executive-brief-level is-${brief.alertLevel.toLowerCase().replace(/\s+/g, "-")}`}>
+        {brief.alertLevel}
       </span>
       <div className="executive-brief-grid">
         <section className="executive-brief-item is-issue">
           <span>{t("executiveIssueDetectedLabel")}</span>
-          <strong>{issueDetectedValue}</strong>
+          <strong>{brief.title}</strong>
         </section>
         <section className="executive-brief-item">
           <span>{t("executiveTopTopicLabel")}</span>
-          <strong>{demoOutcome.topTopic}</strong>
+          <strong>{brief.topTopic}</strong>
         </section>
         <section className="executive-brief-item">
           <span>{t("executiveEvidenceCountLabel")}</span>
-          <strong>{t("executiveEvidenceCountValue", { count: demoOutcome.evidenceCount })}</strong>
-          <small>{t("demoOutcomeTopTopicEvidence", { count: demoOutcome.topTopicCount, total: demoOutcome.totalSignals })}</small>
+          <strong>{t("executiveEvidenceCountValue", { count: brief.evidenceCount })}</strong>
+          <small>{t("demoOutcomeTopTopicEvidence", { count: brief.topTopicCount, total: brief.totalSignals })}</small>
         </section>
         <section className="executive-brief-item">
           <span>{t("executiveConfidenceLabel")}</span>
-          <strong>{demoOutcome.confidenceLabel}</strong>
+          <strong>{brief.confidence}</strong>
         </section>
         <section className="executive-brief-item is-action">
           <span>{t("executiveRecommendedActionLabel")}</span>
-          <strong>“{demoOutcome.followUpQuestion}”</strong>
+          <strong>“{brief.recommendedAction}”</strong>
         </section>
       </div>
     </article>
@@ -3290,9 +3378,8 @@ interface MobileSignalInboxProps {
   demoScenario: DemoSignalScenario;
   demoOutcome: DemoIntelligenceOutcome;
   demoIntelligenceViewMode: DemoIntelligenceViewMode;
-  demoBriefAvailable: boolean;
-  demoAlertLevel: DemoIntelligenceAlertLevel;
-  onOpenDemoBrief: () => void;
+  latestBrief: IntelligenceBrief | null;
+  onOpenDemoBrief?: () => void;
   demoJustArrivedSignalIds: Set<string>;
   hasMoreSignals: boolean;
   onLoadMoreSignals: () => void;
@@ -3355,8 +3442,7 @@ function MobileSignalInbox({
   demoScenario,
   demoOutcome,
   demoIntelligenceViewMode,
-  demoBriefAvailable,
-  demoAlertLevel,
+  latestBrief,
   onOpenDemoBrief,
   demoJustArrivedSignalIds,
   hasMoreSignals,
@@ -3472,8 +3558,7 @@ function MobileSignalInbox({
         demoScenario={demoScenario}
         demoOutcome={demoOutcome}
         demoIntelligenceViewMode={demoIntelligenceViewMode}
-        demoBriefAvailable={demoBriefAvailable}
-        demoAlertLevel={demoAlertLevel}
+        latestBrief={latestBrief}
         onOpenDemoBrief={onOpenDemoBrief}
       />
     </section>
@@ -3663,7 +3748,15 @@ export function AdminDashboardPage() {
     () => buildDemoIntelligenceOutcome(demoSignalRecords, demoSignalScenario),
     [demoSignalRecords, demoSignalScenario],
   );
-  const demoAlertLevel = getDemoScenarioAlertLevel(demoSignalScenario);
+  const demoIntelligenceBrief = useMemo(
+    () => buildDemoIntelligenceBrief(demoSignalRecords, demoSignalScenario),
+    [demoSignalRecords, demoSignalScenario],
+  );
+  const realIntelligenceBrief = useMemo(
+    () => buildRealIntelligenceBrief(realVisibleSignals, t),
+    [realVisibleSignals, t],
+  );
+  const latestIntelligenceBrief = demoBriefAvailable ? demoIntelligenceBrief : realIntelligenceBrief;
   const intelligenceDemoSimulationEnabled = demoSignalCount > 0 || demoSignalsGenerating;
   const demoSignalVolume = getDemoSignalVolume(demoSignalCount);
   const isIntelligenceDemoRoute = new URLSearchParams(location.search).get("demo") === "intelligence";
@@ -3897,6 +3990,12 @@ export function AdminDashboardPage() {
       setSelectedSignalId("");
     }
   }, [clearDemoArrivalTimers, clearDemoIngestTimers, selectedSignalId, setSelectedSignalId]);
+
+  useEffect(() => {
+    if (!isIntelligenceDemoRoute && (demoSignalRecords.length > 0 || demoSignalsGenerating || demoBriefAvailable)) {
+      handleResetDemoSignals();
+    }
+  }, [demoBriefAvailable, demoSignalRecords.length, demoSignalsGenerating, handleResetDemoSignals, isIntelligenceDemoRoute]);
 
   useEffect(() => () => {
     clearDemoIngestTimers();
@@ -6271,9 +6370,8 @@ export function AdminDashboardPage() {
             demoScenario={demoSignalScenario}
             demoOutcome={demoIntelligenceOutcome}
             demoIntelligenceViewMode={demoIntelligenceViewMode}
-            demoBriefAvailable={demoBriefAvailable}
-            demoAlertLevel={demoAlertLevel}
-            onOpenDemoBrief={() => setDemoIntelligenceAlertOpen(true)}
+            latestBrief={latestIntelligenceBrief}
+            onOpenDemoBrief={demoBriefAvailable ? () => setDemoIntelligenceAlertOpen(true) : undefined}
             demoJustArrivedSignalIds={demoJustArrivedSignalIds}
             hasMoreSignals={hasMoreRenderedSignals}
             onLoadMoreSignals={() => setRenderedSignalLimit((current) => current + SIGNAL_LIST_PAGE_SIZE)}
@@ -6551,9 +6649,8 @@ export function AdminDashboardPage() {
                 demoScenario={demoSignalScenario}
                 demoOutcome={demoIntelligenceOutcome}
                 demoIntelligenceViewMode={demoIntelligenceViewMode}
-                demoBriefAvailable={demoBriefAvailable}
-                demoAlertLevel={demoAlertLevel}
-                onOpenDemoBrief={() => setDemoIntelligenceAlertOpen(true)}
+                latestBrief={latestIntelligenceBrief}
+                onOpenDemoBrief={demoBriefAvailable ? () => setDemoIntelligenceAlertOpen(true) : undefined}
               />
               {hasAdminAccess ? (
                 <section className="answer-card answer-card-plain optional-proof-queue-panel">
@@ -6767,11 +6864,13 @@ export function AdminDashboardPage() {
                   model={inboxTimelineModel}
                   t={t}
                   demoSimulationEnabled={intelligenceDemoSimulationEnabled}
+                  demoControlsEnabled={isIntelligenceDemoRoute}
                   demoSignalVolume={demoSignalVolume}
                   demoScenario={demoSignalScenario}
                   demoSignalCount={demoSignalCount}
                   realSignalCount={realSignalCount}
                   demoOutcome={demoIntelligenceOutcome}
+                  intelligenceBrief={demoIntelligenceBrief}
                   demoIntelligenceViewMode={demoIntelligenceViewMode}
                   demoGenerating={demoSignalsGenerating}
                   demoIngestTarget={demoIngestTarget}
@@ -7204,13 +7303,12 @@ export function AdminDashboardPage() {
                 </span>
               </div>
             ) : null}
-            <DemoExecutiveBriefCard
+            <ExecutiveBriefCard
               t={t}
-              demoOutcome={demoIntelligenceOutcome}
+              brief={demoIntelligenceBrief}
               demoSignalCount={demoSignalCount}
               realSignalCount={realSignalCount}
-              observedCount={demoSignalCount}
-              alertLevel={demoAlertLevel}
+              mixLabel={t("demoSignalMixLabel", { demo: demoSignalCount, real: realSignalCount })}
             />
             <div className="intelligence-alert-actions">
               <button type="button" className="primary-button" onClick={() => setDemoIntelligenceAlertOpen(false)}>

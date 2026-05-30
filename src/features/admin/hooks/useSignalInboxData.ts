@@ -100,7 +100,7 @@ const ADMIN_SUBMISSION_BATCH_SIZE = 4;
 const ONCHAIN_SIGNAL_BATCH_SIZE = 4;
 const MANIFEST_RESTORE_TIMEOUT_MS = 2500;
 const INBOX_BACKGROUND_TASK_TIMEOUT_MS = 1200;
-const REMOTE_SUBMISSION_INDEX_TIMEOUT_MS = 750;
+const REMOTE_SUBMISSION_INDEX_TIMEOUT_MS = 8000;
 
 function getViewerRole(capabilityProfile: CapabilityProfile, accountAddress?: string | null) {
   if (!accountAddress) {
@@ -1109,9 +1109,14 @@ export function useSignalInboxData({
                 REMOTE_SUBMISSION_INDEX_TIMEOUT_MS,
                 `Remote submission index fetch timed out for ${form.id}.`,
               ).catch((error) => {
-                  if (!isTimeoutError(error)) {
-                    console.warn(`Failed to load remote submission index for form ${form.id}`, error);
-                  }
+                  console.warn("[admin inbox] Remote submission index unavailable.", {
+                    formId: form.id,
+                    projectId: form.projectId ?? null,
+                    timeoutMs: REMOTE_SUBMISSION_INDEX_TIMEOUT_MS,
+                    timedOut: isTimeoutError(error),
+                    errorName: error instanceof Error ? error.name : typeof error,
+                    errorMessage: error instanceof Error ? error.message : String(error),
+                  });
                   return { indexEntries: [], submissions: [] as Submission[] };
                 });
               const normalizedLocal: Submission[] = raw.map((submission) => normalizeSubmission(submission) as Submission);
