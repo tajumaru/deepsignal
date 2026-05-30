@@ -7,6 +7,7 @@ export type BuildManifest = {
   gitHash?: string;
   assets?: string[];
   entryAsset?: string | null;
+  routeAssets?: Record<string, string[]>;
 };
 
 export type BuildUpdateReason = "latest_build_available" | "chunk_load_failure" | "mixed_build_assets";
@@ -41,7 +42,9 @@ const updateCheckDelayMs = 4500;
 const updateCheckRetryMs = 30000;
 const maxUpdateCheckAttempts = 20;
 const assetCheckTimeoutMs = 7000;
-const assetCheckLimit = 10;
+const assetCheckLimit = 120;
+const updateAssetReadyAttempts = 5;
+const updateAssetReadyRetryMs = 1800;
 const updateNoticeEvent = "deepsignal:build-update-available";
 const updateAttemptKey = "deepsignal.buildUpdate.attempt";
 
@@ -170,6 +173,19 @@ export function subscribeToBuildUpdateNotices(listener: (notice: BuildUpdateNoti
   return () => window.removeEventListener(updateNoticeEvent, handler);
 }
 
+function isExpectedAssetContentType(url: string, contentType: string | null) {
+  if (url.endsWith(".css")) {
+    return Boolean(contentType?.includes("text/css"));
+  }
+  if (url.endsWith(".js")) {
+    return Boolean(
+      contentType?.includes("javascript") ||
+        contentType?.includes("ecmascript"),
+    );
+  }
+  return true;
+}
+
 async function fetchWithTimeout(url: string, signal: AbortSignal) {
   const controller = new AbortController();
   const timeout = window.setTimeout(() => controller.abort(), assetCheckTimeoutMs);
@@ -182,18 +198,23 @@ async function fetchWithTimeout(url: string, signal: AbortSignal) {
       headers: { "cache-control": "no-cache" },
       signal: controller.signal,
     });
-    await response.arrayBuffer();
-    return response.ok;
+    const body = await response.arrayBuffer();
+    return response.ok && body.byteLength > 0 && isExpectedAssetContentType(url, response.headers.get("content-type"));
   } finally {
     signal.removeEventListener("abort", abort);
     window.clearTimeout(timeout);
   }
 }
 
-async function assetsReady(manifest: BuildManifest, signal: AbortSignal) {
-  const assets = (manifest.assets ?? [])
+function collectAssetsToCheck(manifest: BuildManifest) {
+  const routeAssets = Object.values(manifest.routeAssets ?? {}).flat();
+  return Array.from(new Set([manifest.entryAsset ?? "", ...routeAssets, ...(manifest.assets ?? [])]))
     .filter((asset) => asset.endsWith(".js") || asset.endsWith(".css"))
     .slice(0, assetCheckLimit);
+}
+
+async function assetsReady(manifest: BuildManifest, signal: AbortSignal) {
+  const assets = collectAssetsToCheck(manifest);
 
   if (assets.length === 0) {
     return true;
@@ -209,6 +230,24 @@ async function assetsReady(manifest: BuildManifest, signal: AbortSignal) {
   );
 
   return results.every(Boolean);
+}
+
+function wait(ms: number) {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
+async function waitForAssetsReady(manifest: BuildManifest) {
+  for (let attempt = 1; attempt <= updateAssetReadyAttempts; attempt += 1) {
+    const controller = new AbortController();
+    const ready = await assetsReady(manifest, controller.signal).catch(() => false);
+    if (ready) {
+      return true;
+    }
+    if (attempt < updateAssetReadyAttempts) {
+      await wait(updateAssetReadyRetryMs);
+    }
+  }
+  return false;
 }
 
 async function fetchLatestBuildManifest(signal?: AbortSignal) {
@@ -326,6 +365,17 @@ export async function updateDeepSignalToLatest(notice?: BuildUpdateNotice) {
     chunkFailure: notice?.chunkFailure,
   };
   publishDiagnostics(initialDiagnostics);
+
+  const latestAssetsReady = await waitForAssetsReady(latestBuild);
+  if (!latestAssetsReady) {
+    publishDiagnostics({
+      ...initialDiagnostics,
+      serviceWorkerControllerState: getServiceWorkerControllerState(),
+      updateAttempted: true,
+      updateSucceeded: false,
+    });
+    throw new Error("Latest DeepSignal assets are still propagating. Try Update DeepSignal again in a moment.");
+  }
 
   cleanupTemporaryStorageKeys();
   await updateServiceWorkers().catch((error) => {

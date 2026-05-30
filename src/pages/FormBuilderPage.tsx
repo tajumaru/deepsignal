@@ -551,6 +551,10 @@ function FormBuilderComposer({
     fields: builder.values.fields,
     sections: builder.values.sections,
     purpose: builder.values.purpose,
+    analysisProfileId: builder.values.analysisProfileId,
+    signalType: builder.values.signalType,
+    analystType: builder.values.analystType,
+    analysisType: builder.values.analysisType,
     visibility: builder.values.visibility,
     identityPolicy: builder.values.identityPolicy,
     locationRequirement: builder.values.locationRequirement,
@@ -596,6 +600,10 @@ function FormBuilderComposer({
       fields: builder.values.fields,
       sections: builder.values.sections,
       purpose: builder.values.purpose,
+      analysisProfileId: builder.values.analysisProfileId,
+      signalType: builder.values.signalType,
+      analystType: builder.values.analystType,
+      analysisType: builder.values.analysisType,
       visibility: builder.values.visibility,
       identityPolicy: builder.values.identityPolicy,
       locationRequirement: builder.values.locationRequirement,
@@ -612,6 +620,10 @@ function FormBuilderComposer({
     builder.values.identityPolicy,
     builder.values.locationRequirement,
     builder.values.purpose,
+    builder.values.analysisProfileId,
+    builder.values.signalType,
+    builder.values.analystType,
+    builder.values.analysisType,
     builder.values.sections,
     builder.values.title,
     builder.values.visibility,
@@ -814,6 +826,10 @@ function FormBuilderComposer({
     }
 
     setDisplayMode("mirror");
+    if (editingForm) {
+      setShowMirrorStartChoice(false);
+      return;
+    }
     if (hasEditedCoreSignal) {
       setShowMirrorStartChoice(true);
       return;
@@ -825,6 +841,9 @@ function FormBuilderComposer({
 
   function handleStartMirrorFromIntent() {
     setShowMirrorStartChoice(false);
+    if (editingForm) {
+      return;
+    }
     builder.goToStep("template");
   }
 
@@ -833,6 +852,9 @@ function FormBuilderComposer({
   }
 
   function handleSelectStep(step: typeof builder.values.currentStep) {
+    if (editingForm && step === "template") {
+      return;
+    }
     if (step === "template") {
       pendingTemplateScrollRef.current = true;
     }
@@ -893,8 +915,13 @@ function FormBuilderComposer({
           setHeaderLogo={builder.setHeaderLogo}
           setResponseDeadlinePreset={builder.setResponseDeadlinePreset}
           setResponseDeadlineCustomAt={builder.setResponseDeadlineCustomAt}
-          onBack={() => builder.moveStep(-1)}
+          onBack={() => {
+            if (!editingForm) {
+              builder.moveStep(-1);
+            }
+          }}
           onContinue={() => builder.moveStep(1)}
+          backDisabled={Boolean(editingForm)}
         />
       ) : null}
 
@@ -945,6 +972,10 @@ function FormBuilderComposer({
           headerLogo={builder.values.headerLogo}
           fields={builder.values.fields}
           sections={builder.values.sections}
+          analysisProfileId={builder.values.analysisProfileId}
+          signalType={builder.values.signalType}
+          analystType={builder.values.analystType}
+          analysisType={builder.values.analysisType}
           visibility={builder.values.visibility}
           identityPolicy={builder.values.identityPolicy}
           locationRequirement={builder.values.locationRequirement}
@@ -1026,6 +1057,7 @@ function FormBuilderComposer({
               isScrolled={isScrolled}
               currentStep={builder.values.currentStep}
               completedSteps={completedSteps}
+              disabledSteps={editingForm ? ["template"] : undefined}
               capabilityConfigured={!isGuestDraftMode && capabilityProfile.isConfigured}
               accessRoleLabel={isGuestDraftMode ? t("guestDraftRole") : getRoleLabel(capabilityProfile)}
               adminCapLabel={!isGuestDraftMode && hasAdminAccess && capabilityProfile.adminCapIds[0] ? shortAddress(capabilityProfile.adminCapIds[0]) : undefined}

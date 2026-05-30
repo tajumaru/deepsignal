@@ -14,6 +14,10 @@ import { formatWalrusFailureStage, type WalrusFailureDetails } from "../../../st
 import type { EncryptionReadinessWarning } from "../encryptionReadiness";
 import { StepNavigationActions } from "./StepNavigationActions";
 import type {
+  AnalysisProfileId,
+  AnalysisSignalType,
+  AnalysisType,
+  AnalystType,
   FormField,
   FormHeaderImage,
   FormHeaderLogo,
@@ -53,6 +57,10 @@ interface PublishStepProps {
   };
   fields: FormField[];
   sections: FormSection[];
+  analysisProfileId?: AnalysisProfileId;
+  signalType?: AnalysisSignalType;
+  analystType?: AnalystType;
+  analysisType?: AnalysisType;
   visibility: FormVisibility;
   identityPolicy: FormIdentityPolicy;
   locationRequirement: FormLocationRequirement;
@@ -166,6 +174,86 @@ function AnonymousRiskIcon() {
   );
 }
 
+const analysisProfileLabelKeys: Record<AnalysisProfileId, string> = {
+  customer_feedback: "analysisProfileCustomerFeedback",
+  ai_agent_log: "analysisProfileAiAgentLog",
+  incident_report: "analysisProfileIncidentReport",
+  governance_signal: "analysisProfileGovernanceSignal",
+  general_signal: "analysisProfileGeneralSignal",
+};
+
+const signalTypeLabelKeys: Record<AnalysisSignalType, string> = {
+  feedback: "analysisSignalTypeFeedback",
+  product_voice: "analysisSignalTypeProductVoice",
+  agent_log: "analysisSignalTypeAgentLog",
+  operation: "analysisSignalTypeOperation",
+  incident: "analysisSignalTypeIncident",
+  internal_report: "analysisSignalTypeInternalReport",
+  disaster: "analysisSignalTypeDisaster",
+  safety: "analysisSignalTypeSafety",
+  governance: "analysisSignalTypeGovernance",
+  community: "analysisSignalTypeCommunity",
+  generic: "analysisSignalTypeGeneric",
+};
+
+const analystTypeLabelKeys: Record<AnalystType, string> = {
+  risk: "analysisAnalystTypeRisk",
+  operations: "analysisAnalystTypeOperations",
+  product: "analysisAnalystTypeProduct",
+  community: "analysisAnalystTypeCommunity",
+  executive: "analysisAnalystTypeExecutive",
+};
+
+const analysisTypeLabelKeys: Record<AnalysisType, string> = {
+  summary: "analysisTypeSummary",
+  risk: "analysisTypeRisk",
+  trend: "analysisTypeTrend",
+  action: "analysisTypeAction",
+  sentiment: "analysisTypeSentiment",
+  urgency: "analysisTypeUrgency",
+  anomaly: "analysisTypeAnomaly",
+  silence: "analysisTypeSilence",
+  velocity: "analysisTypeVelocity",
+};
+
+function getLensProfileLabel(t: Translate, profileId?: AnalysisProfileId) {
+  return profileId ? t(analysisProfileLabelKeys[profileId]) : t("publishLensInferredProfile");
+}
+
+function getSignalTypeLabel(t: Translate, signalType?: AnalysisSignalType) {
+  return signalType ? t(signalTypeLabelKeys[signalType]) : t("publishLensInferredSignal");
+}
+
+function getAnalystTypeLabel(t: Translate, analystType?: AnalystType) {
+  return analystType ? t(analystTypeLabelKeys[analystType]) : t("analysisAnalystTypeOperations");
+}
+
+function getAnalysisTypeLabel(t: Translate, analysisType?: AnalysisType) {
+  return analysisType ? t(analysisTypeLabelKeys[analysisType]) : t("analysisTypeSummary");
+}
+
+function getLensActionCopy(t: Translate, signalType?: AnalysisSignalType, analysisType?: AnalysisType) {
+  if (signalType === "disaster") {
+    return t("publishLensActionDisaster");
+  }
+  if (signalType === "incident") {
+    return t("publishLensActionIncident");
+  }
+  if (signalType === "feedback") {
+    return t("publishLensActionFeedback");
+  }
+  if (signalType === "product_voice") {
+    return t("publishLensActionProductVoice");
+  }
+  if (signalType === "operation" || signalType === "agent_log" || analysisType === "anomaly") {
+    return t("publishLensActionOperations");
+  }
+  if (signalType === "internal_report") {
+    return t("publishLensActionInternalReport");
+  }
+  return t("publishLensActionDefault");
+}
+
 export function PublishStep({
   t,
   saving,
@@ -180,6 +268,10 @@ export function PublishStep({
   headerLogo,
   fields,
   sections,
+  analysisProfileId,
+  signalType,
+  analystType,
+  analysisType,
   visibility,
   identityPolicy,
   locationRequirement,
@@ -252,6 +344,10 @@ export function PublishStep({
       ? t("projectEncryptedFormPersonalContrast")
       : t("personalEncryptedFormProjectContrast")
     : "";
+  const lensProfileLabel = getLensProfileLabel(t, analysisProfileId);
+  const lensSignalLabel = getSignalTypeLabel(t, signalType);
+  const lensOperatorLabel = getAnalystTypeLabel(t, analystType);
+  const lensAnalysisLabel = getAnalysisTypeLabel(t, analysisType);
 
   function formatBytes(bytes: number) {
     if (bytes < 1024) {
@@ -492,6 +588,30 @@ export function PublishStep({
           ) : null}
           {isGuestDraftMode && !savedForm ? (
             <p className="wallet-inline-note">{t("guestDraftPublishWalletRequired")}</p>
+          ) : null}
+
+          {!savedForm ? (
+            <section className="publish-signal-lens-card" aria-label={t("publishLensAriaLabel")}>
+              <div>
+                <p className="eyebrow">{t("publishLensEyebrow")}</p>
+                <h3>{lensProfileLabel}</h3>
+                <p>{getLensActionCopy(t, signalType, analysisType)}</p>
+              </div>
+              <div className="publish-signal-lens-grid">
+                <span>
+                  <small>{t("publishLensSignalLabel")}</small>
+                  <strong>{lensSignalLabel}</strong>
+                </span>
+                <span>
+                  <small>{t("publishLensOperatorLabel")}</small>
+                  <strong>{lensOperatorLabel}</strong>
+                </span>
+                <span>
+                  <small>{t("publishLensAnalysisLabel")}</small>
+                  <strong>{lensAnalysisLabel}</strong>
+                </span>
+              </div>
+            </section>
           ) : null}
 
           {shouldShowWalrusDiagnostics ? (

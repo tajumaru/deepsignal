@@ -806,7 +806,18 @@ export default defineConfig(({ mode }) => {
     },
     test: {
       environment: "jsdom",
-      exclude: ["**/node_modules/**", "**/dist/**", "**/.tmp-test/**", "**/move/**"],
+      fileParallelism: false,
+      exclude: [
+        "**/node_modules/**",
+        "**/dist/**",
+        "**/.tmp-test/**",
+        "**/move/**",
+        "**/ci-run-verify/**",
+        "**/.ci-run-verify/**",
+        "**/.ci-verify/**",
+        "**/.ci-cache/**",
+        "**/tests/e2e/**",
+      ],
       setupFiles: [testSetupFile],
     },
   };

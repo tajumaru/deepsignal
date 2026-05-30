@@ -1,5 +1,7 @@
 /* Wallet, Sui address, network selector, access, and member/project registry surfaces. */
 
+@import "@mysten/dapp-kit/dist/index.css";
+
 .wallet-connect,
 .wallet-inline-note {
   color: var(--text-soft);
@@ -57,24 +59,26 @@
   text-transform: uppercase;
 }
 
+.wallet-connect-direct .wallet-connect-trigger,
 .wallet-connect-direct [data-dapp-kit] button,
 .wallet-connect-direct button[data-dapp-kit] {
   width: 100%;
   justify-content: center;
   min-height: 3rem;
-  border: 1px solid rgba(118, 206, 255, 0.18);
-  border-radius: 16px;
-  padding: 0.85rem 1rem;
+  border: 1px solid rgba(118, 206, 255, 0.18) !important;
+  border-radius: 16px !important;
+  padding: 0.85rem 1rem !important;
   background:
     linear-gradient(180deg, rgba(10, 30, 48, 0.96), rgba(7, 22, 37, 0.98)),
     radial-gradient(circle at top left, rgba(102, 227, 255, 0.08), transparent 34%)
     !important;
+  background-color: transparent !important;
   color: #eafaff !important;
-  font-weight: 700;
-  letter-spacing: 0.02em;
+  font-weight: 700 !important;
+  letter-spacing: 0.02em !important;
   box-shadow:
     inset 0 1px 0 rgba(186, 245, 255, 0.08),
-    0 10px 24px rgba(3, 10, 18, 0.26);
+    0 10px 24px rgba(3, 10, 18, 0.26) !important;
   transition:
     transform var(--transition-fast),
     box-shadow var(--transition-fast),
@@ -83,29 +87,33 @@
     color var(--transition-fast);
 }
 
+.wallet-connect-direct .wallet-connect-trigger:hover,
+.wallet-connect-direct .wallet-connect-trigger:focus-visible,
 .wallet-connect-direct [data-dapp-kit] button:hover,
 .wallet-connect-direct [data-dapp-kit] button:focus-visible,
 .wallet-connect-direct button[data-dapp-kit]:hover,
 .wallet-connect-direct button[data-dapp-kit]:focus-visible {
-  border-color: rgba(144, 230, 255, 0.3);
+  border-color: rgba(144, 230, 255, 0.3) !important;
   background:
     linear-gradient(180deg, rgba(12, 36, 56, 0.98), rgba(8, 25, 42, 1)),
     radial-gradient(circle at top left, rgba(102, 227, 255, 0.12), transparent 36%)
     !important;
+  background-color: transparent !important;
   box-shadow:
     inset 0 1px 0 rgba(186, 245, 255, 0.12),
     0 0 0 1px rgba(149, 242, 255, 0.1),
     0 14px 28px rgba(3, 10, 18, 0.3),
-    0 0 18px rgba(83, 201, 255, 0.08);
+    0 0 18px rgba(83, 201, 255, 0.08) !important;
   transform: translateY(-1px);
 }
 
+.wallet-connect-direct .wallet-connect-trigger:active,
 .wallet-connect-direct [data-dapp-kit] button:active,
 .wallet-connect-direct button[data-dapp-kit]:active {
   transform: translateY(0);
   box-shadow:
     inset 0 1px 0 rgba(186, 245, 255, 0.08),
-    0 8px 18px rgba(3, 10, 18, 0.22);
+    0 8px 18px rgba(3, 10, 18, 0.22) !important;
 }
 
 .wallet-sync-button {

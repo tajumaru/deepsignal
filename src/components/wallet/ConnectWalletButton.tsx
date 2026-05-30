@@ -44,5 +44,5 @@ export function ConnectWalletButton({
     );
   }
 
-  return <ConnectButton />;
+  return <ConnectButton className="wallet-connect-trigger" />;
 }

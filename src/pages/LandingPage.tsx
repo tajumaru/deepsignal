@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { Link } from "react-router-dom";
 import { CreateFormLink } from "../components/CreateFormLink";
 import { FlowStepIcon, type FlowStepIconName } from "../components/SignalFlowIcons";
+import { clearDemoLocalArtifacts } from "../demo/demoLocalCleanup";
 import { useI18n } from "../i18n";
 import "../styles/pages/landing.css";
 import "../styles/frog-effects.css";
@@ -987,6 +988,10 @@ export function LandingPage() {
   const heroTrustBadges = ["Encrypted", "Private", "Review-ready"];
   const heroDescription =
     "DeepSignal turns feedback, reports, and forms into an encrypted inbox that feels fast to open and easy to review.";
+
+  useEffect(() => {
+    clearDemoLocalArtifacts();
+  }, []);
 
   return (
     <section className="landing-shell">

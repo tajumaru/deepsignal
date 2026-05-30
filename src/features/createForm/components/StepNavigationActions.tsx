@@ -4,6 +4,7 @@ interface StepNavigationActionsProps {
   t: Translate;
   onBack: () => void;
   onContinue?: () => void;
+  backDisabled?: boolean;
 }
 
 function StepBackIcon() {
@@ -22,7 +23,7 @@ function StepContinueIcon() {
   );
 }
 
-export function StepNavigationActions({ t, onBack, onContinue }: StepNavigationActionsProps) {
+export function StepNavigationActions({ t, onBack, onContinue, backDisabled = false }: StepNavigationActionsProps) {
   const backLabel = t("back");
   const continueLabel = t("continue");
 
@@ -31,6 +32,7 @@ export function StepNavigationActions({ t, onBack, onContinue }: StepNavigationA
       <button
         type="button"
         className="ghost-button step-nav-button"
+        disabled={backDisabled}
         onClick={onBack}
         aria-label={backLabel}
         title={backLabel}

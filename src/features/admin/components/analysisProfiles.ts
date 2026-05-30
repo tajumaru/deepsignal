@@ -18,12 +18,20 @@ export interface AnalysisMetric {
   tone?: "alert" | "cluster";
 }
 
+export interface AnalysisEvidenceChip {
+  id: string;
+  label: string;
+  value: string;
+  tone?: "alert" | "cluster";
+}
+
 export interface AnalysisInsightCard {
   id: string;
   eyebrow: string;
   title: string;
   body: string;
   tone?: "alert" | "cluster";
+  evidence?: AnalysisEvidenceChip[];
 }
 
 export interface AnalysisRecommendedAction {
@@ -998,6 +1006,303 @@ function buildResponseLagMetric(context: AnalysisProfileContext): AnalysisMetric
   };
 }
 
+function makeEvidenceChip(
+  id: string,
+  label: string,
+  value: string | number,
+  tone?: AnalysisEvidenceChip["tone"],
+): AnalysisEvidenceChip {
+  return {
+    id,
+    label,
+    value: typeof value === "number" ? value.toLocaleString() : value,
+    tone,
+  };
+}
+
+function getCardEvidence(
+  card: AnalysisInsightCard,
+  context: AnalysisProfileContext,
+  signalType: AnalysisSignalType,
+  analysisType: AnalysisType,
+): AnalysisEvidenceChip[] {
+  const topCluster = context.clusters[0];
+  const urgentCount = getSeverityMix(context.records).high;
+  const sentiment = estimateSentiment(context.records);
+  const contradiction = countMatches(context.records, /\b(contradict|conflict|different story|doesn't match|mismatch|inconsistent|denied|approved)\b/);
+  const repeatedThemes = topCluster?.signalCount ?? 0;
+  const retries = countMatches(context.records, /\b(retry|retries|attempt|attempted again|backoff)\b/);
+  const timeouts = countMatches(context.records, /\b(timeout|timed out|latency|hung|stall|stalled)\b/);
+  const loops = countMatches(context.records, /\b(loop|stuck|repeat(ed)? failure|re-?queue|same error)\b/);
+  const conflict = countMatches(context.records, /\b(conflict|dispute|vote|against|opposed|fork|friction|challenge)\b/);
+  const duplicateRisk =
+    (context.relatedPatterns.find((pattern) => pattern.label === "possible_duplicates")?.count ?? 0) +
+    countMatches(context.records, /\b(spam|duplicate|bot|sybil)\b/);
+
+  if (signalType === "disaster") {
+    if (card.id === "urgent-front") {
+      return [
+        makeEvidenceChip("urgent", "Urgent", urgentCount, urgentCount > 0 ? "alert" : "cluster"),
+        makeEvidenceChip("unread", "Unread", context.unreadSignals, context.unreadSignals > 0 ? "alert" : "cluster"),
+        makeEvidenceChip("locked", "Locked", context.encryptedWaitingCount, context.encryptedWaitingCount > 0 ? "alert" : "cluster"),
+      ];
+    }
+    if (card.id === "cluster-front") {
+      return [
+        makeEvidenceChip("cluster", "Cluster", repeatedThemes, topCluster?.severity === "high" ? "alert" : "cluster"),
+        makeEvidenceChip("confidence", "Confidence", topCluster ? `${topCluster.confidence}%` : "N/A", "cluster"),
+        makeEvidenceChip("areas", "Map nodes", context.clusters.length, context.clusters.length > 1 ? "alert" : "cluster"),
+      ];
+    }
+    return [
+      makeEvidenceChip("quiet", "Quiet zones", context.silenceCandidates.length, context.silenceCandidates.length > 0 ? "alert" : "cluster"),
+      makeEvidenceChip("anomaly", "Anomalies", context.anomalyCount, context.anomalyCount > 0 ? "alert" : "cluster"),
+      makeEvidenceChip("lag", "Lag", formatLag(context.currentVelocity.medianLagHours), context.currentVelocity.medianLagHours !== null && context.currentVelocity.medianLagHours > 24 ? "alert" : "cluster"),
+    ];
+  }
+
+  if (signalType === "feedback" || signalType === "product_voice") {
+    if (card.id === "sentiment-readout") {
+      return [
+        makeEvidenceChip("negative", "Negative", sentiment.negative, sentiment.negative >= sentiment.positive ? "alert" : "cluster"),
+        makeEvidenceChip("praise", "Praise", sentiment.positive, "cluster"),
+        makeEvidenceChip("neutral", "Neutral", sentiment.neutral, "cluster"),
+      ];
+    }
+    if (card.id === "topic-cluster") {
+      return [
+        makeEvidenceChip("repeated", signalType === "product_voice" ? "Action cluster" : "Repeated pain", repeatedThemes, repeatedThemes > 1 ? "alert" : "cluster"),
+        makeEvidenceChip("confidence", "Confidence", topCluster ? `${topCluster.confidence}%` : "N/A", "cluster"),
+        makeEvidenceChip("trend", "Trend", topCluster?.trend ?? "early", topCluster?.trend === "increasing" ? "alert" : "cluster"),
+      ];
+    }
+    return [
+      makeEvidenceChip("unread", "Unread", context.unreadSignals, context.unreadSignals > 0 ? "alert" : "cluster"),
+      makeEvidenceChip("open", "Open", context.unresolvedSignals, context.unresolvedSignals > 0 ? "alert" : "cluster"),
+      makeEvidenceChip("locked", "Locked", context.encryptedWaitingCount, context.encryptedWaitingCount > 0 ? "alert" : "cluster"),
+    ];
+  }
+
+  if (signalType === "internal_report") {
+    if (card.id === "spread-front") {
+      return [
+        makeEvidenceChip("contradiction", "Contradiction", contradiction, contradiction > 0 ? "alert" : "cluster"),
+        makeEvidenceChip("open", "Open", context.unresolvedSignals, context.unresolvedSignals > 0 ? "alert" : "cluster"),
+        makeEvidenceChip("unread", "Unread", context.unreadSignals, context.unreadSignals > 0 ? "alert" : "cluster"),
+      ];
+    }
+    return [
+      makeEvidenceChip("risk", "Risk language", sentiment.negative, sentiment.negative > 0 ? "alert" : "cluster"),
+      makeEvidenceChip("theme", "Theme cluster", repeatedThemes, repeatedThemes > 1 ? "alert" : "cluster"),
+      makeEvidenceChip("contradiction", "Contradiction", contradiction, contradiction > 0 ? "alert" : "cluster"),
+    ];
+  }
+
+  if (signalType === "agent_log" || signalType === "operation" || analysisType === "anomaly") {
+    if (card.id === "retry-pressure") {
+      return [
+        makeEvidenceChip("retries", "Retries", retries, retries > 0 ? "alert" : "cluster"),
+        makeEvidenceChip("open", "Open logs", context.unresolvedSignals, context.unresolvedSignals > 0 ? "alert" : "cluster"),
+        makeEvidenceChip("lag", "Lag", formatLag(context.currentVelocity.medianLagHours), context.currentVelocity.medianLagHours !== null && context.currentVelocity.medianLagHours > 24 ? "alert" : "cluster"),
+      ];
+    }
+    if (card.id === "timeout-signature") {
+      return [
+        makeEvidenceChip("timeouts", "Timeouts", timeouts, timeouts > 0 ? "alert" : "cluster"),
+        makeEvidenceChip("anomaly", "Anomalies", context.anomalyCount, context.anomalyCount > 0 ? "alert" : "cluster"),
+        makeEvidenceChip("velocity", "Inside 24h", `${context.currentVelocity.withinDayPercent}%`, context.currentVelocity.withinDayPercent < 60 ? "alert" : "cluster"),
+      ];
+    }
+    return [
+      makeEvidenceChip("loops", "Loops", loops, loops > 0 ? "alert" : "cluster"),
+      makeEvidenceChip("cluster", "Failure cluster", repeatedThemes, repeatedThemes > 1 ? "alert" : "cluster"),
+      makeEvidenceChip("locked", "Locked", context.encryptedWaitingCount, context.encryptedWaitingCount > 0 ? "alert" : "cluster"),
+    ];
+  }
+
+  if (signalType === "governance" || signalType === "community") {
+    return [
+      makeEvidenceChip("conflict", "Conflict", conflict, conflict > 0 ? "alert" : "cluster"),
+      makeEvidenceChip("duplicates", "Duplicate risk", duplicateRisk, duplicateRisk > 0 ? "alert" : "cluster"),
+      makeEvidenceChip("cluster", "Cluster", repeatedThemes, repeatedThemes > 1 ? "alert" : "cluster"),
+    ];
+  }
+
+  return [
+    makeEvidenceChip("signals", "Signals", context.totalSignals, "cluster"),
+    makeEvidenceChip("open", "Open", context.unresolvedSignals, context.unresolvedSignals > 0 ? "alert" : "cluster"),
+    makeEvidenceChip("locked", "Locked", context.encryptedWaitingCount, context.encryptedWaitingCount > 0 ? "alert" : "cluster"),
+  ];
+}
+
+function specializeInsightCard(
+  card: AnalysisInsightCard,
+  context: AnalysisProfileContext,
+  signalType: AnalysisSignalType,
+): AnalysisInsightCard {
+  const topCluster = context.clusters[0];
+  const urgentCount = getSeverityMix(context.records).high;
+  const sentiment = estimateSentiment(context.records);
+  const contradiction = countMatches(context.records, /\b(contradict|conflict|different story|doesn't match|mismatch|inconsistent|denied|approved)\b/);
+
+  if (signalType === "disaster") {
+    if (card.id === "urgent-front") {
+      return {
+        ...card,
+        eyebrow: "Help demand",
+        title: urgentCount > 0 ? "Urgent help demand is active" : "No urgent help demand is dominating",
+        body: urgentCount > 0
+          ? `${urgentCount} high-severity disaster signals need responder attention before lower-risk check-ins.`
+          : "Current disaster signals need monitoring, but no high-severity help demand is dominating.",
+        tone: urgentCount > 0 ? "alert" : "cluster",
+      };
+    }
+    if (card.id === "cluster-front") {
+      return {
+        ...card,
+        eyebrow: "Location cluster",
+        title: topCluster?.label ?? "No location cluster yet",
+        body: topCluster
+          ? `${topCluster.signalCount} disaster signals are grouping around this operational area.`
+          : "Location evidence has not yet separated into a dominant response zone.",
+      };
+    }
+    if (card.id === "spread-front") {
+      return {
+        ...card,
+        eyebrow: "Response coverage",
+        title: context.silenceCandidates.length > 0 ? "Silent unresolved pockets need a check" : "Response coverage is holding",
+        body: context.silenceCandidates[0]
+          ? `${context.silenceCandidates[0].label} has unresolved signals with low recent follow-up.`
+          : "No unresolved disaster cluster has gone quiet enough to indicate a response gap.",
+        tone: context.silenceCandidates.length > 0 ? "alert" : "cluster",
+      };
+    }
+  }
+
+  if (signalType === "product_voice") {
+    if (card.id === "topic-cluster") {
+      return {
+        ...card,
+        eyebrow: "Action cluster",
+        title: topCluster?.label ?? "No action cluster yet",
+        body: topCluster
+          ? `${topCluster.signalCount} product voice signals are pointing toward one action lane.`
+          : "Product signals are active, but no repeated action lane has separated yet.",
+      };
+    }
+    if (card.id === "sentiment-readout") {
+      return {
+        ...card,
+        eyebrow: "Friction readout",
+        title: sentiment.negative > 0 ? "Friction is shaping the product queue" : "No sharp friction signature yet",
+        body: `${sentiment.negative} product signals carry negative or blocking language while ${sentiment.positive} preserve positive context.`,
+        tone: sentiment.negative > 0 ? "alert" : "cluster",
+      };
+    }
+    if (card.id === "review-gap") {
+      return {
+        ...card,
+        eyebrow: "Action routing",
+        title: context.unresolvedSignals > 0 ? "Open product signals need one owner lane" : "No product action backlog",
+        body: context.unresolvedSignals > 0
+          ? `${context.unresolvedSignals} product voice items remain open and should be routed before the theme fragments.`
+          : "Product voice is clear enough that no open action backlog is dominating.",
+        tone: context.unresolvedSignals > 0 ? "alert" : "cluster",
+      };
+    }
+  }
+
+  if (signalType === "feedback") {
+    if (card.id === "sentiment-readout") {
+      return {
+        ...card,
+        eyebrow: "Sentiment balance",
+        title: sentiment.negative > sentiment.positive ? "Negative feedback is outpacing praise" : "Feedback sentiment is still balanced",
+        body: `${sentiment.negative} signals read as negative or blocked while ${sentiment.positive} preserve positive context.`,
+        tone: sentiment.negative > sentiment.positive ? "alert" : "cluster",
+      };
+    }
+    if (card.id === "topic-cluster") {
+      return {
+        ...card,
+        eyebrow: "Repeated pain",
+        title: topCluster?.label ?? "No repeated pain point yet",
+        body: topCluster
+          ? `${topCluster.signalCount} feedback signals repeat this pain point, making it more useful than a one-off complaint.`
+          : "Feedback is arriving, but no repeated pain point has separated from one-off noise yet.",
+      };
+    }
+    if (card.id === "review-gap") {
+      return {
+        ...card,
+        eyebrow: "Response gap",
+        title: context.unreadSignals > 0 ? "Unread feedback may hide fresh friction" : "No unread feedback gap",
+        body: context.unreadSignals > 0
+          ? `${context.unreadSignals} feedback signals have not entered review, so the visible sentiment may be lagging reality.`
+          : "Feedback intake has no unread drift right now.",
+        tone: context.unreadSignals > 0 ? "alert" : "cluster",
+      };
+    }
+  }
+
+  if (signalType === "internal_report") {
+    if (card.id === "urgent-front") {
+      return {
+        ...card,
+        eyebrow: "Escalation pressure",
+        title: sentiment.negative > 0 ? "Internal risk language is active" : "Internal risk pressure is low",
+        body: `${sentiment.negative} reports carry concern, escalation, or friction language in the current review set.`,
+        tone: sentiment.negative > 0 ? "alert" : "cluster",
+      };
+    }
+    if (card.id === "cluster-front") {
+      return {
+        ...card,
+        eyebrow: "Evidence preservation",
+        title: topCluster?.label ?? "No internal risk theme yet",
+        body: topCluster
+          ? `${topCluster.signalCount} reports cluster around the same internal risk theme and should stay grouped.`
+          : "No internal report theme is strong enough to require evidence bundling yet.",
+      };
+    }
+    if (card.id === "spread-front") {
+      return {
+        ...card,
+        eyebrow: contradiction > 0 ? "Contradiction" : "Owner assignment",
+        title: contradiction > 0
+          ? "Conflicting internal evidence needs reconciliation"
+          : context.unresolvedSignals > 0
+            ? "Assign one owner before side channels split"
+            : "No owner gap detected",
+        body: contradiction > 0
+          ? `${contradiction} reports include contradiction or approval mismatch language that should be reconciled before escalation.`
+          : context.unresolvedSignals > 0
+            ? `${context.unresolvedSignals} internal reports remain open and need a visible response owner.`
+            : "Internal reports are not showing an unresolved ownership gap right now.",
+        tone: contradiction > 0 || context.unresolvedSignals > 0 ? "alert" : "cluster",
+      };
+    }
+  }
+
+  return card;
+}
+
+function prepareInsightCards(
+  cards: AnalysisInsightCard[],
+  context: AnalysisProfileContext,
+  signalType: AnalysisSignalType,
+  analysisType: AnalysisType,
+) {
+  return cards.map((card) => {
+    const specialized = specializeInsightCard(card, context, signalType);
+    return {
+      ...specialized,
+      evidence: getCardEvidence(specialized, context, signalType, analysisType),
+    };
+  });
+}
+
 function buildAnalysisLensProfile(
   baseProfile: ResolvedAnalysisProfile,
   context: AnalysisProfileContext,
@@ -1226,7 +1531,12 @@ function buildAnalysisLensProfile(
     highlightedAction,
     evidenceCount,
     metrics: uniqueById([...injectedMetrics, ...sortByPriority(baseProfile.metrics, priorityMetricIds)]).slice(0, 4),
-    insightCards: sortByPriority(baseProfile.insightCards, priorityCardIds),
+    insightCards: prepareInsightCards(
+      sortByPriority(baseProfile.insightCards, priorityCardIds),
+      context,
+      signalType,
+      analysisType,
+    ),
     recommendedActions: sortByPriority(baseProfile.recommendedActions, priorityActionIds),
   };
 }

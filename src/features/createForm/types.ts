@@ -2,6 +2,10 @@ import type { MutableRefObject } from "react";
 import { useI18n } from "../../i18n";
 import { createFormOnChain } from "../../lib/projectRegistry";
 import type {
+  AnalysisProfileId,
+  AnalysisSignalType,
+  AnalysisType,
+  AnalystType,
   FieldType,
   FormField,
   FormHeaderImage,
@@ -16,6 +20,10 @@ import type {
 } from "../../types";
 
 export type {
+  AnalysisProfileId,
+  AnalysisSignalType,
+  AnalysisType,
+  AnalystType,
   FieldType,
   FormField,
   FormHeaderImage,
@@ -79,6 +87,10 @@ export interface FormBuilderValues {
   fields: FormField[];
   sections: FormSection[];
   purpose: FormPurpose;
+  analysisProfileId?: AnalysisProfileId;
+  signalType?: AnalysisSignalType;
+  analystType?: AnalystType;
+  analysisType?: AnalysisType;
   visibility: FormVisibility;
   identityPolicy: FormIdentityPolicy;
   locationRequirement: FormLocationRequirement;

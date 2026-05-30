@@ -25,8 +25,8 @@ describe("AppShell", () => {
     expect(container.querySelector(".mobile-header-cta")).not.toBeInTheDocument();
   });
 
-  it("keeps mobile compose shortcuts available from workspace routes", () => {
-    const { container } = renderShell("/dashboard");
+  it("keeps mobile compose shortcuts available from signal discovery routes", () => {
+    const { container } = renderShell("/explore");
 
     expect(container.querySelector(".mobile-compose-fab")).toBeInTheDocument();
   });

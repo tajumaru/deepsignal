@@ -10,6 +10,7 @@ interface FormBuilderStepsProps {
   steps: ComposerStep[];
   currentStep: string;
   completedSteps?: string[];
+  disabledSteps?: string[];
   getStateLabel?: (state: "current" | "done" | "upcoming") => string;
   onSelect?: (stepKey: string) => void;
 }
@@ -18,6 +19,7 @@ export function FormBuilderSteps({
   steps,
   currentStep,
   completedSteps = [],
+  disabledSteps = [],
   getStateLabel,
   onSelect,
 }: FormBuilderStepsProps) {
@@ -51,6 +53,7 @@ export function FormBuilderSteps({
       {steps.map((step, index) => {
         const isCurrent = currentStep === step.key;
         const isComplete = completedSteps.includes(step.key);
+        const isDisabled = disabledSteps.includes(step.key);
         const state = isCurrent ? "current" : isComplete ? "done" : "upcoming";
         return (
           <button
@@ -59,7 +62,8 @@ export function FormBuilderSteps({
               stepRefs.current[step.key] = node;
             }}
             type="button"
-            className={`composer-flow-step ${isCurrent ? "is-current" : ""} ${isComplete ? "is-complete" : ""}`}
+            className={`composer-flow-step ${isCurrent ? "is-current" : ""} ${isComplete ? "is-complete" : ""} ${isDisabled ? "is-disabled" : ""}`}
+            disabled={isDisabled}
             onClick={() => onSelect?.(step.key)}
             aria-current={isCurrent ? "step" : undefined}
           >

@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { DynamicField } from "../components/DynamicField";
 import { EmptyState } from "../components/EmptyState";
@@ -198,6 +198,14 @@ export function PublicFormPage() {
       setSubmissionOverlayDismissed(false);
     }
   }, [submitting, submitPipeline.status]);
+
+  const handleWalletAccountAddressChange = useCallback((address?: string) => {
+    setResolvedWalletAddress(address);
+  }, []);
+
+  const handleWalletProviderChange = useCallback((provider?: string) => {
+    setWalletProvider(provider);
+  }, []);
 
   const groupedFields = useMemo(() => {
     if (!form) {
@@ -661,8 +669,8 @@ export function PublicFormPage() {
                   <LazyWalrusRuntimeSurface fallback={walletFallback}>
                     <Suspense fallback={walletFallback}>
                       <LazyPublicWalletAccountPanel
-                        onAccountAddressChange={(address) => setResolvedWalletAddress(address)}
-                        onWalletProviderChange={(provider) => setWalletProvider(provider)}
+                        onAccountAddressChange={handleWalletAccountAddressChange}
+                        onWalletProviderChange={handleWalletProviderChange}
                       />
                     </Suspense>
                   </LazyWalrusRuntimeSurface>
@@ -748,8 +756,8 @@ export function PublicFormPage() {
             <div aria-hidden="true" style={{ display: "none" }}>
               <Suspense fallback={null}>
                 <LazyPublicWalletAccountPanel
-                  onAccountAddressChange={(address) => setResolvedWalletAddress(address)}
-                  onWalletProviderChange={(provider) => setWalletProvider(provider)}
+                  onAccountAddressChange={handleWalletAccountAddressChange}
+                  onWalletProviderChange={handleWalletProviderChange}
                 />
               </Suspense>
             </div>

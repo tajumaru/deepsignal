@@ -14,6 +14,7 @@ const mockUseProjectRegistry = vi.fn();
 const mockListForms = vi.fn();
 const mockListSubmissions = vi.fn();
 const mockFetchJsonBlob = vi.fn();
+const mockReadManifestWithForm = vi.fn();
 
 vi.mock("@mysten/dapp-kit", () => ({
   useSuiClient: () => ({
@@ -27,7 +28,7 @@ vi.mock("../../../hooks/useProjectRegistry", () => ({
 
 vi.mock("../../../lib/walrus", () => ({
   fetchJsonBlob: (...args: unknown[]) => mockFetchJsonBlob(...args),
-  readManifestWithForm: vi.fn(),
+  readManifestWithForm: (...args: unknown[]) => mockReadManifestWithForm(...args),
 }));
 
 vi.mock("../../../lib/storage", async () => {
@@ -48,6 +49,18 @@ vi.mock("../../../lib/projectRegistry", async () => {
     ...actual,
     getSelectedProjectId: () => null,
     subscribeProjectRegistryStorageChange: () => () => undefined,
+  };
+});
+
+vi.mock("../../../storage/submissionDelivery", async () => {
+  const actual = await vi.importActual<typeof import("../../../storage/submissionDelivery")>(
+    "../../../storage/submissionDelivery",
+  );
+  return {
+    ...actual,
+    fetchRemoteSubmissionIndex: vi.fn().mockResolvedValue([]),
+    getRemoteSubmissionIndexSource: vi.fn().mockReturnValue(""),
+    writeOwnerSubmissionIndexFetchLog: vi.fn(),
   };
 });
 
@@ -130,6 +143,7 @@ describe("mergeFormsWithProjectRegistry", () => {
     mockListForms.mockResolvedValue([]);
     mockListSubmissions.mockResolvedValue([]);
     mockFetchJsonBlob.mockResolvedValue(null);
+    mockReadManifestWithForm.mockResolvedValue({ manifest: {}, form: null });
   });
 
   it("adds shadow forms for on-chain project forms when local cache is empty", () => {
@@ -288,5 +302,69 @@ describe("mergeFormsWithProjectRegistry", () => {
     expect(result.current.visibleSignals[0].submission.onchainStatus).toBe("new");
     expect(result.current.signalIndex.counts.registeredSui).toBe(1);
     expect(result.current.signalIndex.counts.pendingSui).toBe(0);
+  });
+
+  it("loads submissions for forms restored from a project manifest during the same inbox refresh", async () => {
+    const restoredForm = createForm({
+      id: "form-restored",
+      title: "Restored Walrus channel",
+      projectId: "0xproject-a",
+      projectName: "Project A",
+      onchainFormId: 7,
+      manifestBlobId: "manifest-7",
+    });
+    const restoredSubmission = createSubmission({
+      id: "submission-restored-1",
+      formId: "form-restored",
+      receiptBlobId: "blob-restored-1",
+      pendingOnchainRegistration: false,
+    });
+    const project = createProject({
+      objectId: "0xproject-a",
+      name: "Project A",
+      onchainForms: [
+        {
+          formId: 7,
+          title: "Restored Walrus channel",
+          metadataDigest: "digest-form-7",
+          manifestBlobId: "manifest-7",
+          active: true,
+          createdAt: "2026-05-22T00:00:00.000Z",
+        },
+      ],
+    });
+
+    mockUseProjectRegistry.mockReturnValue({
+      projects: [project],
+      dataUpdatedAt: 1,
+    });
+    mockListForms.mockResolvedValue([]);
+    mockReadManifestWithForm.mockResolvedValue({
+      manifest: { formBlobId: "__bundled_form__" },
+      form: restoredForm,
+    });
+    mockListSubmissions.mockImplementation((formId: string) =>
+      Promise.resolve(formId === "form-restored" ? [restoredSubmission] : []),
+    );
+
+    const { result } = renderHook(() =>
+      useSignalInboxData({
+        accountAddress: "0xowner-1",
+        capabilityProfile: createCapabilityProfile(),
+      }),
+    );
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    await waitFor(() =>
+      expect(result.current.forms.some((form) => form.id === "form-restored")).toBe(true),
+    );
+    await waitFor(() =>
+      expect(result.current.visibleSignals.some((record) => record.submission.id === "submission-restored-1")).toBe(
+        true,
+      ),
+    );
+
+    expect(mockListSubmissions).toHaveBeenCalledWith("form-restored");
+    expect(result.current.forms.find((form) => form.id === "form-restored")?.submissionCount).toBe(1);
   });
 });

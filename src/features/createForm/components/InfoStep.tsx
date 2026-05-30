@@ -54,6 +54,7 @@ interface InfoStepProps {
   setResponseDeadlineCustomAt: (value: string) => void;
   onBack: () => void;
   onContinue: () => void;
+  backDisabled?: boolean;
 }
 
 export function InfoStep({
@@ -72,6 +73,7 @@ export function InfoStep({
   setResponseDeadlineCustomAt,
   onBack,
   onContinue,
+  backDisabled,
 }: InfoStepProps) {
   const deadlineOptions: Array<{ value: ResponseDeadlinePreset; label: string }> = [
     { value: "none", label: t("responseDeadlineNone") },
@@ -430,7 +432,7 @@ export function InfoStep({
         </section>
       </div>
 
-      <StepNavigationActions t={t} onBack={onBack} onContinue={onContinue} />
+      <StepNavigationActions t={t} onBack={onBack} onContinue={onContinue} backDisabled={backDisabled} />
     </section>
   );
 }

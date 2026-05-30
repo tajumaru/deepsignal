@@ -1,7 +1,9 @@
 import type { FormSchema, Submission } from "../types";
+import { removeLocalFormVersionSchemas } from "./localFormVersions";
 
 const FORMS_KEY = "deepsignal.forms";
 const SUBMISSIONS_KEY = "deepsignal.submissions";
+const ENCRYPTED_PAYLOADS_KEY = "deepsignal.encryptedPayloads";
 const BLOB_INDEX_KEY = "deepsignal.walrus.index";
 const FORM_METADATA_OVERLAY_KEY = "deepsignal.formMetadataOverlays";
 
@@ -94,14 +96,37 @@ export function forcePurgeFormArtifacts(args: {
     (entry) => !(entry.formId && removedFormIdsFromBlobIndex.has(entry.formId)),
   );
   const removedFormIds = new Set([...formIds, ...removedFormIdsFromForms, ...removedFormIdsFromBlobIndex]);
-  blobIndex.submissions = (blobIndex.submissions ?? []).filter(
-    (entry) => !(entry.formId && removedFormIds.has(entry.formId)),
-  );
+  const removedBlobIndexSubmissionIds = new Set<string>();
+  blobIndex.submissions = (blobIndex.submissions ?? []).filter((entry) => {
+    const shouldRemove = Boolean(entry.formId && removedFormIds.has(entry.formId));
+    if (shouldRemove && entry.submissionId) {
+      removedBlobIndexSubmissionIds.add(entry.submissionId);
+    }
+    return !shouldRemove;
+  });
   writeJson(BLOB_INDEX_KEY, blobIndex);
 
   const submissions = readJson<Submission[]>(SUBMISSIONS_KEY, []);
+  const removedSubmissions = submissions.filter(
+    (submission) => removedFormIds.has(submission.formId) || removedBlobIndexSubmissionIds.has(submission.id),
+  );
   writeJson(
     SUBMISSIONS_KEY,
-    submissions.filter((submission) => !removedFormIds.has(submission.formId)),
+    submissions.filter(
+      (submission) => !removedFormIds.has(submission.formId) && !removedBlobIndexSubmissionIds.has(submission.id),
+    ),
   );
+  const encryptedPayloadBlobIds = new Set(
+    removedSubmissions
+      .flatMap((submission) => [submission.encryptedBlobId, submission.blobId, submission.receiptBlobId])
+      .filter((blobId): blobId is string => typeof blobId === "string" && blobId.length > 0),
+  );
+  if (encryptedPayloadBlobIds.size > 0) {
+    const encryptedPayloads = readJson<Array<{ blobId?: string; payload?: string }>>(ENCRYPTED_PAYLOADS_KEY, []);
+    writeJson(
+      ENCRYPTED_PAYLOADS_KEY,
+      encryptedPayloads.filter((payload) => !(payload.blobId && encryptedPayloadBlobIds.has(payload.blobId))),
+    );
+  }
+  removeLocalFormVersionSchemas(removedFormIds);
 }

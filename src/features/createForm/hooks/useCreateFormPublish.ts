@@ -27,6 +27,10 @@ import {
 } from "../../../storage/walrusCostEstimate";
 import { getCreateFormEncryptionReadiness } from "../encryptionReadiness";
 import type {
+  AnalysisProfileId,
+  AnalysisSignalType,
+  AnalysisType,
+  AnalystType,
   CreateFormTransaction,
   FormField,
   FormHeaderImagePosition,
@@ -69,6 +73,10 @@ interface UseCreateFormPublishArgs {
   fields: FormField[];
   sections: FormSection[];
   purpose: FormPurpose;
+  analysisProfileId?: AnalysisProfileId;
+  signalType?: AnalysisSignalType;
+  analystType?: AnalystType;
+  analysisType?: AnalysisType;
   visibility: FormVisibility;
   identityPolicy: FormIdentityPolicy;
   locationRequirement: FormLocationRequirement;
@@ -111,6 +119,10 @@ export function useCreateFormPublish({
   fields,
   sections,
   purpose,
+  analysisProfileId,
+  signalType,
+  analystType,
+  analysisType,
   visibility,
   identityPolicy,
   locationRequirement,
@@ -198,6 +210,10 @@ export function useCreateFormPublish({
         fields,
         sections,
         purpose,
+        analysisProfileId,
+        signalType,
+        analystType,
+        analysisType,
         visibility,
         identityPolicy,
         locationRequirement,
@@ -225,6 +241,9 @@ export function useCreateFormPublish({
     };
   }, [
     accountAddress,
+    analysisProfileId,
+    analysisType,
+    analystType,
     creationMode,
     description,
     encryptSubmissions,
@@ -239,6 +258,7 @@ export function useCreateFormPublish({
     sections,
     selectedProject?.name,
     selectedProject?.objectId,
+    signalType,
     title,
     visibility,
   ]);
@@ -398,6 +418,10 @@ export function useCreateFormPublish({
       fields,
       sections,
       purpose,
+      analysisProfileId,
+      signalType,
+      analystType,
+      analysisType,
       visibility,
       identityPolicy,
       locationRequirement,

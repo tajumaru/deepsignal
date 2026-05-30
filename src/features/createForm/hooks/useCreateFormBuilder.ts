@@ -20,6 +20,10 @@ import { normalizeFieldType } from "../../../lib/fieldTypes";
 import { getSelectedProjectId, setSelectedProjectId } from "../../../lib/projectRegistry";
 import { createInitialDraftSnapshot, getInitialFields, getInitialTemplate } from "../constants";
 import type {
+  AnalysisProfileId,
+  AnalysisSignalType,
+  AnalysisType,
+  AnalystType,
   BuilderStepKey,
   DisplayMode,
   FieldType,
@@ -97,6 +101,12 @@ export function useCreateFormBuilder({
   const [fields, setFields] = useState(initialFields);
   const [sections, setSections] = useState<FormSection[]>([]);
   const [purpose, setPurpose] = useState(initialTemplate.purpose);
+  const [analysisProfileId, setAnalysisProfileId] = useState<AnalysisProfileId | undefined>(
+    initialTemplate.analysis?.analysisProfileId,
+  );
+  const [signalType, setSignalType] = useState<AnalysisSignalType | undefined>(initialTemplate.analysis?.signalType);
+  const [analystType, setAnalystType] = useState<AnalystType | undefined>(initialTemplate.analysis?.analystType);
+  const [analysisType, setAnalysisType] = useState<AnalysisType | undefined>(initialTemplate.analysis?.analysisType);
   const [visibility, setVisibility] = useState<"private" | "unlisted" | "public">("public");
   const [identityPolicy, setIdentityPolicy] = useState<"anonymous_allowed" | "wallet_required">("anonymous_allowed");
   const [locationRequirement, setLocationRequirement] = useState<"optional" | "required">("optional");
@@ -129,6 +139,10 @@ export function useCreateFormBuilder({
         headerLogo,
         fields,
         purpose,
+        analysisProfileId,
+        signalType,
+        analystType,
+        analysisType,
         visibility,
         identityPolicy,
         locationRequirement,
@@ -139,6 +153,9 @@ export function useCreateFormBuilder({
         responseDeadlineCustomAt,
       ),
     [
+      analysisProfileId,
+      analysisType,
+      analystType,
       createOnSui,
       description,
       encryptSubmissions,
@@ -151,6 +168,7 @@ export function useCreateFormBuilder({
       responseDeadlineCustomAt,
       responseDeadlinePreset,
       sections,
+      signalType,
       title,
       visibility,
     ],
@@ -181,6 +199,10 @@ export function useCreateFormBuilder({
     setFields(nextFields);
     setSections([]);
     setPurpose(initialTemplate.purpose);
+    setAnalysisProfileId(initialTemplate.analysis?.analysisProfileId);
+    setSignalType(initialTemplate.analysis?.signalType);
+    setAnalystType(initialTemplate.analysis?.analystType);
+    setAnalysisType(initialTemplate.analysis?.analysisType);
     setVisibility("public");
     setIdentityPolicy("anonymous_allowed");
     setLocationRequirement("optional");
@@ -241,6 +263,10 @@ export function useCreateFormBuilder({
     setFields(nextFields);
     setSections([]);
     setPurpose(normalizeFormPurpose(template.purpose));
+    setAnalysisProfileId(template.analysis?.analysisProfileId);
+    setSignalType(template.analysis?.signalType);
+    setAnalystType(template.analysis?.analystType);
+    setAnalysisType(template.analysis?.analysisType);
     setVisibility(automation.visibility);
     setIdentityPolicy(automation.identityPolicy);
     setLocationRequirement(automation.locationRequirement);
@@ -290,6 +316,10 @@ export function useCreateFormBuilder({
     );
     setSections(Array.isArray(parsedDraft.sections) ? parsedDraft.sections : []);
     setPurpose(parsedDraft.purpose ?? initialTemplate.purpose);
+    setAnalysisProfileId(parsedDraft.analysisProfileId ?? initialTemplate.analysis?.analysisProfileId);
+    setSignalType(parsedDraft.signalType ?? initialTemplate.analysis?.signalType);
+    setAnalystType(parsedDraft.analystType ?? initialTemplate.analysis?.analystType);
+    setAnalysisType(parsedDraft.analysisType ?? initialTemplate.analysis?.analysisType);
     setVisibility(parsedDraft.visibility ?? "public");
     setIdentityPolicy(parsedDraft.identityPolicy === "wallet_required" ? "wallet_required" : "anonymous_allowed");
     setLocationRequirement(parsedDraft.locationRequirement === "required" ? "required" : "optional");
@@ -430,6 +460,10 @@ export function useCreateFormBuilder({
         fields,
         sections,
         purpose,
+        analysisProfileId,
+        signalType,
+        analystType,
+        analysisType,
         visibility,
         identityPolicy,
         locationRequirement,
@@ -447,6 +481,9 @@ export function useCreateFormBuilder({
     }, 500);
     return () => window.clearTimeout(timeoutId);
   }, [
+    analysisProfileId,
+    analysisType,
+    analystType,
     currentStep,
     description,
     draftSaveState,
@@ -466,6 +503,7 @@ export function useCreateFormBuilder({
     sections,
     selectedProjectId,
     selectedTemplateKey,
+    signalType,
     title,
     visibility,
   ]);
@@ -497,6 +535,10 @@ export function useCreateFormBuilder({
     startTransition(() => {
       setSelectedTemplateKey(template.key);
       setPurpose(normalizeFormPurpose(template.purpose));
+      setAnalysisProfileId(template.analysis?.analysisProfileId);
+      setSignalType(template.analysis?.signalType);
+      setAnalystType(template.analysis?.analystType);
+      setAnalysisType(template.analysis?.analysisType);
       setTitle(template.title);
       setDescription(template.description);
       setHeaderImage({ url: "", alt: "", position: "center", source: "url", fileName: "" });
@@ -575,6 +617,10 @@ export function useCreateFormBuilder({
     );
     const nextSections = Array.isArray(form.sections) ? form.sections : [];
     const nextPurpose = normalizeFormPurpose(form.purpose);
+    const nextAnalysisProfileId = form.analysisProfileId;
+    const nextSignalType = form.signalType;
+    const nextAnalystType = form.analystType;
+    const nextAnalysisType = form.analysisType;
     const nextVisibility = form.visibility ?? "public";
     const nextIdentityPolicy = form.identityPolicy === "wallet_required" ? "wallet_required" : "anonymous_allowed";
     const nextLocationRequirement = form.locationRequirement === "required" ? "required" : "optional";
@@ -588,6 +634,10 @@ export function useCreateFormBuilder({
       nextHeaderLogo,
       nextFields,
       nextPurpose,
+      nextAnalysisProfileId,
+      nextSignalType,
+      nextAnalystType,
+      nextAnalysisType,
       nextVisibility,
       nextIdentityPolicy,
       nextLocationRequirement,
@@ -609,6 +659,10 @@ export function useCreateFormBuilder({
       setFields(nextFields);
       setSections(nextSections);
       setPurpose(nextPurpose);
+      setAnalysisProfileId(nextAnalysisProfileId);
+      setSignalType(nextSignalType);
+      setAnalystType(nextAnalystType);
+      setAnalysisType(nextAnalysisType);
       setVisibility(nextVisibility);
       setIdentityPolicy(nextIdentityPolicy);
       setLocationRequirement(nextLocationRequirement);
@@ -954,6 +1008,10 @@ export function useCreateFormBuilder({
     fields,
     sections,
     purpose,
+    analysisProfileId,
+    signalType,
+    analystType,
+    analysisType,
     visibility,
     identityPolicy,
     locationRequirement,

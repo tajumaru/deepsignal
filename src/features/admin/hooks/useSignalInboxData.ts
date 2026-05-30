@@ -472,6 +472,52 @@ async function loadRemoteIndexedSubmissions(form: FormWithCount) {
   };
 }
 
+async function loadSubmissionsForForm(form: FormWithCount) {
+  const raw = await storageAdapter.listSubmissions(form.id);
+  const remoteIndexed = await withTimeout(
+    loadRemoteIndexedSubmissions(form),
+    REMOTE_SUBMISSION_INDEX_TIMEOUT_MS,
+    `Remote submission index fetch timed out for ${form.id}.`,
+  ).catch((error) => {
+    console.warn("[admin inbox] Remote submission index unavailable.", {
+      formId: form.id,
+      projectId: form.projectId ?? null,
+      timeoutMs: REMOTE_SUBMISSION_INDEX_TIMEOUT_MS,
+      timedOut: isTimeoutError(error),
+      errorName: error instanceof Error ? error.name : typeof error,
+      errorMessage: error instanceof Error ? error.message : String(error),
+    });
+    return { indexEntries: [], submissions: [] as Submission[] };
+  });
+  const normalizedLocal: Submission[] = raw.map((submission) => normalizeSubmission(submission) as Submission);
+  const merged: Submission[] = [...normalizedLocal];
+  remoteIndexed.submissions.forEach((remoteSubmission) => {
+    const existingIndex = merged.findIndex((submission) =>
+      matchesSignalIdentity(
+        buildSubmissionSignalIdentity(submission, form.projectId),
+        buildSubmissionSignalIdentity(remoteSubmission, form.projectId),
+      ),
+    );
+    if (existingIndex === -1) {
+      merged.push(remoteSubmission);
+      return;
+    }
+    merged[existingIndex] = {
+      ...merged[existingIndex],
+      ...remoteSubmission,
+      answers:
+        Object.keys(remoteSubmission.answers).length > 0
+          ? remoteSubmission.answers
+          : merged[existingIndex].answers,
+    };
+  });
+  return {
+    formId: form.id,
+    remoteIndexEntryCount: remoteIndexed.indexEntries.length,
+    submissions: merged,
+  };
+}
+
 function mapOnchainStatusToSubmissionState(status: OnchainProjectSignalSummary["status"]) {
   if (status === "archived") {
     return {
@@ -1056,16 +1102,66 @@ export function useSignalInboxData({
             return;
           }
 
-          setForms((current) =>
-            mergeFormsWithProjectRegistry(
-              mergeFormsById(restoredForms, current).map((form) => ({
-                ...form,
-                submissionCount: form.submissionCount ?? 0,
-              })),
-              projects,
-              hydratedSelectedProject,
-            ).filter((form) => !isDeletedFormTombstone(form)),
+          const updatedForms = mergeFormsWithProjectRegistry(
+            mergeFormsById(restoredForms, formsRef.current).map((form) => ({
+              ...form,
+              submissionCount: form.submissionCount ?? 0,
+            })),
+            projects,
+            hydratedSelectedProject,
+          ).filter((form) => !isDeletedFormTombstone(form));
+          setForms(updatedForms);
+
+          const restoredAccessibleForms = restoredForms.filter((form) =>
+            canReviewForm(form, accountAddress, capabilityProfile),
           );
+          if (restoredAccessibleForms.length === 0) {
+            scheduleInboxBackgroundTask(() => {
+              void measurePerf("admin:onchain-hydration", () =>
+                hydrateOnchainSignals(updatedForms, submissionsRef.current, runId),
+              );
+            });
+            return;
+          }
+
+          const restoredResults = await Promise.all(
+            restoredAccessibleForms.map(async (form) => {
+              try {
+                return await loadSubmissionsForForm(form);
+              } catch (error) {
+                console.error(`Failed to load submissions for restored form ${form.id}`, error);
+                return {
+                  formId: form.id,
+                  remoteIndexEntryCount: 0,
+                  submissions: [] as Submission[],
+                };
+              }
+            }),
+          );
+
+          if (runId !== loadConsoleRunRef.current) {
+            return;
+          }
+
+          const restoredSubmissions = Object.fromEntries(
+            restoredResults.map((result) => [result.formId, result.submissions]),
+          );
+          const combinedSubmissions = {
+            ...submissionsRef.current,
+            ...restoredSubmissions,
+          };
+          setSubmissionsByFormId(combinedSubmissions);
+          setForms((current) =>
+            current.map((form) => {
+              const loaded = restoredSubmissions[form.id];
+              return loaded ? { ...form, submissionCount: loaded.length } : form;
+            }),
+          );
+          scheduleInboxBackgroundTask(() => {
+            void measurePerf("admin:onchain-hydration", () =>
+              hydrateOnchainSignals(updatedForms, combinedSubmissions, runId),
+            );
+          });
         });
       });
 
@@ -1103,49 +1199,7 @@ export function useSignalInboxData({
         const batchResults = await Promise.all(
           formBatch.map(async (form) => {
             try {
-              const raw = await storageAdapter.listSubmissions(form.id);
-              const remoteIndexed = await withTimeout(
-                loadRemoteIndexedSubmissions(form),
-                REMOTE_SUBMISSION_INDEX_TIMEOUT_MS,
-                `Remote submission index fetch timed out for ${form.id}.`,
-              ).catch((error) => {
-                  console.warn("[admin inbox] Remote submission index unavailable.", {
-                    formId: form.id,
-                    projectId: form.projectId ?? null,
-                    timeoutMs: REMOTE_SUBMISSION_INDEX_TIMEOUT_MS,
-                    timedOut: isTimeoutError(error),
-                    errorName: error instanceof Error ? error.name : typeof error,
-                    errorMessage: error instanceof Error ? error.message : String(error),
-                  });
-                  return { indexEntries: [], submissions: [] as Submission[] };
-                });
-              const normalizedLocal: Submission[] = raw.map((submission) => normalizeSubmission(submission) as Submission);
-              const merged: Submission[] = [...normalizedLocal];
-              remoteIndexed.submissions.forEach((remoteSubmission) => {
-                const existingIndex = merged.findIndex((submission) =>
-                  matchesSignalIdentity(
-                    buildSubmissionSignalIdentity(submission, form.projectId),
-                    buildSubmissionSignalIdentity(remoteSubmission, form.projectId),
-                  ),
-                );
-                if (existingIndex === -1) {
-                  merged.push(remoteSubmission);
-                  return;
-                }
-                merged[existingIndex] = {
-                  ...merged[existingIndex],
-                  ...remoteSubmission,
-                  answers:
-                    Object.keys(remoteSubmission.answers).length > 0
-                      ? remoteSubmission.answers
-                      : merged[existingIndex].answers,
-                };
-              });
-              return {
-                formId: form.id,
-                remoteIndexEntryCount: remoteIndexed.indexEntries.length,
-                submissions: merged,
-              };
+              return await loadSubmissionsForForm(form);
             } catch (error) {
               console.error(`Failed to load submissions for form ${form.id}`, error);
               return {

@@ -10,6 +10,7 @@ export function BuildUpdateBanner() {
   const { t } = useI18n();
   const [notice, setNotice] = useState<BuildUpdateNotice | null>(null);
   const [updating, setUpdating] = useState(false);
+  const [updateError, setUpdateError] = useState<string | null>(null);
 
   useEffect(() => subscribeToBuildUpdateNotices(setNotice), []);
 
@@ -22,10 +23,12 @@ export function BuildUpdateBanner() {
       return;
     }
     setUpdating(true);
+    setUpdateError(null);
     try {
       await updateDeepSignalToLatest(notice);
     } catch (error) {
       setUpdating(false);
+      setUpdateError(error instanceof Error ? error.message : "DeepSignal update is not ready yet. Try again in a moment.");
       console.warn("[DeepSignal update] update action failed", error);
     }
   }
@@ -39,6 +42,7 @@ export function BuildUpdateBanner() {
             : t("buildUpdateAvailableTitle")}
         </strong>
         <p>{t("buildUpdateBody")}</p>
+        {updateError ? <p className="build-update-error">{updateError}</p> : null}
         {notice.chunkFailure ? (
           <details className="build-update-details">
             <summary>{t("buildUpdateDiagnostics")}</summary>

@@ -1,6 +1,10 @@
 import { makeId } from "./utils";
 import type { Language } from "../i18n";
 import type {
+  AnalysisProfileId,
+  AnalysisSignalType,
+  AnalysisType,
+  AnalystType,
   FieldType,
   FormField,
   FormIdentityPolicy,
@@ -33,6 +37,13 @@ export interface TemplateAutomationPreset {
   encryptSubmissions?: boolean;
 }
 
+export interface TemplateAnalysisPreset {
+  analysisProfileId?: AnalysisProfileId;
+  signalType?: AnalysisSignalType;
+  analystType?: AnalystType;
+  analysisType?: AnalysisType;
+}
+
 export interface FormTemplateDefinition {
   key: string;
   purpose: FormPurpose;
@@ -45,6 +56,7 @@ export interface FormTemplateDefinition {
   cardBadges: TemplateCapabilityBadge[];
   capabilities: TemplateCapabilityBadge[];
   automation?: TemplateAutomationPreset;
+  analysis?: TemplateAnalysisPreset;
   featured?: {
     eyebrow: string;
     title: string;
@@ -230,6 +242,12 @@ export const formTemplates: FormTemplateDefinition[] = [
       locationRequirement: "optional",
       encryptSubmissions: true,
     },
+    analysis: {
+      analysisProfileId: "incident_report",
+      signalType: "incident",
+      analystType: "risk",
+      analysisType: "risk",
+    },
     featured: {
       eyebrow: "Featured signal",
       title: "Secure Incident Report",
@@ -272,6 +290,12 @@ export const formTemplates: FormTemplateDefinition[] = [
       locationRequirement: "optional",
       encryptSubmissions: true,
     },
+    analysis: {
+      analysisProfileId: "incident_report",
+      signalType: "incident",
+      analystType: "operations",
+      analysisType: "urgency",
+    },
     fields: [
       { type: "shortText", label: "What happened?", required: true, placeholder: "Example: I cannot tap Submit on iPhone" },
       { type: "longText", label: "Tell us what happened", placeholder: "A screenshot alone is okay" },
@@ -308,6 +332,12 @@ export const formTemplates: FormTemplateDefinition[] = [
       locationRequirement: "optional",
       encryptSubmissions: false,
     },
+    analysis: {
+      analysisProfileId: "customer_feedback",
+      signalType: "product_voice",
+      analystType: "product",
+      analysisType: "action",
+    },
     fields: [
       { type: "shortText", label: "Feature idea", required: true },
       { type: "longText", label: "What problem would this solve?", required: true, placeholder: "What is hard or slow today?" },
@@ -343,6 +373,12 @@ export const formTemplates: FormTemplateDefinition[] = [
       locationRequirement: "optional",
       encryptSubmissions: false,
     },
+    analysis: {
+      analysisProfileId: "customer_feedback",
+      signalType: "feedback",
+      analystType: "product",
+      analysisType: "sentiment",
+    },
     fields: [
       { type: "longText", label: "What should we improve?", required: true },
       { type: "longText", label: "What already feels good?" },
@@ -371,6 +407,12 @@ export const formTemplates: FormTemplateDefinition[] = [
       identityPolicy: "anonymous_allowed",
       locationRequirement: "optional",
       encryptSubmissions: false,
+    },
+    analysis: {
+      analysisProfileId: "customer_feedback",
+      signalType: "feedback",
+      analystType: "product",
+      analysisType: "trend",
     },
     fields: [
       {
@@ -409,6 +451,12 @@ export const formTemplates: FormTemplateDefinition[] = [
       locationRequirement: "optional",
       encryptSubmissions: true,
     },
+    analysis: {
+      analysisProfileId: "customer_feedback",
+      signalType: "product_voice",
+      analystType: "product",
+      analysisType: "trend",
+    },
     fields: [
       { type: "shortText", label: "Build or version played" },
       { type: "longText", label: "What moment stood out most?", required: true },
@@ -439,6 +487,12 @@ export const formTemplates: FormTemplateDefinition[] = [
       identityPolicy: "anonymous_allowed",
       locationRequirement: "optional",
       encryptSubmissions: true,
+    },
+    analysis: {
+      analysisProfileId: "incident_report",
+      signalType: "operation",
+      analystType: "operations",
+      analysisType: "anomaly",
     },
     fields: [
       { type: "shortText", label: "Quick summary", required: true },
@@ -477,6 +531,12 @@ export const formTemplates: FormTemplateDefinition[] = [
       locationRequirement: "optional",
       encryptSubmissions: true,
     },
+    analysis: {
+      analysisProfileId: "general_signal",
+      signalType: "internal_report",
+      analystType: "risk",
+      analysisType: "risk",
+    },
     fields: [
       { type: "shortText", label: "What should be seen?", required: true },
       { type: "longText", label: "Share the signal", required: true, sensitive: true, placeholder: "Leave only the context that matters." },
@@ -510,6 +570,12 @@ export const formTemplates: FormTemplateDefinition[] = [
       locationRequirement: "required",
       encryptSubmissions: true,
     },
+    analysis: {
+      analysisProfileId: "incident_report",
+      signalType: "disaster",
+      analystType: "risk",
+      analysisType: "urgency",
+    },
     fields: [
       { type: "shortText", label: "Current status", required: true, placeholder: "Safe, need support, blocked, evacuating" },
       { type: "longText", label: "What help is needed?", placeholder: "Supplies, transport, contact, medical, shelter" },
@@ -540,6 +606,12 @@ export const formTemplates: FormTemplateDefinition[] = [
       locationRequirement: "optional",
       encryptSubmissions: true,
     },
+    analysis: {
+      analysisProfileId: "general_signal",
+      signalType: "generic",
+      analystType: "operations",
+      analysisType: "summary",
+    },
     fields: [{ type: "longText", label: "What should we improve?", required: true }],
   },
   {
@@ -564,6 +636,12 @@ export const formTemplates: FormTemplateDefinition[] = [
       identityPolicy: "anonymous_allowed",
       locationRequirement: "optional",
       encryptSubmissions: true,
+    },
+    analysis: {
+      analysisProfileId: "general_signal",
+      signalType: "generic",
+      analystType: "operations",
+      analysisType: "summary",
     },
     fields: [],
   },

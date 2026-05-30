@@ -8,6 +8,7 @@ interface BuilderToolbarProps {
   isScrolled: boolean;
   currentStep: BuilderStepKey;
   completedSteps: string[];
+  disabledSteps?: BuilderStepKey[];
   capabilityConfigured: boolean;
   accessRoleLabel: string;
   adminCapLabel?: string;
@@ -22,6 +23,7 @@ export function BuilderToolbar({
   isScrolled,
   currentStep,
   completedSteps,
+  disabledSteps,
   capabilityConfigured,
   accessRoleLabel,
   adminCapLabel,
@@ -56,6 +58,7 @@ export function BuilderToolbar({
         steps={builderSteps}
         currentStep={currentStep}
         completedSteps={completedSteps}
+        disabledSteps={disabledSteps}
         getStateLabel={(state) =>
           state === "current" ? t("stepStateCurrent") : state === "done" ? t("stepStateDone") : t("stepStateUpcoming")
         }

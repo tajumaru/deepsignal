@@ -4,6 +4,10 @@ import { makeId } from "../../lib/utils";
 import { normalizeFormVisibility } from "../../lib/explore";
 import { computeSchemaHash } from "../../lib/formVersioning";
 import type {
+  AnalysisProfileId,
+  AnalysisSignalType,
+  AnalysisType,
+  AnalystType,
   FieldType,
   FormField,
   FormHeaderImage,
@@ -35,6 +39,10 @@ export interface ParsedCreateFormDraft {
   fields?: FormField[];
   sections?: FormSection[];
   purpose?: FormPurpose;
+  analysisProfileId?: AnalysisProfileId;
+  signalType?: AnalysisSignalType;
+  analystType?: AnalystType;
+  analysisType?: AnalysisType;
   visibility?: FormSchema["visibility"];
   identityPolicy?: FormIdentityPolicy;
   locationRequirement?: FormLocationRequirement;
@@ -166,6 +174,10 @@ export function serializeDraft(
   },
   fields: FormField[],
   purpose: FormPurpose,
+  analysisProfileId: AnalysisProfileId | undefined,
+  signalType: AnalysisSignalType | undefined,
+  analystType: AnalystType | undefined,
+  analysisType: AnalysisType | undefined,
   visibility: FormSchema["visibility"],
   identityPolicy: FormIdentityPolicy,
   locationRequirement: FormLocationRequirement,
@@ -181,6 +193,10 @@ export function serializeDraft(
     headerImage,
     headerLogo,
     purpose,
+    analysisProfileId,
+    signalType,
+    analystType,
+    analysisType,
     visibility: normalizeFormVisibility(visibility),
     identityPolicy,
     locationRequirement,
@@ -234,6 +250,10 @@ export function buildFormSchema(args: {
   fields: FormField[];
   sections: FormSection[];
   purpose: FormPurpose;
+  analysisProfileId?: AnalysisProfileId;
+  signalType?: AnalysisSignalType;
+  analystType?: AnalystType;
+  analysisType?: AnalysisType;
   visibility: NonNullable<FormSchema["visibility"]>;
   identityPolicy: FormIdentityPolicy;
   locationRequirement: FormLocationRequirement;
@@ -282,6 +302,10 @@ export function buildFormSchema(args: {
       }))
       .filter((section) => section.title),
     purpose: args.purpose,
+    analysisProfileId: args.analysisProfileId,
+    signalType: args.signalType,
+    analystType: args.analystType,
+    analysisType: args.analysisType,
     visibility: args.visibility,
     identityPolicy: args.identityPolicy,
     locationRequirement: args.locationRequirement,

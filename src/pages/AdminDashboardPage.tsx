@@ -6860,27 +6860,38 @@ export function AdminDashboardPage() {
 
             <article ref={signalDetailPanelRef} className="panel signal-detail-column">
               {!selectedRecord ? (
-                <SignalIntelligenceCenter
-                  model={inboxTimelineModel}
-                  t={t}
-                  demoSimulationEnabled={intelligenceDemoSimulationEnabled}
-                  demoControlsEnabled={isIntelligenceDemoRoute}
-                  demoSignalVolume={demoSignalVolume}
-                  demoScenario={demoSignalScenario}
-                  demoSignalCount={demoSignalCount}
-                  realSignalCount={realSignalCount}
-                  demoOutcome={demoIntelligenceOutcome}
-                  intelligenceBrief={demoIntelligenceBrief}
-                  demoIntelligenceViewMode={demoIntelligenceViewMode}
-                  demoGenerating={demoSignalsGenerating}
-                  demoIngestTarget={demoIngestTarget}
-                  demoUnlockAlert={demoUnlockAlert}
-                  onDemoIntelligenceViewModeChange={setDemoIntelligenceViewMode}
-                  onDemoScenarioChange={handleDemoScenarioChange}
-                  onGenerateDemoSignals={handleGenerateDemoSignals}
-                  onCancelDemoIngest={handleCancelDemoIngest}
-                  onResetDemoSignals={handleResetDemoSignals}
-                />
+                isIntelligenceDemoRoute ? (
+                  <SignalIntelligenceCenter
+                    model={inboxTimelineModel}
+                    t={t}
+                    demoSimulationEnabled={intelligenceDemoSimulationEnabled}
+                    demoControlsEnabled={isIntelligenceDemoRoute}
+                    demoSignalVolume={demoSignalVolume}
+                    demoScenario={demoSignalScenario}
+                    demoSignalCount={demoSignalCount}
+                    realSignalCount={realSignalCount}
+                    demoOutcome={demoIntelligenceOutcome}
+                    intelligenceBrief={demoIntelligenceBrief}
+                    demoIntelligenceViewMode={demoIntelligenceViewMode}
+                    demoGenerating={demoSignalsGenerating}
+                    demoIngestTarget={demoIngestTarget}
+                    demoUnlockAlert={demoUnlockAlert}
+                    onDemoIntelligenceViewModeChange={setDemoIntelligenceViewMode}
+                    onDemoScenarioChange={handleDemoScenarioChange}
+                    onGenerateDemoSignals={handleGenerateDemoSignals}
+                    onCancelDemoIngest={handleCancelDemoIngest}
+                    onResetDemoSignals={handleResetDemoSignals}
+                  />
+                ) : (
+                  <EmptyState variant="abyss" className="signal-detail-empty-state">
+                    <span className="empty-state-kicker">{t("signalDetailTitle")}</span>
+                    <h3>{t("noSignalSelectedTitle")}</h3>
+                    <p>{t("noSignalSelectedBody")}</p>
+                    <button type="button" className="primary-button" onClick={() => scrollToReviewPanel("signals")}>
+                      {t("selectSignalToReview")}
+                    </button>
+                  </EmptyState>
+                )
               ) : (
                 <>
                   <section className="answer-card signal-detail-hero">
@@ -6940,6 +6951,33 @@ export function AdminDashboardPage() {
                               <div>
                                 <h4>{t("submittedFeedbackTitle")}</h4>
                               </div>
+                              {selectedRecordNeedsDecrypt && shouldHideLockedDetailBeforeReview ? (
+                                <div className="mobile-quick-decrypt-actions">
+                                  <button
+                                    type="button"
+                                    className="ghost-button mobile-quick-decrypt-button"
+                                    onClick={() => void handleDecrypt()}
+                                    disabled={Boolean(selectedRecordUnlockDisabledReason) || decrypting || decryptInFlightRef.current}
+                                  >
+                                    <span className="mobile-quick-decrypt-icon" aria-hidden="true">
+                                      <svg viewBox="0 0 20 20" focusable="false">
+                                        <path d="M6.25 8.6V6.8a3.75 3.75 0 0 1 7.5 0v1.8" />
+                                        <rect x="4.75" y="8.25" width="10.5" height="7.25" rx="2.1" />
+                                        <path d="M10 11.2v1.9" />
+                                      </svg>
+                                    </span>
+                                    <span>{decrypting || decryptInFlightRef.current ? t("decrypting") : t("decryptSignalAction")}</span>
+                                  </button>
+                                  {decryptStatusMessage || decryptError || selectedRecordUnlockDisabledReason ? (
+                                    <span
+                                      className={`mobile-quick-decrypt-status ${decryptError ? "is-error" : ""}`}
+                                      role={decryptError ? "alert" : "status"}
+                                    >
+                                      {decryptError || decryptStatusMessage || selectedRecordUnlockDisabledReason}
+                                    </span>
+                                  ) : null}
+                                </div>
+                              ) : null}
                             </div>
                           {detailAnswers ? (
                             <div className="stack">

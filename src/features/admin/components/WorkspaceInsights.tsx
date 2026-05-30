@@ -16,8 +16,11 @@ import {
   getSignalProfileId,
   resolveAnalysisProfile,
   resolveProfileDistribution,
+  type AnalysisMetric,
+  type AnalysisInsightCard,
+  type ResolvedAnalysisProfile,
 } from "./analysisProfiles";
-import { buildWorkspaceAnalysisExperience } from "./signalIntelligence";
+import { buildSignalCardIntelligence, buildWorkspaceAnalysisExperience } from "./signalIntelligence";
 import type { SignalRecord } from "../hooks/useSignalInboxData";
 
 interface UnlockedSignalSummary {
@@ -786,6 +789,12 @@ function exportInsightsSnapshotJson(input: {
       title: string;
       body: string;
       tone?: string;
+      evidence?: Array<{
+        id: string;
+        label: string;
+        value: string;
+        tone?: string;
+      }>;
     }>;
     recommendedActions: Array<{
       id: string;
@@ -949,15 +958,324 @@ function buildRelatedPatternSummary(records: SignalRecord[]) {
     .slice(0, 5);
 }
 
-function getActionUrgencyLabel(urgency: "now" | "next" | "watch") {
+function getActionUrgencyLabel(urgency: "now" | "next" | "watch", t: ReturnType<typeof useI18n>["t"]) {
   switch (urgency) {
     case "now":
-      return "Now";
+      return t("workspaceActionUrgencyNow");
     case "next":
-      return "Next";
+      return t("workspaceActionUrgencyNext");
     default:
-      return "Watch";
+      return t("workspaceActionUrgencyWatch");
   }
+}
+
+function getRepresentativeSignalTerms(card: AnalysisInsightCard, profile: ResolvedAnalysisProfile) {
+  return [
+    card.eyebrow,
+    card.title,
+    card.body,
+    profile.signalType,
+    profile.analysisType,
+    ...(card.evidence ?? []).flatMap((evidence) => [evidence.label, evidence.value]),
+  ]
+    .join(" ")
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s-]+/gu, " ")
+    .split(/\s+/)
+    .map((term) => term.trim())
+    .filter(
+      (term) =>
+        term.length > 3 &&
+        ![
+          "signal",
+          "signals",
+          "report",
+          "reports",
+          "cluster",
+          "current",
+          "active",
+          "with",
+          "from",
+          "this",
+          "that",
+        ].includes(term),
+    );
+}
+
+function getRecordRepresentativeCorpus(record: SignalRecord) {
+  return [
+    record.form.title,
+    record.form.description,
+    record.form.purpose,
+    record.form.analysisProfileId,
+    record.form.signalType,
+    record.form.analysisType,
+    record.category,
+    record.submission.subjectPreview,
+    record.submission.aiSummary,
+    record.submission.emotion,
+    record.submission.clusterId,
+    record.submission.tags.join(" "),
+    (record.submission.keywords ?? []).join(" "),
+    getSignalPreview(record.submission),
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+}
+
+function scoreRepresentativeSignal(
+  record: SignalRecord,
+  card: AnalysisInsightCard,
+  profile: ResolvedAnalysisProfile,
+) {
+  const intelligence = buildSignalCardIntelligence(record);
+  const corpus = getRecordRepresentativeCorpus(record);
+  const terms = getRepresentativeSignalTerms(card, profile);
+  let score = intelligence.urgencyScore;
+
+  terms.forEach((term) => {
+    if (corpus.includes(term)) {
+      score += 9;
+    }
+  });
+
+  if (record.form.signalType === profile.signalType) {
+    score += 18;
+  }
+  if (record.form.analysisType === profile.analysisType) {
+    score += 12;
+  }
+  if (card.tone === "alert" && (record.submission.priority === "high" || record.submission.severity === "high")) {
+    score += 22;
+  }
+  if (card.id.includes("urgent") && (record.submission.priority === "high" || record.submission.severity === "high")) {
+    score += 28;
+  }
+  if (card.id.includes("review") && record.submission.status === "unread") {
+    score += 24;
+  }
+  if (
+    card.id.includes("sentiment") &&
+    /negative|frustrated|angry|concern|pain|poor|bad|broken|blocked|fear|distress/i.test(corpus)
+  ) {
+    score += 24;
+  }
+  if (
+    (card.id.includes("cluster") || card.id.includes("topic")) &&
+    (record.submission.clusterId || (record.submission.keywords ?? []).length > 0)
+  ) {
+    score += 16;
+  }
+  if (card.id.includes("spread") && (record.submission.clusterId || record.form.projectId)) {
+    score += 10;
+  }
+
+  return score;
+}
+
+function selectRepresentativeSignal(
+  card: AnalysisInsightCard,
+  profile: ResolvedAnalysisProfile,
+  records: SignalRecord[],
+) {
+  return [...records]
+    .map((record) => ({
+      record,
+      score: scoreRepresentativeSignal(record, card, profile),
+      timestamp: getLatestTimestamp(record),
+    }))
+    .sort((left, right) => right.score - left.score || right.timestamp - left.timestamp)[0]?.record;
+}
+
+function localizeAnalysisMetric(metric: AnalysisMetric, language: Language): AnalysisMetric {
+  if (language !== "ja") {
+    return metric;
+  }
+
+  const labelById: Record<string, string> = {
+    "open-load": "未処理負荷",
+    "dominant-cluster": "主要クラスタ",
+    "review-lag": "レビュー遅延",
+    "proof-coverage": "証明カバー率",
+    sentiment: "ネガティブ感情",
+    "pain-points": "課題",
+    "repeated-topics": "反復トピック",
+    "within-day": "24時間内対応",
+    retries: "再試行",
+    "failure-loops": "失敗ループ",
+    "timeout-patterns": "タイムアウト傾向",
+    "dominant-failure": "主要な失敗傾向",
+    urgency: "緊急度",
+    spread: "拡散",
+    anomaly: "異常圧力",
+    "silence-risk": "静穏リスク",
+    conflict: "対立シグナル",
+    clustering: "クラスタ化",
+    "spam-risk": "スパムリスク",
+    "unread-front": "未読シグナル",
+    "spike-watch": "急増監視",
+    "silence-watch": "沈黙監視",
+    "response-lag": "反応遅延",
+    "high-severity": "高重要度",
+    "negative-signals": "ネガティブ",
+    "repeated-pain-point": "反復課題",
+    "praise-signals": "称賛",
+    "unresolved-feedback": "未解決フィードバック",
+    "ux-friction": "反復UX摩擦",
+    "bug-suspect": "バグ疑い",
+    "top-cluster-action": "主要クラスタ",
+    "action-pressure": "アクション圧",
+    "activity-direction": "活動の動き",
+    "repeated-themes": "反復テーマ",
+    "participation-heat": "参加熱量",
+  };
+
+  const detailById: Record<string, string> = {
+    "negative-signals": metric.detail.replace(
+      /(\d+) positive or praise-like signals in the same window/,
+      "同じ期間のポジティブ/称賛系シグナル $1 件",
+    ),
+    "praise-signals":
+      metric.value === "0" ? "目立った称賛シグナルはありません。" : "ポジティブな反応が現在の流れに残っています。",
+    "unresolved-feedback": metric.detail.replace(
+      /(\d+) unread customer signals still need a first response/,
+      "初回対応が必要な未読カスタマーシグナル $1 件",
+    ),
+    "high-severity": metric.detail.replace(
+      /(\d+) unresolved reports still in play/,
+      "未解決レポート $1 件がまだ進行中",
+    ),
+    "ux-friction": metric.detail.replace(
+      /(\d+) open product voice items still need follow-up/,
+      "フォローアップが必要なプロダクトボイス $1 件",
+    ),
+    "bug-suspect":
+      metric.value === "0" ? "バグ寄りの強い反復傾向はまだありません。" : "バグに近い言及が繰り返し見えています。",
+    "action-pressure": "未読のプロダクトボイス内に、次の反復摩擦が隠れている可能性があります。",
+    "activity-direction":
+      metric.detail === "Participation is holding near baseline"
+        ? "参加状況は基準線付近で推移しています。"
+        : "直近のコミュニティ活動が前期間から変化しています。",
+    "participation-heat": metric.detail.replace(
+      /(\d+) unread community signals in the current view/,
+      "現在のビューに未読コミュニティシグナル $1 件",
+    ),
+  };
+
+  return {
+    ...metric,
+    label: labelById[metric.id] ?? metric.label,
+    detail: detailById[metric.id] ?? metric.detail,
+  };
+}
+
+function localizeAnalysisProfile(profile: ResolvedAnalysisProfile, language: Language): ResolvedAnalysisProfile {
+  if (language !== "ja") {
+    return profile;
+  }
+
+  const profileTextById: Partial<Record<ResolvedAnalysisProfile["id"], {
+    label: string;
+    shortLabel: string;
+    description: string;
+  }>> = {
+    customer_feedback: {
+      label: "カスタマーフィードバック",
+      shortLabel: "フィードバック",
+      description: "感情、反復課題、繰り返し現れる顧客トピックを追跡します。",
+    },
+    ai_agent_log: {
+      label: "AIエージェントログ",
+      shortLabel: "エージェントログ",
+      description: "再試行圧、失敗ループ、タイムアウト傾向を検知します。",
+    },
+    incident_report: {
+      label: "インシデントレポート",
+      shortLabel: "インシデント",
+      description: "インシデント系シグナルの緊急度、拡散、異常圧を追跡します。",
+    },
+    governance_signal: {
+      label: "ガバナンスシグナル",
+      shortLabel: "ガバナンス",
+      description: "対立、クラスタ化、スパムリスク、レビュー遅延を監視します。",
+    },
+    general_signal: {
+      label: "汎用シグナル",
+      shortLabel: "汎用",
+      description: "混在したインボックスと未分類シグナル向けのバランス型レビューです。",
+    },
+  };
+
+  const emphasisByLabel: Record<string, string> = {
+    "Balanced review": "バランス型レビュー",
+    "Customer voice": "顧客の声",
+    "Operational telemetry": "運用テレメトリ",
+    "Incident command": "インシデント指揮",
+    "Governance radar": "ガバナンス監視",
+  };
+
+  const translated = profileTextById[profile.id];
+  return {
+    ...profile,
+    label: translated?.label ?? profile.label,
+    shortLabel: translated?.shortLabel ?? profile.shortLabel,
+    description: translated?.description ?? profile.description,
+    keyFinding: translateInsightSentence(profile.keyFinding),
+    whyItMatters: translateInsightSentence(profile.whyItMatters),
+    highlightedAction: translateInsightSentence(profile.highlightedAction),
+    emphasis: {
+      ...profile.emphasis,
+      label: emphasisByLabel[profile.emphasis.label] ?? profile.emphasis.label,
+      headline: translateInsightSentence(profile.emphasis.headline),
+      body: translateInsightSentence(profile.emphasis.body),
+    },
+  };
+}
+
+function translateInsightSentence(text: string) {
+  const exact: Record<string, string> = {
+    "Balanced review profile for mixed inboxes and uncategorized signal streams.":
+      "混在したインボックスと未分類シグナル向けのバランス型レビューです。",
+    "Praise is still visible, but 1 unresolved feedback items could let fresh friction compound.":
+      "称賛はまだ見えていますが、未解決のフィードバック 1 件が新しい摩擦を増幅させる可能性があります。",
+    "This lens highlights friction, repeated requests, and feature opportunity so signals become decision-ready product evidence.":
+      "このレンズは摩擦、反復リクエスト、機能機会を強調し、シグナルを意思決定に使えるプロダクト根拠へ変えます。",
+    "Group the repeated pain point into one owner thread and answer the freshest unresolved feedback before sentiment drifts further.":
+      "反復課題をひとつのオーナースレッドにまとめ、感情がさらに悪化する前に最新の未解決フィードバックへ対応してください。",
+    "Review the strongest evidence signal first and keep the next operator move explicit.":
+      "最も強い根拠シグナルを先に確認し、次のオペレーター行動を明確にしてください。",
+    "Listen for repeated friction":
+      "反復する摩擦を読む",
+    "Break repeated failure loops":
+      "反復する失敗ループを止める",
+    "Triage incidents by pressure":
+      "圧力でインシデントを仕分ける",
+    "Watch for governance drift":
+      "ガバナンスの揺らぎを監視する",
+    "Keep the next review move visible":
+      "次のレビュー行動を見える状態に保つ",
+  };
+  if (exact[text]) {
+    return exact[text];
+  }
+  return text
+    .replace(
+      /^Praise is still visible, but (\d+) unresolved feedback items could let fresh friction compound\.$/,
+      "称賛はまだ見えていますが、未解決のフィードバック $1 件が新しい摩擦を増幅させる可能性があります。",
+    )
+    .replace(
+      /^Negative sentiment is outweighing praise, and the top pain-point cluster already covers (\d+) signals\.$/,
+      "ネガティブ感情が称賛を上回っており、主要な課題クラスタはすでに $1 件のシグナルを含んでいます。",
+    )
+    .replace(
+      /^(\d+) signals are active with no single cluster fully dominant yet\.$/,
+      "$1 件のシグナルがアクティブですが、まだ単一の優勢クラスタはありません。",
+    )
+    .replace(
+      /^(\d+) signals are clustering around (.+)\.$/,
+      "$1 件のシグナルが $2 の周辺にクラスタ化しています。",
+    );
 }
 
 interface WorkspaceInsightsProps {
@@ -1089,6 +1407,10 @@ export function WorkspaceInsights({
       currentVelocity,
     ],
   );
+  const displayAnalysisProfile = useMemo(
+    () => localizeAnalysisProfile(analysisProfile, language),
+    [analysisProfile, language],
+  );
   const profileDistribution = useMemo(
     () =>
       resolveProfileDistribution(records)
@@ -1106,21 +1428,34 @@ export function WorkspaceInsights({
     () =>
       buildWorkspaceAnalysisExperience({
         records,
-        profile: analysisProfile,
+        profile: displayAnalysisProfile,
         encryptedWaitingCount: signalSummary.encryptedWaitingCount,
         anomalyCount,
-        topClusterLabel: primaryCluster?.label ?? "No dominant cluster yet",
+        topClusterLabel: primaryCluster?.label ?? t("workspaceNoDominantClusterYet"),
       }),
-    [records, analysisProfile, signalSummary.encryptedWaitingCount, anomalyCount, primaryCluster?.label],
+    [records, displayAnalysisProfile, signalSummary.encryptedWaitingCount, anomalyCount, primaryCluster?.label, t],
   );
+  const localizedAnalysisMetrics = useMemo(
+    () => displayAnalysisProfile.metrics.map((metric) => localizeAnalysisMetric(metric, language)),
+    [displayAnalysisProfile.metrics, language],
+  );
+  const representativeSignalsByInsightId = useMemo(() => {
+    return new Map(
+      displayAnalysisProfile.insightCards.map((card) => [
+        card.id,
+        selectRepresentativeSignal(card, displayAnalysisProfile, records),
+      ]),
+    );
+  }, [displayAnalysisProfile, records]);
   const activityWaveCard = (
-    <article className="workspace-sonar-card">
+    <article className={`workspace-sonar-card is-primary-scan is-${activityMonitorState.tone}`}>
       <div className="workspace-signal-summary-header">
         <div>
           <p className="eyebrow">{t("workspaceActivityWaveEyebrow")}</p>
           <h3>{t("workspaceActivityWaveTitle")}</h3>
         </div>
         <div className="workspace-wave-status">
+          <span className="workspace-primary-scan-pill">{t("workspacePrimaryScan")}</span>
           <span className={`workspace-monitor-state is-${activityMonitorState.tone}`}>
             {t(`workspaceMonitorState${activityMonitorState.key}`)}
           </span>
@@ -1131,13 +1466,18 @@ export function WorkspaceInsights({
         </div>
       </div>
       <div className="workspace-sonar-wave" aria-label={t("workspaceSignalActivityTitle")}>
-        {activityPoints.map((point) => (
+        {activityPoints.map((point, index) => (
           <span
             key={point.label}
-            className={[point.count === 0 ? "is-empty" : undefined, point.anomaly ? "is-anomaly" : undefined]
+            className={[
+              point.count === 0 ? "is-empty" : undefined,
+              point.anomaly ? "is-anomaly" : undefined,
+              index === activityPoints.length - 1 ? "is-current" : undefined,
+            ]
               .filter(Boolean)
               .join(" ")}
             style={{ "--density": `${point.intensity}%` } as CSSProperties}
+            data-current-label={t("workspaceCurrentPulse")}
             title={`${point.label}: ${point.count}`}
           >
             <i />
@@ -1158,7 +1498,7 @@ export function WorkspaceInsights({
 
   return (
     <section
-      className={`panel workspace-insights-panel analysis-tone-${analysisProfile.emphasis.tone}`}
+      className={`panel workspace-insights-panel analysis-tone-${displayAnalysisProfile.emphasis.tone}`}
       aria-labelledby="workspace-insights-title"
     >
       <div className="workspace-insights-header">
@@ -1176,20 +1516,20 @@ export function WorkspaceInsights({
               exportInsightsSnapshotJson({
                 language,
                 profile: {
-                  id: analysisProfile.id,
-                  signalType: analysisProfile.signalType,
-                  analystType: analysisProfile.analystType,
-                  analysisType: analysisProfile.analysisType,
-                  label: analysisProfile.label,
-                  description: analysisProfile.description,
-                  keyFinding: analysisProfile.keyFinding,
-                  whyItMatters: analysisProfile.whyItMatters,
-                  highlightedAction: analysisProfile.highlightedAction,
-                  evidenceCount: analysisProfile.evidenceCount,
-                  emphasis: analysisProfile.emphasis,
-                  metrics: analysisProfile.metrics,
-                  insightCards: analysisProfile.insightCards,
-                  recommendedActions: analysisProfile.recommendedActions,
+                  id: displayAnalysisProfile.id,
+                  signalType: displayAnalysisProfile.signalType,
+                  analystType: displayAnalysisProfile.analystType,
+                  analysisType: displayAnalysisProfile.analysisType,
+                  label: displayAnalysisProfile.label,
+                  description: displayAnalysisProfile.description,
+                  keyFinding: displayAnalysisProfile.keyFinding,
+                  whyItMatters: displayAnalysisProfile.whyItMatters,
+                  highlightedAction: displayAnalysisProfile.highlightedAction,
+                  evidenceCount: displayAnalysisProfile.evidenceCount,
+                  emphasis: displayAnalysisProfile.emphasis,
+                  metrics: displayAnalysisProfile.metrics,
+                  insightCards: displayAnalysisProfile.insightCards,
+                  recommendedActions: displayAnalysisProfile.recommendedActions,
                 },
                 profileDistribution,
                 totalSignals,
@@ -1226,32 +1566,32 @@ export function WorkspaceInsights({
       <article className="workspace-signal-summary-card workspace-insights-section">
         <div className="workspace-signal-summary-header">
           <div>
-            <p className="eyebrow">Analysis Profile</p>
-            <h3>{analysisProfile.label}</h3>
-            <p className="workspace-insights-intro">{analysisProfile.description}</p>
+            <p className="eyebrow">{t("workspaceSignalLensLabel")}</p>
+            <h3>{displayAnalysisProfile.label}</h3>
+            <p className="workspace-insights-intro">{displayAnalysisProfile.description}</p>
           </div>
-          <span className="workspace-profile-pill">{analysisProfile.emphasis.label}</span>
+          <span className="workspace-profile-pill">{displayAnalysisProfile.emphasis.label}</span>
         </div>
-        <div className="workspace-analysis-badge-row" aria-label="Active insight lens">
+        <div className="workspace-analysis-badge-row" aria-label={t("workspaceActiveInsightLensAria")}>
           <span className="signal-chip signal-chip-soft is-active">
-            Signal Type: {getAnalysisSignalTypeLabel(analysisProfile.signalType)}
+            {t("workspaceSignalLabel")}: {getAnalysisSignalTypeLabel(displayAnalysisProfile.signalType)}
           </span>
           <span className="signal-chip signal-chip-soft">
-            Analyst Type: {getAnalystTypeLabel(analysisProfile.analystType)}
+            {t("workspaceOperatorLabel")}: {getAnalystTypeLabel(displayAnalysisProfile.analystType)}
           </span>
           <span className="signal-chip signal-chip-soft">
-            Analysis Type: {getAnalysisTypeLabel(analysisProfile.analysisType)}
+            {t("workspaceLensLabel")}: {getAnalysisTypeLabel(displayAnalysisProfile.analysisType)}
           </span>
           <span className="signal-chip signal-chip-soft">
-            Evidence: {analysisProfile.evidenceCount}
+            {t("workspaceEvidenceLabel")}: {displayAnalysisProfile.evidenceCount}
           </span>
         </div>
         {profileDistribution.length > 0 ? (
-          <div className="workspace-profile-chip-row" aria-label="Active signal type distribution">
+          <div className="workspace-profile-chip-row" aria-label={t("workspaceActiveSignalDistributionAria")}>
             {profileDistribution.map((profile) => (
               <span
                 key={profile.id}
-                className={`signal-chip signal-chip-soft ${profile.id === analysisProfile.id ? "is-active" : ""}`}
+                className={`signal-chip signal-chip-soft ${profile.id === displayAnalysisProfile.id ? "is-active" : ""}`}
                 title={`${profile.label}: ${profile.signalCount} signals`}
               >
                 {getAnalysisProfileShortLabel(profile.id)} {profile.signalCount}
@@ -1259,28 +1599,23 @@ export function WorkspaceInsights({
             ))}
           </div>
         ) : null}
-        <article className="workspace-analysis-summary-card">
-          <div className="workspace-analysis-summary-grid">
-            {analysisExperience.summaryEntries.map((entry) => (
-              <div key={entry.id}>
-                <span>{entry.label}</span>
-                <strong>{entry.value}</strong>
-                {entry.detail ? <p>{entry.detail}</p> : null}
-              </div>
-            ))}
+        <article className="workspace-insight-brief" aria-label={t("workspacePrimaryInsightBriefAria")}>
+          <div className="workspace-insight-brief-main">
+            <span>{t("workspacePrimaryReadoutLabel")}</span>
+            <strong>{displayAnalysisProfile.keyFinding}</strong>
+            <p>{displayAnalysisProfile.whyItMatters}</p>
+          </div>
+          <div className="workspace-insight-brief-action">
+            <span>{t("workspaceNextMoveLabel")}</span>
+            <strong>{displayAnalysisProfile.highlightedAction}</strong>
+            <small>{t("workspaceInsightEvidenceLine", {
+              count: displayAnalysisProfile.evidenceCount.toLocaleString(),
+              lens: getAnalysisTypeLabel(displayAnalysisProfile.analysisType).toLowerCase(),
+            })}</small>
           </div>
         </article>
         <div className="workspace-insights-grid">
-          {analysisExperience.overviewCards.map((card) => (
-            <article key={card.id} className={`workspace-insight-card is-${card.tone ?? "cluster"}`}>
-              <span>{card.label}</span>
-              <strong>{card.value}</strong>
-              <p>{card.detail}</p>
-            </article>
-          ))}
-        </div>
-        <div className="workspace-insights-grid">
-          {analysisProfile.metrics.map((metric) => (
+          {localizedAnalysisMetrics.map((metric) => (
             <article key={metric.id} className={`workspace-insight-card is-${metric.tone ?? "cluster"}`}>
               <span>{metric.label}</span>
               <strong>{metric.value}</strong>
@@ -1308,10 +1643,10 @@ export function WorkspaceInsights({
         </div>
         <article className="workspace-signal-intelligence-card">
           <div className="workspace-signal-intelligence-copy">
-            <p className="eyebrow">Visual emphasis</p>
-            <h3>{analysisProfile.emphasis.headline}</h3>
-            <p>{analysisProfile.emphasis.body}</p>
-            {analysisProfile.analystType === "executive" ? (
+            <p className="eyebrow">{t("workspaceVisualEmphasisLabel")}</p>
+            <h3>{displayAnalysisProfile.emphasis.headline}</h3>
+            <p>{displayAnalysisProfile.emphasis.body}</p>
+            {displayAnalysisProfile.analystType === "executive" ? (
               <div className="workspace-executive-lines">
                 {analysisExperience.executiveLines.map((line) => (
                   <small key={line}>{line}</small>
@@ -1320,20 +1655,20 @@ export function WorkspaceInsights({
             ) : null}
           </div>
           <div className="workspace-signal-readout">
-            <span>Active profile</span>
-            <strong>{analysisProfile.shortLabel}</strong>
+            <span>{t("workspaceActiveLensLabel")}</span>
+            <strong>{displayAnalysisProfile.shortLabel}</strong>
             <small>
               {profileDistribution.length > 1
-                ? `${profileDistribution.length} profile types detected in this view.`
-                : "One profile type is dominating the current view."}
+                ? t("workspaceLensProfilesDetected", { count: profileDistribution.length })
+                : t("workspaceOneLensDominating")}
             </small>
           </div>
           <div className="workspace-intelligence-meta">
-            <span>Type: {analysisProfile.label}</span>
-            <span>Signal type: {getAnalysisSignalTypeLabel(analysisProfile.signalType)}</span>
-            <span>Analyst type: {getAnalystTypeLabel(analysisProfile.analystType)}</span>
-            <span>Analysis type: {getAnalysisTypeLabel(analysisProfile.analysisType)}</span>
-            <span>Top cluster: {primaryCluster?.label ?? "No dominant cluster yet"}</span>
+            <span>{t("workspaceLensProfileLabel")}: {displayAnalysisProfile.label}</span>
+            <span>{t("workspaceSignalTypeLabel")}: {getAnalysisSignalTypeLabel(displayAnalysisProfile.signalType)}</span>
+            <span>{t("workspaceAnalystTypeLabel")}: {getAnalystTypeLabel(displayAnalysisProfile.analystType)}</span>
+            <span>{t("workspaceAnalysisTypeLabel")}: {getAnalysisTypeLabel(displayAnalysisProfile.analysisType)}</span>
+            <span>{t("workspaceTopClusterLabel")}: {primaryCluster?.label ?? t("workspaceNoDominantClusterYet")}</span>
             <span>{t("workspaceEncryptedCoverage", { count: encryptedSignals, total: totalSignals })}</span>
             <span>{t("workspacePotentialAreaLabel")}: {primaryCluster?.keywords.slice(0, 2).join(" / ") || t("workspaceEncryptedIntakeArea")}</span>
             <span>{t("workspaceUnreadCountPill", { count: unreadSignals })}</span>
@@ -1347,17 +1682,49 @@ export function WorkspaceInsights({
         <article className="workspace-review-queue-card workspace-diagnostic-card">
           <div className="workspace-signal-summary-header">
             <div>
-              <p className="eyebrow">Type-specific insights</p>
-              <h3>Insight cards</h3>
+              <p className="eyebrow">{t("workspaceTypeSpecificInsightsEyebrow")}</p>
+              <h3>{t("workspaceInsightCardsTitle")}</h3>
             </div>
           </div>
           <div className="workspace-diagnostic-list workspace-profile-card-list">
-            {analysisProfile.insightCards.map((card) => (
-              <div key={card.id} className={`workspace-diagnostic-row is-${card.tone ?? "pattern"}`}>
-                <strong>{card.title}</strong>
-                <span>{card.eyebrow}</span>
-                <small>{card.body}</small>
-              </div>
+            {displayAnalysisProfile.insightCards.map((card) => (
+              (() => {
+                const representativeSignal = representativeSignalsByInsightId.get(card.id);
+                const representativeSignalIntelligence = representativeSignal
+                  ? buildSignalCardIntelligence(representativeSignal)
+                  : null;
+
+                return (
+                  <div key={card.id} className={`workspace-diagnostic-row is-${card.tone ?? "pattern"}`}>
+                    <strong>{card.title}</strong>
+                    <span>{card.eyebrow}</span>
+                    <small>{card.body}</small>
+                    {card.evidence && card.evidence.length > 0 ? (
+                      <div className="workspace-evidence-chip-row" aria-label={t("workspaceCardEvidenceAria", { title: card.title })}>
+                        {card.evidence.map((evidence) => (
+                          <em key={evidence.id} className={`workspace-evidence-chip is-${evidence.tone ?? "cluster"}`}>
+                            <b>{evidence.label}</b>
+                            {evidence.value}
+                          </em>
+                        ))}
+                      </div>
+                    ) : null}
+                    {representativeSignal && representativeSignalIntelligence ? (
+                      <div className="workspace-representative-signal">
+                        <span>{t("workspaceRepresentativeSignalLabel")}</span>
+                        <strong>
+                          {shortenSummaryText(
+                            getRecordReviewTitle(representativeSignal, t, language, unlockedSignalsById),
+                            82,
+                          )}
+                        </strong>
+                        <small>{representativeSignalIntelligence.evidenceQuote}</small>
+                        <em>{representativeSignalIntelligence.recommendedAction}</em>
+                      </div>
+                    ) : null}
+                  </div>
+                );
+              })()
             ))}
           </div>
         </article>
@@ -1365,15 +1732,15 @@ export function WorkspaceInsights({
         <article className="workspace-review-queue-card workspace-diagnostic-card">
           <div className="workspace-signal-summary-header">
             <div>
-              <p className="eyebrow">Recommended actions</p>
-              <h3>Next operator moves</h3>
+              <p className="eyebrow">{t("workspaceRecommendedActionsEyebrow")}</p>
+              <h3>{t("workspaceNextOperatorMovesTitle")}</h3>
             </div>
           </div>
           <div className="workspace-diagnostic-list workspace-profile-card-list">
-            {analysisProfile.recommendedActions.map((action) => (
+            {displayAnalysisProfile.recommendedActions.map((action) => (
               <div key={action.id} className={`workspace-diagnostic-row is-${action.urgency === "now" ? "alert" : action.urgency === "next" ? "estimated_silence" : "pattern"}`}>
                 <strong>{action.title}</strong>
-                <span>{getActionUrgencyLabel(action.urgency)}</span>
+                <span>{getActionUrgencyLabel(action.urgency, t)}</span>
                 <small>{action.detail}</small>
               </div>
             ))}
@@ -1457,7 +1824,7 @@ export function WorkspaceInsights({
             {t(`workspaceMonitorState${clusterMonitorState.key}`)}
           </span>
         </div>
-        <div className="workspace-cluster-map" aria-label="Cluster pulse map">
+        <div className="workspace-cluster-map" aria-label={t("workspaceClusterPulseMapAria")}>
           <div className="workspace-cluster-map-grid" />
           {clusterMapNodes.map((node, index) => (
             <div
@@ -1545,7 +1912,7 @@ export function WorkspaceInsights({
               <small>{t(`workspaceVelocity${velocityDirection.tone === "accelerating" ? "AcceleratingBody" : velocityDirection.tone === "slowing" ? "SlowingBody" : "SteadyBody"}`)}</small>
             </div>
           </div>
-          <div className="workspace-velocity-buckets" aria-label="Response velocity buckets">
+          <div className="workspace-velocity-buckets" aria-label={t("workspaceResponseVelocityBucketsAria")}>
             {currentVelocity.bucketCounts.map((bucket) => (
               <div key={bucket.label} className="workspace-velocity-bucket">
                 <strong>{bucket.count}</strong>
