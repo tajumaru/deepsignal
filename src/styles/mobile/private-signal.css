@@ -74,3 +74,106 @@
     font-size: 0.86rem;
   }
 }
+
+@media (max-width: 768px) {
+  .private-signal-unlock-card,
+  .private-signal-unlock-header,
+  .private-signal-unlock-copy,
+  .private-signal-unlock-actions,
+  .private-signal-unlock-side-action,
+  .private-signal-unlock-note,
+  .private-signal-unlock-status,
+  .private-signal-recovery-actions,
+  .review-session-decrypt-shell {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .review-session-stage-unlock {
+    align-content: start;
+    overflow-y: auto;
+  }
+
+  .review-session-stage-unlock .private-signal-unlock-card {
+    gap: 0.7rem;
+    padding: 0.78rem;
+  }
+
+  .review-session-stage-unlock .private-signal-vault-visual {
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: center;
+    gap: 0.65rem;
+    min-height: auto;
+    padding: 0.72rem;
+  }
+
+  .review-session-stage-unlock .private-signal-vault-lock {
+    width: 3.8rem;
+    height: 3.8rem;
+    border-radius: 18px;
+  }
+
+  .review-session-stage-unlock .private-signal-vault-lock .private-signal-unlock-icon {
+    width: 2.15rem;
+    height: 2.15rem;
+  }
+
+  .review-session-stage-unlock .private-signal-unlock-steps {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .private-signal-unlock-steps strong,
+  .private-signal-unlock-copy h4,
+  .private-signal-unlock-copy p,
+  .private-signal-unlock-note strong,
+  .private-signal-unlock-note p,
+  .private-signal-unlock-status span,
+  .private-signal-unlock-detail,
+  .private-signal-recovery-toast {
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    word-break: normal;
+  }
+
+  .private-signal-unlock-actions,
+  .private-signal-recovery-actions {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: stretch;
+  }
+
+  .private-signal-unlock-button,
+  .private-signal-cancel-button,
+  .private-signal-recovery-actions > *,
+  .private-signal-unlock-side-action > *,
+  .private-signal-unlock-side-action .ghost-button {
+    width: 100%;
+    min-width: 0;
+    white-space: normal;
+  }
+
+  .private-signal-unlock-button {
+    min-height: 3.2rem;
+    padding-inline: 0.85rem;
+  }
+
+  .private-signal-unlock-button span {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .private-signal-unlock-status {
+    align-items: flex-start;
+    line-height: 1.4;
+  }
+
+  .private-signal-unlock-card.is-success {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .private-signal-unlock-card.is-success .private-signal-unlock-copy,
+  .private-signal-unlock-card.is-success .private-signal-unlock-actions,
+  .private-signal-unlock-card.is-success .private-signal-unlock-status {
+    grid-column: 1;
+  }
+}

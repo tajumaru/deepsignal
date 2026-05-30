@@ -272,6 +272,18 @@ const DEMO_SIGNAL_VOLUME_OPTIONS = [0, 3, 5, 20, 100] as const;
 
 type DemoSignalVolume = (typeof DEMO_SIGNAL_VOLUME_OPTIONS)[number];
 type DemoSignalScenario = "safari_incident" | "product_feedback" | "disaster_checkin";
+type DemoIntelligenceEventType =
+  | "trend_unlocked"
+  | "insights_unlocked"
+  | "evolution_unlocked"
+  | "ingest_complete";
+
+interface DemoIntelligenceEvent {
+  id: string;
+  type: DemoIntelligenceEventType;
+  timestamp: number;
+  count?: number;
+}
 
 const DEMO_SIGNAL_METADATA_FLAG = "deepSignalDemoOnly";
 
@@ -286,6 +298,14 @@ const DEMO_SIGNAL_SCENARIOS: Record<
     summaries: string[];
     subjects: string[];
     answers: string[];
+    outcome: {
+      topTopic: string;
+      insight: string;
+      insightShort: string;
+      followUp: string;
+      followUpShort: string;
+      contribution: string;
+    };
   }
 > = {
   safari_incident: {
@@ -315,6 +335,14 @@ const DEMO_SIGNAL_SCENARIOS: Record<
       "Wallet restore eventually works, but Safari delays the workspace for a long time.",
       "The review screen does not recover cleanly on iPhone Safari.",
     ],
+    outcome: {
+      topTopic: "Mobile Safari",
+      insight: "Mobile Safari loading complaints are increasing.",
+      insightShort: "Loading complaints increasing",
+      followUp: "What Safari issue are you experiencing?",
+      followUpShort: "Follow-up suggested",
+      contribution: "Loading complaints increasing",
+    },
   },
   product_feedback: {
     label: "Product Feedback",
@@ -343,6 +371,14 @@ const DEMO_SIGNAL_SCENARIOS: Record<
       "The dashboard is powerful, but new reviewers need clearer next steps.",
       "It would help if DeepSignal suggested follow-up signals automatically.",
     ],
+    outcome: {
+      topTopic: "Mobile layout",
+      insight: "Users like the UI but request export and dashboard simplification.",
+      insightShort: "Export and simplification requested",
+      followUp: "Which dashboard step feels most complex?",
+      followUpShort: "Follow-up suggested",
+      contribution: "Export and dashboard simplification requests",
+    },
   },
   disaster_checkin: {
     label: "Disaster Check-in",
@@ -371,6 +407,14 @@ const DEMO_SIGNAL_SCENARIOS: Record<
       "This is an emergency. We need immediate contact.",
       "Please help confirm whether my family has checked in.",
     ],
+    outcome: {
+      topTopic: "Need supplies",
+      insight: "Safety reports are stable, but supply requests are increasing.",
+      insightShort: "Supply requests increasing",
+      followUp: "What supplies are most urgent?",
+      followUpShort: "Follow-up suggested",
+      contribution: "Supply requests increasing",
+    },
   },
 };
 
@@ -417,6 +461,65 @@ function getDemoSimulationStage(demoSignalVolume: DemoSignalVolume, t: Translati
     title: t("demoSimulationHeroMonitoringTitle"),
     body: t("demoSimulationHeroMonitoringBody"),
   };
+}
+
+function getDemoScenarioOutcome(scenarioId: DemoSignalScenario) {
+  return DEMO_SIGNAL_SCENARIOS[scenarioId].outcome;
+}
+
+function getDemoScenarioIdFromSubmission(submission?: Submission | null): DemoSignalScenario {
+  const scenario = submission?.metadata?.scenario;
+  return scenario === "product_feedback" || scenario === "disaster_checkin" || scenario === "safari_incident"
+    ? scenario
+    : "safari_incident";
+}
+
+function getDemoIntelligenceEventContent(
+  event: DemoIntelligenceEvent,
+  t: TranslationFn,
+  outcome: ReturnType<typeof getDemoScenarioOutcome>,
+) {
+  switch (event.type) {
+    case "trend_unlocked":
+      return {
+        icon: "🔥",
+        label: t("demoEventTrendUnlockedLabel"),
+        detail: t("demoEventTrendUnlockedDetail", { topic: outcome.topTopic }),
+      };
+    case "insights_unlocked":
+      return {
+        icon: "🧠",
+        label: t("demoEventInsightsUnlockedLabel"),
+        detail: t("demoEventInsightsUnlockedDetail", { insight: outcome.insight }),
+      };
+    case "evolution_unlocked":
+      return {
+        icon: "🌱",
+        label: t("demoEventEvolutionUnlockedLabel"),
+        detail: t("demoEventEvolutionUnlockedDetail", { followUp: outcome.followUp }),
+      };
+    case "ingest_complete":
+      return {
+        icon: "✓",
+        label: t("demoEventIngestCompleteLabel"),
+        detail: t("demoEventIngestCompleteDetail", { count: event.count ?? 0 }),
+      };
+    default:
+      return {
+        icon: "✓",
+        label: t("demoEventIngestCompleteLabel"),
+        detail: t("demoEventIngestCompleteDetail", { count: event.count ?? 0 }),
+      };
+  }
+}
+
+function formatDemoIntelligenceEventTime(timestamp: number) {
+  return new Date(timestamp).toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  });
 }
 
 function isDemoSignalSubmission(submission?: Submission | null) {
@@ -1350,6 +1453,8 @@ function InboxTimelineOverview({
   demoGenerating = false,
   demoIngestTarget = null,
   demoArrivalAlert = null,
+  demoEventFeed = [],
+  demoScenario = "safari_incident",
 }: {
   model: InboxTimelineModel;
   t: TranslationFn;
@@ -1359,7 +1464,38 @@ function InboxTimelineOverview({
   demoGenerating?: boolean;
   demoIngestTarget?: 5 | 20 | 100 | null;
   demoArrivalAlert?: string | null;
+  demoEventFeed?: DemoIntelligenceEvent[];
+  demoScenario?: DemoSignalScenario;
 }) {
+  const liveFeedEvents = demoEventFeed.slice(-8);
+  const demoOutcome = getDemoScenarioOutcome(demoScenario);
+  const demoModeVisible = demoSignalCount > 0 || demoGenerating || liveFeedEvents.length > 0;
+  const currentDemoStage =
+    model.generatedFromCount >= 100
+      ? 4
+      : model.generatedFromCount >= 20
+        ? 3
+        : model.generatedFromCount >= 5
+          ? 2
+          : 1;
+  const storyStages = [
+    { id: 1, label: t("demoStoryStageMonitoring"), detail: t("demoStoryStageMonitoringDetail") },
+    {
+      id: 2,
+      label: t("demoStoryStageTrendDetection"),
+      detail: currentDemoStage >= 2 ? t("demoOutcomeTopTopicValue", { topic: demoOutcome.topTopic }) : t("demoSimulationLockedStatus"),
+    },
+    {
+      id: 3,
+      label: t("demoStoryStageAiInsights"),
+      detail: currentDemoStage >= 3 ? demoOutcome.insightShort : t("demoSimulationLockedStatus"),
+    },
+    {
+      id: 4,
+      label: t("demoStoryStageSignalEvolution"),
+      detail: currentDemoStage >= 4 ? demoOutcome.followUpShort : t("demoSimulationLockedStatus"),
+    },
+  ];
   if (compact) {
     return (
       <section className="inbox-timeline-overview is-compact" aria-label={t("inboxActivityTitle")}>
@@ -1371,15 +1507,26 @@ function InboxTimelineOverview({
         </div>
         <div className="inbox-activity-chip-row">
           <span>{t("inboxActivityResponses", { count: model.generatedFromCount })}</span>
-          {demoSignalCount > 0 ? (
+          {demoModeVisible ? (
             <>
-              <span>{t("demoActivityDemoCount", { count: demoSignalCount })}</span>
-              <span>{t("demoActivityRealCount", { count: realSignalCount ?? Math.max(0, model.generatedFromCount - demoSignalCount) })}</span>
+              {model.generatedFromCount >= 5 ? (
+                <span>{t("demoActivityTopTopic", { topic: demoOutcome.topTopic })}</span>
+              ) : null}
+              {model.generatedFromCount >= 20 ? (
+                <span>{t("demoActivityInsight", { insight: demoOutcome.insightShort })}</span>
+              ) : null}
+              {model.generatedFromCount >= 100 ? (
+                <span>{t("demoActivityNextAction", { action: demoOutcome.followUpShort })}</span>
+              ) : null}
+              <span className="is-subtle">{t("demoSignalMixLabel", { demo: demoSignalCount, real: realSignalCount ?? 0 })}</span>
             </>
-          ) : null}
-          <span>{t("inboxActivityUnread", { count: model.unreadCount })}</span>
-          <span>{model.activeTrendLabel}</span>
-          <span>{model.responseGrowthLabel}</span>
+          ) : (
+            <>
+              <span>{t("inboxActivityUnread", { count: model.unreadCount })}</span>
+              <span>{model.activeTrendLabel}</span>
+              <span>{model.responseGrowthLabel}</span>
+            </>
+          )}
         </div>
         {demoGenerating && demoIngestTarget ? (
           <div className="inbox-demo-receiving" role="status" aria-live="polite">
@@ -1395,10 +1542,48 @@ function InboxTimelineOverview({
             </span>
           </div>
         ) : null}
-        {demoArrivalAlert ? (
+        {!demoGenerating && demoArrivalAlert ? (
           <div className="inbox-demo-arrival-alert" role="status" aria-live="polite">
             <strong>{t("demoSignalArrivedTitle")}</strong>
             <span>{demoArrivalAlert}</span>
+          </div>
+        ) : null}
+        {!demoGenerating && liveFeedEvents.length > 0 ? (
+          <div className="demo-event-feed" aria-label={t("demoEventFeedTitle")}>
+            <div className="demo-event-feed-head">
+              <strong>{t("demoEventFeedTitle")}</strong>
+              <span>{t("demoEventFeedStoryLabel")}</span>
+            </div>
+            <div className="demo-event-stage-strip" aria-label={t("demoEventFeedStageLabel")}>
+              {storyStages.map((stage) => (
+                <span
+                  key={stage.id}
+                  className={`${stage.id === currentDemoStage ? "is-current" : ""} ${stage.id < currentDemoStage ? "is-complete" : ""}`}
+                >
+                  <strong>{t("demoEventFeedStageNumber", { count: stage.id })}</strong>
+                  <em>{stage.label}</em>
+                  <small>{stage.detail}</small>
+                </span>
+              ))}
+            </div>
+            <ol>
+              {liveFeedEvents.map((event, index) => {
+                const content = getDemoIntelligenceEventContent(event, t, demoOutcome);
+                const newest = index === liveFeedEvents.length - 1;
+                return (
+                  <li key={event.id} className={`demo-event-feed-item is-${event.type} ${newest ? "is-newest" : ""}`}>
+                    <time>{formatDemoIntelligenceEventTime(event.timestamp)}</time>
+                    <span className="demo-event-feed-icon" aria-hidden="true">
+                      {content.icon}
+                    </span>
+                    <span className="demo-event-feed-copy">
+                      <strong>{content.label}</strong>
+                      <span>{content.detail}</span>
+                    </span>
+                  </li>
+                );
+              })}
+            </ol>
           </div>
         ) : null}
         {model.generatedFromCount === 0 ? (
@@ -2638,6 +2823,7 @@ interface MobileSignalInboxProps {
   demoGenerating: boolean;
   demoIngestTarget: 5 | 20 | 100 | null;
   demoArrivalAlert: string | null;
+  demoEventFeed: DemoIntelligenceEvent[];
   demoJustArrivedSignalIds: Set<string>;
   hasMoreSignals: boolean;
   onLoadMoreSignals: () => void;
@@ -2696,6 +2882,7 @@ function MobileSignalInbox({
   demoGenerating,
   demoIngestTarget,
   demoArrivalAlert,
+  demoEventFeed,
   demoJustArrivedSignalIds,
   hasMoreSignals,
   onLoadMoreSignals,
@@ -2806,6 +2993,8 @@ function MobileSignalInbox({
         demoGenerating={demoGenerating}
         demoIngestTarget={demoIngestTarget}
         demoArrivalAlert={demoArrivalAlert}
+        demoEventFeed={demoEventFeed}
+        demoScenario={demoScenario}
       />
     </section>
   );
@@ -2886,6 +3075,7 @@ export function AdminDashboardPage() {
   const [demoUnlockAlert, setDemoUnlockAlert] = useState<string | null>(null);
   const [demoArrivalAlert, setDemoArrivalAlert] = useState<string | null>(null);
   const [demoJustArrivedSignalIds, setDemoJustArrivedSignalIds] = useState<Set<string>>(new Set());
+  const [demoEventFeed, setDemoEventFeed] = useState<DemoIntelligenceEvent[]>([]);
   const [detailSectionsState, setDetailSectionsState] = useState<DetailWorkspaceSectionsState>({
     originalSignalOpen: true,
     attachmentsOpen: false,
@@ -2915,6 +3105,7 @@ export function AdminDashboardPage() {
   const demoIngestTimerRefs = useRef<number[]>([]);
   const demoArrivalTimerRefs = useRef<number[]>([]);
   const demoUnlockedThresholdsRef = useRef<Set<number>>(new Set());
+  const demoEventIdRef = useRef(0);
   const hasAdminAccess = canAdmin(capabilityProfile);
   const isNodeRegistrationBusy = registerFormTx.isPending || registeringFormId !== null;
   const setWorkspaceTab = useCallback(
@@ -3029,6 +3220,17 @@ export function AdminDashboardPage() {
     demoArrivalTimerRefs.current = [];
   }, []);
 
+  const appendDemoEvent = useCallback((type: DemoIntelligenceEventType, count?: number) => {
+    demoEventIdRef.current += 1;
+    const event: DemoIntelligenceEvent = {
+      id: `demo-event-${Date.now()}-${demoEventIdRef.current}`,
+      type,
+      timestamp: Date.now(),
+      count,
+    };
+    setDemoEventFeed((current) => [...current, event].slice(-24));
+  }, []);
+
   const markDemoSignalsArrived = useCallback(
     (records: SignalRecord[]) => {
       const arrivedIds = records.map((record) => record.submission.id);
@@ -3063,21 +3265,25 @@ export function AdminDashboardPage() {
       if (nextCount >= 5 && !demoUnlockedThresholdsRef.current.has(5)) {
         demoUnlockedThresholdsRef.current.add(5);
         setDemoUnlockAlert(t("intelligenceUnlockTrendUnlocked"));
+        appendDemoEvent("trend_unlocked", 5);
       }
       if (nextCount >= 20 && !demoUnlockedThresholdsRef.current.has(20)) {
         demoUnlockedThresholdsRef.current.add(20);
         setDemoUnlockAlert(t("intelligenceUnlockAiUnlocked"));
+        appendDemoEvent("insights_unlocked", 20);
       }
       if (nextCount >= 100 && !demoUnlockedThresholdsRef.current.has(100)) {
         demoUnlockedThresholdsRef.current.add(100);
         setDemoUnlockAlert(t("intelligenceUnlockEvolutionUnlocked"));
+        appendDemoEvent("evolution_unlocked", 100);
       }
       if (nextCount >= targetCount) {
+        appendDemoEvent("ingest_complete", targetCount);
         const timerId = window.setTimeout(() => setDemoUnlockAlert(null), 1600);
         demoIngestTimerRefs.current.push(timerId);
       }
     },
-    [t],
+    [appendDemoEvent, t],
   );
 
   const handleCancelDemoIngest = useCallback(() => {
@@ -3171,6 +3377,7 @@ export function AdminDashboardPage() {
     setDemoUnlockAlert(null);
     setDemoArrivalAlert(null);
     setDemoJustArrivedSignalIds(new Set());
+    setDemoEventFeed([]);
     demoUnlockedThresholdsRef.current = new Set();
     if (selectedSignalId?.startsWith("demo-signal-")) {
       setSelectedSignalId("");
@@ -3187,6 +3394,7 @@ export function AdminDashboardPage() {
     setDemoUnlockAlert(null);
     setDemoArrivalAlert(null);
     setDemoJustArrivedSignalIds(new Set());
+    setDemoEventFeed([]);
     demoUnlockedThresholdsRef.current = new Set();
     if (selectedSignalId?.startsWith("demo-signal-")) {
       setSelectedSignalId("");
@@ -5562,6 +5770,7 @@ export function AdminDashboardPage() {
             demoGenerating={demoSignalsGenerating}
             demoIngestTarget={demoIngestTarget}
             demoArrivalAlert={demoArrivalAlert}
+            demoEventFeed={demoEventFeed}
             demoJustArrivedSignalIds={demoJustArrivedSignalIds}
             hasMoreSignals={hasMoreRenderedSignals}
             onLoadMoreSignals={() => setRenderedSignalLimit((current) => current + SIGNAL_LIST_PAGE_SIZE)}
@@ -5835,6 +6044,7 @@ export function AdminDashboardPage() {
                 demoGenerating={demoSignalsGenerating}
                 demoIngestTarget={demoIngestTarget}
                 demoArrivalAlert={demoArrivalAlert}
+                demoEventFeed={demoEventFeed}
               />
               {hasAdminAccess ? (
                 <section className="answer-card answer-card-plain optional-proof-queue-panel">

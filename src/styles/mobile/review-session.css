@@ -63,11 +63,52 @@
     max-height: 100dvh;
     min-height: 100dvh;
     border-radius: 0;
+    overflow: hidden;
     padding:
       max(1rem, env(safe-area-inset-top, 0px))
       max(1rem, env(safe-area-inset-right, 0px))
       max(1rem, env(safe-area-inset-bottom, 0px))
       max(1rem, env(safe-area-inset-left, 0px));
+  }
+
+  .review-session-shell {
+    grid-template-rows: auto auto minmax(0, 1fr) auto;
+    min-height: 0;
+    height: 100%;
+  }
+
+  .review-session-stage,
+  .review-session-stage-split,
+  .review-session-read-panel,
+  .review-stage-card {
+    max-width: 100%;
+  }
+
+  .review-session-stage {
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding-right: 0.05rem;
+  }
+
+  .review-session-stage-split {
+    min-height: 0;
+  }
+
+  .review-progress-rail {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .review-progress-step {
+    min-height: 0;
+    height: auto;
+  }
+
+  .review-progress-title {
+    display: block;
+    min-height: 0;
+    overflow: visible;
+    -webkit-line-clamp: unset;
+    overflow-wrap: anywhere;
   }
 
   .review-session-footer,
@@ -82,6 +123,40 @@
   .review-session-header-actions > span {
     width: 100%;
     justify-content: center;
+    min-width: 0;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .review-session-header h3,
+  .review-session-header .muted,
+  .review-stage-header strong,
+  .review-session-mobile-tab,
+  .review-state-badge,
+  .review-result-item strong,
+  .review-result-item span,
+  .review-action-helper,
+  .review-notes-actions .signal-chip,
+  .review-notes-actions .ghost-button {
+    max-width: 100%;
+    overflow-wrap: anywhere;
+  }
+
+  .review-badge-options,
+  .review-notes-actions,
+  .review-session-decision-grid,
+  .review-result-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .review-star-rating {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .review-star-button {
+    min-width: 0;
+    flex: 1 1 0;
   }
 }
 

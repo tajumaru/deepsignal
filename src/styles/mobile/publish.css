@@ -158,3 +158,85 @@
     grid-template-columns: minmax(0, 1.3fr) minmax(220px, 0.92fr);
   }
 }
+
+@media (max-width: 640px) {
+  .publish-overlay-panel,
+  .publish-overlay-hero,
+  .publish-overlay-copy,
+  .publish-terminal,
+  .publish-status-grid,
+  .publish-blob-panel,
+  .publish-active-panel,
+  .publish-active-layout,
+  .publish-beacon-panel,
+  .publish-beacon-link-row {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .publish-signal-shell {
+    mask-image: none;
+    -webkit-mask-image: none;
+    min-height: 0;
+    padding-block: 0.35rem;
+  }
+
+  .publish-signal-card {
+    max-width: 100%;
+  }
+
+  .publish-signal-card strong,
+  .publish-signal-card p,
+  .publish-overlay-copy h2,
+  .publish-overlay-intro,
+  .publish-terminal-header,
+  .publish-terminal-row,
+  .publish-terminal-row small,
+  .publish-terminal-detail,
+  .publish-storage-note,
+  .publish-active-panel h3,
+  .publish-active-panel .muted,
+  .publish-beacon-note,
+  .publish-beacon-link-hint {
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    word-break: normal;
+  }
+
+  .publish-terminal-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.28rem;
+    align-items: start;
+  }
+
+  .publish-terminal-row small {
+    letter-spacing: 0.08em;
+    line-height: 1.25;
+  }
+
+  .publish-signal-metrics {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+  }
+
+  .publish-signal-metrics span {
+    min-width: 0;
+    text-align: center;
+    overflow-wrap: anywhere;
+  }
+
+  .publish-blob-actions,
+  .publish-active-actions {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .publish-blob-actions > *,
+  .publish-active-actions > * {
+    width: 100%;
+    min-width: 0;
+    white-space: normal;
+  }
+}
