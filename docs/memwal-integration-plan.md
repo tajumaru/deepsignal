@@ -94,6 +94,17 @@ Recommended record shape before calling `remember`:
 
 Keep private answer bodies out of memory by default. If the AI Review Assistant needs evidence from decrypted answers, write a compact, reviewer-approved fact after unlock rather than the full submission payload.
 
+### Redaction Before Writes
+
+Every memory write needs an explicit redaction step before calling MemWal:
+
+- Do not store raw answer bodies by default.
+- Do not store attachment URLs, Walrus blob IDs, encrypted blob IDs, or attachment names unless an admin explicitly approves that evidence for memory.
+- Remove emails, wallet addresses, OAuth/zkLogin identifiers, and similar direct identifiers unless they are required for the operational memory being saved.
+- Store compact, reviewer-approved facts only: decision, urgency, pattern, reviewer note summary, and safe evidence fragments.
+
+The redacted memory payload should be treated as a new derived artifact, not as a copy of the submission. If a reviewer needs a memory to reference sensitive evidence, the memory should say that sensitive evidence existed and point back to the authorized DeepSignal review flow instead of embedding the sensitive value.
+
 ### Recall Flow
 
 Recall should be admin-only in the Encrypted Signal Inbox:
@@ -126,6 +137,12 @@ No code should be added in this investigation, but a later implementation should
 - `src/memory/localMemoryAdapter.ts`: no-op/local development adapter if needed for tests.
 - `src/features/admin/hooks/useSignalMemoryRecall.ts`: admin-only hook called from Inbox/review surfaces.
 - No imports from public route entry points or public form components.
+
+Bundle safety requirements:
+
+- Public routes must not import MemWal directly or through shared modules.
+- Future CI/build checks should verify public form chunks do not contain `@mysten-incubation/memwal`.
+- The existing public chunk guard should stay aligned with this rule, the same way it protects public routes from admin, wallet, TipTap, Sui, Walrus, and Seal runtime chunks.
 
 Suggested environment names for a future feature flag:
 
@@ -162,6 +179,22 @@ Potential conflicts:
 - Dependency creep: `@mysten/sui`, `@mysten/seal`, and `@mysten/walrus` already exist in DeepSignal, but MemWal must not make public routes load wallet, Sui, Walrus, Seal, TipTap, or admin chunks.
 - Recovery confusion: MemWal `restore(namespace)` repairs memory vector state; DeepSignal manifests repair form/submission graph state. Keep these operator concepts separate.
 - Cost and quota: MemWal relayers cover or manage Walrus writes differently from DeepSignal's wallet/publisher/Tatum paths. Memory sync must be observable and optional.
+
+## Deletion And Revoke Model
+
+MemWal memories should be advisory recall state, not canonical DeepSignal data. Canonical deletion, archive, revoke, and recovery behavior remains on the DeepSignal storage/manifest side.
+
+Each memory record should include lifecycle metadata:
+
+- `sourceSubmissionId`: the DeepSignal submission that produced the memory.
+- `reviewId`: the review or review-save event that produced the memory.
+- `createdAt`: when the memory was written.
+- `supersededAt`: set when a later review memory replaces this one.
+- `revokedAt`: set when an operator revokes or invalidates this memory.
+
+Recall must filter out revoked and superseded memories before returning evidence to the AI Review Assistant. If MemWal search returns old matches, DeepSignal should treat lifecycle metadata as an application-level allowlist filter before showing or using the memory.
+
+A future delete/revoke operation should not imply that MemWal is the source of truth. It should mark memory state as revoked or superseded for recall, then rely on existing DeepSignal storage, manifest, Walrus, and local fallback deletion semantics for canonical data handling.
 
 ## Recommended First Phase
 
