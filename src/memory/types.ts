@@ -1,12 +1,10 @@
-import type { FormSchema, Submission } from "../types";
-
-export type MemoryRuntimeMode = "disabled";
+export type MemoryAdapterKind = "noop";
 
 export type MemoryRuntimeStatus = {
-  mode: MemoryRuntimeMode;
-  enabled: false;
-  notice: string;
-  configured: false;
+  kind: MemoryAdapterKind;
+  enabled: boolean;
+  configured: boolean;
+  reason: "disabled";
 };
 
 export type ReviewMemoryRecord = {
@@ -19,11 +17,10 @@ export type ReviewMemoryRecord = {
 };
 
 export type ReviewMemoryRecallQuery = {
-  form: Pick<FormSchema, "id" | "projectId" | "title">;
-  submission: Pick<
-    Submission,
-    "id" | "projectId" | "formId" | "subjectPreview" | "aiSummary" | "keywords" | "tags" | "triageStatus" | "priority"
-  >;
+  projectId?: string;
+  formId: string;
+  submissionId: string;
+  query: string;
 };
 
 export type ReviewMemoryMatch = {
@@ -35,17 +32,20 @@ export type ReviewMemoryMatch = {
 };
 
 export type MemoryWriteResult = {
-  status: "skipped";
+  ok: false;
+  skipped: true;
   reason: "disabled";
 };
 
 export type MemoryRecallResult = {
-  status: "skipped";
+  ok: false;
+  skipped: true;
   reason: "disabled";
   matches: ReviewMemoryMatch[];
 };
 
 export interface MemoryAdapter {
+  readonly kind: MemoryAdapterKind;
   getRuntimeStatus(): MemoryRuntimeStatus;
   rememberReviewMemory(record: ReviewMemoryRecord): Promise<MemoryWriteResult>;
   recallReviewMemory(query: ReviewMemoryRecallQuery): Promise<MemoryRecallResult>;

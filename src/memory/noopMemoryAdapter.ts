@@ -3,34 +3,46 @@ import type {
   MemoryRecallResult,
   MemoryRuntimeStatus,
   MemoryWriteResult,
+  ReviewMemoryRecallQuery,
+  ReviewMemoryRecord,
 } from "./types";
 
-const disabledStatus: MemoryRuntimeStatus = {
-  mode: "disabled",
+const noopRuntimeStatus: MemoryRuntimeStatus = {
+  kind: "noop",
   enabled: false,
-  notice: "MemWal memory is disabled. Review saves and recall continue without memory sync.",
   configured: false,
+  reason: "disabled",
 };
 
 const skippedWrite: MemoryWriteResult = {
-  status: "skipped",
+  ok: false,
+  skipped: true,
   reason: "disabled",
 };
 
 const skippedRecall: MemoryRecallResult = {
-  status: "skipped",
+  ok: false,
+  skipped: true,
   reason: "disabled",
   matches: [],
 };
 
-export const noopMemoryAdapter: MemoryAdapter = {
+export class NoopMemoryAdapter implements MemoryAdapter {
+  readonly kind = "noop";
+
   getRuntimeStatus() {
-    return disabledStatus;
-  },
-  async rememberReviewMemory() {
+    return noopRuntimeStatus;
+  }
+
+  async rememberReviewMemory(record: ReviewMemoryRecord) {
+    void record;
     return skippedWrite;
-  },
-  async recallReviewMemory() {
+  }
+
+  async recallReviewMemory(query: ReviewMemoryRecallQuery) {
+    void query;
     return skippedRecall;
-  },
-};
+  }
+}
+
+export const noopMemoryAdapter = new NoopMemoryAdapter();

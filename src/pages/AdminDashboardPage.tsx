@@ -272,6 +272,7 @@ const DEMO_SIGNAL_VOLUME_OPTIONS = [0, 3, 5, 20, 100] as const;
 
 type DemoSignalVolume = (typeof DEMO_SIGNAL_VOLUME_OPTIONS)[number];
 type DemoSignalScenario = "safari_incident" | "product_feedback" | "disaster_checkin";
+type DemoIntelligenceViewMode = "executive" | "developer";
 type DemoIntelligenceEventType =
   | "trend_unlocked"
   | "insights_unlocked"
@@ -283,6 +284,22 @@ interface DemoIntelligenceEvent {
   type: DemoIntelligenceEventType;
   timestamp: number;
   count?: number;
+}
+
+interface DemoIntelligenceOutcome {
+  topTopic: string;
+  topTopicCount: number;
+  totalSignals: number;
+  topTopicRatio: number;
+  insight: string;
+  insightShort: string;
+  evidenceCount: number;
+  followUpQuestion: string;
+  followUpShort: string;
+  confidenceLabel: "High" | "Medium" | "Low";
+  contribution: string;
+  derivedFrom: string[];
+  fallbackUsed: boolean;
 }
 
 const DEMO_SIGNAL_METADATA_FLAG = "deepSignalDemoOnly";
@@ -474,6 +491,242 @@ function getDemoScenarioOutcome(scenarioId?: string | null) {
   return DEMO_SIGNAL_SCENARIOS[normalizeDemoScenarioId(scenarioId)].outcome;
 }
 
+function getDemoFallbackOutcome(scenarioId?: string | null): DemoIntelligenceOutcome {
+  const outcome = getDemoScenarioOutcome(scenarioId);
+  return {
+    topTopic: outcome.topTopic,
+    topTopicCount: 0,
+    totalSignals: 0,
+    topTopicRatio: 0,
+    insight: outcome.insight,
+    insightShort: outcome.insightShort,
+    evidenceCount: 0,
+    followUpQuestion: outcome.followUp,
+    followUpShort: outcome.followUpShort,
+    confidenceLabel: "Low",
+    contribution: outcome.contribution,
+    derivedFrom: [],
+    fallbackUsed: true,
+  };
+}
+
+const DEMO_TOPIC_RULES: Array<{
+  label: string;
+  patterns: string[];
+  insight: string;
+  insightShort: string;
+  followUpQuestion: string;
+  contribution: string;
+}> = [
+  {
+    label: "Mobile Safari",
+    patterns: ["mobile safari", "iphone safari", "safari", "module script", "chunk", "blank screen", "reload loop", "loading"],
+    insight: "Mobile Safari loading complaints are increasing.",
+    insightShort: "Loading complaints increasing",
+    followUpQuestion: "What Safari issue are you experiencing?",
+    contribution: "Loading complaints increasing",
+  },
+  {
+    label: "Mobile layout",
+    patterns: ["mobile layout", "mobile controls", "stack", "compact review"],
+    insight: "Mobile layout feedback is becoming a repeated product signal.",
+    insightShort: "Mobile layout feedback rising",
+    followUpQuestion: "Which mobile layout step feels hardest?",
+    contribution: "Mobile layout feedback",
+  },
+  {
+    label: "Export request",
+    patterns: ["export", "csv", "snapshot", "download"],
+    insight: "Export requests are becoming a repeated product need.",
+    insightShort: "Export requests repeating",
+    followUpQuestion: "Which export format do you need most?",
+    contribution: "Export requests",
+  },
+  {
+    label: "Dashboard complexity",
+    patterns: ["dashboard complexity", "complex", "first-time triage", "new reviewers", "next steps"],
+    insight: "Users like the UI but request dashboard simplification.",
+    insightShort: "Simplification requested",
+    followUpQuestion: "Which dashboard step feels most complex?",
+    contribution: "Dashboard simplification requests",
+  },
+  {
+    label: "Need supplies",
+    patterns: ["need supplies", "supplies", "water", "batteries", "medical"],
+    insight: "Supply and safety requests are becoming the dominant signal.",
+    insightShort: "Supply requests increasing",
+    followUpQuestion: "What supplies are most urgent?",
+    contribution: "Supply requests increasing",
+  },
+  {
+    label: "Emergency",
+    patterns: ["emergency", "immediate", "urgent"],
+    insight: "Emergency language is appearing in high-priority responses.",
+    insightShort: "Emergency language detected",
+    followUpQuestion: "What immediate help is needed?",
+    contribution: "Emergency language",
+  },
+  {
+    label: "Safe check-in",
+    patterns: ["safe", "check-in", "family check-in", "community center"],
+    insight: "Safety reports are stable, but follow-up needs remain visible.",
+    insightShort: "Safety reports stable",
+    followUpQuestion: "Who still needs a check-in?",
+    contribution: "Safety reports",
+  },
+];
+
+function getSubmissionAnswerText(submission: Submission) {
+  return Object.values(submission.answers)
+    .map((value) => {
+      if (typeof value === "string") {
+        return value;
+      }
+      if (Array.isArray(value)) {
+        return value.filter((item): item is string => typeof item === "string").join(" ");
+      }
+      return "";
+    })
+    .filter(Boolean)
+    .join(" ");
+}
+
+function countPatternMatches(text: string, patterns: string[]) {
+  const normalized = text.toLowerCase();
+  return patterns.reduce((count, pattern) => count + (normalized.includes(pattern) ? 1 : 0), 0);
+}
+
+function buildDemoIntelligenceOutcome(
+  demoSignals: SignalRecord[],
+  scenarioId: DemoSignalScenario,
+): DemoIntelligenceOutcome {
+  const fallback = getDemoFallbackOutcome(scenarioId);
+  const totalSignals = demoSignals.length;
+  if (totalSignals === 0) {
+    return fallback;
+  }
+
+  const sourceSet = new Set<string>();
+  const candidates = new Map<string, {
+    label: string;
+    patterns: string[];
+    matchingIds: Set<string>;
+    score: number;
+    rule?: (typeof DEMO_TOPIC_RULES)[number];
+  }>();
+
+  function ensureCandidate(label: string, patterns = [label.toLowerCase()], rule?: (typeof DEMO_TOPIC_RULES)[number]) {
+    const key = label.toLowerCase();
+    const current = candidates.get(key);
+    if (current) {
+      patterns.forEach((pattern) => {
+        if (!current.patterns.includes(pattern)) {
+          current.patterns.push(pattern);
+        }
+      });
+      return current;
+    }
+    const next = {
+      label,
+      patterns,
+      matchingIds: new Set<string>(),
+      score: 0,
+      rule,
+    };
+    candidates.set(key, next);
+    return next;
+  }
+
+  DEMO_TOPIC_RULES.forEach((rule) => ensureCandidate(rule.label, rule.patterns, rule));
+  demoSignals.forEach(({ submission }) => {
+    submission.keywords?.forEach((keyword) => {
+      ensureCandidate(keyword, [keyword.toLowerCase()]);
+    });
+  });
+
+  demoSignals.forEach(({ submission }) => {
+    const keywordText = (submission.keywords ?? []).join(" ");
+    const summaryText = submission.aiSummary ?? "";
+    const subjectText = submission.subjectPreview ?? "";
+    const answerText = getSubmissionAnswerText(submission);
+    if (keywordText) sourceSet.add("keywords");
+    if (summaryText) sourceSet.add("AI summaries");
+    if (answerText) sourceSet.add("answer text");
+    if (subjectText) sourceSet.add("subject previews");
+
+    candidates.forEach((candidate) => {
+      const keywordMatches = countPatternMatches(keywordText, candidate.patterns);
+      const summaryMatches = countPatternMatches(summaryText, candidate.patterns);
+      const subjectMatches = countPatternMatches(subjectText, candidate.patterns);
+      const answerMatches = countPatternMatches(answerText, candidate.patterns);
+      const weightedScore = keywordMatches * 2 + summaryMatches * 3 + subjectMatches * 2 + answerMatches * 2;
+      if (weightedScore > 0) {
+        candidate.matchingIds.add(submission.id);
+        candidate.score += weightedScore;
+      }
+    });
+  });
+
+  const ranked = [...candidates.values()]
+    .filter((candidate) => candidate.matchingIds.size > 0)
+    .sort((left, right) => {
+      const countDelta = right.matchingIds.size - left.matchingIds.size;
+      if (countDelta !== 0) return countDelta;
+      return right.score - left.score;
+    });
+  const topCandidate = ranked[0];
+  if (!topCandidate) {
+    return {
+      ...fallback,
+      totalSignals,
+      fallbackUsed: true,
+      derivedFrom: [...sourceSet],
+    };
+  }
+
+  const matchingIds = topCandidate.matchingIds;
+  const topTopicCount = matchingIds.size;
+  const topTopicRatio = totalSignals > 0 ? topTopicCount / totalSignals : 0;
+  const matchedRule =
+    topCandidate.rule ??
+    DEMO_TOPIC_RULES.find((rule) => rule.patterns.some((pattern) => topCandidate.patterns.includes(pattern))) ??
+    null;
+  const evidencePatterns = matchedRule?.patterns ?? topCandidate.patterns;
+  const evidenceCount = demoSignals.reduce((count, { submission }) => {
+    const evidenceText = [
+      submission.aiSummary,
+      submission.subjectPreview,
+      getSubmissionAnswerText(submission),
+      ...(submission.keywords ?? []),
+    ]
+      .filter(Boolean)
+      .join(" ");
+    return count + (countPatternMatches(evidenceText, evidencePatterns) > 0 ? 1 : 0);
+  }, 0);
+  const confidenceLabel: DemoIntelligenceOutcome["confidenceLabel"] =
+    topTopicRatio >= 0.5 || evidenceCount >= 20
+      ? "High"
+      : topTopicRatio >= 0.25 || evidenceCount >= 5
+        ? "Medium"
+        : "Low";
+
+  return {
+    topTopic: topCandidate.label,
+    topTopicCount,
+    totalSignals,
+    topTopicRatio,
+    insight: matchedRule?.insight ?? fallback.insight,
+    insightShort: matchedRule?.insightShort ?? fallback.insightShort,
+    evidenceCount,
+    followUpQuestion: matchedRule?.followUpQuestion ?? fallback.followUpQuestion,
+    followUpShort: fallback.followUpShort,
+    confidenceLabel,
+    contribution: matchedRule?.contribution ?? fallback.contribution,
+    derivedFrom: [...sourceSet],
+    fallbackUsed: false,
+  };
+}
+
 function getDemoScenarioIdFromSubmission(submission?: Submission | null): DemoSignalScenario {
   const scenario = submission?.metadata?.scenario;
   if (typeof scenario === "string") {
@@ -485,26 +738,30 @@ function getDemoScenarioIdFromSubmission(submission?: Submission | null): DemoSi
 function getDemoIntelligenceEventContent(
   event: DemoIntelligenceEvent,
   t: TranslationFn,
-  outcome: ReturnType<typeof getDemoScenarioOutcome>,
+  outcome: DemoIntelligenceOutcome,
 ) {
   switch (event.type) {
     case "trend_unlocked":
       return {
         icon: "🔥",
         label: t("demoEventTrendUnlockedLabel"),
-        detail: t("demoEventTrendUnlockedDetail", { topic: outcome.topTopic }),
+        detail: t("demoEventTrendUnlockedDetail", {
+          topic: outcome.topTopic,
+          count: outcome.topTopicCount,
+          total: outcome.totalSignals,
+        }),
       };
     case "insights_unlocked":
       return {
         icon: "🧠",
         label: t("demoEventInsightsUnlockedLabel"),
-        detail: t("demoEventInsightsUnlockedDetail", { insight: outcome.insight }),
+        detail: t("demoEventInsightsUnlockedDetail", { count: outcome.evidenceCount }),
       };
     case "evolution_unlocked":
       return {
         icon: "🌱",
         label: t("demoEventEvolutionUnlockedLabel"),
-        detail: t("demoEventEvolutionUnlockedDetail", { followUp: outcome.followUp }),
+        detail: t("demoEventEvolutionUnlockedDetail", { confidence: outcome.confidenceLabel }),
       };
     case "ingest_complete":
       return {
@@ -1385,10 +1642,9 @@ function buildDemoSimulationTimelineModel(
   baseModel: InboxTimelineModel,
   demoSignalVolume: DemoSignalVolume,
   t: TranslationFn,
-  scenarioId: DemoSignalScenario,
+  outcome: DemoIntelligenceOutcome,
 ): InboxTimelineModel {
   const now = new Date().toISOString();
-  const outcome = getDemoScenarioOutcome(scenarioId);
   const demoTrendUnlocked = demoSignalVolume >= 5;
   const demoAiUnlocked = demoSignalVolume >= 20;
   const demoEvolutionUnlocked = demoSignalVolume >= 100;
@@ -1400,7 +1656,10 @@ function buildDemoSimulationTimelineModel(
       label: t("inboxTrendRisingTopicLabel"),
       title: outcome.topTopic,
       value: t("inboxTrendSignalCount", { count: demoSignalVolume }),
-      detail: t("demoOutcomeTopTopicValue", { topic: outcome.topTopic }),
+      detail: t("demoOutcomeTopTopicEvidence", {
+        count: outcome.topTopicCount,
+        total: outcome.totalSignals,
+      }),
       tone: "topic",
     });
   }
@@ -1422,7 +1681,7 @@ function buildDemoSimulationTimelineModel(
       label: t("intelligenceCenterSignalEvolutionTitle"),
       title: t("demoSimulationSignalEvolutionTitle"),
       value: t("inboxTrendSignalCount", { count: demoSignalVolume }),
-      detail: t("demoOutcomeFollowUpValue", { followUp: outcome.followUp }),
+      detail: t("demoOutcomeFollowUpValue", { followUp: outcome.followUpQuestion }),
       tone: "risk",
     });
   }
@@ -1470,6 +1729,8 @@ function InboxTimelineOverview({
   demoArrivalAlert = null,
   demoEventFeed = [],
   demoScenario = DEFAULT_DEMO_SIGNAL_SCENARIO,
+  demoOutcome = getDemoFallbackOutcome(demoScenario),
+  demoIntelligenceViewMode = "executive",
 }: {
   model: InboxTimelineModel;
   t: TranslationFn;
@@ -1481,11 +1742,13 @@ function InboxTimelineOverview({
   demoArrivalAlert?: string | null;
   demoEventFeed?: DemoIntelligenceEvent[];
   demoScenario?: DemoSignalScenario;
+  demoOutcome?: DemoIntelligenceOutcome;
+  demoIntelligenceViewMode?: DemoIntelligenceViewMode;
 }) {
   const liveFeedEvents = demoEventFeed.slice(-8);
-  const safeDemoScenario = normalizeDemoScenarioId(demoScenario);
-  const demoOutcome = getDemoScenarioOutcome(safeDemoScenario);
+  const effectiveDemoOutcome = demoOutcome;
   const demoModeVisible = demoSignalCount > 0 || demoGenerating || liveFeedEvents.length > 0;
+  const showDeveloperDemoFeed = demoIntelligenceViewMode === "developer";
   const currentDemoStage =
     model.generatedFromCount >= 100
       ? 4
@@ -1499,17 +1762,17 @@ function InboxTimelineOverview({
     {
       id: 2,
       label: t("demoStoryStageTrendDetection"),
-      detail: currentDemoStage >= 2 ? t("demoOutcomeTopTopicValue", { topic: demoOutcome.topTopic }) : t("demoSimulationLockedStatus"),
+      detail: currentDemoStage >= 2 ? t("demoOutcomeTopTopicValue", { topic: effectiveDemoOutcome.topTopic }) : t("demoSimulationLockedStatus"),
     },
     {
       id: 3,
       label: t("demoStoryStageAiInsights"),
-      detail: currentDemoStage >= 3 ? demoOutcome.insightShort : t("demoSimulationLockedStatus"),
+      detail: currentDemoStage >= 3 ? effectiveDemoOutcome.insightShort : t("demoSimulationLockedStatus"),
     },
     {
       id: 4,
       label: t("demoStoryStageSignalEvolution"),
-      detail: currentDemoStage >= 4 ? demoOutcome.followUpShort : t("demoSimulationLockedStatus"),
+      detail: currentDemoStage >= 4 ? effectiveDemoOutcome.followUpShort : t("demoSimulationLockedStatus"),
     },
   ];
   if (compact) {
@@ -1526,13 +1789,13 @@ function InboxTimelineOverview({
           {demoModeVisible ? (
             <>
               {model.generatedFromCount >= 5 ? (
-                <span>{t("demoActivityTopTopic", { topic: demoOutcome.topTopic })}</span>
+                <span>{t("demoActivityTopTopic", { topic: effectiveDemoOutcome.topTopic })}</span>
               ) : null}
               {model.generatedFromCount >= 20 ? (
-                <span>{t("demoActivityInsight", { insight: demoOutcome.insightShort })}</span>
+                <span>{t("demoActivityInsight", { insight: effectiveDemoOutcome.insightShort })}</span>
               ) : null}
               {model.generatedFromCount >= 100 ? (
-                <span>{t("demoActivityNextAction", { action: demoOutcome.followUpShort })}</span>
+                <span>{t("demoActivityNextAction", { action: effectiveDemoOutcome.followUpShort })}</span>
               ) : null}
               <span className="is-subtle">{t("demoSignalMixLabel", { demo: demoSignalCount, real: realSignalCount ?? 0 })}</span>
             </>
@@ -1564,7 +1827,7 @@ function InboxTimelineOverview({
             <span>{demoArrivalAlert}</span>
           </div>
         ) : null}
-        {!demoGenerating && liveFeedEvents.length > 0 ? (
+        {!demoGenerating && showDeveloperDemoFeed && liveFeedEvents.length > 0 ? (
           <div className="demo-event-feed" aria-label={t("demoEventFeedTitle")}>
             <div className="demo-event-feed-head">
               <strong>{t("demoEventFeedTitle")}</strong>
@@ -1584,7 +1847,7 @@ function InboxTimelineOverview({
             </div>
             <ol>
               {liveFeedEvents.map((event, index) => {
-                const content = getDemoIntelligenceEventContent(event, t, demoOutcome);
+                const content = getDemoIntelligenceEventContent(event, t, effectiveDemoOutcome);
                 const newest = index === liveFeedEvents.length - 1;
                 return (
                   <li key={event.id} className={`demo-event-feed-item is-${event.type} ${newest ? "is-newest" : ""}`}>
@@ -1660,9 +1923,12 @@ function SignalIntelligenceCenter({
   demoScenario,
   demoSignalCount,
   realSignalCount,
+  demoOutcome,
+  demoIntelligenceViewMode,
   demoGenerating,
   demoIngestTarget,
   demoUnlockAlert,
+  onDemoIntelligenceViewModeChange,
   onDemoScenarioChange,
   onGenerateDemoSignals,
   onCancelDemoIngest,
@@ -1675,18 +1941,21 @@ function SignalIntelligenceCenter({
   demoScenario: DemoSignalScenario;
   demoSignalCount: number;
   realSignalCount: number;
+  demoOutcome: DemoIntelligenceOutcome;
+  demoIntelligenceViewMode: DemoIntelligenceViewMode;
   demoGenerating: boolean;
   demoIngestTarget: 5 | 20 | 100 | null;
   demoUnlockAlert: string | null;
+  onDemoIntelligenceViewModeChange: (mode: DemoIntelligenceViewMode) => void;
   onDemoScenarioChange: (scenario: DemoSignalScenario) => void;
   onGenerateDemoSignals: (targetCount: 5 | 20 | 100) => void;
   onCancelDemoIngest: () => void;
   onResetDemoSignals: () => void;
 }) {
   const safeDemoScenario = normalizeDemoScenarioId(demoScenario);
-  const effectiveModel = demoSimulationEnabled ? buildDemoSimulationTimelineModel(model, demoSignalVolume, t, safeDemoScenario) : model;
+  const effectiveModel = demoSimulationEnabled ? buildDemoSimulationTimelineModel(model, demoSignalVolume, t, demoOutcome) : model;
   const empty = effectiveModel.generatedFromCount === 0;
-  const demoOutcome = getDemoScenarioOutcome(safeDemoScenario);
+  const isDeveloperDemoMode = !demoSimulationEnabled || demoIntelligenceViewMode === "developer";
   const demoStage = getDemoSimulationStage(demoSignalVolume, t);
   const demoStepOptions = DEMO_SIGNAL_VOLUME_OPTIONS.map((volume) => ({
     volume,
@@ -1766,7 +2035,7 @@ function SignalIntelligenceCenter({
       detail: empty
         ? t("intelligenceCenterFollowUpEmpty")
         : demoSimulationEnabled && effectiveModel.generatedFromCount >= 100
-          ? demoOutcome.followUp
+          ? demoOutcome.followUpQuestion
           : effectiveModel.unreadCount > 0
           ? t("intelligenceCenterFollowUpUnread", { count: effectiveModel.unreadCount })
           : t("intelligenceCenterFollowUpStable"),
@@ -1845,9 +2114,25 @@ function SignalIntelligenceCenter({
               </span>
             </div>
           ) : null}
+          <div className="demo-intelligence-mode-switch" role="group" aria-label={t("demoIntelligenceModeLabel")}>
+            <button
+              type="button"
+              className={demoIntelligenceViewMode === "executive" ? "is-active" : ""}
+              onClick={() => onDemoIntelligenceViewModeChange("executive")}
+            >
+              {t("demoIntelligenceExecutiveMode")}
+            </button>
+            <button
+              type="button"
+              className={demoIntelligenceViewMode === "developer" ? "is-active" : ""}
+              onClick={() => onDemoIntelligenceViewModeChange("developer")}
+            >
+              {t("demoIntelligenceDeveloperMode")}
+            </button>
+          </div>
           <p>{t("demoGeneratorDisclosure")}</p>
         </div>
-        {demoSimulationEnabled ? (
+        {demoSimulationEnabled && demoIntelligenceViewMode === "developer" ? (
           <div className="demo-simulation-volume-control">
             <article className={`demo-simulation-stage-hero ${demoSignalVolume >= 100 ? "is-evolution" : ""}`}>
               {demoUnlockAlert ? (
@@ -1862,7 +2147,7 @@ function SignalIntelligenceCenter({
               {demoSignalVolume >= 100 ? (
                 <div className="demo-simulation-follow-up-callout">
                   <span>{t("selectedSignalFollowUpLabel")}</span>
-                  <strong>“{demoOutcome.followUp}”</strong>
+                  <strong>“{demoOutcome.followUpQuestion}”</strong>
                   <button type="button" disabled>
                     {t("demoSimulationCreateFollowUpCta")}
                   </button>
@@ -1887,6 +2172,16 @@ function SignalIntelligenceCenter({
           </div>
         ) : null}
       </div>
+      {demoSimulationEnabled && demoIntelligenceViewMode === "executive" ? (
+        <DemoExecutiveBriefCard
+          t={t}
+          demoOutcome={demoOutcome}
+          demoSignalCount={demoSignalCount}
+          realSignalCount={realSignalCount}
+          observedCount={effectiveModel.generatedFromCount}
+        />
+      ) : null}
+      {isDeveloperDemoMode ? (
       <div className="signal-intelligence-center-metrics">
         <span>{t("inboxActivityResponses", { count: effectiveModel.generatedFromCount })}</span>
         {demoSimulationEnabled ? (
@@ -1909,27 +2204,37 @@ function SignalIntelligenceCenter({
           </>
         )}
       </div>
-      {demoSimulationEnabled && effectiveModel.generatedFromCount >= 5 ? (
+      ) : null}
+      {isDeveloperDemoMode && demoSimulationEnabled && effectiveModel.generatedFromCount >= 5 ? (
         <article className="demo-outcome-summary-card">
           <span>{t("demoOutcomeSummaryTitle")}</span>
           <div>
             <strong>{t("demoOutcomeTopTopicLabel")}</strong>
             <p>{demoOutcome.topTopic}</p>
+            <small>{t("demoOutcomeTopTopicEvidence", { count: demoOutcome.topTopicCount, total: demoOutcome.totalSignals })}</small>
           </div>
           {effectiveModel.generatedFromCount >= 20 ? (
             <div>
               <strong>{t("demoOutcomeInsightLabel")}</strong>
               <p>{demoOutcome.insight}</p>
+              <small>{t("demoOutcomeInsightEvidence", { count: demoOutcome.evidenceCount })}</small>
             </div>
           ) : null}
           {effectiveModel.generatedFromCount >= 100 ? (
             <div>
               <strong>{t("demoOutcomeFollowUpLabel")}</strong>
-              <p>“{demoOutcome.followUp}”</p>
+              <p>“{demoOutcome.followUpQuestion}”</p>
+              <small>{t("demoOutcomeConfidence", { confidence: demoOutcome.confidenceLabel })}</small>
             </div>
           ) : null}
+          <em>
+            {demoOutcome.derivedFrom.length > 0
+              ? t("demoOutcomeDerivedFrom", { sources: demoOutcome.derivedFrom.join(", ") })
+              : t("demoOutcomeFallbackUsed")}
+          </em>
         </article>
       ) : null}
+      {isDeveloperDemoMode ? (
       <div className="intelligence-unlock-panel" aria-label={t("intelligenceUnlockTitle")}>
         <div className="intelligence-unlock-panel-head">
           <strong>{t("intelligenceUnlockTitle")}</strong>
@@ -1952,7 +2257,8 @@ function SignalIntelligenceCenter({
           ))}
         </div>
       </div>
-      {empty ? (
+      ) : null}
+      {isDeveloperDemoMode && empty ? (
         <article className="signal-intelligence-readiness-card">
           <span>{t("intelligenceReadinessLabel")}</span>
           <strong>{t("intelligenceReadinessTitle")}</strong>
@@ -1965,6 +2271,7 @@ function SignalIntelligenceCenter({
           </ul>
         </article>
       ) : null}
+      {isDeveloperDemoMode ? (
       <div className="signal-intelligence-center-card-grid">
         {intelligencePlaceholders.map((card) => (
           <article
@@ -1979,7 +2286,8 @@ function SignalIntelligenceCenter({
           </article>
         ))}
       </div>
-      {!empty && effectiveModel.hasTrendData ? (
+      ) : null}
+      {isDeveloperDemoMode && !empty && effectiveModel.hasTrendData ? (
         <div className="signal-intelligence-center-trends">
           {effectiveModel.trendCards.map((card) => (
             <article key={card.id} className={`inbox-trend-card is-${card.tone}`}>
@@ -1991,6 +2299,59 @@ function SignalIntelligenceCenter({
         </div>
       ) : null}
     </section>
+  );
+}
+
+function DemoExecutiveBriefCard({
+  t,
+  demoOutcome,
+  demoSignalCount,
+  realSignalCount,
+  observedCount,
+}: {
+  t: TranslationFn;
+  demoOutcome: DemoIntelligenceOutcome;
+  demoSignalCount: number;
+  realSignalCount: number;
+  observedCount: number;
+}) {
+  const issueDetectedValue =
+    observedCount >= 20
+      ? demoOutcome.insightShort
+      : observedCount >= 5
+        ? t("executiveIssueDetectedFromTopic", { topic: demoOutcome.topTopic })
+        : t("executiveIssueDetectedMonitoring");
+
+  return (
+    <article className="executive-brief-card" aria-label={t("executiveBriefTitle")}>
+      <div className="executive-brief-head">
+        <span>{t("executiveBriefTitle")}</span>
+        <strong>{t("demoSignalMixLabel", { demo: demoSignalCount, real: realSignalCount })}</strong>
+      </div>
+      <div className="executive-brief-grid">
+        <section className="executive-brief-item is-issue">
+          <span>{t("executiveIssueDetectedLabel")}</span>
+          <strong>{issueDetectedValue}</strong>
+        </section>
+        <section className="executive-brief-item">
+          <span>{t("executiveTopTopicLabel")}</span>
+          <strong>{demoOutcome.topTopic}</strong>
+        </section>
+        <section className="executive-brief-item">
+          <span>{t("executiveEvidenceCountLabel")}</span>
+          <strong>{t("executiveEvidenceCountValue", { count: demoOutcome.evidenceCount })}</strong>
+          <small>{t("demoOutcomeTopTopicEvidence", { count: demoOutcome.topTopicCount, total: demoOutcome.totalSignals })}</small>
+        </section>
+        <section className="executive-brief-item">
+          <span>{t("executiveConfidenceLabel")}</span>
+          <strong>{demoOutcome.confidenceLabel}</strong>
+        </section>
+        <section className="executive-brief-item is-action">
+          <span>{t("executiveRecommendedActionLabel")}</span>
+          <strong>“{demoOutcome.followUpQuestion}”</strong>
+        </section>
+      </div>
+    </article>
   );
 }
 
@@ -2006,6 +2367,7 @@ function SelectedSignalIntelligenceCard({
   isPublishingToRoadmap,
   onMarkEmergingRisk,
   onPublishToRoadmap,
+  demoOutcome,
 }: {
   record: SignalRecord;
   t: TranslationFn;
@@ -2018,10 +2380,11 @@ function SelectedSignalIntelligenceCard({
   isPublishingToRoadmap: boolean;
   onMarkEmergingRisk: () => void;
   onPublishToRoadmap: () => void;
+  demoOutcome?: DemoIntelligenceOutcome;
 }) {
   const isDemoSignal = isDemoSignalRecord(record);
   const demoScenario = getDemoScenarioIdFromSubmission(record.submission);
-  const demoOutcome = getDemoScenarioOutcome(demoScenario);
+  const selectedDemoOutcome = demoOutcome ?? buildDemoIntelligenceOutcome([record], demoScenario);
   const aiSummary = record.submission.aiSummary?.trim() || t("selectedSignalAiSummaryPending");
   const followUp = hasNeedsFollowUp(record.submission)
     ? t("selectedSignalFollowUpRequested")
@@ -2039,22 +2402,22 @@ function SelectedSignalIntelligenceCard({
       <div className="selected-signal-intelligence-grid">
         <article>
           <span>{t("selectedSignalTrendDetectionLabel")}</span>
-          <strong>{isDemoSignal ? demoOutcome.topTopic : trendLabel}</strong>
+          <strong>{isDemoSignal ? selectedDemoOutcome.topTopic : trendLabel}</strong>
         </article>
         <article>
           <span>{t("selectedSignalAiSummaryLabel")}</span>
-          <p>{isDemoSignal ? demoOutcome.insight : aiSummary}</p>
+          <p>{isDemoSignal ? selectedDemoOutcome.insight : aiSummary}</p>
         </article>
         <article>
           <span>{t("selectedSignalFollowUpLabel")}</span>
-          <p>{isDemoSignal ? demoOutcome.followUp : followUp}</p>
+          <p>{isDemoSignal ? selectedDemoOutcome.followUpQuestion : followUp}</p>
         </article>
       </div>
       {isDemoSignal ? (
         <article className="demo-signal-outcome-note">
           <span>{t("demoScenarioLabel")}: {DEMO_SIGNAL_SCENARIOS[normalizeDemoScenarioId(demoScenario)].label}</span>
-          <strong>{t("demoOutcomeTopTopicValue", { topic: demoOutcome.topTopic })}</strong>
-          <p>{t("demoSignalContributedTo", { contribution: demoOutcome.contribution })}</p>
+          <strong>{t("demoOutcomeTopTopicValue", { topic: selectedDemoOutcome.topTopic })}</strong>
+          <p>{t("demoSignalContributedTo", { contribution: selectedDemoOutcome.contribution })}</p>
         </article>
       ) : null}
       <div
@@ -2892,6 +3255,8 @@ interface MobileSignalInboxProps {
   demoArrivalAlert: string | null;
   demoEventFeed: DemoIntelligenceEvent[];
   demoScenario: DemoSignalScenario;
+  demoOutcome: DemoIntelligenceOutcome;
+  demoIntelligenceViewMode: DemoIntelligenceViewMode;
   demoJustArrivedSignalIds: Set<string>;
   hasMoreSignals: boolean;
   onLoadMoreSignals: () => void;
@@ -2952,6 +3317,8 @@ function MobileSignalInbox({
   demoArrivalAlert,
   demoEventFeed,
   demoScenario,
+  demoOutcome,
+  demoIntelligenceViewMode,
   demoJustArrivedSignalIds,
   hasMoreSignals,
   onLoadMoreSignals,
@@ -3064,6 +3431,8 @@ function MobileSignalInbox({
         demoArrivalAlert={demoArrivalAlert}
         demoEventFeed={demoEventFeed}
         demoScenario={demoScenario}
+        demoOutcome={demoOutcome}
+        demoIntelligenceViewMode={demoIntelligenceViewMode}
       />
     </section>
   );
@@ -3138,6 +3507,7 @@ export function AdminDashboardPage() {
   const [isRunningDemoFlow, setIsRunningDemoFlow] = useState(false);
   const [isDemoGuideOpen, setIsDemoGuideOpen] = useState(true);
   const [demoSignalScenario, setDemoSignalScenario] = useState<DemoSignalScenario>(DEFAULT_DEMO_SIGNAL_SCENARIO);
+  const [demoIntelligenceViewMode, setDemoIntelligenceViewMode] = useState<DemoIntelligenceViewMode>("executive");
   const [demoSignalRecords, setDemoSignalRecords] = useState<SignalRecord[]>([]);
   const [demoSignalsGenerating, setDemoSignalsGenerating] = useState(false);
   const [demoIngestTarget, setDemoIngestTarget] = useState<5 | 20 | 100 | null>(null);
@@ -3245,6 +3615,10 @@ export function AdminDashboardPage() {
   );
   const demoSignalCount = demoSignalRecords.length;
   const realSignalCount = realVisibleSignals.length;
+  const demoIntelligenceOutcome = useMemo(
+    () => buildDemoIntelligenceOutcome(demoSignalRecords, demoSignalScenario),
+    [demoSignalRecords, demoSignalScenario],
+  );
   const intelligenceDemoSimulationEnabled = demoSignalCount > 0 || demoSignalsGenerating;
   const demoSignalVolume = getDemoSignalVolume(demoSignalCount);
   const isIntelligenceDemoRoute = new URLSearchParams(location.search).get("demo") === "intelligence";
@@ -5841,6 +6215,8 @@ export function AdminDashboardPage() {
             demoArrivalAlert={demoArrivalAlert}
             demoEventFeed={demoEventFeed}
             demoScenario={demoSignalScenario}
+            demoOutcome={demoIntelligenceOutcome}
+            demoIntelligenceViewMode={demoIntelligenceViewMode}
             demoJustArrivedSignalIds={demoJustArrivedSignalIds}
             hasMoreSignals={hasMoreRenderedSignals}
             onLoadMoreSignals={() => setRenderedSignalLimit((current) => current + SIGNAL_LIST_PAGE_SIZE)}
@@ -6116,6 +6492,8 @@ export function AdminDashboardPage() {
                 demoArrivalAlert={demoArrivalAlert}
                 demoEventFeed={demoEventFeed}
                 demoScenario={demoSignalScenario}
+                demoOutcome={demoIntelligenceOutcome}
+                demoIntelligenceViewMode={demoIntelligenceViewMode}
               />
               {hasAdminAccess ? (
                 <section className="answer-card answer-card-plain optional-proof-queue-panel">
@@ -6333,9 +6711,12 @@ export function AdminDashboardPage() {
                   demoScenario={demoSignalScenario}
                   demoSignalCount={demoSignalCount}
                   realSignalCount={realSignalCount}
+                  demoOutcome={demoIntelligenceOutcome}
+                  demoIntelligenceViewMode={demoIntelligenceViewMode}
                   demoGenerating={demoSignalsGenerating}
                   demoIngestTarget={demoIngestTarget}
                   demoUnlockAlert={demoUnlockAlert}
+                  onDemoIntelligenceViewModeChange={setDemoIntelligenceViewMode}
                   onDemoScenarioChange={handleDemoScenarioChange}
                   onGenerateDemoSignals={handleGenerateDemoSignals}
                   onCancelDemoIngest={handleCancelDemoIngest}
@@ -6554,6 +6935,7 @@ export function AdminDashboardPage() {
                       followUpProminent={selectedFollowUpProminent}
                       showEmergingRiskAction={!selectedRecordIsDemo && selectedShowEmergingRiskAction}
                       showRoadmapAction={selectedShowRoadmapAction}
+                      demoOutcome={demoIntelligenceOutcome}
                       isMarkingEmergingRisk={
                         hasNeedsFollowUp(selectedRecord.submission) && selectedRecord.submission.priority === "high"
                       }

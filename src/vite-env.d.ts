@@ -48,10 +48,6 @@ interface ImportMetaEnv {
   readonly VITE_ZKLOGIN_SALT_SERVICE_URL?: string;
   readonly VITE_ZKLOGIN_MAX_EPOCH_OFFSET?: string;
   readonly VITE_MEMWAL_ENABLED?: string;
-  readonly VITE_MEMWAL_SERVER_URL?: string;
-  readonly VITE_MEMWAL_ACCOUNT_ID?: string;
-  readonly VITE_MEMWAL_DELEGATE_KEY?: string;
-  readonly VITE_MEMWAL_NAMESPACE_PREFIX?: string;
 }
 
 interface ImportMeta {

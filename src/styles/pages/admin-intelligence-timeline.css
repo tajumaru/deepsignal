@@ -561,6 +561,20 @@
   line-height: 1.35;
 }
 
+.demo-outcome-summary-card small,
+.demo-outcome-summary-card em {
+  color: #8fb9c6;
+  font-size: 0.68rem;
+  font-style: normal;
+  font-weight: 750;
+  line-height: 1.25;
+}
+
+.demo-outcome-summary-card em {
+  padding-top: 0.1rem;
+  border-top: 1px solid rgba(116, 226, 255, 0.08);
+}
+
 .demo-signal-outcome-note {
   margin-top: 0.65rem;
   padding: 0.62rem;
@@ -700,6 +714,36 @@
   line-height: 1.38;
 }
 
+.demo-intelligence-mode-switch {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.34rem;
+  padding: 0.24rem;
+  border: 1px solid rgba(116, 226, 255, 0.1);
+  border-radius: 12px;
+  background: rgba(2, 12, 22, 0.36);
+}
+
+.demo-intelligence-mode-switch button {
+  min-width: 0;
+  min-height: 2rem;
+  padding: 0.26rem 0.48rem;
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  border-radius: 9px;
+  background: transparent;
+  color: #91b8c7;
+  font-size: 0.72rem;
+  font-weight: 950;
+}
+
+.demo-intelligence-mode-switch button.is-active {
+  border-color: rgba(82, 208, 141, 0.28);
+  background:
+    radial-gradient(circle at top right, rgba(82, 208, 141, 0.16), transparent 46%),
+    rgba(82, 208, 141, 0.12);
+  color: #e8fff1;
+}
+
 .demo-ingest-status {
   display: grid;
   gap: 0.34rem;
@@ -741,6 +785,115 @@
   border-radius: inherit;
   background: linear-gradient(90deg, #74e2ff, #52d08d);
   transition: width 180ms ease;
+}
+
+.executive-brief-card {
+  display: grid;
+  gap: 0.78rem;
+  min-width: 0;
+  padding: 0.86rem;
+  border: 1px solid rgba(82, 208, 141, 0.22);
+  border-radius: 16px;
+  background:
+    radial-gradient(circle at top right, rgba(82, 208, 141, 0.16), transparent 36%),
+    radial-gradient(circle at bottom left, rgba(116, 226, 255, 0.1), transparent 34%),
+    rgba(3, 18, 26, 0.54);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 20px 42px rgba(0, 0, 0, 0.18);
+}
+
+.executive-brief-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  min-width: 0;
+}
+
+.executive-brief-head span {
+  color: #effcff;
+  font-size: 0.95rem;
+  font-weight: 950;
+  line-height: 1.15;
+}
+
+.executive-brief-head strong {
+  flex: 0 1 auto;
+  min-width: 0;
+  padding: 0.14rem 0.48rem;
+  border: 1px solid rgba(116, 226, 255, 0.14);
+  border-radius: var(--radius-pill);
+  background: rgba(116, 226, 255, 0.065);
+  color: #aeeeff;
+  font-size: 0.62rem;
+  font-weight: 900;
+  line-height: 1.2;
+  text-align: right;
+}
+
+.executive-brief-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.48rem;
+  min-width: 0;
+}
+
+.executive-brief-item {
+  display: grid;
+  gap: 0.16rem;
+  min-width: 0;
+  padding: 0.68rem;
+  border: 1px solid rgba(116, 226, 255, 0.1);
+  border-radius: 12px;
+  background: rgba(3, 14, 25, 0.44);
+}
+
+.executive-brief-item.is-issue,
+.executive-brief-item.is-action {
+  grid-column: 1 / -1;
+}
+
+.executive-brief-item.is-issue {
+  border-color: rgba(82, 208, 141, 0.26);
+  background:
+    linear-gradient(90deg, rgba(82, 208, 141, 0.14), transparent 82%),
+    rgba(3, 18, 26, 0.5);
+}
+
+.executive-brief-item.is-action {
+  border-color: rgba(116, 226, 255, 0.18);
+  background:
+    linear-gradient(90deg, rgba(116, 226, 255, 0.12), transparent 82%),
+    rgba(3, 18, 26, 0.5);
+}
+
+.executive-brief-item span {
+  color: #8feaff;
+  font-size: 0.64rem;
+  font-weight: 950;
+  letter-spacing: 0.06em;
+  line-height: 1.15;
+  text-transform: uppercase;
+}
+
+.executive-brief-item strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: #f2fdff;
+  font-size: 0.98rem;
+  line-height: 1.2;
+}
+
+.executive-brief-item.is-issue strong {
+  font-size: clamp(1.14rem, 2vw, 1.45rem);
+}
+
+.executive-brief-item small {
+  color: #8fb9c6;
+  font-size: 0.68rem;
+  font-weight: 800;
+  line-height: 1.25;
 }
 
 .demo-simulation-volume-control {
@@ -1527,6 +1680,7 @@
   .inbox-timeline-event-strip,
   .inbox-trend-card-grid,
   .signal-intelligence-center-metrics,
+  .executive-brief-grid,
   .intelligence-unlock-stage-list,
   .demo-simulation-volume-options,
   .demo-generator-actions,
@@ -1536,9 +1690,14 @@
   }
 
   .demo-simulation-toggle-row,
+  .executive-brief-head,
   .demo-simulation-volume-head {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .demo-intelligence-mode-switch {
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .demo-generator-state,

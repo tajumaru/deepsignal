@@ -80,6 +80,11 @@ function collectPublicRouteImportGraph() {
 }
 
 describe("public route MemWal isolation", () => {
+  it("keeps the public bundle guard scoped to MemWal placeholders", () => {
+    expect(forbiddenSpecifiers).toEqual(["@mysten-incubation/memwal"]);
+    expect(forbiddenSourceSegments).toEqual([normalize("src/memory")]);
+  });
+
   it("does not import MemWal package or the memory adapter graph", () => {
     const graph = collectPublicRouteImportGraph();
     const violations: string[] = [];
