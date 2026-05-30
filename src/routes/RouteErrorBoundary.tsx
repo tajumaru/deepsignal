@@ -288,8 +288,10 @@ export class RouteErrorBoundary extends Component<
     if (this.state.error) {
       const chunkFailure = isChunkLoadFailure(this.state.error);
       const diagnostics = this.state.diagnostics;
-      const showDiagnostics = chunkFailure || shouldShowRouteDiagnostics(this.props.routePath);
-      const headline = chunkFailure ? "App update detected, refresh required." : "Explore hit an unexpected fault.";
+      const showDiagnostics = Boolean(diagnostics) || chunkFailure || shouldShowRouteDiagnostics(this.props.routePath);
+      const headline = chunkFailure
+        ? "App update detected, refresh required."
+        : "We couldn't reopen this workspace yet. Your local signals are still preserved.";
       const failedImportDiagnostics = diagnostics?.failedImportDiagnostics ?? [];
       const latestFailedImport = failedImportDiagnostics[failedImportDiagnostics.length - 1];
       const dependencyFailures = latestFailedImport?.dependencyProbe?.dependencies.filter((probe: ChunkProbe) => !probe.ok) ?? [];
@@ -303,23 +305,20 @@ export class RouteErrorBoundary extends Component<
               ? "A route chunk could not be loaded, usually because Safari has an older asset cached while a newer build is active. Local fallback data is still preserved."
               : "Retry the route to restore the workspace. Local fallback data is still preserved."}
           </p>
-          <p className="muted route-error-summary">
-            Diagnostic: {this.state.error.name || "Error"} - {this.state.error.message || "No error message reported."}
-          </p>
           <div className="inline-actions">
-            <button type="button" className="primary-button" onClick={this.handleRetry}>
-              {this.state.retryCount === 0 ? "Retry surface" : "Retry after clearing stale markers"}
-            </button>
-            <button type="button" className="ghost-button" onClick={() => void this.handleHardRefresh()}>
+            <button type="button" className="primary-button" onClick={() => void this.handleHardRefresh()}>
               Update DeepSignal
+            </button>
+            <button type="button" className="ghost-button" onClick={this.handleRetry}>
+              {this.state.retryCount === 0 ? "Retry surface" : "Retry after clearing stale markers"}
             </button>
             <button type="button" className="ghost-button" onClick={() => void this.handleCopyDiagnostics()}>
               {this.state.diagnosticsCopied ? "Copied diagnostics" : "Copy diagnostics"}
             </button>
           </div>
           {showDiagnostics && diagnostics ? (
-            <details className="route-diagnostics-panel" open>
-              <summary>Route diagnostics</summary>
+            <details className="route-diagnostics-panel">
+              <summary>Technical details</summary>
               <dl>
                 <dt>error.name</dt>
                 <dd>{diagnostics.errorName}</dd>

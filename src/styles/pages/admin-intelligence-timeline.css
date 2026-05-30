@@ -217,7 +217,8 @@
 }
 
 .demo-event-stage-strip strong,
-.demo-event-stage-strip em {
+.demo-event-stage-strip em,
+.demo-event-stage-strip small {
   overflow: hidden;
   min-width: 0;
   text-overflow: ellipsis;
@@ -239,6 +240,18 @@
   font-style: normal;
   font-weight: 850;
   line-height: 1.15;
+}
+
+.demo-event-stage-strip small {
+  color: #8fb9c6;
+  font-size: 0.58rem;
+  font-weight: 750;
+  line-height: 1.18;
+}
+
+.demo-event-stage-strip > span.is-current small,
+.demo-event-stage-strip > span.is-complete small {
+  color: #bcefd2;
 }
 
 .demo-event-feed-item {
@@ -498,6 +511,59 @@
   font-size: 0.76rem;
   font-weight: 850;
   text-align: center;
+}
+
+.signal-intelligence-center-metrics span.is-subtle,
+.inbox-activity-chip-row span.is-subtle {
+  color: #8fb9c6;
+  opacity: 0.78;
+}
+
+.demo-outcome-summary-card,
+.demo-signal-outcome-note {
+  display: grid;
+  gap: 0.56rem;
+  min-width: 0;
+  padding: 0.72rem;
+  border: 1px solid rgba(82, 208, 141, 0.18);
+  border-radius: 14px;
+  background:
+    radial-gradient(circle at top right, rgba(82, 208, 141, 0.12), transparent 38%),
+    rgba(5, 24, 25, 0.38);
+}
+
+.demo-outcome-summary-card > span,
+.demo-signal-outcome-note > span {
+  color: #91dff0;
+  font-size: 0.68rem;
+  font-weight: 950;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.demo-outcome-summary-card div {
+  display: grid;
+  gap: 0.12rem;
+  min-width: 0;
+}
+
+.demo-outcome-summary-card strong,
+.demo-signal-outcome-note strong {
+  color: #effcff;
+  font-size: 0.82rem;
+}
+
+.demo-outcome-summary-card p,
+.demo-signal-outcome-note p {
+  margin: 0;
+  color: #b9d9e5;
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+
+.demo-signal-outcome-note {
+  margin-top: 0.65rem;
+  padding: 0.62rem;
 }
 
 .demo-simulation-control {

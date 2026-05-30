@@ -8,6 +8,7 @@ const { walletSurfaceSpy, walrusRuntimeSurfaceSpy, routeFailures } = vi.hoisted(
   walrusRuntimeSurfaceSpy: vi.fn(),
   routeFailures: {
     explore: null as Error | null,
+    admin: null as Error | null,
   },
 }));
 
@@ -72,7 +73,12 @@ vi.mock("./pages/ExploreSignalsPage", () => ({
 }));
 
 vi.mock("./pages/AdminDashboardPage", () => ({
-  AdminDashboardPage: () => <h1>Admin Route</h1>,
+  AdminDashboardPage: () => {
+    if (routeFailures.admin) {
+      throw routeFailures.admin;
+    }
+    return <h1>Admin Route</h1>;
+  },
 }));
 
 vi.mock("./pages/FormBuilderPage", () => ({
@@ -89,6 +95,7 @@ describe("App routing", () => {
     walletSurfaceSpy.mockClear();
     walrusRuntimeSurfaceSpy.mockClear();
     routeFailures.explore = null;
+    routeFailures.admin = null;
     window.sessionStorage.clear();
     window.localStorage.clear();
   });
@@ -209,7 +216,11 @@ describe("App routing", () => {
       </MemoryRouter>,
     );
 
-    await screen.findByRole("heading", { name: "Explore hit an unexpected fault." });
+    await screen.findByRole("heading", {
+      name: "We couldn't reopen this workspace yet. Your local signals are still preserved.",
+    });
+    expect(screen.getByText("Technical details").closest("details")).not.toHaveAttribute("open");
+    fireEvent.click(screen.getByText("Technical details"));
     expect(screen.getByText("useI18n must be used within I18nProvider")).toBeInTheDocument();
     expect(screen.getByText(/i18nProvider/)).toBeInTheDocument();
   });
@@ -247,12 +258,39 @@ describe("App routing", () => {
       </MemoryRouter>,
     );
 
-    await screen.findByRole("heading", { name: "Explore hit an unexpected fault." });
+    await screen.findByRole("heading", {
+      name: "We couldn't reopen this workspace yet. Your local signals are still preserved.",
+    });
     const urlBeforeRetry = window.location.href;
     routeFailures.explore = null;
     fireEvent.click(screen.getByRole("button", { name: "Retry surface" }));
 
     await waitFor(() => expect(screen.getByRole("heading", { name: "Explore Route" })).toBeInTheDocument());
     expect(window.location.href).toBe(urlBeforeRetry);
+  });
+
+  it("keeps admin ReferenceError details folded behind the recovery message", async () => {
+    routeFailures.admin = new ReferenceError("demoScenario is not defined");
+
+    render(
+      <MemoryRouter initialEntries={["/admin"]}>
+        <App />
+      </MemoryRouter>,
+    );
+
+    await screen.findByRole("heading", {
+      name: "We couldn't reopen this workspace yet. Your local signals are still preserved.",
+    });
+    expect(screen.queryByText("ReferenceError - demoScenario is not defined")).not.toBeInTheDocument();
+    expect(screen.getAllByRole("button").map((button) => button.textContent)).toEqual([
+      "Update DeepSignal",
+      "Retry surface",
+      "Copy diagnostics",
+    ]);
+
+    fireEvent.click(screen.getByText("Technical details"));
+    expect(screen.getByText("ReferenceError")).toBeInTheDocument();
+    expect(screen.getByText("demoScenario is not defined")).toBeInTheDocument();
+    expect(screen.getByText("admin")).toBeInTheDocument();
   });
 });
