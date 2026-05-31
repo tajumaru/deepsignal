@@ -30,20 +30,6 @@ import { WalletConnectionContext, type WalletConnectionState } from "./walletSta
 
 const PREFERRED_WALLETS = ["Sui Wallet", "Slush", "Phantom", "OKX Wallet"];
 
-type SuiRpcCallEntry = {
-  method: string;
-  startedAt: number;
-  durationMs?: number;
-  status: "pending" | "ok" | "failed";
-  detail?: string;
-};
-
-declare global {
-  interface Window {
-    __DEEPSIGNAL_SUI_RPC__?: SuiRpcCallEntry[];
-  }
-}
-
 class OptionalWalrusRuntimeBoundary extends Component<
   PropsWithChildren<{ fallback?: ReactNode }>,
   { failed: boolean }
@@ -88,70 +74,6 @@ export function WalrusRuntimeProvider({ children }: PropsWithChildren) {
       <WalrusRuntimeBridge>{children}</WalrusRuntimeBridge>
     </OptionalWalrusRuntimeBoundary>
   );
-}
-
-function recordSuiRpcStart(method: string, detail?: string) {
-  if (typeof window === "undefined") {
-    return null;
-  }
-  const entry: SuiRpcCallEntry = {
-    method,
-    startedAt: performance.now(),
-    status: "pending",
-    detail,
-  };
-  window.__DEEPSIGNAL_SUI_RPC__ ??= [];
-  window.__DEEPSIGNAL_SUI_RPC__.push(entry);
-  if (window.__DEEPSIGNAL_SUI_RPC__.length > 120) {
-    window.__DEEPSIGNAL_SUI_RPC__.shift();
-  }
-  return entry;
-}
-
-function recordSuiRpcEnd(entry: SuiRpcCallEntry | null, status: "ok" | "failed", detail?: string) {
-  if (!entry || typeof performance === "undefined") {
-    return;
-  }
-  entry.status = status;
-  entry.durationMs = Math.max(0, Math.round(performance.now() - entry.startedAt));
-  entry.detail = detail ?? entry.detail;
-  if (typeof console !== "undefined" && typeof console.debug === "function") {
-    const suffix = entry.detail ? ` (${entry.detail})` : "";
-    console.debug(`[DeepSignal Sui RPC] ${entry.method}: ${entry.durationMs}ms [${status}]${suffix}`);
-  }
-}
-
-function instrumentSuiClient(client: SuiJsonRpcClient) {
-  return new Proxy(client, {
-    get(target, prop, receiver) {
-      const original = Reflect.get(target, prop, receiver);
-      if (typeof prop !== "string" || prop.startsWith("$") || typeof original !== "function") {
-        return original;
-      }
-      return (...args: unknown[]) => {
-        const entry = recordSuiRpcStart(prop);
-        try {
-          const result = Reflect.apply(original as (...methodArgs: unknown[]) => unknown, target, args);
-          if (result && typeof result === "object" && "then" in result) {
-            return (result as Promise<unknown>)
-              .then((value) => {
-                recordSuiRpcEnd(entry, "ok");
-                return value;
-              })
-              .catch((error: unknown) => {
-                recordSuiRpcEnd(entry, "failed", error instanceof Error ? error.message : String(error));
-                throw error;
-              });
-          }
-          recordSuiRpcEnd(entry, "ok");
-          return result;
-        } catch (error) {
-          recordSuiRpcEnd(entry, "failed", error instanceof Error ? error.message : String(error));
-          throw error;
-        }
-      };
-    },
-  }) as SuiJsonRpcClient;
 }
 
 function WalletStatusBridge({ children }: PropsWithChildren) {
@@ -232,12 +154,12 @@ export function WalletProviders({ children }: PropsWithChildren) {
       _name: string | number,
       config: Readonly<{ url: string; network: "mainnet" | "testnet" }>,
     ) =>
-      instrumentSuiClient(new SuiJsonRpcClient({
+      new SuiJsonRpcClient({
         network: SUI_NETWORK,
         transport: new JsonRpcHTTPTransport({
           url: config.url,
         }),
-      })),
+      }),
     [],
   );
   return (

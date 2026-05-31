@@ -21,7 +21,7 @@ export function createAppRouteComponents(retryNonce = 0) {
     ),
     FormBuilderPage: lazy(() =>
       retryLazyImport(() => import("../pages/FormBuilderPage"), "route-form-builder").then((module) =>
-        resolveLazyRouteModule(module, "route-form-builder"),
+        resolveLazyRouteModule<{ initialSurface?: "home" | "composer" }>(module, "route-form-builder"),
       ),
     ),
     SubmissionDetailPage: lazy(() =>

@@ -240,6 +240,33 @@ function buildManifestPlugin(args: {
         replaceChunkReferences(oldName, newName);
       };
 
+      const addReleaseSuffixToAllJsChunks = () => {
+        if (!existsSync(assetsDir)) {
+          return;
+        }
+        const releaseSuffix = createHash("sha256")
+          .update(`${args.appVersion}:${args.buildTime}:${args.gitHash}`)
+          .digest("base64url")
+          .slice(0, 6);
+        const jsFiles = readdirSync(assetsDir)
+          .filter((fileName) => fileName.endsWith(".js") && !fileName.includes(`-${releaseSuffix}.js`))
+          .sort();
+        const renamePairs = jsFiles
+          .map((oldName) => {
+            const newName = oldName.replace(/\.js$/, `-${releaseSuffix}.js`);
+            return { oldName, newName };
+          })
+          .filter(({ oldName, newName }) => oldName !== newName && !existsSync(join(assetsDir, newName)));
+
+        for (const { oldName, newName } of renamePairs) {
+          writeFileSync(join(assetsDir, newName), readFileSync(join(assetsDir, oldName), "utf8"));
+          unlinkSync(join(assetsDir, oldName));
+        }
+        for (const { oldName, newName } of renamePairs) {
+          replaceChunkReferences(oldName, newName);
+        }
+      };
+
       if (existsSync(assetsDir)) {
         const manifestBeforeSalt = JSON.parse(readFileSync(manifestPath, "utf8")) as {
           entryAsset?: string | null;
@@ -259,6 +286,7 @@ function buildManifestPlugin(args: {
           );
           saltAndRenameChunk(routeChunk, `route-${routeKey}`);
         }
+        addReleaseSuffixToAllJsChunks();
       }
 
       const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as {

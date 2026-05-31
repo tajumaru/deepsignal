@@ -283,11 +283,11 @@ function readModuleExport(module: unknown, exportName: string) {
   return { value: null, resolvedExport: "missing" as const };
 }
 
-export function resolveLazyRouteModule(
+export function resolveLazyRouteModule<TProps extends object = Record<string, never>>(
   module: unknown,
   label: string,
   exportName = routeChunkByLabel[label]?.exportName ?? "default",
-): { default: ComponentType<any> } {
+): { default: ComponentType<TProps> } {
   const moduleKeys = getModuleKeys(module);
   const resolved = readModuleExport(module, exportName);
   if (!resolved.value) {
@@ -308,7 +308,7 @@ export function resolveLazyRouteModule(
     });
     throw error;
   }
-  return { default: resolved.value as ComponentType<any> };
+  return { default: resolved.value as ComponentType<TProps> };
 }
 
 async function probeChunkDependencyTree(parentUrl: string): Promise<ChunkDependencyProbe> {
