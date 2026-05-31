@@ -351,6 +351,7 @@ describe("responses CSV export", () => {
         priority: "high",
         tags: ["vip"],
         triageStatus: "investigating",
+        processingMode: "hybrid",
       },
       responseOverrides: {
         "response-1": {
@@ -370,6 +371,7 @@ describe("responses CSV export", () => {
       includedAttachmentInfo: true,
     });
     expect(metadata.filterSnapshot.searchQuery).toBe("billing");
+    expect(metadata.filterSnapshot.processingMode).toBe("hybrid");
     expect(metadata.columns).toContain("attachments");
   });
 

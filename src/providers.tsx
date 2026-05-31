@@ -3,7 +3,6 @@ import {
   Component,
   useCallback,
   useMemo,
-  useRef,
   useState,
   useEffect,
   type PropsWithChildren,
@@ -17,18 +16,40 @@ import {
   WalletProvider,
 } from "@mysten/dapp-kit";
 import type { WalletWithRequiredFeatures } from "@mysten/wallet-standard";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { MutationCache, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { REQUIRE_GLOBAL_WALRUS_RUNTIME } from "./lib/runtimeFlags";
 import {
   SUI_NETWORK,
 } from "./lib/sui";
 import { logRouteLifecycle, setDeepSignalDebugReadiness } from "./lib/routeDiagnostics";
-import { endPerf, markPerfMilestone, startPerf } from "./lib/perf";
+import { endPerf, markPerfMilestone } from "./lib/perf";
 import { useRpcInfrastructure } from "./rpcInfrastructure";
 import WalrusRuntimeBridge from "./walrusRuntimeBridge";
 import { WalletConnectionContext, type WalletConnectionState } from "./walletStatus";
 
 const PREFERRED_WALLETS = ["Sui Wallet", "Slush", "Phantom", "OKX Wallet"];
+const DAPP_KIT_WALLET_STORAGE_KEY = "sui-dapp-kit:wallet-connection-info";
+
+function isSilentWalletRestore(variables: unknown): variables is { silent: true } {
+  return Boolean(
+    variables &&
+      typeof variables === "object" &&
+      "silent" in variables &&
+      (variables as { silent?: unknown }).silent === true,
+  );
+}
+
+function clearStaleWalletRestoreState() {
+  if (typeof window === "undefined") {
+    return;
+  }
+  try {
+    window.localStorage.removeItem(DAPP_KIT_WALLET_STORAGE_KEY);
+    console.warn("[DeepSignal wallet] Cleared stale dApp Kit auto-connect state after restore failure.");
+  } catch (error) {
+    console.warn("[DeepSignal wallet] Failed to clear stale dApp Kit auto-connect state.", error);
+  }
+}
 
 class OptionalWalrusRuntimeBoundary extends Component<
   PropsWithChildren<{ fallback?: ReactNode }>,
@@ -79,8 +100,6 @@ export function WalrusRuntimeProvider({ children }: PropsWithChildren) {
 function WalletStatusBridge({ children }: PropsWithChildren) {
   const account = useCurrentAccount();
   const { currentWallet, connectionStatus, isConnected } = useCurrentWallet();
-  const wasRestoringRef = useRef(false);
-  const restoreSettledRef = useRef(false);
   const value = useMemo<WalletConnectionState>(
     () => ({
       status: connectionStatus === "connecting" ? "connecting" : isConnected && account?.address ? "connected" : "disconnected",
@@ -92,23 +111,6 @@ function WalletStatusBridge({ children }: PropsWithChildren) {
   );
 
   useEffect(() => {
-    if (value.isRestoringConnection && !wasRestoringRef.current && !restoreSettledRef.current) {
-      wasRestoringRef.current = true;
-      startPerf("wallet_restore_start", value.walletName ?? undefined);
-      markPerfMilestone("wallet_restore_start", value.walletName ?? undefined);
-    }
-    if (!value.isRestoringConnection && wasRestoringRef.current) {
-      wasRestoringRef.current = false;
-      restoreSettledRef.current = true;
-      endPerf("wallet_restore_start", "ok", value.status);
-      markPerfMilestone("wallet_restore_end", value.status);
-    }
-    if (!value.isRestoringConnection && !wasRestoringRef.current && !restoreSettledRef.current) {
-      restoreSettledRef.current = true;
-      startPerf("wallet_restore_start", value.walletName ?? undefined);
-      endPerf("wallet_restore_start", "ok", value.status);
-      markPerfMilestone("wallet_restore_end", value.status);
-    }
     logRouteLifecycle("wallet-provider:status", { ...value });
     setDeepSignalDebugReadiness({
       walletProvider: value.status,
@@ -122,7 +124,18 @@ function WalletStatusBridge({ children }: PropsWithChildren) {
 }
 
 export function WalletProviders({ children }: PropsWithChildren) {
-  const [queryClient] = useState(() => new QueryClient());
+  const [queryClient] = useState(
+    () =>
+      new QueryClient({
+        mutationCache: new MutationCache({
+          onError(_error, variables) {
+            if (isSilentWalletRestore(variables)) {
+              clearStaleWalletRestoreState();
+            }
+          },
+        }),
+      }),
+  );
   const rpcInfrastructure = useRpcInfrastructure();
   const currentRpcUrl = rpcInfrastructure.currentRpcUrl;
   useEffect(() => {

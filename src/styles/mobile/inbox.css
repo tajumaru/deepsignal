@@ -738,6 +738,14 @@
     text-transform: uppercase;
   }
 
+  .mobile-inbox-summary-row .mobile-inbox-mode {
+    width: min(100%, 14rem);
+  }
+
+  .mobile-inbox-mode .mobile-inbox-filter-panel {
+    width: max(100%, 14rem);
+  }
+
   .mobile-signal-list {
     display: grid;
     gap: 0.62rem;
@@ -953,6 +961,10 @@
 
   .mobile-signal-source-line span {
     min-width: 0;
+  }
+
+  .mobile-signal-source-line .mobile-signal-processing-mode {
+    color: #9fe8f7;
   }
 
   .mobile-signal-source-line span:not(:last-child)::after {

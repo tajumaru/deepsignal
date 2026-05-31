@@ -13,6 +13,7 @@ interface SignalCardProps {
   subject: string;
   preview: string;
   triageStatusLabel: string;
+  processingModeLabel: string;
   priorityLabel: string;
   lockStateLabel: string;
   readStateLabel: string;
@@ -48,6 +49,7 @@ export const SignalCard = forwardRef<HTMLDivElement, SignalCardProps>(function S
     subject,
     preview,
     triageStatusLabel,
+    processingModeLabel,
     priorityLabel,
     lockStateLabel,
     readStateLabel,
@@ -142,12 +144,13 @@ export const SignalCard = forwardRef<HTMLDivElement, SignalCardProps>(function S
       <div className="signal-card-secondary-line signal-card-secondary-line-muted">
         <span className={`mailbox-meta-chip priority-${submission.priority}`}>{priorityLabel}</span>
         <span className="signal-card-triage">{triageStatusLabel}</span>
+        <span className="signal-card-triage signal-card-processing-mode">{processingModeLabel}</span>
         <span className="signal-card-form">{formTitle}</span>
       </div>
       <p className={`signal-card-preview ${submission.isEncrypted ? "is-locked" : ""}`}>{shortSummary || preview}</p>
       <div className="signal-card-intelligence">
-        <p className="signal-card-evidence">Evidence: "{evidenceQuote}"</p>
-        <p className="signal-card-action">Next: {recommendedAction}</p>
+        <p className="signal-card-evidence">{t("signalCardEvidenceLine", { evidence: evidenceQuote })}</p>
+        <p className="signal-card-action">{t("signalCardNextActionLine", { action: recommendedAction })}</p>
       </div>
       {showCompactStateMeta ? (
         <div className="signal-card-footer">
@@ -161,7 +164,7 @@ export const SignalCard = forwardRef<HTMLDivElement, SignalCardProps>(function S
               <span className="mailbox-meta-chip mailbox-meta-chip-subtle status-read">{readStateLabel}</span>
             ) : null}
             {submission.revokeRequested ? (
-              <span className="mailbox-meta-chip mailbox-meta-chip-subtle is-revoke-requested">Revoke requested</span>
+              <span className="mailbox-meta-chip mailbox-meta-chip-subtle is-revoke-requested">{t("revokeRequestedLabel")}</span>
             ) : null}
             {isOnchainRecoverySnapshot ? (
               <span className="mailbox-meta-chip mailbox-meta-chip-subtle">{t("onchainRecoverySnapshotLabel")}</span>

@@ -1,5 +1,5 @@
 import type { Language } from "../i18n";
-import type { FormSchema, Submission } from "../types";
+import type { FormSchema, SignalProcessingMode, Submission } from "../types";
 import { formatAnswerText } from "./answerFormatting";
 import { sanitizeCsvCell } from "./csv";
 import { getSubmissionRespondentMeta } from "./respondentMeta";
@@ -31,6 +31,7 @@ export interface ExportFilterSnapshot {
   priority?: string;
   tags?: string[];
   triageStatus?: string;
+  processingMode?: "all" | SignalProcessingMode;
   dateRange?: {
     from?: string;
     to?: string;

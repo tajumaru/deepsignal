@@ -1,5 +1,6 @@
 import { formatAnswerText } from "../../../lib/answerFormatting";
 import { getSubmissionRespondentMeta, isVerifiedSignal } from "../../../lib/respondentMeta";
+import type { useI18n } from "../../../i18n";
 import type { Submission, SubmissionLocation } from "../../../types";
 import type { SignalRecord } from "../hooks/useSignalInboxData";
 import type { ResolvedAnalysisProfile } from "./analysisProfiles";
@@ -9,6 +10,8 @@ import {
   resolveAnalystTypeForForm,
   resolveSignalTypeForForm,
 } from "./analysisProfiles";
+
+type TranslationFn = ReturnType<typeof useI18n>["t"];
 
 export interface SignalCardIntelligence {
   urgencyScore: number;
@@ -76,8 +79,16 @@ function firstReadableAnswer(record: SignalRecord) {
   return "";
 }
 
-function getEvidenceQuote(record: SignalRecord) {
-  const text = firstReadableAnswer(record) || record.submission.subjectPreview || record.submission.aiSummary || "Signal content unavailable.";
+function translate(t: TranslationFn | undefined, key: string, fallback: string, params?: Record<string, string | number>) {
+  return t ? t(key, params) : fallback;
+}
+
+function getEvidenceQuote(record: SignalRecord, t?: TranslationFn) {
+  const text =
+    firstReadableAnswer(record) ||
+    record.submission.subjectPreview ||
+    record.submission.aiSummary ||
+    translate(t, "signalContentUnavailable", "Signal content unavailable.");
   return compact(text, 144);
 }
 
@@ -92,9 +103,9 @@ function formatLocation(location: SubmissionLocation | null) {
   return `${location.latitude.toFixed(3)}, ${location.longitude.toFixed(3)}`;
 }
 
-function getEmotionLabel(emotion?: string) {
+function getEmotionLabel(emotion?: string, t?: TranslationFn) {
   if (!emotion) {
-    return "Mixed";
+    return translate(t, "emotionMixedLabel", "Mixed");
   }
   const normalized = emotion.replace(/[_-]/g, " ").trim();
   return normalized.charAt(0).toUpperCase() + normalized.slice(1);
@@ -124,54 +135,62 @@ function buildUrgencyScore(submission: Submission) {
   return Math.max(0, Math.min(100, score));
 }
 
-function getUrgencyBand(score: number) {
+function getUrgencyBand(score: number, t?: TranslationFn) {
   if (score >= 75) {
-    return "Critical";
+    return translate(t, "urgencyBandCritical", "Critical");
   }
   if (score >= 55) {
-    return "Elevated";
+    return translate(t, "urgencyBandElevated", "Elevated");
   }
   if (score >= 35) {
-    return "Monitor";
+    return translate(t, "urgencyBandMonitor", "Monitor");
   }
-  return "Low";
+  return translate(t, "urgencyBandLow", "Low");
 }
 
 function getTopKeywords(record: SignalRecord) {
   return [...new Set((record.submission.keywords ?? []).filter(Boolean))].slice(0, 3);
 }
 
-function buildRecommendedAction(record: SignalRecord, score: number) {
+function getLocalizedSignalTypeLabel(signalType: ReturnType<typeof resolveSignalTypeForForm>, t?: TranslationFn) {
+  return translate(t, `analysisSignalType_${signalType}`, getAnalysisSignalTypeLabel(signalType));
+}
+
+function getLocalizedAnalystTypeLabel(analystType: ReturnType<typeof resolveAnalystTypeForForm>, t?: TranslationFn) {
+  return translate(t, `analysisAnalystType_${analystType}`, getAnalystTypeLabel(analystType));
+}
+
+function buildRecommendedAction(record: SignalRecord, score: number, t?: TranslationFn) {
   const signalType = resolveSignalTypeForForm(record.form);
   const analystType = resolveAnalystTypeForForm(record.form, signalType);
 
   if (signalType === "disaster") {
     return score >= 75
-      ? "Validate the location cluster and route urgent help needs now."
-      : "Check who has not responded and confirm whether the cluster is expanding.";
+      ? translate(t, "signalActionDisasterCritical", "Validate the location cluster and route urgent help needs now.")
+      : translate(t, "signalActionDisasterMonitor", "Check who has not responded and confirm whether the cluster is expanding.");
   }
   if (signalType === "internal_report") {
     return score >= 75
-      ? "Escalate to the owning lead and preserve evidence before this splits into side channels."
-      : "Group this with the same team theme and assign one reviewer.";
+      ? translate(t, "signalActionInternalReportCritical", "Escalate to the owning lead and preserve evidence before this splits into side channels.")
+      : translate(t, "signalActionInternalReportMonitor", "Group this with the same team theme and assign one reviewer.");
   }
   if (signalType === "feedback" || signalType === "product_voice") {
     return analystType === "product"
-      ? "Merge this into the dominant friction theme and translate it into one product action."
-      : "Acknowledge the request and check if it repeats across the same cluster.";
+      ? translate(t, "signalActionProductFeedback", "Merge this into the dominant friction theme and translate it into one product action.")
+      : translate(t, "signalActionFeedbackCluster", "Acknowledge the request and check if it repeats across the same cluster.");
   }
   if (signalType === "community") {
-    return "Compare mood and participation trend before deciding whether this is momentum or drift.";
+    return translate(t, "signalActionCommunity", "Compare mood and participation trend before deciding whether this is momentum or drift.");
   }
   if (signalType === "incident") {
     return score >= 75
-      ? "Escalate the highest-severity cluster and confirm the blast radius."
-      : "Check recurrence risk and tag the affected area for follow-up.";
+      ? translate(t, "signalActionIncidentCritical", "Escalate the highest-severity cluster and confirm the blast radius.")
+      : translate(t, "signalActionIncidentMonitor", "Check recurrence risk and tag the affected area for follow-up.");
   }
-  return "Review the strongest evidence signal first and keep the next operator move explicit.";
+  return translate(t, "signalActionDefault", "Review the strongest evidence signal first and keep the next operator move explicit.");
 }
 
-export function buildSignalCardIntelligence(record: SignalRecord): SignalCardIntelligence {
+export function buildSignalCardIntelligence(record: SignalRecord, t?: TranslationFn): SignalCardIntelligence {
   const urgencyScore = buildUrgencyScore(record.submission);
   const signalType = resolveSignalTypeForForm(record.form);
   const analystType = resolveAnalystTypeForForm(record.form, signalType);
@@ -180,18 +199,24 @@ export function buildSignalCardIntelligence(record: SignalRecord): SignalCardInt
 
   return {
     urgencyScore,
-    urgencyLabel: getUrgencyBand(urgencyScore),
-    signalTypeLabel: getAnalysisSignalTypeLabel(signalType),
-    analystTypeLabel: getAnalystTypeLabel(analystType),
-    shortSummary: compact(record.submission.aiSummary || firstReadableAnswer(record) || record.submission.subjectPreview || "Signal pending analysis.", 112),
-    evidenceQuote: getEvidenceQuote(record),
-    recommendedAction: buildRecommendedAction(record, urgencyScore),
-    emotionalTone: getEmotionLabel(record.submission.emotion),
+    urgencyLabel: getUrgencyBand(urgencyScore, t),
+    signalTypeLabel: getLocalizedSignalTypeLabel(signalType, t),
+    analystTypeLabel: getLocalizedAnalystTypeLabel(analystType, t),
+    shortSummary: compact(
+      record.submission.aiSummary ||
+      firstReadableAnswer(record) ||
+      record.submission.subjectPreview ||
+      translate(t, "signalPendingAnalysis", "Signal pending analysis."),
+      112,
+    ),
+    evidenceQuote: getEvidenceQuote(record, t),
+    recommendedAction: buildRecommendedAction(record, urgencyScore, t),
+    emotionalTone: getEmotionLabel(record.submission.emotion, t),
     verifiedLabel: isVerifiedSignal(record.submission)
-      ? "Verified"
+      ? translate(t, "verifiedLabel", "Verified")
       : respondentMeta.isAnonymous
-        ? "Anonymous"
-        : "Unverified",
+        ? translate(t, "anonymousLabel", "Anonymous")
+        : translate(t, "unverifiedLabel", "Unverified"),
     locationLabel: formatLocation(findLocation(record.submission)) ?? record.submission.clusterId ?? keywords[0] ?? null,
   };
 }

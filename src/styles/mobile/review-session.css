@@ -75,6 +75,7 @@
     grid-template-rows: auto auto minmax(0, 1fr) auto;
     min-height: 0;
     height: 100%;
+    gap: 0.75rem;
   }
 
   .review-session-stage,
@@ -95,12 +96,34 @@
   }
 
   .review-progress-rail {
-    grid-template-columns: minmax(0, 1fr);
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.35rem;
   }
 
   .review-progress-step {
+    display: grid;
+    justify-items: center;
+    gap: 0.28rem;
     min-height: 0;
     height: auto;
+    padding: 0.45rem 0.3rem;
+    text-align: center;
+  }
+
+  .review-progress-marker {
+    width: 1.55rem;
+    height: 1.55rem;
+    flex-basis: 1.55rem;
+  }
+
+  .review-progress-copy {
+    justify-items: center;
+    gap: 0.04rem;
+  }
+
+  .review-progress-step-label {
+    font-size: 0.58rem;
+    letter-spacing: 0.04em;
   }
 
   .review-progress-title {
@@ -109,23 +132,56 @@
     overflow: visible;
     -webkit-line-clamp: unset;
     overflow-wrap: anywhere;
+    font-size: 0.66rem;
+    line-height: 1.12;
   }
 
   .review-session-footer,
-  .review-session-footer-actions,
-  .review-session-header,
-  .review-session-header-actions {
+  .review-session-footer-actions {
     width: 100%;
   }
 
   .review-session-footer-actions > button,
-  .review-session-header-actions > button,
-  .review-session-header-actions > span {
+  .review-session-footer > button {
     width: 100%;
     justify-content: center;
     min-width: 0;
     white-space: normal;
     overflow-wrap: anywhere;
+  }
+
+  .review-session-header {
+    position: relative;
+    display: grid;
+    width: 100%;
+    padding-right: 3.05rem;
+  }
+
+  .review-session-header-actions {
+    display: contents;
+  }
+
+  .review-session-header-actions > .save-state-pill {
+    justify-self: start;
+    width: auto;
+    max-width: 100%;
+    margin-top: 0.35rem;
+    justify-content: flex-start;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .review-session-header-actions > .review-session-close-button {
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 2.45rem;
+    min-width: 2.45rem;
+    height: 2.45rem;
+    min-height: 2.45rem;
+    border-color: rgba(112, 209, 239, 0.28);
+    background: rgba(10, 28, 43, 0.92);
+    color: #dffaff;
   }
 
   .review-session-header h3,

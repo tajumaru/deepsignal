@@ -382,6 +382,10 @@ Goal: process structured fields immediately while sending risky content to revie
 - Update Insights to consume `insightPayload`. The current implementation makes survey summaries and workspace insight summaries prefer `insightPayload.answers` when available.
 - Update Review UI to explain which part of a Hybrid submission requires review. The current implementation shows a Hybrid review split panel in the review session when `insightPayload.fieldIds` and `insightPayload.redactedFieldIds` are available.
 - Show processing state in admin metadata/proof surfaces. The current implementation adds processing mode, review state, visibility state, insight eligibility, and insight payload counts to the secondary inspector.
+- Show processing mode in the signal list. The current implementation adds the mode label to each admin signal card so operators can distinguish Review Required, Auto Process, and Hybrid before opening detail.
+- Show processing mode in the mobile signal list as well, preserving the same operator context on narrow viewports.
+- Add a processing-mode filter to the admin signal list. The current implementation lets operators narrow the review workspace to all modes, Review Required, Auto Process, or Hybrid without changing the underlying stream definitions.
+- Show processing-mode distribution in Workspace Insights and include it in the Insights snapshot JSON export so operators can see how much of the analysis came from Review Required, Auto Process, and Hybrid pipelines.
 
 ## Risks and Notes
 
@@ -391,6 +395,7 @@ Goal: process structured fields immediately while sending risky content to revie
 - Avoid overloading `status` and `triageStatus` further. They are legacy/review workflow state, not enough to describe processing mode.
 - Manifest must remain a recovery index. If mode is copied there, keep it as safe routing metadata only.
 - Export needs separate semantics for review exports versus aggregate exports. Existing CSV columns can remain for backward compatibility, but Auto Process exports should not pretend every response had triage.
+- Filtered exports should preserve the active processing-mode filter in export metadata so audit review can distinguish Review Required, Auto Process, Hybrid, and all-mode snapshots.
 - On-chain/project registry state currently maps project signals into review-like `Submission` states. Mode-aware on-chain metadata may need a later protocol update; until then, default recovered on-chain signals to Review Required.
 - Public routes must remain wallet-optional. Processing mode must not introduce responder wallet requirements.
 - Old cached forms and submissions should normalize to Review Required and existing inbox behavior.
@@ -465,6 +470,37 @@ Template field policy follow-up validation:
 - `npm.cmd run build` succeeded with the existing large chunk warning for `mysten-sui`.
 
 Admin processing metadata follow-up validation:
+
+- `npm.cmd run typecheck` succeeded.
+- `npm.cmd run check` succeeded.
+- `npm.cmd run build` succeeded with the existing large chunk warning for `mysten-sui`.
+
+Admin signal card mode label follow-up validation:
+
+- `npm.cmd run typecheck` succeeded.
+- `npm.cmd run check` succeeded.
+- `npm.cmd run build` succeeded with the existing large chunk warning for `mysten-sui`.
+
+Mobile signal row mode label follow-up validation:
+
+- `npm.cmd run typecheck` succeeded.
+- `npm.cmd run check` succeeded.
+- `npm.cmd run build` succeeded with the existing large chunk warning for `mysten-sui`.
+
+Admin processing mode filter follow-up validation:
+
+- `npm.cmd run typecheck` succeeded.
+- `npm.cmd run check` succeeded.
+- `npm.cmd run build` succeeded with the existing large chunk warning for `mysten-sui`.
+
+Processing mode export snapshot follow-up validation:
+
+- `npm.cmd run test -- src/lib/exportResponses.test.ts` succeeded.
+- `npm.cmd run typecheck` succeeded.
+- `npm.cmd run check` succeeded.
+- `npm.cmd run build` succeeded with the existing large chunk warning for `mysten-sui`.
+
+Workspace Insights processing mode distribution follow-up validation:
 
 - `npm.cmd run typecheck` succeeded.
 - `npm.cmd run check` succeeded.

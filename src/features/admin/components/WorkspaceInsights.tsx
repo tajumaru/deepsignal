@@ -4,10 +4,10 @@ import { getRelatedSignals, type RelatedSignalReason } from "../../../lib/relate
 import { getSignalPreview } from "../../../lib/signalInbox";
 import type { VersionedFormSchemas } from "../../../lib/formVersionSchemas";
 import { getSubmissionVersion } from "../../../lib/submissionVersioning";
-import { getInsightAnswers } from "../../../lib/signalProcessing";
+import { getInsightAnswers, getSignalProcessingMode } from "../../../lib/signalProcessing";
 import { downloadTextFile } from "../../../lib/utils";
 import { formatAnswerText } from "../../../lib/answerFormatting";
-import type { FormSchema, SignalSeverity } from "../../../types";
+import type { FormSchema, SignalProcessingMode, SignalSeverity } from "../../../types";
 import {
   getAnalysisProfileLabel,
   getAnalysisProfileShortLabel,
@@ -97,12 +97,40 @@ interface InsightExportClusterNode {
   connected: boolean;
 }
 
+type ProcessingModeCounts = Record<SignalProcessingMode, number>;
+
 function shortenSummaryText(text: string, maxLength = 88) {
   const normalized = text.replace(/\s+/g, " ").trim();
   if (normalized.length <= maxLength) {
     return normalized;
   }
   return `${normalized.slice(0, maxLength - 3).trim()}...`;
+}
+
+function getProcessingModeLabel(mode: SignalProcessingMode, t: ReturnType<typeof useI18n>["t"]) {
+  switch (mode) {
+    case "auto_process":
+      return t("processingModeAutoProcess");
+    case "hybrid":
+      return t("processingModeHybrid");
+    default:
+      return t("processingModeReviewRequired");
+  }
+}
+
+function buildProcessingModeCounts(records: SignalRecord[]): ProcessingModeCounts {
+  return records.reduce<ProcessingModeCounts>(
+    (counts, record) => {
+      const mode = getSignalProcessingMode(record.form, record.submission);
+      counts[mode] += 1;
+      return counts;
+    },
+    {
+      review_required: 0,
+      auto_process: 0,
+      hybrid: 0,
+    },
+  );
 }
 
 function normalizeReadableAnswer(
@@ -814,6 +842,7 @@ function exportInsightsSnapshotJson(input: {
   unreadSignals: number;
   needsReviewSignals: number;
   encryptedSignals: number;
+  processingModeCounts: ProcessingModeCounts;
   unresolvedSignals: number;
   archivedSignals: number;
   anomalyCount: number;
@@ -848,6 +877,7 @@ function exportInsightsSnapshotJson(input: {
       unresolvedSignals: input.unresolvedSignals,
       archivedSignals: input.archivedSignals,
       encryptedSignals: input.encryptedSignals,
+      processingModeCounts: input.processingModeCounts,
       anomalyCount: input.anomalyCount,
     },
     state: {
@@ -1309,6 +1339,16 @@ export function WorkspaceInsights({
   );
   const primaryCluster = clusters[0];
   const activityPoints = useMemo(() => buildActivityPoints(records, language), [records, language]);
+  const processingModeCounts = useMemo(() => buildProcessingModeCounts(records), [records]);
+  const processingModeDistribution = useMemo(
+    () =>
+      (["review_required", "auto_process", "hybrid"] as const).map((mode) => ({
+        mode,
+        label: getProcessingModeLabel(mode, t),
+        count: processingModeCounts[mode],
+      })),
+    [processingModeCounts, t],
+  );
   const anomalyPoints = useMemo(() => activityPoints.filter((point) => point.anomaly), [activityPoints]);
   const anomalyCount = anomalyPoints.length;
   const activityStatus = useMemo(() => getActivityStatus(activityPoints), [activityPoints]);
@@ -1537,6 +1577,7 @@ export function WorkspaceInsights({
                 unreadSignals,
                 needsReviewSignals,
                 encryptedSignals,
+                processingModeCounts,
                 unresolvedSignals,
                 archivedSignals,
                 anomalyCount,
@@ -1600,6 +1641,17 @@ export function WorkspaceInsights({
             ))}
           </div>
         ) : null}
+        <div className="workspace-profile-chip-row" aria-label={t("workspaceProcessingModeDistributionAria")}>
+          {processingModeDistribution.map((item) => (
+            <span
+              key={item.mode}
+              className={`signal-chip signal-chip-soft ${item.count > 0 ? "is-active" : ""}`}
+              title={t("workspaceProcessingModeCountTitle", { mode: item.label, count: item.count })}
+            >
+              {item.label} {item.count}
+            </span>
+          ))}
+        </div>
         <article className="workspace-insight-brief" aria-label={t("workspacePrimaryInsightBriefAria")}>
           <div className="workspace-insight-brief-main">
             <span>{t("workspacePrimaryReadoutLabel")}</span>
@@ -1692,7 +1744,7 @@ export function WorkspaceInsights({
               (() => {
                 const representativeSignal = representativeSignalsByInsightId.get(card.id);
                 const representativeSignalIntelligence = representativeSignal
-                  ? buildSignalCardIntelligence(representativeSignal)
+                  ? buildSignalCardIntelligence(representativeSignal, t)
                   : null;
 
                 return (

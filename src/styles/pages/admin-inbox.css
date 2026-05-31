@@ -3628,6 +3628,10 @@
   color: #d6f6ff;
 }
 
+.signal-card-processing-mode {
+  color: #9fe8f7;
+}
+
 .signal-card-meta-separator {
   color: rgba(160, 205, 223, 0.55);
 }

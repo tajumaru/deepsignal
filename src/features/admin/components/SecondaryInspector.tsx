@@ -328,12 +328,12 @@ export function SecondaryInspector({
                   <strong>{verificationRouteLabel}</strong>
                 </div>
                 <div className="metadata-row">
-                  <span>Form version</span>
+                  <span>{t("adminFormVersionLabel")}</span>
                   <strong>v{getSubmissionVersion(selectedRecord.submission)}</strong>
                 </div>
                 {selectedRecord.submission.schemaHash ? (
                   <div className="metadata-row">
-                    <span>Schema hash</span>
+                    <span>{t("adminSchemaHashLabel")}</span>
                     <strong>{selectedRecord.submission.schemaHash}</strong>
                   </div>
                 ) : null}
@@ -461,7 +461,7 @@ export function SecondaryInspector({
                     </div>
                   </div>
                   <div className="metadata-row">
-                    <span>Respondent identity</span>
+                    <span>{t("respondentIdentityLabel")}</span>
                     {respondentMeta.isAnonymous ? (
                       <strong>{t("anonymousRespondent")}</strong>
                     ) : respondentDisplayAddress ? (
@@ -474,7 +474,7 @@ export function SecondaryInspector({
                     )}
                   </div>
                   <div className="metadata-row">
-                    <span>Identity type</span>
+                    <span>{t("identityTypeLabel")}</span>
                     <strong>{respondentIdentityLabel}</strong>
                   </div>
                   <div className="metadata-row">

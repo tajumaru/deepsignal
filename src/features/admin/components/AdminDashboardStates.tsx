@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
+import { useI18n } from "../../../i18n";
 import { resetLocalEnvironment } from "../../../lib/resetEnvironment";
 
 export function InboxListSkeleton({ compact = false }: { compact?: boolean }) {
@@ -13,12 +14,14 @@ export function InboxListSkeleton({ compact = false }: { compact?: boolean }) {
 }
 
 export function WorkspaceInsightsFallback() {
+  const { t } = useI18n();
+
   return (
     <section className="panel workspace-insights-panel workspace-insights-loading" role="status" aria-live="polite">
       <div className="workspace-insights-header">
         <div>
-          <p className="eyebrow">Signal intelligence</p>
-          <h2>Preparing insights</h2>
+          <p className="eyebrow">{t("workspaceInsightsFallbackEyebrow")}</p>
+          <h2>{t("workspaceInsightsFallbackTitle")}</h2>
         </div>
       </div>
       <InboxListSkeleton />
@@ -36,6 +39,7 @@ export function InboxRecoveryPanel({
   onRetry: () => void;
 }) {
   const [resettingState, setResettingState] = useState(false);
+  const { t } = useI18n();
 
   async function handleResetLocalState() {
     setResettingState(true);
@@ -49,17 +53,16 @@ export function InboxRecoveryPanel({
   return (
     <section className="panel inbox-loading-panel" role="alert" aria-live="assertive">
       <div className="inbox-loading-copy">
-        <p className="eyebrow">Encrypted Signal Inbox</p>
+        <p className="eyebrow">{t("encryptedSignalInboxLabel")}</p>
         <h1>{title}</h1>
         <p className="muted">{body}</p>
         <p className="muted">
-          Local fallback data, registry restore, or a partial publish state may be blocking recovery. You can retry or
-          reset browser-local DeepSignal state without deleting on-chain records.
+          {t("inboxRecoveryPanelBody")}
         </p>
       </div>
       <div className="inline-actions">
         <button type="button" className="primary-button" onClick={onRetry}>
-          Retry workspace
+          {t("retryWorkspace")}
         </button>
         <button
           type="button"
@@ -67,10 +70,10 @@ export function InboxRecoveryPanel({
           onClick={() => void handleResetLocalState()}
           disabled={resettingState}
         >
-          {resettingState ? "Resetting local state..." : "Reset local state"}
+          {resettingState ? t("resettingLocalState") : t("resetLocalState")}
         </button>
         <Link className="ghost-button" to="/">
-          Open home
+          {t("openHome")}
         </Link>
       </div>
     </section>

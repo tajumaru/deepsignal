@@ -138,6 +138,7 @@ import {
   normalizeSubmission,
   storageAdapter,
 } from "../lib/storage";
+import { getSignalProcessingMode } from "../lib/signalProcessing";
 import { formatDate } from "../lib/utils";
 import { handleRateLimitedRpcFallback, useRpcInfrastructure } from "../rpcInfrastructure";
 import { cleanupRegisteredFormLocalFallback } from "../storage/localStorageAdapter";
@@ -146,7 +147,7 @@ import { markDeletedFormTombstones } from "../storage/deletedFormTombstones";
 import { forcePurgeFormArtifacts } from "../storage/forcePurgeFormArtifacts";
 import { saveFormMetadataOverlay } from "../storage/formMetadataOverlay";
 import { deleteFormsFromLocalCache, getStorageRuntimeStatus } from "../storage/storageFactory";
-import type { ActivityEvent, FormSchema, Submission } from "../types";
+import type { ActivityEvent, FormSchema, SignalProcessingMode, Submission } from "../types";
 
 const MOBILE_REVIEW_MEDIA_QUERY = "(max-width: 768px)";
 const COARSE_POINTER_MEDIA_QUERY = "(pointer: coarse)";
@@ -157,6 +158,7 @@ const NODE_LONG_PRESS_MOVE_THRESHOLD = 18;
 const NODE_SWIPE_ACTIVATION_THRESHOLD = 10;
 const NODE_SWIPE_DELETE_THRESHOLD = 64;
 const NODE_SWIPE_HORIZONTAL_LEEWAY = 56;
+const NODE_REMOTE_DELETE_TIMEOUT_MS = 45000;
 const MODAL_FOCUSABLE_SELECTOR = [
   "button:not([disabled])",
   "input:not([disabled])",
@@ -187,6 +189,21 @@ function loadWalrusDeleteModule() {
   return import("../storage/walrusAdapter");
 }
 
+function withTimeout<T>(operation: Promise<T>, timeoutMs: number, timeoutMessage: string): Promise<T> {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(() => reject(new Error(timeoutMessage)), timeoutMs);
+  });
+  return Promise.race([
+    operation.finally(() => {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+    }),
+    timeout,
+  ]);
+}
+
 function normalizeProjectObjectId(value?: string | null) {
   if (!value) {
     return "";
@@ -211,6 +228,7 @@ function getSelectedProjectIdSnapshot() {
 }
 
 type WorkspaceTab = "review" | "activity" | "insights" | "members";
+type ProcessingModeFilter = "all" | SignalProcessingMode;
 type QuickActionId = "reviewing" | "resolve" | "publish" | "archive";
 type KeyboardShortcutAction = QuickActionId | "next" | "previous" | "search" | "help";
 type ProjectWorkspaceModalMode = "select" | "create" | "connect";
@@ -2603,6 +2621,9 @@ interface MobileInboxHeaderProps {
   onSelectStream: (streamId: StreamId) => void;
   sortOrder: SignalSortOrder;
   onSortOrderChange: (value: SignalSortOrder) => void;
+  processingModeFilter: ProcessingModeFilter;
+  onProcessingModeFilterChange: (value: ProcessingModeFilter) => void;
+  processingModeOptions: MobileFilterMenuOption[];
   searchPlaceholder: string;
   filterLabel: string;
   queueLabel: string;
@@ -2755,6 +2776,9 @@ function MobileInboxHeader(props: MobileInboxHeaderProps) {
     onSearchChange,
     sortOrder,
     onSortOrderChange,
+    processingModeFilter,
+    onProcessingModeFilterChange,
+    processingModeOptions,
     searchPlaceholder,
     accessibleForms,
     selectedFormId,
@@ -2857,6 +2881,17 @@ function MobileInboxHeader(props: MobileInboxHeaderProps) {
         />
       </div>
 
+      <div className="mobile-inbox-summary-row">
+        <MobileFilterMenu
+          srLabel={t("processingModeFilterSrOnly")}
+          buttonLabel={t("processingModeFilterSrOnly")}
+          selectedValue={processingModeFilter}
+          options={processingModeOptions}
+          onSelect={(value) => onProcessingModeFilterChange(value as ProcessingModeFilter)}
+          className="mobile-inbox-mode"
+        />
+      </div>
+
       {canUseProjectScope ? (
         <div className="mobile-inbox-summary-row">
           <button
@@ -2915,6 +2950,17 @@ function getSortLabel(sortOrder: SignalSortOrder, t: TranslationFn) {
       return t("sortOrderUnreadFirst");
     default:
       return t("sortOrderDefault");
+  }
+}
+
+function getProcessingModeLabel(mode: SignalProcessingMode, t: TranslationFn) {
+  switch (mode) {
+    case "auto_process":
+      return t("processingModeAutoProcess");
+    case "hybrid":
+      return t("processingModeHybrid");
+    default:
+      return t("processingModeReviewRequired");
   }
 }
 
@@ -3290,6 +3336,8 @@ function MobileSignalRow({
       : submission.status === "read"
         ? t("statusRead")
         : t("statusArchived");
+  const processingMode = submission.processingMode ?? record.form.processingMode ?? "review_required";
+  const processingModeLabel = getProcessingModeLabel(processingMode, t);
   const ariaLabel = t("mobileSignalRowAriaLabel", {
     subject: title,
     status: readStateLabel,
@@ -3325,6 +3373,7 @@ function MobileSignalRow({
           <span className="mobile-signal-source-line">
             <span>{priorityLabel}</span>
             <span>{getTriageStatusLabel(submission.triageStatus)}</span>
+            <span className="mobile-signal-processing-mode">{processingModeLabel}</span>
             <span>{sourceLabel}</span>
           </span>
           {submission.isEncrypted || submission.status === "archived" || persistenceState !== "walrus_synced" ? (
@@ -3369,6 +3418,9 @@ interface MobileSignalInboxProps {
   onSelectStream: (streamId: StreamId) => void;
   sortOrder: SignalSortOrder;
   onSortOrderChange: (value: SignalSortOrder) => void;
+  processingModeFilter: ProcessingModeFilter;
+  onProcessingModeFilterChange: (value: ProcessingModeFilter) => void;
+  processingModeOptions: MobileFilterMenuOption[];
   visibleSignals: SignalRecord[];
   timelineModel: InboxTimelineModel;
   demoSignalCount: number;
@@ -3433,6 +3485,9 @@ function MobileSignalInbox({
   onSelectStream,
   sortOrder,
   onSortOrderChange,
+  processingModeFilter,
+  onProcessingModeFilterChange,
+  processingModeOptions,
   visibleSignals,
   timelineModel,
   demoSignalCount,
@@ -3498,6 +3553,9 @@ function MobileSignalInbox({
         onSelectStream={onSelectStream}
         sortOrder={sortOrder}
         onSortOrderChange={onSortOrderChange}
+        processingModeFilter={processingModeFilter}
+        onProcessingModeFilterChange={onProcessingModeFilterChange}
+        processingModeOptions={processingModeOptions}
         searchPlaceholder={searchPlaceholder}
         filterLabel={t("filterInboxLabel")}
         queueLabel={t("encryptedQueueLabel")}
@@ -3624,6 +3682,7 @@ export function AdminDashboardPage() {
   const [selectedVersion, setSelectedVersion] = useState<SubmissionVersionFilter>("all");
   const [versionedFormsByFormId, setVersionedFormsByFormId] = useState<Record<string, VersionedFormSchemas>>({});
   const [signalSortOrder, setSignalSortOrder] = useState<SignalSortOrder>("default");
+  const [processingModeFilter, setProcessingModeFilter] = useState<ProcessingModeFilter>("all");
   const [excludedCsvPiiFields, setExcludedCsvPiiFields] = useState<ExportPiiField[]>([]);
   const [pendingCsvExportMetadata, setPendingCsvExportMetadata] = useState<ExportMetadata | null>(null);
   const [pendingCsvExportForm, setPendingCsvExportForm] = useState<FormSchema | null>(null);
@@ -3732,12 +3791,27 @@ export function AdminDashboardPage() {
     [allSignals],
   );
   const realVisibleSignals = useMemo(
-    () => unversionedVisibleSignals.filter((record) => matchesSubmissionVersion(record.submission, selectedVersion)),
-    [selectedVersion, unversionedVisibleSignals],
+    () =>
+      unversionedVisibleSignals
+        .filter((record) => matchesSubmissionVersion(record.submission, selectedVersion))
+        .filter(
+          (record) =>
+            processingModeFilter === "all" ||
+            getSignalProcessingMode(record.form, record.submission) === processingModeFilter,
+        ),
+    [processingModeFilter, selectedVersion, unversionedVisibleSignals],
   );
   const visibleSignals = useMemo(
-    () => [...demoSignalRecords, ...realVisibleSignals],
-    [demoSignalRecords, realVisibleSignals],
+    () => {
+      const filteredDemoSignals =
+        processingModeFilter === "all"
+          ? demoSignalRecords
+          : demoSignalRecords.filter(
+              (record) => getSignalProcessingMode(record.form, record.submission) === processingModeFilter,
+            );
+      return [...filteredDemoSignals, ...realVisibleSignals];
+    },
+    [demoSignalRecords, processingModeFilter, realVisibleSignals],
   );
   const inboxTimelineModel = useMemo(
     () => buildInboxTimelineModel(visibleSignals, t),
@@ -3767,7 +3841,8 @@ export function AdminDashboardPage() {
       :
     selectedSignalId && visibleSignals.some((record) => record.submission.id === selectedSignalId)
       ? visibleSignals.find((record) => record.submission.id === selectedSignalId) ?? null
-      : selectedRecordFromInbox && matchesSubmissionVersion(selectedRecordFromInbox.submission, selectedVersion)
+      : selectedRecordFromInbox &&
+          visibleSignals.some((record) => record.submission.id === selectedRecordFromInbox.submission.id)
         ? selectedRecordFromInbox
         : visibleSignals[0] ?? null;
   const selectedRecordIsDemo = isDemoSignalRecord(selectedRecord);
@@ -3790,7 +3865,16 @@ export function AdminDashboardPage() {
 
   useEffect(() => {
     setRenderedSignalLimit(INITIAL_SIGNAL_LIST_LIMIT);
-  }, [search, selectedFormId, selectedStreamId, selectedVersion, signalSortOrder, signalViewScope, demoSignalCount]);
+  }, [
+    search,
+    selectedFormId,
+    selectedStreamId,
+    selectedVersion,
+    signalSortOrder,
+    signalViewScope,
+    demoSignalCount,
+    processingModeFilter,
+  ]);
 
   const clearDemoIngestTimers = useCallback(() => {
     demoIngestTimerRefs.current.forEach((timerId) => window.clearTimeout(timerId));
@@ -4267,9 +4351,13 @@ export function AdminDashboardPage() {
     ];
 
     let walrusDeleteHandledInBatch = false;
+    let remoteDeleteWarning: string | null = null;
     const selectedProjectIdForDelete = onchainDeleteTargets.length > 0 ? selectedProject?.objectId ?? null : null;
 
     if (onchainDeleteTargets.length > 0 || walrusBlobObjectIds.length > 0) {
+      try {
+        await withTimeout(
+          (async () => {
       if (onchainDeleteTargets.length > 0) {
         if (!selectedProject) {
           throw new Error("Select the linked project before deleting this node.");
@@ -4335,7 +4423,15 @@ export function AdminDashboardPage() {
           break;
         }
       }
-      if (onchainDeleteTargets.length > 0) {
+          })(),
+          NODE_REMOTE_DELETE_TIMEOUT_MS,
+          "Remote node deletion timed out. Removed the local inbox copy and kept the node tombstoned.",
+        );
+      } catch (error) {
+        remoteDeleteWarning = error instanceof Error ? error.message : t("deleteNodeFailed");
+        console.warn("Remote node delete did not complete; continuing local cleanup.", error);
+      }
+      if (onchainDeleteTargets.length > 0 && !remoteDeleteWarning) {
         await refetchProjects();
       }
     }
@@ -4346,8 +4442,17 @@ export function AdminDashboardPage() {
     });
     const localCacheOnlyIds = expandedIds.filter((formId) => !walletOwnedIds.includes(formId));
 
-    if (walletOwnedIds.length > 0 && !walrusDeleteHandledInBatch) {
-      await storageAdapter.deleteForms(walletOwnedIds);
+    if (walletOwnedIds.length > 0 && !walrusDeleteHandledInBatch && !remoteDeleteWarning) {
+      try {
+        await withTimeout(
+          storageAdapter.deleteForms(walletOwnedIds),
+          NODE_REMOTE_DELETE_TIMEOUT_MS,
+          "Remote storage deletion timed out. Removed the local inbox copy and kept the node tombstoned.",
+        );
+      } catch (error) {
+        remoteDeleteWarning = error instanceof Error ? error.message : t("deleteNodeFailed");
+        console.warn("Remote storage delete did not complete; continuing local cleanup.", error);
+      }
     }
     if (expandedIds.length > 0) {
       await deleteFormsFromLocalCache(expandedIds);
@@ -4373,10 +4478,15 @@ export function AdminDashboardPage() {
     appendActivityEvents(archivedEvents);
     setLocalActivityEvents(listActivityEvents());
 
+    const remoteDeleteIncomplete = Boolean(remoteDeleteWarning);
+    const walletDeletedCount = remoteDeleteIncomplete ? 0 : walletOwnedIds.length;
+    const localCacheDeletedCount = remoteDeleteIncomplete ? expandedIds.length : localCacheOnlyIds.length;
+
     return {
-      walletDeletedCount: walletOwnedIds.length,
-      localCacheDeletedCount: localCacheOnlyIds.length,
+      walletDeletedCount,
+      localCacheDeletedCount,
       totalDeletedCount: expandedIds.length,
+      remoteDeleteWarning,
     };
   }
 
@@ -5693,7 +5803,7 @@ export function AdminDashboardPage() {
   const selectedReviewSummaryBadges = selectedRecord
     ? [
         reviewSaveStatus !== "idle" ? reviewStatusPillLabel : null,
-        selectedRecord.submission.revokeRequested ? "Revoke requested" : null,
+        selectedRecord.submission.revokeRequested ? t("revokeRequestedLabel") : null,
         isSelectedRecordOnRoadmap ? t("publishReadyTitle") : null,
         selectedRecord.submission.status === "archived" ? t("statusArchived") : null,
         selectedRecord.submission.triageStatus === "fixed" || selectedRecord.submission.triageStatus === "closed"
@@ -5750,6 +5860,7 @@ export function AdminDashboardPage() {
       priority: selectedStreamId === "high" ? "high" : undefined,
       tags: [...(search.trim() ? [search.trim()] : []), ...(selectedStreamId === "follow_up" ? [NEEDS_FOLLOW_UP_TAG] : [])],
       triageStatus: undefined,
+      processingMode: processingModeFilter,
       dateRange: {},
       formVersion: selectedVersion,
     };
@@ -5837,6 +5948,7 @@ export function AdminDashboardPage() {
         priority: undefined,
         tags: [],
         triageStatus: undefined,
+        processingMode: "all",
         dateRange: {},
         formVersion: "all",
       },
@@ -5966,6 +6078,15 @@ export function AdminDashboardPage() {
   const shouldRequireProjectSelection = hasAdminAccess && projectScopeActive && !selectedProject;
   const activeStreamLabel =
     streamItems.find((stream) => stream.id === selectedStreamId)?.label ?? "All Signals";
+  const processingModeOptions = useMemo<MobileFilterMenuOption[]>(
+    () => [
+      { value: "all", label: t("processingModeFilterAll") },
+      { value: "review_required", label: getProcessingModeLabel("review_required", t) },
+      { value: "auto_process", label: getProcessingModeLabel("auto_process", t) },
+      { value: "hybrid", label: getProcessingModeLabel("hybrid", t) },
+    ],
+    [t],
+  );
   const visibleUnreadCount = visibleSignals.filter(
     (record) => record.submission.status === "unread",
   ).length;
@@ -6361,6 +6482,12 @@ export function AdminDashboardPage() {
             onSelectStream={setSelectedStreamId}
             sortOrder={signalSortOrder}
             onSortOrderChange={setSignalSortOrder}
+            processingModeFilter={processingModeFilter}
+            onProcessingModeFilterChange={(value) => {
+              setProcessingModeFilter(value);
+              setSelectedSignalId("");
+            }}
+            processingModeOptions={processingModeOptions}
             visibleSignals={renderedVisibleSignals}
             timelineModel={inboxTimelineModel}
             demoSignalCount={demoSignalRecords.length}
@@ -6484,6 +6611,21 @@ export function AdminDashboardPage() {
                       <option value="unread">{getSortLabel("unread", t)}</option>
                     </select>
                   </label>
+                  <label className="review-sort-control">
+                    <span className="sr-only">{t("processingModeFilterSrOnly")}</span>
+                    <select
+                      value={processingModeFilter}
+                      onChange={(event) => {
+                        setProcessingModeFilter(event.target.value as ProcessingModeFilter);
+                        setSelectedSignalId("");
+                      }}
+                    >
+                      <option value="all">{t("processingModeFilterAll")}</option>
+                      <option value="review_required">{getProcessingModeLabel("review_required", t)}</option>
+                      <option value="auto_process">{getProcessingModeLabel("auto_process", t)}</option>
+                      <option value="hybrid">{getProcessingModeLabel("hybrid", t)}</option>
+                    </select>
+                  </label>
                 </div>
               </div>
             </div>
@@ -6564,7 +6706,7 @@ export function AdminDashboardPage() {
                     <span className="signal-chip signal-chip-soft">{t("resultsLabel", { count: visibleSignals.length })}</span>
                     {versionCounts.length > 1 ? (
                       <label className="review-sort-control">
-                        <span className="sr-only">Form version</span>
+                        <span className="sr-only">{t("adminFormVersionLabel")}</span>
                         <select
                           value={selectedVersion}
                           onChange={(event) => {
@@ -6572,9 +6714,9 @@ export function AdminDashboardPage() {
                             setSelectedVersion(value === "all" ? "all" : Number(value));
                             setSelectedSignalId("");
                           }}
-                          aria-label="Form version"
+                          aria-label={t("adminFormVersionLabel")}
                         >
-                          <option value="all">All versions</option>
+                          <option value="all">{t("adminAllVersionsOption")}</option>
                           {versionCounts.map(([version, count]) => (
                             <option key={version} value={version}>
                               v{version} ({count})
@@ -6792,7 +6934,8 @@ export function AdminDashboardPage() {
                     const persistenceLabel =
                       persistenceState === "not_available" ? null : getSignalPersistenceLabel(persistenceState);
                     const hasPayloadIssue = hasPrivateSignalPayloadIssue(submission);
-                    const cardIntelligence = buildSignalCardIntelligence(record);
+                    const cardIntelligence = buildSignalCardIntelligence(record, t);
+                    const processingModeLabel = getProcessingModeLabel(getSignalProcessingMode(form, submission), t);
                     return (
                       <SignalCard
                         key={submission.id}
@@ -6805,6 +6948,7 @@ export function AdminDashboardPage() {
                         subject={subject}
                         preview={preview}
                         triageStatusLabel={getTriageStatusLabel(submission.triageStatus)}
+                        processingModeLabel={processingModeLabel}
                         priorityLabel={priorityLabel}
                         lockStateLabel={lockStateLabel}
                         readStateLabel={readStateLabel}
