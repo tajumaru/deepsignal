@@ -1071,161 +1071,161 @@ export function FormSubmissionsPage() {
     });
 
     return (
-    <section className="answer-card review-triage-card">
-      <div className="section-row">
-        <div>
-          <p className="eyebrow">Review workbench</p>
-          <h3>Review & Triage</h3>
-          <p className="review-helper-copy">Turn this raw feedback into an actionable signal.</p>
-        </div>
-        <span className={`save-state-pill is-${saveState}`}>
-          {saveState === "saving"
-            ? "Saving signal ops..."
-            : saveState === "saved"
-              ? "Saved"
-              : saveState === "error"
-                ? "Save failed"
-                : "Ready"}
-        </span>
-      </div>
-      {saveError ? <p className="warning-text">{saveError}</p> : null}
-      <div className="review-field-grid">
-        <label>
-          <span>{t("status")}</span>
-          <select
-            value={statusDraft}
-            onChange={(event) =>
-              setStatusDraft(event.target.value as Submission["status"])
-            }
-          >
-            <option value="unread">{t("statusUnread")}</option>
-            <option value="read">{t("statusRead")}</option>
-            <option value="archived">{t("statusArchived")}</option>
-          </select>
-        </label>
-        <label>
-          <span>Signal Triage</span>
-          <select
-            value={triageStatusDraft}
-            onChange={(event) =>
-              setTriageStatusDraft(event.target.value as Submission["triageStatus"])
-            }
-          >
-            {TRIAGE_STATUS_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          <span>{t("priority")}</span>
-          <select
-            value={priorityDraft}
-            onChange={(event) =>
-              setPriorityDraft(event.target.value as Submission["priority"])
-            }
-          >
-            <option value="low">{t("priorityLow")}</option>
-            <option value="medium">{t("priorityMedium")}</option>
-            <option value="high">{t("priorityHigh")}</option>
-          </select>
-        </label>
-        <label>
-          <span>Signal Value</span>
-          <select
-            value={signalValueDraft}
-            onChange={(event) => setSignalValueDraft(event.target.value)}
-          >
-            <option value="">Not scored</option>
-            {[1, 2, 3, 4, 5].map((value) => (
-              <option key={value} value={value}>
-                {value}
-              </option>
-            ))}
-          </select>
-        </label>
-      </div>
-      <div className={`respondent-lifecycle-preview is-${respondentLifecyclePreview}`}>
-        <div>
-          <span>Responder timeline preview</span>
-          <strong>{getRespondentLifecyclePreviewLabel(respondentLifecyclePreview)}</strong>
-        </div>
-        <p>{getRespondentLifecyclePreviewDetail(respondentLifecyclePreview)}</p>
-      </div>
-      <label>
-        <span>{t("assignedReviewerLabel")}</span>
-        <input
-          type="text"
-          value={reviewerDraft}
-          onChange={(event) => setReviewerDraft(event.target.value)}
-          placeholder={t("reviewerInputPlaceholder")}
-        />
-      </label>
-      <div className="review-controls-actions">
-        <span className="signal-chip signal-chip-soft">
-          {selectedReviewerDisplayLabel || t("unassignedLabel")}
-        </span>
-        {wallet.accountAddress ? (
-          <button
-            type="button"
-            className="ghost-button"
-            onClick={() => setReviewerDraft(wallet.accountAddress ?? "")}
-          >
-            {t("assignToMe")}
-          </button>
-        ) : null}
-        {selectedSubmission ? (
-          <button
-            type="button"
-            className="ghost-button"
-            onClick={() =>
-              void updateSubmission(
-                {
-                  ...selectedSubmission,
-                  tags: setNeedsFollowUpTag(selectedSubmission.tags, !hasNeedsFollowUp(selectedSubmission)),
-                },
-                { notifyOnSuccess: true },
-              )
-            }
-          >
-            {selectedNeedsFollowUp ? t("followUpEnabledLabel") : t("needsFollowUpLabel")}
-          </button>
-        ) : null}
-      </div>
-      <label>
-        <span>{t("reviewerNoteLabel")}</span>
-        <textarea
-          rows={5}
-          value={notesDraft}
-          onChange={(event) => setNotesDraft(event.target.value)}
-          placeholder={t("captureReviewNotes")}
-        />
-      </label>
-      <p className="muted">{t("reviewEditableHelper")}</p>
-      <div className="review-controls-actions">
-        <span className={`save-state-pill is-${saveState === "saving" ? "saving" : notesDraft !== (selectedSubmission ? getVisibleReviewerNotes(selectedSubmission) : "") || reviewerDraft !== (selectedSubmission ? getAssignedReviewer(selectedSubmission) ?? "" : "") ? "editing" : "saved"}`}>
-          {saveState === "saving"
-            ? t("reviewSaveSaving")
-            : notesDraft !== (selectedSubmission ? getVisibleReviewerNotes(selectedSubmission) : "") || reviewerDraft !== (selectedSubmission ? getAssignedReviewer(selectedSubmission) ?? "" : "")
-              ? t("reviewSaveUnsavedDraft")
-              : t("reviewSaveSaved")}
-        </span>
-        {selectedReviewerNoteUpdatedAt ? (
-          <span className="muted">
-            {t("lastUpdatedLabel")}: {formatDate(selectedReviewerNoteUpdatedAt)}
+      <section className="answer-card review-triage-card">
+        <div className="section-row">
+          <div>
+            <p className="eyebrow">Review workbench</p>
+            <h3>Review & Triage</h3>
+            <p className="review-helper-copy">Turn this raw feedback into an actionable signal.</p>
+          </div>
+          <span className={`save-state-pill is-${saveState}`}>
+            {saveState === "saving"
+              ? "Saving signal ops..."
+              : saveState === "saved"
+                ? "Saved"
+                : saveState === "error"
+                  ? "Save failed"
+                  : "Ready"}
           </span>
-        ) : null}
-        <button
-          type="button"
-          className="primary-button"
-          disabled={saveState === "saving"}
-          onClick={() => void handleSaveReviewControls()}
-        >
-          Save Review & Triage
-        </button>
-      </div>
-    </section>
+        </div>
+        {saveError ? <p className="warning-text">{saveError}</p> : null}
+        <div className="review-field-grid">
+          <label>
+            <span>{t("status")}</span>
+            <select
+              value={statusDraft}
+              onChange={(event) =>
+                setStatusDraft(event.target.value as Submission["status"])
+              }
+            >
+              <option value="unread">{t("statusUnread")}</option>
+              <option value="read">{t("statusRead")}</option>
+              <option value="archived">{t("statusArchived")}</option>
+            </select>
+          </label>
+          <label>
+            <span>Signal Triage</span>
+            <select
+              value={triageStatusDraft}
+              onChange={(event) =>
+                setTriageStatusDraft(event.target.value as Submission["triageStatus"])
+              }
+            >
+              {TRIAGE_STATUS_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <span>{t("priority")}</span>
+            <select
+              value={priorityDraft}
+              onChange={(event) =>
+                setPriorityDraft(event.target.value as Submission["priority"])
+              }
+            >
+              <option value="low">{t("priorityLow")}</option>
+              <option value="medium">{t("priorityMedium")}</option>
+              <option value="high">{t("priorityHigh")}</option>
+            </select>
+          </label>
+          <label>
+            <span>Signal Value</span>
+            <select
+              value={signalValueDraft}
+              onChange={(event) => setSignalValueDraft(event.target.value)}
+            >
+              <option value="">Not scored</option>
+              {[1, 2, 3, 4, 5].map((value) => (
+                <option key={value} value={value}>
+                  {value}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+        <div className={`respondent-lifecycle-preview is-${respondentLifecyclePreview}`}>
+          <div>
+            <span>Responder timeline preview</span>
+            <strong>{getRespondentLifecyclePreviewLabel(respondentLifecyclePreview)}</strong>
+          </div>
+          <p>{getRespondentLifecyclePreviewDetail(respondentLifecyclePreview)}</p>
+        </div>
+        <label>
+          <span>{t("assignedReviewerLabel")}</span>
+          <input
+            type="text"
+            value={reviewerDraft}
+            onChange={(event) => setReviewerDraft(event.target.value)}
+            placeholder={t("reviewerInputPlaceholder")}
+          />
+        </label>
+        <div className="review-controls-actions">
+          <span className="signal-chip signal-chip-soft">
+            {selectedReviewerDisplayLabel || t("unassignedLabel")}
+          </span>
+          {wallet.accountAddress ? (
+            <button
+              type="button"
+              className="ghost-button"
+              onClick={() => setReviewerDraft(wallet.accountAddress ?? "")}
+            >
+              {t("assignToMe")}
+            </button>
+          ) : null}
+          {selectedSubmission ? (
+            <button
+              type="button"
+              className="ghost-button"
+              onClick={() =>
+                void updateSubmission(
+                  {
+                    ...selectedSubmission,
+                    tags: setNeedsFollowUpTag(selectedSubmission.tags, !hasNeedsFollowUp(selectedSubmission)),
+                  },
+                  { notifyOnSuccess: true },
+                )
+              }
+            >
+              {selectedNeedsFollowUp ? t("followUpEnabledLabel") : t("needsFollowUpLabel")}
+            </button>
+          ) : null}
+        </div>
+        <label>
+          <span>{t("reviewerNoteLabel")}</span>
+          <textarea
+            rows={5}
+            value={notesDraft}
+            onChange={(event) => setNotesDraft(event.target.value)}
+            placeholder={t("captureReviewNotes")}
+          />
+        </label>
+        <p className="muted">{t("reviewEditableHelper")}</p>
+        <div className="review-controls-actions">
+          <span className={`save-state-pill is-${saveState === "saving" ? "saving" : notesDraft !== (selectedSubmission ? getVisibleReviewerNotes(selectedSubmission) : "") || reviewerDraft !== (selectedSubmission ? getAssignedReviewer(selectedSubmission) ?? "" : "") ? "editing" : "saved"}`}>
+            {saveState === "saving"
+              ? t("reviewSaveSaving")
+              : notesDraft !== (selectedSubmission ? getVisibleReviewerNotes(selectedSubmission) : "") || reviewerDraft !== (selectedSubmission ? getAssignedReviewer(selectedSubmission) ?? "" : "")
+                ? t("reviewSaveUnsavedDraft")
+                : t("reviewSaveSaved")}
+          </span>
+          {selectedReviewerNoteUpdatedAt ? (
+            <span className="muted">
+              {t("lastUpdatedLabel")}: {formatDate(selectedReviewerNoteUpdatedAt)}
+            </span>
+          ) : null}
+          <button
+            type="button"
+            className="primary-button"
+            disabled={saveState === "saving"}
+            onClick={() => void handleSaveReviewControls()}
+          >
+            Save Review & Triage
+          </button>
+        </div>
+      </section>
     );
   };
 
