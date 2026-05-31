@@ -5293,12 +5293,12 @@
 }
 
 .landing-final-cta-shell {
-  min-height: 25rem;
+  min-height: clamp(30rem, 38vw, 35rem);
   display: grid;
   justify-items: center;
   align-content: center;
   gap: 1rem;
-  padding: clamp(2rem, 5vw, 5rem);
+  padding: clamp(2rem, 5vw, 5rem) clamp(2rem, 5vw, 5rem) clamp(8.5rem, 14vw, 12rem);
   text-align: center;
   background:
     radial-gradient(circle at 50% 53%, rgba(210, 252, 255, 0.105), transparent 13%),
@@ -5345,10 +5345,14 @@
 }
 
 .landing-final-cta-shell .eyebrow,
-.landing-final-cta-shell h2,
+.landing-final-cta-shell h2 {
+  position: relative;
+  z-index: 2;
+}
+
 .landing-final-cta-button {
   position: relative;
-  z-index: 1;
+  z-index: 3;
 }
 
 .landing-final-cta-shell h2 {
@@ -5398,6 +5402,21 @@
     0 0 0 0.68rem rgba(167, 238, 248, 0.045),
     0 0 34px rgba(144, 229, 243, 0.14),
     0 16px 36px rgba(5, 14, 28, 0.36);
+}
+
+.landing-final-cta-mascot {
+  position: absolute;
+  z-index: 1;
+  left: 50%;
+  top: calc(50% + 1.4rem);
+  width: clamp(10.5rem, 16vw, 16rem);
+  max-width: 42%;
+  height: auto;
+  pointer-events: none;
+  transform: translateX(-50%);
+  filter:
+    drop-shadow(0 1.1rem 2.2rem rgba(0, 0, 0, 0.34))
+    drop-shadow(0 0 1.4rem rgba(48, 224, 239, 0.14));
 }
 
 .landing-mock-panel {

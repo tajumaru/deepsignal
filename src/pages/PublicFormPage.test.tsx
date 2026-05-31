@@ -6,6 +6,7 @@ import { RpcInfrastructureContext, type RpcInfrastructureContextValue } from "..
 import { PublicFormPage } from "./PublicFormPage";
 import type { FormSchema } from "../types";
 import type { ZkLoginSession } from "../lib/zkloginSession";
+import { listPendingSubmissions } from "../storage/submissionDelivery";
 
 const SUBMIT_SIGNAL_BUTTON = /^(Hold to send signal|Signal preserved locally|Signal sent)/;
 
@@ -104,6 +105,7 @@ vi.mock("../lib/publicRouteAssets", () => ({
 }));
 
 vi.mock("../lib/walrusProof", () => ({
+  getCurrentWalrusNetwork: () => "testnet",
   verifyWalrusBlob: (...args: unknown[]) => mockVerifyWalrusBlob(...args),
 }));
 
@@ -404,6 +406,104 @@ describe("PublicFormPage shared manifest restore", () => {
 
     await waitFor(() => expect(mockSaveSubmission).toHaveBeenCalledTimes(1));
     expect(screen.queryByText(/sending it requires/i)).not.toBeInTheDocument();
+  });
+
+  it("clears local recovery once a public submission reaches the owner inbox", async () => {
+    const form: FormSchema = {
+      id: "form-123",
+      title: "Shared Feedback Form",
+      description: "Restored from a Walrus manifest link.",
+      fields: [
+        {
+          id: "field-1",
+          type: "shortText",
+          label: "What happened?",
+          required: true,
+          sensitive: false,
+        },
+      ],
+      createdAt: "2026-05-14T00:00:00.000Z",
+    };
+
+    mockReadManifestWithForm.mockResolvedValue({
+      manifest: {
+        version: 1,
+        formId: "form-123",
+        createdAt: "2026-05-14T00:00:00.000Z",
+        updatedAt: "2026-05-14T00:00:00.000Z",
+        formBlobId: "__bundled_form__",
+        submissions: [],
+      },
+      form,
+    });
+    mockSaveSubmission.mockResolvedValue({
+      id: "submission-123",
+      blobId: "blob-remote-123",
+      answerBlobId: "blob-answer-123",
+      remoteIndexUpdated: true,
+      remoteIndexReadBack: true,
+      ownerReadable: true,
+      remoteSyncStatus: "remote_synced",
+    });
+
+    renderPublicFormPage();
+
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Shared Feedback Form" })).toBeInTheDocument());
+    fireEvent.input(screen.getByRole("textbox"), { target: { value: "This reaches the owner inbox." } });
+    fireEvent.click(screen.getByRole("button", { name: SUBMIT_SIGNAL_BUTTON }));
+
+    await waitFor(() => expect(mockSaveSubmission).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(listPendingSubmissions()).toEqual([]));
+    expect(screen.queryByText("Pending local signals")).not.toBeInTheDocument();
+  });
+
+  it("does not show local recovery for relay-accepted submissions awaiting inbox readback", async () => {
+    const form: FormSchema = {
+      id: "form-123",
+      title: "Shared Feedback Form",
+      description: "Restored from a Walrus manifest link.",
+      fields: [
+        {
+          id: "field-1",
+          type: "shortText",
+          label: "What happened?",
+          required: true,
+          sensitive: false,
+        },
+      ],
+      createdAt: "2026-05-14T00:00:00.000Z",
+    };
+
+    mockReadManifestWithForm.mockResolvedValue({
+      manifest: {
+        version: 1,
+        formId: "form-123",
+        createdAt: "2026-05-14T00:00:00.000Z",
+        updatedAt: "2026-05-14T00:00:00.000Z",
+        formBlobId: "__bundled_form__",
+        submissions: [],
+      },
+      form,
+    });
+    mockSaveSubmission.mockResolvedValue({
+      id: "submission-123",
+      blobId: "blob-remote-123",
+      answerBlobId: "blob-answer-123",
+      remoteIndexTarget: "google-apps-script-drive",
+      remoteIndexUpdated: true,
+      remoteIndexReadBack: false,
+      ownerReadable: false,
+      remoteSyncStatus: "sync_pending",
+    });
+
+    renderPublicFormPage();
+
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Shared Feedback Form" })).toBeInTheDocument());
+    fireEvent.input(screen.getByRole("textbox"), { target: { value: "Relay accepted, readback pending." } });
+    fireEvent.click(screen.getByRole("button", { name: SUBMIT_SIGNAL_BUTTON }));
+
+    await waitFor(() => expect(listPendingSubmissions()).toHaveLength(1));
+    await waitFor(() => expect(screen.queryByText("Pending local signals")).not.toBeInTheDocument());
   });
 
   it("preserves typed answers when public page language text changes", async () => {

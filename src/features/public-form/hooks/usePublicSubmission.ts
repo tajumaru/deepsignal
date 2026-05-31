@@ -1406,7 +1406,7 @@ export function usePublicSubmission({
         "preparing",
         form.encryptSubmissions ? "Encrypting response..." : "Preparing secure upload...",
       );
-      const { enqueuePendingSubmission } = await import("../../../storage/submissionDelivery");
+      const { enqueuePendingSubmission, removePendingSubmission } = await import("../../../storage/submissionDelivery");
       enqueuePendingSubmission({
         ...submission,
         remoteIndexUpdated: false,
@@ -1605,6 +1605,7 @@ export function usePublicSubmission({
         deliveryStatus: "inbox_synced" as const,
         deliveryStatuses: ["stored_local" as const, "stored_walrus" as const, "inbox_synced" as const],
       };
+      removePendingSubmission(syncedSubmission.id);
       setSubmitted(syncedSubmission);
       upsertMyResponseHistoryEntry(
         buildMyResponseHistoryEntry({

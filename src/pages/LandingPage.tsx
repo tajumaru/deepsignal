@@ -998,6 +998,13 @@ function FinalSignalCtaSection() {
         <CreateFormLink className="primary-button landing-cta-primary landing-final-cta-button">
           {t("landingHeroContestCreate")}
         </CreateFormLink>
+        <img
+          className="landing-final-cta-mascot"
+          src="/deepsignal-final-cta-mascot.webp"
+          alt=""
+          loading="lazy"
+          decoding="async"
+        />
       </div>
     </section>
   );
@@ -1072,9 +1079,6 @@ export function LandingPage() {
               <Link className="primary-button landing-cta-primary" to="/dashboard">
                 {t("openInboxCta")}
               </Link>
-              <CreateFormLink className="ghost-button landing-cta-secondary">
-                {t("composeSignalCta")}
-              </CreateFormLink>
             </div>
 
             <div className="cta-row landing-hero-actions landing-hero-actions-secondary">

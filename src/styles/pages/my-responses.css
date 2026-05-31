@@ -1,6 +1,7 @@
 .my-responses-page {
   width: min(1120px, 100%);
   margin: 0 auto;
+  padding-bottom: calc(5.75rem + env(safe-area-inset-bottom, 0px));
 }
 
 .my-responses-page,
@@ -56,7 +57,9 @@
 .my-responses-hero-copy,
 .my-response-card-main,
 .my-response-receipt-title-block,
-.my-response-receipt-quick-meta > div {
+.my-response-receipt-quick-meta > div,
+.my-response-receipt-id-block,
+.my-response-status-grid > div {
   min-width: 0;
 }
 
@@ -67,7 +70,8 @@
 .my-response-lifecycle-card h2,
 .my-response-history-actions h2,
 .my-response-receipt-header h2,
-.my-response-answer-vault h2 {
+.my-response-answer-vault h2,
+.my-response-status-summary h2 {
   margin: 0;
 }
 
@@ -167,11 +171,12 @@
 .my-response-card {
   position: relative;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(13rem, 0.48fr) auto;
+  grid-template-columns: minmax(0, 1fr) minmax(13rem, 0.48fr);
   gap: 1rem;
   align-items: center;
   overflow: hidden;
   min-width: 0;
+  padding: 1rem 1.05rem 1rem 1.2rem;
   color: inherit;
   text-decoration: none;
   border-color: rgba(103, 232, 249, 0.18);
@@ -280,11 +285,6 @@
   overflow-wrap: anywhere;
 }
 
-.my-response-open-cta {
-  min-height: 2.75rem;
-  white-space: nowrap;
-}
-
 .my-response-badge {
   display: inline-flex;
   align-items: center;
@@ -345,17 +345,56 @@
   color: #bbf7d0;
 }
 
+.my-response-badge.is-revoke-unavailable {
+  border-color: rgba(148, 163, 184, 0.24);
+  color: #cbd5e1;
+}
+
+.my-response-overview-panel {
+  display: grid;
+  gap: 1.1rem;
+  border-color: rgba(103, 232, 249, 0.22);
+  background:
+    radial-gradient(circle at 12% 12%, rgba(45, 212, 191, 0.12), transparent 24%),
+    radial-gradient(circle at top right, rgba(125, 211, 252, 0.1), transparent 28%),
+    linear-gradient(135deg, rgba(4, 18, 31, 0.88), rgba(15, 23, 42, 0.88));
+}
+
+.my-response-detail-section {
+  margin-bottom: 0.45rem;
+  padding: clamp(1rem, 2.2vw, 1.25rem);
+}
+
+.my-response-section-label {
+  display: inline-flex;
+  align-items: center;
+  width: max-content;
+  max-width: 100%;
+  min-height: 1.55rem;
+  margin: 0 0 0.38rem;
+  padding: 0.2rem 0.48rem;
+  border: 1px solid rgba(103, 232, 249, 0.2);
+  border-radius: 999px;
+  background: rgba(8, 47, 73, 0.34);
+  color: #a5f3fc;
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
 .my-response-receipt-header {
   position: relative;
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) minmax(14rem, 0.5fr) auto;
-  gap: 1rem;
+  grid-template-columns: auto minmax(0, 1fr) minmax(15rem, 0.44fr);
+  gap: 0.9rem 1rem;
   align-items: center;
-  overflow: hidden;
-  border-color: rgba(103, 232, 249, 0.2);
-  background:
-    radial-gradient(circle at 12% 20%, rgba(45, 212, 191, 0.12), transparent 26%),
-    linear-gradient(135deg, rgba(4, 18, 31, 0.88), rgba(15, 23, 42, 0.88));
+  min-width: 0;
+}
+
+.my-response-receipt-header .my-response-section-label {
+  grid-column: 1 / -1;
 }
 
 .my-response-receipt-mark {
@@ -379,9 +418,50 @@
 
 .my-response-receipt-title-block h2,
 .my-response-receipt-title-block p,
+.my-response-receipt-id-block strong,
+.my-response-receipt-id-block small,
 .my-response-receipt-quick-meta strong,
 .my-response-receipt-quick-meta span {
   overflow-wrap: anywhere;
+}
+
+.my-response-receipt-title-block {
+  display: grid;
+  gap: 0.18rem;
+}
+
+.my-response-receipt-id-block {
+  display: grid;
+  gap: 0.22rem;
+  padding: 0.78rem;
+  border: 1px solid rgba(103, 232, 249, 0.16);
+  border-radius: 12px;
+  background: rgba(2, 8, 23, 0.44);
+}
+
+.my-response-receipt-id-block span,
+.my-response-receipt-id-block strong,
+.my-response-receipt-id-block small {
+  display: block;
+}
+
+.my-response-receipt-id-block span {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.my-response-receipt-id-block strong {
+  color: #f8fafc;
+  font-family: "Consolas", "SFMono-Regular", "Roboto Mono", monospace;
+  font-size: 0.9rem;
+}
+
+.my-response-receipt-id-block small {
+  color: rgba(203, 213, 225, 0.76);
+  font-size: 0.68rem;
+  line-height: 1.35;
 }
 
 .my-response-receipt-quick-meta {
@@ -417,9 +497,56 @@
 
 .my-response-detail-card,
 .my-response-answer-vault,
-.my-response-lifecycle-card {
+.my-response-lifecycle-card,
+.my-response-status-summary {
   display: grid;
   gap: 1rem;
+}
+
+.my-response-status-summary {
+  padding-top: 1.05rem;
+  border-top: 1px solid rgba(148, 163, 184, 0.14);
+}
+
+.my-response-status-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.7rem;
+}
+
+.my-response-status-grid > div {
+  padding: 0.78rem;
+  border: 1px solid rgba(148, 163, 184, 0.15);
+  border-radius: 12px;
+  background: rgba(2, 8, 23, 0.42);
+}
+
+.my-response-status-grid span,
+.my-response-status-grid strong {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.my-response-status-grid span {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.my-response-status-grid strong {
+  margin-top: 0.25rem;
+  color: #f8fafc;
+  font-size: 0.9rem;
+  line-height: 1.35;
+}
+
+.my-response-status-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding-top: 0.9rem;
+  border-top: 1px solid rgba(148, 163, 184, 0.14);
 }
 
 .my-response-answer-vault {
@@ -427,6 +554,31 @@
   background:
     radial-gradient(circle at top left, rgba(45, 212, 191, 0.08), transparent 28%),
     rgba(4, 18, 31, 0.72);
+}
+
+.my-response-answer-vault .stack {
+  gap: 0.85rem;
+}
+
+.my-response-answer-vault .answer-line {
+  padding: 0.95rem;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 14px;
+  background: rgba(2, 8, 23, 0.28);
+}
+
+.my-response-answer-vault .answer-line > strong {
+  display: block;
+  margin-bottom: 0.7rem;
+  padding-bottom: 0.62rem;
+  border-bottom: 1px solid rgba(103, 232, 249, 0.13);
+  color: #e0f2fe;
+}
+
+.my-response-detail-card {
+  background:
+    radial-gradient(circle at top left, rgba(167, 139, 250, 0.08), transparent 26%),
+    rgba(4, 18, 31, 0.7);
 }
 
 .my-response-detail-card .metadata-row strong,
@@ -569,6 +721,10 @@
   gap: 0.18rem;
 }
 
+.my-response-technical-details[open] summary {
+  margin-bottom: 1rem;
+}
+
 .my-response-history-actions {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -645,9 +801,6 @@
     opacity: 0.38;
   }
 
-  .my-response-open-cta {
-    justify-self: stretch;
-  }
 }
 
 @media (max-width: 760px) {
@@ -659,11 +812,28 @@
     padding: 1rem;
   }
 
-  .my-responses-hero-stats,
+  .my-response-status-grid,
   .my-response-receipt-quick-meta,
   .my-response-lifecycle-timeline,
   .my-response-lifecycle-footer {
     grid-template-columns: 1fr;
+  }
+
+  .my-responses-hero-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.5rem;
+  }
+
+  .my-responses-hero-stats > div {
+    padding: 0.62rem 0.7rem;
+  }
+
+  .my-responses-hero-stats span {
+    font-size: 0.66rem;
+  }
+
+  .my-responses-hero-stats strong {
+    font-size: 1.12rem;
   }
 
   .my-response-lifecycle-step {
@@ -688,6 +858,10 @@
   .my-response-roadmap-link {
     width: 100%;
   }
+
+  .my-response-detail-section {
+    margin-bottom: 0.9rem;
+  }
 }
 
 @media (max-width: 360px) {
@@ -697,7 +871,7 @@
   }
 
   .my-response-card,
-  .my-response-receipt-header,
+  .my-response-overview-panel,
   .my-response-detail-card,
   .my-response-answer-vault,
   .my-response-lifecycle-card,
@@ -706,6 +880,10 @@
   .my-responses-empty {
     padding-right: 0.85rem;
     padding-left: 0.85rem;
+  }
+
+  .my-response-card {
+    padding-left: 1rem;
   }
 
   .my-response-receipt-mark {

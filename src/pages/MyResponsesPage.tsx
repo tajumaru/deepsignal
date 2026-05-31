@@ -153,7 +153,7 @@ function SignalLifecycleTimeline({ entry }: { entry: MyResponseHistoryEntry }) {
   const isRoadmapVisible = Boolean(entry.roadmapStatus);
 
   return (
-    <section className="answer-card my-response-lifecycle-card">
+    <section className="answer-card my-response-lifecycle-card my-response-detail-section">
       <div className="section-row">
         <div>
           <p className="eyebrow">{t("myResponsesLifecycleEyebrow")}</p>
@@ -257,40 +257,66 @@ export function MyResponsesPage() {
           </Link>
         </div>
 
-        <section className="answer-card my-response-receipt-header">
-          <div className="my-response-receipt-mark" aria-hidden="true">
-            <span />
-          </div>
-          <div className="my-response-receipt-title-block">
-            <p className="eyebrow">{receiptId}</p>
-            <h2>{selectedEntry.formTitle}</h2>
-            {selectedEntry.projectName ? <p className="muted">{selectedEntry.projectName}</p> : null}
-          </div>
-          <div className="my-response-receipt-quick-meta">
-            <div>
-              <span>{t("myResponsesSubmittedAt")}</span>
-              <strong>{formatDate(selectedEntry.submittedAt)}</strong>
+        <section className="answer-card my-response-overview-panel my-response-detail-section">
+          <div className="my-response-receipt-header">
+            <p className="my-response-section-label">{t("myResponsesHeaderSummary")}</p>
+            <div className="my-response-receipt-mark" aria-hidden="true">
+              <span />
             </div>
-            <div>
-              <span>{t("myResponsesLifecycleStatus")}</span>
-              <strong>{getLifecycleLabel(selectedEntry.lifecycleStatus, t)}</strong>
+            <div className="my-response-receipt-title-block">
+              <p className="eyebrow">{t("myResponsesSignal")}</p>
+              <h2>{selectedEntry.formTitle}</h2>
+              {selectedEntry.projectName ? <p className="muted">{selectedEntry.projectName}</p> : null}
+            </div>
+            <div className="my-response-receipt-id-block">
+              <span>{t("myResponsesSubmissionId")}</span>
+              <strong>{receiptId}</strong>
+              <small>{selectedEntry.submissionId}</small>
             </div>
           </div>
-          <div className="my-response-badge-row">
-            <span className={`my-response-badge is-${selectedEntry.status}`}>{getStatusLabel(selectedEntry.status, t)}</span>
-            <span className={`my-response-badge is-lifecycle-${selectedEntry.lifecycleStatus ?? "submitted"}`}>
-              {getLifecycleLabel(selectedEntry.lifecycleStatus, t)}
-            </span>
-            <span className={`my-response-badge is-storage-${selectedEntry.storageMode}`}>
-              {getStorageLabel(selectedEntry.storageMode, t)}
-            </span>
+
+          <div className="my-response-status-summary">
+            <div className="section-row">
+              <div>
+                <p className="my-response-section-label">{t("myResponsesStatusSummary")}</p>
+                <h2>{t("myResponsesStorageStatus")}</h2>
+              </div>
+            </div>
+            <div className="my-response-status-grid">
+              <div>
+                <span>{t("myResponsesSubmittedAt")}</span>
+                <strong>{formatDate(selectedEntry.submittedAt)}</strong>
+              </div>
+              <div>
+                <span>{t("myResponsesLifecycleStatus")}</span>
+                <strong>{getLifecycleLabel(selectedEntry.lifecycleStatus, t)}</strong>
+              </div>
+              <div>
+                <span>{t("myResponsesStorageStatus")}</span>
+                <strong>{getStorageLabel(selectedEntry.storageMode, t)}</strong>
+              </div>
+              <div>
+                <span>{t("myResponsesFormVersion")}</span>
+                <strong>v{getFormVersion(selectedEntry)}</strong>
+              </div>
+            </div>
+            <div className="my-response-status-tags" aria-label={t("myResponsesStatusTags")}>
+              <span className={`my-response-badge is-${selectedEntry.status}`}>{getStatusLabel(selectedEntry.status, t)}</span>
+              <span className={`my-response-badge is-lifecycle-${selectedEntry.lifecycleStatus ?? "submitted"}`}>
+                {getLifecycleLabel(selectedEntry.lifecycleStatus, t)}
+              </span>
+              <span className={`my-response-badge is-storage-${selectedEntry.storageMode}`}>
+                {getStorageLabel(selectedEntry.storageMode, t)}
+              </span>
+              <span className="my-response-badge is-revoke-unavailable">{t("myResponsesChipRevokeUnavailable")}</span>
+            </div>
           </div>
         </section>
 
-        <section className="answer-card my-response-answer-vault">
+        <section className="answer-card my-response-answer-vault my-response-detail-section">
           <div className="section-row">
             <div>
-              <p className="eyebrow">{t("myResponsesAnswerSnapshot")}</p>
+              <p className="my-response-section-label">{t("myResponsesAnswerSnapshot")}</p>
               <h2>{t("myResponsesContent")}</h2>
             </div>
           </div>
@@ -311,29 +337,17 @@ export function MyResponsesPage() {
           )}
         </section>
 
-        <section className="answer-card my-response-detail-card">
+        <section className="answer-card my-response-detail-card my-response-detail-section">
           <div className="section-row">
             <div>
-              <p className="eyebrow">{t("myResponsesResponseDetail")}</p>
-              <h2>{t("myResponsesReceiptMetadata")}</h2>
+              <p className="my-response-section-label">{t("myResponsesSignalDetails")}</p>
+              <h2>{t("myResponsesResponseDetail")}</h2>
             </div>
           </div>
           <div className="metadata-list">
             <div className="metadata-row">
-              <span>{t("myResponsesSubmittedAt")}</span>
-              <strong>{formatDate(selectedEntry.submittedAt)}</strong>
-            </div>
-            <div className="metadata-row">
               <span>{t("myResponsesSignal")}</span>
               <strong>{selectedEntry.formTitle}</strong>
-            </div>
-            <div className="metadata-row">
-              <span>{t("myResponsesStorageStatus")}</span>
-              <strong>{getStatusLabel(selectedEntry.status, t)}</strong>
-            </div>
-            <div className="metadata-row">
-              <span>{t("myResponsesLifecycleStatus")}</span>
-              <strong>{getLifecycleLabel(selectedEntry.lifecycleStatus, t)}</strong>
             </div>
             <div className="metadata-row">
               <span>{t("myResponsesFormVersion")}</span>
@@ -354,7 +368,7 @@ export function MyResponsesPage() {
 
         <SignalLifecycleTimeline entry={selectedEntry} />
 
-        <details className="answer-card my-response-technical-details">
+        <details className="answer-card my-response-technical-details my-response-detail-section">
           <summary>
             <span>
               <strong>{t("myResponsesTechnicalDetails")}</strong>
@@ -393,7 +407,7 @@ export function MyResponsesPage() {
           </div>
         </details>
 
-        <section className="answer-card my-response-history-actions">
+        <section className="answer-card my-response-history-actions my-response-detail-section">
           <div>
             <p className="eyebrow">{t("myResponsesLocalHistoryControl")}</p>
             <h2>{t("myResponsesHideTitle")}</h2>
@@ -484,7 +498,6 @@ export function MyResponsesPage() {
                 <span className={`my-response-badge is-storage-${entry.storageMode}`}>{getStorageLabel(entry.storageMode, t)}</span>
                 <span>v{getFormVersion(entry)}</span>
               </div>
-              <span className="primary-button my-response-open-cta">{t("myResponsesOpenReceipt")}</span>
             </Link>
           ))}
         </div>

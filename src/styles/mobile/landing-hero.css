@@ -226,7 +226,8 @@
   }
 
   .landing-final-cta-shell {
-    min-height: 18rem;
+    min-height: 25rem;
+    padding: 1.05rem;
   }
 
   .landing-flow-track {

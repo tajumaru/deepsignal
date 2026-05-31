@@ -1,7 +1,16 @@
 import { useCallback, useEffect, useState } from "react";
-import { listPendingSubmissions } from "../storage/submissionDelivery";
+import { PENDING_SUBMISSION_QUEUE_CHANGED_EVENT, listPendingSubmissions } from "../storage/submissionDelivery";
 import type { Submission } from "../types";
 import { formatDate } from "../lib/utils";
+
+function isLocalFallbackBlob(blobId?: string | null) {
+  return Boolean(blobId && blobId.startsWith("local-"));
+}
+
+function needsLocalRecovery(submission: Submission) {
+  const primaryBlobId = submission.answerBlobId ?? submission.encryptedBlobId ?? submission.blobId;
+  return !primaryBlobId || isLocalFallbackBlob(primaryBlobId) || submission.remoteSyncStatus === "local_only";
+}
 
 export function LocalRecoveryCenter({ formId }: { formId?: string }) {
   const [pending, setPending] = useState<Submission[]>([]);
@@ -9,7 +18,9 @@ export function LocalRecoveryCenter({ formId }: { formId?: string }) {
   const [message, setMessage] = useState("");
 
   const refresh = useCallback(() => {
-    const queue = listPendingSubmissions().filter((submission) => !formId || submission.formId === formId);
+    const queue = listPendingSubmissions().filter(
+      (submission) => (!formId || submission.formId === formId) && needsLocalRecovery(submission),
+    );
     setPending(queue);
   }, [formId]);
 
@@ -17,7 +28,11 @@ export function LocalRecoveryCenter({ formId }: { formId?: string }) {
     refresh();
     const onStorage = () => refresh();
     window.addEventListener("storage", onStorage);
-    return () => window.removeEventListener("storage", onStorage);
+    window.addEventListener(PENDING_SUBMISSION_QUEUE_CHANGED_EVENT, onStorage);
+    return () => {
+      window.removeEventListener("storage", onStorage);
+      window.removeEventListener(PENDING_SUBMISSION_QUEUE_CHANGED_EVENT, onStorage);
+    };
   }, [refresh]);
 
   async function retrySync() {

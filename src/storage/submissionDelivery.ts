@@ -52,6 +52,7 @@ export interface OwnerSubmissionIndexFetchLog {
 }
 
 const PENDING_QUEUE_KEY = "deepsignal.submissionDelivery.pendingQueue";
+export const PENDING_SUBMISSION_QUEUE_CHANGED_EVENT = "deepsignal:pending-submission-queue-changed";
 const REMOTE_SUBMISSION_INDEX_CACHE_TTL_MS = 15000;
 const submissionRelayUrl = String(import.meta.env.VITE_DEEPSIGNAL_SUBMISSION_RELAY_URL || "").replace(/\/$/, "");
 const submissionRelayIsAppsScript = submissionRelayUrl.includes("script.google.com/macros/");
@@ -59,6 +60,10 @@ const remoteSubmissionIndexRequests = new Map<string, {
   expiresAt: number;
   promise: Promise<SubmissionIndexEntry[]>;
 }>();
+
+function notifyPendingQueueChanged() {
+  window.dispatchEvent(new Event(PENDING_SUBMISSION_QUEUE_CHANGED_EVENT));
+}
 
 function normalizeSubmitterMode(submission: Submission): SubmitterMode {
   const identityKind = submission.respondentMeta?.identityKind;
@@ -111,6 +116,7 @@ export function enqueuePendingSubmission(submission: Submission) {
       ...queue.filter((item) => item.id !== submission.id),
     ].slice(0, 100);
     window.localStorage.setItem(PENDING_QUEUE_KEY, JSON.stringify(next));
+    notifyPendingQueueChanged();
   } catch (error) {
     console.warn("[deepsignal] failed to enqueue pending submission sync", error);
   }
@@ -130,6 +136,7 @@ export function removePendingSubmission(submissionId: string) {
   try {
     const next = listPendingSubmissions().filter((submission) => submission.id !== submissionId);
     window.localStorage.setItem(PENDING_QUEUE_KEY, JSON.stringify(next));
+    notifyPendingQueueChanged();
   } catch (error) {
     console.warn("[deepsignal] failed to remove pending submission sync", error);
   }

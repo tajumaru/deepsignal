@@ -912,6 +912,17 @@
     max-height: 100%;
   }
 
+  .node-directory-heading {
+    display: block;
+    padding-right: 3.25rem;
+  }
+
+  .node-directory-heading .review-session-close-button {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+  }
+
   .node-directory-toolbar,
   .node-directory-toolbar-actions,
   .node-directory-item-heading {
