@@ -216,6 +216,8 @@ export function ReviewSessionModal({
                   isDecrypting={decrypting || decryptInFlight}
                   isUnlocked={Boolean(detailAnswers)}
                   actionLabel={t("decryptSignalAction")}
+                  mobileActionLabel={t("mobileRevealSignalAction")}
+                  mobileUnlockedActionLabel={t("mobileHideSignalAction")}
                   unlockState={decryptState}
                   statusMessage={decryptStatusMessage}
                   errorMessage={decryptError ?? undefined}

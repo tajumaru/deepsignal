@@ -13,6 +13,7 @@
     <title>DeepSignal — Walrus Feedback Lab</title>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="apple-touch-icon" href="/deepsignal-mark.svg" />
+    <link rel="preload" as="image" href="/deepsignal-mascot-ui.png" />
     <style>
       :root {
         color-scheme: dark;
@@ -118,10 +119,8 @@
         width: 3rem;
         height: 3rem;
         place-items: center;
-        border: 1px solid rgba(116, 226, 255, 0.36);
-        border-radius: 16px;
-        background: rgba(10, 28, 43, 0.72);
-        box-shadow: 0 12px 32px rgba(0, 0, 0, 0.28);
+        border: 0;
+        background: transparent;
       }
 
       .boot-eyebrow {
@@ -134,13 +133,152 @@
       }
 
       .boot-signal {
-        width: 1.45rem;
-        height: 1.45rem;
+        position: relative;
+        width: 3rem;
+        height: 3rem;
+        filter: drop-shadow(0 12px 28px rgba(0, 0, 0, 0.3));
+      }
+
+      .boot-signal::before {
+        content: "";
+        position: absolute;
+        inset: 0.24rem 0.18rem 0.1rem;
         border-radius: 999px;
         background:
-          radial-gradient(circle, #8df7ff 0 22%, rgba(141, 247, 255, 0.2) 24% 52%, transparent 54%),
+          radial-gradient(circle at 50% 62%, rgba(35, 227, 229, 0.96) 0 38%, rgba(7, 122, 142, 0.82) 78%),
+          linear-gradient(180deg, rgba(125, 239, 255, 0.32), rgba(6, 18, 29, 0.24));
+        box-shadow:
+          inset 0 0 0 1px rgba(236, 253, 255, 0.1),
+          0 0 18px rgba(125, 239, 255, 0.2);
+      }
+
+      .boot-watcher-hat {
+        position: absolute;
+        left: 0.47rem;
+        right: 0.47rem;
+        top: 0.64rem;
+        height: 0.7rem;
+        z-index: 2;
+        border-radius: 0.8rem 0.8rem 0.32rem 0.32rem;
+        background:
+          repeating-linear-gradient(90deg, transparent 0 0.23rem, rgba(111, 48, 8, 0.23) 0.23rem 0.29rem),
+          linear-gradient(180deg, #ff9c1a 0%, #ff7900 100%);
+        box-shadow:
+          inset 0 1px 0 rgba(255, 222, 126, 0.35),
+          0 2px 8px rgba(255, 122, 0, 0.2);
+      }
+
+      .boot-watcher-monitor {
+        position: absolute;
+        left: 50%;
+        top: 0.04rem;
+        z-index: 3;
+        width: 1.34rem;
+        height: 0.94rem;
+        transform: translateX(-50%);
+        border: 1px solid rgba(116, 226, 255, 0.34);
+        border-radius: 0.34rem;
+        background:
+          radial-gradient(circle at 50% 54%, rgba(125, 239, 255, 0.22), transparent 42%),
+          linear-gradient(180deg, #203647 0%, #0e1d2c 100%);
+        box-shadow:
+          inset 0 0 0 1px rgba(236, 253, 255, 0.05),
+          0 0 10px rgba(125, 239, 255, 0.14);
+      }
+
+      .boot-watcher-monitor::before,
+      .boot-watcher-monitor::after {
+        content: "";
+        position: absolute;
+        top: -0.36rem;
+        width: 0.38rem;
+        height: 0.38rem;
+        border-radius: 999px;
+        background: #24394b;
+        box-shadow: inset 0 0 0 1px rgba(116, 226, 255, 0.28);
+      }
+
+      .boot-watcher-monitor::before {
+        left: 0.1rem;
+      }
+
+      .boot-watcher-monitor::after {
+        right: 0.1rem;
+      }
+
+      .boot-watcher-core {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        width: 0.48rem;
+        height: 0.48rem;
+        transform: translate(-50%, -50%);
+        border-radius: 999px;
+        background:
+          radial-gradient(circle, #8df7ff 0 24%, rgba(141, 247, 255, 0.2) 27% 54%, transparent 56%),
           radial-gradient(circle, rgba(69, 245, 190, 0.3), transparent 64%);
-        box-shadow: 0 0 24px rgba(125, 239, 255, 0.42);
+        box-shadow: 0 0 12px rgba(125, 239, 255, 0.4);
+      }
+
+      .boot-watcher-eye {
+        position: absolute;
+        left: 50%;
+        top: 1.82rem;
+        z-index: 4;
+        width: 1.08rem;
+        height: 1.08rem;
+        overflow: hidden;
+        transform: translate(-50%, -50%);
+        border-radius: 999px;
+        background: #fff2d8;
+        box-shadow:
+          0 0 0 1px rgba(4, 16, 27, 0.36),
+          0 0 16px rgba(125, 239, 255, 0.28);
+      }
+
+      .boot-watcher-eye::before {
+        content: "";
+        position: absolute;
+        inset: -0.16rem;
+        border: 2px solid rgba(127, 232, 255, 0.42);
+        border-radius: inherit;
+        animation: boot-watcher-rim 5.8s ease-in-out infinite;
+      }
+
+      .boot-watcher-pupil {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        width: 0.52rem;
+        height: 0.52rem;
+        transform: translate(-50%, -50%);
+        border-radius: 999px;
+        background:
+          radial-gradient(circle at 35% 28%, #ddfdff 0 10%, transparent 11%),
+          radial-gradient(circle at 50% 50%, #0b1828 0 58%, #10283b 60% 100%);
+        animation: boot-watcher-look 5.8s ease-in-out infinite;
+      }
+
+      .boot-watcher-lid {
+        position: absolute;
+        inset: -1px;
+        transform: scaleY(0);
+        transform-origin: top;
+        border-radius: inherit;
+        background: linear-gradient(180deg, #12d7df 0%, #0ba9bc 100%);
+        animation: boot-watcher-blink 7.2s ease-in-out infinite;
+      }
+
+      .boot-watcher-mouth {
+        position: absolute;
+        left: 50%;
+        bottom: 0.24rem;
+        z-index: 4;
+        width: 0.25rem;
+        height: 1px;
+        transform: translateX(-50%);
+        border-radius: 999px;
+        background: rgba(4, 24, 34, 0.64);
       }
 
       .boot-title {
@@ -345,8 +483,27 @@
         50% { opacity: 0.35; }
       }
 
+      @keyframes boot-watcher-look {
+        0%, 24%, 100% { transform: translate(-50%, -50%); }
+        38%, 50% { transform: translate(-68%, -50%); }
+        68%, 82% { transform: translate(-32%, -50%); }
+      }
+
+      @keyframes boot-watcher-blink {
+        0%, 71%, 75%, 100% { transform: scaleY(0); }
+        72.4%, 73.2% { transform: scaleY(1); }
+      }
+
+      @keyframes boot-watcher-rim {
+        0%, 100% { opacity: 0.46; }
+        50% { opacity: 0.78; }
+      }
+
       @media (prefers-reduced-motion: reduce) {
         #boot-overlay,
+        .boot-watcher-eye::before,
+        .boot-watcher-pupil,
+        .boot-watcher-lid,
         .boot-pipeline-node::before,
         .boot-particle,
         .boot-progress::before,
@@ -429,7 +586,17 @@
     <div id="boot-overlay" aria-live="polite">
       <section class="boot-shell" role="status" aria-label="DeepSignal initialization">
         <div class="boot-mark" aria-hidden="true">
-          <div class="boot-signal"></div>
+          <div class="boot-signal">
+            <span class="boot-watcher-monitor">
+              <span class="boot-watcher-core"></span>
+            </span>
+            <span class="boot-watcher-hat"></span>
+            <span class="boot-watcher-eye">
+              <span class="boot-watcher-pupil"></span>
+              <span class="boot-watcher-lid"></span>
+            </span>
+            <span class="boot-watcher-mouth"></span>
+          </div>
         </div>
         <p class="boot-eyebrow">DeepSignal secure boot</p>
         <h1 class="boot-title">Initializing Secure Signal Pipeline</h1>

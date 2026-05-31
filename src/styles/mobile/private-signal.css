@@ -157,6 +157,16 @@
     padding-inline: 0.85rem;
   }
 
+  .private-signal-unlock-button.has-mobile-visibility-copy .private-signal-desktop-action-label,
+  .private-signal-unlock-button.has-mobile-visibility-copy .private-signal-unlock-icon {
+    display: none;
+  }
+
+  .private-signal-unlock-button.has-mobile-visibility-copy .private-signal-mobile-action-label,
+  .private-signal-unlock-button.has-mobile-visibility-copy .private-signal-eye-icon {
+    display: inline-flex;
+  }
+
   .private-signal-unlock-button span {
     min-width: 0;
     overflow-wrap: anywhere;

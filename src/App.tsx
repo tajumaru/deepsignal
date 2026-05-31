@@ -11,6 +11,7 @@ import {
 import { retryLazyImport } from "./lib/lazyRetry";
 import { logRouteLifecycle, setDeepSignalDebugReadiness } from "./lib/routeDiagnostics";
 import { scheduleIdleTask } from "./lib/scheduleIdleTask";
+import { LandingPage } from "./pages/LandingPage";
 import { RpcInfrastructureProvider } from "./RpcInfrastructureProvider";
 import { AppRoutes } from "./routes/AppRoutes";
 import { createAppRouteComponents, type AppRouteComponents } from "./routes/appRouteComponents";
@@ -212,7 +213,6 @@ export default function App() {
   const [routeRetryNonce, setRouteRetryNonce] = useState(0);
   const appRouteComponents = useMemo(() => createAppRouteComponents(routeRetryNonce), [routeRetryNonce]);
   const publicRouteComponents = useMemo(() => createPublicRouteComponents(routeRetryNonce), [routeRetryNonce]);
-  const { LandingPage } = appRouteComponents;
   const routeNeedsWalletSurface =
     location.pathname === "/admin" ||
     location.pathname === "/dashboard" ||
@@ -277,14 +277,10 @@ export default function App() {
   if (routeIsLanding) {
     return (
       <RpcInfrastructureProvider>
-        <Suspense fallback={<WorkspaceRestoreFallback />}>
-          <AppShell walletAvailable={false} chrome="full">
-            <BuildUpdateBanner />
-            <RouteReady routePath={routePath} onReady={() => setInitialRouteReady(true)}>
-              <LandingPage />
-            </RouteReady>
-          </AppShell>
-        </Suspense>
+        <BuildUpdateBanner />
+        <RouteReady routePath={routePath} onReady={() => setInitialRouteReady(true)}>
+          <LandingPage />
+        </RouteReady>
       </RpcInfrastructureProvider>
     );
   }

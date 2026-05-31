@@ -24,11 +24,14 @@ type UnlockState =
 
 interface PrivateSignalUnlockCardProps {
   onUnlock: () => void;
+  onHideUnlocked?: () => void;
   onClearDebugCache?: () => void;
   onCancel?: () => void;
   isDecrypting: boolean;
   isUnlocked: boolean;
   actionLabel?: string;
+  mobileActionLabel?: string;
+  mobileUnlockedActionLabel?: string;
   unlockState?: UnlockState;
   statusMessage?: string;
   errorMessage?: string;
@@ -100,6 +103,51 @@ function OpenLockIcon() {
         strokeWidth="1.8"
         strokeLinecap="round"
         strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function EyeIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" className="private-signal-action-icon private-signal-eye-icon">
+      <path
+        d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <circle cx="12" cy="12" r="2.7" fill="none" stroke="currentColor" strokeWidth="1.8" />
+    </svg>
+  );
+}
+
+function EyeOffIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" className="private-signal-action-icon private-signal-eye-icon">
+      <path
+        d="M3 3 21 21"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+      />
+      <path
+        d="M10.6 6.15A10.7 10.7 0 0 1 12 6c6 0 9.5 6 9.5 6a16 16 0 0 1-2.35 2.95M6.85 7.55A16 16 0 0 0 2.5 12s3.5 6 9.5 6a10.4 10.4 0 0 0 4.05-.8"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M9.9 9.9a2.7 2.7 0 0 0 3.82 3.82"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
       />
     </svg>
   );
@@ -352,11 +400,14 @@ const unlockSteps: Array<{ key: "locked" | "waiting_wallet_approval" | "decrypti
 
 export function PrivateSignalUnlockCard({
   onUnlock,
+  onHideUnlocked,
   onClearDebugCache,
   onCancel,
   isDecrypting,
   isUnlocked,
   actionLabel,
+  mobileActionLabel,
+  mobileUnlockedActionLabel,
   unlockState,
   statusMessage,
   errorMessage,
@@ -374,7 +425,7 @@ export function PrivateSignalUnlockCard({
   const state = isUnlocked
     ? "decrypted"
     : (unlockState ?? (isDecrypting ? "decrypting" : errorMessage ? "failed" : "locked"));
-  const buttonDisabled = actionDisabled || isDecrypting || state === "decrypted";
+  const buttonDisabled = actionDisabled || isDecrypting || (state === "decrypted" && !onHideUnlocked);
   const helperText = isUnlocked
     ? t("privateSignalUnlockSuccessDetail")
     : state === "unauthorized"
@@ -488,14 +539,20 @@ export function PrivateSignalUnlockCard({
       <div className="private-signal-unlock-actions">
         <button
           type="button"
-          className="private-signal-unlock-button"
-          onClick={onUnlock}
+          className={`private-signal-unlock-button ${mobileActionLabel || mobileUnlockedActionLabel ? "has-mobile-visibility-copy" : ""}`}
+          onClick={state === "decrypted" && onHideUnlocked ? onHideUnlocked : onUnlock}
           disabled={buttonDisabled}
           aria-describedby={resolvedStatusMessage ? statusId : undefined}
         >
           {isDecrypting ? <SpinnerIcon /> : null}
-          {!isDecrypting && state !== "decrypted" ? <LockIcon /> : null}
-          <span>
+          {!isDecrypting && state === "decrypted" && onHideUnlocked ? <EyeOffIcon /> : null}
+          {!isDecrypting && state !== "decrypted" ? (
+            <>
+              <LockIcon />
+              {mobileActionLabel ? <EyeIcon /> : null}
+            </>
+          ) : null}
+          <span className={mobileActionLabel || mobileUnlockedActionLabel ? "private-signal-desktop-action-label" : undefined}>
             {isDecrypting
               ? t("privateSignalUnlockLoading")
               : state === "decrypted"
@@ -504,6 +561,13 @@ export function PrivateSignalUnlockCard({
                   ? t("accessDeniedButton")
                 : actionLabel ?? t("privateSignalUnlockAction")}
           </span>
+          {!isDecrypting && state !== "unauthorized" && (mobileActionLabel || mobileUnlockedActionLabel) ? (
+            <span className="private-signal-mobile-action-label">
+              {state === "decrypted"
+                ? mobileUnlockedActionLabel ?? t("mobileHideSignalAction")
+                : mobileActionLabel ?? t("mobileRevealSignalAction")}
+            </span>
+          ) : null}
         </button>
         {isDecrypting && onCancel ? (
           <button

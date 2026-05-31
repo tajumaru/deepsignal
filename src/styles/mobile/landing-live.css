@@ -213,6 +213,21 @@
     padding-top: 0.85rem;
   }
 
+  .landing-live-flow-powered-icon {
+    width: 3.65rem;
+    height: 3.65rem;
+  }
+
+  .landing-live-flow-walrus-mark {
+    width: 3.14rem;
+    height: 3.14rem;
+  }
+
+  .landing-live-flow-powered-icon.is-seal img {
+    width: 4.34rem;
+    height: 4.34rem;
+  }
+
   .landing-live-flow-powered-button {
     width: 100%;
   }

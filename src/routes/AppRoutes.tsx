@@ -28,7 +28,6 @@ export function AppRoutes({ components }: { components: AppRouteComponents }) {
     AccessManagementPage,
     AdminDashboardPage,
     FormBuilderPage,
-    LandingPage,
     SubmissionDetailPage,
     SubmittedHistoryPage,
     MyResponsesPage,
@@ -39,7 +38,6 @@ export function AppRoutes({ components }: { components: AppRouteComponents }) {
 
   return (
     <Routes>
-      <Route path="/" element={<LandingPage />} />
       <Route path="/explore" element={<ExploreSignalsPage />} />
       <Route path="/signals" element={<Navigate to="/explore" replace />} />
       <Route

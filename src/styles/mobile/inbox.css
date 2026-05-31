@@ -1115,7 +1115,7 @@
   .desktop-signal-inbox.has-selected-signal .mobile-quick-decrypt-actions {
     display: grid;
     gap: 0.35rem;
-    width: min(100%, 11.4rem);
+    width: min(100%, 13.2rem);
     margin-top: 0.15rem;
   }
 
@@ -1132,6 +1132,7 @@
     color: #06131d;
     font-weight: 900;
     letter-spacing: 0;
+    white-space: nowrap;
     box-shadow:
       0 14px 30px rgba(240, 99, 179, 0.24),
       inset 0 1px 0 rgba(255, 255, 255, 0.46);
@@ -1173,6 +1174,12 @@
     font-size: 0.78rem;
     line-height: 1.35;
     overflow-wrap: anywhere;
+  }
+
+  .desktop-signal-inbox.has-selected-signal .locked-signal-state.is-view-hidden {
+    border-color: rgba(125, 211, 252, 0.18);
+    background:
+      linear-gradient(180deg, rgba(9, 30, 45, 0.82), rgba(4, 17, 30, 0.8));
   }
 
   .desktop-signal-inbox.has-selected-signal .mobile-quick-decrypt-status.is-error {

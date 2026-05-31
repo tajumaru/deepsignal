@@ -32,6 +32,12 @@ describe("AppShell", () => {
     expect(container.querySelector(".mobile-compose-fab")).toBeInTheDocument();
   });
 
+  it("keeps the mobile compose shortcut available from the inbox route", () => {
+    const { container } = renderShell("/dashboard");
+
+    expect(container.querySelector(".mobile-compose-fab")).toBeInTheDocument();
+  });
+
   it("shows the mobile bottom navigation from the sent signals route", () => {
     const { container } = renderShell("/my-responses");
 

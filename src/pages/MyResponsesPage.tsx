@@ -8,14 +8,32 @@ import "../styles/mobile/signal.css";
 import { FormattedAnswerValue } from "../components/FormattedAnswerValue";
 import { SignalMetaRow } from "../components/SignalMetaChip";
 import { useI18n } from "../i18n";
+import { getPublicRoadmapPath } from "../lib/publicLinks";
 import { formatDate } from "../lib/utils";
 import {
-  getMyResponseHistoryEntry,
   hideMyResponseHistoryEntry,
   listMyResponseHistory,
+  mergeMyResponseLifecycleFromSubmission,
+  upsertMyResponseHistoryEntry,
   type MyResponseHistoryEntry,
+  type MyResponseLifecycleStatus,
 } from "../storage/myResponseHistory";
+import { localStorageAdapter } from "../storage/localStorageAdapter";
 import type { FormField } from "../types";
+
+const LIFECYCLE_STEPS: Array<{
+  value: MyResponseLifecycleStatus;
+  labelKey: string;
+  detailKey: string;
+}> = [
+  { value: "submitted", labelKey: "myResponsesLifecycleSubmitted", detailKey: "myResponsesLifecycleSubmittedDetail" },
+  { value: "received", labelKey: "myResponsesLifecycleReceived", detailKey: "myResponsesLifecycleReceivedDetail" },
+  { value: "reviewing", labelKey: "myResponsesLifecycleReviewing", detailKey: "myResponsesLifecycleReviewingDetail" },
+  { value: "planned", labelKey: "myResponsesLifecyclePlanned", detailKey: "myResponsesLifecyclePlannedDetail" },
+  { value: "in_progress", labelKey: "myResponsesLifecycleInProgress", detailKey: "myResponsesLifecycleInProgressDetail" },
+  { value: "completed", labelKey: "myResponsesLifecycleCompleted", detailKey: "myResponsesLifecycleCompletedDetail" },
+  { value: "closed", labelKey: "myResponsesLifecycleClosed", detailKey: "myResponsesLifecycleClosedDetail" },
+];
 
 function getStatusLabel(status: MyResponseHistoryEntry["status"], t: (key: string) => string) {
   switch (status) {
@@ -47,18 +65,141 @@ function getFormVersion(entry: MyResponseHistoryEntry) {
   return entry.formVersion ?? 1;
 }
 
+function getLifecycleIndex(status: MyResponseLifecycleStatus | undefined) {
+  return Math.max(
+    0,
+    LIFECYCLE_STEPS.findIndex((step) => step.value === (status ?? "submitted")),
+  );
+}
+
+function getLifecycleLabel(status: MyResponseLifecycleStatus | undefined, t: (key: string) => string) {
+  const step = LIFECYCLE_STEPS.find((item) => item.value === status) ?? LIFECYCLE_STEPS[0];
+  return t(step.labelKey);
+}
+
+function getLifecycleDetail(status: MyResponseLifecycleStatus | undefined, t: (key: string) => string) {
+  const step = LIFECYCLE_STEPS.find((item) => item.value === status) ?? LIFECYCLE_STEPS[0];
+  return t(step.detailKey);
+}
+
+function getLifecycleEventForStep(entry: MyResponseHistoryEntry, status: MyResponseLifecycleStatus) {
+  const events = entry.lifecycleEvents ?? [];
+  for (let index = events.length - 1; index >= 0; index -= 1) {
+    if (events[index].status === status) {
+      return events[index];
+    }
+  }
+  return null;
+}
+
+async function listMyResponseHistoryWithSubmissionLifecycle() {
+  const entries = listMyResponseHistory();
+  const formIds = Array.from(new Set(entries.map((entry) => entry.formId)));
+  const submissionsById = new Map(
+    (
+      await Promise.all(
+        formIds.map(async (formId) => {
+          try {
+            return await localStorageAdapter.listSubmissions(formId);
+          } catch (error) {
+            console.warn("[my responses] failed to sync local lifecycle", { formId, error });
+            return [];
+          }
+        }),
+      )
+    )
+      .flat()
+      .map((submission) => [submission.id, submission]),
+  );
+  const syncedEntries = entries.map((entry) =>
+    mergeMyResponseLifecycleFromSubmission(entry, submissionsById.get(entry.submissionId)),
+  );
+  for (const syncedEntry of syncedEntries) {
+    const original = entries.find((entry) => entry.submissionId === syncedEntry.submissionId);
+    if (
+      original &&
+      (original.lifecycleStatus !== syncedEntry.lifecycleStatus ||
+        original.triageStatus !== syncedEntry.triageStatus ||
+        original.roadmapStatus !== syncedEntry.roadmapStatus ||
+        original.lifecycleUpdatedAt !== syncedEntry.lifecycleUpdatedAt)
+    ) {
+      upsertMyResponseHistoryEntry(syncedEntry);
+    }
+  }
+  return syncedEntries;
+}
+
+function SignalLifecycleTimeline({ entry }: { entry: MyResponseHistoryEntry }) {
+  const { t } = useI18n();
+  const activeIndex = getLifecycleIndex(entry.lifecycleStatus);
+  const isRoadmapVisible = Boolean(entry.roadmapStatus);
+
+  return (
+    <section className="answer-card my-response-lifecycle-card">
+      <div className="section-row">
+        <div>
+          <p className="eyebrow">{t("myResponsesLifecycleEyebrow")}</p>
+          <h2>{t("myResponsesLifecycleTitle")}</h2>
+          <p className="muted">{t("myResponsesLifecycleBody")}</p>
+        </div>
+        <span className={`my-response-badge is-lifecycle-${entry.lifecycleStatus ?? "submitted"}`}>
+          {getLifecycleLabel(entry.lifecycleStatus, t)}
+        </span>
+      </div>
+
+      <ol className="my-response-lifecycle-timeline" aria-label={t("myResponsesLifecycleTitle")}>
+        {LIFECYCLE_STEPS.map((step, index) => {
+          const state = index < activeIndex ? "complete" : index === activeIndex ? "current" : "pending";
+          const event = getLifecycleEventForStep(entry, step.value);
+          return (
+            <li key={step.value} className={`my-response-lifecycle-step is-${state}`}>
+              <span className="my-response-lifecycle-dot" aria-hidden="true" />
+              <div>
+                <strong>{t(step.labelKey)}</strong>
+                <small>{t(step.detailKey)}</small>
+                {event ? <time dateTime={event.at}>{formatDate(event.at)}</time> : null}
+              </div>
+            </li>
+          );
+        })}
+      </ol>
+
+      <div className="my-response-lifecycle-footer">
+        <div>
+          <span>{t("myResponsesLifecycleLastUpdate")}</span>
+          <strong>{formatDate(entry.lifecycleUpdatedAt ?? entry.submittedAt)}</strong>
+        </div>
+        <div>
+          <span>{t("myResponsesRoadmapVisibility")}</span>
+          <strong>{isRoadmapVisible ? t("myResponsesRoadmapVisible") : t("myResponsesRoadmapInternal")}</strong>
+        </div>
+      </div>
+      {isRoadmapVisible ? (
+        <Link to={getPublicRoadmapPath(entry.formId, entry.manifestBlobId)} className="ghost-button my-response-roadmap-link">
+          {t("myResponsesOpenRoadmap")}
+        </Link>
+      ) : null}
+    </section>
+  );
+}
+
 export function MyResponsesPage() {
   const { t } = useI18n();
   const { submissionId = "" } = useParams();
   const navigate = useNavigate();
   const [entries, setEntries] = useState<MyResponseHistoryEntry[]>(() => listMyResponseHistory());
-  const selectedEntry = useMemo(
-    () => (submissionId ? getMyResponseHistoryEntry(submissionId) : null),
-    [submissionId],
-  );
+  const selectedEntry = useMemo(() => entries.find((entry) => entry.submissionId === submissionId) ?? null, [entries, submissionId]);
 
   useEffect(() => {
-    setEntries(listMyResponseHistory());
+    let active = true;
+    void listMyResponseHistoryWithSubmissionLifecycle().then((nextEntries) => {
+      if (active) {
+        setEntries(nextEntries);
+      }
+    });
+    return () => {
+      active = false;
+    };
   }, [submissionId]);
 
   function handleHide(entry: MyResponseHistoryEntry) {
@@ -119,6 +260,10 @@ export function MyResponsesPage() {
               <strong>{getStatusLabel(selectedEntry.status, t)}</strong>
             </div>
             <div className="metadata-row">
+              <span>{t("myResponsesLifecycleStatus")}</span>
+              <strong>{getLifecycleLabel(selectedEntry.lifecycleStatus, t)}</strong>
+            </div>
+            <div className="metadata-row">
               <span>{t("myResponsesFormVersion")}</span>
               <strong>v{getFormVersion(selectedEntry)}</strong>
             </div>
@@ -134,6 +279,8 @@ export function MyResponsesPage() {
             ) : null}
           </div>
         </section>
+
+        <SignalLifecycleTimeline entry={selectedEntry} />
 
         <section className="answer-card">
           <div className="section-row">
@@ -243,10 +390,17 @@ export function MyResponsesPage() {
                 <p className="eyebrow">{t("myResponsesSignalTitle")}</p>
                 <h2>{entry.formTitle}</h2>
                 <p className="muted">{entry.answerSummary}</p>
+                <p className="my-response-lifecycle-hint">
+                  <strong>{getLifecycleLabel(entry.lifecycleStatus, t)}</strong>
+                  <span>{getLifecycleDetail(entry.lifecycleStatus, t)}</span>
+                </p>
               </div>
               <div className="my-response-card-meta">
                 <span>{formatDate(entry.submittedAt)}</span>
                 <span className={`my-response-badge is-${entry.status}`}>{getStatusLabel(entry.status, t)}</span>
+                <span className={`my-response-badge is-lifecycle-${entry.lifecycleStatus ?? "submitted"}`}>
+                  {getLifecycleLabel(entry.lifecycleStatus, t)}
+                </span>
                 <span className={`my-response-badge is-storage-${entry.storageMode}`}>{getStorageLabel(entry.storageMode, t)}</span>
                 <span>v{getFormVersion(entry)}</span>
               </div>

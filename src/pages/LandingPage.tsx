@@ -935,14 +935,37 @@ function LiveSignalFlowSection() {
           <div className="landing-live-flow-powered">
             <div className="landing-live-flow-powered-topline">{t("landingLiveFlowPoweredBy")}</div>
             <div className="landing-live-flow-powered-item">
-              <span className="landing-live-flow-powered-icon is-walrus">W</span>
+              <span className="landing-live-flow-powered-icon is-walrus" aria-hidden="true">
+                <svg className="landing-live-flow-walrus-mark" viewBox="0 0 96 96" role="presentation" focusable="false">
+                  <path className="walrus-flipper walrus-flipper-left" d="M24 55C14 58 10 66 12 77C23 75 30 68 32 58Z" />
+                  <path className="walrus-flipper walrus-flipper-right" d="M72 55C82 58 86 66 84 77C73 75 66 68 64 58Z" />
+                  <path className="walrus-body" d="M48 10C32 10 22 27 22 48C22 73 33 87 48 87C63 87 74 73 74 48C74 27 64 10 48 10Z" />
+                  <path className="walrus-crest" d="M39 15C42 9 46 6 48 2C50 6 55 9 58 15C54 13 51 12 48 12C45 12 42 13 39 15Z" />
+                  <ellipse className="walrus-muzzle walrus-muzzle-left" cx="39" cy="39" rx="13" ry="17" />
+                  <ellipse className="walrus-muzzle walrus-muzzle-right" cx="57" cy="39" rx="13" ry="17" />
+                  <ellipse className="walrus-nose" cx="48" cy="32" rx="8" ry="4.5" />
+                  <circle className="walrus-eye" cx="34.5" cy="26" r="3.2" />
+                  <circle className="walrus-eye" cx="61.5" cy="26" r="3.2" />
+                  <path className="walrus-whisker" d="M37 43C27 39 20 36 12 30" />
+                  <path className="walrus-whisker" d="M37 48C26 48 19 47 10 45" />
+                  <path className="walrus-whisker" d="M37 53C28 56 21 59 14 64" />
+                  <path className="walrus-whisker" d="M59 43C69 39 76 36 84 30" />
+                  <path className="walrus-whisker" d="M59 48C70 48 77 47 86 45" />
+                  <path className="walrus-whisker" d="M59 53C68 56 75 59 82 64" />
+                  <path className="walrus-tusk" d="M41 47C41 62 40 76 36 89" />
+                  <path className="walrus-tusk" d="M55 47C55 62 56 76 60 89" />
+                </svg>
+              </span>
               <div>
                 <strong>Walrus</strong>
                 <p>{t("landingLiveFlowPoweredWalrus")}</p>
               </div>
             </div>
             <div className="landing-live-flow-powered-item">
-              <span className="landing-live-flow-powered-icon is-seal">S</span>
+              <span className="landing-live-flow-powered-icon is-seal" aria-hidden="true">
+                <img src="/deepsignal-mascot-ui.png" alt="" />
+                <span className="landing-live-flow-seal-frost" />
+              </span>
               <div>
                 <strong>Seal</strong>
                 <p>{t("landingLiveFlowPoweredSeal")}</p>
@@ -981,7 +1004,7 @@ function FinalSignalCtaSection() {
 }
 
 export function LandingPage() {
-  const { t } = useI18n();
+  const { language, setLanguage, t } = useI18n();
   const heroSignalBars = [0.46, 0.72, 0.38, 0.92, 0.58, 0.81, 0.5, 0.68, 0.42, 0.86];
   const heroFeedRows = [t("landingHeroLiveFeed1"), t("landingHeroLiveFeed2"), t("landingHeroLiveFeed3")];
   const heroLifecycle = ["Intent", "Signal opened", "Protected", "Stored", "Reviewed", "Resolved"];
@@ -996,6 +1019,24 @@ export function LandingPage() {
   return (
     <section className="landing-shell">
       <div className="landing-page-atmosphere" aria-hidden="true" />
+      <div className="landing-language-switch" aria-label={t("languageLabel")}>
+        <button
+          type="button"
+          className={language === "en" ? "is-active" : ""}
+          onClick={() => setLanguage("en")}
+          aria-pressed={language === "en"}
+        >
+          EN
+        </button>
+        <button
+          type="button"
+          className={language === "ja" ? "is-active" : ""}
+          onClick={() => setLanguage("ja")}
+          aria-pressed={language === "ja"}
+        >
+          JA
+        </button>
+      </div>
 
       <section className="landing-hero-console panel glow-panel">
         <div className="landing-hero-grid">

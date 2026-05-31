@@ -27,6 +27,10 @@
 }
 
 @media (max-width: 640px) {
+  .public-form {
+    padding-bottom: calc(14rem + env(safe-area-inset-bottom, 0px));
+  }
+
   .public-identity-choice-screen {
     gap: 1.1rem;
     padding: 0.95rem;
@@ -138,6 +142,60 @@
   .public-form-actions {
     grid-template-columns: 1fr;
     display: grid;
+  }
+
+  .public-form .rating-picker {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    align-items: stretch;
+    gap: 0.38rem;
+  }
+
+  .public-form .star-button {
+    width: 100%;
+    min-width: 0;
+    min-height: 3.05rem;
+    padding: 0;
+    border: 1px solid rgba(116, 226, 255, 0.2);
+    border-radius: 14px;
+    background:
+      linear-gradient(180deg, rgba(11, 32, 49, 0.9), rgba(5, 18, 30, 0.9)),
+      rgba(116, 226, 255, 0.06);
+    color: rgba(214, 246, 255, 0.66);
+    font-size: 1.18rem;
+    box-shadow: inset 0 1px 0 rgba(219, 249, 255, 0.05);
+  }
+
+  .public-form .star-button.active {
+    border-color: rgba(255, 217, 120, 0.48);
+    background:
+      linear-gradient(135deg, rgba(255, 196, 94, 0.28), rgba(14, 165, 198, 0.18)),
+      rgba(255, 217, 120, 0.08);
+    color: #ffd978;
+  }
+
+  .public-form .rating-label {
+    grid-column: 1 / -1;
+    padding-top: 0.18rem;
+    line-height: 1.35;
+  }
+
+  .public-form .check-item {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    justify-items: start;
+    gap: 0.72rem;
+  }
+
+  .public-form .check-item input {
+    justify-self: start;
+    margin: 0;
+  }
+
+  .public-form .check-item span {
+    min-width: 0;
+    overflow-wrap: anywhere;
   }
 
   .public-location-secondary-action {

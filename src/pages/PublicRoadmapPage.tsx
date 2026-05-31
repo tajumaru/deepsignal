@@ -13,6 +13,7 @@ import { PUBLIC_ROADMAP_TRIAGE_STATUSES, getTriageStatusLabel } from "../lib/sig
 import { normalizeForm } from "../lib/formSchema";
 import { flattenAnswer, formatDate } from "../lib/utils";
 import { localStorageAdapter } from "../storage/localStorageAdapter";
+import { listMyResponseHistory } from "../storage/myResponseHistory";
 import type { FormSchema, Submission } from "../types";
 
 const ROADMAP_GROUPS = [
@@ -53,6 +54,7 @@ export function PublicRoadmapPage() {
   const navigate = useNavigate();
   const [form, setForm] = useState<FormSchema | null>(null);
   const [submissions, setSubmissions] = useState<Submission[]>([]);
+  const [localResponseIds, setLocalResponseIds] = useState<Set<string>>(() => new Set());
   const [loading, setLoading] = useState(true);
   const manifestBlobId = searchParams.get("manifest") ?? "";
 
@@ -82,6 +84,13 @@ export function PublicRoadmapPage() {
         }
       }
       const rawSubmissions = await localStorageAdapter.listSubmissions(formId);
+      setLocalResponseIds(
+        new Set(
+          listMyResponseHistory()
+            .filter((entry) => entry.formId === formId)
+            .map((entry) => entry.submissionId),
+        ),
+      );
       setForm(nextForm ? normalizeForm(nextForm) : null);
       setSubmissions(
         rawSubmissions
@@ -177,11 +186,22 @@ export function PublicRoadmapPage() {
               <p className="muted">No signals published in this lane yet.</p>
             ) : (
               <div className="roadmap-card-list">
-                {groupedSubmissions[group.key].map((submission) => (
-                  <article key={submission.id} className="answer-card roadmap-card">
-                    <div className="section-row">
-                      <strong>{submission.subjectPreview || `Signal ${submission.id.slice(0, 8)}`}</strong>
-                      <span className={`pill priority-${submission.priority}`}>{submission.priority}</span>
+                {groupedSubmissions[group.key].map((submission) => {
+                  const isLocalRespondentSignal = localResponseIds.has(submission.id);
+                  return (
+                  <article
+                    key={submission.id}
+                    className={`answer-card roadmap-card ${isLocalRespondentSignal ? "is-local-response" : ""}`}
+                  >
+                    <div className="section-row roadmap-card-title-row">
+                      <div>
+                        {isLocalRespondentSignal ? <p className="eyebrow">Your signal</p> : null}
+                        <strong>{submission.subjectPreview || `Signal ${submission.id.slice(0, 8)}`}</strong>
+                      </div>
+                      <div className="roadmap-card-badge-stack">
+                        {isLocalRespondentSignal ? <span className="signal-chip roadmap-own-signal-chip">Local receipt matched</span> : null}
+                        <span className={`pill priority-${submission.priority}`}>{submission.priority}</span>
+                      </div>
                     </div>
                     <div className="pill-row">
                       <span className="signal-chip">{inferPublicSignalCategory(submission)}</span>
@@ -208,6 +228,11 @@ export function PublicRoadmapPage() {
                       <p className="muted">Encrypted signal: public roadmap shows metadata only.</p>
                     )}
                     <div className="inline-actions">
+                      {isLocalRespondentSignal ? (
+                        <Link className="ghost-button" to={`/my-responses/${submission.id}`}>
+                          Track lifecycle
+                        </Link>
+                      ) : null}
                       {submission.githubIssueUrl ? (
                         <a className="ghost-button" href={submission.githubIssueUrl} target="_blank" rel="noreferrer">
                           GitHub Issue
@@ -220,7 +245,8 @@ export function PublicRoadmapPage() {
                       ) : null}
                     </div>
                   </article>
-                ))}
+                  );
+                })}
               </div>
             )}
           </section>

@@ -69,6 +69,11 @@ import {
   normalizeSubmission,
   storageAdapter,
 } from "../lib/storage";
+import {
+  lifecycleStatusFromSubmissionState,
+  updateMyResponseLifecycleFromSubmission,
+  type MyResponseLifecycleStatus,
+} from "../storage/myResponseHistory";
 import { buildVersionedSurveySummary } from "../lib/surveySummary";
 import { formatDate, flattenAnswer } from "../lib/utils";
 import { useRpcInfrastructure } from "../rpcInfrastructure";
@@ -131,6 +136,46 @@ function getReviewLifecycleSteps(submission?: Submission | null, unlocked = fals
     { label: "Triaged", active: isTriaged, complete: isTriaged },
     { label: "Resolved", active: isResolved, complete: isResolved },
   ];
+}
+
+function getRespondentLifecyclePreviewLabel(status: MyResponseLifecycleStatus) {
+  switch (status) {
+    case "received":
+      return "Received";
+    case "reviewing":
+      return "Reviewing";
+    case "planned":
+      return "Planned";
+    case "in_progress":
+      return "In progress";
+    case "completed":
+      return "Completed";
+    case "closed":
+      return "Closed";
+    case "submitted":
+    default:
+      return "Submitted";
+  }
+}
+
+function getRespondentLifecyclePreviewDetail(status: MyResponseLifecycleStatus) {
+  switch (status) {
+    case "received":
+      return "Matched sender receipts show that the signal reached the encrypted inbox.";
+    case "reviewing":
+      return "Matched sender receipts show that an operator is reviewing the signal.";
+    case "planned":
+      return "Matched sender receipts show that the signal has moved onto the public roadmap.";
+    case "in_progress":
+      return "Matched sender receipts show that work is underway.";
+    case "completed":
+      return "Matched sender receipts show that the signal has been fixed or completed.";
+    case "closed":
+      return "Matched sender receipts show that review has been closed.";
+    case "submitted":
+    default:
+      return "Sender receipts remain at the local submitted state until the inbox can match this signal.";
+  }
 }
 
 export function FormSubmissionsPage() {
@@ -652,6 +697,7 @@ export function FormSubmissionsPage() {
       try {
         let successMessage = "Review & triage saved.";
         await storageAdapter.updateSubmission(normalized);
+        updateMyResponseLifecycleFromSubmission(normalized);
         const nextOnchainStatus = triageStatusToOnchainStatus(normalized.triageStatus, normalized.status);
         const previousOnchainStatus = previousSubmission
           ? triageStatusToOnchainStatus(previousSubmission.triageStatus, previousSubmission.status)
@@ -677,6 +723,7 @@ export function FormSubmissionsPage() {
             normalized.onchainStatus = nextOnchainStatus;
             applySubmissionUpdate(normalized);
             await storageAdapter.updateSubmission(normalized);
+            updateMyResponseLifecycleFromSubmission(normalized);
           } catch (chainError) {
             console.warn("update_signal_status failed, keeping local triage state", chainError);
             successMessage =
@@ -1016,7 +1063,14 @@ export function FormSubmissionsPage() {
     );
   };
 
-  const renderReviewTriageCard = () => (
+  const renderReviewTriageCard = () => {
+    const respondentLifecyclePreview = lifecycleStatusFromSubmissionState({
+      triageStatus: triageStatusDraft,
+      reviewStatus: statusDraft,
+      storageStatus: "submitted",
+    });
+
+    return (
     <section className="answer-card review-triage-card">
       <div className="section-row">
         <div>
@@ -1092,6 +1146,13 @@ export function FormSubmissionsPage() {
           </select>
         </label>
       </div>
+      <div className={`respondent-lifecycle-preview is-${respondentLifecyclePreview}`}>
+        <div>
+          <span>Responder timeline preview</span>
+          <strong>{getRespondentLifecyclePreviewLabel(respondentLifecyclePreview)}</strong>
+        </div>
+        <p>{getRespondentLifecyclePreviewDetail(respondentLifecyclePreview)}</p>
+      </div>
       <label>
         <span>{t("assignedReviewerLabel")}</span>
         <input
@@ -1165,7 +1226,8 @@ export function FormSubmissionsPage() {
         </button>
       </div>
     </section>
-  );
+    );
+  };
 
   const renderMetadataExportCard = () => {
     if (!selectedSubmission) {

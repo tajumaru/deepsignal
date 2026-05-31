@@ -146,6 +146,7 @@ import { listFormBlobIndex } from "../storage/blobIndex";
 import { markDeletedFormTombstones } from "../storage/deletedFormTombstones";
 import { forcePurgeFormArtifacts } from "../storage/forcePurgeFormArtifacts";
 import { saveFormMetadataOverlay } from "../storage/formMetadataOverlay";
+import { updateMyResponseLifecycleFromSubmission } from "../storage/myResponseHistory";
 import { deleteFormsFromLocalCache, getStorageRuntimeStatus } from "../storage/storageFactory";
 import type { ActivityEvent, FormSchema, SignalProcessingMode, Submission } from "../types";
 
@@ -4268,6 +4269,25 @@ export function AdminDashboardPage() {
       bulkDecryptPartialSuccess: (count, failed) => t("bulkDecryptToastPartialSuccess", { count, failed }),
     },
   });
+  const [hiddenUnlockedSignalIds, setHiddenUnlockedSignalIds] = useState<Set<string>>(() => new Set());
+  const selectedSignalHiddenAfterUnlock = Boolean(
+    selectedSignalId && detailAnswers && hiddenUnlockedSignalIds.has(selectedSignalId),
+  );
+  const selectedSignalContentVisible = Boolean(detailAnswers && !selectedSignalHiddenAfterUnlock);
+  const toggleSelectedSignalVisibility = useCallback(() => {
+    if (!selectedSignalId || !detailAnswers) {
+      return;
+    }
+    setHiddenUnlockedSignalIds((current) => {
+      const next = new Set(current);
+      if (next.has(selectedSignalId)) {
+        next.delete(selectedSignalId);
+      } else {
+        next.add(selectedSignalId);
+      }
+      return next;
+    });
+  }, [detailAnswers, selectedSignalId]);
   const roleLabel = getRoleLabel(capabilityProfile);
   const activityActorRole = getActivityActorRole(capabilityProfile);
   const accessState = activeAccountAddress ? "allowed" : "denied";
@@ -5311,6 +5331,7 @@ export function AdminDashboardPage() {
       setReviewSaveStatus("saving");
       try {
         await storageAdapter.updateSubmission(normalized);
+        updateMyResponseLifecycleFromSubmission(normalized);
         const signalRecord = signalIndex.signalById[normalized.id];
         const projectId = signalRecord?.form.projectId;
         const onchainStatusModule =
@@ -5354,6 +5375,7 @@ export function AdminDashboardPage() {
             updatedAt: new Date().toISOString(),
           });
           await storageAdapter.updateSubmission(syncedSubmission);
+          updateMyResponseLifecycleFromSubmission(syncedSubmission);
           applySubmissionUpdate(syncedSubmission);
         }
         const nextStatus = normalized.pendingOnchainRegistration ? "skipped" : "saved";
@@ -7106,25 +7128,62 @@ export function AdminDashboardPage() {
                                   >
                                     <span className="mobile-quick-decrypt-icon" aria-hidden="true">
                                       <svg viewBox="0 0 20 20" focusable="false">
-                                        <path d="M6.25 8.6V6.8a3.75 3.75 0 0 1 7.5 0v1.8" />
-                                        <rect x="4.75" y="8.25" width="10.5" height="7.25" rx="2.1" />
-                                        <path d="M10 11.2v1.9" />
+                                        <path d="M3 9.5s2.6-4.4 7-4.4 7 4.4 7 4.4-2.6 4.4-7 4.4-7-4.4-7-4.4Z" />
+                                        <circle cx="10" cy="9.5" r="2" />
                                       </svg>
                                     </span>
-                                    <span>{decrypting || decryptInFlightRef.current ? t("decrypting") : t("decryptSignalAction")}</span>
-                                  </button>
-                                  {decryptStatusMessage || decryptError || selectedRecordUnlockDisabledReason ? (
-                                    <span
-                                      className={`mobile-quick-decrypt-status ${decryptError ? "is-error" : ""}`}
-                                      role={decryptError ? "alert" : "status"}
-                                    >
-                                      {decryptError || decryptStatusMessage || selectedRecordUnlockDisabledReason}
+                                    <span>
+                                      {decrypting || decryptInFlightRef.current
+                                        ? t("privateSignalUnlockLoading")
+                                        : t("mobileRevealSignalAction")}
                                     </span>
-                                  ) : null}
+                                  </button>
+                                  <span
+                                    className={`mobile-quick-decrypt-status ${decryptError ? "is-error" : ""}`}
+                                    role={decryptError ? "alert" : "status"}
+                                  >
+                                    {decryptError ||
+                                      decryptStatusMessage ||
+                                      selectedRecordUnlockDisabledReason ||
+                                      t("mobileEncryptedSignalHelper")}
+                                  </span>
+                                </div>
+                              ) : null}
+                              {selectedRecord?.submission.isEncrypted && detailAnswers ? (
+                                <div className="mobile-quick-decrypt-actions">
+                                  <button
+                                    type="button"
+                                    className="ghost-button mobile-quick-decrypt-button"
+                                    onClick={toggleSelectedSignalVisibility}
+                                    aria-pressed={selectedSignalContentVisible}
+                                  >
+                                    <span className="mobile-quick-decrypt-icon" aria-hidden="true">
+                                      <svg viewBox="0 0 20 20" focusable="false">
+                                        {selectedSignalContentVisible ? (
+                                          <>
+                                            <path d="M3 3 17 17" />
+                                            <path d="M8.7 5.2A7.9 7.9 0 0 1 10 5.1c4.4 0 7 4.4 7 4.4a11.7 11.7 0 0 1-1.8 2.2" />
+                                            <path d="M5.4 6.4A11.7 11.7 0 0 0 3 9.5s2.6 4.4 7 4.4a7.6 7.6 0 0 0 3-.6" />
+                                          </>
+                                        ) : (
+                                          <>
+                                            <path d="M3 9.5s2.6-4.4 7-4.4 7 4.4 7 4.4-2.6 4.4-7 4.4-7-4.4-7-4.4Z" />
+                                            <circle cx="10" cy="9.5" r="2" />
+                                          </>
+                                        )}
+                                      </svg>
+                                    </span>
+                                    <span>
+                                      {selectedSignalContentVisible
+                                        ? t("mobileHideSignalAction")
+                                        : t("mobileRevealSignalAction")}
+                                    </span>
+                                  </button>
+                                  <span className="mobile-quick-decrypt-status">{t("mobileEncryptedSignalHelper")}</span>
                                 </div>
                               ) : null}
                             </div>
-                          {detailAnswers ? (
+                          {selectedSignalContentVisible ? (
                             <div className="stack">
                               {detailLegacyUnencrypted ? (
                                 <p className="warning-text">{t("legacyUnencryptedResponse")}</p>
@@ -7150,9 +7209,22 @@ export function AdminDashboardPage() {
                                 .map((field, index) => (
                                   <div key={field.id} className="answer-line" data-question-index={`Q${index + 1}`}>
                                     <strong>{field.label}</strong>
-                                    {renderAnswerValue(field, detailAnswers[field.id])}
+                                    {renderAnswerValue(field, detailAnswers?.[field.id])}
                                   </div>
                                 ))}
+                            </div>
+                          ) : selectedRecord?.submission.isEncrypted && detailAnswers && selectedSignalHiddenAfterUnlock ? (
+                            <div className="locked-signal-state is-view-hidden">
+                              <div className="locked-signal-copy">
+                                <div className="classified-signal-redaction" aria-hidden="true">
+                                  <span />
+                                  <span />
+                                  <span />
+                                  <span />
+                                </div>
+                                <strong>{t("mobileSignalHiddenTitle")}</strong>
+                                <p>{t("mobileSignalHiddenBody")}</p>
+                              </div>
                             </div>
                           ) : selectedRecordNeedsDecrypt ? (
                             <div className="locked-signal-state">
@@ -7184,7 +7256,9 @@ export function AdminDashboardPage() {
                             <p className="muted">{t("noResponseContentYet")}</p>
                           )}
                           </div>
-                          {!isReviewerFocusMode && !selectedRecordNeedsDecrypt ? (
+                          {!isReviewerFocusMode &&
+                          !selectedRecordNeedsDecrypt &&
+                          (!selectedRecord?.submission.isEncrypted || selectedSignalContentVisible) ? (
                             <div className="original-signal-block">
                               <WorkspaceSectionToggle
                                 eyebrow={t("attachments")}
@@ -7227,6 +7301,9 @@ export function AdminDashboardPage() {
                         isDecrypting={decrypting || decryptInFlightRef.current}
                         isUnlocked={Boolean(detailAnswers)}
                         actionLabel={t("decrypt")}
+                        mobileActionLabel={t("mobileRevealSignalAction")}
+                        mobileUnlockedActionLabel={t("mobileHideSignalAction")}
+                        onHideUnlocked={toggleSelectedSignalVisibility}
                         unlockState={decryptState}
                         statusMessage={decryptStatusMessage}
                         errorMessage={decryptError}

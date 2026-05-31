@@ -54,6 +54,7 @@ export function PublicFormSuccess({
   const providerDetailLabel = rpc.usingTatum ? "Powered by Tatum" : rpc.providerLabel;
   const receiptJson = useMemo(() => JSON.stringify(submitted, null, 2), [submitted]);
   const submitAnotherHref = `${location.pathname}${location.search}`;
+  const myResponseDetailHref = `/my-responses/${submitted.id}`;
 
   function openTechnicalDetails() {
     if (!detailsRef.current) {
@@ -86,8 +87,8 @@ export function PublicFormSuccess({
           <Link to="/explore" className="primary-button signal-success-action">
             Return to Signals
           </Link>
-          <Link to="/my-responses" className="ghost-button signal-success-action">
-            View My Responses
+          <Link to={myResponseDetailHref} className="ghost-button signal-success-action">
+            Track Lifecycle
           </Link>
           {remoteDelivered ? (
             <Link to={submitAnotherHref} className="ghost-button signal-success-action">
@@ -99,8 +100,9 @@ export function PublicFormSuccess({
           </button>
         </div>
         <p className="muted signal-success-history-note">
-          A local read-only receipt was saved on this device. Anonymous submission history exists only in this
-          browser storage and cannot be recovered if localStorage is cleared.
+          A local read-only receipt was saved on this device. Open the lifecycle timeline to follow this signal as it
+          moves through Inbox review, roadmap planning, and completion. Anonymous submission history exists only in this
+          browser storage.
         </p>
 
         <details ref={detailsRef} className="answer-card public-submit-details signal-success-details">

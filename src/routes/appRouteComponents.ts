@@ -9,11 +9,6 @@ export function createAppRouteComponents(retryNonce = 0) {
         resolveLazyRouteModule(module, "route-access-management"),
       ),
     ),
-    LandingPage: lazy(() =>
-      retryLazyImport(() => import("../pages/LandingPage"), "route-landing").then((module) =>
-        resolveLazyRouteModule(module, "route-landing"),
-      ),
-    ),
     AdminDashboardPage: lazy(() =>
       retryLazyImport(() => import("../pages/AdminDashboardPage"), "route-admin-dashboard").then((module) =>
         resolveLazyRouteModule(module, "route-admin-dashboard"),

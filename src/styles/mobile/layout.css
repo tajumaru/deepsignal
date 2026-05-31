@@ -1093,7 +1093,7 @@
 
   .public-form {
     gap: 0.85rem;
-    padding: 0.78rem 0.78rem calc(7.2rem + env(safe-area-inset-bottom, 0px));
+    padding: 0.78rem 0.78rem calc(14rem + env(safe-area-inset-bottom, 0px));
     border-radius: var(--radius-lg);
   }
 

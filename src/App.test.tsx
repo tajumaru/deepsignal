@@ -160,7 +160,7 @@ describe("App routing", () => {
     expect(screen.getByRole("link", { name: "Open Inbox" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Create Signal" })).toBeInTheDocument();
     expect(screen.queryByText(/Loading encrypted signal workspace/i)).not.toBeInTheDocument();
-    expect(screen.getByTestId("app-shell")).toHaveAttribute("data-wallet-available", "no");
+    expect(screen.queryByTestId("app-shell")).not.toBeInTheDocument();
     expect(walletSurfaceSpy).not.toHaveBeenCalled();
   });
 
