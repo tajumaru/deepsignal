@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
 import "../styles/components/metadata-proof.css";
 import "../styles/pages/public-flows.css";
+import "../styles/pages/my-responses.css";
 import "../styles/mobile/layout.css";
 import "../styles/mobile/workspace.css";
 import "../styles/mobile/signal.css";
@@ -63,6 +64,23 @@ function getStorageLabel(storageMode: MyResponseHistoryEntry["storageMode"], t: 
 
 function getFormVersion(entry: MyResponseHistoryEntry) {
   return entry.formVersion ?? 1;
+}
+
+function getReceiptDisplayId(submissionId: string) {
+  const normalized = submissionId.replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
+  if (!normalized) {
+    return "REC-LOCAL";
+  }
+  return `REC-${normalized.slice(0, 6)}-${normalized.slice(-4)}`;
+}
+
+function getVaultSummary(entries: MyResponseHistoryEntry[]) {
+  return {
+    total: entries.length,
+    localOnly: entries.filter((entry) => entry.status === "local-only" || entry.storageMode === "local").length,
+    failed: entries.filter((entry) => entry.status === "failed").length,
+    durable: entries.filter((entry) => entry.storageMode === "walrus" || entry.storageMode === "uploadRelay").length,
+  };
 }
 
 function getLifecycleIndex(status: MyResponseLifecycleStatus | undefined) {
@@ -189,6 +207,7 @@ export function MyResponsesPage() {
   const navigate = useNavigate();
   const [entries, setEntries] = useState<MyResponseHistoryEntry[]>(() => listMyResponseHistory());
   const selectedEntry = useMemo(() => entries.find((entry) => entry.submissionId === submissionId) ?? null, [entries, submissionId]);
+  const vaultSummary = useMemo(() => getVaultSummary(entries), [entries]);
 
   useEffect(() => {
     let active = true;
@@ -217,35 +236,88 @@ export function MyResponsesPage() {
   if (selectedEntry) {
     const fieldsById = new Map((selectedEntry.fields ?? []).map((field) => [field.id, field]));
     const answerEntries = Object.entries(selectedEntry.answers ?? {});
+    const receiptId = getReceiptDisplayId(selectedEntry.submissionId);
 
     return (
       <section className="stack my-responses-page">
         <div className="panel glow-panel my-responses-hero">
-          <div>
+          <div className="my-responses-hero-copy">
             <p className="eyebrow">{t("myResponsesDetailEyebrow")}</p>
-            <h1>{t("myResponsesTitle")}</h1>
+            <h1>{t("myResponsesVaultTitle")}</h1>
             <p className="lede">{t("myResponsesDetailLede")}</p>
+            <div className="my-responses-vault-chips" aria-label={t("myResponsesVaultStatus")}>
+              <span>{t("myResponsesChipLocalHistory")}</span>
+              <span>{t("myResponsesChipEncryptedReceipt")}</span>
+              <span>{t("myResponsesChipWalletOptional")}</span>
+              <span className="is-muted">{t("myResponsesChipRevokeUnavailable")}</span>
+            </div>
           </div>
           <Link to="/my-responses" className="ghost-button">
             {t("myResponsesBack")}
           </Link>
         </div>
 
+        <section className="answer-card my-response-receipt-header">
+          <div className="my-response-receipt-mark" aria-hidden="true">
+            <span />
+          </div>
+          <div className="my-response-receipt-title-block">
+            <p className="eyebrow">{receiptId}</p>
+            <h2>{selectedEntry.formTitle}</h2>
+            {selectedEntry.projectName ? <p className="muted">{selectedEntry.projectName}</p> : null}
+          </div>
+          <div className="my-response-receipt-quick-meta">
+            <div>
+              <span>{t("myResponsesSubmittedAt")}</span>
+              <strong>{formatDate(selectedEntry.submittedAt)}</strong>
+            </div>
+            <div>
+              <span>{t("myResponsesLifecycleStatus")}</span>
+              <strong>{getLifecycleLabel(selectedEntry.lifecycleStatus, t)}</strong>
+            </div>
+          </div>
+          <div className="my-response-badge-row">
+            <span className={`my-response-badge is-${selectedEntry.status}`}>{getStatusLabel(selectedEntry.status, t)}</span>
+            <span className={`my-response-badge is-lifecycle-${selectedEntry.lifecycleStatus ?? "submitted"}`}>
+              {getLifecycleLabel(selectedEntry.lifecycleStatus, t)}
+            </span>
+            <span className={`my-response-badge is-storage-${selectedEntry.storageMode}`}>
+              {getStorageLabel(selectedEntry.storageMode, t)}
+            </span>
+          </div>
+        </section>
+
+        <section className="answer-card my-response-answer-vault">
+          <div className="section-row">
+            <div>
+              <p className="eyebrow">{t("myResponsesAnswerSnapshot")}</p>
+              <h2>{t("myResponsesContent")}</h2>
+            </div>
+          </div>
+          {answerEntries.length > 0 ? (
+            <div className="stack">
+              {answerEntries.map(([fieldId, value], index) => {
+                const field = fieldsById.get(fieldId) as FormField | undefined;
+                return (
+                  <div key={fieldId} className="answer-line" data-question-index={`Q${index + 1}`}>
+                    <strong>{field?.label ?? fieldId}</strong>
+                    <FormattedAnswerValue field={field} value={value} emptyLabel={t("myResponsesNoAnswer")} showCountryIso />
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="muted">{t("myResponsesNoAnswerBody")}</p>
+          )}
+        </section>
+
         <section className="answer-card my-response-detail-card">
           <div className="section-row">
             <div>
               <p className="eyebrow">{t("myResponsesResponseDetail")}</p>
-              <h2>{selectedEntry.formTitle}</h2>
-              {selectedEntry.projectName ? <p className="muted">{selectedEntry.projectName}</p> : null}
-            </div>
-            <div className="my-response-badge-row">
-              <span className={`my-response-badge is-${selectedEntry.status}`}>{getStatusLabel(selectedEntry.status, t)}</span>
-              <span className={`my-response-badge is-storage-${selectedEntry.storageMode}`}>
-                {getStorageLabel(selectedEntry.storageMode, t)}
-              </span>
+              <h2>{t("myResponsesReceiptMetadata")}</h2>
             </div>
           </div>
-
           <div className="metadata-list">
             <div className="metadata-row">
               <span>{t("myResponsesSubmittedAt")}</span>
@@ -281,30 +353,6 @@ export function MyResponsesPage() {
         </section>
 
         <SignalLifecycleTimeline entry={selectedEntry} />
-
-        <section className="answer-card">
-          <div className="section-row">
-            <div>
-              <p className="eyebrow">{t("myResponsesAnswerSnapshot")}</p>
-              <h2>{t("myResponsesContent")}</h2>
-            </div>
-          </div>
-          {answerEntries.length > 0 ? (
-            <div className="stack">
-              {answerEntries.map(([fieldId, value], index) => {
-                const field = fieldsById.get(fieldId) as FormField | undefined;
-                return (
-                  <div key={fieldId} className="answer-line" data-question-index={`Q${index + 1}`}>
-                    <strong>{field?.label ?? fieldId}</strong>
-                    <FormattedAnswerValue field={field} value={value} emptyLabel={t("myResponsesNoAnswer")} showCountryIso />
-                  </div>
-                );
-              })}
-            </div>
-          ) : (
-            <p className="muted">{t("myResponsesNoAnswerBody")}</p>
-          )}
-        </section>
 
         <details className="answer-card my-response-technical-details">
           <summary>
@@ -367,15 +415,42 @@ export function MyResponsesPage() {
   return (
     <section className="stack my-responses-page">
       <div className="panel glow-panel my-responses-hero">
-        <div>
+        <div className="my-responses-hero-copy">
           <p className="eyebrow">{t("myResponsesEyebrow")}</p>
-          <h1>{t("myResponsesTitle")}</h1>
+          <h1>{t("myResponsesVaultTitle")}</h1>
           <p className="lede">{t("myResponsesLede")}</p>
+          <div className="my-responses-vault-chips" aria-label={t("myResponsesVaultStatus")}>
+            <span>{t("myResponsesChipLocalHistory")}</span>
+            <span>{t("myResponsesChipEncryptedReceipt")}</span>
+            <span>{t("myResponsesChipWalletOptional")}</span>
+            <span className="is-muted">{t("myResponsesChipRevokeUnavailable")}</span>
+          </div>
+        </div>
+        <div className="my-responses-hero-stats" aria-label={t("myResponsesVaultSummary")}>
+          <div>
+            <span>{t("myResponsesStatReceipts")}</span>
+            <strong>{vaultSummary.total}</strong>
+          </div>
+          <div>
+            <span>{t("myResponsesStatLocalOnly")}</span>
+            <strong>{vaultSummary.localOnly}</strong>
+          </div>
+          <div>
+            <span>{t("myResponsesStatDurable")}</span>
+            <strong>{vaultSummary.durable}</strong>
+          </div>
+          <div className={vaultSummary.failed > 0 ? "is-alert" : undefined}>
+            <span>{t("myResponsesStatFailed")}</span>
+            <strong>{vaultSummary.failed}</strong>
+          </div>
         </div>
       </div>
 
       {entries.length === 0 ? (
         <section className="answer-card my-responses-empty">
+          <div className="my-responses-empty-vault" aria-hidden="true">
+            <span />
+          </div>
           <h2>{t("myResponsesEmptyTitle")}</h2>
           <p className="muted">{t("myResponsesEmptyBody")}</p>
           <Link to="/explore" className="primary-button">
@@ -385,11 +460,16 @@ export function MyResponsesPage() {
       ) : (
         <div className="my-response-list">
           {entries.map((entry) => (
-            <article key={entry.submissionId} className="answer-card my-response-card">
+            <Link
+              key={entry.submissionId}
+              to={`/my-responses/${entry.submissionId}`}
+              className="answer-card my-response-card"
+              aria-label={`${t("myResponsesOpenReceipt")}: ${entry.formTitle}`}
+            >
               <div className="my-response-card-main">
-                <p className="eyebrow">{t("myResponsesSignalTitle")}</p>
+                <p className="eyebrow">{getReceiptDisplayId(entry.submissionId)}</p>
                 <h2>{entry.formTitle}</h2>
-                <p className="muted">{entry.answerSummary}</p>
+                <p className="my-response-preview">{entry.answerSummary}</p>
                 <p className="my-response-lifecycle-hint">
                   <strong>{getLifecycleLabel(entry.lifecycleStatus, t)}</strong>
                   <span>{getLifecycleDetail(entry.lifecycleStatus, t)}</span>
@@ -404,10 +484,8 @@ export function MyResponsesPage() {
                 <span className={`my-response-badge is-storage-${entry.storageMode}`}>{getStorageLabel(entry.storageMode, t)}</span>
                 <span>v{getFormVersion(entry)}</span>
               </div>
-              <Link to={`/my-responses/${entry.submissionId}`} className="primary-button">
-                {t("myResponsesViewResponse")}
-              </Link>
-            </article>
+              <span className="primary-button my-response-open-cta">{t("myResponsesOpenReceipt")}</span>
+            </Link>
           ))}
         </div>
       )}

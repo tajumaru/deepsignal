@@ -1,6 +1,8 @@
 import type { FormSchema, StorageAdapter, Submission } from "../types";
 import { assertEncryptedSubmissionLeakGuard, sanitizeSubmissionForStorage } from "./submissionSanitizer";
 import { LEGACY_SCHEMA_HASH, computeSchemaHash, resolveFormVersion } from "../lib/formVersioning";
+import { endPerf, startPerf } from "../lib/perf";
+import { logRouteLifecycle } from "../lib/routeDiagnostics";
 import { removeLocalFormVersionSchemas, upsertLocalFormVersionSchema } from "./localFormVersions";
 
 const FORMS_KEY = "deepsignal.forms";
@@ -185,7 +187,14 @@ export const localStorageAdapter: StorageAdapter = {
   },
 
   async listForms() {
-    return readJson<FormSchema[]>(FORMS_KEY, []);
+    startPerf("inbox:local-storage-list-forms", FORMS_KEY);
+    const forms = readJson<FormSchema[]>(FORMS_KEY, []);
+    endPerf("inbox:local-storage-list-forms", "ok", `${forms.length} forms`);
+    logRouteLifecycle("inbox:local-storage-list-forms-end", {
+      key: FORMS_KEY,
+      count: forms.length,
+    });
+    return forms;
   },
 
   async deleteForm(id) {
@@ -251,10 +260,23 @@ export const localStorageAdapter: StorageAdapter = {
   },
 
   async listSubmissions(formId) {
+    startPerf(`inbox:local-storage-list-submissions:${formId}`, SUBMISSIONS_KEY);
     const submissions = readJson<Submission[]>(SUBMISSIONS_KEY, []);
-    return submissions
+    const filteredSubmissions = submissions
       .filter((submission) => submission.formId === formId)
       .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+    endPerf(
+      `inbox:local-storage-list-submissions:${formId}`,
+      "ok",
+      `${filteredSubmissions.length}/${submissions.length} submissions`,
+    );
+    logRouteLifecycle("inbox:local-storage-list-submissions-end", {
+      key: SUBMISSIONS_KEY,
+      formId,
+      totalCount: submissions.length,
+      formCount: filteredSubmissions.length,
+    });
+    return filteredSubmissions;
   },
 
   async updateSubmission(submission) {

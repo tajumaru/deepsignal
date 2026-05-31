@@ -22,6 +22,32 @@ const ROADMAP_GROUPS = [
   { key: "fixed", label: "Fixed Signals" },
 ] as const;
 
+function getRoadmapLifecycleLabel(triageStatus: Submission["triageStatus"]) {
+  switch (triageStatus) {
+    case "planned":
+      return "Lifecycle: planned";
+    case "in_progress":
+      return "Lifecycle: in progress";
+    case "fixed":
+      return "Lifecycle: fixed";
+    default:
+      return "Lifecycle: internal review";
+  }
+}
+
+function getRoadmapEmptyCopy(groupKey: (typeof ROADMAP_GROUPS)[number]["key"]) {
+  switch (groupKey) {
+    case "planned":
+      return "No planned signals yet. Signals appear here after operators accept them into the roadmap.";
+    case "in_progress":
+      return "No signals are in progress yet. This lane updates when reviewed signals move into active work.";
+    case "fixed":
+      return "No fixed signals yet. Completed work appears here after operators mark signals fixed.";
+    default:
+      return "No signals published in this lane yet.";
+  }
+}
+
 function getPublicSignalPreview(submission: Submission) {
   if (submission.isEncrypted) {
     return "Encrypted Signal";
@@ -183,68 +209,73 @@ export function PublicRoadmapPage() {
             </div>
 
             {groupedSubmissions[group.key].length === 0 ? (
-              <p className="muted">No signals published in this lane yet.</p>
+              <p className="roadmap-empty-lane">{getRoadmapEmptyCopy(group.key)}</p>
             ) : (
               <div className="roadmap-card-list">
                 {groupedSubmissions[group.key].map((submission) => {
                   const isLocalRespondentSignal = localResponseIds.has(submission.id);
                   return (
-                  <article
-                    key={submission.id}
-                    className={`answer-card roadmap-card ${isLocalRespondentSignal ? "is-local-response" : ""}`}
-                  >
-                    <div className="section-row roadmap-card-title-row">
-                      <div>
-                        {isLocalRespondentSignal ? <p className="eyebrow">Your signal</p> : null}
-                        <strong>{submission.subjectPreview || `Signal ${submission.id.slice(0, 8)}`}</strong>
+                    <article
+                      key={submission.id}
+                      className={`answer-card roadmap-card ${isLocalRespondentSignal ? "is-local-response" : ""}`}
+                    >
+                      <div className="section-row roadmap-card-title-row">
+                        <div>
+                          {isLocalRespondentSignal ? <p className="eyebrow">Your signal</p> : null}
+                          <strong>{submission.subjectPreview || `Signal ${submission.id.slice(0, 8)}`}</strong>
+                        </div>
+                        <div className="roadmap-card-badge-stack">
+                          {isLocalRespondentSignal ? <span className="signal-chip roadmap-own-signal-chip">Local receipt matched</span> : null}
+                          <span className="signal-chip roadmap-lifecycle-chip">{getRoadmapLifecycleLabel(submission.triageStatus)}</span>
+                          <span className={`pill priority-${submission.priority}`}>{submission.priority}</span>
+                        </div>
                       </div>
-                      <div className="roadmap-card-badge-stack">
-                        {isLocalRespondentSignal ? <span className="signal-chip roadmap-own-signal-chip">Local receipt matched</span> : null}
-                        <span className={`pill priority-${submission.priority}`}>{submission.priority}</span>
-                      </div>
-                    </div>
-                    <div className="pill-row">
-                      <span className="signal-chip">{inferPublicSignalCategory(submission)}</span>
-                      <span className="signal-chip">{formatDate(submission.createdAt)}</span>
-                      <span className="signal-chip">
-                        {getSubmissionRespondentMeta(submission).isAnonymous ? "Anonymous respondent" : "Wallet respondent"}
-                      </span>
-                      {typeof submission.signalValue === "number" ? (
-                        <span className="signal-chip">Signal Value {submission.signalValue}/5</span>
-                      ) : null}
-                    </div>
-                    {submission.tags.length > 0 ? (
                       <div className="pill-row">
-                        {submission.tags.map((tag) => (
-                          <span key={tag} className="tag-pill static-tag-pill">
-                            {tag}
-                          </span>
-                        ))}
+                        <span className="signal-chip">{inferPublicSignalCategory(submission)}</span>
+                        <span className="signal-chip">{getTriageStatusLabel(submission.triageStatus)}</span>
+                        <span className="signal-chip">{formatDate(submission.createdAt)}</span>
+                        <span className="signal-chip">
+                          {getSubmissionRespondentMeta(submission).isAnonymous ? "Anonymous respondent" : "Wallet respondent"}
+                        </span>
+                        {typeof submission.signalValue === "number" ? (
+                          <span className="signal-chip">Signal Value {submission.signalValue}/5</span>
+                        ) : null}
                       </div>
-                    ) : null}
-                    {!submission.isEncrypted ? (
-                      <p className="roadmap-preview">{getPublicSignalPreview(submission)}</p>
-                    ) : (
-                      <p className="muted">Encrypted signal: public roadmap shows metadata only.</p>
-                    )}
-                    <div className="inline-actions">
-                      {isLocalRespondentSignal ? (
-                        <Link className="ghost-button" to={`/my-responses/${submission.id}`}>
-                          Track lifecycle
-                        </Link>
+                      {submission.tags.length > 0 ? (
+                        <div className="pill-row">
+                          {submission.tags.map((tag) => (
+                            <span key={tag} className="tag-pill static-tag-pill">
+                              {tag}
+                            </span>
+                          ))}
+                        </div>
                       ) : null}
-                      {submission.githubIssueUrl ? (
-                        <a className="ghost-button" href={submission.githubIssueUrl} target="_blank" rel="noreferrer">
-                          GitHub Issue
-                        </a>
-                      ) : null}
-                      {submission.githubPrUrl ? (
-                        <a className="ghost-button" href={submission.githubPrUrl} target="_blank" rel="noreferrer">
-                          GitHub PR
-                        </a>
-                      ) : null}
-                    </div>
-                  </article>
+                      {!submission.isEncrypted ? (
+                        <p className="roadmap-preview">{getPublicSignalPreview(submission)}</p>
+                      ) : (
+                        <p className="roadmap-metadata-only">
+                          Metadata-only roadmap entry. The encrypted signal body stays private while lifecycle status,
+                          priority, and respondent metadata remain visible.
+                        </p>
+                      )}
+                      <div className="inline-actions">
+                        {isLocalRespondentSignal ? (
+                          <Link className="ghost-button" to={`/my-responses/${submission.id}`}>
+                            Track lifecycle
+                          </Link>
+                        ) : null}
+                        {submission.githubIssueUrl ? (
+                          <a className="ghost-button" href={submission.githubIssueUrl} target="_blank" rel="noreferrer">
+                            GitHub Issue
+                          </a>
+                        ) : null}
+                        {submission.githubPrUrl ? (
+                          <a className="ghost-button" href={submission.githubPrUrl} target="_blank" rel="noreferrer">
+                            GitHub PR
+                          </a>
+                        ) : null}
+                      </div>
+                    </article>
                   );
                 })}
               </div>

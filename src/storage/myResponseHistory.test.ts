@@ -48,6 +48,32 @@ describe("my response lifecycle history", () => {
     });
   });
 
+  it("ignores invalid legacy lifecycle and triage fields", () => {
+    window.localStorage.setItem(
+      HISTORY_KEY,
+      JSON.stringify([
+        {
+          ...buildEntry(),
+          lifecycleStatus: "triaged",
+          triageStatus: "unknown",
+          lifecycleEvents: [{ status: "triaged", at: "bad", source: "legacy" }],
+        },
+      ]),
+    );
+
+    expect(listMyResponseHistory()[0]).toMatchObject({
+      lifecycleStatus: "received",
+      triageStatus: undefined,
+      roadmapStatus: undefined,
+      lifecycleEvents: [
+        {
+          status: "received",
+          source: "sender",
+        },
+      ],
+    });
+  });
+
   it("keeps storage status separate from review lifecycle", () => {
     expect(lifecycleStatusFromTriageStatus("investigating", "submitted")).toBe("reviewing");
     expect(lifecycleStatusFromTriageStatus("fixed", "submitted")).toBe("completed");

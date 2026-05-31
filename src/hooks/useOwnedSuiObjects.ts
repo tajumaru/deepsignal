@@ -1,6 +1,8 @@
 import { useSuiClient } from "@mysten/dapp-kit";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
+import { endPerf, markPerfMilestone, startPerf } from "../lib/perf";
+import { logRouteLifecycle } from "../lib/routeDiagnostics";
 import { isSuiRateLimitError } from "../lib/sui";
 import { handleRateLimitedRpcFallback, useRpcInfrastructure } from "../rpcInfrastructure";
 
@@ -116,16 +118,43 @@ export function useOwnedSuiObjects(
     refetchOnWindowFocus: false,
     placeholderData: (previousData) => previousData,
     queryFn: async () => {
+      const spanName = `sui-rpc:owned-objects:${address ?? "unknown"}`;
+      startPerf(spanName, `${structTypes.length || 0} struct filters`);
+      markPerfMilestone("sui-rpc:owned-objects:start", address ? "wallet-connected" : "wallet-missing");
+      logRouteLifecycle("sui-rpc:owned-objects-start", {
+        address: address ? "present" : "absent",
+        structTypeCount: structTypes.length,
+        rpcMode: rpc.mode,
+        rpcUrl: rpc.currentRpcUrl,
+      });
       try {
         const result = await fetchOwnedObjects(suiClient, address ?? "", structTypes);
         setIsRateLimitedFallback(false);
+        endPerf(spanName, "ok", `${result.length} objects`);
+        markPerfMilestone("sui-rpc:owned-objects:end", `${result.length} objects`);
+        logRouteLifecycle("sui-rpc:owned-objects-end", {
+          objectCount: result.length,
+          rpcMode: rpc.mode,
+        });
         return result;
       } catch (error) {
         if (isSuiRateLimitError(error)) {
           handleRateLimitedRpcFallback(rpc, error);
           setIsRateLimitedFallback(true);
+          endPerf(spanName, "ok", "rate-limited-fallback");
+          markPerfMilestone("sui-rpc:owned-objects:end", "rate-limited-fallback");
+          logRouteLifecycle("sui-rpc:owned-objects-rate-limited", {
+            fallbackCount: lastSuccessfulData.length,
+            rpcMode: rpc.mode,
+          });
           return lastSuccessfulData;
         }
+        endPerf(spanName, "failed", error instanceof Error ? error.message : String(error));
+        logRouteLifecycle("sui-rpc:owned-objects-failed", {
+          errorName: error instanceof Error ? error.name : typeof error,
+          errorMessage: error instanceof Error ? error.message : String(error),
+          rpcMode: rpc.mode,
+        });
         throw error;
       }
     },

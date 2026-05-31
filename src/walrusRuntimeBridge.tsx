@@ -6,8 +6,9 @@ import {
 import { walrus } from "@mysten/walrus";
 import walrusWasmUrl from "@mysten/walrus-wasm/web/walrus_wasm_bg.wasm?url";
 import { useEffect, useMemo, type PropsWithChildren } from "react";
-import { WALRUS_UPLOAD_RELAY_URL } from "./lib/sui";
+import { WALRUS_AGGREGATOR_URL, WALRUS_UPLOAD_RELAY_URL } from "./lib/sui";
 import { logRouteLifecycle } from "./lib/routeDiagnostics";
+import { endPerf, markPerfMilestone, startPerf } from "./lib/perf";
 import { WalrusDiagnosticError, getWalrusErrorMessage } from "./storage/walrusDiagnostics";
 import { setWalrusRuntimeContext } from "./storage/walrusAdapter";
 import { setSuiRuntimeContext } from "./suiRuntime";
@@ -23,6 +24,7 @@ const WALRUS_UPLOAD_RELAY_TIP_MAX =
   WALRUS_UPLOAD_RELAY_TIP_MAX_RAW && WALRUS_UPLOAD_RELAY_TIP_MAX_RAW.trim()
     ? Number(WALRUS_UPLOAD_RELAY_TIP_MAX_RAW)
     : null;
+const AGGREGATOR_DIAGNOSTIC_TIMEOUT_MS = 3500;
 
 function buildWaitForTransactionTimeoutError(digest: string, timeoutMs: number, lastError: unknown) {
   const lastRpcError = getWalrusErrorMessage(lastError);
@@ -49,6 +51,79 @@ function WalrusRuntimeBridgeInner() {
   const { client, config, network } = useSuiClientContext();
   const rpcUrl = config?.url ?? null;
   const currentNetwork = network ?? null;
+  useEffect(() => {
+    markPerfMilestone("walrus-runtime:bridge-mounted", currentNetwork ?? "network-pending");
+    logRouteLifecycle("walrus-runtime:bridge-mounted", {
+      hasClient: Boolean(client),
+      rpcUrl,
+      network: currentNetwork,
+      aggregatorConfigured: Boolean(WALRUS_AGGREGATOR_URL),
+    });
+  }, [client, currentNetwork, rpcUrl]);
+
+  useEffect(() => {
+    const aggregatorUrl = WALRUS_AGGREGATOR_URL?.replace(/\/$/, "");
+    if (!aggregatorUrl) {
+      markPerfMilestone("walrus:aggregator:unconfigured");
+      logRouteLifecycle("walrus:aggregator-unconfigured");
+      return;
+    }
+
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), AGGREGATOR_DIAGNOSTIC_TIMEOUT_MS);
+    startPerf("walrus:aggregator-readiness", aggregatorUrl);
+    markPerfMilestone("walrus:aggregator-readiness:start", aggregatorUrl);
+    logRouteLifecycle("walrus:aggregator-readiness-start", { aggregatorUrl });
+
+    void fetch(aggregatorUrl, {
+      method: "HEAD",
+      cache: "no-store",
+      signal: controller.signal,
+    })
+      .then((response) => {
+        endPerf("walrus:aggregator-readiness", response.ok ? "ok" : "failed", String(response.status));
+        markPerfMilestone("walrus:aggregator-readiness:end", String(response.status));
+        logRouteLifecycle("walrus:aggregator-readiness-end", {
+          aggregatorUrl,
+          ok: response.ok,
+          status: response.status,
+        });
+      })
+      .catch((error) => {
+        endPerf("walrus:aggregator-readiness", "failed", error instanceof Error ? error.message : String(error));
+        markPerfMilestone("walrus:aggregator-readiness:end", "failed");
+        logRouteLifecycle("walrus:aggregator-readiness-failed", {
+          aggregatorUrl,
+          timeoutMs: AGGREGATOR_DIAGNOSTIC_TIMEOUT_MS,
+          errorName: error instanceof Error ? error.name : typeof error,
+          errorMessage: error instanceof Error ? error.message : String(error),
+        });
+      })
+      .finally(() => window.clearTimeout(timeout));
+
+    return () => {
+      window.clearTimeout(timeout);
+      controller.abort();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!client) {
+      startPerf("sui-rpc:readiness", rpcUrl ?? "rpc-pending");
+      logRouteLifecycle("sui-rpc:readiness-pending", {
+        rpcUrl,
+        network: currentNetwork,
+      });
+      return;
+    }
+    endPerf("sui-rpc:readiness", "ok", rpcUrl ?? "rpc-ready");
+    markPerfMilestone("sui-rpc:ready", rpcUrl ?? "rpc-ready");
+    logRouteLifecycle("sui-rpc:ready", {
+      rpcUrl,
+      network: currentNetwork,
+    });
+  }, [client, currentNetwork, rpcUrl]);
+
   const stableSupportedIntents = useMemo(
     () => (Array.isArray(supportedIntents) ? [...supportedIntents] : []),
     [supportedIntents],
@@ -56,12 +131,15 @@ function WalrusRuntimeBridgeInner() {
   const walrusClient = useMemo(
     () => {
       if (!client) {
+        startPerf("walrus:client-create", rpcUrl ?? "client-pending");
         logRouteLifecycle("walrus-runtime:client-pending", {
           rpcUrl,
           network: currentNetwork,
         });
         return null;
       }
+      startPerf("walrus:client-create", rpcUrl ?? "client-ready");
+      markPerfMilestone("walrus:client-create:start", rpcUrl ?? "rpc-ready");
       const walrusEnabledClient = client.$extend(
         walrus({
           wasmUrl: walrusWasmUrl,
@@ -80,8 +158,16 @@ function WalrusRuntimeBridgeInner() {
                 },
               }
             : {}),
-        }),
+          }),
       );
+      endPerf("walrus:client-create", "ok", currentNetwork ?? "network-ready");
+      markPerfMilestone("walrus:client-create:end", currentNetwork ?? "network-ready");
+      logRouteLifecycle("walrus-runtime:client-created", {
+        rpcUrl,
+        network: currentNetwork,
+        uploadRelayConfigured: Boolean(WALRUS_UPLOAD_RELAY_URL),
+        wasmUrl: walrusWasmUrl,
+      });
       (walrusEnabledClient.core as typeof walrusEnabledClient.core & {
         waitForTransaction: typeof walrusEnabledClient.core.waitForTransaction;
       }).waitForTransaction = async (input) => {
@@ -162,6 +248,14 @@ function WalrusRuntimeBridgeInner() {
     setWalrusRuntimeContext(runtimeContext);
     setSuiRuntimeContext({
       client,
+      rpcUrl,
+      network: currentNetwork,
+    });
+    markPerfMilestone("walrus-runtime:context-set", runtimeContext.client ? "client-ready" : "client-null");
+    logRouteLifecycle("walrus-runtime:context-set", {
+      hasClient: Boolean(runtimeContext.client),
+      hasAccount: Boolean(runtimeContext.account),
+      hasWallet: Boolean(runtimeContext.wallet),
       rpcUrl,
       network: currentNetwork,
     });

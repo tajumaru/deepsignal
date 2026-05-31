@@ -5,6 +5,7 @@ import {
   useMemo,
   useState,
   useEffect,
+  useRef,
   type PropsWithChildren,
   type ReactNode,
 } from "react";
@@ -22,7 +23,7 @@ import {
   SUI_NETWORK,
 } from "./lib/sui";
 import { logRouteLifecycle, setDeepSignalDebugReadiness } from "./lib/routeDiagnostics";
-import { endPerf, markPerfMilestone } from "./lib/perf";
+import { endPerf, markPerfMilestone, startPerf } from "./lib/perf";
 import { useRpcInfrastructure } from "./rpcInfrastructure";
 import WalrusRuntimeBridge from "./walrusRuntimeBridge";
 import { WalletConnectionContext, type WalletConnectionState } from "./walletStatus";
@@ -100,6 +101,7 @@ export function WalrusRuntimeProvider({ children }: PropsWithChildren) {
 function WalletStatusBridge({ children }: PropsWithChildren) {
   const account = useCurrentAccount();
   const { currentWallet, connectionStatus, isConnected } = useCurrentWallet();
+  const restoreInFlightRef = useRef(false);
   const value = useMemo<WalletConnectionState>(
     () => ({
       status: connectionStatus === "connecting" ? "connecting" : isConnected && account?.address ? "connected" : "disconnected",
@@ -111,6 +113,25 @@ function WalletStatusBridge({ children }: PropsWithChildren) {
   );
 
   useEffect(() => {
+    if (value.isRestoringConnection && !restoreInFlightRef.current) {
+      restoreInFlightRef.current = true;
+      startPerf("wallet:restoration", value.walletName ?? "wallet-auto-connect");
+      markPerfMilestone("wallet:restoration:start", value.walletName ?? "wallet-auto-connect");
+      logRouteLifecycle("wallet:restoration-start", {
+        walletName: value.walletName,
+        accountAddress: value.accountAddress ? "present" : "absent",
+      });
+    }
+    if (!value.isRestoringConnection && restoreInFlightRef.current) {
+      restoreInFlightRef.current = false;
+      endPerf("wallet:restoration", value.status === "connected" ? "ok" : "failed", value.status);
+      markPerfMilestone("wallet:restoration:end", value.status);
+      logRouteLifecycle("wallet:restoration-end", {
+        status: value.status,
+        walletName: value.walletName,
+        accountAddress: value.accountAddress ? "present" : "absent",
+      });
+    }
     logRouteLifecycle("wallet-provider:status", { ...value });
     setDeepSignalDebugReadiness({
       walletProvider: value.status,
@@ -166,13 +187,26 @@ export function WalletProviders({ children }: PropsWithChildren) {
     (
       _name: string | number,
       config: Readonly<{ url: string; network: "mainnet" | "testnet" }>,
-    ) =>
-      new SuiJsonRpcClient({
+    ) => {
+      startPerf("sui-rpc:client-create", config.url);
+      logRouteLifecycle("sui-rpc:client-create-start", {
+        url: config.url,
+        network: config.network,
+      });
+      const rpcClient = new SuiJsonRpcClient({
         network: SUI_NETWORK,
         transport: new JsonRpcHTTPTransport({
           url: config.url,
         }),
-      }),
+      });
+      endPerf("sui-rpc:client-create", "ok", config.network);
+      markPerfMilestone("sui-rpc:client-created", config.url);
+      logRouteLifecycle("sui-rpc:client-create-end", {
+        url: config.url,
+        network: config.network,
+      });
+      return rpcClient;
+    },
     [],
   );
   return (

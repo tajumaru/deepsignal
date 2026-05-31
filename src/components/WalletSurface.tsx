@@ -1,13 +1,18 @@
 import { createContext, lazy, Suspense, useContext, useEffect, type PropsWithChildren, type ReactNode } from "react";
 import { retryLazyImport } from "../lib/lazyRetry";
-import { startPerf } from "../lib/perf";
+import { markPerfMilestone, startPerf } from "../lib/perf";
 import { logRouteLifecycle } from "../lib/routeDiagnostics";
 
 const WalletProviders = lazy(() => {
   startPerf("provider:wallet");
+  markPerfMilestone("provider:wallet:import-start");
+  logRouteLifecycle("provider:wallet-import-start");
   return retryLazyImport(() => import("../providers"), "wallet-providers").then((module) => ({
     default: module.WalletProviders,
-  }));
+  })).finally(() => {
+    markPerfMilestone("provider:wallet:import-end");
+    logRouteLifecycle("provider:wallet-import-end");
+  });
 });
 
 function WalletSurfaceFallback() {

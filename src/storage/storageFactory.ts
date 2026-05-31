@@ -17,6 +17,8 @@ import {
 } from "./walrusDiagnostics";
 import { isLikelyWalletCancelError } from "../crypto/sealPayload";
 import type { FormSchema, StorageAdapter, Submission } from "../types";
+import { endPerf, markPerfMilestone, startPerf } from "../lib/perf";
+import { logRouteLifecycle } from "../lib/routeDiagnostics";
 import { WALRUS_AGGREGATOR_URL, WALRUS_UPLOAD_RELAY_URL } from "../lib/sui";
 import {
   enqueuePendingSubmission,
@@ -283,11 +285,24 @@ const hybridWalrusStorage: StorageAdapter = {
     return applyFormMetadataOverlay(await localStorageAdapter.getForm(id));
   },
   async listForms() {
+    startPerf("inbox:storage-list-forms", walrusRequested ? "hybrid-walrus-local" : "local");
+    markPerfMilestone("inbox:storage-list-forms:start", walrusRequested ? "hybrid" : "local");
+    logRouteLifecycle("inbox:storage-list-forms-start", {
+      mode: walrusRequested ? "hybrid-walrus-local" : "local",
+    });
     const [walrusForms, localForms] = await Promise.all([
       swallow(() => walrusAdapter.listForms(), [] as FormSchema[]),
       localStorageAdapter.listForms(),
     ]);
-    return applyFormMetadataOverlays(mergeById(walrusForms, localForms));
+    const mergedForms = applyFormMetadataOverlays(mergeById(walrusForms, localForms));
+    endPerf("inbox:storage-list-forms", "ok", `${mergedForms.length} forms`);
+    markPerfMilestone("inbox:storage-list-forms:end", `${mergedForms.length} forms`);
+    logRouteLifecycle("inbox:storage-list-forms-end", {
+      walrusForms: walrusForms.length,
+      localForms: localForms.length,
+      mergedForms: mergedForms.length,
+    });
+    return mergedForms;
   },
   async deleteForm(id) {
     await this.deleteForms([id]);
@@ -398,13 +413,26 @@ const hybridWalrusStorage: StorageAdapter = {
     );
   },
   async listSubmissions(formId) {
+    startPerf(`inbox:storage-list-submissions:${formId}`, walrusRequested ? "hybrid-walrus-local" : "local");
+    logRouteLifecycle("inbox:storage-list-submissions-start", {
+      formId,
+      mode: walrusRequested ? "hybrid-walrus-local" : "local",
+    });
     const [walrusSubmissions, localSubmissions] = await Promise.all([
       swallow(() => walrusAdapter.listSubmissions(formId), [] as Submission[]),
       localStorageAdapter.listSubmissions(formId),
     ]);
-    return mergeSubmissionsById(walrusSubmissions, localSubmissions).sort((left, right) =>
+    const mergedSubmissions = mergeSubmissionsById(walrusSubmissions, localSubmissions).sort((left, right) =>
       right.createdAt.localeCompare(left.createdAt),
     );
+    endPerf(`inbox:storage-list-submissions:${formId}`, "ok", `${mergedSubmissions.length} submissions`);
+    logRouteLifecycle("inbox:storage-list-submissions-end", {
+      formId,
+      walrusSubmissions: walrusSubmissions.length,
+      localSubmissions: localSubmissions.length,
+      mergedSubmissions: mergedSubmissions.length,
+    });
+    return mergedSubmissions;
   },
   async updateSubmission(submission) {
     return withWriteFallback(

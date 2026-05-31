@@ -216,6 +216,115 @@
   }
 }
 
+@media (max-width: 480px) {
+  .review-session-modal {
+    padding:
+      max(0.75rem, env(safe-area-inset-top, 0px))
+      max(0.65rem, env(safe-area-inset-right, 0px))
+      max(0.75rem, env(safe-area-inset-bottom, 0px))
+      max(0.65rem, env(safe-area-inset-left, 0px));
+  }
+
+  .review-session-shell {
+    gap: 0.65rem;
+  }
+
+  .review-progress-rail {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-auto-rows: auto;
+    gap: 0.45rem;
+  }
+
+  .review-progress-step {
+    grid-template-columns: auto minmax(0, 1fr);
+    justify-items: start;
+    align-items: center;
+    gap: 0.42rem;
+    min-height: 3.15rem;
+    padding: 0.5rem 0.55rem;
+    text-align: left;
+  }
+
+  .review-progress-marker {
+    width: 1.45rem;
+    height: 1.45rem;
+    flex-basis: 1.45rem;
+  }
+
+  .review-progress-copy {
+    justify-items: start;
+    min-width: 0;
+  }
+
+  .review-progress-step-label,
+  .review-progress-title {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .review-progress-title {
+    font-size: 0.7rem;
+    line-height: 1.16;
+  }
+
+  .review-session-read-panel,
+  .review-stage-card,
+  .review-session-answer-card {
+    padding: 0.82rem;
+    border-radius: 16px;
+  }
+
+  .review-field-grid,
+  .review-badge-options,
+  .review-notes-actions,
+  .review-session-decision-grid,
+  .review-result-grid,
+  .review-result-grid-compact {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .review-badge-options {
+    gap: 0.42rem;
+  }
+
+  .review-state-badge {
+    width: 100%;
+    justify-content: center;
+    white-space: normal;
+  }
+
+  .review-star-rating {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 0.25rem;
+    border-radius: 16px;
+  }
+
+  .review-star-button {
+    width: 100%;
+    min-height: 2.2rem;
+  }
+
+  .review-session-footer {
+    display: grid;
+    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+    gap: 0.55rem;
+  }
+
+  .review-session-footer > span[aria-hidden="true"] {
+    display: none;
+  }
+
+  .review-session-footer:has(> span[aria-hidden="true"]) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .review-session-footer-actions {
+    min-width: 0;
+  }
+}
+
 @media (max-width: 1080px) {
   .review-session-stage-split {
     grid-template-columns: minmax(0, 1fr);

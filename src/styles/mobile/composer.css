@@ -245,6 +245,108 @@
     height: 1.7rem;
     font-size: 1rem;
   }
+
+  body.composer-mode .build-indicator {
+    position: static;
+    width: 100%;
+    padding: 0;
+    justify-items: stretch;
+  }
+
+  body.composer-mode .build-indicator-attribution {
+    display: none;
+  }
+
+  body.composer-mode .build-indicator-button {
+    width: 100%;
+    max-width: 100%;
+    text-align: left;
+    white-space: normal;
+  }
+
+  .composer-radio-options-three,
+  .signal-identity-layout,
+  .composer-header-logo-grid,
+  .composer-header-image-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .composer-radio-option-stacked {
+    min-height: 0;
+  }
+
+  .composer-radio-option-stacked > span:last-child {
+    min-width: 0;
+  }
+
+  .composer-radio-option-stacked strong,
+  .composer-radio-option-stacked small,
+  .signal-asset-heading strong,
+  .signal-asset-heading small {
+    overflow-wrap: anywhere;
+  }
+
+  .signal-identity-layout,
+  .signal-identity-controls,
+  .signal-asset-panel,
+  .signal-preview-stage,
+  .composer-header-image-inline-preview {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  .signal-position-selector {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .composer-live-preview .rating-picker {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    align-items: stretch;
+    gap: 0.38rem;
+  }
+
+  .composer-live-preview .star-button {
+    width: 100%;
+    min-width: 0;
+    min-height: 3.05rem;
+    padding: 0;
+    border-radius: 14px;
+  }
+
+  .composer-live-preview .rating-label {
+    grid-column: 1 / -1;
+    line-height: 1.35;
+  }
+
+  .intent-draft-panel {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  .intent-start-card-creative .intent-start-grid,
+  .intent-start-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .intent-start-card-creative .intent-prompt-panel,
+  .intent-start-card-creative .intent-draft-panel {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    padding: 0.9rem;
+  }
+
+  .intent-draft-header,
+  .intent-lifecycle-strip,
+  .intent-suggestion-rail,
+  .intent-draft-flow,
+  .intent-draft-empty,
+  .intent-draft-apply-bar {
+    min-width: 0;
+  }
 }
 
 @media (hover: none), (pointer: coarse) {

@@ -101,6 +101,17 @@ describe("MyResponsesPage lifecycle sync", () => {
     });
   });
 
+  it("opens the roadmap without a manifest query when the receipt has no manifest blob", async () => {
+    upsertMyResponseHistoryEntry(buildHistoryEntry());
+    mockListSubmissions.mockResolvedValue([buildSubmission({ triageStatus: "planned" })]);
+
+    renderMyResponses();
+
+    await waitFor(() => {
+      expect(screen.getByRole("link", { name: "Open roadmap" })).toHaveAttribute("href", "/roadmap/form-1");
+    });
+  });
+
   it("keeps the existing sender lifecycle when no local submission matches", async () => {
     upsertMyResponseHistoryEntry(buildHistoryEntry());
     mockListSubmissions.mockResolvedValue([buildSubmission({ id: "other-submission" })]);

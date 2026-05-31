@@ -34,6 +34,7 @@ import {
 } from "../../../lib/storage";
 import { flattenAnswer } from "../../../lib/utils";
 import { endPerf, markPerfMilestone, measurePerf, startPerf } from "../../../lib/perf";
+import { logRouteLifecycle } from "../../../lib/routeDiagnostics";
 import type { CapabilityProfile } from "../../../hooks/useAccessControl";
 import type { FormSchema, Submission } from "../../../types";
 import { localStorageAdapter } from "../../../storage/localStorageAdapter";
@@ -752,6 +753,10 @@ export function useSignalInboxData({
 
     let cancelled = false;
     setSelectedProjectHydrating(true);
+    startPerf("inbox:selected-project-hydration", selectedProjectId);
+    logRouteLifecycle("inbox:selected-project-hydration-start", {
+      selectedProjectId,
+    });
 
     const refreshSelectedProject = async () => {
       try {
@@ -760,17 +765,37 @@ export function useSignalInboxData({
           if (!cancelled) {
             setHydratedSelectedProject(null);
             setSelectedProjectHydrating(false);
+            endPerf("inbox:selected-project-hydration", "ok", "missing");
+            logRouteLifecycle("inbox:selected-project-hydration-end", {
+              selectedProjectId,
+              found: false,
+            });
           }
           return;
         }
         if (!cancelled) {
           setHydratedSelectedProject(project);
           setSelectedProjectHydrating(false);
+          endPerf("inbox:selected-project-hydration", "ok", "found");
+          logRouteLifecycle("inbox:selected-project-hydration-end", {
+            selectedProjectId,
+            found: true,
+          });
         }
-      } catch {
+      } catch (error) {
         if (!cancelled) {
           setHydratedSelectedProject(null);
           setSelectedProjectHydrating(false);
+          endPerf(
+            "inbox:selected-project-hydration",
+            "failed",
+            error instanceof Error ? error.message : String(error),
+          );
+          logRouteLifecycle("inbox:selected-project-hydration-failed", {
+            selectedProjectId,
+            errorName: error instanceof Error ? error.name : typeof error,
+            errorMessage: error instanceof Error ? error.message : String(error),
+          });
         }
       }
     };
@@ -793,6 +818,13 @@ export function useSignalInboxData({
     nextSubmissions: Record<string, Submission[]>,
     runId: number,
   ) {
+    startPerf("inbox:onchain-hydration", `${nextForms.length} forms`);
+    logRouteLifecycle("inbox:onchain-hydration-start", {
+      formCount: nextForms.length,
+      localSubmissionCount: Object.values(nextSubmissions).reduce((count, submissions) => count + submissions.length, 0),
+      projectCount: projects.length,
+      hasHydratedSelectedProject: Boolean(hydratedSelectedProject),
+    });
     const activeProjects =
       hydratedSelectedProject
         ? [
@@ -805,6 +837,11 @@ export function useSignalInboxData({
       if (runId === loadConsoleRunRef.current) {
         setSupplementalSignals([]);
       }
+      endPerf("inbox:onchain-hydration", "ok", "0 projects");
+      logRouteLifecycle("inbox:onchain-hydration-end", {
+        projectCount: 0,
+        hydratedRecords: 0,
+      });
       return;
     }
 
@@ -868,6 +905,12 @@ export function useSignalInboxData({
       if (runId === loadConsoleRunRef.current) {
         setSupplementalSignals([]);
       }
+      endPerf("inbox:onchain-hydration", "ok", "0 candidates");
+      logRouteLifecycle("inbox:onchain-hydration-end", {
+        projectCount: activeProjects.length,
+        candidates: 0,
+        hydratedRecords: 0,
+      });
       return;
     }
 
@@ -931,6 +974,12 @@ export function useSignalInboxData({
     if (runId === loadConsoleRunRef.current) {
       setSupplementalSignals(hydratedRecords);
     }
+    endPerf("inbox:onchain-hydration", "ok", `${hydratedRecords.length} signals`);
+    logRouteLifecycle("inbox:onchain-hydration-end", {
+      projectCount: activeProjects.length,
+      candidates: candidates.length,
+      hydratedRecords: hydratedRecords.length,
+    });
   }
 
   function patchLocalOnchainSignals(
@@ -1030,6 +1079,10 @@ export function useSignalInboxData({
     if (selectedProjectId && selectedProjectHydrating) {
       setLoading(true);
       setLoadError("");
+      markPerfMilestone("inbox:render-blocked:selected-project-hydration", selectedProjectId);
+      logRouteLifecycle("inbox:render-blocked:selected-project-hydration", {
+        selectedProjectId,
+      });
       return;
     }
     const runId = loadConsoleRunRef.current + 1;
@@ -1038,11 +1091,22 @@ export function useSignalInboxData({
     startPerf("admin:load-console");
     startPerf("inbox_fetch_start", selectedProjectId || "all");
     startPerf("admin:local-shell");
+    logRouteLifecycle("inbox:load-console-start", {
+      runId,
+      selectedProjectId: selectedProjectId || null,
+      hasLoadedOnce: hasLoadedOnceRef.current,
+      projectCount: projects.length,
+      accountConnected: Boolean(accountAddress),
+    });
     setLoading(!hasLoadedOnceRef.current);
     setSubmissionsLoading(false);
     setLoadError("");
     try {
       const initialForms = await measurePerf("admin:local-forms", () => storageAdapter.listForms());
+      logRouteLifecycle("inbox:local-forms-loaded", {
+        runId,
+        formCount: initialForms.length,
+      });
       if (runId !== loadConsoleRunRef.current) {
         return;
       }
@@ -1065,6 +1129,12 @@ export function useSignalInboxData({
       hasLoadedOnceRef.current = true;
       setLoading(false);
       endPerf("admin:local-shell", "ok", `${effectiveForms.length} forms`);
+      markPerfMilestone("inbox:first-render-unblocked", `${effectiveForms.length} forms`);
+      logRouteLifecycle("inbox:first-render-unblocked", {
+        runId,
+        effectiveFormCount: effectiveForms.length,
+        accessibleFormCount: effectiveForms.filter((form) => canReviewForm(form, accountAddress, capabilityProfile)).length,
+      });
 
       scheduleInboxBackgroundTask(() => {
         void measurePerf("admin:manifest-restore", async () => {
@@ -1199,6 +1269,12 @@ export function useSignalInboxData({
       setSubmissionsLoading(true);
       const nextSubmissions: Record<string, Submission[]> = {};
       startPerf("admin:submissions");
+      markPerfMilestone("inbox:submissions-hydration:start", `${nextAccessibleForms.length} forms`);
+      logRouteLifecycle("inbox:submissions-hydration-start", {
+        runId,
+        accessibleFormCount: nextAccessibleForms.length,
+        batchSize: ADMIN_SUBMISSION_BATCH_SIZE,
+      });
 
       for (let index = 0; index < nextAccessibleForms.length; index += ADMIN_SUBMISSION_BATCH_SIZE) {
         const formBatch = nextAccessibleForms.slice(index, index + ADMIN_SUBMISSION_BATCH_SIZE);
@@ -1239,6 +1315,12 @@ export function useSignalInboxData({
         );
       }
       endPerf("admin:submissions", "ok");
+      markPerfMilestone("inbox:submissions-hydration:end", `${Object.values(nextSubmissions).flat().length} signals`);
+      logRouteLifecycle("inbox:submissions-hydration-end", {
+        runId,
+        formCount: Object.keys(nextSubmissions).length,
+        signalCount: Object.values(nextSubmissions).flat().length,
+      });
 
       const loadedSubmissions = Object.values(nextSubmissions).flat();
       const remoteIndexEntryCount = Object.values(nextSubmissions).reduce(
