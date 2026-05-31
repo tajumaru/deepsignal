@@ -93,6 +93,16 @@ export interface AddProjectAdminArgs {
   tx?: Transaction;
 }
 
+export type ProjectObjectClient = {
+  getObject: (input: {
+    id: string;
+    options?: {
+      showType?: boolean;
+      showContent?: boolean;
+    };
+  }) => Promise<unknown>;
+};
+
 export interface AddProjectMemberArgs {
   projectId: string;
   ownerCapId: string;
@@ -159,6 +169,8 @@ export interface ProjectFormMetadataReference {
 }
 
 const PROJECT_FORM_METADATA_PREFIX = "deepsignal-form-ref:v1:";
+const PROJECT_OBJECT_CACHE_TTL_MS = 1000 * 60 * 3;
+const projectObjectCache = new Map<string, { expiresAt: number; promise: Promise<ProjectSummary | null> }>();
 
 function requireValue(value: string | undefined, label: string) {
   if (!value?.trim()) {
@@ -609,6 +621,57 @@ export function isProjectObjectType(type?: string | null) {
       ? `${ACCESS_CONTROL_PACKAGE_ID}::${PROJECT_REGISTRY_MODULE}::Project`
       : "",
   );
+}
+
+export function readCachedProjectSummary(projectId: string) {
+  const normalized = normalizeObjectId(projectId);
+  const cached = projectObjectCache.get(normalized);
+  if (!cached || cached.expiresAt <= Date.now()) {
+    projectObjectCache.delete(normalized);
+    return null;
+  }
+  return cached.promise;
+}
+
+export async function fetchProjectSummaryWithCache(
+  suiClient: ProjectObjectClient,
+  projectId: string,
+) {
+  const normalized = normalizeObjectId(projectId);
+  if (!normalized) {
+    return null;
+  }
+
+  const cached = readCachedProjectSummary(normalized);
+  if (cached) {
+    return cached;
+  }
+
+  const promise = suiClient
+    .getObject({
+      id: normalized,
+      options: {
+        showType: true,
+        showContent: true,
+      },
+    })
+    .then((response) => {
+      const parsed = parseSuiObjectData(response);
+      if (!parsed || !isProjectObjectType(parsed.type)) {
+        return null;
+      }
+      return parseProjectSummary(parsed.objectId, parsed.fields);
+    })
+    .catch((error) => {
+      projectObjectCache.delete(normalized);
+      throw error;
+    });
+
+  projectObjectCache.set(normalized, {
+    expiresAt: Date.now() + PROJECT_OBJECT_CACHE_TTL_MS,
+    promise,
+  });
+  return promise;
 }
 
 export function isProjectOwnerCapType(type?: string | null) {

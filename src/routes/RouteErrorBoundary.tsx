@@ -59,6 +59,10 @@ type RouteErrorDiagnostics = {
     label: string;
     message: string;
     chunkUrl?: string | null;
+    category?: "chunkLoad" | "missingExport" | "runtime";
+    expectedExport?: string;
+    moduleKeys?: string[];
+    resolvedExport?: "default" | string | "missing";
     probe?: ChunkProbe;
     dependencyProbe?: ChunkDependencyProbe;
   }>;
@@ -342,6 +346,12 @@ export class RouteErrorBoundary extends Component<
                 <dd>{diagnostics.hash || "none"}</dd>
                 <dt>failed chunk URL</dt>
                 <dd>{diagnostics.chunkUrl ?? "n/a"}</dd>
+                <dt>lazy import category</dt>
+                <dd>{latestFailedImport?.category ?? "n/a"}</dd>
+                <dt>expected export</dt>
+                <dd>{latestFailedImport?.expectedExport ?? "n/a"}</dd>
+                <dt>resolved export</dt>
+                <dd>{latestFailedImport?.resolvedExport ?? "n/a"}</dd>
                 <dt>dependency failures</dt>
                 <dd>
                   {latestFailedImport?.dependencyProbe
@@ -365,6 +375,12 @@ export class RouteErrorBoundary extends Component<
                   <pre className="route-status-diagnostics">{JSON.stringify(diagnostics.providerReadiness, null, 2)}</pre>
                 </dd>
               </dl>
+              {latestFailedImport?.moduleKeys ? (
+                <>
+                  <p className="eyebrow">module keys</p>
+                  <pre className="route-status-diagnostics">{JSON.stringify(latestFailedImport.moduleKeys, null, 2)}</pre>
+                </>
+              ) : null}
               {latestFailedImport?.probe || latestFailedImport?.dependencyProbe ? (
                 <>
                   <p className="eyebrow">chunk probe</p>

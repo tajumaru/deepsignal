@@ -24,9 +24,7 @@ import type {
 } from "../../../lib/projectRegistry";
 import {
   getSelectedProjectId,
-  isProjectObjectType,
-  parseProjectSummary,
-  parseSuiObjectData,
+  fetchProjectSummaryWithCache,
   subscribeProjectRegistryStorageChange,
 } from "../../../lib/projectRegistry";
 import {
@@ -35,7 +33,7 @@ import {
   storageAdapter,
 } from "../../../lib/storage";
 import { flattenAnswer } from "../../../lib/utils";
-import { endPerf, measurePerf, startPerf } from "../../../lib/perf";
+import { endPerf, markPerfMilestone, measurePerf, startPerf } from "../../../lib/perf";
 import type { CapabilityProfile } from "../../../hooks/useAccessControl";
 import type { FormSchema, Submission } from "../../../types";
 import { localStorageAdapter } from "../../../storage/localStorageAdapter";
@@ -635,12 +633,24 @@ function createFallbackOnchainSubmission(
   });
 }
 
+export function requiresReview(record: SignalRecord) {
+  if (record.submission.status === "archived") {
+    return false;
+  }
+  if (record.submission.reviewState === "not_required" || record.submission.reviewState === "suppressed") {
+    return false;
+  }
+  const processingMode = record.submission.processingMode ?? record.form.processingMode ?? "review_required";
+  return processingMode !== "auto_process";
+}
+
 export function matchesStream(record: SignalRecord, streamId: StreamId) {
   switch (streamId) {
     case "needs_review":
-      return record.submission.status !== "archived";
+      return requiresReview(record);
     case "unresolved":
       return (
+        requiresReview(record) &&
         record.submission.status !== "archived" &&
         record.submission.triageStatus !== "fixed" &&
         record.submission.triageStatus !== "closed"
@@ -648,7 +658,7 @@ export function matchesStream(record: SignalRecord, streamId: StreamId) {
     case "follow_up":
       return hasNeedsFollowUp(record.submission);
     case "unread":
-      return record.submission.status === "unread";
+      return requiresReview(record) && record.submission.status === "unread";
     case "verified":
       return isVerifiedSignal(record.submission);
     case "anonymous":
@@ -745,22 +755,14 @@ export function useSignalInboxData({
 
     const refreshSelectedProject = async () => {
       try {
-        const response = await suiClient.getObject({
-          id: selectedProjectId,
-          options: {
-            showType: true,
-            showContent: true,
-          },
-        });
-        const parsed = parseSuiObjectData(response);
-        if (!parsed || !isProjectObjectType(parsed.type)) {
+        const project = await fetchProjectSummaryWithCache(suiClient, selectedProjectId);
+        if (!project) {
           if (!cancelled) {
             setHydratedSelectedProject(null);
             setSelectedProjectHydrating(false);
           }
           return;
         }
-        const project = parseProjectSummary(parsed.objectId, parsed.fields);
         if (!cancelled) {
           setHydratedSelectedProject(project);
           setSelectedProjectHydrating(false);
@@ -1032,7 +1034,9 @@ export function useSignalInboxData({
     }
     const runId = loadConsoleRunRef.current + 1;
     loadConsoleRunRef.current = runId;
+    markPerfMilestone("inbox_fetch_start", selectedProjectId || "all");
     startPerf("admin:load-console");
+    startPerf("inbox_fetch_start", selectedProjectId || "all");
     startPerf("admin:local-shell");
     setLoading(!hasLoadedOnceRef.current);
     setSubmissionsLoading(false);
@@ -1187,6 +1191,8 @@ export function useSignalInboxData({
           void measurePerf("admin:onchain-hydration", () => hydrateOnchainSignals(effectiveForms, {}, runId));
         });
         endPerf("admin:load-console", "ok");
+        endPerf("inbox_fetch_start", "ok", "0 visible signals");
+        markPerfMilestone("inbox_fetch_end", "0 visible signals");
         return;
       }
 
@@ -1270,6 +1276,8 @@ export function useSignalInboxData({
         void measurePerf("admin:onchain-hydration", () => hydrateOnchainSignals(effectiveForms, nextSubmissions, runId));
       });
       endPerf("admin:load-console", "ok");
+      endPerf("inbox_fetch_start", "ok", `${loadedSubmissions.length} signals`);
+      markPerfMilestone("inbox_fetch_end", `${loadedSubmissions.length} signals`);
     } catch (error) {
       console.error("Failed to load admin console", error);
       if (formsRef.current.length === 0) {
@@ -1287,6 +1295,8 @@ export function useSignalInboxData({
           : "Failed to load Research Lab.",
       );
       endPerf("admin:load-console", "failed", error instanceof Error ? error.message : String(error));
+      endPerf("inbox_fetch_start", "failed", error instanceof Error ? error.message : String(error));
+      markPerfMilestone("inbox_fetch_end", "failed");
     } finally {
       if (runId === loadConsoleRunRef.current) {
         setSubmissionsLoading(false);
@@ -1360,11 +1370,12 @@ export function useSignalInboxData({
       signalById[record.submission.id] = record;
       appendedSignals.push({ form: record.form, submission: record.submission });
 
-      if (record.submission.status === "unread") {
+      if (requiresReview(record) && record.submission.status === "unread") {
         unreadCountByFormId[record.form.id] = (unreadCountByFormId[record.form.id] ?? 0) + 1;
         counts.unread += 1;
       }
       if (
+        requiresReview(record) &&
         record.submission.status !== "archived" &&
         record.submission.triageStatus !== "fixed" &&
         record.submission.triageStatus !== "closed"
@@ -1377,7 +1388,7 @@ export function useSignalInboxData({
       if (getSubmissionRespondentMeta(record.submission).isAnonymous) {
         counts.anonymous += 1;
       }
-      if (record.submission.status !== "archived") {
+      if (requiresReview(record)) {
         counts.needsReview += 1;
       }
       if (
@@ -1487,11 +1498,12 @@ export function useSignalInboxData({
 
     signals.forEach((record) => {
       signalById[record.submission.id] = record;
-      if (record.submission.status === "unread") {
+      if (requiresReview(record) && record.submission.status === "unread") {
         unreadCountByFormId[record.form.id] = (unreadCountByFormId[record.form.id] ?? 0) + 1;
         counts.unread += 1;
       }
       if (
+        requiresReview(record) &&
         record.submission.status !== "archived" &&
         record.submission.triageStatus !== "fixed" &&
         record.submission.triageStatus !== "closed"
@@ -1504,7 +1516,7 @@ export function useSignalInboxData({
       if (getSubmissionRespondentMeta(record.submission).isAnonymous) {
         counts.anonymous += 1;
       }
-      if (record.submission.status !== "archived") {
+      if (requiresReview(record)) {
         counts.needsReview += 1;
       }
       if (

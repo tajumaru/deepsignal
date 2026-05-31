@@ -62,6 +62,7 @@ import {
   type ReviewSaveStatus,
 } from "../features/admin/hooks/useReviewWorkspace";
 import {
+  requiresReview,
   useSignalInboxData,
   type FormWithCount,
   type SignalSortOrder,
@@ -6039,8 +6040,8 @@ export function AdminDashboardPage() {
     () =>
       insightsRecords.reduce(
         (counts, record) => ({
-          unread: counts.unread + (record.submission.status === "unread" ? 1 : 0),
-          needsReview: counts.needsReview + (record.submission.status !== "archived" ? 1 : 0),
+          unread: counts.unread + (requiresReview(record) && record.submission.status === "unread" ? 1 : 0),
+          needsReview: counts.needsReview + (requiresReview(record) ? 1 : 0),
           encrypted: counts.encrypted + (record.submission.isEncrypted ? 1 : 0),
         }),
         { unread: 0, needsReview: 0, encrypted: 0 },

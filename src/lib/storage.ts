@@ -32,6 +32,7 @@ import { normalizeFormVisibility } from "./explore";
 import { normalizeActivityEvent } from "./activityLog";
 import { LEGACY_SCHEMA_HASH, computeSchemaHash, resolveFormVersion } from "./formVersioning";
 import { isResponseDeadlinePassed } from "./responseDeadline";
+import { buildSubmissionInsightPayload, normalizeFieldProcessingPolicy } from "./signalProcessing";
 import { enrichSubmissionWithTriage } from "./signalTriage";
 import { SUI_NETWORK } from "./sui";
 import { getWalrusNetwork } from "./walrusProof";
@@ -482,6 +483,77 @@ function coerceTriageStatus(triageStatus: unknown): Submission["triageStatus"] {
   return "new";
 }
 
+function normalizeProcessingMode(processingMode: unknown): NonNullable<FormSchema["processingMode"]> {
+  return processingMode === "auto_process" || processingMode === "hybrid" || processingMode === "review_required"
+    ? processingMode
+    : "review_required";
+}
+
+function normalizeReviewState(reviewState: unknown, processingMode: NonNullable<FormSchema["processingMode"]>): Submission["reviewState"] {
+  if (
+    reviewState === "queued" ||
+    reviewState === "in_review" ||
+    reviewState === "reviewed" ||
+    reviewState === "not_required" ||
+    reviewState === "suppressed"
+  ) {
+    return reviewState;
+  }
+  return processingMode === "auto_process" ? "not_required" : "queued";
+}
+
+function normalizeVisibilityState(
+  visibilityState: unknown,
+  processingMode: NonNullable<FormSchema["processingMode"]>,
+): Submission["visibilityState"] {
+  if (
+    visibilityState === "private" ||
+    visibilityState === "aggregate_only" ||
+    visibilityState === "reviewed_public" ||
+    visibilityState === "public"
+  ) {
+    return visibilityState;
+  }
+  return processingMode === "review_required" ? "private" : "aggregate_only";
+}
+
+function normalizeInsightEligibility(
+  insightEligibility: unknown,
+  processingMode: NonNullable<FormSchema["processingMode"]>,
+  isEncrypted: boolean,
+): Submission["insightEligibility"] {
+  if (
+    insightEligibility === "eligible" ||
+    insightEligibility === "metadata_only" ||
+    insightEligibility === "requires_review" ||
+    insightEligibility === "excluded"
+  ) {
+    return insightEligibility;
+  }
+  if (isEncrypted) {
+    return "metadata_only";
+  }
+  return processingMode === "auto_process" || processingMode === "hybrid" ? "eligible" : "requires_review";
+}
+
+function normalizeInsightPayload(raw: unknown): Submission["insightPayload"] {
+  if (!raw || typeof raw !== "object") {
+    return undefined;
+  }
+  const payload = raw as NonNullable<Submission["insightPayload"]>;
+  if (typeof payload.generatedAt !== "string") {
+    return undefined;
+  }
+  return {
+    answers: payload.answers && typeof payload.answers === "object" ? payload.answers : undefined,
+    fieldIds: Array.isArray(payload.fieldIds) ? payload.fieldIds.map(String).filter(Boolean) : undefined,
+    redactedFieldIds: Array.isArray(payload.redactedFieldIds)
+      ? payload.redactedFieldIds.map(String).filter(Boolean)
+      : undefined,
+    generatedAt: payload.generatedAt,
+  };
+}
+
 function coerceSignalValue(signalValue: unknown): Submission["signalValue"] {
   const value =
     typeof signalValue === "number"
@@ -601,6 +673,8 @@ export function normalizeSubmission(raw: Submission | (Record<string, unknown> &
     raw.publicPayload && typeof raw.publicPayload === "object"
       ? (raw.publicPayload as NonNullable<Submission["publicPayload"]>)
       : null;
+  const processingMode = normalizeProcessingMode(raw.processingMode);
+  const isEncrypted = Boolean(raw.isEncrypted);
 
   return {
     id: raw.id,
@@ -610,6 +684,7 @@ export function normalizeSubmission(raw: Submission | (Record<string, unknown> &
     schemaHash: typeof raw.schemaHash === "string" && raw.schemaHash.trim() ? raw.schemaHash : LEGACY_SCHEMA_HASH,
     manifestBlobId: typeof raw.manifestBlobId === "string" ? raw.manifestBlobId : undefined,
     projectId: typeof raw.projectId === "string" ? raw.projectId : undefined,
+    processingMode,
     answers: typeof raw.answers === "object" && raw.answers ? (raw.answers as Record<string, unknown>) : {},
     attachments: normalizeSubmissionAttachments(raw.attachments),
     location: normalizeSubmissionLocation(raw.location),
@@ -641,6 +716,10 @@ export function normalizeSubmission(raw: Submission | (Record<string, unknown> &
     status: coerceStatus(raw.status),
     priority: coercePriority(raw.priority),
     triageStatus: coerceTriageStatus(raw.triageStatus),
+    reviewState: normalizeReviewState(raw.reviewState, processingMode),
+    visibilityState: normalizeVisibilityState(raw.visibilityState, processingMode),
+    insightEligibility: normalizeInsightEligibility(raw.insightEligibility, processingMode, isEncrypted),
+    insightPayload: normalizeInsightPayload(raw.insightPayload),
     tags: Array.isArray(raw.tags) ? raw.tags.map(String) : [],
     notes: legacyNotes,
     contributorId: typeof raw.contributorId === "string" ? raw.contributorId : undefined,
@@ -650,7 +729,7 @@ export function normalizeSubmission(raw: Submission | (Record<string, unknown> &
     signalValue: coerceSignalValue(raw.signalValue),
     githubIssueUrl: typeof raw.githubIssueUrl === "string" ? raw.githubIssueUrl : undefined,
     githubPrUrl: typeof raw.githubPrUrl === "string" ? raw.githubPrUrl : undefined,
-    isEncrypted: Boolean(raw.isEncrypted),
+    isEncrypted,
     encryptedBlobId: typeof raw.encryptedBlobId === "string" ? raw.encryptedBlobId : undefined,
     encryptedWalrusProof: normalizeWalrusProof(
       raw.encryptedWalrusProof,
@@ -759,6 +838,7 @@ export function normalizeForm(raw: FormSchema | (Record<string, unknown> & { id:
               ? (Array.isArray(field.columns) ? field.columns : defaultMatrixColumns).map((column) => String(column).trim()).filter(Boolean)
               : undefined,
           selectionMode: fieldType === "matrix" ? "single" : undefined,
+          processingPolicy: normalizeFieldProcessingPolicy(field.processingPolicy),
           visibilityRules: normalizeLogicGroup(field.visibilityRules),
           requiredRules: normalizeLogicGroup(field.requiredRules),
         };
@@ -773,6 +853,7 @@ export function normalizeForm(raw: FormSchema | (Record<string, unknown> & { id:
     visibility: normalizeFormVisibility(raw.visibility, raw.publicExplore),
     identityPolicy: normalizeFormIdentityPolicy(raw.identityPolicy),
     locationRequirement: normalizeFormLocationRequirement(raw.locationRequirement),
+    processingMode: normalizeProcessingMode(raw.processingMode),
     publicExplore: raw.publicExplore === true || normalizeFormVisibility(raw.visibility, raw.publicExplore) === "public",
     createdAt: typeof raw.createdAt === "string" ? raw.createdAt : new Date(0).toISOString(),
     updatedAt: typeof raw.updatedAt === "string" ? raw.updatedAt : typeof raw.createdAt === "string" ? raw.createdAt : new Date(0).toISOString(),
@@ -1049,6 +1130,7 @@ export async function saveSubmissionWithEncryption(
   }
 
   const isFullyEncrypted = form.encryptSubmissions === true;
+  const processingMode = normalizeProcessingMode(form.processingMode);
   const formVersion = resolveFormVersion(form);
   const schemaHash = form.schemaHash || computeSchemaHash(form);
   const submissionVersionMetadata = {
@@ -1065,13 +1147,29 @@ export async function saveSubmissionWithEncryption(
       : isFullyEncrypted
         ? "medium"
         : inferPriorityFromTemplateAnswers(normalizeFormPurpose(form.purpose), form.fields, submission.answers);
+  const normalizedInsightPayload = normalizeInsightPayload(submission.insightPayload);
   const baseSubmission: Submission = {
     ...submission,
     ...submissionVersionMetadata,
+    processingMode,
     category: submission.category ?? getSubmissionCategoryFromPurpose(normalizeFormPurpose(form.purpose)),
     status: coerceStatus(submission.status),
     priority,
     triageStatus: coerceTriageStatus(submission.triageStatus),
+    reviewState: normalizeReviewState(submission.reviewState, processingMode),
+    visibilityState: normalizeVisibilityState(submission.visibilityState, processingMode),
+    insightEligibility: normalizeInsightEligibility(submission.insightEligibility, processingMode, isFullyEncrypted),
+    insightPayload:
+      normalizedInsightPayload ??
+      buildSubmissionInsightPayload(
+        form,
+        {
+          answers: submission.answers,
+          isEncrypted: Boolean(submission.isEncrypted || isFullyEncrypted),
+          insightPayload: undefined,
+        },
+        submission.updatedAt || submission.createdAt || new Date().toISOString(),
+      ),
     tags: submission.tags ?? [],
     notes: submission.notes ?? "",
     contributorId: submission.contributorId,

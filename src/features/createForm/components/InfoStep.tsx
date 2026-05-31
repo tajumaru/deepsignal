@@ -1,7 +1,7 @@
 import { lazy, Suspense, useState, type DragEvent, type FocusEvent } from "react";
 import { FormHeaderImage } from "../../../components/FormHeaderImage";
 import { toDateTimeLocalValue } from "../../../lib/responseDeadline";
-import type { FormHeaderImagePosition, ResponseDeadlinePreset, Translate } from "../types";
+import type { FormHeaderImagePosition, ResponseDeadlinePreset, SignalProcessingMode, Translate } from "../types";
 import { StepNavigationActions } from "./StepNavigationActions";
 
 const MAX_HEADER_IMAGE_BYTES = 2 * 1024 * 1024;
@@ -19,6 +19,7 @@ interface InfoStepProps {
   description: string;
   identityPolicy: "anonymous_allowed" | "wallet_required";
   locationRequirement: "optional" | "required";
+  processingMode: SignalProcessingMode;
   encryptSubmissions: boolean;
   headerImage: {
     url: string;
@@ -50,6 +51,7 @@ interface InfoStepProps {
     source: "url" | "upload";
     fileName: string;
   }) => void;
+  setProcessingMode: (value: SignalProcessingMode) => void;
   setResponseDeadlinePreset: (value: ResponseDeadlinePreset) => void;
   setResponseDeadlineCustomAt: (value: string) => void;
   onBack: () => void;
@@ -63,12 +65,14 @@ export function InfoStep({
   description,
   headerImage,
   headerLogo,
+  processingMode,
   responseDeadlinePreset,
   responseDeadlineCustomAt,
   setTitle,
   setDescription,
   setHeaderImage,
   setHeaderLogo,
+  setProcessingMode,
   setResponseDeadlinePreset,
   setResponseDeadlineCustomAt,
   onBack,
@@ -82,6 +86,27 @@ export function InfoStep({
     { value: "7d", label: t("responseDeadlineSevenDays") },
     { value: "30d", label: t("responseDeadlineThirtyDays") },
     { value: "custom", label: t("responseDeadlineCustom") },
+  ];
+  const processingModeOptions: Array<{
+    value: SignalProcessingMode;
+    label: string;
+    description: string;
+  }> = [
+    {
+      value: "review_required",
+      label: t("processingModeReviewRequired"),
+      description: t("processingModeReviewRequiredHelp"),
+    },
+    {
+      value: "auto_process",
+      label: t("processingModeAutoProcess"),
+      description: t("processingModeAutoProcessHelp"),
+    },
+    {
+      value: "hybrid",
+      label: t("processingModeHybrid"),
+      description: t("processingModeHybridHelp"),
+    },
   ];
 
   function handleHeaderImageUpload(file: File | undefined) {
@@ -201,6 +226,42 @@ export function InfoStep({
             />
           </Suspense>
         </label>
+
+        <section className="composer-deadline-card composer-processing-mode-card">
+          <div className="section-row">
+            <div>
+              <span>{t("processingModeTitle")}</span>
+              <p className="muted">{t("processingModeHelp")}</p>
+            </div>
+          </div>
+
+          <fieldset className="composer-radio-field">
+            <legend>{t("processingModeLabel")}</legend>
+            <div className="composer-radio-options composer-radio-options-three">
+              {processingModeOptions.map((option) => (
+                <label
+                  key={option.value}
+                  className={`composer-radio-option composer-radio-option-stacked${
+                    processingMode === option.value ? " is-selected" : ""
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="processingMode"
+                    value={option.value}
+                    checked={processingMode === option.value}
+                    onChange={() => setProcessingMode(option.value)}
+                  />
+                  <span className="composer-radio-mark" aria-hidden="true" />
+                  <span>
+                    <strong>{option.label}</strong>
+                    <small>{option.description}</small>
+                  </span>
+                </label>
+              ))}
+            </div>
+          </fieldset>
+        </section>
 
         <section className="composer-header-image-card signal-identity-builder">
           <div className="section-row signal-identity-heading">

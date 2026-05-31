@@ -29,6 +29,7 @@ function TestHarness() {
     visibility: "private",
     identityPolicy: "anonymous_allowed",
     locationRequirement: "optional",
+    processingMode: "review_required",
     encryptSubmissions: false,
     responseDeadlinePreset: "none",
     responseDeadlineCustomAt: "",

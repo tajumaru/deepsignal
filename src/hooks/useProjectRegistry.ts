@@ -12,6 +12,7 @@ import {
 } from "../lib/projectRegistry";
 import { PROJECT_OWNER_CAP_TYPE } from "../lib/sui";
 import { isSuiRateLimitError } from "../lib/sui";
+import { endPerf, markPerfMilestone, startPerf } from "../lib/perf";
 import { handleRateLimitedRpcFallback, useRpcInfrastructure } from "../rpcInfrastructure";
 import { useOwnedSuiObjects } from "./useOwnedSuiObjects";
 
@@ -107,6 +108,8 @@ export function useProjectRegistry(address?: string | null) {
     refetchOnReconnect: false,
     refetchOnWindowFocus: false,
     queryFn: async () => {
+      startPerf("projects_fetch_start", address ?? undefined);
+      markPerfMilestone("projects_fetch_start", address ? "wallet-connected" : "wallet-disconnected");
       try {
         const parsedCaps = parsedOwnedProjectCaps;
 
@@ -149,10 +152,13 @@ export function useProjectRegistry(address?: string | null) {
 
         const projectIds = [...new Set(hydratedCaps.map((cap) => cap.projectId).filter(Boolean))];
         if (projectIds.length === 0) {
-          return {
+          const result = {
             caps: hydratedCaps,
             projects: [],
           };
+          endPerf("projects_fetch_start", "ok", "0 projects");
+          markPerfMilestone("projects_fetch_end", "0 projects");
+          return result;
         }
 
         const projects = await fetchProjectObjects(suiClient, projectIds);
@@ -160,21 +166,28 @@ export function useProjectRegistry(address?: string | null) {
           hydratedCaps.map((cap) => [cap.projectId, cap.objectId]),
         );
 
-        return {
+        const result = {
           caps: hydratedCaps,
           projects: projects.map((project) => ({
             ...project,
             ownedOwnerCapId: ownerCapIdByProjectId.get(project.objectId),
           })),
         };
+        endPerf("projects_fetch_start", "ok", `${result.projects.length} projects`);
+        markPerfMilestone("projects_fetch_end", `${result.projects.length} projects`);
+        return result;
       } catch (error) {
         if (isSuiRateLimitError(error)) {
           handleRateLimitedRpcFallback(rpc, error);
+          endPerf("projects_fetch_start", "ok", "rate-limited-fallback");
+          markPerfMilestone("projects_fetch_end", "rate-limited-fallback");
           return {
             caps: [],
             projects: [],
           };
         }
+        endPerf("projects_fetch_start", "failed", error instanceof Error ? error.message : String(error));
+        markPerfMilestone("projects_fetch_end", "failed");
         throw error;
       }
     },

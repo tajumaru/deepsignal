@@ -1,6 +1,7 @@
 import { flattenAnswer } from "./utils";
 import { EMOTION_SCALE_OPTIONS, type EmotionScaleValue } from "./emotionScale";
 import { getSubmissionVersion } from "./submissionVersioning";
+import { getInsightAnswers } from "./signalProcessing";
 import type { VersionedFormSchemas } from "./formVersionSchemas";
 import type { FormField, FormSchema, Submission } from "../types";
 
@@ -44,8 +45,8 @@ export function buildSurveySummary(form: FormSchema, submissions: Submission[]) 
   const ratingValues = availableSubmissions
     .map((submission) => {
       const raw =
-        ratingField && submission.answers
-          ? Number(submission.answers[ratingField.id] ?? submission.ratingValue ?? 0)
+        ratingField
+          ? Number(getInsightAnswers(submission)[ratingField.id] ?? submission.ratingValue ?? 0)
           : Number(submission.ratingValue ?? 0);
       return Number.isFinite(raw) && raw > 0 ? raw : null;
     })
@@ -63,7 +64,7 @@ export function buildSurveySummary(form: FormSchema, submissions: Submission[]) 
       }
 
       for (const submission of availableSubmissions) {
-        const rawValue = submission.answers[field.id];
+        const rawValue = getInsightAnswers(submission)[field.id];
         const numericValue = typeof rawValue === "number" ? rawValue : typeof rawValue === "string" ? Number(rawValue) : NaN;
         const option = EMOTION_SCALE_OPTIONS.find((candidate) => candidate.value === numericValue);
         if (option) {
@@ -101,7 +102,7 @@ export function buildSurveySummary(form: FormSchema, submissions: Submission[]) 
 
     const answerCounts: Record<string, number> = {};
     for (const submission of availableSubmissions) {
-      const value = submission.answers[field.id];
+      const value = getInsightAnswers(submission)[field.id];
       if (Array.isArray(value)) {
         value.forEach((item) => countAnswer(answerCounts, flattenAnswer(item)));
       } else {

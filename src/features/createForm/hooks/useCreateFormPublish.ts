@@ -80,6 +80,7 @@ interface UseCreateFormPublishArgs {
   visibility: FormVisibility;
   identityPolicy: FormIdentityPolicy;
   locationRequirement: FormLocationRequirement;
+  processingMode: FormSchema["processingMode"];
   encryptSubmissions: boolean;
   responseDeadlinePreset: "none" | "1h" | "24h" | "7d" | "30d" | "custom";
   responseDeadlineCustomAt: string;
@@ -126,6 +127,7 @@ export function useCreateFormPublish({
   visibility,
   identityPolicy,
   locationRequirement,
+  processingMode,
   encryptSubmissions,
   responseDeadlinePreset,
   responseDeadlineCustomAt,
@@ -217,6 +219,7 @@ export function useCreateFormPublish({
         visibility,
         identityPolicy,
         locationRequirement,
+        processingMode: processingMode ?? "review_required",
         ownerAddress: accountAddress ?? "",
         creationMode,
         projectId: selectedProject?.objectId,
@@ -252,6 +255,7 @@ export function useCreateFormPublish({
     headerLogo,
     identityPolicy,
     locationRequirement,
+    processingMode,
     purpose,
     responseDeadlineCustomAt,
     responseDeadlinePreset,
@@ -425,6 +429,7 @@ export function useCreateFormPublish({
       visibility,
       identityPolicy,
       locationRequirement,
+      processingMode: processingMode ?? "review_required",
       ownerAddress: accountAddress,
       creationMode,
       projectId: selectedProject?.objectId,

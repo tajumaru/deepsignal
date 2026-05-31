@@ -106,11 +106,11 @@
 
       .boot-shell {
         display: grid;
-        justify-items: start;
+        justify-items: center;
         gap: 1rem;
-        width: min(100%, 54rem);
+        width: min(100%, 34rem);
         color: #ecfdff;
-        text-align: left;
+        text-align: center;
       }
 
       .boot-mark {
@@ -145,104 +145,249 @@
 
       .boot-title {
         margin: 0;
-        max-width: 44rem;
-        font-size: clamp(3rem, 13vw, 6.6rem);
-        line-height: 0.95;
+        max-width: 34rem;
+        font-size: clamp(1.9rem, 6.3vw, 3.35rem);
+        line-height: 1.02;
         letter-spacing: 0;
-        text-transform: uppercase;
       }
 
       .boot-status {
         margin: 0;
         color: #a8d3e4;
-        max-width: 40rem;
-        font-size: clamp(1.05rem, 3vw, 1.5rem);
+        max-width: 28rem;
+        font-size: clamp(0.98rem, 2.5vw, 1.08rem);
         line-height: 1.5;
       }
 
-      .boot-tagline {
+      .boot-diagnostic {
+        display: none;
         margin: 0;
-        color: #ecfdff;
-        font-size: clamp(1.25rem, 4vw, 2.2rem);
-        font-weight: 800;
-        line-height: 1.12;
+        color: rgba(168, 211, 228, 0.76);
+        font-size: 0.84rem;
+        line-height: 1.4;
       }
 
-      .boot-features {
+      .boot-diagnostic:not(:empty) {
+        display: block;
+      }
+
+      .boot-pipeline {
+        position: relative;
         display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 0.75rem;
-        width: min(100%, 44rem);
-        margin-top: 0.35rem;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        align-items: start;
+        width: min(100%, 25rem);
+        min-width: 0;
+        margin: 0.15rem 0 0.1rem;
+        padding-top: 0.1rem;
       }
 
-      .boot-feature {
-        border: 1px solid rgba(168, 230, 255, 0.2);
-        border-radius: 8px;
+      .boot-pipeline::before {
+        content: "";
+        position: absolute;
+        top: 0.62rem;
+        right: 12.5%;
+        left: 12.5%;
+        height: 1px;
+        background:
+          linear-gradient(90deg, rgba(127, 232, 255, 0.1), rgba(127, 232, 255, 0.72), rgba(56, 245, 181, 0.3));
+        box-shadow: 0 0 14px rgba(127, 232, 255, 0.34);
+      }
+
+      .boot-pipeline-node {
+        position: relative;
+        display: grid;
+        justify-items: center;
+        gap: 0.45rem;
+        min-width: 0;
+        color: #a8d3e4;
+        font-family: "Cascadia Mono", "SFMono-Regular", Consolas, monospace;
+        font-size: 0.68rem;
+        line-height: 1.25;
+        text-transform: uppercase;
+      }
+
+      .boot-pipeline-node::before {
+        content: "";
+        position: relative;
+        z-index: 1;
+        width: 0.74rem;
+        height: 0.74rem;
+        border: 1px solid rgba(127, 232, 255, 0.72);
+        border-radius: 999px;
+        background:
+          radial-gradient(circle, #8df7ff 0 26%, rgba(5, 18, 30, 0.95) 32% 100%);
+        box-shadow:
+          0 0 0 4px rgba(127, 232, 255, 0.07),
+          0 0 18px rgba(127, 232, 255, 0.28);
+        animation: boot-node-pulse 2.8s ease-in-out infinite;
+      }
+
+      .boot-particle {
+        position: absolute;
+        top: 0.39rem;
+        left: 12.5%;
+        z-index: 2;
+        width: 0.48rem;
+        height: 0.48rem;
+        margin-left: -0.24rem;
+        border-radius: 999px;
+        background: #8df7ff;
+        box-shadow:
+          0 0 10px rgba(141, 247, 255, 0.95),
+          0 0 24px rgba(56, 245, 181, 0.42);
+        animation: boot-particle 2.7s cubic-bezier(0.45, 0, 0.25, 1) infinite;
+        will-change: left, transform, opacity;
+      }
+
+      .boot-steps {
+        display: grid;
+        gap: 0.45rem;
+        width: min(100%, 25rem);
+        min-width: 0;
+        margin: 0.2rem 0 0;
         padding: 0.85rem;
-        background: rgba(10, 28, 43, 0.54);
+        border: 1px solid rgba(168, 230, 255, 0.18);
+        border-radius: 8px;
+        background:
+          linear-gradient(180deg, rgba(10, 28, 43, 0.78), rgba(5, 18, 30, 0.72));
+        box-shadow:
+          inset 0 1px 0 rgba(236, 253, 255, 0.04),
+          0 24px 70px rgba(0, 0, 0, 0.2);
+        list-style: none;
+        text-align: left;
       }
 
-      .boot-feature strong {
-        display: block;
-        color: #ecfdff;
-        font-size: 0.88rem;
-      }
-
-      .boot-feature span {
-        display: block;
-        margin-top: 0.3rem;
-        color: #9ec7d8;
-        font-size: 0.78rem;
+      .boot-steps li {
+        display: grid;
+        grid-template-columns: 1.25rem 1fr;
+        align-items: center;
+        gap: 0.65rem;
+        color: #b8dcea;
+        font-family: "Cascadia Mono", "SFMono-Regular", Consolas, monospace;
+        font-size: 0.82rem;
         line-height: 1.35;
       }
 
-      .boot-actions {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0.75rem;
-        margin-top: 0.25rem;
+      .boot-steps li::before {
+        color: #38f5b5;
+        content: "\2713";
       }
 
-      .boot-actions a {
-        display: inline-flex;
-        min-height: 2.75rem;
-        align-items: center;
-        justify-content: center;
-        border-radius: 8px;
-        padding: 0.75rem 1rem;
+      .boot-steps li.is-active {
         color: #ecfdff;
-        font-size: 0.94rem;
-        font-weight: 700;
-        text-decoration: none;
+        animation: boot-active-step 1.6s ease-in-out infinite;
       }
 
-      .boot-primary {
-        background: linear-gradient(135deg, #3ee7ff, #38f5b5);
-        color: #03101b !important;
-        box-shadow: 0 18px 42px rgba(56, 245, 181, 0.18);
+      .boot-steps li.is-active::before {
+        content: "\2192";
+        color: #7fe8ff;
+        animation: boot-cursor 1s steps(2, end) infinite;
       }
 
-      .boot-secondary {
-        border: 1px solid rgba(168, 230, 255, 0.28);
-        background: rgba(10, 28, 43, 0.58);
+      .boot-progress {
+        position: relative;
+        width: min(100%, 25rem);
+        height: 2px;
+        overflow: hidden;
+        border-radius: 999px;
+        background: rgba(168, 230, 255, 0.14);
+      }
+
+      .boot-progress::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        width: 46%;
+        background: linear-gradient(90deg, transparent, #7fe8ff, #38f5b5);
+        animation: boot-progress 1.7s ease-in-out infinite;
+      }
+
+      .boot-version {
+        position: fixed;
+        right: max(1rem, env(safe-area-inset-right));
+        bottom: max(0.85rem, env(safe-area-inset-bottom));
+        margin: 0;
+        color: rgba(168, 211, 228, 0.68);
+        font-family: "Cascadia Mono", "SFMono-Regular", Consolas, monospace;
+        font-size: 0.72rem;
+        line-height: 1.45;
+        text-align: right;
+        white-space: pre-line;
+      }
+
+      .boot-version[hidden] {
+        display: none;
+      }
+
+      @keyframes boot-node-pulse {
+        0%, 100% { opacity: 0.74; transform: scale(0.92); }
+        48% { opacity: 1; transform: scale(1.08); }
+      }
+
+      @keyframes boot-particle {
+        0% { opacity: 0; left: 12.5%; transform: scale(0.75); }
+        12%, 88% { opacity: 1; }
+        100% { opacity: 0; left: 87.5%; transform: scale(0.75); }
+      }
+
+      @keyframes boot-progress {
+        0% { transform: translateX(-120%); }
+        100% { transform: translateX(240%); }
+      }
+
+      @keyframes boot-active-step {
+        0%, 100% { text-shadow: 0 0 0 rgba(127, 232, 255, 0); }
+        50% { text-shadow: 0 0 12px rgba(127, 232, 255, 0.42); }
+      }
+
+      @keyframes boot-cursor {
+        50% { opacity: 0.35; }
       }
 
       @media (prefers-reduced-motion: reduce) {
-        #boot-overlay {
+        #boot-overlay,
+        .boot-pipeline-node::before,
+        .boot-particle,
+        .boot-progress::before,
+        .boot-steps li.is-active,
+        .boot-steps li.is-active::before {
+          animation: none;
           transition-duration: 1ms;
+        }
+
+        .boot-particle {
+          opacity: 1;
+          left: 50%;
+          transform: scale(0.9);
         }
       }
 
       @media (max-width: 720px) {
-        #boot-overlay {
-          align-items: start;
-          place-items: start;
-          overflow: auto;
+        .boot-shell {
+          gap: 0.85rem;
         }
 
-        .boot-features {
-          grid-template-columns: 1fr;
+        .boot-title {
+          font-size: clamp(1.75rem, 9vw, 2.45rem);
+        }
+
+        .boot-pipeline,
+        .boot-steps,
+        .boot-progress {
+          width: min(100%, 21.4rem);
+        }
+
+        .boot-pipeline-node {
+          font-size: 0.58rem;
+        }
+
+        .boot-version {
+          right: 50%;
+          transform: translateX(50%);
+          width: max-content;
+          max-width: calc(100vw - 2rem);
+          text-align: center;
         }
       }
     </style>
@@ -282,39 +427,61 @@
   </head>
   <body class="booting">
     <div id="boot-overlay" aria-live="polite">
-      <section class="boot-shell" role="status" aria-label="DeepSignal landing">
+      <section class="boot-shell" role="status" aria-label="DeepSignal initialization">
         <div class="boot-mark" aria-hidden="true">
           <div class="boot-signal"></div>
         </div>
-        <p class="boot-eyebrow">Secure signal operations</p>
-        <h1 class="boot-title">CREATE SIGNALS</h1>
-        <p class="boot-tagline">Private by default. Permanent by design.</p>
-        <p class="boot-status" data-boot-status>DeepSignal turns feedback, reports, and forms into an encrypted inbox that feels fast to open and easy to review.</p>
-        <div class="boot-actions" aria-label="DeepSignal quick actions">
-          <a class="boot-primary" href="/#/create">Create Signal</a>
-          <a class="boot-secondary" href="/#/admin">Admin / Inbox</a>
-          <a class="boot-secondary" href="/#/explore">Explore Signals</a>
+        <p class="boot-eyebrow">DeepSignal secure boot</p>
+        <h1 class="boot-title">Initializing Secure Signal Pipeline</h1>
+        <p class="boot-status">Preparing encrypted inbox infrastructure...</p>
+        <p class="boot-diagnostic" data-boot-status></p>
+        <div class="boot-pipeline" aria-label="Incoming Signal to encrypted inbox pipeline">
+          <span class="boot-particle" aria-hidden="true"></span>
+          <span class="boot-pipeline-node">Incoming Signal</span>
+          <span class="boot-pipeline-node">Encrypt</span>
+          <span class="boot-pipeline-node">Store</span>
+          <span class="boot-pipeline-node">Inbox</span>
         </div>
-        <div class="boot-features" aria-label="DeepSignal landing highlights">
-          <div class="boot-feature">
-            <strong>Anonymous intake</strong>
-            <span>Open public signal channels without forcing sender wallets.</span>
-          </div>
-          <div class="boot-feature">
-            <strong>Encrypted review</strong>
-            <span>Route sensitive payloads into a reviewer-gated inbox.</span>
-          </div>
-          <div class="boot-feature">
-            <strong>Walrus storage</strong>
-            <span>Preserve recoverable signal evidence on decentralized storage.</span>
-          </div>
-        </div>
+        <div class="boot-progress" aria-hidden="true"></div>
+        <ol class="boot-steps" aria-label="Initialization sequence">
+          <li>Receiving signal stream</li>
+          <li>Sealing private payloads</li>
+          <li>Preserving evidence</li>
+          <li>Preparing encrypted inbox</li>
+          <li class="is-active">Ready to review</li>
+        </ol>
       </section>
+      <p class="boot-version" data-boot-version hidden></p>
     </div>
     <div id="root"></div>
     <script>
       (() => {
         window.__DEEPSIGNAL_BOOT_STARTED_AT__ = performance.now();
+
+        const versionTarget = document.querySelector("[data-boot-version]");
+        if (!versionTarget) {
+          return;
+        }
+
+        function setBootVersion(manifest) {
+          const version = typeof manifest?.appVersion === "string" ? manifest.appVersion.trim() : "";
+          const buildTime = typeof manifest?.buildTime === "string" ? manifest.buildTime.trim() : "";
+          if (!version && !buildTime) {
+            return;
+          }
+
+          versionTarget.textContent = [version ? `v${version}` : "", buildTime].filter(Boolean).join("\n");
+          versionTarget.hidden = false;
+        }
+
+        fetch(new URL("./version.json", window.location.href).toString(), { cache: "no-store" })
+          .then((response) => (response.ok ? response.json() : null))
+          .then((manifest) => {
+            if (manifest) {
+              setBootVersion(manifest);
+            }
+          })
+          .catch(() => undefined);
       })();
     </script>
     <script type="module" src="/src/main.tsx"></script>

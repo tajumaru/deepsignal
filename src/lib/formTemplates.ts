@@ -12,6 +12,8 @@ import type {
   FormPurpose,
   FormSection,
   FormVisibility,
+  SignalFieldProcessingPolicy,
+  SignalProcessingMode,
   SubmissionCategory,
 } from "../types";
 
@@ -34,6 +36,7 @@ export interface TemplateAutomationPreset {
   visibility?: FormVisibility;
   identityPolicy?: FormIdentityPolicy;
   locationRequirement?: FormLocationRequirement;
+  processingMode?: SignalProcessingMode;
   encryptSubmissions?: boolean;
 }
 
@@ -72,6 +75,7 @@ export interface FormTemplateDefinition {
     placeholder?: string;
     helpText?: string;
     validationHint?: string;
+    processingPolicy?: SignalFieldProcessingPolicy;
   }>;
 }
 
@@ -94,12 +98,40 @@ export interface SmartTemplateDefinition {
     placeholder?: string;
     helpText?: string;
     validationHint?: string;
+    processingPolicy?: SignalFieldProcessingPolicy;
   }>;
 }
 
 export const defaultComposerTemplateKey = "encrypted-report";
 
 type TemplateFieldDefinition = FormTemplateDefinition["fields"][number];
+
+const TEMPLATE_AGGREGATE_FIELD_TYPES = new Set<FieldType>([
+  "checkbox",
+  "confirmation",
+  "country_select",
+  "date",
+  "dropdown",
+  "emotionRating",
+  "matrix",
+  "rating",
+]);
+
+function inferTemplateFieldProcessingPolicy(
+  template: Pick<FormTemplateDefinition, "automation">,
+  field: Pick<TemplateFieldDefinition, "type" | "sensitive" | "processingPolicy">,
+): SignalFieldProcessingPolicy {
+  if (field.processingPolicy) {
+    return field.processingPolicy;
+  }
+  if (field.sensitive) {
+    return "review";
+  }
+  if (template.automation?.processingMode === "auto_process" || template.automation?.processingMode === "hybrid") {
+    return TEMPLATE_AGGREGATE_FIELD_TYPES.has(field.type) ? "aggregate" : "review";
+  }
+  return "auto";
+}
 
 type LocalizedTemplateOverride = {
   title?: string;
@@ -240,6 +272,7 @@ export const formTemplates: FormTemplateDefinition[] = [
       visibility: "unlisted",
       identityPolicy: "anonymous_allowed",
       locationRequirement: "optional",
+      processingMode: "review_required",
       encryptSubmissions: true,
     },
     analysis: {
@@ -288,6 +321,7 @@ export const formTemplates: FormTemplateDefinition[] = [
     automation: {
       identityPolicy: "anonymous_allowed",
       locationRequirement: "optional",
+      processingMode: "review_required",
       encryptSubmissions: true,
     },
     analysis: {
@@ -330,6 +364,7 @@ export const formTemplates: FormTemplateDefinition[] = [
     automation: {
       identityPolicy: "anonymous_allowed",
       locationRequirement: "optional",
+      processingMode: "hybrid",
       encryptSubmissions: false,
     },
     analysis: {
@@ -371,6 +406,7 @@ export const formTemplates: FormTemplateDefinition[] = [
     automation: {
       identityPolicy: "anonymous_allowed",
       locationRequirement: "optional",
+      processingMode: "hybrid",
       encryptSubmissions: false,
     },
     analysis: {
@@ -406,6 +442,7 @@ export const formTemplates: FormTemplateDefinition[] = [
     automation: {
       identityPolicy: "anonymous_allowed",
       locationRequirement: "optional",
+      processingMode: "auto_process",
       encryptSubmissions: false,
     },
     analysis: {
@@ -449,6 +486,7 @@ export const formTemplates: FormTemplateDefinition[] = [
     automation: {
       identityPolicy: "anonymous_allowed",
       locationRequirement: "optional",
+      processingMode: "hybrid",
       encryptSubmissions: true,
     },
     analysis: {
@@ -486,6 +524,7 @@ export const formTemplates: FormTemplateDefinition[] = [
     automation: {
       identityPolicy: "anonymous_allowed",
       locationRequirement: "optional",
+      processingMode: "review_required",
       encryptSubmissions: true,
     },
     analysis: {
@@ -529,6 +568,7 @@ export const formTemplates: FormTemplateDefinition[] = [
       visibility: "public",
       identityPolicy: "anonymous_allowed",
       locationRequirement: "optional",
+      processingMode: "review_required",
       encryptSubmissions: true,
     },
     analysis: {
@@ -568,6 +608,7 @@ export const formTemplates: FormTemplateDefinition[] = [
       visibility: "unlisted",
       identityPolicy: "anonymous_allowed",
       locationRequirement: "required",
+      processingMode: "review_required",
       encryptSubmissions: true,
     },
     analysis: {
@@ -604,6 +645,7 @@ export const formTemplates: FormTemplateDefinition[] = [
     automation: {
       identityPolicy: "anonymous_allowed",
       locationRequirement: "optional",
+      processingMode: "review_required",
       encryptSubmissions: true,
     },
     analysis: {
@@ -635,6 +677,7 @@ export const formTemplates: FormTemplateDefinition[] = [
     automation: {
       identityPolicy: "anonymous_allowed",
       locationRequirement: "optional",
+      processingMode: "review_required",
       encryptSubmissions: true,
     },
     analysis: {
@@ -657,6 +700,7 @@ export function createTemplateFields(template: FormTemplateDefinition): FormFiel
     placeholder: field.placeholder,
     helpText: field.helpText,
     validationHint: field.validationHint,
+    processingPolicy: inferTemplateFieldProcessingPolicy(template, field),
     options:
       field.type === "dropdown" || field.type === "checkbox"
         ? [...(field.options ?? ["Option 1", "Option 2"])]
@@ -773,6 +817,7 @@ export function createSmartTemplateBundle(template: SmartTemplateDefinition): {
     placeholder: field.placeholder,
     helpText: field.helpText,
     validationHint: field.validationHint,
+    processingPolicy: field.processingPolicy,
     options:
       field.type === "dropdown" || field.type === "checkbox"
         ? [...(field.options ?? ["Option 1", "Option 2"])]

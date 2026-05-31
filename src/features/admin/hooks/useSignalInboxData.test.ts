@@ -5,7 +5,9 @@ import type { CapabilityProfile } from "../../../hooks/useAccessControl";
 import type { FormSchema, Submission } from "../../../types";
 import {
   createShadowForm,
+  matchesStream,
   mergeFormsWithProjectRegistry,
+  requiresReview,
   useSignalInboxData,
   type FormWithCount,
 } from "./useSignalInboxData";
@@ -366,5 +368,81 @@ describe("mergeFormsWithProjectRegistry", () => {
 
     expect(mockListSubmissions).toHaveBeenCalledWith("form-restored");
     expect(result.current.forms.find((form) => form.id === "form-restored")?.submissionCount).toBe(1);
+  });
+});
+
+describe("processing mode stream routing", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockUseProjectRegistry.mockReturnValue({
+      projects: [],
+      dataUpdatedAt: 0,
+    });
+    mockListForms.mockResolvedValue([]);
+    mockListSubmissions.mockResolvedValue([]);
+    mockFetchJsonBlob.mockResolvedValue(null);
+    mockReadManifestWithForm.mockResolvedValue({ manifest: {}, form: null });
+  });
+
+  it("keeps auto-process signals in all signals while excluding them from review queues", () => {
+    const form = createForm({
+      processingMode: "auto_process",
+    });
+    const submission = createSubmission({
+      processingMode: "auto_process",
+      reviewState: "not_required",
+      visibilityState: "aggregate_only",
+      insightEligibility: "eligible",
+      isEncrypted: false,
+      pendingOnchainRegistration: false,
+    });
+    const record = {
+      form,
+      submission,
+      category: "Survey",
+      searchText: "survey aggregate",
+    } satisfies Parameters<typeof requiresReview>[0];
+
+    expect(requiresReview(record)).toBe(false);
+    expect(matchesStream(record, "needs_review")).toBe(false);
+    expect(matchesStream(record, "unread")).toBe(false);
+    expect(matchesStream(record, "unresolved")).toBe(false);
+    expect(matchesStream(record, "all")).toBe(true);
+  });
+
+  it("keeps auto-process submissions visible without incrementing review workload counts", async () => {
+    const form = createForm({
+      processingMode: "auto_process",
+    });
+    const submission = createSubmission({
+      processingMode: "auto_process",
+      reviewState: "not_required",
+      visibilityState: "aggregate_only",
+      insightEligibility: "eligible",
+      isEncrypted: false,
+      pendingOnchainRegistration: false,
+    });
+
+    mockUseProjectRegistry.mockReturnValue({
+      projects: [],
+      dataUpdatedAt: 1,
+    });
+    mockListForms.mockResolvedValue([form]);
+    mockListSubmissions.mockResolvedValue([submission]);
+
+    const { result } = renderHook(() =>
+      useSignalInboxData({
+        accountAddress: "0xowner-1",
+        capabilityProfile: createCapabilityProfile(),
+      }),
+    );
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    await waitFor(() => expect(result.current.allSignals).toHaveLength(1));
+
+    expect(result.current.signalIndex.counts.needsReview).toBe(0);
+    expect(result.current.signalIndex.counts.unread).toBe(0);
+    expect(result.current.signalIndex.counts.unresolved).toBe(0);
+    expect(result.current.visibleSignals).toHaveLength(1);
   });
 });

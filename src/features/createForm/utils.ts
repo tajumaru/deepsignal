@@ -3,6 +3,7 @@ import { hasChoiceOptions, isConfirmationCheckboxField, isMatrixFieldType, norma
 import { makeId } from "../../lib/utils";
 import { normalizeFormVisibility } from "../../lib/explore";
 import { computeSchemaHash } from "../../lib/formVersioning";
+import { normalizeFieldProcessingPolicy } from "../../lib/signalProcessing";
 import type {
   AnalysisProfileId,
   AnalysisSignalType,
@@ -18,6 +19,7 @@ import type {
   FormPurpose,
   FormSchema,
   FormSection,
+  SignalProcessingMode,
   ResponseDeadlinePreset,
 } from "./types";
 
@@ -46,6 +48,7 @@ export interface ParsedCreateFormDraft {
   visibility?: FormSchema["visibility"];
   identityPolicy?: FormIdentityPolicy;
   locationRequirement?: FormLocationRequirement;
+  processingMode?: SignalProcessingMode;
   encryptSubmissions?: boolean;
   responseDeadlinePreset?: ResponseDeadlinePreset;
   responseDeadlineCustomAt?: string;
@@ -112,6 +115,7 @@ export function createField(type: FieldType = "shortText", sectionId?: string, l
     label: isConfirmation ? labels.confirmationLabel ?? "Consent / confirmation" : "",
     required: false,
     sensitive: false,
+    processingPolicy: "auto",
     visibility: "public",
     adminOnly: false,
     sectionId,
@@ -181,6 +185,7 @@ export function serializeDraft(
   visibility: FormSchema["visibility"],
   identityPolicy: FormIdentityPolicy,
   locationRequirement: FormLocationRequirement,
+  processingMode: SignalProcessingMode,
   createOnSui: boolean,
   encryptSubmissions: boolean,
   sections: FormSection[],
@@ -200,6 +205,7 @@ export function serializeDraft(
     visibility: normalizeFormVisibility(visibility),
     identityPolicy,
     locationRequirement,
+    processingMode,
     createOnSui,
     encryptSubmissions,
     responseDeadlinePreset,
@@ -219,6 +225,7 @@ export function serializeDraft(
       adminOnly: Boolean(field.adminOnly),
       visibility: field.visibility ?? "public",
       validationHint: field.validationHint ?? "",
+      processingPolicy: normalizeFieldProcessingPolicy(field.processingPolicy),
       options: field.options ?? [],
       rows: field.rows ?? [],
       columns: field.columns ?? [],
@@ -257,6 +264,7 @@ export function buildFormSchema(args: {
   visibility: NonNullable<FormSchema["visibility"]>;
   identityPolicy: FormIdentityPolicy;
   locationRequirement: FormLocationRequirement;
+  processingMode: SignalProcessingMode;
   ownerAddress: string;
   creationMode: NonNullable<FormSchema["creationMode"]>;
   projectId?: string;
@@ -284,6 +292,7 @@ export function buildFormSchema(args: {
         placeholder: field.placeholder?.trim() || undefined,
         helpText: field.helpText?.trim() || undefined,
         validationHint: field.validationHint?.trim() || undefined,
+        processingPolicy: normalizeFieldProcessingPolicy(field.processingPolicy),
         options: hasChoiceOptions(fieldType) ? (field.options ?? []).map((option) => option.trim()).filter(Boolean) : undefined,
         rows: isMatrixFieldType(fieldType)
           ? (field.rows ?? DEFAULT_MATRIX_ROWS).map((row) => row.trim()).filter(Boolean)
@@ -309,6 +318,7 @@ export function buildFormSchema(args: {
     visibility: args.visibility,
     identityPolicy: args.identityPolicy,
     locationRequirement: args.locationRequirement,
+    processingMode: args.processingMode,
     publicExplore: args.visibility === "public",
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),

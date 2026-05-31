@@ -358,7 +358,7 @@ Goal: author and persist mode while preserving current runtime behavior.
 
 - Add mode to builder draft state and published form schema.
 - Extend template automation defaults.
-- Show mode in publish diagnostics/preview only if it helps operators.
+- Show mode in the Create Signal flow. The current implementation exposes it in the Basic info step so operators can override the template default before fields and publish.
 - Do not yet remove responses from inbox; first release should be metadata-only.
 
 ### Phase 3: Auto Process aggregate path
@@ -368,17 +368,20 @@ Goal: make auto-process forms useful without requiring review.
 - Add mode-aware selectors in `useSignalInboxData`.
 - Keep `allSignals` intact, but exclude `reviewState: "not_required"` from `needs_review`.
 - Route Auto Process form cards toward Insights.
-- Add aggregate-safe export/snapshot path that does not imply review notes or triage.
+- Add aggregate-safe export/snapshot path that does not imply review notes or triage. The current CSV export supports an `aggregate` processing scope and defaults Auto Process forms to aggregate-safe columns.
 
 ### Phase 4: Hybrid review/insights split
 
 Goal: process structured fields immediately while sending risky content to review.
 
-- Add `processingPolicy` to fields or a separate form-level field policy map.
-- Build `insightPayload` at submission time from aggregate-safe fields.
-- Queue review only when review-policy fields contain data or risk rules fire.
-- Update Insights to consume `insightPayload`.
-- Update Review UI to explain which part of a Hybrid submission requires review.
+- Add `processingPolicy` to fields or a separate form-level field policy map. The current implementation adds optional field-level `processingPolicy: "auto" | "aggregate" | "review"` metadata. `auto` preserves existing type-based inference, `aggregate` can opt a non-sensitive field into immediate Insights, and `review` keeps a field in the review path. `sensitive: true` still wins and remains review-only.
+- Expose field policy in the field editor when operators need to override the default split. The current implementation adds this to Advanced field settings without changing the public responder flow.
+- Seed template fields with policy defaults. The current implementation gives Hybrid and Auto Process templates explicit aggregate/review field policies while leaving Review Required templates mostly `auto`; sensitive template fields are still forced to `review`.
+- Build `insightPayload` at submission time from aggregate-safe fields. The current implementation creates this projection for Auto Process and Hybrid non-encrypted submissions.
+- Queue review only when review-policy fields contain data or risk rules fire. Current behavior still queues Hybrid submissions, preserving the existing review surface.
+- Update Insights to consume `insightPayload`. The current implementation makes survey summaries and workspace insight summaries prefer `insightPayload.answers` when available.
+- Update Review UI to explain which part of a Hybrid submission requires review. The current implementation shows a Hybrid review split panel in the review session when `insightPayload.fieldIds` and `insightPayload.redactedFieldIds` are available.
+- Show processing state in admin metadata/proof surfaces. The current implementation adds processing mode, review state, visibility state, insight eligibility, and insight payload counts to the secondary inspector.
 
 ## Risks and Notes
 
@@ -394,7 +397,75 @@ Goal: process structured fields immediately while sending risky content to revie
 
 ## Validation
 
-This document is the only file changed in this task.
+Initial research validation:
 
 - `npm run check` failed under PowerShell because `npm.ps1` is blocked by the local execution policy.
 - `npm.cmd run check` succeeded.
+
+Implementation follow-up validation:
+
+- `npm.cmd run typecheck` succeeded.
+- `npm.cmd run test -- src/features/createForm/utils.test.ts src/features/createForm/hooks/useCreateFormPublish.test.tsx src/features/createForm/signalIntelligence.test.ts` succeeded.
+- `npm.cmd run check` succeeded.
+- `npm.cmd run build` succeeded.
+
+Auto Process review-queue follow-up validation:
+
+- `npm.cmd run test -- src/features/admin/hooks/useSignalInboxData.test.ts src/features/createForm/utils.test.ts src/features/createForm/hooks/useCreateFormPublish.test.tsx src/features/createForm/signalIntelligence.test.ts` succeeded.
+- `npm.cmd run check` succeeded.
+- `npm.cmd run build` succeeded.
+
+Hybrid insight-payload follow-up validation:
+
+- `npm.cmd run test -- src/lib/signalProcessing.test.ts src/lib/storage.encryption.test.ts src/features/admin/hooks/useSignalInboxData.test.ts` succeeded.
+- `npm.cmd run typecheck` succeeded.
+- `npm.cmd run check` succeeded.
+- `npm.cmd run build` succeeded.
+
+Create Signal mode-selector follow-up validation:
+
+- `npm.cmd run test -- src/features/createForm/hooks/useCreateFormBuilder.test.tsx src/features/createForm/utils.test.ts src/features/createForm/hooks/useCreateFormPublish.test.tsx src/lib/signalProcessing.test.ts` succeeded.
+- `npm.cmd run typecheck` succeeded.
+- `npm.cmd run check` succeeded.
+- `npm.cmd run build` succeeded.
+
+Aggregate CSV export follow-up validation:
+
+- `npm.cmd run test -- src/lib/exportResponses.test.ts` succeeded.
+- `npm.cmd run typecheck` succeeded.
+- `npm.cmd run test -- src/lib/exportResponses.test.ts src/lib/signalProcessing.test.ts src/features/createForm/hooks/useCreateFormBuilder.test.tsx` succeeded.
+- `npm.cmd run check` succeeded.
+- `npm.cmd run build` succeeded.
+
+Hybrid review split UI follow-up validation:
+
+- `npm.cmd run test -- src/lib/signalProcessing.test.ts src/lib/exportResponses.test.ts src/features/admin/hooks/useSignalInboxData.test.ts` succeeded.
+- `npm.cmd run typecheck` succeeded.
+- `npm.cmd run check` succeeded.
+- `npm.cmd run build` succeeded with the existing large chunk warning for `mysten-sui`.
+
+Field processing policy follow-up validation:
+
+- `npm.cmd run test -- src/lib/signalProcessing.test.ts src/features/createForm/utils.test.ts` succeeded.
+- `npm.cmd run typecheck` succeeded.
+- `npm.cmd run check` succeeded.
+- `npm.cmd run build` succeeded with the existing large chunk warning for `mysten-sui`.
+
+Field processing policy UI follow-up validation:
+
+- `npm.cmd run test -- src/lib/signalProcessing.test.ts src/features/createForm/utils.test.ts src/features/createForm/hooks/useCreateFormBuilder.test.tsx` succeeded.
+- `npm.cmd run typecheck` succeeded.
+- `npm.cmd run check` succeeded.
+- `npm.cmd run build` succeeded with the existing large chunk warning for `mysten-sui`.
+
+Template field policy follow-up validation:
+
+- `npm.cmd run test -- src/lib/formTemplates.test.ts src/lib/signalProcessing.test.ts src/features/createForm/utils.test.ts` succeeded.
+- `npm.cmd run check` succeeded.
+- `npm.cmd run build` succeeded with the existing large chunk warning for `mysten-sui`.
+
+Admin processing metadata follow-up validation:
+
+- `npm.cmd run typecheck` succeeded.
+- `npm.cmd run check` succeeded.
+- `npm.cmd run build` succeeded with the existing large chunk warning for `mysten-sui`.

@@ -13,8 +13,63 @@ import { getSubmissionVersion } from "../../../lib/submissionVersioning";
 import { formatDate } from "../../../lib/utils";
 import type { SignalRecord } from "../hooks/useSignalInboxData";
 import type { ResponsesCsvExportScope, ResponsesCsvSortOrder } from "../../../lib/exportResponses";
+import type { SignalInsightEligibility, SignalProcessingMode, SignalReviewState, SignalVisibilityState } from "../../../types";
 
 type TranslationFn = ReturnType<typeof useI18n>["t"];
+
+function getProcessingModeLabel(mode: SignalProcessingMode, t: TranslationFn) {
+  if (mode === "auto_process") {
+    return t("processingModeAutoProcess");
+  }
+  if (mode === "hybrid") {
+    return t("processingModeHybrid");
+  }
+  return t("processingModeReviewRequired");
+}
+
+function getReviewStatePipelineLabel(state: SignalReviewState | undefined, t: TranslationFn) {
+  switch (state) {
+    case "not_required":
+      return t("reviewStateNotRequired");
+    case "in_review":
+      return t("reviewStateInReview");
+    case "reviewed":
+      return t("reviewStateReviewed");
+    case "suppressed":
+      return t("reviewStateSuppressed");
+    case "queued":
+    default:
+      return t("reviewStateQueued");
+  }
+}
+
+function getVisibilityStatePipelineLabel(state: SignalVisibilityState | undefined, t: TranslationFn) {
+  switch (state) {
+    case "aggregate_only":
+      return t("visibilityStateAggregateOnly");
+    case "reviewed_public":
+      return t("visibilityStateReviewedPublic");
+    case "public":
+      return t("visibilityStatePublic");
+    case "private":
+    default:
+      return t("visibilityStatePrivate");
+  }
+}
+
+function getInsightEligibilityPipelineLabel(state: SignalInsightEligibility | undefined, t: TranslationFn) {
+  switch (state) {
+    case "eligible":
+      return t("insightEligibilityEligible");
+    case "metadata_only":
+      return t("insightEligibilityMetadataOnly");
+    case "excluded":
+      return t("insightEligibilityExcluded");
+    case "requires_review":
+    default:
+      return t("insightEligibilityRequiresReview");
+  }
+}
 
 interface SecondaryInspectorProps {
   t: TranslationFn;
@@ -102,6 +157,14 @@ export function SecondaryInspector({
     selectedRecord.submission.walrusProof?.objectId ??
     selectedRecord.submission.encryptedWalrusProof?.objectId;
   const encryptedObjectId = selectedRecord.submission.encryptedWalrusProof?.objectId;
+  const processingMode = selectedRecord.submission.processingMode ?? selectedRecord.form.processingMode ?? "review_required";
+  const insightPayload = selectedRecord.submission.insightPayload;
+  const insightPayloadSummary = insightPayload
+    ? t("insightPayloadSummary", {
+        aggregate: insightPayload.fieldIds?.length ?? 0,
+        review: insightPayload.redactedFieldIds?.length ?? 0,
+      })
+    : t("notAvailable");
 
   return (
     <section className="secondary-inspector">
@@ -227,6 +290,26 @@ export function SecondaryInspector({
                 <div className="metadata-row">
                   <span>{t("reviewAccessLabel")}</span>
                   <strong>{hasAdminAccess ? t("projectReviewerAccess") : t("walletLabel")}</strong>
+                </div>
+                <div className="metadata-row">
+                  <span>{t("processingModeLabel")}</span>
+                  <strong>{getProcessingModeLabel(processingMode, t)}</strong>
+                </div>
+                <div className="metadata-row">
+                  <span>{t("reviewStateLabel")}</span>
+                  <strong>{getReviewStatePipelineLabel(selectedRecord.submission.reviewState, t)}</strong>
+                </div>
+                <div className="metadata-row">
+                  <span>{t("visibilityStateLabel")}</span>
+                  <strong>{getVisibilityStatePipelineLabel(selectedRecord.submission.visibilityState, t)}</strong>
+                </div>
+                <div className="metadata-row">
+                  <span>{t("insightEligibilityLabel")}</span>
+                  <strong>{getInsightEligibilityPipelineLabel(selectedRecord.submission.insightEligibility, t)}</strong>
+                </div>
+                <div className="metadata-row">
+                  <span>{t("insightPayloadLabel")}</span>
+                  <strong>{insightPayloadSummary}</strong>
                 </div>
                 <div className="metadata-row">
                   <span>{t("storageStatusLabel")}</span>

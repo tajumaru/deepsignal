@@ -54,6 +54,7 @@ export function createInitialDraftSnapshot(language: Language = "en") {
     "unlisted",
     "anonymous_allowed",
     "optional",
+    template.automation?.processingMode ?? "review_required",
     false,
     true,
     initialSections,

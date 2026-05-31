@@ -4,6 +4,7 @@ import { getRelatedSignals, type RelatedSignalReason } from "../../../lib/relate
 import { getSignalPreview } from "../../../lib/signalInbox";
 import type { VersionedFormSchemas } from "../../../lib/formVersionSchemas";
 import { getSubmissionVersion } from "../../../lib/submissionVersioning";
+import { getInsightAnswers } from "../../../lib/signalProcessing";
 import { downloadTextFile } from "../../../lib/utils";
 import { formatAnswerText } from "../../../lib/answerFormatting";
 import type { FormSchema, SignalSeverity } from "../../../types";
@@ -125,7 +126,7 @@ function getReadableSummaryEntries(
       ? unlockedSignalsById[record.submission.id].answers
       : record.submission.isEncrypted || record.submission.status === "archived"
         ? null
-        : record.submission.answers;
+        : getInsightAnswers(record.submission);
 
   if (!answers) {
     return [];

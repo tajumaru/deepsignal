@@ -1018,6 +1018,8 @@ export function PublicFormPage() {
   );
 }
 
+export default PublicFormPage;
+
 function HoldToSendButton({
   state,
   disabled,

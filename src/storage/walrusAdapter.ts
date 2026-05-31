@@ -1327,7 +1327,7 @@ function extractEmbeddedEncryptedPayload(value: string) {
 }
 
 function createManifest(
-  form: Pick<FormSchema, "id" | "createdAt" | "headerImage" | "headerLogo" | "formVersion" | "schemaHash"> & {
+  form: Pick<FormSchema, "id" | "createdAt" | "headerImage" | "headerLogo" | "formVersion" | "schemaHash" | "processingMode"> & {
     title?: string;
   },
   formBlobId: string,
@@ -1363,6 +1363,7 @@ function createManifest(
     versions,
     headerImage: form.headerImage,
     headerLogo: form.headerLogo,
+    processingMode: form.processingMode ?? "review_required",
     submissions: submissions
       .map((submission) => ({
         ...submission,
@@ -1411,6 +1412,7 @@ export function normalizeManifest(
     formBlobId,
     currentVersion,
     versions,
+    processingMode: manifest.processingMode ?? form?.processingMode ?? "review_required",
     submissions: manifest.submissions.map((submission) => ({
       ...submission,
       formVersion: submission.formVersion ?? currentVersion,
@@ -1922,6 +1924,7 @@ async function saveSubmissionRecord(
       headerLogo: form?.headerLogo ?? manifest.headerLogo,
       formVersion: manifest.currentVersion,
       schemaHash: manifest.versions?.find((version) => version.version === manifest.currentVersion)?.schemaHash,
+      processingMode: form?.processingMode ?? manifest.processingMode ?? "review_required",
       title: form?.title ?? manifest.versions?.find((version) => version.version === manifest.currentVersion)?.titleSnapshot,
     },
     form ? bundledFormPointer : manifest.formBlobId,
@@ -2253,6 +2256,7 @@ export const walrusAdapter: StorageAdapter = {
         headerLogo: form?.headerLogo ?? manifest.headerLogo,
         formVersion: manifest.currentVersion,
         schemaHash: manifest.versions?.find((version) => version.version === manifest.currentVersion)?.schemaHash,
+        processingMode: form?.processingMode ?? manifest.processingMode ?? "review_required",
         title: form?.title ?? manifest.versions?.find((version) => version.version === manifest.currentVersion)?.titleSnapshot,
       },
       form ? bundledFormPointer : manifest.formBlobId,

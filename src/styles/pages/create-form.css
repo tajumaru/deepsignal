@@ -4589,6 +4589,10 @@
   gap: 0.6rem;
 }
 
+.composer-radio-options-three {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
 .composer-radio-option {
   position: relative;
   display: flex;
@@ -4830,6 +4834,22 @@
   overflow-y: auto;
   overscroll-behavior: contain;
   padding: 1rem;
+}
+
+.composer-radio-option-stacked {
+  align-items: flex-start;
+}
+
+.composer-radio-option-stacked > span:last-child {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.composer-radio-option-stacked small {
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  font-weight: 500;
+  line-height: 1.35;
 }
 
 .publish-signal-lens-card {

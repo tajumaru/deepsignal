@@ -11,6 +11,7 @@ import { getSubmissionCategoryFromPurpose } from "../../../lib/formTemplates";
 import { isResponseDeadlinePassed } from "../../../lib/responseDeadline";
 import { ensureRespondentSession } from "../../../lib/respondentSession";
 import { collectSignalContext, installSignalContextCapture } from "../../../lib/signalContext";
+import { buildSubmissionInsightPayload } from "../../../lib/signalProcessing";
 import { ENCRYPTED_INLINE_ATTACHMENT_MAX_BYTES } from "../../../lib/attachmentLimits";
 import { makeId } from "../../../lib/utils";
 import type { ZkLoginSession } from "../../../lib/zkloginSession";
@@ -1324,6 +1325,12 @@ export function usePublicSubmission({
       const publicPayloadAnswers = Object.fromEntries(
         visibleFields.filter((field) => !field.sensitive).map((field) => [field.id, normalizedAnswers[field.id]]),
       );
+      const processingMode = form.processingMode ?? "review_required";
+      const insightEligibility = form.encryptSubmissions
+        ? "metadata_only"
+        : processingMode === "auto_process" || processingMode === "hybrid"
+          ? "eligible"
+          : "requires_review";
       const submission: Submission = {
         id: makeId("submission"),
         formId: form.id,
@@ -1332,6 +1339,7 @@ export function usePublicSubmission({
         schemaHash: form.schemaHash,
         manifestBlobId: form.manifestBlobId,
         projectId: form.projectId,
+        processingMode,
         answers: normalizedAnswers,
         attachments,
         location,
@@ -1358,6 +1366,21 @@ export function usePublicSubmission({
         status: "unread",
         priority: "medium",
         triageStatus: "new",
+        reviewState: processingMode === "auto_process" ? "not_required" : "queued",
+        visibilityState: processingMode === "review_required" ? "private" : "aggregate_only",
+        insightEligibility,
+        insightPayload:
+          insightEligibility === "eligible"
+            ? buildSubmissionInsightPayload(
+                form,
+                {
+                  answers: normalizedAnswers,
+                  isEncrypted: Boolean(form.encryptSubmissions),
+                  insightPayload: undefined,
+                },
+                signedAt,
+              )
+            : undefined,
         tags: [],
         notes: "",
         contributorId: respondentMeta.verifiedAddress ?? respondentMeta.walletAddress ?? respondentMeta.sessionId,

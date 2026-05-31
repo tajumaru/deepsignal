@@ -1,3 +1,4 @@
+import type { ComponentType } from "react";
 import { recoverFromChunkLoadFailure } from "./chunkLoadRecovery";
 import { buildInfo, type BuildInfo } from "./buildInfo";
 import { recordBuildAsset } from "./buildAssetDiagnostics";
@@ -41,6 +42,21 @@ type RouteChunkSpec = {
   filePrefix: string;
   routeKey: RouteAssetKey;
 };
+
+export class MissingLazyRouteExportError extends Error {
+  readonly category = "missingExport";
+  readonly expectedExport: string;
+  readonly moduleKeys: string[];
+  readonly resolvedExport: "missing";
+
+  constructor(label: string, expectedExport: string, moduleKeys: string[]) {
+    super(`Route lazy module ${label} loaded but export ${expectedExport} was missing.`);
+    this.name = "MissingLazyRouteExportError";
+    this.expectedExport = expectedExport;
+    this.moduleKeys = moduleKeys;
+    this.resolvedExport = "missing";
+  }
+}
 
 const routeChunkByLabel: Record<string, RouteChunkSpec> = {
   "route-access-management": { exportName: "AccessManagementPage", filePrefix: "AccessManagementPage", routeKey: "access" },
@@ -233,6 +249,68 @@ function extractDependencyUrls(sourceUrl: string, source: string) {
   return [...dependencies];
 }
 
+function getModuleKeys(module: unknown) {
+  if (!module || typeof module !== "object") {
+    return [];
+  }
+  try {
+    return Object.keys(module as Record<string, unknown>).sort();
+  } catch {
+    return [];
+  }
+}
+
+function readModuleExport(module: unknown, exportName: string) {
+  const moduleRecord = module && typeof module === "object" ? (module as Record<string, unknown>) : {};
+  let defaultExport: unknown;
+  try {
+    defaultExport = moduleRecord.default;
+  } catch {
+    defaultExport = undefined;
+  }
+  if (defaultExport) {
+    return { value: defaultExport, resolvedExport: "default" as const };
+  }
+  let namedExport: unknown;
+  try {
+    namedExport = moduleRecord[exportName];
+  } catch {
+    namedExport = undefined;
+  }
+  if (namedExport) {
+    return { value: namedExport, resolvedExport: exportName };
+  }
+  return { value: null, resolvedExport: "missing" as const };
+}
+
+export function resolveLazyRouteModule(
+  module: unknown,
+  label: string,
+  exportName = routeChunkByLabel[label]?.exportName ?? "default",
+): { default: ComponentType<any> } {
+  const moduleKeys = getModuleKeys(module);
+  const resolved = readModuleExport(module, exportName);
+  if (!resolved.value) {
+    const error = new MissingLazyRouteExportError(label, exportName, moduleKeys);
+    recordFailedImport(label, error, null, {
+      category: "missingExport",
+      expectedExport: exportName,
+      moduleKeys,
+      resolvedExport: "missing",
+    });
+    console.error("[DeepSignal route lazy export missing]", {
+      label,
+      expectedExport: exportName,
+      moduleKeys,
+      buildVersion: buildInfo.appVersion,
+      buildTime: buildInfo.buildTime,
+      gitHash: buildInfo.gitHash,
+    });
+    throw error;
+  }
+  return { default: resolved.value as ComponentType<any> };
+}
+
 async function probeChunkDependencyTree(parentUrl: string): Promise<ChunkDependencyProbe> {
   const pending = [parentUrl];
   const seen = new Set<string>();
@@ -322,7 +400,9 @@ export async function retryLazyImport<T>(loader: () => Promise<T>, label = "anon
       return result;
     } catch (error) {
       lastError = error;
-      recordFailedImport(label, error, expectedChunkUrl);
+      recordFailedImport(label, error, expectedChunkUrl, {
+        category: "runtime",
+      });
       if (expectedChunkUrl) {
         const probe = await probeChunk(expectedChunkUrl);
         recordFailedImportProbe(label, probe);

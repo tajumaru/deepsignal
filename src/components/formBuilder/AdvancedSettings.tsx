@@ -91,6 +91,22 @@ export function AdvancedSettings({ field, onChange }: AdvancedSettingsProps) {
             </select>
           </label>
         </section>
+
+        <section className="composer-advanced-group">
+          <strong>{t("signalProcessingSettings")}</strong>
+          <label>
+            <span>{t("fieldProcessingPolicy")}</span>
+            <select
+              value={field.processingPolicy ?? "auto"}
+              onChange={(event) => update("processingPolicy", event.target.value as FormField["processingPolicy"])}
+            >
+              <option value="auto">{t("fieldProcessingAuto")}</option>
+              <option value="aggregate">{t("fieldProcessingAggregate")}</option>
+              <option value="review">{t("fieldProcessingReview")}</option>
+            </select>
+          </label>
+          <p className="muted">{t("fieldProcessingHelp")}</p>
+        </section>
       </div>
     </details>
   );

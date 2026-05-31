@@ -65,9 +65,24 @@ export function BuildUpdateBanner() {
           </details>
         ) : null}
       </div>
-      <button type="button" className="primary-button" onClick={() => void handleUpdate()} disabled={updating}>
-        {updating ? t("buildUpdateUpdating") : t("buildUpdateAction")}
-      </button>
+      <div className="build-update-action-stack">
+        <p className="build-update-preservation">{t("buildUpdatePreservation")}</p>
+        <button
+          type="button"
+          className="build-update-secure-button"
+          onClick={() => void handleUpdate()}
+          disabled={updating}
+        >
+          <span className="build-update-button-glint" aria-hidden="true" />
+          <span className="build-update-sync-icon" aria-hidden="true">
+            {updating ? "\u27f3" : "\u21bb"}
+          </span>
+          <span className="build-update-button-label">
+            {updating ? t("buildUpdatePreparing") : t("buildUpdateSecureAction")}
+          </span>
+          <span className="build-update-pulse-dot" aria-hidden="true" />
+        </button>
+      </div>
     </aside>
   );
 }

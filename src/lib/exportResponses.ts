@@ -3,6 +3,7 @@ import type { FormSchema, Submission } from "../types";
 import { formatAnswerText } from "./answerFormatting";
 import { sanitizeCsvCell } from "./csv";
 import { getSubmissionRespondentMeta } from "./respondentMeta";
+import { getInsightAnswers } from "./signalProcessing";
 import { getSubmissionVersion } from "./submissionVersioning";
 import type { VersionedFormSchemas } from "./formVersionSchemas";
 import { downloadTextFile } from "./utils";
@@ -21,6 +22,7 @@ interface ResponseExportOverride {
 
 export type ResponsesCsvSortOrder = "createdAtDesc" | "createdAtAsc";
 export type ResponsesCsvExportScope = "filtered" | "all" | "selected";
+export type ResponsesCsvProcessingScope = "review" | "aggregate";
 export type ExportPiiField = "respondentAddress" | "walletAddress" | "notes" | "attachments" | "decryptedAnswers";
 
 export interface ExportFilterSnapshot {
@@ -42,6 +44,7 @@ export interface ExportResponsesToCsvOptions {
   responseOverrides?: Record<string, ResponseExportOverride>;
   sortOrder?: ResponsesCsvSortOrder;
   scope?: ResponsesCsvExportScope;
+  processingScope?: ResponsesCsvProcessingScope;
   excludedPiiFields?: ExportPiiField[];
   exportedBy?: string;
   filterSnapshot?: ExportFilterSnapshot;
@@ -56,6 +59,7 @@ export interface ExportMetadata {
   formTitle: string;
   responseCount: number;
   filterMode: ResponsesCsvExportScope;
+  processingScope: ResponsesCsvProcessingScope;
   exportedBy: string;
   includedDecryptedData: boolean;
   includedAttachmentInfo: boolean;
@@ -178,6 +182,14 @@ function isExcluded(excludedFields: ExportPiiField[] | undefined, field: ExportP
   return excludedFields?.includes(field) ?? false;
 }
 
+function getProcessingScope(form: FormSchema, options: ExportResponsesToCsvOptions): ResponsesCsvProcessingScope {
+  return options.processingScope ?? (form.processingMode === "auto_process" ? "aggregate" : "review");
+}
+
+function isAggregateExport(form: FormSchema, options: ExportResponsesToCsvOptions) {
+  return getProcessingScope(form, options) === "aggregate";
+}
+
 function isRespondentAddressExcluded(excludedFields: ExportPiiField[] | undefined) {
   return isExcluded(excludedFields, "respondentAddress") || isExcluded(excludedFields, "walletAddress");
 }
@@ -219,11 +231,14 @@ export function buildColumns(
   options: ExportResponsesToCsvOptions = {},
 ) {
   const questionHeaders = buildQuestionColumns(form, responses, options).map((column) => column.header);
+  const aggregateExport = isAggregateExport(form, options);
   const columns = [
     "formTitle",
     "exportedAt",
     "responseCount",
     "responseId",
+    "processingMode",
+    "processingScope",
     "formVersion",
     "schemaHash",
     "formBlobId",
@@ -232,19 +247,21 @@ export function buildColumns(
     "createdAt",
   ];
 
-  if (!isRespondentAddressExcluded(options.excludedPiiFields)) {
+  if (!aggregateExport && !isRespondentAddressExcluded(options.excludedPiiFields)) {
     columns.push("respondentAddress");
   }
 
   columns.push("respondentIdentity", "identityProvider", "isAnonymous", "walrusBlobId", "storageBlobId");
 
-  if (!isExcluded(options.excludedPiiFields, "attachments")) {
+  if (!aggregateExport && !isExcluded(options.excludedPiiFields, "attachments")) {
     columns.push("attachments");
   }
 
-  columns.push("tags", "priority", "triageStatus", "status");
+  if (!aggregateExport) {
+    columns.push("tags", "priority", "triageStatus", "status");
+  }
 
-  if (!isExcluded(options.excludedPiiFields, "notes")) {
+  if (!aggregateExport && !isExcluded(options.excludedPiiFields, "notes")) {
     columns.push("notes");
   }
 
@@ -259,6 +276,7 @@ export function buildExportMetadata(
 ): ExportMetadata {
   const exportedAt = (options.now ?? new Date()).toISOString();
   const excludedPiiFields = options.excludedPiiFields ?? [];
+  const processingScope = getProcessingScope(form, options);
   return {
     title: "DeepSignal Export",
     exportedAt,
@@ -266,6 +284,7 @@ export function buildExportMetadata(
     formTitle: form.title,
     responseCount: responses.length,
     filterMode: options.scope ?? "all",
+    processingScope,
     exportedBy: options.exportedBy ?? "",
     includedDecryptedData:
       !excludedPiiFields.includes("decryptedAnswers") && hasUnlockedAnswerOverride(options.responseOverrides),
@@ -283,6 +302,7 @@ export function buildRows(
 ) {
   const language = options.language ?? "en";
   const sortedResponses = sortResponsesByCreatedAt(responses, options.sortOrder ?? "createdAtDesc");
+  const aggregateExport = isAggregateExport(form, options);
   const omitRespondentAddress = isRespondentAddressExcluded(options.excludedPiiFields);
   const omitAttachments = isExcluded(options.excludedPiiFields, "attachments");
   const omitNotes = isExcluded(options.excludedPiiFields, "notes");
@@ -291,7 +311,11 @@ export function buildRows(
 
   return sortedResponses.map((submission) => {
     const override = options.responseOverrides?.[submission.id];
-    const answers = omitDecryptedAnswers ? submission.answers ?? {} : override?.answers ?? submission.answers ?? {};
+    const answers = aggregateExport
+      ? getInsightAnswers(submission)
+      : omitDecryptedAnswers
+        ? submission.answers ?? {}
+        : override?.answers ?? submission.answers ?? {};
     const attachments = override?.attachments ?? submission.attachments ?? [];
     const respondentMeta = getSubmissionRespondentMeta(submission);
     const respondentAddress = respondentMeta.isAnonymous ? "" : respondentMeta.verifiedAddress ?? respondentMeta.walletAddress ?? "";
@@ -309,6 +333,8 @@ export function buildRows(
       metadata.exportedAt,
       metadata.responseCount,
       submission.id,
+      submission.processingMode ?? form.processingMode ?? "review_required",
+      metadata.processingScope,
       getSubmissionVersion(submission),
       submission.schemaHash ?? "",
       submission.formBlobId ?? "",
@@ -317,7 +343,7 @@ export function buildRows(
       submission.createdAt,
     ];
 
-    if (!omitRespondentAddress) {
+    if (!aggregateExport && !omitRespondentAddress) {
       row.push(respondentAddress);
     }
 
@@ -329,13 +355,15 @@ export function buildRows(
       storageBlobId,
     );
 
-    if (!omitAttachments) {
+    if (!aggregateExport && !omitAttachments) {
       row.push(formatAttachmentsForCsv(attachments));
     }
 
-    row.push(submission.tags.join("; "), submission.priority, submission.triageStatus, submission.status);
+    if (!aggregateExport) {
+      row.push(submission.tags.join("; "), submission.priority, submission.triageStatus, submission.status);
+    }
 
-    if (!omitNotes) {
+    if (!aggregateExport && !omitNotes) {
       row.push(submission.notes);
     }
 

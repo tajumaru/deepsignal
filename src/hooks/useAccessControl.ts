@@ -110,7 +110,7 @@ function inferOwnedCapRegistryId(entries: OwnedObjectEntry[], preferredRegistryI
 export function useAccessControl(address?: string | null, options: { enabled?: boolean } = {}) {
   const queryEnabled = options.enabled ?? true;
   const { registry, isLoadingRegistry, error: registryError } = useAccessRegistry({
-    enabled: queryEnabled,
+    enabled: Boolean(queryEnabled && address),
   });
   const packageId = normalizeObjectId(ACCESS_CONTROL_PACKAGE_ID);
   const registryId = normalizeObjectId(ACCESS_CONTROL_REGISTRY_ID);

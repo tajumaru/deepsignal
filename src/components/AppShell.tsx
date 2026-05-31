@@ -162,8 +162,6 @@ export function AppShell({
   const showMobileBottomNav =
     !publicChrome &&
     (location.pathname === "/explore" ||
-      location.pathname === "/create" ||
-      location.pathname === "/compose" ||
       location.pathname === "/my-responses" ||
       location.pathname === "/admin" ||
       location.pathname.startsWith("/admin/") ||

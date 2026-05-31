@@ -36,6 +36,7 @@ function createValues(patch: Partial<FormBuilderValues> = {}): FormBuilderValues
     visibility: "public",
     identityPolicy: "anonymous_allowed",
     locationRequirement: "optional",
+    processingMode: "review_required",
     encryptSubmissions: false,
     responseDeadlinePreset: "none",
     responseDeadlineCustomAt: "",

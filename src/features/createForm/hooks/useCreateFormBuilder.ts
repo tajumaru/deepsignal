@@ -17,6 +17,7 @@ import {
 import { toDateTimeLocalValue } from "../../../lib/responseDeadline";
 import type { Language } from "../../../i18n";
 import { normalizeFieldType } from "../../../lib/fieldTypes";
+import { normalizeFieldProcessingPolicy } from "../../../lib/signalProcessing";
 import { getSelectedProjectId, setSelectedProjectId } from "../../../lib/projectRegistry";
 import { createInitialDraftSnapshot, getInitialFields, getInitialTemplate } from "../constants";
 import type {
@@ -110,6 +111,7 @@ export function useCreateFormBuilder({
   const [visibility, setVisibility] = useState<"private" | "unlisted" | "public">("public");
   const [identityPolicy, setIdentityPolicy] = useState<"anonymous_allowed" | "wallet_required">("anonymous_allowed");
   const [locationRequirement, setLocationRequirement] = useState<"optional" | "required">("optional");
+  const [processingMode, setProcessingMode] = useState(initialTemplate.automation?.processingMode ?? "review_required");
   const [encryptSubmissions, setEncryptSubmissions] = useState(true);
   const [responseDeadlinePreset, setResponseDeadlinePreset] = useState<ResponseDeadlinePreset>("none");
   const [responseDeadlineCustomAt, setResponseDeadlineCustomAt] = useState("");
@@ -146,6 +148,7 @@ export function useCreateFormBuilder({
         visibility,
         identityPolicy,
         locationRequirement,
+        processingMode,
         createOnSui,
         encryptSubmissions,
         sections,
@@ -164,6 +167,7 @@ export function useCreateFormBuilder({
       headerLogo,
       identityPolicy,
       locationRequirement,
+      processingMode,
       purpose,
       responseDeadlineCustomAt,
       responseDeadlinePreset,
@@ -184,6 +188,7 @@ export function useCreateFormBuilder({
       visibility: template.automation?.visibility ?? "public",
       identityPolicy: template.automation?.identityPolicy ?? "anonymous_allowed",
       locationRequirement: template.automation?.locationRequirement ?? "optional",
+      processingMode: template.automation?.processingMode ?? "review_required",
       encryptSubmissions: template.automation?.encryptSubmissions ?? !isGuestDraftMode,
     } as const;
   }
@@ -206,6 +211,7 @@ export function useCreateFormBuilder({
     setVisibility("public");
     setIdentityPolicy("anonymous_allowed");
     setLocationRequirement("optional");
+    setProcessingMode(initialTemplate.automation?.processingMode ?? "review_required");
     setEncryptSubmissions(!isGuestDraftMode);
     setResponseDeadlinePreset("none");
     setResponseDeadlineCustomAt("");
@@ -253,6 +259,7 @@ export function useCreateFormBuilder({
       visibility: template.automation?.visibility ?? "public",
       identityPolicy: template.automation?.identityPolicy ?? "anonymous_allowed",
       locationRequirement: template.automation?.locationRequirement ?? "optional",
+      processingMode: template.automation?.processingMode ?? "review_required",
       encryptSubmissions: template.automation?.encryptSubmissions ?? false,
     } as const;
     setSelectedTemplateKey(template.key);
@@ -270,6 +277,7 @@ export function useCreateFormBuilder({
     setVisibility(automation.visibility);
     setIdentityPolicy(automation.identityPolicy);
     setLocationRequirement(automation.locationRequirement);
+    setProcessingMode(automation.processingMode);
     setEncryptSubmissions(automation.encryptSubmissions);
     setResponseDeadlinePreset("none");
     setResponseDeadlineCustomAt("");
@@ -311,6 +319,7 @@ export function useCreateFormBuilder({
         parsedDraft.fields.map((field) => ({
           ...field,
           type: normalizeFieldType(field.type),
+          processingPolicy: normalizeFieldProcessingPolicy(field.processingPolicy),
         })),
       ),
     );
@@ -323,6 +332,7 @@ export function useCreateFormBuilder({
     setVisibility(parsedDraft.visibility ?? "public");
     setIdentityPolicy(parsedDraft.identityPolicy === "wallet_required" ? "wallet_required" : "anonymous_allowed");
     setLocationRequirement(parsedDraft.locationRequirement === "required" ? "required" : "optional");
+    setProcessingMode(parsedDraft.processingMode ?? "review_required");
     setEncryptSubmissions(parsedDraft.encryptSubmissions ?? !isGuestDraftMode);
     setResponseDeadlinePreset(parsedDraft.responseDeadlinePreset ?? "none");
     setResponseDeadlineCustomAt(parsedDraft.responseDeadlineCustomAt ?? "");
@@ -467,6 +477,7 @@ export function useCreateFormBuilder({
         visibility,
         identityPolicy,
         locationRequirement,
+        processingMode,
         encryptSubmissions,
         responseDeadlinePreset,
         responseDeadlineCustomAt,
@@ -496,6 +507,7 @@ export function useCreateFormBuilder({
     identityPolicy,
     initialDraftSnapshot,
     locationRequirement,
+    processingMode,
     projectState,
     purpose,
     responseDeadlineCustomAt,
@@ -547,6 +559,7 @@ export function useCreateFormBuilder({
       setVisibility(automation.visibility);
       setIdentityPolicy(automation.identityPolicy);
       setLocationRequirement(automation.locationRequirement);
+      setProcessingMode(automation.processingMode);
       setEncryptSubmissions(automation.encryptSubmissions);
       setResponseDeadlinePreset("none");
       setResponseDeadlineCustomAt("");
@@ -589,6 +602,7 @@ export function useCreateFormBuilder({
       setVisibility("public");
       setIdentityPolicy("anonymous_allowed");
       setLocationRequirement("optional");
+      setProcessingMode("review_required");
       setResponseDeadlinePreset("none");
       setResponseDeadlineCustomAt("");
       goToStep("info");
@@ -613,6 +627,7 @@ export function useCreateFormBuilder({
       (form.fields.length ? form.fields : initialFields).map((field) => ({
         ...field,
         type: normalizeFieldType(field.type),
+        processingPolicy: normalizeFieldProcessingPolicy(field.processingPolicy),
       })),
     );
     const nextSections = Array.isArray(form.sections) ? form.sections : [];
@@ -641,6 +656,7 @@ export function useCreateFormBuilder({
       nextVisibility,
       nextIdentityPolicy,
       nextLocationRequirement,
+      form.processingMode ?? "review_required",
       Boolean(nextSelectedProjectId),
       form.encryptSubmissions ?? !isGuestDraftMode,
       nextSections,
@@ -666,6 +682,7 @@ export function useCreateFormBuilder({
       setVisibility(nextVisibility);
       setIdentityPolicy(nextIdentityPolicy);
       setLocationRequirement(nextLocationRequirement);
+      setProcessingMode(form.processingMode ?? "review_required");
       setEncryptSubmissions(form.encryptSubmissions ?? !isGuestDraftMode);
       setResponseDeadlinePreset(nextDeadlinePreset);
       setResponseDeadlineCustomAt(nextDeadlineCustomAt);
@@ -1015,6 +1032,7 @@ export function useCreateFormBuilder({
     visibility,
     identityPolicy,
     locationRequirement,
+    processingMode,
     encryptSubmissions,
     responseDeadlinePreset,
     responseDeadlineCustomAt,
@@ -1049,6 +1067,7 @@ export function useCreateFormBuilder({
     setEncryptSubmissions,
     setIdentityPolicy,
     setLocationRequirement,
+    setProcessingMode,
     setResponseDeadlinePreset,
     setResponseDeadlineCustomAt,
     setVisibility,

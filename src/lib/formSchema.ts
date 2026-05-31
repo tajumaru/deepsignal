@@ -3,6 +3,7 @@ import { normalizeFormVisibility } from "./explore";
 import { normalizeActivityEvent } from "./activityLog";
 import { computeSchemaHash, resolveFormVersion } from "./formVersioning";
 import { normalizeFormPurpose } from "./formTemplates";
+import { normalizeFieldProcessingPolicy } from "./signalProcessing";
 import { normalizeLogicGroup, sanitizeConditionalLogicFields } from "../utils/formLogic";
 import type {
   AnalysisProfileId,
@@ -120,6 +121,7 @@ export function normalizeForm(raw: FormSchema | (Record<string, unknown> & { id:
               ? (Array.isArray(field.columns) ? field.columns : defaultMatrixColumns).map((column) => String(column).trim()).filter(Boolean)
               : undefined,
           selectionMode: fieldType === "matrix" ? "single" : undefined,
+          processingPolicy: normalizeFieldProcessingPolicy(field.processingPolicy),
           visibilityRules: normalizeLogicGroup(field.visibilityRules),
           requiredRules: normalizeLogicGroup(field.requiredRules),
         };

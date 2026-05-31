@@ -52,6 +52,10 @@ declare global {
         buildVersion?: string;
         buildTime?: string;
         gitHash?: string;
+        category?: "chunkLoad" | "missingExport" | "runtime";
+        expectedExport?: string;
+        moduleKeys?: string[];
+        resolvedExport?: "default" | string | "missing";
         dependencyProbe?: ChunkDependencyProbe;
         probe?: ChunkProbe;
       }>;
@@ -180,7 +184,17 @@ export function setDeepSignalBrowserCapabilities(details: ReadinessState) {
   state.updatedAt = new Date().toISOString();
 }
 
-export function recordFailedImport(label: string, error: unknown, chunkUrl?: string | null) {
+export function recordFailedImport(
+  label: string,
+  error: unknown,
+  chunkUrl?: string | null,
+  details?: {
+    category?: "chunkLoad" | "missingExport" | "runtime";
+    expectedExport?: string;
+    moduleKeys?: string[];
+    resolvedExport?: "default" | string | "missing";
+  },
+) {
   if (typeof window === "undefined") {
     return;
   }
@@ -193,6 +207,7 @@ export function recordFailedImport(label: string, error: unknown, chunkUrl?: str
     buildVersion: buildInfo.appVersion,
     buildTime: buildInfo.buildTime,
     gitHash: buildInfo.gitHash,
+    ...details,
   });
   if (state.failedImports.length > 40) {
     state.failedImports.shift();

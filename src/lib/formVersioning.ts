@@ -1,4 +1,5 @@
 import { hasChoiceOptions, isMatrixFieldType, normalizeFieldType } from "./fieldTypes";
+import { normalizeFieldProcessingPolicy } from "./signalProcessing";
 import { normalizeLogicGroup, sanitizeConditionalLogicFields } from "../utils/formLogic";
 import type { FormField, FormSchema, FormSection } from "../types";
 
@@ -76,6 +77,7 @@ function getStructuralFieldShape(field: FormField) {
     sensitive: Boolean(field.sensitive),
     sectionId: field.sectionId ?? "",
     validationHint: field.validationHint?.trim() ?? "",
+    processingPolicy: normalizeFieldProcessingPolicy(field.processingPolicy),
     visibility: field.visibility ?? "public",
     adminOnly: Boolean(field.adminOnly),
     options: hasChoiceOptions(type) ? normalizeTextList(field.options) : [],

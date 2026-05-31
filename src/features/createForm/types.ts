@@ -17,6 +17,7 @@ import type {
   FormSchema,
   FormSection,
   FormVisibility,
+  SignalProcessingMode,
 } from "../../types";
 
 export type {
@@ -35,6 +36,7 @@ export type {
   FormSchema,
   FormSection,
   FormVisibility,
+  SignalProcessingMode,
 };
 
 export type PublishStageKey = "encoding" | "encrypting" | "sending" | "stored" | "registering" | "active";
@@ -94,6 +96,7 @@ export interface FormBuilderValues {
   visibility: FormVisibility;
   identityPolicy: FormIdentityPolicy;
   locationRequirement: FormLocationRequirement;
+  processingMode: SignalProcessingMode;
   encryptSubmissions: boolean;
   responseDeadlinePreset: ResponseDeadlinePreset;
   responseDeadlineCustomAt: string;

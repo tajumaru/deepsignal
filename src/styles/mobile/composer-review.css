@@ -100,6 +100,36 @@
     line-height: 1.35;
   }
 
+  @media (max-width: 390px) {
+    .composer-toolbar {
+      padding: 0.82rem;
+    }
+
+    .composer-toolbar-copy h1 {
+      font-size: clamp(1.55rem, 7vw, 1.9rem);
+    }
+
+    .composer-intro {
+      font-size: 0.9rem;
+      line-height: 1.42;
+    }
+
+    .composer-flow-step {
+      flex-basis: min(208px, 62vw);
+      min-height: 3.6rem;
+      gap: 0.42rem;
+      padding: 0.5rem 0.56rem;
+    }
+
+    .composer-flow-step-copy strong {
+      font-size: 0.86rem;
+    }
+
+    .composer-flow-step-copy small {
+      display: none;
+    }
+  }
+
   .composer-builder-grid {
     grid-template-columns: 1fr;
   }

@@ -125,6 +125,19 @@ export function ReviewSessionModal({
     return null;
   }
 
+  const insightPayload = selectedRecord.submission.insightPayload;
+  const aggregateFieldIds = new Set(insightPayload?.fieldIds ?? []);
+  const reviewFieldIds = new Set(insightPayload?.redactedFieldIds ?? []);
+  const hasHybridReviewSplit =
+    (selectedRecord.submission.processingMode ?? selectedRecordForm.processingMode) === "hybrid" &&
+    (aggregateFieldIds.size > 0 || reviewFieldIds.size > 0);
+  const aggregateFieldLabels = selectedRecordForm.fields
+    .filter((field) => aggregateFieldIds.has(field.id))
+    .map((field) => field.label || field.id);
+  const reviewFieldLabels = selectedRecordForm.fields
+    .filter((field) => reviewFieldIds.has(field.id))
+    .map((field) => field.label || field.id);
+
   return (
     <div className="modal-backdrop review-session-backdrop" role="presentation" onMouseDown={onBackdropMouseDown}>
       <section
@@ -269,6 +282,27 @@ export function ReviewSessionModal({
                   <strong>{t("originalSignalTitle")}</strong>
                   <p className="muted">{t("originalSignalBody")}</p>
                 </div>
+                {hasHybridReviewSplit ? (
+                  <section className="review-session-processing-split" aria-label={t("hybridReviewSplitTitle")}>
+                    <div>
+                      <p className="eyebrow">{t("hybridReviewSplitEyebrow")}</p>
+                      <strong>{t("hybridReviewSplitTitle")}</strong>
+                      <p className="muted">{t("hybridReviewSplitBody")}</p>
+                    </div>
+                    <div className="review-session-processing-grid">
+                      <span>
+                        <small>{t("hybridReviewSplitInsightsLabel")}</small>
+                        <strong>{aggregateFieldLabels.length}</strong>
+                        <em>{aggregateFieldLabels.join(", ") || t("notAvailable")}</em>
+                      </span>
+                      <span>
+                        <small>{t("hybridReviewSplitReviewLabel")}</small>
+                        <strong>{reviewFieldLabels.length}</strong>
+                        <em>{reviewFieldLabels.join(", ") || t("notAvailable")}</em>
+                      </span>
+                    </div>
+                  </section>
+                ) : null}
                 <div className="review-session-answer-list">
                   {selectedRecordForm.fields
                     .filter((field) => !isAttachmentFieldType(field.type))

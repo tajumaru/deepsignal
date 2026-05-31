@@ -8,12 +8,13 @@ import {
   createProject,
   deleteFormOnChain,
   deleteProject,
+  fetchProjectSummaryWithCache,
   getSelectedProjectId,
   isProjectObjectType,
   isProjectOwnerCapType,
   parseProjectIdFromOwnerCapFields,
-  parseProjectSummary,
   parseSuiObjectData,
+  readCachedProjectSummary,
   removeRecentProject,
   saveRecentProject,
   setSelectedProjectId,
@@ -135,6 +136,12 @@ export function useProjectWorkspace({
   }, [highlightCreateFormCta]);
 
   const hydrateProject = useCallback(async (projectId: string): Promise<ProjectSummary> => {
+    const cachedProject = await readCachedProjectSummary(projectId);
+    if (cachedProject) {
+      saveRecentProject(cachedProject);
+      return cachedProject;
+    }
+
     const response = await suiClient.getObject({
       id: projectId,
       options: {
@@ -163,7 +170,7 @@ export function useProjectWorkspace({
       throw new Error("That object is not a DeepSignal project or project owner cap.");
     }
 
-    const summary = parseProjectSummary(parsed.objectId, parsed.fields);
+    const summary = await fetchProjectSummaryWithCache(suiClient, parsed.objectId);
     if (!summary) {
       throw new Error("Project exists on Sui, but its fields could not be parsed.");
     }

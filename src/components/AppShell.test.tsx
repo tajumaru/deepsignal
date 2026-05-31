@@ -23,6 +23,7 @@ describe("AppShell", () => {
     expect(screen.getByRole("heading", { name: "Test workspace" })).toBeInTheDocument();
     expect(container.querySelector(".mobile-compose-fab")).not.toBeInTheDocument();
     expect(container.querySelector(".mobile-header-cta")).not.toBeInTheDocument();
+    expect(container.querySelector(".mobile-inbox-bottom-nav")).not.toBeInTheDocument();
   });
 
   it("keeps mobile compose shortcuts available from signal discovery routes", () => {

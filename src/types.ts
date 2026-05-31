@@ -55,6 +55,11 @@ export type FormVisibility = "private" | "unlisted" | "public";
 export type FormIdentityPolicy = "anonymous_allowed" | "wallet_required";
 export type FormLocationRequirement = "optional" | "required";
 export type FormHeaderImagePosition = "center" | "top" | "bottom";
+export type SignalProcessingMode = "review_required" | "auto_process" | "hybrid";
+export type SignalReviewState = "queued" | "in_review" | "reviewed" | "not_required" | "suppressed";
+export type SignalVisibilityState = "private" | "aggregate_only" | "reviewed_public" | "public";
+export type SignalInsightEligibility = "eligible" | "metadata_only" | "requires_review" | "excluded";
+export type SignalFieldProcessingPolicy = "auto" | "aggregate" | "review";
 export type SubmissionCategory = "bug" | "feature" | "survey" | "general";
 export type SubmissionPriority = "low" | "medium" | "high";
 export type SubmissionDeliveryStatus = "stored_local" | "stored_walrus" | "inbox_pending" | "inbox_synced";
@@ -103,6 +108,7 @@ export interface FormField {
   placeholder?: string;
   helpText?: string;
   validationHint?: string;
+  processingPolicy?: SignalFieldProcessingPolicy;
   visibility?: "public" | "admin";
   adminOnly?: boolean;
   options?: string[];
@@ -156,6 +162,7 @@ export interface FormSchema {
   identityPolicy?: FormIdentityPolicy;
   publicExplore?: boolean;
   locationRequirement?: FormLocationRequirement;
+  processingMode?: SignalProcessingMode;
   createdAt: string;
   updatedAt?: string;
   ownerAddress?: string;
@@ -233,6 +240,7 @@ export interface SignalManifest {
   }>;
   headerImage?: FormHeaderImage;
   headerLogo?: FormHeaderLogo;
+  processingMode?: SignalProcessingMode;
   submissions: Array<{
     submissionId: string;
     blobId: string;
@@ -332,6 +340,7 @@ export interface Submission {
   schemaHash?: string;
   manifestBlobId?: string;
   projectId?: string;
+  processingMode?: SignalProcessingMode;
   answers: Record<string, unknown>;
   attachments: SubmissionAttachment[];
   location?: SubmissionLocation;
@@ -348,6 +357,15 @@ export interface Submission {
   status: "unread" | "read" | "archived";
   priority: SubmissionPriority;
   triageStatus: SubmissionTriageStatus;
+  reviewState?: SignalReviewState;
+  visibilityState?: SignalVisibilityState;
+  insightEligibility?: SignalInsightEligibility;
+  insightPayload?: {
+    answers?: Record<string, unknown>;
+    fieldIds?: string[];
+    redactedFieldIds?: string[];
+    generatedAt: string;
+  };
   tags: string[];
   notes: string;
   contributorId?: string;

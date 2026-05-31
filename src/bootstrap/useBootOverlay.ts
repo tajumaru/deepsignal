@@ -13,7 +13,9 @@ export const BOOT_FAILSAFE_MS = 2500;
 
 export function InitialBootReady({ onReady, routePath, children }: { onReady: () => void; routePath: string; children: ReactNode }) {
   useEffect(() => {
+    endPerf("app_boot_start", "ok", routePath);
     endPerf("app:render", "ok");
+    markPerfMilestone("route_ready", routePath);
     markPerfMilestone("route:interactive", routePath);
     markPerfMilestone("workspace:ready", routePath);
     onReady();

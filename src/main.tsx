@@ -7,6 +7,8 @@ import { startChunkLoadRecovery } from "./lib/chunkLoadRecovery";
 import { startFirstPaintInstrumentation, startPerf } from "./lib/perf";
 import "./styles/index.css";
 
+startPerf("app_boot_start");
+
 function redirectLegacyPublicPathToHashRoute() {
   if (typeof window === "undefined" || window.location.hash) {
     return;

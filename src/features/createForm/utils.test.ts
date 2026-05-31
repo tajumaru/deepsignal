@@ -23,6 +23,7 @@ function buildBaseForm() {
     visibility: "private",
     identityPolicy: "anonymous_allowed",
     locationRequirement: "optional",
+    processingMode: "review_required",
     ownerAddress: "0xowner",
     creationMode: "admin",
     projectId: "0xproject",
@@ -74,6 +75,7 @@ describe("buildFormSchema", () => {
       visibility: "unlisted",
       identityPolicy: "anonymous_allowed",
       locationRequirement: "required",
+      processingMode: "review_required",
       ownerAddress: "0xowner",
       creationMode: "admin",
       encryptSubmissions: true,
@@ -84,6 +86,7 @@ describe("buildFormSchema", () => {
       signalType: "disaster",
       analystType: "risk",
       analysisType: "urgency",
+      processingMode: "review_required",
     });
     expect(form.schemaHash).toBe(computeSchemaHash(form));
   });

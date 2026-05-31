@@ -74,30 +74,30 @@ interface ComposerHomeState {
   error: string;
 }
 
-function formatRelativeSignalTime(value?: string) {
+function formatRelativeSignalTime(value: string | undefined, t: ReturnType<typeof useI18n>["t"]) {
   if (!value) {
-    return "Activity unavailable";
+    return t("composerHomeActivityUnavailable");
   }
   const date = new Date(value);
   const time = date.getTime();
   if (!Number.isFinite(time)) {
-    return "Activity unavailable";
+    return t("composerHomeActivityUnavailable");
   }
   const deltaMs = Date.now() - time;
   const deltaMinutes = Math.max(0, Math.floor(deltaMs / 60000));
   if (deltaMinutes < 1) {
-    return "Just now";
+    return t("composerHomeJustNow");
   }
   if (deltaMinutes < 60) {
-    return `${deltaMinutes}m ago`;
+    return t("composerHomeMinutesAgo", { count: deltaMinutes });
   }
   const deltaHours = Math.floor(deltaMinutes / 60);
   if (deltaHours < 24) {
-    return `${deltaHours}h ago`;
+    return t("composerHomeHoursAgo", { count: deltaHours });
   }
   const deltaDays = Math.floor(deltaHours / 24);
   if (deltaDays < 8) {
-    return `${deltaDays}d ago`;
+    return t("composerHomeDaysAgo", { count: deltaDays });
   }
   return date.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
 }
@@ -115,7 +115,7 @@ function getLatestFormActivity(form: FormSchema, submissions: Array<{ createdAt:
     .sort((left, right) => right.localeCompare(left))[0];
 }
 
-function readComposerHomeDrafts(): ComposerHomeDraft[] {
+function readComposerHomeDrafts(t: ReturnType<typeof useI18n>["t"]): ComposerHomeDraft[] {
   if (typeof window === "undefined") {
     return [];
   }
@@ -133,7 +133,7 @@ function readComposerHomeDrafts(): ComposerHomeDraft[] {
       if (parsed.status !== "valid") {
         return [];
       }
-      const title = parsed.draft.title?.trim() || "Untitled signal draft";
+      const title = parsed.draft.title?.trim() || t("composerHomeUntitledDraft");
       return [
         {
           key,
@@ -251,15 +251,15 @@ function ComposerHomeSignalCard({ signal }: { signal: ComposerHomeSignal }) {
       <div className="composer-home-card-main">
         <span className={`composer-home-status is-${signal.status}`}>{getComposerHomeStatusLabel(signal.status, t)}</span>
         <h3>{signal.title}</h3>
-        <p className="muted">{t("composerHomeLastEdited", { time: formatRelativeSignalTime(signal.lastEdited) })}</p>
+        <p className="muted">{t("composerHomeLastEdited", { time: formatRelativeSignalTime(signal.lastEdited, t) })}</p>
         <dl className="composer-home-signal-meta">
           <div>
             <dt>{t("composerHomeResponses")}</dt>
-            <dd>{signal.responseCount === undefined ? "Unavailable" : signal.responseCount}</dd>
+            <dd>{signal.responseCount === undefined ? t("composerHomeUnavailable") : signal.responseCount}</dd>
           </div>
           <div>
             <dt>{t("composerHomeLastActivity")}</dt>
-            <dd>{formatRelativeSignalTime(signal.lastActivity)}</dd>
+            <dd>{formatRelativeSignalTime(signal.lastActivity, t)}</dd>
           </div>
         </dl>
       </div>
@@ -303,7 +303,7 @@ function ComposerHomePage() {
     let cancelled = false;
     async function loadComposerHome() {
       setLoading(true);
-      const drafts = readComposerHomeDrafts();
+      const drafts = readComposerHomeDrafts(t);
       try {
         const forms = await storageAdapter.listForms();
         const signals = await Promise.all(
@@ -312,7 +312,7 @@ function ComposerHomePage() {
               const submissions = await storageAdapter.listSubmissions(form.id);
               return {
                 id: form.id,
-                title: form.title?.trim() || "Untitled signal",
+                title: form.title?.trim() || t("composerHomeUntitledSignal"),
                 status: getFormStatus(form),
                 responseCount: submissions.length,
                 lastEdited: form.updatedAt ?? form.createdAt,
@@ -322,7 +322,7 @@ function ComposerHomePage() {
             } catch {
               return {
                 id: form.id,
-                title: form.title?.trim() || "Untitled signal",
+                title: form.title?.trim() || t("composerHomeUntitledSignal"),
                 status: getFormStatus(form),
                 lastEdited: form.updatedAt ?? form.createdAt,
                 lastActivity: form.updatedAt ?? form.createdAt,
@@ -344,7 +344,7 @@ function ComposerHomePage() {
           setState({
             drafts,
             signals: [],
-            error: "Signal registry is unavailable. Local drafts are still safe, and you can start a new signal.",
+            error: t("composerHomeRegistryUnavailable"),
           });
         }
       } finally {
@@ -358,7 +358,7 @@ function ComposerHomePage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [t]);
 
   const hasSignals = state.signals.length > 0;
   const hasDrafts = state.drafts.length > 0;
@@ -394,7 +394,7 @@ function ComposerHomePage() {
             </div>
             <span>{hasDrafts ? t("composerHomeDraftCount", { count: state.drafts.length }) : t("composerHomeNoDraft")}</span>
           </div>
-          {loading ? <div className="composer-home-loading panel">Restoring unpublished drafts...</div> : null}
+          {loading ? <div className="composer-home-loading panel">{t("composerHomeRestoringDrafts")}</div> : null}
           {!loading && hasDrafts ? (
             <div className="composer-home-draft-list">
               {state.drafts.map((draft) => (
@@ -442,7 +442,7 @@ function ComposerHomePage() {
           </div>
           {state.error ? <p className="composer-home-warning">{state.error}</p> : null}
           <div className={`composer-home-signal-list is-${signalViewMode}`}>
-            {loading ? <div className="composer-home-loading panel">Scanning signal registry...</div> : null}
+            {loading ? <div className="composer-home-loading panel">{t("composerHomeScanningRegistry")}</div> : null}
             {!loading && hasSignals ? state.signals.map((signal) => <ComposerHomeSignalCard key={signal.id} signal={signal} />) : null}
             {!loading && !hasSignals ? (
               <div className="composer-home-empty panel">
@@ -558,6 +558,7 @@ function FormBuilderComposer({
     visibility: builder.values.visibility,
     identityPolicy: builder.values.identityPolicy,
     locationRequirement: builder.values.locationRequirement,
+    processingMode: builder.values.processingMode,
     encryptSubmissions: builder.values.encryptSubmissions,
     responseDeadlinePreset: builder.values.responseDeadlinePreset,
     responseDeadlineCustomAt: builder.values.responseDeadlineCustomAt,
@@ -607,6 +608,7 @@ function FormBuilderComposer({
       visibility: builder.values.visibility,
       identityPolicy: builder.values.identityPolicy,
       locationRequirement: builder.values.locationRequirement,
+      processingMode: builder.values.processingMode,
       encryptSubmissions: builder.values.encryptSubmissions,
       publicExplore: builder.values.visibility === "public",
       updatedAt: new Date().toISOString(),
@@ -619,6 +621,7 @@ function FormBuilderComposer({
     builder.values.headerLogo,
     builder.values.identityPolicy,
     builder.values.locationRequirement,
+    builder.values.processingMode,
     builder.values.purpose,
     builder.values.analysisProfileId,
     builder.values.signalType,
@@ -904,6 +907,7 @@ function FormBuilderComposer({
           description={builder.values.description}
           identityPolicy={builder.values.identityPolicy}
           locationRequirement={builder.values.locationRequirement}
+          processingMode={builder.values.processingMode}
           encryptSubmissions={builder.values.encryptSubmissions}
           headerImage={builder.values.headerImage}
           headerLogo={builder.values.headerLogo}
@@ -913,6 +917,7 @@ function FormBuilderComposer({
           setDescription={builder.setDescription}
           setHeaderImage={builder.setHeaderImage}
           setHeaderLogo={builder.setHeaderLogo}
+          setProcessingMode={builder.setProcessingMode}
           setResponseDeadlinePreset={builder.setResponseDeadlinePreset}
           setResponseDeadlineCustomAt={builder.setResponseDeadlineCustomAt}
           onBack={() => {
@@ -1263,30 +1268,35 @@ function FormBuilderComposer({
   );
 }
 
-export function FormBuilderPage({ initialSurface = "home" }: { initialSurface?: "home" | "composer" }) {
-  const wallet = useSuiWallet();
-  const location = useLocation();
-  const { t } = useI18n();
-  const { capabilityProfile, isLoadingAccess } = useAccessControl(wallet.accountAddress);
-  const searchParams = new URLSearchParams(location.search);
-  const requestedGuestDraftMode = searchParams.get("mode") === "guestDraft";
-  const freshStartToken = searchParams.get("fresh") ?? "";
-  const republishFormId = searchParams.get("republishFormId") ?? undefined;
-  const republishManifest = searchParams.get("republishManifest") ?? undefined;
-  const requestedComposer = searchParams.get("composer") === "1";
-  const initialDisplayMode: DisplayMode = searchParams.get("preview") === "mirror" ? "mirror" : "classic";
-  const draftSeed = {
-    templateKey: searchParams.get("template") ?? undefined,
-    idea: searchParams.get("idea") ?? undefined,
+interface FormBuilderRouteContentProps {
+  draftSeed: {
+    templateKey?: string;
+    idea?: string;
   };
+  freshStartToken: string;
+  initialDisplayMode: DisplayMode;
+  republishFormId?: string;
+  republishManifest?: string;
+  requestedGuestDraftMode: boolean;
+}
+
+function FormBuilderRouteContent({
+  draftSeed,
+  freshStartToken,
+  initialDisplayMode,
+  republishFormId,
+  republishManifest,
+  requestedGuestDraftMode,
+}: FormBuilderRouteContentProps) {
+  const wallet = useSuiWallet();
+  const { t } = useI18n();
+  const { capabilityProfile, isLoadingAccess } = useAccessControl(wallet.accountAddress, {
+    enabled: !requestedGuestDraftMode,
+  });
   const hasAdminAccess = canAdmin(capabilityProfile);
 
   if (!requestedGuestDraftMode && !wallet.accountAddress) {
     return <AdminAccessGate hasWallet={false} access="allowed" />;
-  }
-
-  if (initialSurface === "home" && !freshStartToken && !requestedComposer && !republishFormId && !republishManifest) {
-    return <ComposerHomePage />;
   }
 
   if (!requestedGuestDraftMode && wallet.accountAddress && isLoadingAccess) {
@@ -1309,6 +1319,36 @@ export function FormBuilderPage({ initialSurface = "home" }: { initialSurface?: 
       republishManifest={republishManifest}
       initialDisplayMode={initialDisplayMode}
       draftSeed={draftSeed}
+    />
+  );
+}
+
+export function FormBuilderPage({ initialSurface = "home" }: { initialSurface?: "home" | "composer" }) {
+  const location = useLocation();
+  const searchParams = new URLSearchParams(location.search);
+  const requestedGuestDraftMode = searchParams.get("mode") === "guestDraft";
+  const freshStartToken = searchParams.get("fresh") ?? "";
+  const republishFormId = searchParams.get("republishFormId") ?? undefined;
+  const republishManifest = searchParams.get("republishManifest") ?? undefined;
+  const requestedComposer = searchParams.get("composer") === "1";
+  const initialDisplayMode: DisplayMode = searchParams.get("preview") === "mirror" ? "mirror" : "classic";
+  const draftSeed = {
+    templateKey: searchParams.get("template") ?? undefined,
+    idea: searchParams.get("idea") ?? undefined,
+  };
+
+  if (initialSurface === "home" && !freshStartToken && !requestedComposer && !republishFormId && !republishManifest) {
+    return <ComposerHomePage />;
+  }
+
+  return (
+    <FormBuilderRouteContent
+      draftSeed={draftSeed}
+      freshStartToken={freshStartToken}
+      initialDisplayMode={initialDisplayMode}
+      republishFormId={republishFormId}
+      republishManifest={republishManifest}
+      requestedGuestDraftMode={requestedGuestDraftMode}
     />
   );
 }

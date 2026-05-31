@@ -3,6 +3,7 @@ import {
   Component,
   useCallback,
   useMemo,
+  useRef,
   useState,
   useEffect,
   type PropsWithChildren,
@@ -22,12 +23,26 @@ import {
   SUI_NETWORK,
 } from "./lib/sui";
 import { logRouteLifecycle, setDeepSignalDebugReadiness } from "./lib/routeDiagnostics";
-import { endPerf, markPerfMilestone } from "./lib/perf";
+import { endPerf, markPerfMilestone, startPerf } from "./lib/perf";
 import { useRpcInfrastructure } from "./rpcInfrastructure";
 import WalrusRuntimeBridge from "./walrusRuntimeBridge";
 import { WalletConnectionContext, type WalletConnectionState } from "./walletStatus";
 
 const PREFERRED_WALLETS = ["Sui Wallet", "Slush", "Phantom", "OKX Wallet"];
+
+type SuiRpcCallEntry = {
+  method: string;
+  startedAt: number;
+  durationMs?: number;
+  status: "pending" | "ok" | "failed";
+  detail?: string;
+};
+
+declare global {
+  interface Window {
+    __DEEPSIGNAL_SUI_RPC__?: SuiRpcCallEntry[];
+  }
+}
 
 class OptionalWalrusRuntimeBoundary extends Component<
   PropsWithChildren<{ fallback?: ReactNode }>,
@@ -75,9 +90,75 @@ export function WalrusRuntimeProvider({ children }: PropsWithChildren) {
   );
 }
 
+function recordSuiRpcStart(method: string, detail?: string) {
+  if (typeof window === "undefined") {
+    return null;
+  }
+  const entry: SuiRpcCallEntry = {
+    method,
+    startedAt: performance.now(),
+    status: "pending",
+    detail,
+  };
+  window.__DEEPSIGNAL_SUI_RPC__ ??= [];
+  window.__DEEPSIGNAL_SUI_RPC__.push(entry);
+  if (window.__DEEPSIGNAL_SUI_RPC__.length > 120) {
+    window.__DEEPSIGNAL_SUI_RPC__.shift();
+  }
+  return entry;
+}
+
+function recordSuiRpcEnd(entry: SuiRpcCallEntry | null, status: "ok" | "failed", detail?: string) {
+  if (!entry || typeof performance === "undefined") {
+    return;
+  }
+  entry.status = status;
+  entry.durationMs = Math.max(0, Math.round(performance.now() - entry.startedAt));
+  entry.detail = detail ?? entry.detail;
+  if (typeof console !== "undefined" && typeof console.debug === "function") {
+    const suffix = entry.detail ? ` (${entry.detail})` : "";
+    console.debug(`[DeepSignal Sui RPC] ${entry.method}: ${entry.durationMs}ms [${status}]${suffix}`);
+  }
+}
+
+function instrumentSuiClient(client: SuiJsonRpcClient) {
+  return new Proxy(client, {
+    get(target, prop, receiver) {
+      const original = Reflect.get(target, prop, receiver);
+      if (typeof prop !== "string" || prop.startsWith("$") || typeof original !== "function") {
+        return original;
+      }
+      return (...args: unknown[]) => {
+        const entry = recordSuiRpcStart(prop);
+        try {
+          const result = Reflect.apply(original as (...methodArgs: unknown[]) => unknown, target, args);
+          if (result && typeof result === "object" && "then" in result) {
+            return (result as Promise<unknown>)
+              .then((value) => {
+                recordSuiRpcEnd(entry, "ok");
+                return value;
+              })
+              .catch((error: unknown) => {
+                recordSuiRpcEnd(entry, "failed", error instanceof Error ? error.message : String(error));
+                throw error;
+              });
+          }
+          recordSuiRpcEnd(entry, "ok");
+          return result;
+        } catch (error) {
+          recordSuiRpcEnd(entry, "failed", error instanceof Error ? error.message : String(error));
+          throw error;
+        }
+      };
+    },
+  }) as SuiJsonRpcClient;
+}
+
 function WalletStatusBridge({ children }: PropsWithChildren) {
   const account = useCurrentAccount();
   const { currentWallet, connectionStatus, isConnected } = useCurrentWallet();
+  const wasRestoringRef = useRef(false);
+  const restoreSettledRef = useRef(false);
   const value = useMemo<WalletConnectionState>(
     () => ({
       status: connectionStatus === "connecting" ? "connecting" : isConnected && account?.address ? "connected" : "disconnected",
@@ -89,6 +170,23 @@ function WalletStatusBridge({ children }: PropsWithChildren) {
   );
 
   useEffect(() => {
+    if (value.isRestoringConnection && !wasRestoringRef.current && !restoreSettledRef.current) {
+      wasRestoringRef.current = true;
+      startPerf("wallet_restore_start", value.walletName ?? undefined);
+      markPerfMilestone("wallet_restore_start", value.walletName ?? undefined);
+    }
+    if (!value.isRestoringConnection && wasRestoringRef.current) {
+      wasRestoringRef.current = false;
+      restoreSettledRef.current = true;
+      endPerf("wallet_restore_start", "ok", value.status);
+      markPerfMilestone("wallet_restore_end", value.status);
+    }
+    if (!value.isRestoringConnection && !wasRestoringRef.current && !restoreSettledRef.current) {
+      restoreSettledRef.current = true;
+      startPerf("wallet_restore_start", value.walletName ?? undefined);
+      endPerf("wallet_restore_start", "ok", value.status);
+      markPerfMilestone("wallet_restore_end", value.status);
+    }
     logRouteLifecycle("wallet-provider:status", { ...value });
     setDeepSignalDebugReadiness({
       walletProvider: value.status,
@@ -116,6 +214,7 @@ export function WalletProviders({ children }: PropsWithChildren) {
       walletRpcMode: rpcInfrastructure.mode,
     });
     endPerf("provider:wallet", "ok");
+    markPerfMilestone("sui_client_ready", rpcInfrastructure.providerLabel);
     markPerfMilestone("provider:wallet:ready");
   }, [currentRpcUrl, rpcInfrastructure]);
   const { networkConfig } = useMemo(
@@ -133,12 +232,12 @@ export function WalletProviders({ children }: PropsWithChildren) {
       _name: string | number,
       config: Readonly<{ url: string; network: "mainnet" | "testnet" }>,
     ) =>
-      new SuiJsonRpcClient({
+      instrumentSuiClient(new SuiJsonRpcClient({
         network: SUI_NETWORK,
         transport: new JsonRpcHTTPTransport({
           url: config.url,
         }),
-      }),
+      })),
     [],
   );
   return (

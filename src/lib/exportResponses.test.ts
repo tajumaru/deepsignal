@@ -62,10 +62,10 @@ describe("responses CSV export", () => {
 
     const [header, row] = csv.split("\r\n");
     expect(header).toBe(
-      '"formTitle","exportedAt","responseCount","responseId","formVersion","schemaHash","formBlobId","manifestBlobId","submittedAt","createdAt","respondentAddress","respondentIdentity","identityProvider","isAnonymous","walrusBlobId","storageBlobId","attachments","tags","priority","triageStatus","status","notes","Comment","Score","Comment (2)"',
+      '"formTitle","exportedAt","responseCount","responseId","processingMode","processingScope","formVersion","schemaHash","formBlobId","manifestBlobId","submittedAt","createdAt","respondentAddress","respondentIdentity","identityProvider","isAnonymous","walrusBlobId","storageBlobId","attachments","tags","priority","triageStatus","status","notes","Comment","Score","Comment (2)"',
     );
     expect(row).toContain(
-      '"Feedback","2026-05-16T12:00:00.000Z","1","response-1","1","","","","2026-05-16T01:02:03.000Z","2026-05-16T01:02:03.000Z","0xabc","sui_wallet","","false","walrus-blob-1","walrus-blob-1"',
+      '"Feedback","2026-05-16T12:00:00.000Z","1","response-1","review_required","review","1","","","","2026-05-16T01:02:03.000Z","2026-05-16T01:02:03.000Z","0xabc","sui_wallet","","false","walrus-blob-1","walrus-blob-1"',
     );
     expect(row).toContain('"日本語, comma, and ""quotes""\nsecond line"');
     expect(row.endsWith(',"★★★★★",""')).toBe(true);
@@ -87,7 +87,7 @@ describe("responses CSV export", () => {
     ]);
 
     expect(csv).toContain(
-      '"response-locked","1","","","","2026-05-16T02:00:00.000Z","2026-05-16T01:02:03.000Z","","anonymous","","true","encrypted-blob-1","encrypted-blob-1"',
+      '"response-locked","review_required","review","1","","","","2026-05-16T02:00:00.000Z","2026-05-16T01:02:03.000Z","","anonymous","","true","encrypted-blob-1","encrypted-blob-1"',
     );
     expect(csv).toContain('"[encrypted]","[encrypted]","[encrypted]"');
   });
@@ -113,8 +113,52 @@ describe("responses CSV export", () => {
     ]);
 
     expect(csv).toContain(
-      '"response-zklogin","1","","","","2026-05-16T02:30:00.000Z","2026-05-16T01:02:03.000Z","0xzklogin123","zklogin","google","false"',
+      '"response-zklogin","review_required","review","1","","","","2026-05-16T02:30:00.000Z","2026-05-16T01:02:03.000Z","0xzklogin123","zklogin","google","false"',
     );
+  });
+
+  it("builds aggregate CSV exports from insight payloads without review-only metadata", () => {
+    const csv = buildResponsesCsv(
+      { ...form, processingMode: "auto_process" },
+      [
+        makeSubmission({
+          id: "aggregate-response",
+          processingMode: "auto_process",
+          reviewState: "not_required",
+          visibilityState: "aggregate_only",
+          insightEligibility: "eligible",
+          insightPayload: {
+            answers: { q2: 4 },
+            fieldIds: ["q2"],
+            redactedFieldIds: ["q1", "q3"],
+            generatedAt: "2026-05-16T01:02:03.000Z",
+          },
+          answers: {
+            q1: "private comment",
+            q2: 4,
+            q3: "free text",
+          },
+          attachments: [{ fieldId: "q1", type: "document", blobId: "blob-doc", name: "private.pdf", size: 10 }],
+          notes: "operator note",
+          tags: ["review"],
+          triageStatus: "investigating",
+        }),
+      ],
+      { now: new Date("2026-05-16T12:00:00.000Z") },
+    );
+
+    const [header, row] = csv.split("\r\n");
+    expect(header).toContain('"processingScope"');
+    expect(header).not.toContain("respondentAddress");
+    expect(header).not.toContain("attachments");
+    expect(header).not.toContain("triageStatus");
+    expect(header).not.toContain("notes");
+    expect(row).toContain('"aggregate-response","auto_process","aggregate"');
+    expect(row).toContain('"","","★★★★☆",""');
+    expect(csv).not.toContain("private comment");
+    expect(csv).not.toContain("free text");
+    expect(csv).not.toContain("private.pdf");
+    expect(csv).not.toContain("operator note");
   });
 
   it("uses each response version schema for mixed-version exports", () => {
