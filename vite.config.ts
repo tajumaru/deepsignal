@@ -332,6 +332,7 @@ function moduleEntryRetryPlugin(args: { appVersion: string; buildTime: string; g
         const bootShell = document.querySelector(".boot-shell");
         const failures = [];
         let latestEntryPathPromise = null;
+        let latestBuildManifest = null;
 
         function redirectLegacyPublicPathToHashRoute() {
           if (window.location.hash) {
@@ -373,18 +374,92 @@ function moduleEntryRetryPlugin(args: { appVersion: string; buildTime: string; g
           }
         }
 
-        function getDiagnostics(error) {
+        function isJavaScriptMime(contentType) {
+          return /javascript|ecmascript/i.test(contentType || "");
+        }
+
+        async function probeAsset(url) {
+          const startedAt = Date.now();
+          try {
+            const response = await fetch(url, {
+              cache: "no-store",
+              headers: { "cache-control": "no-cache" },
+            });
+            const contentType = response.headers.get("content-type") || "";
+            const contentLength = response.headers.get("content-length") || "";
+            const text = await response.text();
+            const snippet = text.slice(0, 200);
+            const looksLikeHtml = /^\\s*<!doctype html|^\\s*<html[\\s>]/i.test(snippet);
+            const bodySize = text.length;
+            return {
+              url,
+              ok: response.ok,
+              status: response.status,
+              statusText: response.statusText,
+              contentType,
+              contentLength,
+              bodySize,
+              looksLikeHtml,
+              isJavaScriptMime: isJavaScriptMime(contentType),
+              isEmpty: bodySize === 0,
+              elapsedMs: Date.now() - startedAt,
+              snippet,
+            };
+          } catch (error) {
+            return {
+              url,
+              ok: false,
+              status: "network-error",
+              statusText: error?.message || String(error || "Unknown fetch failure"),
+              contentType: "",
+              contentLength: "",
+              bodySize: 0,
+              looksLikeHtml: false,
+              isJavaScriptMime: false,
+              isEmpty: true,
+              elapsedMs: Date.now() - startedAt,
+              snippet: "",
+            };
+          }
+        }
+
+        function assetProbePassed(probe) {
+          return Boolean(
+            probe &&
+              probe.ok &&
+              probe.isJavaScriptMime &&
+              !probe.isEmpty &&
+              !probe.looksLikeHtml,
+          );
+        }
+
+        async function getDiagnostics(error, importTargetUrl, retryCount) {
           const entryUrl = new URL(entryPath, window.location.href).toString();
+          const buildJsonEntryAsset = latestBuildManifest?.entryAsset || null;
+          const buildJsonEntryAssetUrl = buildJsonEntryAsset
+            ? new URL(buildJsonEntryAsset, window.location.href).toString()
+            : null;
+          const targetUrl = importTargetUrl || buildJsonEntryAssetUrl || entryUrl;
           const chunkUrl = String(error?.message || error || "").match(/https?:\\/\\/[^\\s)'"]+/)?.[0] || entryUrl;
+          const targetProbe = await probeAsset(targetUrl);
           return {
             errorName: error?.name || "Error",
             errorMessage: error?.message || String(error || "Unknown module entry failure"),
             stack: error?.stack || "",
+            entryAssetUrl: entryUrl,
+            buildJsonEntryAsset,
+            buildJsonEntryAssetUrl,
+            importTargetUrl: targetUrl,
+            entryAssetFetch: targetProbe,
+            retryCount,
             routePath: window.location.hash?.replace(/^#/, "") || window.location.pathname + window.location.search,
             routeId: window.location.hash?.startsWith("#/f/") ? "public-form" : window.location.hash?.startsWith("#/admin") ? "admin" : window.location.hash?.startsWith("#/explore") ? "explore" : "boot",
             buildVersion: ${JSON.stringify(args.appVersion)},
             buildTime: ${JSON.stringify(args.buildTime)},
             gitHash: ${JSON.stringify(args.gitHash)},
+            latestBuildVersion: latestBuildManifest?.appVersion || null,
+            latestBuildTime: latestBuildManifest?.buildTime || null,
+            latestGitHash: latestBuildManifest?.gitHash || null,
             userAgent: navigator.userAgent,
             chunkUrl,
             providerReadiness: window.__DEEPSIGNAL_DEBUG__?.providerReadiness || {},
@@ -414,6 +489,7 @@ function moduleEntryRetryPlugin(args: { appVersion: string; buildTime: string; g
             });
             if (response.ok && response.headers.get("content-type")?.includes("application/json")) {
               latestBuild = await response.json();
+              latestBuildManifest = latestBuild;
             }
           } catch {
             // Keep the embedded build metadata as a fallback.
@@ -424,6 +500,39 @@ function moduleEntryRetryPlugin(args: { appVersion: string; buildTime: string; g
             latestBuild.buildTime || "unknown",
             latestBuild.gitHash || "unknown",
           ].join("|");
+
+          const targetEntryPath = typeof latestBuild.entryAsset === "string" && latestBuild.entryAsset.endsWith(".js")
+            ? latestBuild.entryAsset
+            : entryPath;
+          const targetEntryUrl = new URL(targetEntryPath, window.location.href).toString();
+          const targetEntryProbe = await probeAsset(targetEntryUrl);
+          if (!assetProbePassed(targetEntryProbe)) {
+            const diagnostics = {
+              reason: "entry_asset_not_ready",
+              message: "Assets are still propagating. Try again in a minute.",
+              entryAssetUrl: new URL(entryPath, window.location.href).toString(),
+              buildJsonEntryAsset: latestBuild.entryAsset || null,
+              importTargetUrl: targetEntryUrl,
+              entryAssetFetch: targetEntryProbe,
+              retryCount: failures.length,
+              buildVersion: ${JSON.stringify(args.appVersion)},
+              buildTime: ${JSON.stringify(args.buildTime)},
+              gitHash: ${JSON.stringify(args.gitHash)},
+              latestBuildVersion: latestBuild.appVersion || "unknown",
+              latestBuildTime: latestBuild.buildTime || "unknown",
+              latestGitHash: latestBuild.gitHash || "unknown",
+              timestamp: new Date().toISOString(),
+              userAgent: navigator.userAgent,
+            };
+            setBootStatus("Assets are still propagating. Try again in a minute.");
+            const diagnosticsNode = bootShell?.querySelector("[data-boot-diagnostics]");
+            if (diagnosticsNode) {
+              diagnosticsNode.textContent = JSON.stringify(diagnostics, null, 2);
+            }
+            console.warn("[DeepSignal update] entry asset is not ready", diagnostics);
+            throw new Error("Assets are still propagating. Try again in a minute.");
+          }
+
           try {
             window.sessionStorage.setItem("deepsignal.buildUpdate.attempt", JSON.stringify({
               currentBuildVersion: [
@@ -494,11 +603,10 @@ function moduleEntryRetryPlugin(args: { appVersion: string; buildTime: string; g
           window.location.replace(nextUrl.toString());
         }
 
-        function ensureRecoveryActions(error) {
+        async function ensureRecoveryActions(error, diagnostics) {
           if (!bootShell || bootShell.querySelector("[data-boot-recovery]")) {
             return;
           }
-          const diagnostics = getDiagnostics(error);
           console.error("DeepSignal module entry failed to load.", diagnostics);
           const actions = document.createElement("div");
           actions.dataset.bootRecovery = "true";
@@ -523,7 +631,31 @@ function moduleEntryRetryPlugin(args: { appVersion: string; buildTime: string; g
           updateButton.onclick = () => {
             updateButton.disabled = true;
             updateButton.textContent = "Updating...";
-            void updateDeepSignal();
+            void updateDeepSignal().catch((error) => {
+              updateButton.disabled = false;
+              updateButton.textContent = "Update DeepSignal";
+              console.warn("[DeepSignal update] update was not started", error);
+            });
+          };
+
+          const copyButton = document.createElement("button");
+          copyButton.type = "button";
+          copyButton.textContent = "Copy diagnostics";
+          copyButton.style.padding = "0.8rem 1rem";
+          copyButton.style.borderRadius = "999px";
+          copyButton.style.border = "1px solid rgba(138, 223, 255, 0.2)";
+          copyButton.style.background = "rgba(0, 0, 0, 0.2)";
+          copyButton.style.color = "#ecfdff";
+          copyButton.onclick = () => {
+            const text = JSON.stringify(diagnostics, null, 2);
+            if (navigator.clipboard?.writeText) {
+              void navigator.clipboard.writeText(text).then(() => {
+                copyButton.textContent = "Copied";
+                window.setTimeout(() => {
+                  copyButton.textContent = "Copy diagnostics";
+                }, 1800);
+              });
+            }
           };
 
           const details = document.createElement("details");
@@ -534,6 +666,7 @@ function moduleEntryRetryPlugin(args: { appVersion: string; buildTime: string; g
           const summary = document.createElement("summary");
           summary.textContent = "Load diagnostics";
           const pre = document.createElement("pre");
+          pre.dataset.bootDiagnostics = "true";
           pre.textContent = JSON.stringify(diagnostics, null, 2);
           pre.style.whiteSpace = "pre-wrap";
           pre.style.overflowWrap = "anywhere";
@@ -548,6 +681,7 @@ function moduleEntryRetryPlugin(args: { appVersion: string; buildTime: string; g
 
           actions.appendChild(title);
           actions.appendChild(updateButton);
+          actions.appendChild(copyButton);
           bootShell.appendChild(actions);
           bootShell.appendChild(details);
         }
@@ -567,6 +701,7 @@ function moduleEntryRetryPlugin(args: { appVersion: string; buildTime: string; g
                   return null;
                 }
                 const manifest = await response.json();
+                latestBuildManifest = manifest;
                 return typeof manifest.entryAsset === "string" && manifest.entryAsset.endsWith(".js")
                   ? manifest.entryAsset
                   : null;
@@ -587,10 +722,11 @@ function moduleEntryRetryPlugin(args: { appVersion: string; buildTime: string; g
           try {
             await import(url.toString());
           } catch (error) {
-            failures.push(getDiagnostics(error));
+            const diagnostics = await getDiagnostics(error, url.toString(), attempt);
+            failures.push(diagnostics);
             if (attempt >= maxAttempts) {
               setBootStatus("Signal surface load failed. App update or asset propagation issue detected.");
-              ensureRecoveryActions(error);
+              await ensureRecoveryActions(error, diagnostics);
               return;
             }
 

@@ -9,13 +9,17 @@ import {
   recoverFromMixedBuildAssets,
 } from "./lib/buildAssetDiagnostics";
 import { retryLazyImport } from "./lib/lazyRetry";
+import { markPerfMilestone } from "./lib/perf";
 import { logRouteLifecycle, setDeepSignalDebugReadiness } from "./lib/routeDiagnostics";
 import { scheduleIdleTask } from "./lib/scheduleIdleTask";
 import { LandingPage } from "./pages/LandingPage";
 import { RpcInfrastructureProvider } from "./RpcInfrastructureProvider";
 import { AppRoutes } from "./routes/AppRoutes";
 import { createAppRouteComponents, type AppRouteComponents } from "./routes/appRouteComponents";
-import { ProviderReadinessBarrier, WorkspaceRestoreFallback } from "./routes/ProviderReadinessBarrier";
+import {
+  DelayedWorkspaceRestoreFallback,
+  ProviderReadinessBarrier,
+} from "./routes/ProviderReadinessBarrier";
 import { PublicAppRoutes } from "./routes/PublicAppRoutes";
 import { createPublicRouteComponents, type PublicRouteComponents } from "./routes/publicRouteComponents";
 import { MixedBuildRecoveryScreen, RouteErrorBoundary } from "./routes/RouteErrorBoundary";
@@ -34,6 +38,15 @@ const PublicAppShell = lazy(() =>
 
 function prefetchExploreRoute() {
   void retryLazyImport(() => import("./pages/ExploreSignalsPage"), "prefetch-route-explore").catch(() => undefined);
+}
+
+function prefetchInboxWorkspaceRoute() {
+  void Promise.allSettled([
+    retryLazyImport(() => import("./pages/AdminDashboardPage"), "prefetch-route-admin-dashboard"),
+    import("./components/AppShell"),
+    import("./lib/projectRegistry"),
+    import("./storage/storageFactory"),
+  ]);
 }
 
 function RouteReady({
@@ -138,7 +151,7 @@ function PublicRouteSurface({
             <MixedBuildRecoveryScreen observed={mixedBuildStatus.observed} />
           </RouteReady>
         ) : (
-          <Suspense fallback={<WorkspaceRestoreFallback />}>
+          <Suspense fallback={<DelayedWorkspaceRestoreFallback />}>
             <RouteReady routePath={routePath} onReady={onRouteReady}>
               <PublicAppRoutes components={components} />
             </RouteReady>
@@ -171,7 +184,7 @@ function PrivateRouteSurface({
   routeRetryNonce: number;
 }) {
   return (
-    <Suspense fallback={<WorkspaceRestoreFallback />}>
+    <Suspense fallback={<DelayedWorkspaceRestoreFallback />}>
       <AppShell walletAvailable={routeNeedsWalletSurface} chrome="full">
         <BuildUpdateBanner />
         <AppRouteRuntimeEffects enabled={routeNeedsWorkspaceBoot} />
@@ -185,7 +198,7 @@ function PrivateRouteSurface({
               <MixedBuildRecoveryScreen observed={mixedBuildStatus.observed} />
             </RouteReady>
           ) : (
-            <Suspense fallback={<WorkspaceRestoreFallback />}>
+            <Suspense fallback={<DelayedWorkspaceRestoreFallback />}>
               <RouteReady routePath={routePath} onReady={onRouteReady}>
                 <ProviderReadinessBarrier routePath={routePath} enabled={routeNeedsWorkspaceBoot}>
                   <AppRoutes components={components} />
@@ -215,7 +228,6 @@ export default function App() {
   const publicRouteComponents = useMemo(() => createPublicRouteComponents(routeRetryNonce), [routeRetryNonce]);
   const routeNeedsWalletSurface =
     location.pathname === "/admin" ||
-    location.pathname === "/dashboard" ||
     location.pathname === "/create" ||
     location.pathname === "/compose" ||
     location.pathname === "/troubleshooting" ||
@@ -266,11 +278,29 @@ export default function App() {
   }, [location.hash, location.pathname, location.search, routeNeedsWalletSurface, routeUsesPublicChrome]);
 
   useEffect(() => {
+    if (location.pathname !== "/dashboard" && !location.pathname.startsWith("/dashboard/")) {
+      return;
+    }
+    markPerfMilestone("provider:wallet:skipped", "dashboard-initial-shell");
+    logRouteLifecycle("provider:wallet-skipped", {
+      reason: "dashboard-initial-shell",
+      routePath: `${location.pathname}${location.search}${location.hash}`,
+    });
+  }, [location.hash, location.pathname, location.search]);
+
+  useEffect(() => {
     if (location.pathname !== "/") {
       return undefined;
     }
     return scheduleIdleTask(() => prefetchExploreRoute(), 3500);
   }, [location.pathname]);
+
+  useEffect(() => {
+    if (routeUsesPublicChrome || location.pathname === "/admin" || location.pathname === "/dashboard") {
+      return undefined;
+    }
+    return scheduleIdleTask(() => prefetchInboxWorkspaceRoute(), location.pathname === "/" ? 1400 : 900);
+  }, [location.pathname, routeUsesPublicChrome]);
 
   const routePath = `${location.pathname}${location.search}${location.hash}`;
 
@@ -288,7 +318,7 @@ export default function App() {
   if (routeUsesPublicChrome) {
     return (
       <RpcInfrastructureProvider>
-        <Suspense fallback={<WorkspaceRestoreFallback />}>
+        <Suspense fallback={<DelayedWorkspaceRestoreFallback />}>
           <PublicRouteSurface
             components={publicRouteComponents}
             locationKey={location.key}
@@ -325,11 +355,11 @@ export default function App() {
     <RpcInfrastructureProvider>
       <WalletSurface
         fallback={
-          <Suspense fallback={<WorkspaceRestoreFallback />}>
+          <Suspense fallback={<DelayedWorkspaceRestoreFallback />}>
             <RouteReady routePath={routePath} onReady={() => setInitialRouteReady(true)}>
               <AppShell walletAvailable={false} chrome="full">
                 <BuildUpdateBanner />
-                <WorkspaceRestoreFallback onRetry={() => window.location.reload()} />
+                <DelayedWorkspaceRestoreFallback onRetry={() => window.location.reload()} />
               </AppShell>
             </RouteReady>
           </Suspense>

@@ -24,6 +24,7 @@ export const SEAL_UNAVAILABLE_MESSAGE = "Seal encryption is unavailable. Submiss
 export const LEGACY_UNENCRYPTED_RESPONSE_LABEL = "Legacy unencrypted response";
 export const ENCRYPTION_REQUIRED_CODE = "ENCRYPTION_REQUIRED";
 export const ENCRYPTION_FAILED_CODE = "ENCRYPTION_FAILED";
+const SEAL_ENCRYPTION_RETRY_DELAYS_MS = [300, 900];
 
 const requestedSealMode = String(import.meta.env.VITE_SEAL_MODE || "seal").toLowerCase();
 const isProductionRuntime = import.meta.env.MODE === "production";
@@ -101,6 +102,57 @@ export function createEncryptionGuardError(
   return error;
 }
 
+function wait(ms: number) {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
+function getErrorDiagnosticMessage(error: unknown): string {
+  if (!(error instanceof Error)) {
+    return String(error);
+  }
+  const diagnosticMessage = (error as Error & { diagnosticMessage?: unknown }).diagnosticMessage;
+  if (typeof diagnosticMessage === "string" && diagnosticMessage.trim()) {
+    return diagnosticMessage;
+  }
+  const cause = (error as Error & { cause?: unknown }).cause;
+  if (cause) {
+    return getErrorDiagnosticMessage(cause);
+  }
+  return error.message;
+}
+
+function isTransientSealEncryptionError(error: unknown) {
+  const message = getErrorDiagnosticMessage(error).toLowerCase();
+  const name = error instanceof Error ? error.name.toLowerCase() : "";
+  return (
+    name === "aborterror" ||
+    message.includes("fetch is aborted") ||
+    message.includes("fetch aborted") ||
+    message.includes("network request failed") ||
+    message.includes("load failed")
+  );
+}
+
+async function encryptWithTransientRetry(
+  value: string,
+  context: SealEncryptContext,
+  seal: SealAdapter,
+) {
+  let lastError: unknown;
+  for (let attempt = 0; attempt <= SEAL_ENCRYPTION_RETRY_DELAYS_MS.length; attempt += 1) {
+    try {
+      return await seal.encrypt(value, context);
+    } catch (error) {
+      lastError = error;
+      if (!isTransientSealEncryptionError(error) || attempt >= SEAL_ENCRYPTION_RETRY_DELAYS_MS.length) {
+        throw error;
+      }
+      await wait(SEAL_ENCRYPTION_RETRY_DELAYS_MS[attempt]);
+    }
+  }
+  throw lastError;
+}
+
 export async function encryptSensitiveResponse(
   value: string,
   context: SealEncryptContext = {},
@@ -109,7 +161,7 @@ export async function encryptSensitiveResponse(
   assertProductionSealAdapter(seal);
   assertSealEncryptionAvailableForAdapter(seal);
   try {
-    const encrypted = await seal.encrypt(value, context);
+    const encrypted = await encryptWithTransientRetry(value, context, seal);
     if (!parseRealSealEnvelope(encrypted)) {
       throw new Error("Seal adapter returned a non-Seal payload.");
     }

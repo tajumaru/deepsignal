@@ -376,6 +376,7 @@ export function ReviewSessionModal({
                         </option>
                       ))}
                     </select>
+                    <small className="review-field-helper">{t("triageStatusRoadmapHelper")}</small>
                   </label>
                   <div className="review-badge-field">
                     <span>{t("priority")}</span>
@@ -536,9 +537,10 @@ export function ReviewSessionModal({
                   </button>
                 </div>
                 <div className="review-result-grid review-result-grid-compact">
-                  <div className="review-result-item">
-                    <span>{t("roadmapStatusLabel")}</span>
-                    <strong>{isDraftOnRoadmap ? t("visibleOnRoadmap") : t("notOnRoadmap")}</strong>
+                  <div className={`review-result-item roadmap-visibility-item ${isDraftOnRoadmap ? "is-visible" : "is-private"}`}>
+                    <span>{t("roadmapVisibilityLabel")}</span>
+                    <strong>{isDraftOnRoadmap ? t("visibleOnPublicRoadmap") : t("privateNotOnRoadmap")}</strong>
+                    {selectedRecord.submission.isEncrypted ? <small>{t("encryptedRoadmapMetadataOnly")}</small> : null}
                   </div>
                   <div className="review-result-item">
                     <span>{t("publicResultLabel")}</span>

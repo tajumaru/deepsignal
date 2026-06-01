@@ -63,6 +63,7 @@ const routeChunkByLabel: Record<string, RouteChunkSpec> = {
   "route-admin-dashboard": { exportName: "AdminDashboardPage", filePrefix: "AdminDashboardPage", routeKey: "admin" },
   "route-explore": { exportName: "ExploreSignalsPage", filePrefix: "ExploreSignalsPage", routeKey: "explore" },
   "route-form-builder": { exportName: "FormBuilderPage", filePrefix: "FormBuilderPage", routeKey: "create" },
+  "prefetch-route-admin-dashboard": { exportName: "AdminDashboardPage", filePrefix: "AdminDashboardPage", routeKey: "admin" },
   "prefetch-route-explore": { exportName: "ExploreSignalsPage", filePrefix: "ExploreSignalsPage", routeKey: "explore" },
   "route-insights-fixture": { exportName: "InsightsFixturePage", filePrefix: "InsightsFixturePage", routeKey: "insightsFixture" },
   "route-landing": { exportName: "LandingPage", filePrefix: "LandingPage", routeKey: "landing" },
@@ -73,7 +74,7 @@ const routeChunkByLabel: Record<string, RouteChunkSpec> = {
   "route-troubleshooting": { exportName: "TroubleshootingPage", filePrefix: "TroubleshootingPage", routeKey: "troubleshooting" },
   "route-zklogin-callback": { exportName: "ZkLoginCallbackPage", filePrefix: "ZkLoginCallbackPage", routeKey: "zkloginCallback" },
   "wallet-providers": { exportName: "WalletProviders", filePrefix: "providers", routeKey: "admin" },
-  "walrus-runtime-provider": { exportName: "WalrusRuntimeProvider", filePrefix: "providers", routeKey: "admin" },
+  "walrus-runtime-provider": { exportName: "WalrusRuntimeProvider", filePrefix: "WalrusRuntimeProvider", routeKey: "admin" },
 };
 
 let buildManifestPromise: Promise<BuildManifest | null> | null = null;

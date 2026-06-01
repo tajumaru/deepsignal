@@ -5408,8 +5408,8 @@
   position: absolute;
   z-index: 1;
   left: 50%;
-  top: calc(50% + 1.4rem);
-  width: clamp(10.5rem, 16vw, 16rem);
+  top: calc(50% - 0.2rem);
+  width: clamp(12rem, 18vw, 18rem);
   max-width: 42%;
   height: auto;
   pointer-events: none;

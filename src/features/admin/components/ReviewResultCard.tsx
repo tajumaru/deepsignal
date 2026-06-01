@@ -102,6 +102,11 @@ export function ReviewResultCard({
             </span>
           </div>
         </div>
+        <div className={`review-result-item review-result-item-wide roadmap-visibility-item ${isOnRoadmap ? "is-visible" : "is-private"}`}>
+          <span>{t("roadmapVisibilityLabel")}</span>
+          <strong>{isOnRoadmap ? t("visibleOnPublicRoadmap") : t("privateNotOnRoadmap")}</strong>
+          {submission.isEncrypted ? <small>{t("encryptedRoadmapMetadataOnly")}</small> : null}
+        </div>
         {reviewResultItems.map((item) => (
           <div key={item.label} className="review-result-item">
             <span>{item.label}</span>

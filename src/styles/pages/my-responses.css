@@ -732,6 +732,20 @@
   align-items: center;
 }
 
+.my-response-history-actions .inline-actions {
+  align-items: flex-start;
+}
+
+.my-response-revoke-helper {
+  flex-basis: 100%;
+  max-width: 24rem;
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
 .my-responses-empty {
   display: grid;
   justify-items: center;

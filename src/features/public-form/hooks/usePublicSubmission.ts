@@ -281,6 +281,18 @@ function isPublicRateLimitError(error: unknown) {
   return message.includes("rate limit") || message.includes("too many requests") || message.includes("status 429");
 }
 
+function isTransientPublicNetworkError(error: unknown) {
+  const name = error instanceof Error ? error.name.toLowerCase() : "";
+  const message = getDiagnosticErrorMessage(error).toLowerCase();
+  return (
+    name === "aborterror" ||
+    message.includes("fetch is aborted") ||
+    message.includes("fetch aborted") ||
+    message.includes("network request failed") ||
+    message.includes("load failed")
+  );
+}
+
 function getStoredRecoveryRetryCount(key: string) {
   if (!key) {
     return 0;
@@ -306,6 +318,12 @@ function classifyRecoveryStorageError(error: unknown, message: string) {
     return {
       category: "rate_limited",
       guidance: "The storage service is rate limiting requests. Wait a few minutes before trying again.",
+    };
+  }
+  if (isTransientPublicNetworkError(error)) {
+    return {
+      category: "network_interrupted",
+      guidance: "The secure connection was interrupted. Keep this page open and retry from the saved draft.",
     };
   }
   if (
@@ -426,6 +444,7 @@ export function usePublicSubmission({
   const [locationState, setLocationState] = useState<SubmissionLocationCaptureState>("idle");
   const [locationMessage, setLocationMessage] = useState("");
   const activeAttachmentUploadsRef = useRef(new Set<string>());
+  const submitPipelineStageRef = useRef<SignalPipelineStage>("idle");
   const lastFormResetKeyRef = useRef<string | null>(null);
   const effectiveIdentityMode =
     identityMode === "wallet" && !accountAddress && !walletRequired ? "anonymous" : identityMode;
@@ -497,6 +516,7 @@ export function usePublicSubmission({
     setRecoveryGuidance("");
     setRecoveryCorrupted(false);
     setSubmitPipeline({ stage: "idle", status: "idle" });
+    submitPipelineStageRef.current = "idle";
     setSignalFailureState(null);
     setLocation(undefined);
     setLocationState("idle");
@@ -886,6 +906,7 @@ export function usePublicSubmission({
     setFailure(null);
     setDiagnosticsCopied(false);
     setSubmitPipeline({ stage: "idle", status: "idle" });
+    submitPipelineStageRef.current = "idle";
     setSignalFailureState(null);
   }
 
@@ -935,18 +956,22 @@ export function usePublicSubmission({
   }
 
   function activatePipeline(stage: SignalPipelineStage, message?: string) {
+    submitPipelineStageRef.current = stage;
     setSubmitPipeline({ stage, status: "active", message });
   }
 
   function failPipeline(message: string) {
+    const failedStage = submitPipelineStageRef.current;
     setSubmitPipeline((current) => ({
       ...current,
+      stage: failedStage,
       status: "failed",
       message,
     }));
   }
 
   function pendingPipeline(message: string) {
+    submitPipelineStageRef.current = "inbox_syncing";
     setSubmitPipeline({
       stage: "inbox_syncing",
       status: "pending",
@@ -1680,7 +1705,7 @@ export function usePublicSubmission({
       const retryable =
         recoveryFailure.corrupted || recoveryFailure.classification?.category === "quota_exceeded"
           ? false
-          : undefined;
+          : isTransientPublicNetworkError(error) || undefined;
       setSubmitError(message);
       setSignalFailureState(message.toLowerCase().includes("upload") || message.toLowerCase().includes("walrus") ? "upload_failed" : "offline_preserved");
       failPipeline(displayMessage);
@@ -1696,7 +1721,7 @@ export function usePublicSubmission({
               : message.toLowerCase().includes("wallet")
                 ? "wallet"
                 : "walrus",
-          step: submitPipeline.stage,
+          step: submitPipelineStageRef.current,
           retryable,
           diagnostics: {
             walletRequired,

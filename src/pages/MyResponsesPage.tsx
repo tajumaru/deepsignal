@@ -420,6 +420,7 @@ export function MyResponsesPage() {
             <button type="button" className="ghost-button" disabled>
               {t("myResponsesRevokeResponse")}
             </button>
+            <p className="my-response-revoke-helper">{t("myResponsesRevokeUnavailableBody")}</p>
           </div>
         </section>
       </section>

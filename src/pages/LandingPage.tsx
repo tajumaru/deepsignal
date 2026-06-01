@@ -1002,7 +1002,7 @@ function FinalSignalCtaSection() {
           className="landing-final-cta-mascot"
           src="/deepsignal-final-cta-mascot.webp"
           alt=""
-          loading="lazy"
+          loading="eager"
           decoding="async"
         />
       </div>

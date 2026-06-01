@@ -226,8 +226,8 @@
   }
 
   .landing-final-cta-shell {
-    min-height: 25rem;
-    padding: 1.05rem;
+    min-height: 31rem;
+    padding: 1.05rem 1.05rem 9.5rem;
   }
 
   .landing-flow-track {
@@ -242,10 +242,14 @@
   .landing-hero-copy .cta-row,
   .landing-hero-actions .landing-cta-primary,
   .landing-hero-actions .landing-cta-secondary,
-  .landing-hero-form-preview-cta,
-  .landing-final-cta-button {
+  .landing-hero-form-preview-cta {
     width: 100%;
     max-width: 100%;
+  }
+
+  .landing-final-cta-button {
+    width: auto;
+    max-width: min(100%, 14rem);
   }
 
   .landing-hero-actions .landing-cta-primary,
@@ -262,6 +266,12 @@
   .landing-live-flow-powered-item p,
   .landing-live-flow-pipeline-step p {
     overflow-wrap: anywhere;
+  }
+
+  .landing-final-cta-mascot {
+    top: calc(50% + 2.35rem);
+    width: clamp(10rem, 54vw, 14rem);
+    max-width: 76%;
   }
 
   .landing-hero-lifecycle {

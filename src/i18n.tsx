@@ -99,6 +99,8 @@ const messages = {
     myResponsesHideBody: "This only hides the device-local entry. It does not revoke a response or delete Walrus evidence.",
     myResponsesHideAction: "Hide from my history",
     myResponsesRevokeResponse: "Revoke response",
+    myResponsesRevokeUnavailableBody:
+      "Revoke request is not available yet. For now, you can hide this local history from this device.",
     myResponsesSignalTitle: "Signal title",
     myResponsesLifecycleEyebrow: "Signal lifecycle",
     myResponsesLifecycleTitle: "Lifecycle timeline",
@@ -2000,8 +2002,14 @@ const messages = {
       "Changes stay as an unsaved draft until you save. Public visibility is decided separately below.",
     publicRoadmapDecisionStep: "Step 4 \u00b7 Public roadmap decision",
     roadmapStatusLabel: "Roadmap status",
+    roadmapVisibilityLabel: "Roadmap visibility",
     roadmapVisibilityHelper:
       "Only signals set to Planned, In Progress, or Fixed appear publicly, with safe metadata only.",
+    triageStatusRoadmapHelper:
+      "Planned, In Progress, and Fixed appear on the Public Roadmap. New, Investigating, and Closed stay private.",
+    visibleOnPublicRoadmap: "Visible on Public Roadmap",
+    privateNotOnRoadmap: "Private / not on roadmap",
+    encryptedRoadmapMetadataOnly: "Metadata only unless explicitly published",
     visibleOnRoadmap: "Visible on roadmap",
     publishSafeMetadata: "Publish safe metadata",
     triageStatusNew: "New",
@@ -3557,6 +3565,8 @@ const messages = {
     myResponsesHideBody: "\u3053\u306e\u7aef\u672b\u5185\u306e\u5c65\u6b74\u3060\u3051\u3092\u975e\u8868\u793a\u306b\u3057\u307e\u3059\u3002\u9001\u4fe1\u306e\u53d6\u308a\u6d88\u3057\u3084 Walrus \u8a3c\u8de1\u306e\u524a\u9664\u306f\u884c\u3044\u307e\u305b\u3093\u3002",
     myResponsesHideAction: "\u5c65\u6b74\u304b\u3089\u975e\u8868\u793a",
     myResponsesRevokeResponse: "\u9001\u4fe1\u3092\u53d6\u308a\u6d88\u3059",
+    myResponsesRevokeUnavailableBody:
+      "\u524a\u9664\u4f9d\u983c\u306f\u307e\u3060\u5229\u7528\u3067\u304d\u307e\u305b\u3093\u3002\u4eca\u306f\u3053\u306e\u7aef\u672b\u306e\u30ed\u30fc\u30ab\u30eb\u5c65\u6b74\u3092\u975e\u8868\u793a\u306b\u3067\u304d\u307e\u3059\u3002",
     myResponsesSignalTitle: "\u30b7\u30b0\u30ca\u30eb\u540d",
     myResponsesLifecycleEyebrow: "\u30b7\u30b0\u30ca\u30eb\u30e9\u30a4\u30d5\u30b5\u30a4\u30af\u30eb",
     myResponsesLifecycleTitle: "\u9032\u884c\u30bf\u30a4\u30e0\u30e9\u30a4\u30f3",
@@ -5533,8 +5543,14 @@ const messages = {
       "\u5909\u66f4\u306f\u4fdd\u5b58\u3059\u308b\u307e\u3067\u672a\u4fdd\u5b58\u306e\u4e0b\u66f8\u304d\u3067\u3059\u3002\u516c\u958b\u8868\u793a\u306f\u4e0b\u3067\u5225\u9014\u5224\u65ad\u3057\u307e\u3059\u3002",
     publicRoadmapDecisionStep: "\u30b9\u30c6\u30c3\u30d7 4 \u30fb \u516c\u958b\u30ed\u30fc\u30c9\u30de\u30c3\u30d7\u5224\u65ad",
     roadmapStatusLabel: "\u30ed\u30fc\u30c9\u30de\u30c3\u30d7\u72b6\u614b",
+    roadmapVisibilityLabel: "\u30ed\u30fc\u30c9\u30de\u30c3\u30d7\u8868\u793a",
     roadmapVisibilityHelper:
       "\u516c\u958b\u3055\u308c\u308b\u306e\u306f Planned\u3001In Progress\u3001Fixed \u306b\u8a2d\u5b9a\u3055\u308c\u305f\u30b7\u30b0\u30ca\u30eb\u306e\u307f\u3067\u3001\u5b89\u5168\u306a\u30e1\u30bf\u30c7\u30fc\u30bf\u3060\u3051\u304c\u8868\u793a\u3055\u308c\u307e\u3059\u3002",
+    triageStatusRoadmapHelper:
+      "Planned\u3001In Progress\u3001Fixed \u306f Public Roadmap \u306b\u8868\u793a\u3055\u308c\u307e\u3059\u3002New\u3001Investigating\u3001Closed \u306f\u975e\u516c\u958b\u306e\u307e\u307e\u3067\u3059\u3002",
+    visibleOnPublicRoadmap: "Public Roadmap \u306b\u8868\u793a\u4e2d",
+    privateNotOnRoadmap: "\u975e\u516c\u958b / roadmap \u306b\u306f\u975e\u8868\u793a",
+    encryptedRoadmapMetadataOnly: "\u660e\u793a\u7684\u306b\u516c\u958b\u3059\u308b\u307e\u3067\u306f metadata \u306e\u307f\u3067\u3059",
     visibleOnRoadmap: "\u30ed\u30fc\u30c9\u30de\u30c3\u30d7\u306b\u8868\u793a\u4e2d",
     publishSafeMetadata: "\u5b89\u5168\u306a\u30e1\u30bf\u30c7\u30fc\u30bf\u3092\u516c\u958b",
     triageStatusNew: "\u65b0\u7740",

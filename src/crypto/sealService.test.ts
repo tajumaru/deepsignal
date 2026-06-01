@@ -4,6 +4,7 @@ import { createRealSealEnvelope } from "./sealPayload";
 import {
   decryptLegacyUnencryptedResponse,
   decryptSensitiveResponse,
+  encryptSensitiveResponse,
 } from "./sealService";
 
 const fakeSealAdapter: SealAdapter = {
@@ -66,5 +67,54 @@ describe("decryptSensitiveResponse fail-closed behavior", () => {
       plaintext: "decrypted plaintext",
       legacyUnencrypted: false,
     });
+  });
+});
+
+describe("encryptSensitiveResponse retry behavior", () => {
+  it("retries transient Seal fetch aborts before failing closed", async () => {
+    vi.useFakeTimers();
+    const envelope = makeSealEnvelope();
+    const sealAdapter: SealAdapter = {
+      encrypt: vi
+        .fn()
+        .mockRejectedValueOnce(new Error("Fetch is aborted"))
+        .mockResolvedValueOnce(envelope),
+      decrypt: vi.fn(async () => "decrypted"),
+    };
+
+    try {
+      const promise = encryptSensitiveResponse("private signal", { projectId: "project-1" }, sealAdapter);
+      await vi.advanceTimersByTimeAsync(300);
+
+      await expect(promise).resolves.toBe(envelope);
+      expect(sealAdapter.encrypt).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("still fails closed after repeated transient Seal fetch aborts", async () => {
+    vi.useFakeTimers();
+    const sealAdapter: SealAdapter = {
+      encrypt: vi.fn(async () => {
+        throw new Error("Fetch is aborted");
+      }),
+      decrypt: vi.fn(async () => "decrypted"),
+    };
+
+    try {
+      const promise = encryptSensitiveResponse("private signal", { projectId: "project-1" }, sealAdapter);
+      const expectation = expect(promise).rejects.toMatchObject({
+        code: "ENCRYPTION_FAILED",
+        diagnosticMessage: "Fetch is aborted",
+      });
+      await vi.advanceTimersByTimeAsync(300);
+      await vi.advanceTimersByTimeAsync(900);
+
+      await expectation;
+      expect(sealAdapter.encrypt).toHaveBeenCalledTimes(3);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

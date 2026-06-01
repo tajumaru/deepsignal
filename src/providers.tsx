@@ -1,13 +1,11 @@
 import { JsonRpcHTTPTransport, SuiJsonRpcClient } from "@mysten/sui/jsonRpc";
 import {
-  Component,
   useCallback,
   useMemo,
   useState,
   useEffect,
   useRef,
   type PropsWithChildren,
-  type ReactNode,
 } from "react";
 import {
   createNetworkConfig,
@@ -25,6 +23,7 @@ import {
 import { logRouteLifecycle, setDeepSignalDebugReadiness } from "./lib/routeDiagnostics";
 import { endPerf, markPerfMilestone, startPerf } from "./lib/perf";
 import { useRpcInfrastructure } from "./rpcInfrastructure";
+import { OptionalWalrusRuntimeBoundary } from "./WalrusRuntimeProvider";
 import WalrusRuntimeBridge from "./walrusRuntimeBridge";
 import { WalletConnectionContext, type WalletConnectionState } from "./walletStatus";
 
@@ -52,49 +51,12 @@ function clearStaleWalletRestoreState() {
   }
 }
 
-class OptionalWalrusRuntimeBoundary extends Component<
-  PropsWithChildren<{ fallback?: ReactNode }>,
-  { failed: boolean }
-> {
-  state = { failed: false };
-
-  static getDerivedStateFromError() {
-    return { failed: true };
-  }
-
-  componentDidCatch(error: unknown) {
-    console.warn("Walrus runtime failed to initialize; continuing with local fallback.", error);
-  }
-
-  render() {
-    if (this.state.failed) {
-      return this.props.fallback ?? null;
-    }
-
-    return this.props.children;
-  }
-}
-
 function walletFilter(wallet: WalletWithRequiredFeatures) {
   if (wallet.name.toLowerCase().includes("nightly")) {
     return false;
   }
   return Boolean(
     wallet.features["sui:signTransaction"] || wallet.features["sui:signTransactionBlock"],
-  );
-}
-
-export function WalrusRuntimeProvider({ children }: PropsWithChildren) {
-  useEffect(() => {
-    setDeepSignalDebugReadiness({ walrusRuntimeProvider: "ready" });
-    endPerf("provider:walrus-runtime", "ok");
-    markPerfMilestone("provider:walrus-runtime:ready");
-  }, []);
-
-  return (
-    <OptionalWalrusRuntimeBoundary fallback={children}>
-      <WalrusRuntimeBridge>{children}</WalrusRuntimeBridge>
-    </OptionalWalrusRuntimeBoundary>
   );
 }
 

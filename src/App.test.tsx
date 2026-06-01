@@ -135,6 +135,18 @@ describe("App routing", () => {
     expect(screen.getByTestId("app-shell")).toHaveAttribute("data-chrome", "full");
   });
 
+  it("renders the dashboard shell without making wallet chrome a route-level blocker", async () => {
+    render(
+      <MemoryRouter initialEntries={["/dashboard"]}>
+        <App />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Admin Route" })).toBeInTheDocument());
+    expect(screen.getByTestId("app-shell")).toHaveAttribute("data-chrome", "full");
+    expect(screen.getByTestId("app-shell")).toHaveAttribute("data-wallet-available", "no");
+  });
+
   it("renders the Create Signal route inside the wallet-enabled workspace chrome", async () => {
     render(
       <MemoryRouter initialEntries={["/create"]}>

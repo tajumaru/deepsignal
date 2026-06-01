@@ -12,6 +12,7 @@ const LocalRecoveryCenter = lazy(() =>
 );
 
 export const WORKSPACE_RECOVERY_TIMEOUT_MS = 3200;
+const WORKSPACE_FALLBACK_DELAY_MS = 180;
 
 export function WorkspaceRestoreFallback({ onRetry }: { onRetry?: () => void }) {
   const [recoveryVisible, setRecoveryVisible] = useState(false);
@@ -81,6 +82,23 @@ export function WorkspaceRestoreFallback({ onRetry }: { onRetry?: () => void }) 
   );
 }
 
+export function DelayedWorkspaceRestoreFallback({
+  delayMs = WORKSPACE_FALLBACK_DELAY_MS,
+  onRetry,
+}: {
+  delayMs?: number;
+  onRetry?: () => void;
+}) {
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setVisible(true), delayMs);
+    return () => window.clearTimeout(timer);
+  }, [delayMs]);
+
+  return visible ? <WorkspaceRestoreFallback onRetry={onRetry} /> : null;
+}
+
 export function ProviderReadinessBarrier({ children, routePath, enabled = true }: { children: ReactNode; routePath: string; enabled?: boolean }) {
   const [ready, setReady] = useState(!enabled);
   const [phase, setPhase] = useState("booting");
@@ -118,7 +136,6 @@ export function ProviderReadinessBarrier({ children, routePath, enabled = true }
             hydrationError: error instanceof Error ? error.message : String(error),
           });
         }
-        await new Promise((resolve) => window.requestAnimationFrame(resolve));
       }
       if (!cancelled) {
         setPhase("ready");
@@ -134,9 +151,7 @@ export function ProviderReadinessBarrier({ children, routePath, enabled = true }
   }, [enabled, routePath]);
 
   if (!ready) {
-    return (
-      <WorkspaceRestoreFallback />
-    );
+    return <DelayedWorkspaceRestoreFallback />;
   }
 
   void phase;

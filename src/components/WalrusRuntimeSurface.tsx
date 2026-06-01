@@ -7,7 +7,7 @@ const WalrusRuntimeProvider = lazy(() => {
   startPerf("provider:walrus-runtime");
   markPerfMilestone("provider:walrus-runtime:import-start");
   logRouteLifecycle("provider:walrus-runtime-import-start");
-  return retryLazyImport(() => import("../providers"), "walrus-runtime-provider").then((module) => ({
+  return retryLazyImport(() => import("../WalrusRuntimeProvider"), "walrus-runtime-provider").then((module) => ({
     default: module.WalrusRuntimeProvider,
   })).finally(() => {
     markPerfMilestone("provider:walrus-runtime:import-end");

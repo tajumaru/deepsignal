@@ -1,7 +1,9 @@
 import type { ReactNode } from "react";
 import { Navigate, Route, Routes, useParams } from "react-router-dom";
 import { WalrusRuntimeSurface } from "../components/WalrusRuntimeSurface";
+import { WalletSurface } from "../components/WalletSurface";
 import { REQUIRE_GLOBAL_WALRUS_RUNTIME } from "../lib/runtimeFlags";
+import { DelayedWorkspaceRestoreFallback } from "./ProviderReadinessBarrier";
 import type { AppRouteComponents } from "./appRouteComponents";
 
 function LegacyFormInboxRedirect({ basePath }: { basePath: "/admin" | "/dashboard" }) {
@@ -21,6 +23,14 @@ function WithWalrusRuntime({ children }: { children: ReactNode }) {
     return <>{children}</>;
   }
   return <WalrusRuntimeSurface>{children}</WalrusRuntimeSurface>;
+}
+
+function WithDeferredWalletRuntime({ children }: { children: ReactNode }) {
+  return (
+    <WalletSurface fallback={<DelayedWorkspaceRestoreFallback />}>
+      {children}
+    </WalletSurface>
+  );
 }
 
 export function AppRoutes({ components }: { components: AppRouteComponents }) {
@@ -67,9 +77,11 @@ export function AppRoutes({ components }: { components: AppRouteComponents }) {
       <Route
         path="/dashboard"
         element={
-          <WithWalrusRuntime>
-            <AdminDashboardPage />
-          </WithWalrusRuntime>
+          <WithDeferredWalletRuntime>
+            <WithWalrusRuntime>
+              <AdminDashboardPage />
+            </WithWalrusRuntime>
+          </WithDeferredWalletRuntime>
         }
       />
       <Route path="/admin/access" element={<AccessManagementPage />} />
