@@ -86,6 +86,19 @@ const RESET_LABELS: Record<ResetOperation, string> = {
 
 const DEEPSIGNAL_STORAGE_PREFIXES = ["deepsignal.", "deepsignal:"];
 const DEEPSIGNAL_NAME_MARKERS = ["deepsignal", "deep-signal", "walrus-feedback-lab"];
+const PRESERVED_LOCAL_STORAGE_KEYS = new Set([
+  "deepsignal.forms",
+  "deepsignal.submissions",
+  "deepsignal.files",
+  "deepsignal.encryptedPayloads",
+  "deepsignal.myResponseHistory.v1",
+  "deepsignal.submittedHistory.v1",
+  "deepsignal:create-form-draft:v1",
+  "deepsignal:create-form-guest-draft:v1",
+]);
+const PRESERVED_LOCAL_STORAGE_PREFIXES = [
+  "deepsignal:public-draft:",
+];
 
 export const RESET_CONFIRMATION_MESSAGE =
   DEFAULT_RESET_ENVIRONMENT_MESSAGES.confirmation;
@@ -116,16 +129,23 @@ function isDeepSignalStorageKey(key: string) {
   return DEEPSIGNAL_STORAGE_PREFIXES.some((prefix) => key.startsWith(prefix));
 }
 
+function isPreservedLocalStorageKey(key: string) {
+  return (
+    PRESERVED_LOCAL_STORAGE_KEYS.has(key) ||
+    PRESERVED_LOCAL_STORAGE_PREFIXES.some((prefix) => key.startsWith(prefix))
+  );
+}
+
 function isDeepSignalNamedResource(name: string) {
   const normalized = name.toLowerCase();
   return DEEPSIGNAL_NAME_MARKERS.some((marker) => normalized.includes(marker));
 }
 
-function removeMatchingStorageKeys(storage: Storage) {
+function removeMatchingStorageKeys(storage: Storage, options: { preserveUserData?: boolean } = {}) {
   const removed: string[] = [];
   for (let index = storage.length - 1; index >= 0; index -= 1) {
     const key = storage.key(index);
-    if (key && isDeepSignalStorageKey(key)) {
+    if (key && isDeepSignalStorageKey(key) && !(options.preserveUserData && isPreservedLocalStorageKey(key))) {
       storage.removeItem(key);
       removed.push(key);
     }
@@ -159,7 +179,9 @@ export async function clearLocalCache(
       return createResult("localCache", "skipped", messages.browserStorageUnavailable, undefined, messages);
     }
     await clearSealSessionCacheSafely();
-    const removedLocalKeys = window.localStorage ? removeMatchingStorageKeys(window.localStorage) : [];
+    const removedLocalKeys = window.localStorage
+      ? removeMatchingStorageKeys(window.localStorage, { preserveUserData: true })
+      : [];
     const removedSessionKeys = window.sessionStorage ? removeMatchingStorageKeys(window.sessionStorage) : [];
     const removedCount = removedLocalKeys.length + removedSessionKeys.length;
     return createResult(

@@ -2589,10 +2589,10 @@ const messages = {
     resetHeroBody:
       "Use this when stale local state in iPhone Safari, Slush Wallet, or an installed PWA keeps Seal decrypt requests failing after reconnecting.",
     resetHeroWarning:
-      "DeepSignal can remove local app state, encryption caches, and browser storage. It cannot remove wallet private keys or internal Slush Wallet data.",
+      "DeepSignal can remove temporary app state, encryption caches, and browser storage. It keeps local forms, drafts, submitted signals, and response history.",
     resetActionLocalCacheTitle: "Clear local cache",
     resetActionLocalCacheBody:
-      "Remove DeepSignal localStorage/sessionStorage keys on this device and clear the in-memory Seal decrypt session cache.",
+      "Remove temporary DeepSignal localStorage/sessionStorage keys on this device and clear the in-memory Seal decrypt session cache. Local forms, drafts, submitted signals, and response history are kept.",
     resetActionIndexedDbTitle: "Delete IndexedDB",
     resetActionIndexedDbBody:
       "Delete DeepSignal browser databases when indexedDB.databases() is supported. Older Safari versions are safely skipped.",
@@ -2614,10 +2614,10 @@ const messages = {
     resetDangerEyebrow: "Danger zone",
     resetAllTitle: "Reset everything",
     resetAllBody:
-      "Disconnect the current wallet session, remove DeepSignal browser storage, IndexedDB, and Cache Storage entries, unregister DeepSignal Service Workers, then return to the DeepSignal home screen. On-chain forms, Walrus blobs, and submitted signals are not deleted.",
+      "Disconnect the current wallet session, remove temporary DeepSignal browser storage, IndexedDB, and Cache Storage entries, unregister DeepSignal Service Workers, then return to the DeepSignal home screen. Local forms, drafts, response history, on-chain forms, Walrus blobs, and submitted signals are not deleted.",
     resetAllButton: "Reset everything",
     resetConfirmationMessage:
-      "Reset DeepSignal local data on this device? On-chain forms and submitted signals will not be deleted, but cached sessions and local encryption state will be removed.",
+      "Reset temporary DeepSignal local data on this device? Local response history, on-chain forms, and submitted signals will not be deleted, but cached sessions and local encryption state will be removed.",
     resetSuccessMessage: "DeepSignal local state has been reset. Reconnect your wallet to continue.",
     resetFailureMessage:
       "Some local data could not be removed. You may need to delete the PWA or clear website data from iOS settings.",
@@ -2628,7 +2628,7 @@ const messages = {
     resetOperationServiceWorkers: "Service Worker registration",
     resetBrowserStorageUnavailable: "Browser storage is unavailable in this environment.",
     resetLocalCacheCleared: (params) =>
-      `Removed ${params?.count ?? 0} DeepSignal storage key(s) and cleared the in-memory Seal session cache.`,
+      `Removed ${params?.count ?? 0} temporary DeepSignal storage key(s), kept local response history, and cleared the in-memory Seal session cache.`,
     resetLocalCacheFailed: "Could not clear browser local cache.",
     resetIndexedDbUnavailable: "IndexedDB is unavailable in this browser.",
     resetIndexedDbDatabasesUnavailable: "indexedDB.databases() is not exposed in this browser.",
@@ -6238,10 +6238,10 @@ const messages = {
     resetHeroBody:
       "iPhone Safari、Slush Wallet、インストール済み PWA に古いローカル状態が残り、再接続後も Seal の復号リクエストが失敗する場合に使用します。",
     resetHeroWarning:
-      "DeepSignal はローカルのアプリ状態、暗号化キャッシュ、ブラウザストレージを削除できます。ウォレットの秘密鍵や Slush Wallet 内部データは削除できません。",
+      "DeepSignal は一時的なアプリ状態、暗号化キャッシュ、ブラウザストレージを削除できます。ローカルフォーム、下書き、送信済みシグナル、送信履歴は残します。",
     resetActionLocalCacheTitle: "ローカルキャッシュを削除",
     resetActionLocalCacheBody:
-      "このデバイス上の DeepSignal localStorage/sessionStorage キーと、メモリ内の Seal 復号セッションキャッシュを削除します。",
+      "このデバイス上の一時的な DeepSignal localStorage/sessionStorage キーと、メモリ内の Seal 復号セッションキャッシュを削除します。ローカルフォーム、下書き、送信済みシグナル、送信履歴は残します。",
     resetActionIndexedDbTitle: "IndexedDB を削除",
     resetActionIndexedDbBody:
       "indexedDB.databases() に対応している場合、DeepSignal 名義のブラウザデータベースを削除します。古い Safari では安全にスキップされます。",
@@ -6263,10 +6263,10 @@ const messages = {
     resetDangerEyebrow: "危険ゾーン",
     resetAllTitle: "すべてリセット",
     resetAllBody:
-      "現在のウォレットセッションを切断し、DeepSignal のブラウザストレージ、IndexedDB、Cache Storage エントリを削除し、DeepSignal の Service Worker 登録を解除してから DeepSignal のホーム画面へ戻ります。オンチェーンフォーム、Walrus blob、送信済みシグナルは削除されません。",
+      "現在のウォレットセッションを切断し、一時的な DeepSignal ブラウザストレージ、IndexedDB、Cache Storage エントリを削除し、DeepSignal の Service Worker 登録を解除してから DeepSignal のホーム画面へ戻ります。ローカルフォーム、下書き、送信履歴、オンチェーンフォーム、Walrus blob、送信済みシグナルは削除されません。",
     resetAllButton: "すべてリセット",
     resetConfirmationMessage:
-      "このデバイス上の DeepSignal ローカルデータをリセットしますか？オンチェーンフォームと送信内容は削除されませんが、キャッシュ済みセッションとローカルの暗号化状態は削除されます。",
+      "このデバイス上の一時的な DeepSignal ローカルデータをリセットしますか？ローカルの送信履歴、オンチェーンフォーム、送信内容は削除されませんが、キャッシュ済みセッションとローカルの暗号化状態は削除されます。",
     resetSuccessMessage:
       "DeepSignal のローカル状態をリセットしました。ウォレットを再接続してください。",
     resetFailureMessage:
@@ -6278,7 +6278,7 @@ const messages = {
     resetOperationServiceWorkers: "Service Worker 登録",
     resetBrowserStorageUnavailable: "この環境ではブラウザストレージを利用できません。",
     resetLocalCacheCleared: (params) =>
-      `${params?.count ?? 0} 件の DeepSignal ストレージキーと、メモリ内の Seal セッションキャッシュを削除しました。`,
+      `${params?.count ?? 0} 件の一時的な DeepSignal ストレージキーを削除し、ローカル送信履歴を残したまま、メモリ内の Seal セッションキャッシュを削除しました。`,
     resetLocalCacheFailed: "ブラウザのローカルキャッシュを削除できませんでした。",
     resetIndexedDbUnavailable: "このブラウザでは IndexedDB を利用できません。",
     resetIndexedDbDatabasesUnavailable:
