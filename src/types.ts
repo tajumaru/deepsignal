@@ -169,6 +169,7 @@ export interface FormSchema {
   creationMode?: "admin" | "guest";
   isOnchain?: boolean;
   encryptSubmissions?: boolean;
+  responseOpenAt?: number | null;
   responseDeadline?: number | null;
   responseDeadlineMode?: "none" | "relative" | "custom";
   projectId?: string;

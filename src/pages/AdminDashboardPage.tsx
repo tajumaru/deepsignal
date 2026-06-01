@@ -17,7 +17,7 @@ import "../styles/mobile/review.css";
 import "../styles/mobile/review-session.css";
 import "../styles/mobile/private-signal.css";
 import "../styles/mobile/inbox.css";
-import type { CSSProperties, ReactNode } from "react";
+import type { CSSProperties, ReactNode, TouchEvent as ReactTouchEvent } from "react";
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { CreateFormLink } from "../components/CreateFormLink";
@@ -124,6 +124,7 @@ import {
 } from "../lib/submissionVersioning";
 import { endPerf, startPerf } from "../lib/perf";
 import {
+  inferSignalCategory,
   getSignalPreview,
   getPrivateSignalPayloadState,
   getSignalPersistenceLabel,
@@ -139,7 +140,7 @@ import {
   storageAdapter,
 } from "../lib/storage";
 import { getSignalProcessingMode } from "../lib/signalProcessing";
-import { formatDate } from "../lib/utils";
+import { formatDate, formatRelativeTime } from "../lib/utils";
 import { handleRateLimitedRpcFallback, useRpcInfrastructure } from "../rpcInfrastructure";
 import { cleanupRegisteredFormLocalFallback } from "../storage/localStorageAdapter";
 import { listFormBlobIndex } from "../storage/blobIndex";
@@ -152,6 +153,11 @@ import type { ActivityEvent, FormSchema, SignalProcessingMode, Submission } from
 
 const MOBILE_REVIEW_MEDIA_QUERY = "(max-width: 768px)";
 const COARSE_POINTER_MEDIA_QUERY = "(pointer: coarse)";
+const MOBILE_DETAIL_SHEET_SWIPE_THRESHOLD_PX = 72;
+const MOBILE_DETAIL_SHEET_INTENT_PX = 8;
+const MOBILE_INBOX_SEARCH_DEBOUNCE_MS = 150;
+const MOBILE_INBOX_RECENT_SEARCHES_KEY = "deepsignal.mobileInbox.recentSearches";
+const MOBILE_INBOX_RECENT_SEARCH_LIMIT = 5;
 const INITIAL_SIGNAL_LIST_LIMIT = 20;
 const SIGNAL_LIST_PAGE_SIZE = 20;
 const NODE_LONG_PRESS_MS = 3000;
@@ -168,6 +174,78 @@ const MODAL_FOCUSABLE_SELECTOR = [
   "a[href]",
   "[tabindex]:not([tabindex='-1'])",
 ].join(",");
+
+interface MobileDetailSheetGestureState {
+  startX: number;
+  startY: number;
+  deltaX: number;
+  deltaY: number;
+  dragging: boolean;
+  blockedByScroll: boolean;
+}
+
+function normalizeRecentSearchTerm(value: string) {
+  return value.trim().replace(/\s+/g, " ");
+}
+
+function readMobileInboxRecentSearches() {
+  if (typeof window === "undefined") {
+    return [];
+  }
+
+  try {
+    const raw = window.localStorage.getItem(MOBILE_INBOX_RECENT_SEARCHES_KEY);
+    if (!raw) {
+      return [];
+    }
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+    const uniqueTerms = new Map<string, string>();
+    parsed.forEach((value) => {
+      if (typeof value !== "string") {
+        return;
+      }
+      const term = normalizeRecentSearchTerm(value);
+      if (term) {
+        uniqueTerms.set(term.toLowerCase(), term);
+      }
+    });
+    return Array.from(uniqueTerms.values()).slice(0, MOBILE_INBOX_RECENT_SEARCH_LIMIT);
+  } catch {
+    return [];
+  }
+}
+
+function writeMobileInboxRecentSearches(searches: string[]) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  try {
+    if (searches.length === 0) {
+      window.localStorage.removeItem(MOBILE_INBOX_RECENT_SEARCHES_KEY);
+      return;
+    }
+    window.localStorage.setItem(MOBILE_INBOX_RECENT_SEARCHES_KEY, JSON.stringify(searches));
+  } catch {
+    // Recent searches are a convenience only.
+  }
+}
+
+function addMobileInboxRecentSearch(searches: string[], value: string) {
+  const term = normalizeRecentSearchTerm(value);
+  if (!term) {
+    return searches;
+  }
+  const next = [
+    term,
+    ...searches.filter((search) => search.toLowerCase() !== term.toLowerCase()),
+  ].slice(0, MOBILE_INBOX_RECENT_SEARCH_LIMIT);
+  writeMobileInboxRecentSearches(next);
+  return next;
+}
 const ROADMAP_READY_STATUSES = new Set<Submission["triageStatus"]>(["planned", "in_progress", "fixed"]);
 const DEMO_FLOW_VISIBLE = false;
 const PROJECT_RECOVERY_NOTICE_ACK_KEY = "deepsignal.admin.projectRecoveryNoticeAck";
@@ -2650,6 +2728,7 @@ interface MobileInboxHeaderProps {
   onJumpToReview: () => void;
   onRevealCreateProject: () => void;
   onRevealConnectProject: () => void;
+  onOpenSearch: () => void;
 }
 
 function MobileFilterCaret() {
@@ -2797,6 +2876,7 @@ function MobileInboxHeader(props: MobileInboxHeaderProps) {
     selectedProjectId,
     projects,
     onSelectProject,
+    onOpenSearch,
   } = props;
   const sortOptions: MobileFilterMenuOption[] = [
     { value: "default", label: getSortLabel("default", t) },
@@ -2827,7 +2907,20 @@ function MobileInboxHeader(props: MobileInboxHeaderProps) {
             <span>{activeScopeLabel}</span>
           </div>
         </div>
-        <span className="mobile-inbox-count-pill">{unreadCountLabel}</span>
+        <div className="mobile-inbox-header-actions">
+          <button
+            type="button"
+            className="mobile-inbox-icon-button mobile-inbox-search-open"
+            aria-label={searchPlaceholder}
+            onClick={onOpenSearch}
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <circle cx="11" cy="11" r="6.4" />
+              <path d="m16.1 16.1 4 4" />
+            </svg>
+          </button>
+          <span className="mobile-inbox-count-pill">{unreadCountLabel}</span>
+        </div>
       </div>
 
       {hasAdminAccess && projectOptions.length > 1 ? (
@@ -2913,6 +3006,7 @@ interface MobileSignalRowProps {
   isSelected: boolean;
   isUnlocked: boolean;
   isDemoJustArrived: boolean;
+  highlightQuery?: string;
   onSelect: () => void;
   onQuickAction: (record: SignalRecord, action: QuickActionId) => void;
   t: TranslationFn;
@@ -2922,6 +3016,51 @@ function getSignalInitials(title: string) {
   const words = title.trim().split(/\s+/).filter(Boolean);
   const [first, second] = words;
   return `${first?.[0] ?? "S"}${second?.[0] ?? ""}`.toUpperCase();
+}
+
+function highlightSearchMatch(text: string, query: string): ReactNode {
+  const normalizedQuery = normalizeRecentSearchTerm(query);
+  if (!normalizedQuery) {
+    return text;
+  }
+  const matchIndex = text.toLowerCase().indexOf(normalizedQuery.toLowerCase());
+  if (matchIndex < 0) {
+    return text;
+  }
+  const before = text.slice(0, matchIndex);
+  const match = text.slice(matchIndex, matchIndex + normalizedQuery.length);
+  const after = text.slice(matchIndex + normalizedQuery.length);
+  return (
+    <>
+      {before}
+      <mark className="mobile-inbox-search-highlight">{match}</mark>
+      {after}
+    </>
+  );
+}
+
+function getMobileSignalSearchText(record: SignalRecord, t: TranslationFn, projectName: string | null) {
+  const { submission } = record;
+  const respondentMeta = getSubmissionRespondentMeta(submission);
+  const respondentFields = Object.values(respondentMeta).filter((value): value is string => typeof value === "string");
+  const processingMode = getSignalProcessingMode(record.form, submission);
+  const fields = [
+    getSignalSubject(submission),
+    getSignalPreview(submission),
+    getSubmissionAnswerText(submission),
+    submission.tags?.join(" "),
+    submission.keywords?.join(" "),
+    submission.status,
+    submission.priority,
+    submission.severity,
+    submission.triageStatus,
+    getTriageStatusLabel(submission.triageStatus),
+    getProcessingModeLabel(processingMode, t),
+    record.form.title,
+    projectName ?? "",
+    ...respondentFields,
+  ];
+  return fields.filter(Boolean).join(" ").toLowerCase();
 }
 
 function buildQuickActionSubmission(submission: Submission, action: QuickActionId): Submission {
@@ -3164,6 +3303,7 @@ function LongPressNodeDirectoryButton({
         longPressEnabled ? "node-card--holdable" : "",
         isHolding ? "node-card--holding" : "",
         isRegistering ? "node-card--registering" : "",
+        !isOnchain ? "node-card--sui-pending" : "",
         swipeOffset > 0 ? "node-card--swiping" : "",
         swipeDeleteReady ? "node-card--swipe-armed" : "",
         mobileGestureMode ? "node-card--mobile-gesture" : "",
@@ -3276,7 +3416,7 @@ function LongPressNodeDirectoryButton({
               ) : null}
             </>
           ) : (
-            <span className="signal-chip signal-chip-soft">{t("notRegisteredYet")}</span>
+            <span className="signal-chip signal-chip-sui-pending">{t("notRegisteredYet")}</span>
           )}
         </div>
       </div>
@@ -3311,6 +3451,7 @@ function MobileSignalRow({
   isSelected,
   isUnlocked,
   isDemoJustArrived,
+  highlightQuery = "",
   onSelect,
   t,
 }: MobileSignalRowProps) {
@@ -3339,6 +3480,8 @@ function MobileSignalRow({
         : t("statusArchived");
   const processingMode = submission.processingMode ?? record.form.processingMode ?? "review_required";
   const processingModeLabel = getProcessingModeLabel(processingMode, t);
+  const fullCreatedAtLabel = formatDate(submission.createdAt);
+  const compactCreatedAtLabel = formatRelativeTime(submission.createdAt) || fullCreatedAtLabel;
   const ariaLabel = t("mobileSignalRowAriaLabel", {
     subject: title,
     status: readStateLabel,
@@ -3364,13 +3507,15 @@ function MobileSignalRow({
         <span className="mobile-signal-main">
           <span className="mobile-signal-title-line">
             {submission.status === "unread" ? <span className="mobile-unread-dot" aria-hidden="true" /> : null}
-            <strong>{title}</strong>
+            <strong>{highlightSearchMatch(title, highlightQuery)}</strong>
             {isDemoSignal ? <span className="mobile-signal-mini-badge">{t("demoBadgeLabel")}</span> : null}
             {isDemoJustArrived ? (
               <span className="mobile-signal-mini-badge is-just-arrived">{t("demoJustArrivedLabel")}</span>
             ) : null}
           </span>
-          <span className={`mobile-signal-preview ${submission.isEncrypted ? "is-locked" : ""}`}>{preview}</span>
+          <span className={`mobile-signal-preview ${submission.isEncrypted ? "is-locked" : ""}`}>
+            {highlightSearchMatch(preview, highlightQuery)}
+          </span>
           <span className="mobile-signal-source-line">
             <span>{priorityLabel}</span>
             <span>{getTriageStatusLabel(submission.triageStatus)}</span>
@@ -3393,10 +3538,163 @@ function MobileSignalRow({
       </span>
 
       <span className="mobile-signal-side">
-        <time>{formatDate(submission.createdAt)}</time>
+        <time dateTime={submission.createdAt} title={fullCreatedAtLabel}>
+          {compactCreatedAtLabel}
+        </time>
         <span className={`mobile-priority-badge priority-${submission.priority}`}>{priorityLabel}</span>
       </span>
     </button>
+  );
+}
+
+interface MobileInboxSearchOverlayProps {
+  query: string;
+  debouncedQuery: string;
+  onQueryChange: (value: string) => void;
+  onClose: () => void;
+  onCommitSearch: (value: string) => void;
+  recentSearches: string[];
+  onUseRecentSearch: (value: string) => void;
+  onRemoveRecentSearch: (value: string) => void;
+  onClearRecentSearches: () => void;
+  results: SignalRecord[];
+  selectedRecord: SignalRecord | null;
+  unlockedSignalId?: string | null;
+  demoJustArrivedSignalIds: Set<string>;
+  onSelectSignal: (record: SignalRecord) => void;
+  onQuickAction: (record: SignalRecord, action: QuickActionId) => void;
+  searchPlaceholder: string;
+  t: TranslationFn;
+}
+
+function MobileInboxSearchOverlay({
+  query,
+  debouncedQuery,
+  onQueryChange,
+  onClose,
+  onCommitSearch,
+  recentSearches,
+  onUseRecentSearch,
+  onRemoveRecentSearch,
+  onClearRecentSearches,
+  results,
+  selectedRecord,
+  unlockedSignalId,
+  demoJustArrivedSignalIds,
+  onSelectSignal,
+  onQuickAction,
+  searchPlaceholder,
+  t,
+}: MobileInboxSearchOverlayProps) {
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const trimmedQuery = normalizeRecentSearchTerm(debouncedQuery);
+
+  useEffect(() => {
+    const focusTimer = window.setTimeout(() => inputRef.current?.focus(), 40);
+    return () => window.clearTimeout(focusTimer);
+  }, []);
+
+  return (
+    <div className="mobile-inbox-search-overlay" role="dialog" aria-modal="true" aria-label={searchPlaceholder}>
+      <button
+        type="button"
+        className="mobile-inbox-search-backdrop"
+        aria-label={t("closeLabel")}
+        onClick={onClose}
+      />
+      <section className="mobile-inbox-search-panel">
+        <form
+          className="mobile-inbox-search-command"
+          role="search"
+          onSubmit={(event) => {
+            event.preventDefault();
+            onCommitSearch(query);
+          }}
+        >
+          <label className="mobile-inbox-search-field">
+            <span aria-hidden="true">
+              <svg viewBox="0 0 24 24" focusable="false">
+                <circle cx="11" cy="11" r="6.4" />
+                <path d="m16.1 16.1 4 4" />
+              </svg>
+            </span>
+            <input
+              ref={inputRef}
+              value={query}
+              onChange={(event) => onQueryChange(event.target.value)}
+              placeholder={searchPlaceholder}
+              autoComplete="off"
+              inputMode="search"
+            />
+          </label>
+          <button type="button" className="ghost-button mobile-inbox-search-cancel" onClick={onClose}>
+            {t("cancel")}
+          </button>
+        </form>
+
+        <div className="mobile-inbox-search-body">
+          {!trimmedQuery ? (
+            <section className="mobile-inbox-search-recents" aria-label="Recent searches">
+              <div className="mobile-inbox-search-section-header">
+                <span>Recent searches</span>
+                {recentSearches.length > 0 ? (
+                  <button type="button" onClick={onClearRecentSearches}>
+                    Clear
+                  </button>
+                ) : null}
+              </div>
+              {recentSearches.length > 0 ? (
+                <div className="mobile-inbox-recent-list">
+                  {recentSearches.map((term) => (
+                    <span className="mobile-inbox-recent-chip" key={term}>
+                      <button type="button" onClick={() => onUseRecentSearch(term)}>
+                        {term}
+                      </button>
+                      <button type="button" aria-label={`Remove ${term}`} onClick={() => onRemoveRecentSearch(term)}>
+                        ×
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              ) : (
+                <p className="mobile-inbox-search-empty">Search signals by title, content, status, sender, or project.</p>
+              )}
+            </section>
+          ) : results.length === 0 ? (
+            <section className="mobile-inbox-search-empty-state">
+              <p className="eyebrow">No matches</p>
+              <h2>No signals found</h2>
+              <p>Try another title, tag, status, sender, or project name.</p>
+            </section>
+          ) : (
+            <div className="mobile-inbox-search-results" aria-live="polite">
+              <div className="mobile-inbox-search-section-header">
+                <span>{results.length} matching signals</span>
+              </div>
+              <div className="mobile-inbox-search-result-list">
+                {results.map((record) => (
+                  <MobileSignalRow
+                    key={record.submission.id}
+                    record={record}
+                    isSelected={selectedRecord?.submission.id === record.submission.id}
+                    isUnlocked={unlockedSignalId === record.submission.id}
+                    isDemoJustArrived={isDemoSignalRecord(record) && demoJustArrivedSignalIds.has(record.submission.id)}
+                    highlightQuery={trimmedQuery}
+                    onSelect={() => {
+                      onCommitSearch(query);
+                      onSelectSignal(record);
+                      onClose();
+                    }}
+                    onQuickAction={onQuickAction}
+                    t={t}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </section>
+    </div>
   );
 }
 
@@ -3441,6 +3739,18 @@ interface MobileSignalInboxProps {
   unlockedSignalId?: string | null;
   onSelectSignal: (record: SignalRecord) => void;
   onQuickAction: (record: SignalRecord, action: QuickActionId) => void;
+  searchOverlayOpen: boolean;
+  onOpenSearch: () => void;
+  onCloseSearch: () => void;
+  searchOverlayQuery: string;
+  debouncedSearchOverlayQuery: string;
+  onSearchOverlayQueryChange: (value: string) => void;
+  onCommitSearchOverlayQuery: (value: string) => void;
+  recentSearches: string[];
+  onUseRecentSearch: (value: string) => void;
+  onRemoveRecentSearch: (value: string) => void;
+  onClearRecentSearches: () => void;
+  searchResults: SignalRecord[];
   searchPlaceholder: string;
   accessibleForms: FormWithCount[];
   selectedFormId: string;
@@ -3508,6 +3818,18 @@ function MobileSignalInbox({
   unlockedSignalId,
   onSelectSignal,
   onQuickAction,
+  searchOverlayOpen,
+  onOpenSearch,
+  onCloseSearch,
+  searchOverlayQuery,
+  debouncedSearchOverlayQuery,
+  onSearchOverlayQueryChange,
+  onCommitSearchOverlayQuery,
+  recentSearches,
+  onUseRecentSearch,
+  onRemoveRecentSearch,
+  onClearRecentSearches,
+  searchResults,
   searchPlaceholder,
   accessibleForms,
   selectedFormId,
@@ -3582,7 +3904,30 @@ function MobileSignalInbox({
         onJumpToReview={onJumpToReview}
         onRevealCreateProject={onRevealCreateProject}
         onRevealConnectProject={onRevealConnectProject}
+        onOpenSearch={onOpenSearch}
       />
+
+      {searchOverlayOpen ? (
+        <MobileInboxSearchOverlay
+          query={searchOverlayQuery}
+          debouncedQuery={debouncedSearchOverlayQuery}
+          onQueryChange={onSearchOverlayQueryChange}
+          onClose={onCloseSearch}
+          onCommitSearch={onCommitSearchOverlayQuery}
+          recentSearches={recentSearches}
+          onUseRecentSearch={onUseRecentSearch}
+          onRemoveRecentSearch={onRemoveRecentSearch}
+          onClearRecentSearches={onClearRecentSearches}
+          results={searchResults}
+          selectedRecord={selectedRecord}
+          unlockedSignalId={unlockedSignalId}
+          demoJustArrivedSignalIds={demoJustArrivedSignalIds}
+          onSelectSignal={onSelectSignal}
+          onQuickAction={onQuickAction}
+          searchPlaceholder={searchPlaceholder}
+          t={t}
+        />
+      ) : null}
 
       <div className="mobile-signal-list" aria-live="polite">
         {visibleSignals.length === 0
@@ -3693,6 +4038,8 @@ export function AdminDashboardPage() {
   const [showShortcutHelp, setShowShortcutHelp] = useState(false);
   const [isReviewerFocusMode, setIsReviewerFocusMode] = useState(false);
   const [isRunningDemoFlow, setIsRunningDemoFlow] = useState(false);
+  const [mobileDetailSheetDragOffset, setMobileDetailSheetDragOffset] = useState(0);
+  const [mobileDetailSheetDragging, setMobileDetailSheetDragging] = useState(false);
   const [isDemoGuideOpen, setIsDemoGuideOpen] = useState(true);
   const [demoSignalScenario, setDemoSignalScenario] = useState<DemoSignalScenario>(DEFAULT_DEMO_SIGNAL_SCENARIO);
   const [demoIntelligenceViewMode, setDemoIntelligenceViewMode] = useState<DemoIntelligenceViewMode>("executive");
@@ -3731,6 +4078,7 @@ export function AdminDashboardPage() {
   const reviewSessionPrimaryActionRef = useRef<HTMLButtonElement | null>(null);
   const keyboardNavigationRef = useRef(false);
   const isClearingMobileSignalSelectionRef = useRef(false);
+  const mobileDetailSheetGestureRef = useRef<MobileDetailSheetGestureState | null>(null);
   const demoIngestTimerRefs = useRef<number[]>([]);
   const demoArrivalTimerRefs = useRef<number[]>([]);
   const demoUnlockedThresholdsRef = useRef<Set<number>>(new Set());
@@ -3787,6 +4135,10 @@ export function AdminDashboardPage() {
     viewScope: signalViewScope,
     mockAdminData,
   });
+  const [mobileInboxSearchOpen, setMobileInboxSearchOpen] = useState(false);
+  const [mobileInboxSearchQuery, setMobileInboxSearchQuery] = useState("");
+  const [debouncedMobileInboxSearchQuery, setDebouncedMobileInboxSearchQuery] = useState("");
+  const [mobileInboxRecentSearches, setMobileInboxRecentSearches] = useState(() => readMobileInboxRecentSearches());
   const versionCounts = useMemo(
     () => getSubmissionVersionCounts(allSignals.map((record) => record.submission)),
     [allSignals],
@@ -3847,6 +4199,12 @@ export function AdminDashboardPage() {
         ? selectedRecordFromInbox
         : visibleSignals[0] ?? null;
   const selectedRecordIsDemo = isDemoSignalRecord(selectedRecord);
+  const selectedSignalTitle = selectedRecord
+    ? isOnchainRecoveredSignal(selectedRecord.submission)
+      ? t("onchainRecoverySnapshotTitle")
+      : getSignalSubject(selectedRecord.submission)
+    : "";
+  const selectedSignalTimestamp = selectedRecord ? formatDate(selectedRecord.submission.createdAt) : "";
   const [renderedSignalLimit, setRenderedSignalLimit] = useState(INITIAL_SIGNAL_LIST_LIMIT);
   const renderedVisibleSignals = useMemo(
     () => visibleSignals.slice(0, renderedSignalLimit),
@@ -4165,6 +4523,69 @@ export function AdminDashboardPage() {
     loadConsole,
     mockProject: mockAdminData?.project ?? null,
   });
+  const mobileInboxSearchResults = useMemo(() => {
+    const query = normalizeRecentSearchTerm(debouncedMobileInboxSearchQuery).toLowerCase();
+    if (!query) {
+      return [];
+    }
+    return visibleSignals.filter((record) =>
+      getMobileSignalSearchText(record, t, selectedProject?.name ?? null).includes(query),
+    );
+  }, [debouncedMobileInboxSearchQuery, selectedProject?.name, t, visibleSignals]);
+  const commitMobileInboxSearchQuery = useCallback((value: string) => {
+    setMobileInboxRecentSearches((current) => addMobileInboxRecentSearch(current, value));
+  }, []);
+  const openMobileInboxSearch = useCallback(() => {
+    setMobileInboxSearchOpen(true);
+  }, []);
+  const closeMobileInboxSearch = useCallback(() => {
+    commitMobileInboxSearchQuery(mobileInboxSearchQuery);
+    setMobileInboxSearchOpen(false);
+  }, [commitMobileInboxSearchQuery, mobileInboxSearchQuery]);
+  const useMobileInboxRecentSearch = useCallback((value: string) => {
+    setMobileInboxSearchQuery(value);
+    setDebouncedMobileInboxSearchQuery(value);
+    commitMobileInboxSearchQuery(value);
+  }, [commitMobileInboxSearchQuery]);
+  const removeMobileInboxRecentSearch = useCallback((value: string) => {
+    setMobileInboxRecentSearches((current) => {
+      const next = current.filter((search) => search.toLowerCase() !== value.toLowerCase());
+      writeMobileInboxRecentSearches(next);
+      return next;
+    });
+  }, []);
+  const clearMobileInboxRecentSearches = useCallback(() => {
+    setMobileInboxRecentSearches([]);
+    writeMobileInboxRecentSearches([]);
+  }, []);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setDebouncedMobileInboxSearchQuery(normalizeRecentSearchTerm(mobileInboxSearchQuery));
+    }, MOBILE_INBOX_SEARCH_DEBOUNCE_MS);
+    return () => window.clearTimeout(timer);
+  }, [mobileInboxSearchQuery]);
+
+  useEffect(() => {
+    if (!mobileInboxSearchOpen) {
+      return;
+    }
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    function handleEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        closeMobileInboxSearch();
+      }
+    }
+
+    window.addEventListener("keydown", handleEscape);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", handleEscape);
+    };
+  }, [closeMobileInboxSearch, mobileInboxSearchOpen]);
 
   useEffect(() => {
     const tab = new URLSearchParams(location.search).get("tab");
@@ -4934,6 +5355,13 @@ export function AdminDashboardPage() {
   const selectedRecordNeedsDecrypt = Boolean(
     selectedRecord?.submission.isEncrypted && !selectedRecordIsDemo && !detailAnswers,
   );
+  const selectedSignalLockStateLabel = !selectedRecord
+    ? ""
+    : selectedRecord.submission.isEncrypted
+      ? detailAnswers
+        ? t("unlockedSignalState")
+        : t("lockedSignalState")
+      : t("openSignalState");
   const reviewSaveStatusLabel: Record<ReviewSaveStatus, string> = {
     idle: t("reviewSaveReadyToSave"),
     saving: t("reviewSaveSaving"),
@@ -5176,7 +5604,7 @@ export function AdminDashboardPage() {
     target?.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" });
   }, [selectedSignalId]);
 
-  function syncMobileSignalUrl(record: SignalRecord | null) {
+  const syncMobileSignalUrl = useCallback((record: SignalRecord | null) => {
     if (typeof window === "undefined" || !window.matchMedia?.(MOBILE_REVIEW_MEDIA_QUERY).matches) {
       return;
     }
@@ -5194,24 +5622,124 @@ export function AdminDashboardPage() {
       },
       { replace: !record },
     );
-  }
+  }, [location.search, navigate, reviewBasePath]);
 
-  function handleReturnToSignals() {
+  const handleReturnToSignals = useCallback(() => {
     isClearingMobileSignalSelectionRef.current = true;
     setSelectedSignalId("");
+    setMobileDetailSheetDragOffset(0);
+    setMobileDetailSheetDragging(false);
     syncMobileSignalUrl(null);
-    window.requestAnimationFrame(() => {
-      window.scrollTo({ top: 0, behavior: "smooth" });
-    });
-  }
+  }, [setSelectedSignalId, syncMobileSignalUrl]);
 
   function handleSelectMobileSignal(record: SignalRecord) {
     setSelectedSignalId(record.submission.id);
+    setMobileDetailSheetDragOffset(0);
+    setMobileDetailSheetDragging(false);
     syncMobileSignalUrl(record);
-    window.requestAnimationFrame(() => {
-      reviewInboxRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-    });
   }
+
+  function isMobileReviewViewport() {
+    return typeof window !== "undefined" && window.matchMedia?.(MOBILE_REVIEW_MEDIA_QUERY).matches;
+  }
+
+  function handleMobileDetailSheetTouchStart(event: ReactTouchEvent<HTMLElement>) {
+    if (!isMobileReviewViewport() || event.touches.length !== 1) {
+      mobileDetailSheetGestureRef.current = null;
+      return;
+    }
+
+    const touch = event.touches[0];
+    mobileDetailSheetGestureRef.current = {
+      startX: touch.clientX,
+      startY: touch.clientY,
+      deltaX: 0,
+      deltaY: 0,
+      dragging: false,
+      blockedByScroll: false,
+    };
+    setMobileDetailSheetDragOffset(0);
+    setMobileDetailSheetDragging(false);
+  }
+
+  function handleMobileDetailSheetTouchMove(event: ReactTouchEvent<HTMLElement>) {
+    const gesture = mobileDetailSheetGestureRef.current;
+    if (!gesture || event.touches.length !== 1) {
+      return;
+    }
+
+    const touch = event.touches[0];
+    const deltaX = touch.clientX - gesture.startX;
+    const deltaY = touch.clientY - gesture.startY;
+    gesture.deltaX = deltaX;
+    gesture.deltaY = deltaY;
+
+    if (!gesture.dragging) {
+      const absDeltaX = Math.abs(deltaX);
+      const absDeltaY = Math.abs(deltaY);
+      if (absDeltaX > MOBILE_DETAIL_SHEET_INTENT_PX && absDeltaX > absDeltaY) {
+        gesture.blockedByScroll = true;
+        return;
+      }
+      if (event.currentTarget.scrollTop > 0 && deltaY > 0) {
+        gesture.blockedByScroll = true;
+        return;
+      }
+      if (deltaY > MOBILE_DETAIL_SHEET_INTENT_PX && deltaY > absDeltaX * 1.25) {
+        gesture.dragging = true;
+        setMobileDetailSheetDragging(true);
+      }
+    }
+
+    if (gesture.dragging) {
+      event.preventDefault();
+      setMobileDetailSheetDragOffset(Math.max(0, Math.min(deltaY, window.innerHeight)));
+    }
+  }
+
+  function finishMobileDetailSheetTouch(event: ReactTouchEvent<HTMLElement>) {
+    const gesture = mobileDetailSheetGestureRef.current;
+    const touch = event.changedTouches[0];
+    if (gesture && touch) {
+      gesture.deltaX = touch.clientX - gesture.startX;
+      gesture.deltaY = touch.clientY - gesture.startY;
+    }
+    mobileDetailSheetGestureRef.current = null;
+    setMobileDetailSheetDragging(false);
+
+    if (
+      gesture &&
+      !gesture.blockedByScroll &&
+      gesture.deltaY > MOBILE_DETAIL_SHEET_SWIPE_THRESHOLD_PX &&
+      gesture.deltaY > Math.abs(gesture.deltaX) * 1.25
+    ) {
+      handleReturnToSignals();
+      return;
+    }
+
+    setMobileDetailSheetDragOffset(0);
+  }
+
+  useEffect(() => {
+    if (!selectedRecord || !isMobileReviewViewport()) {
+      return;
+    }
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    function handleEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        handleReturnToSignals();
+      }
+    }
+
+    window.addEventListener("keydown", handleEscape);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", handleEscape);
+    };
+  }, [handleReturnToSignals, selectedRecord]);
 
   const selectedRecordFocusAction = !selectedRecord
     ? null
@@ -5909,15 +6437,47 @@ export function AdminDashboardPage() {
     return allFormResponses;
   }
 
-  function getCsvResponseOverrides() {
-    return detailAnswers && selectedRecord
-      ? {
-          [selectedRecord.submission.id]: {
-            answers: detailAnswers,
-            attachments: detailAttachments,
-          },
-        }
-      : undefined;
+  function getCsvResponseOverrides(
+    additionalDecryptedSignals: typeof decryptedSignalsById = {},
+  ) {
+    const overrides: NonNullable<ExportResponsesToCsvOptions["responseOverrides"]> = {};
+    for (const [submissionId, decryptedSignal] of Object.entries({
+      ...decryptedSignalsById,
+      ...additionalDecryptedSignals,
+    })) {
+      overrides[submissionId] = {
+        answers: decryptedSignal.answers,
+        attachments: decryptedSignal.attachments,
+      };
+    }
+    if (detailAnswers && selectedRecord) {
+      overrides[selectedRecord.submission.id] = {
+        answers: detailAnswers,
+        attachments: detailAttachments,
+      };
+    }
+    return Object.keys(overrides).length > 0 ? overrides : undefined;
+  }
+
+  async function resolveCsvResponseOverrides(form: FormSchema, responses: Submission[]) {
+    const encryptedResponsesMissingOverrides = responses.filter(
+      (submission) => submission.isEncrypted && !decryptedSignalsById[submission.id],
+    );
+    if (encryptedResponsesMissingOverrides.length === 0) {
+      return getCsvResponseOverrides();
+    }
+    const decryptResult = await handleDecryptRecords(
+      encryptedResponsesMissingOverrides.map((submission) => ({
+        form: {
+          ...form,
+          submissionCount: responses.length,
+        },
+        submission,
+        category: inferSignalCategory(submission),
+        searchText: "",
+      })),
+    );
+    return getCsvResponseOverrides(decryptResult.unlockedSignalsById);
   }
 
   async function handleOpenCsvExportReview() {
@@ -5927,6 +6487,7 @@ export function AdminDashboardPage() {
     }
     const responses = getCsvExportResponses();
     const versionedForms = await loadVersionedFormSchemas(selectedRecord.form);
+    const responseOverrides = await resolveCsvResponseOverrides(selectedRecord.form, responses);
     const options: ExportResponsesToCsvOptions = {
       language,
       now: new Date(),
@@ -5935,7 +6496,7 @@ export function AdminDashboardPage() {
       excludedPiiFields: excludedCsvPiiFields,
       exportedBy: activeAccountAddress ?? "",
       filterSnapshot: getCsvFilterSnapshot(),
-      responseOverrides: getCsvResponseOverrides(),
+      responseOverrides,
       versionedForms,
     };
     const { buildExportMetadata } = await loadCsvExportModule();
@@ -5957,6 +6518,7 @@ export function AdminDashboardPage() {
       return;
     }
     const versionedForms = await loadVersionedFormSchemas(form);
+    const responseOverrides = await resolveCsvResponseOverrides(form, responses);
     const options: ExportResponsesToCsvOptions = {
       language,
       now: new Date(),
@@ -5974,6 +6536,7 @@ export function AdminDashboardPage() {
         dateRange: {},
         formVersion: "all",
       },
+      responseOverrides,
       versionedForms,
     };
     const { buildExportMetadata } = await loadCsvExportModule();
@@ -6529,6 +7092,18 @@ export function AdminDashboardPage() {
             unlockedSignalId={detailAnswers && selectedRecord ? selectedRecord.submission.id : null}
             onSelectSignal={handleSelectMobileSignal}
             onQuickAction={handleQuickAction}
+            searchOverlayOpen={mobileInboxSearchOpen}
+            onOpenSearch={openMobileInboxSearch}
+            onCloseSearch={closeMobileInboxSearch}
+            searchOverlayQuery={mobileInboxSearchQuery}
+            debouncedSearchOverlayQuery={debouncedMobileInboxSearchQuery}
+            onSearchOverlayQueryChange={setMobileInboxSearchQuery}
+            onCommitSearchOverlayQuery={commitMobileInboxSearchQuery}
+            recentSearches={mobileInboxRecentSearches}
+            onUseRecentSearch={useMobileInboxRecentSearch}
+            onRemoveRecentSearch={removeMobileInboxRecentSearch}
+            onClearRecentSearches={clearMobileInboxRecentSearches}
+            searchResults={mobileInboxSearchResults}
             searchPlaceholder={t("searchSignalsPlaceholder")}
             accessibleForms={accessibleForms}
             selectedFormId={selectedFormId}
@@ -6554,10 +7129,26 @@ export function AdminDashboardPage() {
             onRevealCreateProject={() => revealProjectSettingsTools("create")}
             onRevealConnectProject={() => revealProjectSettingsTools("connect")}
           />
+          {hasExplicitSelectedRecord ? (
+            <button
+              type="button"
+              className="mobile-signal-detail-backdrop"
+              onClick={handleReturnToSignals}
+              aria-label={t("backToSignals")}
+            />
+          ) : null}
           <section
             ref={reviewInboxRef}
-            className={`panel signal-inbox-workbench desktop-signal-inbox ${hasExplicitSelectedRecord ? "has-selected-signal" : ""}`}
+            className={`panel signal-inbox-workbench desktop-signal-inbox mobile-signal-detail-sheet ${
+              hasExplicitSelectedRecord ? "has-selected-signal" : ""
+            } ${mobileDetailSheetDragging ? "is-dragging" : ""}`}
+            style={{ "--mobile-detail-sheet-drag-y": `${mobileDetailSheetDragOffset}px` } as CSSProperties}
+            onTouchStart={handleMobileDetailSheetTouchStart}
+            onTouchMove={handleMobileDetailSheetTouchMove}
+            onTouchEnd={finishMobileDetailSheetTouch}
+            onTouchCancel={finishMobileDetailSheetTouch}
           >
+            {hasExplicitSelectedRecord ? <div className="mobile-detail-sheet-handle" aria-hidden="true" /> : null}
             <div className="signal-workbench-header">
               <div className="signal-workbench-copy">
                 <p className="eyebrow">{t("signalInboxTitle")}</p>
@@ -7072,6 +7663,11 @@ export function AdminDashboardPage() {
                     <div className="signal-detail-heading">
                     <div>
                       <p className="eyebrow">{t("reviewConsoleEyebrow")}</p>
+                      <h2>{selectedSignalTitle}</h2>
+                      <p className="signal-detail-mobile-meta">
+                        <time dateTime={selectedRecord.submission.createdAt}>{selectedSignalTimestamp}</time>
+                        <span>{selectedSignalLockStateLabel}</span>
+                      </p>
                       {selectedRecordIsDemo ? (
                         <span className="signal-chip signal-chip-soft demo-signal-detail-badge">{t("demoSignalNotStoredLabel")}</span>
                       ) : null}
@@ -7737,7 +8333,7 @@ export function AdminDashboardPage() {
                         {item.canRegisterOnSui ? (
                           <button
                             type="button"
-                            className="ghost-button node-directory-action-button"
+                            className="ghost-button node-directory-action-button node-directory-register"
                             onClick={() => void handleRegisterNodeOnSui(item.id)}
                             disabled={isNodeRegistrationBusy || deletingVisibleNodes}
                           >

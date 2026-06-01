@@ -1,4 +1,5 @@
 import { useSignAndExecuteTransaction } from "@mysten/dapp-kit";
+import { isValidSuiAddress } from "@mysten/sui/utils";
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { Link, useParams } from "react-router-dom";
 import { AdminAccessGate } from "../components/AdminAccessGate";
@@ -10,6 +11,7 @@ import { ProofPanel } from "../components/ProofPanel";
 import { RichTextContent } from "../components/RichText";
 import { SignalStatusBadges } from "../components/SignalStatusBadges";
 import { SignalMetaChip } from "../components/SignalMetaChip";
+import { SuiAddressDisplay } from "../components/SuiAddressDisplay";
 import { StorageProof } from "../components/StorageProof";
 import { CsvExportConfirmationModal } from "../features/admin/components/CsvExportConfirmationModal";
 import { usePrivateSignalDecrypt } from "../features/admin/hooks/usePrivateSignalDecrypt";
@@ -356,10 +358,12 @@ export function FormSubmissionsPage() {
     setDecryptError,
     setDecryptDiagnostics,
     setDecryptStatusMessage,
+    decryptedSignalsById,
     decryptInFlightRef,
     activeDecryptSubmissionId,
     decryptContext: attachmentDecryptContext,
     handleDecrypt,
+    handleDecryptRecords,
     handleCancelDecrypt: cancelSharedDecrypt,
     realSealSessionTtlMinutes,
   } = usePrivateSignalDecrypt({
@@ -815,18 +819,53 @@ export function FormSubmissionsPage() {
     return csvExportScope === "filtered" ? visibleSignals : versionedSubmissions;
   }
 
-  function getCsvResponseOverrides() {
-    return selectedSubmission && detailAnswers
-      ? {
-          [selectedSubmission.id]: {
-            answers: detailAnswers,
-            attachments: detailAttachments,
-          },
-        }
-      : undefined;
+  function getCsvResponseOverrides(
+    additionalDecryptedSignals: typeof decryptedSignalsById = {},
+  ) {
+    const overrides: NonNullable<ExportResponsesToCsvOptions["responseOverrides"]> = {};
+    for (const [submissionId, decryptedSignal] of Object.entries({
+      ...decryptedSignalsById,
+      ...additionalDecryptedSignals,
+    })) {
+      overrides[submissionId] = {
+        answers: decryptedSignal.answers,
+        attachments: decryptedSignal.attachments,
+      };
+    }
+    if (selectedSubmission && detailAnswers) {
+      overrides[selectedSubmission.id] = {
+        answers: detailAnswers,
+        attachments: detailAttachments,
+      };
+    }
+    return Object.keys(overrides).length > 0 ? overrides : undefined;
   }
 
-  function handleOpenCsvExportReview() {
+  async function resolveCsvResponseOverrides(responses: Submission[]) {
+    if (!form) {
+      return getCsvResponseOverrides();
+    }
+    const encryptedResponsesMissingOverrides = responses.filter(
+      (submission) => submission.isEncrypted && !decryptedSignalsById[submission.id],
+    );
+    if (encryptedResponsesMissingOverrides.length === 0) {
+      return getCsvResponseOverrides();
+    }
+    const decryptResult = await handleDecryptRecords(
+      encryptedResponsesMissingOverrides.map((submission) => ({
+        form: {
+          ...form,
+          submissionCount: versionedSubmissions.length,
+        },
+        submission,
+        category: inferSignalCategory(submission),
+        searchText: "",
+      })),
+    );
+    return getCsvResponseOverrides(decryptResult.unlockedSignalsById);
+  }
+
+  async function handleOpenCsvExportReview() {
     if (!form) {
       return;
     }
@@ -835,6 +874,7 @@ export function FormSubmissionsPage() {
       setToast({ tone: "error", message: t("noResponsesMatchCurrentFilters") });
       return;
     }
+    const responseOverrides = await resolveCsvResponseOverrides(responses);
     const options: ExportResponsesToCsvOptions = {
       language,
       now: new Date(),
@@ -843,7 +883,7 @@ export function FormSubmissionsPage() {
       excludedPiiFields: excludedCsvPiiFields,
       exportedBy: wallet.accountAddress ?? "",
       filterSnapshot: getCsvFilterSnapshot(),
-      responseOverrides: getCsvResponseOverrides(),
+      responseOverrides,
       versionedForms,
     };
     const metadata = buildExportMetadata(form, responses, options);
@@ -927,6 +967,9 @@ export function FormSubmissionsPage() {
   const selectedReviewerPresence = selectedSubmission
     ? getReviewerPresenceText(selectedSubmission, wallet.accountAddress)
     : null;
+  const selectedReviewerWalletAddress = isValidSuiAddress(reviewerDraft.trim())
+    ? reviewerDraft.trim()
+    : "";
   const selectedNeedsFollowUp = selectedSubmission ? hasNeedsFollowUp(selectedSubmission) : false;
   const selectedReviewerNoteUpdatedAt = selectedSubmission ? getReviewerNoteUpdatedAt(selectedSubmission) : undefined;
   const unlockDisabledReason = detailAnswers
@@ -1164,7 +1207,18 @@ export function FormSubmissionsPage() {
         </label>
         <div className="review-controls-actions">
           <span className="signal-chip signal-chip-soft">
-            {selectedReviewerDisplayLabel || t("unassignedLabel")}
+            {selectedReviewerWalletAddress ? (
+              <SuiAddressDisplay
+                address={selectedReviewerWalletAddress}
+                className="reviewer-assignee-address"
+                showCopyLabel={false}
+                showTooltip
+                avatarSize={32}
+                interactive={false}
+              />
+            ) : (
+              selectedReviewerDisplayLabel || t("unassignedLabel")
+            )}
           </span>
           {wallet.accountAddress ? (
             <button

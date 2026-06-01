@@ -560,6 +560,7 @@ function FormBuilderComposer({
     locationRequirement: builder.values.locationRequirement,
     processingMode: builder.values.processingMode,
     encryptSubmissions: builder.values.encryptSubmissions,
+    responseOpenAtCustom: builder.values.responseOpenAtCustom,
     responseDeadlinePreset: builder.values.responseDeadlinePreset,
     responseDeadlineCustomAt: builder.values.responseDeadlineCustomAt,
     isDirty: builder.isDirty,
@@ -911,15 +912,11 @@ function FormBuilderComposer({
           encryptSubmissions={builder.values.encryptSubmissions}
           headerImage={builder.values.headerImage}
           headerLogo={builder.values.headerLogo}
-          responseDeadlinePreset={builder.values.responseDeadlinePreset}
-          responseDeadlineCustomAt={builder.values.responseDeadlineCustomAt}
           setTitle={builder.setTitle}
           setDescription={builder.setDescription}
           setHeaderImage={builder.setHeaderImage}
           setHeaderLogo={builder.setHeaderLogo}
           setProcessingMode={builder.setProcessingMode}
-          setResponseDeadlinePreset={builder.setResponseDeadlinePreset}
-          setResponseDeadlineCustomAt={builder.setResponseDeadlineCustomAt}
           onBack={() => {
             if (!editingForm) {
               builder.moveStep(-1);
@@ -985,6 +982,9 @@ function FormBuilderComposer({
           identityPolicy={builder.values.identityPolicy}
           locationRequirement={builder.values.locationRequirement}
           encryptSubmissions={builder.values.encryptSubmissions}
+          responseOpenAtCustom={builder.values.responseOpenAtCustom}
+          responseDeadlinePreset={builder.values.responseDeadlinePreset}
+          responseDeadlineCustomAt={builder.values.responseDeadlineCustomAt}
           mobilePane={builder.values.mobilePane}
           isReadyToPublish={builder.isReadyToPublish}
           publicPath={publish.publicPath}
@@ -1016,6 +1016,9 @@ function FormBuilderComposer({
           onChangeIdentityPolicy={builder.setIdentityPolicy}
           onChangeLocationRequirement={builder.setLocationRequirement}
           onToggleEncryptSubmissions={builder.setEncryptSubmissions}
+          onChangeResponseOpenAtCustom={builder.setResponseOpenAtCustom}
+          onChangeResponseDeadlinePreset={builder.setResponseDeadlinePreset}
+          onChangeResponseDeadlineCustomAt={builder.setResponseDeadlineCustomAt}
           onRegisterOnSui={() => void publish.handleRegisterOnSui()}
           onCopyDiagnostics={() => void publish.copyDiagnostics()}
           onBack={() => builder.moveStep(-1)}

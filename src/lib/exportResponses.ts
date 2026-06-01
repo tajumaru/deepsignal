@@ -12,6 +12,7 @@ const CSV_MIME_TYPE = "text/csv;charset=utf-8";
 const CSV_BOM = "\uFEFF";
 const EXPORT_AUDIT_LOG_KEY = "deepsignal.exportAuditLog.v1";
 const MAX_AUDIT_LOG_ENTRIES = 100;
+const EMBEDDED_ENCRYPTED_PAYLOAD_BLOB_ID = "__embedded_encrypted_payload__";
 
 export { sanitizeCsvCell } from "./csv";
 
@@ -211,6 +212,22 @@ function formatAttachmentsForCsv(attachments: Submission["attachments"]) {
     .join(" | ");
 }
 
+function isExportableBlobId(value: string | undefined | null) {
+  return Boolean(value && value.trim() && value !== EMBEDDED_ENCRYPTED_PAYLOAD_BLOB_ID);
+}
+
+function isWalrusExportableBlobId(value: string | undefined | null) {
+  return Boolean(isExportableBlobId(value) && !value?.startsWith("local-") && !value?.startsWith("inline:"));
+}
+
+function firstExportableBlobId(values: Array<string | undefined | null>) {
+  return values.find((value): value is string => isExportableBlobId(value)) ?? "";
+}
+
+function firstWalrusBlobId(values: Array<string | undefined | null>) {
+  return values.find((value): value is string => isWalrusExportableBlobId(value)) ?? "";
+}
+
 function formatAnswerForCsv(
   field: FormSchema["fields"][number],
   rowSource: ResponseExportRowSource,
@@ -313,7 +330,9 @@ export function buildRows(
   return sortedResponses.map((submission) => {
     const override = options.responseOverrides?.[submission.id];
     const answers = aggregateExport
-      ? getInsightAnswers(submission)
+      ? omitDecryptedAnswers
+        ? getInsightAnswers(submission)
+        : override?.answers ?? getInsightAnswers(submission)
       : omitDecryptedAnswers
         ? submission.answers ?? {}
         : override?.answers ?? submission.answers ?? {};
@@ -327,8 +346,15 @@ export function buildRows(
           ? "anonymous"
           : "sui_wallet";
     const identityProvider = respondentMeta.identityKind === "zklogin" ? respondentMeta.identityProvider ?? "" : "";
-    const storageBlobId = submission.blobId ?? submission.encryptedBlobId ?? submission.receiptBlobId ?? "";
-    const walrusBlobId = submission.blobId ?? submission.encryptedBlobId ?? "";
+    const blobIdCandidates = [
+      submission.blobId,
+      submission.answerBlobId,
+      submission.receiptBlobId,
+      submission.encryptedBlobId,
+      submission.remoteIndexBlobId,
+    ];
+    const storageBlobId = firstExportableBlobId(blobIdCandidates);
+    const walrusBlobId = firstWalrusBlobId(blobIdCandidates);
     const row = [
       form.title,
       metadata.exportedAt,

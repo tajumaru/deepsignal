@@ -118,11 +118,11 @@ export function ProofPanel({
         ) : null}
         <div className="metadata-row proof-row">
           <span>Current wallet address</span>
-          {walletAddress ? <SignalMetaChip type="contributor" value={walletAddress} /> : <strong>Not connected</strong>}
+          {walletAddress ? <SignalMetaChip type="contributor" value={walletAddress} avatarSize={40} /> : <strong>Not connected</strong>}
         </div>
         <div className="metadata-row proof-row">
           <span>Form ownerAddress</span>
-          {ownerAddress ? <SignalMetaChip type="contributor" value={ownerAddress} /> : <strong>Legacy demo form</strong>}
+          {ownerAddress ? <SignalMetaChip type="contributor" value={ownerAddress} avatarSize={40} /> : <strong>Legacy demo form</strong>}
         </div>
       </div>
     </section>

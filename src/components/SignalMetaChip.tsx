@@ -16,6 +16,7 @@ interface SignalMetaChipProps {
   value: string;
   className?: string;
   interactive?: boolean;
+  avatarSize?: 24 | 32 | 40;
 }
 
 interface SignalMetaRowProps {
@@ -66,6 +67,7 @@ export function SignalMetaChip({
   value,
   className = "",
   interactive = true,
+  avatarSize = 24,
 }: SignalMetaChipProps) {
   const { t } = useI18n();
   const [isVisible, setIsVisible] = useState(false);
@@ -110,6 +112,7 @@ export function SignalMetaChip({
           showTooltip={interactive}
           showCopyLabel={interactive}
           interactive={interactive}
+          avatarSize={avatarSize}
         />
       </span>
     );

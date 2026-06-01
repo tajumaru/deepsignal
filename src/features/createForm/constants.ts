@@ -58,6 +58,7 @@ export function createInitialDraftSnapshot(language: Language = "en") {
     false,
     true,
     initialSections,
+    "",
     "none",
     "",
   );

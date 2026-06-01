@@ -52,7 +52,7 @@ declare global {
         buildVersion?: string;
         buildTime?: string;
         gitHash?: string;
-        category?: "chunkLoad" | "missingExport" | "runtime";
+        category?: "chunkLoad" | "missingExport" | "runtime" | "timeout";
         expectedExport?: string;
         moduleKeys?: string[];
         resolvedExport?: "default" | string | "missing";
@@ -189,7 +189,7 @@ export function recordFailedImport(
   error: unknown,
   chunkUrl?: string | null,
   details?: {
-    category?: "chunkLoad" | "missingExport" | "runtime";
+    category?: "chunkLoad" | "missingExport" | "runtime" | "timeout";
     expectedExport?: string;
     moduleKeys?: string[];
     resolvedExport?: "default" | string | "missing";

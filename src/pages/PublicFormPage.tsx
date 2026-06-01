@@ -14,7 +14,8 @@ import { usePublicSubmission, type SignalPipelineStage } from "../features/publi
 import { useI18n } from "../i18n";
 import {
   formatResponseDeadline,
-  isResponseDeadlinePassed,
+  isResponseWindowClosed,
+  isResponseWindowPending,
   type ResponseDeadlineLabels,
 } from "../lib/responseDeadline";
 import { DEFAULT_ATTACHMENT_MAX_BYTES, ENCRYPTED_INLINE_ATTACHMENT_MAX_BYTES } from "../lib/attachmentLimits";
@@ -226,16 +227,21 @@ export function PublicFormPage() {
     const visibleFields = form ? getOrderedFields(form.fields).filter((field) => visibleFieldIds.has(field.id)) : [];
     return new Map(visibleFields.map((field, index) => [field.id, index + 1]));
   }, [form, visibleFieldIds]);
-  const deadlinePassed = useMemo(() => isResponseDeadlinePassed(form?.responseDeadline), [form?.responseDeadline]);
+  const responseWindowPending = useMemo(() => isResponseWindowPending(form?.responseOpenAt), [form?.responseOpenAt]);
+  const responseWindowClosed = useMemo(
+    () => isResponseWindowClosed(form?.responseOpenAt, form?.responseDeadline),
+    [form?.responseDeadline, form?.responseOpenAt],
+  );
   const deadlineLabel = useMemo(() => {
     const responseDeadlineLabels: ResponseDeadlineLabels = {
       noLimit: t("responseDeadlineNone"),
+      notOpen: t("responseWindowScheduled"),
       closed: t("responseDeadlineClosed"),
       hoursLeft: (hours) => t("responseDeadlineHoursLeft", { count: hours }),
       daysLeft: (days) => t("responseDeadlineDaysLeft", { count: days }),
     };
-    return formatResponseDeadline(form?.responseDeadline, responseDeadlineLabels);
-  }, [form?.responseDeadline, t]);
+    return formatResponseDeadline(form?.responseDeadline, responseDeadlineLabels, form?.responseOpenAt);
+  }, [form?.responseDeadline, form?.responseOpenAt, t]);
   const submitModeLabel =
     walletModeSelected
       ? t("publicSubmitModeWallet")
@@ -278,7 +284,7 @@ export function PublicFormPage() {
       ? "success"
       : submitError || failure || submitPipeline.status === "failed"
         ? "error"
-        : deadlinePassed || storageConnectionPreparing
+        : responseWindowClosed || storageConnectionPreparing
           ? "disabled"
           : "idle";
   const submitButtonSubLabel =
@@ -351,8 +357,10 @@ export function PublicFormPage() {
     () => Object.entries(errors).filter(([fieldId, message]) => visibleFieldIds.has(fieldId) && Boolean(message)).length,
     [errors, visibleFieldIds],
   );
-  const submitReadinessLabel = deadlinePassed
-    ? t("publicSubmitBarClosed")
+  const submitReadinessLabel = responseWindowClosed
+    ? responseWindowPending
+      ? t("publicSubmitBarScheduled")
+      : t("publicSubmitBarClosed")
     : storageConnectionPreparing
       ? "Storage is preparing. Please wait a few seconds."
       : visibleErrorCount > 0
@@ -618,7 +626,7 @@ export function PublicFormPage() {
               </ul>
               <div className="public-identity-choice-terminal-spacer" aria-hidden="true" />
               <button type="button" className="ghost-button signal-capsule-action is-guest" onClick={handleSelectGuestAndContinue}>
-                <span className="signal-capsule-action-icon" aria-hidden="true">◎</span>
+                <span className="signal-capsule-action-icon" aria-hidden="true">{"\u25ce"}</span>
                 <span className="signal-capsule-action-copy">
                   <strong>{t("publicIdentityChoiceAnonymousCta")}</strong>
                   <small>{t("publicIdentityChoiceAnonymousReady")}</small>
@@ -683,7 +691,7 @@ export function PublicFormPage() {
               onClick={handleSelectWalletAndContinue}
               disabled={!resolvedWalletAddress}
             >
-              <span className="signal-capsule-action-icon" aria-hidden="true">◉</span>
+              <span className="signal-capsule-action-icon" aria-hidden="true">{"\u25c9"}</span>
               <span className="signal-capsule-action-copy">
                 <strong>{t("publicIdentityChoiceWalletCta")}</strong>
                 <small>{resolvedWalletAddress ? "Verified route armed" : "Connect wallet to arm this route"}</small>
@@ -797,22 +805,30 @@ export function PublicFormPage() {
           )}
         </button>
       </div>
-      <section className={`public-trust-header ${deadlinePassed ? "is-expired" : ""}`} aria-label={t("publicFormStatusSummary")}>
+      <section className={`public-trust-header ${responseWindowClosed ? "is-expired" : ""}`} aria-label={t("publicFormStatusSummary")}>
         <div className="public-trust-heading-row">
           <div className="public-trust-copy">
             <p className="eyebrow">Secure reporting workflow</p>
             <h1>{form.title}</h1>
             <RichTextContent value={form.description ?? ""} className="lede rich-text-content" fallback={t("publicDefaultBody")} />
           </div>
-          <span className={`public-form-status-badge public-form-deadline-badge ${deadlinePassed ? "is-expired" : "is-live"}`}>
+          <span className={`public-form-status-badge public-form-deadline-badge ${responseWindowClosed ? "is-expired" : "is-live"}`}>
             <span>{t("publicResponseWindow")}</span>
-            <strong>{deadlinePassed ? t("publicDeadlineClosedBadge") : deadlineLabel}</strong>
+            <strong>
+              {responseWindowClosed
+                ? responseWindowPending
+                  ? t("publicWindowScheduledBadge")
+                  : t("publicDeadlineClosedBadge")
+                : deadlineLabel}
+            </strong>
           </span>
         </div>
         <div className="public-trust-footer">
           <p className="muted">
-            {deadlinePassed
-              ? t("publicDeadlineClosedHelp")
+            {responseWindowClosed
+              ? responseWindowPending
+                ? t("publicWindowScheduledHelp")
+                : t("publicDeadlineClosedHelp")
               : form.encryptSubmissions
                 ? "This workflow creates a secure report with verifiable storage metadata."
                 : "This workflow stays public-facing while preserving review controls."}
@@ -862,10 +878,10 @@ export function PublicFormPage() {
                     triggerHaptic([10, 18, 10]);
                     void requestLocation();
                   }}
-                  disabled={deadlinePassed || locationState === "requesting"}
+                  disabled={responseWindowClosed || locationState === "requesting"}
                 >
                   <span className="signal-capsule-action-icon" aria-hidden="true">
-                    {location ? "◎" : "⌖"}
+                    {location ? "\u25ce" : "\u2316"}
                   </span>
                   <span className="signal-capsule-action-copy">
                     <strong>{location ? t("locationRecapture") : t("locationAttachAction")}</strong>
@@ -880,7 +896,7 @@ export function PublicFormPage() {
                       triggerHaptic(10);
                       clearLocation();
                     }}
-                    disabled={deadlinePassed || locationState === "requesting"}
+                    disabled={responseWindowClosed || locationState === "requesting"}
                   >
                     {t("locationRemoveAction")}
                   </button>
@@ -935,7 +951,7 @@ export function PublicFormPage() {
                       field.type === "screenshot" ? getAttachmentHint("screenshot") : field.type === "video" ? getAttachmentHint("video") : undefined
                     }
                     onChange={(value) => updateAnswer(field.id, value)}
-                    disabled={deadlinePassed}
+                    disabled={responseWindowClosed}
                   />
                 ))}
               </div>
@@ -956,7 +972,7 @@ export function PublicFormPage() {
               field.type === "screenshot" ? getAttachmentHint("screenshot") : field.type === "video" ? getAttachmentHint("video") : undefined
             }
             onChange={(value) => updateAnswer(field.id, value)}
-            disabled={deadlinePassed}
+            disabled={responseWindowClosed}
           />
         ))}
       </div>
@@ -991,14 +1007,16 @@ export function PublicFormPage() {
         </div>
         <HoldToSendButton
           state={submitLaunchState}
-          disabled={submitting || deadlinePassed || storageConnectionPreparing}
+          disabled={submitting || responseWindowClosed || storageConnectionPreparing}
           label={
             submitted || submitPipeline.status === "complete"
               ? "Signal sent"
               : preservedLocally
                 ? "Signal preserved locally"
-                : deadlinePassed
-                  ? t("publicSubmissionClosed")
+                : responseWindowClosed
+                  ? responseWindowPending
+                    ? t("publicSubmissionScheduled")
+                    : t("publicSubmissionClosed")
                   : "Hold to send signal"
           }
           subLabel={

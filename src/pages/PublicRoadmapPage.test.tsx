@@ -98,14 +98,33 @@ describe("PublicRoadmapPage lifecycle surface", () => {
     const card = await screen.findByText("Mobile checkout freeze");
     const roadmapCard = card.closest("article");
     expect(roadmapCard).not.toBeNull();
-    expect(within(roadmapCard as HTMLElement).getByText("Your signal")).toBeInTheDocument();
+    expect(within(roadmapCard as HTMLElement).getByText("Originated from your signal")).toBeInTheDocument();
     expect(within(roadmapCard as HTMLElement).getByText("Lifecycle: in progress")).toBeInTheDocument();
-    expect(within(roadmapCard as HTMLElement).getByText("Local receipt matched")).toBeInTheDocument();
-    expect(within(roadmapCard as HTMLElement).getByText(/Metadata-only roadmap entry/)).toBeInTheDocument();
+    expect(within(roadmapCard as HTMLElement).getByText("Your signal helped create this roadmap item")).toBeInTheDocument();
+    expect(within(roadmapCard as HTMLElement).getByText("The team is actively working on this.")).toBeInTheDocument();
+    expect(within(roadmapCard as HTMLElement).getByText("Metadata-only roadmap entry. The encrypted signal body stays private.")).toBeInTheDocument();
     expect(within(roadmapCard as HTMLElement).getByRole("link", { name: "Track lifecycle" })).toHaveAttribute(
       "href",
       "/my-responses/submission-1",
     );
+    expect(screen.getByText("Current Public Impact")).toBeInTheDocument();
+    expect(screen.getByText("In Progress: 1")).toBeInTheDocument();
+  });
+
+  it("does not mark roadmap entries as local respondent signals without a matching receipt", async () => {
+    upsertMyResponseHistoryEntry(buildHistoryEntry({ submissionId: "other-submission" }));
+    mockGetForm.mockResolvedValue(buildForm());
+    mockListSubmissions.mockResolvedValue([buildSubmission({ triageStatus: "planned" })]);
+
+    renderRoadmap();
+
+    const card = await screen.findByText("Mobile checkout freeze");
+    const roadmapCard = card.closest("article");
+    expect(roadmapCard).not.toBeNull();
+    expect(within(roadmapCard as HTMLElement).queryByText("Originated from your signal")).not.toBeInTheDocument();
+    expect(within(roadmapCard as HTMLElement).queryByText("Your signal helped create this roadmap item")).not.toBeInTheDocument();
+    expect(within(roadmapCard as HTMLElement).queryByRole("link", { name: "Track lifecycle" })).not.toBeInTheDocument();
+    expect(within(roadmapCard as HTMLElement).getByText("Accepted into the roadmap.")).toBeInTheDocument();
   });
 
   it("uses actionable empty lane copy when no signals are published", async () => {

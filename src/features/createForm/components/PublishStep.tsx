@@ -8,6 +8,7 @@ import { SuiAddressDisplay } from "../../../components/SuiAddressDisplay";
 import { hasInconsistentPublishState, type CriticalFailure } from "../../../lib/criticalFailure";
 import { LivePreview } from "../../../components/formBuilder/LivePreview";
 import { isLocalFallbackBlob } from "../../../lib/proof";
+import { toDateTimeLocalValue } from "../../../lib/responseDeadline";
 import { SUI_NETWORK } from "../../../lib/sui";
 import type { WalrusCostEstimate } from "../../../storage/walrusCostEstimate";
 import { formatWalrusFailureStage, type WalrusFailureDetails } from "../../../storage/walrusDiagnostics";
@@ -29,6 +30,7 @@ import type {
   MobileBuilderPane,
   PreparedPublishForm,
   ProjectOption,
+  ResponseDeadlinePreset,
   Translate,
 } from "../types";
 
@@ -65,6 +67,9 @@ interface PublishStepProps {
   identityPolicy: FormIdentityPolicy;
   locationRequirement: FormLocationRequirement;
   encryptSubmissions: boolean;
+  responseOpenAtCustom: string;
+  responseDeadlinePreset: ResponseDeadlinePreset;
+  responseDeadlineCustomAt: string;
   mobilePane: MobileBuilderPane;
   isReadyToPublish: boolean;
   publicPath: string;
@@ -96,6 +101,9 @@ interface PublishStepProps {
   onChangeIdentityPolicy: (value: FormIdentityPolicy) => void;
   onChangeLocationRequirement: (value: FormLocationRequirement) => void;
   onToggleEncryptSubmissions: (value: boolean) => void;
+  onChangeResponseOpenAtCustom: (value: string) => void;
+  onChangeResponseDeadlinePreset: (value: ResponseDeadlinePreset) => void;
+  onChangeResponseDeadlineCustomAt: (value: string) => void;
   onRegisterOnSui: () => void;
   onCopyDiagnostics: () => void;
   onBack: () => void;
@@ -276,6 +284,9 @@ export function PublishStep({
   identityPolicy,
   locationRequirement,
   encryptSubmissions,
+  responseOpenAtCustom,
+  responseDeadlinePreset,
+  responseDeadlineCustomAt,
   mobilePane,
   isReadyToPublish,
   publicPath,
@@ -306,6 +317,9 @@ export function PublishStep({
   onChangeIdentityPolicy,
   onChangeLocationRequirement,
   onToggleEncryptSubmissions,
+  onChangeResponseOpenAtCustom,
+  onChangeResponseDeadlinePreset,
+  onChangeResponseDeadlineCustomAt,
   onRegisterOnSui,
   onCopyDiagnostics,
   onBack,
@@ -348,6 +362,14 @@ export function PublishStep({
   const lensSignalLabel = getSignalTypeLabel(t, signalType);
   const lensOperatorLabel = getAnalystTypeLabel(t, analystType);
   const lensAnalysisLabel = getAnalysisTypeLabel(t, analysisType);
+  const deadlineOptions: Array<{ value: ResponseDeadlinePreset; label: string }> = [
+    { value: "none", label: t("responseDeadlineNone") },
+    { value: "1h", label: t("responseDeadlineOneHour") },
+    { value: "24h", label: t("responseDeadlineTwentyFourHours") },
+    { value: "7d", label: t("responseDeadlineSevenDays") },
+    { value: "30d", label: t("responseDeadlineThirtyDays") },
+    { value: "custom", label: t("responseDeadlineCustom") },
+  ];
 
   function formatBytes(bytes: number) {
     if (bytes < 1024) {
@@ -567,6 +589,48 @@ export function PublishStep({
                   )}
                   <span>{identityPolicy === "wallet_required" ? t("verificationRequired") : t("verificationOptional")}</span>
                 </button>
+              </div>
+              <div className="publish-visibility-quick-switch" aria-label={t("responseWindowTitle")}>
+                <span className="publish-visibility-label">{t("responseWindowTitle")}</span>
+                <label>
+                  <span>{t("responseOpenAtLabel")}</span>
+                  <input
+                    type="datetime-local"
+                    value={responseOpenAtCustom}
+                    onChange={(event) => onChangeResponseOpenAtCustom(event.target.value)}
+                  />
+                </label>
+                <label>
+                  <span>{t("responseDeadlineLabel")}</span>
+                  <select
+                    value={responseDeadlinePreset}
+                    onChange={(event) => {
+                      const nextPreset = event.target.value as ResponseDeadlinePreset;
+                      onChangeResponseDeadlinePreset(nextPreset);
+                      if (nextPreset === "custom" && !responseDeadlineCustomAt) {
+                        onChangeResponseDeadlineCustomAt(toDateTimeLocalValue(Date.now() + 60 * 60 * 1000));
+                      }
+                    }}
+                  >
+                    {deadlineOptions.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                {responseDeadlinePreset === "custom" ? (
+                  <label>
+                    <span>{t("responseDeadlineCustomAt")}</span>
+                    <input
+                      type="datetime-local"
+                      value={responseDeadlineCustomAt}
+                      min={toDateTimeLocalValue(Date.now() + 60 * 1000)}
+                      onChange={(event) => onChangeResponseDeadlineCustomAt(event.target.value)}
+                    />
+                  </label>
+                ) : null}
+                <p className="muted">{t("responseDeadlineHelp")}</p>
               </div>
               {showLocationRequirementControls ? (
                 <div className="publish-identity-quick-switch" aria-label={t("locationRequirementTitle")}>

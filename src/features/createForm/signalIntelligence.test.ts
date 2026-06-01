@@ -38,6 +38,7 @@ function createValues(patch: Partial<FormBuilderValues> = {}): FormBuilderValues
     locationRequirement: "optional",
     processingMode: "review_required",
     encryptSubmissions: false,
+    responseOpenAtCustom: "",
     responseDeadlinePreset: "none",
     responseDeadlineCustomAt: "",
     currentStep: "fields",

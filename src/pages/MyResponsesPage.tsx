@@ -100,6 +100,54 @@ function getLifecycleDetail(status: MyResponseLifecycleStatus | undefined, t: (k
   return t(step.detailKey);
 }
 
+function getImpactMessageKey(status: MyResponseLifecycleStatus | undefined) {
+  return `myResponsesImpactMessage${getLifecycleMessageSuffix(status)}`;
+}
+
+function getLifecycleMessageSuffix(status: MyResponseLifecycleStatus | undefined) {
+  switch (status) {
+    case "received":
+      return "Received";
+    case "reviewing":
+      return "Reviewing";
+    case "planned":
+      return "Planned";
+    case "in_progress":
+      return "InProgress";
+    case "completed":
+      return "Completed";
+    case "closed":
+      return "Closed";
+    case "submitted":
+    default:
+      return "Submitted";
+  }
+}
+
+function getImpactScore(status: MyResponseLifecycleStatus | undefined) {
+  switch (status) {
+    case "completed":
+      return 5;
+    case "in_progress":
+      return 4;
+    case "planned":
+      return 3;
+    case "reviewing":
+      return 2;
+    case "received":
+      return 1;
+    case "submitted":
+    case "closed":
+    default:
+      return 1;
+  }
+}
+
+function getImpactStars(status: MyResponseLifecycleStatus | undefined) {
+  const score = getImpactScore(status);
+  return "★".repeat(score) + "☆".repeat(5 - score);
+}
+
 function getLifecycleEventForStep(entry: MyResponseHistoryEntry, status: MyResponseLifecycleStatus) {
   const events = entry.lifecycleEvents ?? [];
   for (let index = events.length - 1; index >= 0; index -= 1) {
@@ -147,6 +195,79 @@ async function listMyResponseHistoryWithSubmissionLifecycle() {
   return syncedEntries;
 }
 
+function SignalImpactCard({ entry }: { entry: MyResponseHistoryEntry }) {
+  const { t } = useI18n();
+  const lifecycleStatus = entry.lifecycleStatus ?? "submitted";
+  const isCelebratory =
+    lifecycleStatus === "planned" || lifecycleStatus === "in_progress" || lifecycleStatus === "completed";
+  const canOpenRoadmap = Boolean(entry.formId && entry.manifestBlobId && entry.roadmapStatus);
+  const roadmapCopy = entry.roadmapStatus
+    ? t("myResponsesImpactIncludedInRoadmap")
+    : t("myResponsesImpactPrivateUntilPublished");
+
+  return (
+    <section
+      className={`answer-card my-response-impact-card my-response-detail-section ${
+        isCelebratory ? "is-celebratory" : "is-standard"
+      } ${lifecycleStatus === "completed" ? "is-completed" : ""}`}
+    >
+      <div className="my-response-impact-header">
+        <div>
+          <p className="my-response-section-label">{t("myResponsesImpactEyebrow")}</p>
+          <h2>{lifecycleStatus === "completed" ? t("myResponsesImpactAchieved") : t("myResponsesImpactTitle")}</h2>
+          <p className="my-response-impact-message">{t(getImpactMessageKey(lifecycleStatus))}</p>
+        </div>
+        <span className={`my-response-badge is-lifecycle-${lifecycleStatus}`}>{getLifecycleLabel(lifecycleStatus, t)}</span>
+      </div>
+
+      <div className="my-response-impact-grid">
+        <div>
+          <span>{t("myResponsesImpactStatus")}</span>
+          <strong>{getLifecycleLabel(lifecycleStatus, t)}</strong>
+        </div>
+        <div>
+          <span>{t("myResponsesImpactImpact")}</span>
+          <strong>{roadmapCopy}</strong>
+        </div>
+        <div>
+          <span>{t("myResponsesImpactVisibility")}</span>
+          <strong>
+            {entry.roadmapStatus
+              ? t("myResponsesImpactPublicMetadataVisible")
+              : t("myResponsesImpactPrivateVisibility")}
+          </strong>
+        </div>
+        <div>
+          <span>{t("myResponsesSubmittedAt")}</span>
+          <strong>{formatDate(entry.submittedAt)}</strong>
+        </div>
+        <div>
+          <span>{t("myResponsesLifecycleLastUpdate")}</span>
+          <strong>{formatDate(entry.lifecycleUpdatedAt ?? entry.submittedAt)}</strong>
+        </div>
+        <div className="my-response-impact-score">
+          <span>{t("myResponsesImpactScore")}</span>
+          <strong aria-label={`${getImpactScore(lifecycleStatus)} / 5`}>{getImpactStars(lifecycleStatus)}</strong>
+        </div>
+      </div>
+
+      {entry.encrypted ? (
+        <p className="my-response-impact-privacy">{t("myResponsesImpactMetadataOnly")}</p>
+      ) : null}
+
+      <div className="my-response-impact-actions">
+        {canOpenRoadmap ? (
+          <Link to={getPublicRoadmapPath(entry.formId, entry.manifestBlobId)} className="ghost-button my-response-roadmap-link">
+            {t("myResponsesImpactViewRoadmap")}
+          </Link>
+        ) : (
+          <span className="my-response-roadmap-unavailable">{t("myResponsesImpactRoadmapUnavailable")}</span>
+        )}
+      </div>
+    </section>
+  );
+}
+
 function SignalLifecycleTimeline({ entry }: { entry: MyResponseHistoryEntry }) {
   const { t } = useI18n();
   const activeIndex = getLifecycleIndex(entry.lifecycleStatus);
@@ -192,7 +313,7 @@ function SignalLifecycleTimeline({ entry }: { entry: MyResponseHistoryEntry }) {
           <strong>{isRoadmapVisible ? t("myResponsesRoadmapVisible") : t("myResponsesRoadmapInternal")}</strong>
         </div>
       </div>
-      {isRoadmapVisible ? (
+      {isRoadmapVisible && entry.manifestBlobId ? (
         <Link to={getPublicRoadmapPath(entry.formId, entry.manifestBlobId)} className="ghost-button my-response-roadmap-link">
           {t("myResponsesOpenRoadmap")}
         </Link>
@@ -365,6 +486,8 @@ export function MyResponsesPage() {
             ) : null}
           </div>
         </section>
+
+        <SignalImpactCard entry={selectedEntry} />
 
         <SignalLifecycleTimeline entry={selectedEntry} />
 

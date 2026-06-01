@@ -101,15 +101,18 @@ describe("MyResponsesPage lifecycle sync", () => {
     });
   });
 
-  it("opens the roadmap without a manifest query when the receipt has no manifest blob", async () => {
+  it("hides the roadmap link when public status has no manifest blob", async () => {
     upsertMyResponseHistoryEntry(buildHistoryEntry());
     mockListSubmissions.mockResolvedValue([buildSubmission({ triageStatus: "planned" })]);
 
     renderMyResponses();
 
     await waitFor(() => {
-      expect(screen.getByRole("link", { name: "Open roadmap" })).toHaveAttribute("href", "/roadmap/form-1");
+      expect(screen.getByText("Your signal helped shape the roadmap.")).toBeInTheDocument();
     });
+    expect(screen.getByText("Roadmap link unavailable")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "View Roadmap" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Open roadmap" })).not.toBeInTheDocument();
   });
 
   it("keeps the existing sender lifecycle when no local submission matches", async () => {
@@ -130,5 +133,39 @@ describe("MyResponsesPage lifecycle sync", () => {
       triageStatus: undefined,
       roadmapStatus: undefined,
     });
+  });
+
+  it("shows the planned impact card and roadmap link when public metadata is available", async () => {
+    upsertMyResponseHistoryEntry(buildHistoryEntry({ manifestBlobId: "manifest-1" }));
+    mockListSubmissions.mockResolvedValue([buildSubmission({ triageStatus: "planned" })]);
+
+    renderMyResponses();
+
+    await waitFor(() => {
+      expect(screen.getByText("Your Signal Is Making Progress")).toBeInTheDocument();
+    });
+
+    expect(screen.getByText("Your signal helped shape the roadmap.")).toBeInTheDocument();
+    expect(screen.getByText("Included in Public Roadmap")).toBeInTheDocument();
+    expect(screen.getByText("★★★☆☆")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "View Roadmap" })).toHaveAttribute(
+      "href",
+      "/roadmap/form-1?manifest=manifest-1",
+    );
+  });
+
+  it("celebrates completed impact and keeps encrypted body copy private", async () => {
+    upsertMyResponseHistoryEntry(buildHistoryEntry({ encrypted: true, manifestBlobId: "manifest-1" }));
+    mockListSubmissions.mockResolvedValue([buildSubmission({ isEncrypted: true, triageStatus: "fixed" })]);
+
+    renderMyResponses();
+
+    await waitFor(() => {
+      expect(screen.getByText("Signal Impact Achieved")).toBeInTheDocument();
+    });
+
+    expect(screen.getByText("Work connected to your signal has been completed.")).toBeInTheDocument();
+    expect(screen.getByText("★★★★★")).toBeInTheDocument();
+    expect(screen.getByText("Metadata only. The encrypted signal body remains private.")).toBeInTheDocument();
   });
 });

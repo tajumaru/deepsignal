@@ -203,7 +203,7 @@ export function ProjectMemberManagementSection({
             <div className="access-role-row" role="row">
               <span className="access-role-value access-role-cell access-role-cell-address" role="cell" data-label="Address">
                 <span className="access-role-meta">
-                  <SignalMetaChip type="contributor" value={selectedProject.owner} />
+                  <SignalMetaChip type="contributor" value={selectedProject.owner} avatarSize={32} />
                 </span>
               </span>
               <span className="access-role-value access-role-cell access-role-cell-role" role="cell" data-label="Role">
@@ -220,7 +220,7 @@ export function ProjectMemberManagementSection({
               <div key={`${member.address}:${member.role}`} className="access-role-row" role="row">
                 <span className="access-role-value access-role-cell access-role-cell-address" role="cell" data-label="Address">
                   <span className="access-role-meta">
-                    <SignalMetaChip type="contributor" value={member.address} />
+                    <SignalMetaChip type="contributor" value={member.address} avatarSize={32} />
                   </span>
                 </span>
                 <span className="access-role-value access-role-cell access-role-cell-role" role="cell" data-label="Role">

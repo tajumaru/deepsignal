@@ -1,7 +1,6 @@
 import { lazy, Suspense, useState, type DragEvent, type FocusEvent } from "react";
 import { FormHeaderImage } from "../../../components/FormHeaderImage";
-import { toDateTimeLocalValue } from "../../../lib/responseDeadline";
-import type { FormHeaderImagePosition, ResponseDeadlinePreset, SignalProcessingMode, Translate } from "../types";
+import type { FormHeaderImagePosition, SignalProcessingMode, Translate } from "../types";
 import { StepNavigationActions } from "./StepNavigationActions";
 
 const MAX_HEADER_IMAGE_BYTES = 2 * 1024 * 1024;
@@ -34,8 +33,6 @@ interface InfoStepProps {
     source: "url" | "upload";
     fileName: string;
   };
-  responseDeadlinePreset: ResponseDeadlinePreset;
-  responseDeadlineCustomAt: string;
   setTitle: (value: string) => void;
   setDescription: (value: string) => void;
   setHeaderImage: (value: {
@@ -52,8 +49,6 @@ interface InfoStepProps {
     fileName: string;
   }) => void;
   setProcessingMode: (value: SignalProcessingMode) => void;
-  setResponseDeadlinePreset: (value: ResponseDeadlinePreset) => void;
-  setResponseDeadlineCustomAt: (value: string) => void;
   onBack: () => void;
   onContinue: () => void;
   backDisabled?: boolean;
@@ -66,27 +61,15 @@ export function InfoStep({
   headerImage,
   headerLogo,
   processingMode,
-  responseDeadlinePreset,
-  responseDeadlineCustomAt,
   setTitle,
   setDescription,
   setHeaderImage,
   setHeaderLogo,
   setProcessingMode,
-  setResponseDeadlinePreset,
-  setResponseDeadlineCustomAt,
   onBack,
   onContinue,
   backDisabled,
 }: InfoStepProps) {
-  const deadlineOptions: Array<{ value: ResponseDeadlinePreset; label: string }> = [
-    { value: "none", label: t("responseDeadlineNone") },
-    { value: "1h", label: t("responseDeadlineOneHour") },
-    { value: "24h", label: t("responseDeadlineTwentyFourHours") },
-    { value: "7d", label: t("responseDeadlineSevenDays") },
-    { value: "30d", label: t("responseDeadlineThirtyDays") },
-    { value: "custom", label: t("responseDeadlineCustom") },
-  ];
   const processingModeOptions: Array<{
     value: SignalProcessingMode;
     label: string;
@@ -448,48 +431,6 @@ export function InfoStep({
             </div>
 
           </section>
-        </section>
-
-        <section className="composer-deadline-card">
-          <div className="section-row">
-            <div>
-              <span>{t("responseDeadlineTitle")}</span>
-              <p className="muted">{t("responseDeadlineHelp")}</p>
-              <p className="muted">{t("responseDeadlineAdminHelp")}</p>
-            </div>
-          </div>
-
-          <label>
-            <span>{t("responseDeadlineLabel")}</span>
-            <select
-              value={responseDeadlinePreset}
-              onChange={(event) => {
-                const nextPreset = event.target.value as ResponseDeadlinePreset;
-                setResponseDeadlinePreset(nextPreset);
-                if (nextPreset === "custom" && !responseDeadlineCustomAt) {
-                  setResponseDeadlineCustomAt(toDateTimeLocalValue(Date.now() + 60 * 60 * 1000));
-                }
-              }}
-            >
-              {deadlineOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          {responseDeadlinePreset === "custom" ? (
-            <label>
-              <span>{t("responseDeadlineCustomAt")}</span>
-              <input
-                type="datetime-local"
-                value={responseDeadlineCustomAt}
-                min={toDateTimeLocalValue(Date.now() + 60 * 1000)}
-                onChange={(event) => setResponseDeadlineCustomAt(event.target.value)}
-              />
-            </label>
-          ) : null}
         </section>
       </div>
 

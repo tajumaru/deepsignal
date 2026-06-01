@@ -9,7 +9,14 @@ function redirectDirectWorkspacePathToHashRoute() {
     return;
   }
   const { pathname, search } = window.location;
-  if (pathname === "/admin" || pathname.startsWith("/admin/")) {
+  if (
+    pathname === "/admin" ||
+    pathname.startsWith("/admin/") ||
+    pathname === "/dashboard" ||
+    pathname.startsWith("/dashboard/") ||
+    pathname === "/create" ||
+    pathname === "/compose"
+  ) {
     window.history.replaceState(null, "", `/#${pathname}${search}`);
   }
 }

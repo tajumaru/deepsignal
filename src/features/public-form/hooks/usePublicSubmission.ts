@@ -8,7 +8,7 @@ import {
 import { isAttachmentFieldType } from "../../../lib/fieldTypes";
 import { normalizeValidSuiAddress } from "../../../lib/suiAddress";
 import { getSubmissionCategoryFromPurpose } from "../../../lib/formTemplates";
-import { isResponseDeadlinePassed } from "../../../lib/responseDeadline";
+import { isResponseWindowClosed } from "../../../lib/responseDeadline";
 import { ensureRespondentSession } from "../../../lib/respondentSession";
 import { collectSignalContext, installSignalContextCapture } from "../../../lib/signalContext";
 import { buildSubmissionInsightPayload } from "../../../lib/signalProcessing";
@@ -1001,7 +1001,7 @@ export function usePublicSubmission({
       );
       return;
     }
-    if (isResponseDeadlinePassed(form.responseDeadline)) {
+    if (isResponseWindowClosed(form.responseOpenAt, form.responseDeadline)) {
       setSubmitError("This signal intake is closed because the response deadline has passed.");
       setSubmitNotice("");
       setFailure(

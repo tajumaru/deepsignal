@@ -98,6 +98,7 @@ export interface FormBuilderValues {
   locationRequirement: FormLocationRequirement;
   processingMode: SignalProcessingMode;
   encryptSubmissions: boolean;
+  responseOpenAtCustom: string;
   responseDeadlinePreset: ResponseDeadlinePreset;
   responseDeadlineCustomAt: string;
   currentStep: BuilderStepKey;

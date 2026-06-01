@@ -4,6 +4,7 @@ import { buildInfo, type BuildInfo } from "./buildInfo";
 import { recordBuildAsset } from "./buildAssetDiagnostics";
 import { endPerf, startPerf } from "./perf";
 import {
+  logRouteLifecycle,
   recordFailedImport,
   recordFailedImportDependencyProbe,
   recordFailedImportProbe,
@@ -13,6 +14,15 @@ import {
 
 const lazyImportAttempts = 3;
 const lazyImportBaseDelayMs = 450;
+
+class LazyImportTimeoutError extends Error {
+  readonly category = "timeout";
+
+  constructor(label: string, timeoutMs: number) {
+    super(`Lazy import ${label} stayed pending for ${timeoutMs}ms.`);
+    this.name = "LazyImportTimeoutError";
+  }
+}
 
 function wait(ms: number) {
   return new Promise((resolve) => window.setTimeout(resolve, ms));
@@ -73,6 +83,7 @@ const routeChunkByLabel: Record<string, RouteChunkSpec> = {
   "route-submission-detail": { exportName: "SubmissionDetailPage", filePrefix: "SubmissionDetailPage", routeKey: "submissionDetail" },
   "route-troubleshooting": { exportName: "TroubleshootingPage", filePrefix: "TroubleshootingPage", routeKey: "troubleshooting" },
   "route-zklogin-callback": { exportName: "ZkLoginCallbackPage", filePrefix: "ZkLoginCallbackPage", routeKey: "zkloginCallback" },
+  "app-shell": { exportName: "AppShell", filePrefix: "AppShell", routeKey: "admin" },
   "wallet-providers": { exportName: "WalletProviders", filePrefix: "providers", routeKey: "admin" },
   "walrus-runtime-provider": { exportName: "WalrusRuntimeProvider", filePrefix: "WalrusRuntimeProvider", routeKey: "admin" },
 };
@@ -105,6 +116,67 @@ function getModuleBuildInfo(module: unknown): Pick<BuildInfo, "appVersion" | "bu
     };
   }
   return null;
+}
+
+function isMobileSafari() {
+  if (typeof navigator === "undefined") {
+    return false;
+  }
+  const userAgent = navigator.userAgent;
+  return /iP(?:hone|ad|od)/.test(userAgent) && /Safari/i.test(userAgent) && !/CriOS|FxiOS|EdgiOS/i.test(userAgent);
+}
+
+function isMobileBrowser() {
+  if (typeof navigator === "undefined") {
+    return false;
+  }
+  return /Android|iP(?:hone|ad|od)|Mobile/i.test(navigator.userAgent);
+}
+
+function getLazyImportTimeoutMs() {
+  if (typeof window === "undefined") {
+    return 8_000;
+  }
+  if (isMobileSafari()) {
+    return 15_000;
+  }
+  if (isMobileBrowser()) {
+    return 12_000;
+  }
+  return 8_000;
+}
+
+function getCurrentRoutePath() {
+  if (typeof window === "undefined") {
+    return "";
+  }
+  return window.location.hash?.replace(/^#/, "") || `${window.location.pathname}${window.location.search}`;
+}
+
+async function withLazyImportTimeout<T>(task: Promise<T>, label: string, timeoutMs: number, chunkUrl?: string | null) {
+  if (typeof window === "undefined") {
+    return task;
+  }
+  let timeoutHandle = 0;
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeoutHandle = window.setTimeout(() => {
+      const error = new LazyImportTimeoutError(label, timeoutMs);
+      logRouteLifecycle("lazy-import-timeout", {
+        label,
+        chunkUrl: chunkUrl ?? null,
+        routePath: getCurrentRoutePath(),
+        timeoutMs,
+        userAgent: navigator.userAgent,
+      });
+      reject(error);
+    }, timeoutMs);
+  });
+
+  try {
+    return await Promise.race([task, timeoutPromise]);
+  } finally {
+    window.clearTimeout(timeoutHandle);
+  }
 }
 
 function getRouteAssetBaseUrl() {
@@ -380,14 +452,23 @@ export async function retryLazyImport<T>(loader: () => Promise<T>, label = "anon
   let lastError: unknown;
   const perfName = `lazy:${label}`;
   const expectedChunkUrl = await getExpectedChunkUrl(label);
+  const timeoutMs = getLazyImportTimeoutMs();
   startPerf(perfName);
 
   for (let attempt = 1; attempt <= lazyImportAttempts; attempt += 1) {
     try {
+      logRouteLifecycle("lazy-import-start", {
+        label,
+        attempt,
+        chunkUrl: expectedChunkUrl ?? null,
+        routePath: getCurrentRoutePath(),
+        timeoutMs,
+      });
       const result =
         attempt === 1 || !expectedChunkUrl
-          ? await loader()
-          : (await importCacheBustedRouteChunk<T>(label, expectedChunkUrl, attempt)) ?? (await loader());
+          ? await withLazyImportTimeout(loader(), label, timeoutMs, expectedChunkUrl)
+          : (await withLazyImportTimeout(importCacheBustedRouteChunk<T>(label, expectedChunkUrl, attempt), label, timeoutMs, expectedChunkUrl)) ??
+            (await withLazyImportTimeout(loader(), label, timeoutMs, expectedChunkUrl));
       const moduleBuildInfo = getModuleBuildInfo(result) ?? buildInfo;
       recordBuildAsset(`lazy:${label}`, moduleBuildInfo);
       console.info("[DeepSignal route chunk]", {
@@ -397,12 +478,26 @@ export async function retryLazyImport<T>(loader: () => Promise<T>, label = "anon
         buildTime: moduleBuildInfo.buildTime,
         gitHash: moduleBuildInfo.gitHash,
       });
+      logRouteLifecycle("lazy-import-resolved", {
+        label,
+        attempt,
+        chunkUrl: expectedChunkUrl ?? null,
+        routePath: getCurrentRoutePath(),
+      });
       endPerf(perfName, "ok", `attempt ${attempt}`);
       return result;
     } catch (error) {
       lastError = error;
       recordFailedImport(label, error, expectedChunkUrl, {
-        category: "runtime",
+        category: error instanceof LazyImportTimeoutError ? "timeout" : "runtime",
+      });
+      logRouteLifecycle(error instanceof LazyImportTimeoutError ? "lazy-import-timeout-recorded" : "lazy-import-rejected", {
+        label,
+        attempt,
+        chunkUrl: expectedChunkUrl ?? null,
+        message: error instanceof Error ? error.message : String(error),
+        routePath: getCurrentRoutePath(),
+        userAgent: typeof navigator === "undefined" ? "" : navigator.userAgent,
       });
       if (expectedChunkUrl) {
         const probe = await probeChunk(expectedChunkUrl);
@@ -426,7 +521,9 @@ export async function retryLazyImport<T>(loader: () => Promise<T>, label = "anon
     }
   }
 
-  recoverFromChunkLoadFailure(lastError);
+  if (!(lastError instanceof LazyImportTimeoutError)) {
+    recoverFromChunkLoadFailure(lastError);
+  }
   endPerf(perfName, "failed", lastError instanceof Error ? lastError.message : String(lastError));
   throw lastError;
 }

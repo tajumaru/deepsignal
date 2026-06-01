@@ -31,6 +31,7 @@ function TestHarness() {
     locationRequirement: "optional",
     processingMode: "review_required",
     encryptSubmissions: false,
+    responseOpenAtCustom: "",
     responseDeadlinePreset: "none",
     responseDeadlineCustomAt: "",
     isDirty: false,

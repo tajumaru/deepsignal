@@ -160,6 +160,320 @@
   cursor: not-allowed;
 }
 
+.public-mobile-menu-toggle,
+.public-app-shell .mobile-drawer-backdrop,
+.public-app-shell .mobile-nav-drawer {
+  display: none;
+}
+
+@media (max-width: 900px) {
+  .public-mobile-menu-toggle {
+    display: inline-grid;
+    place-items: center;
+    width: 2.75rem;
+    height: 2.75rem;
+    border: 1px solid rgba(125, 245, 255, 0.18);
+    border-radius: 14px;
+    background:
+      linear-gradient(180deg, rgba(11, 31, 48, 0.72), rgba(5, 17, 29, 0.7)),
+      radial-gradient(circle at top left, rgba(122, 255, 241, 0.1), transparent 42%);
+    color: #dffbff;
+    box-shadow: inset 0 1px 0 rgba(233, 252, 255, 0.06);
+  }
+
+  .public-mobile-menu-toggle .mobile-menu-toggle-icon {
+    display: grid;
+    gap: 0.24rem;
+    width: 1.12rem;
+  }
+
+  .public-mobile-menu-toggle .mobile-menu-toggle-icon span {
+    display: block;
+    width: 100%;
+    height: 0.12rem;
+    border-radius: 999px;
+    background: currentColor;
+  }
+
+  .public-mobile-menu-toggle.is-open .mobile-menu-toggle-icon span:nth-child(1) {
+    transform: translateY(0.36rem) rotate(45deg);
+  }
+
+  .public-mobile-menu-toggle.is-open .mobile-menu-toggle-icon span:nth-child(2) {
+    opacity: 0;
+  }
+
+  .public-mobile-menu-toggle.is-open .mobile-menu-toggle-icon span:nth-child(3) {
+    transform: translateY(-0.36rem) rotate(-45deg);
+  }
+
+  .public-app-shell .mobile-drawer-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 30;
+    display: block;
+    border: 0;
+    background:
+      radial-gradient(circle at 16% 12%, rgba(102, 227, 255, 0.1), transparent 28%),
+      linear-gradient(90deg, rgba(1, 7, 13, 0.58), rgba(1, 7, 13, 0.28));
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+
+  .public-app-shell .mobile-nav-drawer {
+    position: fixed;
+    top: 0;
+    right: 0;
+    z-index: 31;
+    display: block;
+    width: min(86vw, 360px);
+    height: 100vh;
+    height: 100dvh;
+    max-height: 100vh;
+    max-height: 100dvh;
+    padding:
+      calc(0.78rem + env(safe-area-inset-top, 0px))
+      0.78rem
+      calc(0.78rem + env(safe-area-inset-bottom, 0px))
+      0.78rem;
+    border: 1px solid rgba(125, 245, 255, 0.2);
+    border-radius: 24px 0 0 24px;
+    background:
+      linear-gradient(180deg, rgba(7, 19, 31, 0.94), rgba(4, 14, 23, 0.9)),
+      radial-gradient(circle at top left, rgba(119, 230, 255, 0.15), transparent 30%),
+      radial-gradient(circle at 82% 18%, rgba(82, 208, 141, 0.08), transparent 28%);
+    color: var(--text);
+    transform: translateX(var(--mobile-drawer-drag-x, 0));
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    touch-action: pan-y;
+    -webkit-overflow-scrolling: touch;
+    backdrop-filter: blur(26px) saturate(145%);
+    -webkit-backdrop-filter: blur(26px) saturate(145%);
+    box-shadow:
+      inset 0 1px 0 rgba(233, 252, 255, 0.08),
+      inset 1px 0 0 rgba(149, 242, 255, 0.18),
+      -18px 0 42px rgba(2, 10, 18, 0.44),
+      -1px 0 22px rgba(102, 227, 255, 0.12);
+  }
+
+  .public-app-shell .mobile-nav-drawer.is-dragging {
+    transition: none;
+  }
+
+  .public-app-shell .mobile-drawer-header,
+  .public-app-shell .mobile-drawer-brand,
+  .public-app-shell .mobile-drawer-about-row {
+    display: grid;
+    min-width: 0;
+  }
+
+  .public-app-shell .mobile-drawer-header {
+    grid-template-columns: minmax(0, 1fr) 38px;
+    align-items: start;
+    gap: 0.58rem;
+    padding: 0.02rem 0.02rem 0.62rem;
+    border-bottom: 1px solid rgba(116, 226, 255, 0.1);
+  }
+
+  .public-app-shell .mobile-drawer-brand {
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    gap: 0.56rem;
+  }
+
+  .public-app-shell .mobile-drawer-brand .brand-mark {
+    width: 2.1rem;
+    height: 2.1rem;
+    border-radius: 12px;
+  }
+
+  .public-app-shell .mobile-drawer-close-button {
+    position: relative;
+    display: inline-grid;
+    place-items: center;
+    width: 38px;
+    height: 38px;
+    border: 1px solid rgba(125, 245, 255, 0.16);
+    border-radius: 14px;
+    background: rgba(116, 226, 255, 0.08);
+    color: #dffbff;
+  }
+
+  .public-app-shell .mobile-drawer-close-button span {
+    position: absolute;
+    width: 1rem;
+    height: 1.5px;
+    border-radius: 999px;
+    background: currentColor;
+  }
+
+  .public-app-shell .mobile-drawer-close-button span:first-child {
+    transform: rotate(45deg);
+  }
+
+  .public-app-shell .mobile-drawer-close-button span:last-child {
+    transform: rotate(-45deg);
+  }
+
+  .public-app-shell .mobile-drawer-eyebrow,
+  .public-app-shell .mobile-drawer-section-label,
+  .public-app-shell .mobile-drawer-utility-label {
+    color: rgba(160, 212, 228, 0.74);
+    text-transform: uppercase;
+  }
+
+  .public-app-shell .mobile-drawer-eyebrow {
+    font-size: 0.62rem;
+    letter-spacing: 0.1em;
+  }
+
+  .public-app-shell .mobile-drawer-header strong {
+    display: block;
+    color: #f3feff;
+    font-size: 0.95rem;
+  }
+
+  .public-app-shell .mobile-drawer-section {
+    display: grid;
+    gap: 0.46rem;
+    margin-top: 0.62rem;
+  }
+
+  .public-app-shell .mobile-drawer-section-label {
+    padding-left: 0.3rem;
+    font-size: 0.62rem;
+    letter-spacing: 0.1em;
+  }
+
+  .public-app-shell .mobile-drawer-nav,
+  .public-app-shell .mobile-drawer-utility-group {
+    display: grid;
+    gap: 0.48rem;
+  }
+
+  .public-app-shell .mobile-drawer-nav a,
+  .public-app-shell .mobile-drawer-command-link {
+    display: inline-flex;
+    align-items: center;
+    min-height: 40px;
+    padding: 0.56rem 0.68rem;
+    border: 1px solid rgba(116, 226, 255, 0.1);
+    border-radius: 14px;
+    background: rgba(7, 20, 31, 0.5);
+    color: #d8f7ff;
+    font-size: 0.86rem;
+    font-weight: 750;
+    text-decoration: none;
+  }
+
+  .public-app-shell .mobile-drawer-primary-nav a {
+    min-height: 44px;
+    border-color: rgba(116, 226, 255, 0.16);
+    background:
+      linear-gradient(180deg, rgba(13, 34, 52, 0.72), rgba(8, 23, 36, 0.6)),
+      radial-gradient(circle at top left, rgba(122, 255, 241, 0.1), transparent 42%);
+    color: #effdff;
+    font-size: 0.92rem;
+    font-weight: 850;
+  }
+
+  .public-app-shell .mobile-drawer-settings-nav {
+    gap: 0.36rem;
+  }
+
+  .public-app-shell .mobile-drawer-settings-nav a {
+    min-height: 36px;
+    padding-block: 0.44rem;
+    color: #cbe8f2;
+    font-size: 0.8rem;
+  }
+
+  .public-app-shell .mobile-drawer-utility-card {
+    display: grid;
+    gap: 0.36rem;
+    padding: 0.58rem;
+    border: 1px solid rgba(116, 226, 255, 0.1);
+    border-radius: 16px;
+    background: rgba(5, 17, 28, 0.42);
+  }
+
+  .public-app-shell .mobile-drawer-status-card {
+    gap: 0.28rem;
+    padding: 0.48rem 0.52rem;
+    box-shadow: none;
+  }
+
+  .public-app-shell .mobile-drawer-utility-label {
+    font-size: 0.64rem;
+    letter-spacing: 0.08em;
+  }
+
+  .public-app-shell .mobile-drawer-status-line {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.46rem;
+    min-width: 0;
+    min-height: 36px;
+    padding: 0.5rem 0.62rem;
+    border: 1px solid rgba(116, 226, 255, 0.12);
+    border-radius: 13px;
+    background: rgba(8, 26, 43, 0.7);
+    color: #d8f7ff;
+    font-size: 0.72rem;
+    font-weight: 700;
+  }
+
+  .public-app-shell .mobile-drawer-status-line span:last-child {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .public-app-shell .mobile-drawer-status-dot {
+    width: 0.48rem;
+    height: 0.48rem;
+    flex: 0 0 auto;
+    border-radius: 999px;
+    background: #6af2ff;
+    box-shadow: 0 0 12px rgba(106, 242, 255, 0.46);
+  }
+
+  .public-app-shell .mobile-drawer-status-dot.is-idle {
+    background: #8aa8b8;
+    box-shadow: 0 0 10px rgba(138, 168, 184, 0.18);
+  }
+
+  .public-app-shell .mobile-drawer-language-switch {
+    display: grid;
+    gap: 0.34rem;
+  }
+
+  .public-app-shell .mobile-drawer-language-switch select {
+    width: 100%;
+  }
+
+  .public-app-shell .mobile-drawer-about-row {
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 0.52rem;
+    align-items: center;
+    padding: 0.28rem 0.3rem;
+    color: rgba(159, 190, 205, 0.72);
+    font-family: "Consolas", "SFMono-Regular", "Roboto Mono", monospace;
+    font-size: 0.58rem;
+    line-height: 1.25;
+  }
+
+  .public-app-shell .mobile-drawer-about-row span:last-child {
+    min-width: 0;
+    overflow: hidden;
+    text-align: right;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
 @media (max-width: 620px) {
   .public-app-shell .topbar-public {
     gap: 0.55rem;

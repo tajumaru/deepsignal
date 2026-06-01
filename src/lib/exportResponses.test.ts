@@ -92,6 +92,46 @@ describe("responses CSV export", () => {
     expect(csv).toContain('"[encrypted]","[encrypted]","[encrypted]"');
   });
 
+  it("does not export embedded encrypted payload markers as blob ids", () => {
+    const csv = buildResponsesCsv(form, [
+      makeSubmission({
+        id: "response-embedded-payload",
+        answers: {},
+        isEncrypted: true,
+        encryptedBlobId: "__embedded_encrypted_payload__",
+        receiptBlobId: "walrus-submission-bundle-1",
+        respondentMeta: {
+          chain: "sui",
+          isAnonymous: true,
+          submittedAt: "2026-05-16T02:00:00.000Z",
+        },
+      }),
+    ]);
+
+    expect(csv).toContain('"walrus-submission-bundle-1","walrus-submission-bundle-1"');
+    expect(csv).not.toContain("__embedded_encrypted_payload__");
+  });
+
+  it("keeps local storage ids out of the Walrus blob column", () => {
+    const csv = buildResponsesCsv(form, [
+      makeSubmission({
+        id: "response-local-only",
+        answers: {},
+        isEncrypted: true,
+        encryptedBlobId: "__embedded_encrypted_payload__",
+        blobId: "local-submission-response-local-only",
+        respondentMeta: {
+          chain: "sui",
+          isAnonymous: true,
+          submittedAt: "2026-05-16T02:00:00.000Z",
+        },
+      }),
+    ]);
+
+    expect(csv).toContain('"true","","local-submission-response-local-only"');
+    expect(csv).not.toContain("__embedded_encrypted_payload__");
+  });
+
   it("distinguishes zkLogin respondents from Sui wallet respondents in CSV metadata", () => {
     const csv = buildResponsesCsv(form, [
       makeSubmission({
@@ -273,6 +313,57 @@ describe("responses CSV export", () => {
     expect(redactedCsv).toContain('"[encrypted]","[encrypted]","[encrypted]"');
     expect(redactedCsv).not.toContain(unlockedText);
     expect(redactedCsv).not.toContain("seal-ciphertext");
+  });
+
+  it("uses decrypted answer overrides for aggregate CSV question columns", () => {
+    const unlockedText = "decrypted aggregate answer";
+    const lockedSubmission = makeSubmission({
+      id: "aggregate-field-locked",
+      processingMode: "auto_process",
+      answers: {
+        q1: { encrypted: true, value: "seal-ciphertext" },
+      },
+      isEncrypted: true,
+      encryptedBlobId: "encrypted-blob-aggregate",
+      insightPayload: {
+        answers: {},
+        fieldIds: [],
+        redactedFieldIds: ["q1", "q2", "q3"],
+        generatedAt: "2026-05-16T01:02:03.000Z",
+      },
+    });
+
+    const unlockedCsv = buildResponsesCsv(
+      { ...form, processingMode: "auto_process" },
+      [lockedSubmission],
+      {
+        responseOverrides: {
+          [lockedSubmission.id]: {
+            answers: {
+              q1: unlockedText,
+            },
+          },
+        },
+      },
+    );
+    expect(unlockedCsv).toContain(`"${unlockedText}","[encrypted]","[encrypted]"`);
+
+    const redactedCsv = buildResponsesCsv(
+      { ...form, processingMode: "auto_process" },
+      [lockedSubmission],
+      {
+        excludedPiiFields: ["decryptedAnswers"],
+        responseOverrides: {
+          [lockedSubmission.id]: {
+            answers: {
+              q1: unlockedText,
+            },
+          },
+        },
+      },
+    );
+    expect(redactedCsv).toContain('"[encrypted]","[encrypted]","[encrypted]"');
+    expect(redactedCsv).not.toContain(unlockedText);
   });
 
   it("can omit personal-information-like columns", () => {

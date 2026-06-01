@@ -38,6 +38,24 @@ function getGitHash() {
   }
 }
 
+function ignoreMissingScureBip39SourcemapPlugin(): Plugin {
+  return {
+    name: "deepsignal-ignore-missing-scure-bip39-sourcemap",
+    load(id) {
+      const normalizedId = id.split("?")[0].replace(/\\/g, "/");
+      if (!normalizedId.endsWith("/node_modules/@scure/bip39/index.js")) {
+        return null;
+      }
+
+      const source = readFileSync(normalizedId, "utf8");
+      return {
+        code: source.replace(/\n?\/\/# sourceMappingURL=index\.js\.map\s*$/, ""),
+        map: null,
+      };
+    },
+  };
+}
+
 function buildManifestPlugin(args: {
   appVersion: string;
   buildTime: string;
@@ -789,6 +807,7 @@ export default defineConfig(({ mode }) => {
       "import.meta.env.VITE_TATUM_STORAGE_PROXY_PATH": JSON.stringify(tatumStorageProxyPath),
     },
     plugins: [
+      ignoreMissingScureBip39SourcemapPlugin(),
       react(),
       buildManifestPlugin({
         appVersion,
@@ -957,8 +976,10 @@ export default defineConfig(({ mode }) => {
         "@mysten/dapp-kit",
         "@vanilla-extract/css",
         "@vanilla-extract/recipes",
+        "axios-retry",
         "dataloader",
         "deepmerge",
+        "is-retry-allowed",
         "picocolors",
         "poseidon-lite",
       ],

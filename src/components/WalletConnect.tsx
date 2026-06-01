@@ -6,13 +6,15 @@ import { SuiAddressDisplay } from "./SuiAddressDisplay";
 
 interface WalletConnectProps {
   compact?: boolean;
+  surface?: "default" | "mobileDrawer";
 }
 
-export function WalletConnect({ compact = false }: WalletConnectProps) {
+export function WalletConnect({ compact = false, surface = "default" }: WalletConnectProps) {
   const { t } = useI18n();
-  const wallet = useSuiWallet({ resolveName: false });
+  const wallet = useSuiWallet();
   const [menuOpen, setMenuOpen] = useState(false);
   const shellRef = useRef<HTMLDivElement | null>(null);
+  const isMobileDrawer = surface === "mobileDrawer";
 
   useEffect(() => {
     if (!menuOpen) {
@@ -57,11 +59,31 @@ export function WalletConnect({ compact = false }: WalletConnectProps) {
 
   if (!wallet.isConnected) {
     return (
-      <div className={`wallet-connect-shell ${compact ? "wallet-connect-shell-compact" : ""}`.trim()}>
+      <div
+        className={`wallet-connect-shell ${compact ? "wallet-connect-shell-compact" : ""} ${
+          isMobileDrawer ? "wallet-connect-shell-drawer" : ""
+        }`.trim()}
+      >
         <div className="wallet-connect-direct panel">
           <div className="wallet-connect-direct-copy">
-            <strong>{wallet.isRestoringConnection ? "Opening Session..." : "Activate Session"}</strong>
-            <span>{wallet.isRestoringConnection ? "Restoring secure session" : "Wallet-optional public mode"}</span>
+            <strong>
+              {isMobileDrawer
+                ? wallet.isRestoringConnection
+                  ? "ウォレット確認中"
+                  : "ウォレット未接続"
+                : wallet.isRestoringConnection
+                  ? "Opening Session..."
+                  : "Activate Session"}
+            </strong>
+            <span>
+              {isMobileDrawer
+                ? wallet.isRestoringConnection
+                  ? "接続状態を確認しています"
+                  : "検証が必要な操作で接続"
+                : wallet.isRestoringConnection
+                  ? "Restoring secure session"
+                  : "Wallet-optional public mode"}
+            </span>
           </div>
           <ConnectWalletButton wallet={wallet} compact={compact} />
         </div>
@@ -70,7 +92,12 @@ export function WalletConnect({ compact = false }: WalletConnectProps) {
   }
 
   return (
-    <div ref={shellRef} className={`wallet-connect-shell ${compact ? "wallet-connect-shell-compact" : ""}`.trim()}>
+    <div
+      ref={shellRef}
+      className={`wallet-connect-shell ${compact ? "wallet-connect-shell-compact" : ""} ${
+        isMobileDrawer ? "wallet-connect-shell-drawer" : ""
+      }`.trim()}
+    >
       <div
         className={`wallet-sync-button ${wallet.isConnected ? "is-synced" : ""} ${wallet.isConnecting ? "is-syncing" : ""}`}
       >
@@ -80,6 +107,7 @@ export function WalletConnect({ compact = false }: WalletConnectProps) {
           onConnectedPress={handleToggleMenu}
           connectedMenuOpen={menuOpen}
         />
+        {isMobileDrawer ? <span className="mobile-drawer-wallet-identity">{wallet.displayName}</span> : null}
         {wallet.accountAddress && !compact ? (
           <SuiAddressDisplay
             address={wallet.accountAddress}
@@ -88,7 +116,6 @@ export function WalletConnect({ compact = false }: WalletConnectProps) {
             showCopyLabel={false}
             showTooltip={!compact}
             copyOnClick={!compact}
-            resolveName={false}
             onPress={handleToggleMenu}
           />
         ) : null}
@@ -106,7 +133,6 @@ export function WalletConnect({ compact = false }: WalletConnectProps) {
                 labelClassName="wallet-sync-copy-chip-address"
                 copyClassName="wallet-sync-copy-chip-copy"
                 showTooltip
-                resolveName={false}
               />
             ) : null}
           </div>

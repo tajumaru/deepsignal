@@ -46,6 +46,7 @@ export interface MyResponseHistoryEntry {
   formBlobId?: string;
   manifestBlobId?: string;
   submissionBlobId?: string;
+  encrypted?: boolean;
   answerSummary: string;
   answers: Record<string, unknown>;
   fields: FormField[];
@@ -70,6 +71,7 @@ interface BuildMyResponseHistoryEntryArgs {
     | "answerBlobId"
     | "receiptBlobId"
     | "encryptedBlobId"
+    | "isEncrypted"
     | "blobId"
     | "status"
     | "triageStatus"
@@ -474,6 +476,7 @@ export function buildMyResponseHistoryEntry({
     formBlobId: submission.formBlobId ?? form.blobId,
     manifestBlobId: submission.manifestBlobId ?? form.manifestBlobId,
     submissionBlobId: getSubmissionBlobId(submission),
+    encrypted: Boolean(submission.isEncrypted),
     answerSummary: buildAnswerSummary(form.fields, answers),
     answers,
     fields: cloneJsonSafe(form.fields),

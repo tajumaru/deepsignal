@@ -27,6 +27,7 @@ const LIGHT_EDIT_KEYS = [
   "headerLogo",
   "visibility",
   "publicExplore",
+  "responseOpenAt",
   "responseDeadline",
   "responseDeadlineMode",
 ] as const;

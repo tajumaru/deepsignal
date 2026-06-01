@@ -141,6 +141,13 @@
   min-width: 0;
 }
 
+.roadmap-card-title-row strong,
+.roadmap-card-title-row small,
+.roadmap-card-badge-stack .signal-chip,
+.roadmap-public-impact strong {
+  overflow-wrap: anywhere;
+}
+
 .roadmap-card-badge-stack {
   display: flex;
   flex-wrap: wrap;
@@ -156,6 +163,44 @@
 .roadmap-lifecycle-chip {
   border-color: rgba(96, 165, 250, 0.28);
   color: #bfdbfe;
+}
+
+.roadmap-impact-copy {
+  color: #c7d2fe;
+  line-height: 1.4;
+}
+
+.roadmap-public-impact {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  align-items: center;
+  margin-top: 0.85rem;
+}
+
+.roadmap-public-impact span,
+.roadmap-public-impact strong {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.9rem;
+  padding: 0.34rem 0.62rem;
+  border: 1px solid rgba(103, 232, 249, 0.18);
+  border-radius: 999px;
+  background: rgba(8, 47, 73, 0.38);
+  color: #d5eef8;
+  font-size: 0.78rem;
+  line-height: 1.1;
+}
+
+.roadmap-public-impact span {
+  border-color: rgba(45, 212, 191, 0.26);
+  color: #99f6e4;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.roadmap-public-impact strong {
+  font-weight: 800;
 }
 
 .roadmap-metadata-only,

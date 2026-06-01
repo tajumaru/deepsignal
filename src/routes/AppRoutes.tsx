@@ -1,9 +1,9 @@
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Navigate, Route, Routes, useParams } from "react-router-dom";
 import { WalrusRuntimeSurface } from "../components/WalrusRuntimeSurface";
 import { WalletSurface } from "../components/WalletSurface";
 import { REQUIRE_GLOBAL_WALRUS_RUNTIME } from "../lib/runtimeFlags";
-import { DelayedWorkspaceRestoreFallback } from "./ProviderReadinessBarrier";
+import { formatRouteLifecycleDiagnostics } from "../lib/routeDiagnostics";
 import type { AppRouteComponents } from "./appRouteComponents";
 
 function LegacyFormInboxRedirect({ basePath }: { basePath: "/admin" | "/dashboard" }) {
@@ -25,15 +25,65 @@ function WithWalrusRuntime({ children }: { children: ReactNode }) {
   return <WalrusRuntimeSurface>{children}</WalrusRuntimeSurface>;
 }
 
-function WithDeferredWalletRuntime({ children }: { children: ReactNode }) {
+function DashboardWalletRuntimeFallback({ onRetry }: { onRetry?: () => void }) {
+  const [showDiagnostics, setShowDiagnostics] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setShowDiagnostics(true), 15_000);
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  async function copyDiagnostics() {
+    await navigator.clipboard.writeText(formatRouteLifecycleDiagnostics());
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1800);
+  }
+
   return (
-    <WalletSurface fallback={<DelayedWorkspaceRestoreFallback />}>
+    <div className="panel glow-panel route-status-panel" role="status">
+      <p className="eyebrow">Wallet runtime</p>
+      <h1>Preparing secure dashboard...</h1>
+      <p className="muted">
+        The dashboard shell is ready. DeepSignal is waiting for the wallet runtime before opening protected signal
+        controls.
+      </p>
+      {showDiagnostics ? (
+        <div className="stack">
+          <p className="muted">Wallet runtime loading is taking longer than expected. Your local fallback data is preserved.</p>
+          <pre className="route-status-diagnostics">{formatRouteLifecycleDiagnostics()}</pre>
+          <div className="inline-actions">
+            {onRetry ? (
+              <button type="button" className="primary-button" onClick={onRetry}>
+                Retry wallet runtime
+              </button>
+            ) : null}
+            <button type="button" className="ghost-button" onClick={() => void copyDiagnostics()}>
+              {copied ? "Copied diagnostics" : "Copy diagnostics"}
+            </button>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function WithDeferredWalletRuntime({ children, onRetry }: { children: ReactNode; onRetry?: () => void }) {
+  const [walletRetryNonce, setWalletRetryNonce] = useState(0);
+
+  function handleRetry() {
+    setWalletRetryNonce((value) => value + 1);
+    onRetry?.();
+  }
+
+  return (
+    <WalletSurface fallback={<DashboardWalletRuntimeFallback onRetry={handleRetry} />} retryKey={walletRetryNonce}>
       {children}
     </WalletSurface>
   );
 }
 
-export function AppRoutes({ components }: { components: AppRouteComponents }) {
+export function AppRoutes({ components, onRetryRoute }: { components: AppRouteComponents; onRetryRoute?: () => void }) {
   const {
     AccessManagementPage,
     AdminDashboardPage,
@@ -77,7 +127,7 @@ export function AppRoutes({ components }: { components: AppRouteComponents }) {
       <Route
         path="/dashboard"
         element={
-          <WithDeferredWalletRuntime>
+          <WithDeferredWalletRuntime onRetry={onRetryRoute}>
             <WithWalrusRuntime>
               <AdminDashboardPage />
             </WithWalrusRuntime>

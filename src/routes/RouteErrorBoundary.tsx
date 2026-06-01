@@ -59,7 +59,7 @@ type RouteErrorDiagnostics = {
     label: string;
     message: string;
     chunkUrl?: string | null;
-    category?: "chunkLoad" | "missingExport" | "runtime";
+    category?: "chunkLoad" | "missingExport" | "runtime" | "timeout";
     expectedExport?: string;
     moduleKeys?: string[];
     resolvedExport?: "default" | string | "missing";

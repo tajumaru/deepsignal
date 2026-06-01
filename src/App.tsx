@@ -201,7 +201,7 @@ function PrivateRouteSurface({
             <Suspense fallback={<DelayedWorkspaceRestoreFallback />}>
               <RouteReady routePath={routePath} onReady={onRouteReady}>
                 <ProviderReadinessBarrier routePath={routePath} enabled={routeNeedsWorkspaceBoot}>
-                  <AppRoutes components={components} />
+                  <AppRoutes components={components} onRetryRoute={onRetryRoute} />
                 </ProviderReadinessBarrier>
               </RouteReady>
             </Suspense>
@@ -228,6 +228,7 @@ export default function App() {
   const publicRouteComponents = useMemo(() => createPublicRouteComponents(routeRetryNonce), [routeRetryNonce]);
   const routeNeedsWalletSurface =
     location.pathname === "/admin" ||
+    location.pathname === "/dashboard" ||
     location.pathname === "/create" ||
     location.pathname === "/compose" ||
     location.pathname === "/troubleshooting" ||
@@ -278,15 +279,20 @@ export default function App() {
   }, [location.hash, location.pathname, location.search, routeNeedsWalletSurface, routeUsesPublicChrome]);
 
   useEffect(() => {
-    if (location.pathname !== "/dashboard" && !location.pathname.startsWith("/dashboard/")) {
+    if (
+      routeNeedsWalletSurface ||
+      (location.pathname !== "/dashboard" && !location.pathname.startsWith("/dashboard/"))
+    ) {
       return;
     }
-    markPerfMilestone("provider:wallet:skipped", "dashboard-initial-shell");
-    logRouteLifecycle("provider:wallet-skipped", {
-      reason: "dashboard-initial-shell",
+    markPerfMilestone("provider:wallet:deferred", "dashboard-shell-first");
+    logRouteLifecycle("provider:wallet-deferred", {
+      reason: "dashboard-shell-first",
+      shellWalletSurface: "skipped",
+      contentWalletSurface: "deferred",
       routePath: `${location.pathname}${location.search}${location.hash}`,
     });
-  }, [location.hash, location.pathname, location.search]);
+  }, [location.hash, location.pathname, location.search, routeNeedsWalletSurface]);
 
   useEffect(() => {
     if (location.pathname !== "/") {

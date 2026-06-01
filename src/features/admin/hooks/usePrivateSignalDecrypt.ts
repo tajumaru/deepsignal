@@ -412,7 +412,7 @@ export function usePrivateSignalDecrypt({
 
   async function handleDecryptRecords(records: SignalRecord[]) {
     if (bulkDecryptInFlightRef.current || decryptInFlightRef.current) {
-      return { unlockedCount: 0, failedCount: 0, totalCount: 0 };
+      return { unlockedCount: 0, failedCount: 0, totalCount: 0, unlockedSignalsById: {} };
     }
 
     const targets = records.filter(
@@ -425,7 +425,7 @@ export function usePrivateSignalDecrypt({
       setBulkDecryptStatusMessage("");
       setBulkDecryptError(targets.length > 0 ? messages.onchainPayloadBlobMissing : "");
       setBulkDecryptProgress({ completed: 0, failed: 0, total: 0 });
-      return { unlockedCount: 0, failedCount: 0, totalCount: 0 };
+      return { unlockedCount: 0, failedCount: 0, totalCount: 0, unlockedSignalsById: {} };
     }
 
     bulkDecryptInFlightRef.current = true;
@@ -436,6 +436,7 @@ export function usePrivateSignalDecrypt({
     let unlockedCount = 0;
     let failedCount = 0;
     let firstError = "";
+    const unlockedSignalsById: Record<string, DecryptedSignalCacheEntry> = {};
 
     try {
       for (const [index, record] of decryptableTargets.entries()) {
@@ -464,6 +465,7 @@ export function usePrivateSignalDecrypt({
             attachments: resolved.attachments,
             legacyUnencrypted: Boolean(resolved.legacyUnencrypted),
           };
+          unlockedSignalsById[record.submission.id] = cacheEntry;
           setDecryptedSignalsById((current) => ({
             ...current,
             [record.submission.id]: cacheEntry,
@@ -516,7 +518,7 @@ export function usePrivateSignalDecrypt({
     }
     setBulkDecryptStatusMessage("");
 
-    return { unlockedCount, failedCount, totalCount: decryptableTargets.length };
+    return { unlockedCount, failedCount, totalCount: decryptableTargets.length, unlockedSignalsById };
   }
 
   return {

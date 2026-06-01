@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { useSuiName } from "../hooks/useSuiName";
+import { useSuiIdentity } from "../hooks/useSuiName";
 import { shortAddress } from "../lib/sui";
+
+type SuiAddressAvatarSize = 24 | 32 | 40;
 
 interface SuiAddressDisplayProps {
   address: string;
@@ -14,6 +16,8 @@ interface SuiAddressDisplayProps {
   copyOnClick?: boolean;
   onPress?: () => void;
   resolveName?: boolean;
+  showAvatar?: boolean;
+  avatarSize?: SuiAddressAvatarSize;
   interactive?: boolean;
 }
 
@@ -29,13 +33,20 @@ export function SuiAddressDisplay({
   copyOnClick = true,
   onPress,
   resolveName = true,
+  showAvatar = true,
+  avatarSize = 24,
   interactive = true,
 }: SuiAddressDisplayProps) {
-  const { data: suinsName } = useSuiName(address, { enabled: resolveName });
+  const { data: identity } = useSuiIdentity(address, { enabled: resolveName });
   const [isVisible, setIsVisible] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [failedAvatarUrl, setFailedAvatarUrl] = useState<string | null>(null);
   const timeoutRef = useRef<number | null>(null);
-  const displayLabel = suinsName ?? shortAddress(address);
+  const displayLabel = identity?.suinsName ?? shortAddress(address);
+  const avatarUrl =
+    showAvatar && identity?.avatarUrl && identity.avatarUrl !== failedAvatarUrl
+      ? identity.avatarUrl
+      : null;
 
   useEffect(() => {
     return () => {
@@ -69,6 +80,18 @@ export function SuiAddressDisplay({
 
   const content = (
     <>
+      {avatarUrl ? (
+        <img
+          className={`sui-address-avatar sui-address-avatar-${avatarSize}`}
+          src={avatarUrl}
+          alt=""
+          width={avatarSize}
+          height={avatarSize}
+          loading="lazy"
+          referrerPolicy="no-referrer"
+          onError={() => setFailedAvatarUrl(avatarUrl)}
+        />
+      ) : null}
       <span className={`sui-address-display-label ${labelClassName}`.trim()}>{displayLabel}</span>
       {showCopyLabel ? (
         <span className={`sui-address-display-copy ${copyClassName}`.trim()} aria-hidden="true">

@@ -31,7 +31,7 @@ import { formatAnswerText } from "./answerFormatting";
 import { normalizeFormVisibility } from "./explore";
 import { normalizeActivityEvent } from "./activityLog";
 import { LEGACY_SCHEMA_HASH, computeSchemaHash, resolveFormVersion } from "./formVersioning";
-import { isResponseDeadlinePassed } from "./responseDeadline";
+import { isResponseWindowClosed } from "./responseDeadline";
 import { buildSubmissionInsightPayload, normalizeFieldProcessingPolicy } from "./signalProcessing";
 import { enrichSubmissionWithTriage } from "./signalTriage";
 import { SUI_NETWORK } from "./sui";
@@ -861,6 +861,12 @@ export function normalizeForm(raw: FormSchema | (Record<string, unknown> & { id:
     creationMode: raw.creationMode === "guest" || raw.creationMode === "admin" ? raw.creationMode : undefined,
     projectId: typeof raw.projectId === "string" ? raw.projectId : undefined,
     projectName: typeof raw.projectName === "string" ? raw.projectName : undefined,
+    responseOpenAt:
+      typeof raw.responseOpenAt === "number"
+        ? raw.responseOpenAt
+        : typeof raw.responseOpenAt === "string"
+          ? Number(raw.responseOpenAt)
+          : null,
     responseDeadline:
       typeof raw.responseDeadline === "number"
         ? raw.responseDeadline
@@ -1125,7 +1131,7 @@ export async function saveSubmissionWithEncryption(
     onPipelineStage?: (stage: "encrypting" | "uploading_to_walrus") => void;
   },
 ): Promise<SaveSubmissionWithEncryptionResult> {
-  if (isResponseDeadlinePassed(form.responseDeadline)) {
+  if (isResponseWindowClosed(form.responseOpenAt, form.responseDeadline)) {
     throw new Error(messages?.responseDeadlinePassed ?? "This form is no longer accepting responses.");
   }
 

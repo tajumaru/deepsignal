@@ -82,6 +82,7 @@ interface UseCreateFormPublishArgs {
   locationRequirement: FormLocationRequirement;
   processingMode: FormSchema["processingMode"];
   encryptSubmissions: boolean;
+  responseOpenAtCustom: string;
   responseDeadlinePreset: "none" | "1h" | "24h" | "7d" | "30d" | "custom";
   responseDeadlineCustomAt: string;
   isDirty: boolean;
@@ -129,6 +130,7 @@ export function useCreateFormPublish({
   locationRequirement,
   processingMode,
   encryptSubmissions,
+  responseOpenAtCustom,
   responseDeadlinePreset,
   responseDeadlineCustomAt,
   isDirty,
@@ -198,6 +200,7 @@ export function useCreateFormPublish({
         responseDeadlinePreset === "custom"
           ? parseCustomResponseDeadline(responseDeadlineCustomAt)
           : getResponseDeadlineFromPreset(responseDeadlinePreset);
+      const responseOpenAt = parseCustomResponseDeadline(responseOpenAtCustom);
       const responseDeadlineMode =
         responseDeadlinePreset === "none"
           ? "none"
@@ -225,6 +228,7 @@ export function useCreateFormPublish({
         projectId: selectedProject?.objectId,
         projectName: selectedProject?.name,
         encryptSubmissions,
+        responseOpenAt,
         responseDeadline,
         responseDeadlineMode,
       });
@@ -258,6 +262,7 @@ export function useCreateFormPublish({
     processingMode,
     purpose,
     responseDeadlineCustomAt,
+    responseOpenAtCustom,
     responseDeadlinePreset,
     sections,
     selectedProject?.name,
@@ -388,6 +393,7 @@ export function useCreateFormPublish({
       responseDeadlinePreset === "custom"
         ? parseCustomResponseDeadline(responseDeadlineCustomAt)
         : getResponseDeadlineFromPreset(responseDeadlinePreset);
+    const responseOpenAt = parseCustomResponseDeadline(responseOpenAtCustom);
     const responseDeadlineMode =
       responseDeadlinePreset === "none"
         ? "none"
@@ -403,6 +409,19 @@ export function useCreateFormPublish({
       }
       if (responseDeadline <= Date.now()) {
         setError(t("customDateFuture"));
+        goToStep("info");
+        return;
+      }
+    }
+
+    if (responseOpenAtCustom.trim()) {
+      if (!responseOpenAt) {
+        setError(t("customDateRequired"));
+        goToStep("info");
+        return;
+      }
+      if (responseDeadline && responseOpenAt >= responseDeadline) {
+        setError(t("responseWindowOrderError"));
         goToStep("info");
         return;
       }
@@ -435,6 +454,7 @@ export function useCreateFormPublish({
       projectId: selectedProject?.objectId,
       projectName: selectedProject?.name,
       encryptSubmissions,
+      responseOpenAt,
       responseDeadline,
       responseDeadlineMode,
     });

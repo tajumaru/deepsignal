@@ -3391,6 +3391,13 @@
   box-shadow: 0 0 0 1px rgba(149, 242, 255, 0.1), 0 0 28px rgba(102, 227, 255, 0.08);
 }
 
+.node-directory-item.node-card--sui-pending.is-active {
+  border-color: rgba(255, 226, 138, 0.72);
+  box-shadow:
+    0 0 0 1px rgba(255, 186, 82, 0.22),
+    0 0 30px rgba(255, 186, 82, 0.16);
+}
+
 .form-stream-heading strong,
 .signal-channel-trigger-copy strong,
 .signal-node-summary-copy strong {
@@ -5865,6 +5872,39 @@
   min-width: 0;
 }
 
+.signal-detail-primary-card {
+  padding-top: 0.72rem;
+}
+
+.signal-detail-primary-card > .section-row {
+  margin-bottom: -0.18rem;
+}
+
+.signal-detail-primary-card > .stack {
+  gap: 0.72rem;
+}
+
+.signal-detail-primary-card .signal-storage-badges {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 0.42rem 0.6rem;
+}
+
+.signal-detail-primary-card .signal-storage-badges .storage-proof {
+  justify-self: end;
+}
+
+@media (max-width: 760px) {
+  .signal-detail-primary-card .signal-storage-badges {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .signal-detail-primary-card .signal-storage-badges .storage-proof {
+    justify-self: stretch;
+  }
+}
+
 .review-triage-card textarea {
   min-height: 7rem;
 }
@@ -6073,7 +6113,7 @@ pre,
   }
 
   .mobile-signal-inbox.is-detail-open {
-    display: none;
+    display: grid;
   }
 
   .mobile-inbox-bottom-nav {

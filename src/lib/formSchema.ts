@@ -143,6 +143,12 @@ export function normalizeForm(raw: FormSchema | (Record<string, unknown> & { id:
     creationMode: raw.creationMode === "guest" || raw.creationMode === "admin" ? raw.creationMode : undefined,
     projectId: typeof raw.projectId === "string" ? raw.projectId : undefined,
     projectName: typeof raw.projectName === "string" ? raw.projectName : undefined,
+    responseOpenAt:
+      typeof raw.responseOpenAt === "number"
+        ? raw.responseOpenAt
+        : typeof raw.responseOpenAt === "string"
+          ? Number(raw.responseOpenAt)
+          : null,
     responseDeadline:
       typeof raw.responseDeadline === "number"
         ? raw.responseDeadline

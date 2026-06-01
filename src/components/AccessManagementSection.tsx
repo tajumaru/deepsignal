@@ -230,7 +230,7 @@ export function AccessManagementSection({
             <div key={entry.key} className="access-role-row" role="row">
               <span className="access-role-value access-role-cell access-role-cell-address" role="cell" data-label={t("addressLabel")}>
                 <span className="access-role-meta">
-                  <SignalMetaChip type="contributor" value={entry.address} />
+                  <SignalMetaChip type="contributor" value={entry.address} avatarSize={32} />
                 </span>
               </span>
               <span className="access-role-value access-role-cell access-role-cell-role" role="cell" data-label={t("roleLabel")}>

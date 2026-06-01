@@ -1,4 +1,13 @@
-import { lazy, Suspense, useEffect, useRef, useState, type PropsWithChildren } from "react";
+import {
+  lazy,
+  Suspense,
+  useEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type PropsWithChildren,
+  type TouchEvent as ReactTouchEvent,
+} from "react";
 import { Link, NavLink, useLocation } from "react-router-dom";
 import "../styles/app-shell-entry.css";
 import { CreateFormLink } from "./CreateFormLink";
@@ -6,10 +15,17 @@ import { NavItemLabel } from "./NavIcons";
 import { BuildIndicator } from "./system/BuildIndicator";
 import { WalletConnectSurface } from "./WalletConnectSurface";
 import { useI18n } from "../i18n";
+import { buildInfo } from "../lib/buildInfo";
 import { retryLazyImport } from "../lib/lazyRetry";
 import { isSignalInboxPath } from "../lib/navigation";
 import { scheduleIdleTask } from "../lib/scheduleIdleTask";
 import { useOptionalRpcInfrastructure } from "../rpcInfrastructure";
+
+const MOBILE_DRAWER_SWIPE_THRESHOLD_PX = 60;
+const MOBILE_DRAWER_EDGE_START_PX = 24;
+const MOBILE_DRAWER_HORIZONTAL_RATIO = 1.5;
+const MOBILE_DRAWER_INTENT_PX = 8;
+const MOBILE_VIEWPORT_QUERY = "(max-width: 900px)";
 
 const WalletNav = lazy(() =>
   retryLazyImport(() => import("./WalletNav"), "wallet-nav").then((module) => ({ default: module.WalletNav })),
@@ -21,6 +37,15 @@ const NetworkMenu = lazy(() =>
 interface AppShellProps extends PropsWithChildren {
   walletAvailable?: boolean;
   chrome?: "full" | "public";
+}
+
+interface MobileDrawerGestureState {
+  dragging: boolean;
+  startX: number;
+  startY: number;
+  deltaX: number;
+  deltaY: number;
+  blockedByScroll: boolean;
 }
 
 function MenuToggleIcon() {
@@ -80,9 +105,11 @@ function useWalletChrome(walletAvailable: boolean, navLabLabel: string, onNaviga
 
 interface MobileAppBottomNavProps {
   showComposeShortcut: boolean;
+  drawerOpen: boolean;
+  onOpenDrawer: () => void;
 }
 
-function MobileAppBottomNav({ showComposeShortcut }: MobileAppBottomNavProps) {
+function MobileAppBottomNav({ showComposeShortcut, drawerOpen, onOpenDrawer }: MobileAppBottomNavProps) {
   const location = useLocation();
   const { t } = useI18n();
   const inboxActive = isSignalInboxPath(location.pathname);
@@ -99,7 +126,7 @@ function MobileAppBottomNav({ showComposeShortcut }: MobileAppBottomNavProps) {
           <span className="sr-only">{t("composeSignalCta")}</span>
         </CreateFormLink>
       ) : null}
-      <nav className="mobile-inbox-bottom-nav" aria-label="Mobile workspace navigation">
+      <nav className="mobile-inbox-bottom-nav" aria-label="Mobile workspace navigation" aria-disabled={drawerOpen}>
         <Link className={inboxActive ? "is-active" : undefined} to="/dashboard">
           <span aria-hidden="true">In</span>
           <span>{t("navMobileInbox")}</span>
@@ -112,22 +139,37 @@ function MobileAppBottomNav({ showComposeShortcut }: MobileAppBottomNavProps) {
           <span aria-hidden="true">Me</span>
           <span>{t("navMobileMyResponses")}</span>
         </NavLink>
-        <NavLink className={navClassName} to="/admin/access">
+        <button
+          type="button"
+          className={drawerOpen ? "is-active" : undefined}
+          onClick={onOpenDrawer}
+          aria-haspopup="dialog"
+          aria-expanded={drawerOpen}
+          aria-controls="mobile-command-drawer"
+        >
           <span aria-hidden="true">Set</span>
           <span>{t("navMobileSettings")}</span>
-        </NavLink>
+        </button>
       </nav>
     </>
   );
 }
 
-function DeferredNetworkMenu() {
+function DeferredNetworkMenu({ drawerFallback = false }: { drawerFallback?: boolean }) {
   const [ready, setReady] = useState(false);
   const rpcInfrastructure = useOptionalRpcInfrastructure();
 
   useEffect(() => scheduleIdleTask(() => setReady(true), 2200), []);
 
   if (!ready || !rpcInfrastructure) {
+    if (drawerFallback) {
+      return (
+        <div className="mobile-drawer-status-line" aria-live="polite">
+          <span className="mobile-drawer-status-dot" aria-hidden="true" />
+          <span>{ready ? "Local signal mode" : "Loading network controls"}</span>
+        </div>
+      );
+    }
     return <div className="network-select-shell network-select-shell-placeholder" aria-hidden="true" />;
   }
 
@@ -135,6 +177,19 @@ function DeferredNetworkMenu() {
     <Suspense fallback={<div className="network-select-shell network-select-shell-placeholder" aria-hidden="true" />}>
       <NetworkMenu />
     </Suspense>
+  );
+}
+
+function MobileDrawerNetworkStatus() {
+  const rpcInfrastructure = useOptionalRpcInfrastructure();
+  const providerLabel = rpcInfrastructure?.usingTatum ? rpcInfrastructure.providerLabel : "Sui Fullnode";
+  const networkLabel = rpcInfrastructure?.network ?? "mainnet";
+
+  return (
+    <div className="mobile-drawer-status-line" aria-live="polite">
+      <span className="mobile-drawer-status-dot" aria-hidden="true" />
+      <span>{providerLabel} / {networkLabel}</span>
+    </div>
   );
 }
 
@@ -147,26 +202,24 @@ export function AppShell({
   const location = useLocation();
   const publicChrome = chrome === "public";
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
-  const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
+  const [mobileDrawerDragOffset, setMobileDrawerDragOffset] = useState(0);
+  const [mobileDrawerDragging, setMobileDrawerDragging] = useState(false);
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
   const moreMenuRef = useRef<HTMLDivElement | null>(null);
   const mobileMenuToggleRef = useRef<HTMLButtonElement | null>(null);
   const mobileDrawerRef = useRef<HTMLElement | null>(null);
+  const mobileDrawerCloseRef = useRef<HTMLButtonElement | null>(null);
+  const mobileDrawerReturnFocusRef = useRef<HTMLElement | null>(null);
+  const mobileDrawerGestureRef = useRef<MobileDrawerGestureState | null>(null);
+  const mobileDrawerEdgeGestureRef = useRef<MobileDrawerGestureState | null>(null);
   const walletChrome = useWalletChrome(walletAvailable, t("navLab"), () => setMobileDrawerOpen(false));
   const showComposeShortcut = !isComposerRoute(location.pathname);
-  const showMobileBottomNav =
-    !publicChrome &&
-    (location.pathname === "/explore" ||
-      location.pathname === "/my-responses" ||
-      location.pathname === "/admin" ||
-      location.pathname.startsWith("/admin/") ||
-      location.pathname === "/dashboard" ||
-      location.pathname.startsWith("/dashboard/"));
+  const showMobileBottomNav = !publicChrome;
 
   useEffect(() => {
     setMoreMenuOpen(false);
-    setMobileDrawerOpen(false);
-    setMobileMoreOpen(false);
+    setMobileDrawerDragOffset(0);
+    setMobileDrawerDragging(false);
   }, [location.pathname]);
 
   useEffect(() => {
@@ -206,12 +259,211 @@ export function AppShell({
     };
   }, [mobileDrawerOpen]);
 
-  function closeMobileDrawer() {
-    if (mobileDrawerRef.current?.contains(document.activeElement)) {
-      mobileMenuToggleRef.current?.focus();
+  useEffect(() => {
+    if (!mobileDrawerOpen) {
+      return;
     }
-    setMobileMoreOpen(false);
+
+    mobileDrawerCloseRef.current?.focus();
+
+    function handleEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        closeMobileDrawer();
+      }
+    }
+
+    window.addEventListener("keydown", handleEscape);
+    return () => {
+      window.removeEventListener("keydown", handleEscape);
+    };
+  }, [mobileDrawerOpen]);
+
+  useEffect(() => {
+    if (publicChrome || mobileDrawerOpen) {
+      return;
+    }
+
+    function handleEdgeTouchStart(event: TouchEvent) {
+      if (!isMobileDrawerViewport() || event.touches.length !== 1) {
+        mobileDrawerEdgeGestureRef.current = null;
+        return;
+      }
+
+      const touch = event.touches[0];
+      if (window.innerWidth - touch.clientX > MOBILE_DRAWER_EDGE_START_PX) {
+        mobileDrawerEdgeGestureRef.current = null;
+        return;
+      }
+
+      mobileDrawerEdgeGestureRef.current = {
+        dragging: false,
+        startX: touch.clientX,
+        startY: touch.clientY,
+        deltaX: 0,
+        deltaY: 0,
+        blockedByScroll: false,
+      };
+    }
+
+    function handleEdgeTouchMove(event: TouchEvent) {
+      const gesture = mobileDrawerEdgeGestureRef.current;
+      if (!gesture || event.touches.length !== 1) {
+        return;
+      }
+
+      const touch = event.touches[0];
+      const deltaX = touch.clientX - gesture.startX;
+      const deltaY = touch.clientY - gesture.startY;
+      gesture.deltaX = deltaX;
+      gesture.deltaY = deltaY;
+
+      if (!gesture.dragging) {
+        const absDeltaX = Math.abs(deltaX);
+        const absDeltaY = Math.abs(deltaY);
+        if (absDeltaY > MOBILE_DRAWER_INTENT_PX && absDeltaY > absDeltaX) {
+          gesture.blockedByScroll = true;
+          return;
+        }
+        if (deltaX < -MOBILE_DRAWER_INTENT_PX && absDeltaX > absDeltaY * MOBILE_DRAWER_HORIZONTAL_RATIO) {
+          gesture.dragging = true;
+        }
+      }
+
+      if (gesture.dragging) {
+        event.preventDefault();
+      }
+    }
+
+    function handleEdgeTouchEnd(event: TouchEvent) {
+      const gesture = mobileDrawerEdgeGestureRef.current;
+      const touch = event.changedTouches[0];
+      if (gesture && touch) {
+        gesture.deltaX = touch.clientX - gesture.startX;
+        gesture.deltaY = touch.clientY - gesture.startY;
+      }
+      mobileDrawerEdgeGestureRef.current = null;
+      if (!gesture || gesture.blockedByScroll) {
+        return;
+      }
+
+      if (
+        gesture.deltaX < -MOBILE_DRAWER_SWIPE_THRESHOLD_PX &&
+        Math.abs(gesture.deltaX) > Math.abs(gesture.deltaY) * MOBILE_DRAWER_HORIZONTAL_RATIO
+      ) {
+        openMobileDrawer();
+      }
+    }
+
+    window.addEventListener("touchstart", handleEdgeTouchStart, { passive: true });
+    window.addEventListener("touchmove", handleEdgeTouchMove, { passive: false });
+    window.addEventListener("touchend", handleEdgeTouchEnd);
+    window.addEventListener("touchcancel", handleEdgeTouchEnd);
+    return () => {
+      window.removeEventListener("touchstart", handleEdgeTouchStart);
+      window.removeEventListener("touchmove", handleEdgeTouchMove);
+      window.removeEventListener("touchend", handleEdgeTouchEnd);
+      window.removeEventListener("touchcancel", handleEdgeTouchEnd);
+    };
+  }, [mobileDrawerOpen, publicChrome]);
+
+  function openMobileDrawer() {
+    const activeElement = document.activeElement;
+    mobileDrawerReturnFocusRef.current = activeElement instanceof HTMLElement ? activeElement : mobileMenuToggleRef.current;
+    setMobileDrawerDragOffset(0);
+    setMobileDrawerDragging(false);
+    setMobileDrawerOpen(true);
+  }
+
+  function closeMobileDrawer() {
+    const shouldRestoreFocus =
+      mobileDrawerRef.current?.contains(document.activeElement) ||
+      document.activeElement?.classList.contains("mobile-drawer-backdrop");
+    setMobileDrawerDragOffset(0);
+    setMobileDrawerDragging(false);
     setMobileDrawerOpen(false);
+    if (shouldRestoreFocus) {
+      window.requestAnimationFrame(() => {
+        mobileDrawerReturnFocusRef.current?.focus();
+        mobileDrawerReturnFocusRef.current = null;
+      });
+    }
+  }
+
+  function isMobileDrawerViewport() {
+    return typeof window !== "undefined" && window.matchMedia(MOBILE_VIEWPORT_QUERY).matches;
+  }
+
+  function handleMobileDrawerTouchStart(event: ReactTouchEvent<HTMLElement>) {
+    if (!isMobileDrawerViewport() || event.touches.length !== 1) {
+      mobileDrawerGestureRef.current = null;
+      return;
+    }
+
+    const touch = event.touches[0];
+    mobileDrawerGestureRef.current = {
+      dragging: false,
+      startX: touch.clientX,
+      startY: touch.clientY,
+      deltaX: 0,
+      deltaY: 0,
+      blockedByScroll: false,
+    };
+    setMobileDrawerDragOffset(0);
+    setMobileDrawerDragging(false);
+  }
+
+  function handleMobileDrawerTouchMove(event: ReactTouchEvent<HTMLElement>) {
+    const gesture = mobileDrawerGestureRef.current;
+    if (!gesture || event.touches.length !== 1) {
+      return;
+    }
+
+    const touch = event.touches[0];
+    const deltaX = touch.clientX - gesture.startX;
+    const deltaY = touch.clientY - gesture.startY;
+    gesture.deltaX = deltaX;
+    gesture.deltaY = deltaY;
+
+    if (!gesture.dragging) {
+      const absDeltaX = Math.abs(deltaX);
+      const absDeltaY = Math.abs(deltaY);
+      if (absDeltaY > MOBILE_DRAWER_INTENT_PX && absDeltaY > absDeltaX) {
+        gesture.blockedByScroll = true;
+        return;
+      }
+      if (deltaX > MOBILE_DRAWER_INTENT_PX && deltaX > absDeltaY * MOBILE_DRAWER_HORIZONTAL_RATIO) {
+        gesture.dragging = true;
+        setMobileDrawerDragging(true);
+      }
+    }
+
+    if (gesture.dragging) {
+      event.preventDefault();
+      setMobileDrawerDragOffset(Math.max(0, Math.min(deltaX, window.innerWidth)));
+    }
+  }
+
+  function finishMobileDrawerTouch(event: ReactTouchEvent<HTMLElement>) {
+    const gesture = mobileDrawerGestureRef.current;
+    const touch = event.changedTouches[0];
+    if (gesture && touch) {
+      gesture.deltaX = touch.clientX - gesture.startX;
+      gesture.deltaY = touch.clientY - gesture.startY;
+    }
+    mobileDrawerGestureRef.current = null;
+    setMobileDrawerDragging(false);
+
+    if (
+      gesture &&
+      !gesture.blockedByScroll &&
+      gesture.deltaX > MOBILE_DRAWER_SWIPE_THRESHOLD_PX &&
+      gesture.deltaX > Math.abs(gesture.deltaY) * MOBILE_DRAWER_HORIZONTAL_RATIO
+    ) {
+      closeMobileDrawer();
+      return;
+    }
+
+    setMobileDrawerDragOffset(0);
   }
 
   const shell = (
@@ -234,11 +486,11 @@ export function AppShell({
                   closeMobileDrawer();
                   return;
                 }
-                setMobileDrawerOpen(true);
+                openMobileDrawer();
               }}
               aria-label="Toggle navigation menu"
               aria-expanded={mobileDrawerOpen}
-              aria-controls="mobile-nav-drawer"
+              aria-controls="mobile-command-drawer"
             >
               <MenuToggleIcon />
             </button>
@@ -325,66 +577,86 @@ export function AppShell({
               />
               <aside
                 ref={mobileDrawerRef}
-                id="mobile-nav-drawer"
-                className="mobile-nav-drawer panel is-open"
+                id="mobile-command-drawer"
+                className={`mobile-nav-drawer panel is-open ${mobileDrawerDragging ? "is-dragging" : ""}`}
                 role="dialog"
                 aria-modal="true"
-                aria-label="Mobile navigation menu"
+                aria-label="DeepSignal mobile command menu"
+                style={{ "--mobile-drawer-drag-x": `${mobileDrawerDragOffset}px` } as CSSProperties}
+                onTouchStart={handleMobileDrawerTouchStart}
+                onTouchMove={handleMobileDrawerTouchMove}
+                onTouchEnd={finishMobileDrawerTouch}
+                onTouchCancel={finishMobileDrawerTouch}
               >
                 <div className="mobile-drawer-header">
-                  <div>
-                    <span className="mobile-drawer-eyebrow">Secure Command Panel</span>
-                    <strong>DeepSignal</strong>
-                    <p>{t("brandTagline")}</p>
+                  <div className="mobile-drawer-brand">
+                    <span className="brand-mark" aria-hidden="true">
+                      <img src="/deepsignal-mark.svg" alt="" />
+                    </span>
+                    <div>
+                      <strong>DeepSignal</strong>
+                    </div>
                   </div>
+                  <button
+                    ref={mobileDrawerCloseRef}
+                    type="button"
+                    className="mobile-drawer-close-button"
+                    onClick={closeMobileDrawer}
+                    aria-label="Close mobile command menu"
+                  >
+                    <span aria-hidden="true" />
+                    <span aria-hidden="true" />
+                  </button>
                 </div>
 
                 <div className="mobile-drawer-section">
-                  <span className="mobile-drawer-section-label">Secure Inbox</span>
-                  <nav className="mobile-drawer-nav" aria-label="Mobile navigation">
-                    <a href="/" onClick={closeMobileDrawer}>
-                      {t("navHome")}
-                    </a>
-                    {walletChrome.inboxNav}
+                  <span className="mobile-drawer-section-label">SIGNALS</span>
+                  <nav className="mobile-drawer-nav mobile-drawer-primary-nav" aria-label="Mobile navigation">
                     <NavLink to="/explore" onClick={closeMobileDrawer}>
                       {t("navExplore")}
                     </NavLink>
-                    <NavLink to="/my-responses" onClick={closeMobileDrawer}>
-                      {t("navMyResponses")}
+                    <NavLink to="/dashboard" onClick={closeMobileDrawer}>
+                      {t("navMobileInbox")}
                     </NavLink>
-                    {walletChrome.accessNav}
-                    <div className="mobile-drawer-more">
-                      <button
-                        type="button"
-                        className={`mobile-drawer-more-trigger ${mobileMoreOpen ? "is-open" : ""}`}
-                        onClick={() => setMobileMoreOpen((current) => !current)}
-                        aria-expanded={mobileMoreOpen}
-                      >
-                        <NavItemLabel>{t("navMore")}</NavItemLabel>
-                      </button>
-                      {mobileMoreOpen ? (
-                        <NavLink
-                          className="mobile-drawer-subnav-link"
-                          to="/troubleshooting"
-                          onClick={closeMobileDrawer}
-                        >
-                          {t("navTroubleshooting")}
-                        </NavLink>
-                      ) : null}
-                    </div>
+                    <NavLink to="/my-responses" onClick={closeMobileDrawer}>
+                      {t("navMobileMyResponses")}
+                    </NavLink>
                   </nav>
                 </div>
 
                 <div className="mobile-drawer-section">
-                  <span className="mobile-drawer-section-label">Command Surface</span>
+                  <span className="mobile-drawer-section-label">{t("navMobileSettings")}</span>
+                  <nav className="mobile-drawer-nav mobile-drawer-settings-nav" aria-label="Mobile settings navigation">
+                    {walletChrome.accessNav}
+                    <NavLink className="mobile-drawer-command-link" to="/troubleshooting" onClick={closeMobileDrawer}>
+                      {t("navTroubleshooting")}
+                    </NavLink>
+                  </nav>
                   <div className="mobile-drawer-utility-group">
-                    <div className="mobile-drawer-utility-card">
+                    <div className="mobile-drawer-utility-card mobile-drawer-status-card">
                       <span className="mobile-drawer-utility-label">Network</span>
-                      <DeferredNetworkMenu />
+                      <MobileDrawerNetworkStatus />
+                      <DeferredNetworkMenu drawerFallback />
                     </div>
-                    <div className="mobile-drawer-utility-card">
+                    <div className="mobile-drawer-utility-card mobile-drawer-status-card">
                       <span className="mobile-drawer-utility-label">Wallet</span>
-                      {walletChrome.connect}
+                      {walletAvailable ? (
+                        <WalletConnectSurface
+                          compact
+                          surface="mobileDrawer"
+                          fallback={
+                            <div className="mobile-drawer-status-line" aria-live="polite">
+                              <span className="mobile-drawer-status-dot" aria-hidden="true" />
+                              <span>ウォレット確認中</span>
+                            </div>
+                          }
+                        />
+                      ) : (
+                        <div className="mobile-drawer-status-line">
+                          <span className="mobile-drawer-status-dot is-idle" aria-hidden="true" />
+                          <span>ウォレット未接続</span>
+                        </div>
+                      )}
                     </div>
                     <div className="mobile-drawer-utility-card">
                       <label className="language-switch mobile-drawer-language-switch">
@@ -398,6 +670,10 @@ export function AppShell({
                         </select>
                       </label>
                     </div>
+                    <div className="mobile-drawer-about-row" aria-label="About DeepSignal">
+                      <span>About</span>
+                      <span>{buildInfo.label}</span>
+                    </div>
                   </div>
                 </div>
               </aside>
@@ -406,7 +682,13 @@ export function AppShell({
         </>
       )}
       <main className="page-wrap">{children}</main>
-      {showMobileBottomNav ? <MobileAppBottomNav showComposeShortcut={showComposeShortcut} /> : null}
+      {showMobileBottomNav ? (
+        <MobileAppBottomNav
+          showComposeShortcut={showComposeShortcut}
+          drawerOpen={mobileDrawerOpen}
+          onOpenDrawer={openMobileDrawer}
+        />
+      ) : null}
       <BuildIndicator />
     </div>
   );

@@ -50,6 +50,7 @@ export interface ParsedCreateFormDraft {
   locationRequirement?: FormLocationRequirement;
   processingMode?: SignalProcessingMode;
   encryptSubmissions?: boolean;
+  responseOpenAtCustom?: string;
   responseDeadlinePreset?: ResponseDeadlinePreset;
   responseDeadlineCustomAt?: string;
   currentStep?: "template" | "info" | "fields" | "publish";
@@ -189,6 +190,7 @@ export function serializeDraft(
   createOnSui: boolean,
   encryptSubmissions: boolean,
   sections: FormSection[],
+  responseOpenAtCustom: string,
   responseDeadlinePreset: ResponseDeadlinePreset,
   responseDeadlineCustomAt: string,
 ) {
@@ -208,6 +210,7 @@ export function serializeDraft(
     processingMode,
     createOnSui,
     encryptSubmissions,
+    responseOpenAtCustom,
     responseDeadlinePreset,
     responseDeadlineCustomAt,
     sections: sections.map((section) => ({
@@ -270,6 +273,7 @@ export function buildFormSchema(args: {
   projectId?: string;
   projectName?: string;
   encryptSubmissions: boolean;
+  responseOpenAt?: number | null;
   responseDeadline?: number | null;
   responseDeadlineMode?: "none" | "relative" | "custom";
 }): FormSchema {
@@ -328,6 +332,7 @@ export function buildFormSchema(args: {
     projectId: args.projectId,
     projectName: args.projectName,
     encryptSubmissions: args.encryptSubmissions,
+    responseOpenAt: args.responseOpenAt ?? null,
     responseDeadline: args.responseDeadline ?? null,
     responseDeadlineMode: args.responseDeadlineMode ?? "none",
     registrationMode: "walrus",

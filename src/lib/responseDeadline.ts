@@ -4,6 +4,7 @@ export type ResponseDeadlinePreset = "none" | "1h" | "24h" | "7d" | "30d" | "cus
 
 export interface ResponseDeadlineLabels {
   noLimit: string;
+  notOpen?: string;
   closed: string;
   hoursLeft: (hours: number) => string;
   daysLeft: (days: number) => string;
@@ -22,10 +23,22 @@ export function isResponseDeadlinePassed(responseDeadline?: number | null): bool
     : false;
 }
 
+export function isResponseWindowPending(responseOpenAt?: number | null): boolean {
+  return typeof responseOpenAt === "number" && Number.isFinite(responseOpenAt) ? Date.now() < responseOpenAt : false;
+}
+
+export function isResponseWindowClosed(responseOpenAt?: number | null, responseDeadline?: number | null): boolean {
+  return isResponseWindowPending(responseOpenAt) || isResponseDeadlinePassed(responseDeadline);
+}
+
 export function formatResponseDeadline(
   responseDeadline?: number | null,
   labels?: ResponseDeadlineLabels,
+  responseOpenAt?: number | null,
 ): string {
+  if (isResponseWindowPending(responseOpenAt)) {
+    return labels?.notOpen ?? "Scheduled";
+  }
   if (responseDeadline == null || !Number.isFinite(responseDeadline)) {
     return labels?.noLimit ?? "No limit";
   }
