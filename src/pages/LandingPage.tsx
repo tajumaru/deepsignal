@@ -984,6 +984,20 @@ function LiveSignalFlowSection() {
 function FinalSignalCtaSection() {
   const { sectionRef, isVisible } = useScrollReveal();
   const { t } = useI18n();
+  const intakeNodes = [
+    { label: "Photos", meta: "Encrypted", tone: "cyan", icon: "photo", x: "18%", y: "24%" },
+    { label: "Voice Notes", meta: "Encrypted", tone: "mint", icon: "voice", x: "12%", y: "50%" },
+    { label: "Messages", meta: "Encrypted", tone: "violet", icon: "message", x: "23%", y: "78%" },
+    { label: "Locations", meta: "Encrypted", tone: "violet", icon: "location", x: "78%", y: "24%" },
+    { label: "Ratings", meta: "Encrypted", tone: "gold", icon: "rating", x: "86%", y: "50%" },
+    { label: "Attachments", meta: "Encrypted", tone: "cyan", icon: "attachment", x: "78%", y: "78%" },
+  ];
+  const trustItems = [
+    { label: "End-to-End Encrypted", icon: "Encrypt" as FlowStepIconName },
+    { label: "Stored on Walrus", icon: "Store" as FlowStepIconName },
+    { label: "You Own Your Data", icon: "Review" as FlowStepIconName },
+    { label: "Privacy by Design", icon: "Certify" as FlowStepIconName },
+  ];
 
   return (
     <section
@@ -992,19 +1006,65 @@ function FinalSignalCtaSection() {
       aria-labelledby="landing-final-cta-title"
     >
       <div className="landing-signal-section-shell landing-final-cta-shell">
-        <span className="landing-final-cta-orbit" aria-hidden="true" />
+        <div className="landing-final-cta-field" aria-hidden="true">
+          <span className="landing-final-cta-orbit landing-final-cta-orbit-outer" />
+          <span className="landing-final-cta-orbit landing-final-cta-orbit-mid" />
+        </div>
         <p className="eyebrow">{t("landingFinalCtaEyebrow")}</p>
-        <h2 id="landing-final-cta-title">{t("landingFinalCtaTitle")}</h2>
-        <CreateFormLink className="primary-button landing-cta-primary landing-final-cta-button">
-          {t("landingHeroContestCreate")}
-        </CreateFormLink>
-        <img
-          className="landing-final-cta-mascot"
-          src="/deepsignal-final-cta-mascot.webp"
-          alt=""
-          loading="eager"
-          decoding="async"
-        />
+        <h2 id="landing-final-cta-title">Every feedback becomes a signal.</h2>
+        <p className="landing-final-cta-lede">
+          Photos, voice notes, ratings, locations, and ideas are sealed before they become operational intelligence.
+        </p>
+
+        <div className="landing-final-cta-map">
+          <svg className="landing-final-cta-lines" viewBox="0 0 1000 430" role="presentation" focusable="false">
+            <path className="is-cyan" d="M180 104 C305 158 390 190 500 215" />
+            <path className="is-mint" d="M118 215 C278 216 380 216 500 215" />
+            <path className="is-violet" d="M230 334 C334 280 404 242 500 215" />
+            <path className="is-violet" d="M820 104 C695 158 610 190 500 215" />
+            <path className="is-gold" d="M882 215 C722 216 620 216 500 215" />
+            <path className="is-cyan" d="M770 334 C666 280 596 242 500 215" />
+          </svg>
+
+          {intakeNodes.map((node) => (
+            <div
+              key={node.label}
+              className={`landing-final-cta-node is-${node.tone} is-${node.icon}`}
+              style={{ "--node-x": node.x, "--node-y": node.y } as CSSProperties}
+            >
+              <span className="landing-final-cta-node-icon" />
+              <strong>{node.label}</strong>
+              <small>{node.meta}</small>
+            </div>
+          ))}
+
+          <CreateFormLink className="primary-button landing-cta-primary landing-final-cta-button">
+            <span className="landing-final-cta-button-icon">
+              <FlowStepIcon name="Submit" />
+            </span>
+            {t("landingHeroContestCreate")}
+            <span className="landing-final-cta-arrow" aria-hidden="true">
+              -&gt;
+            </span>
+          </CreateFormLink>
+
+          <img
+            className="landing-final-cta-mascot"
+            src="/deepsignal-final-cta-mascot.webp"
+            alt=""
+            loading="eager"
+            decoding="async"
+          />
+        </div>
+
+        <div className="landing-final-cta-trust" aria-label="Signal protection guarantees">
+          {trustItems.map((item) => (
+            <span key={item.label}>
+              <FlowStepIcon name={item.icon} />
+              {item.label}
+            </span>
+          ))}
+        </div>
       </div>
     </section>
   );
