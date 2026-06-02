@@ -61,7 +61,9 @@ import { summarizeDiagnostics } from "../diagnostics/diagnosticsSummary";
 import { redactSystemSignal } from "../diagnostics/redaction";
 import { MAX_DIAGNOSTICS_LIMIT, type DiagnosticsSummary, type DiagnosticsSummaryOptions } from "../diagnostics/types";
 import {
+  createSignalMemoryAdapter,
   createDraftFromDiagnosticsSummaryGroup,
+  type SignalPatternMemory,
   type SignalPatternMemoryConfidence,
   type SignalPatternMemoryDraft,
   type SignalPatternMemoryStatus,
@@ -4092,16 +4094,36 @@ const patternMemoryStatusOptions: SignalPatternMemoryStatus[] = [
 
 const patternMemoryConfidenceOptions: SignalPatternMemoryConfidence[] = ["low", "medium", "high"];
 
+function createPatternMemoryId() {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+    return `spm_${crypto.randomUUID()}`;
+  }
+  return `spm_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function createSignalPatternMemoryFromDraft(draft: SignalPatternMemoryDraft, now = new Date().toISOString()): SignalPatternMemory {
+  return {
+    ...draft,
+    memoryId: createPatternMemoryId(),
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
 function PatternMemoryDraftReviewModal({
   draft,
+  saveMessage,
   onDraftChange,
   onClose,
   onCopyJson,
+  onSave,
 }: {
   draft: SignalPatternMemoryDraft;
+  saveMessage: string;
   onDraftChange: (draft: SignalPatternMemoryDraft) => void;
   onClose: () => void;
   onCopyJson: () => void;
+  onSave: () => void;
 }) {
   const updateDraft = <Key extends keyof SignalPatternMemoryDraft>(
     key: Key,
@@ -4227,10 +4249,16 @@ function PatternMemoryDraftReviewModal({
           <button type="button" className="ghost-button" onClick={onCopyJson}>
             Copy draft JSON
           </button>
+          <button type="button" className="primary-button" onClick={onSave}>
+            Save pattern memory
+          </button>
           <button type="button" className="primary-button" onClick={onClose}>
             Done
           </button>
         </div>
+        {saveMessage ? (
+          <p className="muted" role="status">{saveMessage}</p>
+        ) : null}
       </section>
     </div>
   );
@@ -4409,6 +4437,7 @@ export function AdminDashboardPage() {
     useState<NonNullable<DiagnosticsSummaryOptions["groupBy"]>>("fingerprint");
   const [systemDiagnosticsSummary, setSystemDiagnosticsSummary] = useState<DiagnosticsSummary | null>(null);
   const [patternMemoryDraft, setPatternMemoryDraft] = useState<SignalPatternMemoryDraft | null>(null);
+  const [patternMemorySaveMessage, setPatternMemorySaveMessage] = useState("");
   const versionCounts = useMemo(
     () => getSubmissionVersionCounts(allSignals.map((record) => record.submission)),
     [allSignals],
@@ -4549,6 +4578,7 @@ export function AdminDashboardPage() {
         groupBy: systemDiagnosticsGroupBy,
         diagnostics,
       }));
+      setPatternMemorySaveMessage("");
     },
     [systemDiagnosticsGroupBy, visibleSystemRecords],
   );
@@ -4898,6 +4928,35 @@ export function AdminDashboardPage() {
     loadConsole,
     mockProject: mockAdminData?.project ?? null,
   });
+  const savePatternMemoryDraft = useCallback(async () => {
+    if (!patternMemoryDraft) {
+      return;
+    }
+    const projectId = selectedProject?.objectId ?? selectedProjectId;
+    if (!projectId) {
+      const message = "Select a project before validating pattern memory.";
+      setPatternMemorySaveMessage(message);
+      setToast({ tone: "error", message });
+      return;
+    }
+    const namespace = `deepsignal:project:${projectId}:signal-pattern-memory:v1`;
+    const memory = createSignalPatternMemoryFromDraft(patternMemoryDraft);
+    try {
+      const result = await createSignalMemoryAdapter().saveMemory(namespace, memory);
+      const message = result.skipped && result.reason === "noop"
+        ? "Pattern memory validated. Persistence is disabled."
+        : result.skipped && result.reason === "memwal_not_implemented"
+          ? "Pattern memory validated. MemWal persistence is not implemented yet."
+          : "Pattern memory saved.";
+      setPatternMemorySaveMessage(message);
+      setToast({ tone: "success", message });
+    } catch (error) {
+      console.error("Pattern memory validation failed", error);
+      const message = "Pattern memory rejected because unsafe raw signal fields were detected.";
+      setPatternMemorySaveMessage(message);
+      setToast({ tone: "error", message });
+    }
+  }, [patternMemoryDraft, selectedProject?.objectId, selectedProjectId, setToast]);
 
   useEffect(() => {
     logRouteLifecycle("admin-dashboard:mount", {
@@ -8708,9 +8767,11 @@ export function AdminDashboardPage() {
       {patternMemoryDraft ? (
         <PatternMemoryDraftReviewModal
           draft={patternMemoryDraft}
+          saveMessage={patternMemorySaveMessage}
           onDraftChange={setPatternMemoryDraft}
           onClose={() => setPatternMemoryDraft(null)}
           onCopyJson={() => void copyPatternMemoryDraftJson()}
+          onSave={() => void savePatternMemoryDraft()}
         />
       ) : null}
       {demoIntelligenceAlertOpen && intelligenceDemoSimulationEnabled && demoBriefAvailable ? (

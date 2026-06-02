@@ -775,6 +775,10 @@ describe("AdminDashboardPage", () => {
     expect(modal.textContent).not.toContain("errorStack");
     expect(modal.textContent).not.toContain("token=abc");
     expect(modal.textContent).not.toContain("#frag");
+
+    fireEvent.click(within(modal).getByRole("button", { name: "Save pattern memory" }));
+    expect(await within(modal).findByText("Pattern memory validated. Persistence is disabled.")).toBeInTheDocument();
+    expect(screen.getAllByText("Pattern memory validated. Persistence is disabled.").length).toBeGreaterThan(0);
   });
 
   it("regroups the System Diagnostics Summary by routeId", async () => {

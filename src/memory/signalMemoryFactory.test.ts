@@ -47,12 +47,22 @@ describe("Signal Pattern Memory adapter factory", () => {
     } as ImportMetaEnv).kind).toBe("memwal-placeholder");
   });
 
-  it("rejects objects containing forbidden raw signal fields", async () => {
+  it.each([
+    "answers",
+    "publicPayload",
+    "encryptedPayload",
+    "attachments",
+    "metadata",
+    "respondentMeta",
+    "responderSignature",
+    "responderSignedBytes",
+    "errorStack",
+  ])("rejects objects containing forbidden raw signal field %s", async (field) => {
     const adapter = createSignalMemoryAdapter({} as ImportMetaEnv);
     const unsafeMemory = {
       ...safeMemory(),
-      answers: {
-        raw: "raw answer text",
+      [field]: {
+        raw: "raw signal data",
       },
     } as SignalPatternMemory;
 
