@@ -4360,8 +4360,8 @@ export function AdminDashboardPage() {
       setToast({
         tone: "success",
         message: envelope.truncated
-          ? `Exported ${envelope.count}/${envelope.totalMatching} redacted diagnostics.`
-          : `Exported ${envelope.count} redacted diagnostics.`,
+          ? `Exported ${envelope.count}/${envelope.totalMatching} visible redacted diagnostics.`
+          : `Exported ${envelope.count} visible redacted diagnostics.`,
       });
     } catch (error) {
       console.error("System diagnostics export failed", error);
@@ -7526,7 +7526,7 @@ export function AdminDashboardPage() {
                           className="ghost-button"
                           onClick={() => void exportVisibleSystemDiagnostics()}
                         >
-                          Export diagnostics JSON
+                          Export visible diagnostics JSON
                         </button>
                       </div>
                     ) : null}

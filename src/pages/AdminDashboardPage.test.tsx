@@ -528,7 +528,7 @@ describe("AdminDashboardPage", () => {
     expect(
       await screen.findByText("Stack traces may include SDK error bodies, route params, object dumps, or local paths."),
     ).toBeInTheDocument();
-    const exportButton = await screen.findByRole("button", { name: "Export diagnostics JSON" });
+    const exportButton = await screen.findByRole("button", { name: "Export visible diagnostics JSON" });
     exportButton.click();
 
     await waitFor(() => expect(clickSpy).toHaveBeenCalled());
