@@ -35,7 +35,7 @@ export class NoopSignalMemoryAdapter implements SignalMemoryAdapter {
     assertSignalMemoryNamespace(namespace);
     assertSafeSignalPatternMemory(memory);
     return {
-      ok: true,
+      ok: false,
       skipped: true,
       reason: "noop",
       memoryId: memory.memoryId,

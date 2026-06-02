@@ -156,6 +156,8 @@
   }
 
   .mobile-explore-row .mobile-signal-main {
+    display: grid;
+    min-width: 0;
     gap: 0.42rem;
   }
 
@@ -177,9 +179,13 @@
   }
 
   .mobile-explore-row .mobile-signal-preview {
+    display: -webkit-box;
+    overflow: hidden;
     color: #c5dde8;
     font-size: 0.86rem;
     line-height: 1.52;
+    white-space: normal;
+    -webkit-box-orient: vertical;
     -webkit-line-clamp: 3;
   }
 
@@ -196,12 +202,16 @@
   }
 
   .mobile-explore-row .mobile-signal-meta-row {
+    display: flex;
+    flex-wrap: wrap;
     gap: 0.38rem;
     padding-top: 0.18rem;
     overflow: visible;
   }
 
   .mobile-explore-row .mobile-signal-mini-badge {
+    display: inline-flex;
+    align-items: center;
     max-width: 100%;
     padding: 0.22rem 0.45rem;
     border-color: rgba(116, 226, 255, 0.18);

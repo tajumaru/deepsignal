@@ -68,7 +68,7 @@ describe("Signal Pattern Memory adapter factory", () => {
     await expect(adapter.saveMemory("deepsignal:project:1:signal-pattern-memory:v1", memory))
       .resolves
       .toEqual({
-        ok: true,
+        ok: false,
         skipped: true,
         reason: "noop",
         memoryId: "memory-1",
