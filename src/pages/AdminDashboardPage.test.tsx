@@ -378,7 +378,7 @@ function createSystemRecord(
   };
 }
 
-function createResponderRecord() {
+function createResponderRecord(overrides: Partial<Submission> = {}) {
   const form: FormWithCount = {
     id: "responder-form-1",
     title: "Field Signals",
@@ -402,6 +402,7 @@ function createResponderRecord() {
     isEncrypted: false,
     createdAt: "2026-01-01T00:00:00.000Z",
     updatedAt: "2026-01-01T00:01:00.000Z",
+    ...overrides,
   };
   return {
     form,
@@ -997,11 +998,56 @@ describe("AdminDashboardPage", () => {
     expect(within(relatedPanel).getByText("Build memory")).toBeInTheDocument();
   });
 
+  it("shows related pattern memories for normal user signals without rendering raw answers", async () => {
+    const { form, record } = createResponderRecord({
+      answers: { report: "raw wallet answer secret" },
+      category: "bug",
+      priority: "high",
+      triageStatus: "investigating",
+      tags: ["wallet", "mobile-ux"],
+      aiSummary: "Users are confused by wallet connection on mobile.",
+      subjectPreview: "Wallet connection confusion",
+      notes: "Safe admin note about connection copy.",
+    });
+    await seedPatternMemory(createPatternMemory({
+      memoryId: "memory-user-signal",
+      type: "ux_friction_pattern",
+      title: "Wallet connection UX memory",
+      summary: "Users report wallet connection confusion on mobile.",
+      signalKinds: ["user_signal"],
+      sourceSignalIds: [],
+      tags: ["mobile-ux"],
+      recommendedCodexPrompt: "Investigate wallet connection UX.",
+    }));
+    allowAdminAccess();
+    signalIndex.counts.system = 0;
+    signalIndex.signalById = { [record.submission.id]: record };
+    mockInboxState.current = {
+      forms: [form],
+      selectedStreamId: "all",
+      allSignals: [record],
+      visibleSignals: [record],
+      selectedRecord: record,
+      signalIndex,
+    };
+
+    renderAdminRoute();
+
+    const relatedPanel = await screen.findByRole("region", { name: "Related Pattern Memories" });
+    expect(within(relatedPanel).getByText("Wallet connection UX memory")).toBeInTheDocument();
+    expect(within(relatedPanel).getByText("ux_friction_pattern")).toBeInTheDocument();
+    expect(within(relatedPanel).getByText("Shared tags")).toBeInTheDocument();
+    expect(within(relatedPanel).getByText("Same category")).toBeInTheDocument();
+    expect(within(relatedPanel).getByText("Similar summary")).toBeInTheDocument();
+    expect(relatedPanel.textContent).not.toContain("raw wallet answer secret");
+  });
+
   it("does not show unrelated pattern memories in System Signal detail", async () => {
     const first = createSystemRecord({ id: "system-error-1", fingerprint: "fp-admin", routeId: "admin" });
     await seedPatternMemory(createPatternMemory({
       memoryId: "memory-unrelated",
       title: "Unrelated memory",
+      sourceSignalIds: [],
       fingerprints: ["fp-other"],
       affectedRoutes: ["public-form"],
       affectedBuilds: ["9.9.9"],

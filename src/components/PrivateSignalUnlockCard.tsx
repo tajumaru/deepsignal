@@ -1,5 +1,5 @@
 import { useDisconnectWallet } from "@mysten/dapp-kit";
-import { useId, useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import type { DecryptDiagnosticContext } from "../crypto/decryptDiagnostics";
 import { useI18n } from "../i18n";
@@ -264,9 +264,6 @@ export function PrivateSignalUnlockCard({
   onCancel,
   isDecrypting,
   isUnlocked,
-  actionLabel,
-  mobileActionLabel,
-  mobileUnlockedActionLabel,
   unlockState,
   statusMessage,
   errorMessage,

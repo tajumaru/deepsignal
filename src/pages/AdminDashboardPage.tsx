@@ -64,6 +64,8 @@ import { MAX_DIAGNOSTICS_LIMIT, type DiagnosticsSummary, type DiagnosticsSummary
 import {
   createSignalMemoryAdapter,
   createDraftFromDiagnosticsSummaryGroup,
+  getRelatedPatternMemoryMatches,
+  type RelatedPatternMemoryReason,
   type SignalPatternMemory,
   type SignalPatternMemoryConfidence,
   type SignalPatternMemoryDraft,
@@ -4115,24 +4117,35 @@ function getSignalPatternMemoryNamespace(projectId: string) {
   return `deepsignal:project:${projectId}:signal-pattern-memory:v1`;
 }
 
-function getRelatedPatternMemoryScore(
-  memory: SignalPatternMemory,
-  diagnostic: NonNullable<ReturnType<typeof redactSystemSignal>>,
-  signalTags: string[],
-) {
-  let score = 0;
-  if (memory.fingerprints.includes(diagnostic.fingerprint)) {
-    score += 4;
+function getRelatedPatternMemoryReasonLabel(reason: RelatedPatternMemoryReason) {
+  switch (reason) {
+    case "source_signal":
+      return "Source signal";
+    case "fingerprint":
+      return "Fingerprint";
+    case "route":
+      return "Route";
+    case "build":
+      return "Build";
+    case "shared_tags":
+      return "Shared tags";
+    case "same_category":
+      return "Same category";
+    case "similar_summary":
+      return "Similar summary";
+    case "same_form":
+      return "Same form";
+    case "same_project":
+      return "Same project";
+    case "same_priority":
+      return "Same priority";
+    case "triage_relevant":
+      return "Triage relevant";
+    case "active_recurring":
+      return "Recurring";
+    default:
+      return "Related";
   }
-  if (memory.affectedRoutes.includes(diagnostic.routeId) || memory.affectedRoutes.includes(diagnostic.routePath)) {
-    score += 3;
-  }
-  if (diagnostic.buildVersion && memory.affectedBuilds.includes(diagnostic.buildVersion)) {
-    score += 3;
-  }
-  const signalTagSet = new Set(signalTags);
-  score += memory.tags.filter((tag) => signalTagSet.has(tag)).length;
-  return score;
 }
 
 function PatternMemoryDraftReviewModal({
@@ -4533,19 +4546,14 @@ export function AdminDashboardPage() {
     : null;
   const relatedPatternMemories = useMemo(
     () => {
-      if (!selectedRecord || !selectedSystemDiagnostics) {
+      if (!selectedRecord) {
         return [];
       }
-      return savedPatternMemories
-        .map((memory) => ({
-          memory,
-          score: getRelatedPatternMemoryScore(memory, selectedSystemDiagnostics, selectedRecord.submission.tags),
-        }))
-        .filter((item) => item.score > 0)
-        .sort((left, right) => right.score - left.score || right.memory.updatedAt.localeCompare(left.memory.updatedAt))
-        .map((item) => item.memory);
+      return getRelatedPatternMemoryMatches(selectedRecord, savedPatternMemories, {
+        projectId: selectedRecord.form.projectId,
+      });
     },
-    [savedPatternMemories, selectedRecord, selectedSystemDiagnostics],
+    [savedPatternMemories, selectedRecord],
   );
   const selectedRecordIsDemo = isDemoSignalRecord(selectedRecord);
   const selectedSignalTitle = selectedRecord
@@ -8424,7 +8432,7 @@ export function AdminDashboardPage() {
                     </section>
                   ) : null}
 
-                  {selectedRecordIsSystem ? (
+                  {selectedRecord ? (
                     <section className="answer-card related-pattern-memories-card" aria-labelledby="related-pattern-memories-title">
                       <div className="signal-detail-group-header">
                         <div>
@@ -8434,16 +8442,25 @@ export function AdminDashboardPage() {
                       </div>
                       {relatedPatternMemories.length > 0 ? (
                         <div className="system-diagnostics-summary-groups" role="list" aria-label="Related Pattern Memories">
-                          {relatedPatternMemories.map((memory) => (
+                          {relatedPatternMemories.map(({ memory, reasons }) => (
                             <article key={memory.memoryId} className="system-diagnostics-summary-group" role="listitem">
                               <div className="system-diagnostics-summary-group-main">
                                 <strong title={memory.title}>{memory.title}</strong>
                                 <span>{memory.status}</span>
                               </div>
                               <div className="system-diagnostics-summary-group-meta">
+                                <span>{memory.type}</span>
                                 <span>{memory.confidence}</span>
                                 <span>Updated {formatDate(memory.updatedAt)}</span>
                               </div>
+                              {reasons.length > 0 ? (
+                                <div className="system-diagnostics-summary-examples">
+                                  <span>Match</span>
+                                  {reasons.slice(0, 3).map((reason) => (
+                                    <code key={reason}>{getRelatedPatternMemoryReasonLabel(reason)}</code>
+                                  ))}
+                                </div>
+                              ) : null}
                               <div className="system-diagnostics-summary-examples">
                                 <span>Tags</span>
                                 {memory.tags.length > 0 ? (

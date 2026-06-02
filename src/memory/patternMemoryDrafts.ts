@@ -1,7 +1,6 @@
 import type { DiagnosticsSummaryGroup, SystemDiagnostic } from "../diagnostics/types";
 import { redactSystemSignal } from "../diagnostics/redaction";
 import { getVisibleReviewerNotes } from "../lib/reviewCollaboration";
-import { getSignalSubject } from "../lib/signalInbox";
 import type { Submission } from "../types";
 import type {
   SignalKind,

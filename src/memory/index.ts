@@ -9,6 +9,13 @@ export {
   createDraftFromDiagnosticsSummaryGroup,
   createDraftFromSelectedSignals,
 } from "./patternMemoryDrafts";
+export {
+  getRelatedPatternMemoryMatches,
+  getSafeSignalProfile,
+  type RelatedPatternMemoryMatch,
+  type RelatedPatternMemoryReason,
+  type SafeSignalProfile,
+} from "./relatedPatternMemories";
 export type {
   MemoryAdapter,
   MemoryAdapterKind,
