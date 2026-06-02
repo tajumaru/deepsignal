@@ -4119,7 +4119,7 @@ const patternMemoryTypeOptions: SignalPatternMemoryType[] = [
 const patternMemoryConfidenceOptions: SignalPatternMemoryConfidence[] = ["low", "medium", "high"];
 const STALE_PATTERN_MEMORY_REVIEW_DAYS = 30;
 const INVESTIGATING_PATTERN_MEMORY_REVIEW_DAYS = 30;
-const ACTIVE_PATTERN_MEMORY_REVIEW_DAYS = 14;
+const ACTIVE_PATTERN_MEMORY_REVIEW_DAYS = 30;
 
 function createPatternMemoryId() {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
@@ -4215,6 +4215,32 @@ function getPatternMemoryNeedsReviewReason(memory: SignalPatternMemory, now = Da
 
 function formatPatternMemoryList(values: string[]) {
   return values.length > 0 ? values.join(", ") : "None";
+}
+
+function createPatternMemoryIssueDraft(memory: SignalPatternMemory) {
+  return {
+    title: memory.title,
+    body: [
+      `## Summary`,
+      memory.summary,
+      "",
+      `## Lifecycle`,
+      `- Status: ${memory.status}`,
+      `- Confidence: ${memory.confidence}`,
+      `- Frequency: ${memory.frequency.count} events${memory.frequency.window ? ` (${memory.frequency.window})` : ""}`,
+      "",
+      `## Affected Context`,
+      `- Routes: ${formatPatternMemoryList(memory.affectedRoutes)}`,
+      `- Builds: ${formatPatternMemoryList(memory.affectedBuilds)}`,
+      `- Platforms: ${formatPatternMemoryList(memory.platforms)}`,
+      "",
+      `## Evidence Summary`,
+      ...(memory.evidenceSummary.length > 0 ? memory.evidenceSummary.map((item) => `- ${item}`) : ["- None"]),
+      "",
+      `## Recommended Action`,
+      memory.recommendedAction || "None",
+    ].join("\n"),
+  };
 }
 
 function PatternMemoryDraftReviewModal({
@@ -4557,6 +4583,7 @@ export function AdminDashboardPage() {
   const [patternMemoryPromptDraft, setPatternMemoryPromptDraft] = useState("");
   const [patternMemoryFailedFixDraft, setPatternMemoryFailedFixDraft] = useState("");
   const [patternMemoryConfirmedFixDraft, setPatternMemoryConfirmedFixDraft] = useState("");
+  const [patternMemoryIssueDraft, setPatternMemoryIssueDraft] = useState<{ title: string; body: string } | null>(null);
   const versionCounts = useMemo(
     () => getSubmissionVersionCounts(allSignals.map((record) => record.submission)),
     [allSignals],
@@ -4706,6 +4733,9 @@ export function AdminDashboardPage() {
     filteredPatternMemories.find((memory) => memory.memoryId === selectedPatternMemoryId) ??
     filteredPatternMemories[0] ??
     null;
+  const selectedPatternMemoryNeedsReviewReason = selectedPatternMemory
+    ? getPatternMemoryNeedsReviewReason(selectedPatternMemory)
+    : "";
   useEffect(() => {
     setPatternMemoryActionDraft(selectedPatternMemory?.recommendedAction ?? "");
     setPatternMemoryPromptDraft(selectedPatternMemory?.recommendedCodexPrompt ?? "");
@@ -5248,6 +5278,20 @@ export function AdminDashboardPage() {
     selectedPatternMemory,
     updateSavedPatternMemory,
   ]);
+  const copyPatternMemoryPromptForInvestigation = useCallback(
+    async (prompt: string) => {
+      try {
+        await navigator.clipboard.writeText(prompt);
+        setToast({ tone: "success", message: "Prompt copied for investigation." });
+      } catch {
+        setToast({ tone: "error", message: "Copy failed." });
+      }
+    },
+    [setToast],
+  );
+  const openPatternMemoryIssueDraft = useCallback((memory: SignalPatternMemory) => {
+    setPatternMemoryIssueDraft(createPatternMemoryIssueDraft(memory));
+  }, []);
 
   useEffect(() => {
     void refreshSavedPatternMemories();
@@ -8210,6 +8254,21 @@ export function AdminDashboardPage() {
                       <span>Grouped by</span>
                       <strong>{systemDiagnosticsGroupBy}</strong>
                     </div>
+                    {systemDiagnosticsSummary && systemDiagnosticsSummary.total > 0 ? (
+                      <div className="system-diagnostics-summary-routes" aria-label="Top system diagnostic routes">
+                        <span>Top routes</span>
+                        {systemDiagnosticsSummary.topRoutes.length > 0 ? (
+                          systemDiagnosticsSummary.topRoutes.map((route) => (
+                            <div key={route.routeId}>
+                              <code>{route.routeId}</code>
+                              <strong>{route.count}</strong>
+                            </div>
+                          ))
+                        ) : (
+                          <p className="muted">No routes found.</p>
+                        )}
+                      </div>
+                    ) : null}
                   </div>
                   {systemDiagnosticsSummary?.truncated ? (
                     <p className="system-diagnostics-summary-cap">
@@ -8247,19 +8306,6 @@ export function AdminDashboardPage() {
                             </button>
                           </article>
                         ))}
-                      </div>
-                      <div className="system-diagnostics-summary-routes" aria-label="Top system diagnostic routes">
-                        <span>Top routes</span>
-                        {systemDiagnosticsSummary.topRoutes.length > 0 ? (
-                          systemDiagnosticsSummary.topRoutes.map((route) => (
-                            <div key={route.routeId}>
-                              <code>{route.routeId}</code>
-                              <strong>{route.count}</strong>
-                            </div>
-                          ))
-                        ) : (
-                          <p className="muted">No routes found.</p>
-                        )}
                       </div>
                     </div>
                   ) : (
@@ -8484,6 +8530,85 @@ export function AdminDashboardPage() {
                                 <div className="metadata-row">
                                   <span>Frequency</span>
                                   <strong>{selectedPatternMemory.frequency.count} events</strong>
+                                </div>
+                              </div>
+                              <div className="system-diagnostics-summary-routes pattern-memory-action-center" role="region" aria-label="Recommended Actions">
+                                <span>Recommended Actions</span>
+                                {selectedPatternMemoryNeedsReviewReason ? (
+                                  <div>
+                                    <code>Needs review</code>
+                                    <strong>{selectedPatternMemoryNeedsReviewReason}</strong>
+                                  </div>
+                                ) : null}
+                                {selectedPatternMemory.recommendedCodexPrompt ? (
+                                  <div className="system-diagnostics-summary-examples related-pattern-memory-prompt">
+                                    <span>Codex action</span>
+                                    <code>{selectedPatternMemory.recommendedCodexPrompt}</code>
+                                    <button
+                                      type="button"
+                                      className="ghost-button"
+                                      onClick={() => {
+                                        void navigator.clipboard.writeText(selectedPatternMemory.recommendedCodexPrompt ?? "")
+                                          .then(() => setToast({ tone: "success", message: "Suggested Codex prompt copied." }))
+                                          .catch(() => setToast({ tone: "error", message: "Copy failed." }));
+                                      }}
+                                    >
+                                      Copy Prompt
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="ghost-button"
+                                      onClick={() => {
+                                        void copyPatternMemoryPromptForInvestigation(selectedPatternMemory.recommendedCodexPrompt ?? "");
+                                      }}
+                                    >
+                                      Use for Investigation
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <p className="muted">No Codex prompt has been reviewed for this memory yet.</p>
+                                )}
+                                <button
+                                  type="button"
+                                  className="ghost-button"
+                                  onClick={() => openPatternMemoryIssueDraft(selectedPatternMemory)}
+                                >
+                                  Create Issue Draft
+                                </button>
+                                <div className="review-toolbar pattern-memory-explorer-filters" aria-label="Pattern memory investigation workflow">
+                                  {selectedPatternMemory.status === "active" || selectedPatternMemory.status === "investigating" ? (
+                                    <button
+                                      type="button"
+                                      className="ghost-button"
+                                      onClick={() => {
+                                        void updateSavedPatternMemory(selectedPatternMemory.memoryId, { status: "investigating" });
+                                      }}
+                                    >
+                                      Mark Investigating
+                                    </button>
+                                  ) : null}
+                                  {selectedPatternMemory.status === "investigating" ? (
+                                    <button
+                                      type="button"
+                                      className="ghost-button"
+                                      onClick={() => {
+                                        void updateSavedPatternMemory(selectedPatternMemory.memoryId, { status: "mitigated" });
+                                      }}
+                                    >
+                                      Mark Mitigated
+                                    </button>
+                                  ) : null}
+                                  {selectedPatternMemory.status === "mitigated" ? (
+                                    <button
+                                      type="button"
+                                      className="ghost-button"
+                                      onClick={() => {
+                                        void updateSavedPatternMemory(selectedPatternMemory.memoryId, { status: "confirmed_fixed" });
+                                      }}
+                                    >
+                                      Mark Confirmed Fixed
+                                    </button>
+                                  ) : null}
                                 </div>
                               </div>
                               <div className="review-toolbar pattern-memory-explorer-filters" aria-label="Pattern memory lifecycle controls">
@@ -9461,6 +9586,38 @@ export function AdminDashboardPage() {
             projectStats: (params) => t("projectModalProjectStats", params),
           }}
         />
+      ) : null}
+      {patternMemoryIssueDraft ? (
+        <div className="node-directory-overlay" role="dialog" aria-modal="true" aria-labelledby="pattern-memory-issue-draft-title">
+          <div className="node-directory-backdrop" onClick={() => setPatternMemoryIssueDraft(null)} />
+          <section className="node-directory-modal pattern-memory-review-modal">
+            <div className="review-session-modal-header">
+              <div>
+                <p className="eyebrow">Local draft only</p>
+                <h2 id="pattern-memory-issue-draft-title">GitHub Issue Draft</h2>
+              </div>
+              <button
+                type="button"
+                className="review-session-close-button"
+                onClick={() => setPatternMemoryIssueDraft(null)}
+                aria-label="Close issue draft"
+              >
+                x
+              </button>
+            </div>
+            <div className="pattern-memory-review-grid">
+              <label className="review-field">
+                <span>Title</span>
+                <input readOnly value={patternMemoryIssueDraft.title} aria-label="Issue draft title" />
+              </label>
+              <label className="review-field pattern-memory-field-wide">
+                <span>Body</span>
+                <textarea readOnly value={patternMemoryIssueDraft.body} aria-label="Issue draft body" rows={14} />
+              </label>
+            </div>
+            <p className="muted">This is a local draft only. GitHub issue creation is not connected yet.</p>
+          </section>
+        </div>
       ) : null}
       {patternMemoryDraft ? (
         <PatternMemoryDraftReviewModal

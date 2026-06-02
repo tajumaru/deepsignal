@@ -1139,6 +1139,106 @@ describe("AdminDashboardPage", () => {
     expect(within(explorer).queryByRole("button", { name: "Active stale update memory" })).not.toBeInTheDocument();
   });
 
+  it("drives safe Pattern Memory actions from the Action Center", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText } });
+    const { form, record } = createResponderRecord({
+      answers: { report: "raw action center answer secret" },
+      attachments: [
+        {
+          fieldId: "upload",
+          type: "document",
+          blobId: "raw-action-attachment",
+          name: "raw-action-attachment.pdf",
+          size: 12,
+        },
+      ],
+      metadata: { token: "raw-action-metadata" },
+      encryptedPayload: "raw-action-payload",
+      respondentMeta: {
+        chain: "sui",
+        isAnonymous: true,
+        sessionId: "raw-action-session",
+        submittedAt: "2026-01-01T00:00:00.000Z",
+      },
+      responderSignature: "raw-action-signature",
+      responderSignedBytes: "raw-action-signed-bytes",
+    });
+    await seedPatternMemory(createPatternMemory({
+      memoryId: "memory-action-center",
+      title: "Action center memory",
+      summary: "Safe action center summary.",
+      type: "ux_friction_pattern",
+      status: "active",
+      confidence: "high",
+      frequency: { count: 6, window: "30d", trend: "increasing" },
+      tags: ["wallet", "mobile"],
+      affectedRoutes: ["admin"],
+      affectedBuilds: ["0.13.1"],
+      platforms: ["iPhone Safari"],
+      evidenceSummary: ["Safe action evidence."],
+      recommendedAction: "Investigate the reviewed wallet friction.",
+      recommendedCodexPrompt: "Investigate the safe action center memory.",
+      updatedAt: "2026-01-01T00:00:00.000Z",
+    }));
+    allowAdminAccess();
+    signalIndex.signalById = { [record.submission.id]: record };
+    mockInboxState.current = {
+      forms: [form],
+      selectedStreamId: "all",
+      allSignals: [record],
+      visibleSignals: [record],
+      selectedRecord: record,
+      signalIndex,
+    };
+
+    renderAdminRoute();
+
+    const explorer = await screen.findByRole("region", { name: "Pattern Memories" });
+    fireEvent.click(within(explorer).getByRole("button", { name: "Action center memory" }));
+    const actionCenter = within(explorer).getByRole("region", { name: "Recommended Actions" });
+    expect(within(actionCenter).getByText("Recommended Actions")).toBeInTheDocument();
+    expect(within(actionCenter).getByText("Needs review")).toBeInTheDocument();
+    expect(within(actionCenter).getByText(/Active without updates for \d+ days/)).toBeInTheDocument();
+    expect(within(actionCenter).getByText("Investigate the safe action center memory.")).toBeInTheDocument();
+
+    fireEvent.click(within(actionCenter).getByRole("button", { name: "Copy Prompt" }));
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith("Investigate the safe action center memory."));
+
+    fireEvent.click(within(actionCenter).getByRole("button", { name: "Use for Investigation" }));
+    await waitFor(() => expect(screen.getByText("Prompt copied for investigation.")).toBeInTheDocument());
+
+    fireEvent.click(within(actionCenter).getByRole("button", { name: "Create Issue Draft" }));
+    const modal = await screen.findByRole("dialog", { name: "GitHub Issue Draft" });
+    expect(within(modal).getByLabelText("Issue draft title")).toHaveValue("Action center memory");
+    const issueBody = within(modal).getByLabelText("Issue draft body") as HTMLTextAreaElement;
+    expect(issueBody.value).toContain("Safe action center summary.");
+    expect(issueBody.value).toContain("- Status: active");
+    expect(issueBody.value).toContain("- Confidence: high");
+    expect(issueBody.value).toContain("- Frequency: 6 events (30d)");
+    expect(issueBody.value).toContain("- Routes: admin");
+    expect(issueBody.value).toContain("- Builds: 0.13.1");
+    expect(issueBody.value).toContain("- Platforms: iPhone Safari");
+    expect(issueBody.value).toContain("- Safe action evidence.");
+    expect(issueBody.value).toContain("Investigate the reviewed wallet friction.");
+    fireEvent.click(within(modal).getByRole("button", { name: "Close issue draft" }));
+
+    fireEvent.click(within(actionCenter).getByRole("button", { name: "Mark Investigating" }));
+    await waitFor(() => expect(within(explorer).getAllByText("investigating").length).toBeGreaterThan(0));
+    fireEvent.click(within(actionCenter).getByRole("button", { name: "Mark Mitigated" }));
+    await waitFor(() => expect(within(explorer).getAllByText("mitigated").length).toBeGreaterThan(0));
+    fireEvent.click(within(actionCenter).getByRole("button", { name: "Mark Confirmed Fixed" }));
+    await waitFor(() => expect(within(explorer).getAllByText("confirmed_fixed").length).toBeGreaterThan(0));
+
+    expect(explorer.textContent).not.toContain("raw action center answer secret");
+    expect(explorer.textContent).not.toContain("raw-action-attachment");
+    expect(explorer.textContent).not.toContain("raw-action-metadata");
+    expect(explorer.textContent).not.toContain("raw-action-payload");
+    expect(explorer.textContent).not.toContain("raw-action-session");
+    expect(explorer.textContent).not.toContain("raw-action-signature");
+    expect(explorer.textContent).not.toContain("raw-action-signed-bytes");
+  });
+
   it("keeps MemWal provider as a placeholder and does not add saved memories", async () => {
     vi.stubEnv("VITE_SIGNAL_MEMORY_PROVIDER", "memwal");
     const first = createSystemRecord({ id: "system-error-1", fingerprint: "fp-admin", routeId: "admin" });
