@@ -4221,24 +4221,38 @@ function createPatternMemoryIssueDraft(memory: SignalPatternMemory) {
   return {
     title: memory.title,
     body: [
-      `## Summary`,
+      "# Summary",
       memory.summary,
       "",
-      `## Lifecycle`,
-      `- Status: ${memory.status}`,
-      `- Confidence: ${memory.confidence}`,
-      `- Frequency: ${memory.frequency.count} events${memory.frequency.window ? ` (${memory.frequency.window})` : ""}`,
+      "# Status",
+      memory.status,
       "",
-      `## Affected Context`,
-      `- Routes: ${formatPatternMemoryList(memory.affectedRoutes)}`,
-      `- Builds: ${formatPatternMemoryList(memory.affectedBuilds)}`,
-      `- Platforms: ${formatPatternMemoryList(memory.platforms)}`,
+      "# Confidence",
+      memory.confidence,
       "",
-      `## Evidence Summary`,
+      "# Frequency",
+      `${memory.frequency.count} events${memory.frequency.window ? ` (${memory.frequency.window})` : ""}`,
+      "",
+      "# Affected routes",
+      formatPatternMemoryList(memory.affectedRoutes),
+      "",
+      "# Affected builds",
+      formatPatternMemoryList(memory.affectedBuilds),
+      "",
+      "# Platforms",
+      formatPatternMemoryList(memory.platforms),
+      "",
+      "# Evidence summary",
       ...(memory.evidenceSummary.length > 0 ? memory.evidenceSummary.map((item) => `- ${item}`) : ["- None"]),
       "",
-      `## Recommended Action`,
+      "# Recommended action",
       memory.recommendedAction || "None",
+      "",
+      "# Suggested Codex prompt",
+      memory.recommendedCodexPrompt || "None",
+      "",
+      "---",
+      "Generated from redacted Signal Pattern Memory. No raw submissions included.",
     ].join("\n"),
   };
 }
@@ -8219,7 +8233,7 @@ export function AdminDashboardPage() {
                 onOpenDemoBrief={demoBriefAvailable ? () => setDemoIntelligenceAlertOpen(true) : undefined}
               />
               {selectedStreamId === "system" ? (
-                <section className="system-diagnostics-summary-panel" aria-labelledby="system-diagnostics-summary-title">
+                <section className="system-diagnostics-summary-panel runtime-diagnostics-summary-panel" aria-labelledby="system-diagnostics-summary-title">
                   <div className="system-diagnostics-summary-header">
                     <div>
                       <p className="eyebrow">Redacted runtime evidence</p>
@@ -9616,6 +9630,17 @@ export function AdminDashboardPage() {
               </label>
             </div>
             <p className="muted">This is a local draft only. GitHub issue creation is not connected yet.</p>
+            <button
+              type="button"
+              className="primary-button"
+              onClick={() => {
+                void navigator.clipboard.writeText(patternMemoryIssueDraft.body)
+                  .then(() => setToast({ tone: "success", message: "Issue Markdown copied." }))
+                  .catch(() => setToast({ tone: "error", message: "Copy failed." }));
+              }}
+            >
+              Copy Issue Markdown
+            </button>
           </section>
         </div>
       ) : null}

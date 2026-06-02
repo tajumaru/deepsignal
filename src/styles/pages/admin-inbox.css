@@ -4054,6 +4054,58 @@
   font-size: 0.75rem;
 }
 
+.runtime-diagnostics-summary-panel .system-diagnostics-summary-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(7.5rem, max-content)) minmax(12rem, 1fr);
+  align-items: stretch;
+}
+
+.runtime-diagnostics-summary-panel .system-diagnostics-summary-content {
+  display: block;
+}
+
+.runtime-diagnostics-summary-panel .system-diagnostics-summary-groups {
+  flex: none;
+  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+  gap: 0.46rem;
+}
+
+.runtime-diagnostics-summary-panel .system-diagnostics-summary-group {
+  padding: 0.5rem 0.58rem;
+}
+
+.runtime-diagnostics-summary-panel .system-diagnostics-summary-group-main strong {
+  font-size: 0.8rem;
+}
+
+.runtime-diagnostics-summary-panel .system-diagnostics-summary-group-main span {
+  font-size: 0.68rem;
+}
+
+.runtime-diagnostics-summary-panel .system-diagnostics-summary-group-meta {
+  gap: 0.28rem;
+  margin-top: 0.28rem;
+  font-size: 0.64rem;
+}
+
+.runtime-diagnostics-summary-panel .system-diagnostics-summary-examples {
+  gap: 0.25rem;
+  margin-top: 0.34rem;
+}
+
+.runtime-diagnostics-summary-panel .system-diagnostics-summary-routes {
+  flex: none;
+  gap: 0.28rem;
+  padding: 0.46rem 0.58rem;
+}
+
+.runtime-diagnostics-summary-panel .system-diagnostics-pattern-memory-button {
+  min-height: 2.1rem;
+  margin-top: 0.42rem;
+  padding: 0.36rem 0.7rem;
+  font-size: 0.78rem;
+}
+
 .system-diagnostics-summary-empty {
   margin: 0;
 }
@@ -4246,8 +4298,8 @@
     width: 100%;
   }
 
-  .system-diagnostics-summary-metrics {
-    flex-wrap: wrap;
+  .runtime-diagnostics-summary-panel .system-diagnostics-summary-metrics {
+    grid-template-columns: 1fr;
   }
 
   .system-signal-diagnostics-grid {
