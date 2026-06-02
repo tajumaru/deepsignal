@@ -4,6 +4,8 @@ This document describes how future MCP tools should call DeepSignal diagnostics.
 
 MCP is not implemented yet. The current safety boundary is the Diagnostics Service in `src/diagnostics`.
 
+`src/diagnostics/*` is browser app-side code only. It may read app storage through DeepSignal adapters when running inside the application, but local MCP servers must never import these modules directly.
+
 ## Data Flow
 
 ```txt
@@ -16,9 +18,11 @@ System Signals
 
 Future MCP code must never read raw `Submission` records, browser `localStorage`, decrypted payloads, or Walrus blobs directly.
 
+Local MCP v1 consumes only exported `DiagnosticsExportEnvelope` JSON files created by the app. Hosted MCP may later call an authenticated admin API endpoint, but it must not read localStorage, Walrus blobs, or raw `Submission` records directly.
+
 ## App-Side Service Calls
 
-Use these service functions from `src/diagnostics`.
+Use these service functions from `src/diagnostics` from browser app-side code only.
 
 ```ts
 import { listDiagnostics, getDiagnostic, searchDiagnostics } from "../src/diagnostics/diagnosticsService";
@@ -43,6 +47,10 @@ Returns:
 {
   diagnostics: SystemDiagnostic[];
   total: number;
+  totalMatching: number;
+  limit: number;
+  maxLimit: number;
+  truncated: boolean;
 }
 ```
 
@@ -58,7 +66,15 @@ Returns:
 SystemDiagnostic | null
 ```
 
-`getDiagnostic` may include a sanitized, capped stack trace for investigation. It still returns only the safe `SystemDiagnostic` shape.
+`getDiagnostic` omits stack traces by default. Explicit browser app-side callers may request a sanitized, capped stack trace for investigation:
+
+```ts
+const diagnostic = await getDiagnostic("system-fingerprint-id", {
+  includeStackTraces: true,
+});
+```
+
+Stack traces are the largest diagnostics export attack surface and should stay disabled for exports unless an admin explicitly opts in.
 
 ### Search Diagnostics
 
@@ -108,6 +124,10 @@ Returns:
   exportedAt: string,
   source: "deepsignal-diagnostics-service",
   filters: DiagnosticsSearchFilters,
+  count: number,
+  totalMatching: number,
+  truncated: boolean,
+  maxLimit: number,
   diagnostics: SystemDiagnostic[],
 }
 ```
@@ -148,7 +168,7 @@ Returns grouped counts, maximum severity, first/last seen timestamps, example di
 
 ## Future MCP Tool Calls
 
-Future MCP tools should accept and return only `DiagnosticsExportEnvelope` or `SystemDiagnostic` data.
+Future MCP tools should accept and return only `DiagnosticsExportEnvelope` or `SystemDiagnostic` data loaded from an exported JSON file or an authenticated hosted API response.
 
 Recommended MCP tool mapping:
 
@@ -196,6 +216,8 @@ Example future MCP call shapes:
 
 ## Safety Requirements
 
+Future Admin copy/export actions must call the Diagnostics Service redaction/export path. Do not use raw System Signal clipboard helpers, raw `metadata.systemDiagnostics`, or raw `Submission` serialization for public/admin exports.
+
 MCP must not expose:
 
 - raw `Submission` objects
@@ -234,6 +256,14 @@ Admin UI exports DiagnosticsExportEnvelope JSON
 
 This keeps MCP away from app storage internals and preserves the Diagnostics Service as the single normalization and redaction boundary.
 
+Local MCP v1 must not:
+
+- import `src/diagnostics/*`
+- import `src/storage/*`
+- read browser localStorage
+- read Walrus blobs directly
+- read raw `Submission` records
+
 ## Future Hosted Path
 
 For hosted MCP:
@@ -247,3 +277,5 @@ Authenticated admin request
 ```
 
 Hosted MCP must require admin authentication and should log diagnostics export access.
+
+Hosted MCP may call only an authenticated diagnostics API endpoint that returns redacted diagnostics data. It must not bypass the Diagnostics Service boundary.

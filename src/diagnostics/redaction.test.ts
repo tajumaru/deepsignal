@@ -117,9 +117,22 @@ describe("diagnostics redaction", () => {
 
   it("omits stack traces unless requested", () => {
     expect(redactSystemSignal(createSystemSubmission())?.errorStack).toBeUndefined();
-    expect(redactSystemSignal(createSystemSubmission(), { includeStackTraces: true })?.errorStack).toContain(
-      "https://example.test/assets/app.js",
-    );
+    const diagnostic = redactSystemSignal(createSystemSubmission({
+      metadata: {
+        systemDiagnostics: {
+          errorStack:
+            "Error session=secret-token at https://example.test/assets/app.js?token=abc#frag:1:2 signature-secret",
+          routePath: "/admin",
+          routeId: "admin",
+        },
+      },
+    }), { includeStackTraces: true });
+
+    expect(diagnostic?.errorStack).toContain("https://example.test/assets/app.js");
+    expect(diagnostic?.errorStack).not.toContain("token=abc");
+    expect(diagnostic?.errorStack).not.toContain("#frag");
+    expect(diagnostic?.errorStack).not.toContain("secret-token");
+    expect(diagnostic?.errorStack).not.toContain("signature-secret");
   });
 
   it("ignores non-system submissions", () => {

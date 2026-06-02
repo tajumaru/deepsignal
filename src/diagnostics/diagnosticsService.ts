@@ -4,8 +4,11 @@ import type { SystemDiagnostic } from "./types";
 import type {
   DiagnosticsListOptions,
   DiagnosticsListResult,
+  DiagnosticsQueryOptions,
   DiagnosticsSearchFilters,
+  DiagnosticsSource,
 } from "./types";
+import { DEFAULT_DIAGNOSTICS_LIMIT, MAX_DIAGNOSTICS_LIMIT } from "./types";
 import { redactSystemSignals } from "./redaction";
 
 function byNewest(left: SystemDiagnostic, right: SystemDiagnostic) {
@@ -41,6 +44,13 @@ function matchesQuery(diagnostic: SystemDiagnostic, query: string) {
     .some((value) => String(value).toLowerCase().includes(needle));
 }
 
+function resolveLimit(limit: number | undefined) {
+  if (!Number.isFinite(limit) || !limit || limit <= 0) {
+    return DEFAULT_DIAGNOSTICS_LIMIT;
+  }
+  return Math.min(Math.floor(limit), MAX_DIAGNOSTICS_LIMIT);
+}
+
 function applyFilters(diagnostics: SystemDiagnostic[], filters: DiagnosticsSearchFilters) {
   const filtered = diagnostics.filter((diagnostic) => {
     if (!matchesTimeRange(diagnostic, filters)) return false;
@@ -53,16 +63,41 @@ function applyFilters(diagnostics: SystemDiagnostic[], filters: DiagnosticsSearc
     if (filters.query && !matchesQuery(diagnostic, filters.query)) return false;
     return true;
   });
-  const limit = Number.isFinite(filters.limit) && filters.limit && filters.limit > 0
-    ? Math.floor(filters.limit)
-    : filtered.length;
-  return filtered.slice(0, limit);
+  const limit = resolveLimit(filters.limit);
+  const limited = filtered.slice(0, limit);
+  return {
+    diagnostics: limited,
+    totalMatching: filtered.length,
+    limit,
+    maxLimit: MAX_DIAGNOSTICS_LIMIT,
+    truncated: limited.length < filtered.length,
+  };
 }
 
-async function readDiagnostics(filters: DiagnosticsSearchFilters = {}) {
+function getSourceSubmissions(source: DiagnosticsSource) {
+  if (source.kind === "adminInboxLoadedRecords") {
+    return [
+      ...(source.submissions ?? []),
+      ...(source.records ?? []).map((record) => record.submission),
+    ];
+  }
+  return null;
+}
+
+async function readDiagnostics(options: DiagnosticsQueryOptions = {}) {
+  const source = options.source ?? { kind: "localOnly" };
+  if (source.kind === "hostedAdminApi") {
+    throw new Error("Hosted diagnostics source is reserved for a future authenticated admin API.");
+  }
+  const sourceSubmissions = getSourceSubmissions(source);
+  if (sourceSubmissions) {
+    return redactSystemSignals(sourceSubmissions, {
+      includeStackTraces: options.includeStackTraces === true,
+    }).sort(byNewest);
+  }
   const submissions = await localStorageAdapter.listSubmissions(SYSTEM_SIGNAL_FORM_ID);
   return redactSystemSignals(submissions, {
-    includeStackTraces: filters.includeStackTraces,
+    includeStackTraces: options.includeStackTraces === true,
   }).sort(byNewest);
 }
 
@@ -70,16 +105,26 @@ export async function listDiagnostics(options: DiagnosticsListOptions = {}): Pro
   const diagnostics = await readDiagnostics(options);
   const filtered = applyFilters(diagnostics, options);
   return {
-    diagnostics: filtered,
-    total: filtered.length,
+    diagnostics: filtered.diagnostics,
+    total: filtered.diagnostics.length,
+    totalMatching: filtered.totalMatching,
+    limit: filtered.limit,
+    maxLimit: filtered.maxLimit,
+    truncated: filtered.truncated,
   };
 }
 
-export async function getDiagnostic(id: string): Promise<SystemDiagnostic | null> {
-  const diagnostics = await readDiagnostics({ includeStackTraces: true });
+export async function getDiagnostic(
+  id: string,
+  options: Pick<DiagnosticsQueryOptions, "includeStackTraces" | "source"> = {},
+): Promise<SystemDiagnostic | null> {
+  const diagnostics = await readDiagnostics({
+    ...options,
+    includeStackTraces: options.includeStackTraces === true,
+  });
   return diagnostics.find((diagnostic) => diagnostic.id === id) ?? null;
 }
 
-export async function searchDiagnostics(filters: DiagnosticsSearchFilters): Promise<DiagnosticsListResult> {
+export async function searchDiagnostics(filters: DiagnosticsQueryOptions): Promise<DiagnosticsListResult> {
   return listDiagnostics(filters);
 }

@@ -92,6 +92,9 @@ export function redactSystemSignal(
   const pathname = optionalString(diagnostics.pathname);
   const errorName = optionalString(diagnostics.errorName) ?? submission.subjectPreview ?? "SystemError";
   const errorMessage = optionalString(diagnostics.errorMessage) ?? submission.aiSummary ?? "DeepSignal runtime alert.";
+  // Stack traces are the largest diagnostics export attack surface: they can
+  // contain SDK error bodies, route params, object dumps, and local paths.
+  // Keep them disabled by default and sanitize before returning them.
   const errorStack = options.includeStackTraces
     ? sanitizeDiagnosticText(safeString(diagnostics.errorStack)).slice(0, STACK_TRACE_LIMIT) || undefined
     : undefined;

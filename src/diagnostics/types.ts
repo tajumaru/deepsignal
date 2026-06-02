@@ -1,6 +1,11 @@
+import type { Submission } from "../types";
+
 export type SystemDiagnosticSeverity = "warning" | "error" | "critical";
 
 export type DiagnosticsRemoteSyncStatus = "remote_synced" | "sync_pending" | "local_only";
+
+export const DEFAULT_DIAGNOSTICS_LIMIT = 50;
+export const MAX_DIAGNOSTICS_LIMIT = 500;
 
 export interface SystemDiagnostic {
   id: string;
@@ -40,14 +45,38 @@ export interface DiagnosticsSearchFilters {
   includeStackTraces?: boolean;
 }
 
-export interface DiagnosticsListOptions extends DiagnosticsSearchFilters {}
+export type DiagnosticsSource =
+  | {
+      kind: "localOnly";
+    }
+  | {
+      kind: "adminInboxLoadedRecords";
+      submissions?: Submission[];
+      records?: Array<{
+        submission: Submission;
+      }>;
+    }
+  | {
+      kind: "hostedAdminApi";
+      endpoint?: string;
+    };
+
+export interface DiagnosticsQueryOptions extends DiagnosticsSearchFilters {
+  source?: DiagnosticsSource;
+}
+
+export type DiagnosticsListOptions = DiagnosticsQueryOptions;
 
 export interface DiagnosticsListResult {
   diagnostics: SystemDiagnostic[];
   total: number;
+  totalMatching: number;
+  limit: number;
+  maxLimit: number;
+  truncated: boolean;
 }
 
-export interface DiagnosticsExportOptions extends DiagnosticsSearchFilters {
+export interface DiagnosticsExportOptions extends DiagnosticsQueryOptions {
   includeStackTraces?: boolean;
 }
 
@@ -56,10 +85,14 @@ export interface DiagnosticsExportEnvelope {
   exportedAt: string;
   source: "deepsignal-diagnostics-service";
   filters: DiagnosticsSearchFilters;
+  count: number;
+  totalMatching: number;
+  truncated: boolean;
+  maxLimit: number;
   diagnostics: SystemDiagnostic[];
 }
 
-export interface DiagnosticsSummaryOptions extends DiagnosticsSearchFilters {
+export interface DiagnosticsSummaryOptions extends DiagnosticsQueryOptions {
   groupBy?: "fingerprint" | "routeId" | "errorName" | "buildVersion";
 }
 

@@ -52,10 +52,11 @@ import { buildSignalCardIntelligence } from "../features/admin/components/signal
 import { SignalTimelineSection } from "../features/admin/components/SignalTimelineSection";
 import { SignalChannelSelector, SignalStreamsNav } from "../features/admin/components/SignalStreamsNav";
 import {
-  copySystemSignalDiagnostics,
-  getSystemSignalDiagnostics,
   isSystemSignal,
 } from "../services/systemSignalReporter";
+import { getDiagnostic } from "../diagnostics/diagnosticsService";
+import { createDiagnosticsExportFilename, exportDiagnosticsJson } from "../diagnostics/diagnosticsExport";
+import { redactSystemSignal } from "../diagnostics/redaction";
 import { WorkspaceActivityLog } from "../features/admin/components/WorkspaceActivityLog";
 import { useAdminToast } from "../features/admin/hooks/useAdminToast";
 import { usePendingSuiRegistration } from "../features/admin/hooks/usePendingSuiRegistration";
@@ -144,7 +145,7 @@ import {
   storageAdapter,
 } from "../lib/storage";
 import { getSignalProcessingMode } from "../lib/signalProcessing";
-import { formatDate, formatRelativeTime } from "../lib/utils";
+import { downloadTextFile, formatDate, formatRelativeTime } from "../lib/utils";
 import { logRouteLifecycle } from "../lib/routeDiagnostics";
 import { handleRateLimitedRpcFallback, useRpcInfrastructure } from "../rpcInfrastructure";
 import { cleanupRegisteredFormLocalFallback } from "../storage/localStorageAdapter";
@@ -4177,6 +4178,7 @@ export function AdminDashboardPage() {
   const [mobileInboxSearchQuery, setMobileInboxSearchQuery] = useState("");
   const [debouncedMobileInboxSearchQuery, setDebouncedMobileInboxSearchQuery] = useState("");
   const [mobileInboxRecentSearches, setMobileInboxRecentSearches] = useState(() => readMobileInboxRecentSearches());
+  const [includeSystemDiagnosticStacks, setIncludeSystemDiagnosticStacks] = useState(false);
   const versionCounts = useMemo(
     () => getSubmissionVersionCounts(allSignals.map((record) => record.submission)),
     [allSignals],
@@ -4237,7 +4239,9 @@ export function AdminDashboardPage() {
         ? selectedRecordFromInbox
         : visibleSignals[0] ?? null;
   const selectedRecordIsSystem = selectedRecord ? isSystemSignal(selectedRecord.submission) : false;
-  const selectedSystemDiagnostics = selectedRecord ? getSystemSignalDiagnostics(selectedRecord.submission) : null;
+  const selectedSystemDiagnostics = selectedRecord
+    ? redactSystemSignal(selectedRecord.submission, { includeStackTraces: includeSystemDiagnosticStacks })
+    : null;
   const selectedRecordIsDemo = isDemoSignalRecord(selectedRecord);
   const selectedSignalTitle = selectedRecord
     ? selectedRecordIsSystem
@@ -4255,6 +4259,54 @@ export function AdminDashboardPage() {
   const hasMoreRenderedSignals = renderedVisibleSignals.length < visibleSignals.length;
   const inboxSettling = loading || submissionsLoading;
   const [showInitialListSkeleton, setShowInitialListSkeleton] = useState(false);
+  const copyRedactedSystemDiagnostics = useCallback(
+    async (submissionId: string) => {
+      const diagnostic = await getDiagnostic(submissionId, {
+        includeStackTraces: includeSystemDiagnosticStacks,
+        source: {
+          kind: "adminInboxLoadedRecords",
+          records: allSignals,
+        },
+      });
+      if (!diagnostic) {
+        setToast({ tone: "error", message: "No redacted diagnostics found." });
+        return;
+      }
+      await navigator.clipboard.writeText(JSON.stringify(diagnostic, null, 2));
+      setToast({ tone: "success", message: "Redacted diagnostics copied." });
+    },
+    [allSignals, includeSystemDiagnosticStacks, setToast],
+  );
+  const exportVisibleSystemDiagnostics = useCallback(async () => {
+    const systemRecords = visibleSignals.filter((record) => isSystemSignal(record.submission));
+    if (systemRecords.length === 0) {
+      setToast({ tone: "error", message: "No System Diagnostics match the current stream." });
+      return;
+    }
+    try {
+      const envelope = await exportDiagnosticsJson({
+        includeStackTraces: includeSystemDiagnosticStacks,
+        source: {
+          kind: "adminInboxLoadedRecords",
+          records: systemRecords,
+        },
+      });
+      downloadTextFile(
+        createDiagnosticsExportFilename(),
+        JSON.stringify(envelope, null, 2),
+        "application/json",
+      );
+      setToast({
+        tone: "success",
+        message: envelope.truncated
+          ? `Exported ${envelope.count}/${envelope.totalMatching} redacted diagnostics.`
+          : `Exported ${envelope.count} redacted diagnostics.`,
+      });
+    } catch (error) {
+      console.error("System diagnostics export failed", error);
+      setToast({ tone: "error", message: "System diagnostics export failed." });
+    }
+  }, [includeSystemDiagnosticStacks, setToast, visibleSignals]);
 
   useEffect(() => {
     void import("../storage/storageFactory")
@@ -7395,6 +7447,30 @@ export function AdminDashboardPage() {
                         </select>
                       </label>
                     ) : null}
+                    {selectedStreamId === "system" ? (
+                      <div className="system-diagnostics-export-controls">
+                        <label className="review-sort-control system-diagnostics-stack-toggle">
+                          <input
+                            type="checkbox"
+                            checked={includeSystemDiagnosticStacks}
+                            onChange={(event) => setIncludeSystemDiagnosticStacks(event.target.checked)}
+                          />
+                          <span>Include stack traces</span>
+                        </label>
+                        {includeSystemDiagnosticStacks ? (
+                          <span className="signal-chip signal-chip-soft system-diagnostics-warning">
+                            Stack traces may include sensitive runtime context.
+                          </span>
+                        ) : null}
+                        <button
+                          type="button"
+                          className="ghost-button"
+                          onClick={() => void exportVisibleSystemDiagnostics()}
+                        >
+                          Export System Diagnostics JSON
+                        </button>
+                      </div>
+                    ) : null}
                     {hasAdminAccess ? (
                       <div className="bulk-decrypt-toolbar" aria-live="polite">
                         <button
@@ -7650,8 +7726,7 @@ export function AdminDashboardPage() {
                         onCopyDiagnostics={
                           cardIsSystemSignal
                             ? () => {
-                                void copySystemSignalDiagnostics(submission)
-                                  .then(() => setToast({ tone: "success", message: "Diagnostics copied." }))
+                                void copyRedactedSystemDiagnostics(submission.id)
                                   .catch(() => setToast({ tone: "error", message: "Copy failed." }));
                               }
                             : undefined
@@ -7771,12 +7846,11 @@ export function AdminDashboardPage() {
                           type="button"
                           className="ghost-button"
                           onClick={() => {
-                            void copySystemSignalDiagnostics(selectedRecord.submission)
-                              .then(() => setToast({ tone: "success", message: "Diagnostics copied." }))
+                            void copyRedactedSystemDiagnostics(selectedRecord.submission.id)
                               .catch(() => setToast({ tone: "error", message: "Copy failed." }));
                           }}
                         >
-                          Copy diagnostics
+                          Copy redacted diagnostics JSON
                         </button>
                       </div>
                       <div className="system-signal-diagnostics-grid">
@@ -7803,7 +7877,7 @@ export function AdminDashboardPage() {
                         {String(selectedSystemDiagnostics?.errorMessage ?? selectedRecord.submission.aiSummary ?? "Runtime error captured.")}
                       </p>
                       <pre className="system-signal-json">
-                        {JSON.stringify(selectedSystemDiagnostics ?? selectedRecord.submission.metadata ?? {}, null, 2)}
+                        {JSON.stringify(selectedSystemDiagnostics ?? {}, null, 2)}
                       </pre>
                     </section>
                   ) : null}

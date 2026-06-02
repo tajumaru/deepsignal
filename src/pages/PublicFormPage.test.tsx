@@ -329,7 +329,26 @@ describe("PublicFormPage shared manifest restore", () => {
     expect(screen.getAllByText(/Walrus read timed out/).length).toBeGreaterThan(0);
     expect(screen.getByText("blob-abc")).toBeInTheDocument();
     expect(mockGetForm).not.toHaveBeenCalled();
-    await waitFor(() => expect(mockSaveLocalSubmission.mock.calls.length).toBeGreaterThan(0));
+    let savedSystemSubmission: unknown;
+    await waitFor(() => {
+      savedSystemSubmission = mockSaveLocalSubmission.mock.calls
+        .map(([submission]) => submission)
+        .find((submission) => (
+          typeof submission === "object" &&
+          submission !== null &&
+          "formId" in submission &&
+          submission.formId === SYSTEM_SIGNAL_FORM_ID &&
+          "metadata" in submission &&
+          typeof submission.metadata === "object" &&
+          submission.metadata !== null &&
+          "systemDiagnostics" in submission.metadata &&
+          typeof submission.metadata.systemDiagnostics === "object" &&
+          submission.metadata.systemDiagnostics !== null &&
+          "sourceContext" in submission.metadata.systemDiagnostics &&
+          submission.metadata.systemDiagnostics.sourceContext === "public-form-load"
+        ));
+      expect(savedSystemSubmission).toBeDefined();
+    });
     expect(mockSaveForm).toHaveBeenCalledWith(expect.objectContaining({
       id: SYSTEM_SIGNAL_FORM_ID,
       title: "DeepSignal System Alerts",
@@ -338,14 +357,6 @@ describe("PublicFormPage shared manifest restore", () => {
       id: "form-123",
       title: "Cached Feedback Form",
     }));
-    const savedSystemSubmission = mockSaveLocalSubmission.mock.calls
-      .map(([submission]) => submission)
-      .find((submission) => (
-        typeof submission === "object" &&
-        submission !== null &&
-        "formId" in submission &&
-        submission.formId === SYSTEM_SIGNAL_FORM_ID
-      ));
     expect(savedSystemSubmission).toMatchObject({
       formId: SYSTEM_SIGNAL_FORM_ID,
       kind: "system_error",

@@ -226,7 +226,7 @@ export const SignalCard = forwardRef<HTMLDivElement, SignalCardProps>(function S
               event.stopPropagation();
             }}
           >
-            Copy diagnostics
+            Copy redacted diagnostics
           </button>
         </div>
       ) : null}
