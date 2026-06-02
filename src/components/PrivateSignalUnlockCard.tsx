@@ -365,12 +365,15 @@ export function PrivateSignalUnlockCard({
         onVerify={state === "decrypted" && onHideUnlocked ? onHideUnlocked : onUnlock}
         disabled={capsuleDisabled}
         title={t("sealedSignalCapsuleTitle")}
+        classifiedTitle={t("sealedSignalCapsuleClassifiedTitle")}
+        transmissionLabel={t("sealedSignalCapsuleTransmissionLabel")}
         subtitle={t("sealedSignalCapsuleSubtitle")}
         lockedStatus={t("sealedSignalCapsuleLockedStatus")}
-        verifyHint={state === "decrypted" ? t("sealedSignalCapsuleGrantedStatus") : actionLabel ?? t("sealedSignalCapsuleVerifyHint")}
+        verifyHint={state === "decrypted" ? t("sealedSignalCapsuleGrantedStatus") : t("sealedSignalCapsuleVerifyHint")}
         verifyingStatus={t("sealedSignalCapsuleVerifyingStatus")}
         grantedStatus={t("sealedSignalCapsuleGrantedStatus")}
         decryptedBadge={t("sealedSignalCapsuleDecryptedBadge")}
+        detectedLabel={t("sealedSignalCapsuleDetectedLabel")}
         ariaLabel={
           state === "decrypted"
             ? t("sealedSignalCapsuleReopenAria")

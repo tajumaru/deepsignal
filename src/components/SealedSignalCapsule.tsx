@@ -7,12 +7,15 @@ interface SealedSignalCapsuleProps {
   onVerify: () => void;
   disabled?: boolean;
   title: string;
+  classifiedTitle?: string;
+  transmissionLabel?: string;
   subtitle: string;
   lockedStatus: string;
   verifyHint: string;
   verifyingStatus: string;
   grantedStatus: string;
   decryptedBadge: string;
+  detectedLabel?: string;
   ariaLabel: string;
   statusMessage?: string;
   errorMessage?: string;
@@ -26,12 +29,15 @@ export function SealedSignalCapsule({
   onVerify,
   disabled = false,
   title,
+  classifiedTitle,
+  transmissionLabel,
   subtitle,
   lockedStatus,
   verifyHint,
   verifyingStatus,
   grantedStatus,
   decryptedBadge,
+  detectedLabel = "SIGNAL DETECTED",
   ariaLabel,
   statusMessage,
   errorMessage,
@@ -43,6 +49,14 @@ export function SealedSignalCapsule({
   const isRevealed = state === "revealed";
   const isInteractive = !isRevealed && !disabled && state !== "verifying";
   const isTemporarilyBusy = state === "verifying" || state === "granted";
+  const displayTitle = isRevealed ? title : classifiedTitle ?? title;
+  const displayEyebrow = isRevealed ? title : transmissionLabel ?? classifiedTitle ?? title;
+  const missionStatusItems =
+    state === "verifying"
+      ? ["ORIGIN VERIFIED", "SCANNING", "REVIEWER ACCESS REQUIRED", "SEALED PAYLOAD"]
+      : state === "granted"
+        ? ["ORIGIN VERIFIED", "ACCESS GRANTED", "UNSEALING", "SEALED PAYLOAD"]
+        : ["ORIGIN VERIFIED", "ENCRYPTION ACTIVE", "REVIEWER ACCESS REQUIRED", "SEALED PAYLOAD"];
   const resolvedStatus =
     errorMessage ||
     statusMessage ||
@@ -83,17 +97,29 @@ export function SealedSignalCapsule({
 
       <div className="sealed-signal-capsule-header">
         <div>
-          <p className="eyebrow">{title}</p>
-          <h4>{title}</h4>
+          <p className="eyebrow">{displayEyebrow}</p>
+          <h4>{displayTitle}</h4>
           <p className="muted">{subtitle}</p>
         </div>
         {isRevealed ? <span className="sealed-signal-capsule-badge">{decryptedBadge}</span> : null}
       </div>
 
+      {!isRevealed ? (
+        <div className="sealed-signal-mission-status" aria-hidden="true">
+          {missionStatusItems.map((item) => (
+            <span key={item}>{item}</span>
+          ))}
+        </div>
+      ) : null}
+
       <div className="sealed-signal-core-stage" aria-hidden="true">
+        {!isRevealed ? <span className="sealed-signal-detected-pulse">{detectedLabel}</span> : null}
         <div className="sealed-signal-core">
           <span className="sealed-signal-core-ring sealed-signal-core-ring-outer" />
+          <span className="sealed-signal-core-ring sealed-signal-core-ring-mid" />
           <span className="sealed-signal-core-ring sealed-signal-core-ring-inner" />
+          <span className="sealed-signal-core-orbit sealed-signal-core-orbit-a" />
+          <span className="sealed-signal-core-orbit sealed-signal-core-orbit-b" />
           <span className="sealed-signal-core-orb" />
           <span className="sealed-signal-core-split sealed-signal-core-split-left" />
           <span className="sealed-signal-core-split sealed-signal-core-split-right" />

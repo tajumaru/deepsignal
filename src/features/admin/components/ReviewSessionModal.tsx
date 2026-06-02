@@ -1,10 +1,8 @@
 ﻿import type { ComponentProps, ReactNode, Ref } from "react";
 import { PrivateSignalUnlockCard } from "../../../components/PrivateSignalUnlockCard";
-import { StorageProof } from "../../../components/StorageProof";
 import { useI18n } from "../../../i18n";
 import { isAttachmentFieldType } from "../../../lib/fieldTypes";
 import { formatDate } from "../../../lib/utils";
-import { isLocalFallbackBlob } from "../../../lib/signalInbox";
 import type { AttachmentPreviewState } from "../../../hooks/useAttachmentPreviews";
 import type { SignalRecord } from "../hooks/useSignalInboxData";
 import { SignalAttachmentList } from "./SignalAttachmentList";
@@ -43,7 +41,6 @@ interface ReviewSessionModalProps {
   decryptError: string | null;
   decryptDiagnostics: ComponentProps<typeof PrivateSignalUnlockCard>["diagnostics"];
   selectedRecordUnlockDisabledReason: string | null | undefined;
-  realSealSessionTtlMinutes: number;
   decryptInFlight: boolean;
   onDecrypt: () => void;
   onClearDebugCache: () => void;
@@ -94,7 +91,6 @@ export function ReviewSessionModal({
   decryptError,
   decryptDiagnostics,
   selectedRecordUnlockDisabledReason,
-  realSealSessionTtlMinutes,
   decryptInFlight,
   onDecrypt,
   onClearDebugCache,
@@ -224,23 +220,7 @@ export function ReviewSessionModal({
                   diagnostics={decryptDiagnostics}
                   disabledReason={selectedRecordUnlockDisabledReason ?? undefined}
                   actionDisabled={Boolean(selectedRecordUnlockDisabledReason)}
-                  supportContent={(
-                    <>
-                      <strong>{t("sealReviewSessionTitle")}</strong>
-                      <p className="muted">
-                        {t("walletApprovalReuseNotice", { minutes: realSealSessionTtlMinutes })}
-                      </p>
-                    </>
-                  )}
-                >
-                  {selectedRecord.submission.encryptedBlobId && !isLocalFallbackBlob(selectedRecord.submission.encryptedBlobId) ? (
-                    <StorageProof
-                      blobId={selectedRecord.submission.encryptedBlobId}
-                      proof={selectedRecord.submission.encryptedWalrusProof ?? selectedRecord.submission.walrusProof}
-                      compact
-                    />
-                  ) : null}
-                </PrivateSignalUnlockCard>
+                />
               </div>
             </div>
           ) : null}

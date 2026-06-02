@@ -8525,12 +8525,15 @@ export function AdminDashboardPage() {
                                 state="revealed"
                                 onVerify={toggleSelectedSignalVisibility}
                                 title={t("sealedSignalCapsuleTitle")}
+                                classifiedTitle={t("sealedSignalCapsuleClassifiedTitle")}
+                                transmissionLabel={t("sealedSignalCapsuleTransmissionLabel")}
                                 subtitle={t("sealedSignalCapsuleSubtitle")}
                                 lockedStatus={t("sealedSignalCapsuleLockedStatus")}
                                 verifyHint={t("sealedSignalCapsuleVerifyHint")}
                                 verifyingStatus={t("sealedSignalCapsuleVerifyingStatus")}
                                 grantedStatus={t("sealedSignalCapsuleGrantedStatus")}
                                 decryptedBadge={t("sealedSignalCapsuleDecryptedBadge")}
+                                detectedLabel={t("sealedSignalCapsuleDetectedLabel")}
                                 ariaLabel={t("sealedSignalCapsuleRevealedAria")}
                                 timestampLabel={selectedSignalTimestamp}
                                 senderLabel={selectedSignalSenderLabel}
@@ -8582,12 +8585,15 @@ export function AdminDashboardPage() {
                               state="granted"
                               onVerify={toggleSelectedSignalVisibility}
                               title={t("sealedSignalCapsuleTitle")}
+                              classifiedTitle={t("sealedSignalCapsuleClassifiedTitle")}
+                              transmissionLabel={t("sealedSignalCapsuleTransmissionLabel")}
                               subtitle={t("sealedSignalCapsuleSubtitle")}
                               lockedStatus={t("sealedSignalCapsuleLockedStatus")}
                               verifyHint={t("sealedSignalCapsuleRevealHint")}
                               verifyingStatus={t("sealedSignalCapsuleVerifyingStatus")}
                               grantedStatus={t("sealedSignalCapsuleGrantedStatus")}
                               decryptedBadge={t("sealedSignalCapsuleDecryptedBadge")}
+                              detectedLabel={t("sealedSignalCapsuleDetectedLabel")}
                               ariaLabel={t("sealedSignalCapsuleReopenAria")}
                               timestampLabel={selectedSignalTimestamp}
                               senderLabel={selectedSignalSenderLabel}
@@ -8598,12 +8604,15 @@ export function AdminDashboardPage() {
                               onVerify={() => void handleDecrypt()}
                               disabled={Boolean(selectedRecordUnlockDisabledReason) || decrypting || decryptInFlightRef.current}
                               title={t("sealedSignalCapsuleTitle")}
+                              classifiedTitle={t("sealedSignalCapsuleClassifiedTitle")}
+                              transmissionLabel={t("sealedSignalCapsuleTransmissionLabel")}
                               subtitle={t("sealedSignalCapsuleSubtitle")}
                               lockedStatus={t("sealedSignalCapsuleLockedStatus")}
                               verifyHint={t("sealedSignalCapsuleVerifyHint")}
                               verifyingStatus={t("sealedSignalCapsuleVerifyingStatus")}
                               grantedStatus={t("sealedSignalCapsuleGrantedStatus")}
                               decryptedBadge={t("sealedSignalCapsuleDecryptedBadge")}
+                              detectedLabel={t("sealedSignalCapsuleDetectedLabel")}
                               ariaLabel={t("sealedSignalCapsuleVerifyAria")}
                               statusMessage={decryptStatusMessage || selectedRecordUnlockDisabledReason}
                               errorMessage={decryptError}
@@ -8823,7 +8832,6 @@ export function AdminDashboardPage() {
         decryptError={decryptError}
         decryptDiagnostics={decryptDiagnostics}
         selectedRecordUnlockDisabledReason={selectedRecordUnlockDisabledReason}
-        realSealSessionTtlMinutes={realSealSessionTtlMinutes}
         decryptInFlight={decryptInFlightRef.current}
         onDecrypt={() => void handleDecrypt()}
         onClearDebugCache={() => void handleClearDebugPolicyCache()}
