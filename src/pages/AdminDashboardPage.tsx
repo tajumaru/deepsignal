@@ -7516,7 +7516,7 @@ export function AdminDashboardPage() {
                             checked={includeSystemDiagnosticStacks}
                             onChange={(event) => setIncludeSystemDiagnosticStacks(event.target.checked)}
                           />
-                          <span>Include stack traces</span>
+                          <span>Include stack traces in exported JSON</span>
                         </label>
                         <span className="signal-chip signal-chip-soft system-diagnostics-warning">
                           Stack traces may include SDK error bodies, route params, object dumps, or local paths.
