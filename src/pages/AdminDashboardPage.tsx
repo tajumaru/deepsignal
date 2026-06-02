@@ -8454,6 +8454,23 @@ export function AdminDashboardPage() {
                                   <span>None</span>
                                 )}
                               </div>
+                              {memory.recommendedCodexPrompt ? (
+                                <div className="system-diagnostics-summary-examples related-pattern-memory-prompt">
+                                  <span>Suggested Codex Prompt</span>
+                                  <code>{memory.recommendedCodexPrompt}</code>
+                                  <button
+                                    type="button"
+                                    className="ghost-button"
+                                    onClick={() => {
+                                      void navigator.clipboard.writeText(memory.recommendedCodexPrompt ?? "")
+                                        .then(() => setToast({ tone: "success", message: "Suggested Codex prompt copied." }))
+                                        .catch(() => setToast({ tone: "error", message: "Copy failed." }));
+                                    }}
+                                  >
+                                    Copy Prompt
+                                  </button>
+                                </div>
+                              ) : null}
                             </article>
                           ))}
                         </div>

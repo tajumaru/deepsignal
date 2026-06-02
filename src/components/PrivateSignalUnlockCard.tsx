@@ -12,6 +12,7 @@ import {
   resetLocalEnvironment,
 } from "../lib/resetEnvironment";
 import { downloadTextFile } from "../lib/utils";
+import { SealedSignalCapsule } from "./SealedSignalCapsule";
 
 type UnlockState =
   | "locked"
@@ -40,148 +41,6 @@ interface PrivateSignalUnlockCardProps {
   actionDisabled?: boolean;
   children?: ReactNode;
   supportContent?: ReactNode;
-}
-
-function LockIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" className="private-signal-unlock-icon">
-      <path
-        d="M8 10V7.75a4 4 0 1 1 8 0V10"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <rect
-        x="5"
-        y="10"
-        width="14"
-        height="10"
-        rx="3"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.8"
-      />
-      <path
-        d="M12 13.25a1.75 1.75 0 0 1 .75 3.33V18"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
-function OpenLockIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" className="private-signal-unlock-icon">
-      <path
-        d="M9 10V7.75a4 4 0 0 1 7.08-2.56"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <rect
-        x="5"
-        y="10"
-        width="14"
-        height="10"
-        rx="3"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.8"
-      />
-      <path
-        d="M12 13.25a1.75 1.75 0 0 1 .75 3.33V18"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
-function EyeIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" className="private-signal-action-icon private-signal-eye-icon">
-      <path
-        d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <circle cx="12" cy="12" r="2.7" fill="none" stroke="currentColor" strokeWidth="1.8" />
-    </svg>
-  );
-}
-
-function EyeOffIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" className="private-signal-action-icon private-signal-eye-icon">
-      <path
-        d="M3 3 21 21"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-      />
-      <path
-        d="M10.6 6.15A10.7 10.7 0 0 1 12 6c6 0 9.5 6 9.5 6a16 16 0 0 1-2.35 2.95M6.85 7.55A16 16 0 0 0 2.5 12s3.5 6 9.5 6a10.4 10.4 0 0 0 4.05-.8"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M9.9 9.9a2.7 2.7 0 0 0 3.82 3.82"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-      />
-    </svg>
-  );
-}
-
-function SpinnerIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" className="private-signal-action-icon private-signal-spinner">
-      <circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" strokeOpacity="0.24" strokeWidth="2" />
-      <path
-        d="M20.5 12A8.5 8.5 0 0 0 12 3.5"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-      />
-    </svg>
-  );
-}
-
-function WarningIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" className="private-signal-action-icon">
-      <path
-        d="M12 4.5 20 18.5H4L12 4.5Z"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinejoin="round"
-      />
-      <path d="M12 9v4.75" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-      <circle cx="12" cy="16.8" r="1" fill="currentColor" />
-    </svg>
-  );
 }
 
 function formatDebugValue(value: unknown) {
@@ -419,18 +278,11 @@ export function PrivateSignalUnlockCard({
 }: PrivateSignalUnlockCardProps) {
   const { t } = useI18n();
   const disconnectWallet = useDisconnectWallet();
-  const statusId = useId();
   const [recoveryToast, setRecoveryToast] = useState<{ tone: "success" | "error"; message: string } | null>(null);
   const [recoveryAction, setRecoveryAction] = useState<"reset" | "reconnect" | null>(null);
   const state = isUnlocked
     ? "decrypted"
     : (unlockState ?? (isDecrypting ? "decrypting" : errorMessage ? "failed" : "locked"));
-  const buttonDisabled = actionDisabled || isDecrypting || (state === "decrypted" && !onHideUnlocked);
-  const helperText = isUnlocked
-    ? t("privateSignalUnlockSuccessDetail")
-    : state === "unauthorized"
-      ? t("privateSignalUnauthorizedHelper")
-      : t("privateSignalUnlockHelper");
   const resolvedStatusMessage =
     errorMessage ||
     statusMessage ||
@@ -449,6 +301,15 @@ export function PrivateSignalUnlockCard({
       : state === "unauthorized"
         ? "failed"
         : state;
+  const capsuleState =
+    state === "decrypted"
+      ? "granted"
+      : state === "unauthorized" || state === "failed"
+        ? "error"
+        : state === "checking_access" || state === "waiting_wallet_approval" || state === "decrypting" || isDecrypting
+          ? "verifying"
+          : "locked";
+  const capsuleDisabled = actionDisabled || (state === "decrypted" && !onHideUnlocked);
   const showRecoveryActions = state === "failed" || state === "unauthorized";
 
   async function handleResetLocalState() {
@@ -499,28 +360,25 @@ export function PrivateSignalUnlockCard({
           {recoveryToast.message}
         </div>
       ) : null}
-      <div className="private-signal-vault-visual" aria-hidden="true">
-        <div className="private-signal-vault-lock">
-          {state === "decrypted" ? <OpenLockIcon /> : <LockIcon />}
-        </div>
-        <div className="private-signal-vault-grid">
-          {Array.from({ length: 18 }).map((_, index) => (
-            <span key={index} />
-          ))}
-        </div>
-      </div>
-      <div className="private-signal-unlock-header">
-        {state === "decrypted" ? null : (
-          <div className="private-signal-unlock-badge">
-            <LockIcon />
-          </div>
-        )}
-        <div className="private-signal-unlock-copy">
-          <p className="eyebrow">{t("privateSignalLockedEyebrow")}</p>
-          <h4>{isUnlocked ? t("privateSignalUnlockedTitle") : t("privateSignalLockedTitle")}</h4>
-          <p className="muted">{helperText}</p>
-        </div>
-      </div>
+      <SealedSignalCapsule
+        state={capsuleState}
+        onVerify={state === "decrypted" && onHideUnlocked ? onHideUnlocked : onUnlock}
+        disabled={capsuleDisabled}
+        title={t("sealedSignalCapsuleTitle")}
+        subtitle={t("sealedSignalCapsuleSubtitle")}
+        lockedStatus={t("sealedSignalCapsuleLockedStatus")}
+        verifyHint={state === "decrypted" ? t("sealedSignalCapsuleGrantedStatus") : actionLabel ?? t("sealedSignalCapsuleVerifyHint")}
+        verifyingStatus={t("sealedSignalCapsuleVerifyingStatus")}
+        grantedStatus={t("sealedSignalCapsuleGrantedStatus")}
+        decryptedBadge={t("sealedSignalCapsuleDecryptedBadge")}
+        ariaLabel={
+          state === "decrypted"
+            ? t("sealedSignalCapsuleReopenAria")
+            : t("sealedSignalCapsuleVerifyAria")
+        }
+        statusMessage={resolvedStatusMessage}
+        errorMessage={errorMessage}
+      />
 
       <ol className="private-signal-unlock-steps" aria-label={t("privateSignalUnlockStatusAriaLabel")}>
         {unlockSteps.map((step) => (
@@ -537,38 +395,6 @@ export function PrivateSignalUnlockCard({
       </ol>
 
       <div className="private-signal-unlock-actions">
-        <button
-          type="button"
-          className={`private-signal-unlock-button ${mobileActionLabel || mobileUnlockedActionLabel ? "has-mobile-visibility-copy" : ""}`}
-          onClick={state === "decrypted" && onHideUnlocked ? onHideUnlocked : onUnlock}
-          disabled={buttonDisabled}
-          aria-describedby={resolvedStatusMessage ? statusId : undefined}
-        >
-          {isDecrypting ? <SpinnerIcon /> : null}
-          {!isDecrypting && state === "decrypted" && onHideUnlocked ? <EyeOffIcon /> : null}
-          {!isDecrypting && state !== "decrypted" ? (
-            <>
-              <LockIcon />
-              {mobileActionLabel ? <EyeIcon /> : null}
-            </>
-          ) : null}
-          <span className={mobileActionLabel || mobileUnlockedActionLabel ? "private-signal-desktop-action-label" : undefined}>
-            {isDecrypting
-              ? t("privateSignalUnlockLoading")
-              : state === "decrypted"
-                ? t("privateSignalUnlockSuccess")
-                : state === "unauthorized"
-                  ? t("accessDeniedButton")
-                : actionLabel ?? t("privateSignalUnlockAction")}
-          </span>
-          {!isDecrypting && state !== "unauthorized" && (mobileActionLabel || mobileUnlockedActionLabel) ? (
-            <span className="private-signal-mobile-action-label">
-              {state === "decrypted"
-                ? mobileUnlockedActionLabel ?? t("mobileHideSignalAction")
-                : mobileActionLabel ?? t("mobileRevealSignalAction")}
-            </span>
-          ) : null}
-        </button>
         {isDecrypting && onCancel ? (
           <button
             type="button"
@@ -582,17 +408,6 @@ export function PrivateSignalUnlockCard({
       </div>
 
       {supportContent ? <div className="private-signal-unlock-note">{supportContent}</div> : null}
-
-      {resolvedStatusMessage ? (
-        <div
-          id={statusId}
-          className={`private-signal-unlock-status is-${state === "unauthorized" || state === "failed" ? "error" : "muted"}`}
-          role={state === "unauthorized" || state === "failed" ? "alert" : "status"}
-        >
-          {state === "unauthorized" || state === "failed" ? <WarningIcon /> : null}
-          <span>{resolvedStatusMessage}</span>
-        </div>
-      ) : null}
 
       {state === "failed" && errorMessage && errorMessage !== t("privateSignalUnlockError") ? (
         <p className="private-signal-unlock-detail">{errorMessage}</p>

@@ -132,6 +132,20 @@
   .desktop-signal-inbox.has-selected-signal .signal-detail-column {
     display: grid;
     gap: 0.72rem;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  .desktop-signal-inbox.has-selected-signal .signal-detail-sections,
+  .desktop-signal-inbox.has-selected-signal .review-primary-sections,
+  .desktop-signal-inbox.has-selected-signal .original-signal-section,
+  .desktop-signal-inbox.has-selected-signal .original-signal-body-block,
+  .desktop-signal-inbox.has-selected-signal .sealed-signal-capsule {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    justify-self: stretch;
   }
 
   .desktop-signal-inbox.has-selected-signal .signal-detail-column *,

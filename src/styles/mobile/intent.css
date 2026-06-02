@@ -198,8 +198,11 @@
 
   .desktop-signal-inbox.has-selected-signal .answer-card,
   .desktop-signal-inbox.has-selected-signal .original-signal-block,
+  .desktop-signal-inbox.has-selected-signal .original-signal-body-block,
+  .desktop-signal-inbox.has-selected-signal .sealed-signal-capsule,
   .desktop-signal-inbox.has-selected-signal .locked-signal-state,
   .desktop-signal-inbox.has-selected-signal .review-triage-card {
+    width: 100%;
     min-width: 0;
     max-width: 100%;
     padding: 0.9rem;

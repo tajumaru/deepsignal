@@ -912,12 +912,15 @@ describe("AdminDashboardPage", () => {
   });
 
   it("shows related pattern memories matched by fingerprint in System Signal detail", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText } });
     const first = createSystemRecord({ id: "system-error-1", fingerprint: "fp-admin", routeId: "admin" });
     await seedPatternMemory(createPatternMemory({
       memoryId: "memory-fingerprint",
       title: "Fingerprint memory",
       fingerprints: ["fp-admin"],
       tags: ["diagnostics"],
+      recommendedCodexPrompt: "Investigate fingerprint memory safely.",
     }));
     allowAdminAccess();
     signalIndex.counts.system = 1;
@@ -938,6 +941,10 @@ describe("AdminDashboardPage", () => {
     expect(within(relatedPanel).getByText("watching")).toBeInTheDocument();
     expect(within(relatedPanel).getByText("medium")).toBeInTheDocument();
     expect(within(relatedPanel).getByText("diagnostics")).toBeInTheDocument();
+    expect(within(relatedPanel).getByText("Investigate fingerprint memory safely.")).toBeInTheDocument();
+
+    fireEvent.click(within(relatedPanel).getByRole("button", { name: "Copy Prompt" }));
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith("Investigate fingerprint memory safely."));
   });
 
   it("shows related pattern memories matched by routeId in System Signal detail", async () => {
