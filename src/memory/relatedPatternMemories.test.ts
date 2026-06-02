@@ -136,6 +136,52 @@ describe("related pattern memories", () => {
     expect(matches[0].reasons).toContain("same_category");
   });
 
+  it("matches feature request signals by product request memory type", () => {
+    const matches = getRelatedPatternMemoryMatches(
+      createRecord({
+        category: "feature",
+        tags: [],
+        aiSummary: "Users request reusable signal templates for launch reports.",
+        subjectPreview: "Template request",
+      }),
+      [
+        createMemory({
+          memoryId: "feature-memory",
+          type: "product_request_pattern",
+          title: "Reusable templates",
+          summary: "Repeated product request for signal templates.",
+          tags: [],
+        }),
+      ],
+    );
+
+    expect(matches.map((match) => match.memory.memoryId)).toEqual(["feature-memory"]);
+    expect(matches[0].reasons).toContain("same_category");
+  });
+
+  it("matches survey signals by user feedback memory type", () => {
+    const matches = getRelatedPatternMemoryMatches(
+      createRecord({
+        category: "survey",
+        tags: [],
+        aiSummary: "Survey responses show confusion about mobile triage filters.",
+        subjectPreview: "Survey feedback",
+      }),
+      [
+        createMemory({
+          memoryId: "survey-memory",
+          type: "user_feedback_pattern",
+          title: "Survey feedback pattern",
+          summary: "Survey feedback mentions mobile triage filter confusion.",
+          tags: [],
+        }),
+      ],
+    );
+
+    expect(matches.map((match) => match.memory.memoryId)).toEqual(["survey-memory"]);
+    expect(matches[0].reasons).toContain("same_category");
+  });
+
   it("matches user signals by safe aiSummary keywords", () => {
     const matches = getRelatedPatternMemoryMatches(createRecord(), [
       createMemory({
