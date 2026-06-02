@@ -6,7 +6,7 @@ import type { ProjectSummary } from "../lib/projectRegistry";
 import { RpcInfrastructureContext, type RpcInfrastructureContextValue } from "../rpcInfrastructure";
 import type { Submission } from "../types";
 import type { FormWithCount, SignalRecord, StreamId } from "../features/admin/hooks/useSignalInboxData";
-import { clearInMemorySignalMemoriesForTests } from "../memory";
+import { clearInMemorySignalMemoriesForTests, createSignalMemoryAdapter, type SignalPatternMemory } from "../memory";
 import { AdminDashboardPage } from "./AdminDashboardPage";
 
 const { defaultCapabilityProfile, mockCapabilityProfile, mockWalletState, mockProjectState, signalIndex, mockInboxState } = vi.hoisted(() => {
@@ -443,6 +443,45 @@ function allowAdminAccess() {
   };
 }
 
+function createPatternMemory(overrides: Partial<SignalPatternMemory> = {}): SignalPatternMemory {
+  return {
+    schemaVersion: "deepsignal.signal_pattern_memory.v1",
+    memoryId: "memory-1",
+    type: "system_diagnostic_pattern",
+    title: "Related runtime pattern",
+    summary: "Safe pattern summary.",
+    signalKinds: ["system_signal"],
+    sourceSignalIds: ["system-error-1"],
+    fingerprints: [],
+    tags: [],
+    affectedRoutes: [],
+    affectedBuilds: [],
+    platforms: [],
+    frequency: {
+      count: 1,
+      window: "all_time",
+      trend: "new",
+    },
+    firstSeen: "2026-01-01T00:00:00.000Z",
+    lastSeen: "2026-01-01T00:00:00.000Z",
+    status: "watching",
+    confidence: "medium",
+    evidenceSummary: ["Safe evidence summary."],
+    recommendedAction: "Review safely.",
+    recommendedCodexPrompt: "Investigate safe pattern.",
+    failedFixes: [],
+    confirmedFixes: [],
+    createdAt: "2026-01-01T00:00:00.000Z",
+    updatedAt: "2026-01-01T00:05:00.000Z",
+    ...overrides,
+  };
+}
+
+async function seedPatternMemory(memory: SignalPatternMemory, namespace = "deepsignal:project:project-1:signal-pattern-memory:v1") {
+  vi.stubEnv("VITE_SIGNAL_MEMORY_PROVIDER", "memory");
+  await createSignalMemoryAdapter().saveMemory(namespace, memory);
+}
+
 describe("AdminDashboardPage", () => {
   beforeEach(() => {
     cleanup();
@@ -870,6 +909,134 @@ describe("AdminDashboardPage", () => {
 
     expect(await within(modal).findByText("Pattern memory validated. MemWal persistence is not implemented yet.")).toBeInTheDocument();
     expect(within(memoriesPanel).getByText("No pattern memories saved in this session.")).toBeInTheDocument();
+  });
+
+  it("shows related pattern memories matched by fingerprint in System Signal detail", async () => {
+    const first = createSystemRecord({ id: "system-error-1", fingerprint: "fp-admin", routeId: "admin" });
+    await seedPatternMemory(createPatternMemory({
+      memoryId: "memory-fingerprint",
+      title: "Fingerprint memory",
+      fingerprints: ["fp-admin"],
+      tags: ["diagnostics"],
+    }));
+    allowAdminAccess();
+    signalIndex.counts.system = 1;
+    signalIndex.signalById = { [first.submission.id]: first.record };
+    mockInboxState.current = {
+      forms: [first.form],
+      selectedStreamId: "system",
+      allSignals: [first.record],
+      visibleSignals: [first.record],
+      selectedRecord: first.record,
+      signalIndex,
+    };
+
+    renderAdminRoute();
+
+    const relatedPanel = await screen.findByRole("region", { name: "Related Pattern Memories" });
+    expect(within(relatedPanel).getByText("Fingerprint memory")).toBeInTheDocument();
+    expect(within(relatedPanel).getByText("watching")).toBeInTheDocument();
+    expect(within(relatedPanel).getByText("medium")).toBeInTheDocument();
+    expect(within(relatedPanel).getByText("diagnostics")).toBeInTheDocument();
+  });
+
+  it("shows related pattern memories matched by routeId in System Signal detail", async () => {
+    const first = createSystemRecord({ id: "system-error-1", fingerprint: "fp-admin", routeId: "admin" });
+    await seedPatternMemory(createPatternMemory({
+      memoryId: "memory-route",
+      title: "Route memory",
+      affectedRoutes: ["admin"],
+    }));
+    allowAdminAccess();
+    signalIndex.counts.system = 1;
+    signalIndex.signalById = { [first.submission.id]: first.record };
+    mockInboxState.current = {
+      forms: [first.form],
+      selectedStreamId: "system",
+      allSignals: [first.record],
+      visibleSignals: [first.record],
+      selectedRecord: first.record,
+      signalIndex,
+    };
+
+    renderAdminRoute();
+
+    const relatedPanel = await screen.findByRole("region", { name: "Related Pattern Memories" });
+    expect(within(relatedPanel).getByText("Route memory")).toBeInTheDocument();
+  });
+
+  it("shows related pattern memories matched by buildVersion in System Signal detail", async () => {
+    const first = createSystemRecord({ id: "system-error-1", fingerprint: "fp-admin", buildVersion: "0.12.21" });
+    await seedPatternMemory(createPatternMemory({
+      memoryId: "memory-build",
+      title: "Build memory",
+      affectedBuilds: ["0.12.21"],
+    }));
+    allowAdminAccess();
+    signalIndex.counts.system = 1;
+    signalIndex.signalById = { [first.submission.id]: first.record };
+    mockInboxState.current = {
+      forms: [first.form],
+      selectedStreamId: "system",
+      allSignals: [first.record],
+      visibleSignals: [first.record],
+      selectedRecord: first.record,
+      signalIndex,
+    };
+
+    renderAdminRoute();
+
+    const relatedPanel = await screen.findByRole("region", { name: "Related Pattern Memories" });
+    expect(within(relatedPanel).getByText("Build memory")).toBeInTheDocument();
+  });
+
+  it("does not show unrelated pattern memories in System Signal detail", async () => {
+    const first = createSystemRecord({ id: "system-error-1", fingerprint: "fp-admin", routeId: "admin" });
+    await seedPatternMemory(createPatternMemory({
+      memoryId: "memory-unrelated",
+      title: "Unrelated memory",
+      fingerprints: ["fp-other"],
+      affectedRoutes: ["public-form"],
+      affectedBuilds: ["9.9.9"],
+      tags: ["unrelated"],
+    }));
+    allowAdminAccess();
+    signalIndex.counts.system = 1;
+    signalIndex.signalById = { [first.submission.id]: first.record };
+    mockInboxState.current = {
+      forms: [first.form],
+      selectedStreamId: "system",
+      allSignals: [first.record],
+      visibleSignals: [first.record],
+      selectedRecord: first.record,
+      signalIndex,
+    };
+
+    renderAdminRoute();
+
+    const relatedPanel = await screen.findByRole("region", { name: "Related Pattern Memories" });
+    expect(within(relatedPanel).queryByText("Unrelated memory")).not.toBeInTheDocument();
+    expect(within(relatedPanel).getByText("No related pattern memories found.")).toBeInTheDocument();
+  });
+
+  it("shows an empty related pattern memory state when there are no saved matches", async () => {
+    const first = createSystemRecord({ id: "system-error-1", fingerprint: "fp-admin", routeId: "admin" });
+    allowAdminAccess();
+    signalIndex.counts.system = 1;
+    signalIndex.signalById = { [first.submission.id]: first.record };
+    mockInboxState.current = {
+      forms: [first.form],
+      selectedStreamId: "system",
+      allSignals: [first.record],
+      visibleSignals: [first.record],
+      selectedRecord: first.record,
+      signalIndex,
+    };
+
+    renderAdminRoute();
+
+    const relatedPanel = await screen.findByRole("region", { name: "Related Pattern Memories" });
+    expect(within(relatedPanel).getByText("No related pattern memories found.")).toBeInTheDocument();
   });
 
   it("regroups the System Diagnostics Summary by routeId", async () => {

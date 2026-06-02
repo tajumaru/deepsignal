@@ -5712,6 +5712,7 @@
 
 .original-signal-body-block {
   position: relative;
+  min-width: 0;
   margin-top: 0.1rem;
   padding: 1rem;
   border-radius: 16px;
@@ -5742,9 +5743,14 @@
   isolation: isolate;
   overflow: hidden;
   display: grid;
+  grid-template-rows: auto minmax(8.8rem, 1fr) auto auto;
   justify-items: stretch;
+  align-self: stretch;
   gap: 0.82rem;
+  width: 100%;
+  max-width: 100%;
   min-height: 19rem;
+  box-sizing: border-box;
   padding: 1rem;
   border: 1px solid rgba(117, 240, 255, 0.2);
   border-radius: 20px;
@@ -5990,6 +5996,7 @@
   justify-content: center;
   gap: 0.48rem;
   min-width: 0;
+  min-height: 1.25rem;
   color: #bdebf2;
   font-size: 0.86rem;
   font-weight: 760;
@@ -6023,6 +6030,7 @@
 .sealed-signal-capsule-hint {
   margin: -0.2rem auto 0;
   max-width: 24rem;
+  min-height: 1rem;
   color: #8fd9e6;
   font-size: 0.76rem;
   font-weight: 850;
@@ -6145,6 +6153,7 @@
 
 @media (max-width: 480px) {
   .sealed-signal-capsule {
+    grid-template-rows: auto minmax(7.4rem, 1fr) auto auto;
     min-height: 17.5rem;
     padding: 0.82rem;
     border-radius: 18px;

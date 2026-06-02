@@ -4115,6 +4115,26 @@ function getSignalPatternMemoryNamespace(projectId: string) {
   return `deepsignal:project:${projectId}:signal-pattern-memory:v1`;
 }
 
+function getRelatedPatternMemoryScore(
+  memory: SignalPatternMemory,
+  diagnostic: NonNullable<ReturnType<typeof redactSystemSignal>>,
+  signalTags: string[],
+) {
+  let score = 0;
+  if (memory.fingerprints.includes(diagnostic.fingerprint)) {
+    score += 4;
+  }
+  if (memory.affectedRoutes.includes(diagnostic.routeId) || memory.affectedRoutes.includes(diagnostic.routePath)) {
+    score += 3;
+  }
+  if (diagnostic.buildVersion && memory.affectedBuilds.includes(diagnostic.buildVersion)) {
+    score += 3;
+  }
+  const signalTagSet = new Set(signalTags);
+  score += memory.tags.filter((tag) => signalTagSet.has(tag)).length;
+  return score;
+}
+
 function PatternMemoryDraftReviewModal({
   draft,
   saveMessage,
@@ -4511,6 +4531,22 @@ export function AdminDashboardPage() {
   const selectedSystemDiagnostics = selectedRecord
     ? redactSystemSignal(selectedRecord.submission, { includeStackTraces: false })
     : null;
+  const relatedPatternMemories = useMemo(
+    () => {
+      if (!selectedRecord || !selectedSystemDiagnostics) {
+        return [];
+      }
+      return savedPatternMemories
+        .map((memory) => ({
+          memory,
+          score: getRelatedPatternMemoryScore(memory, selectedSystemDiagnostics, selectedRecord.submission.tags),
+        }))
+        .filter((item) => item.score > 0)
+        .sort((left, right) => right.score - left.score || right.memory.updatedAt.localeCompare(left.memory.updatedAt))
+        .map((item) => item.memory);
+    },
+    [savedPatternMemories, selectedRecord, selectedSystemDiagnostics],
+  );
   const selectedRecordIsDemo = isDemoSignalRecord(selectedRecord);
   const selectedSignalTitle = selectedRecord
     ? selectedRecordIsSystem
@@ -8385,6 +8421,45 @@ export function AdminDashboardPage() {
                       <pre className="system-signal-json">
                         {JSON.stringify(selectedSystemDiagnostics ?? {}, null, 2)}
                       </pre>
+                    </section>
+                  ) : null}
+
+                  {selectedRecordIsSystem ? (
+                    <section className="answer-card related-pattern-memories-card" aria-labelledby="related-pattern-memories-title">
+                      <div className="signal-detail-group-header">
+                        <div>
+                          <p className="eyebrow">Session pattern recall</p>
+                          <h3 id="related-pattern-memories-title">Related Pattern Memories</h3>
+                        </div>
+                      </div>
+                      {relatedPatternMemories.length > 0 ? (
+                        <div className="system-diagnostics-summary-groups" role="list" aria-label="Related Pattern Memories">
+                          {relatedPatternMemories.map((memory) => (
+                            <article key={memory.memoryId} className="system-diagnostics-summary-group" role="listitem">
+                              <div className="system-diagnostics-summary-group-main">
+                                <strong title={memory.title}>{memory.title}</strong>
+                                <span>{memory.status}</span>
+                              </div>
+                              <div className="system-diagnostics-summary-group-meta">
+                                <span>{memory.confidence}</span>
+                                <span>Updated {formatDate(memory.updatedAt)}</span>
+                              </div>
+                              <div className="system-diagnostics-summary-examples">
+                                <span>Tags</span>
+                                {memory.tags.length > 0 ? (
+                                  memory.tags.slice(0, 6).map((tag) => (
+                                    <code key={tag}>{tag}</code>
+                                  ))
+                                ) : (
+                                  <span>None</span>
+                                )}
+                              </div>
+                            </article>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="muted">No related pattern memories found.</p>
+                      )}
                     </section>
                   ) : null}
 

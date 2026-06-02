@@ -42,6 +42,7 @@ export function SealedSignalCapsule({
   const statusId = useId();
   const isRevealed = state === "revealed";
   const isInteractive = !isRevealed && !disabled && state !== "verifying";
+  const isTemporarilyBusy = state === "verifying" || state === "granted";
   const resolvedStatus =
     errorMessage ||
     statusMessage ||
@@ -65,9 +66,10 @@ export function SealedSignalCapsule({
     <section
       className={`sealed-signal-capsule is-${state} ${disabled ? "is-disabled" : ""}`}
       role={isRevealed ? "region" : "button"}
-      tabIndex={isRevealed || disabled ? undefined : 0}
+      tabIndex={isRevealed || (disabled && !isTemporarilyBusy) ? undefined : 0}
       aria-label={ariaLabel}
       aria-disabled={!isRevealed && disabled ? true : undefined}
+      aria-busy={isTemporarilyBusy ? true : undefined}
       aria-describedby={statusId}
       onClick={handleActivate}
       onKeyDown={handleKeyDown}
