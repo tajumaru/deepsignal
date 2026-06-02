@@ -1,4 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import type { CSSProperties } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useI18n } from "../../../i18n";
 import { isLocalFallbackBlob } from "../../../lib/proof";
 import { formatResponseDeadline, type ResponseDeadlineLabels } from "../../../lib/responseDeadline";
@@ -450,7 +452,9 @@ export function SignalChannelSelector({
 }: SignalChannelSelectorProps) {
   const { t } = useI18n();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [menuStyle, setMenuStyle] = useState<CSSProperties>({});
   const shellRef = useRef<HTMLDivElement | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
   const hasUnreadSignals = totalUnreadCount > 0;
   const unregisteredCount = accessibleForms.filter(hasUnregisteredWalrusNode).length;
   const selectedForm = accessibleForms.find((form) => form.id === selectedFormId) ?? null;
@@ -463,13 +467,46 @@ export function SignalChannelSelector({
       ? t("projectRecoveryNoticeWalrusOnlyBody", { count: unregisteredCount })
       : t("projectRecoveryNoticeWalrusOnlyBody", { count: 1 });
 
+  const updateMenuPosition = useCallback(() => {
+    const anchor = shellRef.current;
+    if (!anchor) {
+      return;
+    }
+
+    const rect = anchor.getBoundingClientRect();
+    const viewport = window.visualViewport;
+    const viewportWidth = viewport?.width ?? window.innerWidth;
+    const viewportHeight = viewport?.height ?? window.innerHeight;
+    const viewportTop = viewport?.offsetTop ?? 0;
+    const isMobile = viewportWidth <= 900;
+    const gutter = isMobile ? 9 : 16;
+    const gap = isMobile ? 7 : 9;
+    const width = isMobile
+      ? viewportWidth - gutter * 2
+      : Math.min(Math.max(rect.width, 496), viewportWidth - gutter * 2);
+    const left = isMobile ? gutter : Math.min(Math.max(rect.left, gutter), viewportWidth - width - gutter);
+    const top = Math.max(rect.bottom + gap + viewportTop, gutter + viewportTop);
+    const bottomReserve = isMobile ? 132 : 24;
+    const availableHeight = Math.max(160, viewportHeight + viewportTop - top - bottomReserve);
+
+    setMenuStyle({
+      position: "fixed",
+      left,
+      top,
+      width,
+      maxHeight: isMobile ? `min(40vh, ${availableHeight}px, 280px)` : `min(72vh, ${availableHeight}px, 42rem)`,
+      zIndex: 1200,
+    });
+  }, []);
+
   useEffect(() => {
     if (!menuOpen) {
       return;
     }
 
     function handlePointerDown(event: MouseEvent) {
-      if (!shellRef.current?.contains(event.target as Node)) {
+      const target = event.target as Node;
+      if (!shellRef.current?.contains(target) && !menuRef.current?.contains(target)) {
         setMenuOpen(false);
       }
     }
@@ -487,6 +524,75 @@ export function SignalChannelSelector({
       window.removeEventListener("keydown", handleEscape);
     };
   }, [menuOpen]);
+
+  useLayoutEffect(() => {
+    if (!menuOpen) {
+      return;
+    }
+
+    updateMenuPosition();
+    window.addEventListener("resize", updateMenuPosition);
+    window.addEventListener("scroll", updateMenuPosition, true);
+    window.visualViewport?.addEventListener("resize", updateMenuPosition);
+    window.visualViewport?.addEventListener("scroll", updateMenuPosition);
+    return () => {
+      window.removeEventListener("resize", updateMenuPosition);
+      window.removeEventListener("scroll", updateMenuPosition, true);
+      window.visualViewport?.removeEventListener("resize", updateMenuPosition);
+      window.visualViewport?.removeEventListener("scroll", updateMenuPosition);
+    };
+  }, [menuOpen, updateMenuPosition]);
+
+  const menu = menuOpen ? (
+    <div
+      ref={menuRef}
+      className={`signal-channel-menu signal-channel-menu-portal panel ${className}`.trim()}
+      role="menu"
+      aria-label={allSignalNodesLabel}
+      style={menuStyle}
+    >
+      <div className="signal-channel-menu-header">
+        <div>
+          <p className="eyebrow">{t("signalInboxTitle")}</p>
+          <h3>{t("formsTitle")}</h3>
+        </div>
+        <div className="signal-channel-menu-header-actions">
+          {hasUnreadSignals ? (
+            <span className="signal-new-count" aria-label={t("unreadBadge", { count: totalUnreadCount })}>
+              {totalUnreadCount}
+            </span>
+          ) : null}
+          <button
+            type="button"
+            className="primary-button signal-node-directory-trigger"
+            aria-label={openNodeDirectoryLabel}
+            title={openNodeDirectoryLabel}
+            onClick={() => {
+              onOpenNodeDirectory();
+              setMenuOpen(false);
+            }}
+          >
+            <NodeDirectoryTriggerIcon />
+            <span>{openNodeDirectoryLabel}</span>
+          </button>
+        </div>
+      </div>
+      <SignalChannelSelectorItem
+        accessibleForms={accessibleForms}
+        selectedFormId={selectedFormId}
+        onSelectForm={onSelectForm}
+        unreadCountByFormId={unreadCountByFormId}
+        signalCountByFormId={signalCountByFormId}
+        allSignalsCount={allSignalsCount}
+        totalUnreadCount={totalUnreadCount}
+        activeScopeLabel={activeScopeLabel}
+        allSignalNodesLabel={allSignalNodesLabel}
+        responseDeadlineLabels={responseDeadlineLabels}
+        onExportAllFormCsv={onExportAllFormCsv}
+        closeMenu={() => setMenuOpen(false)}
+      />
+    </div>
+  ) : null;
 
   return (
     <div ref={shellRef} className={`signal-channel-selector ${className}`.trim()}>
@@ -510,50 +616,7 @@ export function SignalChannelSelector({
         </span>
         <ChannelSelectorCaret />
       </button>
-      {menuOpen ? (
-        <div className="signal-channel-menu panel" role="menu" aria-label={allSignalNodesLabel}>
-          <div className="signal-channel-menu-header">
-            <div>
-              <p className="eyebrow">{t("signalInboxTitle")}</p>
-              <h3>{t("formsTitle")}</h3>
-            </div>
-            <div className="signal-channel-menu-header-actions">
-              {hasUnreadSignals ? (
-                <span className="signal-new-count" aria-label={t("unreadBadge", { count: totalUnreadCount })}>
-                  {totalUnreadCount}
-                </span>
-              ) : null}
-              <button
-                type="button"
-                className="primary-button signal-node-directory-trigger"
-                aria-label={openNodeDirectoryLabel}
-                title={openNodeDirectoryLabel}
-                onClick={() => {
-                  onOpenNodeDirectory();
-                  setMenuOpen(false);
-                }}
-              >
-                <NodeDirectoryTriggerIcon />
-                <span>{openNodeDirectoryLabel}</span>
-              </button>
-            </div>
-          </div>
-          <SignalChannelSelectorItem
-            accessibleForms={accessibleForms}
-            selectedFormId={selectedFormId}
-            onSelectForm={onSelectForm}
-            unreadCountByFormId={unreadCountByFormId}
-            signalCountByFormId={signalCountByFormId}
-            allSignalsCount={allSignalsCount}
-            totalUnreadCount={totalUnreadCount}
-            activeScopeLabel={activeScopeLabel}
-            allSignalNodesLabel={allSignalNodesLabel}
-            responseDeadlineLabels={responseDeadlineLabels}
-            onExportAllFormCsv={onExportAllFormCsv}
-            closeMenu={() => setMenuOpen(false)}
-          />
-        </div>
-      ) : null}
+      {menu ? createPortal(menu, document.body) : null}
     </div>
   );
 }

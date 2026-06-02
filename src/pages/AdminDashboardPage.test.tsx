@@ -2,8 +2,10 @@ import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { I18nProvider } from "../i18n";
+import type { ProjectSummary } from "../lib/projectRegistry";
 import { RpcInfrastructureContext, type RpcInfrastructureContextValue } from "../rpcInfrastructure";
-import type { FormSchema, Submission } from "../types";
+import type { Submission } from "../types";
+import type { FormWithCount, SignalRecord, StreamId } from "../features/admin/hooks/useSignalInboxData";
 import { AdminDashboardPage } from "./AdminDashboardPage";
 
 const { defaultCapabilityProfile, mockCapabilityProfile, mockWalletState, mockProjectState, signalIndex, mockInboxState } = vi.hoisted(() => {
@@ -35,9 +37,17 @@ const { defaultCapabilityProfile, mockCapabilityProfile, mockWalletState, mockPr
       registeredSui: 0,
     },
     pendingSignalIdSet: new Set<string>(),
-    signalById: {},
+    signalById: {} as Record<string, SignalRecord>,
     unreadCountByFormId: {},
     signalCountByFormId: {},
+  };
+  type MockInboxState = {
+    forms: FormWithCount[];
+    selectedStreamId: StreamId;
+    allSignals: SignalRecord[];
+    visibleSignals: SignalRecord[];
+    selectedRecord: SignalRecord | null;
+    signalIndex: typeof signalIndex;
   };
   return {
     defaultCapabilityProfile,
@@ -51,9 +61,9 @@ const { defaultCapabilityProfile, mockCapabilityProfile, mockWalletState, mockPr
     },
     mockProjectState: {
       current: {
-        projects: [] as any[],
+        projects: [] as ProjectSummary[],
         selectedProjectId: "",
-        selectedProject: null as any,
+        selectedProject: null as ProjectSummary | null,
       },
     },
     signalIndex,
@@ -66,7 +76,7 @@ const { defaultCapabilityProfile, mockCapabilityProfile, mockWalletState, mockPr
         selectedRecord: null,
         signalIndex,
       },
-    } as { current: any },
+    } as { current: MockInboxState },
   };
 });
 
@@ -263,12 +273,13 @@ function renderAdminRoute() {
 }
 
 function createSystemRecord() {
-  const form: FormSchema = {
+  const form: FormWithCount = {
     id: "system:deepsignal-runtime",
     title: "DeepSignal System Alerts",
     description: "Runtime diagnostics",
     fields: [],
     sections: [],
+    submissionCount: 1,
     createdAt: "2026-01-01T00:00:00.000Z",
     updatedAt: "2026-01-01T00:00:00.000Z",
   };
@@ -332,7 +343,7 @@ function createSystemRecord() {
       submission,
       category: "System" as const,
       searchText: "chunk load error",
-    },
+    } satisfies SignalRecord,
   };
 }
 
@@ -390,19 +401,18 @@ describe("AdminDashboardPage", () => {
       status: "connected",
     };
     const project = {
-      id: "project-1",
+      objectId: "project-1",
       name: "Ops Project",
       owner: "0xowner",
-      forms: [form],
       formsCount: 1,
       signalsCount: 1,
       members: [],
       admins: [],
       reviewers: [],
-    };
+    } satisfies ProjectSummary;
     mockProjectState.current = {
       projects: [project],
-      selectedProjectId: project.id,
+      selectedProjectId: project.objectId,
       selectedProject: project,
     };
     signalIndex.counts.system = 1;
@@ -458,19 +468,18 @@ describe("AdminDashboardPage", () => {
       status: "connected",
     };
     const project = {
-      id: "project-1",
+      objectId: "project-1",
       name: "Ops Project",
       owner: "0xowner",
-      forms: [form],
       formsCount: 1,
       signalsCount: 1,
       members: [],
       admins: [],
       reviewers: [],
-    };
+    } satisfies ProjectSummary;
     mockProjectState.current = {
       projects: [project],
-      selectedProjectId: project.id,
+      selectedProjectId: project.objectId,
       selectedProject: project,
     };
     signalIndex.counts.system = 1;

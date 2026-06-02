@@ -18,7 +18,8 @@ import "../styles/mobile/review-session.css";
 import "../styles/mobile/private-signal.css";
 import "../styles/mobile/inbox.css";
 import type { CSSProperties, ReactNode, TouchEvent as ReactTouchEvent } from "react";
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { CreateFormLink } from "../components/CreateFormLink";
 import { AdminAccessGate } from "../components/AdminAccessGate";
@@ -2833,7 +2834,41 @@ function MobileFilterMenu({
   className = "",
 }: MobileFilterMenuProps) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [panelStyle, setPanelStyle] = useState<CSSProperties>({});
   const shellRef = useRef<HTMLDivElement | null>(null);
+  const panelRef = useRef<HTMLDivElement | null>(null);
+  const alignRight = className.includes("mobile-inbox-sort") || className.includes("mobile-inbox-mode");
+
+  const updatePanelPosition = useCallback(() => {
+    const anchor = shellRef.current;
+    if (!anchor) {
+      return;
+    }
+
+    const rect = anchor.getBoundingClientRect();
+    const viewport = window.visualViewport;
+    const viewportWidth = viewport?.width ?? window.innerWidth;
+    const viewportHeight = viewport?.height ?? window.innerHeight;
+    const viewportTop = viewport?.offsetTop ?? 0;
+    const gutter = 9;
+    const gap = 7;
+    const minWidth = className.includes("mobile-inbox-project-menu") ? 260 : 216;
+    const width = Math.min(Math.max(rect.width, minWidth), viewportWidth - gutter * 2);
+    const triggerLeft = alignRight ? rect.right - width : rect.left;
+    const left = Math.min(Math.max(triggerLeft, gutter), viewportWidth - width - gutter);
+    const top = Math.max(rect.bottom + gap + viewportTop, gutter + viewportTop);
+    const bottomReserve = 132;
+    const availableHeight = Math.max(144, viewportHeight + viewportTop - top - bottomReserve);
+
+    setPanelStyle({
+      position: "fixed",
+      left,
+      top,
+      width,
+      maxHeight: `min(40vh, ${availableHeight}px, 280px)`,
+      zIndex: 1200,
+    });
+  }, [alignRight, className]);
 
   useEffect(() => {
     if (!menuOpen) {
@@ -2841,7 +2876,8 @@ function MobileFilterMenu({
     }
 
     function handlePointerDown(event: MouseEvent) {
-      if (!shellRef.current?.contains(event.target as Node)) {
+      const target = event.target as Node;
+      if (!shellRef.current?.contains(target) && !panelRef.current?.contains(target)) {
         setMenuOpen(false);
       }
     }
@@ -2860,7 +2896,56 @@ function MobileFilterMenu({
     };
   }, [menuOpen]);
 
+  useLayoutEffect(() => {
+    if (!menuOpen) {
+      return;
+    }
+
+    updatePanelPosition();
+    window.addEventListener("resize", updatePanelPosition);
+    window.addEventListener("scroll", updatePanelPosition, true);
+    window.visualViewport?.addEventListener("resize", updatePanelPosition);
+    window.visualViewport?.addEventListener("scroll", updatePanelPosition);
+    return () => {
+      window.removeEventListener("resize", updatePanelPosition);
+      window.removeEventListener("scroll", updatePanelPosition, true);
+      window.visualViewport?.removeEventListener("resize", updatePanelPosition);
+      window.visualViewport?.removeEventListener("scroll", updatePanelPosition);
+    };
+  }, [menuOpen, updatePanelPosition]);
+
   const selectedOption = options.find((option) => option.value === selectedValue);
+  const panel = menuOpen ? (
+    <div
+      ref={panelRef}
+      className={`mobile-inbox-filter-panel mobile-inbox-filter-panel-portal panel ${className}`.trim()}
+      role="menu"
+      aria-label={buttonLabel}
+      style={panelStyle}
+    >
+      {options.map((option) => {
+        const active = option.value === selectedValue;
+        return (
+          <button
+            key={option.value}
+            type="button"
+            className={`mobile-inbox-filter-option ${active ? "is-active" : ""}`}
+            role="menuitemradio"
+            aria-checked={active}
+            onClick={() => {
+              onSelect(option.value);
+              setMenuOpen(false);
+            }}
+          >
+            <span className="mobile-inbox-filter-option-copy">
+              <strong>{option.label}</strong>
+              {option.meta ? <small>{option.meta}</small> : null}
+            </span>
+          </button>
+        );
+      })}
+    </div>
+  ) : null;
 
   return (
     <div ref={shellRef} className={`mobile-inbox-filter-menu ${menuOpen ? "is-open" : ""} ${className}`.trim()}>
@@ -2879,31 +2964,7 @@ function MobileFilterMenu({
         </span>
         <MobileFilterCaret />
       </button>
-      {menuOpen ? (
-        <div className="mobile-inbox-filter-panel panel" role="menu" aria-label={buttonLabel}>
-          {options.map((option) => {
-            const active = option.value === selectedValue;
-            return (
-              <button
-                key={option.value}
-                type="button"
-                className={`mobile-inbox-filter-option ${active ? "is-active" : ""}`}
-                role="menuitemradio"
-                aria-checked={active}
-                onClick={() => {
-                  onSelect(option.value);
-                  setMenuOpen(false);
-                }}
-              >
-                <span className="mobile-inbox-filter-option-copy">
-                  <strong>{option.label}</strong>
-                  {option.meta ? <small>{option.meta}</small> : null}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-      ) : null}
+      {panel ? createPortal(panel, document.body) : null}
     </div>
   );
 }

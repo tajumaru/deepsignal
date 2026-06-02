@@ -1,5 +1,5 @@
 import type { ComponentType } from "react";
-import { recoverFromChunkLoadFailure } from "./chunkLoadRecovery";
+import { isChunkLoadFailure, recoverFromChunkLoadFailure } from "./chunkLoadRecovery";
 import { buildInfo, type BuildInfo } from "./buildInfo";
 import { recordBuildAsset } from "./buildAssetDiagnostics";
 import { endPerf, startPerf } from "./perf";
@@ -490,7 +490,7 @@ export async function retryLazyImport<T>(loader: () => Promise<T>, label = "anon
     } catch (error) {
       lastError = error;
       recordFailedImport(label, error, expectedChunkUrl, {
-        category: error instanceof LazyImportTimeoutError ? "timeout" : "runtime",
+        category: error instanceof LazyImportTimeoutError ? "timeout" : isChunkLoadFailure(error) ? "chunkLoad" : "runtime",
       });
       logRouteLifecycle(error instanceof LazyImportTimeoutError ? "lazy-import-timeout-recorded" : "lazy-import-rejected", {
         label,

@@ -47,7 +47,7 @@
     left: 0;
     right: 0;
     bottom: 0;
-    z-index: 21;
+    z-index: 1000;
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 0;
@@ -164,7 +164,7 @@
     position: fixed;
     right: max(1rem, env(safe-area-inset-right, 0px));
     bottom: calc(5.85rem + env(safe-area-inset-bottom, 0px));
-    z-index: 22;
+    z-index: 1100;
     display: inline-grid;
     place-items: center;
     width: 3.35rem;

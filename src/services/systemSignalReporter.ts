@@ -216,6 +216,10 @@ function isResourceErrorEvent(event: Event) {
   return tagName === "SCRIPT" || tagName === "LINK" || tagName === "IMG";
 }
 
+function isModulePreloadResourceError(details: ReturnType<typeof safeEventDetails>) {
+  return String(details.tagName || "").toUpperCase() === "LINK" && details.rel === "modulepreload";
+}
+
 function normalizePromiseRejectionReason(reason: unknown): NormalizedRuntimeError {
   if (reason instanceof Error) {
     return {
@@ -458,8 +462,16 @@ export function startSystemSignalReporter() {
       const details = safeEventDetails(event);
       const target = event.target as Partial<HTMLScriptElement & HTMLLinkElement & HTMLImageElement>;
       const tagName = String(details.tagName || "RESOURCE").toUpperCase();
+      const modulePreloadOnly = isModulePreloadResourceError(details);
+      const resourceUrl =
+        tagName === "SCRIPT" && typeof target.src === "string"
+          ? target.src
+          : tagName === "LINK" && typeof target.href === "string"
+            ? target.href
+            : details.src || details.href || null;
+      const sourceContext = modulePreloadOnly ? "resource.modulepreload.preload-only" : "resource.error.capture";
       recordResourceErrorDiagnostic({
-        sourceContext: "resource.error.capture",
+        sourceContext,
         tagName,
         src: details.src,
         href: details.href,
@@ -474,21 +486,31 @@ export function startSystemSignalReporter() {
         href: details.href,
         rel: details.rel,
         as: details.as,
+        preloadOnly: modulePreloadOnly,
       });
       reportSystemError({
-        errorName: `${tagName}ResourceError`,
-        errorMessage: `Resource failed to load: ${details.src || details.href || tagName}`,
+        errorName: modulePreloadOnly ? `${tagName}ModulePreloadResourceError` : `${tagName}ResourceError`,
+        errorMessage: `${modulePreloadOnly ? "Module preload" : "Resource"} failed to load: ${resourceUrl || tagName}`,
         errorStack: "",
-        chunkUrl: tagName === "SCRIPT" && typeof target.src === "string" ? target.src : null,
-        severity: tagName === "SCRIPT" || details.rel === "modulepreload" ? "error" : "warning",
-        sourceContext: "resource.error.capture",
-        diagnostics: details,
+        chunkUrl: tagName === "SCRIPT" || modulePreloadOnly ? resourceUrl : null,
+        severity: modulePreloadOnly ? "warning" : tagName === "SCRIPT" ? "error" : "warning",
+        sourceContext,
+        diagnostics: {
+          ...details,
+          resourceUrl,
+          preloadOnly: modulePreloadOnly,
+          safariPreloadOnly: modulePreloadOnly && isMobileSafari(getUserAgent()),
+          classification: modulePreloadOnly ? "modulepreload_link_error" : "resource_error",
+        },
       });
     },
     true,
   );
 
   window.addEventListener("error", (event) => {
+    if (isResourceErrorEvent(event)) {
+      return;
+    }
     const details = safeEventDetails(event);
     const normalized = normalizeError({
       error: event.error instanceof Error ? event.error : undefined,

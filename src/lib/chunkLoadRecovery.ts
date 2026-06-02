@@ -77,6 +77,14 @@ function errorText(error: unknown) {
   return String(error ?? "").toLowerCase();
 }
 
+function isMobileSafariUserAgent() {
+  if (typeof navigator === "undefined") {
+    return false;
+  }
+  const userAgent = navigator.userAgent;
+  return /iphone|ipad|ipod/i.test(userAgent) && /safari/i.test(userAgent) && !/crios|fxios|edgios/i.test(userAgent);
+}
+
 export function isChunkLoadFailure(error: unknown) {
   const text = errorText(error);
   return (
@@ -94,6 +102,16 @@ export function isChunkLoadFailure(error: unknown) {
 export function getChunkFailureUrl(error: unknown) {
   const source = error instanceof Error ? `${error.message}\n${error.stack ?? ""}` : String(error ?? "");
   return source.match(/https?:\/\/[^\s)'"]+/)?.[0] ?? source.match(/\.\/assets\/[^\s)'"]+/)?.[0] ?? null;
+}
+
+export function isSafariPreloadOnlyFailure(error: unknown) {
+  const text = errorText(error);
+  return (
+    text.includes("vite:preloaderror") ||
+    text.includes("modulepreload") ||
+    text.includes("linkresourceerror") ||
+    text.includes("link resource error")
+  );
 }
 
 export function clearChunkLoadRecoveryState() {
@@ -205,6 +223,10 @@ export function startChunkLoadRecovery() {
   }
 
   const handleVitePreloadError = (event: VitePreloadErrorEvent) => {
+    if (isMobileSafariUserAgent() && isSafariPreloadOnlyFailure(event.payload ?? "vite:preloaderror")) {
+      event.preventDefault();
+      return;
+    }
     if (recoverFromChunkLoadFailure(event.payload ?? "vite:preloaderror")) {
       event.preventDefault();
     }
