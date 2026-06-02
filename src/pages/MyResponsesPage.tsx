@@ -366,12 +366,6 @@ export function MyResponsesPage() {
             <p className="eyebrow">{t("myResponsesDetailEyebrow")}</p>
             <h1>{t("myResponsesVaultTitle")}</h1>
             <p className="lede">{t("myResponsesDetailLede")}</p>
-            <div className="my-responses-vault-chips" aria-label={t("myResponsesVaultStatus")}>
-              <span>{t("myResponsesChipLocalHistory")}</span>
-              <span>{t("myResponsesChipEncryptedReceipt")}</span>
-              <span>{t("myResponsesChipWalletOptional")}</span>
-              <span className="is-muted">{t("myResponsesChipRevokeUnavailable")}</span>
-            </div>
           </div>
           <Link to="/my-responses" className="ghost-button">
             {t("myResponsesBack")}
@@ -557,12 +551,6 @@ export function MyResponsesPage() {
           <p className="eyebrow">{t("myResponsesEyebrow")}</p>
           <h1>{t("myResponsesVaultTitle")}</h1>
           <p className="lede">{t("myResponsesLede")}</p>
-          <div className="my-responses-vault-chips" aria-label={t("myResponsesVaultStatus")}>
-            <span>{t("myResponsesChipLocalHistory")}</span>
-            <span>{t("myResponsesChipEncryptedReceipt")}</span>
-            <span>{t("myResponsesChipWalletOptional")}</span>
-            <span className="is-muted">{t("myResponsesChipRevokeUnavailable")}</span>
-          </div>
         </div>
         <div className="my-responses-hero-stats" aria-label={t("myResponsesVaultSummary")}>
           <div>
@@ -601,26 +589,30 @@ export function MyResponsesPage() {
             <Link
               key={entry.submissionId}
               to={`/my-responses/${entry.submissionId}`}
-              className="answer-card my-response-card"
+              className={`answer-card my-response-card status-${entry.status}`}
               aria-label={`${t("myResponsesOpenReceipt")}: ${entry.formTitle}`}
             >
               <div className="my-response-card-main">
-                <p className="eyebrow">{getReceiptDisplayId(entry.submissionId)}</p>
+                <div className="my-response-card-topline">
+                  <span className={`my-response-card-dot status-${entry.status}`} aria-hidden="true" />
+                  <strong>{getReceiptDisplayId(entry.submissionId)}</strong>
+                  <span className="my-response-card-time">{formatDate(entry.submittedAt)}</span>
+                </div>
                 <h2>{entry.formTitle}</h2>
                 <p className="my-response-preview">{entry.answerSummary}</p>
-                <p className="my-response-lifecycle-hint">
-                  <strong>{getLifecycleLabel(entry.lifecycleStatus, t)}</strong>
+                <p className="my-response-card-source-line">
+                  <span>{getLifecycleLabel(entry.lifecycleStatus, t)}</span>
+                  <span>{getStorageLabel(entry.storageMode, t)}</span>
                   <span>{getLifecycleDetail(entry.lifecycleStatus, t)}</span>
                 </p>
               </div>
               <div className="my-response-card-meta">
-                <span>{formatDate(entry.submittedAt)}</span>
                 <span className={`my-response-badge is-${entry.status}`}>{getStatusLabel(entry.status, t)}</span>
                 <span className={`my-response-badge is-lifecycle-${entry.lifecycleStatus ?? "submitted"}`}>
                   {getLifecycleLabel(entry.lifecycleStatus, t)}
                 </span>
                 <span className={`my-response-badge is-storage-${entry.storageMode}`}>{getStorageLabel(entry.storageMode, t)}</span>
-                <span>v{getFormVersion(entry)}</span>
+                <span className="my-response-card-version">v{getFormVersion(entry)}</span>
               </div>
             </Link>
           ))}

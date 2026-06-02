@@ -52,6 +52,7 @@ interface ImportMetaEnv {
   readonly VITE_MEMWAL_ACCOUNT_ID?: string;
   readonly VITE_MEMWAL_DELEGATE_KEY?: string;
   readonly VITE_MEMWAL_NAMESPACE_PREFIX?: string;
+  readonly VITE_SIGNAL_MEMORY_PROVIDER?: string;
 }
 
 interface ImportMeta {

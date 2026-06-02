@@ -693,6 +693,90 @@ describe("AdminDashboardPage", () => {
     expect(panel.textContent).not.toContain("#frag");
   });
 
+  it("opens a safe Signal Pattern Memory draft modal from a Diagnostics Summary group and copies JSON", async () => {
+    const first = createSystemRecord({ id: "system-error-1", fingerprint: "fp-admin", routeId: "admin" });
+    const second = createSystemRecord({
+      id: "system-error-2",
+      createdAt: "2026-01-01T00:02:00.000Z",
+      severity: "error",
+      fingerprint: "fp-admin",
+      routeId: "admin",
+    });
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText } });
+    allowAdminAccess();
+    signalIndex.counts.system = 2;
+    signalIndex.signalById = {
+      [first.submission.id]: first.record,
+      [second.submission.id]: second.record,
+    };
+    mockInboxState.current = {
+      forms: [first.form],
+      selectedStreamId: "system",
+      allSignals: [first.record, second.record],
+      visibleSignals: [first.record, second.record],
+      selectedRecord: first.record,
+      signalIndex,
+    };
+
+    renderAdminRoute();
+
+    expect(await screen.findByRole("heading", { name: "System Diagnostics Summary" })).toBeInTheDocument();
+    const panel = screen.getByRole("region", { name: "System Diagnostics Summary" });
+    await waitFor(() => expect(within(panel).getByText("fp-admin")).toBeInTheDocument());
+    fireEvent.click(within(panel).getAllByRole("button", { name: "Save pattern memory" })[0]);
+
+    const modal = await screen.findByRole("dialog", { name: "Review pattern memory draft" });
+    expect(within(modal).getByText("This draft is not saved yet. MemWal integration comes later.")).toBeInTheDocument();
+    expect(within(modal).getByLabelText("Type")).toHaveValue("system_diagnostic_pattern");
+    expect(within(modal).getByLabelText("Title")).toHaveValue("Repeated fingerprint fp-admin");
+    expect(within(modal).getByLabelText("Status")).toHaveValue("draft");
+    expect(within(modal).getByLabelText("Confidence")).toHaveValue("medium");
+    expect(within(modal).getByText("Affected routes")).toBeInTheDocument();
+    expect(within(modal).getByText("Affected builds")).toBeInTheDocument();
+    expect(within(modal).getByText("Platforms")).toBeInTheDocument();
+    expect(within(modal).getByText("Frequency")).toBeInTheDocument();
+
+    fireEvent.change(within(modal).getByLabelText("Title"), {
+      target: { value: "Admin chunk failure memory" },
+    });
+    fireEvent.change(within(modal).getByLabelText("Status"), {
+      target: { value: "watching" },
+    });
+    fireEvent.click(within(modal).getByRole("button", { name: "Copy draft JSON" }));
+
+    await waitFor(() => expect(writeText).toHaveBeenCalled());
+    const copied = String(writeText.mock.calls[0][0]);
+    expect(copied).toContain('"schemaVersion": "deepsignal.signal_pattern_memory.v1"');
+    expect(copied).toContain('"title": "Admin chunk failure memory"');
+    expect(copied).toContain('"status": "watching"');
+    expect(copied).toContain('"type": "system_diagnostic_pattern"');
+    expect(copied).toContain('"sourceSignalIds"');
+    expect(copied).toContain('"system-error-1"');
+    expect(copied).not.toContain("raw-answer-secret");
+    expect(copied).not.toContain("public-answer-secret");
+    expect(copied).not.toContain("attachment-secret");
+    expect(copied).not.toContain("session-secret");
+    expect(copied).not.toContain("signature-secret");
+    expect(copied).not.toContain("signed-bytes-secret");
+    expect(copied).not.toContain("encrypted-secret");
+    expect(copied).not.toContain("metadata");
+    expect(copied).not.toContain("errorStack");
+    expect(copied).not.toContain("token=abc");
+    expect(copied).not.toContain("#frag");
+    expect(modal.textContent).not.toContain("raw-answer-secret");
+    expect(modal.textContent).not.toContain("public-answer-secret");
+    expect(modal.textContent).not.toContain("attachment-secret");
+    expect(modal.textContent).not.toContain("session-secret");
+    expect(modal.textContent).not.toContain("signature-secret");
+    expect(modal.textContent).not.toContain("signed-bytes-secret");
+    expect(modal.textContent).not.toContain("encrypted-secret");
+    expect(modal.textContent).not.toContain("metadata-secret");
+    expect(modal.textContent).not.toContain("errorStack");
+    expect(modal.textContent).not.toContain("token=abc");
+    expect(modal.textContent).not.toContain("#frag");
+  });
+
   it("regroups the System Diagnostics Summary by routeId", async () => {
     const first = createSystemRecord({ id: "system-error-1", fingerprint: "fp-admin", routeId: "admin" });
     const second = createSystemRecord({

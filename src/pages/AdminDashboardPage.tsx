@@ -60,6 +60,12 @@ import { createDiagnosticsExportFilename, exportDiagnosticsJson } from "../diagn
 import { summarizeDiagnostics } from "../diagnostics/diagnosticsSummary";
 import { redactSystemSignal } from "../diagnostics/redaction";
 import { MAX_DIAGNOSTICS_LIMIT, type DiagnosticsSummary, type DiagnosticsSummaryOptions } from "../diagnostics/types";
+import {
+  createDraftFromDiagnosticsSummaryGroup,
+  type SignalPatternMemoryConfidence,
+  type SignalPatternMemoryDraft,
+  type SignalPatternMemoryStatus,
+} from "../memory";
 import { WorkspaceActivityLog } from "../features/admin/components/WorkspaceActivityLog";
 import { useAdminToast } from "../features/admin/hooks/useAdminToast";
 import { usePendingSuiRegistration } from "../features/admin/hooks/usePendingSuiRegistration";
@@ -4073,6 +4079,163 @@ function MobileSignalInbox({
   );
 }
 
+const patternMemoryStatusOptions: SignalPatternMemoryStatus[] = [
+  "draft",
+  "active",
+  "watching",
+  "investigating",
+  "mitigated",
+  "confirmed_fixed",
+  "stale",
+  "revoked",
+];
+
+const patternMemoryConfidenceOptions: SignalPatternMemoryConfidence[] = ["low", "medium", "high"];
+
+function PatternMemoryDraftReviewModal({
+  draft,
+  onDraftChange,
+  onClose,
+  onCopyJson,
+}: {
+  draft: SignalPatternMemoryDraft;
+  onDraftChange: (draft: SignalPatternMemoryDraft) => void;
+  onClose: () => void;
+  onCopyJson: () => void;
+}) {
+  const updateDraft = <Key extends keyof SignalPatternMemoryDraft>(
+    key: Key,
+    value: SignalPatternMemoryDraft[Key],
+  ) => {
+    onDraftChange({
+      ...draft,
+      [key]: value,
+    });
+  };
+
+  return (
+    <div className="node-directory-overlay" role="dialog" aria-modal="true" aria-labelledby="pattern-memory-draft-title">
+      <div className="node-directory-backdrop" onClick={onClose} />
+      <section className="panel glow-panel node-directory-panel pattern-memory-draft-modal">
+        <div className="signal-detail-heading node-directory-heading">
+          <div>
+            <p className="eyebrow">Signal Pattern Memory</p>
+            <h2 id="pattern-memory-draft-title">Review pattern memory draft</h2>
+            <p className="muted">This draft is not saved yet. MemWal integration comes later.</p>
+          </div>
+          <button
+            type="button"
+            className="review-session-close-button"
+            aria-label="Close pattern memory draft"
+            title="Close pattern memory draft"
+            onClick={onClose}
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M6 6l12 12" />
+              <path d="M18 6L6 18" />
+            </svg>
+          </button>
+        </div>
+
+        <div className="pattern-memory-draft-grid">
+          <label className="review-select pattern-memory-field">
+            <span>Title</span>
+            <input
+              value={draft.title}
+              onChange={(event) => updateDraft("title", event.target.value)}
+            />
+          </label>
+          <label className="review-select pattern-memory-field">
+            <span>Type</span>
+            <input value={draft.type} readOnly />
+          </label>
+          <label className="review-select pattern-memory-field pattern-memory-field-wide">
+            <span>Summary</span>
+            <textarea
+              value={draft.summary}
+              onChange={(event) => updateDraft("summary", event.target.value)}
+            />
+          </label>
+          <label className="review-select pattern-memory-field">
+            <span>Status</span>
+            <select
+              value={draft.status}
+              onChange={(event) => updateDraft("status", event.target.value as SignalPatternMemoryStatus)}
+            >
+              {patternMemoryStatusOptions.map((status) => (
+                <option key={status} value={status}>{status}</option>
+              ))}
+            </select>
+          </label>
+          <label className="review-select pattern-memory-field">
+            <span>Confidence</span>
+            <select
+              value={draft.confidence}
+              onChange={(event) => updateDraft("confidence", event.target.value as SignalPatternMemoryConfidence)}
+            >
+              {patternMemoryConfidenceOptions.map((confidence) => (
+                <option key={confidence} value={confidence}>{confidence}</option>
+              ))}
+            </select>
+          </label>
+          <label className="review-select pattern-memory-field pattern-memory-field-wide">
+            <span>Recommended action</span>
+            <textarea
+              value={draft.recommendedAction ?? ""}
+              onChange={(event) => updateDraft("recommendedAction", event.target.value)}
+            />
+          </label>
+          <label className="review-select pattern-memory-field pattern-memory-field-wide">
+            <span>Recommended Codex prompt</span>
+            <textarea
+              value={draft.recommendedCodexPrompt ?? ""}
+              onChange={(event) => updateDraft("recommendedCodexPrompt", event.target.value)}
+            />
+          </label>
+        </div>
+
+        <div className="pattern-memory-readonly-sections">
+          <div>
+            <span className="eyebrow">Evidence summary</span>
+            <ul>
+              {draft.evidenceSummary.map((item) => (
+                <li key={item}>{item}</li>
+              ))}
+            </ul>
+          </div>
+          <div className="metadata-list signal-proof-metadata-list">
+            <div className="metadata-row">
+              <span>Affected routes</span>
+              <strong>{draft.affectedRoutes.length > 0 ? draft.affectedRoutes.join(", ") : "None"}</strong>
+            </div>
+            <div className="metadata-row">
+              <span>Affected builds</span>
+              <strong>{draft.affectedBuilds.length > 0 ? draft.affectedBuilds.join(", ") : "None"}</strong>
+            </div>
+            <div className="metadata-row">
+              <span>Platforms</span>
+              <strong>{draft.platforms.length > 0 ? draft.platforms.join(", ") : "None"}</strong>
+            </div>
+            <div className="metadata-row">
+              <span>Frequency</span>
+              <strong>{draft.frequency.count} events / {draft.frequency.window ?? "all_time"}</strong>
+            </div>
+          </div>
+        </div>
+
+        <div className="pattern-memory-draft-actions">
+          <button type="button" className="ghost-button" onClick={onCopyJson}>
+            Copy draft JSON
+          </button>
+          <button type="button" className="primary-button" onClick={onClose}>
+            Done
+          </button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
 export function AdminDashboardPage() {
   const { language, t } = useI18n();
   const location = useLocation();
@@ -4245,6 +4408,7 @@ export function AdminDashboardPage() {
   const [systemDiagnosticsGroupBy, setSystemDiagnosticsGroupBy] =
     useState<NonNullable<DiagnosticsSummaryOptions["groupBy"]>>("fingerprint");
   const [systemDiagnosticsSummary, setSystemDiagnosticsSummary] = useState<DiagnosticsSummary | null>(null);
+  const [patternMemoryDraft, setPatternMemoryDraft] = useState<SignalPatternMemoryDraft | null>(null);
   const versionCounts = useMemo(
     () => getSubmissionVersionCounts(allSignals.map((record) => record.submission)),
     [allSignals],
@@ -4376,6 +4540,25 @@ export function AdminDashboardPage() {
     },
     [allSignals, setToast],
   );
+  const openPatternMemoryDraftFromDiagnosticsGroup = useCallback(
+    (group: DiagnosticsSummary["groups"][number]) => {
+      const diagnostics = visibleSystemRecords
+        .map((record) => redactSystemSignal(record.submission, { includeStackTraces: false }))
+        .filter((diagnostic): diagnostic is NonNullable<ReturnType<typeof redactSystemSignal>> => diagnostic !== null);
+      setPatternMemoryDraft(createDraftFromDiagnosticsSummaryGroup(group, {
+        groupBy: systemDiagnosticsGroupBy,
+        diagnostics,
+      }));
+    },
+    [systemDiagnosticsGroupBy, visibleSystemRecords],
+  );
+  const copyPatternMemoryDraftJson = useCallback(async () => {
+    if (!patternMemoryDraft) {
+      return;
+    }
+    await navigator.clipboard.writeText(JSON.stringify(patternMemoryDraft, null, 2));
+    setToast({ tone: "success", message: "Pattern memory draft JSON copied." });
+  }, [patternMemoryDraft, setToast]);
   const exportVisibleSystemDiagnostics = useCallback(async () => {
     if (visibleSystemRecords.length === 0) {
       setToast({ tone: "error", message: "No System Diagnostics match the current stream." });
@@ -7701,6 +7884,13 @@ export function AdminDashboardPage() {
                                 <code key={id}>{id}</code>
                               ))}
                             </div>
+                            <button
+                              type="button"
+                              className="ghost-button system-diagnostics-pattern-memory-button"
+                              onClick={() => openPatternMemoryDraftFromDiagnosticsGroup(group)}
+                            >
+                              Save pattern memory
+                            </button>
                           </article>
                         ))}
                       </div>
@@ -8513,6 +8703,14 @@ export function AdminDashboardPage() {
             connectButton: t("connectLabel"),
             projectStats: (params) => t("projectModalProjectStats", params),
           }}
+        />
+      ) : null}
+      {patternMemoryDraft ? (
+        <PatternMemoryDraftReviewModal
+          draft={patternMemoryDraft}
+          onDraftChange={setPatternMemoryDraft}
+          onClose={() => setPatternMemoryDraft(null)}
+          onCopyJson={() => void copyPatternMemoryDraftJson()}
         />
       ) : null}
       {demoIntelligenceAlertOpen && intelligenceDemoSimulationEnabled && demoBriefAvailable ? (
