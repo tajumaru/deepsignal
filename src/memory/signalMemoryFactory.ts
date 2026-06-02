@@ -3,7 +3,15 @@ import { MemWalSignalMemoryAdapter } from "./memwalSignalMemoryAdapter";
 import { noopSignalMemoryAdapter } from "./noopSignalMemoryAdapter";
 import type { SignalMemoryAdapter, SignalMemoryProvider } from "./types";
 
-type SignalMemoryProviderEnv = Pick<ImportMetaEnv, "VITE_SIGNAL_MEMORY_PROVIDER">;
+type SignalMemoryProviderEnv = Pick<
+  ImportMetaEnv,
+  | "VITE_SIGNAL_MEMORY_PROVIDER"
+  | "VITE_MEMWAL_ENABLED"
+  | "VITE_MEMWAL_SERVER_URL"
+  | "VITE_MEMWAL_ACCOUNT_ID"
+  | "VITE_MEMWAL_DELEGATE_KEY"
+  | "VITE_MEMWAL_NAMESPACE_PREFIX"
+>;
 
 export function getSignalMemoryProvider(env: SignalMemoryProviderEnv = import.meta.env): SignalMemoryProvider {
   const provider = String(env.VITE_SIGNAL_MEMORY_PROVIDER || "none").toLowerCase();
@@ -21,7 +29,7 @@ export function createSignalMemoryAdapter(
     return inMemorySignalMemoryAdapter;
   }
   if (provider === "memwal") {
-    return new MemWalSignalMemoryAdapter();
+    return new MemWalSignalMemoryAdapter(env);
   }
   return noopSignalMemoryAdapter;
 }

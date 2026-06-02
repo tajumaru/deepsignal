@@ -76,7 +76,7 @@ export type SignalPatternMemory = Omit<SignalPatternMemoryDraft, "status"> & {
 
 export type SignalMemoryProvider = "none" | "memory" | "memwal";
 
-export type SignalMemoryAdapterKind = "noop" | "memory" | "memwal-placeholder";
+export type SignalMemoryAdapterKind = "noop" | "memory" | "memwal";
 
 export type SignalMemorySearchOptions = {
   limit?: number;
@@ -88,7 +88,7 @@ export type SignalMemorySearchOptions = {
 export type SignalMemoryWriteResult = {
   ok: boolean;
   skipped: boolean;
-  reason?: "noop" | "memwal_not_implemented";
+  reason?: "noop" | "memwal_not_configured";
   memoryId?: string;
 };
 
@@ -108,7 +108,7 @@ export type SignalMemorySearchResult = {
   memories: SignalPatternMemory[];
   total: number;
   skipped: boolean;
-  reason?: "noop" | "memwal_not_implemented";
+  reason?: "noop" | "memwal_not_configured";
 };
 
 export interface SignalMemoryAdapter {

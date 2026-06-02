@@ -75,6 +75,14 @@ This is the fastest path through the current UX.
 9. Triage the signal, set priority/tags/notes, assign roadmap stage, and export JSON or CSV.
 10. Open `/explore` or `/roadmap/:formId` and confirm that public views contain only selected roadmap-safe metadata.
 
+## Signal Pattern Memory
+
+Signal Pattern Memory is advisory memory for recurring signal patterns. DeepSignal storage, diagnostics, and review state remain the canonical source of truth.
+
+By default `VITE_SIGNAL_MEMORY_PROVIDER=none` performs validation only. `VITE_SIGNAL_MEMORY_PROVIDER=memory` stores reviewed memories in runtime memory for the current app session. Real MemWal writes are enabled only when `VITE_SIGNAL_MEMORY_PROVIDER=memwal`, `VITE_MEMWAL_ENABLED=true`, and the MemWal server URL, account ID, and delegate key are configured.
+
+MemWal stores reviewed `SignalPatternMemory` envelopes only. It must not store raw submissions, answers, payloads, attachments, respondent metadata, signatures, stack traces, or decrypted content.
+
 ## Demo Flow Status
 
 - The repo includes seeded demo data, fixture tooling, and a hidden Secure Signal Operations workspace path used for local judging rehearsals.

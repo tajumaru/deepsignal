@@ -1,6 +1,7 @@
 export { getMemoryAdapter, isMemWalEnabled } from "./factory";
 export { createSignalMemoryAdapter, getSignalMemoryProvider } from "./signalMemoryFactory";
 export { validateMemWalConfig, type MemWalConfigValidation } from "./memwalConfig";
+export { setSignalMemoryMemWalClientFactoryForTests } from "./memwalSignalMemoryAdapter";
 export { InMemorySignalMemoryAdapter, clearInMemorySignalMemoriesForTests } from "./inMemorySignalMemoryAdapter";
 export { NoopMemoryAdapter, noopMemoryAdapter } from "./noopMemoryAdapter";
 export { NoopSignalMemoryAdapter, noopSignalMemoryAdapter } from "./noopSignalMemoryAdapter";

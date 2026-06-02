@@ -6,7 +6,12 @@ import type { ProjectSummary } from "../lib/projectRegistry";
 import { RpcInfrastructureContext, type RpcInfrastructureContextValue } from "../rpcInfrastructure";
 import type { Submission } from "../types";
 import type { FormWithCount, SignalRecord, StreamId } from "../features/admin/hooks/useSignalInboxData";
-import { clearInMemorySignalMemoriesForTests, createSignalMemoryAdapter, type SignalPatternMemory } from "../memory";
+import {
+  clearInMemorySignalMemoriesForTests,
+  createSignalMemoryAdapter,
+  setSignalMemoryMemWalClientFactoryForTests,
+  type SignalPatternMemory,
+} from "../memory";
 import { AdminDashboardPage } from "./AdminDashboardPage";
 
 const { defaultCapabilityProfile, mockCapabilityProfile, mockWalletState, mockProjectState, signalIndex, mockInboxState } = vi.hoisted(() => {
@@ -510,6 +515,7 @@ describe("AdminDashboardPage", () => {
   afterEach(() => {
     cleanup();
     clearInMemorySignalMemoriesForTests();
+    setSignalMemoryMemWalClientFactoryForTests(null);
     vi.useRealTimers();
     vi.unstubAllEnvs();
     vi.restoreAllMocks();
@@ -1259,7 +1265,7 @@ describe("AdminDashboardPage", () => {
     expect(explorer.textContent).not.toContain("raw-action-signed-bytes");
   });
 
-  it("keeps MemWal provider as a placeholder and does not add saved memories", async () => {
+  it("does not save MemWal memories when MemWal is not configured", async () => {
     vi.stubEnv("VITE_SIGNAL_MEMORY_PROVIDER", "memwal");
     const first = createSystemRecord({ id: "system-error-1", fingerprint: "fp-admin", routeId: "admin" });
     allowAdminAccess();
@@ -1285,8 +1291,58 @@ describe("AdminDashboardPage", () => {
     const modal = await screen.findByRole("dialog", { name: "Review pattern memory draft" });
     fireEvent.click(within(modal).getByRole("button", { name: "Save pattern memory" }));
 
-    expect(await within(modal).findByText("Pattern memory validated. MemWal persistence is not implemented yet.")).toBeInTheDocument();
+    expect(await within(modal).findByText("MemWal is not configured.")).toBeInTheDocument();
     expect(within(memoriesPanel).getByText("No pattern memories saved in this session.")).toBeInTheDocument();
+  });
+
+  it("shows MemWal saved copy when configured MemWal persistence accepts the memory", async () => {
+    vi.stubEnv("VITE_SIGNAL_MEMORY_PROVIDER", "memwal");
+    vi.stubEnv("VITE_MEMWAL_ENABLED", "true");
+    vi.stubEnv("VITE_MEMWAL_SERVER_URL", "https://relayer.staging.memwal.ai");
+    vi.stubEnv("VITE_MEMWAL_ACCOUNT_ID", "0xmemwalaccount");
+    vi.stubEnv("VITE_MEMWAL_DELEGATE_KEY", `0x${"a".repeat(64)}`);
+    const storedTexts: string[] = [];
+    setSignalMemoryMemWalClientFactoryForTests(async () => ({
+      remember: vi.fn(async (text: string) => {
+        storedTexts.push(text);
+      }),
+      recall: vi.fn(async ({ query }: { query: string }) => ({
+        results: storedTexts
+          .filter((text) => text.toLowerCase().includes(query.toLowerCase()) || query.includes("deepsignal signal pattern memory"))
+          .map((text) => ({ text })),
+      })),
+    }));
+    const first = createSystemRecord({ id: "system-error-1", fingerprint: "fp-admin", routeId: "admin" });
+    allowAdminAccess();
+    signalIndex.counts.system = 1;
+    signalIndex.signalById = {
+      [first.submission.id]: first.record,
+    };
+    mockInboxState.current = {
+      forms: [first.form],
+      selectedStreamId: "system",
+      allSignals: [first.record],
+      visibleSignals: [first.record],
+      selectedRecord: first.record,
+      signalIndex,
+    };
+
+    renderAdminRoute();
+
+    const summaryPanel = await screen.findByRole("region", { name: "System Diagnostics Summary" });
+    await waitFor(() => expect(within(summaryPanel).getByText("fp-admin")).toBeInTheDocument());
+    const memoriesPanel = screen.getByRole("region", { name: "Saved Pattern Memories" });
+    fireEvent.click(within(summaryPanel).getByRole("button", { name: "Save pattern memory" }));
+    const modal = await screen.findByRole("dialog", { name: "Review pattern memory draft" });
+    fireEvent.click(within(modal).getByRole("button", { name: "Save pattern memory" }));
+
+    expect(await within(modal).findByText("Pattern memory saved to MemWal.")).toBeInTheDocument();
+    await waitFor(() => expect(within(memoriesPanel).queryByText("No pattern memories saved in this session.")).not.toBeInTheDocument());
+    expect(storedTexts.join("\n")).toContain("deepsignal.signal_pattern_memory");
+    expect(storedTexts.join("\n")).not.toContain("raw-answer-secret");
+    expect(storedTexts.join("\n")).not.toContain("encrypted-secret");
+    expect(storedTexts.join("\n")).not.toContain("attachment-secret");
+    expect(storedTexts.join("\n")).not.toContain("errorStack");
   });
 
   it("shows related pattern memories matched by fingerprint in System Signal detail", async () => {

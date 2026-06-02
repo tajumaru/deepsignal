@@ -5217,9 +5217,11 @@ export function AdminDashboardPage() {
       const result = await adapter.saveMemory(patternMemoryNamespace, memory);
       const message = result.skipped && result.reason === "noop"
         ? "Pattern memory validated. Persistence is disabled."
-        : result.skipped && result.reason === "memwal_not_implemented"
-          ? "Pattern memory validated. MemWal persistence is not implemented yet."
-          : "Pattern memory saved for this session.";
+        : result.skipped && result.reason === "memwal_not_configured"
+          ? "MemWal is not configured."
+          : adapter.kind === "memwal"
+            ? "Pattern memory saved to MemWal."
+            : "Pattern memory saved for this session.";
       setSavedPatternMemories(await adapter.listMemories(patternMemoryNamespace));
       setPatternMemorySaveMessage(message);
       setToast({ tone: "success", message });
@@ -5246,11 +5248,13 @@ export function AdminDashboardPage() {
       const result = await adapter.updateMemory(patternMemoryNamespace, memoryId, patch);
       const message = result.skipped && result.reason === "noop"
         ? "Pattern memory validated. Persistence is disabled."
-        : result.skipped && result.reason === "memwal_not_implemented"
-          ? "Pattern memory validated. MemWal persistence is not implemented yet."
+        : result.skipped && result.reason === "memwal_not_configured"
+          ? "MemWal is not configured."
           : result.skipped
             ? "Pattern memory update skipped."
-            : "Pattern memory updated for this session.";
+            : adapter.kind === "memwal"
+              ? "Pattern memory saved to MemWal."
+              : "Pattern memory updated for this session.";
       setSavedPatternMemories(await adapter.listMemories(patternMemoryNamespace));
       setPatternMemoryEditMessage(message);
       setToast({ tone: "success", message });

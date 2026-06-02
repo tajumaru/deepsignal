@@ -5,6 +5,7 @@ import {
   createSignalMemoryAdapter,
   clearInMemorySignalMemoriesForTests,
   getSignalMemoryProvider,
+  setSignalMemoryMemWalClientFactoryForTests,
   UnsafeSignalMemoryError,
 } from "./index";
 
@@ -31,6 +32,7 @@ function safeMemory() {
 describe("Signal Pattern Memory adapter factory", () => {
   beforeEach(() => {
     clearInMemorySignalMemoriesForTests();
+    setSignalMemoryMemWalClientFactoryForTests(null);
   });
 
   it("uses the noop provider by default", () => {
@@ -53,8 +55,58 @@ describe("Signal Pattern Memory adapter factory", () => {
 
     expect(createSignalMemoryAdapter({
       VITE_SIGNAL_MEMORY_PROVIDER: "memwal",
-    } as ImportMetaEnv).kind).toBe("memwal-placeholder");
+    } as ImportMetaEnv).kind).toBe("memwal");
   });
+
+  it("does not write with the MemWal provider when config is invalid", async () => {
+    const remember = vi.fn();
+    setSignalMemoryMemWalClientFactoryForTests(async () => ({
+      remember,
+      recall: vi.fn(),
+    }));
+    const adapter = createSignalMemoryAdapter({
+      VITE_SIGNAL_MEMORY_PROVIDER: "memwal",
+      VITE_MEMWAL_ENABLED: "true",
+      VITE_MEMWAL_SERVER_URL: "https://relayer.staging.memwal.ai",
+    } as ImportMetaEnv);
+    const memory = safeMemory();
+
+    await expect(adapter.saveMemory("deepsignal:project:1:signal-pattern-memory:v1", memory))
+      .resolves
+      .toEqual({
+        ok: false,
+        skipped: true,
+        reason: "memwal_not_configured",
+        memoryId: memory.memoryId,
+      });
+    expect(remember).not.toHaveBeenCalled();
+    await expect(adapter.listMemories("deepsignal:project:1:signal-pattern-memory:v1")).resolves.toEqual([]);
+  });
+
+  it("rejects forbidden raw fields before writing to MemWal", async () => {
+    const remember = vi.fn();
+    setSignalMemoryMemWalClientFactoryForTests(async () => ({
+      remember,
+      recall: vi.fn(),
+    }));
+    const adapter = createSignalMemoryAdapter({
+      VITE_SIGNAL_MEMORY_PROVIDER: "memwal",
+      VITE_MEMWAL_ENABLED: "true",
+      VITE_MEMWAL_SERVER_URL: "https://relayer.staging.memwal.ai",
+      VITE_MEMWAL_ACCOUNT_ID: "0xmemwalaccount",
+      VITE_MEMWAL_DELEGATE_KEY: `0x${"a".repeat(64)}`,
+    } as ImportMetaEnv);
+    const unsafeMemory = {
+      ...safeMemory(),
+      answers: { raw: "raw signal data" },
+    } as never;
+
+    await expect(adapter.saveMemory("deepsignal:project:1:signal-pattern-memory:v1", unsafeMemory))
+      .rejects
+      .toBeInstanceOf(UnsafeSignalMemoryError);
+    expect(remember).not.toHaveBeenCalled();
+  });
+
 
   it.each([
     "answers",
@@ -209,5 +261,57 @@ describe("Signal Pattern Memory adapter factory", () => {
       recommendedAction: "Unsafe update",
       metadata: { raw: "secret" },
     } as never)).rejects.toBeInstanceOf(UnsafeSignalMemoryError);
+  });
+
+  it("saves, lists, gets, and searches through a mocked MemWal client", async () => {
+    const storedTexts: string[] = [];
+    const remember = vi.fn(async (text: string) => {
+      storedTexts.push(text);
+    });
+    const recall = vi.fn(async ({ query }: { query: string }) => ({
+      results: storedTexts
+        .filter((text) => text.toLowerCase().includes(query.toLowerCase()) || query.includes("deepsignal signal pattern memory"))
+        .map((text) => ({ text })),
+      total: storedTexts.length,
+    }));
+    setSignalMemoryMemWalClientFactoryForTests(async () => ({
+      remember,
+      recall,
+    }));
+    const adapter = createSignalMemoryAdapter({
+      VITE_SIGNAL_MEMORY_PROVIDER: "memwal",
+      VITE_MEMWAL_ENABLED: "true",
+      VITE_MEMWAL_SERVER_URL: "https://relayer.staging.memwal.ai",
+      VITE_MEMWAL_ACCOUNT_ID: "0xmemwalaccount",
+      VITE_MEMWAL_DELEGATE_KEY: `0x${"a".repeat(64)}`,
+    } as ImportMetaEnv);
+    const namespace = "deepsignal:project:1:signal-pattern-memory:v1";
+    const memory = {
+      ...safeMemory(),
+      title: "MemWal Safari memory",
+      tags: ["safari", "runtime"],
+      recommendedAction: "Review the safe MemWal memory.",
+    };
+
+    await expect(adapter.saveMemory(namespace, memory)).resolves.toEqual({
+      ok: true,
+      skipped: false,
+      memoryId: memory.memoryId,
+    });
+    expect(remember).toHaveBeenCalledTimes(1);
+    expect(remember).toHaveBeenCalledWith(expect.stringContaining("MemWal Safari memory"), namespace);
+    expect(storedTexts[0]).not.toContain("answers");
+    expect(storedTexts[0]).not.toContain("encryptedPayload");
+    expect(storedTexts[0]).not.toContain("attachments");
+    expect(storedTexts[0]).not.toContain("metadata");
+
+    await expect(adapter.listMemories(namespace)).resolves.toEqual([memory]);
+    await expect(adapter.getMemory(namespace, memory.memoryId)).resolves.toEqual(memory);
+    await expect(adapter.searchMemories(namespace, "safari", { tags: ["runtime"] })).resolves.toEqual({
+      memories: [memory],
+      total: 1,
+      skipped: false,
+    });
+    expect(recall).toHaveBeenCalledWith(expect.objectContaining({ namespace }));
   });
 });

@@ -3,6 +3,7 @@ export type MemWalConfigValidation = {
   configured: boolean;
   serverUrl: string | null;
   accountId: string | null;
+  delegateKey: string | null;
   namespacePrefix: string;
   missing: string[];
   errors: string[];
@@ -43,6 +44,7 @@ export function validateMemWalConfig(env: MemWalConfigEnv = import.meta.env): Me
       configured: false,
       serverUrl,
       accountId,
+      delegateKey,
       namespacePrefix,
       missing: [],
       errors: [],
@@ -79,6 +81,7 @@ export function validateMemWalConfig(env: MemWalConfigEnv = import.meta.env): Me
     configured: missing.length === 0 && errors.length === 0,
     serverUrl,
     accountId,
+    delegateKey,
     namespacePrefix,
     missing,
     errors,
