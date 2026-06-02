@@ -24,6 +24,8 @@ Supported values:
 
 Existing MemWal runtime settings remain placeholders for a later phase. Setting `VITE_MEMWAL_ENABLED=true` alone must not enable Signal Pattern Memory persistence.
 
+The `memory` provider exists only for testing the admin review UX. It stores reviewed `SignalPatternMemory` records in module memory for the current browser runtime and does not write to localStorage, IndexedDB, Walrus, MemWal, or any remote service. It must not be treated as canonical data.
+
 ## Adapter Contract
 
 The Signal Pattern Memory adapter boundary is:

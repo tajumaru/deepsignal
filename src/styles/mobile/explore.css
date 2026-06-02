@@ -8,10 +8,20 @@
   .explore-hero,
   .explore-hero-compact {
     min-height: 0;
+    border-color: transparent;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
   }
 
   .explore-hero-compact {
-    padding: 0.56rem 0.8rem 0.6rem;
+    padding: 0.56rem 0.62rem 0.32rem;
+  }
+
+  .explore-grid-overlay,
+  .explore-scanlines,
+  .explore-grid-glow {
+    display: none;
   }
 
   .explore-hero-bar {
@@ -24,13 +34,15 @@
   }
 
   .explore-hero-copy .eyebrow {
-    font-size: 0.54rem;
+    color: #9fe8f7;
+    font-size: 0.58rem;
+    line-height: 1;
     letter-spacing: 0.13em;
   }
 
   .explore-hero-copy h1 {
-    font-size: clamp(1.42rem, 6.5vw, 1.74rem);
-    line-height: 1.02;
+    font-size: 0.98rem;
+    line-height: 1.08;
   }
 
   .explore-hero-copy .lede,

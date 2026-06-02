@@ -814,7 +814,7 @@ describe("AdminDashboardPage", () => {
     const summaryPanel = await screen.findByRole("region", { name: "System Diagnostics Summary" });
     await waitFor(() => expect(within(summaryPanel).getByText("fp-admin")).toBeInTheDocument());
     const memoriesPanel = screen.getByRole("region", { name: "Saved Pattern Memories" });
-    expect(within(memoriesPanel).getByText("No pattern memories saved for this session.")).toBeInTheDocument();
+    expect(within(memoriesPanel).getByText("No pattern memories saved in this session.")).toBeInTheDocument();
 
     fireEvent.click(within(summaryPanel).getAllByRole("button", { name: "Save pattern memory" })[0]);
     const modal = await screen.findByRole("dialog", { name: "Review pattern memory draft" });
@@ -831,6 +831,8 @@ describe("AdminDashboardPage", () => {
     expect(within(memoriesPanel).getByText("system_diagnostic_pattern")).toBeInTheDocument();
     expect(within(memoriesPanel).getByText("watching")).toBeInTheDocument();
     expect(within(memoriesPanel).getByText("medium")).toBeInTheDocument();
+    expect(within(memoriesPanel).getByText("system")).toBeInTheDocument();
+    expect(within(memoriesPanel).getByText("diagnostics")).toBeInTheDocument();
     expect(memoriesPanel.textContent).not.toContain("raw-answer-secret");
     expect(memoriesPanel.textContent).not.toContain("attachment-secret");
     expect(memoriesPanel.textContent).not.toContain("encrypted-secret");
@@ -838,6 +840,36 @@ describe("AdminDashboardPage", () => {
     expect(memoriesPanel.textContent).not.toContain("metadata-secret");
     expect(memoriesPanel.textContent).not.toContain("errorStack");
     expect(memoriesPanel.textContent).not.toContain("token=abc");
+  });
+
+  it("keeps MemWal provider as a placeholder and does not add saved memories", async () => {
+    vi.stubEnv("VITE_SIGNAL_MEMORY_PROVIDER", "memwal");
+    const first = createSystemRecord({ id: "system-error-1", fingerprint: "fp-admin", routeId: "admin" });
+    allowAdminAccess();
+    signalIndex.counts.system = 1;
+    signalIndex.signalById = {
+      [first.submission.id]: first.record,
+    };
+    mockInboxState.current = {
+      forms: [first.form],
+      selectedStreamId: "system",
+      allSignals: [first.record],
+      visibleSignals: [first.record],
+      selectedRecord: first.record,
+      signalIndex,
+    };
+
+    renderAdminRoute();
+
+    const summaryPanel = await screen.findByRole("region", { name: "System Diagnostics Summary" });
+    await waitFor(() => expect(within(summaryPanel).getByText("fp-admin")).toBeInTheDocument());
+    const memoriesPanel = screen.getByRole("region", { name: "Saved Pattern Memories" });
+    fireEvent.click(within(summaryPanel).getByRole("button", { name: "Save pattern memory" }));
+    const modal = await screen.findByRole("dialog", { name: "Review pattern memory draft" });
+    fireEvent.click(within(modal).getByRole("button", { name: "Save pattern memory" }));
+
+    expect(await within(modal).findByText("Pattern memory validated. MemWal persistence is not implemented yet.")).toBeInTheDocument();
+    expect(within(memoriesPanel).getByText("No pattern memories saved in this session.")).toBeInTheDocument();
   });
 
   it("regroups the System Diagnostics Summary by routeId", async () => {

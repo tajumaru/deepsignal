@@ -12,6 +12,7 @@ vite.config.js.timestamp-*.mjs
 /move/deepsignal_access/build
 /build-move.ps1
 /.temp-test
+/.tmp-vitest
 /.tmp-test
 /move/deepsignal_access/Published.toml
 /.codex
@@ -24,3 +25,4 @@ vite.config.js.timestamp-*.mjs
 /.move-cache
 /ci-run-verify
 /scripts/google-drive-submission-index-relay.mjs
+.tmp-*

@@ -139,4 +139,24 @@ describe("Signal Pattern Memory adapter factory", () => {
         skipped: false,
       });
   });
+
+  it("keeps runtime memories isolated by namespace", async () => {
+    const adapter = createSignalMemoryAdapter({
+      VITE_SIGNAL_MEMORY_PROVIDER: "memory",
+    } as ImportMetaEnv);
+    const firstNamespace = "deepsignal:project:1:signal-pattern-memory:v1";
+    const secondNamespace = "deepsignal:project:2:signal-pattern-memory:v1";
+    const memory = safeMemory();
+
+    await adapter.saveMemory(firstNamespace, memory);
+
+    await expect(adapter.listMemories(firstNamespace)).resolves.toEqual([memory]);
+    await expect(adapter.listMemories(secondNamespace)).resolves.toEqual([]);
+    await expect(adapter.getMemory(secondNamespace, memory.memoryId)).resolves.toBeNull();
+    await expect(adapter.searchMemories(secondNamespace, memory.title)).resolves.toMatchObject({
+      memories: [],
+      total: 0,
+      skipped: false,
+    });
+  });
 });

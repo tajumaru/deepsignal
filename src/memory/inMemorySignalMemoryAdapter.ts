@@ -29,16 +29,10 @@ function memoryMatchesQuery(memory: SignalPatternMemory, query: string) {
   }
   const haystack = [
     memory.title,
-    memory.type,
     memory.summary,
-    memory.status,
-    memory.confidence,
     ...memory.tags,
-    ...memory.fingerprints,
-    ...memory.affectedRoutes,
-    ...memory.affectedBuilds,
-    ...memory.platforms,
-    ...memory.evidenceSummary,
+    memory.type,
+    memory.status,
   ].join(" ").toLowerCase();
   return haystack.includes(normalizedQuery);
 }

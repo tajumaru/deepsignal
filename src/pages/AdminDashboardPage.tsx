@@ -8027,12 +8027,22 @@ export function AdminDashboardPage() {
                             <span>{memory.confidence}</span>
                             <span>Updated {formatDate(memory.updatedAt)}</span>
                           </div>
+                          <div className="system-diagnostics-summary-examples">
+                            <span>Tags</span>
+                            {memory.tags.length > 0 ? (
+                              memory.tags.slice(0, 6).map((tag) => (
+                                <code key={tag}>{tag}</code>
+                              ))
+                            ) : (
+                              <span>None</span>
+                            )}
+                          </div>
                         </article>
                       ))}
                     </div>
                   ) : (
                     <p className="muted system-diagnostics-summary-empty">
-                      No pattern memories saved for this session.
+                      No pattern memories saved in this session.
                     </p>
                   )}
                 </section>

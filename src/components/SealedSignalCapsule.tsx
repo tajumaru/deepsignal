@@ -41,7 +41,7 @@ export function SealedSignalCapsule({
 }: SealedSignalCapsuleProps) {
   const statusId = useId();
   const isRevealed = state === "revealed";
-  const isInteractive = !isRevealed && !disabled && state !== "verifying" && state !== "granted";
+  const isInteractive = !isRevealed && !disabled && state !== "verifying";
   const resolvedStatus =
     errorMessage ||
     statusMessage ||
