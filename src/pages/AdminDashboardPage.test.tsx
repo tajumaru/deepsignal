@@ -882,6 +882,124 @@ describe("AdminDashboardPage", () => {
     expect(memoriesPanel.textContent).not.toContain("token=abc");
   });
 
+  it("shows a filterable Pattern Memories explorer with safe detail and prompt copy", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText } });
+    const { form, record } = createResponderRecord({
+      answers: { report: "raw explorer answer secret" },
+      attachments: [
+        {
+          fieldId: "upload",
+          type: "document",
+          blobId: "raw-explorer-attachment",
+          name: "raw-explorer-attachment.pdf",
+          size: 12,
+        },
+      ],
+      metadata: { token: "raw-explorer-metadata" },
+      encryptedPayload: "raw-explorer-payload",
+      respondentMeta: {
+        chain: "sui",
+        isAnonymous: true,
+        sessionId: "raw-explorer-session",
+        submittedAt: "2026-01-01T00:00:00.000Z",
+      },
+      responderSignature: "raw-explorer-signature",
+      responderSignedBytes: "raw-explorer-signed-bytes",
+    });
+    await seedPatternMemory(createPatternMemory({
+      memoryId: "memory-wallet",
+      type: "ux_friction_pattern",
+      title: "Wallet connection memory",
+      summary: "Safe wallet connection summary.",
+      signalKinds: ["user_signal"],
+      sourceSignalIds: ["response-1"],
+      tags: ["wallet", "mobile-ux"],
+      frequency: { count: 4, window: "all_time", trend: "stable" },
+      evidenceSummary: ["Safe redacted wallet evidence."],
+      recommendedAction: "Review wallet copy.",
+      recommendedCodexPrompt: "Investigate wallet connection memory.",
+      failedFixes: [{ summary: "Changing button color did not reduce confusion." }],
+      confirmedFixes: [{ summary: "Clearer wallet copy reduced support reports." }],
+      affectedRoutes: ["admin"],
+      affectedBuilds: ["0.13.0"],
+      platforms: ["mobile"],
+    }));
+    await seedPatternMemory(createPatternMemory({
+      memoryId: "memory-template",
+      type: "product_request_pattern",
+      title: "Template request memory",
+      summary: "Safe template request summary.",
+      signalKinds: ["user_signal"],
+      sourceSignalIds: ["response-2"],
+      tags: ["templates"],
+      status: "active",
+      confidence: "high",
+      frequency: { count: 2, window: "all_time", trend: "new" },
+      evidenceSummary: ["Safe redacted template evidence."],
+      recommendedCodexPrompt: "Investigate template request memory.",
+    }));
+    allowAdminAccess();
+    signalIndex.counts.system = 0;
+    signalIndex.signalById = { [record.submission.id]: record };
+    mockInboxState.current = {
+      forms: [form],
+      selectedStreamId: "all",
+      allSignals: [record],
+      visibleSignals: [record],
+      selectedRecord: record,
+      signalIndex,
+    };
+
+    renderAdminRoute();
+
+    const explorer = await screen.findByRole("region", { name: "Pattern Memories" });
+    await waitFor(() => expect(within(explorer).getByRole("button", { name: "Wallet connection memory" })).toBeInTheDocument());
+    expect(within(explorer).getByRole("button", { name: "Template request memory" })).toBeInTheDocument();
+    expect(within(explorer).getAllByText("4 events").length).toBeGreaterThan(0);
+
+    fireEvent.change(within(explorer).getByLabelText("Search pattern memories"), {
+      target: { value: "template" },
+    });
+    expect(within(explorer).queryByRole("button", { name: "Wallet connection memory" })).not.toBeInTheDocument();
+    expect(within(explorer).getByRole("button", { name: "Template request memory" })).toBeInTheDocument();
+
+    fireEvent.change(within(explorer).getByLabelText("Search pattern memories"), {
+      target: { value: "" },
+    });
+    fireEvent.change(within(explorer).getByLabelText("Filter pattern memories by type"), {
+      target: { value: "ux_friction_pattern" },
+    });
+    fireEvent.change(within(explorer).getByLabelText("Filter pattern memories by status"), {
+      target: { value: "watching" },
+    });
+    fireEvent.change(within(explorer).getByLabelText("Filter pattern memories by tag"), {
+      target: { value: "wallet" },
+    });
+    expect(within(explorer).getByRole("button", { name: "Wallet connection memory" })).toBeInTheDocument();
+    expect(within(explorer).queryByRole("button", { name: "Template request memory" })).not.toBeInTheDocument();
+
+    fireEvent.click(within(explorer).getByRole("button", { name: "Wallet connection memory" }));
+    expect(within(explorer).getByText("Safe wallet connection summary.")).toBeInTheDocument();
+    expect(within(explorer).getByText("Safe redacted wallet evidence.")).toBeInTheDocument();
+    expect(within(explorer).getByText("Review wallet copy.")).toBeInTheDocument();
+    expect(within(explorer).getByText("Changing button color did not reduce confusion.")).toBeInTheDocument();
+    expect(within(explorer).getByText("Clearer wallet copy reduced support reports.")).toBeInTheDocument();
+    expect(within(explorer).getByText("response-1")).toBeInTheDocument();
+    expect(within(explorer).getByText("0.13.0")).toBeInTheDocument();
+
+    fireEvent.click(within(explorer).getByRole("button", { name: "Copy Codex Prompt" }));
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith("Investigate wallet connection memory."));
+
+    expect(explorer.textContent).not.toContain("raw explorer answer secret");
+    expect(explorer.textContent).not.toContain("raw-explorer-attachment");
+    expect(explorer.textContent).not.toContain("raw-explorer-metadata");
+    expect(explorer.textContent).not.toContain("raw-explorer-payload");
+    expect(explorer.textContent).not.toContain("raw-explorer-session");
+    expect(explorer.textContent).not.toContain("raw-explorer-signature");
+    expect(explorer.textContent).not.toContain("raw-explorer-signed-bytes");
+  });
+
   it("keeps MemWal provider as a placeholder and does not add saved memories", async () => {
     vi.stubEnv("VITE_SIGNAL_MEMORY_PROVIDER", "memwal");
     const first = createSystemRecord({ id: "system-error-1", fingerprint: "fp-admin", routeId: "admin" });

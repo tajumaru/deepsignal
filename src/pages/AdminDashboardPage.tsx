@@ -70,6 +70,7 @@ import {
   type SignalPatternMemoryConfidence,
   type SignalPatternMemoryDraft,
   type SignalPatternMemoryStatus,
+  type SignalPatternMemoryType,
 } from "../memory";
 import { WorkspaceActivityLog } from "../features/admin/components/WorkspaceActivityLog";
 import { useAdminToast } from "../features/admin/hooks/useAdminToast";
@@ -4095,6 +4096,14 @@ const patternMemoryStatusOptions: SignalPatternMemoryStatus[] = [
   "revoked",
 ];
 
+const patternMemoryTypeOptions: SignalPatternMemoryType[] = [
+  "system_diagnostic_pattern",
+  "user_feedback_pattern",
+  "product_request_pattern",
+  "ux_friction_pattern",
+  "operational_fix_pattern",
+];
+
 const patternMemoryConfidenceOptions: SignalPatternMemoryConfidence[] = ["low", "medium", "high"];
 
 function createPatternMemoryId() {
@@ -4146,6 +4155,29 @@ function getRelatedPatternMemoryReasonLabel(reason: RelatedPatternMemoryReason) 
     default:
       return "Related";
   }
+}
+
+function getPatternMemorySearchText(memory: SignalPatternMemory) {
+  return [
+    memory.memoryId,
+    memory.type,
+    memory.title,
+    memory.summary,
+    memory.status,
+    memory.confidence,
+    memory.tags.join(" "),
+    memory.evidenceSummary.join(" "),
+    memory.recommendedAction,
+    memory.recommendedCodexPrompt,
+    memory.sourceSignalIds.join(" "),
+    memory.affectedRoutes.join(" "),
+    memory.affectedBuilds.join(" "),
+    memory.platforms.join(" "),
+  ].filter(Boolean).join(" ").toLowerCase();
+}
+
+function formatPatternMemoryList(values: string[]) {
+  return values.length > 0 ? values.join(", ") : "None";
 }
 
 function PatternMemoryDraftReviewModal({
@@ -4477,6 +4509,11 @@ export function AdminDashboardPage() {
   const [patternMemoryDraft, setPatternMemoryDraft] = useState<SignalPatternMemoryDraft | null>(null);
   const [patternMemorySaveMessage, setPatternMemorySaveMessage] = useState("");
   const [savedPatternMemories, setSavedPatternMemories] = useState<SignalPatternMemory[]>([]);
+  const [patternMemorySearch, setPatternMemorySearch] = useState("");
+  const [patternMemoryTypeFilter, setPatternMemoryTypeFilter] = useState<SignalPatternMemoryType | "all">("all");
+  const [patternMemoryStatusFilter, setPatternMemoryStatusFilter] = useState<SignalPatternMemoryStatus | "all">("all");
+  const [patternMemoryTagFilter, setPatternMemoryTagFilter] = useState("all");
+  const [selectedPatternMemoryId, setSelectedPatternMemoryId] = useState<string | null>(null);
   const versionCounts = useMemo(
     () => getSubmissionVersionCounts(allSignals.map((record) => record.submission)),
     [allSignals],
@@ -4555,6 +4592,41 @@ export function AdminDashboardPage() {
     },
     [savedPatternMemories, selectedRecord],
   );
+  const patternMemoryTagOptions = useMemo(
+    () => [...new Set(savedPatternMemories.flatMap((memory) => memory.tags))].sort((left, right) => left.localeCompare(right)),
+    [savedPatternMemories],
+  );
+  const filteredPatternMemories = useMemo(
+    () => {
+      const query = patternMemorySearch.trim().toLowerCase();
+      return savedPatternMemories.filter((memory) => {
+        if (patternMemoryTypeFilter !== "all" && memory.type !== patternMemoryTypeFilter) {
+          return false;
+        }
+        if (patternMemoryStatusFilter !== "all" && memory.status !== patternMemoryStatusFilter) {
+          return false;
+        }
+        if (patternMemoryTagFilter !== "all" && !memory.tags.includes(patternMemoryTagFilter)) {
+          return false;
+        }
+        if (query && !getPatternMemorySearchText(memory).includes(query)) {
+          return false;
+        }
+        return true;
+      });
+    },
+    [
+      patternMemorySearch,
+      patternMemoryStatusFilter,
+      patternMemoryTagFilter,
+      patternMemoryTypeFilter,
+      savedPatternMemories,
+    ],
+  );
+  const selectedPatternMemory =
+    filteredPatternMemories.find((memory) => memory.memoryId === selectedPatternMemoryId) ??
+    filteredPatternMemories[0] ??
+    null;
   const selectedRecordIsDemo = isDemoSignalRecord(selectedRecord);
   const selectedSignalTitle = selectedRecord
     ? selectedRecordIsSystem
@@ -8084,6 +8156,214 @@ export function AdminDashboardPage() {
                         </article>
                       ))}
                     </div>
+                  ) : (
+                    <p className="muted system-diagnostics-summary-empty">
+                      No pattern memories saved in this session.
+                    </p>
+                  )}
+                </section>
+              ) : null}
+              {hasAdminAccess ? (
+                <section className="system-diagnostics-summary-panel pattern-memory-explorer-panel" aria-labelledby="pattern-memory-explorer-title">
+                  <div className="system-diagnostics-summary-header">
+                    <div>
+                      <p className="eyebrow">Reviewed pattern recall</p>
+                      <h3 id="pattern-memory-explorer-title">Pattern Memories</h3>
+                    </div>
+                    <span className="signal-chip signal-chip-soft">{savedPatternMemories.length} session</span>
+                  </div>
+                  {savedPatternMemories.length > 0 ? (
+                    <>
+                      <div className="review-toolbar pattern-memory-explorer-filters" aria-label="Pattern memory filters">
+                        <label className="review-sort-control">
+                          <span>Search</span>
+                          <input
+                            value={patternMemorySearch}
+                            onChange={(event) => setPatternMemorySearch(event.target.value)}
+                            placeholder="Search pattern memories"
+                            aria-label="Search pattern memories"
+                          />
+                        </label>
+                        <label className="review-sort-control">
+                          <span>Type</span>
+                          <select
+                            value={patternMemoryTypeFilter}
+                            onChange={(event) => setPatternMemoryTypeFilter(event.target.value as SignalPatternMemoryType | "all")}
+                            aria-label="Filter pattern memories by type"
+                          >
+                            <option value="all">All types</option>
+                            {patternMemoryTypeOptions.map((type) => (
+                              <option key={type} value={type}>{type}</option>
+                            ))}
+                          </select>
+                        </label>
+                        <label className="review-sort-control">
+                          <span>Status</span>
+                          <select
+                            value={patternMemoryStatusFilter}
+                            onChange={(event) => setPatternMemoryStatusFilter(event.target.value as SignalPatternMemoryStatus | "all")}
+                            aria-label="Filter pattern memories by status"
+                          >
+                            <option value="all">All statuses</option>
+                            {patternMemoryStatusOptions.map((status) => (
+                              <option key={status} value={status}>{status}</option>
+                            ))}
+                          </select>
+                        </label>
+                        <label className="review-sort-control">
+                          <span>Tag</span>
+                          <select
+                            value={patternMemoryTagFilter}
+                            onChange={(event) => setPatternMemoryTagFilter(event.target.value)}
+                            aria-label="Filter pattern memories by tag"
+                          >
+                            <option value="all">All tags</option>
+                            {patternMemoryTagOptions.map((tag) => (
+                              <option key={tag} value={tag}>{tag}</option>
+                            ))}
+                          </select>
+                        </label>
+                      </div>
+                      <div className="system-diagnostics-summary-content pattern-memory-explorer-content">
+                        <div className="system-diagnostics-summary-groups" role="list" aria-label="Pattern Memories">
+                          {filteredPatternMemories.length > 0 ? (
+                            filteredPatternMemories.map((memory) => (
+                              <article key={memory.memoryId} className="system-diagnostics-summary-group" role="listitem">
+                                <button
+                                  type="button"
+                                  className="ghost-button pattern-memory-explorer-memory-button"
+                                  onClick={() => setSelectedPatternMemoryId(memory.memoryId)}
+                                >
+                                  <span>{memory.title}</span>
+                                </button>
+                                <div className="system-diagnostics-summary-group-main">
+                                  <strong title={memory.title}>{memory.title}</strong>
+                                  <span>{memory.type}</span>
+                                </div>
+                                <div className="system-diagnostics-summary-group-meta">
+                                  <span>{memory.status}</span>
+                                  <span>{memory.confidence}</span>
+                                  <span>{memory.frequency.count} events</span>
+                                  <span>Updated {formatDate(memory.updatedAt)}</span>
+                                </div>
+                                <div className="system-diagnostics-summary-examples">
+                                  <span>Tags</span>
+                                  {memory.tags.length > 0 ? (
+                                    memory.tags.slice(0, 6).map((tag) => (
+                                      <code key={tag}>{tag}</code>
+                                    ))
+                                  ) : (
+                                    <span>None</span>
+                                  )}
+                                </div>
+                              </article>
+                            ))
+                          ) : (
+                            <p className="muted system-diagnostics-summary-empty">No pattern memories match the current filters.</p>
+                          )}
+                        </div>
+                        <div className="system-diagnostics-summary-routes pattern-memory-detail-panel" aria-label="Pattern Memory Detail">
+                          {selectedPatternMemory ? (
+                            <>
+                              <span>Memory detail</span>
+                              <h4>{selectedPatternMemory.title}</h4>
+                              <p className="muted">{selectedPatternMemory.summary}</p>
+                              <div className="metadata-list signal-proof-metadata-list">
+                                <div className="metadata-row">
+                                  <span>Type</span>
+                                  <strong>{selectedPatternMemory.type}</strong>
+                                </div>
+                                <div className="metadata-row">
+                                  <span>Status</span>
+                                  <strong>{selectedPatternMemory.status}</strong>
+                                </div>
+                                <div className="metadata-row">
+                                  <span>Confidence</span>
+                                  <strong>{selectedPatternMemory.confidence}</strong>
+                                </div>
+                                <div className="metadata-row">
+                                  <span>Frequency</span>
+                                  <strong>{selectedPatternMemory.frequency.count} events</strong>
+                                </div>
+                              </div>
+                              <div className="system-diagnostics-summary-examples">
+                                <span>Evidence</span>
+                                {selectedPatternMemory.evidenceSummary.length > 0 ? (
+                                  selectedPatternMemory.evidenceSummary.map((item) => (
+                                    <code key={item}>{item}</code>
+                                  ))
+                                ) : (
+                                  <span>None</span>
+                                )}
+                              </div>
+                              {selectedPatternMemory.recommendedAction ? (
+                                <div className="system-diagnostics-summary-examples">
+                                  <span>Recommended action</span>
+                                  <code>{selectedPatternMemory.recommendedAction}</code>
+                                </div>
+                              ) : null}
+                              {selectedPatternMemory.recommendedCodexPrompt ? (
+                                <div className="system-diagnostics-summary-examples related-pattern-memory-prompt">
+                                  <span>Suggested Codex Prompt</span>
+                                  <code>{selectedPatternMemory.recommendedCodexPrompt}</code>
+                                  <button
+                                    type="button"
+                                    className="ghost-button"
+                                    onClick={() => {
+                                      void navigator.clipboard.writeText(selectedPatternMemory.recommendedCodexPrompt ?? "")
+                                        .then(() => setToast({ tone: "success", message: "Suggested Codex prompt copied." }))
+                                        .catch(() => setToast({ tone: "error", message: "Copy failed." }));
+                                    }}
+                                  >
+                                    Copy Codex Prompt
+                                  </button>
+                                </div>
+                              ) : null}
+                              <div className="system-diagnostics-summary-examples">
+                                <span>Failed fixes</span>
+                                {selectedPatternMemory.failedFixes.length > 0 ? (
+                                  selectedPatternMemory.failedFixes.map((fix) => (
+                                    <code key={`${fix.summary}-${fix.attemptedAt ?? ""}`}>{fix.summary}</code>
+                                  ))
+                                ) : (
+                                  <span>None</span>
+                                )}
+                              </div>
+                              <div className="system-diagnostics-summary-examples">
+                                <span>Confirmed fixes</span>
+                                {selectedPatternMemory.confirmedFixes.length > 0 ? (
+                                  selectedPatternMemory.confirmedFixes.map((fix) => (
+                                    <code key={`${fix.summary}-${fix.confirmedAt ?? ""}`}>{fix.summary}</code>
+                                  ))
+                                ) : (
+                                  <span>None</span>
+                                )}
+                              </div>
+                              <div className="metadata-list signal-proof-metadata-list">
+                                <div className="metadata-row">
+                                  <span>Source signal IDs</span>
+                                  <strong>{formatPatternMemoryList(selectedPatternMemory.sourceSignalIds)}</strong>
+                                </div>
+                                <div className="metadata-row">
+                                  <span>Affected routes</span>
+                                  <strong>{formatPatternMemoryList(selectedPatternMemory.affectedRoutes)}</strong>
+                                </div>
+                                <div className="metadata-row">
+                                  <span>Affected builds</span>
+                                  <strong>{formatPatternMemoryList(selectedPatternMemory.affectedBuilds)}</strong>
+                                </div>
+                                <div className="metadata-row">
+                                  <span>Platforms</span>
+                                  <strong>{formatPatternMemoryList(selectedPatternMemory.platforms)}</strong>
+                                </div>
+                              </div>
+                            </>
+                          ) : (
+                            <p className="muted">Select a pattern memory to inspect details.</p>
+                          )}
+                        </div>
+                      </div>
+                    </>
                   ) : (
                     <p className="muted system-diagnostics-summary-empty">
                       No pattern memories saved in this session.
