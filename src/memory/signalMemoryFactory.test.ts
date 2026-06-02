@@ -1,8 +1,9 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import type { SignalPatternMemory, SignalPatternMemoryDraft } from "./types";
 import {
   createDraftFromDiagnosticsSummaryGroup,
   createSignalMemoryAdapter,
+  clearInMemorySignalMemoriesForTests,
   getSignalMemoryProvider,
   UnsafeSignalMemoryError,
 } from "./index";
@@ -28,6 +29,10 @@ function safeMemory() {
 }
 
 describe("Signal Pattern Memory adapter factory", () => {
+  beforeEach(() => {
+    clearInMemorySignalMemoriesForTests();
+  });
+
   it("uses the noop provider by default", () => {
     expect(getSignalMemoryProvider({} as ImportMetaEnv)).toBe("none");
     expect(createSignalMemoryAdapter({} as ImportMetaEnv).kind).toBe("noop");
@@ -41,6 +46,10 @@ describe("Signal Pattern Memory adapter factory", () => {
     expect(createSignalMemoryAdapter({
       VITE_SIGNAL_MEMORY_PROVIDER: "none",
     } as ImportMetaEnv).kind).toBe("noop");
+
+    expect(createSignalMemoryAdapter({
+      VITE_SIGNAL_MEMORY_PROVIDER: "memory",
+    } as ImportMetaEnv).kind).toBe("memory");
 
     expect(createSignalMemoryAdapter({
       VITE_SIGNAL_MEMORY_PROVIDER: "memwal",
@@ -92,6 +101,42 @@ describe("Signal Pattern Memory adapter factory", () => {
         total: 0,
         skipped: true,
         reason: "noop",
+      });
+  });
+
+  it("persists memories for the current runtime when the memory provider is enabled", async () => {
+    const adapter = createSignalMemoryAdapter({
+      VITE_SIGNAL_MEMORY_PROVIDER: "memory",
+    } as ImportMetaEnv);
+    const namespace = "deepsignal:project:1:signal-pattern-memory:v1";
+    const memory = {
+      ...safeMemory(),
+      title: "Runtime Safari memory",
+      tags: ["safari", "runtime"],
+    };
+
+    await expect(adapter.saveMemory(namespace, memory))
+      .resolves
+      .toEqual({
+        ok: true,
+        skipped: false,
+        memoryId: "memory-1",
+      });
+    await expect(adapter.listMemories(namespace)).resolves.toEqual([memory]);
+    await expect(adapter.getMemory(namespace, "memory-1")).resolves.toEqual(memory);
+    await expect(adapter.searchMemories(namespace, "safari", { tags: ["runtime"] }))
+      .resolves
+      .toEqual({
+        memories: [memory],
+        total: 1,
+        skipped: false,
+      });
+    await expect(adapter.searchMemories(namespace, "safari", { type: "user_feedback_pattern" }))
+      .resolves
+      .toMatchObject({
+        memories: [],
+        total: 0,
+        skipped: false,
       });
   });
 });

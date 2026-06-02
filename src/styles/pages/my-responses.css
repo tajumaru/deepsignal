@@ -1037,12 +1037,10 @@
   .my-responses-hero {
     gap: 0.6rem;
     padding: 0.56rem 0.62rem;
-    border-radius: 16px;
-    background:
-      linear-gradient(180deg, rgba(11, 33, 52, 0.92), rgba(5, 20, 34, 0.92));
-    box-shadow:
-      inset 0 1px 0 rgba(155, 236, 255, 0.05),
-      0 8px 22px rgba(0, 0, 0, 0.16);
+    border-color: transparent;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
   }
 
   .my-responses-hero::before,

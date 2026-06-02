@@ -6,6 +6,7 @@ import type { ProjectSummary } from "../lib/projectRegistry";
 import { RpcInfrastructureContext, type RpcInfrastructureContextValue } from "../rpcInfrastructure";
 import type { Submission } from "../types";
 import type { FormWithCount, SignalRecord, StreamId } from "../features/admin/hooks/useSignalInboxData";
+import { clearInMemorySignalMemoriesForTests } from "../memory";
 import { AdminDashboardPage } from "./AdminDashboardPage";
 
 const { defaultCapabilityProfile, mockCapabilityProfile, mockWalletState, mockProjectState, signalIndex, mockInboxState } = vi.hoisted(() => {
@@ -468,6 +469,8 @@ describe("AdminDashboardPage", () => {
 
   afterEach(() => {
     cleanup();
+    clearInMemorySignalMemoriesForTests();
+    vi.unstubAllEnvs();
     vi.restoreAllMocks();
   });
 
@@ -779,6 +782,62 @@ describe("AdminDashboardPage", () => {
     fireEvent.click(within(modal).getByRole("button", { name: "Save pattern memory" }));
     expect(await within(modal).findByText("Pattern memory validated. Persistence is disabled.")).toBeInTheDocument();
     expect(screen.getAllByText("Pattern memory validated. Persistence is disabled.").length).toBeGreaterThan(0);
+  });
+
+  it("shows saved Signal Pattern Memories in the System Alerts session panel when memory provider is enabled", async () => {
+    vi.stubEnv("VITE_SIGNAL_MEMORY_PROVIDER", "memory");
+    const first = createSystemRecord({ id: "system-error-1", fingerprint: "fp-admin", routeId: "admin" });
+    const second = createSystemRecord({
+      id: "system-error-2",
+      createdAt: "2026-01-01T00:02:00.000Z",
+      severity: "error",
+      fingerprint: "fp-admin",
+      routeId: "admin",
+    });
+    allowAdminAccess();
+    signalIndex.counts.system = 2;
+    signalIndex.signalById = {
+      [first.submission.id]: first.record,
+      [second.submission.id]: second.record,
+    };
+    mockInboxState.current = {
+      forms: [first.form],
+      selectedStreamId: "system",
+      allSignals: [first.record, second.record],
+      visibleSignals: [first.record, second.record],
+      selectedRecord: first.record,
+      signalIndex,
+    };
+
+    renderAdminRoute();
+
+    const summaryPanel = await screen.findByRole("region", { name: "System Diagnostics Summary" });
+    await waitFor(() => expect(within(summaryPanel).getByText("fp-admin")).toBeInTheDocument());
+    const memoriesPanel = screen.getByRole("region", { name: "Saved Pattern Memories" });
+    expect(within(memoriesPanel).getByText("No pattern memories saved for this session.")).toBeInTheDocument();
+
+    fireEvent.click(within(summaryPanel).getAllByRole("button", { name: "Save pattern memory" })[0]);
+    const modal = await screen.findByRole("dialog", { name: "Review pattern memory draft" });
+    fireEvent.change(within(modal).getByLabelText("Title"), {
+      target: { value: "Runtime admin chunk memory" },
+    });
+    fireEvent.change(within(modal).getByLabelText("Status"), {
+      target: { value: "watching" },
+    });
+    fireEvent.click(within(modal).getByRole("button", { name: "Save pattern memory" }));
+
+    expect(await within(modal).findByText("Pattern memory saved for this session.")).toBeInTheDocument();
+    await waitFor(() => expect(within(memoriesPanel).getByText("Runtime admin chunk memory")).toBeInTheDocument());
+    expect(within(memoriesPanel).getByText("system_diagnostic_pattern")).toBeInTheDocument();
+    expect(within(memoriesPanel).getByText("watching")).toBeInTheDocument();
+    expect(within(memoriesPanel).getByText("medium")).toBeInTheDocument();
+    expect(memoriesPanel.textContent).not.toContain("raw-answer-secret");
+    expect(memoriesPanel.textContent).not.toContain("attachment-secret");
+    expect(memoriesPanel.textContent).not.toContain("encrypted-secret");
+    expect(memoriesPanel.textContent).not.toContain("signature-secret");
+    expect(memoriesPanel.textContent).not.toContain("metadata-secret");
+    expect(memoriesPanel.textContent).not.toContain("errorStack");
+    expect(memoriesPanel.textContent).not.toContain("token=abc");
   });
 
   it("regroups the System Diagnostics Summary by routeId", async () => {

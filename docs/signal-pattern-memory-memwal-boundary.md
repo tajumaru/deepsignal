@@ -19,6 +19,7 @@ VITE_SIGNAL_MEMORY_PROVIDER=none
 Supported values:
 
 - `none`: default no-op provider. It validates memory safety but does not persist.
+- `memory`: runtime-only in-memory provider. It validates memory safety and keeps records only for the current app session.
 - `memwal`: placeholder provider. It validates memory safety but still skips remote writes until the real adapter is implemented.
 
 Existing MemWal runtime settings remain placeholders for a later phase. Setting `VITE_MEMWAL_ENABLED=true` alone must not enable Signal Pattern Memory persistence.

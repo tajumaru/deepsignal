@@ -74,9 +74,9 @@ export type SignalPatternMemory = Omit<SignalPatternMemoryDraft, "status"> & {
   updatedAt: string;
 };
 
-export type SignalMemoryProvider = "none" | "memwal";
+export type SignalMemoryProvider = "none" | "memory" | "memwal";
 
-export type SignalMemoryAdapterKind = "noop" | "memwal-placeholder";
+export type SignalMemoryAdapterKind = "noop" | "memory" | "memwal-placeholder";
 
 export type SignalMemorySearchOptions = {
   limit?: number;

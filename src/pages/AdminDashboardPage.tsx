@@ -28,6 +28,7 @@ import { EmptyState } from "../components/EmptyState";
 import { FormattedAnswerValue } from "../components/FormattedAnswerValue";
 import { PrivateSignalUnlockCard } from "../components/PrivateSignalUnlockCard";
 import { RichTextContent } from "../components/RichText";
+import { SealedSignalCapsule } from "../components/SealedSignalCapsule";
 import { ShareCard } from "../components/ShareCard";
 import { StorageProof } from "../components/StorageProof";
 import { AdminToast } from "../features/admin/components/AdminToast";
@@ -128,7 +129,7 @@ import type {
   ResponsesCsvSortOrder,
 } from "../lib/exportResponses";
 import { getPublicFormPath, getPublicRoadmapPath } from "../lib/publicLinks";
-import { ACCESS_CONTROL_PACKAGE_ID, isSuiRateLimitError } from "../lib/sui";
+import { ACCESS_CONTROL_PACKAGE_ID, isSuiRateLimitError, shortAddress } from "../lib/sui";
 import { clearDeepSignalPolicyCapabilityCache } from "../lib/debugCache";
 import { formatResponseDeadline, type ResponseDeadlineLabels } from "../lib/responseDeadline";
 import { getSubmissionRespondentMeta } from "../lib/respondentMeta";
@@ -4110,6 +4111,10 @@ function createSignalPatternMemoryFromDraft(draft: SignalPatternMemoryDraft, now
   };
 }
 
+function getSignalPatternMemoryNamespace(projectId: string) {
+  return `deepsignal:project:${projectId}:signal-pattern-memory:v1`;
+}
+
 function PatternMemoryDraftReviewModal({
   draft,
   saveMessage,
@@ -4438,6 +4443,7 @@ export function AdminDashboardPage() {
   const [systemDiagnosticsSummary, setSystemDiagnosticsSummary] = useState<DiagnosticsSummary | null>(null);
   const [patternMemoryDraft, setPatternMemoryDraft] = useState<SignalPatternMemoryDraft | null>(null);
   const [patternMemorySaveMessage, setPatternMemorySaveMessage] = useState("");
+  const [savedPatternMemories, setSavedPatternMemories] = useState<SignalPatternMemory[]>([]);
   const versionCounts = useMemo(
     () => getSubmissionVersionCounts(allSignals.map((record) => record.submission)),
     [allSignals],
@@ -4514,6 +4520,12 @@ export function AdminDashboardPage() {
       : getSignalSubject(selectedRecord.submission)
     : "";
   const selectedSignalTimestamp = selectedRecord ? formatDate(selectedRecord.submission.createdAt) : "";
+  const selectedSignalSenderLabel = selectedRecord
+    ? (() => {
+        const respondentMeta = getSubmissionRespondentMeta(selectedRecord.submission);
+        return respondentMeta.verifiedAddress ? shortAddress(respondentMeta.verifiedAddress) : t("anonymousRespondent");
+      })()
+    : "";
   const [renderedSignalLimit, setRenderedSignalLimit] = useState(INITIAL_SIGNAL_LIST_LIMIT);
   const renderedVisibleSignals = useMemo(
     () => visibleSignals.slice(0, renderedSignalLimit),
@@ -4928,26 +4940,41 @@ export function AdminDashboardPage() {
     loadConsole,
     mockProject: mockAdminData?.project ?? null,
   });
+  const patternMemoryNamespace = useMemo(
+    () => {
+      const projectId = selectedProject?.objectId ?? selectedProjectId;
+      return projectId ? getSignalPatternMemoryNamespace(projectId) : null;
+    },
+    [selectedProject?.objectId, selectedProjectId],
+  );
+  const refreshSavedPatternMemories = useCallback(async () => {
+    if (!patternMemoryNamespace) {
+      setSavedPatternMemories([]);
+      return;
+    }
+    const memories = await createSignalMemoryAdapter().listMemories(patternMemoryNamespace);
+    setSavedPatternMemories(memories);
+  }, [patternMemoryNamespace]);
   const savePatternMemoryDraft = useCallback(async () => {
     if (!patternMemoryDraft) {
       return;
     }
-    const projectId = selectedProject?.objectId ?? selectedProjectId;
-    if (!projectId) {
+    if (!patternMemoryNamespace) {
       const message = "Select a project before validating pattern memory.";
       setPatternMemorySaveMessage(message);
       setToast({ tone: "error", message });
       return;
     }
-    const namespace = `deepsignal:project:${projectId}:signal-pattern-memory:v1`;
     const memory = createSignalPatternMemoryFromDraft(patternMemoryDraft);
     try {
-      const result = await createSignalMemoryAdapter().saveMemory(namespace, memory);
+      const adapter = createSignalMemoryAdapter();
+      const result = await adapter.saveMemory(patternMemoryNamespace, memory);
       const message = result.skipped && result.reason === "noop"
         ? "Pattern memory validated. Persistence is disabled."
         : result.skipped && result.reason === "memwal_not_implemented"
           ? "Pattern memory validated. MemWal persistence is not implemented yet."
-          : "Pattern memory saved.";
+          : "Pattern memory saved for this session.";
+      setSavedPatternMemories(await adapter.listMemories(patternMemoryNamespace));
       setPatternMemorySaveMessage(message);
       setToast({ tone: "success", message });
     } catch (error) {
@@ -4956,7 +4983,11 @@ export function AdminDashboardPage() {
       setPatternMemorySaveMessage(message);
       setToast({ tone: "error", message });
     }
-  }, [patternMemoryDraft, selectedProject?.objectId, selectedProjectId, setToast]);
+  }, [patternMemoryDraft, patternMemoryNamespace, setToast]);
+
+  useEffect(() => {
+    void refreshSavedPatternMemories();
+  }, [refreshSavedPatternMemories]);
 
   useEffect(() => {
     logRouteLifecycle("admin-dashboard:mount", {
@@ -7974,6 +8005,38 @@ export function AdminDashboardPage() {
                   )}
                 </section>
               ) : null}
+              {selectedStreamId === "system" ? (
+                <section className="system-diagnostics-summary-panel saved-pattern-memories-panel" aria-labelledby="saved-pattern-memories-title">
+                  <div className="system-diagnostics-summary-header">
+                    <div>
+                      <p className="eyebrow">Runtime-only memory</p>
+                      <h3 id="saved-pattern-memories-title">Saved Pattern Memories</h3>
+                    </div>
+                    <span className="signal-chip signal-chip-soft">{savedPatternMemories.length} session</span>
+                  </div>
+                  {savedPatternMemories.length > 0 ? (
+                    <div className="system-diagnostics-summary-groups" role="list" aria-label="Saved Pattern Memories">
+                      {savedPatternMemories.map((memory) => (
+                        <article key={memory.memoryId} className="system-diagnostics-summary-group" role="listitem">
+                          <div className="system-diagnostics-summary-group-main">
+                            <strong title={memory.title}>{memory.title}</strong>
+                            <span>{memory.type}</span>
+                          </div>
+                          <div className="system-diagnostics-summary-group-meta">
+                            <span>{memory.status}</span>
+                            <span>{memory.confidence}</span>
+                            <span>Updated {formatDate(memory.updatedAt)}</span>
+                          </div>
+                        </article>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="muted system-diagnostics-summary-empty">
+                      No pattern memories saved for this session.
+                    </p>
+                  )}
+                </section>
+              ) : null}
               {hasAdminAccess ? (
                 <section className="answer-card answer-card-plain optional-proof-queue-panel">
                   <div className="section-row">
@@ -8353,140 +8416,98 @@ export function AdminDashboardPage() {
                               <div>
                                 <h4>{t("submittedFeedbackTitle")}</h4>
                               </div>
-                              {selectedRecordNeedsDecrypt && shouldHideLockedDetailBeforeReview ? (
-                                <div className="mobile-quick-decrypt-actions">
-                                  <button
-                                    type="button"
-                                    className="ghost-button mobile-quick-decrypt-button"
-                                    onClick={() => void handleDecrypt()}
-                                    disabled={Boolean(selectedRecordUnlockDisabledReason) || decrypting || decryptInFlightRef.current}
-                                  >
-                                    <span className="mobile-quick-decrypt-icon" aria-hidden="true">
-                                      <svg viewBox="0 0 20 20" focusable="false">
-                                        <path d="M3 9.5s2.6-4.4 7-4.4 7 4.4 7 4.4-2.6 4.4-7 4.4-7-4.4-7-4.4Z" />
-                                        <circle cx="10" cy="9.5" r="2" />
-                                      </svg>
-                                    </span>
-                                    <span>
-                                      {decrypting || decryptInFlightRef.current
-                                        ? t("privateSignalUnlockLoading")
-                                        : t("mobileRevealSignalAction")}
-                                    </span>
-                                  </button>
-                                  <span
-                                    className={`mobile-quick-decrypt-status ${decryptError ? "is-error" : ""}`}
-                                    role={decryptError ? "alert" : "status"}
-                                  >
-                                    {decryptError ||
-                                      decryptStatusMessage ||
-                                      selectedRecordUnlockDisabledReason ||
-                                      t("mobileEncryptedSignalHelper")}
-                                  </span>
-                                </div>
-                              ) : null}
-                              {selectedRecord?.submission.isEncrypted && detailAnswers ? (
-                                <div className="mobile-quick-decrypt-actions">
-                                  <button
-                                    type="button"
-                                    className="ghost-button mobile-quick-decrypt-button"
-                                    onClick={toggleSelectedSignalVisibility}
-                                    aria-pressed={selectedSignalContentVisible}
-                                  >
-                                    <span className="mobile-quick-decrypt-icon" aria-hidden="true">
-                                      <svg viewBox="0 0 20 20" focusable="false">
-                                        {selectedSignalContentVisible ? (
-                                          <>
-                                            <path d="M3 3 17 17" />
-                                            <path d="M8.7 5.2A7.9 7.9 0 0 1 10 5.1c4.4 0 7 4.4 7 4.4a11.7 11.7 0 0 1-1.8 2.2" />
-                                            <path d="M5.4 6.4A11.7 11.7 0 0 0 3 9.5s2.6 4.4 7 4.4a7.6 7.6 0 0 0 3-.6" />
-                                          </>
-                                        ) : (
-                                          <>
-                                            <path d="M3 9.5s2.6-4.4 7-4.4 7 4.4 7 4.4-2.6 4.4-7 4.4-7-4.4-7-4.4Z" />
-                                            <circle cx="10" cy="9.5" r="2" />
-                                          </>
-                                        )}
-                                      </svg>
-                                    </span>
-                                    <span>
-                                      {selectedSignalContentVisible
-                                        ? t("mobileHideSignalAction")
-                                        : t("mobileRevealSignalAction")}
-                                    </span>
-                                  </button>
-                                  <span className="mobile-quick-decrypt-status">{t("mobileEncryptedSignalHelper")}</span>
-                                </div>
-                              ) : null}
                             </div>
                           {selectedSignalContentVisible ? (
-                            <div className="stack">
-                              {detailLegacyUnencrypted ? (
-                                <p className="warning-text">{t("legacyUnencryptedResponse")}</p>
-                              ) : (
-                                <div className="signal-badge-row signal-badge-row-compact original-signal-proof-row">
-                                  <span className="signal-chip signal-chip-accent">{t("sealEncryptedCreatorAdminOnly")}</span>
-                                  {selectedRecordEncryptedBlobStoredOnWalrus && selectedRecordEncryptedBlobId ? (
-                                    <>
-                                      <StorageProof
-                                        blobId={selectedRecordEncryptedBlobId}
-                                        proof={
-                                          selectedRecord.submission.encryptedWalrusProof ??
-                                          selectedRecord.submission.walrusProof
-                                        }
-                                        compact
-                                      />
-                                    </>
-                                  ) : null}
+                            selectedRecord?.submission.isEncrypted ? (
+                              <SealedSignalCapsule
+                                state="revealed"
+                                onVerify={toggleSelectedSignalVisibility}
+                                title={t("sealedSignalCapsuleTitle")}
+                                subtitle={t("sealedSignalCapsuleSubtitle")}
+                                lockedStatus={t("sealedSignalCapsuleLockedStatus")}
+                                verifyHint={t("sealedSignalCapsuleVerifyHint")}
+                                verifyingStatus={t("sealedSignalCapsuleVerifyingStatus")}
+                                grantedStatus={t("sealedSignalCapsuleGrantedStatus")}
+                                decryptedBadge={t("sealedSignalCapsuleDecryptedBadge")}
+                                ariaLabel={t("sealedSignalCapsuleRevealedAria")}
+                                timestampLabel={selectedSignalTimestamp}
+                                senderLabel={selectedSignalSenderLabel}
+                              >
+                                <div className="stack sealed-signal-answer-stack">
+                                  {detailLegacyUnencrypted ? (
+                                    <p className="warning-text">{t("legacyUnencryptedResponse")}</p>
+                                  ) : (
+                                    <div className="signal-badge-row signal-badge-row-compact original-signal-proof-row">
+                                      <span className="signal-chip signal-chip-accent">{t("sealEncryptedCreatorAdminOnly")}</span>
+                                      {selectedRecordEncryptedBlobStoredOnWalrus && selectedRecordEncryptedBlobId ? (
+                                        <>
+                                          <StorageProof
+                                            blobId={selectedRecordEncryptedBlobId}
+                                            proof={
+                                              selectedRecord.submission.encryptedWalrusProof ??
+                                              selectedRecord.submission.walrusProof
+                                            }
+                                            compact
+                                          />
+                                        </>
+                                      ) : null}
+                                    </div>
+                                  )}
+                                  {(selectedRecordVersionedForm ?? selectedRecord.form).fields
+                                    .filter((field) => !isAttachmentFieldType(field.type))
+                                    .map((field, index) => (
+                                      <div key={field.id} className="answer-line" data-question-index={`Q${index + 1}`}>
+                                        <strong>{field.label}</strong>
+                                        {renderAnswerValue(field, detailAnswers?.[field.id])}
+                                      </div>
+                                    ))}
                                 </div>
-                              )}
-                              {(selectedRecordVersionedForm ?? selectedRecord.form).fields
-                                .filter((field) => !isAttachmentFieldType(field.type))
-                                .map((field, index) => (
-                                  <div key={field.id} className="answer-line" data-question-index={`Q${index + 1}`}>
-                                    <strong>{field.label}</strong>
-                                    {renderAnswerValue(field, detailAnswers?.[field.id])}
-                                  </div>
-                                ))}
-                            </div>
+                              </SealedSignalCapsule>
+                            ) : (
+                              <div className="stack">
+                                {(selectedRecordVersionedForm ?? selectedRecord.form).fields
+                                  .filter((field) => !isAttachmentFieldType(field.type))
+                                  .map((field, index) => (
+                                    <div key={field.id} className="answer-line" data-question-index={`Q${index + 1}`}>
+                                      <strong>{field.label}</strong>
+                                      {renderAnswerValue(field, detailAnswers?.[field.id])}
+                                    </div>
+                                  ))}
+                              </div>
+                            )
                           ) : selectedRecord?.submission.isEncrypted && detailAnswers && selectedSignalHiddenAfterUnlock ? (
-                            <div className="locked-signal-state is-view-hidden">
-                              <div className="locked-signal-copy">
-                                <div className="classified-signal-redaction" aria-hidden="true">
-                                  <span />
-                                  <span />
-                                  <span />
-                                  <span />
-                                </div>
-                                <strong>{t("mobileSignalHiddenTitle")}</strong>
-                                <p>{t("mobileSignalHiddenBody")}</p>
-                              </div>
-                            </div>
+                            <SealedSignalCapsule
+                              state="granted"
+                              onVerify={toggleSelectedSignalVisibility}
+                              title={t("sealedSignalCapsuleTitle")}
+                              subtitle={t("sealedSignalCapsuleSubtitle")}
+                              lockedStatus={t("sealedSignalCapsuleLockedStatus")}
+                              verifyHint={t("sealedSignalCapsuleRevealHint")}
+                              verifyingStatus={t("sealedSignalCapsuleVerifyingStatus")}
+                              grantedStatus={t("sealedSignalCapsuleGrantedStatus")}
+                              decryptedBadge={t("sealedSignalCapsuleDecryptedBadge")}
+                              ariaLabel={t("sealedSignalCapsuleReopenAria")}
+                              timestampLabel={selectedSignalTimestamp}
+                              senderLabel={selectedSignalSenderLabel}
+                            />
                           ) : selectedRecordNeedsDecrypt ? (
-                            <div className="locked-signal-state">
-                              <div className="locked-signal-copy">
-                                <div className="classified-signal-redaction" aria-hidden="true">
-                                  <span />
-                                  <span />
-                                  <span />
-                                  <span />
-                                  <span />
-                                  <span />
-                                </div>
-                                <strong>{t("encryptedPrivateSignalStatus")}</strong>
-                                <p>{t("requiresReviewerAccessDecryptHint")}</p>
-                                {detailAttachments.length > 0 ? (
-                                  <div className="locked-signal-attachment-state">
-                                    <span className="signal-chip signal-chip-soft">{t("attachments")}</span>
-                                    <span>{t("attachmentsHiddenUntilUnlocked")}</span>
-                                  </div>
-                                ) : null}
-                              </div>
-                              <div className="locked-signal-skeleton" aria-hidden="true">
-                                <span />
-                                <span />
-                                <span />
-                              </div>
-                            </div>
+                            <SealedSignalCapsule
+                              state={decryptError ? "error" : decrypting || decryptInFlightRef.current ? "verifying" : "locked"}
+                              onVerify={() => void handleDecrypt()}
+                              disabled={Boolean(selectedRecordUnlockDisabledReason) || decrypting || decryptInFlightRef.current}
+                              title={t("sealedSignalCapsuleTitle")}
+                              subtitle={t("sealedSignalCapsuleSubtitle")}
+                              lockedStatus={t("sealedSignalCapsuleLockedStatus")}
+                              verifyHint={t("sealedSignalCapsuleVerifyHint")}
+                              verifyingStatus={t("sealedSignalCapsuleVerifyingStatus")}
+                              grantedStatus={t("sealedSignalCapsuleGrantedStatus")}
+                              decryptedBadge={t("sealedSignalCapsuleDecryptedBadge")}
+                              ariaLabel={t("sealedSignalCapsuleVerifyAria")}
+                              statusMessage={decryptStatusMessage || selectedRecordUnlockDisabledReason}
+                              errorMessage={decryptError}
+                              timestampLabel={selectedSignalTimestamp}
+                              senderLabel={selectedSignalSenderLabel}
+                            />
                           ) : (
                             <p className="muted">{t("noResponseContentYet")}</p>
                           )}
