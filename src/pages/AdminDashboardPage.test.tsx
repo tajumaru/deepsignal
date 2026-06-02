@@ -728,6 +728,35 @@ describe("AdminDashboardPage", () => {
     expect(within(panel).getAllByText("public-form").length).toBeGreaterThan(0);
   });
 
+  it("shows when the System Diagnostics Summary is capped at the max diagnostics limit", async () => {
+    const records = Array.from({ length: 505 }, (_, index) =>
+      createSystemRecord({
+        id: `system-error-${index}`,
+        createdAt: `2026-01-01T${String(Math.floor(index / 60)).padStart(2, "0")}:${String(index % 60).padStart(2, "0")}:00.000Z`,
+        fingerprint: index < 500 ? "fp-loaded" : "fp-over-limit",
+      }).record,
+    );
+    const form = records[0].form;
+    allowAdminAccess();
+    signalIndex.counts.system = records.length;
+    signalIndex.signalById = Object.fromEntries(records.map((record) => [record.submission.id, record]));
+    mockInboxState.current = {
+      forms: [form],
+      selectedStreamId: "system",
+      allSignals: records,
+      visibleSignals: records,
+      selectedRecord: records[0],
+      signalIndex,
+    };
+
+    renderAdminRoute();
+
+    expect(await screen.findByRole("heading", { name: "System Diagnostics Summary" })).toBeInTheDocument();
+    const panel = screen.getByRole("region", { name: "System Diagnostics Summary" });
+    await waitFor(() => expect(within(panel).getByText("500/505")).toBeInTheDocument());
+    expect(within(panel).getByText("Summary is capped at 500 of 505 visible diagnostics.")).toBeInTheDocument();
+  });
+
   it("does not show the diagnostics summary for normal user response streams", async () => {
     const { form, record, submission } = createResponderRecord();
     allowAdminAccess();

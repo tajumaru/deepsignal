@@ -56,6 +56,10 @@ export async function summarizeDiagnostics(options: DiagnosticsSummaryOptions = 
 
   return {
     total: result.diagnostics.length,
+    totalMatching: result.totalMatching,
+    limit: result.limit,
+    maxLimit: result.maxLimit,
+    truncated: result.truncated,
     groupBy,
     groups: [...groupsByKey.values()].sort((left, right) => right.count - left.count),
     topRoutes: [...routeCounts.entries()]

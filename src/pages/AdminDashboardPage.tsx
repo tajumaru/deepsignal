@@ -59,7 +59,7 @@ import { getDiagnostic } from "../diagnostics/diagnosticsService";
 import { createDiagnosticsExportFilename, exportDiagnosticsJson } from "../diagnostics/diagnosticsExport";
 import { summarizeDiagnostics } from "../diagnostics/diagnosticsSummary";
 import { redactSystemSignal } from "../diagnostics/redaction";
-import type { DiagnosticsSummary, DiagnosticsSummaryOptions } from "../diagnostics/types";
+import { MAX_DIAGNOSTICS_LIMIT, type DiagnosticsSummary, type DiagnosticsSummaryOptions } from "../diagnostics/types";
 import { WorkspaceActivityLog } from "../features/admin/components/WorkspaceActivityLog";
 import { useAdminToast } from "../features/admin/hooks/useAdminToast";
 import { usePendingSuiRegistration } from "../features/admin/hooks/usePendingSuiRegistration";
@@ -4337,6 +4337,7 @@ export function AdminDashboardPage() {
     let cancelled = false;
     void summarizeDiagnostics({
       groupBy: systemDiagnosticsGroupBy,
+      limit: MAX_DIAGNOSTICS_LIMIT,
       source: {
         kind: "adminInboxLoadedRecords",
         records: visibleSystemRecords,
@@ -7662,13 +7663,22 @@ export function AdminDashboardPage() {
                   <div className="system-diagnostics-summary-metrics">
                     <div>
                       <span>Total diagnostics</span>
-                      <strong>{systemDiagnosticsSummary?.total ?? 0}</strong>
+                      <strong>
+                        {systemDiagnosticsSummary?.truncated
+                          ? `${systemDiagnosticsSummary.total}/${systemDiagnosticsSummary.totalMatching}`
+                          : systemDiagnosticsSummary?.total ?? 0}
+                      </strong>
                     </div>
                     <div>
                       <span>Grouped by</span>
                       <strong>{systemDiagnosticsGroupBy}</strong>
                     </div>
                   </div>
+                  {systemDiagnosticsSummary?.truncated ? (
+                    <p className="system-diagnostics-summary-cap">
+                      Summary is capped at {systemDiagnosticsSummary.limit} of {systemDiagnosticsSummary.totalMatching} visible diagnostics.
+                    </p>
+                  ) : null}
                   {systemDiagnosticsSummary && systemDiagnosticsSummary.total > 0 ? (
                     <div className="system-diagnostics-summary-content">
                       <div className="system-diagnostics-summary-groups" role="list" aria-label="Top grouped system diagnostics">

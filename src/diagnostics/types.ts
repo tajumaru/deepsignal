@@ -107,6 +107,10 @@ export interface DiagnosticsSummaryGroup {
 
 export interface DiagnosticsSummary {
   total: number;
+  totalMatching: number;
+  limit: number;
+  maxLimit: number;
+  truncated: boolean;
   groupBy: NonNullable<DiagnosticsSummaryOptions["groupBy"]>;
   groups: DiagnosticsSummaryGroup[];
   topRoutes: Array<{

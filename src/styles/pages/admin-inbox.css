@@ -4013,6 +4013,13 @@
   margin: 0;
 }
 
+.system-diagnostics-summary-cap {
+  margin: -0.2rem 0 0;
+  color: #fde68a;
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
 .stream-item.tone-system {
   border-color: rgba(244, 114, 182, 0.24);
 }

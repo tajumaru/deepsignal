@@ -167,6 +167,29 @@ describe("diagnostics service", () => {
     expect(summary.topRoutes[0]).toEqual({ routeId: "admin", count: 2 });
   });
 
+  it("exposes summary limit and truncation metadata", async () => {
+    const submissions = Array.from({ length: 55 }, (_, index) =>
+      createSubmission(`summary-system-${index}`, {
+        createdAt: `2026-01-01T00:${String(index).padStart(2, "0")}:00.000Z`,
+      }),
+    );
+
+    const summary = await summarizeDiagnostics({
+      source: {
+        kind: "adminInboxLoadedRecords",
+        submissions,
+      },
+    });
+
+    expect(summary).toMatchObject({
+      total: 50,
+      totalMatching: 55,
+      limit: 50,
+      maxLimit: 500,
+      truncated: true,
+    });
+  });
+
   it("exports diagnostics from already-loaded admin inbox records", async () => {
     await localStorageAdapter.saveSubmission(createSubmission("local-system"));
     const inboxSubmission = createSubmission("inbox-system", {

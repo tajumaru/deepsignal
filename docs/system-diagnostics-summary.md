@@ -59,6 +59,18 @@ source: {
 
 That means it summarizes the currently loaded and visible system records in Admin Inbox. It does not read directly from `localStorage`.
 
+The Admin UI requests the diagnostics service maximum limit:
+
+```ts
+limit: MAX_DIAGNOSTICS_LIMIT
+```
+
+At the time of writing, `MAX_DIAGNOSTICS_LIMIT` is `500`. If more than 500 visible system diagnostics match the current stream and filters, the panel displays a capped count such as `500/505` and shows:
+
+```text
+Summary is capped at 500 of 505 visible diagnostics.
+```
+
 ## Safety
 
 The panel uses `summarizeDiagnostics()`, which calls the diagnostics service with stack traces disabled.
