@@ -7,6 +7,7 @@ import { PublicFormPage } from "./PublicFormPage";
 import type { FormSchema } from "../types";
 import type { ZkLoginSession } from "../lib/zkloginSession";
 import { listPendingSubmissions } from "../storage/submissionDelivery";
+import { SYSTEM_SIGNAL_FORM_ID } from "../services/systemSignalReporter";
 
 const SUBMIT_SIGNAL_BUTTON = /^(Hold to send signal|Signal preserved locally|Signal sent)/;
 
@@ -20,6 +21,8 @@ const mockVerifyWalrusBlob = vi.fn();
 const mockGetForm = vi.fn();
 const mockSaveSubmission = vi.fn();
 const mockSaveForm = vi.fn();
+const mockSaveLocalSubmission = vi.fn();
+const mockUpdateLocalSubmission = vi.fn();
 const mockUpsertFormBlobIndex = vi.fn();
 const mockIsZkLoginEnabled = vi.fn();
 const mockBeginGoogleZkLogin = vi.fn();
@@ -133,6 +136,8 @@ vi.mock("../lib/storage", async () => {
 vi.mock("../storage/localStorageAdapter", () => ({
   localStorageAdapter: {
     saveForm: (...args: unknown[]) => mockSaveForm(...args),
+    saveSubmission: (...args: unknown[]) => mockSaveLocalSubmission(...args),
+    updateSubmission: (...args: unknown[]) => mockUpdateLocalSubmission(...args),
   },
 }));
 
@@ -179,6 +184,8 @@ describe("PublicFormPage shared manifest restore", () => {
     mockGetForm.mockReset();
     mockSaveSubmission.mockReset();
     mockSaveForm.mockReset();
+    mockSaveLocalSubmission.mockReset();
+    mockUpdateLocalSubmission.mockReset();
     mockUpsertFormBlobIndex.mockReset();
     mockGetWalrusMutationRuntimeStatus.mockReturnValue({
       aggregatorConfigured: true,
@@ -322,7 +329,38 @@ describe("PublicFormPage shared manifest restore", () => {
     expect(screen.getAllByText(/Walrus read timed out/).length).toBeGreaterThan(0);
     expect(screen.getByText("blob-abc")).toBeInTheDocument();
     expect(mockGetForm).not.toHaveBeenCalled();
-    expect(mockSaveForm).not.toHaveBeenCalled();
+    await waitFor(() => expect(mockSaveLocalSubmission.mock.calls.length).toBeGreaterThan(0));
+    expect(mockSaveForm).toHaveBeenCalledWith(expect.objectContaining({
+      id: SYSTEM_SIGNAL_FORM_ID,
+      title: "DeepSignal System Alerts",
+    }));
+    expect(mockSaveForm).not.toHaveBeenCalledWith(expect.objectContaining({
+      id: "form-123",
+      title: "Cached Feedback Form",
+    }));
+    const savedSystemSubmission = mockSaveLocalSubmission.mock.calls
+      .map(([submission]) => submission)
+      .find((submission) => (
+        typeof submission === "object" &&
+        submission !== null &&
+        "formId" in submission &&
+        submission.formId === SYSTEM_SIGNAL_FORM_ID
+      ));
+    expect(savedSystemSubmission).toMatchObject({
+      formId: SYSTEM_SIGNAL_FORM_ID,
+      kind: "system_error",
+      source: "deepsignal-runtime",
+      metadata: expect.objectContaining({
+        systemDiagnostics: expect.objectContaining({
+          sourceContext: "public-form-load",
+          errorMessage: expect.stringContaining("Walrus read timed out"),
+          publicFormLoadError: expect.objectContaining({
+            code: "manifest_blob_unavailable",
+            manifestBlobId: "blob-abc",
+          }),
+        }),
+      }),
+    });
   });
 
   it("shows the failed module asset and republish action when a required module script cannot load", async () => {
