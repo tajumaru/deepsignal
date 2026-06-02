@@ -4117,6 +4117,9 @@ const patternMemoryTypeOptions: SignalPatternMemoryType[] = [
 ];
 
 const patternMemoryConfidenceOptions: SignalPatternMemoryConfidence[] = ["low", "medium", "high"];
+const STALE_PATTERN_MEMORY_REVIEW_DAYS = 30;
+const INVESTIGATING_PATTERN_MEMORY_REVIEW_DAYS = 30;
+const ACTIVE_PATTERN_MEMORY_REVIEW_DAYS = 14;
 
 function createPatternMemoryId() {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
@@ -4186,6 +4189,28 @@ function getPatternMemorySearchText(memory: SignalPatternMemory) {
     memory.affectedBuilds.join(" "),
     memory.platforms.join(" "),
   ].filter(Boolean).join(" ").toLowerCase();
+}
+
+function getPatternMemoryAgeDays(memory: SignalPatternMemory, now = Date.now()) {
+  const updatedAtMs = Date.parse(memory.updatedAt);
+  if (!Number.isFinite(updatedAtMs)) {
+    return 0;
+  }
+  return Math.max(0, Math.floor((now - updatedAtMs) / (1000 * 60 * 60 * 24)));
+}
+
+function getPatternMemoryNeedsReviewReason(memory: SignalPatternMemory, now = Date.now()) {
+  const ageDays = getPatternMemoryAgeDays(memory, now);
+  if (memory.status === "stale" && ageDays > STALE_PATTERN_MEMORY_REVIEW_DAYS) {
+    return `Stale for ${ageDays} days`;
+  }
+  if (memory.status === "investigating" && ageDays > INVESTIGATING_PATTERN_MEMORY_REVIEW_DAYS) {
+    return `Investigating for ${ageDays} days`;
+  }
+  if (memory.status === "active" && ageDays > ACTIVE_PATTERN_MEMORY_REVIEW_DAYS) {
+    return `Active without updates for ${ageDays} days`;
+  }
+  return "";
 }
 
 function formatPatternMemoryList(values: string[]) {
@@ -4524,6 +4549,7 @@ export function AdminDashboardPage() {
   const [patternMemorySearch, setPatternMemorySearch] = useState("");
   const [patternMemoryTypeFilter, setPatternMemoryTypeFilter] = useState<SignalPatternMemoryType | "all">("all");
   const [patternMemoryStatusFilter, setPatternMemoryStatusFilter] = useState<SignalPatternMemoryStatus | "all">("all");
+  const [patternMemoryConfidenceFilter, setPatternMemoryConfidenceFilter] = useState<SignalPatternMemoryConfidence | "all">("all");
   const [patternMemoryTagFilter, setPatternMemoryTagFilter] = useState("all");
   const [selectedPatternMemoryId, setSelectedPatternMemoryId] = useState<string | null>(null);
   const [patternMemoryEditMessage, setPatternMemoryEditMessage] = useState("");
@@ -4613,6 +4639,38 @@ export function AdminDashboardPage() {
     () => [...new Set(savedPatternMemories.flatMap((memory) => memory.tags))].sort((left, right) => left.localeCompare(right)),
     [savedPatternMemories],
   );
+  const patternMemoryStatusCounts = useMemo(
+    () => {
+      const counts = Object.fromEntries(patternMemoryLifecycleStatusOptions.map((status) => [status, 0])) as Record<
+        (typeof patternMemoryLifecycleStatusOptions)[number],
+        number
+      >;
+      for (const memory of savedPatternMemories) {
+        if (memory.status in counts) {
+          counts[memory.status as keyof typeof counts] += 1;
+        }
+      }
+      return counts;
+    },
+    [savedPatternMemories],
+  );
+  const patternMemoryTimeline = useMemo(
+    () => [...savedPatternMemories].sort((left, right) => right.updatedAt.localeCompare(left.updatedAt)),
+    [savedPatternMemories],
+  );
+  const patternMemoriesNeedingReview = useMemo(
+    () => {
+      const now = Date.now();
+      return savedPatternMemories
+        .map((memory) => ({
+          memory,
+          reason: getPatternMemoryNeedsReviewReason(memory, now),
+        }))
+        .filter((item) => item.reason)
+        .sort((left, right) => right.memory.updatedAt.localeCompare(left.memory.updatedAt));
+    },
+    [savedPatternMemories],
+  );
   const filteredPatternMemories = useMemo(
     () => {
       const query = patternMemorySearch.trim().toLowerCase();
@@ -4621,6 +4679,9 @@ export function AdminDashboardPage() {
           return false;
         }
         if (patternMemoryStatusFilter !== "all" && memory.status !== patternMemoryStatusFilter) {
+          return false;
+        }
+        if (patternMemoryConfidenceFilter !== "all" && memory.confidence !== patternMemoryConfidenceFilter) {
           return false;
         }
         if (patternMemoryTagFilter !== "all" && !memory.tags.includes(patternMemoryTagFilter)) {
@@ -4634,6 +4695,7 @@ export function AdminDashboardPage() {
     },
     [
       patternMemorySearch,
+      patternMemoryConfidenceFilter,
       patternMemoryStatusFilter,
       patternMemoryTagFilter,
       patternMemoryTypeFilter,
@@ -8260,6 +8322,45 @@ export function AdminDashboardPage() {
                   </div>
                   {savedPatternMemories.length > 0 ? (
                     <>
+                      <div
+                        className="system-diagnostics-summary-content pattern-memory-lifecycle-dashboard"
+                        role="region"
+                        aria-label="Pattern Memory Lifecycle Dashboard"
+                      >
+                        <div className="system-diagnostics-summary-routes" role="region" aria-label="Pattern memory status counts">
+                          <span>Lifecycle overview</span>
+                          {patternMemoryLifecycleStatusOptions.map((status) => (
+                            <div key={status}>
+                              <code>{status}</code>
+                              <strong>{patternMemoryStatusCounts[status]}</strong>
+                            </div>
+                          ))}
+                        </div>
+                        <div className="system-diagnostics-summary-routes" role="region" aria-label="Pattern memory status timeline">
+                          <span>Status timeline</span>
+                          {patternMemoryTimeline.map((memory) => (
+                            <div key={memory.memoryId}>
+                              <code>{memory.title}</code>
+                              <strong>{memory.status}</strong>
+                              <span>Updated {formatDate(memory.updatedAt)}</span>
+                            </div>
+                          ))}
+                        </div>
+                        <div className="system-diagnostics-summary-routes" role="region" aria-label="Pattern memories needing review">
+                          <span>Needs Review</span>
+                          {patternMemoriesNeedingReview.length > 0 ? (
+                            patternMemoriesNeedingReview.map(({ memory, reason }) => (
+                              <div key={memory.memoryId}>
+                                <code>{memory.title}</code>
+                                <strong>{memory.status}</strong>
+                                <span>{reason}</span>
+                              </div>
+                            ))
+                          ) : (
+                            <p className="muted">No pattern memories need review.</p>
+                          )}
+                        </div>
+                      </div>
                       <div className="review-toolbar pattern-memory-explorer-filters" aria-label="Pattern memory filters">
                         <label className="review-sort-control">
                           <span>Search</span>
@@ -8293,6 +8394,19 @@ export function AdminDashboardPage() {
                             <option value="all">All statuses</option>
                             {patternMemoryStatusOptions.map((status) => (
                               <option key={status} value={status}>{status}</option>
+                            ))}
+                          </select>
+                        </label>
+                        <label className="review-sort-control">
+                          <span>Confidence</span>
+                          <select
+                            value={patternMemoryConfidenceFilter}
+                            onChange={(event) => setPatternMemoryConfidenceFilter(event.target.value as SignalPatternMemoryConfidence | "all")}
+                            aria-label="Filter pattern memories by confidence"
+                          >
+                            <option value="all">All confidence</option>
+                            {patternMemoryConfidenceOptions.map((confidence) => (
+                              <option key={confidence} value={confidence}>{confidence}</option>
                             ))}
                           </select>
                         </label>

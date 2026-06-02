@@ -510,6 +510,7 @@ describe("AdminDashboardPage", () => {
   afterEach(() => {
     cleanup();
     clearInMemorySignalMemoriesForTests();
+    vi.useRealTimers();
     vi.unstubAllEnvs();
     vi.restoreAllMocks();
   });
@@ -1030,6 +1031,112 @@ describe("AdminDashboardPage", () => {
     expect(explorer.textContent).not.toContain("raw-explorer-session");
     expect(explorer.textContent).not.toContain("raw-explorer-signature");
     expect(explorer.textContent).not.toContain("raw-explorer-signed-bytes");
+  });
+
+  it("shows Pattern Memory lifecycle counts, timeline, review queue, and lifecycle filters", async () => {
+    const { form, record } = createResponderRecord();
+    await seedPatternMemory(createPatternMemory({
+      memoryId: "memory-active-old",
+      title: "Active stale update memory",
+      type: "ux_friction_pattern",
+      status: "active",
+      confidence: "high",
+      tags: ["mobile"],
+      updatedAt: "2026-05-01T00:00:00.000Z",
+    }));
+    await seedPatternMemory(createPatternMemory({
+      memoryId: "memory-investigating-old",
+      title: "Long investigation memory",
+      type: "system_diagnostic_pattern",
+      status: "investigating",
+      confidence: "medium",
+      tags: ["diagnostics"],
+      updatedAt: "2026-04-20T00:00:00.000Z",
+    }));
+    await seedPatternMemory(createPatternMemory({
+      memoryId: "memory-stale-old",
+      title: "Old stale memory",
+      type: "product_request_pattern",
+      status: "stale",
+      confidence: "low",
+      tags: ["templates"],
+      updatedAt: "2026-04-01T00:00:00.000Z",
+    }));
+    await seedPatternMemory(createPatternMemory({
+      memoryId: "memory-fixed-recent",
+      title: "Recently fixed memory",
+      type: "operational_fix_pattern",
+      status: "confirmed_fixed",
+      confidence: "high",
+      tags: ["release"],
+      updatedAt: "2026-06-02T00:00:00.000Z",
+    }));
+    await seedPatternMemory(createPatternMemory({
+      memoryId: "memory-revoked",
+      title: "Revoked memory",
+      status: "revoked",
+      confidence: "medium",
+      updatedAt: "2026-05-31T00:00:00.000Z",
+    }));
+    allowAdminAccess();
+    signalIndex.signalById = { [record.submission.id]: record };
+    mockInboxState.current = {
+      forms: [form],
+      selectedStreamId: "all",
+      allSignals: [record],
+      visibleSignals: [record],
+      selectedRecord: record,
+      signalIndex,
+    };
+
+    renderAdminRoute();
+
+    const explorer = await screen.findByRole("region", { name: "Pattern Memories" });
+    const dashboard = within(explorer).getByRole("region", { name: "Pattern Memory Lifecycle Dashboard" });
+    const counts = within(dashboard).getByRole("region", { name: "Pattern memory status counts" });
+    expect(within(counts).getByText("active").parentElement).toHaveTextContent("1");
+    expect(within(counts).getByText("watching").parentElement).toHaveTextContent("0");
+    expect(within(counts).getByText("investigating").parentElement).toHaveTextContent("1");
+    expect(within(counts).getByText("mitigated").parentElement).toHaveTextContent("0");
+    expect(within(counts).getByText("confirmed_fixed").parentElement).toHaveTextContent("1");
+    expect(within(counts).getByText("stale").parentElement).toHaveTextContent("1");
+    expect(within(counts).getByText("revoked").parentElement).toHaveTextContent("1");
+
+    const needsReview = within(dashboard).getByRole("region", { name: "Pattern memories needing review" });
+    expect(within(needsReview).getByText("Old stale memory")).toBeInTheDocument();
+    expect(within(needsReview).getByText(/Stale for \d+ days/)).toBeInTheDocument();
+    expect(within(needsReview).getByText("Long investigation memory")).toBeInTheDocument();
+    expect(within(needsReview).getByText(/Investigating for \d+ days/)).toBeInTheDocument();
+    expect(within(needsReview).getByText("Active stale update memory")).toBeInTheDocument();
+    expect(within(needsReview).getByText(/Active without updates for \d+ days/)).toBeInTheDocument();
+    expect(within(needsReview).queryByText("Recently fixed memory")).not.toBeInTheDocument();
+
+    const timeline = within(dashboard).getByRole("region", { name: "Pattern memory status timeline" });
+    const timelineText = timeline.textContent ?? "";
+    expect(timelineText.indexOf("Recently fixed memory")).toBeLessThan(timelineText.indexOf("Revoked memory"));
+    expect(timelineText.indexOf("Revoked memory")).toBeLessThan(timelineText.indexOf("Active stale update memory"));
+
+    fireEvent.change(within(explorer).getByLabelText("Filter pattern memories by status"), {
+      target: { value: "stale" },
+    });
+    expect(within(explorer).getByRole("button", { name: "Old stale memory" })).toBeInTheDocument();
+    expect(within(explorer).queryByRole("button", { name: "Active stale update memory" })).not.toBeInTheDocument();
+
+    fireEvent.change(within(explorer).getByLabelText("Filter pattern memories by status"), {
+      target: { value: "all" },
+    });
+    fireEvent.change(within(explorer).getByLabelText("Filter pattern memories by confidence"), {
+      target: { value: "high" },
+    });
+    expect(within(explorer).getByRole("button", { name: "Active stale update memory" })).toBeInTheDocument();
+    expect(within(explorer).getByRole("button", { name: "Recently fixed memory" })).toBeInTheDocument();
+    expect(within(explorer).queryByRole("button", { name: "Old stale memory" })).not.toBeInTheDocument();
+
+    fireEvent.change(within(explorer).getByLabelText("Filter pattern memories by type"), {
+      target: { value: "operational_fix_pattern" },
+    });
+    expect(within(explorer).getByRole("button", { name: "Recently fixed memory" })).toBeInTheDocument();
+    expect(within(explorer).queryByRole("button", { name: "Active stale update memory" })).not.toBeInTheDocument();
   });
 
   it("keeps MemWal provider as a placeholder and does not add saved memories", async () => {

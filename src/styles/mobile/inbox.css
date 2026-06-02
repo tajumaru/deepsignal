@@ -2025,6 +2025,25 @@
     width: 100%;
   }
 
+  .pattern-memory-draft-modal {
+    max-height: calc(100dvh - 1.5rem);
+    padding-right: 1rem;
+  }
+
+  .pattern-memory-draft-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .pattern-memory-draft-actions {
+    bottom: env(safe-area-inset-bottom, 0px);
+    justify-content: stretch;
+  }
+
+  .pattern-memory-draft-actions .primary-button,
+  .pattern-memory-draft-actions .ghost-button {
+    width: 100%;
+  }
+
   .mobile-signal-inbox:not(.is-detail-open) .mobile-inbox-header {
     gap: 0.34rem;
     padding-bottom: 0.42rem;
