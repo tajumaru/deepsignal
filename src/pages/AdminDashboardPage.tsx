@@ -57,7 +57,9 @@ import {
 } from "../services/systemSignalReporter";
 import { getDiagnostic } from "../diagnostics/diagnosticsService";
 import { createDiagnosticsExportFilename, exportDiagnosticsJson } from "../diagnostics/diagnosticsExport";
+import { summarizeDiagnostics } from "../diagnostics/diagnosticsSummary";
 import { redactSystemSignal } from "../diagnostics/redaction";
+import type { DiagnosticsSummary, DiagnosticsSummaryOptions } from "../diagnostics/types";
 import { WorkspaceActivityLog } from "../features/admin/components/WorkspaceActivityLog";
 import { useAdminToast } from "../features/admin/hooks/useAdminToast";
 import { usePendingSuiRegistration } from "../features/admin/hooks/usePendingSuiRegistration";
@@ -4240,6 +4242,9 @@ export function AdminDashboardPage() {
   const [debouncedMobileInboxSearchQuery, setDebouncedMobileInboxSearchQuery] = useState("");
   const [mobileInboxRecentSearches, setMobileInboxRecentSearches] = useState(() => readMobileInboxRecentSearches());
   const [includeSystemDiagnosticStacks, setIncludeSystemDiagnosticStacks] = useState(false);
+  const [systemDiagnosticsGroupBy, setSystemDiagnosticsGroupBy] =
+    useState<NonNullable<DiagnosticsSummaryOptions["groupBy"]>>("fingerprint");
+  const [systemDiagnosticsSummary, setSystemDiagnosticsSummary] = useState<DiagnosticsSummary | null>(null);
   const versionCounts = useMemo(
     () => getSubmissionVersionCounts(allSignals.map((record) => record.submission)),
     [allSignals],
@@ -4266,6 +4271,10 @@ export function AdminDashboardPage() {
       return [...filteredDemoSignals, ...realVisibleSignals];
     },
     [demoSignalRecords, processingModeFilter, realVisibleSignals],
+  );
+  const visibleSystemRecords = useMemo(
+    () => visibleSignals.filter((record) => isSystemSignal(record.submission)),
+    [visibleSignals],
   );
   const inboxTimelineModel = useMemo(
     () => buildInboxTimelineModel(visibleSignals, t),
@@ -4320,6 +4329,34 @@ export function AdminDashboardPage() {
   const hasMoreRenderedSignals = renderedVisibleSignals.length < visibleSignals.length;
   const inboxSettling = loading || submissionsLoading;
   const [showInitialListSkeleton, setShowInitialListSkeleton] = useState(false);
+  useEffect(() => {
+    if (selectedStreamId !== "system") {
+      setSystemDiagnosticsSummary(null);
+      return;
+    }
+    let cancelled = false;
+    void summarizeDiagnostics({
+      groupBy: systemDiagnosticsGroupBy,
+      source: {
+        kind: "adminInboxLoadedRecords",
+        records: visibleSystemRecords,
+      },
+    })
+      .then((summary) => {
+        if (!cancelled) {
+          setSystemDiagnosticsSummary(summary);
+        }
+      })
+      .catch((error) => {
+        console.error("System diagnostics summary failed", error);
+        if (!cancelled) {
+          setSystemDiagnosticsSummary(null);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedStreamId, systemDiagnosticsGroupBy, visibleSystemRecords]);
   const copyRedactedSystemDiagnostics = useCallback(
     async (submissionId: string) => {
       const diagnostic = await getDiagnostic(submissionId, {
@@ -4339,8 +4376,7 @@ export function AdminDashboardPage() {
     [allSignals, setToast],
   );
   const exportVisibleSystemDiagnostics = useCallback(async () => {
-    const systemRecords = visibleSignals.filter((record) => isSystemSignal(record.submission));
-    if (systemRecords.length === 0) {
+    if (visibleSystemRecords.length === 0) {
       setToast({ tone: "error", message: "No System Diagnostics match the current stream." });
       return;
     }
@@ -4349,7 +4385,7 @@ export function AdminDashboardPage() {
         includeStackTraces: includeSystemDiagnosticStacks,
         source: {
           kind: "adminInboxLoadedRecords",
-          records: systemRecords,
+          records: visibleSystemRecords,
         },
       });
       downloadTextFile(
@@ -4367,7 +4403,7 @@ export function AdminDashboardPage() {
       console.error("System diagnostics export failed", error);
       setToast({ tone: "error", message: "System diagnostics export failed." });
     }
-  }, [includeSystemDiagnosticStacks, setToast, visibleSignals]);
+  }, [includeSystemDiagnosticStacks, setToast, visibleSystemRecords]);
 
   useEffect(() => {
     void import("../storage/storageFactory")
@@ -7600,6 +7636,85 @@ export function AdminDashboardPage() {
                 latestBrief={latestIntelligenceBrief}
                 onOpenDemoBrief={demoBriefAvailable ? () => setDemoIntelligenceAlertOpen(true) : undefined}
               />
+              {selectedStreamId === "system" ? (
+                <section className="system-diagnostics-summary-panel" aria-labelledby="system-diagnostics-summary-title">
+                  <div className="system-diagnostics-summary-header">
+                    <div>
+                      <p className="eyebrow">Redacted runtime evidence</p>
+                      <h3 id="system-diagnostics-summary-title">System Diagnostics Summary</h3>
+                    </div>
+                    <label className="review-sort-control system-diagnostics-group-control">
+                      <span>Group by</span>
+                      <select
+                        value={systemDiagnosticsGroupBy}
+                        onChange={(event) =>
+                          setSystemDiagnosticsGroupBy(event.target.value as NonNullable<DiagnosticsSummaryOptions["groupBy"]>)
+                        }
+                        aria-label="Group diagnostics by"
+                      >
+                        <option value="fingerprint">fingerprint</option>
+                        <option value="errorName">errorName</option>
+                        <option value="routeId">routeId</option>
+                        <option value="buildVersion">buildVersion</option>
+                      </select>
+                    </label>
+                  </div>
+                  <div className="system-diagnostics-summary-metrics">
+                    <div>
+                      <span>Total diagnostics</span>
+                      <strong>{systemDiagnosticsSummary?.total ?? 0}</strong>
+                    </div>
+                    <div>
+                      <span>Grouped by</span>
+                      <strong>{systemDiagnosticsGroupBy}</strong>
+                    </div>
+                  </div>
+                  {systemDiagnosticsSummary && systemDiagnosticsSummary.total > 0 ? (
+                    <div className="system-diagnostics-summary-content">
+                      <div className="system-diagnostics-summary-groups" role="list" aria-label="Top grouped system diagnostics">
+                        {systemDiagnosticsSummary.groups.slice(0, 5).map((group) => (
+                          <article key={group.key} className="system-diagnostics-summary-group" role="listitem">
+                            <div className="system-diagnostics-summary-group-main">
+                              <strong title={group.key}>{group.key}</strong>
+                              <span>{group.count} events</span>
+                            </div>
+                            <div className="system-diagnostics-summary-group-meta">
+                              <span className={`system-diagnostics-severity severity-${group.severityMax}`}>
+                                {group.severityMax.toUpperCase()}
+                              </span>
+                              <span>First {formatDate(group.firstSeen)}</span>
+                              <span>Last {formatDate(group.lastSeen)}</span>
+                            </div>
+                            <div className="system-diagnostics-summary-examples">
+                              <span>Examples</span>
+                              {group.examples.map((id) => (
+                                <code key={id}>{id}</code>
+                              ))}
+                            </div>
+                          </article>
+                        ))}
+                      </div>
+                      <div className="system-diagnostics-summary-routes" aria-label="Top system diagnostic routes">
+                        <span>Top routes</span>
+                        {systemDiagnosticsSummary.topRoutes.length > 0 ? (
+                          systemDiagnosticsSummary.topRoutes.map((route) => (
+                            <div key={route.routeId}>
+                              <code>{route.routeId}</code>
+                              <strong>{route.count}</strong>
+                            </div>
+                          ))
+                        ) : (
+                          <p className="muted">No routes found.</p>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="muted system-diagnostics-summary-empty">
+                      No system diagnostics match the current filters.
+                    </p>
+                  )}
+                </section>
+              ) : null}
               {hasAdminAccess ? (
                 <section className="answer-card answer-card-plain optional-proof-queue-panel">
                   <div className="section-row">

@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { I18nProvider } from "../i18n";
@@ -272,7 +272,19 @@ function renderAdminRoute() {
   );
 }
 
-function createSystemRecord() {
+function createSystemRecord(
+  overrides: {
+    id?: string;
+    createdAt?: string;
+    severity?: "warning" | "error" | "critical";
+    fingerprint?: string;
+    errorName?: string;
+    errorMessage?: string;
+    routeId?: string;
+    routePath?: string;
+    buildVersion?: string;
+  } = {},
+) {
   const form: FormWithCount = {
     id: "system:deepsignal-runtime",
     title: "DeepSignal System Alerts",
@@ -284,11 +296,11 @@ function createSystemRecord() {
     updatedAt: "2026-01-01T00:00:00.000Z",
   };
   const submission: Submission = {
-    id: "system-error-1",
+    id: overrides.id ?? "system-error-1",
     formId: form.id,
     kind: "system_error",
     source: "deepsignal-runtime",
-    systemSeverity: "critical",
+    systemSeverity: overrides.severity ?? "critical",
     answers: {
       diagnostics: "raw-answer-secret",
     },
@@ -324,15 +336,15 @@ function createSystemRecord() {
     },
     metadata: {
       systemDiagnostics: {
-        severity: "critical",
-        fingerprint: "fp-admin",
-        errorName: "ChunkLoadError",
-        errorMessage: "Failed https://example.test/assets/admin.js?token=abc#frag",
+        severity: overrides.severity ?? "critical",
+        fingerprint: overrides.fingerprint ?? "fp-admin",
+        errorName: overrides.errorName ?? "ChunkLoadError",
+        errorMessage: overrides.errorMessage ?? "Failed https://example.test/assets/admin.js?token=abc#frag",
         errorStack: "Error session=secret-token at https://example.test/assets/admin.js?token=abc#frag:1:2",
-        routePath: "/admin?token=abc#frag",
-        routeId: "admin",
+        routePath: overrides.routePath ?? "/admin?token=abc#frag",
+        routeId: overrides.routeId ?? "admin",
         chunkUrl: "https://example.test/assets/admin.js?token=abc#frag",
-        buildVersion: "0.12.21",
+        buildVersion: overrides.buildVersion ?? "0.12.21",
         gitHash: "abc123",
         platform: "iPhone",
         localStorageKey: "deepsignal.submissions",
@@ -347,9 +359,9 @@ function createSystemRecord() {
     tags: ["system"],
     notes: "",
     isEncrypted: false,
-    severity: "critical",
+    severity: overrides.severity ?? "critical",
     subjectPreview: "ChunkLoadError",
-    createdAt: "2026-01-01T00:00:00.000Z",
+    createdAt: overrides.createdAt ?? "2026-01-01T00:00:00.000Z",
     updatedAt: "2026-01-01T00:01:00.000Z",
     remoteSyncStatus: "local_only",
   };
@@ -362,6 +374,71 @@ function createSystemRecord() {
       category: "System" as const,
       searchText: "chunk load error",
     } satisfies SignalRecord,
+  };
+}
+
+function createResponderRecord() {
+  const form: FormWithCount = {
+    id: "responder-form-1",
+    title: "Field Signals",
+    description: "Responder signals",
+    fields: [],
+    sections: [],
+    submissionCount: 1,
+    createdAt: "2026-01-01T00:00:00.000Z",
+    updatedAt: "2026-01-01T00:00:00.000Z",
+  };
+  const submission: Submission = {
+    id: "response-1",
+    formId: form.id,
+    answers: { report: "bridge outage" },
+    attachments: [],
+    status: "unread",
+    priority: "medium",
+    triageStatus: "new",
+    tags: [],
+    notes: "",
+    isEncrypted: false,
+    createdAt: "2026-01-01T00:00:00.000Z",
+    updatedAt: "2026-01-01T00:01:00.000Z",
+  };
+  return {
+    form,
+    submission,
+    record: {
+      form,
+      submission,
+      category: "General" as const,
+      searchText: "bridge outage",
+    } satisfies SignalRecord,
+  };
+}
+
+function allowAdminAccess() {
+  mockCapabilityProfile.current = {
+    ...defaultCapabilityProfile,
+    hasOwnerCap: true,
+    ownerCapIds: ["owner-cap"],
+  };
+  mockWalletState.current = {
+    accountAddress: "0xowner",
+    isConnected: true,
+    status: "connected",
+  };
+  const project = {
+    objectId: "project-1",
+    name: "Ops Project",
+    owner: "0xowner",
+    formsCount: 1,
+    signalsCount: 1,
+    members: [],
+    admins: [],
+    reviewers: [],
+  } satisfies ProjectSummary;
+  mockProjectState.current = {
+    projects: [project],
+    selectedProjectId: project.objectId,
+    selectedProject: project,
   };
 }
 
@@ -558,5 +635,117 @@ describe("AdminDashboardPage", () => {
     expect(exportedJson).not.toContain("token=abc");
     expect(exportedJson).not.toContain("#frag");
     expect(revokeObjectUrlSpy).toHaveBeenCalledWith("blob:diagnostics");
+  });
+
+  it("shows a redacted diagnostics summary only for the System Alerts stream", async () => {
+    const first = createSystemRecord({ id: "system-error-1", fingerprint: "fp-admin", routeId: "admin" });
+    const second = createSystemRecord({
+      id: "system-error-2",
+      createdAt: "2026-01-01T00:02:00.000Z",
+      severity: "error",
+      fingerprint: "fp-admin",
+      routeId: "admin",
+    });
+    const third = createSystemRecord({
+      id: "system-error-3",
+      createdAt: "2026-01-01T00:03:00.000Z",
+      severity: "warning",
+      fingerprint: "fp-public",
+      routeId: "public-form",
+      routePath: "/f/form-1",
+      errorName: "WindowError",
+    });
+    allowAdminAccess();
+    signalIndex.counts.system = 3;
+    signalIndex.signalById = {
+      [first.submission.id]: first.record,
+      [second.submission.id]: second.record,
+      [third.submission.id]: third.record,
+    };
+    mockInboxState.current = {
+      forms: [first.form],
+      selectedStreamId: "system",
+      allSignals: [first.record, second.record, third.record],
+      visibleSignals: [first.record, second.record, third.record],
+      selectedRecord: first.record,
+      signalIndex,
+    };
+
+    renderAdminRoute();
+
+    expect(await screen.findByRole("heading", { name: "System Diagnostics Summary" })).toBeInTheDocument();
+    const panel = screen.getByRole("region", { name: "System Diagnostics Summary" });
+    await waitFor(() => expect(within(panel).getByText("fp-admin")).toBeInTheDocument());
+    expect(within(panel).getByText("3")).toBeInTheDocument();
+    expect(within(panel).getByText("2 events")).toBeInTheDocument();
+    expect(within(panel).getByText("system-error-1")).toBeInTheDocument();
+    expect(within(panel).getByText("system-error-2")).toBeInTheDocument();
+    expect(within(panel).getByText("CRITICAL")).toBeInTheDocument();
+    expect(within(panel).getByText("public-form")).toBeInTheDocument();
+    expect(panel.textContent).not.toContain("raw-answer-secret");
+    expect(panel.textContent).not.toContain("public-answer-secret");
+    expect(panel.textContent).not.toContain("attachment-secret");
+    expect(panel.textContent).not.toContain("session-secret");
+    expect(panel.textContent).not.toContain("signature-secret");
+    expect(panel.textContent).not.toContain("encrypted-secret");
+    expect(panel.textContent).not.toContain("secret-token");
+    expect(panel.textContent).not.toContain("token=abc");
+    expect(panel.textContent).not.toContain("#frag");
+  });
+
+  it("regroups the System Diagnostics Summary by routeId", async () => {
+    const first = createSystemRecord({ id: "system-error-1", fingerprint: "fp-admin", routeId: "admin" });
+    const second = createSystemRecord({
+      id: "system-error-2",
+      createdAt: "2026-01-01T00:02:00.000Z",
+      fingerprint: "fp-public",
+      routeId: "public-form",
+      routePath: "/f/form-1",
+    });
+    allowAdminAccess();
+    signalIndex.counts.system = 2;
+    signalIndex.signalById = {
+      [first.submission.id]: first.record,
+      [second.submission.id]: second.record,
+    };
+    mockInboxState.current = {
+      forms: [first.form],
+      selectedStreamId: "system",
+      allSignals: [first.record, second.record],
+      visibleSignals: [first.record, second.record],
+      selectedRecord: first.record,
+      signalIndex,
+    };
+
+    renderAdminRoute();
+
+    expect(await screen.findByRole("heading", { name: "System Diagnostics Summary" })).toBeInTheDocument();
+    const panel = screen.getByRole("region", { name: "System Diagnostics Summary" });
+    fireEvent.change(screen.getByLabelText("Group diagnostics by"), { target: { value: "routeId" } });
+
+    await waitFor(() => expect(within(panel).queryByText("fp-admin")).not.toBeInTheDocument());
+    expect(within(panel).getAllByText("admin").length).toBeGreaterThan(0);
+    expect(within(panel).getAllByText("public-form").length).toBeGreaterThan(0);
+  });
+
+  it("does not show the diagnostics summary for normal user response streams", async () => {
+    const { form, record, submission } = createResponderRecord();
+    allowAdminAccess();
+    signalIndex.counts.system = 0;
+    signalIndex.signalById = { [submission.id]: record };
+    mockInboxState.current = {
+      forms: [form],
+      selectedStreamId: "all",
+      allSignals: [record],
+      visibleSignals: [record],
+      selectedRecord: null,
+      signalIndex,
+    };
+
+    renderAdminRoute();
+
+    await waitFor(() => expect(screen.queryByRole("heading", { name: "Connect Wallet" })).not.toBeInTheDocument());
+    expect(screen.queryByRole("heading", { name: "System Diagnostics Summary" })).not.toBeInTheDocument();
+    expect(screen.queryByText("No system diagnostics match the current filters.")).not.toBeInTheDocument();
   });
 });
