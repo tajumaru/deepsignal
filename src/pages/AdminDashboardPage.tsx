@@ -4301,7 +4301,7 @@ export function AdminDashboardPage() {
         : visibleSignals[0] ?? null;
   const selectedRecordIsSystem = selectedRecord ? isSystemSignal(selectedRecord.submission) : false;
   const selectedSystemDiagnostics = selectedRecord
-    ? redactSystemSignal(selectedRecord.submission, { includeStackTraces: includeSystemDiagnosticStacks })
+    ? redactSystemSignal(selectedRecord.submission, { includeStackTraces: false })
     : null;
   const selectedRecordIsDemo = isDemoSignalRecord(selectedRecord);
   const selectedSignalTitle = selectedRecord
@@ -4323,7 +4323,7 @@ export function AdminDashboardPage() {
   const copyRedactedSystemDiagnostics = useCallback(
     async (submissionId: string) => {
       const diagnostic = await getDiagnostic(submissionId, {
-        includeStackTraces: includeSystemDiagnosticStacks,
+        includeStackTraces: false,
         source: {
           kind: "adminInboxLoadedRecords",
           records: allSignals,
@@ -4336,7 +4336,7 @@ export function AdminDashboardPage() {
       await navigator.clipboard.writeText(JSON.stringify(diagnostic, null, 2));
       setToast({ tone: "success", message: "Redacted diagnostics copied." });
     },
-    [allSignals, includeSystemDiagnosticStacks, setToast],
+    [allSignals, setToast],
   );
   const exportVisibleSystemDiagnostics = useCallback(async () => {
     const systemRecords = visibleSignals.filter((record) => isSystemSignal(record.submission));
@@ -7518,17 +7518,15 @@ export function AdminDashboardPage() {
                           />
                           <span>Include stack traces</span>
                         </label>
-                        {includeSystemDiagnosticStacks ? (
-                          <span className="signal-chip signal-chip-soft system-diagnostics-warning">
-                            Stack traces may include sensitive runtime context.
-                          </span>
-                        ) : null}
+                        <span className="signal-chip signal-chip-soft system-diagnostics-warning">
+                          Stack traces may include SDK error bodies, route params, object dumps, or local paths.
+                        </span>
                         <button
                           type="button"
                           className="ghost-button"
                           onClick={() => void exportVisibleSystemDiagnostics()}
                         >
-                          Export System Diagnostics JSON
+                          Export diagnostics JSON
                         </button>
                       </div>
                     ) : null}

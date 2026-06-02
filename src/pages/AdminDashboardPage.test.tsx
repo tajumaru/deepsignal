@@ -292,11 +292,29 @@ function createSystemRecord() {
     answers: {
       diagnostics: "raw-answer-secret",
     },
-    attachments: [],
+    attachments: [
+      {
+        fieldId: "upload",
+        type: "document",
+        blobId: "attachment-secret",
+        name: "attachment-secret.pdf",
+        size: 123,
+        inlineData: "attachment-inline-secret",
+      },
+    ],
     publicPayload: {
       answers: {
         hidden: "public-answer-secret",
       },
+      attachments: [
+        {
+          fieldId: "public-upload",
+          type: "document",
+          blobId: "public-attachment-secret",
+          name: "public-attachment-secret.pdf",
+          size: 456,
+        },
+      ],
     },
     respondentMeta: {
       chain: "sui",
@@ -428,6 +446,8 @@ describe("AdminDashboardPage", () => {
 
     renderAdminRoute();
 
+    const includeStackTracesToggle = await screen.findByLabelText(/include stack traces/i);
+    includeStackTracesToggle.click();
     const copyButtons = await screen.findAllByRole("button", { name: /copy redacted diagnostics/i });
     copyButtons[copyButtons.length - 1].click();
 
@@ -435,11 +455,21 @@ describe("AdminDashboardPage", () => {
     const copied = String(writeText.mock.calls[0][0]);
     expect(copied).toContain('"source": "deepsignal-runtime"');
     expect(copied).toContain('"routePath": "/admin"');
+    expect(copied).not.toContain("errorStack");
     expect(copied).not.toContain("raw-answer-secret");
     expect(copied).not.toContain("public-answer-secret");
+    expect(copied).not.toContain("attachment-secret");
+    expect(copied).not.toContain("public-attachment-secret");
     expect(copied).not.toContain("session-secret");
     expect(copied).not.toContain("signature-secret");
     expect(copied).not.toContain("encrypted-secret");
+    expect(copied).not.toContain("answers");
+    expect(copied).not.toContain("publicPayload");
+    expect(copied).not.toContain("encryptedPayload");
+    expect(copied).not.toContain("responderSignature");
+    expect(copied).not.toContain("responderSignedBytes");
+    expect(copied).not.toContain("respondentMeta");
+    expect(copied).not.toContain("metadata");
     expect(copied).not.toContain("token=abc");
     expect(copied).not.toContain("#frag");
   });
@@ -495,7 +525,10 @@ describe("AdminDashboardPage", () => {
 
     renderAdminRoute();
 
-    const exportButton = await screen.findByRole("button", { name: "Export System Diagnostics JSON" });
+    expect(
+      await screen.findByText("Stack traces may include SDK error bodies, route params, object dumps, or local paths."),
+    ).toBeInTheDocument();
+    const exportButton = await screen.findByRole("button", { name: "Export diagnostics JSON" });
     exportButton.click();
 
     await waitFor(() => expect(clickSpy).toHaveBeenCalled());
@@ -507,11 +540,21 @@ describe("AdminDashboardPage", () => {
     expect(exportedJson).toContain('"maxLimit": 500');
     expect(exportedJson).toContain('"truncated": false');
     expect(exportedJson).toContain('"routePath": "/admin"');
+    expect(exportedJson).not.toContain("errorStack");
     expect(exportedJson).not.toContain("raw-answer-secret");
     expect(exportedJson).not.toContain("public-answer-secret");
+    expect(exportedJson).not.toContain("attachment-secret");
+    expect(exportedJson).not.toContain("public-attachment-secret");
     expect(exportedJson).not.toContain("session-secret");
     expect(exportedJson).not.toContain("signature-secret");
     expect(exportedJson).not.toContain("encrypted-secret");
+    expect(exportedJson).not.toContain("answers");
+    expect(exportedJson).not.toContain("publicPayload");
+    expect(exportedJson).not.toContain("encryptedPayload");
+    expect(exportedJson).not.toContain("responderSignature");
+    expect(exportedJson).not.toContain("responderSignedBytes");
+    expect(exportedJson).not.toContain("respondentMeta");
+    expect(exportedJson).not.toContain("metadata");
     expect(exportedJson).not.toContain("token=abc");
     expect(exportedJson).not.toContain("#frag");
     expect(revokeObjectUrlSpy).toHaveBeenCalledWith("blob:diagnostics");
