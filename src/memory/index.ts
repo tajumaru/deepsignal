@@ -37,6 +37,7 @@ export type {
   SignalPatternMemoryDraft,
   SignalPatternMemoryFrequency,
   SignalPatternMemoryFix,
+  SignalPatternMemoryPatch,
   SignalPatternMemoryStatus,
   SignalPatternMemoryType,
 } from "./types";

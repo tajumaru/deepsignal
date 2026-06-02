@@ -235,4 +235,20 @@ describe("related pattern memories", () => {
     expect(matches.map((match) => match.memory.memoryId)).toEqual(["active-memory", "stale-memory"]);
     expect(matches[0].score).toBeGreaterThan(matches[1].score);
   });
+
+  it("still returns confirmed fixed memories when there is an exact source signal match", () => {
+    const matches = getRelatedPatternMemoryMatches(createRecord(), [
+      createMemory({
+        memoryId: "confirmed-memory",
+        status: "confirmed_fixed",
+        title: "Confirmed historical wallet pattern",
+        summary: "Previously fixed wallet confusion.",
+        sourceSignalIds: ["signal-1"],
+        tags: [],
+      }),
+    ]);
+
+    expect(matches.map((match) => match.memory.memoryId)).toEqual(["confirmed-memory"]);
+    expect(matches[0].reasons).toContain("source_signal");
+  });
 });

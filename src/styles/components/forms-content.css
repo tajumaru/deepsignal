@@ -965,7 +965,7 @@ select {
   line-height: 1.35;
 }
 
-.signal-column-tools input {
+.signal-column-tools input:not([type="checkbox"]):not([type="radio"]) {
   width: min(100%, 320px);
 }
 

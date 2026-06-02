@@ -92,6 +92,18 @@ export type SignalMemoryWriteResult = {
   memoryId?: string;
 };
 
+export type SignalPatternMemoryPatch = Partial<
+  Pick<
+    SignalPatternMemory,
+    | "status"
+    | "confidence"
+    | "recommendedAction"
+    | "recommendedCodexPrompt"
+    | "failedFixes"
+    | "confirmedFixes"
+  >
+>;
+
 export type SignalMemorySearchResult = {
   memories: SignalPatternMemory[];
   total: number;
@@ -104,6 +116,7 @@ export interface SignalMemoryAdapter {
   listMemories(namespace: string): Promise<SignalPatternMemory[]>;
   getMemory(namespace: string, memoryId: string): Promise<SignalPatternMemory | null>;
   saveMemory(namespace: string, memory: SignalPatternMemory): Promise<SignalMemoryWriteResult>;
+  updateMemory(namespace: string, memoryId: string, patch: SignalPatternMemoryPatch): Promise<SignalMemoryWriteResult>;
   searchMemories(
     namespace: string,
     query: string,

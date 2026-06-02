@@ -3,6 +3,7 @@ import type {
   SignalMemorySearchOptions,
   SignalMemorySearchResult,
   SignalMemoryWriteResult,
+  SignalPatternMemoryPatch,
   SignalPatternMemory,
 } from "./types";
 import {
@@ -71,6 +72,38 @@ export class InMemorySignalMemoryAdapter implements SignalMemoryAdapter {
       ok: true,
       skipped: false,
       memoryId: memory.memoryId,
+    };
+  }
+
+  async updateMemory(
+    namespace: string,
+    memoryId: string,
+    patch: SignalPatternMemoryPatch,
+  ): Promise<SignalMemoryWriteResult> {
+    assertSignalMemoryNamespace(namespace);
+    assertSafeSignalPatternMemory(patch);
+    const store = getNamespaceStore(namespace);
+    const existing = store.get(memoryId);
+    if (!existing) {
+      return {
+        ok: false,
+        skipped: true,
+        memoryId,
+      };
+    }
+    const updated: SignalPatternMemory = {
+      ...existing,
+      ...patch,
+      memoryId: existing.memoryId,
+      createdAt: existing.createdAt,
+      updatedAt: new Date().toISOString(),
+    };
+    assertSafeSignalPatternMemory(updated);
+    store.set(memoryId, updated);
+    return {
+      ok: true,
+      skipped: false,
+      memoryId,
     };
   }
 

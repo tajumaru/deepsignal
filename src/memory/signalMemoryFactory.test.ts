@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { SignalPatternMemory, SignalPatternMemoryDraft } from "./types";
 import {
   createDraftFromDiagnosticsSummaryGroup,
@@ -158,5 +158,56 @@ describe("Signal Pattern Memory adapter factory", () => {
       total: 0,
       skipped: false,
     });
+  });
+
+  it("updates runtime memories and refreshes updatedAt", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-06-04T12:00:00.000Z"));
+    const adapter = createSignalMemoryAdapter({
+      VITE_SIGNAL_MEMORY_PROVIDER: "memory",
+    } as ImportMetaEnv);
+    const namespace = "deepsignal:project:1:signal-pattern-memory:v1";
+    const memory = safeMemory();
+
+    await adapter.saveMemory(namespace, memory);
+    await expect(adapter.updateMemory(namespace, memory.memoryId, {
+      status: "investigating",
+      confidence: "high",
+      recommendedAction: "Review the confirmed runtime cluster.",
+      recommendedCodexPrompt: "Investigate the confirmed runtime cluster.",
+      failedFixes: [{ summary: "Cache-only recovery did not fix the issue." }],
+      confirmedFixes: [{ summary: "Route preloading fixed the issue." }],
+    })).resolves.toEqual({
+      ok: true,
+      skipped: false,
+      memoryId: memory.memoryId,
+    });
+
+    const updated = await adapter.getMemory(namespace, memory.memoryId);
+    expect(updated).toMatchObject({
+      status: "investigating",
+      confidence: "high",
+      recommendedAction: "Review the confirmed runtime cluster.",
+      recommendedCodexPrompt: "Investigate the confirmed runtime cluster.",
+      failedFixes: [{ summary: "Cache-only recovery did not fix the issue." }],
+      confirmedFixes: [{ summary: "Route preloading fixed the issue." }],
+      updatedAt: "2026-06-04T12:00:00.000Z",
+    });
+    expect(updated?.createdAt).toBe(memory.createdAt);
+    vi.useRealTimers();
+  });
+
+  it("rejects forbidden raw fields in update patches", async () => {
+    const adapter = createSignalMemoryAdapter({
+      VITE_SIGNAL_MEMORY_PROVIDER: "memory",
+    } as ImportMetaEnv);
+    const namespace = "deepsignal:project:1:signal-pattern-memory:v1";
+    const memory = safeMemory();
+
+    await adapter.saveMemory(namespace, memory);
+    await expect(adapter.updateMemory(namespace, memory.memoryId, {
+      recommendedAction: "Unsafe update",
+      metadata: { raw: "secret" },
+    } as never)).rejects.toBeInstanceOf(UnsafeSignalMemoryError);
   });
 });

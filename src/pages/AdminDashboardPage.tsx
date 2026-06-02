@@ -69,6 +69,8 @@ import {
   type SignalPatternMemory,
   type SignalPatternMemoryConfidence,
   type SignalPatternMemoryDraft,
+  type SignalPatternMemoryFix,
+  type SignalPatternMemoryPatch,
   type SignalPatternMemoryStatus,
   type SignalPatternMemoryType,
 } from "../memory";
@@ -4096,6 +4098,16 @@ const patternMemoryStatusOptions: SignalPatternMemoryStatus[] = [
   "revoked",
 ];
 
+const patternMemoryLifecycleStatusOptions: SignalPatternMemoryStatus[] = [
+  "active",
+  "watching",
+  "investigating",
+  "mitigated",
+  "confirmed_fixed",
+  "stale",
+  "revoked",
+];
+
 const patternMemoryTypeOptions: SignalPatternMemoryType[] = [
   "system_diagnostic_pattern",
   "user_feedback_pattern",
@@ -4514,6 +4526,11 @@ export function AdminDashboardPage() {
   const [patternMemoryStatusFilter, setPatternMemoryStatusFilter] = useState<SignalPatternMemoryStatus | "all">("all");
   const [patternMemoryTagFilter, setPatternMemoryTagFilter] = useState("all");
   const [selectedPatternMemoryId, setSelectedPatternMemoryId] = useState<string | null>(null);
+  const [patternMemoryEditMessage, setPatternMemoryEditMessage] = useState("");
+  const [patternMemoryActionDraft, setPatternMemoryActionDraft] = useState("");
+  const [patternMemoryPromptDraft, setPatternMemoryPromptDraft] = useState("");
+  const [patternMemoryFailedFixDraft, setPatternMemoryFailedFixDraft] = useState("");
+  const [patternMemoryConfirmedFixDraft, setPatternMemoryConfirmedFixDraft] = useState("");
   const versionCounts = useMemo(
     () => getSubmissionVersionCounts(allSignals.map((record) => record.submission)),
     [allSignals],
@@ -4627,6 +4644,13 @@ export function AdminDashboardPage() {
     filteredPatternMemories.find((memory) => memory.memoryId === selectedPatternMemoryId) ??
     filteredPatternMemories[0] ??
     null;
+  useEffect(() => {
+    setPatternMemoryActionDraft(selectedPatternMemory?.recommendedAction ?? "");
+    setPatternMemoryPromptDraft(selectedPatternMemory?.recommendedCodexPrompt ?? "");
+    setPatternMemoryFailedFixDraft("");
+    setPatternMemoryConfirmedFixDraft("");
+    setPatternMemoryEditMessage("");
+  }, [selectedPatternMemory?.memoryId, selectedPatternMemory?.recommendedAction, selectedPatternMemory?.recommendedCodexPrompt]);
   const selectedRecordIsDemo = isDemoSignalRecord(selectedRecord);
   const selectedSignalTitle = selectedRecord
     ? selectedRecordIsSystem
@@ -5100,6 +5124,68 @@ export function AdminDashboardPage() {
       setToast({ tone: "error", message });
     }
   }, [patternMemoryDraft, patternMemoryNamespace, setToast]);
+
+  const updateSavedPatternMemory = useCallback(async (
+    memoryId: string,
+    patch: SignalPatternMemoryPatch,
+  ) => {
+    if (!patternMemoryNamespace) {
+      const message = "Select a project before updating pattern memory.";
+      setPatternMemoryEditMessage(message);
+      setToast({ tone: "error", message });
+      return;
+    }
+    try {
+      const adapter = createSignalMemoryAdapter();
+      const result = await adapter.updateMemory(patternMemoryNamespace, memoryId, patch);
+      const message = result.skipped && result.reason === "noop"
+        ? "Pattern memory validated. Persistence is disabled."
+        : result.skipped && result.reason === "memwal_not_implemented"
+          ? "Pattern memory validated. MemWal persistence is not implemented yet."
+          : result.skipped
+            ? "Pattern memory update skipped."
+            : "Pattern memory updated for this session.";
+      setSavedPatternMemories(await adapter.listMemories(patternMemoryNamespace));
+      setPatternMemoryEditMessage(message);
+      setToast({ tone: "success", message });
+    } catch (error) {
+      console.error("Pattern memory update failed", error);
+      const message = "Pattern memory update rejected because unsafe raw signal fields were detected.";
+      setPatternMemoryEditMessage(message);
+      setToast({ tone: "error", message });
+    }
+  }, [patternMemoryNamespace, setToast]);
+
+  const savePatternMemoryLifecycleEdits = useCallback(() => {
+    if (!selectedPatternMemory) {
+      return;
+    }
+    const failedFixes: SignalPatternMemoryFix[] = [...selectedPatternMemory.failedFixes];
+    const confirmedFixes: SignalPatternMemoryFix[] = [...selectedPatternMemory.confirmedFixes];
+    const attemptedSummary = patternMemoryFailedFixDraft.trim();
+    const confirmedSummary = patternMemoryConfirmedFixDraft.trim();
+    if (attemptedSummary) {
+      failedFixes.push({ summary: attemptedSummary, attemptedAt: new Date().toISOString() });
+    }
+    if (confirmedSummary) {
+      confirmedFixes.push({ summary: confirmedSummary, confirmedAt: new Date().toISOString() });
+    }
+    void updateSavedPatternMemory(selectedPatternMemory.memoryId, {
+      recommendedAction: patternMemoryActionDraft.trim() || undefined,
+      recommendedCodexPrompt: patternMemoryPromptDraft.trim() || undefined,
+      failedFixes,
+      confirmedFixes,
+    });
+    setPatternMemoryFailedFixDraft("");
+    setPatternMemoryConfirmedFixDraft("");
+  }, [
+    patternMemoryActionDraft,
+    patternMemoryConfirmedFixDraft,
+    patternMemoryFailedFixDraft,
+    patternMemoryPromptDraft,
+    selectedPatternMemory,
+    updateSavedPatternMemory,
+  ]);
 
   useEffect(() => {
     void refreshSavedPatternMemories();
@@ -8286,6 +8372,40 @@ export function AdminDashboardPage() {
                                   <strong>{selectedPatternMemory.frequency.count} events</strong>
                                 </div>
                               </div>
+                              <div className="review-toolbar pattern-memory-explorer-filters" aria-label="Pattern memory lifecycle controls">
+                                <label className="review-sort-control">
+                                  <span>Status</span>
+                                  <select
+                                    value={selectedPatternMemory.status}
+                                    onChange={(event) => {
+                                      void updateSavedPatternMemory(selectedPatternMemory.memoryId, {
+                                        status: event.target.value as SignalPatternMemoryStatus,
+                                      });
+                                    }}
+                                    aria-label="Update pattern memory status"
+                                  >
+                                    {patternMemoryLifecycleStatusOptions.map((status) => (
+                                      <option key={status} value={status}>{status}</option>
+                                    ))}
+                                  </select>
+                                </label>
+                                <label className="review-sort-control">
+                                  <span>Confidence</span>
+                                  <select
+                                    value={selectedPatternMemory.confidence}
+                                    onChange={(event) => {
+                                      void updateSavedPatternMemory(selectedPatternMemory.memoryId, {
+                                        confidence: event.target.value as SignalPatternMemoryConfidence,
+                                      });
+                                    }}
+                                    aria-label="Update pattern memory confidence"
+                                  >
+                                    {patternMemoryConfidenceOptions.map((confidence) => (
+                                      <option key={confidence} value={confidence}>{confidence}</option>
+                                    ))}
+                                  </select>
+                                </label>
+                              </div>
                               <div className="system-diagnostics-summary-examples">
                                 <span>Evidence</span>
                                 {selectedPatternMemory.evidenceSummary.length > 0 ? (
@@ -8296,12 +8416,14 @@ export function AdminDashboardPage() {
                                   <span>None</span>
                                 )}
                               </div>
-                              {selectedPatternMemory.recommendedAction ? (
-                                <div className="system-diagnostics-summary-examples">
-                                  <span>Recommended action</span>
-                                  <code>{selectedPatternMemory.recommendedAction}</code>
-                                </div>
-                              ) : null}
+                              <label className="review-field">
+                                <span>Recommended action</span>
+                                <textarea
+                                  value={patternMemoryActionDraft}
+                                  onChange={(event) => setPatternMemoryActionDraft(event.target.value)}
+                                  aria-label="Edit recommended action"
+                                />
+                              </label>
                               {selectedPatternMemory.recommendedCodexPrompt ? (
                                 <div className="system-diagnostics-summary-examples related-pattern-memory-prompt">
                                   <span>Suggested Codex Prompt</span>
@@ -8319,6 +8441,14 @@ export function AdminDashboardPage() {
                                   </button>
                                 </div>
                               ) : null}
+                              <label className="review-field">
+                                <span>Recommended Codex prompt</span>
+                                <textarea
+                                  value={patternMemoryPromptDraft}
+                                  onChange={(event) => setPatternMemoryPromptDraft(event.target.value)}
+                                  aria-label="Edit recommended Codex prompt"
+                                />
+                              </label>
                               <div className="system-diagnostics-summary-examples">
                                 <span>Failed fixes</span>
                                 {selectedPatternMemory.failedFixes.length > 0 ? (
@@ -8329,6 +8459,14 @@ export function AdminDashboardPage() {
                                   <span>None</span>
                                 )}
                               </div>
+                              <label className="review-field">
+                                <span>Add failed fix</span>
+                                <input
+                                  value={patternMemoryFailedFixDraft}
+                                  onChange={(event) => setPatternMemoryFailedFixDraft(event.target.value)}
+                                  aria-label="Add failed fix"
+                                />
+                              </label>
                               <div className="system-diagnostics-summary-examples">
                                 <span>Confirmed fixes</span>
                                 {selectedPatternMemory.confirmedFixes.length > 0 ? (
@@ -8339,6 +8477,24 @@ export function AdminDashboardPage() {
                                   <span>None</span>
                                 )}
                               </div>
+                              <label className="review-field">
+                                <span>Add confirmed fix</span>
+                                <input
+                                  value={patternMemoryConfirmedFixDraft}
+                                  onChange={(event) => setPatternMemoryConfirmedFixDraft(event.target.value)}
+                                  aria-label="Add confirmed fix"
+                                />
+                              </label>
+                              <button
+                                type="button"
+                                className="primary-button"
+                                onClick={savePatternMemoryLifecycleEdits}
+                              >
+                                Update pattern memory
+                              </button>
+                              {patternMemoryEditMessage ? (
+                                <p className="muted" role="status">{patternMemoryEditMessage}</p>
+                              ) : null}
                               <div className="metadata-list signal-proof-metadata-list">
                                 <div className="metadata-row">
                                   <span>Source signal IDs</span>

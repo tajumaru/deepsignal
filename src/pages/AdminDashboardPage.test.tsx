@@ -980,16 +980,48 @@ describe("AdminDashboardPage", () => {
     expect(within(explorer).queryByRole("button", { name: "Template request memory" })).not.toBeInTheDocument();
 
     fireEvent.click(within(explorer).getByRole("button", { name: "Wallet connection memory" }));
+    fireEvent.change(within(explorer).getByLabelText("Filter pattern memories by status"), {
+      target: { value: "all" },
+    });
     expect(within(explorer).getByText("Safe wallet connection summary.")).toBeInTheDocument();
     expect(within(explorer).getByText("Safe redacted wallet evidence.")).toBeInTheDocument();
-    expect(within(explorer).getByText("Review wallet copy.")).toBeInTheDocument();
+    expect(within(explorer).getByLabelText("Edit recommended action")).toHaveValue("Review wallet copy.");
     expect(within(explorer).getByText("Changing button color did not reduce confusion.")).toBeInTheDocument();
     expect(within(explorer).getByText("Clearer wallet copy reduced support reports.")).toBeInTheDocument();
     expect(within(explorer).getByText("response-1")).toBeInTheDocument();
     expect(within(explorer).getByText("0.13.0")).toBeInTheDocument();
 
+    fireEvent.change(within(explorer).getByLabelText("Update pattern memory status"), {
+      target: { value: "investigating" },
+    });
+    expect(await within(explorer).findByText("Pattern memory updated for this session.")).toBeInTheDocument();
+    await waitFor(() => expect(within(explorer).getAllByText("investigating").length).toBeGreaterThan(0));
+
+    fireEvent.change(within(explorer).getByLabelText("Update pattern memory confidence"), {
+      target: { value: "high" },
+    });
+    await waitFor(() => expect(within(explorer).getAllByText("high").length).toBeGreaterThan(0));
+
+    fireEvent.change(within(explorer).getByLabelText("Edit recommended action"), {
+      target: { value: "Review the updated wallet lifecycle." },
+    });
+    fireEvent.change(within(explorer).getByLabelText("Edit recommended Codex prompt"), {
+      target: { value: "Investigate updated wallet lifecycle." },
+    });
+    fireEvent.change(within(explorer).getByLabelText("Add failed fix"), {
+      target: { value: "Hiding the wallet badge caused regressions." },
+    });
+    fireEvent.change(within(explorer).getByLabelText("Add confirmed fix"), {
+      target: { value: "Inline wallet copy resolved confusion." },
+    });
+    fireEvent.click(within(explorer).getByRole("button", { name: "Update pattern memory" }));
+    expect(await within(explorer).findByText("Hiding the wallet badge caused regressions.")).toBeInTheDocument();
+    expect(within(explorer).getByText("Inline wallet copy resolved confusion.")).toBeInTheDocument();
+    expect(within(explorer).getByLabelText("Edit recommended action")).toHaveValue("Review the updated wallet lifecycle.");
+    expect(within(explorer).getByLabelText("Edit recommended Codex prompt")).toHaveValue("Investigate updated wallet lifecycle.");
+
     fireEvent.click(within(explorer).getByRole("button", { name: "Copy Codex Prompt" }));
-    await waitFor(() => expect(writeText).toHaveBeenCalledWith("Investigate wallet connection memory."));
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith("Investigate updated wallet lifecycle."));
 
     expect(explorer.textContent).not.toContain("raw explorer answer secret");
     expect(explorer.textContent).not.toContain("raw-explorer-attachment");

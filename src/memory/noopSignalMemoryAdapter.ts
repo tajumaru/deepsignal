@@ -3,6 +3,7 @@ import type {
   SignalMemorySearchOptions,
   SignalMemorySearchResult,
   SignalMemoryWriteResult,
+  SignalPatternMemoryPatch,
   SignalPatternMemory,
 } from "./types";
 import {
@@ -39,6 +40,21 @@ export class NoopSignalMemoryAdapter implements SignalMemoryAdapter {
       skipped: true,
       reason: "noop",
       memoryId: memory.memoryId,
+    };
+  }
+
+  async updateMemory(
+    namespace: string,
+    memoryId: string,
+    patch: SignalPatternMemoryPatch,
+  ): Promise<SignalMemoryWriteResult> {
+    assertSignalMemoryNamespace(namespace);
+    assertSafeSignalPatternMemory(patch);
+    return {
+      ok: false,
+      skipped: true,
+      reason: "noop",
+      memoryId,
     };
   }
 
