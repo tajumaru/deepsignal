@@ -3511,6 +3511,46 @@
     0 14px 28px rgba(3, 16, 28, 0.22);
 }
 
+.signal-card.is-system-signal {
+  border-color: rgba(244, 114, 182, 0.46);
+  background:
+    linear-gradient(90deg, rgba(244, 114, 182, 0.16), transparent 48%),
+    linear-gradient(180deg, rgba(36, 22, 48, 0.96) 0%, rgba(13, 25, 38, 0.95) 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 214, 238, 0.08),
+    0 0 0 1px rgba(244, 114, 182, 0.08),
+    0 12px 28px rgba(36, 12, 32, 0.24);
+}
+
+.signal-card.is-system-signal::before {
+  background: linear-gradient(180deg, #f9a8d4 0%, #d946ef 58%, #67e8f9 100%);
+}
+
+.signal-card.is-system-signal.is-active {
+  border-color: rgba(244, 114, 182, 0.74);
+  background:
+    radial-gradient(circle at 100% 0%, rgba(244, 114, 182, 0.24), transparent 34%),
+    linear-gradient(180deg, rgba(47, 26, 66, 0.98) 0%, rgba(13, 31, 47, 0.97) 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 230, 244, 0.16),
+    0 0 0 1px rgba(244, 114, 182, 0.3),
+    0 0 0 3px rgba(217, 70, 239, 0.12),
+    0 18px 36px rgba(29, 8, 37, 0.34),
+    0 0 34px rgba(244, 114, 182, 0.18);
+}
+
+.signal-card.is-system-signal .signal-card-read-dot.status-unread {
+  background: #f472b6;
+  box-shadow: 0 0 14px rgba(244, 114, 182, 0.54);
+}
+
+.signal-card.is-system-signal .mailbox-meta-chip.priority-high,
+.signal-card.is-system-signal .mailbox-meta-chip.priority-medium {
+  border-color: rgba(244, 114, 182, 0.32);
+  background: rgba(244, 114, 182, 0.12);
+  color: #ffd9ed;
+}
+
 .signal-card-topline,
 .signal-detail-meta-row,
 .signal-badge-row,
@@ -3680,6 +3720,45 @@
     0 0 16px rgba(102, 227, 255, 0.14);
 }
 
+.signal-card-selection-badge.is-system,
+.signal-card-selection-badge.is-system-severity {
+  border-color: rgba(244, 114, 182, 0.48);
+  background: rgba(244, 114, 182, 0.15);
+  color: #ffd9ed;
+}
+
+.signal-card-selection-badge.is-system-severity.severity-critical,
+.signal-card-selection-badge.is-system-severity.severity-error {
+  border-color: rgba(103, 232, 249, 0.36);
+  background:
+    linear-gradient(90deg, rgba(244, 114, 182, 0.14), rgba(103, 232, 249, 0.08));
+  color: #fce7f3;
+}
+
+.system-diagnostics-copy-button {
+  justify-self: start;
+  min-height: 2rem;
+  padding-block: 0.34rem;
+}
+
+.stream-item.tone-system {
+  border-color: rgba(244, 114, 182, 0.24);
+}
+
+.stream-item.tone-system.is-active {
+  border-color: rgba(244, 114, 182, 0.58);
+  background:
+    radial-gradient(circle at top right, rgba(244, 114, 182, 0.16), transparent 38%),
+    rgba(18, 20, 35, 0.58);
+  box-shadow:
+    0 0 0 1px rgba(244, 114, 182, 0.18),
+    0 0 24px rgba(244, 114, 182, 0.14);
+}
+
+.stream-item.tone-system .stream-item-icon {
+  color: #f9a8d4;
+}
+
 .signal-card-mailbox-meta {
   display: flex;
   flex-wrap: wrap;
@@ -3751,6 +3830,82 @@
   border-color: rgba(250, 204, 21, 0.24);
   background: rgba(250, 204, 21, 0.1);
   color: #fde68a;
+}
+
+.system-signal-detail-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.5rem;
+}
+
+.system-signal-badge,
+.system-signal-severity,
+.system-signal-safari {
+  border-color: rgba(244, 114, 182, 0.38);
+  background: rgba(244, 114, 182, 0.13);
+  color: #ffd9ed;
+}
+
+.system-signal-diagnostics-card {
+  border-color: rgba(244, 114, 182, 0.22);
+  background:
+    linear-gradient(180deg, rgba(35, 22, 48, 0.72), rgba(5, 17, 28, 0.78));
+}
+
+.system-signal-diagnostics-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.65rem;
+  margin-bottom: 0.8rem;
+}
+
+.system-signal-diagnostics-grid div {
+  min-width: 0;
+  padding: 0.58rem 0.65rem;
+  border: 1px solid rgba(244, 114, 182, 0.14);
+  border-radius: 8px;
+  background: rgba(2, 12, 20, 0.34);
+}
+
+.system-signal-diagnostics-grid span {
+  display: block;
+  margin-bottom: 0.24rem;
+  color: #b9cbd5;
+  font-size: 0.68rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.system-signal-diagnostics-grid strong,
+.system-signal-message,
+.system-signal-json {
+  overflow-wrap: anywhere;
+}
+
+.system-signal-diagnostics-grid strong {
+  color: #fde7f3;
+  font-size: 0.84rem;
+}
+
+.system-signal-json {
+  max-height: 22rem;
+  margin: 0;
+  padding: 0.75rem;
+  overflow: auto;
+  border: 1px solid rgba(116, 226, 255, 0.12);
+  border-radius: 8px;
+  background: rgba(1, 8, 14, 0.62);
+  color: #d7f5ff;
+  font-size: 0.75rem;
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
+
+@media (max-width: 720px) {
+  .system-signal-diagnostics-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .mailbox-meta-chip.is-unlocked,

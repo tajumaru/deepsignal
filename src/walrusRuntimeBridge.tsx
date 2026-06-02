@@ -12,6 +12,7 @@ import { endPerf, markPerfMilestone, startPerf } from "./lib/perf";
 import { WalrusDiagnosticError, getWalrusErrorMessage } from "./storage/walrusDiagnostics";
 import { setWalrusRuntimeContext } from "./storage/walrusAdapter";
 import { setSuiRuntimeContext } from "./suiRuntime";
+import { reportSystemError } from "./services/systemSignalReporter";
 
 const WALRUS_TX_WAIT_TIMEOUT_MS = 3 * 60 * 1000;
 const WALRUS_UPLOAD_RELAY_TIMEOUT_RAW = import.meta.env.VITE_WALRUS_UPLOAD_RELAY_TIMEOUT_MS;
@@ -90,6 +91,15 @@ function WalrusRuntimeBridgeInner() {
         });
       })
       .catch((error) => {
+        reportSystemError({
+          error,
+          severity: "warning",
+          sourceContext: "walrus-aggregator-readiness",
+          diagnostics: {
+            aggregatorUrl,
+            timeoutMs: AGGREGATOR_DIAGNOSTIC_TIMEOUT_MS,
+          },
+        });
         endPerf("walrus:aggregator-readiness", "failed", error instanceof Error ? error.message : String(error));
         markPerfMilestone("walrus:aggregator-readiness:end", "failed");
         logRouteLifecycle("walrus:aggregator-readiness-failed", {

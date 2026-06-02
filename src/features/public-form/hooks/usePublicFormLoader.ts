@@ -5,6 +5,7 @@ import { measurePerf } from "../../../lib/perf";
 import { getRepublishFormPath } from "../../../lib/publicLinks";
 import { verifyPublicRouteAssets } from "../../../lib/publicRouteAssets";
 import { localStorageAdapter } from "../../../storage/localStorageAdapter";
+import { reportSystemError } from "../../../services/systemSignalReporter";
 import type { FormSchema } from "../../../types";
 import type { PublicAnswers } from "../types";
 
@@ -398,6 +399,19 @@ export function usePublicFormLoader({
           createLoadErrorDetail(error, { formId, manifestBlobId }),
           error,
         );
+        reportSystemError({
+          error,
+          routePath: `/f/${formId}${manifestBlobId ? `?manifest=${manifestBlobId}` : ""}`,
+          routeId: "public-form",
+          chunkUrl: detail.failedAssetUrl,
+          severity: detail.code === "module_script_failed" ? "critical" : "error",
+          sourceContext: "public-form-load",
+          diagnostics: {
+            publicFormLoadError: detail,
+            formId,
+            manifestBlobId,
+          },
+        });
         setLoadErrorDetail(detail);
         setLoadError(
           manifestBlobId

@@ -1,5 +1,6 @@
 import { formatAnswerText } from "../../../lib/answerFormatting";
 import { getSubmissionRespondentMeta, isVerifiedSignal } from "../../../lib/respondentMeta";
+import { getSystemSignalDiagnostics, isSystemSignal } from "../../../services/systemSignalReporter";
 import type { useI18n } from "../../../i18n";
 import type { Submission, SubmissionLocation } from "../../../types";
 import type { SignalRecord } from "../hooks/useSignalInboxData";
@@ -191,6 +192,24 @@ function buildRecommendedAction(record: SignalRecord, score: number, t?: Transla
 }
 
 export function buildSignalCardIntelligence(record: SignalRecord, t?: TranslationFn): SignalCardIntelligence {
+  if (isSystemSignal(record.submission)) {
+    const diagnostics = getSystemSignalDiagnostics(record.submission);
+    const severity = String(record.submission.systemSeverity ?? diagnostics?.severity ?? "error");
+    const route = String(diagnostics?.routePath || diagnostics?.pathname || "unknown route");
+    const buildVersion = String(diagnostics?.buildVersion || "unknown");
+    return {
+      urgencyScore: severity === "critical" ? 96 : severity === "error" ? 82 : 62,
+      urgencyLabel: severity.charAt(0).toUpperCase() + severity.slice(1),
+      signalTypeLabel: "System",
+      analystTypeLabel: diagnostics?.mobileSafari ? "Mobile Safari" : "Runtime",
+      shortSummary: String(diagnostics?.errorMessage || record.submission.aiSummary || "DeepSignal runtime alert."),
+      evidenceQuote: `${route} / v${buildVersion}`,
+      recommendedAction: "Copy diagnostics and inspect the failing route, storage, or decrypt path.",
+      emotionalTone: "System",
+      verifiedLabel: "System",
+      locationLabel: diagnostics?.mobileSafari ? "Mobile Safari" : route,
+    };
+  }
   const urgencyScore = buildUrgencyScore(record.submission);
   const signalType = resolveSignalTypeForForm(record.form);
   const analystType = resolveAnalystTypeForForm(record.form, signalType);

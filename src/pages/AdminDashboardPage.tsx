@@ -51,6 +51,11 @@ import { SignalCard } from "../features/admin/components/SignalCard";
 import { buildSignalCardIntelligence } from "../features/admin/components/signalIntelligence";
 import { SignalTimelineSection } from "../features/admin/components/SignalTimelineSection";
 import { MailboxIcon, SignalChannelSelector, SignalStreamsNav } from "../features/admin/components/SignalStreamsNav";
+import {
+  copySystemSignalDiagnostics,
+  getSystemSignalDiagnostics,
+  isSystemSignal,
+} from "../services/systemSignalReporter";
 import { WorkspaceActivityLog } from "../features/admin/components/WorkspaceActivityLog";
 import { useAdminToast } from "../features/admin/hooks/useAdminToast";
 import { usePendingSuiRegistration } from "../features/admin/hooks/usePendingSuiRegistration";
@@ -4198,9 +4203,13 @@ export function AdminDashboardPage() {
           visibleSignals.some((record) => record.submission.id === selectedRecordFromInbox.submission.id)
         ? selectedRecordFromInbox
         : visibleSignals[0] ?? null;
+  const selectedRecordIsSystem = selectedRecord ? isSystemSignal(selectedRecord.submission) : false;
+  const selectedSystemDiagnostics = selectedRecord ? getSystemSignalDiagnostics(selectedRecord.submission) : null;
   const selectedRecordIsDemo = isDemoSignalRecord(selectedRecord);
   const selectedSignalTitle = selectedRecord
-    ? isOnchainRecoveredSignal(selectedRecord.submission)
+    ? selectedRecordIsSystem
+      ? getSignalSubject(selectedRecord.submission)
+      : isOnchainRecoveredSignal(selectedRecord.submission)
       ? t("onchainRecoverySnapshotTitle")
       : getSignalSubject(selectedRecord.submission)
     : "";
@@ -6192,6 +6201,11 @@ export function AdminDashboardPage() {
       count: signalIndex.counts.high,
     },
     {
+      id: "system",
+      label: "System Alerts",
+      count: signalIndex.counts.system,
+    },
+    {
       id: "follow_up",
       label: t("needsFollowUpLabel"),
       count: signalIndex.counts.followUp,
@@ -7523,6 +7537,7 @@ export function AdminDashboardPage() {
                         : getSignalPreview(submission);
                     const isAnonymousSignal = getSubmissionRespondentMeta(submission).isAnonymous;
                     const isDemoSignal = isDemoSignalSubmission(submission);
+                    const cardIsSystemSignal = isSystemSignal(submission);
                     const isPendingSui = Boolean(submission.pendingOnchainRegistration);
                     const isSelectedForSui = selectedPendingSignalIds.includes(submission.id);
                     const isSelectedSignal = selectedRecord?.submission.id === submission.id;
@@ -7581,8 +7596,23 @@ export function AdminDashboardPage() {
                         isOnchainRecoverySnapshot={isOnchainRecoverySnapshot}
                         isDemoSignal={isDemoSignal}
                         isDemoJustArrived={isDemoSignal && demoJustArrivedSignalIds.has(submission.id)}
+                        isSystemSignal={cardIsSystemSignal}
+                        systemSeverityLabel={
+                          cardIsSystemSignal
+                            ? String(submission.systemSeverity ?? submission.severity ?? "error").toUpperCase()
+                            : ""
+                        }
                         hasPayloadIssue={hasPayloadIssue}
                         isRegistering={isRegisteringSignal(submission.id)}
+                        onCopyDiagnostics={
+                          cardIsSystemSignal
+                            ? () => {
+                                void copySystemSignalDiagnostics(submission)
+                                  .then(() => setToast({ tone: "success", message: "Diagnostics copied." }))
+                                  .catch(() => setToast({ tone: "error", message: "Copy failed." }));
+                              }
+                            : undefined
+                        }
                         onSelect={() => {
                           handleSelectDesktopSignal(submission.id);
                           scrollToReviewPanel("detail");
@@ -7671,10 +7701,69 @@ export function AdminDashboardPage() {
                       {selectedRecordIsDemo ? (
                         <span className="signal-chip signal-chip-soft demo-signal-detail-badge">{t("demoSignalNotStoredLabel")}</span>
                       ) : null}
+                      {selectedRecordIsSystem ? (
+                        <div className="system-signal-detail-badges">
+                          <span className="signal-chip signal-chip-soft system-signal-badge">System</span>
+                          <span className="signal-chip signal-chip-soft system-signal-severity">
+                            {String(selectedRecord.submission.systemSeverity ?? selectedRecord.submission.severity ?? "error").toUpperCase()}
+                          </span>
+                          {selectedSystemDiagnostics?.mobileSafari ? (
+                            <span className="signal-chip signal-chip-soft system-signal-safari">Mobile Safari</span>
+                          ) : null}
+                        </div>
+                      ) : null}
                     </div>
                     </div>
 
                   </section>
+
+                  {selectedRecordIsSystem ? (
+                    <section className="answer-card system-signal-diagnostics-card">
+                      <div className="signal-detail-group-header">
+                        <div>
+                          <p className="eyebrow">System alert diagnostics</p>
+                          <h3>{String(selectedSystemDiagnostics?.errorName ?? selectedSignalTitle)}</h3>
+                        </div>
+                        <button
+                          type="button"
+                          className="ghost-button"
+                          onClick={() => {
+                            void copySystemSignalDiagnostics(selectedRecord.submission)
+                              .then(() => setToast({ tone: "success", message: "Diagnostics copied." }))
+                              .catch(() => setToast({ tone: "error", message: "Copy failed." }));
+                          }}
+                        >
+                          Copy diagnostics
+                        </button>
+                      </div>
+                      <div className="system-signal-diagnostics-grid">
+                        <div>
+                          <span>Route</span>
+                          <strong>{String(selectedSystemDiagnostics?.routePath ?? selectedSystemDiagnostics?.pathname ?? "unknown")}</strong>
+                        </div>
+                        <div>
+                          <span>Build</span>
+                          <strong>
+                            v{String(selectedSystemDiagnostics?.buildVersion ?? "unknown")} / {String(selectedSystemDiagnostics?.gitHash ?? "unknown")}
+                          </strong>
+                        </div>
+                        <div>
+                          <span>Chunk</span>
+                          <strong>{String(selectedSystemDiagnostics?.chunkUrl ?? "n/a")}</strong>
+                        </div>
+                        <div>
+                          <span>Platform</span>
+                          <strong>{String(selectedSystemDiagnostics?.platform ?? "unknown")}</strong>
+                        </div>
+                      </div>
+                      <p className="muted system-signal-message">
+                        {String(selectedSystemDiagnostics?.errorMessage ?? selectedRecord.submission.aiSummary ?? "Runtime error captured.")}
+                      </p>
+                      <pre className="system-signal-json">
+                        {JSON.stringify(selectedSystemDiagnostics ?? selectedRecord.submission.metadata ?? {}, null, 2)}
+                      </pre>
+                    </section>
+                  ) : null}
 
                   {selectedRecordFocusAction ? (
                     <section className="answer-card review-focus-card">

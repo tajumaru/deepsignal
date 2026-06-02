@@ -568,7 +568,14 @@ function coerceSignalValue(signalValue: unknown): Submission["signalValue"] {
 }
 
 function coerceSeverity(severity: unknown): Submission["severity"] {
-  if (severity === "low" || severity === "medium" || severity === "high") {
+  if (
+    severity === "low" ||
+    severity === "medium" ||
+    severity === "high" ||
+    severity === "warning" ||
+    severity === "error" ||
+    severity === "critical"
+  ) {
     return severity;
   }
   return undefined;
@@ -679,6 +686,12 @@ export function normalizeSubmission(raw: Submission | (Record<string, unknown> &
   return {
     id: raw.id,
     formId: raw.formId,
+    kind: raw.kind === "system_error" ? "system_error" : undefined,
+    source: raw.source === "deepsignal-runtime" ? "deepsignal-runtime" : undefined,
+    systemSeverity:
+      raw.systemSeverity === "warning" || raw.systemSeverity === "error" || raw.systemSeverity === "critical"
+        ? raw.systemSeverity
+        : undefined,
     formVersion: resolveFormVersion(raw),
     formBlobId: typeof raw.formBlobId === "string" ? raw.formBlobId : undefined,
     schemaHash: typeof raw.schemaHash === "string" && raw.schemaHash.trim() ? raw.schemaHash : LEGACY_SCHEMA_HASH,

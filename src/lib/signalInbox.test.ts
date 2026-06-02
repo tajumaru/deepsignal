@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getPrivateSignalPayloadState } from "./signalInbox";
+import { getPrivateSignalPayloadState, getSignalPreview, getSignalSubject, inferSignalCategory } from "./signalInbox";
 import type { Submission } from "../types";
 
 function createSubmission(overrides: Partial<Submission> = {}): Submission {
@@ -51,5 +51,29 @@ describe("getPrivateSignalPayloadState", () => {
         }),
       ),
     ).toBe("missing_payload");
+  });
+});
+
+describe("system signal inbox helpers", () => {
+  it("uses system diagnostics for subject, preview, and category", () => {
+    const submission = createSubmission({
+      isEncrypted: false,
+      kind: "system_error",
+      source: "deepsignal-runtime",
+      systemSeverity: "critical",
+      severity: "critical",
+      subjectPreview: "Fallback subject",
+      metadata: {
+        systemDiagnostics: {
+          errorName: "ChunkLoadError",
+          routePath: "/admin",
+          buildVersion: "0.12.16",
+        },
+      },
+    });
+
+    expect(getSignalSubject(submission)).toBe("ChunkLoadError");
+    expect(getSignalPreview(submission)).toBe("/admin / v0.12.16");
+    expect(inferSignalCategory(submission)).toBe("System");
   });
 });

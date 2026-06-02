@@ -14,6 +14,7 @@ import { isDecryptDiagnosticError, type DecryptDiagnosticContext } from "../../.
 import type { CapabilityProfile } from "../../../hooks/useAccessControl";
 import { getPrivateSignalPayloadState } from "../../../lib/signalInbox";
 import { resolveSubmissionAnswers } from "../../../lib/storage";
+import { reportSystemError } from "../../../services/systemSignalReporter";
 import type { SealDecryptContext, Submission } from "../../../types";
 import type { SignalRecord } from "./useSignalInboxData";
 
@@ -374,6 +375,20 @@ export function usePrivateSignalDecrypt({
         setToast({ tone: "success", message: messages.walletVerifiedPrivateSignalUnlocked });
       }
     } catch (error) {
+      reportSystemError({
+        error,
+        routePath: "/admin",
+        routeId: "admin",
+        severity: "error",
+        sourceContext: "seal-decrypt",
+        diagnostics: {
+          formId: selectedRecord.form.id,
+          submissionId: selectedRecord.submission.id,
+          encryptedBlobId: selectedRecord.submission.encryptedBlobId ?? null,
+          receiptBlobId: selectedRecord.submission.receiptBlobId ?? null,
+          decryptDiagnostics: isDecryptDiagnosticError(error) ? error.diagnostics : null,
+        },
+      });
       const isLatestRequest =
         activeDecryptRequestRef.current?.requestId === requestId &&
         activeDecryptRequestRef.current?.submissionId === submissionId;
@@ -479,6 +494,20 @@ export function usePrivateSignalDecrypt({
           }
           setBulkDecryptProgress({ completed: unlockedCount, failed: failedCount, total: decryptableTargets.length });
         } catch (error) {
+          reportSystemError({
+            error,
+            routePath: "/admin",
+            routeId: "admin",
+            severity: "error",
+            sourceContext: "seal-bulk-decrypt",
+            diagnostics: {
+              formId: record.form.id,
+              submissionId: record.submission.id,
+              encryptedBlobId: record.submission.encryptedBlobId ?? null,
+              receiptBlobId: record.submission.receiptBlobId ?? null,
+              decryptDiagnostics: isDecryptDiagnosticError(error) ? error.diagnostics : null,
+            },
+          });
           failedCount += 1;
           const reasonCode = isDecryptDiagnosticError(error)
             ? error.reasonCode

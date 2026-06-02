@@ -16,6 +16,7 @@ const FLOW_STREAM_IDS: StreamId[] = [
   "needs_review",
   "unresolved",
   "high",
+  "system",
   "follow_up",
   "pending_sui",
   "verified",
@@ -87,10 +88,11 @@ function StreamIcon({ streamId, hasUnread }: { streamId: StreamId; hasUnread: bo
             <path d="M6 17.5h12" />
             <path d="M9 14.5 12 17.5l6-7" />
           </>
-        ) : streamId === "high" ? (
+        ) : streamId === "high" || streamId === "system" ? (
           <>
             <path d="M7 4.5v15" />
             <path d="M7.5 5.5h9l-1.5 3 1.5 3h-9" />
+            {streamId === "system" ? <circle cx="17.8" cy="17.2" r="1.5" /> : null}
           </>
         ) : streamId === "pending_sui" ? (
           <>
@@ -141,6 +143,8 @@ function getStreamHelper(streamId: StreamId, t: ReturnType<typeof useI18n>["t"])
       return t("roadmapReadySignals");
     case "high":
       return t("flaggedStreamHelper");
+    case "system":
+      return "Runtime, route, storage, and decrypt alerts";
     case "encrypted":
       return t("protectedStreamHelper");
     case "archived":
@@ -172,6 +176,8 @@ function getStreamTone(streamId: StreamId) {
       return "tone-resolved";
     case "high":
       return "tone-flagged";
+    case "system":
+      return "tone-system";
     case "follow_up":
       return "tone-needs-review";
     case "encrypted":

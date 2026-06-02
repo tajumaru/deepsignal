@@ -63,7 +63,8 @@ export type SignalFieldProcessingPolicy = "auto" | "aggregate" | "review";
 export type SubmissionCategory = "bug" | "feature" | "survey" | "general";
 export type SubmissionPriority = "low" | "medium" | "high";
 export type SubmissionDeliveryStatus = "stored_local" | "stored_walrus" | "inbox_pending" | "inbox_synced";
-export type SignalSeverity = "low" | "medium" | "high";
+export type SystemSignalSeverity = "warning" | "error" | "critical";
+export type SignalSeverity = "low" | "medium" | "high" | SystemSignalSeverity;
 export type ConditionalLogicOperator =
   | "equals"
   | "notEquals"
@@ -336,6 +337,9 @@ export interface RespondentMeta {
 export interface Submission {
   id: string;
   formId: string;
+  kind?: "system_error";
+  source?: "deepsignal-runtime";
+  systemSeverity?: SystemSignalSeverity;
   formVersion?: number;
   formBlobId?: string;
   schemaHash?: string;

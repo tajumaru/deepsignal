@@ -1,8 +1,9 @@
 import { getBlobViewerUrl } from "../storage/storageFactory";
+import { getSystemSignalDiagnostics, isSystemSignal } from "../services/systemSignalReporter";
 import { flattenAnswer } from "./utils";
 import type { FormSchema, Submission } from "../types";
 
-export type SignalCategory = "Bug" | "Feature" | "Survey" | "Praise" | "General" | "Unknown";
+export type SignalCategory = "Bug" | "Feature" | "Survey" | "Praise" | "General" | "System" | "Unknown";
 export type SignalPersistenceState =
   | "onchain_registered"
   | "pending_onchain"
@@ -16,6 +17,10 @@ export type PrivateSignalPayloadState =
   | "missing_payload";
 
 export function getSignalSubject(submission: Submission) {
+  if (isSystemSignal(submission)) {
+    const diagnostics = getSystemSignalDiagnostics(submission);
+    return String(diagnostics?.errorName || submission.subjectPreview || "System error");
+  }
   return submission.subjectPreview?.trim() || `Signal ${submission.id.slice(0, 8)}`;
 }
 
@@ -47,6 +52,12 @@ export function hasPrivateSignalPayloadIssue(submission: Submission) {
 }
 
 export function getSignalPreview(submission: Submission) {
+  if (isSystemSignal(submission)) {
+    const diagnostics = getSystemSignalDiagnostics(submission);
+    const route = String(diagnostics?.routePath || diagnostics?.pathname || "unknown route");
+    const buildVersion = String(diagnostics?.buildVersion || "unknown");
+    return `${route} / v${buildVersion}`;
+  }
   if (submission.isEncrypted) {
     return "Encrypted Signal";
   }
@@ -61,6 +72,9 @@ export function getSignalPreview(submission: Submission) {
 }
 
 export function inferSignalCategory(submission: Submission): SignalCategory {
+  if (isSystemSignal(submission)) {
+    return "System";
+  }
   if (submission.category === "bug") {
     return "Bug";
   }

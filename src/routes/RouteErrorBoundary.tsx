@@ -24,6 +24,7 @@ import {
   shouldShowRouteDiagnostics,
   type RouteDiagnostics,
 } from "./routeDiagnostics";
+import { reportSystemError } from "../services/systemSignalReporter";
 
 const LAST_EXPLORE_ERROR_KEY = "deepsignal:lastExploreError";
 
@@ -172,6 +173,23 @@ export class RouteErrorBoundary extends Component<
     if (boundaryDiagnostics.routeId === "explore") {
       safeWriteLocalStorage(LAST_EXPLORE_ERROR_KEY, diagnosticsText);
     }
+    reportSystemError({
+      error,
+      errorName: boundaryDiagnostics.errorName,
+      errorMessage: boundaryDiagnostics.errorMessage,
+      errorStack: boundaryDiagnostics.errorStack,
+      routePath: boundaryDiagnostics.routePath,
+      routeId: boundaryDiagnostics.routeId,
+      chunkUrl,
+      severity: chunkUrl ? "critical" : "error",
+      sourceContext: "route-error-boundary",
+      diagnostics: {
+        componentStack: errorInfo.componentStack,
+        routeDiagnostics,
+        failedImportDiagnostics: boundaryDiagnostics.failedImportDiagnostics,
+        mixedBuildAssetsDetected: mixedBuildStatus.detected,
+      },
+    });
     console.error("DeepSignal route failed to render.", {
       error,
       ...boundaryDiagnostics,

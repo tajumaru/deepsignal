@@ -33,6 +33,9 @@ interface SignalCardProps {
   isOnchainRecoverySnapshot: boolean;
   isDemoSignal?: boolean;
   isDemoJustArrived?: boolean;
+  isSystemSignal?: boolean;
+  systemSeverityLabel?: string;
+  onCopyDiagnostics?: () => void;
   hasPayloadIssue: boolean;
   isRegistering: boolean;
   onSelect: () => void;
@@ -68,6 +71,9 @@ export const SignalCard = forwardRef<HTMLDivElement, SignalCardProps>(function S
     isOnchainRecoverySnapshot,
     isDemoSignal = false,
     isDemoJustArrived = false,
+    isSystemSignal = false,
+    systemSeverityLabel = "",
+    onCopyDiagnostics,
     hasPayloadIssue,
     isRegistering,
     onSelect,
@@ -88,7 +94,7 @@ export const SignalCard = forwardRef<HTMLDivElement, SignalCardProps>(function S
 
   return (
     <div
-      className={`signal-card ${isSelectedSignal ? "is-active" : ""} ${submission.status === "unread" ? "is-unread" : "is-read"} ${isPendingSui ? "has-select-checkbox" : ""} ${isSelectedForSui ? "is-selected-for-sui" : ""} ${isDemoJustArrived ? "is-demo-just-arrived" : ""}`}
+      className={`signal-card ${isSelectedSignal ? "is-active" : ""} ${submission.status === "unread" ? "is-unread" : "is-read"} ${isPendingSui ? "has-select-checkbox" : ""} ${isSelectedForSui ? "is-selected-for-sui" : ""} ${isDemoJustArrived ? "is-demo-just-arrived" : ""} ${isSystemSignal ? "is-system-signal" : ""}`}
       role="button"
       tabIndex={0}
       aria-current={isSelectedSignal ? "true" : undefined}
@@ -131,6 +137,12 @@ export const SignalCard = forwardRef<HTMLDivElement, SignalCardProps>(function S
         <strong>{subject}</strong>
         <span className="signal-card-topline-meta">
           {isSelectedSignal ? <span className="signal-card-selection-badge">{t("selectedLabel")}</span> : null}
+          {isSystemSignal ? <span className="signal-card-selection-badge is-system">System</span> : null}
+          {isSystemSignal && systemSeverityLabel ? (
+            <span className={`signal-card-selection-badge is-system-severity severity-${systemSeverityLabel.toLowerCase()}`}>
+              {systemSeverityLabel}
+            </span>
+          ) : null}
           {isDemoSignal ? <span className="signal-card-selection-badge is-demo">{t("demoBadgeLabel")}</span> : null}
           {isDemoJustArrived ? <span className="signal-card-selection-badge is-just-arrived">{t("demoJustArrivedLabel")}</span> : null}
           <span className="signal-card-time">{formatDate(submission.createdAt)}</span>
@@ -197,6 +209,24 @@ export const SignalCard = forwardRef<HTMLDivElement, SignalCardProps>(function S
             }}
           >
             {isRegistering ? t("registeringStatus") : t("registerOnSui")}
+          </button>
+        </div>
+      ) : null}
+      {isSystemSignal && onCopyDiagnostics ? (
+        <div className="signal-card-actions">
+          <button
+            type="button"
+            className="ghost-button system-diagnostics-copy-button"
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              onCopyDiagnostics();
+            }}
+            onKeyDown={(event) => {
+              event.stopPropagation();
+            }}
+          >
+            Copy diagnostics
           </button>
         </div>
       ) : null}

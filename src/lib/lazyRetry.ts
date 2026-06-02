@@ -11,6 +11,7 @@ import {
   type ChunkDependencyProbe,
   type ChunkProbe,
 } from "./routeDiagnostics";
+import { reportSystemError } from "../services/systemSignalReporter";
 
 const lazyImportAttempts = 3;
 const lazyImportBaseDelayMs = 450;
@@ -504,6 +505,18 @@ export async function retryLazyImport<T>(loader: () => Promise<T>, label = "anon
         recordFailedImportProbe(label, probe);
         const dependencyProbe = await probeChunkDependencyTree(expectedChunkUrl);
         recordFailedImportDependencyProbe(label, dependencyProbe);
+        reportSystemError({
+          error,
+          chunkUrl: expectedChunkUrl,
+          severity: attempt === lazyImportAttempts ? "critical" : "warning",
+          sourceContext: "lazy-route-import",
+          diagnostics: {
+            label,
+            attempt,
+            probe,
+            dependencyProbe,
+          },
+        });
         console.warn("[DeepSignal route chunk probe]", {
           label,
           attempt,

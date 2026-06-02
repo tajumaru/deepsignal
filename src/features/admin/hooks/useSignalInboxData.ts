@@ -17,6 +17,7 @@ import {
   getVisibleReviewerNotes,
   hasNeedsFollowUp,
 } from "../../../lib/reviewCollaboration";
+import { isSystemSignal } from "../../../services/systemSignalReporter";
 import type {
   OnchainProjectFormSummary,
   OnchainProjectSignalSummary,
@@ -63,6 +64,7 @@ export type StreamId =
   | "published"
   | "encrypted"
   | "high"
+  | "system"
   | "pending_sui"
   | "registered_sui"
   | "bug"
@@ -647,41 +649,45 @@ export function requiresReview(record: SignalRecord) {
 
 export function matchesStream(record: SignalRecord, streamId: StreamId) {
   switch (streamId) {
+    case "system":
+      return isSystemSignal(record.submission);
     case "needs_review":
-      return requiresReview(record);
+      return !isSystemSignal(record.submission) && requiresReview(record);
     case "unresolved":
       return (
+        !isSystemSignal(record.submission) &&
         requiresReview(record) &&
         record.submission.status !== "archived" &&
         record.submission.triageStatus !== "fixed" &&
         record.submission.triageStatus !== "closed"
       );
     case "follow_up":
-      return hasNeedsFollowUp(record.submission);
+      return !isSystemSignal(record.submission) && hasNeedsFollowUp(record.submission);
     case "unread":
-      return requiresReview(record) && record.submission.status === "unread";
+      return !isSystemSignal(record.submission) && requiresReview(record) && record.submission.status === "unread";
     case "verified":
-      return isVerifiedSignal(record.submission);
+      return !isSystemSignal(record.submission) && isVerifiedSignal(record.submission);
     case "anonymous":
-      return getSubmissionRespondentMeta(record.submission).isAnonymous;
+      return !isSystemSignal(record.submission) && getSubmissionRespondentMeta(record.submission).isAnonymous;
     case "published":
       return (
-        record.submission.triageStatus === "planned" ||
-        record.submission.triageStatus === "in_progress" ||
-        record.submission.triageStatus === "fixed"
+        !isSystemSignal(record.submission) &&
+        (record.submission.triageStatus === "planned" ||
+          record.submission.triageStatus === "in_progress" ||
+          record.submission.triageStatus === "fixed")
       );
     case "encrypted":
-      return record.submission.isEncrypted;
+      return !isSystemSignal(record.submission) && record.submission.isEncrypted;
     case "high":
-      return record.submission.priority === "high" || record.submission.severity === "high";
+      return !isSystemSignal(record.submission) && (record.submission.priority === "high" || record.submission.severity === "high");
     case "pending_sui":
-      return Boolean(record.submission.pendingOnchainRegistration);
+      return !isSystemSignal(record.submission) && Boolean(record.submission.pendingOnchainRegistration);
     case "registered_sui":
-      return typeof record.submission.onchainSignalId === "number";
+      return !isSystemSignal(record.submission) && typeof record.submission.onchainSignalId === "number";
     case "bug":
-      return record.category === "Bug";
+      return !isSystemSignal(record.submission) && record.category === "Bug";
     case "feature":
-      return record.category === "Feature";
+      return !isSystemSignal(record.submission) && record.category === "Feature";
     case "archived":
       return record.submission.status === "archived";
     default:
@@ -1439,6 +1445,7 @@ export function useSignalInboxData({
       published: 0,
       encrypted: 0,
       high: 0,
+      system: 0,
       pendingSui: 0,
       registeredSui: 0,
       archived: 0,
@@ -1451,6 +1458,11 @@ export function useSignalInboxData({
       signals.push(record);
       signalById[record.submission.id] = record;
       appendedSignals.push({ form: record.form, submission: record.submission });
+
+      if (isSystemSignal(record.submission)) {
+        counts.system += 1;
+        return;
+      }
 
       if (requiresReview(record) && record.submission.status === "unread") {
         unreadCountByFormId[record.form.id] = (unreadCountByFormId[record.form.id] ?? 0) + 1;
@@ -1567,6 +1579,7 @@ export function useSignalInboxData({
       published: 0,
       encrypted: 0,
       high: 0,
+      system: 0,
       pendingSui: 0,
       registeredSui: 0,
       archived: 0,
@@ -1580,6 +1593,10 @@ export function useSignalInboxData({
 
     signals.forEach((record) => {
       signalById[record.submission.id] = record;
+      if (isSystemSignal(record.submission)) {
+        counts.system += 1;
+        return;
+      }
       if (requiresReview(record) && record.submission.status === "unread") {
         unreadCountByFormId[record.form.id] = (unreadCountByFormId[record.form.id] ?? 0) + 1;
         counts.unread += 1;

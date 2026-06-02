@@ -5,6 +5,7 @@ import { startRuntimeBootstrap } from "./bootstrap/runtime";
 import { startBuildAssetDiagnostics } from "./lib/buildAssetDiagnostics";
 import { startChunkLoadRecovery } from "./lib/chunkLoadRecovery";
 import { startFirstPaintInstrumentation, startPerf } from "./lib/perf";
+import { startSystemSignalReporter } from "./services/systemSignalReporter";
 import "./styles/index.css";
 
 startPerf("app_boot_start");
@@ -24,6 +25,7 @@ function redirectLegacyPublicPathToHashRoute() {
 redirectLegacyPublicPathToHashRoute();
 startBuildAssetDiagnostics();
 startChunkLoadRecovery();
+startSystemSignalReporter();
 startPerf("app:render");
 startFirstPaintInstrumentation();
 

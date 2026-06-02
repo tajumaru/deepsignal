@@ -410,6 +410,43 @@ describe("processing mode stream routing", () => {
     expect(matchesStream(record, "all")).toBe(true);
   });
 
+  it("routes system errors only into the System Alerts stream", () => {
+    const form = createForm({
+      id: "system:deepsignal-runtime",
+      title: "DeepSignal System Alerts",
+    });
+    const submission = createSubmission({
+      id: "system-error-1",
+      formId: "system:deepsignal-runtime",
+      kind: "system_error",
+      source: "deepsignal-runtime",
+      systemSeverity: "critical",
+      severity: "critical",
+      isEncrypted: false,
+      pendingOnchainRegistration: false,
+      metadata: {
+        systemDiagnostics: {
+          errorName: "ChunkLoadError",
+          routePath: "/admin",
+          buildVersion: "0.12.16",
+        },
+      },
+    });
+    const record = {
+      form,
+      submission,
+      category: "System",
+      searchText: "chunk load error",
+    } satisfies Parameters<typeof requiresReview>[0];
+
+    expect(matchesStream(record, "system")).toBe(true);
+    expect(matchesStream(record, "needs_review")).toBe(false);
+    expect(matchesStream(record, "unread")).toBe(false);
+    expect(matchesStream(record, "high")).toBe(false);
+    expect(matchesStream(record, "bug")).toBe(false);
+    expect(matchesStream(record, "all")).toBe(true);
+  });
+
   it("keeps auto-process submissions visible without incrementing review workload counts", async () => {
     const form = createForm({
       processingMode: "auto_process",
@@ -444,5 +481,44 @@ describe("processing mode stream routing", () => {
     expect(result.current.signalIndex.counts.unread).toBe(0);
     expect(result.current.signalIndex.counts.unresolved).toBe(0);
     expect(result.current.visibleSignals).toHaveLength(1);
+  });
+
+  it("counts system errors separately from responder review workload", async () => {
+    const form = createForm({
+      id: "system:deepsignal-runtime",
+      title: "DeepSignal System Alerts",
+    });
+    const submission = createSubmission({
+      id: "system-error-1",
+      formId: "system:deepsignal-runtime",
+      kind: "system_error",
+      source: "deepsignal-runtime",
+      systemSeverity: "error",
+      severity: "error",
+      isEncrypted: false,
+      pendingOnchainRegistration: false,
+    });
+
+    mockUseProjectRegistry.mockReturnValue({
+      projects: [],
+      dataUpdatedAt: 1,
+    });
+    mockListForms.mockResolvedValue([form]);
+    mockListSubmissions.mockResolvedValue([submission]);
+
+    const { result } = renderHook(() =>
+      useSignalInboxData({
+        accountAddress: "0xowner-1",
+        capabilityProfile: createCapabilityProfile(),
+      }),
+    );
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    await waitFor(() => expect(result.current.allSignals).toHaveLength(1));
+
+    expect(result.current.signalIndex.counts.system).toBe(1);
+    expect(result.current.signalIndex.counts.needsReview).toBe(0);
+    expect(result.current.signalIndex.counts.unread).toBe(0);
+    expect(result.current.signalIndex.counts.high).toBe(0);
   });
 });
