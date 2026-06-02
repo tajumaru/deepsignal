@@ -5544,27 +5544,28 @@
 }
 
 .landing-final-cta-map::before {
-  width: clamp(24rem, 39vw, 36rem);
-  height: clamp(9rem, 16vw, 14rem);
+  width: clamp(28rem, 46vw, 43rem);
+  height: clamp(12rem, 20vw, 18rem);
   border-radius: 50%;
   background:
-    radial-gradient(circle at 50% 50%, rgba(244, 255, 255, 0.95), transparent 5%),
-    radial-gradient(circle at 50% 50%, rgba(0, 238, 255, 0.72), transparent 16%),
-    radial-gradient(circle at 50% 50%, rgba(0, 170, 255, 0.38), transparent 36%),
-    radial-gradient(ellipse at 50% 50%, rgba(19, 62, 159, 0.34), transparent 66%);
-  filter: blur(1.4px);
-  opacity: 0.92;
+    radial-gradient(circle at 50% 50%, rgba(244, 255, 255, 0.98), transparent 4%),
+    radial-gradient(circle at 50% 50%, rgba(0, 238, 255, 0.82), transparent 13%),
+    radial-gradient(circle at 50% 50%, rgba(0, 170, 255, 0.46), transparent 32%),
+    radial-gradient(ellipse at 50% 50%, rgba(19, 62, 159, 0.36), transparent 68%);
+  filter: blur(1.1px);
+  opacity: 0.96;
 }
 
 .landing-final-cta-map::after {
-  width: clamp(27rem, 43vw, 39rem);
-  height: clamp(10rem, 18vw, 15.5rem);
+  width: clamp(34rem, 56vw, 52rem);
+  height: clamp(13rem, 22vw, 19rem);
   border-radius: 50%;
   background:
-    repeating-radial-gradient(circle at 50% 50%, rgba(67, 225, 255, 0.34) 0 1px, transparent 1px 8px),
-    conic-gradient(from 10deg, transparent 0 5deg, rgba(0, 216, 255, 0.42) 6deg 7deg, transparent 8deg 14deg);
-  opacity: 0.78;
-  mask-image: radial-gradient(ellipse at 50% 50%, transparent 0 16%, #000 18% 52%, transparent 72%);
+    radial-gradient(circle at 50% 50%, rgba(224, 255, 255, 0.36) 0 3px, transparent 4px),
+    repeating-radial-gradient(circle at 50% 50%, rgba(67, 225, 255, 0.3) 0 1px, transparent 1px 9px),
+    conic-gradient(from 10deg, transparent 0 4deg, rgba(0, 216, 255, 0.44) 5deg 6deg, transparent 7deg 12deg);
+  opacity: 0.84;
+  mask-image: radial-gradient(ellipse at 50% 50%, transparent 0 12%, #000 15% 50%, transparent 72%);
   animation: landing-final-core-spin 18s linear infinite;
 }
 
@@ -5685,23 +5686,46 @@
     0.58rem -0.42rem 0 -0.14rem currentColor;
 }
 
-.landing-final-cta-node.is-voice .landing-final-cta-node-icon::before {
-  width: 1.9rem;
-  height: 1.45rem;
-  border-width: 0 3px;
+.landing-final-cta-node.is-photo .landing-final-cta-node-icon::before {
+  width: 1.78rem;
+  height: 1.62rem;
+  border-width: 3px;
+  border-radius: 0.24rem;
+}
+
+.landing-final-cta-node.is-photo .landing-final-cta-node-icon::after {
+  width: 1.16rem;
+  height: 0.84rem;
   border-radius: 0;
+  background:
+    radial-gradient(circle at 78% 18%, currentColor 0 0.14rem, transparent 0.15rem),
+    linear-gradient(135deg, transparent 0 46%, currentColor 47% 66%, transparent 67%),
+    linear-gradient(45deg, transparent 0 42%, currentColor 43% 64%, transparent 65%);
+  box-shadow: none;
+  transform: translate(-50%, -38%);
+}
+
+.landing-final-cta-node.is-voice .landing-final-cta-node-icon::before {
+  width: 0.22rem;
+  height: 2.18rem;
+  border: 0;
+  border-radius: 999px;
+  background: currentColor;
   box-shadow:
-    -0.55rem 0 0 -0.18rem currentColor,
-    0.55rem 0 0 -0.18rem currentColor;
+    -0.42rem 0 0 currentColor,
+    0.42rem 0 0 currentColor,
+    -0.82rem 0 0 -0.06rem currentColor,
+    0.82rem 0 0 -0.06rem currentColor;
 }
 
 .landing-final-cta-node.is-voice .landing-final-cta-node-icon::after {
-  width: 0.22rem;
-  height: 2.4rem;
+  width: 0.18rem;
+  height: 1.54rem;
   border-radius: 999px;
+  background: currentColor;
   box-shadow:
-    -0.5rem 0 0 currentColor,
-    0.5rem 0 0 currentColor;
+    -1.14rem 0 0 -0.02rem currentColor,
+    1.14rem 0 0 -0.02rem currentColor;
 }
 
 .landing-final-cta-node.is-message .landing-final-cta-node-icon::before {
@@ -5719,18 +5743,20 @@
 }
 
 .landing-final-cta-node.is-location .landing-final-cta-node-icon::before {
-  width: 1.55rem;
-  height: 1.95rem;
+  width: 1.72rem;
+  height: 2.12rem;
   border-radius: 50% 50% 54% 54%;
   transform: translate(-50%, -58%) rotate(45deg);
 }
 
 .landing-final-cta-node.is-location .landing-final-cta-node-icon::after {
-  width: 0.5rem;
-  height: 0.5rem;
+  width: 0.58rem;
+  height: 0.58rem;
   background: transparent;
   border: 2px solid currentColor;
+  border-radius: 50%;
   box-shadow: none;
+  transform: translate(-50%, -66%);
 }
 
 .landing-final-cta-node.is-rating .landing-final-cta-node-icon::before {
@@ -5746,19 +5772,21 @@
 }
 
 .landing-final-cta-node.is-attachment .landing-final-cta-node-icon::before {
-  width: 1.7rem;
-  height: 2.05rem;
-  border-width: 0 0 0 3px;
+  width: 1.22rem;
+  height: 2.14rem;
+  border: 3px solid currentColor;
+  border-left-color: transparent;
   border-radius: 1rem;
+  background: transparent;
   transform: translate(-50%, -50%) rotate(42deg);
 }
 
 .landing-final-cta-node.is-attachment .landing-final-cta-node-icon::after {
-  width: 1rem;
-  height: 1.45rem;
+  width: 0.62rem;
+  height: 1.42rem;
   border: 3px solid currentColor;
-  border-right: 0;
-  border-radius: 1rem 0 0 1rem;
+  border-left-color: transparent;
+  border-radius: 0.8rem;
   background: transparent;
   box-shadow: none;
   transform: translate(-50%, -50%) rotate(42deg);
@@ -5823,14 +5851,16 @@
   content: "";
   position: absolute;
   z-index: -1;
-  inset: -4.2rem -7rem;
+  inset: -4.8rem -8.8rem;
   border-radius: 50%;
   background:
-    radial-gradient(circle at 50% 50%, rgba(213, 255, 255, 0.42), transparent 10%),
-    radial-gradient(circle at 50% 50%, rgba(0, 221, 255, 0.32), transparent 28%),
-    repeating-radial-gradient(circle at 50% 50%, rgba(61, 210, 255, 0.18) 0 1px, transparent 1px 12px);
-  opacity: 0.95;
+    radial-gradient(circle at 50% 50%, rgba(236, 255, 255, 0.62), transparent 8%),
+    radial-gradient(circle at 50% 50%, rgba(0, 221, 255, 0.4), transparent 24%),
+    radial-gradient(ellipse at 50% 50%, rgba(0, 119, 255, 0.16), transparent 58%),
+    repeating-radial-gradient(circle at 50% 50%, rgba(61, 210, 255, 0.18) 0 1px, transparent 1px 10px);
+  opacity: 0.98;
   filter: blur(0.4px);
+  mask-image: radial-gradient(ellipse at 50% 50%, #000 0 54%, transparent 78%);
   pointer-events: none;
 }
 
@@ -5866,13 +5896,13 @@
 .landing-final-cta-mascot {
   z-index: 4;
   left: 50%;
-  top: 68%;
-  width: clamp(7.4rem, 12vw, 12rem);
-  max-width: min(30%, 12rem);
-  opacity: 0.86;
+  top: 66.5%;
+  width: clamp(10rem, 17vw, 16rem);
+  max-width: min(34%, 16rem);
+  opacity: 0.94;
   filter:
     drop-shadow(0 1rem 1.9rem rgba(0, 0, 0, 0.36))
-    drop-shadow(0 0 1rem rgba(48, 224, 239, 0.18));
+    drop-shadow(0 0 1.15rem rgba(48, 224, 239, 0.24));
 }
 
 .landing-final-cta-trust {
@@ -5882,7 +5912,7 @@
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 0;
   align-items: center;
-  margin: auto auto 0;
+  margin: clamp(1rem, 1.6vw, 1.4rem) auto 0;
   border: 1px solid rgba(83, 183, 255, 0.18);
   border-radius: 1.1rem;
   background: rgba(2, 13, 26, 0.64);

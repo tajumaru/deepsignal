@@ -36,8 +36,8 @@ import {
   WorkspaceInsightsFallback,
 } from "../features/admin/components/AdminDashboardStates";
 import {
+  HoldToDeleteProjectButton,
   SignalInboxOnboardingHero,
-  WorkspaceShortcutBar,
   type InboxOnboardingState,
 } from "../features/admin/components/AdminOnboarding";
 import { CsvExportConfirmationModal } from "../features/admin/components/CsvExportConfirmationModal";
@@ -50,7 +50,7 @@ import { SignalAttachmentList } from "../features/admin/components/SignalAttachm
 import { SignalCard } from "../features/admin/components/SignalCard";
 import { buildSignalCardIntelligence } from "../features/admin/components/signalIntelligence";
 import { SignalTimelineSection } from "../features/admin/components/SignalTimelineSection";
-import { MailboxIcon, SignalChannelSelector, SignalStreamsNav } from "../features/admin/components/SignalStreamsNav";
+import { SignalChannelSelector, SignalStreamsNav } from "../features/admin/components/SignalStreamsNav";
 import {
   copySystemSignalDiagnostics,
   getSystemSignalDiagnostics,
@@ -87,7 +87,6 @@ import {
   addressesMatch,
   canAdmin,
   canAttemptPrivateSignalDecrypt,
-  getRoleLabel,
 } from "../lib/adminAccess";
 import {
   appendActivityEvents,
@@ -146,6 +145,7 @@ import {
 } from "../lib/storage";
 import { getSignalProcessingMode } from "../lib/signalProcessing";
 import { formatDate, formatRelativeTime } from "../lib/utils";
+import { logRouteLifecycle } from "../lib/routeDiagnostics";
 import { handleRateLimitedRpcFallback, useRpcInfrastructure } from "../rpcInfrastructure";
 import { cleanupRegisteredFormLocalFallback } from "../storage/localStorageAdapter";
 import { listFormBlobIndex } from "../storage/blobIndex";
@@ -1236,14 +1236,6 @@ function areActivityEventListsEqual(current: ActivityEvent[], next: ActivityEven
       candidate?.txDigest === event.txDigest
     );
   });
-}
-
-function formatWorkspaceCount(count: number, singular: string, plural = `${singular}s`) {
-  return `${count} ${count === 1 ? singular : plural}`;
-}
-
-function formatAccessLabel(roleLabel: string) {
-  return `${roleLabel} access`;
 }
 
 function isInteractiveKeyboardTarget(target: EventTarget | null) {
@@ -2688,8 +2680,6 @@ type TranslationFn = ReturnType<typeof useI18n>["t"];
 
 interface MobileInboxHeaderProps {
   t: TranslationFn;
-  title: string;
-  sessionLabel: string;
   activeScopeLabel: string;
   viewScope: SignalViewScope;
   onViewScopeChange: (scope: SignalViewScope) => void;
@@ -2734,6 +2724,78 @@ interface MobileInboxHeaderProps {
   onRevealCreateProject: () => void;
   onRevealConnectProject: () => void;
   onOpenSearch: () => void;
+}
+
+interface WorkspaceStatusBarProps {
+  workspaceName: string;
+  securityStateLabel: string;
+  unreadCount: number;
+  memberCount: number;
+  hasAdminAccess: boolean;
+  hasSelectedProject: boolean;
+  deletingProject: boolean;
+  deleteProjectDisabledReason: string;
+  onOpenProjectSettings: () => void;
+  onRevealCreateProject: () => void;
+  onDeleteProject: () => void;
+  labels: {
+    projectActions: string;
+    switchProject: string;
+    chooseProject: string;
+    createProject: string;
+  };
+}
+
+function formatCompactStatusCount(count: number, singular: string, plural = `${singular}s`) {
+  return `${count.toLocaleString()} ${count === 1 ? singular : plural}`;
+}
+
+function WorkspaceStatusBar({
+  workspaceName,
+  securityStateLabel,
+  unreadCount,
+  memberCount,
+  hasAdminAccess,
+  hasSelectedProject,
+  deletingProject,
+  deleteProjectDisabledReason,
+  onOpenProjectSettings,
+  onRevealCreateProject,
+  onDeleteProject,
+  labels,
+}: WorkspaceStatusBarProps) {
+  return (
+    <section className="panel glow-panel workspace-status-bar" aria-label="Workspace status">
+      <div className="workspace-status-bar-main">
+        <div className="workspace-status-bar-primary">
+          <strong>{workspaceName}</strong>
+          <span className="workspace-status-state">{securityStateLabel}</span>
+        </div>
+        <p className="workspace-status-bar-meta">
+          <span>{formatCompactStatusCount(unreadCount, "unread", "unread")}</span>
+          <span aria-hidden="true">•</span>
+          <span>{formatCompactStatusCount(memberCount, "member")}</span>
+        </p>
+      </div>
+      {hasAdminAccess ? (
+        <div className="workspace-status-actions" aria-label={labels.projectActions}>
+          <button type="button" className="ghost-button" onClick={onOpenProjectSettings}>
+            {hasSelectedProject ? labels.switchProject : labels.chooseProject}
+          </button>
+          <button type="button" className="primary-button" onClick={onRevealCreateProject}>
+            {labels.createProject}
+          </button>
+          {hasSelectedProject ? (
+            <HoldToDeleteProjectButton
+              disabledReason={deleteProjectDisabledReason}
+              deleting={deletingProject}
+              onDelete={onDeleteProject}
+            />
+          ) : null}
+        </div>
+      ) : null}
+    </section>
+  );
 }
 
 function MobileFilterCaret() {
@@ -2848,8 +2910,6 @@ function MobileFilterMenu({
 function MobileInboxHeader(props: MobileInboxHeaderProps) {
   const {
     t,
-    title,
-    sessionLabel,
     activeScopeLabel,
     viewScope,
     onViewScopeChange,
@@ -2857,8 +2917,6 @@ function MobileInboxHeader(props: MobileInboxHeaderProps) {
     allSignalsScopeLabel,
     projectSignalsScopeLabel,
     unreadCountLabel,
-    search,
-    onSearchChange,
     sortOrder,
     onSortOrderChange,
     processingModeFilter,
@@ -2878,6 +2936,7 @@ function MobileInboxHeader(props: MobileInboxHeaderProps) {
     onOpenNodeDirectory,
     onExportAllFormCsv,
     hasAdminAccess,
+    selectedProjectName,
     selectedProjectId,
     projects,
     onSelectProject,
@@ -2892,6 +2951,8 @@ function MobileInboxHeader(props: MobileInboxHeaderProps) {
   ];
   const scopeActionLabel =
     viewScope === "project" ? allSignalsScopeLabel : projectSignalsScopeLabel;
+  const workspaceName = selectedProjectName ?? "DeepSignal";
+  const totalSignalsLabel = `${allSignalsCount.toLocaleString()} ${allSignalsCount === 1 ? "signal" : "signals"}`;
   const projectOptions: MobileFilterMenuOption[] = projects.map((project) => ({
     value: project.objectId,
     label: project.name,
@@ -2903,33 +2964,26 @@ function MobileInboxHeader(props: MobileInboxHeaderProps) {
 
   return (
     <header className="mobile-inbox-header">
-      <div className="mobile-inbox-header-bar">
-        <div className="mobile-inbox-title-group">
-          <MailboxIcon hasUnread={totalUnreadCount > 0} />
-          <div className="mobile-inbox-title">
-            <strong>{title}</strong>
-            <span className="mobile-inbox-session-status">{sessionLabel}</span>
-            <span>{activeScopeLabel}</span>
-          </div>
-        </div>
-        <div className="mobile-inbox-header-actions">
-          <button
-            type="button"
-            className="mobile-inbox-icon-button mobile-inbox-search-open"
-            aria-label={searchPlaceholder}
-            onClick={onOpenSearch}
-          >
-            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-              <circle cx="11" cy="11" r="6.4" />
-              <path d="m16.1 16.1 4 4" />
-            </svg>
-          </button>
-          <span className="mobile-inbox-count-pill">{unreadCountLabel}</span>
-        </div>
+      <div className="mobile-inbox-compact-summary" aria-label="Workspace signal summary">
+        <strong>{workspaceName}</strong>
+        <span>{unreadCountLabel}</span>
+        <span>{totalSignalsLabel}</span>
       </div>
 
-      {hasAdminAccess && projectOptions.length > 1 ? (
-        <div className="mobile-inbox-project-row">
+      <div className="mobile-inbox-filter-chip-row" aria-label={t("filterInboxLabel")}>
+        <button
+          type="button"
+          className="mobile-inbox-icon-button mobile-inbox-search-open mobile-inbox-filter-chip"
+          aria-label={searchPlaceholder}
+          onClick={onOpenSearch}
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <circle cx="11" cy="11" r="6.4" />
+            <path d="m16.1 16.1 4 4" />
+          </svg>
+        </button>
+
+        {hasAdminAccess && projectOptions.length > 1 ? (
           <MobileFilterMenu
             srLabel={t("selectedProjectLabel")}
             buttonLabel={t("chooseProjectButton")}
@@ -2938,10 +2992,8 @@ function MobileInboxHeader(props: MobileInboxHeaderProps) {
             onSelect={onSelectProject}
             className="mobile-inbox-project-menu"
           />
-        </div>
-      ) : null}
+        ) : null}
 
-      <div className="mobile-inbox-channel-row">
         <SignalChannelSelector
           className="signal-channel-selector-mobile"
           accessibleForms={accessibleForms}
@@ -2958,18 +3010,7 @@ function MobileInboxHeader(props: MobileInboxHeaderProps) {
           onOpenNodeDirectory={onOpenNodeDirectory}
           onExportAllFormCsv={onExportAllFormCsv}
         />
-      </div>
 
-      <div className="mobile-inbox-search-row">
-        <label className="mobile-inbox-search">
-          <span className="sr-only">{searchPlaceholder}</span>
-          <span aria-hidden="true">S</span>
-          <input
-            value={search}
-            onChange={(event) => onSearchChange(event.target.value)}
-            placeholder={searchPlaceholder}
-          />
-        </label>
         <MobileFilterMenu
           srLabel={t("sortInboxSrOnly")}
           buttonLabel={t("sortInboxSrOnly")}
@@ -2978,9 +3019,7 @@ function MobileInboxHeader(props: MobileInboxHeaderProps) {
           onSelect={(value) => onSortOrderChange(value as SignalSortOrder)}
           className="mobile-inbox-sort"
         />
-      </div>
 
-      <div className="mobile-inbox-summary-row">
         <MobileFilterMenu
           srLabel={t("processingModeFilterSrOnly")}
           buttonLabel={t("processingModeFilterSrOnly")}
@@ -2989,19 +3028,17 @@ function MobileInboxHeader(props: MobileInboxHeaderProps) {
           onSelect={(value) => onProcessingModeFilterChange(value as ProcessingModeFilter)}
           className="mobile-inbox-mode"
         />
-      </div>
 
-      {canUseProjectScope ? (
-        <div className="mobile-inbox-summary-row">
+        {canUseProjectScope ? (
           <button
             type="button"
-            className="ghost-button mobile-inbox-scope-action"
+            className="ghost-button mobile-inbox-scope-action mobile-inbox-filter-chip"
             onClick={() => onViewScopeChange(viewScope === "project" ? "all" : "project")}
           >
             {scopeActionLabel}
           </button>
-        </div>
-      ) : null}
+        ) : null}
+      </div>
     </header>
   );
 }
@@ -3462,6 +3499,7 @@ function MobileSignalRow({
 }: MobileSignalRowProps) {
   const { submission } = record;
   const isDemoSignal = isDemoSignalSubmission(submission);
+  const systemSignal = isSystemSignal(submission);
   const title = getSignalSubject(submission);
   const persistenceState = getSignalPersistenceState(submission);
   const priorityLabel =
@@ -3498,7 +3536,7 @@ function MobileSignalRow({
   return (
     <button
       type="button"
-      className={`mobile-signal-row ${isSelected ? "is-active" : ""} ${submission.status === "unread" ? "is-unread" : "is-read"} ${isDemoJustArrived ? "is-demo-just-arrived" : ""}`}
+      className={`mobile-signal-row ${isSelected ? "is-active" : ""} ${submission.status === "unread" ? "is-unread" : "is-read"} ${isDemoJustArrived ? "is-demo-just-arrived" : ""} ${systemSignal ? "is-system-signal" : ""}`}
       aria-current={isSelected ? "true" : undefined}
       aria-label={ariaLabel}
       onClick={onSelect}
@@ -3705,7 +3743,6 @@ function MobileInboxSearchOverlay({
 
 interface MobileSignalInboxProps {
   title: string;
-  sessionLabel: string;
   activeScopeLabel: string;
   viewScope: SignalViewScope;
   onViewScopeChange: (scope: SignalViewScope) => void;
@@ -3784,7 +3821,6 @@ interface MobileSignalInboxProps {
 
 function MobileSignalInbox({
   title,
-  sessionLabel,
   activeScopeLabel,
   viewScope,
   onViewScopeChange,
@@ -3864,8 +3900,6 @@ function MobileSignalInbox({
     <section className={`mobile-signal-inbox ${selectedRecord ? "is-detail-open" : ""}`} aria-label={title}>
       <MobileInboxHeader
         t={t}
-        title={title}
-        sessionLabel={sessionLabel}
         activeScopeLabel={activeScopeLabel}
         viewScope={viewScope}
         onViewScopeChange={onViewScopeChange}
@@ -3994,7 +4028,6 @@ export function AdminDashboardPage() {
   const [loadingRecoveryVisible, setLoadingRecoveryVisible] = useState(false);
   const {
     capabilityProfile: accessCapabilityProfile,
-    isPending: isLoadingCapabilities,
     ownedObjects: accessOwnedObjects,
     refetch: refetchAccessControl,
   } = useAccessControl(activeAccountAddress, { enabled: !mockAdmin.enabled });
@@ -4532,6 +4565,49 @@ export function AdminDashboardPage() {
     loadConsole,
     mockProject: mockAdminData?.project ?? null,
   });
+
+  useEffect(() => {
+    logRouteLifecycle("admin-dashboard:mount", {
+      routePath: `${location.pathname}${location.search}`,
+      hash: typeof window === "undefined" ? "" : window.location.hash,
+      walletConnected: Boolean(activeAccountAddress),
+      storageMode: storageRuntime.mode,
+    });
+    return () => {
+      logRouteLifecycle("admin-dashboard:unmount", {
+        routePath: `${location.pathname}${location.search}`,
+        hash: typeof window === "undefined" ? "" : window.location.hash,
+      });
+    };
+  }, [activeAccountAddress, location.pathname, location.search, storageRuntime.mode]);
+
+  useEffect(() => {
+    logRouteLifecycle("dashboard:route-render", {
+      routePath: `${location.pathname}${location.search}`,
+      selectedProjectId: selectedProjectId || null,
+      selectedProjectName: selectedProject?.name ?? null,
+      visibleSignalCount: visibleSignals.length,
+      loading,
+      submissionsLoading,
+    });
+  }, [
+    loading,
+    location.pathname,
+    location.search,
+    selectedProject?.name,
+    selectedProjectId,
+    submissionsLoading,
+    visibleSignals.length,
+  ]);
+
+  useEffect(() => {
+    logRouteLifecycle("dashboard:selected-project-resolved", {
+      selectedProjectId: selectedProjectId || null,
+      selectedProjectName: selectedProject?.name ?? null,
+      projectState,
+    });
+  }, [projectState, selectedProject?.name, selectedProjectId]);
+
   const mobileInboxSearchResults = useMemo(() => {
     const query = normalizeRecentSearchTerm(debouncedMobileInboxSearchQuery).toLowerCase();
     if (!query) {
@@ -4636,17 +4712,6 @@ export function AdminDashboardPage() {
       setSignalViewScope("all");
     }
   }, [location.search, selectedProjectId, signalViewScope]);
-  const hasOwnedAccessibleForms = accessibleForms.some((form) =>
-    addressesMatch(form.ownerAddress, activeAccountAddress),
-  );
-  const hasProjectManagementAccess =
-    hasAdminAccess ||
-    hasOwnedAccessibleForms ||
-    projects.some(
-      (project) =>
-        addressesMatch(project.owner, activeAccountAddress) ||
-        project.admins.some((adminAddress) => addressesMatch(adminAddress, activeAccountAddress)),
-    );
   const {
     detailAnswers,
     detailAttachments,
@@ -4718,11 +4783,10 @@ export function AdminDashboardPage() {
       return next;
     });
   }, [detailAnswers, selectedSignalId]);
-  const roleLabel = getRoleLabel(capabilityProfile);
   const activityActorRole = getActivityActorRole(capabilityProfile);
   const accessState = activeAccountAddress ? "allowed" : "denied";
   const privateReviewLabel = t("privateReviewEnabled");
-  const sessionStatusLabel = activeAccountAddress ? t("secureSessionActive") : t("secureSessionStandby");
+  const workspaceSecurityStateLabel = activeAccountAddress ? "Secure" : "Encrypted";
 
   async function handleClearDebugPolicyCache() {
     const result = await clearDeepSignalPolicyCapabilityCache();
@@ -6272,17 +6336,12 @@ export function AdminDashboardPage() {
       hasAdminAccess || !capabilityProfile.isConfigured || addressesMatch(form.ownerAddress, activeAccountAddress),
     [activeAccountAddress, capabilityProfile.isConfigured, hasAdminAccess],
   );
-  const workspaceMetaItems = hasAdminAccess
-    ? [
-        formatWorkspaceCount(selectedProject ? selectedProject.formsCount : accessibleForms.length, "Channel"),
-        formatWorkspaceCount(selectedProject ? selectedProject.signalsCount : allSignals.length, "Signal"),
-        formatAccessLabel(roleLabel),
-      ]
-    : [
-        formatWorkspaceCount(accessibleForms.length, "Channel"),
-        formatWorkspaceCount(allSignals.length, "Signal"),
-        sessionStatusLabel,
-      ];
+  const workspaceStatusName = selectedProject?.name ?? "deepsignal";
+  const workspaceStatusMemberCount = selectedProject
+    ? Math.max(1, selectedProject.members.length || selectedProject.admins.length + selectedProject.reviewers.length + 1)
+    : activeAccountAddress
+      ? 1
+      : 0;
   const hasProjects = projects.length > 0;
   const hasFormsInSelectedProject = selectedProject
     ? selectedProjectForms.length > 0 || selectedProject.formsCount > 0
@@ -6868,7 +6927,7 @@ export function AdminDashboardPage() {
       access={accessState}
       deniedBody={capabilityProfile.isConfigured ? t("reviewConsoleCapabilityRequirement") : undefined}
     >
-      <section className="stack">
+      <section className={`stack admin-workspace-stack is-${activeWorkspaceTab}-tab`}>
         <AdminToast toast={toast} />
         {mockAdmin.enabled ? <div className="mock-admin-badge">MOCK ADMIN</div> : null}
         {projectRecoveryNoticeOpen && selectedProject ? (
@@ -6958,40 +7017,25 @@ export function AdminDashboardPage() {
             highlightCreateFormCta={highlightCreateFormCta}
           />
         ) : (
-          <section className="panel glow-panel workspace-hero workspace-hero-compact desktop-signal-inbox-hero">
-            <div className="workspace-hero-main workspace-overview-shell">
-              <div className="workspace-hero-copy">
-                <p className="eyebrow">{sessionStatusLabel}</p>
-                <h1>{hasAdminAccess && selectedProject ? selectedProject.name : t("openInboxCta")}</h1>
-                <p className="lede">{t("signalInboxFastLaneBody")}</p>
-                <div className="workspace-hero-meta">
-                  {workspaceMetaItems.map((item) => (
-                    <span key={item} className="workspace-meta-item">
-                      {item}
-                    </span>
-                  ))}
-                  {isLoadingCapabilities ? (
-                    <span className="workspace-meta-item">{t("checkingWalletAccess")}</span>
-                  ) : null}
-                  <span className="workspace-meta-item">{sessionStatusLabel}</span>
-                </div>
-              </div>
-
-              <aside className="workspace-action-dock">
-                <WorkspaceShortcutBar
-                  className="workspace-dock-actions"
-                  hasAdminAccess={hasProjectManagementAccess}
-                  selectedProjectName={selectedProject?.name ?? null}
-                  selectedProjectId={selectedProjectId}
-                  projects={projects}
-                  highlightCreateFormCta={highlightCreateFormCta}
-                  onSelectProject={selectProject}
-                  onRevealCreateProject={() => revealProjectSettingsTools("create")}
-                  onRevealConnectProject={() => revealProjectSettingsTools("connect")}
-                />
-              </aside>
-            </div>
-          </section>
+          <WorkspaceStatusBar
+            workspaceName={workspaceStatusName}
+            securityStateLabel={workspaceSecurityStateLabel}
+            unreadCount={visibleUnreadCount}
+            memberCount={workspaceStatusMemberCount}
+            hasAdminAccess={hasAdminAccess}
+            hasSelectedProject={Boolean(selectedProject)}
+            deletingProject={deletingProject}
+            deleteProjectDisabledReason={deleteProjectBlockedReason}
+            onOpenProjectSettings={openAdvancedProjectSettings}
+            onRevealCreateProject={() => revealProjectSettingsTools("create")}
+            onDeleteProject={() => void handleDeleteProject()}
+            labels={{
+              projectActions: t("selectedProjectLabel"),
+              switchProject: t("switchProjectButton"),
+              chooseProject: t("chooseProjectButton"),
+              createProject: t("createProjectButton"),
+            }}
+          />
         )}
 
         {hasAdminAccess && (!showGuidedOnboarding || selectedProject) ? (
@@ -7040,7 +7084,6 @@ export function AdminDashboardPage() {
           <>
           <MobileSignalInbox
             title={selectedProject?.name ?? t("signalInboxTitle")}
-            sessionLabel={sessionStatusLabel}
             activeScopeLabel={activeScopeLabel}
             viewScope={signalViewScope}
             onViewScopeChange={setSignalViewScope}

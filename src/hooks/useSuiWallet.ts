@@ -28,7 +28,7 @@ export interface SuiWalletState {
 
 export function useSuiWallet(options: { resolveName?: boolean } = {}): SuiWalletState {
   const account = useCurrentAccount();
-  const { currentWallet, connectionStatus, isConnected, isConnecting } = useCurrentWallet();
+  const { currentWallet, connectionStatus, isConnecting } = useCurrentWallet();
   const disconnectWallet = useDisconnectWallet();
   const { data: suinsName = null } = useSuiName(account?.address, {
     enabled: options.resolveName ?? true,
@@ -43,9 +43,10 @@ export function useSuiWallet(options: { resolveName?: boolean } = {}): SuiWallet
     ? "error"
     : isRestoringConnection
       ? "connecting"
-      : isConnected && accountAddress
+      : accountAddress
         ? "connected"
         : "disconnected";
+  const hasConnectedAccount = status === "connected";
 
   const disconnect = useCallback(async () => {
     try {
@@ -81,7 +82,7 @@ export function useSuiWallet(options: { resolveName?: boolean } = {}): SuiWallet
       accountAddress,
       walletName: currentWallet?.name,
       status,
-      isConnected,
+      isConnected: hasConnectedAccount,
       isConnecting,
       isDisconnecting: disconnectWallet.isPending,
       isRestoringConnection,
@@ -97,7 +98,7 @@ export function useSuiWallet(options: { resolveName?: boolean } = {}): SuiWallet
       accountAddress,
       currentWallet?.name,
       status,
-      isConnected,
+      hasConnectedAccount,
       isConnecting,
       disconnectWallet.isPending,
       isRestoringConnection,

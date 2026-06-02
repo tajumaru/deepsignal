@@ -175,13 +175,14 @@
     position: absolute;
     top: 0;
     right: 0;
+    justify-self: end;
     width: 2.45rem;
     min-width: 2.45rem;
     height: 2.45rem;
     min-height: 2.45rem;
-    border-color: rgba(112, 209, 239, 0.28);
-    background: rgba(10, 28, 43, 0.92);
-    color: #dffaff;
+    border-color: rgba(248, 113, 113, 0.42);
+    background: rgba(62, 16, 24, 0.86);
+    color: #ff8f8f;
   }
 
   .review-session-header h3,

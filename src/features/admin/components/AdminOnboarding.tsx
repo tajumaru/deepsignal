@@ -175,7 +175,7 @@ export function WorkspaceShortcutBar({
   );
 }
 
-function HoldToDeleteProjectButton({
+export function HoldToDeleteProjectButton({
   disabledReason,
   deleting,
   onDelete,

@@ -1,5 +1,13 @@
 import { buildInfo } from "../lib/buildInfo";
 import { getChunkFailureUrl } from "../lib/chunkLoadRecovery";
+import {
+  getCurrentRoutePath,
+  isMobileSafariLike,
+  logRouteLifecycle,
+  recordResourceErrorDiagnostic,
+  recordRuntimeErrorDiagnostic,
+  updateBrowserCapabilityDiagnostics,
+} from "../lib/routeDiagnostics";
 import type { FormSchema, Submission, SystemSignalSeverity } from "../types";
 
 export const SYSTEM_SIGNAL_FORM_ID = "system:deepsignal-runtime";
@@ -26,6 +34,13 @@ type SystemSignalInput = {
   diagnostics?: Record<string, unknown>;
 };
 
+type NormalizedRuntimeError = {
+  errorName: string;
+  errorMessage: string;
+  errorStack: string;
+  chunkUrl: string | null;
+};
+
 function safeGetLocation() {
   if (typeof window === "undefined") {
     return { pathname: "", hash: "", routePath: "" };
@@ -49,7 +64,7 @@ function getRouteId(routePath: string) {
   return pathname.replace(/^\/+/, "") || "unknown";
 }
 
-function normalizeError(input: SystemSignalInput) {
+function normalizeError(input: SystemSignalInput): NormalizedRuntimeError {
   const error = input.error;
   if (error instanceof Error) {
     return {
@@ -68,7 +83,11 @@ function normalizeError(input: SystemSignalInput) {
 }
 
 function isMobileSafari(userAgent: string) {
-  return /iP(?:hone|ad|od)/.test(userAgent) && /Safari/i.test(userAgent) && !/CriOS|FxiOS|EdgiOS/i.test(userAgent);
+  return isMobileSafariLike(
+    userAgent,
+    typeof navigator === "undefined" ? "" : navigator.platform || "",
+    typeof navigator === "undefined" ? 0 : navigator.maxTouchPoints ?? 0,
+  );
 }
 
 function hashText(value: string) {
@@ -125,6 +144,23 @@ function getProviderReadinessSnapshot() {
   return window.__DEEPSIGNAL_DEBUG__?.providerReadiness ?? {};
 }
 
+function getProviderReadinessValue(key: string) {
+  const snapshot = getProviderReadinessSnapshot();
+  const value = snapshot[key];
+  return typeof value === "string" ? value : String(value ?? "");
+}
+
+function providersLookReadyForDiagnosticOnly() {
+  const wallet = getProviderReadinessValue("walletProvider");
+  const walrus = getProviderReadinessValue("walrusRuntimeProvider");
+  const routeGuard = getProviderReadinessValue("routeProviderGuard");
+  return (
+    (wallet === "ready" || wallet === "connected" || wallet === "deferred" || wallet === "") &&
+    (walrus === "ready" || walrus === "deferred" || walrus === "") &&
+    (routeGuard === "ready" || routeGuard === "deferred" || routeGuard === "")
+  );
+}
+
 function getPlatform() {
   if (typeof navigator === "undefined") {
     return "unknown";
@@ -137,6 +173,65 @@ function getUserAgent() {
     return "unknown";
   }
   return navigator.userAgent || "unknown";
+}
+
+function safeString(value: unknown) {
+  if (typeof value === "string") {
+    return value;
+  }
+  if (value instanceof Error) {
+    return value.stack || value.message || value.name;
+  }
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value ?? "");
+  }
+}
+
+function safeEventDetails(event: Event) {
+  const target = event.target as Partial<HTMLScriptElement & HTMLLinkElement & HTMLImageElement> | null;
+  const currentTarget = event.currentTarget as Partial<EventTarget> | null;
+  const tagName = typeof target?.tagName === "string" ? target.tagName : "";
+  return {
+    eventType: event.type,
+    targetType: target?.constructor?.name ?? typeof target,
+    currentTargetType: currentTarget?.constructor?.name ?? typeof currentTarget,
+    tagName,
+    src: typeof target?.src === "string" ? target.src : undefined,
+    href: typeof target?.href === "string" ? target.href : undefined,
+    rel: typeof target?.rel === "string" ? target.rel : undefined,
+    as: typeof target?.as === "string" ? target.as : undefined,
+    crossOrigin: typeof target?.crossOrigin === "string" ? target.crossOrigin : undefined,
+    message: event instanceof ErrorEvent ? event.message : undefined,
+    filename: event instanceof ErrorEvent ? event.filename : undefined,
+    lineno: event instanceof ErrorEvent ? event.lineno : undefined,
+    colno: event instanceof ErrorEvent ? event.colno : undefined,
+  };
+}
+
+function isResourceErrorEvent(event: Event) {
+  const target = event.target as Partial<HTMLScriptElement & HTMLLinkElement & HTMLImageElement> | null;
+  const tagName = typeof target?.tagName === "string" ? target.tagName.toUpperCase() : "";
+  return tagName === "SCRIPT" || tagName === "LINK" || tagName === "IMG";
+}
+
+function normalizePromiseRejectionReason(reason: unknown): NormalizedRuntimeError {
+  if (reason instanceof Error) {
+    return {
+      errorName: reason.name || "UnhandledRejection",
+      errorMessage: reason.message || "Unhandled promise rejection.",
+      errorStack: reason.stack || "",
+      chunkUrl: getChunkFailureUrl(reason),
+    };
+  }
+  const message = safeString(reason) || "Unhandled promise rejection.";
+  return {
+    errorName: typeof reason === "undefined" ? "UnhandledRejection" : "UnhandledRejectionNonError",
+    errorMessage: message,
+    errorStack: "",
+    chunkUrl: getChunkFailureUrl(message),
+  };
 }
 
 function createSystemForm(timestamp: string): FormSchema {
@@ -352,27 +447,126 @@ export function startSystemSignalReporter() {
   if (typeof window === "undefined") {
     return;
   }
+  updateBrowserCapabilityDiagnostics();
+
+  window.addEventListener(
+    "error",
+    (event) => {
+      if (!isResourceErrorEvent(event)) {
+        return;
+      }
+      const details = safeEventDetails(event);
+      const target = event.target as Partial<HTMLScriptElement & HTMLLinkElement & HTMLImageElement>;
+      const tagName = String(details.tagName || "RESOURCE").toUpperCase();
+      recordResourceErrorDiagnostic({
+        sourceContext: "resource.error.capture",
+        tagName,
+        src: details.src,
+        href: details.href,
+        rel: details.rel,
+        as: details.as,
+        crossOrigin: details.crossOrigin,
+        details,
+      });
+      logRouteLifecycle("resource:error", {
+        tagName,
+        src: details.src,
+        href: details.href,
+        rel: details.rel,
+        as: details.as,
+      });
+      reportSystemError({
+        errorName: `${tagName}ResourceError`,
+        errorMessage: `Resource failed to load: ${details.src || details.href || tagName}`,
+        errorStack: "",
+        chunkUrl: tagName === "SCRIPT" && typeof target.src === "string" ? target.src : null,
+        severity: tagName === "SCRIPT" || details.rel === "modulepreload" ? "error" : "warning",
+        sourceContext: "resource.error.capture",
+        diagnostics: details,
+      });
+    },
+    true,
+  );
+
   window.addEventListener("error", (event) => {
-    reportSystemError({
+    const details = safeEventDetails(event);
+    const normalized = normalizeError({
       error: event.error instanceof Error ? event.error : undefined,
       errorName: event.error instanceof Error ? event.error.name : "WindowError",
-      errorMessage: event.message,
+      errorMessage: event.message || "Unhandled window error.",
       errorStack: event.error instanceof Error ? event.error.stack : "",
       chunkUrl: typeof event.filename === "string" && event.filename.endsWith(".js") ? event.filename : null,
-      severity: "error",
-      sourceContext: "window.error",
+    });
+    const isOpaqueScriptError =
+      normalized.errorMessage === "Script error." &&
+      !normalized.errorStack &&
+      !normalized.chunkUrl &&
+      !event.filename &&
+      !event.lineno &&
+      !event.colno;
+    recordRuntimeErrorDiagnostic({
+      sourceContext: isOpaqueScriptError ? "window.error.opaque-script-diagnostic" : "window.error",
+      errorName: normalized.errorName,
+      errorMessage: normalized.errorMessage,
+      errorStack: normalized.errorStack,
+      details: {
+        ...details,
+        diagnosticOnly: isOpaqueScriptError && providersLookReadyForDiagnosticOnly(),
+        routePath: getCurrentRoutePath(),
+      },
+    });
+    logRouteLifecycle(isOpaqueScriptError ? "window:error:opaque-script" : "window:error", {
+      errorName: normalized.errorName,
+      errorMessage: normalized.errorMessage,
+      filename: details.filename,
+      lineno: details.lineno,
+      colno: details.colno,
+      diagnosticOnly: isOpaqueScriptError && providersLookReadyForDiagnosticOnly(),
+    });
+    reportSystemError({
+      error: event.error instanceof Error ? event.error : undefined,
+      errorName: normalized.errorName,
+      errorMessage: normalized.errorMessage,
+      errorStack: normalized.errorStack,
+      chunkUrl: normalized.chunkUrl,
+      severity: isOpaqueScriptError && providersLookReadyForDiagnosticOnly() ? "warning" : "error",
+      sourceContext: isOpaqueScriptError ? "window.error.opaque-script-diagnostic" : "window.error",
       diagnostics: {
-        filename: event.filename,
-        lineno: event.lineno,
-        colno: event.colno,
+        ...details,
+        diagnosticOnly: isOpaqueScriptError && providersLookReadyForDiagnosticOnly(),
       },
     });
   });
   window.addEventListener("unhandledrejection", (event) => {
+    const normalized = normalizePromiseRejectionReason(event.reason);
+    recordRuntimeErrorDiagnostic({
+      sourceContext: "window.unhandledrejection",
+      errorName: normalized.errorName,
+      errorMessage: normalized.errorMessage,
+      errorStack: normalized.errorStack,
+      details: {
+        reasonType: event.reason?.constructor?.name ?? typeof event.reason,
+        reason: safeString(event.reason).slice(0, 1000),
+        routePath: getCurrentRoutePath(),
+      },
+    });
+    logRouteLifecycle("window:unhandledrejection", {
+      errorName: normalized.errorName,
+      errorMessage: normalized.errorMessage,
+      chunkUrl: normalized.chunkUrl,
+    });
     reportSystemError({
       error: event.reason,
+      errorName: normalized.errorName,
+      errorMessage: normalized.errorMessage,
+      errorStack: normalized.errorStack,
+      chunkUrl: normalized.chunkUrl,
       severity: "error",
       sourceContext: "window.unhandledrejection",
+      diagnostics: {
+        reasonType: event.reason?.constructor?.name ?? typeof event.reason,
+        reason: safeString(event.reason).slice(0, 1000),
+      },
     });
   });
 }

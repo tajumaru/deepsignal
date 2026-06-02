@@ -5,6 +5,7 @@ import "../styles/mobile/layout.css";
 import "../styles/mobile/workspace.css";
 import "../styles/mobile/signal.css";
 import "../styles/mobile/lifecycle.css";
+import "../styles/mobile/explore.css";
 import { CreateFormLink } from "../components/CreateFormLink";
 import { useI18n } from "../i18n";
 import { buildExploreAiPreview, getExploreCategory, isFormPubliclyExplorable, type ExploreCategory } from "../lib/explore";

@@ -57,7 +57,7 @@ export function WalletConnect({ compact = false, surface = "default" }: WalletCo
     setMenuOpen((current) => !current);
   }
 
-  if (!wallet.isConnected) {
+  if (wallet.status !== "connected") {
     return (
       <div
         className={`wallet-connect-shell ${compact ? "wallet-connect-shell-compact" : ""} ${
@@ -69,8 +69,8 @@ export function WalletConnect({ compact = false, surface = "default" }: WalletCo
             <strong>
               {isMobileDrawer
                 ? wallet.isRestoringConnection
-                  ? "ウォレット確認中"
-                  : "ウォレット未接続"
+                  ? t("secureSessionStandby")
+                  : t("notConnected")
                 : wallet.isRestoringConnection
                   ? "Opening Session..."
                   : "Activate Session"}
@@ -78,8 +78,8 @@ export function WalletConnect({ compact = false, surface = "default" }: WalletCo
             <span>
               {isMobileDrawer
                 ? wallet.isRestoringConnection
-                  ? "接続状態を確認しています"
-                  : "検証が必要な操作で接続"
+                  ? t("secureSessionStandby")
+                  : t("connectWalletToReview")
                 : wallet.isRestoringConnection
                   ? "Restoring secure session"
                   : "Wallet-optional public mode"}

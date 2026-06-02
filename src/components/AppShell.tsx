@@ -18,6 +18,7 @@ import { useI18n } from "../i18n";
 import { buildInfo } from "../lib/buildInfo";
 import { retryLazyImport } from "../lib/lazyRetry";
 import { isSignalInboxPath } from "../lib/navigation";
+import { logRouteLifecycle } from "../lib/routeDiagnostics";
 import { scheduleIdleTask } from "../lib/scheduleIdleTask";
 import { useOptionalRpcInfrastructure } from "../rpcInfrastructure";
 
@@ -193,6 +194,17 @@ function MobileDrawerNetworkStatus() {
   );
 }
 
+function MobileDrawerWalletStandbyStatus() {
+  const { t } = useI18n();
+
+  return (
+    <div className="mobile-drawer-status-line">
+      <span className="mobile-drawer-status-dot is-idle" aria-hidden="true" />
+      <span>{t("secureSessionStandby")}</span>
+    </div>
+  );
+}
+
 export function AppShell({
   children,
   walletAvailable = false,
@@ -215,6 +227,23 @@ export function AppShell({
   const walletChrome = useWalletChrome(walletAvailable, t("navLab"), () => setMobileDrawerOpen(false));
   const showComposeShortcut = !isComposerRoute(location.pathname);
   const showMobileBottomNav = !publicChrome;
+
+  useEffect(() => {
+    logRouteLifecycle("app-shell:mount", {
+      chrome,
+      walletAvailable,
+      pathname: location.pathname,
+      hash: typeof window === "undefined" ? "" : window.location.hash,
+    });
+    return () => {
+      logRouteLifecycle("app-shell:unmount", {
+        chrome,
+        walletAvailable,
+        pathname: location.pathname,
+        hash: typeof window === "undefined" ? "" : window.location.hash,
+      });
+    };
+  }, [chrome, location.pathname, walletAvailable]);
 
   useEffect(() => {
     setMoreMenuOpen(false);
@@ -647,15 +676,12 @@ export function AppShell({
                           fallback={
                             <div className="mobile-drawer-status-line" aria-live="polite">
                               <span className="mobile-drawer-status-dot" aria-hidden="true" />
-                              <span>ウォレット確認中</span>
+                              <span>{t("secureSessionStandby")}</span>
                             </div>
                           }
                         />
                       ) : (
-                        <div className="mobile-drawer-status-line">
-                          <span className="mobile-drawer-status-dot is-idle" aria-hidden="true" />
-                          <span>ウォレット未接続</span>
-                        </div>
+                        <MobileDrawerWalletStandbyStatus />
                       )}
                     </div>
                     <div className="mobile-drawer-utility-card">

@@ -258,14 +258,14 @@
   }
 
   .landing-final-cta-map::before {
-    width: min(78vw, 21rem);
-    height: min(34vw, 9rem);
+    width: min(88vw, 23rem);
+    height: min(40vw, 10rem);
   }
 
   .landing-final-cta-map::after {
-    width: min(86vw, 23rem);
-    height: min(40vw, 10rem);
-    opacity: 0.62;
+    width: min(104vw, 27rem);
+    height: min(46vw, 12rem);
+    opacity: 0.7;
   }
 
   .landing-final-cta-lines {
@@ -315,7 +315,7 @@
   }
 
   .landing-final-cta-button::after {
-    inset: -2.5rem -3.2rem;
+    inset: -3.1rem -4.2rem;
   }
 
   .landing-final-cta-button-icon {
@@ -381,11 +381,11 @@
 
   .landing-final-cta-mascot {
     left: 50%;
-    top: 68%;
-    width: clamp(4.6rem, 22vw, 6.3rem);
-    max-width: 30%;
+    top: 67%;
+    width: clamp(5.6rem, 29vw, 8.4rem);
+    max-width: 36%;
     margin: 0;
-    opacity: 0.78;
+    opacity: 0.88;
     transform: translateX(-50%);
   }
 

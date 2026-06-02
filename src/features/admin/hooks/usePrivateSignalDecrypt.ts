@@ -12,6 +12,7 @@ import {
 } from "../../../lib/seal";
 import { isDecryptDiagnosticError, type DecryptDiagnosticContext } from "../../../crypto/decryptDiagnostics";
 import type { CapabilityProfile } from "../../../hooks/useAccessControl";
+import { logRouteLifecycle } from "../../../lib/routeDiagnostics";
 import { getPrivateSignalPayloadState } from "../../../lib/signalInbox";
 import { resolveSubmissionAnswers } from "../../../lib/storage";
 import { reportSystemError } from "../../../services/systemSignalReporter";
@@ -325,6 +326,12 @@ export function usePrivateSignalDecrypt({
     setDecryptError("");
     setDecryptDiagnostics(null);
     let unlocked = false;
+    logRouteLifecycle("seal-decrypt-start", {
+      formId: selectedRecord.form.id,
+      submissionId,
+      encryptedBlobId: selectedRecord.submission.encryptedBlobId ?? null,
+      receiptBlobId: selectedRecord.submission.receiptBlobId ?? null,
+    });
     try {
       const resolved = await resolveSubmissionAnswers(
         selectedRecord.form,
@@ -374,7 +381,19 @@ export function usePrivateSignalDecrypt({
         unlocked = true;
         setToast({ tone: "success", message: messages.walletVerifiedPrivateSignalUnlocked });
       }
+      logRouteLifecycle("seal-decrypt-success", {
+        formId: selectedRecord.form.id,
+        submissionId,
+        unlocked,
+        hasResolvedPayload: Boolean(resolved),
+      });
     } catch (error) {
+      logRouteLifecycle("seal-decrypt-failure", {
+        formId: selectedRecord.form.id,
+        submissionId: selectedRecord.submission.id,
+        error,
+        decryptDiagnostics: isDecryptDiagnosticError(error) ? error.diagnostics : null,
+      });
       reportSystemError({
         error,
         routePath: "/admin",
@@ -453,6 +472,10 @@ export function usePrivateSignalDecrypt({
     let firstError = "";
     const unlockedSignalsById: Record<string, DecryptedSignalCacheEntry> = {};
 
+    logRouteLifecycle("seal-bulk-decrypt-start", {
+      requestedCount: records.length,
+      decryptableCount: decryptableTargets.length,
+    });
     try {
       for (const [index, record] of decryptableTargets.entries()) {
         const position = index + 1;
@@ -494,6 +517,13 @@ export function usePrivateSignalDecrypt({
           }
           setBulkDecryptProgress({ completed: unlockedCount, failed: failedCount, total: decryptableTargets.length });
         } catch (error) {
+          logRouteLifecycle("seal-bulk-decrypt-failure", {
+            formId: record.form.id,
+            submissionId: record.submission.id,
+            position,
+            error,
+            decryptDiagnostics: isDecryptDiagnosticError(error) ? error.diagnostics : null,
+          });
           reportSystemError({
             error,
             routePath: "/admin",
@@ -528,6 +558,12 @@ export function usePrivateSignalDecrypt({
       bulkDecryptInFlightRef.current = false;
       setBulkDecrypting(false);
     }
+
+    logRouteLifecycle(failedCount > 0 ? "seal-bulk-decrypt-failure" : "seal-bulk-decrypt-success", {
+      unlockedCount,
+      failedCount,
+      totalCount: decryptableTargets.length,
+    });
 
     if (failedCount > 0) {
       setBulkDecryptError(firstError || decryptFailedLabel);

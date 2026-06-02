@@ -217,6 +217,8 @@ describe("App routing", () => {
       routeTimings: [],
       hydrationTimings: [],
       failedImports: [],
+      runtimeErrors: [],
+      resourceErrors: [],
       currentProjectId: "",
       cacheRestoreSource: "unknown",
       browserCapabilities: {},

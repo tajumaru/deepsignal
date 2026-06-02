@@ -987,6 +987,98 @@
     linear-gradient(180deg, rgba(4, 18, 31, 0.88), rgba(3, 13, 24, 0.9));
 }
 
+.workspace-status-bar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.28rem;
+  align-items: center;
+  padding: 0.68rem 0.82rem;
+  border-radius: 14px;
+  background:
+    radial-gradient(circle at top right, rgba(103, 232, 249, 0.12), transparent 28%),
+    linear-gradient(180deg, rgba(5, 20, 33, 0.92), rgba(3, 14, 24, 0.94));
+  box-shadow:
+    inset 0 0 0 1px rgba(116, 226, 255, 0.1),
+    0 10px 24px rgba(0, 0, 0, 0.18);
+}
+
+.workspace-status-bar-main {
+  display: grid;
+  gap: 0.28rem;
+  min-width: 0;
+}
+
+.workspace-status-bar-primary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.75rem;
+  align-items: center;
+  min-width: 0;
+}
+
+.workspace-status-bar-primary strong {
+  min-width: 0;
+  overflow: hidden;
+  color: #f3fdff;
+  font-size: clamp(0.98rem, 1.2vw, 1.14rem);
+  line-height: 1.12;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspace-status-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.34rem;
+  color: #9ff6ff;
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  line-height: 1;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.workspace-status-state::before {
+  content: "";
+  width: 0.42rem;
+  height: 0.42rem;
+  border-radius: var(--radius-pill);
+  background: #49ddc6;
+  box-shadow: 0 0 14px rgba(73, 221, 198, 0.72);
+}
+
+.workspace-status-bar-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.32rem;
+  align-items: center;
+  margin: 0;
+  color: #9bbdca;
+  font-size: 0.78rem;
+  font-weight: 750;
+  line-height: 1.25;
+}
+
+.workspace-status-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  min-width: min(100%, 24rem);
+}
+
+.workspace-status-actions .primary-button,
+.workspace-status-actions .ghost-button,
+.workspace-status-actions .danger-button {
+  min-height: 2.55rem;
+  white-space: nowrap;
+}
+
+.workspace-status-actions .signal-inbox-onboarding-delete-project {
+  min-width: 10.5rem;
+}
+
 .workspace-hero-main,
 .workspace-hero-controls,
 .workspace-primary-action,

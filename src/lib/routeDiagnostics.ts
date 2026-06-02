@@ -59,6 +59,27 @@ declare global {
         dependencyProbe?: ChunkDependencyProbe;
         probe?: ChunkProbe;
       }>;
+      runtimeErrors: Array<{
+        at: number;
+        sourceContext: string;
+        errorName: string;
+        errorMessage: string;
+        errorStack?: string;
+        routePath: string;
+        details?: DiagnosticDetails;
+      }>;
+      resourceErrors: Array<{
+        at: number;
+        sourceContext: string;
+        tagName: string;
+        src?: string;
+        href?: string;
+        rel?: string;
+        as?: string;
+        crossOrigin?: string | null;
+        routePath: string;
+        details?: DiagnosticDetails;
+      }>;
       currentProjectId: string;
       cacheRestoreSource: string;
       browserCapabilities: ReadinessState;
@@ -111,6 +132,8 @@ function getDebugState() {
     routeTimings: [],
     hydrationTimings: [],
     failedImports: [],
+    runtimeErrors: [],
+    resourceErrors: [],
     currentProjectId: "",
     cacheRestoreSource: "unknown",
     browserCapabilities: {},
@@ -120,11 +143,52 @@ function getDebugState() {
   window.__DEEPSIGNAL_DEBUG__.routeTimings ??= [];
   window.__DEEPSIGNAL_DEBUG__.hydrationTimings ??= [];
   window.__DEEPSIGNAL_DEBUG__.failedImports ??= [];
+  window.__DEEPSIGNAL_DEBUG__.runtimeErrors ??= [];
+  window.__DEEPSIGNAL_DEBUG__.resourceErrors ??= [];
   window.__DEEPSIGNAL_DEBUG__.currentProjectId ??= "";
   window.__DEEPSIGNAL_DEBUG__.cacheRestoreSource ??= "unknown";
   window.__DEEPSIGNAL_DEBUG__.browserCapabilities ??= {};
   window.__DEEPSIGNAL_DEBUG__.updatedAt ??= new Date().toISOString();
   return window.__DEEPSIGNAL_DEBUG__;
+}
+
+export function getCurrentRoutePath() {
+  if (typeof window === "undefined") {
+    return "";
+  }
+  return window.location.hash?.replace(/^#/, "") || `${window.location.pathname}${window.location.search}`;
+}
+
+export function isMobileSafariLike(userAgent: string, platform = "", maxTouchPoints = 0) {
+  const isIosDevice =
+    /iP(?:hone|ad|od)/i.test(userAgent) ||
+    /iP(?:hone|ad|od)/i.test(platform) ||
+    (/Macintosh/i.test(userAgent) && maxTouchPoints > 1);
+  const isWebKit = /AppleWebKit/i.test(userAgent);
+  const isExcludedChromiumOrFirefox = /CriOS|FxiOS|EdgiOS|OPiOS|Chrome|Chromium|Firefox/i.test(userAgent);
+  const isSafari = /Safari/i.test(userAgent) || !/Version\/[\d.]+/i.test(userAgent);
+  const isWalletInAppBrowser = /Slush|Sui|Wallet|Mobile\/\w+/i.test(userAgent);
+  return Boolean(isIosDevice && isWebKit && (isSafari || isWalletInAppBrowser) && !isExcludedChromiumOrFirefox);
+}
+
+export function updateBrowserCapabilityDiagnostics() {
+  if (typeof navigator === "undefined") {
+    return;
+  }
+  setDeepSignalBrowserCapabilities({
+    mobileSafari: isMobileSafariLike(navigator.userAgent || "", navigator.platform || "", navigator.maxTouchPoints ?? 0),
+    userAgent: navigator.userAgent || "",
+    platform: navigator.platform || "",
+    maxTouchPoints: navigator.maxTouchPoints ?? 0,
+    standalonePwa:
+      typeof window !== "undefined" &&
+      typeof window.matchMedia === "function" &&
+      window.matchMedia("(display-mode: standalone)").matches,
+    hasIndexedDB: typeof indexedDB !== "undefined",
+    hasLocalStorage: typeof window !== "undefined" && "localStorage" in window,
+    hasCryptoSubtle: typeof crypto !== "undefined" && Boolean(crypto.subtle),
+    hasBigInt: typeof BigInt !== "undefined",
+  });
 }
 
 function updateDeepSignalDebug(
@@ -242,6 +306,79 @@ export function recordFailedImportDependencyProbe(label: string, dependencyProbe
       state.failedImports[index].dependencyProbe = dependencyProbe;
       break;
     }
+  }
+  state.updatedAt = new Date().toISOString();
+}
+
+export function recordRuntimeErrorDiagnostic({
+  sourceContext,
+  errorName,
+  errorMessage,
+  errorStack,
+  details,
+}: {
+  sourceContext: string;
+  errorName: string;
+  errorMessage: string;
+  errorStack?: string;
+  details?: DiagnosticDetails;
+}) {
+  if (typeof window === "undefined") {
+    return;
+  }
+  const state = getDebugState();
+  state.runtimeErrors.push({
+    at: Math.round(performance.now()),
+    sourceContext,
+    errorName,
+    errorMessage,
+    errorStack,
+    routePath: getCurrentRoutePath(),
+    details: sanitizeDetails(details),
+  });
+  if (state.runtimeErrors.length > 40) {
+    state.runtimeErrors.shift();
+  }
+  state.updatedAt = new Date().toISOString();
+}
+
+export function recordResourceErrorDiagnostic({
+  sourceContext,
+  tagName,
+  src,
+  href,
+  rel,
+  as,
+  crossOrigin,
+  details,
+}: {
+  sourceContext: string;
+  tagName: string;
+  src?: string;
+  href?: string;
+  rel?: string;
+  as?: string;
+  crossOrigin?: string | null;
+  details?: DiagnosticDetails;
+}) {
+  if (typeof window === "undefined") {
+    return;
+  }
+  const state = getDebugState();
+  state.resourceErrors.push({
+    at: Math.round(performance.now()),
+    sourceContext,
+    tagName,
+    src,
+    href,
+    rel,
+    as,
+    crossOrigin,
+    routePath: getCurrentRoutePath(),
+    details: sanitizeDetails(details),
+  });
+  if (state.resourceErrors.length > 40) {
+    state.resourceErrors.shift();
   }
   state.updatedAt = new Date().toISOString();
 }

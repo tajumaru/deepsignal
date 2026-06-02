@@ -27,6 +27,14 @@ const WALRUS_UPLOAD_RELAY_TIP_MAX =
     : null;
 const AGGREGATOR_DIAGNOSTIC_TIMEOUT_MS = 3500;
 
+function isAbortLikeError(error: unknown) {
+  return error instanceof Error && error.name === "AbortError";
+}
+
+function isTimeoutLikeError(error: unknown) {
+  return error instanceof Error && error.name === "TimeoutError";
+}
+
 function buildWaitForTransactionTimeoutError(digest: string, timeoutMs: number, lastError: unknown) {
   const lastRpcError = getWalrusErrorMessage(lastError);
   const timeoutSeconds = Math.round(timeoutMs / 1000);
@@ -71,7 +79,12 @@ function WalrusRuntimeBridgeInner() {
     }
 
     const controller = new AbortController();
-    const timeout = window.setTimeout(() => controller.abort(), AGGREGATOR_DIAGNOSTIC_TIMEOUT_MS);
+    let disposed = false;
+    let timedOut = false;
+    const timeout = window.setTimeout(() => {
+      timedOut = true;
+      controller.abort(new DOMException("Walrus aggregator readiness timed out.", "TimeoutError"));
+    }, AGGREGATOR_DIAGNOSTIC_TIMEOUT_MS);
     startPerf("walrus:aggregator-readiness", aggregatorUrl);
     markPerfMilestone("walrus:aggregator-readiness:start", aggregatorUrl);
     logRouteLifecycle("walrus:aggregator-readiness-start", { aggregatorUrl });
@@ -91,6 +104,23 @@ function WalrusRuntimeBridgeInner() {
         });
       })
       .catch((error) => {
+        if (disposed && isAbortLikeError(error)) {
+          endPerf("walrus:aggregator-readiness", "ok", "component-unmounted");
+          markPerfMilestone("walrus:aggregator-readiness:end", "canceled");
+          logRouteLifecycle("walrus:aggregator-readiness-canceled", {
+            aggregatorUrl,
+          });
+          return;
+        }
+        if (timedOut && (isTimeoutLikeError(error) || isAbortLikeError(error))) {
+          endPerf("walrus:aggregator-readiness", "failed", "timed-out");
+          markPerfMilestone("walrus:aggregator-readiness:end", "timed-out");
+          logRouteLifecycle("walrus:aggregator-readiness-timeout", {
+            aggregatorUrl,
+            timeoutMs: AGGREGATOR_DIAGNOSTIC_TIMEOUT_MS,
+          });
+          return;
+        }
         reportSystemError({
           error,
           severity: "warning",
@@ -98,6 +128,7 @@ function WalrusRuntimeBridgeInner() {
           diagnostics: {
             aggregatorUrl,
             timeoutMs: AGGREGATOR_DIAGNOSTIC_TIMEOUT_MS,
+            timedOut,
           },
         });
         endPerf("walrus:aggregator-readiness", "failed", error instanceof Error ? error.message : String(error));
@@ -112,8 +143,9 @@ function WalrusRuntimeBridgeInner() {
       .finally(() => window.clearTimeout(timeout));
 
     return () => {
+      disposed = true;
       window.clearTimeout(timeout);
-      controller.abort();
+      controller.abort(new DOMException("Walrus aggregator readiness probe canceled.", "AbortError"));
     };
   }, []);
 

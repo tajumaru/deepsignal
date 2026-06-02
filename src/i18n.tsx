@@ -2675,6 +2675,7 @@ const messages = {
     membersButton: "Members",
     projectButtonLabel: (params) => `Project: ${params?.name ?? ""}`,
     chooseProjectButton: "Choose Project",
+    switchProjectButton: "Switch Project",
     chooseProjectDetail: "Choose active project",
     reviewWorkspaceTitle: "Review workspace",
     reviewWorkspaceBody: "Streams, inbox, and detail stay visible together so triage work starts immediately.",
@@ -6330,6 +6331,7 @@ const messages = {
     membersButton: "\u30e1\u30f3\u30d0\u30fc",
     projectButtonLabel: (params) => `\u30d7\u30ed\u30b8\u30a7\u30af\u30c8: ${params?.name ?? ""}`,
     chooseProjectButton: "\u30d7\u30ed\u30b8\u30a7\u30af\u30c8\u3092\u9078\u629e",
+    switchProjectButton: "\u30d7\u30ed\u30b8\u30a7\u30af\u30c8\u3092\u5207\u308a\u66ff\u3048",
     chooseProjectDetail: "\u30a2\u30af\u30c6\u30a3\u30d6\u306a project \u3092\u9078\u629e",
     reviewWorkspaceTitle: "\u30ec\u30d3\u30e5\u30fc\u30ef\u30fc\u30af\u30b9\u30da\u30fc\u30b9",
     reviewWorkspaceBody:

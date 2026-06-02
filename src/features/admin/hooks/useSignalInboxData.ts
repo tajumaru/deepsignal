@@ -355,7 +355,30 @@ async function restoreProjectFormFromManifest(
     return null;
   }
 
-  const carrier = await readManifestWithForm(onchainForm.manifestBlobId);
+  logRouteLifecycle("walrus-manifest-read-start", {
+    projectId: project.objectId,
+    onchainFormId: onchainForm.formId,
+    manifestBlobId: onchainForm.manifestBlobId,
+  });
+  let carrier: Awaited<ReturnType<typeof readManifestWithForm>>;
+  try {
+    carrier = await readManifestWithForm(onchainForm.manifestBlobId);
+    logRouteLifecycle("walrus-manifest-read-success", {
+      projectId: project.objectId,
+      onchainFormId: onchainForm.formId,
+      manifestBlobId: onchainForm.manifestBlobId,
+      hasBundledForm: Boolean(carrier.form),
+      linkedFormBlobId: carrier.manifest.formBlobId ?? null,
+    });
+  } catch (error) {
+    logRouteLifecycle("walrus-manifest-read-failure", {
+      projectId: project.objectId,
+      onchainFormId: onchainForm.formId,
+      manifestBlobId: onchainForm.manifestBlobId,
+      error,
+    });
+    throw error;
+  }
   const bundledForm = carrier.form;
   const linkedFormBlobId =
     carrier.manifest.formBlobId && carrier.manifest.formBlobId !== "__bundled_form__"
@@ -732,6 +755,22 @@ export function useSignalInboxData({
   const formsRef = useRef<FormWithCount[]>([]);
   const submissionsRef = useRef<Record<string, Submission[]>>({});
   const lastStableFormsRef = useRef<FormWithCount[]>([]);
+
+  useEffect(() => {
+    logRouteLifecycle("useSignalInboxData:mount", {
+      accountConnected: Boolean(accountAddress),
+      selectedProjectId: selectedProjectId || null,
+      viewScope,
+      sortOrder,
+      mockAdmin: Boolean(mockAdminData),
+    });
+    return () => {
+      logRouteLifecycle("useSignalInboxData:unmount", {
+        selectedProjectId: selectedProjectId || null,
+        viewScope,
+      });
+    };
+  }, [accountAddress, mockAdminData, selectedProjectId, sortOrder, viewScope]);
 
   useEffect(() => {
     formsRef.current = forms;
@@ -1366,8 +1405,19 @@ export function useSignalInboxData({
       endPerf("admin:load-console", "ok");
       endPerf("inbox_fetch_start", "ok", `${loadedSubmissions.length} signals`);
       markPerfMilestone("inbox_fetch_end", `${loadedSubmissions.length} signals`);
+      logRouteLifecycle("useSignalInboxData:success", {
+        runId,
+        formCount: effectiveForms.length,
+        visibleSubmissionCount: loadedSubmissions.length,
+        remoteIndexEntryCount,
+      });
     } catch (error) {
       console.error("Failed to load admin console", error);
+      logRouteLifecycle("useSignalInboxData:failure", {
+        runId,
+        selectedProjectId: selectedProjectId || null,
+        error,
+      });
       if (formsRef.current.length === 0) {
         setForms([]);
       }

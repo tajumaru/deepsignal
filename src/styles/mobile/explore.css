@@ -1,0 +1,117 @@
+/* Mobile Explore keeps published signal rows in the first viewport. */
+
+@media (max-width: 767px) {
+  .explore-shell {
+    gap: 0.45rem;
+  }
+
+  .explore-hero,
+  .explore-hero-compact {
+    min-height: 0;
+  }
+
+  .explore-hero-compact {
+    padding: 0.56rem 0.8rem 0.6rem;
+  }
+
+  .explore-hero-bar {
+    min-height: 0;
+    gap: 0.3rem;
+  }
+
+  .explore-hero-copy {
+    gap: 0.2rem;
+  }
+
+  .explore-hero-copy .eyebrow {
+    font-size: 0.54rem;
+    letter-spacing: 0.13em;
+  }
+
+  .explore-hero-copy h1 {
+    font-size: clamp(1.42rem, 6.5vw, 1.74rem);
+    line-height: 1.02;
+  }
+
+  .explore-hero-copy .lede,
+  .explore-hero-note,
+  .explore-hero-summary,
+  .explore-radar-display,
+  .explore-node-field,
+  .explore-dataflow,
+  .explore-radar-sweep {
+    display: none;
+  }
+
+  .explore-discovery-panel {
+    gap: 0.3rem;
+    padding: 0.4rem 0 0.68rem;
+  }
+
+  .explore-discovery-bar {
+    gap: 0.28rem;
+  }
+
+  .explore-stream-console-label {
+    display: none;
+  }
+
+  .explore-tab-row {
+    display: flex;
+    flex-wrap: nowrap;
+    width: 100%;
+    min-width: 0;
+    gap: 0.4rem;
+    padding: 0.02rem 0.64rem 0.08rem;
+    overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-x: contain;
+    scroll-padding-inline: 0.64rem;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .explore-tab-row::-webkit-scrollbar {
+    display: none;
+  }
+
+  .explore-tab {
+    flex: 0 0 auto;
+    min-width: max-content;
+    min-height: 1.95rem;
+    padding: 0.34rem 0.6rem;
+    font-size: 0.75rem;
+    white-space: nowrap;
+  }
+
+  .explore-feed-meta {
+    align-items: center;
+    justify-content: space-between;
+    width: calc(100% - 1.28rem);
+    margin-inline: 0.64rem;
+    gap: 0.34rem;
+    font-size: 0.72rem;
+  }
+
+  .explore-sort-chip {
+    width: auto;
+    min-height: 1.85rem;
+    padding: 0.28rem 0.5rem;
+    border-radius: 10px;
+  }
+
+  .explore-card-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    margin-top: 0;
+  }
+
+  .explore-card-grid .explore-feed-card {
+    display: none;
+  }
+
+  .mobile-explore-row {
+    display: grid;
+    padding-block: 0.68rem;
+  }
+}
