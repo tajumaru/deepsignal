@@ -963,7 +963,18 @@ function LiveSignalFlowSection() {
             </div>
             <div className="landing-live-flow-powered-item">
               <span className="landing-live-flow-powered-icon is-seal" aria-hidden="true">
-                <img src="/deepsignal-mascot-ui.png" alt="" />
+                <picture>
+                  <source srcSet="/deepsignal-mascot-ui.webp 1x, /deepsignal-mascot-ui@2x.webp 2x" type="image/webp" />
+                  <img
+                    src="/deepsignal-mascot-ui.png"
+                    srcSet="/deepsignal-mascot-ui.png 1x, /deepsignal-mascot-ui@2x.png 2x"
+                    width="80"
+                    height="80"
+                    alt=""
+                    loading="eager"
+                    decoding="async"
+                  />
+                </picture>
                 <span className="landing-live-flow-seal-frost" />
               </span>
               <div>
@@ -1051,6 +1062,9 @@ function FinalSignalCtaSection() {
           <img
             className="landing-final-cta-mascot"
             src="/deepsignal-final-cta-mascot.webp"
+            srcSet="/deepsignal-final-cta-mascot.webp 1x, /deepsignal-final-cta-mascot@2x.webp 2x"
+            width="256"
+            height="256"
             alt=""
             loading="eager"
             decoding="async"

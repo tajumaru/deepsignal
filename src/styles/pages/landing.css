@@ -5172,11 +5172,16 @@
   stroke-width: 7.5;
 }
 
+.landing-live-flow-powered-icon.is-seal picture,
 .landing-live-flow-powered-icon.is-seal img {
   position: absolute;
   z-index: 1;
   width: 4.8rem;
   height: 4.8rem;
+}
+
+.landing-live-flow-powered-icon.is-seal img {
+  display: block;
   object-fit: cover;
   object-position: center 44%;
   opacity: 0.96;
