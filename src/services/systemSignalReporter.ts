@@ -220,6 +220,61 @@ function isModulePreloadResourceError(details: ReturnType<typeof safeEventDetail
   return String(details.tagName || "").toUpperCase() === "LINK" && details.rel === "modulepreload";
 }
 
+function isSameOriginAppAssetUrl(url: string | null | undefined) {
+  if (!url || typeof window === "undefined") {
+    return false;
+  }
+  try {
+    const parsed = new URL(url, window.location.href);
+    return parsed.origin === window.location.origin && parsed.pathname.startsWith("/assets/");
+  } catch {
+    return false;
+  }
+}
+
+function isOptionalExternalResourceUrl(url: string | null | undefined) {
+  if (!url) {
+    return false;
+  }
+  try {
+    const parsed = new URL(url, typeof window === "undefined" ? "https://deepsignal.invalid" : window.location.href);
+    return parsed.hostname === "script.google.com" && parsed.pathname.includes("/macros/");
+  } catch {
+    return false;
+  }
+}
+
+function classifyResourceError({
+  modulePreloadOnly,
+  resourceUrl,
+  tagName,
+}: {
+  modulePreloadOnly: boolean;
+  resourceUrl: string | null;
+  tagName: string;
+}) {
+  const appAsset = isSameOriginAppAssetUrl(resourceUrl);
+  const optionalExternal = isOptionalExternalResourceUrl(resourceUrl);
+  if (optionalExternal) {
+    return {
+      appAsset,
+      chunkUrl: null,
+      classification: "optional_remote_sync_resource_error",
+      errorName: "OptionalRemoteSyncResourceError",
+      severity: "warning" as const,
+      sourceContext: "resource.optional-remote-sync",
+    };
+  }
+  return {
+    appAsset,
+    chunkUrl: appAsset && (tagName === "SCRIPT" || modulePreloadOnly) ? resourceUrl : null,
+    classification: modulePreloadOnly ? "modulepreload_link_error" : appAsset ? "app_asset_resource_error" : "external_resource_error",
+    errorName: modulePreloadOnly ? `${tagName}ModulePreloadResourceError` : `${tagName}ResourceError`,
+    severity: modulePreloadOnly || !appAsset ? "warning" as const : tagName === "SCRIPT" ? "error" as const : "warning" as const,
+    sourceContext: modulePreloadOnly ? "resource.modulepreload.preload-only" : "resource.error.capture",
+  };
+}
+
 function normalizePromiseRejectionReason(reason: unknown): NormalizedRuntimeError {
   if (reason instanceof Error) {
     return {
@@ -469,9 +524,9 @@ export function startSystemSignalReporter() {
           : tagName === "LINK" && typeof target.href === "string"
             ? target.href
             : details.src || details.href || null;
-      const sourceContext = modulePreloadOnly ? "resource.modulepreload.preload-only" : "resource.error.capture";
+      const resourceClassification = classifyResourceError({ modulePreloadOnly, resourceUrl, tagName });
       recordResourceErrorDiagnostic({
-        sourceContext,
+        sourceContext: resourceClassification.sourceContext,
         tagName,
         src: details.src,
         href: details.href,
@@ -486,21 +541,29 @@ export function startSystemSignalReporter() {
         href: details.href,
         rel: details.rel,
         as: details.as,
+        appAsset: resourceClassification.appAsset,
+        classification: resourceClassification.classification,
         preloadOnly: modulePreloadOnly,
+        resourceUrl,
       });
       reportSystemError({
-        errorName: modulePreloadOnly ? `${tagName}ModulePreloadResourceError` : `${tagName}ResourceError`,
-        errorMessage: `${modulePreloadOnly ? "Module preload" : "Resource"} failed to load: ${resourceUrl || tagName}`,
+        errorName: resourceClassification.errorName,
+        errorMessage:
+          resourceClassification.classification === "optional_remote_sync_resource_error"
+            ? `Optional remote sync resource failed to load: ${resourceUrl || tagName}`
+            : `${modulePreloadOnly ? "Module preload" : "Resource"} failed to load: ${resourceUrl || tagName}`,
         errorStack: "",
-        chunkUrl: tagName === "SCRIPT" || modulePreloadOnly ? resourceUrl : null,
-        severity: modulePreloadOnly ? "warning" : tagName === "SCRIPT" ? "error" : "warning",
-        sourceContext,
+        chunkUrl: resourceClassification.chunkUrl,
+        severity: resourceClassification.severity,
+        sourceContext: resourceClassification.sourceContext,
         diagnostics: {
           ...details,
+          appAsset: resourceClassification.appAsset,
+          classification: resourceClassification.classification,
           resourceUrl,
           preloadOnly: modulePreloadOnly,
+          remoteSyncDegraded: resourceClassification.classification === "optional_remote_sync_resource_error",
           safariPreloadOnly: modulePreloadOnly && isMobileSafari(getUserAgent()),
-          classification: modulePreloadOnly ? "modulepreload_link_error" : "resource_error",
         },
       });
     },

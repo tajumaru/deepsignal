@@ -15,6 +15,9 @@ type PerfMilestone = {
   detail?: string;
 };
 
+const routeMilestoneNames = new Set(["route_ready", "route:interactive", "workspace:ready"]);
+const recordedRouteMilestones = new Set<string>();
+
 declare global {
   interface Window {
     __DEEPSIGNAL_PERF__?: Record<string, PerfEntry>;
@@ -114,6 +117,19 @@ export function endPerf(name: string, status: PerfStatus = "ok", detail?: string
 export function markPerfMilestone(name: string, detail?: string) {
   if (typeof window === "undefined") {
     return;
+  }
+  if (routeMilestoneNames.has(name)) {
+    const key = `${name}:${detail ?? ""}`;
+    if (recordedRouteMilestones.has(key)) {
+      return;
+    }
+    recordedRouteMilestones.add(key);
+    if (recordedRouteMilestones.size > 120) {
+      const oldest = recordedRouteMilestones.values().next().value;
+      if (oldest) {
+        recordedRouteMilestones.delete(oldest);
+      }
+    }
   }
   const milestone = {
     name,

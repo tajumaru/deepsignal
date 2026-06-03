@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useLocation } from "react-router-dom";
 import { InitialBootReady, useBootOverlay } from "./bootstrap/useBootOverlay";
+import { DashboardDegradedShell } from "./components/DashboardDegradedShell";
 import { BuildUpdateBanner } from "./components/system/BuildUpdateBanner";
 import { WalletSurface } from "./components/WalletSurface";
 import {
@@ -170,6 +171,7 @@ function PrivateRouteSurface({
   onRouteReady,
   routeNeedsWalletSurface,
   routeNeedsWorkspaceBoot,
+  routeIsDashboardShell,
   routePath,
   routeRetryNonce,
 }: {
@@ -180,19 +182,29 @@ function PrivateRouteSurface({
   onRouteReady: () => void;
   routeNeedsWalletSurface: boolean;
   routeNeedsWorkspaceBoot: boolean;
+  routeIsDashboardShell: boolean;
   routePath: string;
   routeRetryNonce: number;
 }) {
+  const shellFallback =
+    routeIsDashboardShell ? (
+      <RouteReady routePath={routePath} onReady={onRouteReady}>
+        <DashboardDegradedShell onRetryImports={onRetryRoute} routePath={routePath} />
+      </RouteReady>
+    ) : (
+      <DelayedWorkspaceRestoreFallback />
+    );
+
   return (
-    <Suspense fallback={<DelayedWorkspaceRestoreFallback />}>
-      <AppShell walletAvailable={routeNeedsWalletSurface} chrome="full">
-        <BuildUpdateBanner />
-        <AppRouteRuntimeEffects enabled={routeNeedsWorkspaceBoot} />
-        <RouteErrorBoundary
-          resetKey={`${locationKey}:${routeRetryNonce}`}
-          routePath={routePath}
-          onRetryRoute={onRetryRoute}
-        >
+    <RouteErrorBoundary
+      resetKey={`${locationKey}:${routeRetryNonce}:shell`}
+      routePath={routePath}
+      onRetryRoute={onRetryRoute}
+    >
+      <Suspense fallback={shellFallback}>
+        <AppShell walletAvailable={routeNeedsWalletSurface} chrome="full">
+          <BuildUpdateBanner />
+          <AppRouteRuntimeEffects enabled={routeNeedsWorkspaceBoot} />
           {mixedBuildStatus.detected ? (
             <RouteReady routePath={routePath} onReady={onRouteReady}>
               <MixedBuildRecoveryScreen observed={mixedBuildStatus.observed} />
@@ -201,14 +213,14 @@ function PrivateRouteSurface({
             <Suspense fallback={<DelayedWorkspaceRestoreFallback />}>
               <RouteReady routePath={routePath} onReady={onRouteReady}>
                 <ProviderReadinessBarrier routePath={routePath} enabled={routeNeedsWorkspaceBoot}>
-                  <AppRoutes components={components} onRetryRoute={onRetryRoute} />
+                  <AppRoutes components={components} onRetryRoute={onRetryRoute} routeRetryNonce={routeRetryNonce} />
                 </ProviderReadinessBarrier>
               </RouteReady>
             </Suspense>
           )}
-        </RouteErrorBoundary>
-      </AppShell>
-    </Suspense>
+        </AppShell>
+      </Suspense>
+    </RouteErrorBoundary>
   );
 }
 
@@ -228,7 +240,6 @@ export default function App() {
   const publicRouteComponents = useMemo(() => createPublicRouteComponents(routeRetryNonce), [routeRetryNonce]);
   const routeNeedsWalletSurface =
     location.pathname === "/admin" ||
-    location.pathname === "/dashboard" ||
     location.pathname === "/create" ||
     location.pathname === "/compose" ||
     location.pathname === "/troubleshooting" ||
@@ -348,6 +359,7 @@ export default function App() {
       onRouteReady={() => setInitialRouteReady(true)}
       routeNeedsWalletSurface={routeNeedsWalletSurface}
       routeNeedsWorkspaceBoot={routeNeedsWorkspaceBoot}
+      routeIsDashboardShell={location.pathname === "/dashboard"}
       routePath={routePath}
       routeRetryNonce={routeRetryNonce}
     />

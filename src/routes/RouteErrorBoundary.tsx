@@ -17,6 +17,8 @@ import {
 import { updateDeepSignalToLatest } from "../lib/buildUpdate";
 import { formatRouteLifecycleDiagnostics, logRouteLifecycle } from "../lib/routeDiagnostics";
 import type { ChunkDependencyProbe, ChunkProbe } from "../lib/routeDiagnostics";
+import { DashboardDegradedShell } from "../components/DashboardDegradedShell";
+import { LocalRecoveryCenter } from "../components/LocalRecoveryCenter";
 import {
   collectRouteDiagnostics,
   getProviderReadiness,
@@ -62,12 +64,30 @@ type RouteErrorDiagnostics = {
     chunkUrl?: string | null;
     category?: "chunkLoad" | "missingExport" | "runtime" | "timeout";
     expectedExport?: string;
+    availableExports?: string[];
     moduleKeys?: string[];
+    routeId?: string;
+    routePath?: string;
+    currentUrl?: string;
+    pathname?: string;
+    hash?: string;
+    userAgent?: string;
+    mobileSafari?: boolean;
     resolvedExport?: "default" | string | "missing";
     probe?: ChunkProbe;
     dependencyProbe?: ChunkDependencyProbe;
   }>;
   recordedAt: string;
+};
+
+type RouteErrorBoundaryState = {
+  cacheClearMessage: string;
+  clearingRouteCache: boolean;
+  diagnosticsCopied: boolean;
+  diagnostics: RouteErrorDiagnostics | null;
+  error: Error | null;
+  liteModeContinued: boolean;
+  retryCount: number;
 };
 
 function safeWriteLocalStorage(key: string, value: string) {
@@ -118,12 +138,15 @@ export function MixedBuildRecoveryScreen({ observed }: { observed: BuildAssetRec
 
 export class RouteErrorBoundary extends Component<
   { children: ReactNode; resetKey: string; routePath: string; onRetryRoute: () => void },
-  { error: Error | null; diagnostics: RouteErrorDiagnostics | null; diagnosticsCopied: boolean; retryCount: number }
+  RouteErrorBoundaryState
 > {
-  state: { error: Error | null; diagnostics: RouteErrorDiagnostics | null; diagnosticsCopied: boolean; retryCount: number } = {
+  state: RouteErrorBoundaryState = {
+    cacheClearMessage: "",
+    clearingRouteCache: false,
     error: null,
     diagnostics: null,
     diagnosticsCopied: false,
+    liteModeContinued: false,
     retryCount: 0,
   };
 
@@ -227,7 +250,7 @@ export class RouteErrorBoundary extends Component<
 
   componentDidUpdate(prevProps: Readonly<{ children: ReactNode; resetKey: string; routePath: string; onRetryRoute: () => void }>) {
     if (prevProps.resetKey !== this.props.resetKey && this.state.error) {
-      this.setState({ error: null, diagnostics: null, diagnosticsCopied: false, retryCount: 0 });
+      this.setState({ cacheClearMessage: "", error: null, diagnostics: null, diagnosticsCopied: false, liteModeContinued: false, retryCount: 0 });
     }
   }
 
@@ -245,7 +268,7 @@ export class RouteErrorBoundary extends Component<
       chunkFailure: isChunkLoadFailure(this.state.error),
     });
     this.props.onRetryRoute();
-    this.setState({ error: null, diagnostics: null, diagnosticsCopied: false, retryCount: nextRetryCount });
+    this.setState({ cacheClearMessage: "", error: null, diagnostics: null, diagnosticsCopied: false, liteModeContinued: false, retryCount: nextRetryCount });
   }
 
   handleHardRefresh = async () => {
@@ -260,6 +283,44 @@ export class RouteErrorBoundary extends Component<
       detectedAt: new Date().toISOString(),
       mixedBuildAssetsDetected: Boolean(this.state.diagnostics?.mixedBuildAssetsDetected),
     });
+  }
+
+  handleClearRouteCache = async () => {
+    this.setState({ clearingRouteCache: true, cacheClearMessage: "" });
+    clearChunkLoadRecoveryState();
+    clearBuildAssetRecoveryState();
+    try {
+      if (typeof window === "undefined" || !("caches" in window)) {
+        this.setState({ cacheClearMessage: "Cache Storage is not available in this browser." });
+        return;
+      }
+      const cacheNamesBefore = await window.caches.keys();
+      const targets = cacheNamesBefore.filter((name) => name.toLowerCase().includes("deepsignal"));
+      await Promise.all(targets.map((name) => window.caches.delete(name)));
+      const cacheNamesAfter = await window.caches.keys();
+      logRouteLifecycle("route:error-boundary-stale-cache-cleared", {
+        routePath: this.props.routePath,
+        removedCaches: targets,
+        cacheNamesBefore,
+        cacheNamesAfter,
+      });
+      this.setState({
+        cacheClearMessage:
+          targets.length > 0
+            ? `Cleared ${targets.length} DeepSignal route cache${targets.length === 1 ? "" : "s"}.`
+            : "No DeepSignal route caches were found.",
+      });
+    } catch (error) {
+      this.setState({ cacheClearMessage: error instanceof Error ? error.message : "Unable to clear route cache." });
+    } finally {
+      this.setState({ clearingRouteCache: false });
+    }
+  }
+
+  handleGoExplore = () => {
+    if (typeof window !== "undefined") {
+      window.location.assign("/#/explore");
+    }
   }
 
   handleCopyDiagnostics = async () => {
@@ -311,12 +372,42 @@ export class RouteErrorBoundary extends Component<
       const chunkFailure = isChunkLoadFailure(this.state.error);
       const diagnostics = this.state.diagnostics;
       const showDiagnostics = Boolean(diagnostics) || chunkFailure || shouldShowRouteDiagnostics(this.props.routePath);
-      const headline = chunkFailure
-        ? "App update detected, refresh required."
-        : "We couldn't reopen this workspace yet. Your local signals are still preserved.";
       const failedImportDiagnostics = diagnostics?.failedImportDiagnostics ?? [];
       const latestFailedImport = failedImportDiagnostics[failedImportDiagnostics.length - 1];
       const dependencyFailures = latestFailedImport?.dependencyProbe?.dependencies.filter((probe: ChunkProbe) => !probe.ok) ?? [];
+      const missingExport = latestFailedImport?.category === "missingExport" || this.state.error.name === "MissingLazyRouteExportError";
+      const appShellTimeout =
+        diagnostics?.routeId === "dashboard" &&
+        latestFailedImport?.label === "app-shell" &&
+        latestFailedImport.category === "timeout";
+      const assetMismatch = missingExport || Boolean(diagnostics?.mixedBuildAssetsDetected);
+      const headline =
+        chunkFailure || assetMismatch
+          ? "App assets out of sync."
+          : "We couldn't reopen this workspace yet. Your local signals are still preserved.";
+
+      if (appShellTimeout) {
+        return (
+          <DashboardDegradedShell
+            onContinueLiteMode={() => {
+              logRouteLifecycle("dashboard:continue-lite-mode", {
+                routePath: this.props.routePath,
+                retryCount: this.state.retryCount,
+              });
+              this.setState({ liteModeContinued: true });
+            }}
+            onRetryImports={this.handleRetry}
+            primaryActionLabel="Retry AppShell"
+            routePath={this.props.routePath}
+            statusMessage={
+              this.state.liteModeContinued
+                ? "Dashboard is staying in Lite Mode. Local fallback data remains preserved while wallet-heavy chrome stays deferred."
+                : "AppShell failed to load on this device. Dashboard Lite Mode is available while the wallet-heavy shell remains deferred."
+            }
+            statusTitle={this.state.liteModeContinued ? "Dashboard Lite Mode active" : "AppShell failed to load on this device"}
+          />
+        );
+      }
 
       return (
         <div className="panel glow-panel route-status-panel" role="alert">
@@ -325,19 +416,34 @@ export class RouteErrorBoundary extends Component<
           <p className="muted">
             {chunkFailure
               ? "A route chunk could not be loaded, usually because Safari has an older asset cached while a newer build is active. Local fallback data is still preserved."
+              : assetMismatch
+                ? "A route module loaded with an unexpected export shape, usually because Safari has stale or mixed app assets cached. Local fallback data is still preserved."
               : "Retry the route to restore the workspace. Local fallback data is still preserved."}
           </p>
           <div className="inline-actions">
             <button type="button" className="primary-button" onClick={() => void this.handleHardRefresh()}>
-              Update DeepSignal
+              Refresh app assets
             </button>
             <button type="button" className="ghost-button" onClick={this.handleRetry}>
-              {this.state.retryCount === 0 ? "Retry surface" : "Retry after clearing stale markers"}
+              {this.state.retryCount === 0 ? "Retry route import" : "Retry after clearing stale markers"}
+            </button>
+            <button type="button" className="ghost-button" onClick={this.handleGoExplore}>
+              Go to Explore
+            </button>
+            <button
+              type="button"
+              className="ghost-button"
+              onClick={() => void this.handleClearRouteCache()}
+              disabled={this.state.clearingRouteCache}
+            >
+              {this.state.clearingRouteCache ? "Clearing route cache..." : "Clear stale route cache"}
             </button>
             <button type="button" className="ghost-button" onClick={() => void this.handleCopyDiagnostics()}>
               {this.state.diagnosticsCopied ? "Copied diagnostics" : "Copy diagnostics"}
             </button>
           </div>
+          {this.state.cacheClearMessage ? <p className="muted">{this.state.cacheClearMessage}</p> : null}
+          {missingExport ? <LocalRecoveryCenter /> : null}
           {showDiagnostics && diagnostics ? (
             <details className="route-diagnostics-panel">
               <summary>Technical details</summary>
@@ -368,6 +474,12 @@ export class RouteErrorBoundary extends Component<
                 <dd>{latestFailedImport?.category ?? "n/a"}</dd>
                 <dt>expected export</dt>
                 <dd>{latestFailedImport?.expectedExport ?? "n/a"}</dd>
+                <dt>available exports</dt>
+                <dd>{latestFailedImport?.availableExports?.join(", ") || latestFailedImport?.moduleKeys?.join(", ") || "n/a"}</dd>
+                <dt>mobile Safari</dt>
+                <dd>{latestFailedImport?.mobileSafari === undefined ? "n/a" : latestFailedImport.mobileSafari ? "yes" : "no"}</dd>
+                <dt>current URL</dt>
+                <dd>{latestFailedImport?.currentUrl ?? "n/a"}</dd>
                 <dt>resolved export</dt>
                 <dd>{latestFailedImport?.resolvedExport ?? "n/a"}</dd>
                 <dt>dependency failures</dt>

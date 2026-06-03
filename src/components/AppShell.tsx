@@ -6,6 +6,7 @@ import {
   useState,
   type CSSProperties,
   type PropsWithChildren,
+  type ReactNode,
   type TouchEvent as ReactTouchEvent,
 } from "react";
 import { Link, NavLink, useLocation } from "react-router-dom";
@@ -13,7 +14,6 @@ import "../styles/app-shell-entry.css";
 import { CreateFormLink } from "./CreateFormLink";
 import { NavItemLabel } from "./NavIcons";
 import { BuildIndicator } from "./system/BuildIndicator";
-import { WalletConnectSurface } from "./WalletConnectSurface";
 import { useI18n } from "../i18n";
 import { buildInfo } from "../lib/buildInfo";
 import { retryLazyImport } from "../lib/lazyRetry";
@@ -28,8 +28,15 @@ const MOBILE_DRAWER_HORIZONTAL_RATIO = 1.5;
 const MOBILE_DRAWER_INTENT_PX = 8;
 const MOBILE_VIEWPORT_QUERY = "(max-width: 900px)";
 
-const WalletNav = lazy(() =>
-  retryLazyImport(() => import("./WalletNav"), "wallet-nav").then((module) => ({ default: module.WalletNav })),
+const WalletRuntimeNavSlot = lazy(() =>
+  retryLazyImport(() => import("./WalletRuntimePanel"), "wallet-runtime-nav").then((module) => ({
+    default: module.WalletRuntimeNavSlot,
+  })),
+);
+const WalletRuntimeConnectSlot = lazy(() =>
+  retryLazyImport(() => import("./WalletRuntimePanel"), "wallet-runtime-connect").then((module) => ({
+    default: module.WalletRuntimeConnectSlot,
+  })),
 );
 const NetworkMenu = lazy(() =>
   retryLazyImport(() => import("./NetworkMenu"), "network-menu").then((module) => ({ default: module.NetworkMenu })),
@@ -72,36 +79,50 @@ function isComposerRoute(pathname: string) {
   return pathname === "/create" || pathname === "/compose" || pathname === "/admin/forms/new";
 }
 
-function useWalletChrome(walletAvailable: boolean, navLabLabel: string, onNavigate?: () => void) {
-  const fallback = <div className="wallet-connect-shell wallet-connect-shell-compact" />;
-
+function WalletNavSlot({
+  navLabLabel,
+  onNavigate,
+  section,
+  walletAvailable,
+}: {
+  navLabLabel: string;
+  onNavigate?: () => void;
+  section: "access" | "inbox";
+  walletAvailable: boolean;
+}) {
   if (!walletAvailable) {
-    return {
-      inboxNav: (
-        <Link to="/admin" onClick={onNavigate}>
-          {navLabLabel}
-        </Link>
-      ),
-      accessNav: null,
-      connect: null,
-    };
+    return section === "inbox" ? (
+      <Link to="/admin" onClick={onNavigate}>
+        {navLabLabel}
+      </Link>
+    ) : null;
   }
 
-  return {
-    inboxNav: (
-      <Suspense fallback={null}>
-        <WalletNav section="inbox" onNavigate={onNavigate} />
-      </Suspense>
-    ),
-    accessNav: (
-      <Suspense fallback={null}>
-        <WalletNav section="access" onNavigate={onNavigate} />
-      </Suspense>
-    ),
-    connect: (
-      <WalletConnectSurface compact fallback={fallback} />
-    ),
-  };
+  return (
+    <Suspense fallback={null}>
+      <WalletRuntimeNavSlot section={section} onNavigate={onNavigate} />
+    </Suspense>
+  );
+}
+
+function WalletConnectSlot({
+  fallback,
+  surface,
+  walletAvailable,
+}: {
+  fallback?: ReactNode;
+  surface?: "mobileDrawer";
+  walletAvailable: boolean;
+}) {
+  if (!walletAvailable) {
+    return null;
+  }
+
+  return (
+    <Suspense fallback={fallback ?? null}>
+      <WalletRuntimeConnectSlot surface={surface} fallback={fallback} />
+    </Suspense>
+  );
 }
 
 interface MobileAppBottomNavProps {
@@ -224,7 +245,13 @@ export function AppShell({
   const mobileDrawerReturnFocusRef = useRef<HTMLElement | null>(null);
   const mobileDrawerGestureRef = useRef<MobileDrawerGestureState | null>(null);
   const mobileDrawerEdgeGestureRef = useRef<MobileDrawerGestureState | null>(null);
-  const walletChrome = useWalletChrome(walletAvailable, t("navLab"), () => setMobileDrawerOpen(false));
+  const walletConnectFallback = <div className="wallet-connect-shell wallet-connect-shell-compact" />;
+  const mobileWalletFallback = (
+    <div className="mobile-drawer-status-line" aria-live="polite">
+      <span className="mobile-drawer-status-dot" aria-hidden="true" />
+      <span>{t("secureSessionStandby")}</span>
+    </div>
+  );
   const showComposeShortcut = !isComposerRoute(location.pathname);
   const showMobileBottomNav = !publicChrome;
 
@@ -547,12 +574,22 @@ export function AppShell({
               <CreateFormLink nav fresh={false}>
                 <NavItemLabel>{t("navCreateForm")}</NavItemLabel>
               </CreateFormLink>
-              {walletChrome.inboxNav}
+              <WalletNavSlot
+                navLabLabel={t("navLab")}
+                onNavigate={() => setMobileDrawerOpen(false)}
+                section="inbox"
+                walletAvailable={walletAvailable}
+              />
             </div>
             <div className="topnav-row topnav-row-secondary">
               <NavLink to="/explore">{t("navExplore")}</NavLink>
               <NavLink to="/my-responses">{t("navMyResponses")}</NavLink>
-              {walletChrome.accessNav}
+              <WalletNavSlot
+                navLabLabel={t("navLab")}
+                onNavigate={() => setMobileDrawerOpen(false)}
+                section="access"
+                walletAvailable={walletAvailable}
+              />
               <div ref={moreMenuRef} className={`topnav-more ${moreMenuOpen ? "is-open" : ""}`}>
                 <button
                   type="button"
@@ -578,7 +615,7 @@ export function AppShell({
           {publicChrome ? null : (
             <div className="topbar-infra">
               <DeferredNetworkMenu />
-              {walletAvailable ? walletChrome.connect : null}
+              <WalletConnectSlot fallback={walletConnectFallback} walletAvailable={walletAvailable} />
             </div>
           )}
           <label className="language-switch">
@@ -656,7 +693,12 @@ export function AppShell({
                 <div className="mobile-drawer-section">
                   <span className="mobile-drawer-section-label">{t("navMobileSettings")}</span>
                   <nav className="mobile-drawer-nav mobile-drawer-settings-nav" aria-label="Mobile settings navigation">
-                    {walletChrome.accessNav}
+                    <WalletNavSlot
+                      navLabLabel={t("navLab")}
+                      onNavigate={closeMobileDrawer}
+                      section="access"
+                      walletAvailable={walletAvailable}
+                    />
                     <NavLink className="mobile-drawer-command-link" to="/troubleshooting" onClick={closeMobileDrawer}>
                       {t("navTroubleshooting")}
                     </NavLink>
@@ -669,20 +711,12 @@ export function AppShell({
                     </div>
                     <div className="mobile-drawer-utility-card mobile-drawer-status-card">
                       <span className="mobile-drawer-utility-label">Wallet</span>
-                      {walletAvailable ? (
-                        <WalletConnectSurface
-                          compact
-                          surface="mobileDrawer"
-                          fallback={
-                            <div className="mobile-drawer-status-line" aria-live="polite">
-                              <span className="mobile-drawer-status-dot" aria-hidden="true" />
-                              <span>{t("secureSessionStandby")}</span>
-                            </div>
-                          }
-                        />
-                      ) : (
-                        <MobileDrawerWalletStandbyStatus />
-                      )}
+                      <WalletConnectSlot
+                        fallback={mobileWalletFallback}
+                        surface="mobileDrawer"
+                        walletAvailable={walletAvailable}
+                      />
+                      {walletAvailable ? null : <MobileDrawerWalletStandbyStatus />}
                     </div>
                     <div className="mobile-drawer-utility-card">
                       <label className="language-switch mobile-drawer-language-switch">

@@ -70,7 +70,9 @@ function buildManifestPlugin(args: {
     publicForm: /\/src\/pages\/PublicFormPage\.tsx$/,
     publicRoadmap: /\/src\/pages\/PublicRoadmapPage\.tsx$/,
     manifestRestore: /\/src\/pages\/ManifestRestorePage\.tsx$/,
+    myResponses: /\/src\/pages\/MyResponsesPage\.tsx$/,
     submissionDetail: /\/src\/pages\/SubmissionDetailPage\.tsx$/,
+    submittedHistory: /\/src\/pages\/SubmittedHistoryPage\.tsx$/,
     troubleshooting: /\/src\/pages\/TroubleshootingPage\.tsx$/,
     insightsFixture: /\/src\/pages\/InsightsFixturePage\.tsx$/,
     landing: /\/src\/pages\/LandingPage\.tsx$/,
@@ -85,9 +87,11 @@ function buildManifestPlugin(args: {
     insightsFixture: "InsightsFixturePage",
     landing: "LandingPage",
     manifestRestore: "ManifestRestorePage",
+    myResponses: "MyResponsesPage",
     publicForm: "PublicFormPage",
     publicRoadmap: "PublicRoadmapPage",
     submissionDetail: "SubmissionDetailPage",
+    submittedHistory: "SubmittedHistoryPage",
     troubleshooting: "TroubleshootingPage",
     zkloginCallback: "ZkLoginCallbackPage",
   };
@@ -157,7 +161,9 @@ function buildManifestPlugin(args: {
         publicForm: [],
         publicRoadmap: [],
         manifestRestore: [],
+        myResponses: [],
         submissionDetail: [],
+        submittedHistory: [],
         troubleshooting: [],
         insightsFixture: [],
         landing: [],
@@ -322,6 +328,24 @@ function buildManifestPlugin(args: {
         );
       }
       writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+    },
+  };
+}
+
+function routeBuildMetadataPlugin(args: { appVersion: string; buildTime: string; gitHash: string; appEnvironment: string }): Plugin {
+  const routeModulePattern = /\/src\/pages\/(?:AccessManagementPage|AdminDashboardPage|ExploreSignalsPage|FormBuilderPage|InsightsFixturePage|ManifestRestorePage|MyResponsesPage|PublicFormPage|PublicRoadmapPage|SubmissionDetailPage|SubmittedHistoryPage|TroubleshootingPage|ZkLoginCallbackPage)\.tsx$/;
+
+  return {
+    name: "deepsignal-route-build-metadata",
+    transform(code, id) {
+      const normalizedId = id.split("?")[0].replace(/\\/g, "/");
+      if (!routeModulePattern.test(normalizedId) || code.includes("DEEPSIGNAL_ROUTE_BUILD")) {
+        return null;
+      }
+      return {
+        code: `${code}\nexport const DEEPSIGNAL_ROUTE_BUILD = ${JSON.stringify(args)};\n`,
+        map: null,
+      };
     },
   };
 }
@@ -808,6 +832,7 @@ export default defineConfig(({ mode }) => {
     },
     plugins: [
       ignoreMissingScureBip39SourcemapPlugin(),
+      routeBuildMetadataPlugin({ appVersion, buildTime, gitHash, appEnvironment }),
       react(),
       buildManifestPlugin({
         appVersion,

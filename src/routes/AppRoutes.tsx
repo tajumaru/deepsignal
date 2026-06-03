@@ -1,9 +1,13 @@
-import { useEffect, useState, type ReactNode } from "react";
-import { Navigate, Route, Routes, useParams } from "react-router-dom";
+import { Component, useCallback, useRef, useState, type ErrorInfo, type ReactNode } from "react";
+import { Navigate, Route, Routes, useLocation, useParams } from "react-router-dom";
+import { DashboardRecoveryPanel } from "../components/DashboardRecoveryPanel";
+import { DashboardShellFirstPanel } from "../components/DashboardShellFirstPanel";
 import { WalrusRuntimeSurface } from "../components/WalrusRuntimeSurface";
 import { WalletSurface } from "../components/WalletSurface";
+import { buildInfo } from "../lib/buildInfo";
+import { getChunkFailureUrl } from "../lib/chunkLoadRecovery";
+import { logRouteLifecycle } from "../lib/routeDiagnostics";
 import { REQUIRE_GLOBAL_WALRUS_RUNTIME } from "../lib/runtimeFlags";
-import { formatRouteLifecycleDiagnostics } from "../lib/routeDiagnostics";
 import type { AppRouteComponents } from "./appRouteComponents";
 
 function LegacyFormInboxRedirect({ basePath }: { basePath: "/admin" | "/dashboard" }) {
@@ -25,65 +29,199 @@ function WithWalrusRuntime({ children }: { children: ReactNode }) {
   return <WalrusRuntimeSurface>{children}</WalrusRuntimeSurface>;
 }
 
-function DashboardWalletRuntimeFallback({ onRetry }: { onRetry?: () => void }) {
-  const [showDiagnostics, setShowDiagnostics] = useState(false);
-  const [copied, setCopied] = useState(false);
-
-  useEffect(() => {
-    const timer = window.setTimeout(() => setShowDiagnostics(true), 15_000);
-    return () => window.clearTimeout(timer);
-  }, []);
-
-  async function copyDiagnostics() {
-    await navigator.clipboard.writeText(formatRouteLifecycleDiagnostics());
-    setCopied(true);
-    window.setTimeout(() => setCopied(false), 1800);
-  }
-
-  return (
-    <div className="panel glow-panel route-status-panel" role="status">
-      <p className="eyebrow">Wallet runtime</p>
-      <h1>Preparing secure dashboard...</h1>
-      <p className="muted">
-        The dashboard shell is ready. DeepSignal is waiting for the wallet runtime before opening protected signal
-        controls.
-      </p>
-      {showDiagnostics ? (
-        <div className="stack">
-          <p className="muted">Wallet runtime loading is taking longer than expected. Your local fallback data is preserved.</p>
-          <pre className="route-status-diagnostics">{formatRouteLifecycleDiagnostics()}</pre>
-          <div className="inline-actions">
-            {onRetry ? (
-              <button type="button" className="primary-button" onClick={onRetry}>
-                Retry wallet runtime
-              </button>
-            ) : null}
-            <button type="button" className="ghost-button" onClick={() => void copyDiagnostics()}>
-              {copied ? "Copied diagnostics" : "Copy diagnostics"}
-            </button>
-          </div>
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
 function WithDeferredWalletRuntime({ children, onRetry }: { children: ReactNode; onRetry?: () => void }) {
   const [walletRetryNonce, setWalletRetryNonce] = useState(0);
+  const silentRetryScheduledRef = useRef(false);
+  const routePath = typeof window === "undefined" ? "/dashboard" : window.location.hash?.replace(/^#/, "") || "/dashboard";
 
-  function handleRetry() {
+  const handleRetry = useCallback(() => {
     setWalletRetryNonce((value) => value + 1);
     onRetry?.();
-  }
+  }, [onRetry]);
+
+  const handleWalletImportSlow = useCallback(() => {
+    if (silentRetryScheduledRef.current) {
+      return;
+    }
+    silentRetryScheduledRef.current = true;
+    logRouteLifecycle("provider:wallet-import-silent-retry-scheduled", {
+      reason: "dashboard-wallet-runtime-slow",
+      routePath,
+      retryKey: walletRetryNonce,
+    });
+    window.setTimeout(() => {
+      logRouteLifecycle("provider:wallet-import-silent-retry", {
+        reason: "dashboard-wallet-runtime-slow",
+        routePath,
+        retryKey: walletRetryNonce + 1,
+      });
+      setWalletRetryNonce((value) => value + 1);
+    }, 750);
+  }, [routePath, walletRetryNonce]);
+
+  const handleWalletImportFailure = useCallback(
+    (details: { buildVersion: string; mobileSafari: boolean; retryCount: number; retryKey: string | number; routePath: string }) => {
+      logRouteLifecycle("dashboard:wallet-runtime-fallback-render", {
+        ...details,
+        routePath,
+        recoveryScope: "wallet-only",
+      });
+    },
+    [routePath],
+  );
 
   return (
-    <WalletSurface fallback={<DashboardWalletRuntimeFallback onRetry={handleRetry} />} retryKey={walletRetryNonce}>
-      {children}
-    </WalletSurface>
+    <WalletRuntimeBoundary onRetry={handleRetry} resetKey={`wallet:${routePath}:${walletRetryNonce}`} routePath={routePath}>
+      <WalletSurface
+        fallback={<DashboardShellFirstPanel onRetryWalletRuntime={handleRetry} routePath={routePath} />}
+        onImportFailure={handleWalletImportFailure}
+        onImportSlow={handleWalletImportSlow}
+        retryKey={walletRetryNonce}
+      >
+        {children}
+      </WalletSurface>
+    </WalletRuntimeBoundary>
   );
 }
 
-export function AppRoutes({ components, onRetryRoute }: { components: AppRouteComponents; onRetryRoute?: () => void }) {
+type WalletRuntimeBoundaryProps = {
+  children: ReactNode;
+  onRetry: () => void;
+  resetKey: string;
+  routePath: string;
+};
+
+type WalletRuntimeBoundaryState = {
+  error: unknown;
+};
+
+class WalletRuntimeBoundary extends Component<WalletRuntimeBoundaryProps, WalletRuntimeBoundaryState> {
+  state: WalletRuntimeBoundaryState = { error: null };
+
+  static getDerivedStateFromError(error: unknown): WalletRuntimeBoundaryState {
+    return { error };
+  }
+
+  componentDidCatch(error: unknown, errorInfo: ErrorInfo) {
+    logRouteLifecycle("provider:wallet-import-failed", {
+      buildVersion: buildInfo.appVersion,
+      chunkUrl: null,
+      errorName: error instanceof Error ? error.name : "Error",
+      errorMessage: error instanceof Error ? error.message : String(error ?? "Unknown wallet runtime failure"),
+      mobileSafari: typeof navigator === "undefined" ? false : /iP(?:hone|ad|od)/.test(navigator.userAgent),
+      recoveryScope: "wallet-only",
+      routePath: this.props.routePath,
+      componentStack: errorInfo.componentStack,
+    });
+  }
+
+  componentDidUpdate(previousProps: WalletRuntimeBoundaryProps) {
+    if (previousProps.resetKey !== this.props.resetKey && this.state.error) {
+      this.setState({ error: null });
+      logRouteLifecycle("provider:wallet-runtime-boundary-reset", {
+        routePath: this.props.routePath,
+        resetKey: this.props.resetKey,
+      });
+    }
+  }
+
+  render() {
+    if (this.state.error) {
+      return (
+        <DashboardShellFirstPanel
+          onRetryWalletRuntime={this.props.onRetry}
+          routePath={this.props.routePath}
+          walletStatusMessage="Wallet runtime failed. Dashboard shell remains available."
+        />
+      );
+    }
+    return this.props.children;
+  }
+}
+
+type DashboardRouteBoundaryProps = {
+  children: ReactNode;
+  onRetry?: () => void;
+  resetKey: string;
+  routePath: string;
+};
+
+type DashboardRouteBoundaryState = {
+  error: unknown;
+};
+
+function getLatestDashboardFailedImport() {
+  if (typeof window === "undefined") {
+    return null;
+  }
+  const failedImports = window.__DEEPSIGNAL_DEBUG__?.failedImports ?? [];
+  for (let index = failedImports.length - 1; index >= 0; index -= 1) {
+    const entry = failedImports[index];
+    if (entry.label === "route-admin-dashboard") {
+      return entry;
+    }
+  }
+  return null;
+}
+
+class DashboardRouteBoundary extends Component<DashboardRouteBoundaryProps, DashboardRouteBoundaryState> {
+  state: DashboardRouteBoundaryState = { error: null };
+
+  static getDerivedStateFromError(error: unknown): DashboardRouteBoundaryState {
+    return { error };
+  }
+
+  componentDidCatch(error: unknown, errorInfo: ErrorInfo) {
+    const latestFailedImport = getLatestDashboardFailedImport();
+    logRouteLifecycle("dashboard:route-lazy-error-boundary", {
+      routePath: this.props.routePath,
+      errorName: error instanceof Error ? error.name : "Error",
+      errorMessage: error instanceof Error ? error.message : String(error ?? "Unknown dashboard route failure"),
+      chunkUrl: latestFailedImport?.chunkUrl ?? getChunkFailureUrl(error),
+      failedImport: latestFailedImport,
+      componentStack: errorInfo.componentStack,
+    });
+  }
+
+  componentDidUpdate(previousProps: DashboardRouteBoundaryProps) {
+    if (previousProps.resetKey !== this.props.resetKey && this.state.error) {
+      this.setState({ error: null });
+      logRouteLifecycle("dashboard:route-lazy-boundary-reset", {
+        routePath: this.props.routePath,
+        resetKey: this.props.resetKey,
+      });
+    }
+  }
+
+  handleRetry = () => {
+    logRouteLifecycle("dashboard:route-lazy-manual-retry", {
+      routePath: this.props.routePath,
+      failedImport: getLatestDashboardFailedImport(),
+    });
+    this.props.onRetry?.();
+    this.setState({ error: null });
+  };
+
+  render() {
+    if (this.state.error) {
+      return <DashboardRecoveryPanel error={this.state.error} onRetry={this.handleRetry} routePath={this.props.routePath} />;
+    }
+
+    return this.props.children;
+  }
+}
+
+export function AppRoutes({
+  components,
+  onRetryRoute,
+  routeRetryNonce = 0,
+}: {
+  components: AppRouteComponents;
+  onRetryRoute?: () => void;
+  routeRetryNonce?: number;
+}) {
+  const location = useLocation();
+  const routePath = `${location.pathname}${location.search}${location.hash}`;
   const {
     AccessManagementPage,
     AdminDashboardPage,
@@ -127,11 +265,17 @@ export function AppRoutes({ components, onRetryRoute }: { components: AppRouteCo
       <Route
         path="/dashboard"
         element={
-          <WithDeferredWalletRuntime onRetry={onRetryRoute}>
-            <WithWalrusRuntime>
-              <AdminDashboardPage />
-            </WithWalrusRuntime>
-          </WithDeferredWalletRuntime>
+          <DashboardRouteBoundary
+            onRetry={onRetryRoute}
+            resetKey={`dashboard:${routePath}:${routeRetryNonce}`}
+            routePath={routePath}
+          >
+            <WithDeferredWalletRuntime onRetry={onRetryRoute}>
+              <WithWalrusRuntime>
+                <AdminDashboardPage />
+              </WithWalrusRuntime>
+            </WithDeferredWalletRuntime>
+          </DashboardRouteBoundary>
         }
       />
       <Route path="/admin/access" element={<AccessManagementPage />} />

@@ -38,6 +38,7 @@ describe("resolveLazyRouteModule", () => {
     const failedImports = window.__DEEPSIGNAL_DEBUG__?.failedImports ?? [];
     expect(failedImports[failedImports.length - 1]).toMatchObject({
       category: "missingExport",
+      availableExports: ["NotPublicFormPage"],
       expectedExport: "PublicFormPage",
       label: "route-public-form",
       moduleKeys: ["NotPublicFormPage"],

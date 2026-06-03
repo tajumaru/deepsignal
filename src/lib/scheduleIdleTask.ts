@@ -13,6 +13,9 @@ export function scheduleIdleTask(task: () => void, fallbackDelayMs = 3000): Idle
       return;
     }
     completed = true;
+    if (typeof window === "undefined") {
+      return;
+    }
     if (idleHandle !== undefined && "cancelIdleCallback" in window) {
       window.cancelIdleCallback(idleHandle);
     }
@@ -28,6 +31,9 @@ export function scheduleIdleTask(task: () => void, fallbackDelayMs = 3000): Idle
   const timeoutHandle = window.setTimeout(runTask, fallbackDelayMs);
   return () => {
     completed = true;
+    if (typeof window === "undefined") {
+      return;
+    }
     if (idleHandle !== undefined && "cancelIdleCallback" in window) {
       window.cancelIdleCallback(idleHandle);
     }

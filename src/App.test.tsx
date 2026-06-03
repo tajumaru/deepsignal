@@ -144,7 +144,7 @@ describe("App routing", () => {
 
     await waitFor(() => expect(screen.getByRole("heading", { name: "Admin Route" })).toBeInTheDocument());
     expect(screen.getByTestId("app-shell")).toHaveAttribute("data-chrome", "full");
-    expect(screen.getByTestId("app-shell")).toHaveAttribute("data-wallet-available", "yes");
+    expect(screen.getByTestId("app-shell")).toHaveAttribute("data-wallet-available", "no");
     expect(walletSurfaceSpy).toHaveBeenCalled();
   });
 
@@ -205,7 +205,7 @@ describe("App routing", () => {
       </MemoryRouter>,
     );
 
-    await screen.findByRole("heading", { name: "App update detected, refresh required." });
+    await screen.findByRole("heading", { name: "App assets out of sync." });
     expect(screen.getAllByText(/ExploreSignalsPage\.js/).length).toBeGreaterThan(0);
     expect(screen.getByText(/iPhone OS 17_5/)).toBeInTheDocument();
   });
@@ -278,7 +278,7 @@ describe("App routing", () => {
     });
     const urlBeforeRetry = window.location.href;
     routeFailures.explore = null;
-    fireEvent.click(screen.getByRole("button", { name: "Retry surface" }));
+    fireEvent.click(screen.getByRole("button", { name: "Retry route import" }));
 
     await waitFor(() => expect(screen.getByRole("heading", { name: "Explore Route" })).toBeInTheDocument());
     expect(window.location.href).toBe(urlBeforeRetry);
@@ -298,8 +298,10 @@ describe("App routing", () => {
     });
     expect(screen.queryByText("ReferenceError - demoScenario is not defined")).not.toBeInTheDocument();
     expect(screen.getAllByRole("button").map((button) => button.textContent)).toEqual([
-      "Update DeepSignal",
-      "Retry surface",
+      "Refresh app assets",
+      "Retry route import",
+      "Go to Explore",
+      "Clear stale route cache",
       "Copy diagnostics",
     ]);
 

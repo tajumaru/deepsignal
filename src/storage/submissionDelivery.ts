@@ -1,4 +1,5 @@
 import type { Submission } from "../types";
+import { logRouteLifecycle } from "../lib/routeDiagnostics";
 
 export type SubmitterMode = "anonymous" | "wallet" | "zkLogin";
 export type SubmissionRemoteSyncStatus = "remote_synced" | "sync_pending" | "local_only";
@@ -54,6 +55,7 @@ export interface OwnerSubmissionIndexFetchLog {
 const PENDING_QUEUE_KEY = "deepsignal.submissionDelivery.pendingQueue";
 export const PENDING_SUBMISSION_QUEUE_CHANGED_EVENT = "deepsignal:pending-submission-queue-changed";
 const REMOTE_SUBMISSION_INDEX_CACHE_TTL_MS = 15000;
+const REMOTE_SUBMISSION_INDEX_TIMEOUT_MS = 10000;
 const submissionRelayUrl = String(import.meta.env.VITE_DEEPSIGNAL_SUBMISSION_RELAY_URL || "").replace(/\/$/, "");
 const submissionRelayIsAppsScript = submissionRelayUrl.includes("script.google.com/macros/");
 const remoteSubmissionIndexRequests = new Map<string, {
@@ -232,31 +234,43 @@ function normalizeIndexEntries(payload: { entries?: unknown } | SubmissionIndexE
   }, []);
 }
 
-function fetchAppsScriptSubmissionIndex(searchParams: URLSearchParams, formId: string) {
-  return new Promise<SubmissionIndexEntry[]>((resolve, reject) => {
-    const callbackName = `__deepsignalIndex_${Date.now()}_${Math.random().toString(36).slice(2)}`;
-    const script = document.createElement("script");
-    const cleanup = () => {
-      delete (window as unknown as Record<string, unknown>)[callbackName];
-      script.remove();
-      window.clearTimeout(timeoutId);
-    };
-    const timeoutId = window.setTimeout(() => {
-      cleanup();
-      reject(new Error("Remote submission index fetch timed out."));
-    }, 10000);
-
-    (window as unknown as Record<string, unknown>)[callbackName] = (payload: { entries?: unknown } | SubmissionIndexEntry[] | null) => {
-      cleanup();
-      resolve(normalizeIndexEntries(payload, formId));
-    };
-    searchParams.set("callback", callbackName);
-    script.src = `${submissionRelayUrl}?${searchParams.toString()}`;
-    script.async = true;
-    script.onerror = () => {
-      cleanup();
-      reject(new Error("Remote submission index JSONP fetch failed."));
-    };
-    document.head.appendChild(script);
-  });
+async function fetchAppsScriptSubmissionIndex(searchParams: URLSearchParams, formId: string) {
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), REMOTE_SUBMISSION_INDEX_TIMEOUT_MS);
+  const requestUrl = `${submissionRelayUrl}?${searchParams.toString()}`;
+  try {
+    logRouteLifecycle("remote-sync:index-fetch-start", {
+      formId,
+      provider: "google-apps-script",
+      requestMode: "fetch",
+    });
+    const response = await fetch(requestUrl, {
+      cache: "no-store",
+      credentials: "omit",
+      headers: { "cache-control": "no-cache" },
+      signal: controller.signal,
+    });
+    if (!response.ok) {
+      throw new Error(`Remote submission index Apps Script fetch failed: ${response.status}`);
+    }
+    const payload = await response.json() as { entries?: unknown } | SubmissionIndexEntry[] | null;
+    const entries = normalizeIndexEntries(payload, formId);
+    logRouteLifecycle("remote-sync:index-fetch-success", {
+      formId,
+      provider: "google-apps-script",
+      entryCount: entries.length,
+    });
+    return entries;
+  } catch (error) {
+    logRouteLifecycle("remote-sync:index-fetch-degraded", {
+      formId,
+      provider: "google-apps-script",
+      status: "local_only",
+      errorName: error instanceof Error ? error.name : typeof error,
+      errorMessage: error instanceof Error ? error.message : String(error),
+    });
+    return [] as SubmissionIndexEntry[];
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
 }

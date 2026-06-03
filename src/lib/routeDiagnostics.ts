@@ -11,9 +11,16 @@ export type ChunkProbe = {
   bodyLooksLikeHtml?: boolean;
   contentLength?: string;
   contentType?: string;
+  decodedBodySize?: number;
+  elapsedMs?: number;
+  encodedBodySize?: number;
+  initiatorType?: string;
   ok: boolean;
+  resourceErrorFired?: boolean;
+  resourceTimingExists?: boolean;
   snippet?: string;
   status?: number;
+  transferSize?: number;
   truncated?: boolean;
   url: string;
 };
@@ -52,8 +59,18 @@ declare global {
         buildVersion?: string;
         buildTime?: string;
         gitHash?: string;
+        attempt?: number;
+        routePath?: string;
+        routeId?: string;
+        elapsedMs?: number;
+        userAgent?: string;
+        mobileSafari?: boolean;
+        currentUrl?: string;
+        pathname?: string;
+        hash?: string;
         category?: "chunkLoad" | "missingExport" | "runtime" | "timeout";
         expectedExport?: string;
+        availableExports?: string[];
         moduleKeys?: string[];
         resolvedExport?: "default" | string | "missing";
         dependencyProbe?: ChunkDependencyProbe;
@@ -254,7 +271,17 @@ export function recordFailedImport(
   chunkUrl?: string | null,
   details?: {
     category?: "chunkLoad" | "missingExport" | "runtime" | "timeout";
+    attempt?: number;
+    routePath?: string;
+    routeId?: string;
+    elapsedMs?: number;
+    userAgent?: string;
+    mobileSafari?: boolean;
+    currentUrl?: string;
+    pathname?: string;
+    hash?: string;
     expectedExport?: string;
+    availableExports?: string[];
     moduleKeys?: string[];
     resolvedExport?: "default" | string | "missing";
   },
@@ -381,6 +408,23 @@ export function recordResourceErrorDiagnostic({
     state.resourceErrors.shift();
   }
   state.updatedAt = new Date().toISOString();
+}
+
+export function hasResourceErrorForUrl(url: string) {
+  if (typeof window === "undefined") {
+    return false;
+  }
+  const target = url.split("#")[0];
+  const withoutQuery = target.split("?")[0];
+  const state = getDebugState();
+  return state.resourceErrors.some((entry) => {
+    const candidate = entry.src ?? entry.href ?? "";
+    if (!candidate) {
+      return false;
+    }
+    const normalized = candidate.split("#")[0];
+    return normalized === target || normalized.split("?")[0] === withoutQuery;
+  });
 }
 
 export function formatRouteLifecycleDiagnostics() {

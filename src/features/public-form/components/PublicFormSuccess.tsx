@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { PublicSignalMetaChip } from "../../../components/PublicSignalMeta";
 import { useI18n } from "../../../i18n";
+import { isMobileSafariLike } from "../../../lib/routeDiagnostics";
 import { getCurrentWalrusNetwork } from "../../../lib/walrusProof";
 import type { Submission } from "../../../types";
 
@@ -44,13 +45,48 @@ function formatReceiptDate(value?: string) {
   }
 }
 
-function SignalSealMascot({ compact = false }: { compact?: boolean }) {
+const MASCOT_WIDTH = 220;
+const MASCOT_HEIGHT = 275;
+const MASCOT_WEBP_SRCSET = "/mascot-sealed.webp 1x, /mascot-sealed@2x.webp 2x";
+const MASCOT_PNG_SRCSET = "/mascot-sealed.png 1x, /mascot-sealed@2x.png 2x";
+
+function isIPhoneSafari() {
+  if (typeof navigator === "undefined") {
+    return false;
+  }
+  return /iPhone/i.test(navigator.userAgent || "") && isMobileSafariLike(
+    navigator.userAgent || "",
+    navigator.platform || "",
+    navigator.maxTouchPoints ?? 0,
+  );
+}
+
+function SignalSealMascot({ compact = false, onLoad }: { compact?: boolean; onLoad?: () => void }) {
+  const [loaded, setLoaded] = useState(false);
+
+  function handleLoad() {
+    setLoaded(true);
+    onLoad?.();
+  }
+
   return (
-    <div className={compact ? "signal-seal-mascot is-compact" : "signal-seal-mascot"} aria-hidden="true">
+    <div
+      className={`${compact ? "signal-seal-mascot is-compact" : "signal-seal-mascot"} ${loaded ? "is-loaded" : "is-loading"}`}
+      aria-hidden="true"
+    >
       <span className="signal-seal-mascot-glow" />
       <picture>
-        <source srcSet="/mascot-sealed.webp" type="image/webp" />
-        <img src="/mascot-sealed.png" alt="" loading="eager" decoding="async" />
+        <source srcSet={MASCOT_WEBP_SRCSET} type="image/webp" />
+        <img
+          src="/mascot-sealed.png"
+          srcSet={MASCOT_PNG_SRCSET}
+          width={MASCOT_WIDTH}
+          height={MASCOT_HEIGHT}
+          alt=""
+          loading="eager"
+          decoding="async"
+          onLoad={handleLoad}
+        />
       </picture>
       <span className="signal-seal-mascot-blink" />
     </div>
@@ -66,6 +102,8 @@ export function PublicFormSuccess({
   const { t } = useI18n();
   const location = useLocation();
   const [receiptVisible, setReceiptVisible] = useState(false);
+  const textVisibleAtRef = useRef<number | null>(null);
+  const mascotLoggedRef = useRef(false);
   const primaryBlobId = submitted.encryptedBlobId ?? submitted.blobId;
   const storedOnWalrus = Boolean(primaryBlobId && !isPublicLocalFallbackBlob(primaryBlobId));
   const remoteDelivered =
@@ -87,11 +125,35 @@ export function PublicFormSuccess({
         ? t("publicReceiptRelayAccepted")
         : t("publicReceiptRelayPending");
 
+  useEffect(() => {
+    if (typeof performance === "undefined") {
+      return;
+    }
+    textVisibleAtRef.current = performance.now();
+  }, [submitted.id]);
+
+  function handleMascotLoad() {
+    if (mascotLoggedRef.current || !isIPhoneSafari() || typeof performance === "undefined") {
+      return;
+    }
+    mascotLoggedRef.current = true;
+    const textVisibleAt = textVisibleAtRef.current ?? performance.now();
+    const mascotVisibleAt = performance.now();
+    console.info("[DeepSignal public receipt mascot]", {
+      routeId: "public-form",
+      platform: "iPhone Safari",
+      textVisibleMs: Math.round(textVisibleAt),
+      mascotVisibleMs: Math.round(mascotVisibleAt),
+      mascotDelayMs: Math.round(mascotVisibleAt - textVisibleAt),
+      image: "/mascot-sealed.webp",
+      submissionId: submitted.id,
+    });
+  }
+
   return (
     <section className="stack">
       <section className="panel glow-panel success-screen signal-success-scene">
         <div className="signal-success-hero">
-          <SignalSealMascot />
           <div className="signal-success-copy">
             <p className="eyebrow">{signalReceivedLabel}</p>
             <h1>{t("publicReceiptHeadline")}</h1>
@@ -107,6 +169,7 @@ export function PublicFormSuccess({
               </span>
             </div>
           </div>
+          <SignalSealMascot onLoad={handleMascotLoad} />
         </div>
 
         <div className="signal-success-actions" aria-label="Next actions">

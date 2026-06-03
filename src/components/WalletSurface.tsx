@@ -1,4 +1,14 @@
-import { createContext, lazy, Suspense, useContext, useEffect, useMemo, type PropsWithChildren, type ReactNode } from "react";
+import {
+  createContext,
+  lazy,
+  Suspense,
+  useContext,
+  useEffect,
+  useMemo,
+  type PropsWithChildren,
+  type ReactNode,
+} from "react";
+import { buildInfo } from "../lib/buildInfo";
 import { retryLazyImport } from "../lib/lazyRetry";
 import { endPerf, markPerfMilestone, startPerf } from "../lib/perf";
 import { logRouteLifecycle } from "../lib/routeDiagnostics";
@@ -17,7 +27,7 @@ function getWalletProviderImportTimeoutMs() {
   }
   const userAgent = navigator.userAgent;
   if (isMobileSafari()) {
-    return 15_000;
+    return 12_000;
   }
   if (/Android|iP(?:hone|ad|od)|Mobile/i.test(userAgent)) {
     return 12_000;
@@ -25,20 +35,61 @@ function getWalletProviderImportTimeoutMs() {
   return 8_000;
 }
 
-function createWalletProviders(retryKey: string | number) {
+type WalletProviderImportOptions = {
+  onFailure?: (details: WalletProviderImportEvent) => void;
+  onSlow?: (details: WalletProviderImportEvent) => void;
+};
+
+type WalletProviderImportEvent = {
+  buildVersion: string;
+  mobileSafari: boolean;
+  retryCount: number;
+  retryKey: string | number;
+  routePath: string;
+  timeoutMs: number;
+  userAgent: string;
+};
+
+function getCurrentRoutePath() {
+  if (typeof window === "undefined") {
+    return "";
+  }
+  return window.location.hash?.replace(/^#/, "") || `${window.location.pathname}${window.location.search}`;
+}
+
+function createWalletProviders(retryKey: string | number, options: WalletProviderImportOptions = {}) {
   return lazy(() => {
     const importTimeoutMs = getWalletProviderImportTimeoutMs();
+    const mobileSafari = isMobileSafari();
+    const userAgent = typeof navigator === "undefined" ? "" : navigator.userAgent;
+    const routePath = getCurrentRoutePath();
+    const eventDetails: WalletProviderImportEvent = {
+      buildVersion: buildInfo.appVersion,
+      mobileSafari,
+      retryCount: Number(retryKey) || 0,
+      retryKey,
+      routePath,
+      timeoutMs: importTimeoutMs,
+      userAgent,
+    };
     startPerf("provider:wallet", `retry ${retryKey}`);
     markPerfMilestone("provider:wallet:import-start", `retry ${retryKey}`);
-    logRouteLifecycle("provider:wallet-import-start", { retryKey, timeoutMs: importTimeoutMs });
+    logRouteLifecycle("provider:wallet-import-start", eventDetails);
+    const slowTimeout = window.setTimeout(() => {
+      logRouteLifecycle("provider:wallet-import-slow", {
+        ...eventDetails,
+        elapsedMs: 5_000,
+      });
+      options.onSlow?.(eventDetails);
+    }, 5_000);
     const timeout = window.setTimeout(() => {
       markPerfMilestone("provider:wallet:import-timeout", `${importTimeoutMs}ms`);
-      logRouteLifecycle("provider:wallet-import-timeout", { retryKey, timeoutMs: importTimeoutMs });
+      logRouteLifecycle("provider:wallet-import-timeout", eventDetails);
     }, importTimeoutMs);
     return retryLazyImport(() => import("../providers"), "wallet-providers")
       .then((module) => {
         markPerfMilestone("provider:wallet:import-resolved", `retry ${retryKey}`);
-        logRouteLifecycle("provider:wallet-import-resolved", { retryKey });
+        logRouteLifecycle("provider:wallet-import-resolved", eventDetails);
         return {
           default: module.WalletProviders,
         };
@@ -46,15 +97,18 @@ function createWalletProviders(retryKey: string | number) {
       .catch((error) => {
         endPerf("provider:wallet", "failed", error instanceof Error ? error.message : String(error));
         logRouteLifecycle("provider:wallet-import-failed", {
-          retryKey,
+          ...eventDetails,
+          chunkUrl: null,
           message: error instanceof Error ? error.message : String(error),
         });
+        options.onFailure?.(eventDetails);
         throw error;
       })
       .finally(() => {
+        window.clearTimeout(slowTimeout);
         window.clearTimeout(timeout);
         markPerfMilestone("provider:wallet:import-end", `retry ${retryKey}`);
-        logRouteLifecycle("provider:wallet-import-end", { retryKey });
+        logRouteLifecycle("provider:wallet-import-end", eventDetails);
       });
   });
 }
@@ -67,12 +121,17 @@ const WalletSurfaceContext = createContext(false);
 
 interface WalletSurfaceProps extends PropsWithChildren {
   fallback?: ReactNode;
+  onImportFailure?: (details: WalletProviderImportEvent) => void;
+  onImportSlow?: (details: WalletProviderImportEvent) => void;
   retryKey?: string | number;
 }
 
-export function WalletSurface({ children, fallback, retryKey = 0 }: WalletSurfaceProps) {
+export function WalletSurface({ children, fallback, onImportFailure, onImportSlow, retryKey = 0 }: WalletSurfaceProps) {
   const hasWalletSurface = useContext(WalletSurfaceContext);
-  const WalletProviders = useMemo(() => createWalletProviders(retryKey), [retryKey]);
+  const WalletProviders = useMemo(
+    () => createWalletProviders(retryKey, { onFailure: onImportFailure, onSlow: onImportSlow }),
+    [onImportFailure, onImportSlow, retryKey],
+  );
 
   useEffect(() => {
     logRouteLifecycle(hasWalletSurface ? "wallet-surface:reuse" : "wallet-surface:mount-requested");

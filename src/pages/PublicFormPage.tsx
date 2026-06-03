@@ -55,6 +55,56 @@ const LazyWalrusRuntimeSurface = lazy(() =>
   })),
 );
 
+const SUCCESS_MASCOT_PRELOAD_ID = "deepsignal-success-mascot-preload";
+const SUCCESS_MASCOT_WEBP_SRCSET = "/mascot-sealed.webp 1x, /mascot-sealed@2x.webp 2x";
+
+function preloadSuccessMascot() {
+  if (typeof document === "undefined") {
+    return;
+  }
+  if (document.getElementById(SUCCESS_MASCOT_PRELOAD_ID)) {
+    return;
+  }
+  const link = document.createElement("link");
+  link.id = SUCCESS_MASCOT_PRELOAD_ID;
+  link.rel = "preload";
+  link.as = "image";
+  link.href = "/mascot-sealed.webp";
+  link.type = "image/webp";
+  link.setAttribute("imagesrcset", SUCCESS_MASCOT_WEBP_SRCSET);
+  document.head.appendChild(link);
+}
+
+function PublicFormSuccessFallback({
+  signalReceivedLabel,
+  headline,
+  savedCopy,
+  retryCopy,
+}: {
+  signalReceivedLabel: string;
+  headline: string;
+  savedCopy: string;
+  retryCopy: string;
+}) {
+  return (
+    <section className="stack">
+      <section className="panel glow-panel success-screen signal-success-scene">
+        <div className="signal-success-hero signal-success-hero-fallback">
+          <div className="signal-success-copy">
+            <p className="eyebrow">{signalReceivedLabel}</p>
+            <h1>{headline}</h1>
+            <p className="lede">
+              {savedCopy}
+              <br />
+              {retryCopy}
+            </p>
+          </div>
+        </div>
+      </section>
+    </section>
+  );
+}
+
 function triggerHaptic(pattern: number | number[]) {
   if (typeof navigator === "undefined" || typeof navigator.vibrate !== "function") {
     return;
@@ -178,6 +228,10 @@ export function PublicFormPage() {
     zkLoginSessionExpiredLabel: t("publicZkLoginSessionExpired"),
     zkLoginProviderLabel: t("publicZkLoginProvider"),
   });
+
+  useEffect(() => {
+    preloadSuccessMascot();
+  }, []);
 
   useEffect(() => {
     if (walletRequired) {
@@ -720,7 +774,16 @@ export function PublicFormPage() {
 
   if (submitted) {
     return (
-      <Suspense fallback={<div className="panel">{t("loading")}</div>}>
+      <Suspense
+        fallback={
+          <PublicFormSuccessFallback
+            signalReceivedLabel={t("signalReceived")}
+            headline={t("publicReceiptHeadline")}
+            savedCopy={t("publicReceiptSubcopySaved")}
+            retryCopy={t("publicReceiptSubcopyRetry")}
+          />
+        }
+      >
         <LazyPublicFormSuccess
           submitted={submitted}
           submitNotice={submitNotice}

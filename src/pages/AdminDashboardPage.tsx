@@ -60,6 +60,7 @@ import { getDiagnostic } from "../diagnostics/diagnosticsService";
 import { createDiagnosticsExportFilename, exportDiagnosticsJson } from "../diagnostics/diagnosticsExport";
 import { summarizeDiagnostics } from "../diagnostics/diagnosticsSummary";
 import { redactSystemSignal } from "../diagnostics/redaction";
+import { logReviewLayoutDiagnostics } from "../diagnostics/reviewLayoutDiagnostics";
 import { MAX_DIAGNOSTICS_LIMIT, type DiagnosticsSummary, type DiagnosticsSummaryOptions } from "../diagnostics/types";
 import {
   createSignalMemoryAdapter,
@@ -4518,6 +4519,9 @@ export function AdminDashboardPage() {
   const reviewSessionPrimaryActionRef = useRef<HTMLButtonElement | null>(null);
   const keyboardNavigationRef = useRef(false);
   const isClearingMobileSignalSelectionRef = useRef(false);
+  const pendingMobileSignalSelectionRef = useRef<string | null>(null);
+  const lastConfirmedSignalLogRef = useRef("");
+  const lastMobileDetailSwitchLogRef = useRef("");
   const mobileDetailSheetGestureRef = useRef<MobileDetailSheetGestureState | null>(null);
   const demoIngestTimerRefs = useRef<number[]>([]);
   const demoArrivalTimerRefs = useRef<number[]>([]);
@@ -6171,6 +6175,40 @@ export function AdminDashboardPage() {
     [allSignals, selectedRecord],
   );
   const hasExplicitSelectedRecord = Boolean(selectedSignalId && selectedRecord);
+  useEffect(() => {
+    if (!selectedSignalId || !selectedRecord || selectedRecord.submission.id !== selectedSignalId) {
+      return;
+    }
+    if (lastConfirmedSignalLogRef.current !== selectedSignalId) {
+      lastConfirmedSignalLogRef.current = selectedSignalId;
+      logRouteLifecycle("inbox:selected-signal-set", {
+        signalId: selectedSignalId,
+        formId: selectedRecord.form.id,
+        routePath: location.pathname,
+      });
+      logRouteLifecycle("inbox:open-confirmed", {
+        signalId: selectedSignalId,
+        formId: selectedRecord.form.id,
+        selectedSignalId,
+        selectedRecordId: selectedRecord.submission.id,
+        routePath: location.pathname,
+      });
+    }
+    if (
+      hasExplicitSelectedRecord &&
+      typeof window !== "undefined" &&
+      window.matchMedia?.(MOBILE_REVIEW_MEDIA_QUERY).matches &&
+      lastMobileDetailSwitchLogRef.current !== selectedSignalId
+    ) {
+      lastMobileDetailSwitchLogRef.current = selectedSignalId;
+      logRouteLifecycle("inbox:mobile-detail-switch", {
+        signalId: selectedSignalId,
+        formId: selectedRecord.form.id,
+        state: "detail-open",
+        routePath: location.pathname,
+      });
+    }
+  }, [hasExplicitSelectedRecord, location.pathname, selectedRecord, selectedSignalId]);
   const isSelectedRecordOnRoadmap = selectedRecord
     ? ROADMAP_READY_STATUSES.has(selectedRecord.submission.triageStatus)
     : false;
@@ -6256,6 +6294,17 @@ export function AdminDashboardPage() {
         ? t("privateSignalUnlockDisabled")
         : undefined;
   const hasDuplicateLikelyRelatedSignals = relatedSignals.some((signal) => signal.duplicateLikely);
+
+  useEffect(() => {
+    const firstFrame = window.requestAnimationFrame(() => {
+      logReviewLayoutDiagnostics("selected signal detail layout");
+      window.requestAnimationFrame(() => {
+        logReviewLayoutDiagnostics("selected signal detail layout settled");
+      });
+    });
+
+    return () => window.cancelAnimationFrame(firstFrame);
+  }, [reviewSessionOpen, reviewSessionStep, selectedRecord?.submission.id]);
 
   useEffect(() => {
     if (!reviewSessionOpen) {
@@ -6394,7 +6443,15 @@ export function AdminDashboardPage() {
         return;
       }
       if (selectedSignalIdFromUrl !== selectedSignalId) {
+        logRouteLifecycle("inbox:open-confirmed", {
+          signalId: selectedSignalIdFromUrl,
+          source: "url-sync",
+          routePath: location.pathname,
+        });
         setSelectedSignalId(selectedSignalIdFromUrl);
+      }
+      if (pendingMobileSignalSelectionRef.current === selectedSignalIdFromUrl) {
+        pendingMobileSignalSelectionRef.current = null;
       }
       return;
     }
@@ -6404,9 +6461,22 @@ export function AdminDashboardPage() {
       typeof window !== "undefined" &&
       window.matchMedia?.(MOBILE_REVIEW_MEDIA_QUERY).matches
     ) {
+      if (pendingMobileSignalSelectionRef.current === selectedSignalId) {
+        logRouteLifecycle("inbox:open-requested", {
+          signalId: selectedSignalId,
+          reason: "awaiting-mobile-url-sync",
+          routePath: location.pathname,
+        });
+        return;
+      }
+      logRouteLifecycle("inbox:open-aborted", {
+        signalId: selectedSignalId,
+        reason: "missing-mobile-url-signal-param",
+        routePath: location.pathname,
+      });
       setSelectedSignalId("");
     }
-  }, [selectedSignalId, selectedSignalIdFromUrl, setSelectedSignalId]);
+  }, [location.pathname, selectedSignalId, selectedSignalIdFromUrl, setSelectedSignalId]);
 
   useEffect(() => {
     if (!showShortcutHelp) {
@@ -6448,6 +6518,7 @@ export function AdminDashboardPage() {
 
   const handleReturnToSignals = useCallback(() => {
     isClearingMobileSignalSelectionRef.current = true;
+    pendingMobileSignalSelectionRef.current = null;
     setSelectedSignalId("");
     setMobileDetailSheetDragOffset(0);
     setMobileDetailSheetDragging(false);
@@ -6455,7 +6526,21 @@ export function AdminDashboardPage() {
   }, [setSelectedSignalId, syncMobileSignalUrl]);
 
   function handleSelectMobileSignal(record: SignalRecord) {
-    setSelectedSignalId(record.submission.id);
+    const signalId = record.submission.id;
+    pendingMobileSignalSelectionRef.current = signalId;
+    logRouteLifecycle("inbox:card-tap", {
+      signalId,
+      formId: record.form.id,
+      mobile: isMobileReviewViewport(),
+      routePath: location.pathname,
+    });
+    logRouteLifecycle("inbox:open-requested", {
+      signalId,
+      formId: record.form.id,
+      source: "mobile-card",
+      routePath: location.pathname,
+    });
+    setSelectedSignalId(signalId);
     setMobileDetailSheetDragOffset(0);
     setMobileDetailSheetDragging(false);
     syncMobileSignalUrl(record);
