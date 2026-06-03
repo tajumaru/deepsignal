@@ -345,6 +345,20 @@
     max-width: 100%;
   }
 
+  .landing-hero-actions-primary {
+    justify-content: center;
+    margin-left: 0;
+    min-height: 8rem;
+    padding-top: 4.8rem;
+    padding-right: 0;
+  }
+
+  .landing-hero-cta-mascot {
+    top: -2.05rem;
+    width: min(72vw, 12.4rem);
+    max-width: 100%;
+  }
+
   .landing-final-cta-button {
     left: 50%;
     top: 50%;
@@ -468,6 +482,7 @@
   .landing-hero-copy::after,
   .landing-hero-title::after,
   .landing-hero-actions .landing-cta-primary::after,
+  .landing-hero-cta-mascot,
   .landing-hero-global-trace::after,
   .landing-hero-particle,
   .landing-hero-app-preview,

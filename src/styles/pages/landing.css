@@ -1885,6 +1885,15 @@
   position: relative;
 }
 
+.landing-hero-actions-primary {
+  width: fit-content;
+  min-height: clamp(7.5rem, 10vw, 8.8rem);
+  margin-left: clamp(10rem, 16vw, 20rem);
+  padding-top: clamp(4.6rem, 6.2vw, 5.4rem);
+  justify-content: flex-start;
+  padding-right: clamp(0rem, 1.4vw, 1.4rem);
+}
+
 .landing-hero-actions::before {
   content: "";
   position: absolute;
@@ -1909,6 +1918,57 @@
   box-shadow:
     0 0 0 1px rgba(198, 251, 255, 0.1),
     0 16px 36px rgba(43, 177, 255, 0.22);
+}
+
+.landing-hero-actions-primary .landing-cta-primary {
+  z-index: 2;
+  min-width: clamp(17rem, 19vw, 22rem);
+  min-height: 3.15rem;
+  padding-inline: clamp(1.4rem, 2.4vw, 2.4rem);
+}
+
+.deepsignal-mascot {
+  display: block;
+  pointer-events: none;
+  user-select: none;
+}
+
+.landing-hero-cta-mascot {
+  position: absolute;
+  left: 50%;
+  top: clamp(-2.95rem, -3.35vw, -2.1rem);
+  z-index: 3;
+  width: clamp(10rem, 18vw, 15rem);
+  max-width: 118%;
+  height: auto;
+  opacity: 0;
+  transform: translateX(-50%) translateY(2rem) scale(0.9);
+  transform-origin: center bottom;
+  filter:
+    drop-shadow(0 1rem 1.6rem rgba(0, 0, 0, 0.45))
+    drop-shadow(0 0 1.1rem rgba(30, 223, 255, 0.25));
+  animation:
+    landing-hero-mascot-peek 860ms cubic-bezier(0.16, 1, 0.3, 1) 520ms forwards,
+    landing-hero-mascot-idle 4.8s ease-in-out 1.6s infinite;
+  will-change: transform, opacity;
+}
+
+.landing-hero-cta-mascot .deepsignal-mascot {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.landing-hero-actions-primary::before {
+  content: "";
+  position: absolute;
+  left: clamp(-0.4rem, -0.8vw, -0.2rem);
+  right: clamp(-5.5rem, -8vw, -3rem);
+  top: calc(100% - 1.3rem);
+  height: 1px;
+  background: linear-gradient(90deg, rgba(116, 239, 255, 0.24), rgba(116, 239, 255, 0.08), transparent);
+  box-shadow: 0 0 18px rgba(72, 203, 255, 0.18);
+  pointer-events: none;
 }
 
 .landing-hero-actions .landing-cta-primary::after {

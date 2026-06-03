@@ -324,10 +324,16 @@ export default function App() {
   if (routeIsLanding) {
     return (
       <RpcInfrastructureProvider>
-        <BuildUpdateBanner />
-        <RouteReady routePath={routePath} onReady={() => setInitialRouteReady(true)}>
-          <LandingPage />
-        </RouteReady>
+        <RouteErrorBoundary
+          resetKey={`${location.key}:landing:${routeRetryNonce}`}
+          routePath={routePath}
+          onRetryRoute={() => setRouteRetryNonce((value) => value + 1)}
+        >
+          <BuildUpdateBanner />
+          <RouteReady routePath={routePath} onReady={() => setInitialRouteReady(true)}>
+            <LandingPage />
+          </RouteReady>
+        </RouteErrorBoundary>
       </RpcInfrastructureProvider>
     );
   }

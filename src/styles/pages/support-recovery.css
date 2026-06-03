@@ -48,10 +48,90 @@
   line-height: 1.45;
 }
 
+.reset-copy-mobile {
+  display: none;
+}
+
 .reset-environment-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 1rem;
+}
+
+@media (max-width: 760px) {
+  .reset-environment-panel {
+    gap: 0.75rem;
+  }
+
+  .reset-environment-hero,
+  .reset-environment-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .reset-environment-hero,
+  .reset-environment-warning {
+    gap: 0.75rem;
+  }
+
+  .reset-environment-hero h1 {
+    max-width: 100%;
+    font-size: clamp(1.7rem, 8vw, 2rem);
+    line-height: 1.05;
+    overflow-wrap: anywhere;
+  }
+
+  .reset-environment-hero .lede {
+    margin-bottom: 0;
+    font-size: 0.95rem;
+    line-height: 1.45;
+  }
+
+  .reset-copy-desktop {
+    display: none;
+  }
+
+  .reset-copy-mobile {
+    display: inline;
+  }
+
+  .reset-environment-warning {
+    min-height: 0;
+    padding: 0.85rem;
+    border-radius: 14px;
+    font-size: 0.88rem;
+    line-height: 1.35;
+  }
+
+  .reset-action-card,
+  .reset-ios-note,
+  .reset-all-zone,
+  .reset-results-panel {
+    gap: 0.75rem;
+  }
+
+  .reset-action-card h2,
+  .reset-ios-note h2,
+  .reset-all-zone h2 {
+    font-size: 1.02rem;
+    line-height: 1.2;
+    overflow-wrap: anywhere;
+  }
+
+  .reset-action-card p,
+  .reset-ios-note p,
+  .reset-all-zone p {
+    display: -webkit-box;
+    overflow: hidden;
+    font-size: 0.9rem;
+    line-height: 1.45;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+
+  .reset-ios-note p,
+  .reset-all-zone p {
+    -webkit-line-clamp: 3;
+  }
 }
 
 .review-roadmap-strip {

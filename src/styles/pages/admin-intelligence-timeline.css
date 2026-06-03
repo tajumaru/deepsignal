@@ -1205,6 +1205,16 @@
   gap: 0.65rem;
 }
 
+.signal-detail-column .selected-signal-intelligence-card {
+  gap: 0.5rem;
+  padding: 0.72rem 0.8rem;
+}
+
+.selected-signal-intelligence-card .signal-detail-group-header {
+  gap: 0.12rem;
+  margin: 0.05rem 0 0;
+}
+
 .intelligence-unlock-panel {
   display: grid;
   gap: 0.55rem;
@@ -1368,7 +1378,7 @@
 .signal-intelligence-center-card,
 .selected-signal-intelligence-grid article,
 .selected-signal-next-action-card {
-  padding: 0.72rem;
+  padding: 0.64rem;
 }
 
 .signal-intelligence-center-card.is-waiting {
@@ -1438,18 +1448,18 @@
 .signal-intelligence-center-card p,
 .selected-signal-intelligence-grid p,
 .selected-signal-next-action-card p {
-  margin: 0.24rem 0 0;
+  margin: 0.18rem 0 0;
   color: #a8c8d8;
-  font-size: 0.8rem;
-  line-height: 1.4;
+  font-size: 0.78rem;
+  line-height: 1.34;
 }
 
 .selected-signal-intelligence-grid span,
 .selected-signal-next-action-card span {
   display: block;
-  margin-bottom: 0.22rem;
+  margin-bottom: 0.16rem;
   color: #91dff0;
-  font-size: 0.68rem;
+  font-size: 0.64rem;
   font-weight: 900;
   text-transform: uppercase;
 }
@@ -1457,7 +1467,7 @@
 .selected-signal-next-action-card {
   display: grid;
   align-content: start;
-  gap: 0.58rem;
+  gap: 0.42rem;
 }
 
 .selected-signal-next-action-grid.is-quiet {
@@ -1497,7 +1507,8 @@
 
 .selected-signal-next-action-card .ghost-button {
   justify-self: start;
-  min-height: 2.35rem;
+  min-height: 2.1rem;
+  padding: 0.44rem 0.78rem;
 }
 
 .signal-timeline-section {

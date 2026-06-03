@@ -601,6 +601,53 @@ describe("AdminDashboardPage", () => {
     expect(copied).not.toContain("#frag");
   });
 
+  it("shows System Alerts as diagnostics instead of submitted feedback", async () => {
+    const { form, submission, record } = createSystemRecord();
+    mockCapabilityProfile.current = {
+      ...defaultCapabilityProfile,
+      hasOwnerCap: true,
+      ownerCapIds: ["owner-cap"],
+    };
+    mockWalletState.current = {
+      accountAddress: "0xowner",
+      isConnected: true,
+      status: "connected",
+    };
+    const project = {
+      objectId: "project-1",
+      name: "Ops Project",
+      owner: "0xowner",
+      formsCount: 1,
+      signalsCount: 1,
+      members: [],
+      admins: [],
+      reviewers: [],
+    } satisfies ProjectSummary;
+    mockProjectState.current = {
+      projects: [project],
+      selectedProjectId: project.objectId,
+      selectedProject: project,
+    };
+    signalIndex.counts.system = 1;
+    signalIndex.signalById = { [submission.id]: record };
+    mockInboxState.current = {
+      forms: [form],
+      selectedStreamId: "system",
+      allSignals: [record],
+      visibleSignals: [record],
+      selectedRecord: record,
+      signalIndex,
+    };
+
+    renderAdminRoute();
+
+    expect(await screen.findByRole("heading", { name: "ChunkLoadError", level: 3 })).toBeInTheDocument();
+    expect(screen.getByText("System alert diagnostics")).toBeInTheDocument();
+    expect(screen.queryByText("Submitted Feedback")).not.toBeInTheDocument();
+    expect(screen.queryByText("Feedback body")).not.toBeInTheDocument();
+    expect(screen.queryByText("raw-answer-secret")).not.toBeInTheDocument();
+  });
+
   it("exports visible System Alerts as a redacted diagnostics envelope", async () => {
     const { form, submission, record } = createSystemRecord();
     const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});

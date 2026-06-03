@@ -148,13 +148,18 @@ export function ResetEnvironmentPanel() {
       <div className="reset-environment-hero panel">
         <div>
           <p className="eyebrow">{t("resetHeroEyebrow")}</p>
-          <h1>{t("resetHeroTitle")}</h1>
+          <h1>
+            <span className="reset-copy-desktop">{t("resetHeroTitle")}</span>
+            <span className="reset-copy-mobile">{t("resetHeroMobileTitle")}</span>
+          </h1>
           <p className="lede">
-            {t("resetHeroBody")}
+            <span className="reset-copy-desktop">{t("resetHeroBody")}</span>
+            <span className="reset-copy-mobile">{t("resetHeroMobileBody")}</span>
           </p>
         </div>
         <div className="reset-environment-warning" role="note">
-          {t("resetHeroWarning")}
+          <span className="reset-copy-desktop">{t("resetHeroWarning")}</span>
+          <span className="reset-copy-mobile">{t("resetHeroMobileWarning")}</span>
         </div>
       </div>
 

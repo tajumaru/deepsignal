@@ -7,6 +7,7 @@ import { readSelectedProjectIdFromStorage } from "./routeDiagnostics";
 
 export const WORKSPACE_RECOVERY_TIMEOUT_MS = 3200;
 const WORKSPACE_FALLBACK_DELAY_MS = 180;
+const LOADING_FALLBACK_BODY_CLASS = "deepsignal-loading-fallback";
 
 export function WorkspaceRestoreFallback({ onRetry }: { onRetry?: () => void }) {
   const [recoveryVisible, setRecoveryVisible] = useState(false);
@@ -82,6 +83,12 @@ export function DelayedWorkspaceRestoreFallback({
   onRetry?: () => void;
 }) {
   const [visible, setVisible] = useState(false);
+  useEffect(() => {
+    document.body.classList.add(LOADING_FALLBACK_BODY_CLASS);
+    return () => {
+      document.body.classList.remove(LOADING_FALLBACK_BODY_CLASS);
+    };
+  }, []);
 
   useEffect(() => {
     const timer = window.setTimeout(() => setVisible(true), delayMs);

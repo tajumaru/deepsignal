@@ -1589,6 +1589,24 @@ function getRecordTimestamp(record: SignalRecord, key: "createdAt" | "updatedAt"
   return record.submission[key] || fallback;
 }
 
+function getSignalRecordKey(record: SignalRecord) {
+  const { form, submission } = record;
+  return [
+    form.id,
+    submission.id,
+    submission.createdAt,
+    submission.receiptBlobId,
+    submission.signalReceiptMetadataDigest,
+    submission.blobId,
+    submission.answerBlobId,
+    submission.encryptedBlobId,
+    typeof submission.onchainSignalId === "number" ? `onchain:${submission.onchainSignalId}` : "",
+  ]
+    .filter(Boolean)
+    .map((value) => encodeURIComponent(String(value)))
+    .join(":");
+}
+
 function extractTrendTopics(record: SignalRecord, options: { includeFallbackText?: boolean } = {}) {
   const includeFallbackText = options.includeFallbackText ?? true;
   const topics = new Set<string>();
@@ -3794,23 +3812,29 @@ function MobileInboxSearchOverlay({
                 <span>{results.length} matching signals</span>
               </div>
               <div className="mobile-inbox-search-result-list">
-                {results.map((record) => (
-                  <MobileSignalRow
-                    key={record.submission.id}
-                    record={record}
-                    isSelected={selectedRecord?.submission.id === record.submission.id}
-                    isUnlocked={unlockedSignalId === record.submission.id}
-                    isDemoJustArrived={isDemoSignalRecord(record) && demoJustArrivedSignalIds.has(record.submission.id)}
-                    highlightQuery={trimmedQuery}
-                    onSelect={() => {
-                      onCommitSearch(query);
-                      onSelectSignal(record);
-                      onClose();
-                    }}
-                    onQuickAction={onQuickAction}
-                    t={t}
-                  />
-                ))}
+                {results.map((record) => {
+                  const signalRecordKey = getSignalRecordKey(record);
+                  return (
+                    <MobileSignalRow
+                      key={signalRecordKey}
+                      record={record}
+                      isSelected={
+                        selectedRecord?.submission.id === record.submission.id &&
+                        getSignalRecordKey(selectedRecord) === signalRecordKey
+                      }
+                      isUnlocked={unlockedSignalId === record.submission.id}
+                      isDemoJustArrived={isDemoSignalRecord(record) && demoJustArrivedSignalIds.has(record.submission.id)}
+                      highlightQuery={trimmedQuery}
+                      onSelect={() => {
+                        onCommitSearch(query);
+                        onSelectSignal(record);
+                        onClose();
+                      }}
+                      onQuickAction={onQuickAction}
+                      t={t}
+                    />
+                  );
+                })}
               </div>
             </div>
           )}
@@ -4050,18 +4074,24 @@ function MobileSignalInbox({
       <div className="mobile-signal-list" aria-live="polite">
         {visibleSignals.length === 0
           ? emptyContent
-          : visibleSignals.map((record) => (
+          : visibleSignals.map((record) => {
+              const signalRecordKey = getSignalRecordKey(record);
+              return (
               <MobileSignalRow
-                key={record.submission.id}
+                key={signalRecordKey}
                 record={record}
-                isSelected={selectedRecord?.submission.id === record.submission.id}
+                isSelected={
+                  selectedRecord?.submission.id === record.submission.id &&
+                  getSignalRecordKey(selectedRecord) === signalRecordKey
+                }
                 isUnlocked={unlockedSignalId === record.submission.id}
                 isDemoJustArrived={isDemoSignalRecord(record) && demoJustArrivedSignalIds.has(record.submission.id)}
                 onSelect={() => onSelectSignal(record)}
                 onQuickAction={onQuickAction}
                 t={t}
               />
-            ))}
+              );
+            })}
         {hasMoreSignals ? (
           <button type="button" className="ghost-button signal-list-load-more" onClick={onLoadMoreSignals}>
             {t("showMoreToggle")}
@@ -4467,6 +4497,7 @@ export function AdminDashboardPage() {
   const [csvExportScope, setCsvExportScope] = useState<ResponsesCsvExportScope>("filtered");
   const [csvSortOrder, setCsvSortOrder] = useState<ResponsesCsvSortOrder>("createdAtDesc");
   const [selectedVersion, setSelectedVersion] = useState<SubmissionVersionFilter>("all");
+  const [selectedSignalRecordKey, setSelectedSignalRecordKey] = useState("");
   const [versionedFormsByFormId, setVersionedFormsByFormId] = useState<Record<string, VersionedFormSchemas>>({});
   const [signalSortOrder, setSignalSortOrder] = useState<SignalSortOrder>("default");
   const [processingModeFilter, setProcessingModeFilter] = useState<ProcessingModeFilter>("all");
@@ -4655,8 +4686,21 @@ export function AdminDashboardPage() {
   const intelligenceDemoSimulationEnabled = demoSignalCount > 0 || demoSignalsGenerating;
   const demoSignalVolume = getDemoSignalVolume(demoSignalCount);
   const isIntelligenceDemoRoute = new URLSearchParams(location.search).get("demo") === "intelligence";
+  const selectedRecordKeyMatch = selectedSignalRecordKey
+    ? visibleSignals.find(
+        (record) =>
+          record.submission.id === selectedSignalId &&
+          getSignalRecordKey(record) === selectedSignalRecordKey,
+      ) ?? null
+    : null;
   const selectedRecord =
     isIntelligenceDemoRoute && !selectedSignalId
+      ? null
+      :
+    selectedRecordKeyMatch
+      ? selectedRecordKeyMatch
+      :
+    selectedSignalRecordKey
       ? null
       :
     selectedSignalId && visibleSignals.some((record) => record.submission.id === selectedSignalId)
@@ -5079,6 +5123,7 @@ export function AdminDashboardPage() {
     setDemoEventFeed([]);
     demoUnlockedThresholdsRef.current = new Set();
     if (selectedSignalId?.startsWith("demo-signal-")) {
+      setSelectedSignalRecordKey("");
       setSelectedSignalId("");
     }
   }, [clearDemoArrivalTimers, clearDemoIngestTimers, selectedSignalId, setSelectedSignalId]);
@@ -5098,6 +5143,7 @@ export function AdminDashboardPage() {
     setDemoEventFeed([]);
     demoUnlockedThresholdsRef.current = new Set();
     if (selectedSignalId?.startsWith("demo-signal-")) {
+      setSelectedSignalRecordKey("");
       setSelectedSignalId("");
     }
   }, [clearDemoArrivalTimers, clearDemoIngestTimers, selectedSignalId, setSelectedSignalId]);
@@ -6448,6 +6494,7 @@ export function AdminDashboardPage() {
           source: "url-sync",
           routePath: location.pathname,
         });
+        setSelectedSignalRecordKey("");
         setSelectedSignalId(selectedSignalIdFromUrl);
       }
       if (pendingMobileSignalSelectionRef.current === selectedSignalIdFromUrl) {
@@ -6474,6 +6521,7 @@ export function AdminDashboardPage() {
         reason: "missing-mobile-url-signal-param",
         routePath: location.pathname,
       });
+      setSelectedSignalRecordKey("");
       setSelectedSignalId("");
     }
   }, [location.pathname, selectedSignalId, selectedSignalIdFromUrl, setSelectedSignalId]);
@@ -6492,9 +6540,9 @@ export function AdminDashboardPage() {
       return;
     }
     keyboardNavigationRef.current = false;
-    const target = signalCardRefs.current[selectedSignalId];
+    const target = signalCardRefs.current[selectedSignalRecordKey || selectedSignalId];
     target?.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" });
-  }, [selectedSignalId]);
+  }, [selectedSignalId, selectedSignalRecordKey]);
 
   const syncMobileSignalUrl = useCallback((record: SignalRecord | null) => {
     if (typeof window === "undefined" || !window.matchMedia?.(MOBILE_REVIEW_MEDIA_QUERY).matches) {
@@ -6519,6 +6567,7 @@ export function AdminDashboardPage() {
   const handleReturnToSignals = useCallback(() => {
     isClearingMobileSignalSelectionRef.current = true;
     pendingMobileSignalSelectionRef.current = null;
+    setSelectedSignalRecordKey("");
     setSelectedSignalId("");
     setMobileDetailSheetDragOffset(0);
     setMobileDetailSheetDragging(false);
@@ -6527,6 +6576,7 @@ export function AdminDashboardPage() {
 
   function handleSelectMobileSignal(record: SignalRecord) {
     const signalId = record.submission.id;
+    const signalRecordKey = getSignalRecordKey(record);
     pendingMobileSignalSelectionRef.current = signalId;
     logRouteLifecycle("inbox:card-tap", {
       signalId,
@@ -6540,6 +6590,7 @@ export function AdminDashboardPage() {
       source: "mobile-card",
       routePath: location.pathname,
     });
+    setSelectedSignalRecordKey(signalRecordKey);
     setSelectedSignalId(signalId);
     setMobileDetailSheetDragOffset(0);
     setMobileDetailSheetDragging(false);
@@ -6750,6 +6801,7 @@ export function AdminDashboardPage() {
             : record,
         ),
       );
+      setSelectedSignalRecordKey("");
       setSelectedSignalId(nextSubmission.id);
       return true;
     }
@@ -6759,6 +6811,7 @@ export function AdminDashboardPage() {
       updatedAt: new Date().toISOString(),
     });
     applySubmissionUpdate(normalized);
+    setSelectedSignalRecordKey("");
     setSelectedSignalId(normalized.id);
     let saved = false;
     const runSave = async () => {
@@ -6936,12 +6989,13 @@ export function AdminDashboardPage() {
   );
 
   const handleSelectDesktopSignal = useCallback(
-    (signalId: string, options: { scrollIntoView?: boolean } = {}) => {
+    (signalId: string, options: { scrollIntoView?: boolean; signalRecordKey?: string } = {}) => {
+      setSelectedSignalRecordKey(options.signalRecordKey ?? "");
       setSelectedSignalId(signalId);
       if (!options.scrollIntoView) {
         return;
       }
-      const target = signalCardRefs.current[signalId];
+      const target = signalCardRefs.current[options.signalRecordKey ?? signalId];
       if (!target) {
         return;
       }
@@ -6957,7 +7011,11 @@ export function AdminDashboardPage() {
       if (visibleSignals.length === 0) {
         return;
       }
-      const currentIndex = visibleSignals.findIndex((record) => record.submission.id === selectedSignalId);
+      const currentIndex = visibleSignals.findIndex((record) =>
+        selectedSignalRecordKey
+          ? getSignalRecordKey(record) === selectedSignalRecordKey
+          : record.submission.id === selectedSignalId,
+      );
       const nextIndex =
         currentIndex === -1
           ? direction > 0
@@ -6969,9 +7027,12 @@ export function AdminDashboardPage() {
         return;
       }
       keyboardNavigationRef.current = true;
-      handleSelectDesktopSignal(nextRecord.submission.id, { scrollIntoView: true });
+      handleSelectDesktopSignal(nextRecord.submission.id, {
+        scrollIntoView: true,
+        signalRecordKey: getSignalRecordKey(nextRecord),
+      });
     },
-    [handleSelectDesktopSignal, selectedSignalId, visibleSignals],
+    [handleSelectDesktopSignal, selectedSignalId, selectedSignalRecordKey, visibleSignals],
   );
 
   const triggerShortcutAction = useCallback(
@@ -7540,6 +7601,7 @@ export function AdminDashboardPage() {
       setSelectedFormId(DEMO_FORM_ID);
       setSelectedStreamId("all");
       setSearch("");
+      setSelectedSignalRecordKey("");
       setSelectedSignalId(DEMO_PRIMARY_SIGNAL_ID);
       setIsDemoGuideOpen(true);
       reviewInboxRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -7961,6 +8023,7 @@ export function AdminDashboardPage() {
             processingModeFilter={processingModeFilter}
             onProcessingModeFilterChange={(value) => {
               setProcessingModeFilter(value);
+              setSelectedSignalRecordKey("");
               setSelectedSignalId("");
             }}
             processingModeOptions={processingModeOptions}
@@ -8121,6 +8184,7 @@ export function AdminDashboardPage() {
                       value={processingModeFilter}
                       onChange={(event) => {
                         setProcessingModeFilter(event.target.value as ProcessingModeFilter);
+                        setSelectedSignalRecordKey("");
                         setSelectedSignalId("");
                       }}
                     >
@@ -8216,6 +8280,7 @@ export function AdminDashboardPage() {
                           onChange={(event) => {
                             const value = event.target.value;
                             setSelectedVersion(value === "all" ? "all" : Number(value));
+                            setSelectedSignalRecordKey("");
                             setSelectedSignalId("");
                           }}
                           aria-label={t("adminFormVersionLabel")}
@@ -8972,6 +9037,7 @@ export function AdminDashboardPage() {
                 <div className="signal-list">
                   {renderedVisibleSignals.map((record) => {
                     const { form, submission } = record;
+                    const signalRecordKey = getSignalRecordKey(record);
                     const persistenceState = getSignalPersistenceState(submission);
                     const isOnchainRecoverySnapshot = isOnchainRecoveredSignal(submission);
                     const subject = isOnchainRecoverySnapshot
@@ -8987,7 +9053,9 @@ export function AdminDashboardPage() {
                     const cardIsSystemSignal = isSystemSignal(submission);
                     const isPendingSui = Boolean(submission.pendingOnchainRegistration);
                     const isSelectedForSui = selectedPendingSignalIds.includes(submission.id);
-                    const isSelectedSignal = selectedRecord?.submission.id === submission.id;
+                    const isSelectedSignal =
+                      selectedRecord?.submission.id === submission.id &&
+                      getSignalRecordKey(selectedRecord) === signalRecordKey;
                     const isUnlockedSignal = Boolean(decryptedSignalsById[submission.id]) || (isSelectedSignal && Boolean(detailAnswers));
                     const readStateLabel =
                       submission.status === "unread"
@@ -9013,9 +9081,9 @@ export function AdminDashboardPage() {
                     const processingModeLabel = getProcessingModeLabel(getSignalProcessingMode(form, submission), t);
                     return (
                       <SignalCard
-                        key={submission.id}
+                        key={signalRecordKey}
                         ref={(node) => {
-                          signalCardRefs.current[submission.id] = node;
+                          signalCardRefs.current[signalRecordKey] = node;
                         }}
                         t={t}
                         submission={submission}
@@ -9060,11 +9128,11 @@ export function AdminDashboardPage() {
                             : undefined
                         }
                         onSelect={() => {
-                          handleSelectDesktopSignal(submission.id);
+                          handleSelectDesktopSignal(submission.id, { signalRecordKey });
                           scrollToReviewPanel("detail");
                         }}
                         onKeySelect={() => {
-                          handleSelectDesktopSignal(submission.id);
+                          handleSelectDesktopSignal(submission.id, { signalRecordKey });
                           scrollToReviewPanel("detail");
                         }}
                         onTogglePending={() => {
@@ -9293,6 +9361,7 @@ export function AdminDashboardPage() {
                       selectedRecordNeedsDecrypt ? "" : "is-review-ready"
                     }`}
                   >
+                    {!selectedRecordIsSystem ? (
                     <section className="answer-card original-signal-section">
                       <WorkspaceSectionToggle
                         title={t("feedbackBodyLabel")}
@@ -9455,6 +9524,7 @@ export function AdminDashboardPage() {
                         </>
                       ) : null}
                     </section>
+                    ) : null}
 
                     {selectedRecordNeedsDecrypt && !shouldHideLockedDetailBeforeReview ? (
                       <PrivateSignalUnlockCard
@@ -9587,7 +9657,10 @@ export function AdminDashboardPage() {
                         if (decryptInFlightRef.current) {
                           return;
                         }
-                        handleSelectDesktopSignal(record.submission.id, { scrollIntoView: true });
+                        handleSelectDesktopSignal(record.submission.id, {
+                          scrollIntoView: true,
+                          signalRecordKey: getSignalRecordKey(record),
+                        });
                       }}
                     />
                     ) : null}

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { Link } from "react-router-dom";
 import { CreateFormLink } from "../components/CreateFormLink";
+import { DeepSignalMascot } from "../components/mascot/DeepSignalMascot";
 import { FlowStepIcon, type FlowStepIconName } from "../components/SignalFlowIcons";
 import { clearDemoLocalArtifacts } from "../demo/demoLocalCleanup";
 import { useI18n } from "../i18n";
@@ -1149,7 +1150,20 @@ export function LandingPage() {
 
             <p className="landing-tagline">{t("landingHeroContestTagline")}</p>
 
-            <div className="cta-row landing-hero-actions">
+            <div className="cta-row landing-hero-actions landing-hero-actions-primary">
+              <picture className="landing-hero-cta-mascot">
+                <source srcSet="/mascot/deepsignal-frog/peek.webp" type="image/webp" />
+                <img
+                  className="deepsignal-mascot deepsignal-mascot-peek"
+                  src="/mascot/deepsignal-frog/peek.png"
+                  alt="DeepSignal Frog peeking over the inbox launch button"
+                  width="480"
+                  height="320"
+                  loading="eager"
+                  decoding="async"
+                  draggable={false}
+                />
+              </picture>
               <Link className="primary-button landing-cta-primary" to="/dashboard">
                 {t("openInboxCta")}
               </Link>

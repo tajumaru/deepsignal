@@ -250,6 +250,33 @@
   }
 }
 
+@keyframes landing-hero-mascot-peek {
+  0% {
+    opacity: 0;
+    transform: translateX(-50%) translateY(2rem) scale(0.9);
+  }
+  62% {
+    opacity: 1;
+    transform: translateX(-50%) translateY(-0.18rem) scale(1.02);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0) scale(1);
+  }
+}
+
+@keyframes landing-hero-mascot-idle {
+  0%,
+  100% {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0) rotate(0deg) scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: translateX(-50%) translateY(-0.32rem) rotate(-0.6deg) scale(1.01);
+  }
+}
+
 @keyframes landing-hero-radar-spin {
   to {
     transform: rotate(360deg);
