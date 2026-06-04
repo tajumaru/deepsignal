@@ -32,10 +32,12 @@ import type {
   AnalysisType,
   AnalystType,
   CreateFormTransaction,
+  FormAccessMode,
   FormField,
   FormHeaderImagePosition,
   FormIdentityPolicy,
   FormLocationRequirement,
+  FormNftGate,
   FormPurpose,
   FormSection,
   FormVisibility,
@@ -79,6 +81,8 @@ interface UseCreateFormPublishArgs {
   analysisType?: AnalysisType;
   visibility: FormVisibility;
   identityPolicy: FormIdentityPolicy;
+  accessMode: FormAccessMode;
+  nftGate: FormNftGate;
   locationRequirement: FormLocationRequirement;
   processingMode: FormSchema["processingMode"];
   encryptSubmissions: boolean;
@@ -127,6 +131,8 @@ export function useCreateFormPublish({
   analysisType,
   visibility,
   identityPolicy,
+  accessMode,
+  nftGate,
   locationRequirement,
   processingMode,
   encryptSubmissions,
@@ -221,6 +227,8 @@ export function useCreateFormPublish({
         analysisType,
         visibility,
         identityPolicy,
+        accessMode,
+        nftGate,
         locationRequirement,
         processingMode: processingMode ?? "review_required",
         ownerAddress: accountAddress ?? "",
@@ -258,7 +266,9 @@ export function useCreateFormPublish({
     headerImage,
     headerLogo,
     identityPolicy,
+    accessMode,
     locationRequirement,
+    nftGate,
     processingMode,
     purpose,
     responseDeadlineCustomAt,
@@ -369,6 +379,22 @@ export function useCreateFormPublish({
       return;
     }
 
+    if (accessMode === "nft_required" && !nftGate.structType.trim()) {
+      const nextError = "Select an NFT collection or enter a Struct Type before publishing this signal.";
+      setError(nextError);
+      setFailure(
+        createCriticalFailure({
+          error: new Error(nextError),
+          surface: "form",
+          step: "publish",
+          noDataSubmitted: true,
+          diagnostics: { accessMode, nftGate },
+        }),
+      );
+      goToStep("publish");
+      return;
+    }
+
     const blockingEncryptionWarning = getCreateFormEncryptionReadiness({
       encryptSubmissions,
       projectId: selectedProject?.objectId,
@@ -447,6 +473,8 @@ export function useCreateFormPublish({
       analysisType,
       visibility,
       identityPolicy,
+      accessMode,
+      nftGate,
       locationRequirement,
       processingMode: processingMode ?? "review_required",
       ownerAddress: accountAddress,

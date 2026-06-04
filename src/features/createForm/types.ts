@@ -8,11 +8,13 @@ import type {
   AnalystType,
   FieldType,
   FormField,
+  FormAccessMode,
   FormHeaderImage,
   FormHeaderLogo,
   FormHeaderImagePosition,
   FormIdentityPolicy,
   FormLocationRequirement,
+  FormNftGate,
   FormPurpose,
   FormSchema,
   FormSection,
@@ -27,11 +29,13 @@ export type {
   AnalystType,
   FieldType,
   FormField,
+  FormAccessMode,
   FormHeaderImage,
   FormHeaderLogo,
   FormHeaderImagePosition,
   FormIdentityPolicy,
   FormLocationRequirement,
+  FormNftGate,
   FormPurpose,
   FormSchema,
   FormSection,
@@ -95,6 +99,8 @@ export interface FormBuilderValues {
   analysisType?: AnalysisType;
   visibility: FormVisibility;
   identityPolicy: FormIdentityPolicy;
+  accessMode: FormAccessMode;
+  nftGate: FormNftGate;
   locationRequirement: FormLocationRequirement;
   processingMode: SignalProcessingMode;
   encryptSubmissions: boolean;

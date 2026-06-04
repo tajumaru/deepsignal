@@ -10,8 +10,10 @@ import { LocalRecoveryCenter } from "../components/LocalRecoveryCenter";
 import { PublicSignalMetaChip } from "../components/PublicSignalMeta";
 import { SignalSubmissionPipeline } from "../features/public-form/components/SignalSubmissionPipeline";
 import { usePublicFormLoader } from "../features/public-form/hooks/usePublicFormLoader";
+import { usePublicNftGate } from "../features/public-form/hooks/usePublicNftGate";
 import { usePublicSubmission, type SignalPipelineStage } from "../features/public-form/hooks/usePublicSubmission";
 import { useI18n } from "../i18n";
+import { isNftGatedForm, requiresWalletForFormAccess } from "../lib/formAccess";
 import {
   formatResponseDeadline,
   isResponseWindowClosed,
@@ -166,13 +168,15 @@ export function PublicFormPage() {
     manifestBlobId,
     missingFormMessage: t("publicFormMissingBody"),
   });
-  const walletRequired = form?.identityPolicy === "wallet_required";
+  const walletRequired = requiresWalletForFormAccess(form);
+  const nftRequired = isNftGatedForm(form);
   const zkLoginSession = !walletRequired && isZkLoginEnabled() ? loadZkLoginSession() : null;
   const walletModeSelected = walletRequired || answerAuthMode === "sui_wallet";
   const walletIdentityReady = walletRequired || (answerAuthMode === "sui_wallet" && Boolean(resolvedWalletAddress));
   const identityMode = walletIdentityReady ? "wallet" : zkLoginSession ? "zklogin" : "anonymous";
   const attachWallet = walletModeSelected;
   const walletFallback = <div className="wallet-connect-shell wallet-connect-shell-compact" />;
+  const nftGate = usePublicNftGate(form, resolvedWalletAddress);
   const {
     answers,
     errors,
@@ -227,6 +231,7 @@ export function PublicFormPage() {
     locationFailedLabel: t("locationFailedLabel"),
     zkLoginSessionExpiredLabel: t("publicZkLoginSessionExpired"),
     zkLoginProviderLabel: t("publicZkLoginProvider"),
+    recheckNftAccess: nftGate.recheckAccess,
   });
 
   useEffect(() => {
@@ -768,6 +773,66 @@ export function PublicFormPage() {
             {t("publicIdentityChoicePrivacyAction")}
           </button>
         </div>
+      </section>
+    );
+  }
+
+  if (nftRequired && nftGate.viewGateActive && !nftGate.canViewForm) {
+    return (
+      <section className="panel glow-panel public-identity-choice-screen" aria-label="NFT gated signal">
+        {walletModeSelected ? (
+          <LazyWalletSurface fallback={null}>
+            <LazyWalrusRuntimeSurface fallback={null}>
+              <div aria-hidden="true" style={{ display: "none" }}>
+                <Suspense fallback={null}>
+                  <LazyPublicWalletAccountPanel
+                    onAccountAddressChange={handleWalletAccountAddressChange}
+                    onWalletProviderChange={handleWalletProviderChange}
+                  />
+                </Suspense>
+              </div>
+            </LazyWalrusRuntimeSurface>
+          </LazyWalletSurface>
+        ) : null}
+        <div className="public-identity-choice-hero">
+          <div className="public-identity-choice-copy">
+            <div className="public-identity-choice-title-row">
+              <span className="public-identity-choice-hero-icon" aria-hidden="true">NFT</span>
+              <p className="eyebrow">Holder gate</p>
+            </div>
+            <h1>{form.title}</h1>
+            <p className="muted">
+              This signal is available only to eligible NFT holders. Connect a wallet that holds the required collection to continue.
+            </p>
+          </div>
+        </div>
+        <div className="metadata-list">
+          <div className="metadata-row">
+            <span>Collection</span>
+            <strong>{nftGate.nftGate?.collectionLabel ?? "Custom Struct Type"}</strong>
+          </div>
+          <div className="metadata-row">
+            <span>Required count</span>
+            <strong>{nftGate.nftGate?.requiredCount ?? 1}</strong>
+          </div>
+          <div className="metadata-row">
+            <span>Owned count</span>
+            <strong>{nftGate.ownedCount}</strong>
+          </div>
+          {nftGate.nftGate?.structType ? (
+            <div className="metadata-row">
+              <span>Struct Type</span>
+              <strong>{nftGate.nftGate.structType}</strong>
+            </div>
+          ) : null}
+        </div>
+        {nftGate.isChecking ? <p className="muted">Checking NFT ownership...</p> : null}
+        {nftGate.gateError ? <p className="error-text">{nftGate.gateError}</p> : null}
+        {!resolvedWalletAddress ? (
+          <p className="error-text">Connect a wallet to verify NFT ownership.</p>
+        ) : !nftGate.isChecking ? (
+          <p className="error-text">This wallet does not currently meet the NFT holder requirement.</p>
+        ) : null}
       </section>
     );
   }

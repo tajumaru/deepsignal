@@ -53,6 +53,7 @@ export type AnalysisType =
   | "velocity";
 export type FormVisibility = "private" | "unlisted" | "public";
 export type FormIdentityPolicy = "anonymous_allowed" | "wallet_required";
+export type FormAccessMode = "public" | "wallet_required" | "nft_required";
 export type FormLocationRequirement = "optional" | "required";
 export type FormHeaderImagePosition = "center" | "top" | "bottom";
 export type SignalProcessingMode = "review_required" | "auto_process" | "hybrid";
@@ -143,6 +144,20 @@ export interface FormHeaderLogo {
   fileName?: string;
 }
 
+export interface FormNftGate {
+  network: "sui-mainnet" | "sui-testnet";
+  structType: string;
+  requiredCount: number;
+  gateViewing: boolean;
+  gateSubmission: boolean;
+  collectionLabel?: string;
+  presetId?: "prime_machin" | "custom";
+  futureSealPolicy?: {
+    eligible: boolean;
+    policyMode: "none" | "nft_ownership_decrypt";
+  };
+}
+
 export interface FormSchema {
   id: string;
   baseFormId?: string;
@@ -161,6 +176,8 @@ export interface FormSchema {
   analysisType?: AnalysisType;
   visibility?: FormVisibility;
   identityPolicy?: FormIdentityPolicy;
+  accessMode?: FormAccessMode;
+  nftGate?: FormNftGate;
   publicExplore?: boolean;
   locationRequirement?: FormLocationRequirement;
   processingMode?: SignalProcessingMode;

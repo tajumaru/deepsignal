@@ -36,10 +36,14 @@ type OwnedObjectsRequest = {
   limit?: number;
 };
 
+type OwnedObjectsClient = {
+  getOwnedObjects: (request: OwnedObjectsRequest) => Promise<unknown>;
+};
+
 const OWNED_OBJECTS_CACHE_PREFIX = "deepsignal.ownedObjects";
 
-async function fetchOwnedObjects(
-  suiClient: ReturnType<typeof useSuiClient>,
+export async function fetchOwnedSuiObjectsForClient(
+  suiClient: OwnedObjectsClient,
   owner: string,
   structTypes: string[] = [],
 ) {
@@ -128,7 +132,7 @@ export function useOwnedSuiObjects(
         rpcUrl: rpc.currentRpcUrl,
       });
       try {
-        const result = await fetchOwnedObjects(suiClient, address ?? "", structTypes);
+        const result = await fetchOwnedSuiObjectsForClient(suiClient, address ?? "", structTypes);
         setIsRateLimitedFallback(false);
         endPerf(spanName, "ok", `${result.length} objects`);
         markPerfMilestone("sui-rpc:owned-objects:end", `${result.length} objects`);

@@ -1,5 +1,12 @@
 import { sanitizeConditionalLogicFields } from "../../utils/formLogic";
 import { hasChoiceOptions, isConfirmationCheckboxField, isMatrixFieldType, normalizeFieldType } from "../../lib/fieldTypes";
+import {
+  createDefaultNftGate,
+  CUSTOM_NFT_PRESET_ID,
+  getIdentityPolicyForAccessMode,
+  normalizeFormAccessMode,
+  normalizeFormNftGate,
+} from "../../lib/formAccess";
 import { makeId } from "../../lib/utils";
 import { normalizeFormVisibility } from "../../lib/explore";
 import { computeSchemaHash } from "../../lib/formVersioning";
@@ -11,11 +18,13 @@ import type {
   AnalystType,
   FieldType,
   FormField,
+  FormAccessMode,
   FormHeaderImage,
   FormHeaderLogo,
   FormHeaderImagePosition,
   FormIdentityPolicy,
   FormLocationRequirement,
+  FormNftGate,
   FormPurpose,
   FormSchema,
   FormSection,
@@ -47,6 +56,8 @@ export interface ParsedCreateFormDraft {
   analysisType?: AnalysisType;
   visibility?: FormSchema["visibility"];
   identityPolicy?: FormIdentityPolicy;
+  accessMode?: FormAccessMode;
+  nftGate?: FormNftGate;
   locationRequirement?: FormLocationRequirement;
   processingMode?: SignalProcessingMode;
   encryptSubmissions?: boolean;
@@ -185,6 +196,8 @@ export function serializeDraft(
   analysisType: AnalysisType | undefined,
   visibility: FormSchema["visibility"],
   identityPolicy: FormIdentityPolicy,
+  accessMode: FormAccessMode,
+  nftGate: FormNftGate,
   locationRequirement: FormLocationRequirement,
   processingMode: SignalProcessingMode,
   createOnSui: boolean,
@@ -206,6 +219,8 @@ export function serializeDraft(
     analysisType,
     visibility: normalizeFormVisibility(visibility),
     identityPolicy,
+    accessMode,
+    nftGate,
     locationRequirement,
     processingMode,
     createOnSui,
@@ -266,6 +281,8 @@ export function buildFormSchema(args: {
   analysisType?: AnalysisType;
   visibility: NonNullable<FormSchema["visibility"]>;
   identityPolicy: FormIdentityPolicy;
+  accessMode: FormAccessMode;
+  nftGate: FormNftGate;
   locationRequirement: FormLocationRequirement;
   processingMode: SignalProcessingMode;
   ownerAddress: string;
@@ -279,6 +296,8 @@ export function buildFormSchema(args: {
 }): FormSchema {
   const normalizedHeaderImage = normalizeHeaderImage(args.headerImage);
   const normalizedHeaderLogo = normalizeHeaderLogo(args.headerLogo);
+  const normalizedAccessMode = normalizeFormAccessMode(args.accessMode, args.identityPolicy);
+  const normalizedNftGate = normalizeFormNftGate(args.nftGate, normalizedAccessMode);
   const formWithoutHash = {
     id: makeId("form"),
     baseFormId: "",
@@ -320,7 +339,9 @@ export function buildFormSchema(args: {
     analystType: args.analystType,
     analysisType: args.analysisType,
     visibility: args.visibility,
-    identityPolicy: args.identityPolicy,
+    identityPolicy: getIdentityPolicyForAccessMode(normalizedAccessMode),
+    accessMode: normalizedAccessMode,
+    nftGate: normalizedNftGate,
     locationRequirement: args.locationRequirement,
     processingMode: args.processingMode,
     publicExplore: args.visibility === "public",
@@ -344,6 +365,8 @@ export function buildFormSchema(args: {
     schemaHash: computeSchemaHash(formWithoutHash),
   };
 }
+
+export { createDefaultNftGate, CUSTOM_NFT_PRESET_ID };
 
 export function normalizeHeaderImage(
   headerImage?: {

@@ -6,6 +6,11 @@ import { ShareCard } from "../../../components/ShareCard";
 import { SignalMetaRow } from "../../../components/SignalMetaChip";
 import { SuiAddressDisplay } from "../../../components/SuiAddressDisplay";
 import { hasInconsistentPublishState, type CriticalFailure } from "../../../lib/criticalFailure";
+import {
+  CUSTOM_NFT_PRESET_ID,
+  getNftGatePresetLabel,
+  PRIME_MACHIN_PRESET_ID,
+} from "../../../lib/formAccess";
 import { LivePreview } from "../../../components/formBuilder/LivePreview";
 import { isLocalFallbackBlob } from "../../../lib/proof";
 import { toDateTimeLocalValue } from "../../../lib/responseDeadline";
@@ -20,10 +25,12 @@ import type {
   AnalysisType,
   AnalystType,
   FormField,
+  FormAccessMode,
   FormHeaderImage,
   FormHeaderLogo,
   FormIdentityPolicy,
   FormLocationRequirement,
+  FormNftGate,
   FormSection,
   FormVisibility,
   DisplayMode,
@@ -65,6 +72,8 @@ interface PublishStepProps {
   analysisType?: AnalysisType;
   visibility: FormVisibility;
   identityPolicy: FormIdentityPolicy;
+  accessMode: FormAccessMode;
+  nftGate: FormNftGate;
   locationRequirement: FormLocationRequirement;
   encryptSubmissions: boolean;
   responseOpenAtCustom: string;
@@ -99,6 +108,9 @@ interface PublishStepProps {
   onSelectProject: (projectId: string) => void;
   onChangeVisibility: (value: FormVisibility) => void;
   onChangeIdentityPolicy: (value: FormIdentityPolicy) => void;
+  onChangeAccessMode: (value: FormAccessMode) => void;
+  onChangeNftGatePreset: (value: FormNftGate["presetId"]) => void;
+  onChangeNftGate: (value: Partial<FormNftGate>) => void;
   onChangeLocationRequirement: (value: FormLocationRequirement) => void;
   onToggleEncryptSubmissions: (value: boolean) => void;
   onChangeResponseOpenAtCustom: (value: string) => void;
@@ -282,6 +294,8 @@ export function PublishStep({
   analysisType,
   visibility,
   identityPolicy,
+  accessMode,
+  nftGate,
   locationRequirement,
   encryptSubmissions,
   responseOpenAtCustom,
@@ -315,6 +329,9 @@ export function PublishStep({
   onSelectProject,
   onChangeVisibility,
   onChangeIdentityPolicy,
+  onChangeAccessMode,
+  onChangeNftGatePreset,
+  onChangeNftGate,
   onChangeLocationRequirement,
   onToggleEncryptSubmissions,
   onChangeResponseOpenAtCustom,
@@ -346,6 +363,14 @@ export function PublishStep({
   const publishReadyBody = isGuestDraftMode ? t("guestDraftPublishBody") : t("publishReadyBody");
   const isProjectEncryptedForm = Boolean(encryptSubmissions && visibleSelectedProject);
   const isPersonalEncryptedForm = Boolean(encryptSubmissions && !visibleSelectedProject);
+  const identityRequirementLabel =
+    accessMode === "nft_required"
+      ? "NFT holders only"
+      : identityPolicy === "wallet_required"
+        ? t("verificationRequired")
+        : t("verificationOptional");
+  const selectedNftPresetId = nftGate.presetId ?? CUSTOM_NFT_PRESET_ID;
+  const collectionPresetLabel = getNftGatePresetLabel(selectedNftPresetId);
   const encryptionScopePrimary = encryptSubmissions
     ? isProjectEncryptedForm
       ? t("projectEncryptedFormHelp", { name: visibleSelectedProject?.name ?? "" })
@@ -568,6 +593,27 @@ export function PublishStep({
                   <SignalPrivacyIcon locked={encryptSubmissions} />
                   <span>{encryptSubmissions ? "Seal on" : "Open"}</span>
                 </button>
+              </div>
+              <div className="publish-identity-quick-switch" aria-label={t("navAccess")}>
+                <span className="publish-visibility-label">{t("navAccess")}</span>
+                <div className="publish-visibility-options">
+                  {([
+                    ["public", "Public"],
+                    ["wallet_required", "Wallet Required"],
+                    ["nft_required", "NFT Holders Only"],
+                  ] as const).map(([value, label]) => (
+                    <button
+                      key={value}
+                      type="button"
+                      className={`publish-visibility-chip ${accessMode === value ? "is-active" : ""}`}
+                      onClick={() => onChangeAccessMode(value)}
+                      aria-pressed={accessMode === value}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                <p className="muted">{identityRequirementLabel}</p>
               </div>
               <div className="publish-identity-quick-switch" aria-label={t("submissionIdentityLabel")}>
                 <span className="publish-visibility-label">{t("identityPolicyTitle")}</span>
@@ -897,36 +943,39 @@ export function PublishStep({
                     </span>
                     <div>
                       <p className="eyebrow">{t("responderIdentityEyebrow")}</p>
-                      <h3>{t("identityPolicyTitle")}</h3>
+                      <h3>{t("navAccess")}</h3>
                     </div>
                   </div>
                   <fieldset className="composer-radio-field">
-                    <legend>{t("submissionIdentityLabel")}</legend>
+                    <legend>{t("navAccess")}</legend>
                     <div className="metadata-list">
                       <div className="metadata-row">
                         <span>{t("allowedSenderTypesLabel")}</span>
                         <strong>
-                          {identityPolicy === "wallet_required"
-                            ? t("allowedSenderTypesWalletOnly")
-                            : t("allowedSenderTypesAnonymousAndWallet")}
+                          {accessMode === "nft_required"
+                            ? "NFT holders with a connected wallet"
+                            : accessMode === "wallet_required"
+                              ? t("allowedSenderTypesWalletOnly")
+                              : t("allowedSenderTypesAnonymousAndWallet")}
                         </strong>
                       </div>
                     </div>
                     <div className="composer-radio-options">
                       {([
-                        ["anonymous_allowed", t("verificationOptional")],
-                        ["wallet_required", t("verificationRequired")],
+                        ["public", "Public"],
+                        ["wallet_required", "Wallet Required"],
+                        ["nft_required", "NFT Holders Only"],
                       ] as const).map(([value, label]) => (
                         <label
                           key={value}
-                          className={`composer-radio-option${identityPolicy === value ? " is-selected" : ""}`}
+                          className={`composer-radio-option${accessMode === value ? " is-selected" : ""}`}
                         >
                           <input
                             type="radio"
-                            name="submissionIdentity"
+                            name="submissionAccess"
                             value={value}
-                            checked={identityPolicy === value}
-                            onChange={() => onChangeIdentityPolicy(value)}
+                            checked={accessMode === value}
+                            onChange={() => onChangeAccessMode(value)}
                           />
                           <span className="composer-radio-mark" aria-hidden="true" />
                           <span>{label}</span>
@@ -934,9 +983,68 @@ export function PublishStep({
                       ))}
                     </div>
                   </fieldset>
-                  <p className="muted">
-                    {t("identityPolicyHelp")}
-                  </p>
+                  <p className="muted">{identityRequirementLabel}</p>
+                  {accessMode === "nft_required" ? (
+                    <div className="stack">
+                      <label>
+                        <span>Collection Preset</span>
+                        <select
+                          value={selectedNftPresetId}
+                          onChange={(event) => onChangeNftGatePreset(event.target.value as FormNftGate["presetId"])}
+                        >
+                          <option value={PRIME_MACHIN_PRESET_ID}>{getNftGatePresetLabel(PRIME_MACHIN_PRESET_ID)}</option>
+                          <option value={CUSTOM_NFT_PRESET_ID}>{getNftGatePresetLabel(CUSTOM_NFT_PRESET_ID)}</option>
+                        </select>
+                      </label>
+                      <div className="metadata-list">
+                        <div className="metadata-row">
+                          <span>Preset</span>
+                          <strong>{collectionPresetLabel}</strong>
+                        </div>
+                      </div>
+                      <label>
+                        <span>Struct Type</span>
+                        <input
+                          type="text"
+                          value={nftGate.structType}
+                          onChange={(event) => onChangeNftGate({ structType: event.target.value })}
+                          placeholder="0x...::collection::PrimeMachin"
+                        />
+                      </label>
+                      <label>
+                        <span>Required Count</span>
+                        <input
+                          type="number"
+                          min={1}
+                          step={1}
+                          value={nftGate.requiredCount}
+                          onChange={(event) =>
+                            onChangeNftGate({ requiredCount: Math.max(1, Number(event.target.value) || 1) })
+                          }
+                        />
+                      </label>
+                      <label className="toggle">
+                        <input
+                          type="checkbox"
+                          checked={nftGate.gateViewing}
+                          onChange={(event) => onChangeNftGate({ gateViewing: event.target.checked })}
+                        />
+                        <span>Gate viewing</span>
+                      </label>
+                      <label className="toggle">
+                        <input
+                          type="checkbox"
+                          checked={nftGate.gateSubmission}
+                          onChange={(event) => onChangeNftGate({ gateSubmission: event.target.checked })}
+                        />
+                        <span>Gate submission</span>
+                      </label>
+                      <p className="muted">
+                        Prime Machin is one-click when the preset struct type is configured. Published signals always
+                        use the saved struct type.
+                      </p>
+                    </div>
+                  ) : null}
                 </section>
 
                 <section className="panel composer-settings-card composer-settings-card-visual">

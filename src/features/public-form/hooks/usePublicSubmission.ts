@@ -18,6 +18,7 @@ import type { ZkLoginSession } from "../../../lib/zkloginSession";
 import { useRpcInfrastructure } from "../../../rpcInfrastructure";
 import type { FormSchema, Submission, SubmissionAttachment, SubmissionLocation } from "../../../types";
 import { getOrderedFields, getVisibleFieldIds } from "../../../utils/formLogic";
+import type { PublicNftAccessCheckResult } from "./usePublicNftGate";
 import type { PublicAnswers, PublicVoiceAnswerDraft, ValidationErrors } from "../types";
 import { getUploadAnswer } from "../utils/getUploadAnswer";
 import { validatePublicSubmission, validateSubmissionLocation } from "../utils/validatePublicSubmission";
@@ -394,6 +395,7 @@ interface UsePublicSubmissionArgs {
   locationFailedLabel: string;
   zkLoginSessionExpiredLabel: string;
   zkLoginProviderLabel: string;
+  recheckNftAccess?: () => Promise<PublicNftAccessCheckResult>;
 }
 
 export function usePublicSubmission({
@@ -419,6 +421,7 @@ export function usePublicSubmission({
   locationFailedLabel,
   zkLoginSessionExpiredLabel,
   zkLoginProviderLabel,
+  recheckNftAccess,
 }: UsePublicSubmissionArgs) {
   const rpcInfrastructure = useRpcInfrastructure();
   const [answers, setAnswers] = useState<PublicAnswers>(initialAnswers);
@@ -1069,6 +1072,32 @@ export function usePublicSubmission({
       );
       return;
     }
+    const accessCheck = recheckNftAccess ? await recheckNftAccess() : undefined;
+    if (accessCheck && !accessCheck.passed) {
+      const message =
+        accessCheck.reason === "wallet_missing"
+          ? "Connect a wallet to verify NFT ownership before submitting."
+          : accessCheck.reason === "network_mismatch"
+            ? "This wallet is connected to the wrong Sui network for this NFT-gated signal."
+            : accessCheck.reason === "rpc_failed"
+              ? "NFT ownership could not be verified right now. Please retry in a moment."
+              : "This wallet does not currently meet the NFT holder requirement for this signal.";
+      setSubmitError(message);
+      setSubmitNotice("");
+      setFailure(
+        createCriticalFailure({
+          error: new Error(message),
+          surface: "wallet",
+          step: "validation",
+          noDataSubmitted: true,
+          diagnostics: {
+            formId: form.id,
+            accessCheck,
+          },
+        }),
+      );
+      return;
+    }
     if (
       walrusRuntimeReady &&
       effectiveIdentityMode === "anonymous" &&
@@ -1380,6 +1409,7 @@ export function usePublicSubmission({
           rpcProvider: rpcInfrastructure.providerLabel,
           rpcUrl: rpcInfrastructure.displayRpcUrl,
           network: rpcInfrastructure.connectedNetworkLabel,
+          accessCheck,
           respondentIdentity: {
             mode: respondentMeta.identityKind,
             provider: respondentMeta.identityProvider,

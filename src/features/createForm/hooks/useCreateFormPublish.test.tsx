@@ -1,5 +1,6 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { createDefaultNftGate, CUSTOM_NFT_PRESET_ID } from "../../../lib/formAccess";
 import { PublishFlowError } from "../services";
 import { useCreateFormPublish } from "./useCreateFormPublish";
 
@@ -28,6 +29,8 @@ function TestHarness() {
     purpose: "custom",
     visibility: "private",
     identityPolicy: "anonymous_allowed",
+    accessMode: "public",
+    nftGate: createDefaultNftGate(CUSTOM_NFT_PRESET_ID),
     locationRequirement: "optional",
     processingMode: "review_required",
     encryptSubmissions: false,

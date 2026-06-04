@@ -557,6 +557,8 @@ function FormBuilderComposer({
     analysisType: builder.values.analysisType,
     visibility: builder.values.visibility,
     identityPolicy: builder.values.identityPolicy,
+    accessMode: builder.values.accessMode,
+    nftGate: builder.values.nftGate,
     locationRequirement: builder.values.locationRequirement,
     processingMode: builder.values.processingMode,
     encryptSubmissions: builder.values.encryptSubmissions,
@@ -608,6 +610,8 @@ function FormBuilderComposer({
       analysisType: builder.values.analysisType,
       visibility: builder.values.visibility,
       identityPolicy: builder.values.identityPolicy,
+      accessMode: builder.values.accessMode,
+      nftGate: builder.values.accessMode === "nft_required" ? builder.values.nftGate : undefined,
       locationRequirement: builder.values.locationRequirement,
       processingMode: builder.values.processingMode,
       encryptSubmissions: builder.values.encryptSubmissions,
@@ -621,7 +625,9 @@ function FormBuilderComposer({
     builder.values.headerImage,
     builder.values.headerLogo,
     builder.values.identityPolicy,
+    builder.values.accessMode,
     builder.values.locationRequirement,
+    builder.values.nftGate,
     builder.values.processingMode,
     builder.values.purpose,
     builder.values.analysisProfileId,
@@ -980,6 +986,8 @@ function FormBuilderComposer({
           analysisType={builder.values.analysisType}
           visibility={builder.values.visibility}
           identityPolicy={builder.values.identityPolicy}
+          accessMode={builder.values.accessMode}
+          nftGate={builder.values.nftGate}
           locationRequirement={builder.values.locationRequirement}
           encryptSubmissions={builder.values.encryptSubmissions}
           responseOpenAtCustom={builder.values.responseOpenAtCustom}
@@ -1014,6 +1022,9 @@ function FormBuilderComposer({
           onSelectProject={handleSelectProject}
           onChangeVisibility={builder.setVisibility}
           onChangeIdentityPolicy={builder.setIdentityPolicy}
+          onChangeAccessMode={builder.setAccessModeState}
+          onChangeNftGatePreset={builder.setNftGatePresetState}
+          onChangeNftGate={builder.updateNftGateState}
           onChangeLocationRequirement={builder.setLocationRequirement}
           onToggleEncryptSubmissions={builder.setEncryptSubmissions}
           onChangeResponseOpenAtCustom={builder.setResponseOpenAtCustom}

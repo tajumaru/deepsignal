@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { createDefaultNftGate, CUSTOM_NFT_PRESET_ID } from "../../lib/formAccess";
 import { computeSchemaHash } from "../../lib/formVersioning";
 import { buildFormSchema, createField } from "./utils";
 
@@ -22,6 +23,8 @@ function buildBaseForm() {
     purpose: "custom",
     visibility: "private",
     identityPolicy: "anonymous_allowed",
+    accessMode: "public",
+    nftGate: createDefaultNftGate(CUSTOM_NFT_PRESET_ID),
     locationRequirement: "optional",
     processingMode: "review_required",
     ownerAddress: "0xowner",
@@ -74,6 +77,8 @@ describe("buildFormSchema", () => {
       analysisType: "urgency",
       visibility: "unlisted",
       identityPolicy: "anonymous_allowed",
+      accessMode: "public",
+      nftGate: createDefaultNftGate(CUSTOM_NFT_PRESET_ID),
       locationRequirement: "required",
       processingMode: "review_required",
       ownerAddress: "0xowner",
@@ -102,5 +107,37 @@ describe("buildFormSchema", () => {
     };
 
     expect(computeSchemaHash(lightEdit)).toBe(base.schemaHash);
+  });
+
+  it("forces wallet identity policy for nft-required signals while preserving nft gate config", () => {
+    const form = buildFormSchema({
+      title: "Prime holder signal",
+      description: "Only NFT holders can respond",
+      headerImage: { url: "", alt: "", position: "center" },
+      headerLogo: { url: "", alt: "" },
+      fields: [{ ...createField("shortText"), label: "Signal", required: true }],
+      sections: [],
+      purpose: "custom",
+      visibility: "private",
+      identityPolicy: "anonymous_allowed",
+      accessMode: "nft_required",
+      nftGate: {
+        ...createDefaultNftGate(CUSTOM_NFT_PRESET_ID),
+        structType: "0xprime::machin::PrimeMachin",
+        requiredCount: 2,
+      },
+      locationRequirement: "optional",
+      processingMode: "review_required",
+      ownerAddress: "0xowner",
+      creationMode: "admin",
+      encryptSubmissions: true,
+    });
+
+    expect(form.accessMode).toBe("nft_required");
+    expect(form.identityPolicy).toBe("wallet_required");
+    expect(form.nftGate).toMatchObject({
+      structType: "0xprime::machin::PrimeMachin",
+      requiredCount: 2,
+    });
   });
 });

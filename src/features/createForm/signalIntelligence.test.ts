@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { createDefaultNftGate, CUSTOM_NFT_PRESET_ID } from "../../lib/formAccess";
 import { analyzeSignalDraft } from "./signalIntelligence";
 import type { FormBuilderValues } from "./types";
 
@@ -35,6 +36,8 @@ function createValues(patch: Partial<FormBuilderValues> = {}): FormBuilderValues
     purpose: "custom",
     visibility: "public",
     identityPolicy: "anonymous_allowed",
+    accessMode: "public",
+    nftGate: createDefaultNftGate(CUSTOM_NFT_PRESET_ID),
     locationRequirement: "optional",
     processingMode: "review_required",
     encryptSubmissions: false,

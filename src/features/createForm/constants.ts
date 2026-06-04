@@ -1,5 +1,6 @@
 import type { Language } from "../../i18n";
 import { createTemplateFields, defaultComposerTemplateKey, getTemplateDefinition } from "../../lib/formTemplates";
+import { createDefaultNftGate, CUSTOM_NFT_PRESET_ID } from "../../lib/formAccess";
 import type { BuilderStep, PublishPhase } from "./types";
 import { serializeDraft } from "./utils";
 
@@ -53,6 +54,8 @@ export function createInitialDraftSnapshot(language: Language = "en") {
     template.analysis?.analysisType,
     "unlisted",
     "anonymous_allowed",
+    "public",
+    createDefaultNftGate(CUSTOM_NFT_PRESET_ID),
     "optional",
     template.automation?.processingMode ?? "review_required",
     false,

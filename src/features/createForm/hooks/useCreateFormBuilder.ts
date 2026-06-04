@@ -17,6 +17,14 @@ import {
 import { toDateTimeLocalValue } from "../../../lib/responseDeadline";
 import type { Language } from "../../../i18n";
 import { normalizeFieldType } from "../../../lib/fieldTypes";
+import {
+  createDefaultNftGate,
+  CUSTOM_NFT_PRESET_ID,
+  getIdentityPolicyForAccessMode,
+  normalizeFormAccessMode,
+  normalizeFormNftGate,
+  resolveFormAccessMode,
+} from "../../../lib/formAccess";
 import { normalizeFieldProcessingPolicy } from "../../../lib/signalProcessing";
 import { getSelectedProjectId, setSelectedProjectId } from "../../../lib/projectRegistry";
 import { createInitialDraftSnapshot, getInitialFields, getInitialTemplate } from "../constants";
@@ -110,6 +118,8 @@ export function useCreateFormBuilder({
   const [analysisType, setAnalysisType] = useState<AnalysisType | undefined>(initialTemplate.analysis?.analysisType);
   const [visibility, setVisibility] = useState<"private" | "unlisted" | "public">("public");
   const [identityPolicy, setIdentityPolicy] = useState<"anonymous_allowed" | "wallet_required">("anonymous_allowed");
+  const [accessMode, setAccessMode] = useState<FormBuilderValues["accessMode"]>("public");
+  const [nftGate, setNftGate] = useState<FormBuilderValues["nftGate"]>(createDefaultNftGate(CUSTOM_NFT_PRESET_ID));
   const [locationRequirement, setLocationRequirement] = useState<"optional" | "required">("optional");
   const [processingMode, setProcessingMode] = useState(initialTemplate.automation?.processingMode ?? "review_required");
   const [encryptSubmissions, setEncryptSubmissions] = useState(true);
@@ -148,6 +158,8 @@ export function useCreateFormBuilder({
         analysisType,
         visibility,
         identityPolicy,
+        accessMode,
+        nftGate,
         locationRequirement,
         processingMode,
         createOnSui,
@@ -167,8 +179,10 @@ export function useCreateFormBuilder({
       fields,
       headerImage,
       headerLogo,
+      accessMode,
       identityPolicy,
       locationRequirement,
+      nftGate,
       processingMode,
       purpose,
       responseOpenAtCustom,
@@ -189,7 +203,9 @@ export function useCreateFormBuilder({
   function resolveTemplateAutomation(template: ReturnType<typeof getTemplateDefinition>) {
     return {
       visibility: template.automation?.visibility ?? "public",
+      accessMode: normalizeFormAccessMode(undefined, template.automation?.identityPolicy),
       identityPolicy: template.automation?.identityPolicy ?? "anonymous_allowed",
+      nftGate: createDefaultNftGate(CUSTOM_NFT_PRESET_ID),
       locationRequirement: template.automation?.locationRequirement ?? "optional",
       processingMode: template.automation?.processingMode ?? "review_required",
       encryptSubmissions: template.automation?.encryptSubmissions ?? !isGuestDraftMode,
@@ -213,6 +229,8 @@ export function useCreateFormBuilder({
     setAnalysisType(initialTemplate.analysis?.analysisType);
     setVisibility("public");
     setIdentityPolicy("anonymous_allowed");
+    setAccessMode("public");
+    setNftGate(createDefaultNftGate(CUSTOM_NFT_PRESET_ID));
     setLocationRequirement("optional");
     setProcessingMode(initialTemplate.automation?.processingMode ?? "review_required");
     setEncryptSubmissions(!isGuestDraftMode);
@@ -261,7 +279,9 @@ export function useCreateFormBuilder({
     const idea = draftSeed?.idea?.trim() ?? "";
     const automation = {
       visibility: template.automation?.visibility ?? "public",
+      accessMode: normalizeFormAccessMode(undefined, template.automation?.identityPolicy),
       identityPolicy: template.automation?.identityPolicy ?? "anonymous_allowed",
+      nftGate: createDefaultNftGate(CUSTOM_NFT_PRESET_ID),
       locationRequirement: template.automation?.locationRequirement ?? "optional",
       processingMode: template.automation?.processingMode ?? "review_required",
       encryptSubmissions: template.automation?.encryptSubmissions ?? false,
@@ -280,6 +300,8 @@ export function useCreateFormBuilder({
     setAnalysisType(template.analysis?.analysisType);
     setVisibility(automation.visibility);
     setIdentityPolicy(automation.identityPolicy);
+    setAccessMode(automation.accessMode);
+    setNftGate(automation.nftGate);
     setLocationRequirement(automation.locationRequirement);
     setProcessingMode(automation.processingMode);
     setEncryptSubmissions(automation.encryptSubmissions);
@@ -335,7 +357,10 @@ export function useCreateFormBuilder({
     setAnalystType(parsedDraft.analystType ?? initialTemplate.analysis?.analystType);
     setAnalysisType(parsedDraft.analysisType ?? initialTemplate.analysis?.analysisType);
     setVisibility(parsedDraft.visibility ?? "public");
-    setIdentityPolicy(parsedDraft.identityPolicy === "wallet_required" ? "wallet_required" : "anonymous_allowed");
+    const nextAccessMode = normalizeFormAccessMode(parsedDraft.accessMode, parsedDraft.identityPolicy);
+    setAccessMode(nextAccessMode);
+    setIdentityPolicy(getIdentityPolicyForAccessMode(nextAccessMode));
+    setNftGate(normalizeFormNftGate(parsedDraft.nftGate, nextAccessMode) ?? createDefaultNftGate(CUSTOM_NFT_PRESET_ID));
     setLocationRequirement(parsedDraft.locationRequirement === "required" ? "required" : "optional");
     setProcessingMode(parsedDraft.processingMode ?? "review_required");
     setEncryptSubmissions(parsedDraft.encryptSubmissions ?? !isGuestDraftMode);
@@ -482,6 +507,8 @@ export function useCreateFormBuilder({
         analysisType,
         visibility,
         identityPolicy,
+        accessMode,
+        nftGate,
         locationRequirement,
         processingMode,
         encryptSubmissions,
@@ -512,8 +539,10 @@ export function useCreateFormBuilder({
     headerImage,
     headerLogo,
     identityPolicy,
+    accessMode,
     initialDraftSnapshot,
     locationRequirement,
+    nftGate,
     processingMode,
     projectState,
     purpose,
@@ -566,6 +595,8 @@ export function useCreateFormBuilder({
       setSections([]);
       setVisibility(automation.visibility);
       setIdentityPolicy(automation.identityPolicy);
+      setAccessMode(automation.accessMode);
+      setNftGate(automation.nftGate);
       setLocationRequirement(automation.locationRequirement);
       setProcessingMode(automation.processingMode);
       setEncryptSubmissions(automation.encryptSubmissions);
@@ -610,6 +641,8 @@ export function useCreateFormBuilder({
       setPurpose("custom");
       setVisibility("public");
       setIdentityPolicy("anonymous_allowed");
+      setAccessMode("public");
+      setNftGate(createDefaultNftGate(CUSTOM_NFT_PRESET_ID));
       setLocationRequirement("optional");
       setProcessingMode("review_required");
       setResponseOpenAtCustom("");
@@ -647,7 +680,9 @@ export function useCreateFormBuilder({
     const nextAnalystType = form.analystType;
     const nextAnalysisType = form.analysisType;
     const nextVisibility = form.visibility ?? "public";
-    const nextIdentityPolicy = form.identityPolicy === "wallet_required" ? "wallet_required" : "anonymous_allowed";
+    const nextAccessMode = resolveFormAccessMode(form);
+    const nextIdentityPolicy = getIdentityPolicyForAccessMode(nextAccessMode);
+    const nextNftGate = normalizeFormNftGate(form.nftGate, nextAccessMode) ?? createDefaultNftGate(CUSTOM_NFT_PRESET_ID);
     const nextLocationRequirement = form.locationRequirement === "required" ? "required" : "optional";
     const nextDeadlinePreset = form.responseDeadline ? "custom" : "none";
     const nextDeadlineCustomAt = form.responseDeadline ? toDateTimeLocalValue(form.responseDeadline) : "";
@@ -666,6 +701,8 @@ export function useCreateFormBuilder({
       nextAnalysisType,
       nextVisibility,
       nextIdentityPolicy,
+      nextAccessMode,
+      nextNftGate,
       nextLocationRequirement,
       form.processingMode ?? "review_required",
       Boolean(nextSelectedProjectId),
@@ -693,6 +730,8 @@ export function useCreateFormBuilder({
       setAnalysisType(nextAnalysisType);
       setVisibility(nextVisibility);
       setIdentityPolicy(nextIdentityPolicy);
+      setAccessMode(nextAccessMode);
+      setNftGate(nextNftGate);
       setLocationRequirement(nextLocationRequirement);
       setProcessingMode(form.processingMode ?? "review_required");
       setEncryptSubmissions(form.encryptSubmissions ?? !isGuestDraftMode);
@@ -1029,6 +1068,38 @@ export function useCreateFormBuilder({
     setDraftParseNotice("");
   }
 
+  function setAccessModeState(nextAccessMode: FormBuilderValues["accessMode"]) {
+    setAccessMode(nextAccessMode);
+    setIdentityPolicy(getIdentityPolicyForAccessMode(nextAccessMode));
+    if (nextAccessMode === "nft_required") {
+      setNftGate((current) => normalizeFormNftGate(current, nextAccessMode) ?? createDefaultNftGate(CUSTOM_NFT_PRESET_ID));
+    }
+  }
+
+  function setNftGatePresetState(presetId: FormBuilderValues["nftGate"]["presetId"]) {
+    if (!presetId) {
+      return;
+    }
+    setNftGate((current) => {
+      const nextDefault = createDefaultNftGate(presetId);
+      return {
+        ...nextDefault,
+        requiredCount: current.requiredCount || nextDefault.requiredCount,
+        gateViewing: current.gateViewing,
+        gateSubmission: current.gateSubmission,
+      };
+    });
+    setAccessModeState("nft_required");
+  }
+
+  function updateNftGateState(patch: Partial<FormBuilderValues["nftGate"]>) {
+    setNftGate((current) => ({
+      ...current,
+      ...patch,
+    }));
+    setAccessModeState("nft_required");
+  }
+
   const values: FormBuilderValues = {
     selectedTemplateKey,
     title,
@@ -1044,6 +1115,8 @@ export function useCreateFormBuilder({
     analysisType,
     visibility,
     identityPolicy,
+    accessMode,
+    nftGate,
     locationRequirement,
     processingMode,
     encryptSubmissions,
@@ -1080,6 +1153,9 @@ export function useCreateFormBuilder({
     setHeaderLogo,
     setEncryptSubmissions,
     setIdentityPolicy,
+    setAccessModeState,
+    setNftGatePresetState,
+    updateNftGateState,
     setLocationRequirement,
     setProcessingMode,
     setResponseOpenAtCustom,

@@ -1,25 +1,16 @@
 import { hasChoiceOptions, isAttachmentFieldType, isConfirmationCheckboxField, normalizeFieldType } from "./fieldTypes";
 import { normalizeFormVisibility } from "./explore";
+import {
+  normalizeFormAccessMode,
+  normalizeFormIdentityPolicyWithAccess,
+  normalizeFormNftGate,
+} from "./formAccess";
 import { normalizeActivityEvent } from "./activityLog";
 import { computeSchemaHash, resolveFormVersion } from "./formVersioning";
 import { normalizeFormPurpose } from "./formTemplates";
 import { normalizeFieldProcessingPolicy } from "./signalProcessing";
 import { normalizeLogicGroup, sanitizeConditionalLogicFields } from "../utils/formLogic";
-import type {
-  AnalysisProfileId,
-  AnalysisSignalType,
-  AnalystType,
-  AnalysisType,
-  FormField,
-  FormIdentityPolicy,
-  FormLocationRequirement,
-  FormSchema,
-  FormSection,
-} from "../types";
-
-function normalizeFormIdentityPolicy(identityPolicy: unknown): FormIdentityPolicy {
-  return identityPolicy === "wallet_required" ? "wallet_required" : "anonymous_allowed";
-}
+import type { AnalysisProfileId, AnalysisSignalType, AnalystType, AnalysisType, FormField, FormLocationRequirement, FormSchema, FormSection } from "../types";
 
 function normalizeFormLocationRequirement(locationRequirement: unknown): FormLocationRequirement | undefined {
   return locationRequirement === "required" || locationRequirement === "optional" ? locationRequirement : undefined;
@@ -134,7 +125,12 @@ export function normalizeForm(raw: FormSchema | (Record<string, unknown> & { id:
     analystType: normalizeAnalystType(raw.analystType),
     analysisType: normalizeAnalysisType(raw.analysisType),
     visibility,
-    identityPolicy: normalizeFormIdentityPolicy(raw.identityPolicy),
+    accessMode: normalizeFormAccessMode(raw.accessMode, raw.identityPolicy),
+    identityPolicy: normalizeFormIdentityPolicyWithAccess(
+      normalizeFormAccessMode(raw.accessMode, raw.identityPolicy),
+      raw.identityPolicy,
+    ),
+    nftGate: normalizeFormNftGate(raw.nftGate, normalizeFormAccessMode(raw.accessMode, raw.identityPolicy)),
     locationRequirement: normalizeFormLocationRequirement(raw.locationRequirement),
     publicExplore: raw.publicExplore === true || visibility === "public",
     createdAt: typeof raw.createdAt === "string" ? raw.createdAt : new Date(0).toISOString(),
