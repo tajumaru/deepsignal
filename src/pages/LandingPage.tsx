@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { Link } from "react-router-dom";
 import { CreateFormLink } from "../components/CreateFormLink";
-import { DeepSignalMascot } from "../components/mascot/DeepSignalMascot";
 import { FlowStepIcon, type FlowStepIconName } from "../components/SignalFlowIcons";
 import { clearDemoLocalArtifacts } from "../demo/demoLocalCleanup";
 import { useI18n } from "../i18n";

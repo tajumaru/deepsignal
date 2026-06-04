@@ -30,7 +30,7 @@
   }
 
   .beacon-meta-row,
-  .beacon-meta-grid > div,
+  .beacon-console-module,
   .publish-blob-panel,
   .publish-active-panel {
     padding: 0.8rem 0.85rem;
@@ -60,6 +60,10 @@
     padding-inline:
       max(0.75rem, env(safe-area-inset-left, 0px))
       max(0.75rem, env(safe-area-inset-right, 0px));
+  }
+
+  .composer-success-card.is-focused-success {
+    padding-bottom: calc(5.5rem + env(safe-area-inset-bottom, 0px));
   }
 
   .node-directory-overlay,
@@ -162,7 +166,7 @@
   }
 
   .beacon-meta-row,
-  .beacon-meta-grid > div {
+  .beacon-console-module {
     padding: 0.72rem 0.8rem;
   }
 
@@ -284,5 +288,11 @@
 
   .beacon-action-panel .beacon-open-link {
     grid-column: auto;
+  }
+
+  .beacon-storage-disclosure summary,
+  .beacon-storage-proof-body {
+    padding-left: 0.8rem;
+    padding-right: 0.8rem;
   }
 }

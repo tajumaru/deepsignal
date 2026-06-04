@@ -66,11 +66,15 @@ function MenuToggleIcon() {
   );
 }
 
-function PencilIcon() {
+function TransmissionIcon() {
   return (
     <svg className="mobile-compose-fab-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-      <path d="M4 20h4.8L19.3 9.5a2.1 2.1 0 0 0 0-3L17.5 4.7a2.1 2.1 0 0 0-3 0L4 15.2V20Z" />
-      <path d="m13.4 5.8 4.8 4.8" />
+      <path d="M12 5.5a6.5 6.5 0 0 1 6.5 6.5" />
+      <path d="M12 2.5A9.5 9.5 0 0 1 21.5 12" />
+      <path d="M12 10.75a1.25 1.25 0 1 1 0 2.5 1.25 1.25 0 0 1 0-2.5Z" />
+      <path d="M12 12l4.9-4.9" />
+      <path d="M5.5 12A6.5 6.5 0 0 1 12 5.5" />
+      <path d="M2.5 12A9.5 9.5 0 0 1 12 2.5" />
     </svg>
   );
 }
@@ -144,7 +148,7 @@ function MobileAppBottomNav({ showComposeShortcut, drawerOpen, onOpenDrawer }: M
           fresh={false}
           className="mobile-compose-fab"
         >
-          <PencilIcon />
+          <TransmissionIcon />
           <span className="sr-only">{t("composeSignalCta")}</span>
         </CreateFormLink>
       ) : null}

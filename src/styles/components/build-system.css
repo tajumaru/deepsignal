@@ -96,96 +96,79 @@
 
 .build-update-banner {
   position: fixed;
-  right: max(0.85rem, env(safe-area-inset-right, 0px));
-  bottom: calc(max(0.85rem, env(safe-area-inset-bottom, 0px)) + 2.1rem);
-  z-index: 20;
-  display: flex;
-  align-items: center;
-  gap: 0.9rem;
-  width: min(92vw, 28rem);
-  padding: 0.82rem 0.9rem;
-  border: 1px solid rgba(116, 226, 255, 0.26);
-  border-radius: var(--radius-md);
-  background:
-    linear-gradient(135deg, rgba(8, 31, 48, 0.96), rgba(5, 18, 30, 0.96));
-  box-shadow:
-    0 18px 42px rgba(0, 0, 0, 0.28),
-    inset 0 1px 0 rgba(220, 252, 255, 0.06);
+  inset-inline: 0;
+  bottom: 0;
+  z-index: 60;
+  padding:
+    0
+    max(0.85rem, env(safe-area-inset-right, 0px))
+    max(0.85rem, env(safe-area-inset-bottom, 0px))
+    max(0.85rem, env(safe-area-inset-left, 0px));
   color: #ecfdff;
+  pointer-events: none;
+}
+
+.build-update-banner-shell {
+  pointer-events: auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 1rem;
+  width: 100%;
+  min-height: 72px;
+  padding: 0.7rem 1rem;
+  border-top: 1px solid rgba(116, 226, 255, 0.18);
+  background:
+    linear-gradient(180deg, rgba(8, 31, 48, 0.95), rgba(5, 18, 30, 0.97));
+  box-shadow:
+    0 -10px 32px rgba(0, 0, 0, 0.22),
+    inset 0 1px 0 rgba(220, 252, 255, 0.04);
   backdrop-filter: blur(16px);
 }
 
-.build-update-banner div {
+.build-update-copy {
   display: grid;
   min-width: 0;
-  gap: 0.16rem;
+  gap: 0.22rem;
 }
 
-.build-update-copy {
-  flex: 1 1 auto;
-}
-
-.build-update-action-stack {
+.build-update-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.65rem;
   flex: 0 0 auto;
-  width: min(100%, 15.5rem);
-  gap: 0.35rem;
-  justify-items: stretch;
 }
 
 .build-update-banner strong,
 .build-update-banner p {
   min-width: 0;
   margin: 0;
-  line-height: 1.25;
+  line-height: 1.2;
 }
 
 .build-update-banner strong {
-  font-size: 0.9rem;
+  font-size: 0.95rem;
 }
 
 .build-update-banner p {
   color: var(--text-soft);
-  font-size: 0.78rem;
+  font-size: 0.8rem;
 }
 
-.build-update-banner .build-update-error {
-  color: #ffd98a;
-  font-weight: 700;
-}
-
-.build-update-preservation {
-  color: rgba(185, 243, 255, 0.78);
-  font-size: 0.68rem;
-  font-weight: 700;
-  text-align: center;
-}
-
+.build-update-dismiss-button,
 .build-update-secure-button {
   position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 0.45rem;
-  flex: 0 0 auto;
   min-width: 0;
-  min-height: 2.75rem;
-  width: 100%;
-  padding: 0.58rem 0.76rem;
-  border: 1px solid rgba(116, 226, 255, 0.68);
+  min-height: 2.5rem;
+  padding: 0.58rem 0.9rem;
   border-radius: var(--radius-pill);
-  background:
-    linear-gradient(180deg, rgba(18, 47, 63, 0.9), rgba(3, 14, 24, 0.96)),
-    rgba(3, 14, 24, 0.92);
-  box-shadow:
-    0 0 0 1px rgba(116, 226, 255, 0.12),
-    0 0 18px rgba(34, 211, 238, 0.26),
-    inset 0 1px 0 rgba(231, 253, 255, 0.12),
-    inset 0 -10px 24px rgba(8, 145, 178, 0.14);
   color: #ecfdff;
   cursor: pointer;
-  isolation: isolate;
-  overflow: hidden;
-  text-shadow: 0 0 10px rgba(125, 249, 255, 0.34);
   white-space: nowrap;
   transition:
     border-color var(--transition-fast),
@@ -194,37 +177,26 @@
     background var(--transition-fast);
 }
 
-.build-update-secure-button::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  background: repeating-linear-gradient(
-    180deg,
-    rgba(116, 226, 255, 0.1) 0,
-    rgba(116, 226, 255, 0.1) 1px,
-    transparent 1px,
-    transparent 7px
-  );
-  opacity: 0.24;
-  animation: build-update-scan 3.8s linear infinite;
+.build-update-dismiss-button {
+  border: 1px solid rgba(116, 226, 255, 0.16);
+  background: rgba(5, 18, 30, 0.36);
+  color: rgba(220, 250, 255, 0.84);
+  box-shadow: inset 0 1px 0 rgba(231, 253, 255, 0.05);
 }
 
-.build-update-button-glint {
-  position: absolute;
-  inset: -35% auto -35% -45%;
-  width: 36%;
-  transform: skewX(-18deg);
-  background: linear-gradient(90deg, transparent, rgba(236, 253, 255, 0.42), transparent);
-  opacity: 0.72;
-  animation: build-update-glint 3.2s ease-in-out infinite;
-}
-
-.build-update-sync-icon,
-.build-update-button-label,
-.build-update-pulse-dot {
-  position: relative;
-  z-index: 1;
+.build-update-secure-button {
+  border: 1px solid rgba(116, 226, 255, 0.42);
+  background:
+    radial-gradient(circle at 18% 50%, rgba(122, 255, 221, 0.2), transparent 18%),
+    linear-gradient(135deg, rgba(82, 229, 255, 0.22), rgba(77, 140, 255, 0.18) 54%, rgba(124, 92, 255, 0.18)),
+    rgba(3, 14, 24, 0.88);
+  box-shadow:
+    0 0 0 1px rgba(116, 226, 255, 0.08),
+    0 8px 22px rgba(34, 211, 238, 0.14),
+    inset 0 1px 0 rgba(231, 253, 255, 0.1);
+  isolation: isolate;
+  overflow: hidden;
+  text-shadow: 0 0 10px rgba(125, 249, 255, 0.2);
 }
 
 .build-update-sync-icon {
@@ -240,41 +212,28 @@
 
 .build-update-button-label {
   min-width: 0;
-  overflow: hidden;
   color: #f0feff;
   font-size: 0.78rem;
   font-weight: 800;
-  text-overflow: ellipsis;
 }
 
-.build-update-pulse-dot {
-  flex: 0 0 auto;
-  width: 0.46rem;
-  height: 0.46rem;
-  border-radius: 50%;
-  background: #7df9ff;
-  box-shadow: 0 0 0 0 rgba(125, 249, 255, 0.5), 0 0 12px rgba(125, 249, 255, 0.9);
-  animation: build-update-pulse 1.8s ease-out infinite;
-}
-
+.build-update-dismiss-button:hover,
+.build-update-dismiss-button:focus-visible,
 .build-update-secure-button:hover,
 .build-update-secure-button:focus-visible {
   border-color: rgba(167, 243, 255, 0.9);
-  background:
-    linear-gradient(180deg, rgba(21, 63, 79, 0.94), rgba(4, 19, 31, 0.98)),
-    rgba(3, 14, 24, 0.94);
   box-shadow:
-    0 0 0 1px rgba(116, 226, 255, 0.2),
-    0 0 26px rgba(34, 211, 238, 0.38),
-    inset 0 1px 0 rgba(231, 253, 255, 0.18),
-    inset 0 -10px 24px rgba(8, 145, 178, 0.2);
+    0 0 0 1px rgba(116, 226, 255, 0.16),
+    0 0 18px rgba(34, 211, 238, 0.18);
   outline: none;
 }
 
+.build-update-dismiss-button:active,
 .build-update-secure-button:active {
   transform: translateY(1px) scale(0.99);
 }
 
+.build-update-dismiss-button:disabled,
 .build-update-secure-button:disabled {
   cursor: wait;
   opacity: 0.8;
@@ -284,144 +243,50 @@
   animation: build-update-spin 1s linear infinite;
 }
 
-@keyframes build-update-glint {
-  0%,
-  28% {
-    transform: translateX(0) skewX(-18deg);
-  }
-  64%,
-  100% {
-    transform: translateX(410%) skewX(-18deg);
-  }
-}
-
-@keyframes build-update-scan {
-  from {
-    background-position: 0 0;
-  }
-  to {
-    background-position: 0 28px;
-  }
-}
-
-@keyframes build-update-pulse {
-  0% {
-    box-shadow: 0 0 0 0 rgba(125, 249, 255, 0.5), 0 0 12px rgba(125, 249, 255, 0.9);
-  }
-  75%,
-  100% {
-    box-shadow: 0 0 0 0.45rem rgba(125, 249, 255, 0), 0 0 12px rgba(125, 249, 255, 0.85);
-  }
-}
-
 @keyframes build-update-spin {
   to {
     transform: rotate(360deg);
   }
 }
 
-.build-update-secure-button:disabled .build-update-button-glint,
-.build-update-secure-button:disabled .build-update-pulse-dot {
-  animation-duration: 1.2s;
-}
-
-.build-update-secure-button:disabled::before {
-  animation-duration: 1.6s;
-}
-
-.build-update-secure-button:disabled .build-update-pulse-dot {
-  opacity: 0.9;
-}
-
 @media (prefers-reduced-motion: reduce) {
-  .build-update-secure-button::before,
-  .build-update-button-glint,
-  .build-update-pulse-dot,
   .build-update-secure-button:disabled .build-update-sync-icon {
     animation: none;
   }
+}
 
-  .build-update-button-glint {
-    opacity: 0;
+@media (max-width: 720px) {
+  .build-update-banner-shell {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.75rem;
+    min-height: 76px;
+    padding: 0.68rem 0.85rem;
   }
 
-  .build-update-pulse-dot {
-    box-shadow: 0 0 10px rgba(125, 249, 255, 0.8);
-  }
-}
-
-.build-update-secure-button:disabled .build-update-pulse-dot {
-  background: #b8fbff;
-}
-
-.build-update-details {
-  margin-top: 0.28rem;
-}
-
-.build-update-details summary {
-  width: max-content;
-  cursor: pointer;
-  color: rgba(151, 222, 238, 0.88);
-  font-size: 0.72rem;
-  font-weight: 700;
-}
-
-.build-update-diagnostics {
-  display: grid;
-  grid-template-columns: max-content minmax(0, 1fr);
-  gap: 0.12rem 0.45rem;
-  margin: 0.35rem 0 0;
-  color: rgba(224, 250, 255, 0.78);
-  font-size: 0.72rem;
-}
-
-.build-update-diagnostics dt {
-  color: rgba(151, 222, 238, 0.78);
-  font-weight: 700;
-}
-
-.build-update-diagnostics dd {
-  min-width: 0;
-  margin: 0;
-  overflow-wrap: anywhere;
-}
-
-@media (max-width: 620px) {
-  .build-update-banner {
-    right: max(0.85rem, env(safe-area-inset-right, 0px));
-    left: max(0.85rem, env(safe-area-inset-left, 0px));
-    bottom: calc(max(0.85rem, env(safe-area-inset-bottom, 0px)) + 4.35rem);
-    width: auto;
-    max-height: calc(100dvh - max(0.85rem, env(safe-area-inset-top, 0px)) - max(0.85rem, env(safe-area-inset-bottom, 0px)) - 5rem);
-    overflow-y: auto;
-    align-items: stretch;
-    flex-direction: column;
-    padding: 0.78rem;
-    z-index: 80;
+  .build-update-actions {
+    justify-content: stretch;
   }
 
-  .build-update-action-stack,
+  .build-update-dismiss-button,
   .build-update-secure-button {
-    width: 100%;
+    flex: 1 1 0;
   }
 }
 
 @media (max-width: 380px) {
-  .build-update-banner {
-    right: max(0.6rem, env(safe-area-inset-right, 0px));
-    left: max(0.6rem, env(safe-area-inset-left, 0px));
-    gap: 0.65rem;
+  .build-update-banner-shell {
+    padding-inline: 0.72rem;
   }
 
   .build-update-banner strong {
     font-size: 0.82rem;
   }
 
-  .build-update-banner p,
-  .build-update-diagnostics {
+  .build-update-banner p {
     font-size: 0.72rem;
   }
 
+  .build-update-dismiss-button,
   .build-update-secure-button {
     gap: 0.36rem;
     padding-inline: 0.62rem;
@@ -430,4 +295,8 @@
   .build-update-button-label {
     font-size: 0.74rem;
   }
+}
+
+body.deepsignal-build-update-visible .landing-hero-grid {
+  padding-bottom: calc(6rem + max(0.85rem, env(safe-area-inset-bottom, 0px)));
 }

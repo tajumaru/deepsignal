@@ -8,7 +8,7 @@
   type PropsWithChildren,
 } from "react";
 import type { FieldType } from "./types";
-import type { Language, Params, TranslationValue, LocaleMessages } from "./i18n/types";
+import type { Language, Params, LocaleMessages } from "./i18n/types";
 import { enMessages } from "./i18n/locales/en";
 
 export type { Language } from "./i18n/types";

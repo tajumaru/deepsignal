@@ -1,6 +1,7 @@
 /* Design tokens only: colors, radii, transitions, and shared shadows. Do not place selectors here. */
 
 :root {
+  --bottom-nav-height: 96px;
   --color-text: #ecfdff;
   --color-bg-start: #06111d;
   --color-bg-mid: #081726;

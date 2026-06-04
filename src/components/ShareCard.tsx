@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useI18n } from "../i18n";
 import { getAbsolutePublicFormUrl } from "../lib/publicLinks";
 import { formatDate } from "../lib/utils";
@@ -9,6 +9,13 @@ interface ShareCardProps {
   blobId?: string;
   createdAt?: string;
   manifestBlobId?: string;
+}
+
+interface SignalConsoleModuleProps {
+  label: string;
+  value?: string;
+  children?: ReactNode;
+  className?: string;
 }
 
 function hashSeed(value: string) {
@@ -39,6 +46,16 @@ function ShareActionIcon({ type }: { type: "open" | "x" }) {
       <path d="m8 16 8-8" />
       <path d="M19 13v7H4V5h7" />
     </svg>
+  );
+}
+
+function SignalConsoleModule({ label, value, children, className }: SignalConsoleModuleProps) {
+  return (
+    <section className={`beacon-console-module ${className ?? ""}`.trim()}>
+      <span>{label}</span>
+      {value ? <strong>{value}</strong> : null}
+      {children}
+    </section>
   );
 }
 
@@ -222,6 +239,10 @@ export function ShareCard({ formId, blobId, createdAt, manifestBlobId }: ShareCa
   const timestampLabel = createdAt ? formatDate(createdAt) : "Awaiting sync";
   const rarity = getBeaconRarity(seed);
   const signalStatus = absoluteUrl ? "LINK ARMED" : "AWAITING MANIFEST";
+  const storageProofLabel = manifestBlobId ? "Manifest verified" : "Awaiting manifest proof";
+  const storageProofHint = blobId
+    ? "Blob ID stays available for audit, recovery, and storage verification."
+    : "Blob ID will appear here after storage confirmation.";
 
   return (
     <section className={`share-card beacon-card rarity-${rarity.toLowerCase().replace(/\s+/g, "-")} ${beaconLocked ? "is-locked" : "is-forming"}`}>
@@ -277,39 +298,51 @@ export function ShareCard({ formId, blobId, createdAt, manifestBlobId }: ShareCa
       <div className="beacon-meta">
         {shareLinkError ? <p className="error-text">{shareLinkError}</p> : null}
         <div className="beacon-meta-grid">
-          <div>
-            <span>{t("blobIdLabel")}</span>
-            {blobId ? (
-              <CopyableBeaconValue
-                value={blobId}
-                label={t("copyBlobId")}
-                copied={blobCopied}
-                onCopy={() => void handleCopyBlobId()}
-                metaType="blob"
-              />
-            ) : (
-              <strong>{blobLabel}</strong>
-            )}
-          </div>
-          <div>
-            <span>{t("signalIdLabel")}</span>
-            <strong>{signalId}</strong>
-          </div>
-          <div>
-            <span>{t("createdTimestampLabel")}</span>
-            <strong>{timestampLabel}</strong>
-          </div>
-          <div>
-            <span>{t("depthLabel")}</span>
-            <strong>{`${depthMeters}m / HADAL TRACE`}</strong>
-          </div>
-          <div>
-            <span>{t("status")}</span>
-            <strong>{signalStatus}</strong>
-            {absoluteUrl ? (
-              <small className="beacon-status-detail">Signal is live. Ready to receive encrypted responses.</small>
-            ) : null}
-          </div>
+          <SignalConsoleModule label={t("signalIdLabel")} value={signalId} className="is-primary-id" />
+          <SignalConsoleModule label={t("status")} className="is-status-module">
+            <div className={`beacon-status-console ${absoluteUrl ? "is-live" : "is-pending"}`}>
+              <div className="beacon-status-heading">
+                <span className="beacon-status-dot-wrap" aria-hidden="true">
+                  <span className="beacon-status-dot-core" />
+                </span>
+                <strong>{signalStatus}</strong>
+              </div>
+              <small className="beacon-status-detail">
+                {absoluteUrl ? "Signal is live. Ready to receive encrypted responses." : "Manifest handoff pending. Share link will arm after verification."}
+              </small>
+            </div>
+          </SignalConsoleModule>
+          <SignalConsoleModule label={t("depthLabel")} className="is-depth-module">
+            <div className="beacon-depth-readout">
+              <strong>{`${depthMeters}m`}</strong>
+              <span className="beacon-depth-zone">HADAL TRACE</span>
+            </div>
+          </SignalConsoleModule>
+          <SignalConsoleModule label={t("createdTimestampLabel")} value={timestampLabel} className="is-timestamp-module" />
+          <details className="beacon-storage-disclosure">
+            <summary>
+              <span>
+                <span className="beacon-storage-label">Storage Proof</span>
+                <strong>{storageProofLabel}</strong>
+              </span>
+            </summary>
+            <div className="beacon-storage-proof-body">
+              <SignalConsoleModule label={t("blobIdLabel")} className="is-storage-proof-module">
+                {blobId ? (
+                  <CopyableBeaconValue
+                    value={blobId}
+                    label={t("copyBlobId")}
+                    copied={blobCopied}
+                    onCopy={() => void handleCopyBlobId()}
+                    metaType="blob"
+                  />
+                ) : (
+                  <strong>{blobLabel}</strong>
+                )}
+                <small className="beacon-storage-proof-hint">{storageProofHint}</small>
+              </SignalConsoleModule>
+            </div>
+          </details>
         </div>
         <div className="beacon-action-panel" aria-label={t("transmissionLinkLabel")}>
           <button

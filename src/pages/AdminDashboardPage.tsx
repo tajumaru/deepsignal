@@ -336,6 +336,23 @@ type QuickActionId = "reviewing" | "resolve" | "publish" | "archive";
 type KeyboardShortcutAction = QuickActionId | "next" | "previous" | "search" | "help";
 type ProjectWorkspaceModalMode = "select" | "create" | "connect";
 
+function readWorkspaceTabFromRoute(search: string, hash: string): WorkspaceTab {
+  const directTab = new URLSearchParams(search).get("tab");
+  if (directTab === "review" || directTab === "activity" || directTab === "insights" || directTab === "members") {
+    return directTab;
+  }
+
+  const hashQueryIndex = hash.indexOf("?");
+  if (hashQueryIndex >= 0) {
+    const hashTab = new URLSearchParams(hash.slice(hashQueryIndex + 1)).get("tab");
+    if (hashTab === "review" || hashTab === "activity" || hashTab === "insights" || hashTab === "members") {
+      return hashTab;
+    }
+  }
+
+  return "review";
+}
+
 interface DetailWorkspaceSectionsState {
   originalSignalOpen: boolean;
   attachmentsOpen: boolean;
@@ -4506,7 +4523,9 @@ export function AdminDashboardPage() {
   const [pendingCsvExportForm, setPendingCsvExportForm] = useState<FormSchema | null>(null);
   const [pendingCsvExportResponses, setPendingCsvExportResponses] = useState<Submission[]>([]);
   const [pendingCsvExportOptions, setPendingCsvExportOptions] = useState<ExportResponsesToCsvOptions | null>(null);
-  const [activeWorkspaceTab, setActiveWorkspaceTab] = useState<WorkspaceTab>("review");
+  const [activeWorkspaceTab, setActiveWorkspaceTab] = useState<WorkspaceTab>(() =>
+    readWorkspaceTabFromRoute(location.search, location.hash),
+  );
   const [showShortcutHelp, setShowShortcutHelp] = useState(false);
   const [isReviewerFocusMode, setIsReviewerFocusMode] = useState(false);
   const [isRunningDemoFlow, setIsRunningDemoFlow] = useState(false);
@@ -4564,6 +4583,10 @@ export function AdminDashboardPage() {
     (tab: WorkspaceTab) => {
       if (tab === activeWorkspaceTab) {
         return;
+      }
+      setActiveWorkspaceTab(tab);
+      if (tab === "activity") {
+        setLocalActivityEvents(listActivityEvents());
       }
       const params = new URLSearchParams(location.search);
       params.set("tab", tab);
@@ -5472,16 +5495,12 @@ export function AdminDashboardPage() {
   }, [closeMobileInboxSearch, mobileInboxSearchOpen]);
 
   useEffect(() => {
-    const tab = new URLSearchParams(location.search).get("tab");
-    const nextTab: WorkspaceTab =
-      tab === "review" || tab === "activity" || tab === "insights" || tab === "members" ? tab : "review";
-    if (activeWorkspaceTab !== nextTab) {
-      setActiveWorkspaceTab(nextTab);
-    }
+    const nextTab = readWorkspaceTabFromRoute(location.search, location.hash);
+    setActiveWorkspaceTab((current) => (current === nextTab ? current : nextTab));
     if (nextTab === "activity") {
       setLocalActivityEvents(listActivityEvents());
     }
-  }, [activeWorkspaceTab, location.search]);
+  }, [location.hash, location.search]);
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     if (params.get("scope") === "all" || params.get("form")) {
