@@ -345,3 +345,74 @@
     display: none;
   }
 }
+
+@media (max-width: 390px) {
+  .public-identity-choice-screen {
+    gap: 0.9rem;
+    padding: 0.82rem;
+  }
+
+  .public-identity-choice-copy h1 {
+    font-size: 1.45rem;
+    line-height: 1.12;
+  }
+
+  .public-identity-choice-copy .muted,
+  .public-form-status-strip .muted {
+    font-size: 0.82rem;
+    line-height: 1.42;
+  }
+
+  .public-identity-choice-hero-icon {
+    width: 2.3rem;
+    height: 2.3rem;
+    font-size: 0.78rem;
+  }
+
+  .public-identity-choice-card {
+    padding: 1rem;
+    border-radius: 1.45rem;
+  }
+
+  .public-identity-choice-wallet-shell,
+  .public-identity-choice-wallet-shell .wallet-connect-shell,
+  .public-identity-choice-wallet-shell .wallet-connect-direct,
+  .public-identity-choice-wallet-shell [data-dapp-kit] {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .public-identity-choice-wallet-shell [data-dapp-kit] button,
+  .public-identity-choice-wallet-shell button[data-dapp-kit],
+  .public-identity-choice-wallet-shell .wallet-sync-button {
+    min-width: 0;
+    padding-inline: 0.85rem;
+    font-size: 0.9rem;
+  }
+
+  .public-identity-choice-screen .metadata-list {
+    gap: 0.52rem;
+  }
+
+  .public-identity-choice-screen .metadata-row {
+    padding: 0.72rem 0.78rem;
+    border-radius: 0.9rem;
+  }
+
+  .public-identity-choice-screen .metadata-row span,
+  .public-identity-choice-screen .metadata-row strong {
+    display: block;
+    min-width: 0;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+
+  .public-form-status-badge {
+    min-width: 100%;
+  }
+
+  .public-form-deadline-badge {
+    max-width: 100%;
+  }
+}

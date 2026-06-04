@@ -244,7 +244,7 @@ describe("PublishStep access control UI", () => {
     });
 
     const arts = Array.from(document.querySelectorAll(".publish-nft-preset-art")) as HTMLImageElement[];
-    expect(arts.some((art) => art.getAttribute("src") === "/nft/tally.webp")).toBe(true);
+    expect(arts.some((art) => art.getAttribute("src")?.includes("tally.webp"))).toBe(true);
   });
 
   it("shows an English datetime placeholder overlay when the intake window is empty", () => {

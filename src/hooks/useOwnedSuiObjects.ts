@@ -42,39 +42,44 @@ type OwnedObjectsClient = {
 
 const OWNED_OBJECTS_CACHE_PREFIX = "deepsignal.ownedObjects";
 
+function normalizeSuiTypeName(value: string) {
+  return value.trim().toLowerCase();
+}
+
+export function matchesOwnedObjectType(actualType: string | undefined, requiredType: string) {
+  if (!actualType || !requiredType.trim()) {
+    return false;
+  }
+  const normalizedActual = normalizeSuiTypeName(actualType);
+  const normalizedRequired = normalizeSuiTypeName(requiredType);
+  return normalizedActual === normalizedRequired || normalizedActual.startsWith(`${normalizedRequired}<`);
+}
+
 export async function fetchOwnedSuiObjectsForClient(
   suiClient: OwnedObjectsClient,
   owner: string,
   structTypes: string[] = [],
 ) {
   const normalizedStructTypes = [...new Set(structTypes.map((value) => value.trim()).filter(Boolean))];
-  const matches: OwnedObjectEntry[] = [];
-  const queryStructTypes = normalizedStructTypes.length > 0 ? normalizedStructTypes : [""];
+  const collectedEntries: OwnedObjectEntry[] = [];
+  let cursor: string | null | undefined = null;
 
-  for (const structType of queryStructTypes) {
-    let cursor: string | null | undefined = null;
+  do {
+    const request: OwnedObjectsRequest = {
+      owner,
+      cursor: cursor ?? undefined,
+      options: {
+        showType: true,
+        showContent: true,
+      },
+      limit: 50,
+    };
+    const page = (await suiClient.getOwnedObjects(request)) as OwnedObjectsResponse;
+    collectedEntries.push(...(page.data ?? []));
+    cursor = page.hasNextPage ? page.nextCursor : null;
+  } while (cursor);
 
-    do {
-      const request: OwnedObjectsRequest = {
-        owner,
-        cursor: cursor ?? undefined,
-        options: {
-          showType: true,
-          showContent: true,
-        },
-        limit: 50,
-      };
-      if (structType) {
-        request.filter = { StructType: structType };
-      }
-      const page = (await suiClient.getOwnedObjects(request)) as OwnedObjectsResponse;
-
-      matches.push(...(page.data ?? []));
-      cursor = page.hasNextPage ? page.nextCursor : null;
-    } while (cursor);
-  }
-
-  return matches.reduce<OwnedObjectEntry[]>((unique, entry) => {
+  const uniqueEntries = collectedEntries.reduce<OwnedObjectEntry[]>((unique, entry) => {
     const objectId = entry.data?.objectId?.trim();
     if (!objectId || unique.some((candidate) => candidate.data?.objectId?.trim() === objectId)) {
       return unique;
@@ -82,6 +87,14 @@ export async function fetchOwnedSuiObjectsForClient(
     unique.push(entry);
     return unique;
   }, []);
+
+  if (normalizedStructTypes.length === 0) {
+    return uniqueEntries;
+  }
+
+  return uniqueEntries.filter((entry) =>
+    normalizedStructTypes.some((requiredType) => matchesOwnedObjectType(entry.data?.type, requiredType)),
+  );
 }
 
 export function useOwnedSuiObjects(

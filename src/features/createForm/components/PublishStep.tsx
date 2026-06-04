@@ -1,6 +1,8 @@
 ﻿import { useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
 import { useMemo, useState } from "react";
+import primeNftArt from "../../../assets/nft/prime.avif";
+import tallyNftArt from "../../../assets/nft/tally.webp";
 import { BlobLink } from "../../../components/BlobLink";
 import { CriticalFailurePanel } from "../../../components/CriticalFailurePanel";
 import { ShareCard } from "../../../components/ShareCard";
@@ -9,7 +11,6 @@ import { SuiAddressDisplay } from "../../../components/SuiAddressDisplay";
 import { hasInconsistentPublishState, type CriticalFailure } from "../../../lib/criticalFailure";
 import {
   CUSTOM_NFT_PRESET_ID,
-  getNftGatePresetLabel,
   PRIME_MACHIN_PRESET_ID,
   PRIME_MACHIN_STRUCT_TYPE,
   TALLY_PRESET_ID,
@@ -402,6 +403,7 @@ export function PublishStep({
   void publicPath;
   void publicUrl;
   void identityPolicy;
+  void encryptionWarnings;
   void onChangeIdentityPolicy;
   const isRegisteredOnSui = Boolean(savedForm?.isOnchain && typeof savedForm.onchainFormId === "number");
   const isMirrorMode = displayMode === "mirror";
@@ -422,12 +424,11 @@ export function PublishStep({
   const showLocationRequirementControls = selectedTemplateKey === "disaster-checkin";
   const publishReadyBody = isGuestDraftMode ? t("guestDraftPublishBody") : t("publishReadyBody");
   const selectedNftPresetId = nftGate.presetId ?? CUSTOM_NFT_PRESET_ID;
-  const collectionPresetLabel = getNftGatePresetLabel(selectedNftPresetId);
   const selectedNftPresetArt =
     selectedNftPresetId === PRIME_MACHIN_PRESET_ID
-      ? "/nft/prime.avif"
+      ? primeNftArt
       : selectedNftPresetId === TALLY_PRESET_ID
-        ? "/nft/tally.webp"
+        ? tallyNftArt
         : "";
   const [ownedTypesCopied, setOwnedTypesCopied] = useState(false);
   const dateTimeInputLang = language === "ja" ? "ja-JP" : "en-US";
@@ -531,24 +532,6 @@ export function PublishStep({
       return t("storageLocalFallback");
     }
     return t("walrusCostEstimatePartial");
-  }
-  function getEncryptionWarningMessage(warning: EncryptionReadinessWarning) {
-    switch (warning.kind) {
-      case "project-missing":
-        return t("encryptionProjectMissing");
-      case "seal-env-incomplete":
-        return t("encryptionSealIncomplete");
-      case "walrus-write-unavailable":
-        return t("encryptionWalrusWriteUnavailable");
-      case "network-mismatch":
-        return t("encryptionNetworkMismatch", {
-          endpoint: warning.endpoint ?? "",
-          detectedNetwork: warning.detectedNetwork ?? "",
-          configuredNetwork: warning.configuredNetwork ?? "",
-        });
-      default:
-        return warning.message;
-    }
   }
 
   useEffect(() => {

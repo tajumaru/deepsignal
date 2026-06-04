@@ -1,0 +1,96 @@
+import { describe, expect, it, vi } from "vitest";
+import { fetchOwnedSuiObjectsForClient, matchesOwnedObjectType } from "./useOwnedSuiObjects";
+
+describe("matchesOwnedObjectType", () => {
+  it("matches the exact struct type", () => {
+    expect(
+      matchesOwnedObjectType(
+        "0x75888defd3f392d276643932ae204cd85337a5b8f04335f9f912b6291149f423::nft::Tally",
+        "0x75888defd3f392d276643932ae204cd85337a5b8f04335f9f912b6291149f423::nft::Tally",
+      ),
+    ).toBe(true);
+  });
+
+  it("matches a generic instantiation of the required struct type", () => {
+    expect(
+      matchesOwnedObjectType(
+        "0x75888defd3f392d276643932ae204cd85337a5b8f04335f9f912b6291149f423::nft::Tally<0x2::sui::SUI>",
+        "0x75888defd3f392d276643932ae204cd85337a5b8f04335f9f912b6291149f423::nft::Tally",
+      ),
+    ).toBe(true);
+  });
+
+  it("does not match a different struct name", () => {
+    expect(
+      matchesOwnedObjectType(
+        "0x75888defd3f392d276643932ae204cd85337a5b8f04335f9f912b6291149f423::nft::Other",
+        "0x75888defd3f392d276643932ae204cd85337a5b8f04335f9f912b6291149f423::nft::Tally",
+      ),
+    ).toBe(false);
+  });
+});
+
+describe("fetchOwnedSuiObjectsForClient", () => {
+  it("walks every cursor page before filtering matches", async () => {
+    const getOwnedObjects = vi
+      .fn()
+      .mockResolvedValueOnce({
+        data: [
+          {
+            data: {
+              objectId: "0x1",
+              type: "0x2::example::Noise",
+            },
+          },
+        ],
+        hasNextPage: true,
+        nextCursor: "cursor-2",
+      })
+      .mockResolvedValueOnce({
+        data: [
+          {
+            data: {
+              objectId: "0x2",
+              type: "0x75888defd3f392d276643932ae204cd85337a5b8f04335f9f912b6291149f423::nft::Tally<0x2::sui::SUI>",
+            },
+          },
+        ],
+        hasNextPage: false,
+        nextCursor: null,
+      });
+
+    const result = await fetchOwnedSuiObjectsForClient(
+      { getOwnedObjects },
+      "0xwallet",
+      ["0x75888defd3f392d276643932ae204cd85337a5b8f04335f9f912b6291149f423::nft::Tally"],
+    );
+
+    expect(getOwnedObjects).toHaveBeenCalledTimes(2);
+    expect(getOwnedObjects).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        owner: "0xwallet",
+        cursor: undefined,
+        options: {
+          showType: true,
+          showContent: true,
+        },
+        limit: 50,
+      }),
+    );
+    expect(getOwnedObjects).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        owner: "0xwallet",
+        cursor: "cursor-2",
+        options: {
+          showType: true,
+          showContent: true,
+        },
+        limit: 50,
+      }),
+    );
+    expect(result).toHaveLength(1);
+    expect(result[0]?.data?.objectId).toBe("0x2");
+  });
+});

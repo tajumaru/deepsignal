@@ -107,16 +107,22 @@ export function LivePreview({
           ) : null,
         )}
 
-        {sectionedFields.unsectionedFields.map((field) => (
-          <DynamicField
-            key={field.id}
-            field={field}
-            value={answers[field.id]}
-            questionNumber={questionNumbers.get(field.id)}
-            required={isFieldRequired(field, fields, answers, true)}
-            onChange={(value) => setAnswers((current) => ({ ...current, [field.id]: value }))}
-          />
-        ))}
+        {sectionedFields.unsectionedFields.length ? (
+          <section className="composer-preview-section">
+            <div className="stack composer-preview-fields-stack">
+              {sectionedFields.unsectionedFields.map((field) => (
+                <DynamicField
+                  key={field.id}
+                  field={field}
+                  value={answers[field.id]}
+                  questionNumber={questionNumbers.get(field.id)}
+                  required={isFieldRequired(field, fields, answers, true)}
+                  onChange={(value) => setAnswers((current) => ({ ...current, [field.id]: value }))}
+                />
+              ))}
+            </div>
+          </section>
+        ) : null}
       </div>
     </section>
   );

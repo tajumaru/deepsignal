@@ -51,12 +51,6 @@ const LazyWalletSurface = lazy(() =>
     default: module.WalletSurface,
   })),
 );
-const LazyWalrusRuntimeSurface = lazy(() =>
-  retryLazyImport(() => import("../components/WalrusRuntimeSurface"), "public-walrus-runtime-surface").then((module) => ({
-    default: module.WalrusRuntimeSurface,
-  })),
-);
-
 const SUCCESS_MASCOT_PRELOAD_ID = "deepsignal-success-mascot-preload";
 const SUCCESS_MASCOT_WEBP_SRCSET = "/mascot-sealed.webp 1x, /mascot-sealed@2x.webp 2x";
 
@@ -177,6 +171,15 @@ export function PublicFormPage() {
   const attachWallet = walletModeSelected;
   const walletFallback = <div className="wallet-connect-shell wallet-connect-shell-compact" />;
   const nftGate = usePublicNftGate(form, resolvedWalletAddress);
+  const nftDebugInfo = nftGate.debugInfo ?? {
+    connectedAddress: resolvedWalletAddress,
+    requiredType: nftGate.nftGate?.structType,
+    fetchedObjectCount: 0,
+    firstObjectTypes: [],
+    matchedObjectId: undefined,
+    matchedType: undefined,
+    lastError: undefined,
+  };
   const nftSubmitGateEnabled = nftRequired && nftGate.submitGateActive;
   const {
     answers,
@@ -286,16 +289,14 @@ export function PublicFormPage() {
 
     return (
       <LazyWalletSurface fallback={fallback}>
-        <LazyWalrusRuntimeSurface fallback={fallback}>
-          <div className={className} {...containerProps}>
-            <Suspense fallback={fallback}>
-              <LazyPublicWalletAccountPanel
-                onAccountAddressChange={handleWalletAccountAddressChange}
-                onWalletProviderChange={handleWalletProviderChange}
-              />
-            </Suspense>
-          </div>
-        </LazyWalrusRuntimeSurface>
+        <div className={className} {...containerProps}>
+          <Suspense fallback={fallback}>
+            <LazyPublicWalletAccountPanel
+              onAccountAddressChange={handleWalletAccountAddressChange}
+              onWalletProviderChange={handleWalletProviderChange}
+            />
+          </Suspense>
+        </div>
       </LazyWalletSurface>
     );
   }
@@ -836,13 +837,27 @@ export function PublicFormPage() {
         </div>
         {nftGate.isChecking ? <p className="muted">{t("publicNftGateChecking")}</p> : null}
         {!resolvedWalletAddress ? (
-          <>
-            <p className="muted">{t("publicNftGateConnectPrompt")}</p>
-            {renderWalletAccountPanel({ className: "public-identity-choice-wallet-shell" })}
-          </>
+          <p className="muted">{t("publicNftGateConnectPrompt")}</p>
         ) : null}
+        {renderWalletAccountPanel({
+          className: "public-identity-choice-wallet-shell",
+        })}
         {nftGate.gateError ? <p className="error-text">{nftGate.gateError}</p> : null}
-        {resolvedWalletAddress && !nftGate.isChecking ? (
+        {import.meta.env.DEV && resolvedWalletAddress ? (
+          <details className="answer-card answer-card-plain">
+            <summary>NFT gate debug</summary>
+            <pre className="muted">{JSON.stringify({
+              connectedAddress: nftDebugInfo.connectedAddress,
+              requiredType: nftDebugInfo.requiredType,
+              fetchedObjectCount: nftDebugInfo.fetchedObjectCount,
+              matchedObjectId: nftDebugInfo.matchedObjectId,
+              matchedType: nftDebugInfo.matchedType,
+              first10ObjectTypes: nftDebugInfo.firstObjectTypes,
+              lastError: nftDebugInfo.lastError,
+            }, null, 2)}</pre>
+          </details>
+        ) : null}
+        {resolvedWalletAddress && nftGate.hasResolvedOwnership && !nftGate.isChecking ? (
           <p className="error-text">{t("publicNftGateNotEligible")}</p>
         ) : null}
       </section>
@@ -899,9 +914,25 @@ export function PublicFormPage() {
           <p className="muted">{`${t("publishNftStructTypeLabel")}: ${nftGate.nftGate.structType}`}</p>
         ) : null}
         {nftGate.isChecking ? <p className="muted">{t("publicNftGateChecking")}</p> : null}
-        {!resolvedWalletAddress ? renderWalletAccountPanel({ className: "public-identity-choice-wallet-shell" }) : null}
+        {renderWalletAccountPanel({
+          className: "public-identity-choice-wallet-shell",
+        })}
         {nftGate.gateError ? <p className="error-text">{nftGate.gateError}</p> : null}
-        {resolvedWalletAddress && !nftGate.isChecking && nftGate.submitGateActive && !nftGate.meetsRequirement ? (
+        {import.meta.env.DEV && resolvedWalletAddress ? (
+          <details className="answer-card answer-card-plain">
+            <summary>NFT gate debug</summary>
+            <pre className="muted">{JSON.stringify({
+              connectedAddress: nftDebugInfo.connectedAddress,
+              requiredType: nftDebugInfo.requiredType,
+              fetchedObjectCount: nftDebugInfo.fetchedObjectCount,
+              matchedObjectId: nftDebugInfo.matchedObjectId,
+              matchedType: nftDebugInfo.matchedType,
+              first10ObjectTypes: nftDebugInfo.firstObjectTypes,
+              lastError: nftDebugInfo.lastError,
+            }, null, 2)}</pre>
+          </details>
+        ) : null}
+        {resolvedWalletAddress && nftGate.hasResolvedOwnership && !nftGate.isChecking && nftGate.submitGateActive && !nftGate.meetsRequirement ? (
           <p className="error-text">{t("publicNftGateNotEligible")}</p>
         ) : null}
       </section>

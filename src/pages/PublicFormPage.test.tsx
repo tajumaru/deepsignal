@@ -250,6 +250,13 @@ describe("PublicFormPage shared manifest restore", () => {
       ownedCount: 0,
       meetsRequirement: true,
       canViewForm: true,
+      hasResolvedOwnership: true,
+      debugInfo: {
+        connectedAddress: undefined,
+        requiredType: undefined,
+        fetchedObjectCount: 0,
+        firstObjectTypes: [],
+      },
       gateError: "",
       recheckAccess: vi.fn(async () => ({
         checkedAt: new Date().toISOString(),
@@ -506,6 +513,72 @@ describe("PublicFormPage shared manifest restore", () => {
 
     await waitFor(() => expect(mockSaveSubmission).toHaveBeenCalledTimes(1));
     expect(screen.queryByText(/sending it requires/i)).not.toBeInTheDocument();
+  });
+
+  it("keeps the NFT gate in checking state without showing not-holder before ownership resolves", async () => {
+    const form: FormSchema = {
+      id: "form-123",
+      title: "NFT Gated Signal",
+      description: "Only holders can proceed.",
+      fields: [],
+      createdAt: "2026-05-14T00:00:00.000Z",
+      accessMode: "nft_required",
+      nftGate: {
+        network: "sui-mainnet",
+        structType: PRIME_MACHIN_STRUCT_TYPE,
+        requiredCount: 1,
+        gateViewing: true,
+        gateSubmission: true,
+        collectionLabel: "Prime Machin",
+        presetId: "prime_machin",
+      },
+    };
+
+    mockUseCurrentAccount.mockReturnValue({ address: "0xholder" });
+    mockUseCurrentWallet.mockReturnValue({
+      currentWallet: { name: "Mock Wallet" },
+      connectionStatus: "connected",
+      isConnected: true,
+      isConnecting: false,
+      supportedIntents: [],
+    });
+    mockReadManifestWithForm.mockResolvedValue({
+      manifest: {
+        version: 1,
+        formId: "form-123",
+        createdAt: "2026-05-14T00:00:00.000Z",
+        updatedAt: "2026-05-14T00:00:00.000Z",
+        formBlobId: "__bundled_form__",
+        submissions: [],
+      },
+      form,
+    });
+    mockUsePublicNftGate.mockReturnValue({
+      accessMode: "nft_required",
+      nftGate: form.nftGate,
+      nftRequired: true,
+      viewGateActive: true,
+      submitGateActive: true,
+      isChecking: true,
+      ownedCount: 0,
+      meetsRequirement: false,
+      canViewForm: false,
+      hasResolvedOwnership: false,
+      debugInfo: {
+        connectedAddress: "0xholder",
+        requiredType: PRIME_MACHIN_STRUCT_TYPE,
+        fetchedObjectCount: 0,
+        firstObjectTypes: [],
+      },
+      gateError: "",
+      recheckAccess: vi.fn(),
+    });
+
+    renderPublicFormPage("/f/form-123?manifest=blob-abc&step=answer&identity=wallet");
+
+    await waitFor(() => expect(screen.getByRole("heading", { name: "NFT Gated Signal" })).toBeInTheDocument());
+    expect(screen.getByText("Checking NFT ownership...")).toBeInTheDocument();
+    expect(screen.queryByText("This wallet does not currently meet the NFT holder requirement.")).not.toBeInTheDocument();
   });
 
   it("clears local recovery once a public submission reaches the owner inbox", async () => {
@@ -1200,6 +1273,78 @@ describe("PublicFormPage shared manifest restore", () => {
     await waitFor(() => expect(screen.getByRole("heading", { name: "Prime Holder Signal" })).toBeInTheDocument());
     expect(screen.getByText("Connect wallet to verify NFT ownership.")).toBeInTheDocument();
     await waitFor(() => expect(screen.getByRole("button", { name: "Connect" })).toBeInTheDocument());
+  });
+
+  it("keeps the wallet connection panel visible on the nft gate screen after a wallet connects", async () => {
+    const form: FormSchema = {
+      id: "form-123",
+      title: "Prime Holder Signal",
+      description: "Only Prime Machin holders can respond.",
+      fields: [
+        {
+          id: "field-1",
+          type: "shortText",
+          label: "What happened?",
+          required: true,
+          sensitive: false,
+        },
+      ],
+      createdAt: "2026-05-14T00:00:00.000Z",
+      accessMode: "nft_required",
+      identityPolicy: "wallet_required",
+      nftGate: {
+        network: "sui-mainnet",
+        structType: PRIME_MACHIN_STRUCT_TYPE,
+        requiredCount: 1,
+        gateViewing: true,
+        gateSubmission: true,
+        collectionLabel: "Prime Machin",
+        presetId: "prime_machin",
+      },
+    };
+
+    mockUseCurrentAccount.mockReturnValue({
+      address: "0xabc123",
+    });
+    mockUseCurrentWallet.mockReturnValue({
+      currentWallet: { name: "Sui Wallet" },
+      connectionStatus: "connected",
+      isConnected: true,
+      isConnecting: false,
+      supportedIntents: [],
+    });
+    mockReadManifestWithForm.mockResolvedValue({
+      manifest: {
+        version: 1,
+        formId: "form-123",
+        createdAt: "2026-05-14T00:00:00.000Z",
+        updatedAt: "2026-05-14T00:00:00.000Z",
+        formBlobId: "__bundled_form__",
+        submissions: [],
+      },
+      form,
+    });
+    mockUsePublicNftGate.mockReturnValue({
+      accessMode: "nft_required",
+      nftGate: form.nftGate,
+      nftRequired: true,
+      viewGateActive: true,
+      submitGateActive: true,
+      isChecking: true,
+      ownedCount: 0,
+      meetsRequirement: false,
+      canViewForm: false,
+      gateError: "",
+      recheckAccess: vi.fn(),
+    });
+
+    const { container } = renderPublicFormPage("/f/form-123?manifest=blob-abc");
+
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Prime Holder Signal" })).toBeInTheDocument());
+    await waitFor(() =>
+      expect(container.querySelector(".public-identity-choice-wallet-shell")).not.toBeNull(),
+    );
+    expect(container.querySelector(".public-identity-choice-wallet-shell[aria-hidden='true']")).toBeNull();
   });
 
   it("stores nft access verification metadata before submission", async () => {
