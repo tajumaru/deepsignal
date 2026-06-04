@@ -304,8 +304,8 @@ describe("PublicFormPage shared manifest restore", () => {
 
     await waitFor(() => expect(screen.getByRole("heading", { name: "Shared Feedback Form" })).toBeInTheDocument());
     const answerInput = screen.getByRole("textbox");
-    fireEvent.change(answerInput, { target: { value: "Anonymous fallback still submits." } });
-    await waitFor(() => expect(answerInput).toHaveValue("Anonymous fallback still submits."));
+    fireEvent.input(answerInput, { target: { value: "Anonymous fallback still submits." } });
+    await waitFor(() => expect(screen.getByRole("textbox")).toHaveValue("Anonymous fallback still submits."));
     fireEvent.click(screen.getByRole("button", { name: SUBMIT_SIGNAL_BUTTON }));
 
     await waitFor(() => expect(mockSaveSubmission).toHaveBeenCalledTimes(1));

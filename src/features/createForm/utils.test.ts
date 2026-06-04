@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { createDefaultNftGate, CUSTOM_NFT_PRESET_ID } from "../../lib/formAccess";
+import {
+  createDefaultNftGate,
+  CUSTOM_NFT_PRESET_ID,
+  PRIME_MACHIN_COLLECTION_LABEL,
+  PRIME_MACHIN_PRESET_ID,
+} from "../../lib/formAccess";
 import { computeSchemaHash } from "../../lib/formVersioning";
 import { buildFormSchema, createField } from "./utils";
 
@@ -139,5 +144,18 @@ describe("buildFormSchema", () => {
       structType: "0xprime::machin::PrimeMachin",
       requiredCount: 2,
     });
+  });
+
+  it("keeps the Prime Machin preset stable even before the canonical struct type is configured", () => {
+    const gate = createDefaultNftGate(PRIME_MACHIN_PRESET_ID);
+
+    expect(gate).toMatchObject({
+      presetId: PRIME_MACHIN_PRESET_ID,
+      collectionLabel: PRIME_MACHIN_COLLECTION_LABEL,
+      requiredCount: 1,
+      gateViewing: true,
+      gateSubmission: true,
+    });
+    expect(typeof gate.structType).toBe("string");
   });
 });

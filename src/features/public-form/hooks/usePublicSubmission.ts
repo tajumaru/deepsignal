@@ -447,6 +447,7 @@ export function usePublicSubmission({
   const [locationState, setLocationState] = useState<SubmissionLocationCaptureState>("idle");
   const [locationMessage, setLocationMessage] = useState("");
   const activeAttachmentUploadsRef = useRef(new Set<string>());
+  const isMountedRef = useRef(true);
   const submitPipelineStageRef = useRef<SignalPipelineStage>("idle");
   const lastFormResetKeyRef = useRef<string | null>(null);
   const effectiveIdentityMode =
@@ -465,6 +466,13 @@ export function usePublicSubmission({
           !canWrite;
 
   useEffect(() => installSignalContextCapture(), []);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (!canWrite) {
@@ -1687,9 +1695,9 @@ export function usePublicSubmission({
         buildMyResponseHistoryEntry,
         upsertMyResponseHistoryEntry,
       } = await import("../../../storage/myResponseHistory");
-      const latestWalrusRuntime = await import("../../../lib/walrus")
+      const latestWalrusRuntime = (await import("../../../lib/walrus")
         .then(({ getWalrusMutationRuntimeStatus }) => getWalrusMutationRuntimeStatus())
-        .catch(() => walrusRuntime);
+        .catch(() => walrusRuntime)) ?? walrusRuntime ?? DEFAULT_WALRUS_RUNTIME_STATUS;
       if (isWalrusRuntimePreparingError(error)) {
         console.warn("[public submission] Walrus runtime was not ready for submission.", {
           error,
@@ -1780,7 +1788,9 @@ export function usePublicSubmission({
         }),
       );
     } finally {
-      setSubmitting(false);
+      if (isMountedRef.current) {
+        setSubmitting(false);
+      }
     }
   }
 

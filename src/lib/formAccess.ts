@@ -4,6 +4,8 @@ import type { FormAccessMode, FormIdentityPolicy, FormNftGate, FormSchema } from
 export const PRIME_MACHIN_PRESET_ID = "prime_machin" as const;
 export const CUSTOM_NFT_PRESET_ID = "custom" as const;
 export const PRIME_MACHIN_COLLECTION_LABEL = "Prime Machin";
+// TODO(nft-gated-signals): Replace this env-driven fallback with the canonical
+// Prime Machin struct type once the collection contract is finalized for production.
 export const PRIME_MACHIN_STRUCT_TYPE = String(import.meta.env.VITE_PRIME_MACHIN_STRUCT_TYPE || "").trim();
 
 export function getCurrentFormNftNetwork(): FormNftGate["network"] {

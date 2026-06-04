@@ -63,6 +63,8 @@ export function usePublicNftGate(form: FormSchema | null, walletAddress?: string
     }
     setIsChecking(true);
     try {
+      // Reuse the same owned-object fetch path as useOwnedSuiObjects while keeping
+      // Mysten wallet/query code out of the public route's initial bundle.
       const { fetchOwnedSuiObjectsForClient } = await import("../../../hooks/useOwnedSuiObjects");
       const client = {
         async getOwnedObjects(request: unknown) {
