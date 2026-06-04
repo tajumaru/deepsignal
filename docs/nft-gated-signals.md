@@ -396,6 +396,7 @@ Recommended options:
 
 When `NFT Holders Only` is selected, show:
 
+- `Collection Preset`
 - `Struct Type`
 - `Required Count`
 - `Gate Viewing` toggle
@@ -407,6 +408,53 @@ Recommended defaults:
 - `gateSubmission: true`
 - `requiredCount: 1`
 
+### Initial collection preset
+
+First release should support a predefined collection preset for Prime Machin.
+
+Recommended builder UX:
+
+- `Prime Machin Holders`
+- `Custom Struct Type`
+
+Recommended behavior:
+
+- selecting `Prime Machin Holders` auto-fills the canonical Prime Machin `structType`
+- `requiredCount` defaults to `1`
+- the operator can still adjust `requiredCount`
+- the operator does not need to manually know or paste the Prime Machin type string
+- selecting `Custom Struct Type` reveals the raw `structType` input
+
+Recommended internal model:
+
+```ts
+interface FormNftGate {
+  preset?: "prime_machin" | "custom";
+  structType: string;
+  requiredCount: number;
+  gateViewing: boolean;
+  gateSubmission: boolean;
+}
+```
+
+Why add `preset`:
+
+- builder UX needs a stable, operator-friendly selection
+- stored forms should still persist the resolved `structType`
+- future releases can add more curated presets without changing the top-level access model
+
+Recommended publish behavior:
+
+- always persist the final resolved `structType`
+- persist `preset: "prime_machin"` when the preset was chosen
+- persist `preset: "custom"` when the operator typed the struct type manually
+
+Recommended safety rule:
+
+- if the Prime Machin preset mapping changes in code later, already-published forms must continue to rely on their saved `structType`, not a newly remapped preset value
+
+This keeps published gates deterministic and avoids retroactively changing access rules.
+
 ### Draft and publish plumbing
 
 Add the new fields to:
@@ -416,6 +464,12 @@ Add the new fields to:
 - draft parsing
 - `buildFormSchema(...)`
 - publish summary UI
+
+Also add a small preset registry in create-form code, for example:
+
+- a local constant or helper that maps `prime_machin` -> canonical `structType`
+
+This should stay UI-focused and should not introduce special-case logic into storage or encryption layers.
 
 ### Relationship to existing `identityPolicy`
 
@@ -681,6 +735,7 @@ Add data model and normalization support.
 - extend `FormSchema`
 - add normalization defaults
 - keep backward-compatible fallback from `identityPolicy`
+- add optional NFT preset persistence
 
 ### Step 2
 
@@ -689,6 +744,7 @@ Add create/publish state and draft serialization.
 - builder state
 - publish UI
 - form schema construction
+- Prime Machin preset autofill
 
 ### Step 3
 
