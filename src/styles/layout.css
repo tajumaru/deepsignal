@@ -77,6 +77,38 @@
   font-size: 1.8rem;
 }
 
+.route-status-panel-compact {
+  width: min(100%, 39rem);
+  margin: clamp(1.1rem, 8vh, 3rem) auto;
+  padding: 1rem;
+}
+
+.route-status-panel-compact .eyebrow {
+  margin-bottom: 0.35rem;
+}
+
+.route-status-panel-compact h1 {
+  font-size: clamp(1.45rem, 4vw, 2rem);
+  line-height: 1.05;
+}
+
+.route-status-panel-compact .muted {
+  max-width: 46ch;
+  margin-top: 0.35rem;
+  margin-bottom: 0;
+}
+
+.route-status-panel-compact .inline-actions {
+  gap: 0.55rem;
+  margin-top: 0.85rem;
+}
+
+.route-status-panel-compact .inline-actions .primary-button,
+.route-status-panel-compact .inline-actions .ghost-button {
+  min-height: 2.5rem;
+  padding: 0.68rem 1rem;
+}
+
 .route-status-panel p:last-child {
   margin-bottom: 0;
 }
@@ -126,6 +158,23 @@
   background: rgba(0, 0, 0, 0.24);
   color: var(--text);
   font-size: 0.78rem;
+}
+
+.route-diagnostics-panel-compact {
+  margin-top: 0.8rem;
+  padding: 0.7rem 0.75rem;
+}
+
+.route-diagnostics-panel-compact summary {
+  font-size: 0.92rem;
+}
+
+.route-diagnostics-panel-compact .route-status-diagnostics {
+  max-height: 10rem;
+  margin-top: 0.65rem;
+  padding: 0.65rem;
+  font-size: 0.74rem;
+  line-height: 1.45;
 }
 
 .brand {
@@ -1292,6 +1341,30 @@ fieldset {
 }
 
 @media (max-width: 720px) {
+  .route-status-panel-compact {
+    width: min(100%, 100%);
+    margin: 0.75rem auto;
+    padding: 0.9rem;
+  }
+
+  .route-status-panel-compact h1 {
+    font-size: 1.7rem;
+  }
+
+  .route-status-panel-compact .inline-actions {
+    gap: 0.5rem;
+  }
+
+  .route-status-panel-compact .inline-actions .primary-button,
+  .route-status-panel-compact .inline-actions .ghost-button {
+    min-height: 2.35rem;
+    padding: 0.62rem 0.9rem;
+  }
+
+  .route-diagnostics-panel-compact .route-status-diagnostics {
+    max-height: 8rem;
+  }
+
   .recoverable-draft-banner {
     grid-template-columns: 1fr;
     row-gap: 0.85rem;

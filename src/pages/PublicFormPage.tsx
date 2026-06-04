@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent, type ReactNode } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { DynamicField } from "../components/DynamicField";
 import { EmptyState } from "../components/EmptyState";
@@ -177,6 +177,7 @@ export function PublicFormPage() {
   const attachWallet = walletModeSelected;
   const walletFallback = <div className="wallet-connect-shell wallet-connect-shell-compact" />;
   const nftGate = usePublicNftGate(form, resolvedWalletAddress);
+  const nftSubmitGateEnabled = nftRequired && nftGate.submitGateActive;
   const {
     answers,
     errors,
@@ -231,7 +232,7 @@ export function PublicFormPage() {
     locationFailedLabel: t("locationFailedLabel"),
     zkLoginSessionExpiredLabel: t("publicZkLoginSessionExpired"),
     zkLoginProviderLabel: t("publicZkLoginProvider"),
-    recheckNftAccess: nftGate.recheckAccess,
+    recheckNftAccess: nftSubmitGateEnabled ? nftGate.recheckAccess : undefined,
   });
 
   useEffect(() => {
@@ -266,6 +267,38 @@ export function PublicFormPage() {
   const handleWalletProviderChange = useCallback((provider?: string) => {
     setWalletProvider(provider);
   }, []);
+
+  function renderWalletAccountPanel({
+    fallback = walletFallback,
+    hidden = false,
+    className,
+  }: {
+    fallback?: ReactNode;
+    hidden?: boolean;
+    className?: string;
+  } = {}) {
+    const containerProps = hidden
+      ? ({
+          "aria-hidden": true,
+          style: { display: "none" },
+        } as const)
+      : undefined;
+
+    return (
+      <LazyWalletSurface fallback={fallback}>
+        <LazyWalrusRuntimeSurface fallback={fallback}>
+          <div className={className} {...containerProps}>
+            <Suspense fallback={fallback}>
+              <LazyPublicWalletAccountPanel
+                onAccountAddressChange={handleWalletAccountAddressChange}
+                onWalletProviderChange={handleWalletProviderChange}
+              />
+            </Suspense>
+          </div>
+        </LazyWalrusRuntimeSurface>
+      </LazyWalletSurface>
+    );
+  }
 
   const groupedFields = useMemo(() => {
     if (!form) {
@@ -731,18 +764,7 @@ export function PublicFormPage() {
               <li>{t("publicIdentityChoiceWalletPoint3")}</li>
             </ul>
             {walletSelected || walletRequired ? (
-              <div className="public-identity-choice-wallet-shell">
-                <LazyWalletSurface fallback={walletFallback}>
-                  <LazyWalrusRuntimeSurface fallback={walletFallback}>
-                    <Suspense fallback={walletFallback}>
-                      <LazyPublicWalletAccountPanel
-                        onAccountAddressChange={handleWalletAccountAddressChange}
-                        onWalletProviderChange={handleWalletProviderChange}
-                      />
-                    </Suspense>
-                  </LazyWalrusRuntimeSurface>
-                </LazyWalletSurface>
-              </div>
+              renderWalletAccountPanel({ className: "public-identity-choice-wallet-shell" })
             ) : null}
             <button
               type="button"
@@ -780,58 +802,107 @@ export function PublicFormPage() {
   if (nftRequired && nftGate.viewGateActive && !nftGate.canViewForm) {
     return (
       <section className="panel glow-panel public-identity-choice-screen" aria-label="NFT gated signal">
-        {walletModeSelected ? (
-          <LazyWalletSurface fallback={null}>
-            <LazyWalrusRuntimeSurface fallback={null}>
-              <div aria-hidden="true" style={{ display: "none" }}>
-                <Suspense fallback={null}>
-                  <LazyPublicWalletAccountPanel
-                    onAccountAddressChange={handleWalletAccountAddressChange}
-                    onWalletProviderChange={handleWalletProviderChange}
-                  />
-                </Suspense>
-              </div>
-            </LazyWalrusRuntimeSurface>
-          </LazyWalletSurface>
-        ) : null}
         <div className="public-identity-choice-hero">
           <div className="public-identity-choice-copy">
             <div className="public-identity-choice-title-row">
               <span className="public-identity-choice-hero-icon" aria-hidden="true">NFT</span>
-              <p className="eyebrow">Holder gate</p>
+              <p className="eyebrow">{t("publicNftGateEyebrow")}</p>
             </div>
             <h1>{form.title}</h1>
             <p className="muted">
-              This signal is available only to eligible NFT holders. Connect a wallet that holds the required collection to continue.
+              {t("publicNftGateBody")}
             </p>
           </div>
         </div>
         <div className="metadata-list">
           <div className="metadata-row">
-            <span>Collection</span>
-            <strong>{nftGate.nftGate?.collectionLabel ?? "Custom Struct Type"}</strong>
+            <span>{t("publicNftGateCollectionLabel")}</span>
+            <strong>{nftGate.nftGate?.collectionLabel ?? t("publishNftCustomPresetLabel")}</strong>
           </div>
           <div className="metadata-row">
-            <span>Required count</span>
+            <span>{t("publicNftGateRequiredCountLabel")}</span>
             <strong>{nftGate.nftGate?.requiredCount ?? 1}</strong>
           </div>
           <div className="metadata-row">
-            <span>Owned count</span>
+            <span>{t("publicNftGateOwnedCountLabel")}</span>
             <strong>{nftGate.ownedCount}</strong>
           </div>
           {nftGate.nftGate?.structType ? (
             <div className="metadata-row">
-              <span>Struct Type</span>
+              <span>{t("publishNftStructTypeLabel")}</span>
               <strong>{nftGate.nftGate.structType}</strong>
             </div>
           ) : null}
         </div>
-        {nftGate.isChecking ? <p className="muted">Checking NFT ownership...</p> : null}
-        {nftGate.gateError ? <p className="error-text">{nftGate.gateError}</p> : null}
+        {nftGate.isChecking ? <p className="muted">{t("publicNftGateChecking")}</p> : null}
         {!resolvedWalletAddress ? (
-          <p className="error-text">Connect a wallet to verify NFT ownership.</p>
-        ) : !nftGate.isChecking ? (
-          <p className="error-text">This wallet does not currently meet the NFT holder requirement.</p>
+          <>
+            <p className="muted">{t("publicNftGateConnectPrompt")}</p>
+            {renderWalletAccountPanel({ className: "public-identity-choice-wallet-shell" })}
+          </>
+        ) : null}
+        {nftGate.gateError ? <p className="error-text">{nftGate.gateError}</p> : null}
+        {resolvedWalletAddress && !nftGate.isChecking ? (
+          <p className="error-text">{t("publicNftGateNotEligible")}</p>
+        ) : null}
+      </section>
+    );
+  }
+
+  function renderInlineNftGateCard() {
+    if (!nftRequired || nftGate.viewGateActive) {
+      return null;
+    }
+
+    const collectionLabel = nftGate.nftGate?.collectionLabel ?? t("publishNftCustomPresetLabel");
+    const statusCopy = nftGate.submitGateActive
+      ? !resolvedWalletAddress
+        ? t("publicNftGateSubmitConnectPrompt")
+        : nftGate.isChecking
+          ? t("publicNftGateCheckingConnected")
+          : nftGate.meetsRequirement
+            ? t("publicNftGateEligible")
+            : t("publicNftGateVisibleSubmitRestricted")
+      : t("publicNftGateVisibleWithoutVerification");
+
+    return (
+      <section className="answer-card answer-card-plain public-nft-inline-card" aria-label={t("publicNftGateInlineAriaLabel")}>
+        <div className="section-row">
+          <div>
+            <p className="eyebrow">{t("publicNftGateInlineEyebrow")}</p>
+            <h3>{collectionLabel}</h3>
+            <p className="muted">{statusCopy}</p>
+          </div>
+          <span className={`signal-chip ${nftGate.meetsRequirement ? "signal-chip-success" : "signal-chip-muted"}`}>
+            {nftGate.submitGateActive
+              ? nftGate.meetsRequirement
+                ? t("publicNftGateEligibleBadge")
+                : t("publicNftGateVerificationNeededBadge")
+              : t("publicNftGateViewOnlyBadge")}
+          </span>
+        </div>
+        <div className="metadata-list">
+          <div className="metadata-row">
+            <span>{t("publicNftGateRequiredCountLabel")}</span>
+            <strong>{nftGate.nftGate?.requiredCount ?? 1}</strong>
+          </div>
+          <div className="metadata-row">
+            <span>{t("publicNftGateOwnedCountLabel")}</span>
+            <strong>{nftGate.ownedCount}</strong>
+          </div>
+          <div className="metadata-row">
+            <span>{t("networkLabel")}</span>
+            <strong>{nftGate.nftGate?.network ?? t("notAvailable")}</strong>
+          </div>
+        </div>
+        {nftGate.nftGate?.structType ? (
+          <p className="muted">{`${t("publishNftStructTypeLabel")}: ${nftGate.nftGate.structType}`}</p>
+        ) : null}
+        {nftGate.isChecking ? <p className="muted">{t("publicNftGateChecking")}</p> : null}
+        {!resolvedWalletAddress ? renderWalletAccountPanel({ className: "public-identity-choice-wallet-shell" }) : null}
+        {nftGate.gateError ? <p className="error-text">{nftGate.gateError}</p> : null}
+        {resolvedWalletAddress && !nftGate.isChecking && nftGate.submitGateActive && !nftGate.meetsRequirement ? (
+          <p className="error-text">{t("publicNftGateNotEligible")}</p>
         ) : null}
       </section>
     );
@@ -886,20 +957,7 @@ export function PublicFormPage() {
 
   return (
     <form className={`panel glow-panel public-form ${publicFormExpanded ? "is-expanded" : ""}`} onSubmit={handleSubmit}>
-      {walletModeSelected ? (
-        <LazyWalletSurface fallback={null}>
-          <LazyWalrusRuntimeSurface fallback={null}>
-            <div aria-hidden="true" style={{ display: "none" }}>
-              <Suspense fallback={null}>
-                <LazyPublicWalletAccountPanel
-                  onAccountAddressChange={handleWalletAccountAddressChange}
-                  onWalletProviderChange={handleWalletProviderChange}
-                />
-              </Suspense>
-            </div>
-          </LazyWalrusRuntimeSurface>
-        </LazyWalletSurface>
-      ) : null}
+      {walletModeSelected ? renderWalletAccountPanel({ hidden: true, fallback: null }) : null}
       <div className="public-form-header-frame">
         <FormHeaderImage
           image={form.headerImage}
@@ -977,6 +1035,7 @@ export function PublicFormPage() {
           onDiscard={discardDraft}
         />
       ) : null}
+      {renderInlineNftGateCard()}
 
       <div className="stack public-form-fields">
         <div className="public-progress-row" aria-live="polite">

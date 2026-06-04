@@ -94,6 +94,30 @@
     scroll-snap-align: start;
   }
 
+  .composer-flow-step-state {
+    position: static;
+    top: auto;
+    right: auto;
+    grid-column: 2;
+    grid-row: 2;
+    justify-self: start;
+    min-height: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    font-size: 0.62rem;
+    line-height: 1;
+  }
+
+  .composer-flow-step-index {
+    grid-row: 1 / span 2;
+  }
+
+  .composer-flow-step-copy {
+    grid-column: 2;
+    min-width: 0;
+  }
+
   .composer-flow-step-copy small {
     display: block;
     font-size: 0.73rem;

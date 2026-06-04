@@ -11,15 +11,31 @@ export const BOOT_MIN_VISIBLE_MS = 1250;
 export const BOOT_EXIT_DURATION_MS = 380;
 export const BOOT_FAILSAFE_MS = 2500;
 
-export function InitialBootReady({ onReady, routePath, children }: { onReady: () => void; routePath: string; children: ReactNode }) {
+export function InitialBootReady({
+  onReady,
+  routePath,
+  workspaceReady = true,
+  children,
+}: {
+  onReady: () => void;
+  routePath: string;
+  workspaceReady?: boolean;
+  children: ReactNode;
+}) {
   useEffect(() => {
     endPerf("app_boot_start", "ok", routePath);
     endPerf("app:render", "ok");
     markPerfMilestone("route_ready", routePath);
     markPerfMilestone("route:interactive", routePath);
-    markPerfMilestone("workspace:ready", routePath);
     onReady();
   }, [onReady, routePath]);
+
+  useEffect(() => {
+    if (!workspaceReady) {
+      return;
+    }
+    markPerfMilestone("workspace:ready", routePath);
+  }, [routePath, workspaceReady]);
 
   return createElement(Fragment, null, children);
 }

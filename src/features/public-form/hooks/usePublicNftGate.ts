@@ -77,8 +77,10 @@ export function usePublicNftGate(form: FormSchema | null, walletAddress?: string
           };
           const response = await fetch(rpc.currentRpcUrl, {
             method: "POST",
+            // Keep this as a simple CORS request. Some public Sui fullnodes reject
+            // browser preflight for application/json even though the RPC itself is reachable.
             headers: {
-              "Content-Type": "application/json",
+              "Content-Type": "text/plain;charset=UTF-8",
             },
             body: JSON.stringify({
               jsonrpc: "2.0",

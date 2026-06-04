@@ -9,6 +9,7 @@ import {
   recordBuildAsset,
   recoverFromMixedBuildAssets,
 } from "./lib/buildAssetDiagnostics";
+import { isDashboardWorkspaceReady, useDashboardProjectRestore, useDashboardProjectRestoreSnapshot } from "./lib/dashboardProjectRestore";
 import { retryLazyImport } from "./lib/lazyRetry";
 import { markPerfMilestone } from "./lib/perf";
 import { logRouteLifecycle, setDeepSignalDebugReadiness } from "./lib/routeDiagnostics";
@@ -54,19 +55,24 @@ function RouteReady({
   children,
   routePath,
   onReady,
+  workspaceReady = true,
 }: {
   children: ReactNode;
   routePath: string;
   onReady: () => void;
+  workspaceReady?: boolean;
 }) {
   return (
-    <InitialBootReady routePath={routePath} onReady={onReady}>
+    <InitialBootReady routePath={routePath} onReady={onReady} workspaceReady={workspaceReady}>
       {children}
     </InitialBootReady>
   );
 }
 
-function AppRouteRuntimeEffects({ enabled }: { enabled: boolean }) {
+function AppRouteRuntimeEffects({ enabled, routePath }: { enabled: boolean; routePath: string }) {
+  const dashboardProjectRestore = useDashboardProjectRestoreSnapshot();
+  const dashboardShellRoute = routePath === "/dashboard" || routePath.startsWith("/dashboard?");
+
   useEffect(() => {
     if (!enabled) {
       setDeepSignalDebugReadiness({
@@ -85,9 +91,16 @@ function AppRouteRuntimeEffects({ enabled }: { enabled: boolean }) {
           return;
         }
         const storageRuntime = storageFactory.getStorageRuntimeStatus();
+        const workspaceProjectProvider =
+          dashboardShellRoute &&
+          (dashboardProjectRestore.state === "unknown" || dashboardProjectRestore.state === "restoring")
+            ? "restoring"
+            : projectRegistry.getSelectedProjectId()
+              ? "selected"
+              : "empty";
         setDeepSignalDebugReadiness({
           routeProviderGuard: "ready",
-          workspaceProjectProvider: projectRegistry.getSelectedProjectId() ? "selected" : "empty",
+          workspaceProjectProvider,
           storageProvider: storageRuntime.mode,
           storageNotice: storageRuntime.notice,
         });
@@ -99,7 +112,7 @@ function AppRouteRuntimeEffects({ enabled }: { enabled: boolean }) {
     return () => {
       cancelled = true;
     };
-  }, [enabled]);
+  }, [dashboardProjectRestore.state, dashboardShellRoute, enabled]);
 
   useEffect(() => {
     if (!enabled) {
@@ -174,6 +187,7 @@ function PrivateRouteSurface({
   routeIsDashboardShell,
   routePath,
   routeRetryNonce,
+  workspaceReady,
 }: {
   components: AppRouteComponents;
   locationKey: string;
@@ -185,10 +199,11 @@ function PrivateRouteSurface({
   routeIsDashboardShell: boolean;
   routePath: string;
   routeRetryNonce: number;
+  workspaceReady: boolean;
 }) {
   const shellFallback =
     routeIsDashboardShell ? (
-      <RouteReady routePath={routePath} onReady={onRouteReady}>
+      <RouteReady routePath={routePath} onReady={onRouteReady} workspaceReady={false}>
         <DashboardDegradedShell onRetryImports={onRetryRoute} routePath={routePath} />
       </RouteReady>
     ) : (
@@ -204,14 +219,14 @@ function PrivateRouteSurface({
       <Suspense fallback={shellFallback}>
         <AppShell walletAvailable={routeNeedsWalletSurface} chrome="full">
           <BuildUpdateBanner />
-          <AppRouteRuntimeEffects enabled={routeNeedsWorkspaceBoot} />
+          <AppRouteRuntimeEffects enabled={routeNeedsWorkspaceBoot} routePath={routePath} />
           {mixedBuildStatus.detected ? (
             <RouteReady routePath={routePath} onReady={onRouteReady}>
               <MixedBuildRecoveryScreen observed={mixedBuildStatus.observed} />
             </RouteReady>
           ) : (
             <Suspense fallback={<DelayedWorkspaceRestoreFallback />}>
-              <RouteReady routePath={routePath} onReady={onRouteReady}>
+              <RouteReady routePath={routePath} onReady={onRouteReady} workspaceReady={workspaceReady}>
                 <ProviderReadinessBarrier routePath={routePath} enabled={routeNeedsWorkspaceBoot}>
                   <AppRoutes components={components} onRetryRoute={onRetryRoute} routeRetryNonce={routeRetryNonce} />
                 </ProviderReadinessBarrier>
@@ -250,6 +265,9 @@ export default function App() {
     location.pathname.startsWith("/admin/") ||
     location.pathname.startsWith("/dashboard/");
   const routeNeedsWorkspaceBoot = !routeIsLanding && !routeUsesPublicChrome;
+  const routePath = `${location.pathname}${location.search}${location.hash}`;
+  const dashboardProjectRestore = useDashboardProjectRestore(routePath, location.pathname === "/dashboard");
+  const workspaceReadyForRoute = location.pathname === "/dashboard" ? isDashboardWorkspaceReady(dashboardProjectRestore) : true;
 
   useBootOverlay({
     bootDismissed,
@@ -290,6 +308,12 @@ export default function App() {
   }, [location.hash, location.pathname, location.search, routeNeedsWalletSurface, routeUsesPublicChrome]);
 
   useEffect(() => {
+    setDeepSignalDebugReadiness({
+      workspaceReady: workspaceReadyForRoute,
+    });
+  }, [workspaceReadyForRoute]);
+
+  useEffect(() => {
     if (
       routeNeedsWalletSurface ||
       (location.pathname !== "/dashboard" && !location.pathname.startsWith("/dashboard/"))
@@ -318,8 +342,6 @@ export default function App() {
     }
     return scheduleIdleTask(() => prefetchInboxWorkspaceRoute(), location.pathname === "/" ? 1400 : 900);
   }, [location.pathname, routeUsesPublicChrome]);
-
-  const routePath = `${location.pathname}${location.search}${location.hash}`;
 
   if (routeIsLanding) {
     return (
@@ -368,6 +390,7 @@ export default function App() {
       routeIsDashboardShell={location.pathname === "/dashboard"}
       routePath={routePath}
       routeRetryNonce={routeRetryNonce}
+      workspaceReady={workspaceReadyForRoute}
     />
   );
 

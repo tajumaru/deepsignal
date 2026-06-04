@@ -213,7 +213,7 @@ interface FormNftGate {
   gateViewing: boolean;
   gateSubmission: boolean;
   collectionLabel?: string;
-  presetId?: "prime_machin" | "custom";
+  presetId?: "prime_machin" | "tally" | "custom";
   futureSealPolicy?: {
     eligible: boolean;
     policyMode: "none" | "nft_ownership_decrypt";
@@ -467,18 +467,13 @@ Recommended form metadata behavior:
 
 That means published forms must always be governed by their saved `structType`, not by whatever the preset registry says later.
 
-### If Prime Machin struct type is not finalized
+### Prime Machin canonical struct type
 
-If the exact Prime Machin `structType` is not yet confirmed:
+Prime Machin now has a canonical `structType`:
 
-- still add the preset in UI and type design
-- do not allow save/publish when the resolved `structType` is empty
-- treat the preset as incomplete configuration until the canonical type is known
+- `0x034c162f6b594cb5a1805264dd01ca5d80ce3eca6522e6ee37fd9ebfb9d3ddca::factory::PrimeMachin`
 
-Recommended design-note behavior:
-
-- the preset option can exist
-- the form is not publishable until the underlying struct type is resolved
+The preset registry should resolve `prime_machin` to that exact value. Published forms must still persist the resolved `structType` in `nftGate`, so future preset metadata changes do not alter access rules for already-published signals.
 
 ### Debugging owned object types
 
@@ -674,7 +669,7 @@ This is the core safety boundary for Phase 1.
 - builder supports `Public`, `Wallet Required`, `NFT Holders Only`
 - Prime Machin preset auto-fills defaults
 - custom mode requires struct type entry
-- unresolved Prime Machin struct type prevents save/publish
+- Prime Machin preset resolves to the canonical struct type
 
 ### Platform and bundle tests
 

@@ -1,6 +1,7 @@
 import { buildInfo } from "../lib/buildInfo";
 import { getChunkFailureUrl } from "../lib/chunkLoadRecovery";
 import {
+  getBrowserCapabilitiesSnapshot,
   getCurrentRoutePath,
   isMobileSafariLike,
   logRouteLifecycle,
@@ -83,6 +84,10 @@ function normalizeError(input: SystemSignalInput): NormalizedRuntimeError {
 }
 
 function isMobileSafari(userAgent: string) {
+  const snapshot = getBrowserCapabilitiesSnapshot();
+  if (typeof snapshot.userAgent === "string" && snapshot.userAgent === userAgent && typeof snapshot.mobileSafari === "boolean") {
+    return snapshot.mobileSafari;
+  }
   return isMobileSafariLike(
     userAgent,
     typeof navigator === "undefined" ? "" : navigator.platform || "",

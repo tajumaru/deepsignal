@@ -1,17 +1,8 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { buildInfo } from "../lib/buildInfo";
+import { useDashboardProjectRestoreSnapshot } from "../lib/dashboardProjectRestore";
 import { formatRouteLifecycleDiagnostics, logRouteLifecycle } from "../lib/routeDiagnostics";
-
-const SELECTED_PROJECT_ID_KEY = "deepsignal.projectRegistry.selectedProjectId";
-
-function readCurrentProjectId() {
-  try {
-    return window.localStorage.getItem(SELECTED_PROJECT_ID_KEY) ?? "";
-  } catch {
-    return "";
-  }
-}
 
 export function DashboardShellFirstPanel({
   onRetryWalletRuntime,
@@ -22,21 +13,26 @@ export function DashboardShellFirstPanel({
   routePath: string;
   walletStatusMessage?: string;
 }) {
-  const [currentProjectId, setCurrentProjectId] = useState(() => readCurrentProjectId());
+  const restoreSnapshot = useDashboardProjectRestoreSnapshot();
   const [copiedDiagnostics, setCopiedDiagnostics] = useState(false);
+  const currentProjectId = restoreSnapshot.currentProjectId;
+  const restorePending = restoreSnapshot.state === "unknown" || restoreSnapshot.state === "restoring";
 
   useEffect(() => {
-    logRouteLifecycle(currentProjectId ? "dashboard:shell-render" : "dashboard:empty-project-state-render", {
+    const eventName = restorePending
+      ? "dashboard:empty-project-state-blocked"
+      : currentProjectId
+        ? "dashboard:shell-render"
+        : "dashboard:empty-project-state-render";
+    logRouteLifecycle(eventName, {
       routePath,
       currentProjectId: currentProjectId || "",
-      walletRuntime: "deferred",
+      walletRuntime: restoreSnapshot.walletRuntime,
+      projectRestoreState: restoreSnapshot.state,
+      projectRestoreSource: restoreSnapshot.source,
       buildVersion: buildInfo.appVersion,
     });
-
-    const refresh = () => setCurrentProjectId(readCurrentProjectId());
-    window.addEventListener("storage", refresh);
-    return () => window.removeEventListener("storage", refresh);
-  }, [currentProjectId, routePath]);
+  }, [currentProjectId, restorePending, restoreSnapshot.source, restoreSnapshot.state, restoreSnapshot.walletRuntime, routePath]);
 
   async function handleCopyDiagnostics() {
     try {
@@ -52,9 +48,13 @@ export function DashboardShellFirstPanel({
     <main className="dashboard-degraded-shell" role="main" aria-label="Signal Intelligence Workspace">
       <section className="panel glow-panel route-status-panel" role="status">
         <p className="eyebrow">Signal Intelligence Workspace</p>
-        <h1>{currentProjectId ? "Dashboard shell ready" : "Choose or create a signal project"}</h1>
+        <h1>
+          {restorePending ? "Restoring signal project" : currentProjectId ? "Dashboard shell ready" : "Choose or create a signal project"}
+        </h1>
         <p className="muted">
-          The dashboard shell is usable while protected wallet-only controls finish loading. Local fallback data is preserved.
+          {restorePending
+            ? "DeepSignal is keeping the dashboard shell interactive while wallet and project restore settle. Local fallback data is preserved."
+            : "The dashboard shell is usable while protected wallet-only controls finish loading. Local fallback data is preserved."}
         </p>
         <dl className="route-status-metadata">
           <div>
@@ -70,8 +70,12 @@ export function DashboardShellFirstPanel({
             <dd>{currentProjectId || "empty"}</dd>
           </div>
           <div>
+            <dt>Project restore</dt>
+            <dd>{restoreSnapshot.state}</dd>
+          </div>
+          <div>
             <dt>Wallet runtime</dt>
-            <dd>{walletStatusMessage}</dd>
+            <dd>{restorePending ? `${walletStatusMessage} (${restoreSnapshot.walletRuntime})` : walletStatusMessage}</dd>
           </div>
         </dl>
         <div className="inline-actions">

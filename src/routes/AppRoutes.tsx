@@ -6,7 +6,12 @@ import { WalrusRuntimeSurface } from "../components/WalrusRuntimeSurface";
 import { WalletSurface } from "../components/WalletSurface";
 import { buildInfo } from "../lib/buildInfo";
 import { getChunkFailureUrl } from "../lib/chunkLoadRecovery";
-import { logRouteLifecycle } from "../lib/routeDiagnostics";
+import {
+  markDashboardWalletImportFailed,
+  markDashboardWalletImportReady,
+  markDashboardWalletImportStarted,
+} from "../lib/dashboardProjectRestore";
+import { getBrowserCapabilitiesSnapshot, logRouteLifecycle } from "../lib/routeDiagnostics";
 import { REQUIRE_GLOBAL_WALRUS_RUNTIME } from "../lib/runtimeFlags";
 import type { AppRouteComponents } from "./appRouteComponents";
 
@@ -61,6 +66,7 @@ function WithDeferredWalletRuntime({ children, onRetry }: { children: ReactNode;
 
   const handleWalletImportFailure = useCallback(
     (details: { buildVersion: string; mobileSafari: boolean; retryCount: number; retryKey: string | number; routePath: string }) => {
+      markDashboardWalletImportFailed(routePath);
       logRouteLifecycle("dashboard:wallet-runtime-fallback-render", {
         ...details,
         routePath,
@@ -76,6 +82,8 @@ function WithDeferredWalletRuntime({ children, onRetry }: { children: ReactNode;
         fallback={<DashboardShellFirstPanel onRetryWalletRuntime={handleRetry} routePath={routePath} />}
         onImportFailure={handleWalletImportFailure}
         onImportSlow={handleWalletImportSlow}
+        onImportStart={() => markDashboardWalletImportStarted(routePath)}
+        onImportSuccess={() => markDashboardWalletImportReady(routePath)}
         retryKey={walletRetryNonce}
       >
         {children}
@@ -108,11 +116,15 @@ class WalletRuntimeBoundary extends Component<WalletRuntimeBoundaryProps, Wallet
       chunkUrl: null,
       errorName: error instanceof Error ? error.name : "Error",
       errorMessage: error instanceof Error ? error.message : String(error ?? "Unknown wallet runtime failure"),
-      mobileSafari: typeof navigator === "undefined" ? false : /iP(?:hone|ad|od)/.test(navigator.userAgent),
+      mobileSafari: Boolean(getBrowserCapabilitiesSnapshot().mobileSafari),
       recoveryScope: "wallet-only",
       routePath: this.props.routePath,
       componentStack: errorInfo.componentStack,
     });
+    markDashboardWalletImportFailed(
+      this.props.routePath,
+      error instanceof Error ? error.message : String(error ?? "Unknown wallet runtime failure"),
+    );
   }
 
   componentDidUpdate(previousProps: WalletRuntimeBoundaryProps) {

@@ -1,6 +1,19 @@
 /* Composer and builder responsive overrides. */
 
 @media (max-width: 900px) {
+  .publish-quick-controls {
+    grid-template-columns: 1fr;
+  }
+
+  .publish-quick-card-grid,
+  .publish-quick-card-grid-three {
+    grid-template-columns: 1fr;
+  }
+
+  .publish-response-window-grid {
+    grid-template-columns: 1fr;
+  }
+
   .composer-home-hero,
   .composer-home-grid,
   .composer-home-draft-list,
@@ -265,6 +278,9 @@
   }
 
   .composer-radio-options-three,
+  .publish-access-layout,
+  .publish-nft-diagnostic-summary,
+  .publish-nft-toggle-grid,
   .signal-identity-layout,
   .composer-header-logo-grid,
   .composer-header-image-grid {
@@ -298,6 +314,16 @@
 
   .signal-position-selector {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .publish-nft-diagnostic-actions,
+  .publish-nft-diagnostic-item {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .publish-nft-diagnostic-item-actions {
+    justify-content: space-between;
   }
 
   .composer-live-preview .rating-picker {

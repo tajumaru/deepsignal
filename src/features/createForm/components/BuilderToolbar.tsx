@@ -38,20 +38,25 @@ export function BuilderToolbar({
     { key: "fields", title: "Step 3", description: t("stepFieldsDescription") },
     { key: "publish", title: "Step 4", description: t("stepPublishDescription") },
   ];
+  const hasActions = Boolean(savedFormId);
 
   return (
-    <div className={`composer-toolbar panel ${isScrolled ? "is-scrolled" : ""}`}>
+    <div className={`composer-toolbar panel ${isScrolled ? "is-scrolled" : ""} ${hasActions ? "has-actions" : "no-actions"}`}>
       <div className="composer-toolbar-copy">
         <p className="eyebrow">{t("builderEyebrow")}</p>
         <h1>{t("builderTitle")}</h1>
         <p className="muted composer-intro">{t("composerIntro")}</p>
-        {capabilityConfigured ? (
-          <p className="muted">
-            {t("accessRoleLabel")}: {accessRoleLabel}
-            {adminCapLabel ? ` (${adminCapLabel})` : ""}
-          </p>
+        {capabilityConfigured || draftStateLabel ? (
+          <div className="composer-toolbar-meta">
+            {capabilityConfigured ? (
+              <span className="composer-toolbar-meta-item">
+                {t("accessRoleLabel")}: {accessRoleLabel}
+                {adminCapLabel ? ` (${adminCapLabel})` : ""}
+              </span>
+            ) : null}
+            {draftStateLabel ? <span className="composer-toolbar-meta-item composer-draft-status">{draftStateLabel}</span> : null}
+          </div>
         ) : null}
-        {draftStateLabel ? <p className="muted composer-draft-status">{draftStateLabel}</p> : null}
       </div>
 
       <FormBuilderSteps

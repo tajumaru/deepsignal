@@ -3,8 +3,9 @@ import { FormHeaderImage } from "../../../components/FormHeaderImage";
 import type { FormHeaderImagePosition, SignalProcessingMode, Translate } from "../types";
 import { StepNavigationActions } from "./StepNavigationActions";
 
-const MAX_HEADER_IMAGE_BYTES = 2 * 1024 * 1024;
+const MAX_HEADER_IMAGE_BYTES = 1 * 1024 * 1024;
 type HeaderAssetSource = "upload" | "url";
+type HeaderLogoSource = "none" | "upload" | "url";
 
 const RichTextEditor = lazy(() =>
   import("../../../components/RichTextEditor").then((module) => ({
@@ -30,7 +31,7 @@ interface InfoStepProps {
   headerLogo: {
     url: string;
     alt: string;
-    source: "url" | "upload";
+    source: "none" | "url" | "upload";
     fileName: string;
   };
   setTitle: (value: string) => void;
@@ -45,7 +46,7 @@ interface InfoStepProps {
   setHeaderLogo: (value: {
     url: string;
     alt: string;
-    source: "url" | "upload";
+    source: "none" | "url" | "upload";
     fileName: string;
   }) => void;
   setProcessingMode: (value: SignalProcessingMode) => void;
@@ -128,11 +129,13 @@ export function InfoStep({
     });
   }
 
-  function setHeaderLogoSource(source: HeaderAssetSource) {
+  function setHeaderLogoSource(source: HeaderLogoSource) {
     setHeaderLogo({
       ...headerLogo,
+      url: source === "none" ? "" : headerLogo.url,
+      alt: source === "none" ? "" : headerLogo.alt,
       source,
-      fileName: source === "url" ? "" : headerLogo.fileName,
+      fileName: source === "url" || source === "none" ? "" : headerLogo.fileName,
     });
   }
 
@@ -292,7 +295,7 @@ export function InfoStep({
                   t={t}
                   label={t("signalCoverSourceLabel")}
                   value={headerImage.source}
-                  onChange={setHeaderImageSource}
+                  onChange={(source) => setHeaderImageSource(source === "none" ? "url" : source)}
                 />
 
                 {headerImage.source === "upload" ? (
@@ -372,7 +375,7 @@ export function InfoStep({
                     <button
                       type="button"
                       className="ghost-button signal-asset-clear-button"
-                      onClick={() => setHeaderLogo({ url: "", alt: "", source: "url", fileName: "" })}
+                      onClick={() => setHeaderLogo({ url: "", alt: "", source: "none", fileName: "" })}
                     >
                       {t("headerLogoClear")}
                     </button>
@@ -387,10 +390,16 @@ export function InfoStep({
               label={t("signalLogoSourceLabel")}
               value={headerLogo.source}
               onChange={setHeaderLogoSource}
+              options={["none", "upload", "url"]}
             />
 
             <div className="composer-header-logo-grid">
-              {headerLogo.source === "upload" ? (
+              {headerLogo.source === "none" ? (
+                <div className="signal-asset-empty-state">
+                  <strong>{t("headerLogoNoneTitle")}</strong>
+                  <p className="muted">{t("headerLogoNoneHelp")}</p>
+                </div>
+              ) : headerLogo.source === "upload" ? (
                 <HeaderAssetDropzone
                   t={t}
                   label={t("headerLogoUpload")}
@@ -442,14 +451,15 @@ export function InfoStep({
 interface SourceSegmentedControlProps {
   t: Translate;
   label: string;
-  value: HeaderAssetSource;
-  onChange: (source: HeaderAssetSource) => void;
+  value: HeaderLogoSource;
+  onChange: (source: HeaderLogoSource) => void;
+  options?: HeaderLogoSource[];
 }
 
-function SourceSegmentedControl({ t, label, value, onChange }: SourceSegmentedControlProps) {
+function SourceSegmentedControl({ t, label, value, onChange, options = ["upload", "url"] }: SourceSegmentedControlProps) {
   return (
     <div className="signal-source-control" role="group" aria-label={label}>
-      {(["upload", "url"] as HeaderAssetSource[]).map((source) => (
+      {options.map((source) => (
         <button
           key={source}
           type="button"
@@ -457,7 +467,7 @@ function SourceSegmentedControl({ t, label, value, onChange }: SourceSegmentedCo
           aria-pressed={value === source}
           onClick={() => onChange(source)}
         >
-          {source === "upload" ? t("signalSourceUpload") : t("signalSourceUrl")}
+          {source === "none" ? t("signalSourceNone") : source === "upload" ? t("signalSourceUpload") : t("signalSourceUrl")}
         </button>
       ))}
     </div>

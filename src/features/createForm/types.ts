@@ -87,7 +87,7 @@ export interface FormBuilderValues {
   headerLogo: {
     url: string;
     alt: string;
-    source: "url" | "upload";
+    source: "none" | "url" | "upload";
     fileName: string;
   };
   fields: FormField[];

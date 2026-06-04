@@ -5,6 +5,18 @@ type DiagnosticDetails = Record<string, unknown>;
 type ReadinessState = Record<string, unknown>;
 const SELECTED_PROJECT_ID_KEY = "deepsignal.projectRegistry.selectedProjectId";
 
+export type BrowserCapabilities = {
+  mobileSafari?: boolean;
+  userAgent?: string;
+  platform?: string;
+  maxTouchPoints?: number;
+  standalonePwa?: boolean;
+  hasIndexedDB?: boolean;
+  hasLocalStorage?: boolean;
+  hasCryptoSubtle?: boolean;
+  hasBigInt?: boolean;
+};
+
 export type ChunkProbe = {
   bodyEmpty?: boolean;
   bodyHash?: string;
@@ -188,11 +200,12 @@ export function isMobileSafariLike(userAgent: string, platform = "", maxTouchPoi
   return Boolean(isIosDevice && isWebKit && (isSafari || isWalletInAppBrowser) && !isExcludedChromiumOrFirefox);
 }
 
-export function updateBrowserCapabilityDiagnostics() {
+export function detectBrowserCapabilities(): BrowserCapabilities {
   if (typeof navigator === "undefined") {
-    return;
+    return {};
   }
-  setDeepSignalBrowserCapabilities({
+
+  return {
     mobileSafari: isMobileSafariLike(navigator.userAgent || "", navigator.platform || "", navigator.maxTouchPoints ?? 0),
     userAgent: navigator.userAgent || "",
     platform: navigator.platform || "",
@@ -205,7 +218,38 @@ export function updateBrowserCapabilityDiagnostics() {
     hasLocalStorage: typeof window !== "undefined" && "localStorage" in window,
     hasCryptoSubtle: typeof crypto !== "undefined" && Boolean(crypto.subtle),
     hasBigInt: typeof BigInt !== "undefined",
-  });
+  };
+}
+
+export function getBrowserCapabilitiesSnapshot(): BrowserCapabilities {
+  if (typeof window === "undefined") {
+    return detectBrowserCapabilities();
+  }
+
+  const state = getDebugState();
+  const snapshot = state.browserCapabilities as BrowserCapabilities;
+  if (typeof snapshot.mobileSafari === "boolean" && typeof snapshot.userAgent === "string" && snapshot.userAgent.length > 0) {
+    return snapshot;
+  }
+
+  const detected = detectBrowserCapabilities();
+  setDeepSignalBrowserCapabilities(detected);
+  return {
+    ...snapshot,
+    ...detected,
+  };
+}
+
+export function isMobileSafariRuntime() {
+  return Boolean(getBrowserCapabilitiesSnapshot().mobileSafari);
+}
+
+export function updateBrowserCapabilityDiagnostics() {
+  const capabilities = detectBrowserCapabilities();
+  if (Object.keys(capabilities).length === 0) {
+    return;
+  }
+  setDeepSignalBrowserCapabilities(capabilities);
 }
 
 function updateDeepSignalDebug(

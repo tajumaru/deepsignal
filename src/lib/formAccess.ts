@@ -2,11 +2,14 @@ import { SUI_NETWORK } from "./sui";
 import type { FormAccessMode, FormIdentityPolicy, FormNftGate, FormSchema } from "../types";
 
 export const PRIME_MACHIN_PRESET_ID = "prime_machin" as const;
+export const TALLY_PRESET_ID = "tally" as const;
 export const CUSTOM_NFT_PRESET_ID = "custom" as const;
 export const PRIME_MACHIN_COLLECTION_LABEL = "Prime Machin";
-// TODO(nft-gated-signals): Replace this env-driven fallback with the canonical
-// Prime Machin struct type once the collection contract is finalized for production.
-export const PRIME_MACHIN_STRUCT_TYPE = String(import.meta.env.VITE_PRIME_MACHIN_STRUCT_TYPE || "").trim();
+export const TALLY_COLLECTION_LABEL = "Tally";
+export const PRIME_MACHIN_STRUCT_TYPE =
+  "0x034c162f6b594cb5a1805264dd01ca5d80ce3eca6522e6ee37fd9ebfb9d3ddca::factory::PrimeMachin";
+export const TALLY_STRUCT_TYPE =
+  "0x75888defd3f392d276643932ae204cd85337a5b8f04335f9f912b6291149f423::nft::Tally";
 
 export function getCurrentFormNftNetwork(): FormNftGate["network"] {
   return SUI_NETWORK === "mainnet" ? "sui-mainnet" : "sui-testnet";
@@ -56,7 +59,7 @@ export function normalizeFormNftGate(
     gateSubmission: gate.gateSubmission !== false,
     collectionLabel: typeof gate.collectionLabel === "string" ? gate.collectionLabel.trim() || undefined : undefined,
     presetId:
-      gate.presetId === PRIME_MACHIN_PRESET_ID || gate.presetId === CUSTOM_NFT_PRESET_ID
+      gate.presetId === PRIME_MACHIN_PRESET_ID || gate.presetId === TALLY_PRESET_ID || gate.presetId === CUSTOM_NFT_PRESET_ID
         ? gate.presetId
         : undefined,
     futureSealPolicy:
@@ -108,6 +111,21 @@ export function createDefaultNftGate(presetId: FormNftGate["presetId"] = CUSTOM_
       },
     };
   }
+  if (presetId === TALLY_PRESET_ID) {
+    return {
+      network: getCurrentFormNftNetwork(),
+      structType: TALLY_STRUCT_TYPE,
+      requiredCount: 1,
+      gateViewing: true,
+      gateSubmission: true,
+      collectionLabel: TALLY_COLLECTION_LABEL,
+      presetId,
+      futureSealPolicy: {
+        eligible: true,
+        policyMode: "none",
+      },
+    };
+  }
   return {
     network: getCurrentFormNftNetwork(),
     structType: "",
@@ -126,6 +144,9 @@ export function createDefaultNftGate(presetId: FormNftGate["presetId"] = CUSTOM_
 export function getNftGatePresetLabel(presetId?: FormNftGate["presetId"]) {
   if (presetId === PRIME_MACHIN_PRESET_ID) {
     return PRIME_MACHIN_COLLECTION_LABEL;
+  }
+  if (presetId === TALLY_PRESET_ID) {
+    return TALLY_COLLECTION_LABEL;
   }
   return "Custom Struct Type";
 }

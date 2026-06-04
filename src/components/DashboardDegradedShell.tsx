@@ -1,17 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { buildInfo } from "../lib/buildInfo";
+import { useDashboardProjectRestoreSnapshot } from "../lib/dashboardProjectRestore";
 import { formatRouteLifecycleDiagnostics, logRouteLifecycle } from "../lib/routeDiagnostics";
 import { LocalRecoveryCenter } from "./LocalRecoveryCenter";
-
-const SELECTED_PROJECT_ID_KEY = "deepsignal.projectRegistry.selectedProjectId";
-
-function readCurrentProjectId() {
-  try {
-    return window.localStorage.getItem(SELECTED_PROJECT_ID_KEY) ?? "";
-  } catch {
-    return "";
-  }
-}
 
 function canClearAssetCache() {
   return typeof window !== "undefined" && "caches" in window;
@@ -43,7 +34,8 @@ export function DashboardDegradedShell({
   statusMessage?: string;
   statusTitle?: string;
 }) {
-  const [currentProjectId, setCurrentProjectId] = useState(() => readCurrentProjectId());
+  const restoreSnapshot = useDashboardProjectRestoreSnapshot();
+  const currentProjectId = restoreSnapshot.currentProjectId;
   const [cacheStatus, setCacheStatus] = useState("");
   const [clearingCache, setClearingCache] = useState(false);
   const [copiedDiagnostics, setCopiedDiagnostics] = useState(false);
@@ -53,13 +45,12 @@ export function DashboardDegradedShell({
     logRouteLifecycle("dashboard:degraded-shell-render", {
       routePath,
       currentProjectId: currentProjectId || "",
+      projectRestoreState: restoreSnapshot.state,
+      projectRestoreSource: restoreSnapshot.source,
+      walletRuntime: restoreSnapshot.walletRuntime,
       buildVersion: buildInfo.appVersion,
     });
-
-    const refresh = () => setCurrentProjectId(readCurrentProjectId());
-    window.addEventListener("storage", refresh);
-    return () => window.removeEventListener("storage", refresh);
-  }, [currentProjectId, routePath]);
+  }, [currentProjectId, restoreSnapshot.source, restoreSnapshot.state, restoreSnapshot.walletRuntime, routePath]);
 
   async function handleClearAssetCache() {
     setClearingCache(true);
@@ -116,6 +107,10 @@ export function DashboardDegradedShell({
           <div>
             <dt>currentProjectId</dt>
             <dd>{currentProjectId || "empty"}</dd>
+          </div>
+          <div>
+            <dt>Project restore</dt>
+            <dd>{restoreSnapshot.state}</dd>
           </div>
         </dl>
         <div className="inline-actions">

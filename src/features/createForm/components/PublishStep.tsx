@@ -1,5 +1,6 @@
-import { useEffect, useRef } from "react";
+﻿import { useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
+import { useMemo, useState } from "react";
 import { BlobLink } from "../../../components/BlobLink";
 import { CriticalFailurePanel } from "../../../components/CriticalFailurePanel";
 import { ShareCard } from "../../../components/ShareCard";
@@ -10,8 +11,11 @@ import {
   CUSTOM_NFT_PRESET_ID,
   getNftGatePresetLabel,
   PRIME_MACHIN_PRESET_ID,
+  PRIME_MACHIN_STRUCT_TYPE,
+  TALLY_PRESET_ID,
 } from "../../../lib/formAccess";
 import { LivePreview } from "../../../components/formBuilder/LivePreview";
+import { useOwnedSuiObjects } from "../../../hooks/useOwnedSuiObjects";
 import { isLocalFallbackBlob } from "../../../lib/proof";
 import { toDateTimeLocalValue } from "../../../lib/responseDeadline";
 import { SUI_NETWORK } from "../../../lib/sui";
@@ -43,6 +47,7 @@ import type {
 
 interface PublishStepProps {
   t: Translate;
+  language: "en" | "ja";
   saving: boolean;
   registeringOnSui: boolean;
   error: string;
@@ -61,7 +66,7 @@ interface PublishStepProps {
   headerLogo: FormHeaderLogo | {
     url: string;
     alt: string;
-    source?: "url" | "upload";
+    source?: "none" | "url" | "upload";
     fileName?: string;
   };
   fields: FormField[];
@@ -182,16 +187,68 @@ function SignalPrivacyIcon({ locked }: { locked: boolean }) {
   );
 }
 
-function AnonymousRiskIcon() {
+function AccessModeGlyph({ mode }: { mode: FormAccessMode }) {
+  if (mode === "wallet_required") {
+    return (
+      <svg viewBox="0 0 24 24" role="img" aria-hidden="true" focusable="false">
+        <path d="M4.5 7.5h12a2.5 2.5 0 0 1 2.5 2.5v6a2.5 2.5 0 0 1-2.5 2.5h-12A2.5 2.5 0 0 1 2 16V10a2.5 2.5 0 0 1 2.5-2.5Z" />
+        <path d="M15.5 12h4.5v3.2h-4.5A1.6 1.6 0 0 1 13.9 13.6v0A1.6 1.6 0 0 1 15.5 12Z" />
+        <path d="M6.5 7.5V6.8A2.8 2.8 0 0 1 9.3 4h7.2" />
+      </svg>
+    );
+  }
+
+  if (mode === "nft_required") {
+    return (
+      <svg viewBox="0 0 24 24" role="img" aria-hidden="true" focusable="false">
+        <path d="M12 3.5 18.5 6v5.2c0 4.1-2.6 7.7-6.5 9.3-3.9-1.6-6.5-5.2-6.5-9.3V6L12 3.5Z" />
+        <path d="M9.5 12.2 11.2 14l3.6-4.1" />
+      </svg>
+    );
+  }
+
   return (
     <svg viewBox="0 0 24 24" role="img" aria-hidden="true" focusable="false">
-      <path d="M7 10.2c.8-3 2.4-4.5 5-4.5s4.2 1.5 5 4.5" />
-      <path d="M7.7 10.2h8.6l-1 3.2H8.7l-1-3.2Z" />
-      <path d="M9.2 13.4c.5 1.2 1.4 2 2.8 2s2.3-.8 2.8-2" />
-      <path d="M4.7 20c1.5-2.7 4-4.1 7.3-4.1s5.8 1.4 7.3 4.1" />
-      <path d="m17.7 4.7 1.8-1.8M6.3 4.7 4.5 2.9" />
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M3.5 12h17" />
+      <path d="M12 3.5a13.8 13.8 0 0 1 0 17" />
+      <path d="M12 3.5a13.8 13.8 0 0 0 0 17" />
     </svg>
   );
+}
+
+function VisibilityGlyph({ mode }: { mode: FormVisibility }) {
+  if (mode === "private") {
+    return (
+      <svg viewBox="0 0 24 24" role="img" aria-hidden="true" focusable="false">
+        <path d="M12 4.2 18 6.6v4.8c0 3.8-2.4 7.1-6 8.5-3.6-1.4-6-4.7-6-8.5V6.6l6-2.4Z" />
+        <path d="M9.8 11.8 11.4 13.5l3.2-3.6" />
+      </svg>
+    );
+  }
+
+  if (mode === "unlisted") {
+    return (
+      <svg viewBox="0 0 24 24" role="img" aria-hidden="true" focusable="false">
+        <path d="M9.2 8.8 7.4 10.6a2.8 2.8 0 0 0 0 4l2 2a2.8 2.8 0 0 0 4 0l1.8-1.8" />
+        <path d="m10.2 13.8 3.6-3.6" />
+        <path d="M14.8 15.2 16.6 13.4a2.8 2.8 0 0 0 0-4l-2-2a2.8 2.8 0 0 0-4 0L8.8 9.2" />
+      </svg>
+    );
+  }
+
+  return (
+    <svg viewBox="0 0 24 24" role="img" aria-hidden="true" focusable="false">
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M3.5 12h17" />
+      <path d="M12 3.5a13.8 13.8 0 0 1 0 17" />
+      <path d="M12 3.5a13.8 13.8 0 0 0 0 17" />
+    </svg>
+  );
+}
+
+function getDateTimePlaceholder(language: "en" | "ja") {
+  return language === "ja" ? "年/月/日 --:--" : "MM/DD/YYYY --:--";
 }
 
 const analysisProfileLabelKeys: Record<AnalysisProfileId, string> = {
@@ -276,6 +333,7 @@ function getLensActionCopy(t: Translate, signalType?: AnalysisSignalType, analys
 
 export function PublishStep({
   t,
+  language,
   saving,
   registeringOnSui,
   error,
@@ -343,6 +401,8 @@ export function PublishStep({
 }: PublishStepProps) {
   void publicPath;
   void publicUrl;
+  void identityPolicy;
+  void onChangeIdentityPolicy;
   const isRegisteredOnSui = Boolean(savedForm?.isOnchain && typeof savedForm.onchainFormId === "number");
   const isMirrorMode = displayMode === "mirror";
   const hideLivePreview = isMirrorMode;
@@ -361,28 +421,17 @@ export function PublishStep({
   const visibleSelectedProject = canManageProjects ? selectedProject : null;
   const showLocationRequirementControls = selectedTemplateKey === "disaster-checkin";
   const publishReadyBody = isGuestDraftMode ? t("guestDraftPublishBody") : t("publishReadyBody");
-  const isProjectEncryptedForm = Boolean(encryptSubmissions && visibleSelectedProject);
-  const isPersonalEncryptedForm = Boolean(encryptSubmissions && !visibleSelectedProject);
-  const identityRequirementLabel =
-    accessMode === "nft_required"
-      ? "NFT holders only"
-      : identityPolicy === "wallet_required"
-        ? t("verificationRequired")
-        : t("verificationOptional");
   const selectedNftPresetId = nftGate.presetId ?? CUSTOM_NFT_PRESET_ID;
   const collectionPresetLabel = getNftGatePresetLabel(selectedNftPresetId);
-  const encryptionScopePrimary = encryptSubmissions
-    ? isProjectEncryptedForm
-      ? t("projectEncryptedFormHelp", { name: visibleSelectedProject?.name ?? "" })
-      : accountAddress
-        ? t("personalEncryptedFormHelp")
-        : t("personalEncryptedFormConnectHelp")
-    : t("openFormEncryptionHelp");
-  const encryptionScopeContrast = encryptSubmissions
-    ? isProjectEncryptedForm
-      ? t("projectEncryptedFormPersonalContrast")
-      : t("personalEncryptedFormProjectContrast")
-    : "";
+  const selectedNftPresetArt =
+    selectedNftPresetId === PRIME_MACHIN_PRESET_ID
+      ? "/nft/prime.avif"
+      : selectedNftPresetId === TALLY_PRESET_ID
+        ? "/nft/tally.webp"
+        : "";
+  const [ownedTypesCopied, setOwnedTypesCopied] = useState(false);
+  const dateTimeInputLang = language === "ja" ? "ja-JP" : "en-US";
+  const dateTimePlaceholder = getDateTimePlaceholder(language);
   const lensProfileLabel = getLensProfileLabel(t, analysisProfileId);
   const lensSignalLabel = getSignalTypeLabel(t, signalType);
   const lensOperatorLabel = getAnalystTypeLabel(t, analystType);
@@ -395,6 +444,49 @@ export function PublishStep({
     { value: "30d", label: t("responseDeadlineThirtyDays") },
     { value: "custom", label: t("responseDeadlineCustom") },
   ];
+  const accessControlOptions: Array<{
+    value: FormAccessMode;
+    label: string;
+    description: string;
+  }> = [
+    {
+      value: "public",
+      label: "Public",
+      description: "Anyone with the link can view and submit",
+    },
+    {
+      value: "wallet_required",
+      label: "Wallet Required",
+      description: "Connected wallet required",
+    },
+    {
+      value: "nft_required",
+      label: "NFT Holders Only",
+      description: "Only holders of a selected NFT can view and submit",
+    },
+  ];
+  const nftDiagnostics = useOwnedSuiObjects(accountAddress, {
+    enabled: accessMode === "nft_required" && Boolean(accountAddress),
+  });
+  const discoveredOwnedTypes = useMemo(() => {
+    const uniqueTypes = new Set<string>();
+    for (const entry of nftDiagnostics.data ?? []) {
+      const type = entry.data?.type?.trim();
+      if (type) {
+        uniqueTypes.add(type);
+      }
+    }
+    return [...uniqueTypes].sort((left, right) => left.localeCompare(right));
+  }, [nftDiagnostics.data]);
+  const activeStructType = nftGate.structType.trim();
+  const matchedOwnedObjects = useMemo(() => {
+    if (!activeStructType) {
+      return 0;
+    }
+    return (nftDiagnostics.data ?? []).filter((entry) => entry.data?.type?.trim() === activeStructType).length;
+  }, [activeStructType, nftDiagnostics.data]);
+  const nftDiagnosticsError =
+    nftDiagnostics.error instanceof Error ? nftDiagnostics.error.message : nftDiagnostics.error ? String(nftDiagnostics.error) : "";
 
   function formatBytes(bytes: number) {
     if (bytes < 1024) {
@@ -483,6 +575,31 @@ export function PublishStep({
     publishButton?.focus();
   }
 
+  async function copyOwnedObjectTypes() {
+    if (!discoveredOwnedTypes.length || !navigator.clipboard) {
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(discoveredOwnedTypes.join("\n"));
+      setOwnedTypesCopied(true);
+      window.setTimeout(() => setOwnedTypesCopied(false), 1500);
+    } catch {
+      setOwnedTypesCopied(false);
+    }
+  }
+
+  function applyOwnedObjectType(nextStructType: string) {
+    if (nextStructType === PRIME_MACHIN_STRUCT_TYPE) {
+      onChangeNftGatePreset(PRIME_MACHIN_PRESET_ID);
+      return;
+    }
+    onChangeNftGatePreset(CUSTOM_NFT_PRESET_ID);
+    onChangeNftGate({
+      structType: nextStructType,
+      collectionLabel: undefined,
+    });
+  }
+
   const failureActions =
     failure?.kind === "wallet_disconnected"
       ? [{ key: "reconnect", label: t("reconnectWallet"), onClick: triggerWalletReconnect }]
@@ -551,19 +668,11 @@ export function PublishStep({
             ) : null}
           </div>
 
-          <p className="wallet-inline-note">
-            {t("formOwnerLabel")}:{" "}
-            {accountAddress ? (
-              <SuiAddressDisplay address={accountAddress} className="wallet-inline-address" showTooltip />
-            ) : (
-              t("walletPublishHint")
-            )}
-          </p>
           {!savedForm ? (
             <div className="publish-quick-controls">
-              <div className="publish-visibility-quick-switch" aria-label={t("formVisibilityLabel")}>
+              <section className="publish-visibility-quick-switch" aria-label={t("formVisibilityLabel")}>
                 <span className="publish-visibility-label">{t("visibilityTitle")}</span>
-                <div className="publish-visibility-options">
+                <div className="publish-quick-card-grid publish-quick-card-grid-three">
                   {([
                     ["private", t("visibilityPrivate")],
                     ["unlisted", t("visibilityUnlisted")],
@@ -572,110 +681,91 @@ export function PublishStep({
                     <button
                       key={value}
                       type="button"
-                      className={`publish-visibility-chip is-${value} ${visibility === value ? "is-active" : ""}`}
+                      className={`publish-visibility-chip publish-quick-choice-card is-${value} ${visibility === value ? "is-active" : ""}`}
                       onClick={() => onChangeVisibility(value)}
                       aria-pressed={visibility === value}
                     >
-                      {label}
+                      <span className="publish-quick-choice-icon" aria-hidden="true">
+                        <VisibilityGlyph mode={value} />
+                      </span>
+                      <span className="publish-quick-choice-copy">
+                        <strong>{label}</strong>
+                      </span>
                     </button>
                   ))}
                 </div>
-              </div>
-              <div className="publish-seal-quick-switch" aria-label={t("encryptSubmissions")}>
+              </section>
+              <section className="publish-seal-quick-switch" aria-label={t("encryptSubmissions")}>
                 <span className="publish-visibility-label">{t("privateSignalEyebrow")}</span>
                 <button
                   type="button"
-                  className={`publish-seal-toggle ${encryptSubmissions ? "is-locked" : "is-open"}`}
+                  className={`publish-seal-toggle publish-quick-choice-card ${encryptSubmissions ? "is-locked" : "is-open"}`}
                   onClick={() => onToggleEncryptSubmissions(!encryptSubmissions)}
                   aria-pressed={encryptSubmissions}
                   title={encryptSubmissions ? t("encryptSubmissionsReviewHelp") : t("openFormEncryptionHelp")}
                 >
-                  <SignalPrivacyIcon locked={encryptSubmissions} />
-                  <span>{encryptSubmissions ? "Seal on" : "Open"}</span>
+                  <span className="publish-quick-choice-icon" aria-hidden="true">
+                    <SignalPrivacyIcon locked={encryptSubmissions} />
+                  </span>
+                  <span className="publish-quick-choice-copy">
+                    <strong>{encryptSubmissions ? "Seal on" : "Open"}</strong>
+                  </span>
                 </button>
-              </div>
-              <div className="publish-identity-quick-switch" aria-label={t("navAccess")}>
-                <span className="publish-visibility-label">{t("navAccess")}</span>
-                <div className="publish-visibility-options">
-                  {([
-                    ["public", "Public"],
-                    ["wallet_required", "Wallet Required"],
-                    ["nft_required", "NFT Holders Only"],
-                  ] as const).map(([value, label]) => (
-                    <button
-                      key={value}
-                      type="button"
-                      className={`publish-visibility-chip ${accessMode === value ? "is-active" : ""}`}
-                      onClick={() => onChangeAccessMode(value)}
-                      aria-pressed={accessMode === value}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
-                <p className="muted">{identityRequirementLabel}</p>
-              </div>
-              <div className="publish-identity-quick-switch" aria-label={t("submissionIdentityLabel")}>
-                <span className="publish-visibility-label">{t("identityPolicyTitle")}</span>
-                <button
-                  type="button"
-                  className={`publish-identity-toggle is-${identityPolicy}`}
-                  onClick={() =>
-                    onChangeIdentityPolicy(identityPolicy === "wallet_required" ? "anonymous_allowed" : "wallet_required")
-                  }
-                  aria-pressed={identityPolicy === "wallet_required"}
-                  title={t("identityPolicyHelp")}
-                >
-                  {identityPolicy === "wallet_required" ? (
-                    <span className="publish-identity-drop" aria-hidden="true">
-                      💧
-                    </span>
-                  ) : (
-                    <AnonymousRiskIcon />
-                  )}
-                  <span>{identityPolicy === "wallet_required" ? t("verificationRequired") : t("verificationOptional")}</span>
-                </button>
-              </div>
-              <div className="publish-visibility-quick-switch" aria-label={t("responseWindowTitle")}>
+              </section>
+              <div className="publish-visibility-quick-switch publish-response-window-card" aria-label={t("responseWindowTitle")}>
                 <span className="publish-visibility-label">{t("responseWindowTitle")}</span>
-                <label>
-                  <span>{t("responseOpenAtLabel")}</span>
-                  <input
-                    type="datetime-local"
-                    value={responseOpenAtCustom}
-                    onChange={(event) => onChangeResponseOpenAtCustom(event.target.value)}
-                  />
-                </label>
-                <label>
-                  <span>{t("responseDeadlineLabel")}</span>
-                  <select
-                    value={responseDeadlinePreset}
-                    onChange={(event) => {
-                      const nextPreset = event.target.value as ResponseDeadlinePreset;
-                      onChangeResponseDeadlinePreset(nextPreset);
-                      if (nextPreset === "custom" && !responseDeadlineCustomAt) {
-                        onChangeResponseDeadlineCustomAt(toDateTimeLocalValue(Date.now() + 60 * 60 * 1000));
-                      }
-                    }}
-                  >
-                    {deadlineOptions.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                {responseDeadlinePreset === "custom" ? (
+                <div className="publish-response-window-grid">
                   <label>
-                    <span>{t("responseDeadlineCustomAt")}</span>
-                    <input
-                      type="datetime-local"
-                      value={responseDeadlineCustomAt}
-                      min={toDateTimeLocalValue(Date.now() + 60 * 1000)}
-                      onChange={(event) => onChangeResponseDeadlineCustomAt(event.target.value)}
-                    />
+                    <span>{t("responseOpenAtLabel")}</span>
+                    <span className={`publish-datetime-shell${responseOpenAtCustom ? "" : " is-empty"}`}>
+                      <input
+                        type="datetime-local"
+                        className={`publish-datetime-input${responseOpenAtCustom ? "" : " is-empty"}`}
+                        lang={dateTimeInputLang}
+                        value={responseOpenAtCustom}
+                        onChange={(event) => onChangeResponseOpenAtCustom(event.target.value)}
+                      />
+                      {!responseOpenAtCustom ? <span className="publish-datetime-placeholder">{dateTimePlaceholder}</span> : null}
+                    </span>
                   </label>
-                ) : null}
+                  <label>
+                    <span>{t("responseDeadlineLabel")}</span>
+                    <select
+                      value={responseDeadlinePreset}
+                      onChange={(event) => {
+                        const nextPreset = event.target.value as ResponseDeadlinePreset;
+                        onChangeResponseDeadlinePreset(nextPreset);
+                        if (nextPreset === "custom" && !responseDeadlineCustomAt) {
+                          onChangeResponseDeadlineCustomAt(toDateTimeLocalValue(Date.now() + 60 * 60 * 1000));
+                        }
+                      }}
+                    >
+                      {deadlineOptions.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  {responseDeadlinePreset === "custom" ? (
+                    <label className="publish-response-window-custom-deadline">
+                      <span>{t("responseDeadlineCustomAt")}</span>
+                      <span className={`publish-datetime-shell${responseDeadlineCustomAt ? "" : " is-empty"}`}>
+                        <input
+                          type="datetime-local"
+                          className={`publish-datetime-input${responseDeadlineCustomAt ? "" : " is-empty"}`}
+                          lang={dateTimeInputLang}
+                          value={responseDeadlineCustomAt}
+                          min={toDateTimeLocalValue(Date.now() + 60 * 1000)}
+                          onChange={(event) => onChangeResponseDeadlineCustomAt(event.target.value)}
+                        />
+                        {!responseDeadlineCustomAt ? (
+                          <span className="publish-datetime-placeholder">{dateTimePlaceholder}</span>
+                        ) : null}
+                      </span>
+                    </label>
+                  ) : null}
+                </div>
                 <p className="muted">{t("responseDeadlineHelp")}</p>
               </div>
               {showLocationRequirementControls ? (
@@ -696,6 +786,292 @@ export function PublishStep({
               ) : null}
             </div>
           ) : null}
+          {!showFocusedSuccessCard ? (
+            <section className="panel composer-settings-card composer-settings-card-visual publish-access-panel">
+              <div className="section-row composer-settings-visual-heading">
+                <span className="composer-settings-visual-icon composer-settings-visual-icon-identity">
+                  <RoutingIcon type="identity" />
+                </span>
+                <div>
+                  <p className="eyebrow">{t("responderIdentityEyebrow")}</p>
+                  <h3>{t("publishAccessSettingsTitle")}</h3>
+                  <p className="muted">{t("publishAccessSettingsDescription")}</p>
+                </div>
+              </div>
+              <div className="publish-access-layout">
+                <div className="publish-access-main">
+                  <section className="publish-access-block" aria-label="access-control-panel">
+                    <div className="publish-access-block-heading">
+                      <div>
+                        <h4>{t("publishAccessControlTitle")}</h4>
+                        <p className="muted">{t("publishAccessControlDescription")}</p>
+                      </div>
+                      <span className="publish-access-badge">{t("requiredLabel")}</span>
+                    </div>
+                    <fieldset className="composer-radio-field">
+                      <legend className="sr-only">{t("navAccess")}</legend>
+                      <div className="composer-radio-options composer-radio-options-three publish-access-card-grid">
+                        {accessControlOptions.map((option) => (
+                          <label
+                            key={option.value}
+                            className={`composer-radio-option composer-radio-option-stacked publish-access-card publish-access-card-${option.value}${accessMode === option.value ? " is-selected" : ""}`}
+                          >
+                            <input
+                              type="radio"
+                              name="submissionAccess"
+                              value={option.value}
+                              checked={accessMode === option.value}
+                              onChange={() => onChangeAccessMode(option.value)}
+                            />
+                            <span className="publish-access-card-icon" aria-hidden="true">
+                              <AccessModeGlyph mode={option.value} />
+                            </span>
+                            <span>
+                              <strong>
+                                {option.value === "public"
+                                  ? t("publishAccessModePublic")
+                                  : option.value === "wallet_required"
+                                    ? t("publishAccessModeWallet")
+                                    : t("publishAccessModeNft")}
+                              </strong>
+                              <small>
+                                {option.value === "public"
+                                  ? t("publishAccessModePublicDescription")
+                                  : option.value === "wallet_required"
+                                    ? t("publishAccessModeWalletDescriptionLong")
+                                    : t("publishAccessModeNftDescriptionLong")}
+                              </small>
+                            </span>
+                          </label>
+                        ))}
+                      </div>
+                    </fieldset>
+                    {accessMode === "nft_required" ? (
+                      <div className="publish-access-note" role="note">
+                        <span className="publish-access-note-icon" aria-hidden="true">
+                          i
+                        </span>
+                        <p>{t("publishAccessNftNote")}</p>
+                      </div>
+                    ) : null}
+                  </section>
+
+                  {accessMode === "nft_required" ? (
+                    <section className="publish-access-block publish-nft-settings" aria-label="nft-gate-settings">
+                      <div className="publish-access-block-heading">
+                        <div>
+                          <h4>{t("publishNftSettingsTitle")}</h4>
+                          <p className="muted">{t("publishNftSettingsDescription")}</p>
+                        </div>
+                        <span className="publish-access-badge publish-access-badge-accent">{t("publishNftSettingsActiveBadge")}</span>
+                      </div>
+                      <label>
+                        <span>{t("publishNftCollectionPresetLabel")}</span>
+                        <span className={`publish-nft-preset-select-shell${selectedNftPresetArt ? " has-collection-art" : ""}`}>
+                          {selectedNftPresetArt ? (
+                            <img
+                              className="publish-nft-preset-art"
+                              src={selectedNftPresetArt}
+                              alt=""
+                              aria-hidden="true"
+                              loading="lazy"
+                              decoding="async"
+                            />
+                          ) : null}
+                          <select
+                            value={selectedNftPresetId}
+                            className={selectedNftPresetArt ? "has-collection-art" : undefined}
+                            onChange={(event) => onChangeNftGatePreset(event.target.value as FormNftGate["presetId"])}
+                          >
+                            <option value={PRIME_MACHIN_PRESET_ID}>Prime Machin Holders</option>
+                            <option value={TALLY_PRESET_ID}>Tally Holders</option>
+                            <option value={CUSTOM_NFT_PRESET_ID}>Custom Struct Type</option>
+                          </select>
+                        </span>
+                      </label>
+                      <p className="publish-nft-hint">
+                        {selectedNftPresetId === PRIME_MACHIN_PRESET_ID
+                          ? t("publishNftPrimePresetHint")
+                          : selectedNftPresetId === TALLY_PRESET_ID
+                            ? t("publishNftTallyPresetHint")
+                          : t("publishNftCustomPresetHint")}
+                      </p>
+                      <label>
+                        <span>{t("publishNftStructTypeLabel")}</span>
+                        <input
+                          type="text"
+                          value={nftGate.structType}
+                          onChange={(event) => onChangeNftGate({ structType: event.target.value })}
+                          placeholder="0x...::collection::PrimeMachin"
+                        />
+                      </label>
+                      <div className="publish-nft-count-row">
+                        <label>
+                          <span>{t("publishNftRequiredCountLabel")}</span>
+                          <div className="publish-nft-count-control">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                onChangeNftGate({ requiredCount: Math.max(1, nftGate.requiredCount - 1) })
+                              }
+                              aria-label="Decrease required NFT count"
+                            >
+                              -
+                            </button>
+                            <input
+                              type="number"
+                              min={1}
+                              step={1}
+                              value={nftGate.requiredCount}
+                              onChange={(event) =>
+                                onChangeNftGate({ requiredCount: Math.max(1, Number(event.target.value) || 1) })
+                              }
+                            />
+                            <button
+                              type="button"
+                              onClick={() => onChangeNftGate({ requiredCount: nftGate.requiredCount + 1 })}
+                              aria-label="Increase required NFT count"
+                            >
+                              +
+                            </button>
+                          </div>
+                        </label>
+                        <p className="muted">{t("publishNftRequiredCountHelp")}</p>
+                      </div>
+                      <div className="publish-nft-toggle-grid">
+                        <label className="publish-nft-toggle-card">
+                          <input
+                            type="checkbox"
+                            checked={nftGate.gateViewing}
+                            onChange={(event) => onChangeNftGate({ gateViewing: event.target.checked })}
+                          />
+                          <span>
+                            <strong>{t("publishNftGateViewingTitle")}</strong>
+                            <small>{t("publishNftGateViewingDescription")}</small>
+                          </span>
+                        </label>
+                        <label className="publish-nft-toggle-card">
+                          <input
+                            type="checkbox"
+                            checked={nftGate.gateSubmission}
+                            onChange={(event) => onChangeNftGate({ gateSubmission: event.target.checked })}
+                          />
+                          <span>
+                            <strong>{t("publishNftGateSubmissionTitle")}</strong>
+                            <small>{t("publishNftGateSubmissionDescription")}</small>
+                          </span>
+                        </label>
+                      </div>
+                      <details className="publish-nft-diagnostics collapsible-detail-card" aria-label="nft-owned-object-diagnostics">
+                        <summary className="publish-nft-diagnostics-summary-toggle">
+                          <div className="publish-access-block-heading">
+                            <div>
+                              <h4>{t("publishNftDiagnosticsTitle")}</h4>
+                              <p className="muted">{t("publishNftDiagnosticsDescription")}</p>
+                            </div>
+                            <span className="publish-access-badge">{nftGate.network}</span>
+                          </div>
+                        </summary>
+                        {!accountAddress ? (
+                          <p className="muted">{t("publishNftDiagnosticsConnectPrompt")}</p>
+                        ) : nftDiagnostics.isLoading ? (
+                          <p className="muted">{t("publishNftDiagnosticsChecking")}</p>
+                        ) : nftDiagnosticsError ? (
+                          <p className="error-text">{nftDiagnosticsError || t("publishNftDiagnosticsErrorFallback")}</p>
+                        ) : (
+                          <>
+                            <div
+                              className="publish-nft-diagnostic-summary"
+                              role="list"
+                              aria-label={t("publishNftDiagnosticsSummaryLabel")}
+                            >
+                              <span className="publish-nft-diagnostic-stat" role="listitem">
+                                <small>{t("publishNftDiagnosticsOwnedObjectsLabel")}</small>
+                                <strong>{nftDiagnostics.data?.length ?? 0}</strong>
+                              </span>
+                              <span className="publish-nft-diagnostic-stat" role="listitem">
+                                <small>{t("publishNftDiagnosticsDiscoveredTypesLabel")}</small>
+                                <strong>{discoveredOwnedTypes.length}</strong>
+                              </span>
+                              <span className="publish-nft-diagnostic-stat" role="listitem">
+                                <small>{t("publishNftDiagnosticsMatchingObjectsLabel")}</small>
+                                <strong>{matchedOwnedObjects}</strong>
+                              </span>
+                            </div>
+                            <div
+                              className={`publish-nft-diagnostic-status${
+                                !activeStructType
+                                  ? " is-neutral"
+                                  : matchedOwnedObjects > 0
+                                    ? " is-match"
+                                    : " is-missing"
+                              }`}
+                            >
+                              <strong>
+                                {!activeStructType
+                                  ? t("publishNftDiagnosticsNoStructTypeTitle")
+                                  : matchedOwnedObjects > 0
+                                    ? t("publishNftDiagnosticsStructTypeMatchedTitle")
+                                    : t("publishNftDiagnosticsStructTypeMissingTitle")}
+                              </strong>
+                              <small>
+                                {!activeStructType
+                                  ? t("publishNftDiagnosticsNoStructTypeBody")
+                                  : matchedOwnedObjects > 0
+                                    ? t("publishNftDiagnosticsStructTypeMatchedBody")
+                                    : t("publishNftDiagnosticsStructTypeMissingBody")}
+                              </small>
+                            </div>
+                            {discoveredOwnedTypes.length ? (
+                              <>
+                                <div className="publish-nft-diagnostic-actions">
+                                  <p className="muted">{t("publishNftDiagnosticsDiscoveredTypesHelp")}</p>
+                                  <button type="button" className="ghost-button" onClick={() => void copyOwnedObjectTypes()}>
+                                    {ownedTypesCopied ? t("copiedLabel") : t("publishNftDiagnosticsCopyTypes")}
+                                  </button>
+                                </div>
+                                <div className="publish-nft-diagnostic-list">
+                                  {discoveredOwnedTypes.map((type) => (
+                                    <div key={type} className="publish-nft-diagnostic-item">
+                                      <code>{type}</code>
+                                      <div className="publish-nft-diagnostic-item-actions">
+                                        {type === activeStructType ? (
+                                          <span className="signal-chip signal-chip-success">{t("publishNftDiagnosticsActiveTypeBadge")}</span>
+                                        ) : null}
+                                        <button
+                                          type="button"
+                                          className="ghost-button"
+                                          onClick={() => applyOwnedObjectType(type)}
+                                        >
+                                          {t("publishNftDiagnosticsUseType")}
+                                        </button>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </>
+                            ) : (
+                              <p className="muted">{t("publishNftDiagnosticsNoOwnedTypes")}</p>
+                            )}
+                          </>
+                        )}
+                      </details>
+                      <p className="publish-nft-footnote">{t("publishNftFootnote")}</p>
+                    </section>
+                  ) : null}
+                </div>
+              </div>
+            </section>
+          ) : null}
+
+          <p className="wallet-inline-note">
+            {t("formOwnerLabel")}:{" "}
+            {accountAddress ? (
+              <SuiAddressDisplay address={accountAddress} className="wallet-inline-address" showTooltip />
+            ) : (
+              t("walletPublishHint")
+            )}
+          </p>
           {isGuestDraftMode && !savedForm ? (
             <p className="wallet-inline-note">{t("guestDraftPublishWalletRequired")}</p>
           ) : null}
@@ -912,186 +1288,6 @@ export function PublishStep({
                     <p className="muted">{t("locationRequirementHelp")}</p>
                   </section>
                 ) : null}
-
-                <section className="panel composer-settings-card composer-settings-card-visual">
-                  <div className="section-row composer-settings-visual-heading">
-                    <span className="composer-settings-visual-icon composer-settings-visual-icon-visibility">
-                      <RoutingIcon type="visibility" />
-                    </span>
-                    <div>
-                      <p className="eyebrow">{t("exploreRoutingEyebrow")}</p>
-                      <h3>{t("visibilityTitle")}</h3>
-                    </div>
-                  </div>
-                  <label>
-                    <span>{t("formVisibilityLabel")}</span>
-                    <select value={visibility} onChange={(event) => onChangeVisibility(event.target.value as FormVisibility)}>
-                      <option value="private">{t("visibilityPrivate")}</option>
-                      <option value="unlisted">{t("visibilityUnlisted")}</option>
-                      <option value="public">{t("visibilityPublicExplore")}</option>
-                    </select>
-                  </label>
-                  <p className="muted">
-                    {t("visibilityHelp")}
-                  </p>
-                </section>
-
-                <section className="panel composer-settings-card composer-settings-card-visual">
-                  <div className="section-row composer-settings-visual-heading">
-                    <span className="composer-settings-visual-icon composer-settings-visual-icon-identity">
-                      <RoutingIcon type="identity" />
-                    </span>
-                    <div>
-                      <p className="eyebrow">{t("responderIdentityEyebrow")}</p>
-                      <h3>{t("navAccess")}</h3>
-                    </div>
-                  </div>
-                  <fieldset className="composer-radio-field">
-                    <legend>{t("navAccess")}</legend>
-                    <div className="metadata-list">
-                      <div className="metadata-row">
-                        <span>{t("allowedSenderTypesLabel")}</span>
-                        <strong>
-                          {accessMode === "nft_required"
-                            ? "NFT holders with a connected wallet"
-                            : accessMode === "wallet_required"
-                              ? t("allowedSenderTypesWalletOnly")
-                              : t("allowedSenderTypesAnonymousAndWallet")}
-                        </strong>
-                      </div>
-                    </div>
-                    <div className="composer-radio-options">
-                      {([
-                        ["public", "Public"],
-                        ["wallet_required", "Wallet Required"],
-                        ["nft_required", "NFT Holders Only"],
-                      ] as const).map(([value, label]) => (
-                        <label
-                          key={value}
-                          className={`composer-radio-option${accessMode === value ? " is-selected" : ""}`}
-                        >
-                          <input
-                            type="radio"
-                            name="submissionAccess"
-                            value={value}
-                            checked={accessMode === value}
-                            onChange={() => onChangeAccessMode(value)}
-                          />
-                          <span className="composer-radio-mark" aria-hidden="true" />
-                          <span>{label}</span>
-                        </label>
-                      ))}
-                    </div>
-                  </fieldset>
-                  <p className="muted">{identityRequirementLabel}</p>
-                  {accessMode === "nft_required" ? (
-                    <div className="stack">
-                      <label>
-                        <span>Collection Preset</span>
-                        <select
-                          value={selectedNftPresetId}
-                          onChange={(event) => onChangeNftGatePreset(event.target.value as FormNftGate["presetId"])}
-                        >
-                          <option value={PRIME_MACHIN_PRESET_ID}>{getNftGatePresetLabel(PRIME_MACHIN_PRESET_ID)}</option>
-                          <option value={CUSTOM_NFT_PRESET_ID}>{getNftGatePresetLabel(CUSTOM_NFT_PRESET_ID)}</option>
-                        </select>
-                      </label>
-                      <div className="metadata-list">
-                        <div className="metadata-row">
-                          <span>Preset</span>
-                          <strong>{collectionPresetLabel}</strong>
-                        </div>
-                      </div>
-                      <label>
-                        <span>Struct Type</span>
-                        <input
-                          type="text"
-                          value={nftGate.structType}
-                          onChange={(event) => onChangeNftGate({ structType: event.target.value })}
-                          placeholder="0x...::collection::PrimeMachin"
-                        />
-                      </label>
-                      <label>
-                        <span>Required Count</span>
-                        <input
-                          type="number"
-                          min={1}
-                          step={1}
-                          value={nftGate.requiredCount}
-                          onChange={(event) =>
-                            onChangeNftGate({ requiredCount: Math.max(1, Number(event.target.value) || 1) })
-                          }
-                        />
-                      </label>
-                      <label className="toggle">
-                        <input
-                          type="checkbox"
-                          checked={nftGate.gateViewing}
-                          onChange={(event) => onChangeNftGate({ gateViewing: event.target.checked })}
-                        />
-                        <span>Gate viewing</span>
-                      </label>
-                      <label className="toggle">
-                        <input
-                          type="checkbox"
-                          checked={nftGate.gateSubmission}
-                          onChange={(event) => onChangeNftGate({ gateSubmission: event.target.checked })}
-                        />
-                        <span>Gate submission</span>
-                      </label>
-                      <p className="muted">
-                        Prime Machin is one-click when the preset struct type is configured. Published signals always
-                        use the saved struct type.
-                      </p>
-                    </div>
-                  ) : null}
-                </section>
-
-                <section className="panel composer-settings-card composer-settings-card-visual">
-                  <div className="section-row composer-settings-visual-heading">
-                    <span className="composer-settings-visual-icon composer-settings-visual-icon-encryption">
-                      <RoutingIcon type="encryption" />
-                    </span>
-                    <div>
-                      <p className="eyebrow">{t("privateSignalEyebrow")}</p>
-                      <h3>{t("encryptSubmissions")}</h3>
-                    </div>
-                    <label className="toggle">
-                      <input
-                        type="checkbox"
-                        checked={encryptSubmissions}
-                        onChange={(event) => onToggleEncryptSubmissions(event.target.checked)}
-                      />
-                      <span>{encryptSubmissions ? t("enabled") : t("disabled")}</span>
-                    </label>
-                  </div>
-                  <p className="muted">{t("encryptSubmissionsReviewHelp")}</p>
-                  <div className="metadata-list">
-                    <div className="metadata-row">
-                      <span>{t("encryptedScopeCurrentLabel")}</span>
-                      <strong>{encryptionScopePrimary}</strong>
-                    </div>
-                    {isPersonalEncryptedForm || isProjectEncryptedForm ? (
-                      <div className="metadata-row">
-                        <span>{t("encryptedScopeProjectLabel")}</span>
-                        <strong>{encryptionScopeContrast}</strong>
-                      </div>
-                    ) : null}
-                  </div>
-                  {encryptionWarnings.length > 0 ? (
-                    <div className="composer-warning-list" aria-live="polite">
-                      {encryptionWarnings.map((warning) => (
-                        <p
-                          key={`${warning.kind}-${warning.message}`}
-                          className={warning.blocksPublish ? "error-text" : "warning-text"}
-                        >
-                          {getEncryptionWarningMessage(warning)}
-                        </p>
-                      ))}
-                    </div>
-                  ) : null}
-                </section>
-
                 {shouldShowWalrusDiagnostics ? (
                   <section className="panel composer-settings-card">
                     <div className="section-row">

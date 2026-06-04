@@ -4,6 +4,7 @@ import { buildInfo, type BuildInfo } from "./buildInfo";
 import { recordBuildAsset } from "./buildAssetDiagnostics";
 import { endPerf, startPerf } from "./perf";
 import {
+  getBrowserCapabilitiesSnapshot,
   isMobileSafariLike,
   hasResourceErrorForUrl,
   logRouteLifecycle,
@@ -126,14 +127,6 @@ function getModuleBuildInfo(module: unknown): Pick<BuildInfo, "appVersion" | "bu
   return null;
 }
 
-function isMobileSafari() {
-  if (typeof navigator === "undefined") {
-    return false;
-  }
-  const userAgent = navigator.userAgent;
-  return /iP(?:hone|ad|od)/.test(userAgent) && /Safari/i.test(userAgent) && !/CriOS|FxiOS|EdgiOS/i.test(userAgent);
-}
-
 function isMobileBrowser() {
   if (typeof navigator === "undefined") {
     return false;
@@ -145,7 +138,7 @@ function getLazyImportTimeoutMs() {
   if (typeof window === "undefined") {
     return 8_000;
   }
-  if (isMobileSafari()) {
+  if (getBrowserCapabilitiesSnapshot().mobileSafari) {
     return 12_000;
   }
   if (isMobileBrowser()) {
@@ -576,7 +569,7 @@ export async function resolveLazyRouteModuleWithSafariRetry<TProps extends objec
   }
 
   const expectedChunkUrl = await getExpectedChunkUrl(label);
-  if (isMobileSafari() && expectedChunkUrl) {
+  if (getBrowserCapabilitiesSnapshot().mobileSafari && expectedChunkUrl) {
     logRouteLifecycle("lazy-route-export-cache-bust-retry", {
       label,
       routeId: getCurrentRouteId(label),

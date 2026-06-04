@@ -5,28 +5,22 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   type PropsWithChildren,
   type ReactNode,
 } from "react";
 import { buildInfo } from "../lib/buildInfo";
 import { retryLazyImport } from "../lib/lazyRetry";
 import { endPerf, markPerfMilestone, startPerf } from "../lib/perf";
-import { logRouteLifecycle } from "../lib/routeDiagnostics";
-
-function isMobileSafari() {
-  if (typeof navigator === "undefined") {
-    return false;
-  }
-  const userAgent = navigator.userAgent;
-  return /iP(?:hone|ad|od)/.test(userAgent) && /Safari/i.test(userAgent) && !/CriOS|FxiOS|EdgiOS/i.test(userAgent);
-}
+import { getBrowserCapabilitiesSnapshot, logRouteLifecycle } from "../lib/routeDiagnostics";
 
 function getWalletProviderImportTimeoutMs() {
+  const capabilities = getBrowserCapabilitiesSnapshot();
   if (typeof navigator === "undefined") {
     return 8_000;
   }
   const userAgent = navigator.userAgent;
-  if (isMobileSafari()) {
+  if (capabilities.mobileSafari) {
     return 12_000;
   }
   if (/Android|iP(?:hone|ad|od)|Mobile/i.test(userAgent)) {
@@ -36,8 +30,10 @@ function getWalletProviderImportTimeoutMs() {
 }
 
 type WalletProviderImportOptions = {
+  onStart?: (details: WalletProviderImportEvent) => void;
   onFailure?: (details: WalletProviderImportEvent) => void;
   onSlow?: (details: WalletProviderImportEvent) => void;
+  onSuccess?: (details: WalletProviderImportEvent) => void;
 };
 
 type WalletProviderImportEvent = {
@@ -57,11 +53,15 @@ function getCurrentRoutePath() {
   return window.location.hash?.replace(/^#/, "") || `${window.location.pathname}${window.location.search}`;
 }
 
-function createWalletProviders(retryKey: string | number, options: WalletProviderImportOptions = {}) {
+function createWalletProviders(
+  retryKey: string | number,
+  optionsRef: { current: WalletProviderImportOptions },
+) {
   return lazy(() => {
     const importTimeoutMs = getWalletProviderImportTimeoutMs();
-    const mobileSafari = isMobileSafari();
-    const userAgent = typeof navigator === "undefined" ? "" : navigator.userAgent;
+    const capabilities = getBrowserCapabilitiesSnapshot();
+    const mobileSafari = Boolean(capabilities.mobileSafari);
+    const userAgent = capabilities.userAgent ?? (typeof navigator === "undefined" ? "" : navigator.userAgent);
     const routePath = getCurrentRoutePath();
     const eventDetails: WalletProviderImportEvent = {
       buildVersion: buildInfo.appVersion,
@@ -75,12 +75,13 @@ function createWalletProviders(retryKey: string | number, options: WalletProvide
     startPerf("provider:wallet", `retry ${retryKey}`);
     markPerfMilestone("provider:wallet:import-start", `retry ${retryKey}`);
     logRouteLifecycle("provider:wallet-import-start", eventDetails);
+    optionsRef.current.onStart?.(eventDetails);
     const slowTimeout = window.setTimeout(() => {
       logRouteLifecycle("provider:wallet-import-slow", {
         ...eventDetails,
         elapsedMs: 5_000,
       });
-      options.onSlow?.(eventDetails);
+      optionsRef.current.onSlow?.(eventDetails);
     }, 5_000);
     const timeout = window.setTimeout(() => {
       markPerfMilestone("provider:wallet:import-timeout", `${importTimeoutMs}ms`);
@@ -90,6 +91,7 @@ function createWalletProviders(retryKey: string | number, options: WalletProvide
       .then((module) => {
         markPerfMilestone("provider:wallet:import-resolved", `retry ${retryKey}`);
         logRouteLifecycle("provider:wallet-import-resolved", eventDetails);
+        optionsRef.current.onSuccess?.(eventDetails);
         return {
           default: module.WalletProviders,
         };
@@ -101,7 +103,7 @@ function createWalletProviders(retryKey: string | number, options: WalletProvide
           chunkUrl: null,
           message: error instanceof Error ? error.message : String(error),
         });
-        options.onFailure?.(eventDetails);
+        optionsRef.current.onFailure?.(eventDetails);
         throw error;
       })
       .finally(() => {
@@ -123,14 +125,36 @@ interface WalletSurfaceProps extends PropsWithChildren {
   fallback?: ReactNode;
   onImportFailure?: (details: WalletProviderImportEvent) => void;
   onImportSlow?: (details: WalletProviderImportEvent) => void;
+  onImportStart?: (details: WalletProviderImportEvent) => void;
+  onImportSuccess?: (details: WalletProviderImportEvent) => void;
   retryKey?: string | number;
 }
 
-export function WalletSurface({ children, fallback, onImportFailure, onImportSlow, retryKey = 0 }: WalletSurfaceProps) {
+export function WalletSurface({
+  children,
+  fallback,
+  onImportFailure,
+  onImportSlow,
+  onImportStart,
+  onImportSuccess,
+  retryKey = 0,
+}: WalletSurfaceProps) {
   const hasWalletSurface = useContext(WalletSurfaceContext);
+  const importOptionsRef = useRef<WalletProviderImportOptions>({
+    onFailure: onImportFailure,
+    onSlow: onImportSlow,
+    onStart: onImportStart,
+    onSuccess: onImportSuccess,
+  });
+  importOptionsRef.current = {
+    onFailure: onImportFailure,
+    onSlow: onImportSlow,
+    onStart: onImportStart,
+    onSuccess: onImportSuccess,
+  };
   const WalletProviders = useMemo(
-    () => createWalletProviders(retryKey, { onFailure: onImportFailure, onSlow: onImportSlow }),
-    [onImportFailure, onImportSlow, retryKey],
+    () => createWalletProviders(retryKey, importOptionsRef),
+    [retryKey],
   );
 
   useEffect(() => {
@@ -143,7 +167,7 @@ export function WalletSurface({ children, fallback, onImportFailure, onImportSlo
 
   return (
     <Suspense fallback={fallback ?? <WalletSurfaceFallback />}>
-      <WalletSurfaceContext.Provider value>
+      <WalletSurfaceContext.Provider value={true}>
         <WalletProviders>{children}</WalletProviders>
       </WalletSurfaceContext.Provider>
     </Suspense>

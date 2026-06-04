@@ -4,6 +4,10 @@ import {
   CUSTOM_NFT_PRESET_ID,
   PRIME_MACHIN_COLLECTION_LABEL,
   PRIME_MACHIN_PRESET_ID,
+  PRIME_MACHIN_STRUCT_TYPE,
+  TALLY_COLLECTION_LABEL,
+  TALLY_PRESET_ID,
+  TALLY_STRUCT_TYPE,
 } from "../../lib/formAccess";
 import { computeSchemaHash } from "../../lib/formVersioning";
 import { buildFormSchema, createField } from "./utils";
@@ -114,6 +118,54 @@ describe("buildFormSchema", () => {
     expect(computeSchemaHash(lightEdit)).toBe(base.schemaHash);
   });
 
+  it("keeps anonymous identity for public access mode", () => {
+    const form = buildFormSchema({
+      title: "Public signal",
+      description: "Anyone can respond",
+      headerImage: { url: "", alt: "", position: "center" },
+      headerLogo: { url: "", alt: "" },
+      fields: [{ ...createField("shortText"), label: "Signal", required: true }],
+      sections: [],
+      purpose: "custom",
+      visibility: "private",
+      identityPolicy: "wallet_required",
+      accessMode: "public",
+      nftGate: createDefaultNftGate(CUSTOM_NFT_PRESET_ID),
+      locationRequirement: "optional",
+      processingMode: "review_required",
+      ownerAddress: "0xowner",
+      creationMode: "admin",
+      encryptSubmissions: false,
+    });
+
+    expect(form.accessMode).toBe("public");
+    expect(form.identityPolicy).toBe("anonymous_allowed");
+  });
+
+  it("forces wallet identity when wallet access mode is selected", () => {
+    const form = buildFormSchema({
+      title: "Wallet-gated signal",
+      description: "Connected wallet required",
+      headerImage: { url: "", alt: "", position: "center" },
+      headerLogo: { url: "", alt: "" },
+      fields: [{ ...createField("shortText"), label: "Signal", required: true }],
+      sections: [],
+      purpose: "custom",
+      visibility: "private",
+      identityPolicy: "anonymous_allowed",
+      accessMode: "wallet_required",
+      nftGate: createDefaultNftGate(CUSTOM_NFT_PRESET_ID),
+      locationRequirement: "optional",
+      processingMode: "review_required",
+      ownerAddress: "0xowner",
+      creationMode: "admin",
+      encryptSubmissions: false,
+    });
+
+    expect(form.accessMode).toBe("wallet_required");
+    expect(form.identityPolicy).toBe("wallet_required");
+  });
+
   it("forces wallet identity policy for nft-required signals while preserving nft gate config", () => {
     const form = buildFormSchema({
       title: "Prime holder signal",
@@ -128,7 +180,7 @@ describe("buildFormSchema", () => {
       accessMode: "nft_required",
       nftGate: {
         ...createDefaultNftGate(CUSTOM_NFT_PRESET_ID),
-        structType: "0xprime::machin::PrimeMachin",
+        structType: PRIME_MACHIN_STRUCT_TYPE,
         requiredCount: 2,
       },
       locationRequirement: "optional",
@@ -141,21 +193,34 @@ describe("buildFormSchema", () => {
     expect(form.accessMode).toBe("nft_required");
     expect(form.identityPolicy).toBe("wallet_required");
     expect(form.nftGate).toMatchObject({
-      structType: "0xprime::machin::PrimeMachin",
+      structType: PRIME_MACHIN_STRUCT_TYPE,
       requiredCount: 2,
     });
   });
 
-  it("keeps the Prime Machin preset stable even before the canonical struct type is configured", () => {
+  it("uses the canonical Prime Machin struct type for the preset", () => {
     const gate = createDefaultNftGate(PRIME_MACHIN_PRESET_ID);
 
     expect(gate).toMatchObject({
       presetId: PRIME_MACHIN_PRESET_ID,
       collectionLabel: PRIME_MACHIN_COLLECTION_LABEL,
+      structType: PRIME_MACHIN_STRUCT_TYPE,
       requiredCount: 1,
       gateViewing: true,
       gateSubmission: true,
     });
-    expect(typeof gate.structType).toBe("string");
+  });
+
+  it("uses the canonical Tally struct type for the preset", () => {
+    const gate = createDefaultNftGate(TALLY_PRESET_ID);
+
+    expect(gate).toMatchObject({
+      presetId: TALLY_PRESET_ID,
+      collectionLabel: TALLY_COLLECTION_LABEL,
+      structType: TALLY_STRUCT_TYPE,
+      requiredCount: 1,
+      gateViewing: true,
+      gateSubmission: true,
+    });
   });
 });

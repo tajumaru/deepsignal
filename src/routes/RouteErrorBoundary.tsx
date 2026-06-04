@@ -114,7 +114,7 @@ function getLastFailedImportChunkUrl() {
 
 export function MixedBuildRecoveryScreen({ observed }: { observed: BuildAssetRecord[] }) {
   return (
-    <div className="panel glow-panel route-status-panel" role="alert">
+    <div className="panel glow-panel route-status-panel route-status-panel-compact" role="alert">
       <p className="eyebrow">Signal surface recovery</p>
       <h1>New version available</h1>
       <p className="muted">
@@ -127,7 +127,7 @@ export function MixedBuildRecoveryScreen({ observed }: { observed: BuildAssetRec
         </button>
       </div>
       {shouldShowRouteDiagnostics(typeof window === "undefined" ? "/" : `${window.location.pathname}${window.location.search}`) ? (
-        <details className="route-diagnostics-panel" open>
+        <details className="route-diagnostics-panel route-diagnostics-panel-compact">
           <summary>Build diagnostics</summary>
           <pre className="route-status-diagnostics">{JSON.stringify(observed, null, 2)}</pre>
         </details>

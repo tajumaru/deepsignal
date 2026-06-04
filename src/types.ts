@@ -140,7 +140,7 @@ export interface FormHeaderImage {
 export interface FormHeaderLogo {
   url: string;
   alt?: string;
-  source?: "url" | "upload";
+  source?: "none" | "url" | "upload";
   fileName?: string;
 }
 
@@ -151,7 +151,7 @@ export interface FormNftGate {
   gateViewing: boolean;
   gateSubmission: boolean;
   collectionLabel?: string;
-  presetId?: "prime_machin" | "custom";
+  presetId?: "prime_machin" | "tally" | "custom";
   futureSealPolicy?: {
     eligible: boolean;
     policyMode: "none" | "nft_ownership_decrypt";

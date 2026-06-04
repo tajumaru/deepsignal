@@ -44,7 +44,7 @@ export interface ParsedCreateFormDraft {
     fileName?: string;
   };
   headerLogo?: Partial<FormHeaderLogo> & {
-    source?: "url" | "upload";
+    source?: "none" | "url" | "upload";
     fileName?: string;
   };
   fields?: FormField[];
@@ -185,7 +185,7 @@ export function serializeDraft(
   headerLogo: {
     url: string;
     alt: string;
-    source?: "url" | "upload";
+    source?: "none" | "url" | "upload";
     fileName?: string;
   },
   fields: FormField[],
@@ -269,7 +269,7 @@ export function buildFormSchema(args: {
   headerLogo: {
     url: string;
     alt: string;
-    source?: "url" | "upload";
+    source?: "none" | "url" | "upload";
     fileName?: string;
   };
   fields: FormField[];
@@ -394,10 +394,16 @@ export function normalizeHeaderLogo(
   headerLogo?: {
     url?: string;
     alt?: string;
-    source?: "url" | "upload";
+    source?: "none" | "url" | "upload";
     fileName?: string;
   },
 ): FormHeaderLogo | undefined {
+  if (headerLogo?.source === "none") {
+    return {
+      url: "",
+      source: "none",
+    };
+  }
   const url = headerLogo?.url?.trim();
   if (!url) {
     return undefined;

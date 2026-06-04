@@ -104,7 +104,7 @@ export function useCreateFormBuilder({
   const [headerLogo, setHeaderLogo] = useState<FormBuilderValues["headerLogo"]>({
     url: "",
     alt: "",
-    source: "url",
+    source: "none",
     fileName: "",
   });
   const [fields, setFields] = useState(initialFields);
@@ -219,7 +219,7 @@ export function useCreateFormBuilder({
     setTitle(initialTemplate.title);
     setDescription(initialTemplate.description);
     setHeaderImage({ url: "", alt: "", position: "center", source: "url", fileName: "" });
-    setHeaderLogo({ url: "", alt: "", source: "url", fileName: "" });
+    setHeaderLogo({ url: "", alt: "", source: "none", fileName: "" });
     setFields(nextFields);
     setSections([]);
     setPurpose(initialTemplate.purpose);
@@ -290,7 +290,7 @@ export function useCreateFormBuilder({
     setTitle(idea || template.title);
     setDescription(idea ? `A quick form for ${idea.toLowerCase()}.` : template.description);
     setHeaderImage({ url: "", alt: "", position: "center", source: "url", fileName: "" });
-    setHeaderLogo({ url: "", alt: "", source: "url", fileName: "" });
+    setHeaderLogo({ url: "", alt: "", source: "none", fileName: "" });
     setFields(nextFields);
     setSections([]);
     setPurpose(normalizeFormPurpose(template.purpose));
@@ -338,7 +338,14 @@ export function useCreateFormBuilder({
     setHeaderLogo({
       url: typeof parsedDraft.headerLogo?.url === "string" ? parsedDraft.headerLogo.url : "",
       alt: typeof parsedDraft.headerLogo?.alt === "string" ? parsedDraft.headerLogo.alt : "",
-      source: parsedDraft.headerLogo?.source === "upload" ? "upload" : "url",
+      source:
+        parsedDraft.headerLogo?.source === "none"
+          ? "none"
+          : parsedDraft.headerLogo?.source === "upload"
+            ? "upload"
+            : typeof parsedDraft.headerLogo?.url === "string" && parsedDraft.headerLogo.url.trim()
+              ? "url"
+              : "none",
       fileName: typeof parsedDraft.headerLogo?.fileName === "string" ? parsedDraft.headerLogo.fileName : "",
     });
     setFields(
@@ -663,7 +670,7 @@ export function useCreateFormBuilder({
     const nextHeaderLogo = {
       url: form.headerLogo?.url ?? "",
       alt: form.headerLogo?.alt ?? "",
-      source: form.headerLogo?.source ?? "url",
+      source: form.headerLogo?.source ?? (form.headerLogo?.url ? "url" : "none"),
       fileName: form.headerLogo?.fileName ?? "",
     };
     const nextFields = sanitizeConditionalLogicFields(

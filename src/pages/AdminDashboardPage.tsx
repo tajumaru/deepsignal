@@ -102,6 +102,7 @@ import { useSuiWallet } from "../hooks/useSuiWallet";
 import { useI18n } from "../i18n";
 import { DEMO_FORM_ID, DEMO_PRIMARY_SIGNAL_ID, seedDemoWorkspace } from "../demo/demoData";
 import { isAttachmentFieldType, isLongTextLikeField } from "../lib/fieldTypes";
+import { useDashboardProjectRestoreSnapshot } from "../lib/dashboardProjectRestore";
 import {
   addressesMatch,
   canAdmin,
@@ -4462,6 +4463,11 @@ function PatternMemoryDraftReviewModal({
 export function AdminDashboardPage() {
   const { language, t } = useI18n();
   const location = useLocation();
+  const dashboardProjectRestore = useDashboardProjectRestoreSnapshot();
+  const dashboardShellRoute = location.pathname === "/dashboard";
+  const projectRestorePending =
+    dashboardShellRoute &&
+    (dashboardProjectRestore.state === "unknown" || dashboardProjectRestore.state === "restoring");
   const navigate = useNavigate();
   const wallet = useSuiWallet();
   const mockAdmin = useMockAdminMode(location.search);
@@ -4849,7 +4855,7 @@ export function AdminDashboardPage() {
     [renderedSignalLimit, visibleSignals],
   );
   const hasMoreRenderedSignals = renderedVisibleSignals.length < visibleSignals.length;
-  const inboxSettling = loading || submissionsLoading;
+  const inboxSettling = loading || submissionsLoading || projectRestorePending;
   const [showInitialListSkeleton, setShowInitialListSkeleton] = useState(false);
   useEffect(() => {
     if (selectedStreamId !== "system") {
@@ -5408,11 +5414,15 @@ export function AdminDashboardPage() {
       routePath: `${location.pathname}${location.search}`,
       selectedProjectId: selectedProjectId || null,
       selectedProjectName: selectedProject?.name ?? null,
+      projectRestoreState: dashboardProjectRestore.state,
+      projectRestoreWalletRuntime: dashboardProjectRestore.walletRuntime,
       visibleSignalCount: visibleSignals.length,
       loading,
       submissionsLoading,
     });
   }, [
+    dashboardProjectRestore.state,
+    dashboardProjectRestore.walletRuntime,
     loading,
     location.pathname,
     location.search,

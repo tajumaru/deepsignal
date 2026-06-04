@@ -600,7 +600,12 @@ function FormBuilderComposer({
       title: builder.values.title,
       description: builder.values.description,
       headerImage: builder.values.headerImage.url ? builder.values.headerImage : undefined,
-      headerLogo: builder.values.headerLogo.url ? builder.values.headerLogo : undefined,
+      headerLogo:
+        builder.values.headerLogo.source === "none"
+          ? { url: "", source: "none" }
+          : builder.values.headerLogo.url
+            ? builder.values.headerLogo
+            : undefined,
       fields: builder.values.fields,
       sections: builder.values.sections,
       purpose: builder.values.purpose,
@@ -968,6 +973,7 @@ function FormBuilderComposer({
       {builder.values.currentStep === "publish" ? (
         <PublishStep
           t={t}
+          language={language}
           saving={publish.saving}
           registeringOnSui={publish.registeringOnSui}
           error={publish.error}
