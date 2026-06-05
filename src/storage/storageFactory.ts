@@ -74,9 +74,11 @@ function formatWalrusFallbackNotice(error: unknown) {
     const detail =
       error.details.stage === "rpc-visibility"
         ? "Walrus transaction is still waiting on RPC visibility."
+        : error.details.stage === "wallet-approval"
+          ? "Wallet approval failed before the Walrus upload started."
         : error.details.stage === "upload-relay"
           ? "Walrus upload relay timed out before the blob write completed."
-        : error.message.trim();
+          : error.message.trim();
     const digest = error.details.digest ? ` digest=${error.details.digest}` : "";
     return `${detail}${digest} Saved locally instead.`;
   }

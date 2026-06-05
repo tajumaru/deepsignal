@@ -8,7 +8,7 @@ function renderShell(initialPath: string) {
   return render(
     <MemoryRouter initialEntries={[initialPath]}>
       <I18nProvider>
-        <AppShell walletAvailable={false}>
+        <AppShell walletUiEnabled={false}>
           <h1>Test workspace</h1>
         </AppShell>
       </I18nProvider>

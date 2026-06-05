@@ -29,6 +29,8 @@ export function WalletConnectSurface({ compact = false, fallback, surface = "def
   const [menuOpen, setMenuOpen] = useState(false);
   const shellRef = useRef<HTMLDivElement | null>(null);
   const isMobileDrawer = surface === "mobileDrawer";
+  const providerDeferred = !walletRuntime.loaded;
+  const showStandbyState = providerDeferred || wallet.isRestoringConnection;
 
   useEffect(() => {
     if (!menuOpen) {
@@ -157,20 +159,22 @@ export function WalletConnectSurface({ compact = false, fallback, surface = "def
           <div className="wallet-connect-direct-copy">
             <strong>
               {isMobileDrawer
-                ? wallet.isRestoringConnection
+                ? showStandbyState
                   ? t("secureSessionStandby")
                   : t("notConnected")
-                : wallet.isRestoringConnection
+                : showStandbyState
                   ? "Opening Session..."
                   : "Activate Session"}
             </strong>
             <span>
               {isMobileDrawer
-                ? wallet.isRestoringConnection
+                ? showStandbyState
                   ? t("secureSessionStandby")
                   : t("connectWalletToReview")
-                : wallet.isRestoringConnection
-                  ? "Restoring secure session"
+                : showStandbyState
+                  ? providerDeferred
+                    ? "Preparing secure session"
+                    : "Restoring secure session"
                   : "Wallet-optional public mode"}
             </span>
           </div>
@@ -183,7 +187,7 @@ export function WalletConnectSurface({ compact = false, fallback, surface = "def
             }}
             disabled={wallet.isConnecting || walletRuntime.loading}
           >
-            {wallet.isConnecting || walletRuntime.loading ? "Opening..." : "Connect"}
+            {wallet.isConnecting || walletRuntime.loading ? "Opening..." : providerDeferred ? "Prepare" : "Connect"}
           </button>
         </div>
       </div>

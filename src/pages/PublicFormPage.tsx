@@ -14,6 +14,7 @@ import { usePublicNftGate } from "../features/public-form/hooks/usePublicNftGate
 import { usePublicSubmission, type SignalPipelineStage } from "../features/public-form/hooks/usePublicSubmission";
 import { useI18n } from "../i18n";
 import { isNftGatedForm, requiresWalletForFormAccess } from "../lib/formAccess";
+import { resolveNftCollectionArt } from "../lib/nftCollectionArt";
 import {
   formatResponseDeadline,
   isResponseWindowClosed,
@@ -157,6 +158,7 @@ export function PublicFormPage() {
   const [resolvedWalletAddress, setResolvedWalletAddress] = useState<string | undefined>(undefined);
   const [walletProvider, setWalletProvider] = useState<string | undefined>(undefined);
   const manifestBlobId = searchParams.get("manifest") ?? "";
+  const nftDebugEnabled = import.meta.env.DEV || searchParams.get("nftDebug") === "1";
   const { form, initialAnswers, loading, loadError, loadErrorDetail } = usePublicFormLoader({
     formId,
     manifestBlobId,
@@ -171,16 +173,26 @@ export function PublicFormPage() {
   const attachWallet = walletModeSelected;
   const walletFallback = <div className="wallet-connect-shell wallet-connect-shell-compact" />;
   const nftGate = usePublicNftGate(form, resolvedWalletAddress);
+  const nftCollectionArt = resolveNftCollectionArt(nftGate.nftGate);
   const nftDebugInfo = nftGate.debugInfo ?? {
     connectedAddress: resolvedWalletAddress ?? "",
     network: nftGate.nftGate?.network ?? "sui-mainnet",
+    rpcEndpoint: "",
     targetTypes: nftGate.nftGate?.structType ? [nftGate.nftGate.structType] : [],
     directOwnedCount: 0,
     kioskCount: 0,
     kioskItemCount: 0,
+    directOwnedPages: [],
+    kioskPages: [],
+    directOwnedTypes: [],
+    kioskItemTypes: [],
+    kioskItemsByKiosk: [],
+    requiredTypeBreakdown: [],
+    typeComparisons: [],
     matchedDirectObjects: [],
     matchedKioskItems: [],
     sampleObjectTypes: [],
+    zeroCountReason: "not_checked_yet",
     lastError: undefined,
   };
   const nftSubmitGateEnabled = nftRequired && nftGate.submitGateActive;
@@ -809,7 +821,15 @@ export function PublicFormPage() {
         <div className="public-identity-choice-hero">
           <div className="public-identity-choice-copy">
             <div className="public-identity-choice-title-row">
-              <span className="public-identity-choice-hero-icon" aria-hidden="true">NFT</span>
+              {nftCollectionArt ? (
+                <img
+                  className="public-identity-choice-hero-icon public-identity-choice-hero-art"
+                  src={nftCollectionArt.src}
+                  alt={nftCollectionArt.alt}
+                />
+              ) : (
+                <span className="public-identity-choice-hero-icon" aria-hidden="true">NFT</span>
+              )}
               <p className="eyebrow">{t("publicNftGateEyebrow")}</p>
             </div>
             <h1>{form.title}</h1>
@@ -846,21 +866,10 @@ export function PublicFormPage() {
           className: "public-identity-choice-wallet-shell",
         })}
         {nftGate.gateError ? <p className="error-text">{nftGate.gateError}</p> : null}
-        {import.meta.env.DEV && resolvedWalletAddress ? (
+        {nftDebugEnabled && resolvedWalletAddress ? (
           <details className="answer-card answer-card-plain">
             <summary>NFT gate debug</summary>
-            <pre className="muted">{JSON.stringify({
-              connectedAddress: nftDebugInfo.connectedAddress,
-              network: nftDebugInfo.network,
-              targetTypes: nftDebugInfo.targetTypes,
-              directOwnedCount: nftDebugInfo.directOwnedCount,
-              kioskCount: nftDebugInfo.kioskCount,
-              kioskItemCount: nftDebugInfo.kioskItemCount,
-              matchedDirectObjects: nftDebugInfo.matchedDirectObjects,
-              matchedKioskItems: nftDebugInfo.matchedKioskItems,
-              sampleObjectTypes: nftDebugInfo.sampleObjectTypes,
-              lastError: nftDebugInfo.lastError,
-            }, null, 2)}</pre>
+            <pre className="muted">{JSON.stringify(nftDebugInfo, null, 2)}</pre>
           </details>
         ) : null}
         {resolvedWalletAddress && nftGate.hasResolvedOwnership && !nftGate.isChecking && !nftGate.gateError ? (
@@ -924,21 +933,10 @@ export function PublicFormPage() {
           className: "public-identity-choice-wallet-shell",
         })}
         {nftGate.gateError ? <p className="error-text">{nftGate.gateError}</p> : null}
-        {import.meta.env.DEV && resolvedWalletAddress ? (
+        {nftDebugEnabled && resolvedWalletAddress ? (
           <details className="answer-card answer-card-plain">
             <summary>NFT gate debug</summary>
-            <pre className="muted">{JSON.stringify({
-              connectedAddress: nftDebugInfo.connectedAddress,
-              network: nftDebugInfo.network,
-              targetTypes: nftDebugInfo.targetTypes,
-              directOwnedCount: nftDebugInfo.directOwnedCount,
-              kioskCount: nftDebugInfo.kioskCount,
-              kioskItemCount: nftDebugInfo.kioskItemCount,
-              matchedDirectObjects: nftDebugInfo.matchedDirectObjects,
-              matchedKioskItems: nftDebugInfo.matchedKioskItems,
-              sampleObjectTypes: nftDebugInfo.sampleObjectTypes,
-              lastError: nftDebugInfo.lastError,
-            }, null, 2)}</pre>
+            <pre className="muted">{JSON.stringify(nftDebugInfo, null, 2)}</pre>
           </details>
         ) : null}
         {resolvedWalletAddress && nftGate.hasResolvedOwnership && !nftGate.isChecking && !nftGate.gateError && nftGate.submitGateActive && !nftGate.meetsRequirement ? (

@@ -1,8 +1,6 @@
 ﻿import { useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
 import { useMemo, useState } from "react";
-import primeNftArt from "../../../assets/nft/prime.avif";
-import tallyNftArt from "../../../assets/nft/tally.webp";
 import { BlobLink } from "../../../components/BlobLink";
 import { CriticalFailurePanel } from "../../../components/CriticalFailurePanel";
 import { ShareCard } from "../../../components/ShareCard";
@@ -15,6 +13,7 @@ import {
   PRIME_MACHIN_STRUCT_TYPE,
   TALLY_PRESET_ID,
 } from "../../../lib/formAccess";
+import { resolveNftCollectionArt } from "../../../lib/nftCollectionArt";
 import { matchesOwnedObjectType } from "../../../lib/nftOwnership";
 import { LivePreview } from "../../../components/formBuilder/LivePreview";
 import { useOwnedSuiObjects } from "../../../hooks/useOwnedSuiObjects";
@@ -425,12 +424,7 @@ export function PublishStep({
   const showLocationRequirementControls = selectedTemplateKey === "disaster-checkin";
   const publishReadyBody = isGuestDraftMode ? t("guestDraftPublishBody") : t("publishReadyBody");
   const selectedNftPresetId = nftGate.presetId ?? CUSTOM_NFT_PRESET_ID;
-  const selectedNftPresetArt =
-    selectedNftPresetId === PRIME_MACHIN_PRESET_ID
-      ? primeNftArt
-      : selectedNftPresetId === TALLY_PRESET_ID
-        ? tallyNftArt
-        : "";
+  const selectedNftPresetArt = resolveNftCollectionArt(nftGate)?.src ?? "";
   const [ownedTypesCopied, setOwnedTypesCopied] = useState(false);
   const dateTimeInputLang = language === "ja" ? "ja-JP" : "en-US";
   const dateTimePlaceholder = getDateTimePlaceholder(language);
@@ -1149,37 +1143,37 @@ export function PublishStep({
                 ) : null}
                 {storageRuntimeDiagnostics?.source ? (
                   <div className="metadata-row">
-                    <span>Failure source</span>
+                    <span>{t("walrusFailureSourceLabel")}</span>
                     <strong>{storageRuntimeDiagnostics.source}</strong>
                   </div>
                 ) : null}
                 {typeof storageRuntimeDiagnostics?.status === "number" ? (
                   <div className="metadata-row">
-                    <span>HTTP status</span>
+                    <span>{t("walrusHttpStatusLabel")}</span>
                     <strong>{storageRuntimeDiagnostics.status}</strong>
                   </div>
                 ) : null}
                 {storageRuntimeDiagnostics?.errorName ? (
                   <div className="metadata-row">
-                    <span>Error class</span>
+                    <span>{t("walrusErrorClassLabel")}</span>
                     <strong>{storageRuntimeDiagnostics.errorName}</strong>
                   </div>
                 ) : null}
                 {storageRuntimeDiagnostics?.causeMessage ? (
                   <div className="metadata-row">
-                    <span>Cause</span>
+                    <span>{t("walrusCauseLabel")}</span>
                     <strong>{storageRuntimeDiagnostics.causeMessage}</strong>
                   </div>
                 ) : null}
                 {storageRuntimeDiagnostics?.url ? (
                   <div className="metadata-row">
-                    <span>Request URL</span>
+                    <span>{t("walrusRequestUrlLabel")}</span>
                     <strong>{storageRuntimeDiagnostics.url}</strong>
                   </div>
                 ) : null}
                 {storageRuntimeDiagnostics?.responseBody ? (
                   <div className="metadata-row">
-                    <span>Response body</span>
+                    <span>{t("walrusResponseBodyLabel")}</span>
                     <strong>{storageRuntimeDiagnostics.responseBody}</strong>
                   </div>
                 ) : null}

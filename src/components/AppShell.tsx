@@ -21,6 +21,7 @@ import { isSignalInboxPath } from "../lib/navigation";
 import { logRouteLifecycle } from "../lib/routeDiagnostics";
 import { scheduleIdleTask } from "../lib/scheduleIdleTask";
 import { useOptionalRpcInfrastructure } from "../rpcInfrastructure";
+import type { WalletSessionPhase } from "../walletSession";
 
 const MOBILE_DRAWER_SWIPE_THRESHOLD_PX = 60;
 const MOBILE_DRAWER_EDGE_START_PX = 24;
@@ -34,8 +35,9 @@ const NetworkMenu = lazy(() =>
 );
 
 interface AppShellProps extends PropsWithChildren {
-  walletAvailable?: boolean;
   chrome?: "full" | "public";
+  walletSessionPhase?: WalletSessionPhase;
+  walletUiEnabled?: boolean;
 }
 
 interface MobileDrawerGestureState {
@@ -78,14 +80,14 @@ function WalletNavSlot({
   navLabLabel,
   onNavigate,
   section,
-  walletAvailable,
+  walletUiEnabled,
 }: {
   navLabLabel: string;
   onNavigate?: () => void;
   section: "access" | "inbox";
-  walletAvailable: boolean;
+  walletUiEnabled: boolean;
 }) {
-  if (!walletAvailable) {
+  if (!walletUiEnabled) {
     return section === "inbox" ? (
       <Link to="/admin" onClick={onNavigate}>
         {navLabLabel}
@@ -103,14 +105,20 @@ function WalletNavSlot({
 function WalletConnectSlot({
   fallback,
   surface,
-  walletAvailable,
+  walletSessionPhase,
+  walletUiEnabled,
 }: {
   fallback?: ReactNode;
   surface?: "mobileDrawer";
-  walletAvailable: boolean;
+  walletSessionPhase: WalletSessionPhase;
+  walletUiEnabled: boolean;
 }) {
-  if (!walletAvailable) {
+  if (!walletUiEnabled) {
     return null;
+  }
+
+  if (walletSessionPhase === "provider_deferred") {
+    return fallback ? <>{fallback}</> : null;
   }
 
   return (
@@ -223,8 +231,9 @@ function MobileDrawerWalletStandbyStatus() {
 
 export function AppShell({
   children,
-  walletAvailable = false,
   chrome = "full",
+  walletSessionPhase = "provider_deferred",
+  walletUiEnabled = false,
 }: AppShellProps) {
   const { language, setLanguage, t } = useI18n();
   const location = useLocation();
@@ -240,6 +249,7 @@ export function AppShell({
   const mobileDrawerReturnFocusRef = useRef<HTMLElement | null>(null);
   const mobileDrawerGestureRef = useRef<MobileDrawerGestureState | null>(null);
   const mobileDrawerEdgeGestureRef = useRef<MobileDrawerGestureState | null>(null);
+  const mountPathRef = useRef(location.pathname);
   const walletConnectFallback = <div className="wallet-connect-shell wallet-connect-shell-compact" />;
   const mobileWalletFallback = (
     <div className="mobile-drawer-status-line" aria-live="polite">
@@ -253,19 +263,24 @@ export function AppShell({
   useEffect(() => {
     logRouteLifecycle("app-shell:mount", {
       chrome,
-      walletAvailable,
-      pathname: location.pathname,
+      pathname: mountPathRef.current,
       hash: typeof window === "undefined" ? "" : window.location.hash,
     });
     return () => {
       logRouteLifecycle("app-shell:unmount", {
         chrome,
-        walletAvailable,
-        pathname: location.pathname,
-        hash: typeof window === "undefined" ? "" : window.location.hash,
       });
     };
-  }, [chrome, location.pathname, walletAvailable]);
+  }, [chrome]);
+
+  useEffect(() => {
+    logRouteLifecycle("app-shell:route-change", {
+      chrome,
+      pathname: location.pathname,
+      walletSessionPhase,
+      walletUiEnabled,
+    });
+  }, [chrome, location.pathname, walletSessionPhase, walletUiEnabled]);
 
   useEffect(() => {
     setMoreMenuOpen(false);
@@ -573,7 +588,7 @@ export function AppShell({
                 navLabLabel={t("navLab")}
                 onNavigate={() => setMobileDrawerOpen(false)}
                 section="inbox"
-                walletAvailable={walletAvailable}
+                walletUiEnabled={walletUiEnabled}
               />
             </div>
             <div className="topnav-row topnav-row-secondary">
@@ -583,7 +598,7 @@ export function AppShell({
                 navLabLabel={t("navLab")}
                 onNavigate={() => setMobileDrawerOpen(false)}
                 section="access"
-                walletAvailable={walletAvailable}
+                walletUiEnabled={walletUiEnabled}
               />
               <div ref={moreMenuRef} className={`topnav-more ${moreMenuOpen ? "is-open" : ""}`}>
                 <button
@@ -610,7 +625,11 @@ export function AppShell({
           {publicChrome ? null : (
             <div className="topbar-infra">
               <DeferredNetworkMenu />
-              <WalletConnectSlot fallback={walletConnectFallback} walletAvailable={walletAvailable} />
+              <WalletConnectSlot
+                fallback={walletConnectFallback}
+                walletSessionPhase={walletSessionPhase}
+                walletUiEnabled={walletUiEnabled}
+              />
             </div>
           )}
           <label className="language-switch">
@@ -692,7 +711,7 @@ export function AppShell({
                       navLabLabel={t("navLab")}
                       onNavigate={closeMobileDrawer}
                       section="access"
-                      walletAvailable={walletAvailable}
+                      walletUiEnabled={walletUiEnabled}
                     />
                     <NavLink className="mobile-drawer-command-link" to="/troubleshooting" onClick={closeMobileDrawer}>
                       {t("navTroubleshooting")}
@@ -709,9 +728,10 @@ export function AppShell({
                       <WalletConnectSlot
                         fallback={mobileWalletFallback}
                         surface="mobileDrawer"
-                        walletAvailable={walletAvailable}
+                        walletSessionPhase={walletSessionPhase}
+                        walletUiEnabled={walletUiEnabled}
                       />
-                      {walletAvailable ? null : <MobileDrawerWalletStandbyStatus />}
+                      {walletUiEnabled ? null : <MobileDrawerWalletStandbyStatus />}
                     </div>
                     <div className="mobile-drawer-utility-card">
                       <label className="language-switch mobile-drawer-language-switch">

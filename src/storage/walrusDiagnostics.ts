@@ -3,6 +3,7 @@ export type WalrusFailureStage =
   | "transaction-execution"
   | "upload-relay"
   | "certification"
+  | "wallet-approval"
   | "wallet-balance"
   | "unknown";
 
@@ -17,7 +18,7 @@ export interface WalrusFailureDetails {
   lastRpcError?: string;
   timeoutMs?: number;
   category?: "quota_exceeded" | "rate_limited" | "storage_unavailable";
-  source?: "upload-relay" | "rpc" | "walrus-sdk" | "browser-storage" | "tatum" | "unknown";
+  source?: "upload-relay" | "rpc" | "walrus-sdk" | "browser-storage" | "tatum" | "wallet" | "unknown";
   status?: number;
   errorName?: string;
   causeMessage?: string;
@@ -147,9 +148,22 @@ export function formatWalrusFailureStage(stage: WalrusFailureStage) {
       return "Upload relay failed";
     case "certification":
       return "Certification failed";
+    case "wallet-approval":
+      return "Wallet approval failed";
     case "wallet-balance":
       return "Wallet balance issue";
     default:
       return "Unknown failure";
   }
+}
+
+export function isWalletApprovalError(error: unknown) {
+  const message = getWalrusErrorMessage(error).toLowerCase();
+  return (
+    message.includes("incorrect password") ||
+    message.includes("wrong password") ||
+    message.includes("invalid password") ||
+    message.includes("password is incorrect") ||
+    message.includes("authentication failed")
+  );
 }

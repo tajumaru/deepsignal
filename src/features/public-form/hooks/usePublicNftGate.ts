@@ -10,6 +10,7 @@ import type { FormSchema, FormNftGate } from "../../../types";
 
 const ROUTE_LEVEL_SUCCESS_CACHE_MS = 30_000;
 const ROUTE_LEVEL_FAILURE_COOLDOWN_MS = 15_000;
+const NFT_OWNERSHIP_API_URL = import.meta.env.VITE_NFT_OWNERSHIP_API_URL || "/api/nft-ownership-check";
 
 type PublicNftOwnershipCacheEntry = {
   checkedAt: number;
@@ -95,13 +96,22 @@ export function usePublicNftGate(form: FormSchema | null, walletAddress?: string
   const [debugInfo, setDebugInfo] = useState<PublicNftGateDebugInfo>({
     connectedAddress: walletAddress ?? "",
     network: nftGate?.network ?? getCurrentFormNftNetwork(),
+    rpcEndpoint: "",
     targetTypes: nftGate?.structType ? [nftGate.structType] : [],
     directOwnedCount: 0,
     kioskCount: 0,
     kioskItemCount: 0,
+    directOwnedPages: [],
+    kioskPages: [],
+    directOwnedTypes: [],
+    kioskItemTypes: [],
+    kioskItemsByKiosk: [],
+    requiredTypeBreakdown: [],
+    typeComparisons: [],
     matchedDirectObjects: [],
     matchedKioskItems: [],
     sampleObjectTypes: [],
+    zeroCountReason: "not_checked_yet",
   });
   const [lastResolvedCheckKey, setLastResolvedCheckKey] = useState<string | null>(null);
   const previousWalletAddressRef = useRef<string | undefined>(undefined);
@@ -114,13 +124,22 @@ export function usePublicNftGate(form: FormSchema | null, walletAddress?: string
     console.info("[nft-gate]", {
       connectedAddress: nextDebugInfo.connectedAddress,
       network: nextDebugInfo.network,
+      rpcEndpoint: nextDebugInfo.rpcEndpoint,
       targetTypes: nextDebugInfo.targetTypes,
       directOwnedCount: nextDebugInfo.directOwnedCount,
+      directOwnedPages: nextDebugInfo.directOwnedPages,
+      directOwnedTypes: nextDebugInfo.directOwnedTypes,
       kioskCount: nextDebugInfo.kioskCount,
+      kioskPages: nextDebugInfo.kioskPages,
       kioskItemCount: nextDebugInfo.kioskItemCount,
+      kioskItemTypes: nextDebugInfo.kioskItemTypes,
+      kioskItemsByKiosk: nextDebugInfo.kioskItemsByKiosk,
+      requiredTypeBreakdown: nextDebugInfo.requiredTypeBreakdown,
+      typeComparisons: nextDebugInfo.typeComparisons,
       matchedDirectObjects: nextDebugInfo.matchedDirectObjects,
       matchedKioskItems: nextDebugInfo.matchedKioskItems,
       sampleObjectTypes: nextDebugInfo.sampleObjectTypes,
+      zeroCountReason: nextDebugInfo.zeroCountReason,
       lastError: nextDebugInfo.lastError,
     });
   }, []);
@@ -134,13 +153,22 @@ export function usePublicNftGate(form: FormSchema | null, walletAddress?: string
       setDebugInfo({
         connectedAddress: walletAddress ?? "",
         network: nftGate?.network ?? getCurrentFormNftNetwork(),
+        rpcEndpoint: "",
         targetTypes: nftGate?.structType ? [nftGate.structType] : [],
         directOwnedCount: 0,
         kioskCount: 0,
         kioskItemCount: 0,
+        directOwnedPages: [],
+        kioskPages: [],
+        directOwnedTypes: [],
+        kioskItemTypes: [],
+        kioskItemsByKiosk: [],
+        requiredTypeBreakdown: [],
+        typeComparisons: [],
         matchedDirectObjects: [],
         matchedKioskItems: [],
         sampleObjectTypes: [],
+        zeroCountReason: "wallet_or_gate_not_ready",
       });
       return 0;
     }
@@ -170,7 +198,7 @@ export function usePublicNftGate(form: FormSchema | null, walletAddress?: string
 
     setIsChecking(true);
     const requestPromise = (async () => {
-      const response = await fetch("/api/nft-ownership-check", {
+      const response = await fetch(NFT_OWNERSHIP_API_URL, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -197,13 +225,22 @@ export function usePublicNftGate(form: FormSchema | null, walletAddress?: string
         const nextDebugInfo: PublicNftGateDebugInfo = {
           connectedAddress: walletAddress,
           network: nftGate.network,
+          rpcEndpoint: "",
           targetTypes: [nftGate.structType],
           directOwnedCount: 0,
           kioskCount: 0,
           kioskItemCount: 0,
+          directOwnedPages: [],
+          kioskPages: [],
+          directOwnedTypes: [],
+          kioskItemTypes: [],
+          kioskItemsByKiosk: [],
+          requiredTypeBreakdown: [],
+          typeComparisons: [],
           matchedDirectObjects: [],
           matchedKioskItems: [],
           sampleObjectTypes: [],
+          zeroCountReason: "rpc_error_before_ownership_match",
           ...(payload && "diagnostic" in payload && payload.diagnostic ? payload.diagnostic : {}),
           lastError: error,
         };
@@ -243,13 +280,22 @@ export function usePublicNftGate(form: FormSchema | null, walletAddress?: string
       const nextDebugInfo: PublicNftGateDebugInfo = {
         connectedAddress: walletAddress,
         network: nftGate.network,
+        rpcEndpoint: "",
         targetTypes: [nftGate.structType],
         directOwnedCount: 0,
         kioskCount: 0,
         kioskItemCount: 0,
+        directOwnedPages: [],
+        kioskPages: [],
+        directOwnedTypes: [],
+        kioskItemTypes: [],
+        kioskItemsByKiosk: [],
+        requiredTypeBreakdown: [],
+        typeComparisons: [],
         matchedDirectObjects: [],
         matchedKioskItems: [],
         sampleObjectTypes: [],
+        zeroCountReason: "rpc_error_before_ownership_match",
         lastError: nextError,
       };
       publicNftOwnershipCache.set(cacheKey, {
@@ -296,13 +342,22 @@ export function usePublicNftGate(form: FormSchema | null, walletAddress?: string
     setDebugInfo({
       connectedAddress: walletAddress ?? "",
       network: nftGate?.network ?? getCurrentFormNftNetwork(),
+      rpcEndpoint: "",
       targetTypes: nftGate?.structType ? [nftGate.structType] : [],
       directOwnedCount: 0,
       kioskCount: 0,
       kioskItemCount: 0,
+      directOwnedPages: [],
+      kioskPages: [],
+      directOwnedTypes: [],
+      kioskItemTypes: [],
+      kioskItemsByKiosk: [],
+      requiredTypeBreakdown: [],
+      typeComparisons: [],
       matchedDirectObjects: [],
       matchedKioskItems: [],
       sampleObjectTypes: [],
+      zeroCountReason: activeCheckKey ? "awaiting_check_result" : "not_checked_yet",
     });
   }, [activeCheckKey, walletAddress, nftGate?.network, nftGate?.structType]);
 

@@ -41,17 +41,13 @@ export function WorkspaceRestoreFallback({ onRetry }: { onRetry?: () => void }) 
   }
 
   return (
-    <div className="panel glow-panel route-status-panel" role="status">
+    <div className="panel glow-panel route-status-panel route-status-panel-compact" role="status">
       <p className="eyebrow">Signal surface</p>
       <h1>Loading workspace...</h1>
-      <p className="muted">Restoring the Explore surface and local fallback data.</p>
+      <p className="muted">Restoring your signal workspace and local fallback data.</p>
       {recoveryVisible ? (
         <div className="stack">
-          <p className="muted">
-            Workspace restore is taking longer than expected. DeepSignal can continue in recovery mode even if local
-            fallback data or a publish state is broken.
-          </p>
-          <pre className="route-status-diagnostics">{formatRouteLifecycleDiagnostics()}</pre>
+          <p className="muted">This is taking longer than expected, but local fallback data is still preserved.</p>
           <div className="inline-actions">
             <button type="button" className="primary-button" onClick={() => (onRetry ? onRetry() : window.location.reload())}>
               Retry workspace
@@ -68,6 +64,10 @@ export function WorkspaceRestoreFallback({ onRetry }: { onRetry?: () => void }) 
               {resettingState ? "Resetting local state..." : "Reset local state"}
             </button>
           </div>
+          <details className="route-diagnostics-panel route-diagnostics-panel-compact">
+            <summary>Technical details</summary>
+            <pre className="route-status-diagnostics">{formatRouteLifecycleDiagnostics()}</pre>
+          </details>
           <LocalRecoveryCenter />
         </div>
       ) : null}

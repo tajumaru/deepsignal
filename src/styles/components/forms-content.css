@@ -966,7 +966,7 @@ select {
 }
 
 .signal-column-tools input:not([type="checkbox"]):not([type="radio"]) {
-  width: min(100%, 320px);
+  width: min(100%, 280px);
 }
 
 .project-selector-field {

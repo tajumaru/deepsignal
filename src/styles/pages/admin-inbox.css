@@ -1896,8 +1896,8 @@
 
 .signal-inbox-workbench {
   display: grid;
-  gap: 0.9rem;
-  padding: 0.9rem;
+  gap: 0.72rem;
+  padding: 0.78rem;
   background:
     radial-gradient(circle at top center, rgba(116, 226, 255, 0.08), transparent 24%),
     linear-gradient(180deg, rgba(6, 21, 35, 0.92), rgba(4, 16, 29, 0.96));
@@ -3502,8 +3502,8 @@
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 1rem;
-  margin-bottom: 0.8rem;
+  gap: 0.7rem;
+  margin-bottom: 0.55rem;
 }
 
 .signal-card {

@@ -52,16 +52,65 @@ export type MatchedKioskItem = {
   isLocked: boolean;
 };
 
+export type StructTypeBreakdown = {
+  rawType: string;
+  normalizedType: string;
+  packageId: string;
+  module: string;
+  struct: string;
+  generics: string[];
+};
+
+export type TypeComparisonDiagnostic = {
+  source: "direct" | "kiosk";
+  actualType: string;
+  normalizedActualType: string;
+  requiredType: string;
+  normalizedRequiredType: string;
+  matches: boolean;
+  actualBreakdown: StructTypeBreakdown;
+  requiredBreakdown: StructTypeBreakdown;
+};
+
+export type OwnedObjectsPageDiagnostic = {
+  cursor: string | null;
+  hasNextPage: boolean;
+  nextCursor: string | null;
+  resultCount: number;
+};
+
+export type KioskPageDiagnostic = {
+  cursor: string | null;
+  hasNextPage: boolean;
+  nextCursor: string | null;
+  kioskCount: number;
+};
+
+export type KioskItemDiagnostic = {
+  kioskId: string;
+  itemCount: number;
+  itemTypes: string[];
+};
+
 export type NftOwnershipDiagnostic = {
   connectedAddress: string;
   network: string;
+  rpcEndpoint: string;
   targetTypes: string[];
   directOwnedCount: number;
   kioskCount: number;
   kioskItemCount: number;
+  directOwnedPages: OwnedObjectsPageDiagnostic[];
+  kioskPages: KioskPageDiagnostic[];
+  directOwnedTypes: string[];
+  kioskItemTypes: string[];
+  kioskItemsByKiosk: KioskItemDiagnostic[];
+  requiredTypeBreakdown: StructTypeBreakdown[];
+  typeComparisons: TypeComparisonDiagnostic[];
   matchedDirectObjects: MatchedOwnedObject[];
   matchedKioskItems: MatchedKioskItem[];
   sampleObjectTypes: string[];
+  zeroCountReason: string;
 };
 
 export type NftOwnershipCheckResult = {
@@ -119,6 +168,8 @@ type OwnedKioskItem = {
 const RPC_RETRY_ATTEMPTS = 4;
 const RPC_RETRY_BASE_DELAY_MS = 250;
 const KIOSK_FETCH_BATCH_SIZE = 4;
+const MAX_DEBUG_TYPES = 50;
+const MAX_DEBUG_COMPARISONS = 50;
 
 function uniqueStrings(values: string[]) {
   return [...new Set(values.filter(Boolean))];
@@ -174,9 +225,80 @@ export function normalizeSuiTypeName(value?: string | null) {
   }
 }
 
+export function normalizeStructType(value?: string | null) {
+  return normalizeSuiTypeName(value);
+}
+
+function splitGenericArguments(value: string) {
+  const generics: string[] = [];
+  let current = "";
+  let depth = 0;
+
+  for (const char of value) {
+    if (char === "<") {
+      depth += 1;
+      current += char;
+      continue;
+    }
+    if (char === ">") {
+      depth = Math.max(0, depth - 1);
+      current += char;
+      continue;
+    }
+    if (char === "," && depth === 0) {
+      const trimmed = current.trim();
+      if (trimmed) {
+        generics.push(trimmed);
+      }
+      current = "";
+      continue;
+    }
+    current += char;
+  }
+
+  const trimmed = current.trim();
+  if (trimmed) {
+    generics.push(trimmed);
+  }
+
+  return generics;
+}
+
+export function breakdownStructType(value?: string | null): StructTypeBreakdown {
+  const rawType = value?.trim() ?? "";
+  const normalizedType = normalizeStructType(rawType);
+  if (!normalizedType) {
+    return {
+      rawType,
+      normalizedType,
+      packageId: "",
+      module: "",
+      struct: "",
+      generics: [],
+    };
+  }
+
+  const [packageId = "", module = "", structAndGenerics = ""] = normalizedType.split("::");
+  const genericStartIndex = structAndGenerics.indexOf("<");
+  const hasGenerics = genericStartIndex >= 0 && structAndGenerics.endsWith(">");
+  const struct = hasGenerics ? structAndGenerics.slice(0, genericStartIndex) : structAndGenerics;
+  const genericContent = hasGenerics
+    ? structAndGenerics.slice(genericStartIndex + 1, -1)
+    : "";
+
+  return {
+    rawType,
+    normalizedType,
+    packageId,
+    module,
+    struct,
+    generics: genericContent ? splitGenericArguments(genericContent) : [],
+  };
+}
+
 export function matchesOwnedObjectType(actualType: string | undefined, requiredType: string) {
-  const normalizedActualType = normalizeSuiTypeName(actualType);
-  const normalizedRequiredType = normalizeSuiTypeName(requiredType);
+  const normalizedActualType = normalizeStructType(actualType);
+  const normalizedRequiredType = normalizeStructType(requiredType);
   if (!normalizedActualType || !normalizedRequiredType) {
     return false;
   }
@@ -184,18 +306,20 @@ export function matchesOwnedObjectType(actualType: string | undefined, requiredT
 }
 
 export function filterOwnedObjectsByType(entries: OwnedObjectEntry[], requiredTypes: string[]) {
-  const normalizedRequiredTypes = new Set(requiredTypes.map((value) => normalizeSuiTypeName(value)).filter(Boolean));
+  const normalizedRequiredTypes = new Set(requiredTypes.map((value) => normalizeStructType(value)).filter(Boolean));
   if (normalizedRequiredTypes.size === 0) {
     return entries;
   }
-  return entries.filter((entry) => normalizedRequiredTypes.has(normalizeSuiTypeName(entry.data?.type)));
+  return entries.filter((entry) => normalizedRequiredTypes.has(normalizeStructType(entry.data?.type)));
 }
 
 export async function fetchAllOwnedSuiObjectsForClient(suiClient: OwnedObjectsClient, owner: string) {
   const matches: OwnedObjectEntry[] = [];
   let cursor: string | null | undefined = null;
+  const pageDiagnostics: OwnedObjectsPageDiagnostic[] = [];
 
   do {
+    const requestCursor = cursor ?? null;
     const page = (await retryRpcCall(
       () =>
         suiClient.getOwnedObjects({
@@ -211,10 +335,19 @@ export async function fetchAllOwnedSuiObjectsForClient(suiClient: OwnedObjectsCl
       "getOwnedObjects(all)",
     )) as OwnedObjectsResponse;
     matches.push(...(page.data ?? []));
+    pageDiagnostics.push({
+      cursor: requestCursor,
+      hasNextPage: Boolean(page.hasNextPage),
+      nextCursor: page.nextCursor ?? null,
+      resultCount: page.data?.length ?? 0,
+    });
     cursor = page.hasNextPage ? page.nextCursor : null;
   } while (cursor);
 
-  return uniqueObjectEntries(matches);
+  return {
+    entries: uniqueObjectEntries(matches),
+    pageDiagnostics,
+  };
 }
 
 export async function fetchOwnedSuiObjectsForClient(
@@ -260,14 +393,18 @@ async function fetchOwnedKioskItemsForClient(suiClient: OwnedObjectsClient, owne
     return {
       kioskIds: [] as string[],
       items: [] as OwnedKioskItem[],
+      pageDiagnostics: [] as KioskPageDiagnostic[],
+      kioskItemsByKiosk: [] as KioskItemDiagnostic[],
     };
   }
 
   const kioskClient = suiClient.$extend(kiosk()) as KioskQueryClient;
   const kioskIds = new Set<string>();
   let cursor: string | null = null;
+  const pageDiagnostics: KioskPageDiagnostic[] = [];
 
   do {
+    const requestCursor = cursor;
     const response = await retryRpcCall(
       () =>
         kioskClient.kiosk.getOwnedKiosks({
@@ -280,6 +417,12 @@ async function fetchOwnedKioskItemsForClient(suiClient: OwnedObjectsClient, owne
       "getOwnedKiosks",
     );
     response.kioskIds.forEach((kioskId) => kioskIds.add(kioskId));
+    pageDiagnostics.push({
+      cursor: requestCursor,
+      hasNextPage: response.hasNextPage,
+      nextCursor: response.nextCursor ?? null,
+      kioskCount: response.kioskIds.length,
+    });
     cursor = response.hasNextPage ? response.nextCursor : null;
   } while (cursor);
 
@@ -313,11 +456,110 @@ async function fetchOwnedKioskItemsForClient(suiClient: OwnedObjectsClient, owne
       isLocked: item.isLocked,
     })),
   );
+  const kioskItemsByKiosk = kioskIdList.map((kioskId) => {
+    const itemTypes = uniqueStrings(
+      items
+        .filter((item) => item.kioskId === kioskId)
+        .map((item) => item.type.trim()),
+    ).slice(0, MAX_DEBUG_TYPES);
+    return {
+      kioskId,
+      itemCount: items.filter((item) => item.kioskId === kioskId).length,
+      itemTypes,
+    };
+  });
 
   return {
     kioskIds: [...kioskIds],
     items,
+    pageDiagnostics,
+    kioskItemsByKiosk,
   };
+}
+
+function buildTypeComparisons(args: {
+  directOwnedObjects: OwnedObjectEntry[];
+  kioskItems: OwnedKioskItem[];
+  requiredTypes: string[];
+}) {
+  const requiredEntries = uniqueStrings(args.requiredTypes.map((value) => value.trim()))
+    .map((requiredType) => ({
+      requiredType,
+      normalizedRequiredType: normalizeStructType(requiredType),
+    }))
+    .filter((entry) => entry.normalizedRequiredType);
+  const comparisons: TypeComparisonDiagnostic[] = [];
+  const seenKeys = new Set<string>();
+
+  const pushComparisons = (source: "direct" | "kiosk", actualTypes: string[]) => {
+    for (const actualType of actualTypes) {
+      const normalizedActualType = normalizeStructType(actualType);
+      for (const requiredEntry of requiredEntries) {
+        const { normalizedRequiredType, requiredType } = requiredEntry;
+        const key = `${source}::${normalizedActualType}::${normalizedRequiredType}`;
+        if (!normalizedActualType || seenKeys.has(key)) {
+          continue;
+        }
+        seenKeys.add(key);
+        comparisons.push({
+          source,
+          actualType,
+          normalizedActualType,
+          requiredType,
+          normalizedRequiredType,
+          matches: normalizedActualType === normalizedRequiredType,
+          actualBreakdown: breakdownStructType(actualType),
+          requiredBreakdown: breakdownStructType(requiredType),
+        });
+        if (comparisons.length >= MAX_DEBUG_COMPARISONS) {
+          return;
+        }
+      }
+    }
+  };
+
+  pushComparisons(
+    "direct",
+    uniqueStrings(args.directOwnedObjects.map((entry) => entry.data?.type?.trim() ?? "")).slice(0, MAX_DEBUG_TYPES),
+  );
+  if (comparisons.length < MAX_DEBUG_COMPARISONS) {
+    pushComparisons(
+      "kiosk",
+      uniqueStrings(args.kioskItems.map((item) => item.type.trim())).slice(0, MAX_DEBUG_TYPES),
+    );
+  }
+
+  return comparisons;
+}
+
+function determineZeroCountReason(args: {
+  requiredTypes: string[];
+  directOwnedCount: number;
+  kioskCount: number;
+  kioskItemCount: number;
+  matchedDirectObjects: MatchedOwnedObject[];
+  matchedKioskItems: MatchedKioskItem[];
+  typeComparisons: TypeComparisonDiagnostic[];
+}) {
+  if (args.matchedDirectObjects.length > 0 || args.matchedKioskItems.length > 0) {
+    return "matched_required_type";
+  }
+  if (args.requiredTypes.length === 0) {
+    return "required_type_missing";
+  }
+  if (args.directOwnedCount === 0 && args.kioskCount === 0) {
+    return "no_direct_objects_and_no_kiosks_detected";
+  }
+  if (args.directOwnedCount === 0 && args.kioskItemCount > 0) {
+    return "only_kiosk_items_detected_but_required_type_not_matched";
+  }
+  if (args.directOwnedCount > 0 && args.kioskItemCount === 0 && args.kioskCount === 0) {
+    return "direct_objects_detected_but_required_type_not_matched";
+  }
+  if (args.typeComparisons.some((comparison) => comparison.matches)) {
+    return "type_match_detected_but_matched_objects_missing";
+  }
+  return "types_detected_but_no_normalized_type_match";
 }
 
 export async function checkOwnedNftsForClient(
@@ -325,11 +567,13 @@ export async function checkOwnedNftsForClient(
   owner: string,
   requiredTypes: string[],
   network: string,
+  rpcEndpoint = "",
 ): Promise<NftOwnershipCheckResult> {
-  const [directOwnedObjects, kioskResult] = await Promise.all([
+  const [directOwnedResult, kioskResult] = await Promise.all([
     fetchAllOwnedSuiObjectsForClient(suiClient, owner),
     fetchOwnedKioskItemsForClient(suiClient, owner),
   ]);
+  const directOwnedObjects = directOwnedResult.entries;
   const matchedDirectObjects = filterOwnedObjectsByType(directOwnedObjects, requiredTypes)
     .map((entry) => ({
       objectId: entry.data?.objectId?.trim() ?? "",
@@ -339,20 +583,51 @@ export async function checkOwnedNftsForClient(
   const matchedKioskItems = kioskResult.items.filter((item) =>
     requiredTypes.some((requiredType) => matchesOwnedObjectType(item.type, requiredType)),
   );
-
-  const diagnostic: NftOwnershipDiagnostic = {
-    connectedAddress: owner,
-    network,
-    targetTypes: uniqueStrings(requiredTypes.map((value) => value.trim())),
+  const directOwnedTypes = uniqueStrings(
+    directOwnedObjects.map((entry) => entry.data?.type?.trim() ?? ""),
+  ).slice(0, MAX_DEBUG_TYPES);
+  const kioskItemTypes = uniqueStrings(
+    kioskResult.items.map((item) => item.type.trim()),
+  ).slice(0, MAX_DEBUG_TYPES);
+  const requiredTypeBreakdown = uniqueStrings(requiredTypes.map((value) => value.trim()))
+    .map((value) => breakdownStructType(value));
+  const typeComparisons = buildTypeComparisons({
+    directOwnedObjects,
+    kioskItems: kioskResult.items,
+    requiredTypes,
+  });
+  const zeroCountReason = determineZeroCountReason({
+    requiredTypes,
     directOwnedCount: directOwnedObjects.length,
     kioskCount: kioskResult.kioskIds.length,
     kioskItemCount: kioskResult.items.length,
     matchedDirectObjects,
     matchedKioskItems,
+    typeComparisons,
+  });
+
+  const diagnostic: NftOwnershipDiagnostic = {
+    connectedAddress: owner,
+    network,
+    rpcEndpoint,
+    targetTypes: uniqueStrings(requiredTypes.map((value) => value.trim())),
+    directOwnedCount: directOwnedObjects.length,
+    kioskCount: kioskResult.kioskIds.length,
+    kioskItemCount: kioskResult.items.length,
+    directOwnedPages: directOwnedResult.pageDiagnostics,
+    kioskPages: kioskResult.pageDiagnostics,
+    directOwnedTypes,
+    kioskItemTypes,
+    kioskItemsByKiosk: kioskResult.kioskItemsByKiosk,
+    requiredTypeBreakdown,
+    typeComparisons,
+    matchedDirectObjects,
+    matchedKioskItems,
     sampleObjectTypes: uniqueStrings([
-      ...directOwnedObjects.map((entry) => entry.data?.type?.trim() ?? ""),
-      ...kioskResult.items.map((item) => item.type.trim()),
-    ]).slice(0, 20),
+      ...directOwnedTypes,
+      ...kioskItemTypes,
+    ]).slice(0, MAX_DEBUG_TYPES),
+    zeroCountReason,
   };
 
   return {
@@ -372,6 +647,7 @@ export async function hasRequiredNft(
   owner: string,
   requiredTypes: string[],
   network: string,
+  rpcEndpoint = "",
 ) {
-  return checkOwnedNftsForClient(suiClient, owner, requiredTypes, network);
+  return checkOwnedNftsForClient(suiClient, owner, requiredTypes, network, rpcEndpoint);
 }

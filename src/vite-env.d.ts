@@ -18,6 +18,7 @@ interface ImportMetaEnv {
   readonly VITE_SEAL_KEY_SERVER_OBJECT_ID?: string;
   readonly VITE_SEAL_AGGREGATOR_URL?: string;
   readonly VITE_SUI_NETWORK?: string;
+  readonly VITE_NFT_OWNERSHIP_API_URL?: string;
   readonly VITE_RPC_URL?: string;
   readonly VITE_SUI_FULLNODE_URL?: string;
   readonly NEXT_PUBLIC_SUI_RPC_URL?: string;

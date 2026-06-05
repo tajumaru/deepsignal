@@ -71,14 +71,14 @@ vi.mock("./components/AppShell", async () => {
   return {
     AppShell: ({
       children,
-      walletAvailable,
+      walletUiEnabled,
     }: {
       children: ReactNode;
-      walletAvailable?: boolean;
+      walletUiEnabled?: boolean;
       chrome: "full" | "public";
     }) => (
       <div>
-        {walletAvailable ? <WalletConnectSurface compact /> : null}
+        {walletUiEnabled ? <WalletConnectSurface compact /> : null}
         {children}
       </div>
     ),

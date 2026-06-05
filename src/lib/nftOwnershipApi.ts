@@ -1,6 +1,11 @@
 import { SuiJsonRpcClient } from "@mysten/sui/jsonRpc";
 import { isValidSuiAddress, normalizeSuiAddress } from "@mysten/sui/utils";
-import { checkOwnedNftsForClient, type NftOwnershipCheckResult, type NftOwnershipDiagnostic } from "./nftOwnership";
+import {
+  breakdownStructType,
+  checkOwnedNftsForClient,
+  type NftOwnershipCheckResult,
+  type NftOwnershipDiagnostic,
+} from "./nftOwnership";
 
 export type NftOwnershipCheckApiRequest = {
   address: string;
@@ -71,7 +76,22 @@ export async function runNftOwnershipCheckApi(
       diagnostic: {
         connectedAddress: request.address,
         network: request.network,
+        rpcEndpoint: "",
         targetTypes: request.requiredTypes,
+        directOwnedCount: 0,
+        kioskCount: 0,
+        kioskItemCount: 0,
+        directOwnedPages: [],
+        kioskPages: [],
+        directOwnedTypes: [],
+        kioskItemTypes: [],
+        kioskItemsByKiosk: [],
+        requiredTypeBreakdown: [],
+        typeComparisons: [],
+        matchedDirectObjects: [],
+        matchedKioskItems: [],
+        sampleObjectTypes: [],
+        zeroCountReason: "server_rpc_url_missing",
       },
     };
   }
@@ -93,7 +113,7 @@ export async function runNftOwnershipCheckApi(
       });
 
       try {
-        const result = await checkOwnedNftsForClient(client, request.address, request.requiredTypes, request.network);
+        const result = await checkOwnedNftsForClient(client, request.address, request.requiredTypes, request.network, rpcUrl);
         return {
           ok: true,
           hasRequiredNft: result.hasRequiredNft,
@@ -117,7 +137,22 @@ export async function runNftOwnershipCheckApi(
       diagnostic: {
         connectedAddress: request.address,
         network: request.network,
+        rpcEndpoint: rpcUrls.join(" -> "),
         targetTypes: request.requiredTypes,
+        directOwnedCount: 0,
+        kioskCount: 0,
+        kioskItemCount: 0,
+        directOwnedPages: [],
+        kioskPages: [],
+        directOwnedTypes: [],
+        kioskItemTypes: [],
+        kioskItemsByKiosk: [],
+        requiredTypeBreakdown: request.requiredTypes.map((value) => breakdownStructType(value)),
+        typeComparisons: [],
+        matchedDirectObjects: [],
+        matchedKioskItems: [],
+        sampleObjectTypes: [],
+        zeroCountReason: "rpc_error_before_ownership_match",
       },
     };
   })();

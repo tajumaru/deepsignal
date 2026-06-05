@@ -1287,6 +1287,7 @@ describe("PublicFormPage shared manifest restore", () => {
     await waitFor(() => expect(screen.getByRole("heading", { name: "Prime Holder Signal" })).toBeInTheDocument());
     expect(screen.queryByText("What happened?")).not.toBeInTheDocument();
     expect(screen.getByText("Prime Machin")).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: "Prime Machin NFT art" })).toBeInTheDocument();
   });
 
   it("shows wallet connect UI on the nft gate screen when the responder is not connected", async () => {

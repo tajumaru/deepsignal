@@ -31,6 +31,7 @@ import {
   getWalrusErrorUrl,
   isQuotaExceededError,
   isRateLimitError,
+  isWalletApprovalError,
   isWalrusDiagnosticError,
 } from "./walrusDiagnostics";
 import {
@@ -556,6 +557,22 @@ function normalizeWalrusWriteError(error: unknown) {
           category: "rate_limited",
           source: error instanceof StorageNodeAPIError ? "upload-relay" : "unknown",
           status: getWalrusErrorStatus(error) ?? 429,
+          errorName: error.name,
+          causeMessage: getWalrusCauseMessage(error),
+          url: getWalrusErrorUrl(error),
+          responseBody: getWalrusErrorResponseBody(error),
+        },
+        error,
+      );
+    }
+
+    if (isWalletApprovalError(error)) {
+      return new WalrusDiagnosticError(
+        "Wallet approval failed before the Walrus upload started.",
+        {
+          stage: "wallet-approval",
+          source: "wallet",
+          status: getWalrusErrorStatus(error),
           errorName: error.name,
           causeMessage: getWalrusCauseMessage(error),
           url: getWalrusErrorUrl(error),

@@ -547,6 +547,11 @@
   box-shadow: 0 0 28px rgba(116, 226, 255, 0.12);
 }
 
+img.public-identity-choice-hero-art {
+  display: block;
+  object-fit: cover;
+}
+
 .public-identity-choice-copy {
   display: grid;
   gap: 0.5rem;

@@ -3,7 +3,6 @@ import { useLocation } from "react-router-dom";
 import { InitialBootReady, useBootOverlay } from "./bootstrap/useBootOverlay";
 import { DashboardDegradedShell } from "./components/DashboardDegradedShell";
 import { BuildUpdateBanner } from "./components/system/BuildUpdateBanner";
-import { WalletSurface } from "./components/WalletSurface";
 import {
   getMixedBuildStatus,
   recordBuildAsset,
@@ -25,6 +24,7 @@ import { PublicAppRoutes } from "./routes/PublicAppRoutes";
 import { createPublicRouteComponents, type PublicRouteComponents } from "./routes/publicRouteComponents";
 import { MixedBuildRecoveryScreen, RouteErrorBoundary } from "./routes/RouteErrorBoundary";
 import { getRouteId } from "./routes/routeDiagnostics";
+import { useWalletSessionState } from "./walletSession";
 
 const AppShell = lazy(() =>
   retryLazyImport(() => import("./components/AppShell"), "app-shell").then((module) => ({
@@ -200,11 +200,12 @@ function PrivateRouteSurface({
   mixedBuildStatus,
   onRetryRoute,
   onRouteReady,
-  routeNeedsWalletSurface,
+  routeShowsWalletUi,
   routeNeedsWorkspaceBoot,
   routeIsDashboardShell,
   routePath,
   routeRetryNonce,
+  walletSessionPhase,
   workspaceReady,
 }: {
   components: AppRouteComponents;
@@ -212,11 +213,12 @@ function PrivateRouteSurface({
   mixedBuildStatus: ReturnType<typeof getMixedBuildStatus>;
   onRetryRoute: () => void;
   onRouteReady: () => void;
-  routeNeedsWalletSurface: boolean;
+  routeShowsWalletUi: boolean;
   routeNeedsWorkspaceBoot: boolean;
   routeIsDashboardShell: boolean;
   routePath: string;
   routeRetryNonce: number;
+  walletSessionPhase: "provider_deferred" | "restoring" | "disconnected" | "connected";
   workspaceReady: boolean;
 }) {
   const shellFallback =
@@ -235,7 +237,7 @@ function PrivateRouteSurface({
       onRetryRoute={onRetryRoute}
     >
       <Suspense fallback={shellFallback}>
-        <AppShell walletAvailable={routeNeedsWalletSurface} chrome="full">
+        <AppShell walletSessionPhase={walletSessionPhase} walletUiEnabled={routeShowsWalletUi} chrome="full">
           <BuildUpdateBanner />
           <AppRouteRuntimeEffects enabled={routeNeedsWorkspaceBoot} routePath={routePath} />
           {mixedBuildStatus.detected ? (
@@ -259,6 +261,7 @@ function PrivateRouteSurface({
 
 export default function App() {
   const location = useLocation();
+  const walletSession = useWalletSessionState();
   const routeIsLanding = location.pathname === "/";
   const routeUsesPublicChrome =
     location.pathname.startsWith("/f/") ||
@@ -271,8 +274,9 @@ export default function App() {
   const [routeRetryNonce, setRouteRetryNonce] = useState(0);
   const appRouteComponents = useMemo(() => createAppRouteComponents(routeRetryNonce), [routeRetryNonce]);
   const publicRouteComponents = useMemo(() => createPublicRouteComponents(routeRetryNonce), [routeRetryNonce]);
-  const routeNeedsWalletSurface =
+  const routeShowsWalletUi =
     location.pathname === "/admin" ||
+    location.pathname === "/dashboard" ||
     location.pathname === "/create" ||
     location.pathname === "/compose" ||
     location.pathname === "/troubleshooting" ||
@@ -315,7 +319,7 @@ export default function App() {
       hash: location.hash || "",
       browserPathname: typeof window === "undefined" ? location.pathname : window.location.pathname,
       browserHash: typeof window === "undefined" ? location.hash : window.location.hash,
-      walletSurface: routeNeedsWalletSurface,
+      walletSurface: routeShowsWalletUi,
       publicChrome: routeUsesPublicChrome,
     });
     return () => {
@@ -323,29 +327,13 @@ export default function App() {
         routePath: `${location.pathname}${location.search}${location.hash}`,
       });
     };
-  }, [location.hash, location.pathname, location.search, routeNeedsWalletSurface, routeUsesPublicChrome]);
+  }, [location.hash, location.pathname, location.search, routeShowsWalletUi, routeUsesPublicChrome]);
 
   useEffect(() => {
     setDeepSignalDebugReadiness({
       workspaceReady: workspaceReadyForRoute,
     });
   }, [workspaceReadyForRoute]);
-
-  useEffect(() => {
-    if (
-      routeNeedsWalletSurface ||
-      (location.pathname !== "/dashboard" && !location.pathname.startsWith("/dashboard/"))
-    ) {
-      return;
-    }
-    markPerfMilestone("provider:wallet:deferred", "dashboard-shell-first");
-    logRouteLifecycle("provider:wallet-deferred", {
-      reason: "dashboard-shell-first",
-      shellWalletSurface: "skipped",
-      contentWalletSurface: "deferred",
-      routePath: `${location.pathname}${location.search}${location.hash}`,
-    });
-  }, [location.hash, location.pathname, location.search, routeNeedsWalletSurface]);
 
   useEffect(() => {
     if (location.pathname !== "/") {
@@ -404,40 +392,15 @@ export default function App() {
       mixedBuildStatus={mixedBuildStatus}
       onRetryRoute={() => setRouteRetryNonce((value) => value + 1)}
       onRouteReady={() => setInitialRouteReady(true)}
-      routeNeedsWalletSurface={routeNeedsWalletSurface}
+      routeShowsWalletUi={routeShowsWalletUi}
       routeNeedsWorkspaceBoot={routeNeedsWorkspaceBoot}
       routeIsDashboardShell={location.pathname === "/dashboard"}
       routePath={routePath}
       routeRetryNonce={routeRetryNonce}
+      walletSessionPhase={walletSession.phase}
       workspaceReady={workspaceReadyForRoute}
     />
   );
 
-  if (!routeNeedsWalletSurface) {
-    return routeSurface;
-  }
-
-  return (
-    <WalletSurface
-      blockUntilLoaded={location.pathname !== "/create"}
-      fallback={
-        <Suspense fallback={<DelayedWorkspaceRestoreFallback />}>
-          <RouteReady routePath={routePath} onReady={() => setInitialRouteReady(true)}>
-            <AppShell walletAvailable={false} chrome="full">
-              <BuildUpdateBanner />
-              <DelayedWorkspaceRestoreFallback onRetry={() => window.location.reload()} />
-            </AppShell>
-          </RouteReady>
-        </Suspense>
-      }
-      requestOnMount={
-        routeNeedsWalletSurface &&
-        location.pathname !== "/create" &&
-        location.pathname !== "/dashboard" &&
-        !location.pathname.startsWith("/dashboard/")
-      }
-    >
-      {routeSurface}
-    </WalletSurface>
-  );
+  return routeSurface;
 }

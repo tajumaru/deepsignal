@@ -3,8 +3,7 @@ import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
 
-const { walletSurfaceSpy, walrusRuntimeSurfaceSpy, routeFailures } = vi.hoisted(() => ({
-  walletSurfaceSpy: vi.fn(),
+const { walrusRuntimeSurfaceSpy, routeFailures } = vi.hoisted(() => ({
   walrusRuntimeSurfaceSpy: vi.fn(),
   routeFailures: {
     explore: null as Error | null,
@@ -15,13 +14,24 @@ const { walletSurfaceSpy, walrusRuntimeSurfaceSpy, routeFailures } = vi.hoisted(
 vi.mock("./components/AppShell", () => ({
   AppShell: ({
     children,
-    walletAvailable,
+    walletSessionPhase,
+    walletUiEnabled,
     chrome,
   }: {
     children: React.ReactNode;
-    walletAvailable?: boolean;
+    walletSessionPhase?: string;
+    walletUiEnabled?: boolean;
     chrome: "full" | "public";
-  }) => <div data-testid="app-shell" data-chrome={chrome} data-wallet-available={walletAvailable ? "yes" : "no"}>{children}</div>,
+  }) => (
+    <div
+      data-testid="app-shell"
+      data-chrome={chrome}
+      data-wallet-phase={walletSessionPhase ?? "provider_deferred"}
+      data-wallet-ui={walletUiEnabled ? "enabled" : "disabled"}
+    >
+      {children}
+    </div>
+  ),
 }));
 
 vi.mock("./components/PublicAppShell", () => ({
@@ -32,13 +42,6 @@ vi.mock("./components/PublicAppShell", () => ({
 
 vi.mock("./components/system/BuildUpdateBanner", () => ({
   BuildUpdateBanner: () => null,
-}));
-
-vi.mock("./components/WalletSurface", () => ({
-  WalletSurface: ({ children }: { children: React.ReactNode }) => {
-    walletSurfaceSpy();
-    return <>{children}</>;
-  },
 }));
 
 vi.mock("./components/WalrusRuntimeSurface", () => ({
@@ -92,7 +95,6 @@ vi.mock("./pages/MyResponsesPage", () => ({
 describe("App routing", () => {
   afterEach(() => {
     document.body.innerHTML = "";
-    walletSurfaceSpy.mockClear();
     walrusRuntimeSurfaceSpy.mockClear();
     routeFailures.explore = null;
     routeFailures.admin = null;
@@ -120,7 +122,6 @@ describe("App routing", () => {
 
     await waitFor(() => expect(screen.getByRole("heading", { name: "Public Form Route" })).toBeInTheDocument());
     expect(screen.getByTestId("app-shell")).toHaveAttribute("data-chrome", "public");
-    expect(walletSurfaceSpy).not.toHaveBeenCalled();
     expect(walrusRuntimeSurfaceSpy).not.toHaveBeenCalled();
   });
 
@@ -144,8 +145,7 @@ describe("App routing", () => {
 
     await waitFor(() => expect(screen.getByRole("heading", { name: "Admin Route" })).toBeInTheDocument());
     expect(screen.getByTestId("app-shell")).toHaveAttribute("data-chrome", "full");
-    expect(screen.getByTestId("app-shell")).toHaveAttribute("data-wallet-available", "no");
-    expect(walletSurfaceSpy).toHaveBeenCalled();
+    expect(screen.getByTestId("app-shell")).toHaveAttribute("data-wallet-ui", "enabled");
   });
 
   it("renders the Create Signal route inside the wallet-enabled workspace chrome", async () => {
@@ -157,8 +157,7 @@ describe("App routing", () => {
 
     await waitFor(() => expect(screen.getByRole("heading", { name: "Create Signal Route" })).toBeInTheDocument());
     expect(screen.getByTestId("app-shell")).toHaveAttribute("data-chrome", "full");
-    expect(screen.getByTestId("app-shell")).toHaveAttribute("data-wallet-available", "yes");
-    expect(walletSurfaceSpy).toHaveBeenCalled();
+    expect(screen.getByTestId("app-shell")).toHaveAttribute("data-wallet-ui", "enabled");
   });
 
   it("renders the public landing hero immediately without waiting for wallet providers", async () => {
@@ -174,7 +173,6 @@ describe("App routing", () => {
     expect(screen.getByRole("link", { name: "Create Signal" })).toBeInTheDocument();
     expect(screen.queryByText(/Loading encrypted signal workspace/i)).not.toBeInTheDocument();
     expect(screen.queryByTestId("app-shell")).not.toBeInTheDocument();
-    expect(walletSurfaceSpy).not.toHaveBeenCalled();
   });
 
   it("keeps My Responses wallet-optional on the full chrome", async () => {
@@ -186,8 +184,7 @@ describe("App routing", () => {
 
     await waitFor(() => expect(screen.getByRole("heading", { name: "My Responses Route" })).toBeInTheDocument());
     expect(screen.getByTestId("app-shell")).toHaveAttribute("data-chrome", "full");
-    expect(screen.getByTestId("app-shell")).toHaveAttribute("data-wallet-available", "no");
-    expect(walletSurfaceSpy).not.toHaveBeenCalled();
+    expect(screen.getByTestId("app-shell")).toHaveAttribute("data-wallet-ui", "disabled");
   });
 
   it("shows app-update diagnostics when a route chunk import fails", async () => {

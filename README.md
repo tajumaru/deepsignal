@@ -342,6 +342,7 @@ VITE_SEAL_SERVER_TYPE=independent
 VITE_SEAL_AGGREGATOR_URL=
 
 VITE_SUI_NETWORK=mainnet
+VITE_NFT_OWNERSHIP_API_URL=
 NEXT_PUBLIC_SUI_RPC_URL=https://sui-mainnet.gateway.tatum.io
 NEXT_PUBLIC_TATUM_ENABLED=false
 VITE_SUI_FULLNODE_URL=https://fullnode.mainnet.sui.io:443
@@ -355,6 +356,10 @@ VITE_OWNER_CAP_ID=
 
 Notes:
 
+- Recommended split:
+  - `.env.development.local` for local-only values used by `vite dev`
+  - `.env.production.local` for production build values used by `npm run build` and `release.bat`
+  - copy from [`./.env.development.local.example`](./.env.development.local.example) and [`./.env.production.local.example`](./.env.production.local.example)
 - `VITE_WALRUS_NETWORK` accepts `testnet` or `mainnet`; keep Walrus and Sui URLs aligned with the selected network.
 - `VITE_WALRUS_STORAGE_MODE=publisher` also needs `VITE_WALRUS_PUBLISHER_URL`; `.env.example` defaults to publisher mode for a wallet-driven local/demo path.
 - `VITE_WALRUS_STORAGE_MODE` also accepts `tatum`, but it is experimental and only becomes a write candidate when `VITE_TATUM_STORAGE_ENABLED=true` and `VITE_TATUM_STORAGE_BASE_URL` points at a relay/server path. DeepSignal still keeps `blobId` as the recovery/read key and continues to use `VITE_WALRUS_AGGREGATOR_URL` as the read fallback.
@@ -362,8 +367,10 @@ Notes:
 - `NEXT_PUBLIC_TATUM_ENABLED=true` turns on the Tatum RPC presentation and switchable client path.
 - `VITE_TATUM_STORAGE_ENABLED=true` turns on the experimental Tatum Storage candidate. Keep `TATUM_API_KEY` server-side in the relay; do not use `VITE_TATUM_API_KEY`, because Vite would expose it to browsers.
 - `TATUM_API_KEY` is optional. When present during `vite dev` or `vite preview`, DeepSignal proxies RPC calls through a local `/api/tatum/sui-rpc` path so the secret does not need to be exposed in the browser bundle.
-- NFT ownership checks for public NFT-gated forms now call `/api/nft-ownership-check` instead of querying Sui directly from the browser. During local `vite dev` and `vite preview`, Vite serves this route and runs the check server-side against `VITE_SUI_FULLNODE_URL`, `VITE_RPC_URL`, or `NEXT_PUBLIC_SUI_RPC_URL` in that order.
-- For static production hosting, provide a server-side route compatible with [`api/nft-ownership-check.ts`](./api/nft-ownership-check.ts) so public NFT gates do not depend on browser-direct Sui RPC access.
+- NFT ownership checks for public NFT-gated forms now call `VITE_NFT_OWNERSHIP_API_URL` when set, otherwise `/api/nft-ownership-check`. During local `vite dev` and `vite preview`, Vite serves `/api/nft-ownership-check` and runs the check server-side against `VITE_SUI_FULLNODE_URL`, `VITE_RPC_URL`, or `NEXT_PUBLIC_SUI_RPC_URL` in that order.
+- For static production hosting, point `VITE_NFT_OWNERSHIP_API_URL` at a real server-side endpoint compatible with [`api/nft-ownership-check.ts`](./api/nft-ownership-check.ts), because static SPA hosting alone cannot serve the NFT ownership API route.
+- Public NFT gate diagnostics can be shown in production with `?nftDebug=1` on the form URL.
+- `release.bat` first looks for `VITE_NFT_OWNERSHIP_API_URL` in `.env.production.local`, then `.env.production`, and finally honors `PROD_NFT_OWNERSHIP_API_URL` as an override. The resolved value is exported into the production build so the released static bundle points at the real NFT ownership API.
 - `VITE_ADMIN_CAP_ID` and `VITE_OWNER_CAP_ID` are optional helper envs for operator tooling and manual transaction flows.
 - Normal app access discovers active cap objects from the connected wallet.
 - `VITE_SEAL_AGGREGATOR_URL` is needed when the configured Seal key server is a committee server.
