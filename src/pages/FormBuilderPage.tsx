@@ -1,4 +1,3 @@
-import { useSignAndExecuteTransaction, useSuiClient } from "@mysten/dapp-kit";
 import "../styles/components/forms-content.css";
 import "../styles/components/metadata-proof.css";
 import "../styles/components/wallet-network.css";
@@ -17,6 +16,7 @@ import { RecoverableDraftBanner } from "../components/RecoverableDraftBanner";
 import { FieldTypePicker } from "../components/formBuilder/FieldTypePicker";
 import { useAccessControl } from "../hooks/useAccessControl";
 import { useProjectRegistry } from "../hooks/useProjectRegistry";
+import { useRpcSuiClient } from "../hooks/useRpcSuiClient";
 import { useSuiWallet } from "../hooks/useSuiWallet";
 import { useI18n } from "../i18n";
 import { canAdmin, getAdminSurfaceAccessState, getRoleLabel } from "../lib/adminAccess";
@@ -47,6 +47,7 @@ import {
   parseStoredCreateFormDraft,
 } from "../features/createForm/utils";
 import type { FormSchema, Submission } from "../types";
+import { useOptionalWalletActions } from "../walletStatus";
 
 type ComposerHomeSignalStatus = "draft" | "active" | "archived";
 
@@ -506,10 +507,10 @@ function FormBuilderComposer({
 }: FormBuilderComposerProps) {
   const { t, language } = useI18n();
   const wallet = useSuiWallet();
-  const suiClient = useSuiClient();
+  const walletActions = useOptionalWalletActions();
+  const suiClient = useRpcSuiClient();
   const { capabilityProfile, isLoadingAccess } = useAccessControl(wallet.accountAddress);
   const { projects } = useProjectRegistry(wallet.accountAddress);
-  const createFormTx = useSignAndExecuteTransaction();
   const composerShellRef = useRef<HTMLElement | null>(null);
   const pendingTemplateScrollRef = useRef(false);
   const [isScrolled, setIsScrolled] = useState(false);
@@ -569,7 +570,7 @@ function FormBuilderComposer({
     selectedProject: selectedProjectForPublish,
     editingForm,
     setProjectState: builder.setProjectState,
-    signAndExecuteTransaction: async (transaction) => createFormTx.mutateAsync({ transaction }),
+    signAndExecuteTransaction: async (transaction) => walletActions.signAndExecuteTransaction(transaction),
     waitForTransaction: async (digest) =>
       suiClient.waitForTransaction({
         digest,

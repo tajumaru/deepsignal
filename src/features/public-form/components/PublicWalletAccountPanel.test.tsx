@@ -2,14 +2,22 @@ import { render } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { PublicWalletAccountPanel } from "./PublicWalletAccountPanel";
 
-const mockUseSuiWallet = vi.hoisted(() => vi.fn());
-
-vi.mock("../../../hooks/useSuiWallet", () => ({
-  useSuiWallet: mockUseSuiWallet,
+vi.mock("../../../components/WalletConnectSurface", () => ({
+  WalletConnectSurface: () => <div data-testid="wallet-connect-surface" />,
 }));
 
-vi.mock("../../../components/WalletConnectSurface", () => ({
-  WalletConnectSurface: () => <div>WalletConnectSurface</div>,
+vi.mock("../../../i18n", () => ({
+  useI18n: () => ({
+    t: (key: string) => key,
+    language: "en",
+    setLanguage: () => undefined,
+  }),
+}));
+
+const mockUseSuiWallet = vi.fn();
+
+vi.mock("../../../hooks/useSuiWallet", () => ({
+  useSuiWallet: () => mockUseSuiWallet(),
 }));
 
 describe("PublicWalletAccountPanel", () => {

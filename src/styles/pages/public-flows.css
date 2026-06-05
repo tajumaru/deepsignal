@@ -565,6 +565,118 @@
   line-height: 1.65;
 }
 
+.public-nft-gate-screen {
+  gap: 1rem;
+  padding: 1.1rem 1.2rem 1rem;
+  overflow: visible;
+}
+
+.public-nft-gate-screen::after {
+  inset: auto 0 4.25rem 0;
+}
+
+.public-nft-gate-screen .public-identity-choice-hero {
+  gap: 0.9rem;
+}
+
+.public-nft-gate-screen .public-identity-choice-title-row {
+  gap: 0.7rem;
+}
+
+.public-nft-gate-screen .public-identity-choice-hero-icon {
+  width: 2.55rem;
+  height: 2.55rem;
+  font-size: 0.76rem;
+}
+
+.public-nft-gate-screen .public-identity-choice-copy {
+  gap: 0.35rem;
+}
+
+.public-nft-gate-screen .public-identity-choice-copy h1 {
+  font-size: clamp(1.7rem, 2.5vw, 2.4rem);
+  line-height: 1.04;
+}
+
+.public-nft-gate-screen .public-identity-choice-copy .muted {
+  max-width: 38rem;
+  font-size: 0.94rem;
+  line-height: 1.5;
+}
+
+.public-nft-gate-screen .metadata-list {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.6rem;
+}
+
+.public-nft-gate-screen .metadata-row {
+  display: grid;
+  align-content: start;
+  gap: 0.24rem;
+  min-height: 0;
+  padding: 0.72rem 0.82rem;
+  border-radius: 0.95rem;
+  background: rgba(4, 18, 31, 0.58);
+}
+
+.public-nft-gate-screen .metadata-row span {
+  color: rgba(198, 226, 239, 0.78);
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.public-nft-gate-screen .metadata-row strong {
+  min-width: 0;
+  color: #effcff;
+  font-size: 0.92rem;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.public-nft-gate-screen > .muted,
+.public-nft-gate-screen > .error-text {
+  margin: 0;
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
+
+.public-nft-gate-screen .public-identity-choice-wallet-shell {
+  margin-top: 0.1rem;
+  position: relative;
+  z-index: 3;
+}
+
+.public-nft-gate-screen .public-identity-choice-wallet-shell [data-dapp-kit] button,
+.public-nft-gate-screen .public-identity-choice-wallet-shell button[data-dapp-kit],
+.public-nft-gate-screen .public-identity-choice-wallet-shell .wallet-sync-button {
+  min-height: 2.9rem;
+  border-radius: 0.9rem;
+}
+
+.public-nft-gate-screen .wallet-sync-copy strong {
+  font-size: 0.88rem;
+}
+
+.public-nft-gate-screen .wallet-sync-copy span {
+  font-size: 0.62rem;
+}
+
+.public-nft-gate-screen details.answer-card {
+  padding: 0.75rem 0.85rem;
+  border-radius: 0.95rem;
+}
+
+.public-nft-gate-screen details.answer-card summary {
+  font-size: 0.88rem;
+}
+
+.public-nft-gate-screen details.answer-card pre {
+  max-height: 12rem;
+  overflow: auto;
+}
+
 .public-identity-choice-help {
   min-height: 2.6rem;
   padding: 0.7rem 1rem;

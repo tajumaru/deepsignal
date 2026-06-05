@@ -28,16 +28,7 @@ const MOBILE_DRAWER_HORIZONTAL_RATIO = 1.5;
 const MOBILE_DRAWER_INTENT_PX = 8;
 const MOBILE_VIEWPORT_QUERY = "(max-width: 900px)";
 
-const WalletRuntimeNavSlot = lazy(() =>
-  retryLazyImport(() => import("./WalletRuntimePanel"), "wallet-runtime-nav").then((module) => ({
-    default: module.WalletRuntimeNavSlot,
-  })),
-);
-const WalletRuntimeConnectSlot = lazy(() =>
-  retryLazyImport(() => import("./WalletRuntimePanel"), "wallet-runtime-connect").then((module) => ({
-    default: module.WalletRuntimeConnectSlot,
-  })),
-);
+const WalletRuntimePanel = lazy(() => retryLazyImport(() => import("./WalletRuntimePanel"), "wallet-runtime-panel"));
 const NetworkMenu = lazy(() =>
   retryLazyImport(() => import("./NetworkMenu"), "network-menu").then((module) => ({ default: module.NetworkMenu })),
 );
@@ -104,7 +95,7 @@ function WalletNavSlot({
 
   return (
     <Suspense fallback={null}>
-      <WalletRuntimeNavSlot section={section} onNavigate={onNavigate} />
+      <WalletRuntimePanel mode="nav" section={section} onNavigate={onNavigate} />
     </Suspense>
   );
 }
@@ -124,7 +115,7 @@ function WalletConnectSlot({
 
   return (
     <Suspense fallback={fallback ?? null}>
-      <WalletRuntimeConnectSlot surface={surface} fallback={fallback} />
+      <WalletRuntimePanel mode="connect" surface={surface} fallback={fallback} />
     </Suspense>
   );
 }

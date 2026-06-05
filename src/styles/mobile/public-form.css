@@ -36,6 +36,20 @@
     padding: 0.95rem;
   }
 
+  .public-nft-gate-screen {
+    gap: 0.85rem;
+    padding: 0.9rem;
+  }
+
+  .public-nft-gate-screen .metadata-list {
+    grid-template-columns: 1fr;
+    gap: 0.5rem;
+  }
+
+  .public-nft-gate-screen .metadata-row {
+    padding: 0.68rem 0.75rem;
+  }
+
   .public-identity-choice-hero,
   .public-identity-choice-footer,
   .public-identity-choice-footer-copy {
@@ -350,6 +364,15 @@
   .public-identity-choice-screen {
     gap: 0.9rem;
     padding: 0.82rem;
+  }
+
+  .public-nft-gate-screen {
+    gap: 0.78rem;
+    padding: 0.8rem;
+  }
+
+  .public-nft-gate-screen .public-identity-choice-copy h1 {
+    font-size: 1.35rem;
   }
 
   .public-identity-choice-copy h1 {

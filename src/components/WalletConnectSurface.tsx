@@ -4,6 +4,7 @@ import { useSuiWallet } from "../hooks/useSuiWallet";
 import { useI18n } from "../i18n";
 import { retryLazyImport } from "../lib/lazyRetry";
 import { SuiAddressDisplay } from "./SuiAddressDisplay";
+import { useWalletProviderRuntime } from "./WalletSurfaceRuntime";
 import { WalletStatus } from "./wallet/WalletStatus";
 
 const WalletConnect = lazy(() =>
@@ -23,6 +24,7 @@ function WalletConnectFallback({ compact = false }: { compact?: boolean }) {
 export function WalletConnectSurface({ compact = false, fallback, surface = "default" }: WalletConnectSurfaceProps) {
   const { t } = useI18n();
   const wallet = useSuiWallet();
+  const walletRuntime = useWalletProviderRuntime();
   const [connectRequested, setConnectRequested] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const shellRef = useRef<HTMLDivElement | null>(null);
@@ -175,14 +177,21 @@ export function WalletConnectSurface({ compact = false, fallback, surface = "def
           <button
             type="button"
             className="wallet-connect-trigger"
-            onClick={() => setConnectRequested(true)}
-            disabled={wallet.isConnecting}
+            onClick={() => {
+              walletRuntime.requestLoad();
+              setConnectRequested(true);
+            }}
+            disabled={wallet.isConnecting || walletRuntime.loading}
           >
-            {wallet.isConnecting ? "Opening..." : "Connect"}
+            {wallet.isConnecting || walletRuntime.loading ? "Opening..." : "Connect"}
           </button>
         </div>
       </div>
     );
+  }
+
+  if (!walletRuntime.loaded) {
+    return fallback ?? <WalletConnectFallback compact={compact} />;
   }
 
   return (

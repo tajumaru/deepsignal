@@ -22,7 +22,8 @@ Purpose:
 Implementation approach:
 
 - wallet connection required
-- Sui RPC `getOwnedObjects` verifies NFT ownership
+- a server-side `/api/nft-ownership-check` route verifies NFT ownership
+- the ownership check aggregates direct owned objects plus Kiosk items
 - `PublicFormPage` enforces the viewing gate
 - `usePublicSubmission` re-verifies ownership immediately before submit
 - guest mode is disabled for NFT-gated forms

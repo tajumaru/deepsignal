@@ -1,107 +1,19 @@
-import { useSuiClient } from "@mysten/dapp-kit";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
+import { fetchOwnedSuiObjectsForClient, type OwnedObjectEntry } from "../lib/nftOwnership";
 import { endPerf, markPerfMilestone, startPerf } from "../lib/perf";
 import { logRouteLifecycle } from "../lib/routeDiagnostics";
 import { isSuiRateLimitError } from "../lib/sui";
 import { handleRateLimitedRpcFallback, useRpcInfrastructure } from "../rpcInfrastructure";
-
-type OwnedObjectEntry = {
-  data?: {
-    objectId?: string;
-    type?: string;
-    content?: {
-      dataType?: string;
-      fields?: Record<string, unknown>;
-    } | null;
-  } | null;
-};
-
-type OwnedObjectsResponse = {
-  data?: OwnedObjectEntry[];
-  hasNextPage?: boolean;
-  nextCursor?: string | null;
-};
-
-type OwnedObjectsRequest = {
-  owner: string;
-  cursor?: string;
-  filter?: {
-    StructType: string;
-  };
-  options?: {
-    showType?: boolean;
-    showContent?: boolean;
-  };
-  limit?: number;
-};
-
-type OwnedObjectsClient = {
-  getOwnedObjects: (request: OwnedObjectsRequest) => Promise<unknown>;
-};
+import { useRpcSuiClient } from "./useRpcSuiClient";
 
 const OWNED_OBJECTS_CACHE_PREFIX = "deepsignal.ownedObjects";
-
-function normalizeSuiTypeName(value: string) {
-  return value.trim().toLowerCase();
-}
-
-export function matchesOwnedObjectType(actualType: string | undefined, requiredType: string) {
-  if (!actualType || !requiredType.trim()) {
-    return false;
-  }
-  const normalizedActual = normalizeSuiTypeName(actualType);
-  const normalizedRequired = normalizeSuiTypeName(requiredType);
-  return normalizedActual === normalizedRequired || normalizedActual.startsWith(`${normalizedRequired}<`);
-}
-
-export async function fetchOwnedSuiObjectsForClient(
-  suiClient: OwnedObjectsClient,
-  owner: string,
-  structTypes: string[] = [],
-) {
-  const normalizedStructTypes = [...new Set(structTypes.map((value) => value.trim()).filter(Boolean))];
-  const collectedEntries: OwnedObjectEntry[] = [];
-  let cursor: string | null | undefined = null;
-
-  do {
-    const request: OwnedObjectsRequest = {
-      owner,
-      cursor: cursor ?? undefined,
-      options: {
-        showType: true,
-        showContent: true,
-      },
-      limit: 50,
-    };
-    const page = (await suiClient.getOwnedObjects(request)) as OwnedObjectsResponse;
-    collectedEntries.push(...(page.data ?? []));
-    cursor = page.hasNextPage ? page.nextCursor : null;
-  } while (cursor);
-
-  const uniqueEntries = collectedEntries.reduce<OwnedObjectEntry[]>((unique, entry) => {
-    const objectId = entry.data?.objectId?.trim();
-    if (!objectId || unique.some((candidate) => candidate.data?.objectId?.trim() === objectId)) {
-      return unique;
-    }
-    unique.push(entry);
-    return unique;
-  }, []);
-
-  if (normalizedStructTypes.length === 0) {
-    return uniqueEntries;
-  }
-
-  return uniqueEntries.filter((entry) =>
-    normalizedStructTypes.some((requiredType) => matchesOwnedObjectType(entry.data?.type, requiredType)),
-  );
-}
 
 export function useOwnedSuiObjects(
   address?: string | null,
   options: { enabled?: boolean; structTypes?: string[] } = {},
 ) {
-  const suiClient = useSuiClient();
+  const suiClient = useRpcSuiClient();
   const rpc = useRpcInfrastructure();
   const queryEnabled = options.enabled ?? true;
   const structTypes = options.structTypes ?? [];
@@ -202,3 +114,5 @@ export function useOwnedSuiObjects(
 }
 
 export type { OwnedObjectEntry };
+export { fetchOwnedSuiObjectsForClient } from "../lib/nftOwnership";
+export { matchesOwnedObjectType, normalizeSuiTypeName } from "../lib/nftOwnership";

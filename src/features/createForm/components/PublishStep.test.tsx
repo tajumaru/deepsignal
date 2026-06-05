@@ -247,6 +247,23 @@ describe("PublishStep access control UI", () => {
     expect(arts.some((art) => art.getAttribute("src")?.includes("tally.webp"))).toBe(true);
   });
 
+  it("eager-loads the selected collection art for faster mobile rendering", () => {
+    renderPublishStep({
+      identityPolicy: "wallet_required",
+      accessMode: "nft_required",
+      nftGate: {
+        ...createDefaultNftGate(PRIME_MACHIN_PRESET_ID),
+        structType: PRIME_MACHIN_STRUCT_TYPE,
+      },
+    });
+
+    const art = document.querySelector(".publish-nft-preset-art");
+    expect(art).toHaveAttribute("loading", "eager");
+    expect(art).toHaveAttribute("decoding", "sync");
+    expect(art).toHaveAttribute("width", "32");
+    expect(art).toHaveAttribute("height", "32");
+  });
+
   it("shows an English datetime placeholder overlay when the intake window is empty", () => {
     renderPublishStep({
       language: "en",

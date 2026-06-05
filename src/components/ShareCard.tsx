@@ -267,8 +267,8 @@ export function ShareCard({ formId, blobId, createdAt, manifestBlobId }: ShareCa
         <p className="muted">{t("signalBeaconBody")}</p>
       </div>
 
-      <div className="beacon-core" aria-label={t("signalBeaconTitle")}>
-        <div className="beacon-core-label" aria-hidden="true">
+      <div className="beacon-core signal-beacon-layout" aria-label={t("signalBeaconTitle")}>
+        <div className="beacon-core-label signal-processing-label" aria-hidden="true">
           <span>SIGNAL CORE</span>
         </div>
         <div className="beacon-rings" aria-hidden="true">
@@ -282,7 +282,7 @@ export function ShareCard({ formId, blobId, createdAt, manifestBlobId }: ShareCa
         </div>
         <div className="beacon-frame">
           <div className="beacon-scan" aria-hidden="true" />
-          <div className="beacon-qr-shell">
+          <div className="beacon-qr-shell signal-qr">
             {qrMarkup ? (
               <div
                 className="beacon-qr-markup"

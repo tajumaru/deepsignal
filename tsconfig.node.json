@@ -2,10 +2,11 @@
   "compilerOptions": {
     "composite": true,
     "skipLibCheck": true,
+    "target": "ES2020",
     "module": "ESNext",
-    "moduleResolution": "Node",
+    "moduleResolution": "Bundler",
     "noEmit": true,
     "allowSyntheticDefaultImports": true
   },
-  "include": ["vite.config.ts"]
+  "include": ["vite.config.ts", "src/lib/nftOwnership.ts", "src/lib/nftOwnershipApi.ts", "src/lib/rpcErrors.ts", "api/**/*.ts"]
 }

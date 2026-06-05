@@ -2,22 +2,36 @@ import type { ReactNode } from "react";
 import { WalletConnectSurface } from "./WalletConnectSurface";
 import { WalletNav } from "./WalletNav";
 
+type WalletRuntimePanelProps =
+  | {
+      mode: "nav";
+      onNavigate?: () => void;
+      section: "access" | "inbox";
+    }
+  | {
+      mode: "connect";
+      fallback?: ReactNode;
+      surface?: "mobileDrawer";
+    };
+
+export default function WalletRuntimePanel(props: WalletRuntimePanelProps) {
+  if (props.mode === "nav") {
+    return <WalletNav section={props.section} onNavigate={props.onNavigate} />;
+  }
+
+  return <WalletConnectSurface compact surface={props.surface} fallback={props.fallback} />;
+}
+
 export function WalletRuntimeNavSlot({
   onNavigate,
   section,
-}: {
-  onNavigate?: () => void;
-  section: "access" | "inbox";
-}) {
-  return <WalletNav section={section} onNavigate={onNavigate} />;
+}: Extract<WalletRuntimePanelProps, { mode: "nav" }>) {
+  return <WalletRuntimePanel mode="nav" section={section} onNavigate={onNavigate} />;
 }
 
 export function WalletRuntimeConnectSlot({
   fallback,
   surface,
-}: {
-  fallback?: ReactNode;
-  surface?: "mobileDrawer";
-}) {
-  return <WalletConnectSurface compact surface={surface} fallback={fallback} />;
+}: Extract<WalletRuntimePanelProps, { mode: "connect" }>) {
+  return <WalletRuntimePanel mode="connect" surface={surface} fallback={fallback} />;
 }

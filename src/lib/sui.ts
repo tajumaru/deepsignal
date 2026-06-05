@@ -1,3 +1,7 @@
+import { isSuiRateLimitError } from "./rpcErrors";
+
+export { isSuiRateLimitError };
+
 export function shortAddress(address: string) {
   return `${address.slice(0, 6)}...${address.slice(-4)}`;
 }
@@ -8,15 +12,17 @@ const requestedNetwork = String(
     "mainnet",
 ).toLowerCase();
 export const SUI_NETWORK = requestedNetwork === "mainnet" ? "mainnet" : "testnet";
+export const SUI_DEV_PROXY_PATH = "/api/sui-rpc";
 export const SUI_DEFAULT_RPC_URL =
   SUI_NETWORK === "mainnet"
     ? "https://fullnode.mainnet.sui.io:443"
     : "https://fullnode.testnet.sui.io:443";
 export const SUI_TATUM_RPC_URL = import.meta.env.NEXT_PUBLIC_SUI_RPC_URL || "";
-export const SUI_FALLBACK_RPC_URL =
+export const SUI_CONFIGURED_RPC_URL =
   import.meta.env.VITE_SUI_FULLNODE_URL ||
   import.meta.env.VITE_RPC_URL ||
   SUI_DEFAULT_RPC_URL;
+export const SUI_FALLBACK_RPC_URL = import.meta.env.DEV ? SUI_DEV_PROXY_PATH : SUI_CONFIGURED_RPC_URL;
 export const SUI_FULLNODE_URL = SUI_TATUM_RPC_URL || SUI_FALLBACK_RPC_URL;
 export const SUI_RPC_URL = SUI_FULLNODE_URL || SUI_DEFAULT_RPC_URL;
 export const TATUM_ENABLED = String(import.meta.env.NEXT_PUBLIC_TATUM_ENABLED || "").toLowerCase() === "true";
@@ -49,36 +55,6 @@ export function getConnectedNetworkLabel(chainIdentifier?: string | null) {
   return SUI_NETWORK;
 }
 
-export function isSuiRateLimitError(error: unknown) {
-  if (!error) {
-    return false;
-  }
-
-  const status = typeof error === "object" && error !== null && "status" in error
-    ? (error as { status?: unknown }).status
-    : undefined;
-  if (status === 429) {
-    return true;
-  }
-
-  const cause = typeof error === "object" && error !== null && "cause" in error
-    ? (error as { cause?: unknown }).cause
-    : undefined;
-  if (cause && cause !== error && isSuiRateLimitError(cause)) {
-    return true;
-  }
-
-  const message =
-    error instanceof Error
-      ? `${error.name} ${error.message}`.toLowerCase()
-      : String(error).toLowerCase();
-  return (
-    message.includes("429") ||
-    message.includes("too many requests") ||
-    message.includes("rate limit") ||
-    message.includes("status code: 429")
-  );
-}
 export const WALRUS_AGGREGATOR_URL =
   import.meta.env.VITE_WALRUS_AGGREGATOR_URL ||
   (SUI_NETWORK === "mainnet"

@@ -12,10 +12,9 @@ import {
 import { isDashboardWorkspaceReady, useDashboardProjectRestore, useDashboardProjectRestoreSnapshot } from "./lib/dashboardProjectRestore";
 import { retryLazyImport } from "./lib/lazyRetry";
 import { markPerfMilestone } from "./lib/perf";
-import { logRouteLifecycle, setDeepSignalDebugReadiness } from "./lib/routeDiagnostics";
+import { getBrowserCapabilitiesSnapshot, logRouteLifecycle, setDeepSignalDebugReadiness } from "./lib/routeDiagnostics";
 import { scheduleIdleTask } from "./lib/scheduleIdleTask";
 import { LandingPage } from "./pages/LandingPage";
-import { RpcInfrastructureProvider } from "./RpcInfrastructureProvider";
 import { AppRoutes } from "./routes/AppRoutes";
 import { createAppRouteComponents, type AppRouteComponents } from "./routes/appRouteComponents";
 import {
@@ -49,6 +48,25 @@ function prefetchInboxWorkspaceRoute() {
     import("./lib/projectRegistry"),
     import("./storage/storageFactory"),
   ]);
+}
+
+function shouldPrefetchAdminWorkspace(pathname: string) {
+  if (typeof window === "undefined") {
+    return false;
+  }
+  const capabilities = getBrowserCapabilitiesSnapshot();
+  const mobileSafari = Boolean(capabilities.mobileSafari);
+  const isDesktopViewport = window.matchMedia?.("(min-width: 901px)").matches ?? true;
+  const routeBlocksPrefetch =
+    pathname === "/create" ||
+    pathname === "/compose" ||
+    pathname === "/explore" ||
+    pathname === "/signals" ||
+    pathname.startsWith("/f/");
+  if (mobileSafari || routeBlocksPrefetch) {
+    return false;
+  }
+  return isDesktopViewport && document.visibilityState === "visible";
 }
 
 function RouteReady({
@@ -337,7 +355,12 @@ export default function App() {
   }, [location.pathname]);
 
   useEffect(() => {
-    if (routeUsesPublicChrome || location.pathname === "/admin" || location.pathname === "/dashboard") {
+    if (
+      routeUsesPublicChrome ||
+      location.pathname === "/admin" ||
+      location.pathname === "/dashboard" ||
+      !shouldPrefetchAdminWorkspace(location.pathname)
+    ) {
       return undefined;
     }
     return scheduleIdleTask(() => prefetchInboxWorkspaceRoute(), location.pathname === "/" ? 1400 : 900);
@@ -345,36 +368,32 @@ export default function App() {
 
   if (routeIsLanding) {
     return (
-      <RpcInfrastructureProvider>
-        <RouteErrorBoundary
-          resetKey={`${location.key}:landing:${routeRetryNonce}`}
-          routePath={routePath}
-          onRetryRoute={() => setRouteRetryNonce((value) => value + 1)}
-        >
-          <BuildUpdateBanner />
-          <RouteReady routePath={routePath} onReady={() => setInitialRouteReady(true)}>
-            <LandingPage />
-          </RouteReady>
-        </RouteErrorBoundary>
-      </RpcInfrastructureProvider>
+      <RouteErrorBoundary
+        resetKey={`${location.key}:landing:${routeRetryNonce}`}
+        routePath={routePath}
+        onRetryRoute={() => setRouteRetryNonce((value) => value + 1)}
+      >
+        <BuildUpdateBanner />
+        <RouteReady routePath={routePath} onReady={() => setInitialRouteReady(true)}>
+          <LandingPage />
+        </RouteReady>
+      </RouteErrorBoundary>
     );
   }
 
   if (routeUsesPublicChrome) {
     return (
-      <RpcInfrastructureProvider>
-        <Suspense fallback={<DelayedWorkspaceRestoreFallback />}>
-          <PublicRouteSurface
-            components={publicRouteComponents}
-            locationKey={location.key}
-            mixedBuildStatus={mixedBuildStatus}
-            onRetryRoute={() => setRouteRetryNonce((value) => value + 1)}
-            onRouteReady={() => setInitialRouteReady(true)}
-            routePath={routePath}
-            routeRetryNonce={routeRetryNonce}
-          />
-        </Suspense>
-      </RpcInfrastructureProvider>
+      <Suspense fallback={<DelayedWorkspaceRestoreFallback />}>
+        <PublicRouteSurface
+          components={publicRouteComponents}
+          locationKey={location.key}
+          mixedBuildStatus={mixedBuildStatus}
+          onRetryRoute={() => setRouteRetryNonce((value) => value + 1)}
+          onRouteReady={() => setInitialRouteReady(true)}
+          routePath={routePath}
+          routeRetryNonce={routeRetryNonce}
+        />
+      </Suspense>
     );
   }
 
@@ -395,25 +414,30 @@ export default function App() {
   );
 
   if (!routeNeedsWalletSurface) {
-    return <RpcInfrastructureProvider>{routeSurface}</RpcInfrastructureProvider>;
+    return routeSurface;
   }
 
   return (
-    <RpcInfrastructureProvider>
-      <WalletSurface
-        fallback={
-          <Suspense fallback={<DelayedWorkspaceRestoreFallback />}>
-            <RouteReady routePath={routePath} onReady={() => setInitialRouteReady(true)}>
-              <AppShell walletAvailable={false} chrome="full">
-                <BuildUpdateBanner />
-                <DelayedWorkspaceRestoreFallback onRetry={() => window.location.reload()} />
-              </AppShell>
-            </RouteReady>
-          </Suspense>
-        }
-      >
-        {routeSurface}
-      </WalletSurface>
-    </RpcInfrastructureProvider>
+    <WalletSurface
+      blockUntilLoaded={location.pathname !== "/create"}
+      fallback={
+        <Suspense fallback={<DelayedWorkspaceRestoreFallback />}>
+          <RouteReady routePath={routePath} onReady={() => setInitialRouteReady(true)}>
+            <AppShell walletAvailable={false} chrome="full">
+              <BuildUpdateBanner />
+              <DelayedWorkspaceRestoreFallback onRetry={() => window.location.reload()} />
+            </AppShell>
+          </RouteReady>
+        </Suspense>
+      }
+      requestOnMount={
+        routeNeedsWalletSurface &&
+        location.pathname !== "/create" &&
+        location.pathname !== "/dashboard" &&
+        !location.pathname.startsWith("/dashboard/")
+      }
+    >
+      {routeSurface}
+    </WalletSurface>
   );
 }

@@ -42,16 +42,10 @@ import {
   SignalInboxOnboardingHero,
   type InboxOnboardingState,
 } from "../features/admin/components/AdminOnboarding";
-import { CsvExportConfirmationModal } from "../features/admin/components/CsvExportConfirmationModal";
-import { ProjectWorkspaceModal } from "../features/admin/components/ProjectWorkspaceModal";
-import { ProjectMemberManagementSection } from "../features/admin/components/ProjectMemberManagementSection";
 import { ReviewResultCard } from "../features/admin/components/ReviewResultCard";
-import { ReviewSessionModal } from "../features/admin/components/ReviewSessionModal";
-import { SecondaryInspector } from "../features/admin/components/SecondaryInspector";
 import { SignalAttachmentList } from "../features/admin/components/SignalAttachmentList";
 import { SignalCard } from "../features/admin/components/SignalCard";
 import { buildSignalCardIntelligence } from "../features/admin/components/signalIntelligence";
-import { SignalTimelineSection } from "../features/admin/components/SignalTimelineSection";
 import { SignalChannelSelector, SignalStreamsNav } from "../features/admin/components/SignalStreamsNav";
 import {
   isSystemSignal,
@@ -75,7 +69,6 @@ import {
   type SignalPatternMemoryStatus,
   type SignalPatternMemoryType,
 } from "../memory";
-import { WorkspaceActivityLog } from "../features/admin/components/WorkspaceActivityLog";
 import { useAdminToast } from "../features/admin/hooks/useAdminToast";
 import { usePendingSuiRegistration } from "../features/admin/hooks/usePendingSuiRegistration";
 import { usePrivateSignalDecrypt } from "../features/admin/hooks/usePrivateSignalDecrypt";
@@ -119,6 +112,7 @@ import {
 import { getTriageStatusLabel, TRIAGE_STATUS_OPTIONS } from "../lib/signalOps";
 import { getRelatedSignals } from "../lib/relatedSignals";
 import { loadVersionedFormSchemas, type VersionedFormSchemas } from "../lib/formVersionSchemas";
+import { retryLazyImport } from "../lib/lazyRetry";
 import {
   getAssignedReviewer,
   getReviewerNoteUpdatedAt,
@@ -276,6 +270,41 @@ const DEMO_FLOW_VISIBLE = false;
 const PROJECT_RECOVERY_NOTICE_ACK_KEY = "deepsignal.admin.projectRecoveryNoticeAck";
 const WORKSPACE_RECOVERY_TIMEOUT_MS = 4000;
 const LazyWorkspaceInsights = lazy(() => import("../features/admin/components/WorkspaceInsights"));
+const LazyCsvExportConfirmationModal = lazy(() =>
+  retryLazyImport(() => import("../features/admin/components/CsvExportConfirmationModal"), "admin-csv-export-modal").then((module: typeof import("../features/admin/components/CsvExportConfirmationModal")) => ({
+    default: module.CsvExportConfirmationModal,
+  })),
+);
+const LazyProjectWorkspaceModal = lazy(() =>
+  retryLazyImport(() => import("../features/admin/components/ProjectWorkspaceModal"), "admin-project-workspace-modal").then((module: typeof import("../features/admin/components/ProjectWorkspaceModal")) => ({
+    default: module.ProjectWorkspaceModal,
+  })),
+);
+const LazyProjectMemberManagementSection = lazy(() =>
+  retryLazyImport(() => import("../features/admin/components/ProjectMemberManagementSection"), "admin-project-members").then((module: typeof import("../features/admin/components/ProjectMemberManagementSection")) => ({
+    default: module.ProjectMemberManagementSection,
+  })),
+);
+const LazyReviewSessionModal = lazy(() =>
+  retryLazyImport(() => import("../features/admin/components/ReviewSessionModal"), "admin-review-session-modal").then((module: typeof import("../features/admin/components/ReviewSessionModal")) => ({
+    default: module.ReviewSessionModal,
+  })),
+);
+const LazySecondaryInspector = lazy(() =>
+  retryLazyImport(() => import("../features/admin/components/SecondaryInspector"), "admin-secondary-inspector").then((module: typeof import("../features/admin/components/SecondaryInspector")) => ({
+    default: module.SecondaryInspector,
+  })),
+);
+const LazySignalTimelineSection = lazy(() =>
+  retryLazyImport(() => import("../features/admin/components/SignalTimelineSection"), "admin-signal-timeline").then((module: typeof import("../features/admin/components/SignalTimelineSection")) => ({
+    default: module.SignalTimelineSection,
+  })),
+);
+const LazyWorkspaceActivityLog = lazy(() =>
+  retryLazyImport(() => import("../features/admin/components/WorkspaceActivityLog"), "admin-workspace-activity-log").then((module: typeof import("../features/admin/components/WorkspaceActivityLog")) => ({
+    default: module.WorkspaceActivityLog,
+  })),
+);
 
 function loadCsvExportModule() {
   return import("../lib/exportResponses");
@@ -7893,7 +7922,8 @@ export function AdminDashboardPage() {
           </div>
         ) : null}
         {pendingCsvExportMetadata ? (
-          <CsvExportConfirmationModal
+          <Suspense fallback={null}>
+          <LazyCsvExportConfirmationModal
             metadata={pendingCsvExportMetadata}
             excludedPiiFields={excludedCsvPiiFields}
             labels={{
@@ -7925,6 +7955,7 @@ export function AdminDashboardPage() {
             }}
             onConfirm={handleConfirmCsvExport}
           />
+          </Suspense>
         ) : null}
 
         {showGuidedOnboarding ? (
@@ -7968,10 +7999,12 @@ export function AdminDashboardPage() {
         ) : null}
 
         {activeWorkspaceTab === "members" && hasAdminAccess ? (
-          <ProjectMemberManagementSection
+          <Suspense fallback={null}>
+          <LazyProjectMemberManagementSection
             selectedProject={selectedProject}
             onRefreshProjects={refetchProjects}
           />
+          </Suspense>
         ) : showGuidedOnboarding ? (
           onboardingState === "create-signal" ? (
             <EmptyState variant="abyss" className="signal-inbox-onboarding-empty-state">
@@ -7981,7 +8014,9 @@ export function AdminDashboardPage() {
             </EmptyState>
           ) : null
         ) : activeWorkspaceTab === "activity" && hasAdminAccess ? (
-          <WorkspaceActivityLog events={activityEvents} />
+          <Suspense fallback={null}>
+            <LazyWorkspaceActivityLog events={activityEvents} />
+          </Suspense>
         ) : activeWorkspaceTab === "insights" && hasAdminAccess ? (
           <Suspense fallback={<WorkspaceInsightsFallback />}>
             <LazyWorkspaceInsights
@@ -9623,7 +9658,8 @@ export function AdminDashboardPage() {
                       onMarkEmergingRisk={() => void handleMarkSelectedEmergingRisk()}
                       onPublishToRoadmap={() => void handlePublishSelectedToRoadmap()}
                     />
-                    <SignalTimelineSection
+                    <Suspense fallback={null}>
+                    <LazySignalTimelineSection
                       open={detailSectionsState.signalTimelineOpen}
                       onToggle={() => setDetailSectionOpen("signalTimelineOpen", !detailSectionsState.signalTimelineOpen)}
                       entries={selectedSignalTimelineEntries}
@@ -9631,9 +9667,11 @@ export function AdminDashboardPage() {
                       timelineNow={timelineNow}
                       getPhaseLabel={getTimelinePhaseLabel}
                     />
+                    </Suspense>
 
                     {!selectedRecordIsDemo ? (
-                    <SecondaryInspector
+                    <Suspense fallback={null}>
+                    <LazySecondaryInspector
                       t={t}
                       selectedRecord={selectedRecord}
                       csvExportScopeLabel={csvExportScopeLabel}
@@ -9649,11 +9687,11 @@ export function AdminDashboardPage() {
                       }
                       onOpenCsvExportReview={handleOpenCsvExportReview}
                       storageProofOpen={detailSectionsState.storageProofOpen}
-                      onStorageProofOpenChange={(open) => setDetailSectionOpen("storageProofOpen", open)}
+                      onStorageProofOpenChange={(open: boolean) => setDetailSectionOpen("storageProofOpen", open)}
                       advancedMetadataOpen={detailSectionsState.advancedMetadataOpen}
-                      onAdvancedMetadataOpenChange={(open) => setDetailSectionOpen("advancedMetadataOpen", open)}
+                      onAdvancedMetadataOpenChange={(open: boolean) => setDetailSectionOpen("advancedMetadataOpen", open)}
                       relatedSignalsOpen={detailSectionsState.relatedSignalsOpen}
-                      onRelatedSignalsOpenChange={(open) => setDetailSectionOpen("relatedSignalsOpen", open)}
+                      onRelatedSignalsOpenChange={(open: boolean) => setDetailSectionOpen("relatedSignalsOpen", open)}
                       storageMode={storageRuntime.mode}
                       isRegisteringSelectedSignal={isRegisteringSignal(selectedRecord.submission.id)}
                       onRegisterSelectedSignal={() => {
@@ -9682,7 +9720,7 @@ export function AdminDashboardPage() {
                       canDecrypt={Boolean(activeAccountAddress)}
                       relatedSignals={relatedSignals}
                       selectedSignalId={selectedSignalId}
-                      onSelectRelatedRecord={(record) => {
+                      onSelectRelatedRecord={(record: SignalRecord) => {
                         if (decryptInFlightRef.current) {
                           return;
                         }
@@ -9692,6 +9730,7 @@ export function AdminDashboardPage() {
                         });
                       }}
                     />
+                    </Suspense>
                     ) : null}
                   </div>
                   ) : null}
@@ -9704,7 +9743,8 @@ export function AdminDashboardPage() {
         )}
         <div className="mobile-console-banner">{t("adminDesktopNotice")}</div>
       </section>
-      <ReviewSessionModal
+      <Suspense fallback={null}>
+      <LazyReviewSessionModal
         open={reviewSessionOpen}
         selectedRecord={selectedRecord}
         selectedRecordForm={selectedRecordVersionedForm}
@@ -9735,7 +9775,7 @@ export function AdminDashboardPage() {
         activeReviewDraft={activeReviewDraft}
         patchReviewDraft={patchReviewDraft}
         triageOptions={TRIAGE_STATUS_OPTIONS}
-        getLocalizedTriageStatusLabel={(value) => getLocalizedTriageStatusLabel(value, t)}
+        getLocalizedTriageStatusLabel={(value: SignalRecord["submission"]["triageStatus"]) => getLocalizedTriageStatusLabel(value, t)}
         renderAnswerValue={renderAnswerValue}
         detailAttachments={detailAttachments}
         attachmentPreviews={attachmentPreviews}
@@ -9753,8 +9793,10 @@ export function AdminDashboardPage() {
         hasSavedReviewResult={selectedHasSavedReviewResult}
         onSaveReview={saveActiveReviewDraft}
       />
+      </Suspense>
       {projectModalMode ? (
-        <ProjectWorkspaceModal
+        <Suspense fallback={null}>
+        <LazyProjectWorkspaceModal
           mode={projectModalMode}
           projects={projects}
           selectedProjectId={selectedProjectId}
@@ -9788,9 +9830,10 @@ export function AdminDashboardPage() {
             connectBody: t("projectModalConnectBody"),
             connectPlaceholder: t("projectOrOwnerCapPlaceholder"),
             connectButton: t("connectLabel"),
-            projectStats: (params) => t("projectModalProjectStats", params),
+            projectStats: (params?: { forms?: number; signals?: number }) => t("projectModalProjectStats", params),
           }}
         />
+        </Suspense>
       ) : null}
       {patternMemoryIssueDraft ? (
         <div className="node-directory-overlay" role="dialog" aria-modal="true" aria-labelledby="pattern-memory-issue-draft-title">

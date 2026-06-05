@@ -1087,8 +1087,8 @@ export function usePublicSubmission({
           ? "Connect a wallet to verify NFT ownership before submitting."
           : accessCheck.reason === "network_mismatch"
             ? "This wallet is connected to the wrong Sui network for this NFT-gated signal."
-            : accessCheck.reason === "rpc_failed"
-              ? "NFT ownership could not be verified right now. Please retry in a moment."
+            : accessCheck.reason === "rpc_error"
+              ? "NFT check failed. Retry or switch RPC."
               : "This wallet does not currently meet the NFT holder requirement for this signal.";
       setSubmitError(message);
       setSubmitNotice("");

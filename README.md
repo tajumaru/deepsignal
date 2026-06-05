@@ -362,6 +362,8 @@ Notes:
 - `NEXT_PUBLIC_TATUM_ENABLED=true` turns on the Tatum RPC presentation and switchable client path.
 - `VITE_TATUM_STORAGE_ENABLED=true` turns on the experimental Tatum Storage candidate. Keep `TATUM_API_KEY` server-side in the relay; do not use `VITE_TATUM_API_KEY`, because Vite would expose it to browsers.
 - `TATUM_API_KEY` is optional. When present during `vite dev` or `vite preview`, DeepSignal proxies RPC calls through a local `/api/tatum/sui-rpc` path so the secret does not need to be exposed in the browser bundle.
+- NFT ownership checks for public NFT-gated forms now call `/api/nft-ownership-check` instead of querying Sui directly from the browser. During local `vite dev` and `vite preview`, Vite serves this route and runs the check server-side against `VITE_SUI_FULLNODE_URL`, `VITE_RPC_URL`, or `NEXT_PUBLIC_SUI_RPC_URL` in that order.
+- For static production hosting, provide a server-side route compatible with [`api/nft-ownership-check.ts`](./api/nft-ownership-check.ts) so public NFT gates do not depend on browser-direct Sui RPC access.
 - `VITE_ADMIN_CAP_ID` and `VITE_OWNER_CAP_ID` are optional helper envs for operator tooling and manual transaction flows.
 - Normal app access discovers active cap objects from the connected wallet.
 - `VITE_SEAL_AGGREGATOR_URL` is needed when the configured Seal key server is a committee server.

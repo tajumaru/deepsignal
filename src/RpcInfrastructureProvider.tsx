@@ -4,6 +4,7 @@ import {
   getEffectiveTatumRpcUrl,
   getRpcProviderLabel,
   isTatumRpcUrl,
+  SUI_CONFIGURED_RPC_URL,
   SUI_FALLBACK_RPC_URL,
   SUI_NETWORK,
   SUI_TATUM_RPC_URL,
@@ -29,7 +30,7 @@ export function RpcInfrastructureProvider({ children }: PropsWithChildren) {
     canUseTatum ? Date.now() + TATUM_SELECTION_GRACE_MS : 0,
   );
   const currentRpcUrl = rpcMode === "tatum" && tatumRpcUrl ? tatumRpcUrl : SUI_FALLBACK_RPC_URL;
-  const displayRpcUrl = rpcMode === "tatum" && SUI_TATUM_RPC_URL ? SUI_TATUM_RPC_URL : currentRpcUrl;
+  const displayRpcUrl = rpcMode === "tatum" && SUI_TATUM_RPC_URL ? SUI_TATUM_RPC_URL : SUI_CONFIGURED_RPC_URL;
 
   const switchToDefault = useCallback(() => {
     setManualTatumSelectionUntil(0);

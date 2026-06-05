@@ -1,4 +1,3 @@
-import { useSuiClient } from "@mysten/dapp-kit";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -15,6 +14,7 @@ import { isSuiRateLimitError } from "../lib/sui";
 import { endPerf, markPerfMilestone, startPerf } from "../lib/perf";
 import { handleRateLimitedRpcFallback, useRpcInfrastructure } from "../rpcInfrastructure";
 import { useOwnedSuiObjects } from "./useOwnedSuiObjects";
+import { useRpcSuiClient } from "./useRpcSuiClient";
 
 type SuiObjectResponse = {
   data?: {
@@ -31,7 +31,7 @@ function normalizeType(value?: string | null) {
 }
 
 async function fetchProjectObjects(
-  suiClient: ReturnType<typeof useSuiClient>,
+  suiClient: ReturnType<typeof useRpcSuiClient>,
   projectIds: string[],
 ) {
   const projects: ProjectSummary[] = [];
@@ -72,7 +72,7 @@ async function fetchProjectObjects(
 }
 
 export function useProjectRegistry(address?: string | null) {
-  const suiClient = useSuiClient();
+  const suiClient = useRpcSuiClient();
   const rpc = useRpcInfrastructure();
   const enabled = Boolean(address && PROJECT_OWNER_CAP_TYPE && !rpc.isRateLimitedCooldownActive);
   const expectedType = normalizeType(PROJECT_OWNER_CAP_TYPE);

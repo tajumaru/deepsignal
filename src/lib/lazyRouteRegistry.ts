@@ -116,8 +116,7 @@ export const lazyChunkExportSpecs: Record<string, RouteChunkSpec> = {
   },
   "app-shell": { exportName: "AppShell", filePrefix: "AppShell", routeKey: "admin" },
   "network-menu": { exportName: "NetworkMenu", filePrefix: "NetworkMenu", routeKey: "admin" },
-  "wallet-runtime-connect": { exportName: "WalletRuntimeConnectSlot", filePrefix: "WalletRuntimePanel", routeKey: "admin" },
-  "wallet-runtime-nav": { exportName: "WalletRuntimeNavSlot", filePrefix: "WalletRuntimePanel", routeKey: "admin" },
+  "wallet-runtime-panel": { exportName: "default", filePrefix: "WalletRuntimePanel", routeKey: "admin" },
   "wallet-providers": { exportName: "WalletProviders", filePrefix: "providers", routeKey: "admin" },
   "walrus-runtime-provider": { exportName: "WalrusRuntimeProvider", filePrefix: "WalrusRuntimeProvider", routeKey: "admin" },
 };

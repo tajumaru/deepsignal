@@ -1,11 +1,9 @@
 import {
-  createContext,
-  lazy,
-  Suspense,
   useContext,
   useEffect,
   useMemo,
   useRef,
+  useState,
   type PropsWithChildren,
   type ReactNode,
 } from "react";
@@ -13,6 +11,7 @@ import { buildInfo } from "../lib/buildInfo";
 import { retryLazyImport } from "../lib/lazyRetry";
 import { endPerf, markPerfMilestone, startPerf } from "../lib/perf";
 import { getBrowserCapabilitiesSnapshot, logRouteLifecycle } from "../lib/routeDiagnostics";
+import { WalletSurfaceContext, type WalletProviderRuntime } from "./WalletSurfaceRuntime";
 
 function getWalletProviderImportTimeoutMs() {
   const capabilities = getBrowserCapabilitiesSnapshot();
@@ -57,7 +56,7 @@ function createWalletProviders(
   retryKey: string | number,
   optionsRef: { current: WalletProviderImportOptions },
 ) {
-  return lazy(() => {
+  return () => {
     const importTimeoutMs = getWalletProviderImportTimeoutMs();
     const capabilities = getBrowserCapabilitiesSnapshot();
     const mobileSafari = Boolean(capabilities.mobileSafari);
@@ -112,34 +111,36 @@ function createWalletProviders(
         markPerfMilestone("provider:wallet:import-end", `retry ${retryKey}`);
         logRouteLifecycle("provider:wallet-import-end", eventDetails);
       });
-  });
+  };
 }
 
 function WalletSurfaceFallback() {
   return <div className="panel">Loading wallet...</div>;
 }
 
-const WalletSurfaceContext = createContext(false);
-
 interface WalletSurfaceProps extends PropsWithChildren {
+  blockUntilLoaded?: boolean;
   fallback?: ReactNode;
   onImportFailure?: (details: WalletProviderImportEvent) => void;
   onImportSlow?: (details: WalletProviderImportEvent) => void;
   onImportStart?: (details: WalletProviderImportEvent) => void;
   onImportSuccess?: (details: WalletProviderImportEvent) => void;
+  requestOnMount?: boolean;
   retryKey?: string | number;
 }
 
 export function WalletSurface({
+  blockUntilLoaded = true,
   children,
   fallback,
   onImportFailure,
   onImportSlow,
   onImportStart,
   onImportSuccess,
+  requestOnMount = false,
   retryKey = 0,
 }: WalletSurfaceProps) {
-  const hasWalletSurface = useContext(WalletSurfaceContext);
+  const parentRuntime = useContext(WalletSurfaceContext);
   const importOptionsRef = useRef<WalletProviderImportOptions>({
     onFailure: onImportFailure,
     onSlow: onImportSlow,
@@ -152,24 +153,72 @@ export function WalletSurface({
     onStart: onImportStart,
     onSuccess: onImportSuccess,
   };
-  const WalletProviders = useMemo(
-    () => createWalletProviders(retryKey, importOptionsRef),
-    [retryKey],
-  );
+  const loadWalletProviders = useMemo(() => createWalletProviders(retryKey, importOptionsRef), [retryKey]);
+  const [providersModule, setProvidersModule] = useState<null | { WalletProviders: (props: PropsWithChildren) => JSX.Element }>(null);
+  const [loading, setLoading] = useState(false);
+  const requestStartedRef = useRef(false);
 
   useEffect(() => {
-    logRouteLifecycle(hasWalletSurface ? "wallet-surface:reuse" : "wallet-surface:mount-requested");
-  }, [hasWalletSurface]);
+    logRouteLifecycle(parentRuntime.loaded ? "wallet-surface:reuse" : "wallet-surface:mount-requested");
+  }, [parentRuntime.loaded]);
 
-  if (hasWalletSurface) {
+  useEffect(() => {
+    if (providersModule || parentRuntime.loaded) {
+      return;
+    }
+    requestStartedRef.current = false;
+    setLoading(false);
+  }, [parentRuntime.loaded, providersModule, retryKey]);
+
+  useEffect(() => {
+    if (!requestOnMount || requestStartedRef.current) {
+      return;
+    }
+    requestStartedRef.current = true;
+    setLoading(true);
+    void loadWalletProviders()
+      .then((module) => setProvidersModule({ WalletProviders: module.default }))
+      .catch(() => undefined)
+      .finally(() => setLoading(false));
+  }, [loadWalletProviders, requestOnMount]);
+
+  const requestLoad = useMemo(
+    () => () => {
+      if (parentRuntime.loaded || requestStartedRef.current) {
+        return;
+      }
+      requestStartedRef.current = true;
+      setLoading(true);
+      void loadWalletProviders()
+        .then((module) => setProvidersModule({ WalletProviders: module.default }))
+        .catch(() => undefined)
+        .finally(() => setLoading(false));
+    },
+    [loadWalletProviders, parentRuntime.loaded],
+  );
+
+  if (parentRuntime.loaded) {
     return <>{children}</>;
   }
 
-  return (
-    <Suspense fallback={fallback ?? <WalletSurfaceFallback />}>
-      <WalletSurfaceContext.Provider value={true}>
+  const runtime = {
+    loaded: Boolean(providersModule),
+    loading,
+    requestLoad,
+  } satisfies WalletProviderRuntime;
+
+  if (providersModule) {
+    const WalletProviders = providersModule.WalletProviders;
+    return (
+      <WalletSurfaceContext.Provider value={runtime}>
         <WalletProviders>{children}</WalletProviders>
       </WalletSurfaceContext.Provider>
-    </Suspense>
+    );
+  }
+
+  return (
+    <WalletSurfaceContext.Provider value={runtime}>
+      {loading && blockUntilLoaded ? fallback ?? <WalletSurfaceFallback /> : children}
+    </WalletSurfaceContext.Provider>
   );
 }

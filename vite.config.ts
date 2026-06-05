@@ -7,6 +7,7 @@ import { existsSync, readFileSync, readdirSync, unlinkSync, writeFileSync } from
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadEnv, type Plugin } from "vite";
+import { runNftOwnershipCheckApi } from "./src/lib/nftOwnershipApi";
 
 type PackageMetadata = {
   version?: string;
@@ -52,6 +53,70 @@ function ignoreMissingScureBip39SourcemapPlugin(): Plugin {
         code: source.replace(/\n?\/\/# sourceMappingURL=index\.js\.map\s*$/, ""),
         map: null,
       };
+    },
+  };
+}
+
+function nftOwnershipApiPlugin(args: { rpcUrls: string[] }): Plugin {
+  const routePath = "/api/nft-ownership-check";
+
+  async function readJsonBody(req: NodeJS.ReadableStream) {
+    const chunks: Buffer[] = [];
+    for await (const chunk of req) {
+      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+    }
+    const body = Buffer.concat(chunks).toString("utf8");
+    return body ? JSON.parse(body) : {};
+  }
+
+  async function handle(req: import("node:http").IncomingMessage, res: import("node:http").ServerResponse) {
+    if (!req.url || !req.url.startsWith(routePath)) {
+      return false;
+    }
+
+    res.setHeader("Content-Type", "application/json; charset=utf-8");
+    res.setHeader("Cache-Control", "no-store");
+
+    if (req.method !== "POST") {
+      res.statusCode = 405;
+      res.end(JSON.stringify({ ok: false, error: "Method not allowed." }));
+      return true;
+    }
+
+    try {
+      const requestBody = await readJsonBody(req);
+      const payload = await runNftOwnershipCheckApi(requestBody, args.rpcUrls);
+      res.statusCode = payload.ok ? 200 : 502;
+      res.end(JSON.stringify(payload));
+    } catch (error) {
+      res.statusCode = 500;
+      res.end(
+        JSON.stringify({
+          ok: false,
+          error: error instanceof Error ? error.message : "NFT ownership check failed.",
+        }),
+      );
+    }
+    return true;
+  }
+
+  return {
+    name: "deepsignal-nft-ownership-api",
+    configureServer(server) {
+      server.middlewares.use(async (req, res, next) => {
+        if (await handle(req, res)) {
+          return;
+        }
+        next();
+      });
+    },
+    configurePreviewServer(server) {
+      server.middlewares.use(async (req, res, next) => {
+        if (await handle(req, res)) {
+          return;
+        }
+        next();
+      });
     },
   };
 }
@@ -802,6 +867,11 @@ export default defineConfig(({ mode }) => {
   const appEnvironment =
     process.env.VITE_APP_ENV || env.VITE_APP_ENV || process.env.VERCEL_ENV || process.env.NODE_ENV || mode || "dev";
   const tatumApiKey = process.env.TATUM_API_KEY || env.TATUM_API_KEY || "";
+  const serverRpcUrls = [
+    env.NEXT_PUBLIC_SUI_RPC_URL || "",
+    env.VITE_SUI_FULLNODE_URL || "",
+    env.VITE_RPC_URL || "",
+  ].filter(Boolean);
   const configuredRpcUrl =
     env.NEXT_PUBLIC_SUI_RPC_URL || env.VITE_SUI_FULLNODE_URL || env.VITE_RPC_URL || "";
   const tatumEnabled = String(env.NEXT_PUBLIC_TATUM_ENABLED || "").toLowerCase() === "true";
@@ -812,9 +882,46 @@ export default defineConfig(({ mode }) => {
       configuredRpcUrl.includes("gateway.tatum.io") &&
       tatumApiKey,
   );
+  const suiProxyPath = "/api/sui-rpc";
   const tatumProxyPath = "/api/tatum/sui-rpc";
   const tatumStorageProxyEnabled = Boolean(tatumStorageEnabled && tatumApiKey);
   const tatumStorageProxyPath = "/api/tatum/storage";
+  const localSuiProxyEnabled = Boolean(configuredRpcUrl);
+  const devServerProxy = {
+    ...(localSuiProxyEnabled
+      ? {
+          [suiProxyPath]: {
+            target: configuredRpcUrl,
+            changeOrigin: true,
+            rewrite: () => "",
+          },
+        }
+      : {}),
+    ...(tatumProxyEnabled
+      ? {
+          [tatumProxyPath]: {
+            target: configuredRpcUrl,
+            changeOrigin: true,
+            rewrite: () => "",
+            headers: {
+              "x-api-key": tatumApiKey,
+            },
+          },
+        }
+      : {}),
+    ...(tatumStorageProxyEnabled
+      ? {
+          [tatumStorageProxyPath]: {
+            target: env.VITE_TATUM_STORAGE_API_URL || "https://api.tatum.io",
+            changeOrigin: true,
+            rewrite: (path) => path.replace(new RegExp(`^${tatumStorageProxyPath}`), ""),
+            headers: {
+              "x-api-key": tatumApiKey,
+            },
+          },
+        }
+      : {}),
+  };
 
   return {
     base: "./",
@@ -832,6 +939,7 @@ export default defineConfig(({ mode }) => {
     },
     plugins: [
       ignoreMissingScureBip39SourcemapPlugin(),
+      nftOwnershipApiPlugin({ rpcUrls: serverRpcUrls }),
       routeBuildMetadataPlugin({ appVersion, buildTime, gitHash, appEnvironment }),
       react(),
       buildManifestPlugin({
@@ -936,34 +1044,9 @@ export default defineConfig(({ mode }) => {
         },
       },
     },
-    server: tatumProxyEnabled || tatumStorageProxyEnabled
+    server: Object.keys(devServerProxy).length > 0
       ? {
-          proxy: {
-            ...(tatumProxyEnabled
-              ? {
-                  [tatumProxyPath]: {
-                    target: configuredRpcUrl,
-                    changeOrigin: true,
-                    rewrite: () => "",
-                    headers: {
-                      "x-api-key": tatumApiKey,
-                    },
-                  },
-                }
-              : {}),
-            ...(tatumStorageProxyEnabled
-              ? {
-                  [tatumStorageProxyPath]: {
-                    target: env.VITE_TATUM_STORAGE_API_URL || "https://api.tatum.io",
-                    changeOrigin: true,
-                    rewrite: (path) => path.replace(new RegExp(`^${tatumStorageProxyPath}`), ""),
-                    headers: {
-                      "x-api-key": tatumApiKey,
-                    },
-                  },
-                }
-              : {}),
-          },
+          proxy: devServerProxy,
         }
       : undefined,
     preview: tatumProxyEnabled || tatumStorageProxyEnabled

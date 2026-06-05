@@ -15,6 +15,7 @@ import {
   PRIME_MACHIN_STRUCT_TYPE,
   TALLY_PRESET_ID,
 } from "../../../lib/formAccess";
+import { matchesOwnedObjectType } from "../../../lib/nftOwnership";
 import { LivePreview } from "../../../components/formBuilder/LivePreview";
 import { useOwnedSuiObjects } from "../../../hooks/useOwnedSuiObjects";
 import { isLocalFallbackBlob } from "../../../lib/proof";
@@ -484,7 +485,7 @@ export function PublishStep({
     if (!activeStructType) {
       return 0;
     }
-    return (nftDiagnostics.data ?? []).filter((entry) => entry.data?.type?.trim() === activeStructType).length;
+    return (nftDiagnostics.data ?? []).filter((entry) => matchesOwnedObjectType(entry.data?.type, activeStructType)).length;
   }, [activeStructType, nftDiagnostics.data]);
   const nftDiagnosticsError =
     nftDiagnostics.error instanceof Error ? nftDiagnostics.error.message : nftDiagnostics.error ? String(nftDiagnostics.error) : "";
@@ -857,8 +858,10 @@ export function PublishStep({
                               src={selectedNftPresetArt}
                               alt=""
                               aria-hidden="true"
-                              loading="lazy"
-                              decoding="async"
+                              width={32}
+                              height={32}
+                              loading="eager"
+                              decoding="sync"
                             />
                           ) : null}
                           <select

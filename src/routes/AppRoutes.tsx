@@ -84,6 +84,7 @@ function WithDeferredWalletRuntime({ children, onRetry }: { children: ReactNode;
         onImportSlow={handleWalletImportSlow}
         onImportStart={() => markDashboardWalletImportStarted(routePath)}
         onImportSuccess={() => markDashboardWalletImportReady(routePath)}
+        requestOnMount
         retryKey={walletRetryNonce}
       >
         {children}

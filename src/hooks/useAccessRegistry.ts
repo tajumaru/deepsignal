@@ -1,4 +1,3 @@
-import { useSuiClient } from "@mysten/dapp-kit";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { parseRegistrySnapshot } from "../lib/accessRegistry";
@@ -8,6 +7,7 @@ import {
   isSuiRateLimitError,
 } from "../lib/sui";
 import { handleRateLimitedRpcFallback, useRpcInfrastructure } from "../rpcInfrastructure";
+import { useRpcSuiClient } from "./useRpcSuiClient";
 
 type RegistryObjectResponse = {
   data?: {
@@ -32,7 +32,7 @@ function normalizeObjectId(value?: string | null) {
 }
 
 export function useAccessRegistry(options: { enabled?: boolean } = {}) {
-  const suiClient = useSuiClient();
+  const suiClient = useRpcSuiClient();
   const rpc = useRpcInfrastructure();
   const packageId = normalizeObjectId(ACCESS_CONTROL_PACKAGE_ID);
   const registryId = normalizeObjectId(ACCESS_CONTROL_REGISTRY_ID);

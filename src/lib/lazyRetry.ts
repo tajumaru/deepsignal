@@ -22,6 +22,9 @@ const lazyImportAttempts = 3;
 const lazyImportBaseDelayMs = 450;
 const proactiveDependencyProbeLabels = new Set(["app-shell"]);
 const recordedLazyImportTimeouts = new Set<string>();
+const mobileSafariLazyImportMaxConcurrency = 1;
+let mobileSafariLazyImportActiveCount = 0;
+const mobileSafariLazyImportQueue: Array<() => void> = [];
 
 class LazyImportTimeoutError extends Error {
   readonly category = "timeout";
@@ -34,6 +37,25 @@ class LazyImportTimeoutError extends Error {
 
 function wait(ms: number) {
   return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
+async function runWithMobileSafariLazyImportQueue<T>(task: () => Promise<T>) {
+  if (typeof window === "undefined" || !getBrowserCapabilitiesSnapshot().mobileSafari) {
+    return task();
+  }
+  if (mobileSafariLazyImportActiveCount >= mobileSafariLazyImportMaxConcurrency) {
+    await new Promise<void>((resolve) => {
+      mobileSafariLazyImportQueue.push(resolve);
+    });
+  }
+  mobileSafariLazyImportActiveCount += 1;
+  try {
+    return await task();
+  } finally {
+    mobileSafariLazyImportActiveCount = Math.max(0, mobileSafariLazyImportActiveCount - 1);
+    const next = mobileSafariLazyImportQueue.shift();
+    next?.();
+  }
 }
 
 type BuildManifest = {
@@ -741,9 +763,15 @@ export async function retryLazyImport<T>(loader: () => Promise<T>, label = "anon
       }
       const result =
         attempt === 1 || !expectedChunkUrl
-          ? await withLazyImportTimeout(loader(), label, timeoutMs, expectedChunkUrl, attempt)
-          : (await withLazyImportTimeout(importCacheBustedRouteChunk<T>(label, expectedChunkUrl, attempt), label, timeoutMs, expectedChunkUrl, attempt)) ??
-            (await withLazyImportTimeout(loader(), label, timeoutMs, expectedChunkUrl, attempt));
+          ? await runWithMobileSafariLazyImportQueue(() =>
+              withLazyImportTimeout(loader(), label, timeoutMs, expectedChunkUrl, attempt),
+            )
+          : (await runWithMobileSafariLazyImportQueue(() =>
+              withLazyImportTimeout(importCacheBustedRouteChunk<T>(label, expectedChunkUrl, attempt), label, timeoutMs, expectedChunkUrl, attempt),
+            )) ??
+            (await runWithMobileSafariLazyImportQueue(() =>
+              withLazyImportTimeout(loader(), label, timeoutMs, expectedChunkUrl, attempt),
+            ));
       const moduleBuildInfo = getModuleBuildInfo(result) ?? buildInfo;
       recordBuildAsset(`lazy:${label}`, moduleBuildInfo);
       console.info("[DeepSignal route chunk]", {
@@ -783,6 +811,22 @@ export async function retryLazyImport<T>(loader: () => Promise<T>, label = "anon
         recordFailedImportProbe(label, probe);
         const dependencyProbe = await probeChunkDependencyTree(expectedChunkUrl);
         recordFailedImportDependencyProbe(label, dependencyProbe);
+        const failureStage = probe.ok ? "evaluation" : "fetch";
+        logRouteLifecycle("lazy-import-diagnostics", {
+          label,
+          attempt,
+          category: error instanceof LazyImportTimeoutError ? "timeout" : isChunkLoadFailure(error) ? "chunkLoad" : "runtime",
+          failureStage,
+          chunkUrl: expectedChunkUrl,
+          routePath: getCurrentRoutePath(),
+          parentChunk: {
+            status: probe.status ?? null,
+            contentType: probe.contentType ?? null,
+            contentLength: probe.contentLength ?? null,
+            decodedBodySize: probe.decodedBodySize ?? null,
+            resourceTimingExists: probe.resourceTimingExists ?? false,
+          },
+        });
         reportSystemError({
           error,
           chunkUrl: expectedChunkUrl,

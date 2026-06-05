@@ -252,10 +252,15 @@ describe("PublicFormPage shared manifest restore", () => {
       canViewForm: true,
       hasResolvedOwnership: true,
       debugInfo: {
-        connectedAddress: undefined,
-        requiredType: undefined,
-        fetchedObjectCount: 0,
-        firstObjectTypes: [],
+        connectedAddress: "",
+        network: "sui-mainnet",
+        targetTypes: [],
+        directOwnedCount: 0,
+        kioskCount: 0,
+        kioskItemCount: 0,
+        matchedDirectObjects: [],
+        matchedKioskItems: [],
+        sampleObjectTypes: [],
       },
       gateError: "",
       recheckAccess: vi.fn(async () => ({
@@ -566,9 +571,14 @@ describe("PublicFormPage shared manifest restore", () => {
       hasResolvedOwnership: false,
       debugInfo: {
         connectedAddress: "0xholder",
-        requiredType: PRIME_MACHIN_STRUCT_TYPE,
-        fetchedObjectCount: 0,
-        firstObjectTypes: [],
+        network: "sui-mainnet",
+        targetTypes: [PRIME_MACHIN_STRUCT_TYPE],
+        directOwnedCount: 0,
+        kioskCount: 0,
+        kioskItemCount: 0,
+        matchedDirectObjects: [],
+        matchedKioskItems: [],
+        sampleObjectTypes: [],
       },
       gateError: "",
       recheckAccess: vi.fn(),
@@ -578,6 +588,70 @@ describe("PublicFormPage shared manifest restore", () => {
 
     await waitFor(() => expect(screen.getByRole("heading", { name: "NFT Gated Signal" })).toBeInTheDocument());
     expect(screen.getByText("Checking NFT ownership...")).toBeInTheDocument();
+    expect(screen.queryByText("This wallet does not currently meet the NFT holder requirement.")).not.toBeInTheDocument();
+  });
+
+  it("shows an RPC failure message without falling back to not-holder copy", async () => {
+    const form: FormSchema = {
+      id: "form-123",
+      title: "NFT Gated Signal",
+      description: "Only holders can proceed.",
+      fields: [],
+      createdAt: "2026-05-14T00:00:00.000Z",
+      accessMode: "nft_required",
+      nftGate: {
+        network: "sui-mainnet",
+        structType: PRIME_MACHIN_STRUCT_TYPE,
+        requiredCount: 1,
+        gateViewing: true,
+        gateSubmission: true,
+        collectionLabel: "Prime Machin",
+        presetId: "prime_machin",
+      },
+    };
+
+    mockReadManifestWithForm.mockResolvedValue({
+      manifest: {
+        version: 1,
+        formId: "form-123",
+        createdAt: "2026-05-14T00:00:00.000Z",
+        updatedAt: "2026-05-14T00:00:00.000Z",
+        formBlobId: "__bundled_form__",
+        submissions: [],
+      },
+      form,
+    });
+    mockUsePublicNftGate.mockReturnValue({
+      accessMode: "nft_required",
+      nftGate: form.nftGate,
+      nftRequired: true,
+      viewGateActive: true,
+      submitGateActive: true,
+      isChecking: false,
+      ownedCount: 0,
+      meetsRequirement: false,
+      canViewForm: false,
+      hasResolvedOwnership: true,
+      debugInfo: {
+        connectedAddress: "0xholder",
+        network: "sui-mainnet",
+        targetTypes: [PRIME_MACHIN_STRUCT_TYPE],
+        directOwnedCount: 0,
+        kioskCount: 0,
+        kioskItemCount: 0,
+        matchedDirectObjects: [],
+        matchedKioskItems: [],
+        sampleObjectTypes: [],
+        lastError: "Sui RPC request failed with status 415.",
+      },
+      gateError: "NFT check failed. Retry or switch RPC.",
+      recheckAccess: vi.fn(),
+    });
+
+    renderPublicFormPage("/f/form-123?manifest=blob-abc&step=answer&identity=wallet");
+
+    await waitFor(() => expect(screen.getByRole("heading", { name: "NFT Gated Signal" })).toBeInTheDocument());
+    expect(screen.getByText("NFT check failed. Retry or switch RPC.")).toBeInTheDocument();
     expect(screen.queryByText("This wallet does not currently meet the NFT holder requirement.")).not.toBeInTheDocument();
   });
 

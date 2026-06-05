@@ -1,16 +1,12 @@
-import {
-  useCurrentAccount,
-  useCurrentWallet,
-  useDisconnectWallet,
-} from "@mysten/dapp-kit";
 import { useCallback, useMemo, useState } from "react";
 import { shortAddress } from "../lib/sui";
 import { useSuiName } from "./useSuiName";
+import { useOptionalWalletActions, useOptionalWalletConnection } from "../walletStatus";
 
 export type SuiWalletConnectionStatus = "connecting" | "disconnected" | "connected" | "error";
 
 export interface SuiWalletState {
-  account: ReturnType<typeof useCurrentAccount>;
+  account: { address: string } | null;
   accountAddress?: string;
   walletName?: string;
   status: SuiWalletConnectionStatus;
@@ -27,16 +23,19 @@ export interface SuiWalletState {
 }
 
 export function useSuiWallet(options: { resolveName?: boolean } = {}): SuiWalletState {
-  const account = useCurrentAccount();
-  const { currentWallet, connectionStatus, isConnecting } = useCurrentWallet();
-  const disconnectWallet = useDisconnectWallet();
+  const connection = useOptionalWalletConnection();
+  const actions = useOptionalWalletActions();
+  const account = useMemo(
+    () => (connection.accountAddress ? { address: connection.accountAddress } : null),
+    [connection.accountAddress],
+  );
   const { data: suinsName = null } = useSuiName(account?.address, {
     enabled: options.resolveName ?? true,
   });
   const [error, setError] = useState<Error | null>(null);
 
   const accountAddress = account?.address;
-  const isRestoringConnection = connectionStatus === "connecting";
+  const isRestoringConnection = connection.isRestoringConnection;
   const shortAddressLabel = accountAddress ? shortAddress(accountAddress) : "";
   const displayName = suinsName ?? shortAddressLabel;
   const status: SuiWalletConnectionStatus = error
@@ -47,11 +46,12 @@ export function useSuiWallet(options: { resolveName?: boolean } = {}): SuiWallet
         ? "connected"
         : "disconnected";
   const hasConnectedAccount = status === "connected";
+  const isConnecting = connection.status === "connecting";
 
   const disconnect = useCallback(async () => {
     try {
       setError(null);
-      await disconnectWallet.mutateAsync();
+      await actions.disconnect();
     } catch (disconnectError) {
       const nextError =
         disconnectError instanceof Error
@@ -60,7 +60,7 @@ export function useSuiWallet(options: { resolveName?: boolean } = {}): SuiWallet
       setError(nextError);
       throw nextError;
     }
-  }, [disconnectWallet]);
+  }, [actions]);
 
   const copyAddress = useCallback(async () => {
     if (!accountAddress) {
@@ -80,11 +80,11 @@ export function useSuiWallet(options: { resolveName?: boolean } = {}): SuiWallet
     () => ({
       account,
       accountAddress,
-      walletName: currentWallet?.name,
+      walletName: connection.walletName ?? undefined,
       status,
       isConnected: hasConnectedAccount,
       isConnecting,
-      isDisconnecting: disconnectWallet.isPending,
+      isDisconnecting: false,
       isRestoringConnection,
       displayName,
       suinsName,
@@ -96,11 +96,10 @@ export function useSuiWallet(options: { resolveName?: boolean } = {}): SuiWallet
     [
       account,
       accountAddress,
-      currentWallet?.name,
+      connection.walletName,
       status,
       hasConnectedAccount,
       isConnecting,
-      disconnectWallet.isPending,
       isRestoringConnection,
       displayName,
       suinsName,

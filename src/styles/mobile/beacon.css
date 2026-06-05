@@ -1,5 +1,65 @@
 /* Signal beacon and share overlay responsive overrides. */
 
+@media (max-width: 768px) {
+  .signal-beacon-layout {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 0.7rem;
+  }
+
+  .signal-processing-label {
+    position: static;
+    transform: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    white-space: nowrap;
+    word-break: keep-all;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    writing-mode: horizontal-tb;
+    text-orientation: mixed;
+    width: 100%;
+    max-width: 100%;
+    margin-bottom: 0;
+    text-align: center;
+    font-size: 14px;
+    letter-spacing: 0.08em;
+    line-height: 1.2;
+  }
+
+  .signal-processing-label span {
+    white-space: nowrap;
+    word-break: keep-all;
+    overflow-wrap: normal;
+  }
+
+  .signal-qr,
+  .signal-qr canvas,
+  .signal-qr img,
+  .signal-qr svg,
+  .qr-code {
+    width: min(280px, 80vw);
+    max-width: 100%;
+  }
+
+  .beacon-qr-shell {
+    width: min(280px, 80vw);
+    max-width: 100%;
+  }
+
+  .signal-publish-success,
+  .signal-beacon-card,
+  .share-card.beacon-card,
+  .composer-success-card,
+  .contest-share-ready-card {
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+}
+
 @media (max-width: 480px) {
   .beacon-card {
     padding: 0.9rem;
@@ -63,7 +123,7 @@
   }
 
   .composer-success-card.is-focused-success {
-    padding-bottom: calc(5.5rem + env(safe-area-inset-bottom, 0px));
+    padding-bottom: calc(7rem + env(safe-area-inset-bottom, 0px));
   }
 
   .node-directory-overlay,
@@ -74,8 +134,25 @@
   }
 
   .beacon-card {
+    gap: 1.1rem;
     padding: 1rem;
     border-radius: 20px;
+  }
+
+  .share-card.beacon-card,
+  .publish-beacon-panel,
+  .publish-beacon-panel-top {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .share-card.beacon-card > .beacon-copy,
+  .share-card.beacon-card > .beacon-core,
+  .share-card.beacon-card > .beacon-meta,
+  .publish-beacon-panel > * {
+    width: 100%;
+    min-width: 0;
   }
 
   .beacon-copy .eyebrow,
@@ -83,6 +160,18 @@
   .beacon-meta-row span,
   .beacon-meta-grid span {
     letter-spacing: clamp(0.08em, 1.5vw, 0.12em);
+  }
+
+  .beacon-copy .eyebrow,
+  .publish-beacon-panel .eyebrow,
+  .beacon-classification span,
+  .beacon-classification strong,
+  .beacon-rarity-badge,
+  .beacon-copy h4,
+  .publish-beacon-note {
+    word-break: normal;
+    overflow-wrap: normal;
+    text-align: center;
   }
 
   .beacon-copy h4 {
@@ -95,17 +184,27 @@
   }
 
   .beacon-frame {
-    width: min(100%, 320px);
-    max-width: min(100%, 320px);
+    width: min(100%, 344px);
+    max-width: min(100%, 344px);
     padding: clamp(10px, 3vw, 14px);
     border-radius: 22px;
+    margin-inline: auto;
   }
 
   .beacon-qr-shell {
-    width: min(100%, 288px);
-    max-width: min(100%, 288px);
+    width: min(280px, 80vw);
+    max-width: 100%;
     padding: clamp(10px, 3vw, 14px);
     border-radius: 20px;
+    margin-inline: auto;
+  }
+
+  .beacon-qr-markup,
+  .beacon-qr-markup svg,
+  .beacon-qr-markup canvas,
+  .beacon-qr-markup img {
+    width: 100%;
+    height: auto;
   }
 
   .beacon-meta-grid {
@@ -119,61 +218,69 @@
   }
 
   .publish-beacon-panel {
+    width: 100%;
     max-width: min(100%, 420px);
+    gap: 0.55rem;
   }
 
   .publish-beacon-qr-shell {
-    width: 100%;
-    max-width: min(100%, 220px);
+    width: min(78vw, 320px);
+    max-width: min(100%, 320px);
     padding: clamp(12px, 4vw, 16px);
+    margin-inline: auto;
   }
 
   .publish-beacon-link-row {
     max-width: 100%;
   }
+
+  .publish-overlay-panel {
+    padding-bottom: calc(6rem + env(safe-area-inset-bottom, 0px));
+  }
 }
 
 @media (max-width: 380px) {
   .beacon-card {
-    gap: 1rem;
-    padding: 0.9rem;
+    gap: 0.82rem;
+    padding: 0.78rem;
   }
 
   .beacon-copy h4 {
-    font-size: clamp(1.2rem, 6.8vw, 1.55rem);
+    font-size: clamp(1.08rem, 6.4vw, 1.42rem);
   }
 
   .beacon-copy .muted {
-    font-size: 0.95rem;
+    font-size: 0.84rem;
+    line-height: 1.4;
   }
 
   .beacon-core {
-    min-height: clamp(200px, 60vw, 248px);
+    min-height: clamp(176px, 54vw, 220px);
   }
 
   .beacon-frame {
-    width: min(100%, 286px);
-    max-width: min(100%, 286px);
-    padding: 10px;
-    border-radius: 20px;
+    width: min(100%, 258px);
+    max-width: min(100%, 258px);
+    padding: 8px;
+    border-radius: 18px;
   }
 
   .beacon-qr-shell {
-    width: min(100%, 256px);
-    max-width: min(100%, 256px);
-    padding: 9px;
-    border-radius: var(--radius-lg);
+    width: min(100%, 228px);
+    max-width: min(100%, 228px);
+    padding: 8px;
+    border-radius: 14px;
   }
 
   .beacon-meta-row,
   .beacon-console-module {
-    padding: 0.72rem 0.8rem;
+    padding: 0.62rem 0.68rem;
   }
 
   .beacon-meta-link-copy code,
   .beacon-copy-value code,
   .beacon-meta-grid strong {
-    font-size: 0.88rem;
+    font-size: 0.8rem;
   }
 }
 
@@ -250,8 +357,8 @@
   }
 
   .beacon-qr-shell {
-    width: min(100%, 296px);
-    max-width: min(100%, 296px);
+    width: min(280px, 80vw);
+    max-width: 100%;
     border-radius: 16px;
   }
 
@@ -277,13 +384,121 @@
 }
 
 @media (max-width: 390px) {
+  .beacon-card {
+    gap: 0.78rem;
+    padding: 0.74rem;
+    border-radius: 18px;
+  }
+
+  .beacon-copy {
+    gap: 0.3rem;
+  }
+
+  .beacon-classification {
+    gap: 0.32rem;
+  }
+
+  .beacon-classification span,
+  .beacon-meta-grid span,
+  .beacon-storage-label {
+    font-size: 0.58rem;
+    letter-spacing: 0.1em;
+  }
+
+  .beacon-copy .eyebrow {
+    margin-bottom: 0.2rem;
+    font-size: 0.62rem;
+  }
+
+  .beacon-copy h4 {
+    font-size: clamp(1rem, 6vw, 1.3rem);
+    letter-spacing: 0.05em;
+  }
+
+  .beacon-copy .muted {
+    font-size: 0.8rem;
+  }
+
+  .beacon-core {
+    min-height: clamp(164px, 50vw, 204px);
+  }
+
+  .beacon-frame {
+    width: min(100%, 244px);
+    max-width: min(100%, 244px);
+    padding: 7px;
+    border-radius: 16px;
+  }
+
+  .beacon-qr-shell {
+    width: min(100%, 214px);
+    max-width: min(100%, 214px);
+    padding: 7px;
+    border-radius: 13px;
+  }
+
+  .beacon-console-module,
+  .beacon-storage-disclosure {
+    gap: 0.28rem;
+    border-radius: 12px;
+  }
+
+  .beacon-console-module.is-primary-id strong,
+  .beacon-status-heading strong,
+  .beacon-depth-readout strong,
+  .beacon-console-module.is-timestamp-module strong,
+  .beacon-console-module.is-storage-proof-module strong {
+    font-size: 0.78rem;
+  }
+
+  .beacon-status-console {
+    gap: 0.28rem;
+  }
+
+  .beacon-status-heading {
+    gap: 0.48rem;
+  }
+
+  .beacon-status-dot-wrap {
+    width: 0.9rem;
+    height: 0.9rem;
+  }
+
+  .beacon-status-detail,
+  .beacon-storage-proof-hint {
+    font-size: 0.66rem;
+    line-height: 1.32;
+  }
+
+  .beacon-depth-readout {
+    gap: 0.34rem 0.42rem;
+  }
+
+  .beacon-depth-zone {
+    min-height: 1.46rem;
+    padding: 0.16rem 0.42rem;
+    font-size: 0.6rem;
+    letter-spacing: 0.1em;
+  }
+
   .beacon-action-panel {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.38rem;
+    padding: 0.48rem;
+    border-radius: 14px;
   }
 
   .beacon-action-panel .primary-button.beacon-action-button,
   .beacon-action-panel .beacon-copy-blob-button {
     grid-column: 1 / -1;
+  }
+
+  .beacon-action-panel .beacon-action-button,
+  .beacon-action-panel .beacon-open-link {
+    height: 2.45rem;
+    min-height: 2.45rem;
+    border-radius: 10px;
+    font-size: 0.68rem;
   }
 
   .beacon-action-panel .beacon-open-link {

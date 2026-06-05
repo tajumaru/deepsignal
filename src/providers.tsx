@@ -2,7 +2,6 @@ import { JsonRpcHTTPTransport, SuiJsonRpcClient } from "@mysten/sui/jsonRpc";
 import {
   useCallback,
   useMemo,
-  useState,
   useEffect,
   useRef,
   type PropsWithChildren,
@@ -12,10 +11,11 @@ import {
   SuiClientProvider,
   useCurrentAccount,
   useCurrentWallet,
+  useDisconnectWallet,
+  useSignAndExecuteTransaction,
   WalletProvider,
 } from "@mysten/dapp-kit";
 import type { WalletWithRequiredFeatures } from "@mysten/wallet-standard";
-import { MutationCache, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { REQUIRE_GLOBAL_WALRUS_RUNTIME } from "./lib/runtimeFlags";
 import {
   SUI_NETWORK,
@@ -25,7 +25,9 @@ import { endPerf, markPerfMilestone, startPerf } from "./lib/perf";
 import { useRpcInfrastructure } from "./rpcInfrastructure";
 import { OptionalWalrusRuntimeBoundary } from "./WalrusRuntimeProvider";
 import WalrusRuntimeBridge from "./walrusRuntimeBridge";
-import { WalletConnectionContext, type WalletConnectionState } from "./walletStatus";
+import type { CreateFormTransaction } from "./features/createForm/types";
+import { WalletActionContext, WalletConnectionContext, type WalletConnectionState } from "./walletStatus";
+import { setQueryClientMutationErrorHandler } from "./queryClient";
 
 const PREFERRED_WALLETS = ["Sui Wallet", "Slush", "Phantom", "OKX Wallet"];
 const DAPP_KIT_WALLET_STORAGE_KEY = "sui-dapp-kit:wallet-connection-info";
@@ -63,6 +65,8 @@ function walletFilter(wallet: WalletWithRequiredFeatures) {
 function WalletStatusBridge({ children }: PropsWithChildren) {
   const account = useCurrentAccount();
   const { currentWallet, connectionStatus, isConnected } = useCurrentWallet();
+  const disconnectWallet = useDisconnectWallet();
+  const signAndExecuteTransaction = useSignAndExecuteTransaction();
   const restoreInFlightRef = useRef(false);
   const value = useMemo<WalletConnectionState>(
     () => ({
@@ -103,30 +107,47 @@ function WalletStatusBridge({ children }: PropsWithChildren) {
     });
   }, [value]);
 
-  return <WalletConnectionContext.Provider value={value}>{children}</WalletConnectionContext.Provider>;
+  const actions = useMemo(
+    () => ({
+      disconnect: async () => {
+        await disconnectWallet.mutateAsync();
+      },
+      signAndExecuteTransaction: async (transaction: CreateFormTransaction) => {
+        return signAndExecuteTransaction.mutateAsync({
+          transaction,
+        });
+      },
+    }),
+    [disconnectWallet, signAndExecuteTransaction],
+  );
+
+  return (
+    <WalletActionContext.Provider value={actions}>
+      <WalletConnectionContext.Provider value={value}>{children}</WalletConnectionContext.Provider>
+    </WalletActionContext.Provider>
+  );
 }
 
 export function WalletProviders({ children }: PropsWithChildren) {
-  const [queryClient] = useState(
-    () =>
-      new QueryClient({
-        mutationCache: new MutationCache({
-          onError(_error, variables) {
-            if (isSilentWalletRestore(variables)) {
-              clearStaleWalletRestoreState();
-            }
-          },
-        }),
-      }),
-  );
   const rpcInfrastructure = useRpcInfrastructure();
   const currentRpcUrl = rpcInfrastructure.currentRpcUrl;
+
+  useEffect(() => {
+    setQueryClientMutationErrorHandler((_error, variables) => {
+      if (isSilentWalletRestore(variables)) {
+        clearStaleWalletRestoreState();
+      }
+    });
+    return () => setQueryClientMutationErrorHandler(null);
+  }, []);
+
   useEffect(() => {
     logRouteLifecycle("wallet-provider:ready", {
       currentRpcUrl,
       hasRpcInfrastructure: Boolean(rpcInfrastructure),
     });
     setDeepSignalDebugReadiness({
+      queryClientProvider: "ready",
       walletProviderShell: "ready",
       walletRpcProvider: rpcInfrastructure.providerLabel,
       walletRpcMode: rpcInfrastructure.mode,
@@ -172,27 +193,25 @@ export function WalletProviders({ children }: PropsWithChildren) {
     [],
   );
   return (
-    <QueryClientProvider client={queryClient}>
-      <SuiClientProvider
-        networks={networkConfig}
-        network={SUI_NETWORK}
-        createClient={createClient}
+    <SuiClientProvider
+      networks={networkConfig}
+      network={SUI_NETWORK}
+      createClient={createClient}
+    >
+      <WalletProvider
+        preferredWallets={PREFERRED_WALLETS}
+        walletFilter={walletFilter}
+        autoConnect
       >
-        <WalletProvider
-          preferredWallets={PREFERRED_WALLETS}
-          walletFilter={walletFilter}
-          autoConnect
-        >
-          <WalletStatusBridge>
-            {REQUIRE_GLOBAL_WALRUS_RUNTIME ? (
-              <OptionalWalrusRuntimeBoundary>
-                <WalrusRuntimeBridge />
-              </OptionalWalrusRuntimeBoundary>
-            ) : null}
-            {children}
-          </WalletStatusBridge>
-        </WalletProvider>
-      </SuiClientProvider>
-    </QueryClientProvider>
+        <WalletStatusBridge>
+          {REQUIRE_GLOBAL_WALRUS_RUNTIME ? (
+            <OptionalWalrusRuntimeBoundary>
+              <WalrusRuntimeBridge />
+            </OptionalWalrusRuntimeBoundary>
+          ) : null}
+          {children}
+        </WalletStatusBridge>
+      </WalletProvider>
+    </SuiClientProvider>
   );
 }

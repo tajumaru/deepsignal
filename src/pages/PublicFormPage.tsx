@@ -172,12 +172,15 @@ export function PublicFormPage() {
   const walletFallback = <div className="wallet-connect-shell wallet-connect-shell-compact" />;
   const nftGate = usePublicNftGate(form, resolvedWalletAddress);
   const nftDebugInfo = nftGate.debugInfo ?? {
-    connectedAddress: resolvedWalletAddress,
-    requiredType: nftGate.nftGate?.structType,
-    fetchedObjectCount: 0,
-    firstObjectTypes: [],
-    matchedObjectId: undefined,
-    matchedType: undefined,
+    connectedAddress: resolvedWalletAddress ?? "",
+    network: nftGate.nftGate?.network ?? "sui-mainnet",
+    targetTypes: nftGate.nftGate?.structType ? [nftGate.nftGate.structType] : [],
+    directOwnedCount: 0,
+    kioskCount: 0,
+    kioskItemCount: 0,
+    matchedDirectObjects: [],
+    matchedKioskItems: [],
+    sampleObjectTypes: [],
     lastError: undefined,
   };
   const nftSubmitGateEnabled = nftRequired && nftGate.submitGateActive;
@@ -802,7 +805,7 @@ export function PublicFormPage() {
 
   if (nftRequired && nftGate.viewGateActive && !nftGate.canViewForm) {
     return (
-      <section className="panel glow-panel public-identity-choice-screen" aria-label="NFT gated signal">
+      <section className="panel glow-panel public-identity-choice-screen public-nft-gate-screen" aria-label="NFT gated signal">
         <div className="public-identity-choice-hero">
           <div className="public-identity-choice-copy">
             <div className="public-identity-choice-title-row">
@@ -848,16 +851,19 @@ export function PublicFormPage() {
             <summary>NFT gate debug</summary>
             <pre className="muted">{JSON.stringify({
               connectedAddress: nftDebugInfo.connectedAddress,
-              requiredType: nftDebugInfo.requiredType,
-              fetchedObjectCount: nftDebugInfo.fetchedObjectCount,
-              matchedObjectId: nftDebugInfo.matchedObjectId,
-              matchedType: nftDebugInfo.matchedType,
-              first10ObjectTypes: nftDebugInfo.firstObjectTypes,
+              network: nftDebugInfo.network,
+              targetTypes: nftDebugInfo.targetTypes,
+              directOwnedCount: nftDebugInfo.directOwnedCount,
+              kioskCount: nftDebugInfo.kioskCount,
+              kioskItemCount: nftDebugInfo.kioskItemCount,
+              matchedDirectObjects: nftDebugInfo.matchedDirectObjects,
+              matchedKioskItems: nftDebugInfo.matchedKioskItems,
+              sampleObjectTypes: nftDebugInfo.sampleObjectTypes,
               lastError: nftDebugInfo.lastError,
             }, null, 2)}</pre>
           </details>
         ) : null}
-        {resolvedWalletAddress && nftGate.hasResolvedOwnership && !nftGate.isChecking ? (
+        {resolvedWalletAddress && nftGate.hasResolvedOwnership && !nftGate.isChecking && !nftGate.gateError ? (
           <p className="error-text">{t("publicNftGateNotEligible")}</p>
         ) : null}
       </section>
@@ -923,16 +929,19 @@ export function PublicFormPage() {
             <summary>NFT gate debug</summary>
             <pre className="muted">{JSON.stringify({
               connectedAddress: nftDebugInfo.connectedAddress,
-              requiredType: nftDebugInfo.requiredType,
-              fetchedObjectCount: nftDebugInfo.fetchedObjectCount,
-              matchedObjectId: nftDebugInfo.matchedObjectId,
-              matchedType: nftDebugInfo.matchedType,
-              first10ObjectTypes: nftDebugInfo.firstObjectTypes,
+              network: nftDebugInfo.network,
+              targetTypes: nftDebugInfo.targetTypes,
+              directOwnedCount: nftDebugInfo.directOwnedCount,
+              kioskCount: nftDebugInfo.kioskCount,
+              kioskItemCount: nftDebugInfo.kioskItemCount,
+              matchedDirectObjects: nftDebugInfo.matchedDirectObjects,
+              matchedKioskItems: nftDebugInfo.matchedKioskItems,
+              sampleObjectTypes: nftDebugInfo.sampleObjectTypes,
               lastError: nftDebugInfo.lastError,
             }, null, 2)}</pre>
           </details>
         ) : null}
-        {resolvedWalletAddress && nftGate.hasResolvedOwnership && !nftGate.isChecking && nftGate.submitGateActive && !nftGate.meetsRequirement ? (
+        {resolvedWalletAddress && nftGate.hasResolvedOwnership && !nftGate.isChecking && !nftGate.gateError && nftGate.submitGateActive && !nftGate.meetsRequirement ? (
           <p className="error-text">{t("publicNftGateNotEligible")}</p>
         ) : null}
       </section>
