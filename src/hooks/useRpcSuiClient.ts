@@ -1,18 +1,18 @@
-import { JsonRpcHTTPTransport, SuiJsonRpcClient } from "@mysten/sui/jsonRpc";
+import { SuiJsonRpcClient } from "@mysten/sui/jsonRpc";
 import { useMemo } from "react";
+import { createBrowserSafeSuiTransport } from "../lib/suiRpcTransport";
 import { useRpcInfrastructure } from "../rpcInfrastructure";
 
-export function useRpcSuiClient() {
+export function useRpcSuiClient(overrideRpcUrl?: string) {
   const rpc = useRpcInfrastructure();
+  const rpcUrl = overrideRpcUrl || rpc.currentRpcUrl;
 
   return useMemo(
     () =>
       new SuiJsonRpcClient({
         network: rpc.network,
-        transport: new JsonRpcHTTPTransport({
-          url: rpc.currentRpcUrl,
-        }),
+        transport: createBrowserSafeSuiTransport(rpcUrl),
       }),
-    [rpc.currentRpcUrl, rpc.network],
+    [rpc.network, rpcUrl],
   );
 }

@@ -1,4 +1,4 @@
-import { JsonRpcHTTPTransport, SuiJsonRpcClient } from "@mysten/sui/jsonRpc";
+import { SuiJsonRpcClient } from "@mysten/sui/jsonRpc";
 import {
   useCallback,
   useMemo,
@@ -22,6 +22,7 @@ import {
 } from "./lib/sui";
 import { logRouteLifecycle, setDeepSignalDebugReadiness } from "./lib/routeDiagnostics";
 import { endPerf, markPerfMilestone, startPerf } from "./lib/perf";
+import { createBrowserSafeSuiTransport } from "./lib/suiRpcTransport";
 import { useRpcInfrastructure } from "./rpcInfrastructure";
 import { OptionalWalrusRuntimeBoundary } from "./WalrusRuntimeProvider";
 import WalrusRuntimeBridge from "./walrusRuntimeBridge";
@@ -178,9 +179,7 @@ export function WalletProviders({ children }: PropsWithChildren) {
       });
       const rpcClient = new SuiJsonRpcClient({
         network: SUI_NETWORK,
-        transport: new JsonRpcHTTPTransport({
-          url: config.url,
-        }),
+        transport: createBrowserSafeSuiTransport(config.url),
       });
       endPerf("sui-rpc:client-create", "ok", config.network);
       markPerfMilestone("sui-rpc:client-created", config.url);

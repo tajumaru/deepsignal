@@ -1319,6 +1319,33 @@
   align-self: start;
 }
 
+.node-directory-panel--directory {
+  width: min(100%, 780px);
+  gap: 0.8rem;
+  padding: clamp(1rem, 2vw, 1.25rem);
+}
+
+.node-directory-panel--directory .node-directory-heading {
+  gap: 0.75rem;
+}
+
+.node-directory-panel--directory .node-directory-heading .muted {
+  max-width: 34rem;
+  margin-top: 0.25rem;
+}
+
+.node-directory-panel--directory .node-directory-toolbar {
+  gap: 0.65rem;
+}
+
+.node-directory-panel--directory .node-directory-list {
+  gap: 0.6rem;
+}
+
+.node-directory-panel--directory .node-directory-item {
+  padding: 0.85rem 0.9rem;
+}
+
 .node-directory-toolbar {
   flex-wrap: wrap;
 }

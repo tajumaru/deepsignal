@@ -3139,6 +3139,7 @@ export const enMessages: LocaleMessages = {
     analysisTypeVelocity: "Velocity",
     accessRoleLabel: "Access Role",
     guestDraftRole: "Guest Draft",
+    draftBadge: "Draft",
     draftClearedAfterPublish: "Draft cleared after publish.",
     draftRestored: "Restored unsent draft from this browser.",
     draftSaving: "Saving draft...",

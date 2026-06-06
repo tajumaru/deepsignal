@@ -1,5 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent, type ReactNode } from "react";
-import { Link, useParams, useSearchParams } from "react-router-dom";
+import { Link, useLocation, useParams, useSearchParams } from "react-router-dom";
 import { DynamicField } from "../components/DynamicField";
 import { EmptyState } from "../components/EmptyState";
 import { FormHeaderImage } from "../components/FormHeaderImage";
@@ -102,6 +102,12 @@ function PublicFormSuccessFallback({
   );
 }
 
+function renderDebugJson(value: unknown) {
+  return (
+    <pre className="muted">{JSON.stringify(value, null, 2)}</pre>
+  );
+}
+
 function triggerHaptic(pattern: number | number[]) {
   if (typeof navigator === "undefined" || typeof navigator.vibrate !== "function") {
     return;
@@ -146,6 +152,7 @@ function hasPublicAnswerValue(field: { type: string; rows?: string[] }, value: u
 
 export function PublicFormPage() {
   const { t } = useI18n();
+  const routerLocation = useLocation();
   const { formId = "" } = useParams();
   const [searchParams] = useSearchParams();
   const initialAnswerAuthMode = searchParams.get("identity") === "wallet" ? "sui_wallet" : searchParams.get("identity") === "guest" ? "guest" : null;
@@ -159,6 +166,11 @@ export function PublicFormPage() {
   const [walletProvider, setWalletProvider] = useState<string | undefined>(undefined);
   const manifestBlobId = searchParams.get("manifest") ?? "";
   const nftDebugEnabled = import.meta.env.DEV || searchParams.get("nftDebug") === "1";
+  const nftDebugSearch = useMemo(() => {
+    const params = new URLSearchParams(searchParams);
+    params.set("nftDebug", "1");
+    return `${routerLocation.pathname}?${params.toString()}`;
+  }, [routerLocation.pathname, searchParams]);
   const { form, initialAnswers, loading, loadError, loadErrorDetail } = usePublicFormLoader({
     formId,
     manifestBlobId,
@@ -869,7 +881,28 @@ export function PublicFormPage() {
         {nftDebugEnabled && resolvedWalletAddress ? (
           <details className="answer-card answer-card-plain">
             <summary>NFT gate debug</summary>
-            <pre className="muted">{JSON.stringify(nftDebugInfo, null, 2)}</pre>
+            <div className="stack">
+              <section>
+                <strong>Configured structType</strong>
+                {renderDebugJson(nftDebugInfo.targetTypes)}
+              </section>
+              <section>
+                <strong>sampleObjectTypes</strong>
+                {renderDebugJson(nftDebugInfo.sampleObjectTypes)}
+              </section>
+              <section>
+                <strong>matchedDirectObjects</strong>
+                {renderDebugJson(nftDebugInfo.matchedDirectObjects)}
+              </section>
+              <section>
+                <strong>matchedKioskItems</strong>
+                {renderDebugJson(nftDebugInfo.matchedKioskItems)}
+              </section>
+              <section>
+                <strong>fullDiagnostic</strong>
+                {renderDebugJson(nftDebugInfo)}
+              </section>
+            </div>
           </details>
         ) : null}
         {resolvedWalletAddress && nftGate.hasResolvedOwnership && !nftGate.isChecking && !nftGate.gateError ? (
@@ -932,11 +965,37 @@ export function PublicFormPage() {
         {renderWalletAccountPanel({
           className: "public-identity-choice-wallet-shell",
         })}
+        {!nftDebugEnabled ? (
+          <Link className="ghost-button" to={nftDebugSearch}>
+            Open NFT Debug
+          </Link>
+        ) : null}
         {nftGate.gateError ? <p className="error-text">{nftGate.gateError}</p> : null}
         {nftDebugEnabled && resolvedWalletAddress ? (
           <details className="answer-card answer-card-plain">
             <summary>NFT gate debug</summary>
-            <pre className="muted">{JSON.stringify(nftDebugInfo, null, 2)}</pre>
+            <div className="stack">
+              <section>
+                <strong>Configured structType</strong>
+                {renderDebugJson(nftDebugInfo.targetTypes)}
+              </section>
+              <section>
+                <strong>sampleObjectTypes</strong>
+                {renderDebugJson(nftDebugInfo.sampleObjectTypes)}
+              </section>
+              <section>
+                <strong>matchedDirectObjects</strong>
+                {renderDebugJson(nftDebugInfo.matchedDirectObjects)}
+              </section>
+              <section>
+                <strong>matchedKioskItems</strong>
+                {renderDebugJson(nftDebugInfo.matchedKioskItems)}
+              </section>
+              <section>
+                <strong>fullDiagnostic</strong>
+                {renderDebugJson(nftDebugInfo)}
+              </section>
+            </div>
           </details>
         ) : null}
         {resolvedWalletAddress && nftGate.hasResolvedOwnership && !nftGate.isChecking && !nftGate.gateError && nftGate.submitGateActive && !nftGate.meetsRequirement ? (

@@ -10,30 +10,20 @@
   }
 
   .signal-processing-label {
-    position: static;
-    transform: none;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    white-space: nowrap;
-    word-break: keep-all;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    writing-mode: horizontal-tb;
-    text-orientation: mixed;
-    width: 100%;
-    max-width: 100%;
-    margin-bottom: 0;
-    text-align: center;
-    font-size: 14px;
-    letter-spacing: 0.08em;
-    line-height: 1.2;
+    display: none !important;
   }
 
   .signal-processing-label span {
     white-space: nowrap;
     word-break: keep-all;
     overflow-wrap: normal;
+  }
+
+  .beacon-core,
+  .beacon-frame,
+  .beacon-qr-shell,
+  .signal-qr {
+    margin-inline: auto;
   }
 
   .signal-qr,
@@ -123,7 +113,7 @@
   }
 
   .composer-success-card.is-focused-success {
-    padding-bottom: calc(7rem + env(safe-area-inset-bottom, 0px));
+    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 96px);
   }
 
   .node-directory-overlay,
@@ -235,7 +225,7 @@
   }
 
   .publish-overlay-panel {
-    padding-bottom: calc(6rem + env(safe-area-inset-bottom, 0px));
+    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 96px);
   }
 }
 
@@ -285,6 +275,153 @@
 }
 
 @media (max-width: 600px) {
+  .beacon-overlay-panel--mobile-compact {
+    gap: 0.5rem;
+    max-height: calc(100svh - var(--bottom-nav-height, 96px) - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 0.5rem);
+    max-height: calc(100dvh - var(--bottom-nav-height, 96px) - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 0.5rem);
+    padding:
+      0.68rem
+      0.68rem
+      calc(var(--bottom-nav-height, 96px) + env(safe-area-inset-bottom, 0px) + 0.65rem)
+      0.68rem;
+  }
+
+  .beacon-overlay-panel--mobile-compact .node-directory-heading {
+    gap: 0.45rem;
+  }
+
+  .beacon-overlay-panel--mobile-compact .node-directory-heading h2 {
+    font-size: clamp(1rem, 4.8vw, 1.2rem);
+  }
+
+  .beacon-overlay-panel--mobile-compact .node-directory-heading .muted {
+    font-size: 0.78rem;
+    line-height: 1.4;
+  }
+
+  .beacon-overlay-panel--mobile-compact .share-card.beacon-card {
+    gap: 0.6rem;
+    padding: 0.72rem;
+    border-radius: 18px;
+  }
+
+  .beacon-overlay-panel--mobile-compact .beacon-copy {
+    gap: 0.24rem;
+  }
+
+  .beacon-overlay-panel--mobile-compact .beacon-copy h4 {
+    font-size: 1rem;
+  }
+
+  .beacon-overlay-panel--mobile-compact .beacon-copy .muted {
+    font-size: 0.76rem;
+    line-height: 1.35;
+  }
+
+  .beacon-overlay-panel--mobile-compact .beacon-classification {
+    padding: 0.48rem 0.58rem;
+    gap: 0.45rem;
+  }
+
+  .beacon-overlay-panel--mobile-compact .beacon-classification strong {
+    font-size: 0.74rem;
+  }
+
+  .beacon-overlay-panel--mobile-compact .beacon-classification span,
+  .beacon-overlay-panel--mobile-compact .beacon-rarity-badge {
+    font-size: 0.58rem;
+  }
+
+  .beacon-overlay-panel--mobile-compact .beacon-core {
+    min-height: clamp(186px, 52vw, 232px);
+  }
+
+  .beacon-overlay-panel--mobile-compact .beacon-frame {
+    width: min(100%, 214px);
+    max-width: min(100%, 214px);
+    padding: 0.46rem;
+    border-radius: 16px;
+  }
+
+  .beacon-overlay-panel--mobile-compact .beacon-qr-shell {
+    width: min(100%, 182px);
+    max-width: min(100%, 182px);
+    padding: 0.42rem;
+    border-radius: 12px;
+  }
+
+  .beacon-overlay-panel--mobile-compact .beacon-meta-grid {
+    gap: 0.55rem;
+  }
+
+  .beacon-overlay-panel--mobile-compact .beacon-console-module,
+  .beacon-overlay-panel--mobile-compact .beacon-meta-row {
+    padding: 0.52rem 0.58rem;
+  }
+
+  .beacon-overlay-panel--mobile-compact .beacon-meta-grid strong,
+  .beacon-overlay-panel--mobile-compact .beacon-status-heading strong,
+  .beacon-overlay-panel--mobile-compact .beacon-depth-readout strong {
+    font-size: 0.72rem;
+  }
+
+  .beacon-overlay-panel--mobile-compact .beacon-status-detail,
+  .beacon-overlay-panel--mobile-compact .beacon-storage-proof-hint,
+  .beacon-overlay-panel--mobile-compact .beacon-depth-zone {
+    font-size: 0.66rem;
+    line-height: 1.3;
+  }
+
+  .beacon-overlay-panel--mobile-compact .beacon-action-panel {
+    gap: 0.5rem;
+    position: sticky;
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 0.25rem);
+    padding-top: 0.15rem;
+    background: linear-gradient(180deg, rgba(4, 17, 31, 0), rgba(4, 17, 31, 0.94) 26%, rgba(4, 17, 31, 0.98));
+  }
+
+  .beacon-overlay-panel--mobile-compact .beacon-action-panel .beacon-action-button,
+  .beacon-overlay-panel--mobile-compact .beacon-action-panel .beacon-open-link {
+    height: 2.35rem;
+    min-height: 2.35rem;
+  }
+
+  .beacon-overlay-panel--mobile-compact .beacon-action-panel .x-share-button {
+    min-width: 0;
+    padding-inline: 0.72rem;
+  }
+}
+
+@media (max-width: 390px) {
+  .beacon-overlay-panel--mobile-compact {
+    padding:
+      0.62rem
+      0.62rem
+      calc(var(--bottom-nav-height, 96px) + env(safe-area-inset-bottom, 0px) + 0.55rem)
+      0.62rem;
+  }
+
+  .beacon-overlay-panel--mobile-compact .share-card.beacon-card {
+    gap: 0.52rem;
+    padding: 0.66rem;
+  }
+
+  .beacon-overlay-panel--mobile-compact .beacon-core {
+    min-height: clamp(170px, 48vw, 210px);
+  }
+
+  .beacon-overlay-panel--mobile-compact .beacon-frame {
+    width: min(100%, 196px);
+    max-width: min(100%, 196px);
+  }
+
+  .beacon-overlay-panel--mobile-compact .beacon-qr-shell {
+    width: min(100%, 168px);
+    max-width: min(100%, 168px);
+  }
+}
+
+@media (max-width: 600px) {
   .publish-overlay {
     padding:
       max(0.35rem, env(safe-area-inset-top, 0px))
@@ -300,7 +437,7 @@
     padding:
       0.72rem
       0.72rem
-      calc(0.82rem + env(safe-area-inset-bottom, 0px))
+      calc(env(safe-area-inset-bottom, 0px) + 96px)
       0.72rem;
   }
 

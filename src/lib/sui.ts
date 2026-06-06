@@ -23,7 +23,9 @@ export const SUI_CONFIGURED_RPC_URL =
   import.meta.env.VITE_RPC_URL ||
   SUI_DEFAULT_RPC_URL;
 export const SUI_FALLBACK_RPC_URL = import.meta.env.DEV ? SUI_DEV_PROXY_PATH : SUI_CONFIGURED_RPC_URL;
-export const SUI_FULLNODE_URL = SUI_TATUM_RPC_URL || SUI_FALLBACK_RPC_URL;
+export const SUI_FULLNODE_URL =
+  (String(import.meta.env.NEXT_PUBLIC_TATUM_ENABLED || "").toLowerCase() === "true" && SUI_TATUM_RPC_URL) ||
+  SUI_FALLBACK_RPC_URL;
 export const SUI_RPC_URL = SUI_FULLNODE_URL || SUI_DEFAULT_RPC_URL;
 export const TATUM_ENABLED = String(import.meta.env.NEXT_PUBLIC_TATUM_ENABLED || "").toLowerCase() === "true";
 export const TATUM_PROXY_ENABLED = import.meta.env.VITE_TATUM_PROXY_ENABLED === "true";
@@ -33,15 +35,27 @@ export function isTatumRpcUrl(url?: string | null) {
   return Boolean(url && url.toLowerCase().includes("gateway.tatum.io"));
 }
 
+export function getConfiguredTatumRpcUrl() {
+  if (!isTatumRpcUrl(SUI_TATUM_RPC_URL)) {
+    return null;
+  }
+  return TATUM_PROXY_ENABLED ? TATUM_PROXY_PATH : SUI_TATUM_RPC_URL;
+}
+
 export function getRpcProviderLabel(url?: string | null) {
   return isTatumRpcUrl(url) ? "Tatum RPC" : "Sui Fullnode";
 }
 
 export function getEffectiveTatumRpcUrl() {
-  if (!TATUM_ENABLED || !isTatumRpcUrl(SUI_TATUM_RPC_URL)) {
+  const configuredTatumRpcUrl = getConfiguredTatumRpcUrl();
+  if (!TATUM_ENABLED || !configuredTatumRpcUrl) {
     return null;
   }
-  return TATUM_PROXY_ENABLED ? TATUM_PROXY_PATH : SUI_TATUM_RPC_URL;
+  return configuredTatumRpcUrl;
+}
+
+export function getPreferredBrowserRpcUrl(fallbackUrl?: string | null) {
+  return getEffectiveTatumRpcUrl() || fallbackUrl || SUI_FALLBACK_RPC_URL;
 }
 
 export function getConnectedNetworkLabel(chainIdentifier?: string | null) {

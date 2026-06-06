@@ -52,4 +52,35 @@ describe("PublicWalletAccountPanel", () => {
     expect(onAccountAddressChange.mock.calls).toEqual([[undefined], ["0xabc"]]);
     expect(onWalletProviderChange.mock.calls).toEqual([[undefined], ["Slush"]]);
   });
+
+  it("keeps the connected wallet state across unmount and remount cycles", () => {
+    const onAccountAddressChange = vi.fn();
+    const onWalletProviderChange = vi.fn();
+
+    mockUseSuiWallet.mockReturnValue({
+      accountAddress: "0xabc",
+      walletName: "Slush",
+    });
+
+    const firstView = render(
+      <PublicWalletAccountPanel
+        onAccountAddressChange={onAccountAddressChange}
+        onWalletProviderChange={onWalletProviderChange}
+      />,
+    );
+
+    firstView.unmount();
+
+    const secondView = render(
+      <PublicWalletAccountPanel
+        onAccountAddressChange={onAccountAddressChange}
+        onWalletProviderChange={onWalletProviderChange}
+      />,
+    );
+
+    expect(onAccountAddressChange.mock.calls).toEqual([["0xabc"], ["0xabc"]]);
+    expect(onWalletProviderChange.mock.calls).toEqual([["Slush"], ["Slush"]]);
+
+    secondView.unmount();
+  });
 });

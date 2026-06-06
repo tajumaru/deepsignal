@@ -1,31 +1,12 @@
-import { createContext, useContext, useEffect, useMemo, type PropsWithChildren } from "react";
+import { useEffect, useMemo, type PropsWithChildren } from "react";
 import { logRouteLifecycle, setDeepSignalDebugReadiness } from "./lib/routeDiagnostics";
 import { useWalletProviderRuntime } from "./components/WalletSurfaceRuntime";
 import { useOptionalWalletConnection } from "./walletStatus";
-
-export type WalletSessionPhase = "provider_deferred" | "restoring" | "disconnected" | "connected";
-
-export interface WalletSessionState {
-  accountAddress: string | null;
-  isRestoringConnection: boolean;
-  phase: WalletSessionPhase;
-  providerLoading: boolean;
-  providerMounted: boolean;
-  status: "connecting" | "disconnected" | "connected";
-  walletName: string | null;
-}
-
-const defaultWalletSessionState: WalletSessionState = {
-  accountAddress: null,
-  isRestoringConnection: false,
-  phase: "provider_deferred",
-  providerLoading: false,
-  providerMounted: false,
-  status: "disconnected",
-  walletName: null,
-};
-
-const WalletSessionContext = createContext<WalletSessionState>(defaultWalletSessionState);
+import {
+  WalletSessionContext,
+  type WalletSessionPhase,
+  type WalletSessionState,
+} from "./walletSessionState";
 
 export function WalletSessionStateProvider({ children }: PropsWithChildren) {
   const walletRuntime = useWalletProviderRuntime();
@@ -69,8 +50,4 @@ export function WalletSessionStateProvider({ children }: PropsWithChildren) {
   }, [value]);
 
   return <WalletSessionContext.Provider value={value}>{children}</WalletSessionContext.Provider>;
-}
-
-export function useWalletSessionState() {
-  return useContext(WalletSessionContext);
 }

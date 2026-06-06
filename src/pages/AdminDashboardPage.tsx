@@ -9297,20 +9297,20 @@ export function AdminDashboardPage() {
 
                   {selectedRecordIsSystem ? (
                     <section className="answer-card system-signal-diagnostics-card">
-                      <div className="signal-detail-group-header">
-                        <div>
+                      <div className="signal-detail-group-header system-signal-diagnostics-header">
+                        <div className="system-signal-diagnostics-heading">
                           <p className="eyebrow">System alert diagnostics</p>
                           <h3>{String(selectedSystemDiagnostics?.errorName ?? selectedSignalTitle)}</h3>
                         </div>
                         <button
                           type="button"
-                          className="ghost-button"
+                          className="ghost-button system-signal-diagnostics-copy-button"
                           onClick={() => {
                             void copyRedactedSystemDiagnostics(selectedRecord.submission.id)
                               .catch(() => setToast({ tone: "error", message: "Copy failed." }));
                           }}
                         >
-                          Copy redacted diagnostics JSON
+                          Copy
                         </button>
                       </div>
                       <div className="system-signal-diagnostics-grid">
@@ -9981,7 +9981,7 @@ export function AdminDashboardPage() {
       {nodeDirectoryOpen ? (
         <div className="node-directory-overlay" role="dialog" aria-modal="true">
           <div className="node-directory-backdrop" onClick={() => setNodeDirectoryOpen(false)} />
-          <section className="panel glow-panel node-directory-panel">
+          <section className="panel glow-panel node-directory-panel node-directory-panel--directory">
             <div className="signal-detail-heading node-directory-heading">
               <div>
                 <p className="eyebrow">{t("signalNodesTitle")}</p>
@@ -10147,7 +10147,7 @@ export function AdminDashboardPage() {
       {selectedBeaconForm ? (
         <div className="node-directory-overlay" role="dialog" aria-modal="true">
           <div className="node-directory-backdrop" onClick={() => setBeaconFormId(null)} />
-          <section className="panel glow-panel node-directory-panel beacon-overlay-panel">
+          <section className="panel glow-panel node-directory-panel beacon-overlay-panel beacon-overlay-panel--mobile-compact">
             <div className="signal-detail-heading node-directory-heading">
               <div>
                 <p className="eyebrow">{t("signalBeaconLabel")}</p>

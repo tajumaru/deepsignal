@@ -668,21 +668,7 @@ function FormBuilderComposer({
     projectId: selectedProjectForPublish?.objectId,
     ownerAddress: wallet.accountAddress,
   });
-  const draftStateLabel = useMemo(() => {
-    if (!builder.isDirty && publish.savedForm) {
-      return t("draftClearedAfterPublish");
-    }
-    switch (builder.draftSaveState) {
-      case "restored":
-        return t("draftRestored");
-      case "saving":
-        return t("draftSaving");
-      case "saved":
-        return t("draftSaved");
-      default:
-        return builder.isDirty ? t("draftUnsaved") : "";
-    }
-  }, [builder.draftSaveState, builder.isDirty, publish.savedForm, t]);
+  const draftStateLabel = publish.savedForm ? undefined : t("draftBadge");
   const hasEditedCoreSignal = useMemo(() => {
     const titleChanged = builder.values.title.trim() !== localizedInitialTemplate.title.trim();
     const descriptionChanged = builder.values.description.trim() !== localizedInitialTemplate.description.trim();
@@ -1087,7 +1073,7 @@ function FormBuilderComposer({
               capabilityConfigured={!isGuestDraftMode && capabilityProfile.isConfigured}
               accessRoleLabel={isGuestDraftMode ? t("guestDraftRole") : getRoleLabel(capabilityProfile)}
               adminCapLabel={!isGuestDraftMode && hasAdminAccess && capabilityProfile.adminCapIds[0] ? shortAddress(capabilityProfile.adminCapIds[0]) : undefined}
-              draftStateLabel={draftStateLabel || undefined}
+              draftStateLabel={draftStateLabel}
               savedFormId={publish.savedForm?.id}
               savedManifestBlobId={publish.savedForm?.manifestBlobId}
               onSelectStep={handleSelectStep}

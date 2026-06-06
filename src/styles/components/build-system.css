@@ -1,5 +1,9 @@
 /* Build version and update recovery surfaces shared by app and public shells. */
 
+:root {
+  --build-update-banner-mobile-offset: 0px;
+}
+
 .build-indicator {
   position: fixed;
   right: max(0.75rem, env(safe-area-inset-right, 0px));
@@ -299,4 +303,36 @@
 
 body.deepsignal-build-update-visible .landing-hero-grid {
   padding-bottom: calc(6rem + max(0.85rem, env(safe-area-inset-bottom, 0px)));
+}
+
+@media (max-width: 900px) {
+  body.deepsignal-build-update-visible {
+    --build-update-banner-mobile-offset: 5.75rem;
+  }
+
+  body.deepsignal-build-update-visible .mobile-inbox-bottom-nav {
+    bottom: var(--build-update-banner-mobile-offset);
+  }
+
+  body.deepsignal-build-update-visible .mobile-compose-fab {
+    bottom: calc(5.85rem + env(safe-area-inset-bottom, 0px) + var(--build-update-banner-mobile-offset));
+  }
+
+  body.deepsignal-build-update-visible .has-mobile-bottom-nav .page-wrap {
+    padding-bottom: calc(
+      var(--bottom-nav-height, 96px) + env(safe-area-inset-bottom, 0px) + 32px + var(--build-update-banner-mobile-offset)
+    );
+  }
+}
+
+@media (max-width: 720px) {
+  body.deepsignal-build-update-visible {
+    --build-update-banner-mobile-offset: 7rem;
+  }
+}
+
+@media (max-width: 380px) {
+  body.deepsignal-build-update-visible {
+    --build-update-banner-mobile-offset: 7.4rem;
+  }
 }

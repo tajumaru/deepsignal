@@ -912,6 +912,12 @@
     max-height: 100%;
   }
 
+  .node-directory-panel--directory {
+    width: min(100%, 420px);
+    gap: 0.7rem;
+    padding: 0.9rem;
+  }
+
   .node-directory-heading {
     display: block;
     padding-right: 3.25rem;
@@ -1579,7 +1585,7 @@
   }
 
   .signal-position-selector {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
   .composer-step-card,

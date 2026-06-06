@@ -19,7 +19,9 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
   }
 
   const rpcUrls = [
-    process.env.NEXT_PUBLIC_SUI_RPC_URL || "",
+    String(process.env.NEXT_PUBLIC_TATUM_ENABLED || "").toLowerCase() === "true"
+      ? process.env.NEXT_PUBLIC_SUI_RPC_URL || ""
+      : "",
     process.env.VITE_SUI_FULLNODE_URL || "",
     process.env.VITE_RPC_URL || "",
   ].filter(Boolean);

@@ -21,7 +21,7 @@ import { isSignalInboxPath } from "../lib/navigation";
 import { logRouteLifecycle } from "../lib/routeDiagnostics";
 import { scheduleIdleTask } from "../lib/scheduleIdleTask";
 import { useOptionalRpcInfrastructure } from "../rpcInfrastructure";
-import type { WalletSessionPhase } from "../walletSession";
+import type { WalletSessionPhase } from "../walletSessionState";
 
 const MOBILE_DRAWER_SWIPE_THRESHOLD_PX = 60;
 const MOBILE_DRAWER_EDGE_START_PX = 24;
@@ -130,11 +130,9 @@ function WalletConnectSlot({
 
 interface MobileAppBottomNavProps {
   showComposeShortcut: boolean;
-  drawerOpen: boolean;
-  onOpenDrawer: () => void;
 }
 
-function MobileAppBottomNav({ showComposeShortcut, drawerOpen, onOpenDrawer }: MobileAppBottomNavProps) {
+function MobileAppBottomNav({ showComposeShortcut }: MobileAppBottomNavProps) {
   const location = useLocation();
   const { t } = useI18n();
   const inboxActive = isSignalInboxPath(location.pathname);
@@ -151,7 +149,7 @@ function MobileAppBottomNav({ showComposeShortcut, drawerOpen, onOpenDrawer }: M
           <span className="sr-only">{t("composeSignalCta")}</span>
         </CreateFormLink>
       ) : null}
-      <nav className="mobile-inbox-bottom-nav" aria-label="Mobile workspace navigation" aria-disabled={drawerOpen}>
+      <nav className="mobile-inbox-bottom-nav" aria-label="Mobile workspace navigation">
         <Link className={inboxActive ? "is-active" : undefined} to="/dashboard">
           <span aria-hidden="true">In</span>
           <span>{t("navMobileInbox")}</span>
@@ -164,17 +162,6 @@ function MobileAppBottomNav({ showComposeShortcut, drawerOpen, onOpenDrawer }: M
           <span aria-hidden="true">Me</span>
           <span>{t("navMobileMyResponses")}</span>
         </NavLink>
-        <button
-          type="button"
-          className={drawerOpen ? "is-active" : undefined}
-          onClick={onOpenDrawer}
-          aria-haspopup="dialog"
-          aria-expanded={drawerOpen}
-          aria-controls="mobile-command-drawer"
-        >
-          <span aria-hidden="true">Set</span>
-          <span>{t("navMobileSettings")}</span>
-        </button>
       </nav>
     </>
   );
@@ -758,11 +745,7 @@ export function AppShell({
       )}
       <main className="page-wrap">{children}</main>
       {showMobileBottomNav ? (
-        <MobileAppBottomNav
-          showComposeShortcut={showComposeShortcut}
-          drawerOpen={mobileDrawerOpen}
-          onOpenDrawer={openMobileDrawer}
-        />
+        <MobileAppBottomNav showComposeShortcut={showComposeShortcut} />
       ) : null}
       <BuildIndicator />
     </div>

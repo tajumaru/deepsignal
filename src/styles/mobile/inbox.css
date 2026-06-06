@@ -244,7 +244,7 @@
 
   .desktop-signal-inbox.has-selected-signal .system-signal-diagnostics-card .signal-detail-group-header {
     grid-template-columns: minmax(0, 1fr) auto;
-    align-items: end;
+    align-items: start;
     column-gap: 0.52rem;
     row-gap: 0.12rem;
     margin: 0 0 0.34rem;
@@ -260,7 +260,7 @@
     line-height: 1.08;
   }
 
-  .desktop-signal-inbox.has-selected-signal .system-signal-diagnostics-card .ghost-button {
+  .desktop-signal-inbox.has-selected-signal .system-signal-diagnostics-card .system-signal-diagnostics-copy-button {
     justify-self: end;
     width: auto;
     min-height: 1.85rem;

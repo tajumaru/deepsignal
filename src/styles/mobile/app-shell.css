@@ -48,8 +48,8 @@
     right: 0;
     bottom: 0;
     z-index: 1000;
-    display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    display: flex;
+    align-items: stretch;
     gap: 0;
     width: 100%;
     max-width: 100vw;
@@ -71,6 +71,7 @@
 
   .mobile-inbox-bottom-nav a,
   .mobile-inbox-bottom-nav button {
+    flex: 1 1 0;
     position: relative;
     display: grid;
     justify-items: center;
@@ -1170,6 +1171,7 @@
     width: 100%;
     min-width: 0;
     max-width: 100%;
+    box-sizing: border-box;
     overflow-x: hidden;
   }
 
@@ -1275,6 +1277,26 @@
 
   .mirror-object-card-v2 {
     min-height: 0;
+  }
+
+  .mirror-object-card-v2,
+  .mirror-current-node-card,
+  .mirror-object-status-card,
+  .mirror-intelligence-card,
+  .mirror-publish-timeline,
+  .mirror-published-card,
+  .mirror-mobile-detail,
+  .mirror-question-frame,
+  .mirror-input-preview,
+  .mirror-choice-list,
+  .mirror-matrix-preview,
+  .mirror-rating-preview,
+  .mirror-emotion-preview,
+  .mirror-upload-preview {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
   }
 
   .mirror-description {

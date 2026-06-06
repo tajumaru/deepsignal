@@ -4227,6 +4227,37 @@
   border-color: rgba(244, 114, 182, 0.22);
   background:
     linear-gradient(180deg, rgba(35, 22, 48, 0.72), rgba(5, 17, 28, 0.78));
+  padding: 0.95rem;
+}
+
+.system-signal-diagnostics-header {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  column-gap: 0.75rem;
+  row-gap: 0.32rem;
+  margin: 0 0 0.7rem;
+}
+
+.system-signal-diagnostics-heading {
+  min-width: 0;
+}
+
+.system-signal-diagnostics-heading .eyebrow {
+  margin-bottom: 0.26rem;
+}
+
+.system-signal-diagnostics-heading h3 {
+  margin: 0;
+}
+
+.system-signal-diagnostics-copy-button {
+  justify-self: end;
+  align-self: start;
+  min-height: 2.1rem;
+  padding: 0.45rem 0.9rem;
+  font-size: 0.78rem;
+  line-height: 1;
+  white-space: nowrap;
 }
 
 .system-signal-diagnostics-grid {

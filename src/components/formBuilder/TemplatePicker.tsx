@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useI18n } from "../../i18n";
 import type { Translate } from "../../features/createForm/types";
+import { defaultComposerTemplateKey } from "../../lib/formTemplates";
 import type { FormTemplateDefinition, SignalTypeKey, TemplateSignalType } from "../../lib/formTemplates";
 
 interface TemplatePickerProps {
@@ -132,6 +133,9 @@ export function TemplatePicker({ templates, selectedTemplateKey, onSelect }: Tem
   const { t } = useI18n();
   const [activeFilter, setActiveFilter] = useState<SignalTypeKey | null>(null);
   const [isMobileViewport, setIsMobileViewport] = useState(false);
+  const [hasExplicitMobileSelection, setHasExplicitMobileSelection] = useState(
+    selectedTemplateKey !== defaultComposerTemplateKey,
+  );
 
   useEffect(() => {
     if (typeof window === "undefined" || !window.matchMedia) {
@@ -150,6 +154,12 @@ export function TemplatePicker({ templates, selectedTemplateKey, onSelect }: Tem
     mediaQuery.addListener(syncViewport);
     return () => mediaQuery.removeListener(syncViewport);
   }, []);
+
+  useEffect(() => {
+    if (selectedTemplateKey !== defaultComposerTemplateKey) {
+      setHasExplicitMobileSelection(true);
+    }
+  }, [selectedTemplateKey]);
 
   const signalTypes = useMemo(() => {
     const seen = new Set<SignalTypeKey>();
@@ -264,6 +274,7 @@ export function TemplatePicker({ templates, selectedTemplateKey, onSelect }: Tem
 
   function renderTemplateCard(template: FormTemplateDefinition) {
     const active = selectedTemplateKey === template.key;
+    const showActiveState = active && (!isMobileViewport || hasExplicitMobileSelection);
     const copy = getTemplateCopy(template);
     const hiddenBadges = template.capabilities.filter(
       (badge) => !template.cardBadges.some((cardBadge) => cardBadge.label === badge.label),
@@ -273,8 +284,11 @@ export function TemplatePicker({ templates, selectedTemplateKey, onSelect }: Tem
       <button
         key={template.key}
         type="button"
-        className={`composer-template-card ${active ? "is-active" : ""}`}
-        onClick={() => onSelect(template.key)}
+        className={`composer-template-card ${showActiveState ? "is-active" : ""}`}
+        onClick={() => {
+          setHasExplicitMobileSelection(true);
+          onSelect(template.key);
+        }}
         aria-pressed={active}
       >
         <div className="composer-template-card-header">

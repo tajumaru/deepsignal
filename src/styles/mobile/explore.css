@@ -2,6 +2,8 @@
 
 @media (max-width: 767px) {
   .explore-shell {
+    --explore-mobile-gutter-left: max(0.64rem, env(safe-area-inset-left, 0px));
+    --explore-mobile-gutter-right: max(0.64rem, env(safe-area-inset-right, 0px));
     gap: 0.45rem;
   }
 
@@ -15,7 +17,11 @@
   }
 
   .explore-hero-compact {
-    padding: 0.56rem 0.62rem 0.32rem;
+    padding:
+      0.56rem
+      var(--explore-mobile-gutter-right)
+      0.32rem
+      var(--explore-mobile-gutter-left);
   }
 
   .explore-grid-overlay,
@@ -57,7 +63,11 @@
 
   .explore-discovery-panel {
     gap: 0.3rem;
-    padding: 0.4rem 0 0.68rem;
+    padding:
+      0.4rem
+      var(--explore-mobile-gutter-right)
+      0.68rem
+      var(--explore-mobile-gutter-left);
   }
 
   .explore-discovery-bar {
@@ -74,11 +84,11 @@
     width: 100%;
     min-width: 0;
     gap: 0.4rem;
-    padding: 0.02rem 0.64rem 0.08rem;
+    padding: 0.02rem 0 0.08rem;
     overflow-x: auto;
     overflow-y: hidden;
     overscroll-behavior-x: contain;
-    scroll-padding-inline: 0.64rem;
+    scroll-padding-inline: 0;
     scrollbar-width: none;
     -webkit-overflow-scrolling: touch;
   }
@@ -99,8 +109,8 @@
   .explore-feed-meta {
     align-items: center;
     justify-content: space-between;
-    width: calc(100% - 1.28rem);
-    margin-inline: 0.64rem;
+    width: 100%;
+    margin-inline: 0;
     gap: 0.34rem;
     font-size: 0.72rem;
   }
@@ -117,7 +127,7 @@
     grid-template-columns: minmax(0, 1fr);
     gap: 0.78rem;
     margin-top: 0;
-    padding: 0 0.72rem 0.9rem;
+    padding: 0 0 0.9rem;
     background: transparent;
   }
 
@@ -266,7 +276,6 @@
 @media (max-width: 340px) {
   .explore-card-grid {
     gap: 0.68rem;
-    padding-inline: 0.58rem;
   }
 
   .mobile-explore-row {

@@ -10,7 +10,6 @@ import {
 } from "./lib/buildAssetDiagnostics";
 import { isDashboardWorkspaceReady, useDashboardProjectRestore, useDashboardProjectRestoreSnapshot } from "./lib/dashboardProjectRestore";
 import { retryLazyImport } from "./lib/lazyRetry";
-import { markPerfMilestone } from "./lib/perf";
 import { getBrowserCapabilitiesSnapshot, logRouteLifecycle, setDeepSignalDebugReadiness } from "./lib/routeDiagnostics";
 import { scheduleIdleTask } from "./lib/scheduleIdleTask";
 import { LandingPage } from "./pages/LandingPage";
@@ -24,7 +23,7 @@ import { PublicAppRoutes } from "./routes/PublicAppRoutes";
 import { createPublicRouteComponents, type PublicRouteComponents } from "./routes/publicRouteComponents";
 import { MixedBuildRecoveryScreen, RouteErrorBoundary } from "./routes/RouteErrorBoundary";
 import { getRouteId } from "./routes/routeDiagnostics";
-import { useWalletSessionState } from "./walletSession";
+import { useWalletSessionState } from "./walletSessionState";
 
 const AppShell = lazy(() =>
   retryLazyImport(() => import("./components/AppShell"), "app-shell").then((module) => ({

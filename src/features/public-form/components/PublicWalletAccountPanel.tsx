@@ -18,13 +18,5 @@ export function PublicWalletAccountPanel({ onAccountAddressChange, onWalletProvi
     onWalletProviderChange?.(wallet.walletName);
   }, [wallet.walletName, onWalletProviderChange]);
 
-  useEffect(
-    () => () => {
-      onAccountAddressChange(undefined);
-      onWalletProviderChange?.(undefined);
-    },
-    [onAccountAddressChange, onWalletProviderChange],
-  );
-
   return <WalletConnectSurface compact />;
 }

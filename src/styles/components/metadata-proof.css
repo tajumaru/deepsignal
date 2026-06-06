@@ -1071,6 +1071,7 @@
   background: rgba(2, 15, 27, 0.72);
   box-shadow: 0 0 22px rgba(89, 224, 255, 0.12);
   transform: translateX(-50%);
+  white-space: nowrap;
 }
 
 .beacon-rings span {

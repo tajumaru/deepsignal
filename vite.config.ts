@@ -867,14 +867,14 @@ export default defineConfig(({ mode }) => {
   const appEnvironment =
     process.env.VITE_APP_ENV || env.VITE_APP_ENV || process.env.VERCEL_ENV || process.env.NODE_ENV || mode || "dev";
   const tatumApiKey = process.env.TATUM_API_KEY || env.TATUM_API_KEY || "";
+  const tatumEnabled = String(env.NEXT_PUBLIC_TATUM_ENABLED || "").toLowerCase() === "true";
   const serverRpcUrls = [
-    env.NEXT_PUBLIC_SUI_RPC_URL || "",
+    tatumEnabled ? env.NEXT_PUBLIC_SUI_RPC_URL || "" : "",
     env.VITE_SUI_FULLNODE_URL || "",
     env.VITE_RPC_URL || "",
   ].filter(Boolean);
   const configuredRpcUrl =
-    env.NEXT_PUBLIC_SUI_RPC_URL || env.VITE_SUI_FULLNODE_URL || env.VITE_RPC_URL || "";
-  const tatumEnabled = String(env.NEXT_PUBLIC_TATUM_ENABLED || "").toLowerCase() === "true";
+    (tatumEnabled ? env.NEXT_PUBLIC_SUI_RPC_URL || "" : "") || env.VITE_SUI_FULLNODE_URL || env.VITE_RPC_URL || "";
   const tatumStorageEnabled = String(env.NEXT_PUBLIC_TATUM_STORAGE_ENABLED || "").toLowerCase() === "true";
   const tatumProxyEnabled = Boolean(
     tatumEnabled &&
