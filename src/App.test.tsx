@@ -136,14 +136,14 @@ describe("App routing", () => {
     expect(screen.getByTestId("app-shell")).toHaveAttribute("data-chrome", "full");
   });
 
-  it("renders the dashboard shell with wallet-aware chrome", async () => {
+  it("keeps the dashboard on the wallet-preparation shell while the provider is still deferred", async () => {
     render(
       <MemoryRouter initialEntries={["/dashboard"]}>
         <App />
       </MemoryRouter>,
     );
 
-    await waitFor(() => expect(screen.getByRole("heading", { name: "Admin Route" })).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Preparing wallet session..." })).toBeInTheDocument());
     expect(screen.getByTestId("app-shell")).toHaveAttribute("data-chrome", "full");
     expect(screen.getByTestId("app-shell")).toHaveAttribute("data-wallet-ui", "enabled");
   });

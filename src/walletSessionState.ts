@@ -1,4 +1,4 @@
-import { createContext, useContext } from "react";
+import { useSyncExternalStore } from "react";
 
 export type WalletSessionPhase = "provider_deferred" | "restoring" | "disconnected" | "connected";
 
@@ -22,8 +22,44 @@ export const defaultWalletSessionState: WalletSessionState = {
   walletName: null,
 };
 
-export const WalletSessionContext = createContext<WalletSessionState>(defaultWalletSessionState);
+let walletSessionState = defaultWalletSessionState;
+const walletSessionListeners = new Set<() => void>();
+
+function walletSessionStatesEqual(left: WalletSessionState, right: WalletSessionState) {
+  return (
+    left.accountAddress === right.accountAddress &&
+    left.isRestoringConnection === right.isRestoringConnection &&
+    left.phase === right.phase &&
+    left.providerLoading === right.providerLoading &&
+    left.providerMounted === right.providerMounted &&
+    left.status === right.status &&
+    left.walletName === right.walletName
+  );
+}
+
+export function setWalletSessionState(nextState: WalletSessionState) {
+  if (walletSessionStatesEqual(walletSessionState, nextState)) {
+    return;
+  }
+  walletSessionState = nextState;
+  walletSessionListeners.forEach((listener) => listener());
+}
+
+export function getWalletSessionStateSnapshot() {
+  return walletSessionState;
+}
+
+export function subscribeWalletSessionState(listener: () => void) {
+  walletSessionListeners.add(listener);
+  return () => {
+    walletSessionListeners.delete(listener);
+  };
+}
 
 export function useWalletSessionState() {
-  return useContext(WalletSessionContext);
+  return useSyncExternalStore(
+    subscribeWalletSessionState,
+    getWalletSessionStateSnapshot,
+    getWalletSessionStateSnapshot,
+  );
 }

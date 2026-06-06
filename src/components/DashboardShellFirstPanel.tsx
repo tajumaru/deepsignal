@@ -7,7 +7,7 @@ import { formatRouteLifecycleDiagnostics, logRouteLifecycle } from "../lib/route
 export function DashboardShellFirstPanel({
   onRetryWalletRuntime,
   routePath,
-  walletStatusMessage = "Wallet runtime loading...",
+  walletStatusMessage = "Preparing wallet session...",
 }: {
   onRetryWalletRuntime: () => void;
   routePath: string;
@@ -49,11 +49,11 @@ export function DashboardShellFirstPanel({
       <section className="panel glow-panel route-status-panel" role="status">
         <p className="eyebrow">Signal Intelligence Workspace</p>
         <h1>
-          {restorePending ? "Restoring signal project" : currentProjectId ? "Dashboard shell ready" : "Choose or create a signal project"}
+          {restorePending ? "Preparing wallet session..." : currentProjectId ? "Dashboard shell ready" : "Choose or create a signal project"}
         </h1>
         <p className="muted">
           {restorePending
-            ? "DeepSignal is keeping the dashboard shell interactive while wallet and project restore settle. Local fallback data is preserved."
+            ? "DeepSignal is keeping this private workspace mounted while the wallet session settles. Project restore has not started yet, and local fallback data is preserved."
             : "The dashboard shell is usable while protected wallet-only controls finish loading. Local fallback data is preserved."}
         </p>
         <dl className="route-status-metadata">

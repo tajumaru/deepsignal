@@ -11,6 +11,19 @@ interface RelatedSignalsPanelProps {
   onSelectRecord: (record: SignalRecord) => void;
 }
 
+const REASON_DISPLAY_ORDER: RelatedSignalReason[] = [
+  "same_channel",
+  "similar_subject",
+  "similar_preview",
+  "shared_tags",
+  "same_category",
+  "same_triage",
+  "same_priority",
+  "same_sender_type",
+];
+
+const MAX_VISIBLE_REASON_CHIPS = 4;
+
 function getPriorityLabel(priority: SignalRecord["submission"]["priority"], t: ReturnType<typeof useI18n>["t"]) {
   switch (priority) {
     case "high":
@@ -70,6 +83,12 @@ function getSafePreview(record: SignalRecord, t: ReturnType<typeof useI18n>["t"]
   return getSignalPreview(record.submission);
 }
 
+function getVisibleReasons(reasons: RelatedSignalReason[]) {
+  return [...reasons]
+    .sort((left, right) => REASON_DISPLAY_ORDER.indexOf(left) - REASON_DISPLAY_ORDER.indexOf(right))
+    .slice(0, MAX_VISIBLE_REASON_CHIPS);
+}
+
 export function RelatedSignalsPanel({ relatedSignals, selectedSignalId, onSelectRecord }: RelatedSignalsPanelProps) {
   const { t } = useI18n();
   const duplicateDetected = relatedSignals.some((signal) => signal.duplicateLikely);
@@ -92,6 +111,8 @@ export function RelatedSignalsPanel({ relatedSignals, selectedSignalId, onSelect
         <div className="related-signal-list">
           {relatedSignals.map((match) => {
             const { record, reasons } = match;
+            const visibleReasons = getVisibleReasons(reasons);
+            const hiddenReasonCount = Math.max(0, reasons.length - visibleReasons.length);
             const respondentMeta = getSubmissionRespondentMeta(record.submission);
             const preview = getSafePreview(record, t);
             const encryptedState = record.submission.isEncrypted
@@ -124,7 +145,7 @@ export function RelatedSignalsPanel({ relatedSignals, selectedSignalId, onSelect
                     <span className="signal-chip signal-chip-soft">{encryptedState}</span>
                   </span>
                   <span className="related-signal-reasons">
-                    {reasons.map((reason) => (
+                    {visibleReasons.map((reason) => (
                       <span
                         key={`${record.submission.id}-${reason}`}
                         className="related-signal-reason-chip"
@@ -132,6 +153,11 @@ export function RelatedSignalsPanel({ relatedSignals, selectedSignalId, onSelect
                         {getReasonLabel(reason, t)}
                       </span>
                     ))}
+                    {hiddenReasonCount > 0 ? (
+                      <span className="related-signal-reason-chip related-signal-reason-chip-muted">
+                        +{hiddenReasonCount}
+                      </span>
+                    ) : null}
                   </span>
                 </span>
               </button>

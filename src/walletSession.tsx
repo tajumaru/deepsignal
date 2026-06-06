@@ -1,14 +1,14 @@
-import { useEffect, useMemo, type PropsWithChildren } from "react";
+import { useEffect, useMemo } from "react";
 import { logRouteLifecycle, setDeepSignalDebugReadiness } from "./lib/routeDiagnostics";
 import { useWalletProviderRuntime } from "./components/WalletSurfaceRuntime";
 import { useOptionalWalletConnection } from "./walletStatus";
 import {
-  WalletSessionContext,
+  setWalletSessionState,
   type WalletSessionPhase,
   type WalletSessionState,
 } from "./walletSessionState";
 
-export function WalletSessionStateProvider({ children }: PropsWithChildren) {
+export function WalletSessionBootstrap() {
   const walletRuntime = useWalletProviderRuntime();
   const connection = useOptionalWalletConnection();
 
@@ -35,6 +35,7 @@ export function WalletSessionStateProvider({ children }: PropsWithChildren) {
   }, [connection.accountAddress, connection.isRestoringConnection, connection.status, connection.walletName, walletRuntime.loaded, walletRuntime.loading]);
 
   useEffect(() => {
+    setWalletSessionState(value);
     logRouteLifecycle("wallet-session:state", {
       phase: value.phase,
       providerLoading: value.providerLoading,
@@ -49,5 +50,5 @@ export function WalletSessionStateProvider({ children }: PropsWithChildren) {
     });
   }, [value]);
 
-  return <WalletSessionContext.Provider value={value}>{children}</WalletSessionContext.Provider>;
+  return null;
 }

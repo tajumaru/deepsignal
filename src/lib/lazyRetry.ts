@@ -201,6 +201,13 @@ function getLazyTimeoutKey(label: string, attempt: number, routePath: string) {
   return `${label}:${attempt}:${routePath}`;
 }
 
+function logPublicAppShellTrace(event: "public-app-shell:resolve" | "public-app-shell:waiting" | "public-app-shell:blocker", details: Record<string, unknown>) {
+  if ((details.label as string | undefined) !== "public-app-shell") {
+    return;
+  }
+  logRouteLifecycle(event, details);
+}
+
 function logLazyImportTimeoutOnce({
   attempt,
   chunkUrl,
@@ -264,6 +271,15 @@ async function withLazyImportTimeout<T>(
       }
       if (elapsedMs === timeoutMs) {
         logLazyImportTimeoutOnce({ attempt, chunkUrl, elapsedMs, label, routePath, timeoutMs, userAgent });
+        logPublicAppShellTrace("public-app-shell:blocker", {
+          label,
+          attempt,
+          chunkUrl: chunkUrl ?? null,
+          elapsedMs,
+          routePath,
+          timeoutMs,
+          reason: "timeout-threshold",
+        });
         return;
       }
       logRouteLifecycle("lazy-import-still-pending", {
@@ -275,6 +291,15 @@ async function withLazyImportTimeout<T>(
         timeoutMs,
         userAgent,
         buildVersion: buildInfo.appVersion,
+      });
+      logPublicAppShellTrace("public-app-shell:blocker", {
+        label,
+        attempt,
+        chunkUrl: chunkUrl ?? null,
+        elapsedMs,
+        routePath,
+        timeoutMs,
+        reason: "still-pending",
       });
     }, elapsedMs),
   );
@@ -504,6 +529,21 @@ function readModuleExport(module: unknown, exportName: string) {
   }
   if (namedExport) {
     return { value: namedExport, resolvedExport: exportName };
+  }
+  for (const value of Object.values(moduleRecord)) {
+    if (!value || typeof value !== "object") {
+      continue;
+    }
+    const nestedRecord = value as Record<string, unknown>;
+    let nestedExport: unknown;
+    try {
+      nestedExport = nestedRecord[exportName];
+    } catch {
+      nestedExport = undefined;
+    }
+    if (nestedExport) {
+      return { value: nestedExport, resolvedExport: `nested:${exportName}` as const };
+    }
   }
   return { value: null, resolvedExport: "missing" as const };
 }
@@ -758,6 +798,13 @@ export async function retryLazyImport<T>(loader: () => Promise<T>, label = "anon
         routePath: getCurrentRoutePath(),
         timeoutMs,
       });
+      logPublicAppShellTrace("public-app-shell:waiting", {
+        label,
+        attempt,
+        chunkUrl: expectedChunkUrl ?? null,
+        routePath: getCurrentRoutePath(),
+        timeoutMs,
+      });
       if (attempt === 1) {
         probeLazyImportDependenciesOnStart(label, expectedChunkUrl, attempt);
       }
@@ -787,6 +834,12 @@ export async function retryLazyImport<T>(loader: () => Promise<T>, label = "anon
         chunkUrl: expectedChunkUrl ?? null,
         routePath: getCurrentRoutePath(),
       });
+      logPublicAppShellTrace("public-app-shell:resolve", {
+        label,
+        attempt,
+        chunkUrl: expectedChunkUrl ?? null,
+        routePath: getCurrentRoutePath(),
+      });
       endPerf(perfName, "ok", `attempt ${attempt}`);
       return result;
     } catch (error) {
@@ -805,6 +858,15 @@ export async function retryLazyImport<T>(loader: () => Promise<T>, label = "anon
         message: error instanceof Error ? error.message : String(error),
         routePath: getCurrentRoutePath(),
         userAgent: typeof navigator === "undefined" ? "" : navigator.userAgent,
+      });
+      logPublicAppShellTrace("public-app-shell:blocker", {
+        label,
+        attempt,
+        chunkUrl: expectedChunkUrl ?? null,
+        message: error instanceof Error ? error.message : String(error),
+        routePath: getCurrentRoutePath(),
+        timeoutMs,
+        reason: error instanceof LazyImportTimeoutError ? "timeout" : "rejected",
       });
       if (expectedChunkUrl) {
         const probe = await probeChunk(expectedChunkUrl);
@@ -826,6 +888,19 @@ export async function retryLazyImport<T>(loader: () => Promise<T>, label = "anon
             decodedBodySize: probe.decodedBodySize ?? null,
             resourceTimingExists: probe.resourceTimingExists ?? false,
           },
+        });
+        logPublicAppShellTrace("public-app-shell:blocker", {
+          label,
+          attempt,
+          chunkUrl: expectedChunkUrl,
+          routePath: getCurrentRoutePath(),
+          timeoutMs,
+          reason: "diagnostics",
+          probeOk: probe.ok,
+          probeStatus: probe.status ?? null,
+          probeContentType: probe.contentType ?? null,
+          dependencyFailures: dependencyProbe.failedCount,
+          dependencyTotal: dependencyProbe.totalCount,
         });
         reportSystemError({
           error,

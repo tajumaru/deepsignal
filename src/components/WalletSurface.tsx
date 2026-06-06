@@ -155,7 +155,7 @@ export function WalletSurface({
   };
   const loadWalletProviders = useMemo(() => createWalletProviders(retryKey, importOptionsRef), [retryKey]);
   const [providersModule, setProvidersModule] = useState<null | { WalletProviders: (props: PropsWithChildren) => JSX.Element }>(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(requestOnMount && !parentRuntime.loaded);
   const requestStartedRef = useRef(false);
 
   useEffect(() => {

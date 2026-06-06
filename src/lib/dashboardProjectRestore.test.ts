@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   getDashboardProjectRestoreSnapshot,
+  isDashboardWalletRuntimeSettled,
   initializeDashboardProjectRestore,
   markDashboardWalletImportReady,
   markDashboardWalletImportStarted,
@@ -33,18 +34,33 @@ describe("dashboardProjectRestore", () => {
     vi.advanceTimersByTime(100);
 
     expect(getDashboardProjectRestoreSnapshot().state).toBe("ready_without_project");
-    expect(getDashboardProjectRestoreSnapshot().walletRuntime).toBe("ready");
+    expect(getDashboardProjectRestoreSnapshot().walletRuntime).toBe("mounted");
   });
 
-  it("resolves with a project from namespaced storage before wallet restore completes", () => {
+  it("does not resolve a stored project before wallet restore settles", () => {
     window.localStorage.setItem("deepsignal.projectRegistry.selectedProjectId:test", "0xabc123");
 
     initializeDashboardProjectRestore("/dashboard");
     markDashboardWalletImportStarted("/dashboard");
     vi.advanceTimersByTime(250);
 
+    expect(getDashboardProjectRestoreSnapshot().state).toBe("restoring");
+    expect(getDashboardProjectRestoreSnapshot().currentProjectId).toBe("");
+
+    markDashboardWalletImportReady("/dashboard");
+    vi.advanceTimersByTime(50);
+
     expect(getDashboardProjectRestoreSnapshot().state).toBe("ready_with_project");
     expect(getDashboardProjectRestoreSnapshot().currentProjectId).toBe("0xabc123");
     expect(getDashboardProjectRestoreSnapshot().source).toBe("namespaced-selected-project");
+  });
+
+  it("treats only settled wallet runtime states as safe to restore", () => {
+    expect(isDashboardWalletRuntimeSettled("deferred")).toBe(false);
+    expect(isDashboardWalletRuntimeSettled("pending")).toBe(false);
+    expect(isDashboardWalletRuntimeSettled("mounted")).toBe(true);
+    expect(isDashboardWalletRuntimeSettled("failed")).toBe(true);
+    expect(isDashboardWalletRuntimeSettled("skipped_no_wallet")).toBe(true);
+    expect(isDashboardWalletRuntimeSettled("timeout_fallback")).toBe(true);
   });
 });

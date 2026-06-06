@@ -2,7 +2,13 @@ import { useEffect, useSyncExternalStore } from "react";
 import { getBrowserCapabilitiesSnapshot, logRouteLifecycle, setDeepSignalDebugReadiness } from "./routeDiagnostics";
 
 export type ProjectRestoreState = "unknown" | "restoring" | "ready_with_project" | "ready_without_project" | "error";
-export type DashboardWalletRuntimeState = "deferred" | "pending" | "ready" | "failed" | "timed_out";
+export type DashboardWalletRuntimeState =
+  | "deferred"
+  | "pending"
+  | "mounted"
+  | "failed"
+  | "skipped_no_wallet"
+  | "timeout_fallback";
 
 type ProjectRestoreSource =
   | "unknown"
@@ -142,6 +148,15 @@ function logProjectRestoreSource(selection: ProjectSelectionSnapshot) {
 }
 
 function resolveRestoreState(selection: ProjectSelectionSnapshot) {
+  if (!snapshot.storageSettled || !snapshot.walletSettled) {
+    updateSnapshot({
+      currentProjectId: "",
+      source: selection.source,
+      state: "restoring",
+    });
+    return;
+  }
+
   if (selection.currentProjectId) {
     logProjectRestoreSource(selection);
     updateSnapshot({
@@ -156,15 +171,6 @@ function resolveRestoreState(selection: ProjectSelectionSnapshot) {
       currentProjectId: selection.currentProjectId,
       state: "ready_with_project",
       walletRuntime: snapshot.walletRuntime,
-    });
-    return;
-  }
-
-  if (!snapshot.storageSettled || !snapshot.walletSettled) {
-    updateSnapshot({
-      currentProjectId: "",
-      source: selection.source,
-      state: "restoring",
     });
     return;
   }
@@ -218,6 +224,8 @@ function getWalletSettleTimeoutMs(mobileSafari: boolean) {
 
 export function initializeDashboardProjectRestore(routePath: string) {
   const mobileSafari = Boolean(getBrowserCapabilitiesSnapshot().mobileSafari);
+  const walletRuntime = snapshot.walletRuntime;
+  const walletSettled = isDashboardWalletRuntimeSettled(walletRuntime);
   cleanupActiveRestore?.();
   clearRestoreTimers();
   loggedSourceKey = "";
@@ -227,9 +235,9 @@ export function initializeDashboardProjectRestore(routePath: string) {
     state: "restoring",
     currentProjectId: "",
     source: "unknown",
-    walletRuntime: "deferred",
+    walletRuntime,
     storageSettled: false,
-    walletSettled: false,
+    walletSettled,
     mobileSafari,
     errorMessage: null,
   };
@@ -239,7 +247,7 @@ export function initializeDashboardProjectRestore(routePath: string) {
   emit();
   logRouteLifecycle("project-restore:start", {
     routePath,
-    walletRuntime: "deferred",
+    walletRuntime,
     mobileSafari,
   });
 
@@ -257,14 +265,14 @@ export function initializeDashboardProjectRestore(routePath: string) {
 
   walletTimeoutTimer = window.setTimeout(() => {
     updateSnapshot({
-      walletRuntime: snapshot.walletRuntime === "ready" ? "ready" : "timed_out",
+      walletRuntime: snapshot.walletRuntime === "mounted" ? "mounted" : "timeout_fallback",
       walletSettled: true,
     });
     logRouteLifecycle("project-restore:source", {
       routePath,
       source: "wallet-timeout",
       currentProjectId: snapshot.currentProjectId || "",
-      walletRuntime: "timed_out",
+      walletRuntime: "timeout_fallback",
     });
     refreshProjectRestore();
   }, getWalletSettleTimeoutMs(mobileSafari));
@@ -311,7 +319,7 @@ export function markDashboardWalletImportStarted(routePath: string) {
 export function markDashboardWalletImportReady(routePath: string) {
   updateSnapshot({
     routePath,
-    walletRuntime: "ready",
+    walletRuntime: "mounted",
     walletSettled: true,
   });
   refreshProjectRestore();
@@ -322,6 +330,15 @@ export function markDashboardWalletImportFailed(routePath: string, errorMessage?
     routePath,
     errorMessage: errorMessage ?? snapshot.errorMessage,
     walletRuntime: "failed",
+    walletSettled: true,
+  });
+  refreshProjectRestore();
+}
+
+export function markDashboardWalletImportSkipped(routePath: string) {
+  updateSnapshot({
+    routePath,
+    walletRuntime: "skipped_no_wallet",
     walletSettled: true,
   });
   refreshProjectRestore();
@@ -351,6 +368,15 @@ export function useDashboardProjectRestore(routePath: string, enabled: boolean) 
 
 export function useDashboardProjectRestoreSnapshot() {
   return useSyncExternalStore(subscribeDashboardProjectRestore, getDashboardProjectRestoreSnapshot, getDashboardProjectRestoreSnapshot);
+}
+
+export function isDashboardWalletRuntimeSettled(walletRuntime: DashboardWalletRuntimeState) {
+  return (
+    walletRuntime === "mounted" ||
+    walletRuntime === "failed" ||
+    walletRuntime === "skipped_no_wallet" ||
+    walletRuntime === "timeout_fallback"
+  );
 }
 
 export function isDashboardWorkspaceReady(restoreSnapshot: DashboardProjectRestoreSnapshot) {

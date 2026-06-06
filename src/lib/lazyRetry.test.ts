@@ -30,6 +30,19 @@ describe("resolveLazyRouteModule", () => {
     expect(resolved.default).toBe(NamedPublicFormPage);
   });
 
+  it("finds the expected export inside nested module objects from cache-busted chunk imports", () => {
+    const resolved = resolveLazyRouteModule(
+      {
+        a: Object.freeze({
+          WalrusRuntimeProvider: NamedPublicFormPage,
+        }),
+      },
+      "walrus-runtime-provider",
+    );
+
+    expect(resolved.default).toBe(NamedPublicFormPage);
+  });
+
   it("records missing export diagnostics without consuming chunk recovery", () => {
     expect(() => resolveLazyRouteModule({ NotPublicFormPage: NamedPublicFormPage }, "route-public-form")).toThrow(
       MissingLazyRouteExportError,

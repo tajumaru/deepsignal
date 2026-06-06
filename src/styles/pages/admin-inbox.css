@@ -4534,6 +4534,11 @@
   font-size: 0.72rem;
 }
 
+.related-signal-reason-chip-muted {
+  color: #8fb0c0;
+  background: rgba(255, 255, 255, 0.025);
+}
+
 .project-registry-subpanel .workspace-hero-meta {
   gap: 0.4rem 0.75rem;
 }

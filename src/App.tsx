@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useState, type ReactNode } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useLocation } from "react-router-dom";
 import { InitialBootReady, useBootOverlay } from "./bootstrap/useBootOverlay";
 import { DashboardDegradedShell } from "./components/DashboardDegradedShell";
@@ -8,7 +8,12 @@ import {
   recordBuildAsset,
   recoverFromMixedBuildAssets,
 } from "./lib/buildAssetDiagnostics";
-import { isDashboardWorkspaceReady, useDashboardProjectRestore, useDashboardProjectRestoreSnapshot } from "./lib/dashboardProjectRestore";
+import {
+  isDashboardWalletRuntimeSettled,
+  isDashboardWorkspaceReady,
+  useDashboardProjectRestore,
+  useDashboardProjectRestoreSnapshot,
+} from "./lib/dashboardProjectRestore";
 import { retryLazyImport } from "./lib/lazyRetry";
 import { getBrowserCapabilitiesSnapshot, logRouteLifecycle, setDeepSignalDebugReadiness } from "./lib/routeDiagnostics";
 import { scheduleIdleTask } from "./lib/scheduleIdleTask";
@@ -23,7 +28,7 @@ import { PublicAppRoutes } from "./routes/PublicAppRoutes";
 import { createPublicRouteComponents, type PublicRouteComponents } from "./routes/publicRouteComponents";
 import { MixedBuildRecoveryScreen, RouteErrorBoundary } from "./routes/RouteErrorBoundary";
 import { getRouteId } from "./routes/routeDiagnostics";
-import { useWalletSessionState } from "./walletSessionState";
+import { useWalletSessionState, type WalletSessionState } from "./walletSessionState";
 
 const AppShell = lazy(() =>
   retryLazyImport(() => import("./components/AppShell"), "app-shell").then((module) => ({
@@ -160,6 +165,7 @@ function PublicRouteSurface({
   onRouteReady,
   routePath,
   routeRetryNonce,
+  walletSession,
 }: {
   components: PublicRouteComponents;
   locationKey: string;
@@ -168,7 +174,42 @@ function PublicRouteSurface({
   onRouteReady: () => void;
   routePath: string;
   routeRetryNonce: number;
+  walletSession: WalletSessionState;
 }) {
+  const mountIdRef = useRef(`public-route-${Math.round(performance.now())}`);
+  const renderCountRef = useRef(0);
+  renderCountRef.current += 1;
+
+  useEffect(() => {
+    logRouteLifecycle("public-route:remount", {
+      mountId: mountIdRef.current,
+      routePath,
+      renderCount: renderCountRef.current,
+      walletSessionPhase: walletSession.phase,
+      walletProviderMounted: walletSession.providerMounted,
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!walletSession.providerMounted && !walletSession.providerLoading) {
+      return;
+    }
+    logRouteLifecycle("public-route:rerender-after-wallet", {
+      routePath,
+      renderCount: renderCountRef.current,
+      walletSessionPhase: walletSession.phase,
+      walletProviderLoading: walletSession.providerLoading,
+      walletProviderMounted: walletSession.providerMounted,
+      walletStatus: walletSession.status,
+    });
+  }, [
+    routePath,
+    walletSession.phase,
+    walletSession.providerLoading,
+    walletSession.providerMounted,
+    walletSession.status,
+  ]);
+
   return (
     <PublicAppShell>
       <BuildUpdateBanner />
@@ -287,7 +328,10 @@ export default function App() {
     location.pathname.startsWith("/dashboard/");
   const routeNeedsWorkspaceBoot = !routeIsLanding && !routeUsesPublicChrome;
   const routePath = `${location.pathname}${location.search}${location.hash}`;
-  const dashboardProjectRestore = useDashboardProjectRestore(routePath, location.pathname === "/dashboard");
+  const dashboardProjectRestoreSnapshot = useDashboardProjectRestoreSnapshot();
+  const dashboardWalletSettled = isDashboardWalletRuntimeSettled(dashboardProjectRestoreSnapshot.walletRuntime);
+  const dashboardRestoreEnabled = location.pathname === "/dashboard" && dashboardWalletSettled;
+  const dashboardProjectRestore = useDashboardProjectRestore(routePath, dashboardRestoreEnabled);
   const workspaceReadyForRoute = location.pathname === "/dashboard" ? isDashboardWorkspaceReady(dashboardProjectRestore) : true;
 
   useBootOverlay({
@@ -335,6 +379,25 @@ export default function App() {
   }, [workspaceReadyForRoute]);
 
   useEffect(() => {
+    if (location.pathname !== "/dashboard" || dashboardWalletSettled) {
+      return;
+    }
+    logRouteLifecycle("project-restore:blocked-wallet-pending", {
+      routePath,
+      walletRuntime: dashboardProjectRestoreSnapshot.walletRuntime,
+      walletProviderPending: !walletSession.providerMounted,
+      walletSessionPhase: walletSession.phase,
+    });
+  }, [
+    dashboardProjectRestoreSnapshot.walletRuntime,
+    dashboardWalletSettled,
+    location.pathname,
+    routePath,
+    walletSession.phase,
+    walletSession.providerMounted,
+  ]);
+
+  useEffect(() => {
     if (location.pathname !== "/") {
       return undefined;
     }
@@ -379,6 +442,7 @@ export default function App() {
           onRouteReady={() => setInitialRouteReady(true)}
           routePath={routePath}
           routeRetryNonce={routeRetryNonce}
+          walletSession={walletSession}
         />
       </Suspense>
     );
