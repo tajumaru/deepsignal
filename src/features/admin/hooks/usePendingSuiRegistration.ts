@@ -8,10 +8,8 @@ import {
   registerSignalReceipt,
 } from "../../../lib/projectRegistry";
 import { getSignalSubject, isLocalFallbackBlob } from "../../../lib/signalInbox";
-import {
-  normalizeSubmission,
-  storageAdapter,
-} from "../../../lib/storage";
+import { normalizeSubmission } from "../../../lib/submissionSchema";
+import { storageAdapter } from "../../../lib/storageAdapter";
 import { cleanupRegisteredSubmissionLocalFallback } from "../../../storage/localStorageAdapter";
 import { useI18n } from "../../../i18n";
 import { useRpcInfrastructure } from "../../../rpcInfrastructure";

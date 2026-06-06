@@ -13,8 +13,14 @@ import {
   formatWalrusFailureStage,
   getWalrusErrorMessage,
   isWalrusDiagnosticError,
-  type WalrusFailureDetails,
 } from "./walrusDiagnostics";
+import {
+  getStorageRuntimeStatus,
+  setStorageRuntimeStatus,
+  subscribeStorageRuntime,
+  type RuntimeStatus,
+} from "./storageRuntime";
+import { getBlobViewerUrl } from "./blobViewer";
 import { isLikelyWalletCancelError } from "../crypto/sealPayload";
 import type { FormSchema, StorageAdapter, Submission } from "../types";
 import { endPerf, markPerfMilestone, startPerf } from "../lib/perf";
@@ -27,14 +33,6 @@ import {
   writeSubmissionRemoteIndexLog,
 } from "./submissionDelivery";
 
-type RuntimeMode = "walrus" | "local-fallback";
-type RuntimeStatus = {
-  mode: RuntimeMode;
-  notice: string | null;
-  diagnostics: WalrusFailureDetails | null;
-};
-
-const listeners = new Set<() => void>();
 const WALRUS_READ_TIMEOUT_MS = 4000;
 const requireWalrus = String(import.meta.env.VITE_REQUIRE_WALRUS).toLowerCase() === "true";
 const walrusRequested = requireWalrus || import.meta.env.VITE_STORAGE_MODE === "walrus";
@@ -51,7 +49,7 @@ const walrusConfigured =
       ? tatumStorageConfigured
       : Boolean(WALRUS_UPLOAD_RELAY_URL));
 
-let runtimeStatus: RuntimeStatus = {
+const initialRuntimeStatus: RuntimeStatus = {
   mode: walrusRequested ? "walrus" : "local-fallback",
   notice:
     requireWalrus && !walrusConfigured
@@ -63,11 +61,7 @@ let runtimeStatus: RuntimeStatus = {
       : null,
   diagnostics: null,
 };
-
-function emitStatus(next: Partial<RuntimeStatus>) {
-  runtimeStatus = { ...runtimeStatus, ...next };
-  listeners.forEach((listener) => listener());
-}
+setStorageRuntimeStatus(initialRuntimeStatus);
 
 function formatWalrusFallbackNotice(error: unknown) {
   if (isWalrusDiagnosticError(error)) {
@@ -222,12 +216,12 @@ function mergeSubmissionsById(primary: Submission[], secondary: Submission[]) {
 async function withWriteFallback<T>(walrusTask: () => Promise<T>, localTask: () => Promise<T>) {
   try {
     const result = await walrusTask();
-    emitStatus({ mode: "walrus", notice: null, diagnostics: null });
+    setStorageRuntimeStatus({ mode: "walrus", notice: null, diagnostics: null });
     return result;
   } catch (error) {
     if (isLikelyWalletCancelError(error)) {
       console.info("Walrus write cancelled in wallet; skipping local fallback.");
-      emitStatus({
+      setStorageRuntimeStatus({
         mode: "walrus",
         notice: error instanceof Error ? error.message : "Wallet approval was cancelled.",
         diagnostics: isWalrusDiagnosticError(error) ? error.details : null,
@@ -236,7 +230,7 @@ async function withWriteFallback<T>(walrusTask: () => Promise<T>, localTask: () 
     }
     if (requireWalrus) {
       console.error(error);
-      emitStatus({
+      setStorageRuntimeStatus({
         mode: "walrus",
         notice: error instanceof Error ? error.message : "Walrus is required for this build.",
         diagnostics: isWalrusDiagnosticError(error) ? error.details : null,
@@ -244,7 +238,7 @@ async function withWriteFallback<T>(walrusTask: () => Promise<T>, localTask: () 
       throw error;
     }
     console.warn("Walrus write failed; using local fallback.", error);
-    emitStatus({
+    setStorageRuntimeStatus({
       mode: "local-fallback",
       notice: formatWalrusFallbackNotice(error),
       diagnostics: isWalrusDiagnosticError(error) ? error.details : null,
@@ -256,11 +250,11 @@ async function withWriteFallback<T>(walrusTask: () => Promise<T>, localTask: () 
 async function withProtectedWriteFallback<T>(walrusTask: () => Promise<T>) {
   try {
     const result = await walrusTask();
-    emitStatus({ mode: "walrus", notice: null, diagnostics: null });
+    setStorageRuntimeStatus({ mode: "walrus", notice: null, diagnostics: null });
     return result;
   } catch (error) {
     console.error(error);
-    emitStatus({
+    setStorageRuntimeStatus({
       mode: walrusRequested ? "walrus" : "local-fallback",
       notice:
         error instanceof Error
@@ -322,11 +316,11 @@ const hybridWalrusStorage: StorageAdapter = {
       await walrusAdapter.deleteForms(ids);
       await localStorageAdapter.deleteForms(ids);
       ids.forEach((id) => clearFormMetadataOverlay(id));
-      emitStatus({ mode: "walrus", notice: null, diagnostics: null });
+      setStorageRuntimeStatus({ mode: "walrus", notice: null, diagnostics: null });
     } catch (error) {
       if (requireWalrus) {
         console.error(error);
-        emitStatus({
+        setStorageRuntimeStatus({
           mode: "walrus",
           notice: error instanceof Error ? error.message : "Walrus delete failed.",
           diagnostics: isWalrusDiagnosticError(error) ? error.details : null,
@@ -336,7 +330,7 @@ const hybridWalrusStorage: StorageAdapter = {
       console.warn("Walrus delete failed; deleting local fallback records.", error);
       await localStorageAdapter.deleteForms(ids);
       ids.forEach((id) => clearFormMetadataOverlay(id));
-      emitStatus({
+      setStorageRuntimeStatus({
         mode: "local-fallback",
         notice: "Walrus delete was unavailable. Removed local records from this browser.",
         diagnostics: isWalrusDiagnosticError(error) ? error.details : null,
@@ -485,10 +479,6 @@ const hybridWalrusStorage: StorageAdapter = {
 
 export const storage: StorageAdapter = walrusRequested ? hybridWalrusStorage : localStorageAdapter;
 
-export function getStorageRuntimeStatus() {
-  return runtimeStatus;
-}
-
 export async function deleteFormsFromLocalCache(ids: string[]) {
   const uniqueIds = [...new Set(ids)];
   if (uniqueIds.length === 0) {
@@ -502,12 +492,8 @@ export async function deleteFormsFromLocalCache(ids: string[]) {
 }
 
 export function getStorageRuntimeStageLabel() {
+  const runtimeStatus = getStorageRuntimeStatus();
   return runtimeStatus.diagnostics ? formatWalrusFailureStage(runtimeStatus.diagnostics.stage) : null;
-}
-
-export function subscribeStorageRuntime(listener: () => void) {
-  listeners.add(listener);
-  return () => listeners.delete(listener);
 }
 
 export async function retryPendingSubmissionSync({
@@ -571,17 +557,4 @@ export async function retryPendingSubmissionSync({
   return { attempted: pending.length, synced };
 }
 
-export function getBlobViewerUrl(blobId?: string) {
-  if (
-    !blobId ||
-    blobId.startsWith("local-") ||
-    blobId.startsWith("todo-") ||
-    blobId.startsWith("walrus-form-") ||
-    blobId.startsWith("walrus-submission-") ||
-    blobId.startsWith("walrus-file-")
-  ) {
-    return null;
-  }
-  const aggregator = import.meta.env.VITE_WALRUS_AGGREGATOR_URL?.replace(/\/$/, "");
-  return aggregator ? `${aggregator}/v1/blobs/${blobId}` : null;
-}
+export { getStorageRuntimeStatus, subscribeStorageRuntime, getBlobViewerUrl };

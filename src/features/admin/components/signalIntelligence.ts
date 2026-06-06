@@ -1,6 +1,6 @@
 import { formatAnswerText } from "../../../lib/answerFormatting";
 import { getSubmissionRespondentMeta, isVerifiedSignal } from "../../../lib/respondentMeta";
-import { getSystemSignalDiagnostics, isSystemSignal } from "../../../services/systemSignalReporter";
+import { getSystemSignalDiagnostics, isSystemSignal } from "../../../services/systemSignalReporterHelpers";
 import type { useI18n } from "../../../i18n";
 import type { Submission, SubmissionLocation } from "../../../types";
 import type { SignalRecord } from "../hooks/useSignalInboxData";

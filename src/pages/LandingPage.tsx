@@ -11,6 +11,20 @@ import "../styles/mobile/landing.css";
 import "../styles/mobile/landing-hero.css";
 import "../styles/mobile/landing-live.css";
 
+let hasAnimatedHeroCtaMascot = false;
+
+function useHeroCtaMascotAnimation() {
+  const [shouldAnimate] = useState(() => !hasAnimatedHeroCtaMascot);
+
+  useEffect(() => {
+    if (!hasAnimatedHeroCtaMascot) {
+      hasAnimatedHeroCtaMascot = true;
+    }
+  }, []);
+
+  return shouldAnimate;
+}
+
 function UseCaseIcon({ kind }: { kind: "company" | "dao" | "hackathon" | "research" | "incident" }) {
   switch (kind) {
     case "company":
@@ -1085,6 +1099,7 @@ function FinalSignalCtaSection() {
 }
 
 export function LandingPage() {
+  const shouldAnimateHeroCtaMascot = useHeroCtaMascotAnimation();
   const { language, setLanguage, t } = useI18n();
   const heroSignalBars = [0.46, 0.72, 0.38, 0.92, 0.58, 0.81, 0.5, 0.68, 0.42, 0.86];
   const heroFeedRows = [t("landingHeroLiveFeed1"), t("landingHeroLiveFeed2"), t("landingHeroLiveFeed3")];
@@ -1150,7 +1165,7 @@ export function LandingPage() {
             <p className="landing-tagline">{t("landingHeroContestTagline")}</p>
 
             <div className="cta-row landing-hero-actions landing-hero-actions-primary">
-              <picture className="landing-hero-cta-mascot">
+              <picture className={`landing-hero-cta-mascot${shouldAnimateHeroCtaMascot ? "" : " is-static"}`}>
                 <source srcSet="/mascot/deepsignal-frog/peek.webp" type="image/webp" />
                 <img
                   className="deepsignal-mascot deepsignal-mascot-peek"

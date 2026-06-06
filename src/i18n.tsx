@@ -1,4 +1,4 @@
-﻿import {
+import {
   createContext,
   useContext,
   useEffect,
@@ -9,7 +9,6 @@
 } from "react";
 import type { FieldType } from "./types";
 import type { Language, Params, LocaleMessages } from "./i18n/types";
-import { enMessages } from "./i18n/locales/en";
 
 export type { Language } from "./i18n/types";
 
@@ -17,8 +16,29 @@ const STORAGE_KEY = "deepsignal.language";
 const LANGUAGE_MANUAL_KEY = "deepsignal.language.manual";
 
 type TranslationCatalog = Partial<Record<Language, LocaleMessages>>;
+type FieldTypeMessageKey =
+  | "fieldTypeShortText"
+  | "fieldTypeLongText"
+  | "fieldTypeMarkdown"
+  | "fieldTypeDate"
+  | "fieldTypeDropdown"
+  | "fieldTypeCheckbox"
+  | "fieldTypeMatrix"
+  | "fieldTypeCountrySelect"
+  | "fieldTypeConfirmationCheckbox"
+  | "fieldTypeRating"
+  | "fieldTypeEmotionRating"
+  | "fieldTypeUrl"
+  | "fieldTypeWalletAddress"
+  | "fieldTypeScreenshot"
+  | "fieldTypeVideo"
+  | "fieldTypeVoice";
 
-const localeLoaders: Record<"ja", () => Promise<LocaleMessages>> = {
+const localeLoaders: Record<Language, () => Promise<LocaleMessages>> = {
+  en: async () => {
+    const module = await import("./i18n/locales/en");
+    return module.enMessages;
+  },
   ja: async () => {
     const module = await import("./i18n/locales/ja");
     return module.jaMessages;
@@ -51,7 +71,7 @@ interface I18nContextValue {
 
 const I18nContext = createContext<I18nContextValue | null>(null);
 
-const fieldTypeKeys: Record<FieldType, keyof typeof enMessages> = {
+const fieldTypeKeys: Record<FieldType, FieldTypeMessageKey> = {
   shortText: "fieldTypeShortText",
   longText: "fieldTypeLongText",
   markdown: "fieldTypeMarkdown",
@@ -72,10 +92,9 @@ const fieldTypeKeys: Record<FieldType, keyof typeof enMessages> = {
 
 export function I18nProvider({ children }: PropsWithChildren) {
   const [language, setLanguage] = useState<Language>(getInitialLanguage);
-  const loadedLanguagesRef = useRef<Set<Language>>(new Set(["en"]));
-  const [messages, setMessages] = useState<TranslationCatalog>({
-    en: enMessages,
-  });
+  const loadedLanguagesRef = useRef<Set<Language>>(new Set());
+  const [messages, setMessages] = useState<TranslationCatalog>({});
+  const [initialLanguageReady, setInitialLanguageReady] = useState(false);
 
   useEffect(() => {
     window.localStorage.setItem(STORAGE_KEY, language);
@@ -83,13 +102,16 @@ export function I18nProvider({ children }: PropsWithChildren) {
   }, [language]);
 
   useEffect(() => {
-    if (language === "en" || loadedLanguagesRef.current.has(language)) {
+    if (loadedLanguagesRef.current.has(language)) {
+      setInitialLanguageReady(true);
       return;
     }
 
     let cancelled = false;
-    localeLoaders[language]()
-      .then((catalog) => {
+
+    async function ensureLanguageCatalog() {
+      try {
+        const catalog = await localeLoaders[language]();
         if (cancelled) {
           return;
         }
@@ -100,12 +122,38 @@ export function I18nProvider({ children }: PropsWithChildren) {
           }
           return { ...prev, [language]: catalog };
         });
-      })
-      .catch(() => {
+      } catch {
         if (!cancelled) {
           console.warn(`Unable to load locale ${language}; fallback translations will be used.`);
         }
-      });
+
+        if (language !== "en" && !loadedLanguagesRef.current.has("en")) {
+          try {
+            const fallbackCatalog = await localeLoaders.en();
+            if (cancelled) {
+              return;
+            }
+            loadedLanguagesRef.current.add("en");
+            setMessages((prev) => {
+              if (prev.en) {
+                return prev;
+              }
+              return { ...prev, en: fallbackCatalog };
+            });
+          } catch {
+            if (!cancelled) {
+              console.warn("Unable to load fallback locale en; translation keys will be shown.");
+            }
+          }
+        }
+      } finally {
+        if (!cancelled) {
+          setInitialLanguageReady(true);
+        }
+      }
+    }
+
+    void ensureLanguageCatalog();
 
     return () => {
       cancelled = true;
@@ -118,7 +166,7 @@ export function I18nProvider({ children }: PropsWithChildren) {
       setLanguage(nextLanguage);
     }
 
-    const fallbackCatalog = messages.en ?? enMessages;
+    const fallbackCatalog = messages.en ?? messages[language] ?? {};
 
     function t(key: string, params?: Params) {
       const catalog = messages[language] ?? fallbackCatalog;
@@ -135,6 +183,10 @@ export function I18nProvider({ children }: PropsWithChildren) {
       },
     };
   }, [language, messages]);
+
+  if (!initialLanguageReady) {
+    return null;
+  }
 
   return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>;
 }

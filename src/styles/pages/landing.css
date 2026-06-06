@@ -1959,6 +1959,12 @@
   height: auto;
 }
 
+.landing-hero-cta-mascot.is-static {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0) scale(1);
+  animation: landing-hero-mascot-idle 4.8s ease-in-out infinite;
+}
+
 .landing-hero-actions-primary::before {
   content: "";
   position: absolute;

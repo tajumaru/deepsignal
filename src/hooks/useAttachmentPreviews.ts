@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
 import { useI18n } from "../i18n";
-import { activeSealAdapter, decryptAttachmentBlob, storageAdapter } from "../lib/storage";
 import type { SealDecryptContext, SubmissionAttachment } from "../types";
 
 export interface AttachmentPreviewState {
@@ -11,6 +10,13 @@ export interface AttachmentPreviewState {
   mimeType?: string;
   name?: string;
   error?: string;
+}
+
+let storagePreviewModulePromise: Promise<typeof import("../lib/storageSeal")> | null = null;
+
+function loadStoragePreviewModule() {
+  storagePreviewModulePromise ??= import("../lib/storageSeal");
+  return storagePreviewModulePromise;
 }
 
 function getPreviewKind(mimeType: string | undefined) {
@@ -102,6 +108,8 @@ export function useAttachmentPreviews(
     const objectUrls: string[] = [];
 
     async function loadPreviews() {
+      const hasEncryptedAttachments = attachments.some((attachment) => attachment.encrypted);
+      const storageModule = hasEncryptedAttachments ? await loadStoragePreviewModule() : null;
       const nextEntries = await Promise.all(
         attachments.map(async (attachment) => {
           if (!attachment.encrypted) {
@@ -117,11 +125,11 @@ export function useAttachmentPreviews(
           }
 
           try {
-            const resolved = await decryptAttachmentBlob(
+            const resolved = await storageModule?.decryptAttachmentBlob(
               attachment,
-              activeSealAdapter,
+              storageModule.activeSealAdapter,
               decryptContext,
-              storageAdapter,
+              storageModule.storageAdapter,
             );
             if (!resolved) {
               throw new Error("missing");

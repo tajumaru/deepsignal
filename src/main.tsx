@@ -1,11 +1,10 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import { AppRoot } from "./AppRoot";
-import { startRuntimeBootstrap } from "./bootstrap/runtime";
 import { startBuildAssetDiagnostics } from "./lib/buildAssetDiagnostics";
 import { startChunkLoadRecovery } from "./lib/chunkLoadRecovery";
 import { startFirstPaintInstrumentation, startPerf } from "./lib/perf";
-import { startSystemSignalReporter } from "./services/systemSignalReporter";
+import { startSystemSignalReporter } from "./services/systemSignalReporterClient";
 import "./styles/index.css";
 
 startPerf("app_boot_start");
@@ -35,4 +34,12 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
   </React.StrictMode>,
 );
 
-startRuntimeBootstrap();
+window.setTimeout(() => {
+  void import("./bootstrap/runtime")
+    .then(({ startRuntimeBootstrap }) => {
+      startRuntimeBootstrap();
+    })
+    .catch(() => {
+      // Idle maintenance is best effort and should not block app startup.
+    });
+}, 0);

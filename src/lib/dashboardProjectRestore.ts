@@ -165,6 +165,13 @@ function resolveRestoreState(selection: ProjectSelectionSnapshot) {
       source: selection.source,
       state: "ready_with_project",
     });
+    logRouteLifecycle("project-restore-complete", {
+      currentProjectId: selection.currentProjectId,
+      routePath: snapshot.routePath,
+      source: selection.source,
+      state: "ready_with_project",
+      walletRuntime: snapshot.walletRuntime,
+    });
     logRouteLifecycle("project-restore:resolved", {
       routePath: snapshot.routePath,
       source: selection.source,
@@ -181,6 +188,13 @@ function resolveRestoreState(selection: ProjectSelectionSnapshot) {
     errorMessage: null,
     source: selection.source === "unknown" ? "none-confirmed" : selection.source,
     state: "ready_without_project",
+  });
+  logRouteLifecycle("project-restore-complete", {
+    currentProjectId: "",
+    routePath: snapshot.routePath,
+    source: selection.source === "unknown" ? "none-confirmed" : selection.source,
+    state: "ready_without_project",
+    walletRuntime: snapshot.walletRuntime,
   });
   logRouteLifecycle("project-restore:none-confirmed", {
     routePath: snapshot.routePath,
@@ -245,6 +259,11 @@ export function initializeDashboardProjectRestore(routePath: string) {
     workspaceReady: false,
   });
   emit();
+  logRouteLifecycle("project-restore-start", {
+    routePath,
+    walletRuntime,
+    mobileSafari,
+  });
   logRouteLifecycle("project-restore:start", {
     routePath,
     walletRuntime,

@@ -1,4 +1,4 @@
-import { getBlobViewerUrl } from "../storage/storageFactory";
+import { getBlobViewerUrl } from "../storage/blobViewer";
 
 export type ProofStorageMode = "Walrus" | "Local fallback";
 

@@ -1,9 +1,14 @@
-import { useEffect, useState, type ReactNode } from "react";
-import { LocalRecoveryCenter } from "../components/LocalRecoveryCenter";
+import { Suspense, lazy, useEffect, useState, type ReactNode } from "react";
 import { copyPerfDiagnostics } from "../lib/perf";
 import { resetLocalEnvironment } from "../lib/resetEnvironment";
 import { formatRouteLifecycleDiagnostics, logRouteLifecycle, setDeepSignalDebugReadiness } from "../lib/routeDiagnostics";
 import { readSelectedProjectIdFromStorage } from "./routeDiagnostics";
+
+const LazyLocalRecoveryCenter = lazy(() =>
+  import("../components/LocalRecoveryCenter").then((module) => ({
+    default: module.LocalRecoveryCenter,
+  })),
+);
 
 export const WORKSPACE_RECOVERY_TIMEOUT_MS = 3200;
 const WORKSPACE_FALLBACK_DELAY_MS = 180;
@@ -68,7 +73,9 @@ export function WorkspaceRestoreFallback({ onRetry }: { onRetry?: () => void }) 
             <summary>Technical details</summary>
             <pre className="route-status-diagnostics">{formatRouteLifecycleDiagnostics()}</pre>
           </details>
-          <LocalRecoveryCenter />
+          <Suspense fallback={null}>
+            <LazyLocalRecoveryCenter />
+          </Suspense>
         </div>
       ) : null}
     </div>

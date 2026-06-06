@@ -16,7 +16,7 @@ import {
 } from "./routeDiagnostics";
 import { lazyChunkExportSpecs } from "./lazyRouteRegistry";
 import type { RouteAssetKey, RouteChunkSpec } from "./lazyRouteRegistry";
-import { reportSystemError } from "../services/systemSignalReporter";
+import { reportSystemError } from "../services/systemSignalReporterClient";
 
 const lazyImportAttempts = 3;
 const lazyImportBaseDelayMs = 450;
@@ -120,6 +120,16 @@ export class MissingLazyRouteExportError extends Error {
 const routeChunkByLabel: Record<string, RouteChunkSpec> = lazyChunkExportSpecs;
 
 let buildManifestPromise: Promise<BuildManifest | null> | null = null;
+
+function reportLazyImportSystemError(input: {
+  error: unknown;
+  chunkUrl: string | null;
+  severity: "warning" | "critical";
+  sourceContext: string;
+  diagnostics: Record<string, unknown>;
+}) {
+  reportSystemError(input);
+}
 
 function getModuleBuildInfo(module: unknown): Pick<BuildInfo, "appVersion" | "buildTime" | "gitHash"> | null {
   if (!module || typeof module !== "object") {
@@ -785,45 +795,56 @@ async function importRawCacheBustedRouteChunk(label: string, chunkUrl: string, a
 export async function retryLazyImport<T>(loader: () => Promise<T>, label = "anonymous"): Promise<T> {
   let lastError: unknown;
   const perfName = `lazy:${label}`;
-  const expectedChunkUrl = await getExpectedChunkUrl(label);
+  let expectedChunkUrl: string | null | undefined;
+  const resolveExpectedChunkUrl = async () => {
+    if (expectedChunkUrl !== undefined) {
+      return expectedChunkUrl;
+    }
+    expectedChunkUrl = await getExpectedChunkUrl(label);
+    return expectedChunkUrl;
+  };
   const timeoutMs = getLazyImportTimeoutMs();
   startPerf(perfName);
 
   for (let attempt = 1; attempt <= lazyImportAttempts; attempt += 1) {
     try {
+      const chunkUrlForAttempt = attempt > 1 ? await resolveExpectedChunkUrl() : expectedChunkUrl ?? null;
       logRouteLifecycle("lazy-import-start", {
         label,
         attempt,
-        chunkUrl: expectedChunkUrl ?? null,
+        chunkUrl: chunkUrlForAttempt,
         routePath: getCurrentRoutePath(),
         timeoutMs,
       });
       logPublicAppShellTrace("public-app-shell:waiting", {
         label,
         attempt,
-        chunkUrl: expectedChunkUrl ?? null,
+        chunkUrl: chunkUrlForAttempt,
         routePath: getCurrentRoutePath(),
         timeoutMs,
       });
-      if (attempt === 1) {
-        probeLazyImportDependenciesOnStart(label, expectedChunkUrl, attempt);
-      }
       const result =
-        attempt === 1 || !expectedChunkUrl
+        attempt === 1 || !chunkUrlForAttempt
           ? await runWithMobileSafariLazyImportQueue(() =>
-              withLazyImportTimeout(loader(), label, timeoutMs, expectedChunkUrl, attempt),
+              withLazyImportTimeout(loader(), label, timeoutMs, chunkUrlForAttempt, attempt),
             )
           : (await runWithMobileSafariLazyImportQueue(() =>
-              withLazyImportTimeout(importCacheBustedRouteChunk<T>(label, expectedChunkUrl, attempt), label, timeoutMs, expectedChunkUrl, attempt),
+              withLazyImportTimeout(
+                importCacheBustedRouteChunk<T>(label, chunkUrlForAttempt, attempt),
+                label,
+                timeoutMs,
+                chunkUrlForAttempt,
+                attempt,
+              ),
             )) ??
             (await runWithMobileSafariLazyImportQueue(() =>
-              withLazyImportTimeout(loader(), label, timeoutMs, expectedChunkUrl, attempt),
+              withLazyImportTimeout(loader(), label, timeoutMs, chunkUrlForAttempt, attempt),
             ));
       const moduleBuildInfo = getModuleBuildInfo(result) ?? buildInfo;
       recordBuildAsset(`lazy:${label}`, moduleBuildInfo);
       console.info("[DeepSignal route chunk]", {
         label,
-        chunkUrl: expectedChunkUrl,
+        chunkUrl: chunkUrlForAttempt,
         buildVersion: moduleBuildInfo.appVersion,
         buildTime: moduleBuildInfo.buildTime,
         gitHash: moduleBuildInfo.gitHash,
@@ -831,20 +852,21 @@ export async function retryLazyImport<T>(loader: () => Promise<T>, label = "anon
       logRouteLifecycle("lazy-import-resolved", {
         label,
         attempt,
-        chunkUrl: expectedChunkUrl ?? null,
+        chunkUrl: chunkUrlForAttempt,
         routePath: getCurrentRoutePath(),
       });
       logPublicAppShellTrace("public-app-shell:resolve", {
         label,
         attempt,
-        chunkUrl: expectedChunkUrl ?? null,
+        chunkUrl: chunkUrlForAttempt,
         routePath: getCurrentRoutePath(),
       });
       endPerf(perfName, "ok", `attempt ${attempt}`);
       return result;
     } catch (error) {
+      const chunkUrlForDiagnostics = expectedChunkUrl ?? (await resolveExpectedChunkUrl());
       lastError = error;
-      recordFailedImport(label, error, expectedChunkUrl, {
+      recordFailedImport(label, error, chunkUrlForDiagnostics, {
         category: error instanceof LazyImportTimeoutError ? "timeout" : isChunkLoadFailure(error) ? "chunkLoad" : "runtime",
         attempt,
         routePath: getCurrentRoutePath(),
@@ -854,7 +876,7 @@ export async function retryLazyImport<T>(loader: () => Promise<T>, label = "anon
       logRouteLifecycle(error instanceof LazyImportTimeoutError ? "lazy-import-timeout-recorded" : "lazy-import-rejected", {
         label,
         attempt,
-        chunkUrl: expectedChunkUrl ?? null,
+        chunkUrl: chunkUrlForDiagnostics ?? null,
         message: error instanceof Error ? error.message : String(error),
         routePath: getCurrentRoutePath(),
         userAgent: typeof navigator === "undefined" ? "" : navigator.userAgent,
@@ -862,16 +884,17 @@ export async function retryLazyImport<T>(loader: () => Promise<T>, label = "anon
       logPublicAppShellTrace("public-app-shell:blocker", {
         label,
         attempt,
-        chunkUrl: expectedChunkUrl ?? null,
+        chunkUrl: chunkUrlForDiagnostics ?? null,
         message: error instanceof Error ? error.message : String(error),
         routePath: getCurrentRoutePath(),
         timeoutMs,
         reason: error instanceof LazyImportTimeoutError ? "timeout" : "rejected",
       });
-      if (expectedChunkUrl) {
-        const probe = await probeChunk(expectedChunkUrl);
+      if (chunkUrlForDiagnostics) {
+        probeLazyImportDependenciesOnStart(label, chunkUrlForDiagnostics, attempt);
+        const probe = await probeChunk(chunkUrlForDiagnostics);
         recordFailedImportProbe(label, probe);
-        const dependencyProbe = await probeChunkDependencyTree(expectedChunkUrl);
+        const dependencyProbe = await probeChunkDependencyTree(chunkUrlForDiagnostics);
         recordFailedImportDependencyProbe(label, dependencyProbe);
         const failureStage = probe.ok ? "evaluation" : "fetch";
         logRouteLifecycle("lazy-import-diagnostics", {
@@ -879,7 +902,7 @@ export async function retryLazyImport<T>(loader: () => Promise<T>, label = "anon
           attempt,
           category: error instanceof LazyImportTimeoutError ? "timeout" : isChunkLoadFailure(error) ? "chunkLoad" : "runtime",
           failureStage,
-          chunkUrl: expectedChunkUrl,
+          chunkUrl: chunkUrlForDiagnostics,
           routePath: getCurrentRoutePath(),
           parentChunk: {
             status: probe.status ?? null,
@@ -892,7 +915,7 @@ export async function retryLazyImport<T>(loader: () => Promise<T>, label = "anon
         logPublicAppShellTrace("public-app-shell:blocker", {
           label,
           attempt,
-          chunkUrl: expectedChunkUrl,
+          chunkUrl: chunkUrlForDiagnostics,
           routePath: getCurrentRoutePath(),
           timeoutMs,
           reason: "diagnostics",
@@ -902,9 +925,9 @@ export async function retryLazyImport<T>(loader: () => Promise<T>, label = "anon
           dependencyFailures: dependencyProbe.failedCount,
           dependencyTotal: dependencyProbe.totalCount,
         });
-        reportSystemError({
+        reportLazyImportSystemError({
           error,
-          chunkUrl: expectedChunkUrl,
+          chunkUrl: chunkUrlForDiagnostics,
           severity: attempt === lazyImportAttempts ? "critical" : "warning",
           sourceContext: "lazy-route-import",
           diagnostics: {

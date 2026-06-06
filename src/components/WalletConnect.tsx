@@ -7,9 +7,16 @@ import { SuiAddressDisplay } from "./SuiAddressDisplay";
 interface WalletConnectProps {
   compact?: boolean;
   surface?: "default" | "mobileDrawer";
+  connectModalOpen?: boolean;
+  onConnectModalOpenChange?: (open: boolean) => void;
 }
 
-export function WalletConnect({ compact = false, surface = "default" }: WalletConnectProps) {
+export function WalletConnect({
+  compact = false,
+  surface = "default",
+  connectModalOpen = false,
+  onConnectModalOpenChange,
+}: WalletConnectProps) {
   const { t } = useI18n();
   const wallet = useSuiWallet();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -85,7 +92,12 @@ export function WalletConnect({ compact = false, surface = "default" }: WalletCo
                   : "Wallet-optional public mode"}
             </span>
           </div>
-          <ConnectWalletButton wallet={wallet} compact={compact} />
+          <ConnectWalletButton
+            wallet={wallet}
+            compact={compact}
+            connectModalOpen={connectModalOpen}
+            onConnectModalOpenChange={onConnectModalOpenChange}
+          />
         </div>
       </div>
     );

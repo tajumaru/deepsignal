@@ -3,7 +3,6 @@ import { useSuiClient } from "@mysten/dapp-kit";
 import { canReviewForm } from "../../../lib/adminAccess";
 import { isVerifiedSignal } from "../../../lib/respondentMeta";
 import { getSubmissionRespondentMeta } from "../../../lib/respondentMeta";
-import { fetchJsonBlob, readManifestWithForm } from "../../../lib/walrus";
 import { useProjectRegistry } from "../../../hooks/useProjectRegistry";
 import {
   getSignalPreview,
@@ -17,7 +16,7 @@ import {
   getVisibleReviewerNotes,
   hasNeedsFollowUp,
 } from "../../../lib/reviewCollaboration";
-import { isSystemSignal } from "../../../services/systemSignalReporter";
+import { isSystemSignal } from "../../../services/systemSignalReporterHelpers";
 import type {
   OnchainProjectFormSummary,
   OnchainProjectSignalSummary,
@@ -28,11 +27,9 @@ import {
   fetchProjectSummaryWithCache,
   subscribeProjectRegistryStorageChange,
 } from "../../../lib/projectRegistry";
-import {
-  normalizeForm,
-  normalizeSubmission,
-  storageAdapter,
-} from "../../../lib/storage";
+import { normalizeForm } from "../../../lib/formSchema";
+import { normalizeSubmission } from "../../../lib/submissionSchema";
+import { storageAdapter } from "../../../lib/storageAdapter";
 import { flattenAnswer } from "../../../lib/utils";
 import { endPerf, markPerfMilestone, measurePerf, startPerf } from "../../../lib/perf";
 import { logRouteLifecycle } from "../../../lib/routeDiagnostics";
@@ -102,6 +99,12 @@ const ONCHAIN_SIGNAL_BATCH_SIZE = 4;
 const MANIFEST_RESTORE_TIMEOUT_MS = 2500;
 const INBOX_BACKGROUND_TASK_TIMEOUT_MS = 1200;
 const REMOTE_SUBMISSION_INDEX_TIMEOUT_MS = 8000;
+let walrusReadModulePromise: Promise<typeof import("../../../lib/walrus/read")> | null = null;
+
+function loadWalrusReadModule() {
+  walrusReadModulePromise ??= import("../../../lib/walrus/read");
+  return walrusReadModulePromise;
+}
 
 function getViewerRole(capabilityProfile: CapabilityProfile, accountAddress?: string | null) {
   if (!accountAddress) {
@@ -360,6 +363,7 @@ async function restoreProjectFormFromManifest(
     onchainFormId: onchainForm.formId,
     manifestBlobId: onchainForm.manifestBlobId,
   });
+  const { fetchJsonBlob, readManifestWithForm } = await loadWalrusReadModule();
   let carrier: Awaited<ReturnType<typeof readManifestWithForm>>;
   try {
     carrier = await readManifestWithForm(onchainForm.manifestBlobId);
@@ -450,6 +454,7 @@ function isTimeoutError(error: unknown) {
 }
 
 async function loadRemoteIndexedSubmissions(form: FormWithCount) {
+  const { fetchJsonBlob } = await loadWalrusReadModule();
   const indexEntries = await fetchRemoteSubmissionIndex({
     formId: form.id,
     projectId: form.projectId,
@@ -963,6 +968,7 @@ export function useSignalInboxData({
 
     for (let index = 0; index < candidates.length; index += ONCHAIN_SIGNAL_BATCH_SIZE) {
       const batch = candidates.slice(index, index + ONCHAIN_SIGNAL_BATCH_SIZE);
+      const { fetchJsonBlob } = await loadWalrusReadModule();
       const batchResults = await Promise.all(
         batch.map(async ({ project, signal }) => {
           const onchainForm = (project.onchainForms ?? []).find((entry) => entry.formId === signal.formId);

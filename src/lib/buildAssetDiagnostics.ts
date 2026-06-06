@@ -78,6 +78,11 @@ function writeObservedBuilds(records: BuildAssetRecord[]) {
   }
 }
 
+function resetObservedBuildsForNewRoot(records: BuildAssetRecord[], nextRootId: string) {
+  const hasDifferentRoot = records.some((record) => record.source === "root" && getBuildId(record) !== nextRootId);
+  return hasDifferentRoot ? [] : records;
+}
+
 function publishBuildDebug(root: BuildAssetRecord, observed: BuildAssetRecord[]) {
   if (typeof window === "undefined") {
     return;
@@ -97,7 +102,7 @@ export function recordBuildAsset(source: string, info: Pick<BuildInfo, "appVersi
 
   const nextRecord = toBuildRecord(source, info);
   const nextId = getBuildId(nextRecord);
-  const observed = readObservedBuilds();
+  const observed = source === "root" ? resetObservedBuildsForNewRoot(readObservedBuilds(), nextId) : readObservedBuilds();
   const withoutDuplicate = observed.filter((record) => !(record.source === source && getBuildId(record) === nextId));
   const nextObserved = [...withoutDuplicate, nextRecord];
   writeObservedBuilds(nextObserved);

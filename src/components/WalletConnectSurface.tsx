@@ -26,11 +26,26 @@ export function WalletConnectSurface({ compact = false, fallback, surface = "def
   const wallet = useSuiWallet();
   const walletRuntime = useWalletProviderRuntime();
   const [connectRequested, setConnectRequested] = useState(false);
+  const [connectModalOpen, setConnectModalOpen] = useState(false);
+  const [pendingConnectOpen, setPendingConnectOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const shellRef = useRef<HTMLDivElement | null>(null);
   const isMobileDrawer = surface === "mobileDrawer";
   const providerDeferred = !walletRuntime.loaded;
   const showStandbyState = providerDeferred || wallet.isRestoringConnection;
+
+  useEffect(() => {
+    if (wallet.status === "connected") {
+      setConnectModalOpen(false);
+      setPendingConnectOpen(false);
+      return;
+    }
+
+    if (pendingConnectOpen && walletRuntime.loaded) {
+      setConnectModalOpen(true);
+      setPendingConnectOpen(false);
+    }
+  }, [pendingConnectOpen, wallet.status, walletRuntime.loaded]);
 
   useEffect(() => {
     if (!menuOpen) {
@@ -148,7 +163,7 @@ export function WalletConnectSurface({ compact = false, fallback, surface = "def
     );
   }
 
-  if (!connectRequested) {
+  if (!connectRequested && !walletRuntime.loaded) {
     return (
       <div
         className={`wallet-connect-shell ${compact ? "wallet-connect-shell-compact" : ""} ${
@@ -184,6 +199,7 @@ export function WalletConnectSurface({ compact = false, fallback, surface = "def
             onClick={() => {
               walletRuntime.requestLoad();
               setConnectRequested(true);
+              setPendingConnectOpen(true);
             }}
             disabled={wallet.isConnecting || walletRuntime.loading}
           >
@@ -200,7 +216,12 @@ export function WalletConnectSurface({ compact = false, fallback, surface = "def
 
   return (
     <Suspense fallback={fallback ?? <WalletConnectFallback compact={compact} />}>
-      <WalletConnect compact={compact} surface={surface} />
+      <WalletConnect
+        compact={compact}
+        surface={surface}
+        connectModalOpen={connectModalOpen}
+        onConnectModalOpenChange={setConnectModalOpen}
+      />
     </Suspense>
   );
 }

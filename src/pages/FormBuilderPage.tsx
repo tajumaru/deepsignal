@@ -23,10 +23,9 @@ import { canAdmin, getAdminSurfaceAccessState, getRoleLabel } from "../lib/admin
 import { getActivityActorRole } from "../lib/activityLog";
 import { normalizeForm } from "../lib/formSchema";
 import { classifyFormEdit, isStructuralFormEdit, resolveFormVersion } from "../lib/formVersioning";
-import { storageAdapter } from "../lib/storage";
+import { storageAdapter } from "../lib/storageAdapter";
 import { setSelectedProjectId } from "../lib/projectRegistry";
 import { shortAddress, WALRUS_UPLOAD_RELAY_URL } from "../lib/sui";
-import { readManifestWithForm } from "../lib/walrus";
 import { getInitialFields, getInitialTemplate, showWalrusDiagnostics } from "../features/createForm/constants";
 import { BuilderToolbar } from "../features/createForm/components/BuilderToolbar";
 import { FieldsStep } from "../features/createForm/components/FieldsStep";
@@ -40,7 +39,7 @@ import { getCreateFormEncryptionReadiness } from "../features/createForm/encrypt
 import { useCreateFormBuilder } from "../features/createForm/hooks/useCreateFormBuilder";
 import { useCreateFormPublish } from "../features/createForm/hooks/useCreateFormPublish";
 import type { DisplayMode } from "../features/createForm/types";
-import { getStorageRuntimeStatus, subscribeStorageRuntime } from "../storage/storageFactory";
+import { getStorageRuntimeStatus, subscribeStorageRuntime } from "../storage/storageRuntime";
 import {
   CREATE_FORM_DRAFT_STORAGE_KEY,
   CREATE_FORM_GUEST_DRAFT_STORAGE_KEY,
@@ -702,6 +701,7 @@ function FormBuilderComposer({
       try {
         let nextForm: FormSchema | null = null;
         if (republishManifest) {
+          const { readManifestWithForm } = await import("../lib/walrus/read");
           const carrier = await readManifestWithForm(republishManifest);
           nextForm = carrier.form ? normalizeForm(carrier.form) : null;
         }

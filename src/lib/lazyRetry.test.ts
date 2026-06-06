@@ -1,5 +1,5 @@
-import { afterEach, describe, expect, it } from "vitest";
-import { MissingLazyRouteExportError, resolveLazyRouteModule } from "./lazyRetry";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { MissingLazyRouteExportError, resolveLazyRouteModule, retryLazyImport } from "./lazyRetry";
 
 function NamedPublicFormPage() {
   return null;
@@ -13,6 +13,7 @@ describe("resolveLazyRouteModule", () => {
   afterEach(() => {
     window.__DEEPSIGNAL_DEBUG__ = undefined;
     window.sessionStorage.clear();
+    vi.restoreAllMocks();
   });
 
   it("resolves public form lazy modules from a default export first", () => {
@@ -58,5 +59,16 @@ describe("resolveLazyRouteModule", () => {
       resolvedExport: "missing",
     });
     expect(window.sessionStorage.getItem("deepsignal.chunkLoadRecovery")).toBeNull();
+  });
+
+  it("does not block the first lazy import on build.json for app shell imports", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(
+      () => new Promise(() => undefined) as ReturnType<typeof fetch>,
+    );
+
+    const loaded = await retryLazyImport(async () => ({ ok: true }), "app-shell");
+
+    expect(loaded).toEqual({ ok: true });
+    expect(fetchSpy).not.toHaveBeenCalled();
   });
 });

@@ -105,20 +105,14 @@ function WalletNavSlot({
 function WalletConnectSlot({
   fallback,
   surface,
-  walletSessionPhase,
   walletUiEnabled,
 }: {
   fallback?: ReactNode;
   surface?: "mobileDrawer";
-  walletSessionPhase: WalletSessionPhase;
   walletUiEnabled: boolean;
 }) {
   if (!walletUiEnabled) {
     return null;
-  }
-
-  if (walletSessionPhase === "provider_deferred") {
-    return fallback ? <>{fallback}</> : null;
   }
 
   return (
@@ -614,7 +608,6 @@ export function AppShell({
               <DeferredNetworkMenu />
               <WalletConnectSlot
                 fallback={walletConnectFallback}
-                walletSessionPhase={walletSessionPhase}
                 walletUiEnabled={walletUiEnabled}
               />
             </div>
@@ -715,7 +708,6 @@ export function AppShell({
                       <WalletConnectSlot
                         fallback={mobileWalletFallback}
                         surface="mobileDrawer"
-                        walletSessionPhase={walletSessionPhase}
                         walletUiEnabled={walletUiEnabled}
                       />
                       {walletUiEnabled ? null : <MobileDrawerWalletStandbyStatus />}

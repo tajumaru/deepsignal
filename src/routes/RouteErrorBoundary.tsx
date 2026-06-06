@@ -1,4 +1,4 @@
-import { Component, type ReactNode } from "react";
+import { Component, Suspense, lazy, type ReactNode } from "react";
 import {
   clearChunkLoadRecoveryState,
   getChunkLoadRecoverySnapshot,
@@ -15,70 +15,26 @@ import {
   type BuildAssetRecord,
 } from "../lib/buildAssetDiagnostics";
 import { updateDeepSignalToLatest } from "../lib/buildUpdate";
-import { formatRouteLifecycleDiagnostics, logRouteLifecycle } from "../lib/routeDiagnostics";
-import type { ChunkDependencyProbe, ChunkProbe } from "../lib/routeDiagnostics";
-import { DashboardDegradedShell } from "../components/DashboardDegradedShell";
-import { LocalRecoveryCenter } from "../components/LocalRecoveryCenter";
+import { logRouteLifecycle } from "../lib/routeDiagnostics";
 import {
-  collectRouteDiagnostics,
-  getProviderReadiness,
   getRouteId,
   shouldShowRouteDiagnostics,
-  type RouteDiagnostics,
 } from "./routeDiagnostics";
-import { reportSystemError } from "../services/systemSignalReporter";
+import { reportSystemError } from "../services/systemSignalReporterClient";
+import type { RouteErrorDiagnostics } from "./routeErrorDiagnosticsRuntime";
 
 const LAST_EXPLORE_ERROR_KEY = "deepsignal:lastExploreError";
 
-type RouteErrorDiagnostics = {
-  errorName: string;
-  errorMessage: string;
-  errorStack: string;
-  componentStack: string;
-  routeId: string;
-  routePath: string;
-  pathname: string;
-  hash: string;
-  chunkUrl: string | null;
-  buildVersion: string;
-  buildTime: string;
-  gitHash: string;
-  rootBuildVersion: string;
-  rootBuildTime: string;
-  rootGitHash: string;
-  mixedBuildAssetsDetected: boolean;
-  observedBuildAssets: BuildAssetRecord[];
-  userAgent: string;
-  providerReadiness: Record<string, unknown>;
-  providerState: Record<string, unknown>;
-  hydrationPhase: string;
-  storageMode: string;
-  selectedProjectId: string;
-  routeDiagnostics: RouteDiagnostics;
-  routeLifecycle: string;
-  chunkRecovery: ReturnType<typeof getChunkLoadRecoverySnapshot>;
-  failedImportDiagnostics: Array<{
-    at: number;
-    label: string;
-    message: string;
-    chunkUrl?: string | null;
-    category?: "chunkLoad" | "missingExport" | "runtime" | "timeout";
-    expectedExport?: string;
-    availableExports?: string[];
-    moduleKeys?: string[];
-    routeId?: string;
-    routePath?: string;
-    currentUrl?: string;
-    pathname?: string;
-    hash?: string;
-    userAgent?: string;
-    mobileSafari?: boolean;
-    resolvedExport?: "default" | string | "missing";
-    probe?: ChunkProbe;
-    dependencyProbe?: ChunkDependencyProbe;
-  }>;
-  recordedAt: string;
-};
+const DashboardDegradedShell = lazy(() =>
+  import("../components/DashboardDegradedShell").then((module) => ({
+    default: module.DashboardDegradedShell,
+  })),
+);
+const LocalRecoveryCenter = lazy(() =>
+  import("../components/LocalRecoveryCenter").then((module) => ({
+    default: module.LocalRecoveryCenter,
+  })),
+);
 
 type RouteErrorBoundaryState = {
   cacheClearMessage: string;
@@ -110,6 +66,22 @@ function getLastFailedImportChunkUrl() {
     }
   }
   return null;
+}
+
+function getRecentFailedImportDiagnostics() {
+  if (typeof window === "undefined") {
+    return [];
+  }
+  return window.__DEEPSIGNAL_DEBUG__?.failedImports?.slice(-5) ?? [];
+}
+
+let routeErrorDiagnosticsRuntimePromise: Promise<typeof import("./routeErrorDiagnosticsRuntime")> | null = null;
+
+function loadRouteErrorDiagnosticsRuntime() {
+  if (!routeErrorDiagnosticsRuntimePromise) {
+    routeErrorDiagnosticsRuntimePromise = import("./routeErrorDiagnosticsRuntime");
+  }
+  return routeErrorDiagnosticsRuntimePromise;
 }
 
 export function MixedBuildRecoveryScreen({ observed }: { observed: BuildAssetRecord[] }) {
@@ -161,15 +133,30 @@ export class RouteErrorBoundary extends Component<
     const hash = typeof window === "undefined" ? "" : window.location.hash;
     recordBuildAsset(`route-error:${getRouteId(this.props.routePath)}`, buildInfo);
     const mixedBuildStatus = getMixedBuildStatus();
-    const routeDiagnostics = collectRouteDiagnostics(this.props.routePath);
-    const boundaryDiagnostics = {
-      routePath: this.props.routePath,
-      routeId: getRouteId(this.props.routePath),
-      pathname,
-      hash,
+    const routeId = getRouteId(this.props.routePath);
+    const failedImportDiagnostics = getRecentFailedImportDiagnostics();
+    reportSystemError({
+      error,
       errorName: error.name,
       errorMessage: error.message,
       errorStack: error.stack ?? "",
+      routePath: this.props.routePath,
+      routeId,
+      chunkUrl,
+      severity: chunkUrl ? "critical" : "error",
+      sourceContext: "route-error-boundary",
+      diagnostics: {
+        componentStack: errorInfo.componentStack,
+        failedImportDiagnostics,
+        mixedBuildAssetsDetected: mixedBuildStatus.detected,
+      },
+    });
+    console.error("DeepSignal route failed to render.", {
+      error,
+      routePath: this.props.routePath,
+      routeId,
+      pathname,
+      hash,
       chunkUrl,
       buildVersion: buildInfo.appVersion,
       buildTime: buildInfo.buildTime,
@@ -180,42 +167,8 @@ export class RouteErrorBoundary extends Component<
       mixedBuildAssetsDetected: mixedBuildStatus.detected,
       observedBuildAssets: mixedBuildStatus.observed,
       userAgent,
-      providerReadiness: getProviderReadiness(),
-      providerState: routeDiagnostics.providerState,
-      hydrationPhase: routeDiagnostics.hydrationPhase,
-      storageMode: routeDiagnostics.storageMode,
-      selectedProjectId: routeDiagnostics.selectedProjectId,
-      routeDiagnostics,
-      routeLifecycle: formatRouteLifecycleDiagnostics(),
-      chunkRecovery: getChunkLoadRecoverySnapshot(),
-      failedImportDiagnostics: window.__DEEPSIGNAL_DEBUG__?.failedImports?.slice(-5) ?? [],
       componentStack: errorInfo.componentStack,
-      recordedAt: new Date().toISOString(),
-    };
-    const diagnosticsText = JSON.stringify(boundaryDiagnostics, null, 2);
-    if (boundaryDiagnostics.routeId === "explore") {
-      safeWriteLocalStorage(LAST_EXPLORE_ERROR_KEY, diagnosticsText);
-    }
-    reportSystemError({
-      error,
-      errorName: boundaryDiagnostics.errorName,
-      errorMessage: boundaryDiagnostics.errorMessage,
-      errorStack: boundaryDiagnostics.errorStack,
-      routePath: boundaryDiagnostics.routePath,
-      routeId: boundaryDiagnostics.routeId,
-      chunkUrl,
-      severity: chunkUrl ? "critical" : "error",
-      sourceContext: "route-error-boundary",
-      diagnostics: {
-        componentStack: errorInfo.componentStack,
-        routeDiagnostics,
-        failedImportDiagnostics: boundaryDiagnostics.failedImportDiagnostics,
-        mixedBuildAssetsDetected: mixedBuildStatus.detected,
-      },
-    });
-    console.error("DeepSignal route failed to render.", {
-      error,
-      ...boundaryDiagnostics,
+      failedImportDiagnostics,
     });
     logRouteLifecycle("route:error-boundary", {
       routePath: this.props.routePath,
@@ -242,7 +195,28 @@ export class RouteErrorBoundary extends Component<
         reason: mixedBuildStatus.reason,
       });
     }
-    this.setState({ diagnostics: boundaryDiagnostics, diagnosticsCopied: false });
+    void loadRouteErrorDiagnosticsRuntime()
+      .then(({ buildRouteErrorDiagnostics }) => {
+        const diagnostics = buildRouteErrorDiagnostics({
+          chunkRecovery: getChunkLoadRecoverySnapshot(),
+          chunkUrl,
+          componentStack: errorInfo.componentStack,
+          error,
+          failedImportDiagnostics,
+          hash,
+          mixedBuildStatus,
+          pathname,
+          routePath: this.props.routePath,
+          userAgent,
+        });
+        if (diagnostics.routeId === "explore") {
+          safeWriteLocalStorage(LAST_EXPLORE_ERROR_KEY, JSON.stringify(diagnostics, null, 2));
+        }
+        this.setState({ diagnostics, diagnosticsCopied: false });
+      })
+      .catch(() => {
+        this.setState({ diagnostics: null, diagnosticsCopied: false });
+      });
     if (!recoverFromMixedBuildAssets(mixedBuildStatus)) {
       recoverFromChunkLoadFailure(error);
     }
@@ -324,34 +298,48 @@ export class RouteErrorBoundary extends Component<
   }
 
   handleCopyDiagnostics = async () => {
+    let diagnostics = this.state.diagnostics;
+    if (!diagnostics) {
+      const pathname = typeof window === "undefined" ? this.props.routePath.split(/[?#]/)[0] || "/" : window.location.pathname;
+      const hash = typeof window === "undefined" ? "" : window.location.hash;
+      const chunkUrl = getChunkFailureUrl(this.state.error) ?? getLastFailedImportChunkUrl();
+      const userAgent = typeof navigator === "undefined" ? "unknown" : navigator.userAgent;
+      const mixedBuildStatus = {
+        detected: false,
+        observed: [] as BuildAssetRecord[],
+        root: {
+          source: "root",
+          appVersion: buildInfo.appVersion,
+          buildTime: buildInfo.buildTime,
+          gitHash: buildInfo.gitHash,
+          recordedAt: new Date().toISOString(),
+        },
+      };
+      try {
+        const { buildRouteErrorDiagnostics } = await loadRouteErrorDiagnosticsRuntime();
+        diagnostics = buildRouteErrorDiagnostics({
+          chunkRecovery: getChunkLoadRecoverySnapshot(),
+          chunkUrl,
+          componentStack: "",
+          error: this.state.error,
+          failedImportDiagnostics: getRecentFailedImportDiagnostics(),
+          hash,
+          mixedBuildStatus,
+          pathname,
+          routePath: this.props.routePath,
+          userAgent,
+        });
+        this.setState({ diagnostics });
+      } catch {
+        diagnostics = null;
+      }
+    }
     const diagnosticsText = JSON.stringify(
-      this.state.diagnostics ?? {
+      diagnostics ?? {
         errorName: this.state.error?.name ?? "unknown",
         errorMessage: this.state.error?.message ?? "unknown",
-        errorStack: this.state.error?.stack ?? "",
-        componentStack: "",
         routePath: this.props.routePath,
         routeId: getRouteId(this.props.routePath),
-        pathname: typeof window === "undefined" ? this.props.routePath.split(/[?#]/)[0] || "/" : window.location.pathname,
-        chunkUrl: getChunkFailureUrl(this.state.error) ?? getLastFailedImportChunkUrl(),
-        buildVersion: buildInfo.appVersion,
-        buildTime: buildInfo.buildTime,
-        gitHash: buildInfo.gitHash,
-        rootBuildVersion: buildInfo.appVersion,
-        rootBuildTime: buildInfo.buildTime,
-        rootGitHash: buildInfo.gitHash,
-        mixedBuildAssetsDetected: false,
-        observedBuildAssets: [],
-        userAgent: typeof navigator === "undefined" ? "unknown" : navigator.userAgent,
-        providerReadiness: getProviderReadiness(),
-        providerState: collectRouteDiagnostics(this.props.routePath).providerState,
-        hydrationPhase: collectRouteDiagnostics(this.props.routePath).hydrationPhase,
-        storageMode: collectRouteDiagnostics(this.props.routePath).storageMode,
-        selectedProjectId: collectRouteDiagnostics(this.props.routePath).selectedProjectId,
-        routeDiagnostics: collectRouteDiagnostics(this.props.routePath),
-        routeLifecycle: formatRouteLifecycleDiagnostics(),
-        chunkRecovery: getChunkLoadRecoverySnapshot(),
-        failedImportDiagnostics: window.__DEEPSIGNAL_DEBUG__?.failedImports?.slice(-5) ?? [],
         recordedAt: new Date().toISOString(),
       },
       null,
@@ -371,15 +359,13 @@ export class RouteErrorBoundary extends Component<
     if (this.state.error) {
       const chunkFailure = isChunkLoadFailure(this.state.error);
       const diagnostics = this.state.diagnostics;
-      const showDiagnostics = Boolean(diagnostics) || chunkFailure || shouldShowRouteDiagnostics(this.props.routePath);
-      const failedImportDiagnostics = diagnostics?.failedImportDiagnostics ?? [];
+      const failedImportDiagnostics = diagnostics?.failedImportDiagnostics ?? getRecentFailedImportDiagnostics();
       const latestFailedImport = failedImportDiagnostics[failedImportDiagnostics.length - 1];
-      const dependencyFailures = latestFailedImport?.dependencyProbe?.dependencies.filter((probe: ChunkProbe) => !probe.ok) ?? [];
+      const dependencyFailures = latestFailedImport?.dependencyProbe?.dependencies.filter((probe) => !probe.ok) ?? [];
+      const routeId = diagnostics?.routeId ?? getRouteId(this.props.routePath);
+      const showDiagnostics = Boolean(diagnostics) || chunkFailure || shouldShowRouteDiagnostics(this.props.routePath);
       const missingExport = latestFailedImport?.category === "missingExport" || this.state.error.name === "MissingLazyRouteExportError";
-      const appShellTimeout =
-        diagnostics?.routeId === "dashboard" &&
-        latestFailedImport?.label === "app-shell" &&
-        latestFailedImport.category === "timeout";
+      const appShellTimeout = routeId === "admin" && latestFailedImport?.label === "app-shell" && latestFailedImport.category === "timeout";
       const assetMismatch = missingExport || Boolean(diagnostics?.mixedBuildAssetsDetected);
       const headline =
         chunkFailure || assetMismatch
@@ -388,24 +374,26 @@ export class RouteErrorBoundary extends Component<
 
       if (appShellTimeout) {
         return (
-          <DashboardDegradedShell
-            onContinueLiteMode={() => {
-              logRouteLifecycle("dashboard:continue-lite-mode", {
-                routePath: this.props.routePath,
-                retryCount: this.state.retryCount,
-              });
-              this.setState({ liteModeContinued: true });
-            }}
-            onRetryImports={this.handleRetry}
-            primaryActionLabel="Retry AppShell"
-            routePath={this.props.routePath}
-            statusMessage={
-              this.state.liteModeContinued
-                ? "Dashboard is staying in Lite Mode. Local fallback data remains preserved while wallet-heavy chrome stays deferred."
-                : "AppShell failed to load on this device. Dashboard Lite Mode is available while the wallet-heavy shell remains deferred."
-            }
-            statusTitle={this.state.liteModeContinued ? "Dashboard Lite Mode active" : "AppShell failed to load on this device"}
-          />
+          <Suspense fallback={<div className="panel glow-panel route-status-panel" role="alert"><p className="muted">Preparing dashboard recovery…</p></div>}>
+            <DashboardDegradedShell
+              onContinueLiteMode={() => {
+                logRouteLifecycle("dashboard:continue-lite-mode", {
+                  routePath: this.props.routePath,
+                  retryCount: this.state.retryCount,
+                });
+                this.setState({ liteModeContinued: true });
+              }}
+              onRetryImports={this.handleRetry}
+              primaryActionLabel="Retry AppShell"
+              routePath={this.props.routePath}
+              statusMessage={
+                this.state.liteModeContinued
+                  ? "Dashboard is staying in Lite Mode. Local fallback data remains preserved while wallet-heavy chrome stays deferred."
+                  : "AppShell failed to load on this device. Dashboard Lite Mode is available while the wallet-heavy shell remains deferred."
+              }
+              statusTitle={this.state.liteModeContinued ? "Dashboard Lite Mode active" : "AppShell failed to load on this device"}
+            />
+          </Suspense>
         );
       }
 
@@ -443,7 +431,11 @@ export class RouteErrorBoundary extends Component<
             </button>
           </div>
           {this.state.cacheClearMessage ? <p className="muted">{this.state.cacheClearMessage}</p> : null}
-          {missingExport ? <LocalRecoveryCenter /> : null}
+          {missingExport ? (
+            <Suspense fallback={null}>
+              <LocalRecoveryCenter />
+            </Suspense>
+          ) : null}
           {showDiagnostics && diagnostics ? (
             <details className="route-diagnostics-panel">
               <summary>Technical details</summary>

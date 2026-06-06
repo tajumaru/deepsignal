@@ -1,13 +1,13 @@
 import { waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { localStorageAdapter } from "../storage/localStorageAdapter";
+import { reportSystemError } from "./systemSignalReporterClient";
 import {
   SYSTEM_SIGNAL_FORM_ID,
   getSystemSignalDiagnostics,
   isSystemSignal,
-  reportSystemError,
   shouldAttemptSystemSignalRemoteSync,
-} from "./systemSignalReporter";
+} from "./systemSignalReporterHelpers";
 
 describe("systemSignalReporter", () => {
   beforeEach(() => {

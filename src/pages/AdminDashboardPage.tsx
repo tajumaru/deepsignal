@@ -49,7 +49,7 @@ import { buildSignalCardIntelligence } from "../features/admin/components/signal
 import { SignalChannelSelector, SignalStreamsNav } from "../features/admin/components/SignalStreamsNav";
 import {
   isSystemSignal,
-} from "../services/systemSignalReporter";
+} from "../services/systemSignalReporterHelpers";
 import { getDiagnostic } from "../diagnostics/diagnosticsService";
 import { createDiagnosticsExportFilename, exportDiagnosticsJson } from "../diagnostics/diagnosticsExport";
 import { summarizeDiagnostics } from "../diagnostics/diagnosticsSummary";
@@ -153,10 +153,8 @@ import {
   isOnchainRecoveredSignal,
   isLocalFallbackBlob,
 } from "../lib/signalInbox";
-import {
-  normalizeSubmission,
-  storageAdapter,
-} from "../lib/storage";
+import { normalizeSubmission } from "../lib/submissionSchema";
+import { storageAdapter } from "../lib/storageAdapter";
 import { getSignalProcessingMode } from "../lib/signalProcessing";
 import { downloadTextFile, formatDate, formatRelativeTime } from "../lib/utils";
 import { logRouteLifecycle } from "../lib/routeDiagnostics";
@@ -167,7 +165,7 @@ import { markDeletedFormTombstones } from "../storage/deletedFormTombstones";
 import { forcePurgeFormArtifacts } from "../storage/forcePurgeFormArtifacts";
 import { saveFormMetadataOverlay } from "../storage/formMetadataOverlay";
 import { updateMyResponseLifecycleFromSubmission } from "../storage/myResponseHistory";
-import { deleteFormsFromLocalCache, getStorageRuntimeStatus } from "../storage/storageFactory";
+import { getStorageRuntimeStatus } from "../storage/storageRuntime";
 import type { ActivityEvent, FormSchema, SignalProcessingMode, Submission } from "../types";
 
 const MOBILE_REVIEW_MEDIA_QUERY = "(max-width: 768px)";
@@ -5826,6 +5824,7 @@ export function AdminDashboardPage() {
       }
     }
     if (expandedIds.length > 0) {
+      const { deleteFormsFromLocalCache } = await import("../storage/storageFactory");
       await deleteFormsFromLocalCache(expandedIds);
     }
     forcePurgeFormArtifacts({

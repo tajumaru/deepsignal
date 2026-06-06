@@ -66,11 +66,9 @@ import {
   isLocalFallbackBlob,
 } from "../lib/signalInbox";
 import { getTriageStatusLabel, TRIAGE_STATUS_OPTIONS } from "../lib/signalOps";
-import {
-  normalizeForm,
-  normalizeSubmission,
-  storageAdapter,
-} from "../lib/storage";
+import { normalizeForm } from "../lib/formSchema";
+import { normalizeSubmission } from "../lib/submissionSchema";
+import { storageAdapter } from "../lib/storageAdapter";
 import {
   lifecycleStatusFromSubmissionState,
   updateMyResponseLifecycleFromSubmission,

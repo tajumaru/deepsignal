@@ -13,6 +13,10 @@ import { endPerf, markPerfMilestone, startPerf } from "../lib/perf";
 import { getBrowserCapabilitiesSnapshot, logRouteLifecycle } from "../lib/routeDiagnostics";
 import { WalletSurfaceContext, type WalletProviderRuntime } from "./WalletSurfaceRuntime";
 
+type WalletProvidersModule = { default: (props: PropsWithChildren) => JSX.Element };
+
+let walletProvidersInFlightPromise: Promise<WalletProvidersModule> | null = null;
+
 function getWalletProviderImportTimeoutMs() {
   const capabilities = getBrowserCapabilitiesSnapshot();
   if (typeof navigator === "undefined") {
@@ -71,10 +75,23 @@ function createWalletProviders(
       timeoutMs: importTimeoutMs,
       userAgent,
     };
+    optionsRef.current.onStart?.(eventDetails);
+    if (walletProvidersInFlightPromise) {
+      logRouteLifecycle("provider:wallet-import-join", eventDetails);
+      return walletProvidersInFlightPromise
+        .then((module) => {
+          optionsRef.current.onSuccess?.(eventDetails);
+          return module;
+        })
+        .catch((error) => {
+          optionsRef.current.onFailure?.(eventDetails);
+          throw error;
+        });
+    }
+
     startPerf("provider:wallet", `retry ${retryKey}`);
     markPerfMilestone("provider:wallet:import-start", `retry ${retryKey}`);
     logRouteLifecycle("provider:wallet-import-start", eventDetails);
-    optionsRef.current.onStart?.(eventDetails);
     const slowTimeout = window.setTimeout(() => {
       logRouteLifecycle("provider:wallet-import-slow", {
         ...eventDetails,
@@ -86,14 +103,14 @@ function createWalletProviders(
       markPerfMilestone("provider:wallet:import-timeout", `${importTimeoutMs}ms`);
       logRouteLifecycle("provider:wallet-import-timeout", eventDetails);
     }, importTimeoutMs);
-    return retryLazyImport(() => import("../providers"), "wallet-providers")
+    walletProvidersInFlightPromise = retryLazyImport(() => import("../providers"), "wallet-providers")
       .then((module) => {
         markPerfMilestone("provider:wallet:import-resolved", `retry ${retryKey}`);
         logRouteLifecycle("provider:wallet-import-resolved", eventDetails);
         optionsRef.current.onSuccess?.(eventDetails);
         return {
           default: module.WalletProviders,
-        };
+        } satisfies WalletProvidersModule;
       })
       .catch((error) => {
         endPerf("provider:wallet", "failed", error instanceof Error ? error.message : String(error));
@@ -106,11 +123,13 @@ function createWalletProviders(
         throw error;
       })
       .finally(() => {
+        walletProvidersInFlightPromise = null;
         window.clearTimeout(slowTimeout);
         window.clearTimeout(timeout);
         markPerfMilestone("provider:wallet:import-end", `retry ${retryKey}`);
         logRouteLifecycle("provider:wallet-import-end", eventDetails);
       });
+    return walletProvidersInFlightPromise;
   };
 }
 
@@ -156,6 +175,7 @@ export function WalletSurface({
   const loadWalletProviders = useMemo(() => createWalletProviders(retryKey, importOptionsRef), [retryKey]);
   const [providersModule, setProvidersModule] = useState<null | { WalletProviders: (props: PropsWithChildren) => JSX.Element }>(null);
   const [loading, setLoading] = useState(requestOnMount && !parentRuntime.loaded);
+  const [loadFailed, setLoadFailed] = useState(false);
   const requestStartedRef = useRef(false);
 
   useEffect(() => {
@@ -168,6 +188,7 @@ export function WalletSurface({
     }
     requestStartedRef.current = false;
     setLoading(false);
+    setLoadFailed(false);
   }, [parentRuntime.loaded, providersModule, retryKey]);
 
   useEffect(() => {
@@ -176,11 +197,27 @@ export function WalletSurface({
     }
     requestStartedRef.current = true;
     setLoading(true);
+    setLoadFailed(false);
     void loadWalletProviders()
       .then((module) => setProvidersModule({ WalletProviders: module.default }))
-      .catch(() => undefined)
+      .catch(() => {
+        requestStartedRef.current = false;
+        setLoadFailed(true);
+      })
       .finally(() => setLoading(false));
   }, [loadWalletProviders, requestOnMount]);
+
+  useEffect(() => {
+    if (!providersModule) {
+      return;
+    }
+    logRouteLifecycle("provider-mounted", {
+      parentRuntimeLoaded: parentRuntime.loaded,
+      requestOnMount,
+      retryKey,
+      routePath: getCurrentRoutePath(),
+    });
+  }, [parentRuntime.loaded, providersModule, requestOnMount, retryKey]);
 
   const requestLoad = useMemo(
     () => () => {
@@ -189,9 +226,13 @@ export function WalletSurface({
       }
       requestStartedRef.current = true;
       setLoading(true);
+      setLoadFailed(false);
       void loadWalletProviders()
         .then((module) => setProvidersModule({ WalletProviders: module.default }))
-        .catch(() => undefined)
+        .catch(() => {
+          requestStartedRef.current = false;
+          setLoadFailed(true);
+        })
         .finally(() => setLoading(false));
     },
     [loadWalletProviders, parentRuntime.loaded],
@@ -218,7 +259,7 @@ export function WalletSurface({
 
   return (
     <WalletSurfaceContext.Provider value={runtime}>
-      {loading && blockUntilLoaded ? fallback ?? <WalletSurfaceFallback /> : children}
+      {(loading || loadFailed) && blockUntilLoaded ? fallback ?? <WalletSurfaceFallback /> : children}
     </WalletSurfaceContext.Provider>
   );
 }

@@ -14,8 +14,7 @@ import { isDecryptDiagnosticError, type DecryptDiagnosticContext } from "../../.
 import type { CapabilityProfile } from "../../../hooks/useAccessControl";
 import { logRouteLifecycle } from "../../../lib/routeDiagnostics";
 import { getPrivateSignalPayloadState } from "../../../lib/signalInbox";
-import { resolveSubmissionAnswers } from "../../../lib/storage";
-import { reportSystemError } from "../../../services/systemSignalReporter";
+import { reportSystemError } from "../../../services/systemSignalReporterClient";
 import type { SealDecryptContext, Submission } from "../../../types";
 import type { SignalRecord } from "./useSignalInboxData";
 
@@ -106,6 +105,13 @@ const defaultDecryptMessages: DecryptMessages = {
   bulkDecryptPartialSuccess: (unlockedCount, failedCount) =>
     `${unlockedCount} private signals unlocked. ${failedCount} still locked.`,
 };
+
+let storageDecryptModulePromise: Promise<typeof import("../../../lib/storageSeal")> | null = null;
+
+function loadStorageDecryptModule() {
+  storageDecryptModulePromise ??= import("../../../lib/storageSeal");
+  return storageDecryptModulePromise;
+}
 
 function isOnchainShadowWithoutReadablePayload(diagnostics?: DecryptDiagnosticContext | null) {
   return Boolean(
@@ -333,6 +339,7 @@ export function usePrivateSignalDecrypt({
       receiptBlobId: selectedRecord.submission.receiptBlobId ?? null,
     });
     try {
+      const { resolveSubmissionAnswers } = await loadStorageDecryptModule();
       const resolved = await resolveSubmissionAnswers(
         selectedRecord.form,
         selectedRecord.submission,
@@ -481,6 +488,7 @@ export function usePrivateSignalDecrypt({
         const position = index + 1;
         setBulkDecryptStatusMessage(`${messages.decryptingEncryptedPayload} (${position}/${decryptableTargets.length})`);
         try {
+          const { resolveSubmissionAnswers } = await loadStorageDecryptModule();
           const resolved = await resolveSubmissionAnswers(
             record.form,
             record.submission,

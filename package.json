@@ -1,7 +1,7 @@
 {
   "name": "deepsignal-walrus-feedback-lab",
   "private": true,
-  "version": "0.15.14",
+  "version": "0.15.19",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -12,8 +12,9 @@
     "test:e2e": "playwright test",
     "test:zklogin": "vitest run src/lib/zkloginAddress.test.ts src/lib/zkloginOAuth.test.ts src/lib/zkloginSession.test.ts src/lib/respondentMeta.test.ts src/lib/exportResponses.test.ts src/pages/ZkLoginCallbackPage.test.tsx src/pages/PublicFormPage.test.tsx --exclude ci-run-verify/** --exclude .ci-run-verify/**",
     "typecheck": "tsc -b",
-    "check": "npm run typecheck && npm run lint",
-    "build": "npm run typecheck && vite build",
+    "verify:boot-cycles": "node scripts/check-boot-cycles.mjs",
+    "check": "npm run typecheck && npm run lint && npm run verify:boot-cycles",
+    "build": "npm run typecheck && npm run verify:boot-cycles && vite build",
     "preview": "vite preview",
     "fixture:insights": "node -e \"console.log('Open the running app at /#/dev/insights-fixture to seed browser-local Insights fixtures.')\"",
     "version:set": "tsx scripts/set-version.ts",

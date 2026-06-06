@@ -4,6 +4,7 @@ import { DashboardRecoveryPanel } from "../components/DashboardRecoveryPanel";
 import { DashboardShellFirstPanel } from "../components/DashboardShellFirstPanel";
 import { WalrusRuntimeSurface } from "../components/WalrusRuntimeSurface";
 import { WalletSurface } from "../components/WalletSurface";
+import { useWalletProviderRuntime } from "../components/WalletSurfaceRuntime";
 import { buildInfo } from "../lib/buildInfo";
 import { getChunkFailureUrl } from "../lib/chunkLoadRecovery";
 import {
@@ -28,7 +29,11 @@ function LegacyFormInboxRedirect({ basePath }: { basePath: "/admin" | "/dashboar
 }
 
 function WithWalrusRuntime({ children }: { children: ReactNode }) {
+  const walletRuntime = useWalletProviderRuntime();
   if (REQUIRE_GLOBAL_WALRUS_RUNTIME) {
+    return <>{children}</>;
+  }
+  if (!walletRuntime.loaded) {
     return <>{children}</>;
   }
   return <WalrusRuntimeSurface>{children}</WalrusRuntimeSurface>;

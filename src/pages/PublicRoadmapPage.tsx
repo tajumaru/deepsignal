@@ -103,7 +103,7 @@ export function PublicRoadmapPage() {
     async function loadRoadmap() {
       let nextForm = await localStorageAdapter.getForm(formId);
       if (!nextForm && manifestBlobId) {
-        const { fetchJsonBlob, readManifest } = await import("../lib/walrus");
+        const { fetchJsonBlob, readManifest } = await import("../lib/walrus/read");
         const manifest = await readManifest(manifestBlobId);
         if (manifest?.formBlobId) {
           const restoredForm = await fetchJsonBlob<FormSchema>(manifest.formBlobId);

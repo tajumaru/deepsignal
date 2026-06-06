@@ -727,10 +727,11 @@ export function usePublicSubmission({
 
     try {
       const {
+        activeSealAdapter,
         createEncryptedAttachmentUpload,
         getStorageRuntimeStatus,
         storageAdapter,
-      } = await import("../../../lib/storage");
+      } = await import("../../../lib/storageSeal");
       if (identityMode === "wallet" && accountAddress) {
         const { waitForWalrusMutationRuntimeReady } = await import("../../../lib/walrus");
         await waitForWalrusMutationRuntimeReady({
@@ -740,7 +741,6 @@ export function usePublicSubmission({
           expectedNetwork: rpcInfrastructure.network,
         });
       }
-      const { activeSealAdapter } = await import("../../../lib/seal");
       setStorageRuntime(getStorageRuntimeStatus());
       const uploadFile = requiresProtectedAttachment
         ? (await createEncryptedAttachmentUpload(attachment.file, activeSealAdapter, {
@@ -1183,7 +1183,7 @@ export function usePublicSubmission({
         getStorageRuntimeStatus,
         saveSubmissionWithEncryption,
         storageAdapter,
-      } = await import("../../../lib/storage");
+      } = await import("../../../lib/storageSeal");
       const { saveSubmittedHistoryEntry } = await import("../../../storage/submittedHistory");
       const {
         buildMyResponseHistoryEntry,

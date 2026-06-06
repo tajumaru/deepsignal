@@ -16,7 +16,7 @@ export function ManifestRestorePage() {
 
   useEffect(() => {
     async function restore() {
-      const { fetchJsonBlob, readManifest } = await import("../lib/walrus");
+      const { fetchJsonBlob, readManifest } = await import("../lib/walrus/read");
       const manifest = await readManifest(manifestBlobId);
       if (!manifest) {
         setError("Manifest blob could not be loaded.");

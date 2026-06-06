@@ -12,7 +12,7 @@ import { endPerf, markPerfMilestone, startPerf } from "./lib/perf";
 import { WalrusDiagnosticError, getWalrusErrorMessage } from "./storage/walrusDiagnostics";
 import { setWalrusRuntimeContext } from "./storage/walrusAdapter";
 import { setSuiRuntimeContext } from "./suiRuntime";
-import { reportSystemError } from "./services/systemSignalReporter";
+import { reportSystemError } from "./services/systemSignalReporterClient";
 
 const WALRUS_TX_WAIT_TIMEOUT_MS = 3 * 60 * 1000;
 const WALRUS_UPLOAD_RELAY_TIMEOUT_RAW = import.meta.env.VITE_WALRUS_UPLOAD_RELAY_TIMEOUT_MS;

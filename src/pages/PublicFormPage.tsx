@@ -6,7 +6,6 @@ import { FormHeaderImage } from "../components/FormHeaderImage";
 import { RichTextContent } from "../components/RichText";
 import { CriticalFailurePanel } from "../components/CriticalFailurePanel";
 import { RecoverableDraftBanner } from "../components/RecoverableDraftBanner";
-import { LocalRecoveryCenter } from "../components/LocalRecoveryCenter";
 import { PublicSignalMetaChip } from "../components/PublicSignalMeta";
 import { SignalSubmissionPipeline } from "../features/public-form/components/SignalSubmissionPipeline";
 import { usePublicFormLoader } from "../features/public-form/hooks/usePublicFormLoader";
@@ -50,6 +49,11 @@ const LazyPublicFormSuccess = lazy(() =>
 const LazyWalletSurface = lazy(() =>
   retryLazyImport(() => import("../components/WalletSurface"), "public-wallet-surface").then((module) => ({
     default: module.WalletSurface,
+  })),
+);
+const LazyLocalRecoveryCenter = lazy(() =>
+  retryLazyImport(() => import("../components/LocalRecoveryCenter"), "public-local-recovery-center").then((module) => ({
+    default: module.LocalRecoveryCenter,
   })),
 );
 const SUCCESS_MASCOT_PRELOAD_ID = "deepsignal-success-mascot-preload";
@@ -851,20 +855,20 @@ export function PublicFormPage() {
           </div>
         </div>
         <div className="metadata-list">
-          <div className="metadata-row">
+          <div className="metadata-row public-nft-gate-row-collection">
             <span>{t("publicNftGateCollectionLabel")}</span>
             <strong>{nftGate.nftGate?.collectionLabel ?? t("publishNftCustomPresetLabel")}</strong>
           </div>
-          <div className="metadata-row">
+          <div className="metadata-row public-nft-gate-row-required">
             <span>{t("publicNftGateRequiredCountLabel")}</span>
             <strong>{nftGate.nftGate?.requiredCount ?? 1}</strong>
           </div>
-          <div className="metadata-row">
+          <div className="metadata-row public-nft-gate-row-owned">
             <span>{t("publicNftGateOwnedCountLabel")}</span>
             <strong>{nftGate.ownedCount}</strong>
           </div>
           {nftGate.nftGate?.structType ? (
-            <div className="metadata-row">
+            <div className="metadata-row public-nft-gate-row-struct">
               <span>{t("publishNftStructTypeLabel")}</span>
               <strong>{nftGate.nftGate.structType}</strong>
             </div>
@@ -1282,7 +1286,9 @@ export function PublicFormPage() {
           onCopyDiagnostics={copyDiagnostics}
         />
       ) : null}
-      <LocalRecoveryCenter formId={form.id} />
+      <Suspense fallback={null}>
+        <LazyLocalRecoveryCenter formId={form.id} />
+      </Suspense>
       {submitError && !failure ? <p className="error-text">{submitError}</p> : null}
       <div className="public-form-actions">
         <div className="public-submit-bar-copy" aria-live="polite">

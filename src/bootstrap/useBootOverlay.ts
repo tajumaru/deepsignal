@@ -15,20 +15,28 @@ export function InitialBootReady({
   onReady,
   routePath,
   workspaceReady = true,
+  reportInteractive = true,
+  reportRouteReady = true,
   children,
 }: {
   onReady: () => void;
   routePath: string;
   workspaceReady?: boolean;
+  reportInteractive?: boolean;
+  reportRouteReady?: boolean;
   children: ReactNode;
 }) {
   useEffect(() => {
     endPerf("app_boot_start", "ok", routePath);
     endPerf("app:render", "ok");
-    markPerfMilestone("route_ready", routePath);
-    markPerfMilestone("route:interactive", routePath);
+    if (reportRouteReady && workspaceReady) {
+      markPerfMilestone("route_ready", routePath);
+    }
+    if (reportInteractive && workspaceReady) {
+      markPerfMilestone("route:interactive", routePath);
+    }
     onReady();
-  }, [onReady, routePath]);
+  }, [onReady, reportInteractive, reportRouteReady, routePath, workspaceReady]);
 
   useEffect(() => {
     if (!workspaceReady) {

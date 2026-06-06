@@ -37,7 +37,7 @@ import { enrichSubmissionWithTriage } from "./signalTriage";
 import { SUI_NETWORK } from "./sui";
 import { getWalrusNetwork } from "./walrusProof";
 import { storage } from "../storage/storageFactory";
-import { getStorageRuntimeStatus } from "../storage/storageFactory";
+import { getStorageRuntimeStatus } from "../storage/storageRuntime";
 import { DEFAULT_ATTACHMENT_MAX_BYTES, ENCRYPTED_INLINE_ATTACHMENT_MAX_BYTES } from "./attachmentLimits";
 import {
   assertEncryptedSubmissionAttachments,
@@ -389,7 +389,7 @@ export function createEmptyAnswer(field: FormField) {
   return "";
 }
 
-export { getStorageRuntimeStatus } from "../storage/storageFactory";
+export { getStorageRuntimeStatus } from "../storage/storageRuntime";
 
 function isProductionProtectedStorageUnavailable(targetStorage: StorageAdapter) {
   if (!import.meta.env.PROD || targetStorage !== storageAdapter) {

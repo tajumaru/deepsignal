@@ -8,7 +8,8 @@ import "../styles/mobile/signal.css";
 import { FormattedAnswerValue } from "../components/FormattedAnswerValue";
 import { SignalMetaRow } from "../components/SignalMetaChip";
 import { useSuiWallet } from "../hooks/useSuiWallet";
-import { normalizeSubmission, storageAdapter } from "../lib/storage";
+import { normalizeSubmission } from "../lib/submissionSchema";
+import { storageAdapter } from "../lib/storageAdapter";
 import { formatDate } from "../lib/utils";
 import {
   listSubmittedHistory,

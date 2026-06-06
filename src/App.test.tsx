@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
+import { resetDashboardProjectRestore } from "./lib/dashboardProjectRestore";
 
 const { walrusRuntimeSurfaceSpy, routeFailures } = vi.hoisted(() => ({
   walrusRuntimeSurfaceSpy: vi.fn(),
@@ -98,6 +99,9 @@ describe("App routing", () => {
     walrusRuntimeSurfaceSpy.mockClear();
     routeFailures.explore = null;
     routeFailures.admin = null;
+    resetDashboardProjectRestore();
+    window.__DEEPSIGNAL_PERF_MILESTONES__ = [];
+    window.__DEEPSIGNAL_PERF__ = {};
     window.sessionStorage.clear();
     window.localStorage.clear();
   });
@@ -146,6 +150,20 @@ describe("App routing", () => {
     await waitFor(() => expect(screen.getByRole("heading", { name: "Preparing wallet session..." })).toBeInTheDocument());
     expect(screen.getByTestId("app-shell")).toHaveAttribute("data-chrome", "full");
     expect(screen.getByTestId("app-shell")).toHaveAttribute("data-wallet-ui", "enabled");
+  });
+
+  it("does not mark the dashboard interactive while the degraded shell is standing in for workspace boot", async () => {
+    render(
+      <MemoryRouter initialEntries={["/dashboard"]}>
+        <App />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Preparing wallet session..." })).toBeInTheDocument());
+
+    const milestoneNames = (window.__DEEPSIGNAL_PERF_MILESTONES__ ?? []).map((entry) => entry.name);
+    expect(milestoneNames).not.toContain("route_ready");
+    expect(milestoneNames).not.toContain("route:interactive");
   });
 
   it("renders the Create Signal route inside the wallet-enabled workspace chrome", async () => {

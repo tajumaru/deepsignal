@@ -1,4 +1,4 @@
-import { ConnectButton } from "@mysten/dapp-kit";
+import { ConnectModal } from "@mysten/dapp-kit";
 import { WalletStatus } from "./WalletStatus";
 import type { SuiWalletState } from "../../hooks/useSuiWallet";
 
@@ -7,6 +7,8 @@ interface ConnectWalletButtonProps {
   compact?: boolean;
   onConnectedPress?: () => void;
   connectedMenuOpen?: boolean;
+  connectModalOpen?: boolean;
+  onConnectModalOpenChange?: (open: boolean) => void;
 }
 
 export function ConnectWalletButton({
@@ -14,6 +16,8 @@ export function ConnectWalletButton({
   compact = false,
   onConnectedPress,
   connectedMenuOpen = false,
+  connectModalOpen,
+  onConnectModalOpenChange,
 }: ConnectWalletButtonProps) {
   if (wallet.status === "connected") {
     return (
@@ -44,5 +48,15 @@ export function ConnectWalletButton({
     );
   }
 
-  return <ConnectButton className="wallet-connect-trigger" />;
+  return (
+    <ConnectModal
+      open={connectModalOpen ?? false}
+      onOpenChange={(open) => onConnectModalOpenChange?.(open)}
+      trigger={
+        <button type="button" className="wallet-connect-trigger">
+          Connect Wallet
+        </button>
+      }
+    />
+  );
 }

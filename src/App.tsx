@@ -1,7 +1,8 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useLocation } from "react-router-dom";
+import { retryLazyImport } from "./lib/lazyRetry";
 import { InitialBootReady, useBootOverlay } from "./bootstrap/useBootOverlay";
-import { DashboardDegradedShell } from "./components/DashboardDegradedShell";
+import { DashboardFallbackShell } from "./components/DashboardFallbackShell";
 import { BuildUpdateBanner } from "./components/system/BuildUpdateBanner";
 import {
   getMixedBuildStatus,
@@ -14,9 +15,7 @@ import {
   useDashboardProjectRestore,
   useDashboardProjectRestoreSnapshot,
 } from "./lib/dashboardProjectRestore";
-import { retryLazyImport } from "./lib/lazyRetry";
-import { getBrowserCapabilitiesSnapshot, logRouteLifecycle, setDeepSignalDebugReadiness } from "./lib/routeDiagnostics";
-import { scheduleIdleTask } from "./lib/scheduleIdleTask";
+import { logRouteLifecycle } from "./lib/routeDiagnostics";
 import { LandingPage } from "./pages/LandingPage";
 import { AppRoutes } from "./routes/AppRoutes";
 import { createAppRouteComponents, type AppRouteComponents } from "./routes/appRouteComponents";
@@ -40,121 +39,43 @@ const PublicAppShell = lazy(() =>
     default: module.PublicAppShell,
   })),
 );
-
-function prefetchExploreRoute() {
-  void retryLazyImport(() => import("./pages/ExploreSignalsPage"), "prefetch-route-explore").catch(() => undefined);
-}
-
-function prefetchInboxWorkspaceRoute() {
-  void Promise.allSettled([
-    retryLazyImport(() => import("./pages/AdminDashboardPage"), "prefetch-route-admin-dashboard"),
-    import("./components/AppShell"),
-    import("./lib/projectRegistry"),
-    import("./storage/storageFactory"),
-  ]);
-}
-
-function shouldPrefetchAdminWorkspace(pathname: string) {
-  if (typeof window === "undefined") {
-    return false;
-  }
-  const capabilities = getBrowserCapabilitiesSnapshot();
-  const mobileSafari = Boolean(capabilities.mobileSafari);
-  const isDesktopViewport = window.matchMedia?.("(min-width: 901px)").matches ?? true;
-  const routeBlocksPrefetch =
-    pathname === "/create" ||
-    pathname === "/compose" ||
-    pathname === "/explore" ||
-    pathname === "/signals" ||
-    pathname.startsWith("/f/");
-  if (mobileSafari || routeBlocksPrefetch) {
-    return false;
-  }
-  return isDesktopViewport && document.visibilityState === "visible";
-}
+const AppBootRuntime = lazy(() =>
+  import("./AppBootRuntime").then((module) => ({
+    default: module.AppBootRuntime,
+  })),
+);
+const WorkspaceRouteRuntimeEffects = lazy(() =>
+  import("./AppBootRuntime").then((module) => ({
+    default: module.WorkspaceRouteRuntimeEffects,
+  })),
+);
 
 function RouteReady({
   children,
   routePath,
   onReady,
+  reportInteractive = true,
+  reportRouteReady = true,
   workspaceReady = true,
 }: {
   children: ReactNode;
   routePath: string;
   onReady: () => void;
+  reportInteractive?: boolean;
+  reportRouteReady?: boolean;
   workspaceReady?: boolean;
 }) {
   return (
-    <InitialBootReady routePath={routePath} onReady={onReady} workspaceReady={workspaceReady}>
+    <InitialBootReady
+      routePath={routePath}
+      onReady={onReady}
+      reportInteractive={reportInteractive}
+      reportRouteReady={reportRouteReady}
+      workspaceReady={workspaceReady}
+    >
       {children}
     </InitialBootReady>
   );
-}
-
-function AppRouteRuntimeEffects({ enabled, routePath }: { enabled: boolean; routePath: string }) {
-  const dashboardProjectRestore = useDashboardProjectRestoreSnapshot();
-  const dashboardShellRoute = routePath === "/dashboard" || routePath.startsWith("/dashboard?");
-
-  useEffect(() => {
-    if (!enabled) {
-      setDeepSignalDebugReadiness({
-        routeProviderGuard: "deferred",
-        workspaceProjectProvider: "deferred",
-        storageProvider: "deferred",
-        storageNotice: null,
-      });
-      return undefined;
-    }
-
-    let cancelled = false;
-    void Promise.all([import("./lib/projectRegistry"), import("./storage/storageFactory")])
-      .then(([projectRegistry, storageFactory]) => {
-        if (cancelled) {
-          return;
-        }
-        const storageRuntime = storageFactory.getStorageRuntimeStatus();
-        const workspaceProjectProvider =
-          dashboardShellRoute &&
-          (dashboardProjectRestore.state === "unknown" || dashboardProjectRestore.state === "restoring")
-            ? "restoring"
-            : projectRegistry.getSelectedProjectId()
-              ? "selected"
-              : "empty";
-        setDeepSignalDebugReadiness({
-          routeProviderGuard: "ready",
-          workspaceProjectProvider,
-          storageProvider: storageRuntime.mode,
-          storageNotice: storageRuntime.notice,
-        });
-      })
-      .catch((error) => {
-        console.warn("[app] route runtime diagnostics failed to start", error);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [dashboardProjectRestore.state, dashboardShellRoute, enabled]);
-
-  useEffect(() => {
-    if (!enabled) {
-      return undefined;
-    }
-
-    function retryPendingInboxSync() {
-      void import("./storage/storageFactory")
-        .then(({ retryPendingSubmissionSync }) => retryPendingSubmissionSync({ allowWalletPrompt: false }))
-        .catch((error) => {
-          console.warn("[app] pending inbox sync retry failed to start", error);
-        });
-    }
-
-    retryPendingInboxSync();
-    window.addEventListener("online", retryPendingInboxSync);
-    return () => window.removeEventListener("online", retryPendingInboxSync);
-  }, [enabled]);
-
-  return null;
 }
 
 function PublicRouteSurface({
@@ -178,15 +99,20 @@ function PublicRouteSurface({
 }) {
   const mountIdRef = useRef(`public-route-${Math.round(performance.now())}`);
   const renderCountRef = useRef(0);
+  const initialRouteLifecycleRef = useRef({
+    routePath,
+    walletSessionPhase: walletSession.phase,
+    walletProviderMounted: walletSession.providerMounted,
+  });
   renderCountRef.current += 1;
 
   useEffect(() => {
     logRouteLifecycle("public-route:remount", {
       mountId: mountIdRef.current,
-      routePath,
+      routePath: initialRouteLifecycleRef.current.routePath,
       renderCount: renderCountRef.current,
-      walletSessionPhase: walletSession.phase,
-      walletProviderMounted: walletSession.providerMounted,
+      walletSessionPhase: initialRouteLifecycleRef.current.walletSessionPhase,
+      walletProviderMounted: initialRouteLifecycleRef.current.walletProviderMounted,
     });
   }, []);
 
@@ -263,8 +189,14 @@ function PrivateRouteSurface({
 }) {
   const shellFallback =
     routeIsDashboardShell ? (
-      <RouteReady routePath={routePath} onReady={onRouteReady} workspaceReady={false}>
-        <DashboardDegradedShell onRetryImports={onRetryRoute} routePath={routePath} />
+      <RouteReady
+        routePath={routePath}
+        onReady={onRouteReady}
+        reportInteractive={false}
+        reportRouteReady={false}
+        workspaceReady={false}
+      >
+        <DashboardFallbackShell onRetryImports={onRetryRoute} routePath={routePath} />
       </RouteReady>
     ) : (
       <DelayedWorkspaceRestoreFallback />
@@ -279,7 +211,9 @@ function PrivateRouteSurface({
       <Suspense fallback={shellFallback}>
         <AppShell walletSessionPhase={walletSessionPhase} walletUiEnabled={routeShowsWalletUi} chrome="full">
           <BuildUpdateBanner />
-          <AppRouteRuntimeEffects enabled={routeNeedsWorkspaceBoot} routePath={routePath} />
+          <Suspense fallback={null}>
+            <WorkspaceRouteRuntimeEffects enabled={routeNeedsWorkspaceBoot} routePath={routePath} />
+          </Suspense>
           {mixedBuildStatus.detected ? (
             <RouteReady routePath={routePath} onReady={onRouteReady}>
               <MixedBuildRecoveryScreen observed={mixedBuildStatus.observed} />
@@ -333,6 +267,26 @@ export default function App() {
   const dashboardRestoreEnabled = location.pathname === "/dashboard" && dashboardWalletSettled;
   const dashboardProjectRestore = useDashboardProjectRestore(routePath, dashboardRestoreEnabled);
   const workspaceReadyForRoute = location.pathname === "/dashboard" ? isDashboardWorkspaceReady(dashboardProjectRestore) : true;
+  const runtimeNode = (
+    <Suspense fallback={null}>
+      <AppBootRuntime
+        dashboardGateCurrentProjectId={dashboardProjectRestore.currentProjectId}
+        dashboardGateSource={dashboardProjectRestore.source}
+        dashboardGateState={dashboardProjectRestore.state}
+        dashboardGateWalletRuntime={dashboardProjectRestore.walletRuntime}
+        dashboardSnapshotWalletRuntime={dashboardProjectRestore.walletRuntime}
+        dashboardWalletSettled={dashboardWalletSettled}
+        pathname={location.pathname}
+        routePath={routePath}
+        routeShowsWalletUi={routeShowsWalletUi}
+        routeUsesPublicChrome={routeUsesPublicChrome}
+        walletProviderLoading={walletSession.providerLoading}
+        walletProviderMounted={walletSession.providerMounted}
+        walletSessionPhase={walletSession.phase}
+        workspaceReadyForRoute={workspaceReadyForRoute}
+      />
+    </Suspense>
+  );
 
   useBootOverlay({
     bootDismissed,
@@ -355,114 +309,62 @@ export default function App() {
     }
   }, [location.hash, location.pathname, location.search]);
 
-  useEffect(() => {
-    logRouteLifecycle("route:enter", {
-      routePath: `${location.pathname}${location.search}${location.hash}`,
-      pathname: location.pathname,
-      hash: location.hash || "",
-      browserPathname: typeof window === "undefined" ? location.pathname : window.location.pathname,
-      browserHash: typeof window === "undefined" ? location.hash : window.location.hash,
-      walletSurface: routeShowsWalletUi,
-      publicChrome: routeUsesPublicChrome,
-    });
-    return () => {
-      logRouteLifecycle("route:leave", {
-        routePath: `${location.pathname}${location.search}${location.hash}`,
-      });
-    };
-  }, [location.hash, location.pathname, location.search, routeShowsWalletUi, routeUsesPublicChrome]);
-
-  useEffect(() => {
-    setDeepSignalDebugReadiness({
-      workspaceReady: workspaceReadyForRoute,
-    });
-  }, [workspaceReadyForRoute]);
-
-  useEffect(() => {
-    if (location.pathname !== "/dashboard" || dashboardWalletSettled) {
-      return;
-    }
-    logRouteLifecycle("project-restore:blocked-wallet-pending", {
-      routePath,
-      walletRuntime: dashboardProjectRestoreSnapshot.walletRuntime,
-      walletProviderPending: !walletSession.providerMounted,
-      walletSessionPhase: walletSession.phase,
-    });
-  }, [
-    dashboardProjectRestoreSnapshot.walletRuntime,
-    dashboardWalletSettled,
-    location.pathname,
-    routePath,
-    walletSession.phase,
-    walletSession.providerMounted,
-  ]);
-
-  useEffect(() => {
-    if (location.pathname !== "/") {
-      return undefined;
-    }
-    return scheduleIdleTask(() => prefetchExploreRoute(), 3500);
-  }, [location.pathname]);
-
-  useEffect(() => {
-    if (
-      routeUsesPublicChrome ||
-      location.pathname === "/admin" ||
-      location.pathname === "/dashboard" ||
-      !shouldPrefetchAdminWorkspace(location.pathname)
-    ) {
-      return undefined;
-    }
-    return scheduleIdleTask(() => prefetchInboxWorkspaceRoute(), location.pathname === "/" ? 1400 : 900);
-  }, [location.pathname, routeUsesPublicChrome]);
-
   if (routeIsLanding) {
     return (
-      <RouteErrorBoundary
-        resetKey={`${location.key}:landing:${routeRetryNonce}`}
-        routePath={routePath}
-        onRetryRoute={() => setRouteRetryNonce((value) => value + 1)}
-      >
-        <BuildUpdateBanner />
-        <RouteReady routePath={routePath} onReady={() => setInitialRouteReady(true)}>
-          <LandingPage />
-        </RouteReady>
-      </RouteErrorBoundary>
+      <>
+        {runtimeNode}
+        <RouteErrorBoundary
+          resetKey={`${location.key}:landing:${routeRetryNonce}`}
+          routePath={routePath}
+          onRetryRoute={() => setRouteRetryNonce((value) => value + 1)}
+        >
+          <BuildUpdateBanner />
+          <RouteReady routePath={routePath} onReady={() => setInitialRouteReady(true)}>
+            <LandingPage />
+          </RouteReady>
+        </RouteErrorBoundary>
+      </>
     );
   }
 
   if (routeUsesPublicChrome) {
     return (
-      <Suspense fallback={<DelayedWorkspaceRestoreFallback />}>
-        <PublicRouteSurface
-          components={publicRouteComponents}
-          locationKey={location.key}
-          mixedBuildStatus={mixedBuildStatus}
-          onRetryRoute={() => setRouteRetryNonce((value) => value + 1)}
-          onRouteReady={() => setInitialRouteReady(true)}
-          routePath={routePath}
-          routeRetryNonce={routeRetryNonce}
-          walletSession={walletSession}
-        />
-      </Suspense>
+      <>
+        {runtimeNode}
+        <Suspense fallback={<DelayedWorkspaceRestoreFallback />}>
+          <PublicRouteSurface
+            components={publicRouteComponents}
+            locationKey={location.key}
+            mixedBuildStatus={mixedBuildStatus}
+            onRetryRoute={() => setRouteRetryNonce((value) => value + 1)}
+            onRouteReady={() => setInitialRouteReady(true)}
+            routePath={routePath}
+            routeRetryNonce={routeRetryNonce}
+            walletSession={walletSession}
+          />
+        </Suspense>
+      </>
     );
   }
 
   const routeSurface = (
-    <PrivateRouteSurface
-      components={appRouteComponents}
-      locationKey={location.key}
-      mixedBuildStatus={mixedBuildStatus}
-      onRetryRoute={() => setRouteRetryNonce((value) => value + 1)}
-      onRouteReady={() => setInitialRouteReady(true)}
-      routeShowsWalletUi={routeShowsWalletUi}
-      routeNeedsWorkspaceBoot={routeNeedsWorkspaceBoot}
-      routeIsDashboardShell={location.pathname === "/dashboard"}
-      routePath={routePath}
-      routeRetryNonce={routeRetryNonce}
-      walletSessionPhase={walletSession.phase}
-      workspaceReady={workspaceReadyForRoute}
-    />
+    <>
+      {runtimeNode}
+      <PrivateRouteSurface
+        components={appRouteComponents}
+        locationKey={location.key}
+        mixedBuildStatus={mixedBuildStatus}
+        onRetryRoute={() => setRouteRetryNonce((value) => value + 1)}
+        onRouteReady={() => setInitialRouteReady(true)}
+        routeShowsWalletUi={routeShowsWalletUi}
+        routeNeedsWorkspaceBoot={routeNeedsWorkspaceBoot}
+        routeIsDashboardShell={location.pathname === "/dashboard"}
+        routePath={routePath}
+        routeRetryNonce={routeRetryNonce}
+        walletSessionPhase={walletSession.phase}
+        workspaceReady={workspaceReadyForRoute}
+      />
+    </>
   );
 
   return routeSurface;

@@ -1,5 +1,5 @@
 import { useI18n } from "../i18n";
-import { getBlobViewerUrl } from "../storage/storageFactory";
+import { getBlobViewerUrl } from "../storage/blobViewer";
 
 interface BlobLinkProps {
   blobId?: string;

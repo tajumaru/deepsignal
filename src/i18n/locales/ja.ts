@@ -163,7 +163,7 @@ export const jaMessages: LocaleMessages = {
     navLab: "\u30b7\u30b0\u30ca\u30eb\u53d7\u4fe1\u7bb1",
     navAccess: "\u30a2\u30af\u30bb\u30b9\u7ba1\u7406",
     navCreateForm: "\u30b7\u30b0\u30ca\u30eb\u4f5c\u6210",
-    buildUpdateAvailableTitle: "\u65b0\u3057\u3044 build \u3092\u5229\u7528\u3067\u304d\u307e\u3059",
+    buildUpdateAvailableTitle: "\u65b0\u3057\u3044\u30d0\u30fc\u30b8\u30e7\u30f3\u3092\u5229\u7528\u3067\u304d\u307e\u3059",
     buildUpdateChunkFailureTitle: "DeepSignal \u306e\u66f4\u65b0\u304c\u5fc5\u8981\u3067\u3059",
     buildUpdateBody:
       "\u6700\u65b0 build \u306b\u66f4\u65b0\u3057\u307e\u3059\u3002\u3053\u306e\u7aef\u672b\u306e\u30ed\u30fc\u30ab\u30eb fallback \u30c7\u30fc\u30bf\u306f\u4fdd\u6301\u3055\u308c\u307e\u3059\u3002",
@@ -176,7 +176,7 @@ export const jaMessages: LocaleMessages = {
     buildUpdateUpdating: "\u66f4\u65b0\u4e2d...",
     buildUpdateSecureAction: "DeepSignal \u3092\u5b89\u5168\u306b\u66f4\u65b0",
     buildUpdatePreparing: "\u66f4\u65b0\u3092\u6e96\u5099\u4e2d...",
-    buildUpdatePreservation: "\u30ed\u30fc\u30ab\u30eb\u30c7\u30fc\u30bf\u306f\u4fdd\u6301\u3055\u308c\u307e\u3059",
+    buildUpdatePreservation: "\u30ed\u30fc\u30ab\u30eb\u30c7\u30fc\u30bf\u306f\u305d\u306e\u307e\u307e\u4fdd\u6301\u3055\u308c\u307e\u3059",
     buildUpdateDismiss: "\u9589\u3058\u308b",
     composerHomeEyebrow: "Signal Studio",
     composerHomeTitle: "\u30b7\u30b0\u30ca\u30eb\u3092\u4f5c\u6210\u30fb\u7ba1\u7406\u3059\u308b",

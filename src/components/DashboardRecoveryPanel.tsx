@@ -1,7 +1,12 @@
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, lazy, useEffect, useMemo, useState } from "react";
 import { buildInfo } from "../lib/buildInfo";
 import { formatRouteLifecycleDiagnostics, logRouteLifecycle } from "../lib/routeDiagnostics";
-import { LocalRecoveryCenter } from "./LocalRecoveryCenter";
+
+const LazyLocalRecoveryCenter = lazy(() =>
+  import("./LocalRecoveryCenter").then((module) => ({
+    default: module.LocalRecoveryCenter,
+  })),
+);
 
 type DashboardFailedImport = {
   at?: number;
@@ -127,7 +132,9 @@ export function DashboardRecoveryPanel({
             {copiedDiagnostics ? "Copied diagnostics" : "Copy diagnostics"}
           </button>
         </div>
-        <LocalRecoveryCenter />
+        <Suspense fallback={null}>
+          <LazyLocalRecoveryCenter />
+        </Suspense>
       </section>
     </main>
   );

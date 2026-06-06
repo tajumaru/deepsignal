@@ -1,5 +1,5 @@
-import { getBlobViewerUrl } from "../storage/storageFactory";
-import { getSystemSignalDiagnostics, isSystemSignal } from "../services/systemSignalReporter";
+import { getBlobViewerUrl } from "../storage/blobViewer";
+import { getSystemSignalDiagnostics, isSystemSignal } from "../services/systemSignalReporterHelpers";
 import { flattenAnswer } from "./utils";
 import type { FormSchema, Submission } from "../types";
 

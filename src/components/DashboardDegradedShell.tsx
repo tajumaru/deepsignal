@@ -1,8 +1,13 @@
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, lazy, useEffect, useMemo, useState } from "react";
 import { buildInfo } from "../lib/buildInfo";
 import { useDashboardProjectRestoreSnapshot } from "../lib/dashboardProjectRestore";
 import { formatRouteLifecycleDiagnostics, logRouteLifecycle } from "../lib/routeDiagnostics";
-import { LocalRecoveryCenter } from "./LocalRecoveryCenter";
+
+const LazyLocalRecoveryCenter = lazy(() =>
+  import("./LocalRecoveryCenter").then((module) => ({
+    default: module.LocalRecoveryCenter,
+  })),
+);
 
 function canClearAssetCache() {
   return typeof window !== "undefined" && "caches" in window;
@@ -135,7 +140,9 @@ export function DashboardDegradedShell({
           </button>
         </div>
         {cacheStatus ? <p className="muted">{cacheStatus}</p> : null}
-        <LocalRecoveryCenter />
+        <Suspense fallback={null}>
+          <LazyLocalRecoveryCenter />
+        </Suspense>
       </section>
     </main>
   );

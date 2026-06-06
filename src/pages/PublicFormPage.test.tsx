@@ -8,7 +8,7 @@ import type { FormSchema } from "../types";
 import { PRIME_MACHIN_STRUCT_TYPE } from "../lib/formAccess";
 import type { ZkLoginSession } from "../lib/zkloginSession";
 import { listPendingSubmissions } from "../storage/submissionDelivery";
-import { SYSTEM_SIGNAL_FORM_ID } from "../services/systemSignalReporter";
+import { SYSTEM_SIGNAL_FORM_ID } from "../services/systemSignalReporterHelpers";
 
 const SUBMIT_SIGNAL_BUTTON = /^(Hold to send signal|Signal preserved locally|Signal sent)/;
 
@@ -153,8 +153,8 @@ vi.mock("../lib/walrus", () => ({
   waitForWalrusMutationRuntimeReady: vi.fn(async () => false),
 }));
 
-vi.mock("../lib/storage", async () => {
-  const actual = await vi.importActual<typeof import("../lib/storage")>("../lib/storage");
+vi.mock("../lib/storageSeal", async () => {
+  const actual = await vi.importActual<typeof import("../lib/storageSeal")>("../lib/storageSeal");
   return {
     ...actual,
     storageAdapter: {

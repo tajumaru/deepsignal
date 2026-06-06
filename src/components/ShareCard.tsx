@@ -174,7 +174,7 @@ export function ShareCard({ formId, blobId, createdAt, manifestBlobId }: ShareCa
     if (!manifestBlobId) {
       return;
     }
-    const { readJsonBlobOrThrow, readManifestWithForm } = await import("../lib/walrus");
+    const { readJsonBlobOrThrow, readManifestWithForm } = await import("../lib/walrus/read");
     const carrier = await readManifestWithForm(manifestBlobId);
     if (carrier.manifest.formId !== formId) {
       throw new Error(t("shareLinkMismatchCopyBlocked"));

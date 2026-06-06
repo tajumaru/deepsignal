@@ -1,4 +1,4 @@
-import { SYSTEM_SIGNAL_FORM_ID } from "../services/systemSignalReporter";
+import { SYSTEM_SIGNAL_FORM_ID } from "../services/systemSignalReporterHelpers";
 import { localStorageAdapter } from "../storage/localStorageAdapter";
 import type { SystemDiagnostic } from "./types";
 import type {

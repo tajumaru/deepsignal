@@ -5,7 +5,7 @@ import { measurePerf } from "../../../lib/perf";
 import { getRepublishFormPath } from "../../../lib/publicLinks";
 import { verifyPublicRouteAssets } from "../../../lib/publicRouteAssets";
 import { localStorageAdapter } from "../../../storage/localStorageAdapter";
-import { reportSystemError } from "../../../services/systemSignalReporter";
+import { reportSystemError } from "../../../services/systemSignalReporterClient";
 import type { FormSchema } from "../../../types";
 import type { PublicAnswers } from "../types";
 
@@ -274,11 +274,11 @@ export function usePublicFormLoader({
         if (manifestBlobId) {
           try {
             nextForm = await measurePerf("public-form:manifest-restore", async () => {
-              const {
-                getWalrusMutationRuntimeStatus,
-                readJsonBlobOrThrow,
-                readManifestWithForm,
-              } = await import("../../../lib/walrus");
+              const [{ getWalrusMutationRuntimeStatus }, { readJsonBlobOrThrow, readManifestWithForm }] =
+                await Promise.all([
+                  import("../../../storage/walrusAdapter"),
+                  import("../../../lib/walrus/read"),
+                ]);
               const walrusRuntime = getWalrusMutationRuntimeStatus();
               if (!walrusRuntime.aggregatorConfigured) {
                 throw new SharedFormRestoreError(

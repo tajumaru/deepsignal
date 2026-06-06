@@ -37,17 +37,60 @@
   }
 
   .public-nft-gate-screen {
-    gap: 0.85rem;
-    padding: 0.9rem;
+    gap: 0.72rem;
+    padding: 0.82rem;
   }
 
   .public-nft-gate-screen .metadata-list {
-    grid-template-columns: 1fr;
-    gap: 0.5rem;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.42rem;
   }
 
   .public-nft-gate-screen .metadata-row {
-    padding: 0.68rem 0.75rem;
+    gap: 0.18rem;
+    padding: 0.58rem 0.65rem;
+    border-radius: 0.82rem;
+  }
+
+  .public-nft-gate-screen .public-nft-gate-row-collection,
+  .public-nft-gate-screen .public-nft-gate-row-struct {
+    grid-column: 1 / -1;
+  }
+
+  .public-nft-gate-screen .metadata-row span {
+    font-size: 0.64rem;
+    letter-spacing: 0.07em;
+  }
+
+  .public-nft-gate-screen .metadata-row strong {
+    font-size: 0.84rem;
+    line-height: 1.28;
+  }
+
+  .public-nft-gate-screen .public-identity-choice-copy .muted,
+  .public-nft-gate-screen > .muted,
+  .public-nft-gate-screen > .error-text {
+    font-size: 0.82rem;
+    line-height: 1.4;
+  }
+
+  .public-nft-gate-screen .public-identity-choice-wallet-shell [data-dapp-kit] button,
+  .public-nft-gate-screen .public-identity-choice-wallet-shell button[data-dapp-kit],
+  .public-nft-gate-screen .public-identity-choice-wallet-shell .wallet-sync-button {
+    min-height: 2.6rem;
+    border-radius: 0.82rem;
+  }
+
+  .public-nft-gate-screen .wallet-sync-copy strong {
+    font-size: 0.82rem;
+  }
+
+  .public-nft-gate-screen .wallet-sync-copy span {
+    font-size: 0.58rem;
+  }
+
+  .public-nft-gate-screen details.answer-card {
+    padding: 0.62rem 0.72rem;
   }
 
   .public-identity-choice-hero,
@@ -367,12 +410,45 @@
   }
 
   .public-nft-gate-screen {
-    gap: 0.78rem;
-    padding: 0.8rem;
+    gap: 0.68rem;
+    padding: 0.72rem;
   }
 
   .public-nft-gate-screen .public-identity-choice-copy h1 {
-    font-size: 1.35rem;
+    font-size: 1.28rem;
+  }
+
+  .public-nft-gate-screen .metadata-list {
+    gap: 0.36rem;
+  }
+
+  .public-nft-gate-screen .metadata-row {
+    padding: 0.54rem 0.6rem;
+    border-radius: 0.76rem;
+  }
+
+  .public-nft-gate-screen .metadata-row span {
+    font-size: 0.61rem;
+  }
+
+  .public-nft-gate-screen .metadata-row strong {
+    font-size: 0.8rem;
+    line-height: 1.24;
+  }
+
+  .public-nft-gate-screen .public-identity-choice-wallet-shell [data-dapp-kit] button,
+  .public-nft-gate-screen .public-identity-choice-wallet-shell button[data-dapp-kit],
+  .public-nft-gate-screen .public-identity-choice-wallet-shell .wallet-sync-button {
+    padding-inline: 0.72rem;
+    min-height: 2.45rem;
+  }
+
+  .public-nft-gate-screen .wallet-sync-copy strong {
+    font-size: 0.78rem;
+  }
+
+  .public-nft-gate-screen .wallet-sync-copy span {
+    font-size: 0.55rem;
   }
 
   .public-identity-choice-copy h1 {

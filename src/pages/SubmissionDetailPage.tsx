@@ -11,7 +11,8 @@ import { useAccessControl } from "../hooks/useAccessControl";
 import { useSuiWallet } from "../hooks/useSuiWallet";
 import { getReviewAccessState } from "../lib/adminAccess";
 import { useI18n } from "../i18n";
-import { normalizeSubmission, storageAdapter } from "../lib/storage";
+import { normalizeSubmission } from "../lib/submissionSchema";
+import { storageAdapter } from "../lib/storageAdapter";
 import type { FormSchema } from "../types";
 
 export function SubmissionDetailPage() {

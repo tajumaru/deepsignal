@@ -1,6 +1,6 @@
 import { createMetadataDigest } from "../../lib/projectRegistry";
 import { isLocalFallbackBlob } from "../../lib/proof";
-import { storageAdapter } from "../../lib/storage";
+import { storageAdapter } from "../../lib/storageAdapter";
 import { verifyWalrusBlob } from "../../lib/walrusProof";
 import { saveFormMetadataOverlay } from "../../storage/formMetadataOverlay";
 import type { PreparedPublishForm, ProjectOption, Translate } from "./types";
@@ -71,7 +71,7 @@ async function verifyPublishedManifest(form: PreparedPublishForm) {
   if (!form.manifestBlobId || isLocalFallbackBlob(form.manifestBlobId)) {
     return;
   }
-  const { readJsonBlobOrThrow, readManifestWithForm } = await import("../../lib/walrus");
+  const { readJsonBlobOrThrow, readManifestWithForm } = await import("../../lib/walrus/read");
   const manifestStatus = await verifyWalrusBlob(form.manifestBlobId);
   if (manifestStatus !== "verified") {
     throw new Error(`Published manifest verification failed: Walrus returned ${manifestStatus} for ${form.manifestBlobId}.`);

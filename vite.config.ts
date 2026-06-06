@@ -174,8 +174,9 @@ function buildManifestPlugin(args: {
 
       const collectChunkAssets = (
         chunkFileName: string,
-        options: { includeDynamicImports?: boolean } = {},
+        options: { includeDynamicImports?: boolean; recurseDynamicImports?: boolean } = {},
         seen = new Set<string>(),
+        isRoot = true,
       ) => {
         if (seen.has(chunkFileName)) {
           return [];
@@ -190,7 +191,11 @@ function buildManifestPlugin(args: {
         const viteMetadata = (chunk as import("rollup").OutputChunk & {
           viteMetadata?: { importedCss?: Set<string> };
         }).viteMetadata;
-        const dynamicImports = options.includeDynamicImports === false ? [] : chunk.dynamicImports;
+        const includeDynamicImports =
+          options.includeDynamicImports === false
+            ? false
+            : isRoot || options.recurseDynamicImports !== false;
+        const dynamicImports = includeDynamicImports ? chunk.dynamicImports : [];
         const directAssets = [
           chunkFileName,
           ...chunk.imports.map((fileName) => `./${fileName}`),
@@ -198,11 +203,21 @@ function buildManifestPlugin(args: {
           ...(viteMetadata?.importedCss ? Array.from(viteMetadata.importedCss).map((fileName) => `./${fileName}`) : []),
         ].filter((assetPath) => bundleAssetNames.has(assetPath));
 
-        const nestedAssets = [...chunk.imports, ...dynamicImports].flatMap((fileName) =>
-          collectChunkAssets(`./${fileName}`, options, seen),
+        const nestedImportAssets = chunk.imports.flatMap((fileName) =>
+          collectChunkAssets(`./${fileName}`, options, seen, false),
+        );
+        const nestedDynamicAssets = dynamicImports.flatMap((fileName) =>
+          collectChunkAssets(
+            `./${fileName}`,
+            options.recurseDynamicImports === false
+              ? { ...options, includeDynamicImports: false, recurseDynamicImports: false }
+              : options,
+            seen,
+            false,
+          ),
         );
 
-        return Array.from(new Set([...directAssets, ...nestedAssets]));
+        return Array.from(new Set([...directAssets, ...nestedImportAssets, ...nestedDynamicAssets]));
       };
 
       const routeAssets = Object.entries(routeChunkMatchers).reduce<Record<RouteKey, string[]>>((accumulator, [key, matcher]) => {
@@ -210,7 +225,9 @@ function buildManifestPlugin(args: {
         const routeChunk =
           chunks.find((entry) => matcher.test((entry.facadeModuleId ?? "").replace(/\\/g, "/"))) ??
           chunks.find((entry) => entry.fileName.split("/").pop()?.startsWith(`${routeChunkFilePrefixes[routeKey]}-`));
-        const routeChunkAssets = routeChunk ? collectChunkAssets(`./${routeChunk.fileName}`) : [];
+        const routeChunkAssets = routeChunk
+          ? collectChunkAssets(`./${routeChunk.fileName}`, { recurseDynamicImports: false })
+          : [];
         accumulator[routeKey] = Array.from(
           new Set([
             ...(entryChunk ? collectChunkAssets(`./${entryChunk.fileName}`, { includeDynamicImports: false }) : []),
@@ -275,6 +292,7 @@ function buildManifestPlugin(args: {
       const distDir = join(process.cwd(), "dist");
       const assetsDir = join(distDir, "assets");
       const manifestPath = join(process.cwd(), "dist", "build.json");
+      const indexHtmlPath = join(distDir, "index.html");
       if (!existsSync(manifestPath)) {
         return;
       }
@@ -393,6 +411,14 @@ function buildManifestPlugin(args: {
         );
       }
       writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+
+      if (existsSync(indexHtmlPath)) {
+        const sanitizedIndexHtml = readFileSync(indexHtmlPath, "utf8").replace(
+          /^\s*<link rel="modulepreload" crossorigin href="\.\/assets\/(?:mysten-(?:sui|wallet|walrus|seal)|workspace-core)-[^"]+">\r?\n/gm,
+          "",
+        );
+        writeFileSync(indexHtmlPath, sanitizedIndexHtml);
+      }
     },
   };
 }
@@ -861,6 +887,7 @@ const packageMetadata = JSON.parse(readFileSync(new URL("./package.json", import
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
+  const analyzeBundle = String(process.env.ANALYZE || env.ANALYZE || "").toLowerCase() === "true";
   const appVersion = process.env.VITE_APP_VERSION || env.VITE_APP_VERSION || packageMetadata.version || "0.0.0";
   const buildTime = process.env.VITE_BUILD_TIME || env.VITE_BUILD_TIME || formatBuildTime();
   const gitHash = process.env.VITE_GIT_HASH || env.VITE_GIT_HASH || getGitHash();
@@ -923,6 +950,74 @@ export default defineConfig(({ mode }) => {
       : {}),
   };
 
+  const manualChunkName = (id: string) => {
+    const normalizedId = id.replace(/\\/g, "/");
+
+    if (!normalizedId.includes("node_modules")) {
+      // Keep application source modules in Rollup's default graph so route-level
+      // lazy imports can be split without forcing cross-chunk TDZ hazards between
+      // boot/runtime modules such as shared-core, public-core, and workspace-core.
+      return undefined;
+    }
+
+    if (normalizedId.includes("/qrcode/")) {
+      return "qrcode";
+    }
+    if (normalizedId.includes("/@tiptap/") || normalizedId.includes("/prosemirror-")) {
+      return "editor";
+    }
+    if (
+      normalizedId.includes("/@mysten/dapp-kit/") ||
+      normalizedId.includes("/@mysten/wallet-standard/") ||
+      normalizedId.includes("/@wallet-standard/") ||
+      normalizedId.includes("/window-wallet-core/") ||
+      normalizedId.includes("/slush-wallet/") ||
+      normalizedId.includes("/@radix-ui/") ||
+      normalizedId.includes("/react-remove-scroll") ||
+      normalizedId.includes("/react-style-singleton/") ||
+      normalizedId.includes("/use-sidecar/") ||
+      normalizedId.includes("/use-callback-ref/") ||
+      normalizedId.includes("/detect-node-es/") ||
+      normalizedId.includes("/aria-hidden/") ||
+      normalizedId.includes("/get-nonce/") ||
+      normalizedId.includes("/jose/")
+    ) {
+      return "mysten-wallet";
+    }
+    if (normalizedId.includes("/@mysten/walrus")) {
+      return "mysten-walrus";
+    }
+    if (normalizedId.includes("/@mysten/seal/")) {
+      return "mysten-seal";
+    }
+    if (normalizedId.includes("/@noble/curves/")) {
+      return "noble-curves";
+    }
+    if (normalizedId.includes("/@noble/hashes/")) {
+      return "noble-hashes";
+    }
+    if (normalizedId.includes("/@scure/")) {
+      return "scure";
+    }
+    if (normalizedId.includes("/@mysten/sui/")) {
+      return "mysten-sui";
+    }
+    if (normalizedId.includes("/@tanstack/")) {
+      return "tanstack";
+    }
+    if (
+      normalizedId.includes("/react-router/") ||
+      normalizedId.includes("/react-router-dom/") ||
+      normalizedId.includes("/@remix-run/router/")
+    ) {
+      return "router";
+    }
+    if (/\/node_modules\/(react|react-dom|scheduler)\//.test(normalizedId)) {
+      return "react-vendor";
+    }
+    return undefined;
+  };
+
   return {
     base: "./",
     assetsInclude: ["**/*.wasm"],
@@ -949,7 +1044,7 @@ export default defineConfig(({ mode }) => {
         appEnvironment,
       }),
       moduleEntryRetryPlugin({ appVersion, buildTime, gitHash }),
-      process.env.ANALYZE === "true"
+      analyzeBundle
         ? visualizer({
             emitFile: true,
             filename: "bundle-analysis.html",
@@ -964,7 +1059,10 @@ export default defineConfig(({ mode }) => {
         resolveDependencies(_, deps) {
           return deps.filter((dependency) => {
             const normalizedDependency = dependency.replace(/\\/g, "/");
-            return !/assets\/mysten-(sui|wallet|walrus)-[^/]+\.(js|css)$/.test(normalizedDependency);
+            return !(
+              /assets\/mysten-(sui|wallet|walrus|seal)-[^/]+\.(js|css)$/.test(normalizedDependency) ||
+              /assets\/workspace-core-[^/]+\.(js|css)$/.test(normalizedDependency)
+            );
           });
         },
       },
@@ -979,68 +1077,7 @@ export default defineConfig(({ mode }) => {
             }
             return "assets/[name]-[hash][extname]";
           },
-          manualChunks(id) {
-            const normalizedId = id.replace(/\\/g, "/");
-            if (!normalizedId.includes("node_modules")) {
-              return undefined;
-            }
-            if (normalizedId.includes("/qrcode/")) {
-              return "qrcode";
-            }
-            if (normalizedId.includes("/@tiptap/") || normalizedId.includes("/prosemirror-")) {
-              return "editor";
-            }
-            if (
-              normalizedId.includes("/@mysten/dapp-kit/") ||
-              normalizedId.includes("/@mysten/wallet-standard/") ||
-              normalizedId.includes("/@wallet-standard/") ||
-              normalizedId.includes("/window-wallet-core/") ||
-              normalizedId.includes("/slush-wallet/") ||
-              normalizedId.includes("/@radix-ui/") ||
-              normalizedId.includes("/react-remove-scroll") ||
-              normalizedId.includes("/react-style-singleton/") ||
-              normalizedId.includes("/use-sidecar/") ||
-              normalizedId.includes("/use-callback-ref/") ||
-              normalizedId.includes("/detect-node-es/") ||
-              normalizedId.includes("/aria-hidden/") ||
-              normalizedId.includes("/get-nonce/") ||
-              normalizedId.includes("/jose/")
-            ) {
-              return "mysten-wallet";
-            }
-            if (normalizedId.includes("/@mysten/walrus")) {
-              return "mysten-walrus";
-            }
-            if (normalizedId.includes("/@mysten/seal/")) {
-              return "mysten-seal";
-            }
-            if (normalizedId.includes("/@noble/curves/")) {
-              return "noble-curves";
-            }
-            if (normalizedId.includes("/@noble/hashes/")) {
-              return "noble-hashes";
-            }
-            if (normalizedId.includes("/@scure/")) {
-              return "scure";
-            }
-            if (normalizedId.includes("/@mysten/sui/")) {
-              return "mysten-sui";
-            }
-            if (normalizedId.includes("/@tanstack/")) {
-              return "tanstack";
-            }
-            if (
-              normalizedId.includes("/react-router/") ||
-              normalizedId.includes("/react-router-dom/") ||
-              normalizedId.includes("/@remix-run/router/")
-            ) {
-              return "router";
-            }
-            if (/\/node_modules\/(react|react-dom|scheduler)\//.test(normalizedId)) {
-              return "react-vendor";
-            }
-            return undefined;
-          },
+          manualChunks: manualChunkName,
         },
       },
     },

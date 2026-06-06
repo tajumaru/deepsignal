@@ -1,5 +1,4 @@
 import type { FormSchema } from "../types";
-import { fetchJsonBlob, readManifestWithForm } from "./walrus";
 import { normalizeForm } from "./formSchema";
 import { resolveFormVersion } from "./formVersioning";
 import { readLocalFormVersionSchemas } from "../storage/localFormVersions";
@@ -17,6 +16,7 @@ export async function loadVersionedFormSchemas(form: FormSchema): Promise<Versio
   }
 
   try {
+    const { fetchJsonBlob, readManifestWithForm } = await import("./walrus/read");
     const carrier = await readManifestWithForm(form.manifestBlobId);
     await Promise.all(
       (carrier.manifest.versions ?? []).map(async (entry) => {

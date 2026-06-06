@@ -48,7 +48,8 @@
     right: 0;
     bottom: 0;
     z-index: 1000;
-    display: flex;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     align-items: stretch;
     gap: 0;
     width: 100%;
@@ -71,11 +72,13 @@
 
   .mobile-inbox-bottom-nav a,
   .mobile-inbox-bottom-nav button {
-    flex: 1 1 0;
     position: relative;
     display: grid;
+    box-sizing: border-box;
     justify-items: center;
+    align-content: center;
     gap: 0.1rem;
+    width: 100%;
     min-width: 0;
     min-height: 3.35rem;
     padding: 0.28rem 0.15rem 0.34rem;

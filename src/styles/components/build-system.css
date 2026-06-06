@@ -133,13 +133,14 @@
 .build-update-copy {
   display: grid;
   min-width: 0;
-  gap: 0.22rem;
+  gap: 0.3rem;
 }
 
 .build-update-actions {
   display: inline-flex;
   align-items: center;
   justify-content: flex-end;
+  flex-wrap: wrap;
   gap: 0.65rem;
   flex: 0 0 auto;
 }
@@ -153,11 +154,13 @@
 
 .build-update-banner strong {
   font-size: 0.95rem;
+  line-height: 1.35;
 }
 
 .build-update-banner p {
   color: var(--text-soft);
   font-size: 0.8rem;
+  line-height: 1.45;
 }
 
 .build-update-dismiss-button,
@@ -260,40 +263,52 @@
 }
 
 @media (max-width: 720px) {
+  .build-update-banner {
+    padding-inline:
+      max(0.65rem, env(safe-area-inset-right, 0px))
+      max(0.65rem, env(safe-area-inset-left, 0px));
+  }
+
   .build-update-banner-shell {
     grid-template-columns: minmax(0, 1fr);
     gap: 0.75rem;
-    min-height: 76px;
-    padding: 0.68rem 0.85rem;
+    min-height: auto;
+    padding: 0.78rem 0.85rem;
+    border-radius: 1rem 1rem 0 0;
   }
 
   .build-update-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    width: 100%;
     justify-content: stretch;
   }
 
   .build-update-dismiss-button,
   .build-update-secure-button {
-    flex: 1 1 0;
+    width: 100%;
+    min-height: 2.75rem;
+    padding-inline: 0.8rem;
   }
 }
 
 @media (max-width: 380px) {
   .build-update-banner-shell {
+    gap: 0.65rem;
     padding-inline: 0.72rem;
   }
 
   .build-update-banner strong {
-    font-size: 0.82rem;
+    font-size: 0.86rem;
   }
 
   .build-update-banner p {
-    font-size: 0.72rem;
+    font-size: 0.76rem;
   }
 
-  .build-update-dismiss-button,
-  .build-update-secure-button {
-    gap: 0.36rem;
-    padding-inline: 0.62rem;
+  .build-update-actions {
+    grid-template-columns: 1fr;
+    gap: 0.5rem;
   }
 
   .build-update-button-label {

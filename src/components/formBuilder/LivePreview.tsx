@@ -3,7 +3,7 @@ import { DynamicField } from "../DynamicField";
 import { FormHeaderImage } from "../FormHeaderImage";
 import { RichTextContent } from "../RichText";
 import { useI18n } from "../../i18n";
-import { createEmptyAnswer } from "../../lib/storage";
+import { createEmptyAnswer } from "../../lib/formSchema";
 import { getOrderedFields, getVisibleFieldIds, isFieldRequired } from "../../utils/formLogic";
 import type { FormField, FormHeaderImage as FormHeaderImageConfig, FormHeaderLogo, FormSection } from "../../types";
 

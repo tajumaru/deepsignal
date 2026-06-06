@@ -3,10 +3,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { DecryptDiagnosticError } from "../../../crypto/decryptDiagnostics";
 import type { CapabilityProfile } from "../../../hooks/useAccessControl";
 import { SEAL_PERMISSION_DENIED_MESSAGE } from "../../../lib/seal";
+import { resolveSubmissionAnswers } from "../../../lib/storageSeal";
 import type { FormSchema, Submission } from "../../../types";
 import type { SignalRecord } from "./useSignalInboxData";
 import { usePrivateSignalDecrypt } from "./usePrivateSignalDecrypt";
-import { resolveSubmissionAnswers } from "../../../lib/storage";
 
 type ToastSetter = (toast: { tone: "success" | "error"; message: string } | null) => void;
 
@@ -17,8 +17,8 @@ vi.mock("@mysten/dapp-kit", () => ({
   }),
 }));
 
-vi.mock("../../../lib/storage", async () => {
-  const actual = await vi.importActual<typeof import("../../../lib/storage")>("../../../lib/storage");
+vi.mock("../../../lib/storageSeal", async () => {
+  const actual = await vi.importActual<typeof import("../../../lib/storageSeal")>("../../../lib/storageSeal");
   return {
     ...actual,
     resolveSubmissionAnswers: vi.fn(),

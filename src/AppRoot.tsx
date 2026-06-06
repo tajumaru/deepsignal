@@ -26,6 +26,17 @@ function redirectDirectWorkspacePathToHashRoute() {
   }
 }
 
+function shouldRequestWalletProvidersOnMount() {
+  if (typeof window === "undefined") {
+    return true;
+  }
+  const routePath = window.location.hash?.replace(/^#/, "") || window.location.pathname;
+  if (routePath === "/") {
+    return false;
+  }
+  return !(routePath === "/dashboard" || routePath.startsWith("/dashboard/"));
+}
+
 export function AppProviders({ children }: { children: ReactNode }) {
   useEffect(() => {
     setDeepSignalDebugReadiness({
@@ -38,12 +49,12 @@ export function AppProviders({ children }: { children: ReactNode }) {
     <QueryClientProvider client={queryClient}>
       <I18nProvider>
         <RpcInfrastructureProvider>
-          <>
-            <WalletSurface blockUntilLoaded={false} requestOnMount>
+          <WalletSurface blockUntilLoaded={false} requestOnMount={shouldRequestWalletProvidersOnMount()}>
+            <>
               <WalletSessionBootstrap />
-            </WalletSurface>
-            {children}
-          </>
+              {children}
+            </>
+          </WalletSurface>
         </RpcInfrastructureProvider>
       </I18nProvider>
     </QueryClientProvider>
