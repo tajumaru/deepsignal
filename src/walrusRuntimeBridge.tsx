@@ -289,11 +289,10 @@ function WalrusRuntimeBridgeInner() {
       };
       return walrusEnabledClient;
     },
-    [client, currentNetwork, emitWalrusDiagnostics, rpcUrl],
+    [client],
   );
 
   useEffect(() => {
-    const hadWalrusClient = Boolean(previousWalrusClientRef.current);
     const hasWalrusClient = Boolean(walrusClient);
     const hadSuiClient = Boolean(previousSuiClientRef.current);
     const hasSuiClient = Boolean(client);
