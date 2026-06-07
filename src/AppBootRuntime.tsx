@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import { getBrowserCapabilitiesSnapshot, logRouteLifecycle, setDeepSignalDebugReadiness } from "./lib/routeDiagnostics";
 import { scheduleIdleTask } from "./lib/scheduleIdleTask";
 import { retryLazyImport } from "./lib/lazyRetry";
-import { useDashboardProjectRestoreSnapshot } from "./lib/dashboardProjectRestore";
+import { isDashboardBootPending, useDashboardProjectRestoreSnapshot } from "./lib/dashboardProjectRestore";
 
 function prefetchExploreRoute() {
   void retryLazyImport(() => import("./pages/ExploreSignalsPage"), "prefetch-route-explore").catch(() => undefined);
@@ -39,6 +39,7 @@ function shouldPrefetchAdminWorkspace(pathname: string) {
 export function WorkspaceRouteRuntimeEffects({ enabled, routePath }: { enabled: boolean; routePath: string }) {
   const dashboardProjectRestore = useDashboardProjectRestoreSnapshot();
   const dashboardShellRoute = routePath === "/dashboard" || routePath.startsWith("/dashboard?");
+  const dashboardBootPending = isDashboardBootPending(dashboardProjectRestore);
 
   useEffect(() => {
     if (!enabled) {
@@ -59,8 +60,7 @@ export function WorkspaceRouteRuntimeEffects({ enabled, routePath }: { enabled: 
         }
         const storageRuntime = storageFactory.getStorageRuntimeStatus();
         const workspaceProjectProvider =
-          dashboardShellRoute &&
-          (dashboardProjectRestore.state === "unknown" || dashboardProjectRestore.state === "restoring")
+          dashboardShellRoute && dashboardBootPending
             ? "restoring"
             : projectRegistry.getSelectedProjectId()
               ? "selected"
@@ -79,7 +79,12 @@ export function WorkspaceRouteRuntimeEffects({ enabled, routePath }: { enabled: 
     return () => {
       cancelled = true;
     };
-  }, [dashboardProjectRestore.state, dashboardShellRoute, enabled]);
+  }, [
+    dashboardBootPending,
+    dashboardProjectRestore.state,
+    dashboardShellRoute,
+    enabled,
+  ]);
 
   useEffect(() => {
     if (!enabled) {
@@ -160,13 +165,30 @@ export function AppBootRuntime({
     if (pathname !== "/dashboard" || dashboardWalletSettled) {
       return;
     }
+    logRouteLifecycle("project-restore-blocked", {
+      providerLoading: walletProviderLoading,
+      providerMounted: walletProviderMounted,
+      walletSessionPhase,
+      walletStatus: walletSessionPhase,
+      walletRuntime: dashboardSnapshotWalletRuntime,
+    });
     logRouteLifecycle("project-restore:blocked-wallet-pending", {
       routePath,
       walletRuntime: dashboardSnapshotWalletRuntime,
+      providerLoading: walletProviderLoading,
       walletProviderPending: !walletProviderMounted,
+      providerMounted: walletProviderMounted,
       walletSessionPhase,
     });
-  }, [dashboardSnapshotWalletRuntime, dashboardWalletSettled, pathname, routePath, walletProviderMounted, walletSessionPhase]);
+  }, [
+    dashboardSnapshotWalletRuntime,
+    dashboardWalletSettled,
+    pathname,
+    routePath,
+    walletProviderLoading,
+    walletProviderMounted,
+    walletSessionPhase,
+  ]);
 
   useEffect(() => {
     if (pathname !== "/dashboard" || workspaceReadyForRoute) {

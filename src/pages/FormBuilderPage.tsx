@@ -6,10 +6,7 @@ import "../styles/mobile/layout.css";
 import "../styles/mobile/workspace.css";
 import "../styles/mobile/wallet.css";
 import "../styles/mobile/composer.css";
-import "../styles/mobile/composer-review.css";
-import "../styles/mobile/publish.css";
-import "../styles/mobile/matrix.css";
-import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { AdminAccessGate } from "../components/AdminAccessGate";
 import { RecoverableDraftBanner } from "../components/RecoverableDraftBanner";
@@ -23,18 +20,12 @@ import { canAdmin, getAdminSurfaceAccessState, getRoleLabel } from "../lib/admin
 import { getActivityActorRole } from "../lib/activityLog";
 import { normalizeForm } from "../lib/formSchema";
 import { classifyFormEdit, isStructuralFormEdit, resolveFormVersion } from "../lib/formVersioning";
+import { retryLazyImport } from "../lib/lazyRetry";
 import { storageAdapter } from "../lib/storageAdapter";
 import { setSelectedProjectId } from "../lib/projectRegistry";
 import { shortAddress, WALRUS_UPLOAD_RELAY_URL } from "../lib/sui";
 import { getInitialFields, getInitialTemplate, showWalrusDiagnostics } from "../features/createForm/constants";
-import { BuilderToolbar } from "../features/createForm/components/BuilderToolbar";
-import { FieldsStep } from "../features/createForm/components/FieldsStep";
-import { InfoStep } from "../features/createForm/components/InfoStep";
-import { IntentStartStep } from "../features/createForm/components/IntentStartStep";
-import { MirrorPreviewPanel } from "../features/createForm/components/MirrorPreviewPanel";
 import { PublishOverlay } from "../features/createForm/components/PublishOverlay";
-import { PublishStep } from "../features/createForm/components/PublishStep";
-import { TemplateStep } from "../features/createForm/components/TemplateStep";
 import { getCreateFormEncryptionReadiness } from "../features/createForm/encryptionReadiness";
 import { useCreateFormBuilder } from "../features/createForm/hooks/useCreateFormBuilder";
 import { useCreateFormPublish } from "../features/createForm/hooks/useCreateFormPublish";
@@ -47,6 +38,42 @@ import {
 } from "../features/createForm/utils";
 import type { FormSchema, Submission } from "../types";
 import { useOptionalWalletActions } from "../walletStatus";
+
+const BuilderToolbar = lazy(() =>
+  retryLazyImport(() => import("../features/createForm/components/BuilderToolbar"), "form-builder-toolbar").then((module) => ({
+    default: module.BuilderToolbar,
+  })),
+);
+const FieldsStep = lazy(() =>
+  retryLazyImport(() => import("../features/createForm/components/FieldsStep"), "form-builder-fields-step").then((module) => ({
+    default: module.FieldsStep,
+  })),
+);
+const InfoStep = lazy(() =>
+  retryLazyImport(() => import("../features/createForm/components/InfoStep"), "form-builder-info-step").then((module) => ({
+    default: module.InfoStep,
+  })),
+);
+const IntentStartStep = lazy(() =>
+  retryLazyImport(() => import("../features/createForm/components/IntentStartStep"), "form-builder-intent-step").then((module) => ({
+    default: module.IntentStartStep,
+  })),
+);
+const TemplateStep = lazy(() =>
+  retryLazyImport(() => import("../features/createForm/components/TemplateStep"), "form-builder-template-step").then((module) => ({
+    default: module.TemplateStep,
+  })),
+);
+const PublishStep = lazy(() =>
+  retryLazyImport(() => import("../features/createForm/lazy/FormBuilderPublishStep"), "form-builder-publish-step").then((module) => ({
+    default: module.PublishStep,
+  })),
+);
+const MirrorPreviewPanel = lazy(() =>
+  retryLazyImport(() => import("../features/createForm/lazy/FormBuilderMirrorPreviewPanel"), "form-builder-mirror-preview").then((module) => ({
+    default: module.MirrorPreviewPanel,
+  })),
+);
 
 type ComposerHomeSignalStatus = "draft" | "active" | "archived";
 
@@ -889,144 +916,154 @@ function FormBuilderComposer({
     <form id="create-form" className="composer-stage composer-step-stage" onSubmit={handleBuilderSubmit}>
       {builder.values.currentStep === "template" ? (
         isMirrorMode ? (
-          <IntentStartStep onApplyDraft={handleApplyIntentDraft} />
+          <Suspense fallback={<div className="panel">Loading signal intent...</div>}>
+            <IntentStartStep onApplyDraft={handleApplyIntentDraft} />
+          </Suspense>
         ) : (
-          <TemplateStep
-            t={t}
-            selectedTemplateKey={builder.values.selectedTemplateKey}
-            onSelectTemplate={builder.applyTemplate}
-          />
+          <Suspense fallback={<div className="panel">Loading signal templates...</div>}>
+            <TemplateStep
+              t={t}
+              selectedTemplateKey={builder.values.selectedTemplateKey}
+              onSelectTemplate={builder.applyTemplate}
+            />
+          </Suspense>
         )
       ) : null}
 
       {builder.values.currentStep === "info" ? (
-        <InfoStep
-          t={t}
-          title={builder.values.title}
-          description={builder.values.description}
-          identityPolicy={builder.values.identityPolicy}
-          locationRequirement={builder.values.locationRequirement}
-          processingMode={builder.values.processingMode}
-          encryptSubmissions={builder.values.encryptSubmissions}
-          headerImage={builder.values.headerImage}
-          headerLogo={builder.values.headerLogo}
-          setTitle={builder.setTitle}
-          setDescription={builder.setDescription}
-          setHeaderImage={builder.setHeaderImage}
-          setHeaderLogo={builder.setHeaderLogo}
-          setProcessingMode={builder.setProcessingMode}
-          onBack={() => {
-            if (!editingForm) {
-              builder.moveStep(-1);
-            }
-          }}
-          onContinue={() => builder.moveStep(1)}
-          backDisabled={Boolean(editingForm)}
-        />
+        <Suspense fallback={<div className="panel">Loading signal details...</div>}>
+          <InfoStep
+            t={t}
+            title={builder.values.title}
+            description={builder.values.description}
+            identityPolicy={builder.values.identityPolicy}
+            locationRequirement={builder.values.locationRequirement}
+            processingMode={builder.values.processingMode}
+            encryptSubmissions={builder.values.encryptSubmissions}
+            headerImage={builder.values.headerImage}
+            headerLogo={builder.values.headerLogo}
+            setTitle={builder.setTitle}
+            setDescription={builder.setDescription}
+            setHeaderImage={builder.setHeaderImage}
+            setHeaderLogo={builder.setHeaderLogo}
+            setProcessingMode={builder.setProcessingMode}
+            onBack={() => {
+              if (!editingForm) {
+                builder.moveStep(-1);
+              }
+            }}
+            onContinue={() => builder.moveStep(1)}
+            backDisabled={Boolean(editingForm)}
+          />
+        </Suspense>
       ) : null}
 
       {builder.values.currentStep === "fields" ? (
-        <FieldsStep
-          t={t}
-          title={builder.values.title}
-          description={builder.values.description}
-          fields={builder.values.fields}
-          sections={builder.values.sections}
-          encryptSubmissions={builder.values.encryptSubmissions}
-          draggedFieldId={builder.values.draggedFieldId}
-          dragOverFieldId={builder.values.dragOverFieldId}
-          dragOverPlacement={builder.values.dragOverPlacement}
-          refs={builder.refs}
-          setActiveFieldId={builder.setActiveFieldId}
-          setDraggedFieldId={builder.setDraggedFieldId}
-          setDragOverFieldId={builder.setDragOverFieldId}
-          setDragOverPlacement={builder.setDragOverPlacement}
-          onAddSection={builder.addSection}
-          onUpdateSection={builder.updateSection}
-          onRemoveSection={builder.removeSection}
-          onUpdateField={builder.updateField}
-          onRemoveField={builder.removeField}
-          onDuplicateField={builder.duplicateFieldAt}
-          onInsertConditionalField={builder.insertConditionalField}
-          onInsertField={builder.insertField}
-          onReorderFields={builder.reorderFields}
-          onOpenFieldTypePicker={() => builder.setFieldTypePickerOpen(true)}
-          onBack={() => builder.moveStep(-1)}
-          onContinue={handleFieldsContinue}
-          displayMode={displayMode}
-        />
+        <Suspense fallback={<div className="panel">Loading signal structure...</div>}>
+          <FieldsStep
+            t={t}
+            title={builder.values.title}
+            description={builder.values.description}
+            fields={builder.values.fields}
+            sections={builder.values.sections}
+            encryptSubmissions={builder.values.encryptSubmissions}
+            draggedFieldId={builder.values.draggedFieldId}
+            dragOverFieldId={builder.values.dragOverFieldId}
+            dragOverPlacement={builder.values.dragOverPlacement}
+            refs={builder.refs}
+            setActiveFieldId={builder.setActiveFieldId}
+            setDraggedFieldId={builder.setDraggedFieldId}
+            setDragOverFieldId={builder.setDragOverFieldId}
+            setDragOverPlacement={builder.setDragOverPlacement}
+            onAddSection={builder.addSection}
+            onUpdateSection={builder.updateSection}
+            onRemoveSection={builder.removeSection}
+            onUpdateField={builder.updateField}
+            onRemoveField={builder.removeField}
+            onDuplicateField={builder.duplicateFieldAt}
+            onInsertConditionalField={builder.insertConditionalField}
+            onInsertField={builder.insertField}
+            onReorderFields={builder.reorderFields}
+            onOpenFieldTypePicker={() => builder.setFieldTypePickerOpen(true)}
+            onBack={() => builder.moveStep(-1)}
+            onContinue={handleFieldsContinue}
+            displayMode={displayMode}
+          />
+        </Suspense>
       ) : null}
 
       {builder.values.currentStep === "publish" ? (
-        <PublishStep
-          t={t}
-          language={language}
-          saving={publish.saving}
-          registeringOnSui={publish.registeringOnSui}
-          error={publish.error}
-          failure={publish.failure}
-          diagnosticsCopied={publish.diagnosticsCopied}
-          savedForm={publish.savedForm}
-          title={builder.values.title}
-          description={builder.values.description}
-          headerImage={builder.values.headerImage}
-          headerLogo={builder.values.headerLogo}
-          fields={builder.values.fields}
-          sections={builder.values.sections}
-          analysisProfileId={builder.values.analysisProfileId}
-          signalType={builder.values.signalType}
-          analystType={builder.values.analystType}
-          analysisType={builder.values.analysisType}
-          visibility={builder.values.visibility}
-          identityPolicy={builder.values.identityPolicy}
-          accessMode={builder.values.accessMode}
-          nftGate={builder.values.nftGate}
-          locationRequirement={builder.values.locationRequirement}
-          encryptSubmissions={builder.values.encryptSubmissions}
-          responseOpenAtCustom={builder.values.responseOpenAtCustom}
-          responseDeadlinePreset={builder.values.responseDeadlinePreset}
-          responseDeadlineCustomAt={builder.values.responseDeadlineCustomAt}
-          mobilePane={builder.values.mobilePane}
-          isReadyToPublish={builder.isReadyToPublish}
-          publicPath={publish.publicPath}
-          publicUrl={publish.publicUrl}
-          publishChecks={publish.publishChecks}
-          encryptionWarnings={encryptionWarnings}
-          showPublishSuccessView={showPublishSuccessView}
-          showWalrusDiagnostics={showWalrusDiagnostics}
-          isGuestDraftMode={isGuestDraftMode}
-          isConnected={wallet.isConnected}
-          currentWalletName={wallet.walletName}
-          accountAddress={wallet.accountAddress}
-          storageMode={import.meta.env.VITE_WALRUS_STORAGE_MODE || "uploadRelay"}
-          uploadRelayUrl={WALRUS_UPLOAD_RELAY_URL || t("notConfigured")}
-          storageRuntimeMode={storageRuntime.mode}
-          storageRuntimeNotice={storageRuntime.notice ?? undefined}
-          storageRuntimeDiagnostics={storageRuntime.diagnostics}
-          walrusCostEstimate={publish.walrusCostEstimate}
-          displayMode={displayMode}
-          canManageProjects={hasAdminAccess}
-          selectedProjectId={builder.values.selectedProjectId}
-          selectedProject={hasAdminAccess ? builder.selectedProject : null}
-          projects={hasAdminAccess ? projects : []}
-          projectState={builder.values.projectState}
-          selectedTemplateKey={builder.values.selectedTemplateKey}
-          onSetMobilePane={builder.setMobilePane}
-          onSelectProject={handleSelectProject}
-          onChangeVisibility={builder.setVisibility}
-          onChangeIdentityPolicy={builder.setIdentityPolicy}
-          onChangeAccessMode={builder.setAccessModeState}
-          onChangeNftGatePreset={builder.setNftGatePresetState}
-          onChangeNftGate={builder.updateNftGateState}
-          onChangeLocationRequirement={builder.setLocationRequirement}
-          onToggleEncryptSubmissions={builder.setEncryptSubmissions}
-          onChangeResponseOpenAtCustom={builder.setResponseOpenAtCustom}
-          onChangeResponseDeadlinePreset={builder.setResponseDeadlinePreset}
-          onChangeResponseDeadlineCustomAt={builder.setResponseDeadlineCustomAt}
-          onRegisterOnSui={() => void publish.handleRegisterOnSui()}
-          onCopyDiagnostics={() => void publish.copyDiagnostics()}
-          onBack={() => builder.moveStep(-1)}
-        />
+        <Suspense fallback={<div className="panel">Loading publish controls...</div>}>
+          <PublishStep
+            t={t}
+            language={language}
+            saving={publish.saving}
+            registeringOnSui={publish.registeringOnSui}
+            error={publish.error}
+            failure={publish.failure}
+            diagnosticsCopied={publish.diagnosticsCopied}
+            savedForm={publish.savedForm}
+            title={builder.values.title}
+            description={builder.values.description}
+            headerImage={builder.values.headerImage}
+            headerLogo={builder.values.headerLogo}
+            fields={builder.values.fields}
+            sections={builder.values.sections}
+            analysisProfileId={builder.values.analysisProfileId}
+            signalType={builder.values.signalType}
+            analystType={builder.values.analystType}
+            analysisType={builder.values.analysisType}
+            visibility={builder.values.visibility}
+            identityPolicy={builder.values.identityPolicy}
+            accessMode={builder.values.accessMode}
+            nftGate={builder.values.nftGate}
+            locationRequirement={builder.values.locationRequirement}
+            encryptSubmissions={builder.values.encryptSubmissions}
+            responseOpenAtCustom={builder.values.responseOpenAtCustom}
+            responseDeadlinePreset={builder.values.responseDeadlinePreset}
+            responseDeadlineCustomAt={builder.values.responseDeadlineCustomAt}
+            mobilePane={builder.values.mobilePane}
+            isReadyToPublish={builder.isReadyToPublish}
+            publicPath={publish.publicPath}
+            publicUrl={publish.publicUrl}
+            publishChecks={publish.publishChecks}
+            encryptionWarnings={encryptionWarnings}
+            showPublishSuccessView={showPublishSuccessView}
+            showWalrusDiagnostics={showWalrusDiagnostics}
+            isGuestDraftMode={isGuestDraftMode}
+            isConnected={wallet.isConnected}
+            currentWalletName={wallet.walletName}
+            accountAddress={wallet.accountAddress}
+            storageMode={import.meta.env.VITE_WALRUS_STORAGE_MODE || "uploadRelay"}
+            uploadRelayUrl={WALRUS_UPLOAD_RELAY_URL || t("notConfigured")}
+            storageRuntimeMode={storageRuntime.mode}
+            storageRuntimeNotice={storageRuntime.notice ?? undefined}
+            storageRuntimeDiagnostics={storageRuntime.diagnostics}
+            walrusCostEstimate={publish.walrusCostEstimate}
+            displayMode={displayMode}
+            canManageProjects={hasAdminAccess}
+            selectedProjectId={builder.values.selectedProjectId}
+            selectedProject={hasAdminAccess ? builder.selectedProject : null}
+            projects={hasAdminAccess ? projects : []}
+            projectState={builder.values.projectState}
+            selectedTemplateKey={builder.values.selectedTemplateKey}
+            onSetMobilePane={builder.setMobilePane}
+            onSelectProject={handleSelectProject}
+            onChangeVisibility={builder.setVisibility}
+            onChangeIdentityPolicy={builder.setIdentityPolicy}
+            onChangeAccessMode={builder.setAccessModeState}
+            onChangeNftGatePreset={builder.setNftGatePresetState}
+            onChangeNftGate={builder.updateNftGateState}
+            onChangeLocationRequirement={builder.setLocationRequirement}
+            onToggleEncryptSubmissions={builder.setEncryptSubmissions}
+            onChangeResponseOpenAtCustom={builder.setResponseOpenAtCustom}
+            onChangeResponseDeadlinePreset={builder.setResponseDeadlinePreset}
+            onChangeResponseDeadlineCustomAt={builder.setResponseDeadlineCustomAt}
+            onRegisterOnSui={() => void publish.handleRegisterOnSui()}
+            onCopyDiagnostics={() => void publish.copyDiagnostics()}
+            onBack={() => builder.moveStep(-1)}
+          />
+        </Suspense>
       ) : null}
     </form>
   );
@@ -1064,20 +1101,22 @@ function FormBuilderComposer({
 
         {showComposerChrome ? (
           <>
-            <BuilderToolbar
-              t={t}
-              isScrolled={isScrolled}
-              currentStep={builder.values.currentStep}
-              completedSteps={completedSteps}
-              disabledSteps={editingForm ? ["template"] : undefined}
-              capabilityConfigured={!isGuestDraftMode && capabilityProfile.isConfigured}
-              accessRoleLabel={isGuestDraftMode ? t("guestDraftRole") : getRoleLabel(capabilityProfile)}
-              adminCapLabel={!isGuestDraftMode && hasAdminAccess && capabilityProfile.adminCapIds[0] ? shortAddress(capabilityProfile.adminCapIds[0]) : undefined}
-              draftStateLabel={draftStateLabel}
-              savedFormId={publish.savedForm?.id}
-              savedManifestBlobId={publish.savedForm?.manifestBlobId}
-              onSelectStep={handleSelectStep}
-            />
+            <Suspense fallback={<div className="panel">Loading workspace controls...</div>}>
+              <BuilderToolbar
+                t={t}
+                isScrolled={isScrolled}
+                currentStep={builder.values.currentStep}
+                completedSteps={completedSteps}
+                disabledSteps={editingForm ? ["template"] : undefined}
+                capabilityConfigured={!isGuestDraftMode && capabilityProfile.isConfigured}
+                accessRoleLabel={isGuestDraftMode ? t("guestDraftRole") : getRoleLabel(capabilityProfile)}
+                adminCapLabel={!isGuestDraftMode && hasAdminAccess && capabilityProfile.adminCapIds[0] ? shortAddress(capabilityProfile.adminCapIds[0]) : undefined}
+                draftStateLabel={draftStateLabel}
+                savedFormId={publish.savedForm?.id}
+                savedManifestBlobId={publish.savedForm?.manifestBlobId}
+                onSelectStep={handleSelectStep}
+              />
+            </Suspense>
 
             <section className="panel composer-view-mode-panel" aria-label="Create Signal display mode">
               <div>
@@ -1230,25 +1269,27 @@ function FormBuilderComposer({
         {isMirrorMode ? (
           <div className="composer-mirror-layout">
             <div className="composer-mirror-builder">{builderForm}</div>
-            <MirrorPreviewPanel
-              values={builder.values}
-              activeFieldId={builder.values.activeFieldId}
-              isReadyToPublish={builder.isReadyToPublish}
-              publishedStatus={publish.savedForm ? "published" : "preview"}
-              surface={builder.values.currentStep === "publish" ? "publish" : "builder"}
-              savedForm={publish.savedForm}
-              publicUrl={publish.publicUrl}
-              publicPath={publish.publicPath}
-              storageRuntimeMode={storageRuntime.mode}
-              storageRuntimeNotice={storageRuntime.notice ?? undefined}
-              storageRuntimeDiagnostics={storageRuntime.diagnostics}
-              walrusCostEstimate={publish.walrusCostEstimate}
-              saving={publish.saving}
-              registeringOnSui={publish.registeringOnSui}
-              publishError={publish.error}
-              publishFailure={publish.failure}
-              onCopyLink={publish.handleCopyLink}
-            />
+            <Suspense fallback={<div className="panel">Loading live mirror preview...</div>}>
+              <MirrorPreviewPanel
+                values={builder.values}
+                activeFieldId={builder.values.activeFieldId}
+                isReadyToPublish={builder.isReadyToPublish}
+                publishedStatus={publish.savedForm ? "published" : "preview"}
+                surface={builder.values.currentStep === "publish" ? "publish" : "builder"}
+                savedForm={publish.savedForm}
+                publicUrl={publish.publicUrl}
+                publicPath={publish.publicPath}
+                storageRuntimeMode={storageRuntime.mode}
+                storageRuntimeNotice={storageRuntime.notice ?? undefined}
+                storageRuntimeDiagnostics={storageRuntime.diagnostics}
+                walrusCostEstimate={publish.walrusCostEstimate}
+                saving={publish.saving}
+                registeringOnSui={publish.registeringOnSui}
+                publishError={publish.error}
+                publishFailure={publish.failure}
+                onCopyLink={publish.handleCopyLink}
+              />
+            </Suspense>
           </div>
         ) : (
           builderForm

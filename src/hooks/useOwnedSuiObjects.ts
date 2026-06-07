@@ -1,13 +1,19 @@
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import { fetchOwnedSuiObjectsForClient, type OwnedObjectEntry } from "../lib/nftOwnership";
 import { endPerf, markPerfMilestone, startPerf } from "../lib/perf";
 import { logRouteLifecycle } from "../lib/routeDiagnostics";
 import { isSuiRateLimitError } from "../lib/sui";
+import type { OwnedObjectEntry } from "../lib/nftOwnershipShared";
 import { handleRateLimitedRpcFallback, useRpcInfrastructure } from "../rpcInfrastructure";
 import { useRpcSuiClient } from "./useRpcSuiClient";
 
 const OWNED_OBJECTS_CACHE_PREFIX = "deepsignal.ownedObjects";
+let nftOwnershipModulePromise: Promise<typeof import("../lib/nftOwnership")> | null = null;
+
+async function getNftOwnershipModule() {
+  nftOwnershipModulePromise ??= import("../lib/nftOwnership");
+  return nftOwnershipModulePromise;
+}
 
 export function useOwnedSuiObjects(
   address?: string | null,
@@ -57,6 +63,7 @@ export function useOwnedSuiObjects(
         rpcUrl: rpc.currentRpcUrl,
       });
       try {
+        const { fetchOwnedSuiObjectsForClient } = await getNftOwnershipModule();
         const result = await fetchOwnedSuiObjectsForClient(suiClient, address ?? "", structTypes);
         setIsRateLimitedFallback(false);
         endPerf(spanName, "ok", `${result.length} objects`);
@@ -114,5 +121,11 @@ export function useOwnedSuiObjects(
 }
 
 export type { OwnedObjectEntry };
-export { fetchOwnedSuiObjectsForClient } from "../lib/nftOwnership";
-export { matchesOwnedObjectType, normalizeSuiTypeName } from "../lib/nftOwnership";
+export { matchesOwnedObjectType, normalizeSuiTypeName } from "../lib/nftOwnershipShared";
+
+export async function fetchOwnedSuiObjectsForClient(
+  ...args: Parameters<typeof import("../lib/nftOwnership").fetchOwnedSuiObjectsForClient>
+) {
+  const module = await getNftOwnershipModule();
+  return module.fetchOwnedSuiObjectsForClient(...args);
+}

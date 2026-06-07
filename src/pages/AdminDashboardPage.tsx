@@ -95,7 +95,8 @@ import { useSuiWallet } from "../hooks/useSuiWallet";
 import { useI18n } from "../i18n";
 import { DEMO_FORM_ID, DEMO_PRIMARY_SIGNAL_ID, seedDemoWorkspace } from "../demo/demoData";
 import { isAttachmentFieldType, isLongTextLikeField } from "../lib/fieldTypes";
-import { useDashboardProjectRestoreSnapshot } from "../lib/dashboardProjectRestore";
+import { isDashboardBootPending, useDashboardProjectRestoreSnapshot } from "../lib/dashboardProjectRestore";
+import { useWalletSessionState } from "../walletSessionState";
 import {
   addressesMatch,
   canAdmin,
@@ -156,6 +157,7 @@ import {
 import { normalizeSubmission } from "../lib/submissionSchema";
 import { storageAdapter } from "../lib/storageAdapter";
 import { getSignalProcessingMode } from "../lib/signalProcessing";
+import { triageStatusToOnchainStatus } from "../lib/projectRegistry";
 import { downloadTextFile, formatDate, formatRelativeTime } from "../lib/utils";
 import { logRouteLifecycle } from "../lib/routeDiagnostics";
 import { handleRateLimitedRpcFallback, useRpcInfrastructure } from "../rpcInfrastructure";
@@ -308,16 +310,8 @@ function loadCsvExportModule() {
   return import("../lib/exportResponses");
 }
 
-function loadProjectRegistryWriteModule() {
-  return import("../lib/projectRegistry");
-}
-
-function loadSuiTransactionModule() {
-  return import("@mysten/sui/transactions");
-}
-
-function loadWalrusDeleteModule() {
-  return import("../storage/walrusAdapter");
+function loadAdminWriteRuntimeModule() {
+  return import("../features/admin/runtime/adminWriteRuntime");
 }
 
 function withTimeout<T>(operation: Promise<T>, timeoutMs: number, timeoutMessage: string): Promise<T> {
@@ -4490,11 +4484,16 @@ function PatternMemoryDraftReviewModal({
 export function AdminDashboardPage() {
   const { language, t } = useI18n();
   const location = useLocation();
+  const walletSession = useWalletSessionState();
   const dashboardProjectRestore = useDashboardProjectRestoreSnapshot();
   const dashboardShellRoute = location.pathname === "/dashboard";
   const projectRestorePending =
     dashboardShellRoute &&
-    (dashboardProjectRestore.state === "unknown" || dashboardProjectRestore.state === "restoring");
+    isDashboardBootPending(dashboardProjectRestore, {
+      walletProviderMounted: walletSession.providerMounted,
+      walletProviderPending: walletSession.providerLoading || !walletSession.providerMounted,
+      walletSessionPhase: walletSession.phase,
+    });
   const navigate = useNavigate();
   const wallet = useSuiWallet();
   const mockAdmin = useMockAdminMode(location.search);
@@ -5705,11 +5704,10 @@ export function AdminDashboardPage() {
       blobIds: [...selectedFormBlobIds],
     });
     const {
-      appendWalrusBlobDeletesToTransaction,
       collectWalrusBlobDeleteObjectIds,
-      extractMissingWalrusDeleteObjectIds,
-    } = await loadWalrusDeleteModule();
-    let walrusBlobObjectIds = collectWalrusBlobDeleteObjectIds(expandedIds);
+      deleteNodeBatchOnSui,
+    } = await loadAdminWriteRuntimeModule();
+    const walrusBlobObjectIds = collectWalrusBlobDeleteObjectIds(expandedIds);
     const onchainDeleteTargets = [
       ...new Set(
         expandedIds
@@ -5727,71 +5725,27 @@ export function AdminDashboardPage() {
       try {
         await withTimeout(
           (async () => {
-      if (onchainDeleteTargets.length > 0) {
-        if (!selectedProject) {
-          throw new Error("Select the linked project before deleting this node.");
-        }
-        if (selectedProject.signalsCount > 0) {
-          throw new Error(t("deleteOnchainFormsNoSignalsOnly"));
-        }
-      }
-
-      while (true) {
-        try {
-          const { Transaction } = await loadSuiTransactionModule();
-          const { deleteFormOnChain } = await loadProjectRegistryWriteModule();
-          let tx = new Transaction();
-          if (selectedProjectIdForDelete) {
-            for (const onchainFormId of onchainDeleteTargets) {
-              tx = deleteFormOnChain({
-                projectId: selectedProjectIdForDelete,
-                formId: onchainFormId,
-                tx,
-              });
-            }
-          }
-          tx = appendWalrusBlobDeletesToTransaction({
-            transaction: tx,
-            blobObjectIds: walrusBlobObjectIds,
-            ownerAddress: activeAccountAddress,
-          });
-
-          console.info("[DeepSignal Sui write]", {
-            action: "delete_signal_node",
-            actionLabel: t("deleteFormConfirm"),
-            origin: "delete-node-confirmed-button",
-            projectId: selectedProjectIdForDelete,
-            onchainFormIds: onchainDeleteTargets,
-            walrusBlobObjectIds,
-          });
-          const result = await deleteNodeOnchainTx.mutateAsync({ transaction: tx });
-          await suiClient.waitForTransaction({ digest: result.digest });
-          walrusDeleteHandledInBatch = walrusBlobObjectIds.length > 0;
-          break;
-        } catch (error) {
-          const missingObjectIds = extractMissingWalrusDeleteObjectIds(error);
-          if (missingObjectIds.length > 0) {
-            const missingSet = new Set(missingObjectIds);
-            const nextWalrusBlobObjectIds = walrusBlobObjectIds.filter(
-              (blobObjectId) => !missingSet.has(blobObjectId.toLowerCase()),
-            );
-            if (nextWalrusBlobObjectIds.length !== walrusBlobObjectIds.length) {
-              walrusBlobObjectIds = nextWalrusBlobObjectIds;
-              if (walrusBlobObjectIds.length === 0 && onchainDeleteTargets.length === 0) {
-                break;
+            if (onchainDeleteTargets.length > 0) {
+              if (!selectedProject) {
+                throw new Error("Select the linked project before deleting this node.");
               }
-              continue;
+              if (selectedProject.signalsCount > 0) {
+                throw new Error(t("deleteOnchainFormsNoSignalsOnly"));
+              }
             }
-          }
 
-          const message = error instanceof Error ? error.message : String(error);
-          if (!message.includes("find_form_index")) {
-            throw error;
-          }
-          console.warn("One or more on-chain forms were already absent during node delete. Continuing local cleanup.");
-          break;
-        }
-      }
+            const result = await deleteNodeBatchOnSui({
+              onchainFormIds: onchainDeleteTargets,
+              projectId: selectedProjectIdForDelete,
+              walrusBlobObjectIds,
+              ownerAddress: activeAccountAddress,
+              actionLabel: t("deleteFormConfirm"),
+              origin: "delete-node-confirmed-button",
+              executeTransaction: ({ transaction }) =>
+                deleteNodeOnchainTx.mutateAsync({ transaction }),
+              waitForTransaction: ({ digest }) => suiClient.waitForTransaction({ digest }),
+            });
+            walrusDeleteHandledInBatch = result.walrusDeleteHandledInBatch;
           })(),
           NODE_REMOTE_DELETE_TIMEOUT_MS,
           "Remote node deletion timed out. Removed the local inbox copy and kept the node tombstoned.",
@@ -5969,64 +5923,22 @@ export function AdminDashboardPage() {
     });
     setRegisteringFormId(formId);
     try {
-      const {
-        createFormOnChain,
-        createMetadataDigest,
-        serializeProjectFormMetadataReference,
-      } = await loadProjectRegistryWriteModule();
-      const formMetadataDigest =
-        form.formMetadataDigest ??
-        await createMetadataDigest({
-          localFormId: form.id,
-          title: form.title,
-          description: form.description,
-          purpose: form.purpose,
-          visibility: form.visibility,
-          publicExplore: form.publicExplore,
-          fieldCount: form.fields.length,
-          sectionCount: form.sections?.length ?? 0,
-          encryptSubmissions: form.encryptSubmissions,
-          responseDeadline: form.responseDeadline ?? null,
-          responseDeadlineMode: form.responseDeadlineMode ?? "none",
-          ownerAddress: form.ownerAddress,
-          projectId: form.projectId ?? null,
-        });
-      const metadataReference = serializeProjectFormMetadataReference({
-        digest: formMetadataDigest,
-        manifestBlobId: form.manifestBlobId,
-        formBlobId: form.blobId,
-        formId: form.id,
+      const { registerNodeOnSui } = await loadAdminWriteRuntimeModule();
+      const registration = await registerNodeOnSui({
+        form,
+        executeTransaction: ({ transaction }) =>
+          registerFormTx.mutateAsync({ transaction }),
+        waitForTransaction: ({ digest, options }) =>
+          suiClient.waitForTransaction({
+            digest,
+            options,
+          }),
       });
-      const tx = createFormOnChain({
-        projectId: form.projectId,
-        title: form.title,
-        metadataDigest: metadataReference,
-      });
-      console.info("[DeepSignal Sui write]", {
-        action: "register_signal_node",
-        actionLabel: t("registerOnSui"),
-        origin: "register-node-button",
-        projectId: form.projectId,
-        formId: form.id,
-      });
-      const result = await registerFormTx.mutateAsync({ transaction: tx });
-      const confirmed = await suiClient.waitForTransaction({
-        digest: result.digest,
-        options: { showEvents: true },
-      });
-      const formCreatedEvent = (confirmed.events ?? []).find((chainEvent) =>
-        String(chainEvent.type ?? "").endsWith("::FormCreated"),
-      );
-      const rawFormId = (formCreatedEvent?.parsedJson as { form_id?: string | number } | undefined)?.form_id;
-      const parsedFormId = typeof rawFormId === "number" ? rawFormId : Number(rawFormId ?? Number.NaN);
-      if (!Number.isFinite(parsedFormId)) {
-        throw new Error("Sui registration completed, but the new form id was not returned.");
-      }
 
       const registeredForm = {
         ...form,
-        formMetadataDigest,
-        onchainFormId: parsedFormId,
+        formMetadataDigest: registration.formMetadataDigest,
+        onchainFormId: registration.onchainFormId,
         isOnchain: true,
         registrationMode: "sui" as const,
         activityEvents: [
@@ -6036,7 +5948,7 @@ export function AdminDashboardPage() {
             actorAddress: activeAccountAddress,
             actorRole: activityActorRole,
             action: "form_updated",
-            txDigest: result.digest,
+            txDigest: registration.txDigest,
           }),
         ],
       } satisfies FormWithCount;
@@ -6048,7 +5960,7 @@ export function AdminDashboardPage() {
       setNodeRegistrationFeedback({
         formId,
         tone: "success",
-        message: `${t("registerNodeSuccess", { title: form.title })} ${t("registryFormIdLabel")}: ${parsedFormId}`,
+        message: `${t("registerNodeSuccess", { title: form.title })} ${t("registryFormIdLabel")}: ${registration.onchainFormId}`,
       });
       setToast({ tone: "success", message: t("registerNodeSuccess", { title: form.title }) });
     } catch (error) {
@@ -6879,12 +6791,8 @@ export function AdminDashboardPage() {
         updateMyResponseLifecycleFromSubmission(normalized);
         const signalRecord = signalIndex.signalById[normalized.id];
         const projectId = signalRecord?.form.projectId;
-        const onchainStatusModule =
-          projectId && typeof normalized.onchainSignalId === "number"
-            ? await loadProjectRegistryWriteModule()
-            : null;
-        const nextOnchainStatus = onchainStatusModule
-          ? onchainStatusModule.triageStatusToOnchainStatus(normalized.triageStatus, normalized.status)
+        const nextOnchainStatus = projectId
+          ? triageStatusToOnchainStatus(normalized.triageStatus, normalized.status)
           : undefined;
         const needsOnchainSync =
           Boolean(projectId) &&
@@ -6893,29 +6801,23 @@ export function AdminDashboardPage() {
           nextOnchainStatus !== undefined &&
           normalized.onchainStatus !== nextOnchainStatus;
 
-        if (needsOnchainSync && projectId && nextOnchainStatus && onchainStatusModule) {
-          const tx = onchainStatusModule.updateSignalStatusOnChain({
+        if (needsOnchainSync && projectId && nextOnchainStatus) {
+          const { syncSignalStatusOnSui } = await loadAdminWriteRuntimeModule();
+          const syncResult = await syncSignalStatusOnSui({
             projectId,
-            signalId: normalized.onchainSignalId ?? 0,
-            status: nextOnchainStatus,
+            onchainSignalId: normalized.onchainSignalId ?? 0,
+            triageStatus: normalized.triageStatus,
+            submissionStatus: normalized.status,
+            executeTransaction: ({ transaction }) =>
+              updateSignalStatusTx.mutateAsync({ transaction }),
+            waitForTransaction: ({ digest }) => suiClient.waitForTransaction({ digest }),
           });
-          console.info("[DeepSignal Sui write]", {
-            action: "update_signal_status",
-            actionLabel: "Review & Triage save",
-            origin: "review-save-status-sync",
-            projectId,
-            signalId: normalized.id,
-            onchainSignalId: normalized.onchainSignalId,
-            nextOnchainStatus,
-          });
-          const result = await updateSignalStatusTx.mutateAsync({ transaction: tx });
-          await suiClient.waitForTransaction({ digest: result.digest });
           const syncedSubmission = normalizeSubmission({
             ...normalized,
-            onchainStatus: nextOnchainStatus,
+            onchainStatus: syncResult.onchainStatus,
             metadata: {
               ...(normalized.metadata ?? {}),
-              onchainStatusTxDigest: result.digest,
+              onchainStatusTxDigest: syncResult.txDigest,
             },
             updatedAt: new Date().toISOString(),
           });
@@ -10178,3 +10080,5 @@ export function AdminDashboardPage() {
     </AdminAccessGate>
   );
 }
+
+export default AdminDashboardPage;

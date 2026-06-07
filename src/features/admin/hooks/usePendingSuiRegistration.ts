@@ -3,10 +3,6 @@ import {
   useSignAndExecuteTransaction,
   useSuiClient,
 } from "@mysten/dapp-kit";
-import {
-  createMetadataDigest,
-  registerSignalReceipt,
-} from "../../../lib/projectRegistry";
 import { getSignalSubject, isLocalFallbackBlob } from "../../../lib/signalInbox";
 import { normalizeSubmission } from "../../../lib/submissionSchema";
 import { storageAdapter } from "../../../lib/storageAdapter";
@@ -41,6 +37,10 @@ export function usePendingSuiRegistration({
   const registerSignalReceiptTx = useSignAndExecuteTransaction();
   const [selectedPendingSignalIds, setSelectedPendingSignalIds] = useState<string[]>([]);
   const [registeringSignalIds, setRegisteringSignalIds] = useState<string[]>([]);
+
+  async function loadAdminWriteRuntimeModule() {
+    return import("../runtime/adminWriteRuntime");
+  }
 
   useEffect(() => {
     setSelectedPendingSignalIds((current) => {
@@ -85,57 +85,31 @@ export function usePendingSuiRegistration({
       throw new Error("This signal is not eligible for Sui registration yet.");
     }
 
-    const signalReceiptMetadataDigest = await createMetadataDigest({
-      submissionId: submission.id,
-      formId: submission.formId,
-      createdAt: submission.createdAt,
-      receiptBlobId: submission.receiptBlobId,
-      attachmentBlobIds: submission.attachments.map((attachment) => attachment.blobId),
-      encrypted: submission.isEncrypted,
-      sealIdentity: submission.sealIdentity ?? null,
-      respondentWalletAddress: submission.respondentMeta?.walletAddress ?? null,
-      respondentSessionId: submission.respondentMeta?.sessionId ?? null,
-      isAnonymous: submission.respondentMeta?.isAnonymous ?? true,
-    });
-    const tx = registerSignalReceipt({
-      projectId: form.projectId,
-      formId: form.onchainFormId,
-      walrusBlobId: submission.receiptBlobId,
-      metadataDigest: signalReceiptMetadataDigest,
-      encrypted: submission.isEncrypted,
-      sealIdentity: submission.sealIdentity ?? null,
-    });
-    console.info("[DeepSignal Sui write]", {
-      action: "register_signal_receipt",
+    const { registerSignalReceiptOnSui } = await loadAdminWriteRuntimeModule();
+    const registration = await registerSignalReceiptOnSui({
+      record,
       actionLabel: options.actionLabel,
       origin: options.origin,
-      projectId: form.projectId,
-      formId: form.id,
-      onchainFormId: form.onchainFormId,
-      signalId: submission.id,
+      executeTransaction: ({ transaction }) =>
+        registerSignalReceiptTx.mutateAsync({ transaction }),
+      waitForTransaction: ({ digest, options: waitOptions }) =>
+        suiClient.waitForTransaction({
+          digest,
+          options: waitOptions,
+        }),
     });
-    const result = await registerSignalReceiptTx.mutateAsync({ transaction: tx });
-    const confirmed = await suiClient.waitForTransaction({
-      digest: result.digest,
-      options: { showEvents: true },
-    });
-    const signalRegisteredEvent = (confirmed.events ?? []).find((chainEvent) =>
-      String(chainEvent.type ?? "").endsWith("::SignalRegistered"),
-    );
-    const rawSignalId = (signalRegisteredEvent?.parsedJson as { signal_id?: string | number } | undefined)?.signal_id;
-    const parsedSignalId = typeof rawSignalId === "number" ? rawSignalId : Number(rawSignalId ?? Number.NaN);
     const registeredSubmission = normalizeSubmission({
       ...submission,
       metadata: {
         ...(submission.metadata ?? {}),
-        txDigest: result.digest,
+        txDigest: registration.txDigest,
         rpcProvider: rpcInfrastructure.providerLabel,
         rpcUrl: rpcInfrastructure.displayRpcUrl,
         network: rpcInfrastructure.connectedNetworkLabel,
       },
       pendingOnchainRegistration: false,
-      onchainSignalId: Number.isFinite(parsedSignalId) ? parsedSignalId : undefined,
-      signalReceiptMetadataDigest,
+      onchainSignalId: registration.onchainSignalId,
+      signalReceiptMetadataDigest: registration.signalReceiptMetadataDigest,
       onchainStatus: "new",
       updatedAt: new Date().toISOString(),
     });

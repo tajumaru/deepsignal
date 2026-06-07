@@ -6,10 +6,6 @@ import {
 } from "../../../lib/criticalFailure";
 import { getAbsolutePublicFormUrl, getPublicFormPath } from "../../../lib/publicLinks";
 import {
-  createFormOnChain,
-  serializeProjectFormMetadataReference,
-} from "../../../lib/projectRegistry";
-import {
   appendActivityEvents,
   createActivityEvent,
 } from "../../../lib/activityLog";
@@ -159,6 +155,10 @@ export function useCreateFormPublish({
   const [registeringOnSui, setRegisteringOnSui] = useState(false);
   const [overlay, setOverlay] = useState<PublishOverlayState>(initialOverlayState);
   const [walrusCostEstimate, setWalrusCostEstimate] = useState<WalrusCostEstimate | null>(null);
+
+  async function loadAdminWriteRuntimeModule() {
+    return import("../../admin/runtime/adminWriteRuntime");
+  }
 
   useEffect(() => {
     if (savedForm && isDirty) {
@@ -600,33 +600,15 @@ export function useCreateFormPublish({
     setFailure(null);
     setDiagnosticsCopied(false);
     try {
-      const metadataReference =
-        savedForm.manifestBlobId && !isLocalFallbackBlob(savedForm.manifestBlobId)
-          ? serializeProjectFormMetadataReference({
-              digest: savedForm.formMetadataDigest,
-              manifestBlobId: savedForm.manifestBlobId,
-              formBlobId: savedForm.blobId,
-              formId: savedForm.id,
-            })
-          : savedForm.formMetadataDigest;
-      const tx = createFormOnChain({
-        projectId: savedForm.projectId,
-        title: savedForm.title,
-        metadataDigest: metadataReference,
+      const { registerPublishedFormOnSui } = await loadAdminWriteRuntimeModule();
+      const registration = await registerPublishedFormOnSui({
+        form: savedForm,
+        executeTransaction: ({ transaction }) => signAndExecuteTransaction(transaction),
+        waitForTransaction,
       });
-      const result = await signAndExecuteTransaction(tx);
-      const confirmed = await waitForTransaction(result.digest);
-      const formCreatedEvent = (confirmed.events ?? []).find((chainEvent) =>
-        String(chainEvent.type ?? "").endsWith("::FormCreated"),
-      );
-      const rawFormId = (formCreatedEvent?.parsedJson as { form_id?: string | number } | undefined)?.form_id;
-      const parsedFormId = typeof rawFormId === "number" ? rawFormId : Number(rawFormId ?? Number.NaN);
-      if (!Number.isFinite(parsedFormId)) {
-        throw new Error("Sui registration completed, but the new form id was not returned.");
-      }
       const registeredForm = {
         ...savedForm,
-        onchainFormId: parsedFormId,
+        onchainFormId: registration.onchainFormId,
         isOnchain: true,
         registrationMode: "sui",
         activityEvents: [
@@ -636,7 +618,7 @@ export function useCreateFormPublish({
             actorAddress: accountAddress,
             actorRole,
             action: "form_updated",
-            txDigest: result.digest,
+            txDigest: registration.txDigest,
           }),
         ],
       } satisfies PreparedPublishForm;

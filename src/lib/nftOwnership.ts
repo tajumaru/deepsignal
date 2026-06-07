@@ -1,19 +1,13 @@
 import type { SuiJsonRpcClient } from "@mysten/sui/jsonRpc";
-import { kiosk } from "@mysten/kiosk";
-import { normalizeStructTag } from "@mysten/sui/utils";
 import { isSuiRateLimitError } from "./rpcErrors";
-
-export type OwnedObjectEntry = {
-  data?: {
-    objectId?: string;
-    type?: string;
-    owner?: unknown;
-    content?: {
-      dataType?: string;
-      fields?: Record<string, unknown>;
-    } | null;
-  } | null;
-};
+import {
+  breakdownStructType,
+  filterOwnedObjectsByType,
+  matchesOwnedObjectType,
+  normalizeStructType,
+  type OwnedObjectEntry,
+  type StructTypeBreakdown,
+} from "./nftOwnershipShared";
 
 type OwnedObjectsResponse = {
   data?: OwnedObjectEntry[];
@@ -50,15 +44,6 @@ export type MatchedKioskItem = {
   kioskId: string;
   type: string;
   isLocked: boolean;
-};
-
-export type StructTypeBreakdown = {
-  rawType: string;
-  normalizedType: string;
-  packageId: string;
-  module: string;
-  struct: string;
-  generics: string[];
 };
 
 export type TypeComparisonDiagnostic = {
@@ -213,106 +198,6 @@ function uniqueObjectEntries(entries: OwnedObjectEntry[]) {
   }, []);
 }
 
-export function normalizeSuiTypeName(value?: string | null) {
-  const trimmed = value?.trim() ?? "";
-  if (!trimmed) {
-    return "";
-  }
-  try {
-    return normalizeStructTag(trimmed);
-  } catch {
-    return trimmed.toLowerCase();
-  }
-}
-
-export function normalizeStructType(value?: string | null) {
-  return normalizeSuiTypeName(value);
-}
-
-function splitGenericArguments(value: string) {
-  const generics: string[] = [];
-  let current = "";
-  let depth = 0;
-
-  for (const char of value) {
-    if (char === "<") {
-      depth += 1;
-      current += char;
-      continue;
-    }
-    if (char === ">") {
-      depth = Math.max(0, depth - 1);
-      current += char;
-      continue;
-    }
-    if (char === "," && depth === 0) {
-      const trimmed = current.trim();
-      if (trimmed) {
-        generics.push(trimmed);
-      }
-      current = "";
-      continue;
-    }
-    current += char;
-  }
-
-  const trimmed = current.trim();
-  if (trimmed) {
-    generics.push(trimmed);
-  }
-
-  return generics;
-}
-
-export function breakdownStructType(value?: string | null): StructTypeBreakdown {
-  const rawType = value?.trim() ?? "";
-  const normalizedType = normalizeStructType(rawType);
-  if (!normalizedType) {
-    return {
-      rawType,
-      normalizedType,
-      packageId: "",
-      module: "",
-      struct: "",
-      generics: [],
-    };
-  }
-
-  const [packageId = "", module = "", structAndGenerics = ""] = normalizedType.split("::");
-  const genericStartIndex = structAndGenerics.indexOf("<");
-  const hasGenerics = genericStartIndex >= 0 && structAndGenerics.endsWith(">");
-  const struct = hasGenerics ? structAndGenerics.slice(0, genericStartIndex) : structAndGenerics;
-  const genericContent = hasGenerics
-    ? structAndGenerics.slice(genericStartIndex + 1, -1)
-    : "";
-
-  return {
-    rawType,
-    normalizedType,
-    packageId,
-    module,
-    struct,
-    generics: genericContent ? splitGenericArguments(genericContent) : [],
-  };
-}
-
-export function matchesOwnedObjectType(actualType: string | undefined, requiredType: string) {
-  const normalizedActualType = normalizeStructType(actualType);
-  const normalizedRequiredType = normalizeStructType(requiredType);
-  if (!normalizedActualType || !normalizedRequiredType) {
-    return false;
-  }
-  return normalizedActualType === normalizedRequiredType;
-}
-
-export function filterOwnedObjectsByType(entries: OwnedObjectEntry[], requiredTypes: string[]) {
-  const normalizedRequiredTypes = new Set(requiredTypes.map((value) => normalizeStructType(value)).filter(Boolean));
-  if (normalizedRequiredTypes.size === 0) {
-    return entries;
-  }
-  return entries.filter((entry) => normalizedRequiredTypes.has(normalizeStructType(entry.data?.type)));
-}
-
 export async function fetchAllOwnedSuiObjectsForClient(suiClient: OwnedObjectsClient, owner: string) {
   const matches: OwnedObjectEntry[] = [];
   let cursor: string | null | undefined = null;
@@ -398,6 +283,7 @@ async function fetchOwnedKioskItemsForClient(suiClient: OwnedObjectsClient, owne
     };
   }
 
+  const { kiosk } = await import("@mysten/kiosk");
   const kioskClient = suiClient.$extend(kiosk()) as KioskQueryClient;
   const kioskIds = new Set<string>();
   let cursor: string | null = null;
@@ -651,3 +537,10 @@ export async function hasRequiredNft(
 ) {
   return checkOwnedNftsForClient(suiClient, owner, requiredTypes, network, rpcEndpoint);
 }
+
+export {
+  breakdownStructType,
+  filterOwnedObjectsByType,
+  matchesOwnedObjectType,
+  normalizeStructType,
+} from "./nftOwnershipShared";

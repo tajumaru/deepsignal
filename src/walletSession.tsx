@@ -1,7 +1,6 @@
 import { useEffect, useMemo } from "react";
 import { logRouteLifecycle, setDeepSignalDebugReadiness } from "./lib/routeDiagnostics";
-import { useWalletProviderRuntime } from "./components/WalletSurfaceRuntime";
-import { useOptionalWalletConnection } from "./walletStatus";
+import { useCanonicalWalletSessionState } from "./walletCanonicalState";
 import {
   setWalletSessionState,
   type WalletSessionPhase,
@@ -9,43 +8,51 @@ import {
 } from "./walletSessionState";
 
 export function WalletSessionBootstrap() {
-  const walletRuntime = useWalletProviderRuntime();
-  const connection = useOptionalWalletConnection();
+  const canonicalSession = useCanonicalWalletSessionState();
 
   const value = useMemo<WalletSessionState>(() => {
-    const providerMounted = walletRuntime.loaded;
-    const providerLoading = walletRuntime.loading;
-    const phase: WalletSessionPhase = !providerMounted
+    const phase: WalletSessionPhase = !canonicalSession.providerMounted
       ? "provider_deferred"
-      : connection.isRestoringConnection
+      : canonicalSession.canonicalStatus === "connecting"
         ? "restoring"
-        : connection.status === "connected" && connection.accountAddress
+        : canonicalSession.canonicalStatus === "connected"
           ? "connected"
           : "disconnected";
 
     return {
-      accountAddress: connection.accountAddress,
-      isRestoringConnection: connection.isRestoringConnection,
+      accountAddress: canonicalSession.accountAddress,
+      canonicalStatus: canonicalSession.canonicalStatus,
+      isRestoringConnection: canonicalSession.isRestoringConnection,
       phase,
-      providerLoading,
-      providerMounted,
-      status: connection.status,
-      walletName: connection.walletName,
+      providerLoading: canonicalSession.providerLoading,
+      providerMounted: canonicalSession.providerMounted,
+      status: canonicalSession.connectionStatus,
+      walletName: canonicalSession.walletName,
     };
-  }, [connection.accountAddress, connection.isRestoringConnection, connection.status, connection.walletName, walletRuntime.loaded, walletRuntime.loading]);
+  }, [canonicalSession]);
 
   useEffect(() => {
     setWalletSessionState(value);
+    logRouteLifecycle("wallet-session-state", {
+      providerLoading: value.providerLoading,
+      providerMounted: value.providerMounted,
+      walletName: value.walletName,
+      walletSessionPhase: value.phase,
+      walletStatus: value.canonicalStatus,
+    });
     logRouteLifecycle("wallet-session:state", {
+      canonicalStatus: value.canonicalStatus,
       phase: value.phase,
       providerLoading: value.providerLoading,
       providerMounted: value.providerMounted,
       status: value.status,
       walletName: value.walletName,
+      walletSessionPhase: value.phase,
+      walletStatus: value.canonicalStatus,
     });
     setDeepSignalDebugReadiness({
       walletProviderMounted: value.providerMounted,
-      walletProviderPending: !value.providerMounted,
+      walletProviderPending: value.providerLoading || !value.providerMounted,
       walletSessionPhase: value.phase,
     });
   }, [value]);

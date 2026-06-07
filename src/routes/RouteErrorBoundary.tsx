@@ -16,6 +16,8 @@ import {
 } from "../lib/buildAssetDiagnostics";
 import { updateDeepSignalToLatest } from "../lib/buildUpdate";
 import { logRouteLifecycle } from "../lib/routeDiagnostics";
+import { getWalletProviderRuntimeSnapshot } from "../components/WalletSurfaceRuntime";
+import { getWalletSessionStateSnapshot } from "../walletSessionState";
 import {
   getRouteId,
   shouldShowRouteDiagnostics,
@@ -73,6 +75,22 @@ function getRecentFailedImportDiagnostics() {
     return [];
   }
   return window.__DEEPSIGNAL_DEBUG__?.failedImports?.slice(-5) ?? [];
+}
+
+function routePathShowsWalletUi(routePath: string) {
+  const pathname = routePath.split(/[?#]/)[0] || "/";
+  return (
+    pathname === "/admin" ||
+    pathname === "/dashboard" ||
+    pathname === "/create" ||
+    pathname === "/compose" ||
+    pathname === "/submitted" ||
+    pathname.startsWith("/submitted/") ||
+    pathname === "/my-submissions" ||
+    pathname.startsWith("/my-submissions/") ||
+    pathname.startsWith("/admin/") ||
+    pathname.startsWith("/dashboard/")
+  );
 }
 
 let routeErrorDiagnosticsRuntimePromise: Promise<typeof import("./routeErrorDiagnosticsRuntime")> | null = null;
@@ -135,6 +153,19 @@ export class RouteErrorBoundary extends Component<
     const mixedBuildStatus = getMixedBuildStatus();
     const routeId = getRouteId(this.props.routePath);
     const failedImportDiagnostics = getRecentFailedImportDiagnostics();
+    const walletSession = getWalletSessionStateSnapshot();
+    const walletRuntime = getWalletProviderRuntimeSnapshot();
+    const missingSuiClientContext = /Could not find SuiClientContext/i.test(error.message);
+    const walletProviderDiagnostics = {
+      appShellHeaderRenderedWalletRuntimePanel: window.__DEEPSIGNAL_DEBUG__?.providerReadiness?.appShellHeaderWalletPanel === "runtime",
+      routeWalletSurface: routePathShowsWalletUi(this.props.routePath),
+      suiClientContextAvailable: walletRuntime.contextAvailable,
+      walletProviderChunkLoaded: walletRuntime.chunkLoaded,
+      walletProviderCommittedOnce: walletRuntime.hasCommittedOnce,
+      walletProviderMounted: walletSession.providerMounted,
+      walletProviderPending: walletSession.providerLoading || !walletSession.providerMounted,
+      walletSessionPhase: walletSession.phase,
+    };
     reportSystemError({
       error,
       errorName: error.name,
@@ -149,6 +180,7 @@ export class RouteErrorBoundary extends Component<
         componentStack: errorInfo.componentStack,
         failedImportDiagnostics,
         mixedBuildAssetsDetected: mixedBuildStatus.detected,
+        ...(missingSuiClientContext ? walletProviderDiagnostics : {}),
       },
     });
     console.error("DeepSignal route failed to render.", {
@@ -169,6 +201,7 @@ export class RouteErrorBoundary extends Component<
       userAgent,
       componentStack: errorInfo.componentStack,
       failedImportDiagnostics,
+      ...(missingSuiClientContext ? walletProviderDiagnostics : {}),
     });
     logRouteLifecycle("route:error-boundary", {
       routePath: this.props.routePath,
@@ -186,6 +219,7 @@ export class RouteErrorBoundary extends Component<
       observedBuildAssets: mixedBuildStatus.observed,
       userAgent,
       componentStack: errorInfo.componentStack,
+      ...(missingSuiClientContext ? walletProviderDiagnostics : {}),
     });
     if (mixedBuildStatus.detected) {
       logRouteLifecycle("mixed_build_assets_detected", {

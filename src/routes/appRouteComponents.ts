@@ -39,11 +39,6 @@ export function createAppRouteComponents(retryNonce = 0) {
         resolveLazyRouteModuleWithSafariRetry(module, "route-explore"),
       ),
     ),
-    TroubleshootingPage: lazy(() =>
-      retryLazyImport(() => import("../pages/TroubleshootingPage"), "route-troubleshooting").then((module) =>
-        resolveLazyRouteModuleWithSafariRetry(module, "route-troubleshooting"),
-      ),
-    ),
     InsightsFixturePage: lazy(() =>
       retryLazyImport(() => import("../pages/InsightsFixturePage"), "route-insights-fixture").then((module) =>
         resolveLazyRouteModuleWithSafariRetry(module, "route-insights-fixture"),

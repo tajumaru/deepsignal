@@ -6714,6 +6714,10 @@ body.composer-mode .bg-orb {
   background: rgba(2, 12, 22, 0.62);
 }
 
+.signal-source-control.is-three-option {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
 .signal-asset-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -6853,5 +6857,286 @@ body.composer-mode .bg-orb {
 
   .publish-signal-lens-grid {
     grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 767px) {
+  .signal-source-control.is-three-option {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.2rem;
+    padding: 0.22rem;
+  }
+
+  .signal-source-control.is-three-option button {
+    min-height: 2rem;
+    padding-inline: 0.2rem;
+    font-size: 0.68rem;
+    letter-spacing: -0.01em;
+  }
+
+  .signal-asset-panel {
+    gap: 0.68rem;
+    padding: 0.72rem;
+    border-radius: 14px;
+  }
+
+  .signal-asset-heading {
+    gap: 0.16rem;
+  }
+
+  .signal-asset-heading-row {
+    gap: 0.48rem;
+  }
+
+  .signal-asset-heading strong,
+  .signal-logo-panel strong,
+  .signal-identity-heading span:not(.signal-chip) {
+    font-size: 0.96rem;
+    line-height: 1.14;
+  }
+
+  .signal-asset-panel .muted,
+  .signal-identity-heading .muted {
+    margin-top: 0.08rem;
+    font-size: 0.74rem;
+    line-height: 1.34;
+  }
+
+  .signal-asset-clear-button {
+    min-height: 1.72rem;
+    padding: 0.18rem 0.5rem;
+    font-size: 0.7rem;
+  }
+
+  .composer-step-card {
+    gap: 0.72rem;
+  }
+
+  .composer-step-card > .section-row {
+    gap: 0.32rem;
+    margin-bottom: -0.08rem;
+  }
+
+  .composer-step-card > .section-row .eyebrow {
+    margin-bottom: 0.12rem;
+    font-size: 0.58rem;
+    line-height: 1;
+    letter-spacing: 0.13em;
+  }
+
+  .composer-step-card > .section-row h2 {
+    font-size: clamp(1.02rem, 5.8vw, 1.22rem);
+    line-height: 1.08;
+  }
+
+  .composer-step-card > .section-row .muted {
+    margin-top: 0.14rem;
+    font-size: 0.74rem;
+    line-height: 1.32;
+  }
+
+  .composer-pane-heading {
+    gap: 0.42rem;
+  }
+
+  .composer-pane-heading > div:first-child {
+    gap: 0.02rem;
+  }
+
+  .composer-pane-heading .eyebrow {
+    margin-bottom: 0.12rem;
+    font-size: 0.58rem;
+    line-height: 1;
+    letter-spacing: 0.13em;
+  }
+
+  .composer-pane-heading h2 {
+    font-size: clamp(1.02rem, 5.8vw, 1.22rem);
+    line-height: 1.08;
+  }
+
+  .composer-pane-heading .muted {
+    margin-top: 0.14rem;
+    font-size: 0.74rem;
+    line-height: 1.32;
+  }
+
+  .composer-pane-heading-action {
+    min-width: 0;
+    min-height: 1.9rem;
+    padding-inline: 0.72rem;
+    font-size: 0.74rem;
+  }
+
+  .publish-quick-card-grid-three {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.36rem;
+  }
+
+  .publish-quick-card-grid-three .publish-quick-choice-card {
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.32rem;
+    min-height: 4.2rem;
+    padding: 0.54rem 0.36rem;
+    border-radius: 14px;
+    text-align: center;
+  }
+
+  .publish-quick-card-grid-three .publish-quick-choice-icon {
+    flex-basis: 1.7rem;
+    width: 1.7rem;
+    height: 1.7rem;
+  }
+
+  .publish-quick-card-grid-three .publish-quick-choice-copy {
+    justify-items: center;
+    gap: 0.08rem;
+  }
+
+  .publish-quick-card-grid-three .publish-quick-choice-copy strong {
+    font-size: 0.7rem;
+    line-height: 1.18;
+  }
+
+  .composer-toolbar {
+    gap: 0.4rem;
+    padding: 0.5rem 0.72rem 0.56rem;
+  }
+
+  .composer-toolbar-copy {
+    gap: 0.02rem;
+  }
+
+  .composer-toolbar-copy .eyebrow {
+    font-size: 0.58rem;
+    line-height: 1;
+    letter-spacing: 0.13em;
+  }
+
+  .composer-toolbar-copy h1 {
+    font-size: clamp(0.98rem, 5.6vw, 1.18rem);
+    line-height: 1.08;
+  }
+
+  .composer-intro {
+    display: none;
+  }
+
+  .composer-toolbar-meta {
+    gap: 0.2rem;
+    margin-top: 0.04rem;
+  }
+
+  .composer-toolbar-meta-item {
+    min-height: 1.2rem;
+    padding: 0.06rem 0.34rem;
+    font-size: 0.62rem;
+  }
+
+  .composer-flow-steps {
+    gap: 0.4rem;
+  }
+
+  .composer-flow-step {
+    flex-basis: min(9.6rem, 54vw);
+    min-height: 3.5rem;
+    gap: 0.42rem;
+    padding: 0.48rem 0.56rem;
+    border-radius: 14px;
+    background:
+      radial-gradient(circle at top left, rgba(92, 170, 255, 0.12), transparent 48%),
+      linear-gradient(180deg, rgba(16, 37, 54, 0.98), rgba(10, 24, 37, 0.98));
+    border-color: rgba(104, 196, 255, 0.28);
+    box-shadow:
+      inset 0 1px 0 rgba(220, 245, 255, 0.06),
+      0 10px 22px rgba(0, 0, 0, 0.16);
+  }
+
+  .composer-flow-step::before {
+    background: linear-gradient(90deg, rgba(88, 185, 255, 0.9), rgba(88, 185, 255, 0.18));
+    opacity: 0.72;
+  }
+
+  .composer-flow-step .composer-flow-step-index {
+    background: linear-gradient(135deg, rgba(70, 176, 255, 0.22), rgba(46, 124, 255, 0.16));
+    color: #dff6ff;
+    box-shadow: 0 0 0 1px rgba(102, 202, 255, 0.16);
+  }
+
+  .composer-flow-step .composer-flow-step-state {
+    color: #a9d9ef;
+    border-color: rgba(104, 196, 255, 0.16);
+    background: rgba(36, 92, 128, 0.2);
+  }
+
+  .composer-flow-step.is-current {
+    border-color: rgba(255, 184, 77, 0.72);
+    background:
+      radial-gradient(circle at top left, rgba(255, 196, 92, 0.22), transparent 46%),
+      linear-gradient(180deg, rgba(73, 47, 14, 0.94), rgba(38, 25, 9, 0.96));
+    box-shadow:
+      0 0 0 1px rgba(255, 196, 92, 0.18),
+      0 16px 28px rgba(0, 0, 0, 0.22);
+  }
+
+  .composer-flow-step.is-current::before {
+    background: linear-gradient(90deg, rgba(255, 196, 92, 0.98), rgba(255, 146, 43, 0.44));
+  }
+
+  .composer-flow-step.is-current .composer-flow-step-index {
+    background: linear-gradient(135deg, rgba(255, 196, 92, 0.34), rgba(255, 146, 43, 0.26));
+    color: #fff4df;
+    box-shadow: 0 0 0 1px rgba(255, 196, 92, 0.24);
+  }
+
+  .composer-flow-step.is-current .composer-flow-step-state {
+    color: #fff4dc;
+    border-color: rgba(255, 196, 92, 0.34);
+    background: rgba(255, 184, 77, 0.16);
+  }
+
+  .composer-flow-step-index {
+    width: 1.32rem;
+    height: 1.32rem;
+    font-size: 0.72rem;
+  }
+
+  .composer-flow-step-copy strong {
+    font-size: 0.84rem;
+  }
+
+  .composer-flow-step-state {
+    font-size: 0.58rem;
+  }
+
+  .composer-view-mode-panel {
+    gap: 0.42rem;
+    padding: 0.54rem 0.68rem;
+    border-radius: 18px;
+  }
+
+  .composer-view-mode-panel .eyebrow {
+    margin-bottom: 0.08rem;
+    font-size: 0.56rem;
+    line-height: 1.05;
+    letter-spacing: 0.14em;
+  }
+
+  .composer-view-mode-panel strong {
+    font-size: 0.88rem;
+    line-height: 1.12;
+  }
+
+  .composer-view-mode-toggle {
+    gap: 0.22rem;
+    padding: 0.18rem;
+  }
+
+  .composer-view-mode-toggle button {
+    min-height: 2.15rem;
+    padding: 0.28rem 0.56rem;
+    font-size: 0.88rem;
   }
 }

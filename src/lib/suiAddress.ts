@@ -17,6 +17,10 @@ export function getSuiAddressValidationState(value: unknown): "empty" | "valid" 
   return normalizeHexAddress(address) ? "valid" : "invalid";
 }
 
+export function isValidSuiAddress(value: unknown) {
+  return getSuiAddressValidationState(value) === "valid";
+}
+
 export function normalizeValidSuiAddress(value: unknown) {
   const address = typeof value === "string" ? value.trim() : "";
   const normalizedAddress = normalizeHexAddress(address);
@@ -24,4 +28,8 @@ export function normalizeValidSuiAddress(value: unknown) {
     return address;
   }
   return normalizedAddress;
+}
+
+export function normalizeSuiAddress(value: unknown) {
+  return normalizeValidSuiAddress(value);
 }

@@ -1,5 +1,5 @@
-import { isValidSuiAddress } from "@mysten/sui/utils";
 import { shortAddress } from "../lib/sui";
+import { isValidSuiAddress } from "../lib/suiAddress";
 import { useSuiName } from "./useSuiName";
 
 function normalizeReviewerValue(value?: string | null) {

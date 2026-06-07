@@ -8,12 +8,16 @@ import { useWalletProviderRuntime } from "../components/WalletSurfaceRuntime";
 import { buildInfo } from "../lib/buildInfo";
 import { getChunkFailureUrl } from "../lib/chunkLoadRecovery";
 import {
+  isDashboardBootPending,
   markDashboardWalletImportFailed,
   markDashboardWalletImportReady,
   markDashboardWalletImportStarted,
+  useDashboardProjectRestoreSnapshot,
 } from "../lib/dashboardProjectRestore";
 import { getBrowserCapabilitiesSnapshot, logRouteLifecycle } from "../lib/routeDiagnostics";
 import { REQUIRE_GLOBAL_WALRUS_RUNTIME } from "../lib/runtimeFlags";
+import { useRouteRecoveryState } from "../lib/routeRecoveryState";
+import { useWalletSessionState } from "../walletSessionState";
 import type { AppRouteComponents } from "./appRouteComponents";
 
 function LegacyFormInboxRedirect({ basePath }: { basePath: "/admin" | "/dashboard" }) {
@@ -117,6 +121,19 @@ class WalletRuntimeBoundary extends Component<WalletRuntimeBoundaryProps, Wallet
   }
 
   componentDidCatch(error: unknown, errorInfo: ErrorInfo) {
+    if (isDashboardRouteImportFailure(error)) {
+      logRouteLifecycle("dashboard:route-lazy-bubbled-to-wallet-boundary", {
+        buildVersion: buildInfo.appVersion,
+        errorName: error instanceof Error ? error.name : "Error",
+        errorMessage: error instanceof Error ? error.message : String(error ?? "Unknown dashboard route failure"),
+        failedImport: getLatestDashboardFailedImport(),
+        mobileSafari: Boolean(getBrowserCapabilitiesSnapshot().mobileSafari),
+        recoveryScope: "route-only",
+        routePath: this.props.routePath,
+        componentStack: errorInfo.componentStack,
+      });
+      return;
+    }
     logRouteLifecycle("provider:wallet-import-failed", {
       buildVersion: buildInfo.appVersion,
       chunkUrl: null,
@@ -182,6 +199,14 @@ function getLatestDashboardFailedImport() {
   return null;
 }
 
+function isDashboardRouteImportFailure(error: unknown) {
+  if (error instanceof Error && error.name === "MissingLazyRouteExportError") {
+    return true;
+  }
+  const latestFailedImport = getLatestDashboardFailedImport();
+  return latestFailedImport?.label === "route-admin-dashboard";
+}
+
 class DashboardRouteBoundary extends Component<DashboardRouteBoundaryProps, DashboardRouteBoundaryState> {
   state: DashboardRouteBoundaryState = { error: null };
 
@@ -229,6 +254,80 @@ class DashboardRouteBoundary extends Component<DashboardRouteBoundaryProps, Dash
   }
 }
 
+function DashboardRouteElement({
+  AdminDashboardPage,
+  onRetryRoute,
+  routeRetryNonce,
+  routePath,
+}: {
+  AdminDashboardPage: AppRouteComponents["AdminDashboardPage"];
+  onRetryRoute?: () => void;
+  routeRetryNonce?: number;
+  routePath: string;
+}) {
+  const restoreSnapshot = useDashboardProjectRestoreSnapshot();
+  const walletSession = useWalletSessionState();
+  const restorePending = isDashboardBootPending(restoreSnapshot, {
+    walletProviderMounted: walletSession.providerMounted,
+    walletProviderPending: walletSession.providerLoading || !walletSession.providerMounted,
+    walletSessionPhase: walletSession.phase,
+  });
+  const showEmptyProjectState =
+    !restorePending &&
+    restoreSnapshot.state === "ready_without_project" &&
+    restoreSnapshot.currentProjectId === "";
+
+  return (
+    <WithDeferredWalletRuntime onRetry={onRetryRoute}>
+      {showEmptyProjectState ? (
+        <DashboardShellFirstPanel
+          onRetryWalletRuntime={onRetryRoute ?? (() => undefined)}
+          routePath={routePath}
+          walletStatusMessage="Wallet session ready. No signal project is selected yet."
+        />
+      ) : (
+        <DashboardRouteBoundary
+          onRetry={onRetryRoute}
+          resetKey={`dashboard:${routePath}:${routeRetryNonce ?? 0}`}
+          routePath={routePath}
+        >
+          <WithWalrusRuntime>
+            <AdminDashboardPage />
+          </WithWalrusRuntime>
+        </DashboardRouteBoundary>
+      )}
+    </WithDeferredWalletRuntime>
+  );
+}
+
+function CreateRouteElement({
+  FormBuilderPage,
+  initialSurface,
+}: {
+  FormBuilderPage: AppRouteComponents["FormBuilderPage"];
+  initialSurface?: "home" | "composer";
+}) {
+  const routeRecovery = useRouteRecoveryState();
+
+  if (routeRecovery.phase === "css_recovering") {
+    return <div className="panel">Recovering route assets...</div>;
+  }
+
+  if (routeRecovery.phase === "css_failed") {
+    return (
+      <div className="panel">
+        <strong>Route assets need reload</strong>
+        <p>The Create Signal route stylesheet failed to load on this device. Reload route assets to try again.</p>
+        <button type="button" onClick={() => window.location.reload()}>
+          Reload route assets
+        </button>
+      </div>
+    );
+  }
+
+  return <FormBuilderPage initialSurface={initialSurface} />;
+}
+
 export function AppRoutes({
   components,
   onRetryRoute,
@@ -248,7 +347,6 @@ export function AppRoutes({
     SubmittedHistoryPage,
     MyResponsesPage,
     ExploreSignalsPage,
-    TroubleshootingPage,
     InsightsFixturePage,
   } = components;
 
@@ -260,7 +358,7 @@ export function AppRoutes({
         path="/create"
         element={
           <WithWalrusRuntime>
-            <FormBuilderPage />
+            <CreateRouteElement FormBuilderPage={FormBuilderPage} />
           </WithWalrusRuntime>
         }
       />
@@ -268,7 +366,7 @@ export function AppRoutes({
         path="/compose"
         element={
           <WithWalrusRuntime>
-            <FormBuilderPage />
+            <CreateRouteElement FormBuilderPage={FormBuilderPage} />
           </WithWalrusRuntime>
         }
       />
@@ -283,28 +381,22 @@ export function AppRoutes({
       <Route
         path="/dashboard"
         element={
-          <DashboardRouteBoundary
-            onRetry={onRetryRoute}
-            resetKey={`dashboard:${routePath}:${routeRetryNonce}`}
+          <DashboardRouteElement
+            AdminDashboardPage={AdminDashboardPage}
+            onRetryRoute={onRetryRoute}
             routePath={routePath}
-          >
-            <WithDeferredWalletRuntime onRetry={onRetryRoute}>
-              <WithWalrusRuntime>
-                <AdminDashboardPage />
-              </WithWalrusRuntime>
-            </WithDeferredWalletRuntime>
-          </DashboardRouteBoundary>
+            routeRetryNonce={routeRetryNonce}
+          />
         }
       />
       <Route path="/admin/access" element={<AccessManagementPage />} />
       <Route path="/dashboard/access" element={<AccessManagementPage />} />
-      <Route path="/troubleshooting" element={<TroubleshootingPage />} />
       <Route path="/dev/insights-fixture" element={<InsightsFixturePage />} />
       <Route
         path="/admin/forms/new"
         element={
           <WithWalrusRuntime>
-            <FormBuilderPage initialSurface="composer" />
+            <CreateRouteElement FormBuilderPage={FormBuilderPage} initialSurface="composer" />
           </WithWalrusRuntime>
         }
       />

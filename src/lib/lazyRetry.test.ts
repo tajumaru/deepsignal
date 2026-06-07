@@ -16,19 +16,25 @@ describe("resolveLazyRouteModule", () => {
     vi.restoreAllMocks();
   });
 
-  it("resolves public form lazy modules from a default export first", () => {
+  it("prefers the expected named export when a route contract asks for one", () => {
     const resolved = resolveLazyRouteModule(
       { default: DefaultPublicFormPage, PublicFormPage: NamedPublicFormPage },
       "route-public-form",
     );
 
-    expect(resolved.default).toBe(DefaultPublicFormPage);
+    expect(resolved.default).toBe(NamedPublicFormPage);
   });
 
   it("falls back to the expected public form named export", () => {
     const resolved = resolveLazyRouteModule({ PublicFormPage: NamedPublicFormPage }, "route-public-form");
 
     expect(resolved.default).toBe(NamedPublicFormPage);
+  });
+
+  it("falls back to the default export when the expected named export is not present", () => {
+    const resolved = resolveLazyRouteModule({ default: DefaultPublicFormPage }, "route-public-form");
+
+    expect(resolved.default).toBe(DefaultPublicFormPage);
   });
 
   it("finds the expected export inside nested module objects from cache-busted chunk imports", () => {

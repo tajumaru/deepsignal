@@ -1,6 +1,6 @@
 import { ConnectModal } from "@mysten/dapp-kit";
-import { WalletStatus } from "./WalletStatus";
 import type { SuiWalletState } from "../../hooks/useSuiWallet";
+import { WalletStatus } from "./WalletStatus";
 
 interface ConnectWalletButtonProps {
   wallet: SuiWalletState;
@@ -9,6 +9,7 @@ interface ConnectWalletButtonProps {
   connectedMenuOpen?: boolean;
   connectModalOpen?: boolean;
   onConnectModalOpenChange?: (open: boolean) => void;
+  onManualConnectRequest?: () => Promise<void> | void;
 }
 
 export function ConnectWalletButton({
@@ -18,6 +19,7 @@ export function ConnectWalletButton({
   connectedMenuOpen = false,
   connectModalOpen,
   onConnectModalOpenChange,
+  onManualConnectRequest,
 }: ConnectWalletButtonProps) {
   if (wallet.status === "connected") {
     return (
@@ -40,7 +42,7 @@ export function ConnectWalletButton({
     );
   }
 
-  if (wallet.status === "connecting") {
+  if (wallet.status === "connecting" || wallet.status === "provider_pending" || wallet.status === "booting") {
     return (
       <button type="button" className="wallet-sync-button is-syncing" disabled>
         <WalletStatus status={wallet.status} compact={compact} />
@@ -49,14 +51,22 @@ export function ConnectWalletButton({
   }
 
   return (
-    <ConnectModal
-      open={connectModalOpen ?? false}
-      onOpenChange={(open) => onConnectModalOpenChange?.(open)}
-      trigger={
-        <button type="button" className="wallet-connect-trigger">
-          Connect Wallet
-        </button>
-      }
-    />
+    <>
+      <button
+        type="button"
+        className="wallet-connect-trigger"
+        onClick={() => void onManualConnectRequest?.()}
+        disabled={wallet.isConnecting || connectModalOpen}
+      >
+        Connect Wallet
+      </button>
+      {connectModalOpen ? (
+        <ConnectModal
+          open
+          onOpenChange={(open) => onConnectModalOpenChange?.(open)}
+          trigger={<span aria-hidden="true" style={{ display: "none" }} />}
+        />
+      ) : null}
+    </>
   );
 }

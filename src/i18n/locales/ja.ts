@@ -671,7 +671,7 @@ export const jaMessages: LocaleMessages = {
     signalCoverSourceLabel: "\u30ab\u30d0\u30fc\u753b\u50cf\u306e\u53d6\u308a\u8fbc\u307f\u65b9\u6cd5",
     signalLogoSourceLabel: "\u30ed\u30b4\u306e\u53d6\u308a\u8fbc\u307f\u65b9\u6cd5",
     signalSourceNone: "\u30ed\u30b4\u306a\u3057",
-    signalSourceUpload: "\u30d5\u30a1\u30a4\u30eb\u3092\u30a2\u30c3\u30d7\u30ed\u30fc\u30c9",
+    signalSourceUpload: "\u30a2\u30c3\u30d7\u30ed\u30fc\u30c9",
     signalSourceUrl: "\u5916\u90e8 URL",
     signalUploadDropHint: "\u3053\u3053\u306b\u753b\u50cf\u3092\u30c9\u30ed\u30c3\u30d7\u3001\u307e\u305f\u306f\u30af\u30ea\u30c3\u30af\u3057\u3066\u9078\u629e\u3002",
     signalCoverUploadHelp: "PNG, JPG, WEBP, GIF / 1 MB \u307e\u3067\u3002",

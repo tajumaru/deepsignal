@@ -4,6 +4,9 @@ import { buildInfo } from "./buildInfo";
 type DiagnosticDetails = Record<string, unknown>;
 type ReadinessState = Record<string, unknown>;
 const SELECTED_PROJECT_ID_KEY = "deepsignal.projectRegistry.selectedProjectId";
+const DIAGNOSTIC_LOG_STORAGE_KEY = "deepsignal.runtimeDiagnostics.recentEvents";
+const MAX_RECENT_RUNTIME_EVENTS = 200;
+const EMPTY_RECENT_RUNTIME_EVENTS: RecentRuntimeEvent[] = [];
 
 export type BrowserCapabilities = {
   mobileSafari?: boolean;
@@ -44,6 +47,13 @@ export type ChunkDependencyProbe = {
   totalCount: number;
 };
 
+export type RecentRuntimeEvent = {
+  at: number;
+  details?: DiagnosticDetails;
+  event: string;
+  kind: "resource-error" | "route" | "runtime-error";
+};
+
 declare global {
   interface Window {
     __DEEPSIGNAL_ROUTE_EVENTS__?: Array<{
@@ -52,6 +62,7 @@ declare global {
       details?: DiagnosticDetails;
     }>;
     __DEEPSIGNAL_DEBUG__?: {
+      recentRuntimeEvents?: RecentRuntimeEvent[];
       providerReadiness: ReadinessState;
       routeTimings: Array<{
         event: string;
@@ -117,6 +128,8 @@ declare global {
   }
 }
 
+const runtimeEventListeners = new Set<() => void>();
+
 function sanitizeDetails(details?: DiagnosticDetails) {
   if (!details) {
     return undefined;
@@ -141,10 +154,16 @@ export function logRouteLifecycle(event: string, details?: DiagnosticDetails) {
     return;
   }
 
+  const capabilities = getBrowserCapabilitiesSnapshot();
   const entry = {
     event,
     at: Math.round(performance.now()),
-    details: sanitizeDetails(details),
+    details: sanitizeDetails({
+      ...details,
+      buildVersion: details?.buildVersion ?? buildInfo.appVersion,
+      mobileSafari: details?.mobileSafari ?? Boolean(capabilities.mobileSafari),
+      routePath: details?.routePath ?? getCurrentRoutePath(),
+    }),
   };
   window.__DEEPSIGNAL_ROUTE_EVENTS__ ??= [];
   window.__DEEPSIGNAL_ROUTE_EVENTS__.push(entry);
@@ -152,11 +171,16 @@ export function logRouteLifecycle(event: string, details?: DiagnosticDetails) {
     window.__DEEPSIGNAL_ROUTE_EVENTS__.shift();
   }
   updateDeepSignalDebug(event.includes("hydration") ? "hydrationTimings" : "routeTimings", entry);
+  pushRecentRuntimeEvent({
+    ...entry,
+    kind: "route",
+  });
   console.info("[DeepSignal route]", entry);
 }
 
 function getDebugState() {
   window.__DEEPSIGNAL_DEBUG__ ??= {
+    recentRuntimeEvents: readPersistedRecentRuntimeEvents(),
     providerReadiness: {},
     routeTimings: [],
     hydrationTimings: [],
@@ -168,6 +192,7 @@ function getDebugState() {
     browserCapabilities: {},
     updatedAt: new Date().toISOString(),
   };
+  window.__DEEPSIGNAL_DEBUG__.recentRuntimeEvents ??= readPersistedRecentRuntimeEvents();
   window.__DEEPSIGNAL_DEBUG__.providerReadiness ??= {};
   window.__DEEPSIGNAL_DEBUG__.routeTimings ??= [];
   window.__DEEPSIGNAL_DEBUG__.hydrationTimings ??= [];
@@ -265,6 +290,53 @@ function updateDeepSignalDebug(
   state.updatedAt = new Date().toISOString();
 }
 
+function readPersistedRecentRuntimeEvents() {
+  if (typeof window === "undefined") {
+    return [];
+  }
+  try {
+    const raw = window.localStorage.getItem(DIAGNOSTIC_LOG_STORAGE_KEY);
+    if (!raw) {
+      return [];
+    }
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+    return parsed
+      .filter((entry): entry is RecentRuntimeEvent => Boolean(entry && typeof entry === "object" && "event" in entry))
+      .slice(-MAX_RECENT_RUNTIME_EVENTS);
+  } catch {
+    return [];
+  }
+}
+
+function persistRecentRuntimeEvents(entries: RecentRuntimeEvent[]) {
+  if (typeof window === "undefined") {
+    return;
+  }
+  try {
+    window.localStorage.setItem(DIAGNOSTIC_LOG_STORAGE_KEY, JSON.stringify(entries.slice(-MAX_RECENT_RUNTIME_EVENTS)));
+  } catch {
+    // Ignore storage write failures so diagnostics never break runtime paths.
+  }
+}
+
+function emitRuntimeEventUpdate() {
+  runtimeEventListeners.forEach((listener) => listener());
+}
+
+function pushRecentRuntimeEvent(entry: RecentRuntimeEvent) {
+  if (typeof window === "undefined") {
+    return;
+  }
+  const state = getDebugState();
+  state.recentRuntimeEvents = [...(state.recentRuntimeEvents ?? []), entry].slice(-MAX_RECENT_RUNTIME_EVENTS);
+  state.updatedAt = new Date().toISOString();
+  persistRecentRuntimeEvents(state.recentRuntimeEvents);
+  emitRuntimeEventUpdate();
+}
+
 function readSelectedProjectId() {
   try {
     return window.localStorage.getItem(SELECTED_PROJECT_ID_KEY) ?? "";
@@ -284,6 +356,7 @@ export function setDeepSignalDebugReadiness(details: ReadinessState) {
   };
   state.currentProjectId = readSelectedProjectId();
   state.updatedAt = new Date().toISOString();
+  emitRuntimeEventUpdate();
 }
 
 export function setDeepSignalCacheRestoreSource(source: string) {
@@ -294,6 +367,7 @@ export function setDeepSignalCacheRestoreSource(source: string) {
   state.cacheRestoreSource = source;
   state.currentProjectId = readSelectedProjectId();
   state.updatedAt = new Date().toISOString();
+  emitRuntimeEventUpdate();
 }
 
 export function setDeepSignalBrowserCapabilities(details: ReadinessState) {
@@ -307,6 +381,7 @@ export function setDeepSignalBrowserCapabilities(details: ReadinessState) {
   };
   state.currentProjectId = readSelectedProjectId();
   state.updatedAt = new Date().toISOString();
+  emitRuntimeEventUpdate();
 }
 
 export function recordFailedImport(
@@ -348,6 +423,7 @@ export function recordFailedImport(
     state.failedImports.shift();
   }
   state.updatedAt = new Date().toISOString();
+  emitRuntimeEventUpdate();
 }
 
 export function recordFailedImportProbe(
@@ -365,6 +441,7 @@ export function recordFailedImportProbe(
     }
   }
   state.updatedAt = new Date().toISOString();
+  emitRuntimeEventUpdate();
 }
 
 export function recordFailedImportDependencyProbe(label: string, dependencyProbe: ChunkDependencyProbe) {
@@ -379,6 +456,21 @@ export function recordFailedImportDependencyProbe(label: string, dependencyProbe
     }
   }
   state.updatedAt = new Date().toISOString();
+  emitRuntimeEventUpdate();
+}
+
+export function getFailedImportsSnapshot() {
+  if (typeof window === "undefined") {
+    return [];
+  }
+  return [...getDebugState().failedImports];
+}
+
+export function getResourceErrorsSnapshot() {
+  if (typeof window === "undefined") {
+    return [];
+  }
+  return [...getDebugState().resourceErrors];
 }
 
 export function recordRuntimeErrorDiagnostic({
@@ -411,6 +503,12 @@ export function recordRuntimeErrorDiagnostic({
     state.runtimeErrors.shift();
   }
   state.updatedAt = new Date().toISOString();
+  pushRecentRuntimeEvent({
+    at: Math.round(performance.now()),
+    details: sanitizeDetails(details),
+    event: `runtime-error:${sourceContext}`,
+    kind: "runtime-error",
+  });
 }
 
 export function recordResourceErrorDiagnostic({
@@ -452,6 +550,12 @@ export function recordResourceErrorDiagnostic({
     state.resourceErrors.shift();
   }
   state.updatedAt = new Date().toISOString();
+  pushRecentRuntimeEvent({
+    at: Math.round(performance.now()),
+    details: sanitizeDetails(details),
+    event: `resource-error:${sourceContext}`,
+    kind: "resource-error",
+  });
 }
 
 export function hasResourceErrorForUrl(url: string) {
@@ -485,4 +589,42 @@ export function formatRouteLifecycleDiagnostics() {
   const perfRows = formatPerfDiagnostics(["app:", "lazy:", "route:", "explore:", "wallet:", "admin:", "public-form:"]);
   const debugRows = window.__DEEPSIGNAL_DEBUG__ ? JSON.stringify(window.__DEEPSIGNAL_DEBUG__, null, 2) : "debug snapshot unavailable";
   return [routeRows || "no route lifecycle events recorded", perfRows, debugRows].join("\n\n");
+}
+
+export function subscribeRecentRuntimeEvents(listener: () => void) {
+  runtimeEventListeners.add(listener);
+  return () => {
+    runtimeEventListeners.delete(listener);
+  };
+}
+
+export function getRecentRuntimeEventsSnapshot() {
+  if (typeof window === "undefined") {
+    return EMPTY_RECENT_RUNTIME_EVENTS;
+  }
+  return getDebugState().recentRuntimeEvents ?? EMPTY_RECENT_RUNTIME_EVENTS;
+}
+
+export async function copyRouteLifecycleDiagnosticsToClipboard() {
+  if (typeof navigator === "undefined" || !navigator.clipboard) {
+    return false;
+  }
+  await navigator.clipboard.writeText(formatRouteLifecycleDiagnostics());
+  return true;
+}
+
+export function downloadRouteLifecycleDiagnostics() {
+  if (typeof window === "undefined" || typeof document === "undefined") {
+    return false;
+  }
+  const blob = new Blob([formatRouteLifecycleDiagnostics()], { type: "text/plain;charset=utf-8" });
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `deepsignal-diagnostics-${buildInfo.appVersion}.txt`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  window.URL.revokeObjectURL(url);
+  return true;
 }

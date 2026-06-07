@@ -1,9 +1,9 @@
 import { SuinsClient } from "@mysten/suins";
-import { isValidSuiAddress } from "@mysten/sui/utils";
 import { useQuery } from "@tanstack/react-query";
 import { isSuiRateLimitError } from "../lib/sui";
+import { isValidSuiAddress } from "../lib/suiAddress";
 import { handleRateLimitedRpcFallback, useRpcInfrastructure } from "../rpcInfrastructure";
-import { useRpcSuiClient } from "./useRpcSuiClient";
+import { useReadOnlySuiClient } from "./useReadOnlySuiClient";
 
 export interface SuiIdentityProfile {
   suinsName: string | null;
@@ -45,7 +45,7 @@ function normalizeAvatarUrl(url?: string | null) {
 }
 
 export function useSuiIdentity(address?: string | null, options: { enabled?: boolean } = {}) {
-  const suiClient = useRpcSuiClient();
+  const suiClient = useReadOnlySuiClient();
   const rpc = useRpcInfrastructure();
   const normalizedAddress = normalizeAddress(address);
   const queryEnabled = options.enabled ?? true;

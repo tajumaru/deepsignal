@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent, type ReactNode } from "react";
+﻿import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent } from "react";
 import { Link, useLocation, useParams, useSearchParams } from "react-router-dom";
 import { DynamicField } from "../components/DynamicField";
 import { EmptyState } from "../components/EmptyState";
@@ -6,10 +6,12 @@ import { FormHeaderImage } from "../components/FormHeaderImage";
 import { RichTextContent } from "../components/RichText";
 import { CriticalFailurePanel } from "../components/CriticalFailurePanel";
 import { RecoverableDraftBanner } from "../components/RecoverableDraftBanner";
-import { PublicSignalMetaChip } from "../components/PublicSignalMeta";
+import {
+  createDefaultPublicNftGateRuntimeState,
+  type PublicNftGateRuntimeState,
+} from "../features/public-form/components/PublicNftGateRuntimeState";
 import { SignalSubmissionPipeline } from "../features/public-form/components/SignalSubmissionPipeline";
 import { usePublicFormLoader } from "../features/public-form/hooks/usePublicFormLoader";
-import { usePublicNftGate } from "../features/public-form/hooks/usePublicNftGate";
 import { usePublicSubmission, type SignalPipelineStage } from "../features/public-form/hooks/usePublicSubmission";
 import { useI18n } from "../i18n";
 import { isNftGatedForm, requiresWalletForFormAccess } from "../lib/formAccess";
@@ -24,9 +26,8 @@ import { DEFAULT_ATTACHMENT_MAX_BYTES, ENCRYPTED_INLINE_ATTACHMENT_MAX_BYTES } f
 import { getOrderedFields, getVisibleFieldIds, isFieldRequired } from "../utils/formLogic";
 import { isAttachmentFieldType, isConfirmationCheckboxField } from "../lib/fieldTypes";
 import { collectSignalContext, type AttachedSignalContext } from "../lib/signalContext";
-import { isZkLoginEnabled } from "../lib/zkloginOAuth";
-import { loadZkLoginSession } from "../lib/zkloginSession";
 import type { FieldType } from "../types";
+import type { ZkLoginSession } from "../lib/zkloginSession";
 import { retryLazyImport } from "../lib/lazyRetry";
 import "../styles/components/forms-content.css";
 import "../styles/components/metadata-proof.css";
@@ -36,9 +37,14 @@ import "../styles/mobile/public-form.css";
 import "../styles/mobile/beacon.css";
 import "../styles/mobile/intent.css";
 
-const LazyPublicWalletAccountPanel = lazy(() =>
-  retryLazyImport(() => import("../features/public-form/components/PublicWalletAccountPanel"), "public-wallet-account").then(
-    (module) => ({ default: module.PublicWalletAccountPanel }),
+const LazyPublicNftGateLoader = lazy(() =>
+  retryLazyImport(() => import("../features/public-form/components/PublicNftGateLoader"), "public-nft-gate-loader").then(
+    (module) => ({ default: module.PublicNftGateLoader }),
+  ),
+);
+const LazyPublicWalletLoader = lazy(() =>
+  retryLazyImport(() => import("../features/public-form/components/PublicWalletLoader"), "public-wallet-loader").then(
+    (module) => ({ default: module.PublicWalletLoader }),
   ),
 );
 const LazyPublicFormSuccess = lazy(() =>
@@ -46,10 +52,11 @@ const LazyPublicFormSuccess = lazy(() =>
     (module) => ({ default: module.PublicFormSuccess }),
   ),
 );
-const LazyWalletSurface = lazy(() =>
-  retryLazyImport(() => import("../components/WalletSurface"), "public-wallet-surface").then((module) => ({
-    default: module.WalletSurface,
-  })),
+const LazyPublicFormLoadErrorDetails = lazy(() =>
+  retryLazyImport(
+    () => import("../features/public-form/components/PublicFormLoadErrorDetails"),
+    "public-form-load-error-details",
+  ).then((module) => ({ default: module.PublicFormLoadErrorDetails })),
 );
 const LazyLocalRecoveryCenter = lazy(() =>
   retryLazyImport(() => import("../components/LocalRecoveryCenter"), "public-local-recovery-center").then((module) => ({
@@ -166,8 +173,13 @@ export function PublicFormPage() {
   const [walletChoicePending, setWalletChoicePending] = useState(false);
   const [submissionOverlayDismissed, setSubmissionOverlayDismissed] = useState(false);
   const [publicFormExpanded, setPublicFormExpanded] = useState(false);
+  const [verifiedLoadErrorDetail, setVerifiedLoadErrorDetail] = useState<typeof loadErrorDetail>(null);
+  const [loadErrorDetailsVisible, setLoadErrorDetailsVisible] = useState(false);
+  const [loadingBlobStatuses, setLoadingBlobStatuses] = useState(false);
   const [resolvedWalletAddress, setResolvedWalletAddress] = useState<string | undefined>(undefined);
   const [walletProvider, setWalletProvider] = useState<string | undefined>(undefined);
+  const [zkLoginSession, setZkLoginSession] = useState<ZkLoginSession | null>(null);
+  const [nftGate, setNftGate] = useState<PublicNftGateRuntimeState>(createDefaultPublicNftGateRuntimeState);
   const manifestBlobId = searchParams.get("manifest") ?? "";
   const nftDebugEnabled = import.meta.env.DEV || searchParams.get("nftDebug") === "1";
   const nftDebugSearch = useMemo(() => {
@@ -182,13 +194,11 @@ export function PublicFormPage() {
   });
   const walletRequired = requiresWalletForFormAccess(form);
   const nftRequired = isNftGatedForm(form);
-  const zkLoginSession = !walletRequired && isZkLoginEnabled() ? loadZkLoginSession() : null;
   const walletModeSelected = walletRequired || answerAuthMode === "sui_wallet";
   const walletIdentityReady = walletRequired || (answerAuthMode === "sui_wallet" && Boolean(resolvedWalletAddress));
   const identityMode = walletIdentityReady ? "wallet" : zkLoginSession ? "zklogin" : "anonymous";
   const attachWallet = walletModeSelected;
   const walletFallback = <div className="wallet-connect-shell wallet-connect-shell-compact" />;
-  const nftGate = usePublicNftGate(form, resolvedWalletAddress);
   const nftCollectionArt = resolveNftCollectionArt(nftGate.nftGate);
   const nftDebugInfo = nftGate.debugInfo ?? {
     connectedAddress: resolvedWalletAddress ?? "",
@@ -274,6 +284,51 @@ export function PublicFormPage() {
   }, []);
 
   useEffect(() => {
+    setVerifiedLoadErrorDetail(null);
+    setLoadErrorDetailsVisible(false);
+    setLoadingBlobStatuses(false);
+  }, [loadErrorDetail]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    if (walletRequired) {
+      setZkLoginSession(null);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    void import("../lib/zkloginOAuth")
+      .then(({ isZkLoginEnabled }) => {
+        if (!isZkLoginEnabled()) {
+          return null;
+        }
+        return import("../lib/zkloginSession").then(({ loadZkLoginSession }) => loadZkLoginSession());
+      })
+      .then((session) => {
+        if (!cancelled) {
+          setZkLoginSession(session ?? null);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setZkLoginSession(null);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [walletRequired]);
+
+  useEffect(() => {
+    if (!nftRequired) {
+      setNftGate(createDefaultPublicNftGateRuntimeState());
+    }
+  }, [nftRequired]);
+
+  useEffect(() => {
     if (walletRequired) {
       setAnswerAuthMode("sui_wallet");
       setPublicStep("form");
@@ -302,33 +357,59 @@ export function PublicFormPage() {
     setWalletProvider(provider);
   }, []);
 
+  const handleLoadErrorBlobStatuses = useCallback(
+    async (open: boolean) => {
+      if (
+        !open ||
+        loadingBlobStatuses ||
+        !loadErrorDetail ||
+        verifiedLoadErrorDetail ||
+        (!loadErrorDetail.manifestBlobId && !loadErrorDetail.formBlobId)
+      ) {
+        return;
+      }
+
+      setLoadingBlobStatuses(true);
+      try {
+        const loader = await import("../features/public-form/runtime/publicFormLoadErrorDetailsLoader");
+        const runtime = await loader.loadPublicFormLoadErrorDetailsRuntime();
+        const statuses = await runtime.loadPublicFormBlobStatuses({
+          manifestBlobId: loadErrorDetail.manifestBlobId,
+          formBlobId: loadErrorDetail.formBlobId,
+        });
+        setVerifiedLoadErrorDetail({
+          ...loadErrorDetail,
+          ...statuses,
+        });
+      } finally {
+        setLoadingBlobStatuses(false);
+      }
+    },
+    [loadErrorDetail, loadingBlobStatuses, verifiedLoadErrorDetail],
+  );
+
   function renderWalletAccountPanel({
     fallback = walletFallback,
     hidden = false,
     className,
+    enabled = true,
   }: {
-    fallback?: ReactNode;
+    fallback?: JSX.Element | null;
     hidden?: boolean;
     className?: string;
+    enabled?: boolean;
   } = {}) {
-    const containerProps = hidden
-      ? ({
-          "aria-hidden": true,
-          style: { display: "none" },
-        } as const)
-      : undefined;
-
     return (
-      <LazyWalletSurface fallback={fallback}>
-        <div className={className} {...containerProps}>
-          <Suspense fallback={fallback}>
-            <LazyPublicWalletAccountPanel
-              onAccountAddressChange={handleWalletAccountAddressChange}
-              onWalletProviderChange={handleWalletProviderChange}
-            />
-          </Suspense>
-        </div>
-      </LazyWalletSurface>
+      <Suspense fallback={fallback}>
+        <LazyPublicWalletLoader
+          className={className}
+          enabled={enabled}
+          fallback={fallback}
+          hidden={hidden}
+          onAccountAddressChange={handleWalletAccountAddressChange}
+          onWalletProviderChange={handleWalletProviderChange}
+        />
+      </Suspense>
     );
   }
 
@@ -584,110 +665,54 @@ export function PublicFormPage() {
   }
 
   if (!form) {
+    const activeLoadErrorDetail = verifiedLoadErrorDetail ?? loadErrorDetail;
     const errorTitle =
-      loadErrorDetail?.code === "form_id_mismatch"
+      activeLoadErrorDetail?.code === "form_id_mismatch"
         ? t("sharedLinkMismatchTitle")
-        : loadErrorDetail
+        : activeLoadErrorDetail
           ? t("sharedLinkUnavailableTitle")
           : t("emptyFormNotFound");
     const retryGuidance =
-      loadErrorDetail?.code === "form_id_mismatch"
+      activeLoadErrorDetail?.code === "form_id_mismatch"
         ? t("sharedLinkMismatchGuidance")
-        : loadErrorDetail
+        : activeLoadErrorDetail
           ? t("sharedLinkRepublishGuidance")
           : "";
     return (
       <EmptyState>
         <h1>{errorTitle}</h1>
         <p>{loadError || t("publicFormMissingBody")}</p>
-        {loadErrorDetail ? (
-          <div className="metadata-list">
-            <div className="metadata-row">
-              <span>{t("sharedLinkFailureReason")}</span>
-              <strong>{loadErrorDetail.reason}</strong>
-            </div>
-            <div className="metadata-row">
-              <span>{t("expectedFormId")}</span>
-              <strong>{loadErrorDetail.expectedFormId ?? formId}</strong>
-            </div>
-            {loadErrorDetail.actualFormId ? (
-              <div className="metadata-row">
-                <span>{t("actualFormId")}</span>
-                <strong>{loadErrorDetail.actualFormId}</strong>
-              </div>
-            ) : null}
-            {loadErrorDetail.manifestBlobId ? (
-              <div className="metadata-row">
-                <span>{t("manifestBlobId")}</span>
-                <PublicSignalMetaChip type="manifest" value={loadErrorDetail.manifestBlobId} />
-              </div>
-            ) : null}
-            {loadErrorDetail.formBlobId ? (
-              <div className="metadata-row">
-                <span>{t("formBlobId")}</span>
-                <PublicSignalMetaChip type="blob" value={loadErrorDetail.formBlobId} />
-              </div>
-            ) : null}
-            {loadErrorDetail.manifestStatus ? (
-              <div className="metadata-row">
-                <span>{t("walrusBlobStatus")}</span>
-                <strong>{loadErrorDetail.manifestStatus}</strong>
-              </div>
-            ) : null}
-            {loadErrorDetail.formBlobStatus ? (
-              <div className="metadata-row">
-                <span>{t("linkedBlobStatus")}</span>
-                <strong>{loadErrorDetail.formBlobStatus}</strong>
-              </div>
-            ) : null}
-            {loadErrorDetail.failedAssetPath ? (
-              <>
-                <div className="metadata-row">
-                  <span>{t("failedAsset")}</span>
-                  <strong>{loadErrorDetail.failedAssetPath}</strong>
-                </div>
-                <div className="metadata-row">
-                  <span>{t("assetStatus")}</span>
-                  <strong>
-                    {loadErrorDetail.failedAssetStatus ?? "unknown"}
-                    {loadErrorDetail.failedAssetContentType ? ` · ${loadErrorDetail.failedAssetContentType}` : ""}
-                  </strong>
-                </div>
-                <div className="metadata-row">
-                  <span>{t("assetProbeAttempts")}</span>
-                  <strong>{loadErrorDetail.failedAssetAttempts ?? 1}</strong>
-                </div>
-                {loadErrorDetail.failedAssetBuild ? (
-                  <div className="metadata-row">
-                    <span>{t("assetBuild")}</span>
-                    <strong>{loadErrorDetail.failedAssetBuild}</strong>
-                  </div>
-                ) : null}
-                {loadErrorDetail.failedAssetUrl ? (
-                  <div className="metadata-row">
-                    <span>{t("assetUrl")}</span>
-                    <strong>{loadErrorDetail.failedAssetUrl}</strong>
-                  </div>
-                ) : null}
-                {loadErrorDetail.failedAssetErrorMessage ? (
-                  <div className="metadata-row">
-                    <span>{t("assetNetworkError")}</span>
-                    <strong>{loadErrorDetail.failedAssetErrorMessage}</strong>
-                  </div>
-                ) : null}
-              </>
-            ) : null}
-            <div className="metadata-row">
-              <span>{t("retryGuidance")}</span>
-              <strong>{retryGuidance || loadErrorDetail.guidance}</strong>
-            </div>
-            {loadErrorDetail.republishPath ? (
+        {activeLoadErrorDetail ? (
+          <div className="stack">
+            <p className="muted">{retryGuidance || activeLoadErrorDetail.guidance}</p>
+            {activeLoadErrorDetail.republishPath ? (
               <div className="inline-actions">
-                <Link className="primary-button" to={loadErrorDetail.republishPath}>
+                <Link className="primary-button" to={activeLoadErrorDetail.republishPath}>
                   {t("republish")}
                 </Link>
               </div>
             ) : null}
+            <details
+              className="answer-card answer-card-plain"
+              open={loadErrorDetailsVisible}
+              onToggle={(event) => {
+                setLoadErrorDetailsVisible((event.currentTarget as HTMLDetailsElement).open);
+              }}
+            >
+              <summary>{t("publicReceiptDetails")}</summary>
+              {loadErrorDetailsVisible ? (
+                <Suspense fallback={<div className="metadata-list" aria-hidden="true" />}>
+                  <LazyPublicFormLoadErrorDetails
+                    detail={{
+                      ...activeLoadErrorDetail,
+                      expectedFormId: activeLoadErrorDetail.expectedFormId ?? formId,
+                    }}
+                    loadingBlobStatuses={loadingBlobStatuses}
+                    onBlobStatusToggle={handleLoadErrorBlobStatuses}
+                  />
+                </Suspense>
+              ) : null}
+            </details>
           </div>
         ) : null}
       </EmptyState>
@@ -1056,9 +1081,25 @@ export function PublicFormPage() {
           : [];
   const preservedLocally = signalFailureState === "offline_preserved" || signalFailureState === "sync_failed";
 
+  const shouldKeepWalletRuntimeMounted =
+    walletRequired &&
+    publicStep === "form" &&
+    !resolvedWalletAddress &&
+    !nftGate.viewGateActive;
+
   return (
     <form className={`panel glow-panel public-form ${publicFormExpanded ? "is-expanded" : ""}`} onSubmit={handleSubmit}>
-      {walletModeSelected ? renderWalletAccountPanel({ hidden: true, fallback: null }) : null}
+      {nftRequired ? (
+        <Suspense fallback={null}>
+          <LazyPublicNftGateLoader
+            enabled={nftRequired}
+            form={form}
+            walletAddress={resolvedWalletAddress}
+            onStateChange={setNftGate}
+          />
+        </Suspense>
+      ) : null}
+      {shouldKeepWalletRuntimeMounted ? renderWalletAccountPanel({ hidden: true, fallback: null }) : null}
       <div className="public-form-header-frame">
         <FormHeaderImage
           image={form.headerImage}
@@ -1474,3 +1515,4 @@ function AttachedSignalContextPanel({ context }: { context: AttachedSignalContex
     </details>
   );
 }
+

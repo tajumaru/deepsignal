@@ -13,15 +13,17 @@ import { Link, NavLink, useLocation } from "react-router-dom";
 import "../styles/app-shell-entry.css";
 import { CreateFormLink } from "./CreateFormLink";
 import { NavItemLabel } from "./NavIcons";
+import { RuntimeDiagnosticsOverlay } from "./RuntimeDiagnosticsOverlay";
 import { BuildIndicator } from "./system/BuildIndicator";
 import { useI18n } from "../i18n";
 import { buildInfo } from "../lib/buildInfo";
 import { retryLazyImport } from "../lib/lazyRetry";
 import { isSignalInboxPath } from "../lib/navigation";
-import { logRouteLifecycle } from "../lib/routeDiagnostics";
+import { logRouteLifecycle, setDeepSignalDebugReadiness } from "../lib/routeDiagnostics";
 import { scheduleIdleTask } from "../lib/scheduleIdleTask";
 import { useOptionalRpcInfrastructure } from "../rpcInfrastructure";
 import type { WalletSessionPhase } from "../walletSessionState";
+import { useDashboardProjectRestoreSnapshot } from "../lib/dashboardProjectRestore";
 
 const MOBILE_DRAWER_SWIPE_THRESHOLD_PX = 60;
 const MOBILE_DRAWER_EDGE_START_PX = 24;
@@ -36,8 +38,11 @@ const NetworkMenu = lazy(() =>
 
 interface AppShellProps extends PropsWithChildren {
   chrome?: "full" | "public";
+  walletProviderMounted?: boolean;
+  walletProviderPending?: boolean;
   walletSessionPhase?: WalletSessionPhase;
   walletUiEnabled?: boolean;
+  walletUiRequested?: boolean;
 }
 
 interface MobileDrawerGestureState {
@@ -81,13 +86,15 @@ function WalletNavSlot({
   onNavigate,
   section,
   walletUiEnabled,
+  walletUiRequested,
 }: {
   navLabLabel: string;
   onNavigate?: () => void;
   section: "access" | "inbox";
   walletUiEnabled: boolean;
+  walletUiRequested: boolean;
 }) {
-  if (!walletUiEnabled) {
+  if (!walletUiRequested || !walletUiEnabled) {
     return section === "inbox" ? (
       <Link to="/admin" onClick={onNavigate}>
         {navLabLabel}
@@ -104,21 +111,62 @@ function WalletNavSlot({
 
 function WalletConnectSlot({
   fallback,
+  interaction = "default",
   surface,
+  walletProviderMounted,
+  walletProviderPending,
+  walletSessionPhase,
   walletUiEnabled,
+  walletUiRequested,
 }: {
   fallback?: ReactNode;
+  interaction?: "default" | "passive";
   surface?: "mobileDrawer";
+  walletProviderMounted: boolean;
+  walletProviderPending: boolean;
+  walletSessionPhase: WalletSessionPhase;
   walletUiEnabled: boolean;
+  walletUiRequested: boolean;
 }) {
-  if (!walletUiEnabled) {
+  if (!walletUiRequested) {
     return null;
+  }
+
+  if (!walletUiEnabled || !walletProviderMounted || walletProviderPending || walletSessionPhase === "provider_deferred") {
+    return <SafeWalletPlaceholder surface={surface} />;
   }
 
   return (
     <Suspense fallback={fallback ?? null}>
-      <WalletRuntimePanel mode="connect" surface={surface} fallback={fallback} />
+      <WalletRuntimePanel mode="connect" surface={surface} fallback={fallback} interaction={interaction} />
     </Suspense>
+  );
+}
+
+function SafeWalletPlaceholder({ surface }: { surface?: "mobileDrawer" }) {
+  const isMobileDrawer = surface === "mobileDrawer";
+
+  if (isMobileDrawer) {
+    return (
+      <div className="mobile-drawer-status-line" aria-live="polite">
+        <span className="mobile-drawer-status-dot" aria-hidden="true" />
+        <span>Preparing secure session</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="wallet-connect-shell wallet-connect-shell-compact">
+      <div className="wallet-connect-direct panel">
+        <div className="wallet-connect-direct-copy">
+          <strong>Preparing secure session</strong>
+          <span>Wallet runtime is still mounting.</span>
+        </div>
+        <button type="button" className="wallet-connect-trigger" disabled aria-disabled="true">
+          Wallet loading...
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -213,11 +261,15 @@ function MobileDrawerWalletStandbyStatus() {
 export function AppShell({
   children,
   chrome = "full",
+  walletProviderMounted = false,
+  walletProviderPending = true,
   walletSessionPhase = "provider_deferred",
   walletUiEnabled = false,
+  walletUiRequested = false,
 }: AppShellProps) {
   const { language, setLanguage, t } = useI18n();
   const location = useLocation();
+  const dashboardRestoreSnapshot = useDashboardProjectRestoreSnapshot();
   const publicChrome = chrome === "public";
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
   const [mobileDrawerDragOffset, setMobileDrawerDragOffset] = useState(0);
@@ -240,6 +292,10 @@ export function AppShell({
   );
   const showComposeShortcut = !isComposerRoute(location.pathname);
   const showMobileBottomNav = !publicChrome;
+  const passiveHeaderWallet =
+    location.pathname === "/dashboard" &&
+    dashboardRestoreSnapshot.state === "ready_without_project" &&
+    dashboardRestoreSnapshot.currentProjectId === "";
 
   useEffect(() => {
     logRouteLifecycle("app-shell:mount", {
@@ -258,10 +314,26 @@ export function AppShell({
     logRouteLifecycle("app-shell:route-change", {
       chrome,
       pathname: location.pathname,
+      walletProviderMounted,
+      walletProviderPending,
       walletSessionPhase,
       walletUiEnabled,
+      walletUiRequested,
     });
-  }, [chrome, location.pathname, walletSessionPhase, walletUiEnabled]);
+    logRouteLifecycle("app-shell:wallet-header-state", {
+      headerRenderedWalletRuntimePanel: walletUiRequested && walletUiEnabled,
+      passiveHeaderWallet,
+      routeWalletSurface: walletUiRequested,
+      walletProviderMounted,
+      walletProviderPending,
+      walletSessionPhase,
+    });
+    setDeepSignalDebugReadiness({
+      appShellHeaderWalletPanel: !walletUiRequested ? "hidden" : walletUiEnabled ? "runtime" : "placeholder",
+      appShellHeaderWalletMode: passiveHeaderWallet ? "passive" : "interactive",
+      routeWalletSurface: walletUiRequested,
+    });
+  }, [chrome, location.pathname, passiveHeaderWallet, walletProviderMounted, walletProviderPending, walletSessionPhase, walletUiEnabled, walletUiRequested]);
 
   useEffect(() => {
     setMoreMenuOpen(false);
@@ -541,15 +613,15 @@ export function AppShell({
             >
               <MenuToggleIcon />
             </button>
-            <a className="mobile-brand" href="/" onClick={() => setMobileDrawerOpen(false)}>
+            <Link className="mobile-brand" to="/" onClick={() => setMobileDrawerOpen(false)}>
               <span className="brand-mark" aria-hidden="true">
                 <img src="/deepsignal-mark.svg" alt="" />
               </span>
               <strong>DeepSignal</strong>
-            </a>
+            </Link>
           </div>
         )}
-        <a className="brand desktop-topbar-brand" href="/">
+        <Link className="brand desktop-topbar-brand" to="/">
           <span className="brand-mark" aria-hidden="true">
             <img src="/deepsignal-mark.svg" alt="" />
           </span>
@@ -557,11 +629,11 @@ export function AppShell({
             <strong>DeepSignal</strong>
             <p>{t("brandTagline")}</p>
           </div>
-        </a>
+        </Link>
         {publicChrome ? null : (
           <nav className="topnav desktop-topnav" aria-label="Primary navigation">
             <div className="topnav-row topnav-row-primary">
-              <a href="/">{t("navHome")}</a>
+              <NavLink to="/">{t("navHome")}</NavLink>
               <CreateFormLink nav fresh={false}>
                 <NavItemLabel>{t("navCreateForm")}</NavItemLabel>
               </CreateFormLink>
@@ -570,6 +642,7 @@ export function AppShell({
                 onNavigate={() => setMobileDrawerOpen(false)}
                 section="inbox"
                 walletUiEnabled={walletUiEnabled}
+                walletUiRequested={walletUiRequested}
               />
             </div>
             <div className="topnav-row topnav-row-secondary">
@@ -580,6 +653,7 @@ export function AppShell({
                 onNavigate={() => setMobileDrawerOpen(false)}
                 section="access"
                 walletUiEnabled={walletUiEnabled}
+                walletUiRequested={walletUiRequested}
               />
               <div ref={moreMenuRef} className={`topnav-more ${moreMenuOpen ? "is-open" : ""}`}>
                 <button
@@ -608,7 +682,12 @@ export function AppShell({
               <DeferredNetworkMenu />
               <WalletConnectSlot
                 fallback={walletConnectFallback}
+                interaction={passiveHeaderWallet ? "passive" : "default"}
+                walletProviderMounted={walletProviderMounted}
+                walletProviderPending={walletProviderPending}
+                walletSessionPhase={walletSessionPhase}
                 walletUiEnabled={walletUiEnabled}
+                walletUiRequested={walletUiRequested}
               />
             </div>
           )}
@@ -692,6 +771,7 @@ export function AppShell({
                       onNavigate={closeMobileDrawer}
                       section="access"
                       walletUiEnabled={walletUiEnabled}
+                      walletUiRequested={walletUiRequested}
                     />
                     <NavLink className="mobile-drawer-command-link" to="/troubleshooting" onClick={closeMobileDrawer}>
                       {t("navTroubleshooting")}
@@ -707,10 +787,15 @@ export function AppShell({
                       <span className="mobile-drawer-utility-label">Wallet</span>
                       <WalletConnectSlot
                         fallback={mobileWalletFallback}
+                        interaction={passiveHeaderWallet ? "passive" : "default"}
                         surface="mobileDrawer"
+                        walletProviderMounted={walletProviderMounted}
+                        walletProviderPending={walletProviderPending}
+                        walletSessionPhase={walletSessionPhase}
                         walletUiEnabled={walletUiEnabled}
+                        walletUiRequested={walletUiRequested}
                       />
-                      {walletUiEnabled ? null : <MobileDrawerWalletStandbyStatus />}
+                      {walletUiRequested ? null : <MobileDrawerWalletStandbyStatus />}
                     </div>
                     <div className="mobile-drawer-utility-card">
                       <label className="language-switch mobile-drawer-language-switch">
@@ -739,6 +824,7 @@ export function AppShell({
       {showMobileBottomNav ? (
         <MobileAppBottomNav showComposeShortcut={showComposeShortcut} />
       ) : null}
+      <RuntimeDiagnosticsOverlay />
       <BuildIndicator />
     </div>
   );

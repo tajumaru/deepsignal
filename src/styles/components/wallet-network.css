@@ -59,7 +59,14 @@
   text-transform: uppercase;
 }
 
+.wallet-connect-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.55rem;
+}
+
 .wallet-connect-direct .wallet-connect-trigger,
+.wallet-connect-direct .wallet-connect-dismiss,
 .wallet-connect-direct [data-dapp-kit] button,
 .wallet-connect-direct button[data-dapp-kit] {
   width: 100%;
@@ -89,6 +96,8 @@
 
 .wallet-connect-direct .wallet-connect-trigger:hover,
 .wallet-connect-direct .wallet-connect-trigger:focus-visible,
+.wallet-connect-direct .wallet-connect-dismiss:hover,
+.wallet-connect-direct .wallet-connect-dismiss:focus-visible,
 .wallet-connect-direct [data-dapp-kit] button:hover,
 .wallet-connect-direct [data-dapp-kit] button:focus-visible,
 .wallet-connect-direct button[data-dapp-kit]:hover,
@@ -108,12 +117,25 @@
 }
 
 .wallet-connect-direct .wallet-connect-trigger:active,
+.wallet-connect-direct .wallet-connect-dismiss:active,
 .wallet-connect-direct [data-dapp-kit] button:active,
 .wallet-connect-direct button[data-dapp-kit]:active {
   transform: translateY(0);
   box-shadow:
     inset 0 1px 0 rgba(186, 245, 255, 0.08),
     0 8px 18px rgba(3, 10, 18, 0.22) !important;
+}
+
+.wallet-connect-direct .wallet-connect-dismiss {
+  min-height: 2.5rem;
+  padding: 0.68rem 0.9rem !important;
+  border-color: rgba(146, 173, 191, 0.16) !important;
+  background:
+    linear-gradient(180deg, rgba(8, 21, 34, 0.82), rgba(5, 15, 25, 0.9)),
+    radial-gradient(circle at top left, rgba(108, 133, 153, 0.08), transparent 36%)
+    !important;
+  color: #bfd8e5 !important;
+  font-weight: 600 !important;
 }
 
 .wallet-sync-button {

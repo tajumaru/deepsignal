@@ -4,6 +4,11 @@ import { resolveLazyRouteModuleWithSafariRetry, retryLazyImport } from "../lib/l
 export function createPublicRouteComponents(retryNonce = 0) {
   void retryNonce;
   return {
+    TroubleshootingPage: lazy(() =>
+      retryLazyImport(() => import("../pages/TroubleshootingPage"), "route-troubleshooting").then((module) =>
+        resolveLazyRouteModuleWithSafariRetry(module, "route-troubleshooting"),
+      ),
+    ),
     PublicFormPage: lazy(() =>
       retryLazyImport(() => import("../pages/PublicFormPage"), "route-public-form").then((module) =>
         resolveLazyRouteModuleWithSafariRetry(module, "route-public-form"),

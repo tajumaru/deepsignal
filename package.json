@@ -1,7 +1,7 @@
 {
   "name": "deepsignal-walrus-feedback-lab",
   "private": true,
-  "version": "0.15.19",
+  "version": "0.16.8",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -14,7 +14,7 @@
     "typecheck": "tsc -b",
     "verify:boot-cycles": "node scripts/check-boot-cycles.mjs",
     "check": "npm run typecheck && npm run lint && npm run verify:boot-cycles",
-    "build": "npm run typecheck && npm run verify:boot-cycles && vite build",
+    "build": "npm run typecheck && npm run verify:boot-cycles && vite build && npm run verify:lazy-route-exports && npm run verify:dist-assets",
     "preview": "vite preview",
     "fixture:insights": "node -e \"console.log('Open the running app at /#/dev/insights-fixture to seed browser-local Insights fixtures.')\"",
     "version:set": "tsx scripts/set-version.ts",

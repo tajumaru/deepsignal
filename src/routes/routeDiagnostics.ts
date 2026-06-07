@@ -1,4 +1,5 @@
 import { readCreateDraftParseStatus, type CreateDraftParseStatus } from "./createDraftDiagnostics";
+import { getWalletSessionStateSnapshot } from "../walletSessionState";
 
 export { readCreateDraftParseStatus } from "./createDraftDiagnostics";
 
@@ -66,21 +67,7 @@ export function readPersistedWalletConnectionState(): RouteDiagnostics["walletCo
   }
 
   try {
-    for (let index = 0; index < window.localStorage.length; index += 1) {
-      const key = window.localStorage.key(index);
-      if (!key || !key.toLowerCase().includes("wallet")) {
-        continue;
-      }
-      const value = window.localStorage.getItem(key);
-      if (!value) {
-        continue;
-      }
-      const lowerValue = value.toLowerCase();
-      if (lowerValue.includes("connected") || lowerValue.includes("currentwallet") || lowerValue.includes("accounts")) {
-        return "connected";
-      }
-    }
-    return "disconnected";
+    return getWalletSessionStateSnapshot().accountAddress ? "connected" : "disconnected";
   } catch {
     return "unknown";
   }

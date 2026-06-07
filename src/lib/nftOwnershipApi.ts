@@ -1,11 +1,24 @@
 import { SuiJsonRpcClient } from "@mysten/sui/jsonRpc";
-import { isValidSuiAddress, normalizeSuiAddress } from "@mysten/sui/utils";
 import {
   breakdownStructType,
   checkOwnedNftsForClient,
   type NftOwnershipCheckResult,
   type NftOwnershipDiagnostic,
 } from "./nftOwnership";
+
+function normalizeSuiAddress(value: unknown) {
+  const address = typeof value === "string" ? value.trim() : "";
+  const hex = address.startsWith("0x") || address.startsWith("0X") ? address.slice(2) : address;
+  if (!hex || hex.length > 64 || !/^[0-9a-fA-F]+$/.test(hex)) {
+    return address;
+  }
+  return `0x${hex.toLowerCase().padStart(64, "0")}`;
+}
+
+function isValidSuiAddress(value: unknown) {
+  const address = typeof value === "string" ? value.trim() : "";
+  return normalizeSuiAddress(address).startsWith("0x") && normalizeSuiAddress(address).length === 66;
+}
 
 export type NftOwnershipCheckApiRequest = {
   address: string;

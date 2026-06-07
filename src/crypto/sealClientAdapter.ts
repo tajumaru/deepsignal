@@ -5,9 +5,6 @@ import {
   type KeyServerConfig,
   type SealCompatibleClient,
 } from "@mysten/seal";
-import { SuiJsonRpcClient, getJsonRpcFullnodeUrl } from "@mysten/sui/jsonRpc";
-import { Transaction } from "@mysten/sui/transactions";
-import { fromHex } from "@mysten/sui/utils";
 import type { SealAdapter, SealDecryptContext } from "../types";
 import { SUI_NETWORK } from "../lib/sui";
 import { getSuiRuntimeContext } from "../suiRuntime";
@@ -48,12 +45,44 @@ const serverConfig: KeyServerConfig = {
     : {}),
 };
 
-const defaultSuiClient = new SuiJsonRpcClient({
-  url: getJsonRpcFullnodeUrl(requestedNetwork),
-  network: requestedNetwork,
-});
-
 const sealClientCache = new WeakMap<SealCompatibleClient, SealClient>();
+let suiJsonRpcModulePromise: Promise<typeof import("@mysten/sui/jsonRpc")> | null = null;
+let suiTransactionsModulePromise: Promise<typeof import("@mysten/sui/transactions")> | null = null;
+let suiUtilsModulePromise: Promise<typeof import("@mysten/sui/utils")> | null = null;
+let defaultSuiClientPromise: Promise<SealCompatibleClient> | null = null;
+
+function loadSuiJsonRpcModule() {
+  if (!suiJsonRpcModulePromise) {
+    suiJsonRpcModulePromise = import("@mysten/sui/jsonRpc");
+  }
+  return suiJsonRpcModulePromise;
+}
+
+function loadSuiTransactionsModule() {
+  if (!suiTransactionsModulePromise) {
+    suiTransactionsModulePromise = import("@mysten/sui/transactions");
+  }
+  return suiTransactionsModulePromise;
+}
+
+function loadSuiUtilsModule() {
+  if (!suiUtilsModulePromise) {
+    suiUtilsModulePromise = import("@mysten/sui/utils");
+  }
+  return suiUtilsModulePromise;
+}
+
+async function getDefaultSealCompatibleClient() {
+  if (!defaultSuiClientPromise) {
+    defaultSuiClientPromise = loadSuiJsonRpcModule().then(({ SuiJsonRpcClient, getJsonRpcFullnodeUrl }) =>
+      new SuiJsonRpcClient({
+        url: getJsonRpcFullnodeUrl(requestedNetwork),
+        network: requestedNetwork,
+      }) as unknown as SealCompatibleClient,
+    );
+  }
+  return defaultSuiClientPromise;
+}
 
 function createSealClient(suiClient: SealCompatibleClient) {
   return new SealClient({
@@ -62,7 +91,7 @@ function createSealClient(suiClient: SealCompatibleClient) {
   });
 }
 
-function getActiveSealCompatibleClient(contextClient?: SealCompatibleClient) {
+async function getActiveSealCompatibleClient(contextClient?: SealCompatibleClient) {
   if (contextClient) {
     return contextClient;
   }
@@ -70,11 +99,11 @@ function getActiveSealCompatibleClient(contextClient?: SealCompatibleClient) {
   if (runtimeClient) {
     return runtimeClient;
   }
-  return defaultSuiClient as unknown as SealCompatibleClient;
+  return getDefaultSealCompatibleClient();
 }
 
-function getSealClientForActiveRpc(contextClient?: SealCompatibleClient) {
-  const activeClient = getActiveSealCompatibleClient(contextClient);
+async function getSealClientForActiveRpc(contextClient?: SealCompatibleClient) {
+  const activeClient = await getActiveSealCompatibleClient(contextClient);
   const cachedClient = sealClientCache.get(activeClient);
   if (cachedClient) {
     return cachedClient;
@@ -136,7 +165,7 @@ export const sealClientAdapter: SealAdapter = {
         ? createOwnerScopedSealId(ownerAddress)
         : createRandomObjectId();
     const data = new TextEncoder().encode(value);
-    const sealClient = getSealClientForActiveRpc();
+    const sealClient = await getSealClientForActiveRpc();
     const { encryptedObject } = await sealClient.encrypt({
       threshold: 1,
       packageId,
@@ -176,10 +205,10 @@ export const sealClientAdapter: SealAdapter = {
   },
 
   async decrypt(value, context) {
-    const activeSuiClient = getActiveSealCompatibleClient(
+    const activeSuiClient = await getActiveSealCompatibleClient(
       context?.suiClient as SealCompatibleClient | undefined,
     );
-    const sealClient = getSealClientForActiveRpc(activeSuiClient);
+    const sealClient = await getSealClientForActiveRpc(activeSuiClient);
     const envelope = parseRealSealEnvelope(value);
     if (!envelope) {
       throw new Error("Legacy unencrypted response.");
@@ -366,6 +395,10 @@ async function buildSealApproveTransactionBytes({
   suiClient: SealCompatibleClient;
   packageId: string;
 }) {
+  const [{ Transaction }, { fromHex }] = await Promise.all([
+    loadSuiTransactionsModule(),
+    loadSuiUtilsModule(),
+  ]);
   const tx = new Transaction();
   if (approvalPolicy === "owner_wallet_v1") {
     tx.moveCall({

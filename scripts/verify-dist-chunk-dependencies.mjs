@@ -4,10 +4,29 @@ import { basename, dirname, join, normalize, resolve, sep } from "node:path";
 const root = resolve(process.argv[2] || "dist");
 const assetsDir = join(root, "assets");
 const maxDependencyAssets = 800;
+const routeExportSpecs = [
+  { label: "route-access-management", exportName: "AccessManagementPage", filePrefix: "AccessManagementPage" },
+  { label: "route-admin-dashboard", exportName: "AdminDashboardPage", filePrefix: "AdminDashboardPage" },
+  { label: "route-explore", exportName: "ExploreSignalsPage", filePrefix: "ExploreSignalsPage" },
+  { label: "route-form-builder", exportName: "FormBuilderPage", filePrefix: "FormBuilderPage" },
+  { label: "route-insights-fixture", exportName: "InsightsFixturePage", filePrefix: "InsightsFixturePage" },
+  { label: "route-manifest-restore", exportName: "ManifestRestorePage", filePrefix: "ManifestRestorePage" },
+  { label: "route-my-responses", exportName: "MyResponsesPage", filePrefix: "MyResponsesPage" },
+  { label: "route-public-form", exportName: "PublicFormPage", filePrefix: "PublicFormPage" },
+  { label: "route-public-roadmap", exportName: "PublicRoadmapPage", filePrefix: "PublicRoadmapPage" },
+  { label: "route-submission-detail", exportName: "SubmissionDetailPage", filePrefix: "SubmissionDetailPage" },
+  { label: "route-submitted-history", exportName: "SubmittedHistoryPage", filePrefix: "SubmittedHistoryPage" },
+  { label: "route-troubleshooting", exportName: "TroubleshootingPage", filePrefix: "TroubleshootingPage" },
+  { label: "route-zklogin-callback", exportName: "ZkLoginCallbackPage", filePrefix: "ZkLoginCallbackPage" },
+];
 
 function fail(message) {
   console.error(message);
   process.exitCode = 1;
+}
+
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function normalizeAssetPath(assetPath) {
@@ -106,5 +125,56 @@ if (missing.length > 0) {
   const routeChunks = [...inspected].filter((filePath) => /(?:AdminDashboardPage|FormBuilderPage)-[\w-]+\.js$/.test(basename(filePath)));
   for (const routeChunk of routeChunks) {
     console.log(`ROUTE ${basename(routeChunk)}`);
+  }
+}
+
+const manifestPath = join(root, "build.json");
+if (existsSync(manifestPath)) {
+  const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+  const entryAssetPath = typeof manifest.entryAsset === "string" ? join(root, normalizeAssetPath(manifest.entryAsset)) : null;
+  if (entryAssetPath && existsSync(entryAssetPath)) {
+    const entrySource = readFileSync(entryAssetPath, "utf8");
+    const forbiddenEntryImports = [
+      "./mysten-kiosk-",
+      "./mysten-seal-",
+      "./mysten-sui-",
+      "./mysten-wallet-",
+      "./mysten-walrus-",
+      "./noble-curves-",
+      "./noble-hashes-",
+      "./providers-",
+      "./scure-",
+      "./suiRuntime-",
+      "./walrusRuntime-",
+    ].filter((needle) => entrySource.includes(`from"${needle}`) || entrySource.includes(`from "${needle}`));
+    if (forbiddenEntryImports.length > 0) {
+      fail(
+        `Entry chunk ${basename(entryAssetPath)} still has forbidden static imports: ${forbiddenEntryImports.join(", ")}`,
+      );
+    } else {
+      console.log(`ENTRY ${basename(entryAssetPath)} heavy runtime imports deferred`);
+    }
+  }
+  const assets = Array.isArray(manifest.assets) ? manifest.assets : [];
+  const routeAssetValues = Object.values(manifest.routeAssets || {}).flat();
+  const knownAssetCandidates = [...new Set([...assets, ...routeAssetValues])];
+  for (const spec of routeExportSpecs) {
+    const assetPath =
+      knownAssetCandidates.find((candidate) => candidate.startsWith(`./assets/${spec.filePrefix}-`) && candidate.endsWith(".js")) ||
+      [...inspected]
+        .map((filePath) => `./assets/${basename(filePath)}`)
+        .find((candidate) => candidate.startsWith(`./assets/${spec.filePrefix}-`) && candidate.endsWith(".js"));
+    if (!assetPath) {
+      fail(`Missing built route chunk for ${spec.label} (${spec.filePrefix}).`);
+      continue;
+    }
+    const filePath = join(root, normalizeAssetPath(assetPath));
+    const source = readFileSync(filePath, "utf8");
+    const exportPattern = new RegExp(`\\b${escapeRegExp(spec.exportName)}\\b`);
+    if (!exportPattern.test(source)) {
+      fail(`Built route chunk ${basename(filePath)} did not expose expected export ${spec.exportName} for ${spec.label}.`);
+      continue;
+    }
+    console.log(`EXPORT ${spec.label} ${spec.exportName} ${basename(filePath)}`);
   }
 }

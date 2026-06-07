@@ -1,5 +1,8 @@
-import { SUI_NETWORK, WALRUS_AGGREGATOR_URL } from "./sui";
+import { WALRUS_AGGREGATOR_URL } from "./sui";
+import { getCurrentWalrusNetwork, getWalrusNetwork } from "./walrusNetwork";
 import type { WalrusBlobProof, WalrusNetwork } from "../types";
+
+export { getCurrentWalrusNetwork, getWalrusNetwork } from "./walrusNetwork";
 
 export type WalrusVerificationStatus = "idle" | "verifying" | "verified" | "not-found" | "failed";
 
@@ -18,14 +21,6 @@ function getWalrusBlobGatewayUrl(blobId?: string) {
   }
   const aggregator = WALRUS_AGGREGATOR_URL.replace(/\/$/, "");
   return aggregator ? `${aggregator}/v1/blobs/${blobId}` : null;
-}
-
-export function getWalrusNetwork(network?: string | null): WalrusNetwork {
-  return network === "mainnet" ? "mainnet" : "testnet";
-}
-
-export function getCurrentWalrusNetwork(): WalrusNetwork {
-  return getWalrusNetwork(SUI_NETWORK);
 }
 
 export function shortenWalrusBlobId(blobId: string) {

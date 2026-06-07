@@ -64,6 +64,9 @@ describe("PublicWalletAccountPanel query client regression", () => {
               accountAddress: "0xabc0000000000000000000000000000000000000",
               walletName: "Slush",
               isRestoringConnection: false,
+              connectMode: null,
+              connectLockState: "idle",
+              lastConnectFailure: null,
             }}
           >
             <WalletActionContext.Provider

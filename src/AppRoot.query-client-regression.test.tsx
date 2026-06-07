@@ -2,6 +2,7 @@ import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AppRoot } from "./AppRoot";
+import { shouldRequestWalletProvidersOnMountForRoute } from "./walletProviderMountPolicy";
 
 vi.mock("@mysten/dapp-kit", () => ({
   createNetworkConfig: (config: unknown) => ({ networkConfig: config }),
@@ -15,6 +16,7 @@ vi.mock("@mysten/dapp-kit", () => ({
     connectionStatus: "connected",
     isConnected: true,
   }),
+  useWallets: () => [{ name: "Slush" }],
   useDisconnectWallet: () => ({
     mutateAsync: vi.fn(async () => undefined),
   }),
@@ -59,8 +61,29 @@ vi.mock("./components/PublicAppShell", () => ({
 
 vi.mock("./components/WalletSurface", async () => {
   const { WalletProviders } = await vi.importActual<typeof import("./providers")>("./providers");
-  return {
-    WalletSurface: ({ children }: { children: ReactNode }) => <WalletProviders>{children}</WalletProviders>,
+  const { WalletSurfaceContext } = await vi.importActual<typeof import("./components/WalletSurfaceRuntime")>(
+    "./components/WalletSurfaceRuntime"
+  );
+      return {
+        WalletSurface: ({ children }: { children: ReactNode }) => (
+          <WalletSurfaceContext.Provider
+            value={{
+              chunkLoaded: true,
+              contextAvailable: true,
+              failed: false,
+              hasCommittedOnce: true,
+              loaded: true,
+              loading: false,
+              markContextAvailable: () => undefined,
+              markTreeMounted: () => undefined,
+              requestLoad: () => undefined,
+              resetReadiness: () => undefined,
+              treeMounted: true,
+            }}
+          >
+            <WalletProviders>{children}</WalletProviders>
+          </WalletSurfaceContext.Provider>
+    ),
   };
 });
 
@@ -107,6 +130,9 @@ vi.mock("./pages/PublicFormPage", async () => {
             accountAddress: "0xabc0000000000000000000000000000000000000",
             walletName: "Slush",
             isRestoringConnection: false,
+            connectMode: null,
+            connectLockState: "idle",
+            lastConnectFailure: null,
           }}
         >
           <WalletActionContext.Provider
@@ -132,6 +158,9 @@ vi.mock("./pages/PublicFormPage", async () => {
             accountAddress: "0xabc0000000000000000000000000000000000000",
             walletName: "Slush",
             isRestoringConnection: false,
+            connectMode: null,
+            connectLockState: "idle",
+            lastConnectFailure: null,
           }}
         >
           <WalletActionContext.Provider
@@ -180,6 +209,18 @@ describe("AppRoot query client regression", () => {
     window.history.replaceState(null, "", "/#/");
     window.localStorage.clear();
     window.sessionStorage.clear();
+  });
+
+  it("does not eager-load wallet providers for wallet-optional public routes", () => {
+    expect(shouldRequestWalletProvidersOnMountForRoute("/f/form-123")).toBe(false);
+    expect(shouldRequestWalletProvidersOnMountForRoute("/roadmap/form-123")).toBe(false);
+    expect(shouldRequestWalletProvidersOnMountForRoute("/m/blob-123")).toBe(false);
+  });
+
+  it("keeps wallet provider eager boot for admin and callback routes", () => {
+    expect(shouldRequestWalletProvidersOnMountForRoute("/admin")).toBe(true);
+    expect(shouldRequestWalletProvidersOnMountForRoute("/dashboard")).toBe(true);
+    expect(shouldRequestWalletProvidersOnMountForRoute("/auth/zklogin/callback")).toBe(true);
   });
 
   it("renders /create wallet UI without a missing QueryClient error", async () => {

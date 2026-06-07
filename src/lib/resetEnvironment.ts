@@ -109,6 +109,15 @@ export const RESET_SUCCESS_MESSAGE =
 export const RESET_FAILURE_MESSAGE =
   DEFAULT_RESET_ENVIRONMENT_MESSAGES.failure;
 
+async function clearWalletSessionStorageSafely() {
+  try {
+    const module = await import("./walletSessionReset");
+    module.clearWalletSessionStorage();
+  } catch (error) {
+    console.warn("Wallet session storage could not be cleared eagerly.", error);
+  }
+}
+
 function createResult(
   operation: ResetOperation,
   status: ResetStatus,
@@ -179,6 +188,7 @@ export async function clearLocalCache(
       return createResult("localCache", "skipped", messages.browserStorageUnavailable, undefined, messages);
     }
     await clearSealSessionCacheSafely();
+    await clearWalletSessionStorageSafely();
     const removedLocalKeys = window.localStorage
       ? removeMatchingStorageKeys(window.localStorage, { preserveUserData: true })
       : [];

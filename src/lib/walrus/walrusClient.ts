@@ -1,9 +1,12 @@
 export {
   getWalrusBlobUrl,
+} from "../../storage/walrusAdapter";
+
+export {
   getWalrusMutationRuntimeStatus,
   subscribeWalrusRuntime,
   waitForWalrusMutationRuntimeReady,
-} from "../../storage/walrusAdapter";
+} from "../../storage/walrusRuntime";
 
 export {
   createWalrusBlobProof,

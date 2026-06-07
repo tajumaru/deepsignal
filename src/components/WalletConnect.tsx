@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useSuiWallet } from "../hooks/useSuiWallet";
 import { useI18n } from "../i18n";
-import { ConnectWalletButton } from "./wallet";
+import { ConnectedWalletMenu, ConnectWalletButton } from "./wallet";
 import { SuiAddressDisplay } from "./SuiAddressDisplay";
 
 interface WalletConnectProps {
@@ -9,6 +9,7 @@ interface WalletConnectProps {
   surface?: "default" | "mobileDrawer";
   connectModalOpen?: boolean;
   onConnectModalOpenChange?: (open: boolean) => void;
+  onManualConnectRequest?: () => Promise<void> | void;
 }
 
 export function WalletConnect({
@@ -16,6 +17,7 @@ export function WalletConnect({
   surface = "default",
   connectModalOpen = false,
   onConnectModalOpenChange,
+  onManualConnectRequest,
 }: WalletConnectProps) {
   const { t } = useI18n();
   const wallet = useSuiWallet();
@@ -48,15 +50,6 @@ export function WalletConnect({
     };
   }, [menuOpen]);
 
-  async function handleDisconnect() {
-    try {
-      await wallet.disconnect();
-      setMenuOpen(false);
-    } catch (error) {
-      console.error(error);
-    }
-  }
-
   function handleToggleMenu() {
     if (wallet.isConnecting) {
       return;
@@ -75,20 +68,22 @@ export function WalletConnect({
           <div className="wallet-connect-direct-copy">
             <strong>
               {isMobileDrawer
-                ? wallet.isRestoringConnection
+                ? wallet.isConnecting
                   ? t("secureSessionStandby")
                   : t("notConnected")
-                : wallet.isRestoringConnection
+                : wallet.isConnecting
                   ? "Opening Session..."
                   : "Activate Session"}
             </strong>
             <span>
               {isMobileDrawer
-                ? wallet.isRestoringConnection
+                ? wallet.isConnecting
                   ? t("secureSessionStandby")
                   : t("connectWalletToReview")
-                : wallet.isRestoringConnection
-                  ? "Restoring secure session"
+                : wallet.isConnecting
+                  ? wallet.connectMode === "manual"
+                    ? "Preparing secure session"
+                    : "Restoring secure session"
                   : "Wallet-optional public mode"}
             </span>
           </div>
@@ -97,6 +92,7 @@ export function WalletConnect({
             compact={compact}
             connectModalOpen={connectModalOpen}
             onConnectModalOpenChange={onConnectModalOpenChange}
+            onManualConnectRequest={onManualConnectRequest}
           />
         </div>
       </div>
@@ -111,7 +107,9 @@ export function WalletConnect({
       }`.trim()}
     >
       <div
-        className={`wallet-sync-button ${wallet.isConnected ? "is-synced" : ""} ${wallet.isConnecting ? "is-syncing" : ""}`}
+        className={`wallet-sync-button ${wallet.status === "connected" ? "is-synced" : ""} ${
+          wallet.isConnecting ? "is-syncing" : ""
+        }`}
       >
         <ConnectWalletButton
           wallet={wallet}
@@ -134,32 +132,7 @@ export function WalletConnect({
       </div>
 
       {menuOpen ? (
-        <div className="wallet-sync-menu panel" role="menu">
-          <div className="wallet-sync-menu-header">
-            <span className="wallet-sync-menu-eyebrow">{t("secureSessionActive")}</span>
-            <strong>{wallet.walletName ?? "Wallet"}</strong>
-            {wallet.accountAddress ? (
-              <SuiAddressDisplay
-                address={wallet.accountAddress}
-                className="wallet-sync-copy-chip-shell"
-                labelClassName="wallet-sync-copy-chip-address"
-                copyClassName="wallet-sync-copy-chip-copy"
-                showTooltip
-              />
-            ) : null}
-          </div>
-          <button
-            type="button"
-            className="wallet-sync-disconnect-button"
-            onClick={() => void handleDisconnect()}
-            disabled={wallet.isDisconnecting}
-            role="menuitem"
-            title="Disconnect"
-          >
-            <span className="wallet-sync-disconnect-icon" aria-hidden="true" />
-            <span>{wallet.isDisconnecting ? "Disconnecting..." : "Disconnect"}</span>
-          </button>
-        </div>
+        <ConnectedWalletMenu accountAddress={wallet.accountAddress} onClose={() => setMenuOpen(false)} walletName={wallet.walletName} />
       ) : null}
     </div>
   );

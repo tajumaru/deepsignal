@@ -1,6 +1,5 @@
 import type { MutableRefObject } from "react";
 import { useI18n } from "../../i18n";
-import { createFormOnChain } from "../../lib/projectRegistry";
 import type {
   AnalysisProfileId,
   AnalysisSignalType,
@@ -173,7 +172,9 @@ export interface PreparedPublishForm extends FormSchema {
   onchainFormId?: number;
 }
 
-export type CreateFormTransaction = ReturnType<typeof createFormOnChain>;
+type CreateFormOnChainFn = typeof import("../../lib/projectRegistryWrite").createFormOnChain;
+
+export type CreateFormTransaction = ReturnType<CreateFormOnChainFn>;
 
 export interface TransactionConfirmationEvent {
   type?: string;

@@ -21,8 +21,11 @@ interface WalrusRuntimeSurfaceProps extends PropsWithChildren {
 
 export function WalrusRuntimeSurface({ children, fallback }: WalrusRuntimeSurfaceProps) {
   return (
-    <Suspense fallback={fallback ?? <div className="panel">Loading Walrus runtime...</div>}>
-      <WalrusRuntimeProvider>{children}</WalrusRuntimeProvider>
-    </Suspense>
+    <>
+      <Suspense fallback={fallback ?? null}>
+        <WalrusRuntimeProvider />
+      </Suspense>
+      {children}
+    </>
   );
 }

@@ -1,6 +1,6 @@
-import { isValidSuiAddress } from "@mysten/sui/utils";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useI18n } from "../i18n";
+import { isValidSuiAddress } from "../lib/suiAddress";
 import { SuiAddressDisplay } from "./SuiAddressDisplay";
 
 export type SignalMetaType =

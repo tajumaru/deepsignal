@@ -8,6 +8,7 @@ import {
   recordRuntimeErrorDiagnostic,
   updateBrowserCapabilityDiagnostics,
 } from "../lib/routeDiagnostics";
+import { recoverRouteCssAsset } from "../lib/routeCssRecovery";
 import type { FormSchema, Submission, SystemSignalSeverity } from "../types";
 import {
   getSystemSignalDiagnostics,
@@ -18,6 +19,7 @@ import {
 const DEDUPE_PREFIX = "deepsignal.systemSignalReporter.dedupe.";
 const DEDUPE_WINDOW_MS = 30 * 60 * 1000;
 const MAX_STACK_LENGTH = 5000;
+const SYSTEM_SIGNAL_REPORTER_STARTED_KEY = "__DEEPSIGNAL_SYSTEM_SIGNAL_REPORTER_STARTED__";
 
 export type SystemSignalInput = {
   error?: unknown;
@@ -489,6 +491,10 @@ export function startSystemSignalReporter() {
   if (typeof window === "undefined") {
     return;
   }
+  if ((window as typeof window & { [SYSTEM_SIGNAL_REPORTER_STARTED_KEY]?: boolean })[SYSTEM_SIGNAL_REPORTER_STARTED_KEY]) {
+    return;
+  }
+  (window as typeof window & { [SYSTEM_SIGNAL_REPORTER_STARTED_KEY]?: boolean })[SYSTEM_SIGNAL_REPORTER_STARTED_KEY] = true;
   updateBrowserCapabilityDiagnostics();
 
   window.addEventListener(
@@ -529,6 +535,9 @@ export function startSystemSignalReporter() {
         preloadOnly: modulePreloadOnly,
         resourceUrl,
       });
+      if (tagName === "LINK" && typeof resourceUrl === "string" && resourceUrl.endsWith(".css")) {
+        void recoverRouteCssAsset(resourceUrl);
+      }
       void persistSystemError({
         errorName: resourceClassification.errorName,
         errorMessage:
@@ -591,6 +600,9 @@ export function startSystemSignalReporter() {
       colno: details.colno,
       diagnosticOnly: isOpaqueScriptError && providersLookReadyForDiagnosticOnly(),
     });
+    if (isOpaqueScriptError && providersLookReadyForDiagnosticOnly()) {
+      return;
+    }
     void persistSystemError({
       error: event.error instanceof Error ? event.error : undefined,
       errorName: normalized.errorName,

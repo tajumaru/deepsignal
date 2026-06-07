@@ -1,7 +1,11 @@
-import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { ConnectWalletButton } from "./ConnectWalletButton";
 import type { SuiWalletState } from "../../hooks/useSuiWallet";
+
+const { connectModalPropsSpy } = vi.hoisted(() => ({
+  connectModalPropsSpy: vi.fn(),
+}));
 
 vi.mock("@mysten/dapp-kit", () => ({
   ConnectModal: ({
@@ -12,14 +16,15 @@ vi.mock("@mysten/dapp-kit", () => ({
     open: boolean;
     onOpenChange: (open: boolean) => void;
     trigger: React.ReactNode;
-  }) => (
-    <div data-testid="connect-modal" data-open={open ? "yes" : "no"}>
-      <div>{trigger}</div>
-      <button type="button" onClick={() => onOpenChange(false)}>
-        close modal
-      </button>
-    </div>
-  ),
+  }) => {
+    connectModalPropsSpy({ open, onOpenChange });
+    return (
+      <div>
+        {trigger}
+        <div data-testid="connect-modal-state">{open ? "open" : "closed"}</div>
+      </div>
+    );
+  },
 }));
 
 function createWalletState(overrides: Partial<SuiWalletState> = {}): SuiWalletState {
@@ -31,7 +36,11 @@ function createWalletState(overrides: Partial<SuiWalletState> = {}): SuiWalletSt
     isConnected: false,
     isConnecting: false,
     isDisconnecting: false,
+    isProviderPending: false,
     isRestoringConnection: false,
+    connectLockState: "idle",
+    connectMode: null,
+    lastConnectFailure: null,
     displayName: "",
     suinsName: null,
     shortAddressLabel: "",
@@ -42,8 +51,13 @@ function createWalletState(overrides: Partial<SuiWalletState> = {}): SuiWalletSt
   };
 }
 
+afterEach(() => {
+  cleanup();
+  connectModalPropsSpy.mockClear();
+});
+
 describe("ConnectWalletButton", () => {
-  it("controls the wallet modal open state for disconnected wallets", () => {
+  it("passes the controlled open state to ConnectModal for disconnected wallets", () => {
     const handleOpenChange = vi.fn();
 
     render(
@@ -54,8 +68,36 @@ describe("ConnectWalletButton", () => {
       />,
     );
 
-    expect(screen.getByTestId("connect-modal")).toHaveAttribute("data-open", "yes");
-    fireEvent.click(screen.getByText("close modal"));
-    expect(handleOpenChange).toHaveBeenCalledWith(false);
+    expect(screen.getByTestId("connect-modal-state")).toHaveTextContent("open");
+    expect(connectModalPropsSpy).toHaveBeenCalled();
+    expect(connectModalPropsSpy.mock.calls[connectModalPropsSpy.mock.calls.length - 1]?.[0]).toEqual(
+      expect.objectContaining({
+        open: true,
+      }),
+    );
+  });
+
+  it("renders the trigger button without mounting ConnectModal while closed", () => {
+    render(<ConnectWalletButton wallet={createWalletState()} connectModalOpen={false} onConnectModalOpenChange={() => undefined} />);
+    expect(screen.getByRole("button", { name: "Connect Wallet" })).toBeInTheDocument();
+    expect(screen.queryByTestId("connect-modal-state")).not.toBeInTheDocument();
+    expect(connectModalPropsSpy).not.toHaveBeenCalled();
+  });
+
+  it("runs manual connect preflight before opening the controlled modal", () => {
+    const handleManualConnectRequest = vi.fn();
+
+    render(
+      <ConnectWalletButton
+        wallet={createWalletState()}
+        connectModalOpen={false}
+        onConnectModalOpenChange={() => undefined}
+        onManualConnectRequest={handleManualConnectRequest}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Connect Wallet" }));
+
+    expect(handleManualConnectRequest).toHaveBeenCalledTimes(1);
   });
 });

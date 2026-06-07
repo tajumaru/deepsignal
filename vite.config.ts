@@ -206,16 +206,12 @@ function buildManifestPlugin(args: {
         const nestedImportAssets = chunk.imports.flatMap((fileName) =>
           collectChunkAssets(`./${fileName}`, options, seen, false),
         );
-        const nestedDynamicAssets = dynamicImports.flatMap((fileName) =>
-          collectChunkAssets(
-            `./${fileName}`,
-            options.recurseDynamicImports === false
-              ? { ...options, includeDynamicImports: false, recurseDynamicImports: false }
-              : options,
-            seen,
-            false,
-          ),
-        );
+        const nestedDynamicAssets =
+          options.recurseDynamicImports === false
+            ? []
+            : dynamicImports.flatMap((fileName) =>
+                collectChunkAssets(`./${fileName}`, options, seen, false),
+              );
 
         return Array.from(new Set([...directAssets, ...nestedImportAssets, ...nestedDynamicAssets]));
       };
@@ -461,9 +457,12 @@ function moduleEntryRetryPlugin(args: { appVersion: string; buildTime: string; g
         const maxAttempts = 3;
         const baseDelayMs = 500;
         const retryStorageKey = "deepsignal.moduleEntryRetry";
+        const emergencyReloadKey = "deepsignal.moduleEntryEmergencyReloaded";
         const statusNode = document.querySelector("[data-boot-status]");
         const bootShell = document.querySelector(".boot-shell");
         const failures = [];
+        const attemptedCanonicalEntryUrls = new Set();
+        const attemptedImportTargetUrls = new Set();
         let latestEntryPathPromise = null;
         let latestBuildManifest = null;
 
@@ -507,11 +506,50 @@ function moduleEntryRetryPlugin(args: { appVersion: string; buildTime: string; g
           }
         }
 
+        function clearBootFailureMarkers() {
+          try {
+            [
+              retryStorageKey,
+              "deepsignal.chunkLoadRecovery",
+              "deepsignal.mixedBuildRecovery",
+              "deepsignal:lastExploreError",
+            ].forEach((key) => window.sessionStorage.removeItem(key));
+          } catch {
+            // Best effort only.
+          }
+        }
+
+        function shouldAttemptEmergencyReload() {
+          try {
+            const raw = window.sessionStorage.getItem(emergencyReloadKey);
+            const lastAttemptedAt = Number(raw || "0");
+            return !Number.isFinite(lastAttemptedAt) || lastAttemptedAt <= 0;
+          } catch {
+            return true;
+          }
+        }
+
+        function rememberEmergencyReload() {
+          try {
+            window.sessionStorage.setItem(emergencyReloadKey, String(Date.now()));
+          } catch {
+            // Best effort only.
+          }
+        }
+
+        function clearEmergencyReloadMarker() {
+          try {
+            window.sessionStorage.removeItem(emergencyReloadKey);
+          } catch {
+            // Best effort only.
+          }
+        }
+
         function isJavaScriptMime(contentType) {
           return /javascript|ecmascript/i.test(contentType || "");
         }
 
-        async function probeAsset(url) {
+        async function probeAsset(url, options = {}) {
           const startedAt = Date.now();
           try {
             const response = await fetch(url, {
@@ -537,6 +575,8 @@ function moduleEntryRetryPlugin(args: { appVersion: string; buildTime: string; g
               isEmpty: bodySize === 0,
               elapsedMs: Date.now() - startedAt,
               snippet,
+              errorMessage: null,
+              sourceText: options.includeSourceText ? text : undefined,
             };
           } catch (error) {
             return {
@@ -552,6 +592,8 @@ function moduleEntryRetryPlugin(args: { appVersion: string; buildTime: string; g
               isEmpty: true,
               elapsedMs: Date.now() - startedAt,
               snippet: "",
+              errorMessage: error?.message || String(error || "Unknown fetch failure"),
+              sourceText: undefined,
             };
           }
         }
@@ -566,6 +608,96 @@ function moduleEntryRetryPlugin(args: { appVersion: string; buildTime: string; g
           );
         }
 
+        function parseViteMapDepsAssetPaths(sourceText) {
+          if (typeof sourceText !== "string" || !sourceText) {
+            return [];
+          }
+          const match = sourceText.match(/__vite__mapDeps[^]*?m\\.f\\|\\|\\(m\\.f=\\[(.*?)\\]\\)/);
+          if (!match || !match[1]) {
+            return [];
+          }
+          return Array.from(
+            new Set(
+              Array.from(match[1].matchAll(/["'](\\.\\/[^"'\\]]+)["']/g)).map((entry) => entry[1]),
+            ),
+          );
+        }
+
+        async function mapWithConcurrency(items, limit, mapper) {
+          const results = new Array(items.length);
+          let nextIndex = 0;
+          async function worker() {
+            while (nextIndex < items.length) {
+              const currentIndex = nextIndex;
+              nextIndex += 1;
+              results[currentIndex] = await mapper(items[currentIndex], currentIndex);
+            }
+          }
+          const workerCount = Math.max(1, Math.min(limit, items.length));
+          await Promise.all(Array.from({ length: workerCount }, () => worker()));
+          return results;
+        }
+
+        async function probeEntryDependencies(entryProbe) {
+          const dependencyAssetPaths = parseViteMapDepsAssetPaths(entryProbe?.sourceText || "");
+          const dependencyAssetUrls = dependencyAssetPaths.map((assetPath) =>
+            new URL(assetPath, entryProbe?.url || window.location.href).toString(),
+          );
+          const dependencies = await mapWithConcurrency(
+            dependencyAssetUrls,
+            4,
+            async (dependencyUrl) => probeAsset(dependencyUrl),
+          );
+          return {
+            totalCount: dependencyAssetUrls.length,
+            dependencyAssetPaths,
+            dependencies,
+          };
+        }
+
+        function classifyEntryFailure(error, targetProbe, dependencyProbe) {
+          const errorText = String(error?.message || error || "");
+          const failedDependencies = dependencyProbe?.dependencies?.filter((probe) => !assetProbePassed(probe)) || [];
+          const mobileSafari =
+            /iphone|ipad|ipod/i.test(navigator.userAgent || "") &&
+            /safari/i.test(navigator.userAgent || "") &&
+            !/crios|fxios|edgios/i.test(navigator.userAgent || "");
+
+          if (!assetProbePassed(targetProbe)) {
+            return "entry_asset_fetch_failed";
+          }
+          if (failedDependencies.length > 0) {
+            return "dependency_module_failed";
+          }
+          if (
+            mobileSafari &&
+            (
+              /failed to fetch dynamically imported module/i.test(errorText) ||
+              /importing a module script failed/i.test(errorText) ||
+              /error loading dynamically imported module/i.test(errorText)
+            )
+          ) {
+            return "safari_module_cache_failure";
+          }
+          return "module_evaluation_failed";
+        }
+
+        function inferSafariSensitiveRuntimeHints(error) {
+          const errorText = String(error?.message || error || "");
+          return {
+            suspectedCircularImport: /circular/i.test(errorText),
+            suspectedInitializationOrderIssue:
+              /before initialization/i.test(errorText) ||
+              /cannot access/i.test(errorText) ||
+              /undefined is not an object/i.test(errorText),
+            suspectedTdzError: /cannot access .* before initialization/i.test(errorText),
+            suspectedProviderBootstrapRace:
+              /provider/i.test(errorText) ||
+              /context/i.test(errorText) ||
+              /wallet/i.test(errorText),
+          };
+        }
+
         async function getDiagnostics(error, importTargetUrl, retryCount) {
           const entryUrl = new URL(entryPath, window.location.href).toString();
           const buildJsonEntryAsset = latestBuildManifest?.entryAsset || null;
@@ -574,16 +706,69 @@ function moduleEntryRetryPlugin(args: { appVersion: string; buildTime: string; g
             : null;
           const targetUrl = importTargetUrl || buildJsonEntryAssetUrl || entryUrl;
           const chunkUrl = String(error?.message || error || "").match(/https?:\\/\\/[^\\s)'"]+/)?.[0] || entryUrl;
-          const targetProbe = await probeAsset(targetUrl);
+          const targetProbe = await probeAsset(targetUrl, { includeSourceText: true });
+          const dependencyProbe = await probeEntryDependencies(targetProbe);
+          const failedDependencyFetches = dependencyProbe.dependencies
+            .map((probe, index) => ({
+              assetPath: dependencyProbe.dependencyAssetPaths[index] || null,
+              url: probe.url,
+              status: probe.status,
+              contentType: probe.contentType,
+              looksLikeHtml: probe.looksLikeHtml,
+              elapsedMs: probe.elapsedMs,
+              snippet: probe.snippet || "",
+              errorMessage: probe.errorMessage || null,
+            }))
+            .filter((probe, index) => !assetProbePassed(dependencyProbe.dependencies[index]));
+          const failureCategory = classifyEntryFailure(error, targetProbe, dependencyProbe);
           return {
             errorName: error?.name || "Error",
             errorMessage: error?.message || String(error || "Unknown module entry failure"),
+            failureCategory,
             stack: error?.stack || "",
             entryAssetUrl: entryUrl,
             buildJsonEntryAsset,
             buildJsonEntryAssetUrl,
             importTargetUrl: targetUrl,
-            entryAssetFetch: targetProbe,
+            entryAssetFetch: {
+              url: targetProbe.url,
+              ok: targetProbe.ok,
+              status: targetProbe.status,
+              statusText: targetProbe.statusText,
+              contentType: targetProbe.contentType,
+              contentLength: targetProbe.contentLength,
+              bodySize: targetProbe.bodySize,
+              looksLikeHtml: targetProbe.looksLikeHtml,
+              isJavaScriptMime: targetProbe.isJavaScriptMime,
+              isEmpty: targetProbe.isEmpty,
+              elapsedMs: targetProbe.elapsedMs,
+              snippet: targetProbe.snippet,
+              errorMessage: targetProbe.errorMessage,
+            },
+            entryDependencyFetches: dependencyProbe.dependencies.map((probe, index) => ({
+              assetPath: dependencyProbe.dependencyAssetPaths[index] || null,
+              url: probe.url,
+              ok: probe.ok,
+              status: probe.status,
+              statusText: probe.statusText,
+              contentType: probe.contentType,
+              contentLength: probe.contentLength,
+              bodySize: probe.bodySize,
+              looksLikeHtml: probe.looksLikeHtml,
+              isJavaScriptMime: probe.isJavaScriptMime,
+              isEmpty: probe.isEmpty,
+              elapsedMs: probe.elapsedMs,
+              snippet: probe.snippet || "",
+              errorMessage: probe.errorMessage || null,
+            })),
+            failedDependencyFetches,
+            entryDependencySummary: {
+              totalCount: dependencyProbe.totalCount,
+              failedCount: dependencyProbe.dependencies.filter((probe) =>
+                !assetProbePassed(probe),
+              ).length,
+            },
+            safariSensitiveRuntimeHints: inferSafariSensitiveRuntimeHints(error),
             retryCount,
             routePath: window.location.hash?.replace(/^#/, "") || window.location.pathname + window.location.search,
             routeId: window.location.hash?.startsWith("#/f/") ? "public-form" : window.location.hash?.startsWith("#/admin") ? "admin" : window.location.hash?.startsWith("#/explore") ? "explore" : "boot",
@@ -602,6 +787,7 @@ function moduleEntryRetryPlugin(args: { appVersion: string; buildTime: string; g
             failures: failures.map((failure) => ({
               errorName: failure.errorName,
               errorMessage: failure.errorMessage,
+              failureCategory: failure.failureCategory,
               chunkUrl: failure.chunkUrl,
               recordedAt: failure.recordedAt,
             })),
@@ -751,11 +937,11 @@ function moduleEntryRetryPlugin(args: { appVersion: string; buildTime: string; g
           const title = document.createElement("div");
           title.style.width = "100%";
           title.style.textAlign = "center";
-          title.innerHTML = "<strong>New version available</strong><br><span>DeepSignal has been updated. Load the latest version.</span>";
+          title.innerHTML = "<strong>DeepSignal needs a recovery reload</strong><br><span>Entry fetch succeeded, but Safari could not finish loading the signal surface.</span>";
 
           const updateButton = document.createElement("button");
           updateButton.type = "button";
-          updateButton.textContent = "Update DeepSignal";
+          updateButton.textContent = "Reload latest build";
           updateButton.style.padding = "0.8rem 1rem";
           updateButton.style.borderRadius = "999px";
           updateButton.style.border = "1px solid rgba(138, 223, 255, 0.28)";
@@ -763,10 +949,10 @@ function moduleEntryRetryPlugin(args: { appVersion: string; buildTime: string; g
           updateButton.style.color = "#ecfdff";
           updateButton.onclick = () => {
             updateButton.disabled = true;
-            updateButton.textContent = "Updating...";
+            updateButton.textContent = "Reloading...";
             void updateDeepSignal().catch((error) => {
               updateButton.disabled = false;
-              updateButton.textContent = "Update DeepSignal";
+              updateButton.textContent = "Reload latest build";
               console.warn("[DeepSignal update] update was not started", error);
             });
           };
@@ -844,21 +1030,68 @@ function moduleEntryRetryPlugin(args: { appVersion: string; buildTime: string; g
           return latestEntryPathPromise;
         }
 
+        function createImportTargetUrl(targetEntryPath, attempt) {
+          const canonicalUrl = new URL(targetEntryPath, window.location.href);
+          const importUrl = new URL(canonicalUrl.toString());
+          if (attempt > 1) {
+            importUrl.searchParams.set("module-retry", String(Date.now()));
+          }
+          return {
+            canonicalUrl: canonicalUrl.toString(),
+            importUrl: importUrl.toString(),
+          };
+        }
+
+        function recordAttempt(canonicalUrl, importUrl, attempt) {
+          const retryState = getRetryState();
+          rememberRetryState({
+            count: Math.max(retryState.count, attempt),
+            startedAt: retryState.startedAt || Date.now(),
+            lastCanonicalUrl: canonicalUrl,
+            lastImportUrl: importUrl,
+          });
+        }
+
+        function performEmergencyReload() {
+          clearBootFailureMarkers();
+          rememberEmergencyReload();
+          const nextUrl = new URL(window.location.href);
+          nextUrl.searchParams.set("module-retry", String(Date.now()));
+          window.location.replace(nextUrl.toString());
+        }
+
         async function loadEntry(attempt = 1) {
           const latestEntryPath = attempt > 1 ? await getLatestEntryPath() : null;
-          const url = new URL(latestEntryPath || entryPath, window.location.href);
+          const { canonicalUrl, importUrl } = createImportTargetUrl(latestEntryPath || entryPath, attempt);
           if (attempt > 1) {
-            url.searchParams.set("module-retry", String(Date.now()));
             setBootStatus("Retrying signal surface load...");
           }
+          if (attemptedImportTargetUrls.has(importUrl)) {
+            const duplicateError = new Error("DeepSignal exhausted unique entry import targets after retrying the canonical entry URL and the cache-busted recovery URL.");
+            const diagnostics = await getDiagnostics(duplicateError, importUrl, attempt);
+            failures.push(diagnostics);
+            setBootStatus("Signal surface load failed. Recovery reload is available.");
+            await ensureRecoveryActions(duplicateError, diagnostics);
+            return;
+          }
+          attemptedCanonicalEntryUrls.add(canonicalUrl);
+          attemptedImportTargetUrls.add(importUrl);
+          recordAttempt(canonicalUrl, importUrl, attempt);
 
           try {
-            await import(url.toString());
+            await import(importUrl);
+            clearBootFailureMarkers();
+            clearEmergencyReloadMarker();
           } catch (error) {
-            const diagnostics = await getDiagnostics(error, url.toString(), attempt);
+            const diagnostics = await getDiagnostics(error, importUrl, attempt);
             failures.push(diagnostics);
             if (attempt >= maxAttempts) {
-              setBootStatus("Signal surface load failed. App update or asset propagation issue detected.");
+              if (shouldAttemptEmergencyReload()) {
+                setBootStatus("Attempting recovery reload...");
+                performEmergencyReload();
+                return;
+              }
+              setBootStatus("Signal surface load failed. Recovery reload is available.");
               await ensureRecoveryActions(error, diagnostics);
               return;
             }
@@ -953,6 +1186,10 @@ export default defineConfig(({ mode }) => {
   const manualChunkName = (id: string) => {
     const normalizedId = id.replace(/\\/g, "/");
 
+    if (normalizedId.includes("\0vite/preload-helper.js") || normalizedId.includes("vite/preload-helper.js")) {
+      return "vite-preload";
+    }
+
     if (!normalizedId.includes("node_modules")) {
       // Keep application source modules in Rollup's default graph so route-level
       // lazy imports can be split without forcing cross-chunk TDZ hazards between
@@ -998,6 +1235,27 @@ export default defineConfig(({ mode }) => {
     }
     if (normalizedId.includes("/@scure/")) {
       return "scure";
+    }
+    if (normalizedId.includes("/@mysten/kiosk/")) {
+      return "mysten-kiosk";
+    }
+    if (normalizedId.includes("/@mysten/sui/zklogin")) {
+      return "mysten-sui-zklogin";
+    }
+    if (
+      normalizedId.includes("/@mysten/sui/jsonRpc") ||
+      normalizedId.includes("/@mysten/sui/client")
+    ) {
+      return "mysten-sui-rpc";
+    }
+    if (normalizedId.includes("/@mysten/sui/transactions")) {
+      return "mysten-sui-transactions";
+    }
+    if (
+      normalizedId.includes("/@mysten/sui/utils") ||
+      normalizedId.includes("/@mysten/sui/bcs")
+    ) {
+      return "mysten-sui-utils";
     }
     if (normalizedId.includes("/@mysten/sui/")) {
       return "mysten-sui";

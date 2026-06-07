@@ -69,6 +69,43 @@ const DEFAULT_WALRUS_RUNTIME_STATUS: WalrusRuntimeStatus = {
   storageMode: "uploadRelay",
 };
 
+let publicSubmissionStatusRuntimePromise: Promise<
+  typeof import("../runtime/publicSubmissionStatusRuntime")
+> | null = null;
+let publicSubmissionUploadRuntimePromise: Promise<
+  typeof import("../runtime/publicSubmissionUploadRuntime")
+> | null = null;
+let publicSubmissionPersistenceRuntimePromise: Promise<
+  typeof import("../runtime/publicSubmissionPersistenceRuntime")
+> | null = null;
+
+async function loadPublicSubmissionStatusRuntime() {
+  if (!publicSubmissionStatusRuntimePromise) {
+    publicSubmissionStatusRuntimePromise = import("../runtime/publicSubmissionRuntimeLoader").then((loader) =>
+      loader.loadPublicSubmissionStatusRuntime(),
+    );
+  }
+  return publicSubmissionStatusRuntimePromise;
+}
+
+async function loadPublicSubmissionUploadRuntime() {
+  if (!publicSubmissionUploadRuntimePromise) {
+    publicSubmissionUploadRuntimePromise = import("../runtime/publicSubmissionRuntimeLoader").then((loader) =>
+      loader.loadPublicSubmissionUploadRuntime(),
+    );
+  }
+  return publicSubmissionUploadRuntimePromise;
+}
+
+async function loadPublicSubmissionPersistenceRuntime() {
+  if (!publicSubmissionPersistenceRuntimePromise) {
+    publicSubmissionPersistenceRuntimePromise = import("../runtime/publicSubmissionRuntimeLoader").then((loader) =>
+      loader.loadPublicSubmissionPersistenceRuntime(),
+    );
+  }
+  return publicSubmissionPersistenceRuntimePromise;
+}
+
 function isLocalFallbackBlob(blobId?: string | null) {
   return Boolean(blobId && blobId.startsWith("local-"));
 }
@@ -474,41 +511,6 @@ export function usePublicSubmission({
     };
   }, []);
 
-  useEffect(() => {
-    if (!canWrite) {
-      return;
-    }
-    void import("../../../storage/storageFactory")
-      .then(({ retryPendingSubmissionSync }) => retryPendingSubmissionSync({ allowWalletPrompt: false }))
-      .catch((error) => {
-        console.warn("[public submission] pending remote sync retry failed to start", error);
-      });
-  }, [canWrite]);
-
-  useEffect(() => {
-    let unsubscribe: (() => void) | undefined;
-    let cancelled = false;
-    void import("../../../lib/walrus").then(({ getWalrusMutationRuntimeStatus, subscribeWalrusRuntime }) => {
-      if (cancelled || typeof window === "undefined") {
-        return;
-      }
-      setWalrusRuntime(getWalrusMutationRuntimeStatus());
-      setWalrusRuntimeReady(true);
-      unsubscribe = subscribeWalrusRuntime(() => {
-        if (cancelled || typeof window === "undefined") {
-          return;
-        }
-        setWalrusRuntime(getWalrusMutationRuntimeStatus());
-        setWalrusRuntimeReady(true);
-      });
-    });
-
-    return () => {
-      cancelled = true;
-      unsubscribe?.();
-    };
-  }, []);
-
   const formResetKey = form ? `${form.id}:${manifestBlobId || "direct"}` : "no-form";
 
   useEffect(() => {
@@ -726,29 +728,18 @@ export function usePublicSubmission({
     });
 
     try {
-      const {
-        activeSealAdapter,
-        createEncryptedAttachmentUpload,
-        getStorageRuntimeStatus,
-        storageAdapter,
-      } = await import("../../../lib/storageSeal");
-      if (identityMode === "wallet" && accountAddress) {
-        const { waitForWalrusMutationRuntimeReady } = await import("../../../lib/walrus");
-        await waitForWalrusMutationRuntimeReady({
-          requireWallet: true,
-          timeoutMs: 7000,
-          expectedRpcUrl: rpcInfrastructure.currentRpcUrl,
-          expectedNetwork: rpcInfrastructure.network,
-        });
-      }
-      setStorageRuntime(getStorageRuntimeStatus());
-      const uploadFile = requiresProtectedAttachment
-        ? (await createEncryptedAttachmentUpload(attachment.file, activeSealAdapter, {
-            projectId: form?.projectId,
-            ownerAddress: form?.ownerAddress,
-          })).file
-        : attachment.file;
-      const upload = await storageAdapter.uploadFile(uploadFile);
+      const uploadRuntime = await loadPublicSubmissionUploadRuntime();
+      const { storageRuntime: nextStorageRuntime, upload } = await uploadRuntime.uploadPublicAttachmentRuntime({
+        accountAddress,
+        attachmentFile: attachment.file,
+        expectedNetwork: rpcInfrastructure.network,
+        expectedRpcUrl: rpcInfrastructure.currentRpcUrl,
+        formOwnerAddress: form?.ownerAddress,
+        formProjectId: form?.projectId,
+        identityMode,
+        requiresProtectedAttachment,
+      });
+      setStorageRuntime(nextStorageRuntime);
       if (isLocalFallbackBlob(upload.blobId)) {
         throw new Error("Attachment upload needs Walrus storage. Reconnect storage and select the file again.");
       }
@@ -1026,9 +1017,8 @@ export function usePublicSubmission({
       );
       return;
     }
-    const sealRuntime = form.encryptSubmissions
-      ? await import("../../../crypto/cryptoFactory").then(({ getSealRuntimeStatus }) => getSealRuntimeStatus())
-      : null;
+    const statusRuntime = await loadPublicSubmissionStatusRuntime();
+    const sealRuntime = form.encryptSubmissions ? await statusRuntime.getPublicSealRuntimeStatus() : null;
     if (sealRuntime && !sealRuntime.canEncrypt) {
       const message = sealRuntime.warning ?? "Seal encryption is unavailable. Submission was not uploaded.";
       setSubmitError(message);
@@ -1169,27 +1159,18 @@ export function usePublicSubmission({
     let historySubmission: Submission | null = null;
     const historyStartedAt = new Date().toISOString();
     try {
+      setWalrusRuntime(await statusRuntime.getLatestWalrusMutationRuntimeStatus());
+      setWalrusRuntimeReady(true);
       if (effectiveIdentityMode === "wallet" && accountAddress) {
-        const { waitForWalrusMutationRuntimeReady } = await import("../../../lib/walrus");
-        await waitForWalrusMutationRuntimeReady({
+        const nextWalrusRuntime = await statusRuntime.ensurePublicWalrusMutationRuntime({
           requireWallet: true,
           timeoutMs: 7000,
           expectedRpcUrl: rpcInfrastructure.currentRpcUrl,
           expectedNetwork: rpcInfrastructure.network,
         });
+        setWalrusRuntime(nextWalrusRuntime);
       }
-      const {
-        createInlinePrivateAttachment,
-        getStorageRuntimeStatus,
-        saveSubmissionWithEncryption,
-        storageAdapter,
-      } = await import("../../../lib/storageSeal");
-      const { saveSubmittedHistoryEntry } = await import("../../../storage/submittedHistory");
-      const {
-        buildMyResponseHistoryEntry,
-        upsertMyResponseHistoryEntry,
-      } = await import("../../../storage/myResponseHistory");
-      setStorageRuntime(getStorageRuntimeStatus());
+      setStorageRuntime(await statusRuntime.getPublicStorageRuntimeStatus());
       const signedAt = historyStartedAt;
       const isAnonymous = effectiveIdentityMode === "anonymous";
       const session = await ensureRespondentSession({
@@ -1270,7 +1251,8 @@ export function usePublicSubmission({
               if (attachment.file.size > ENCRYPTED_INLINE_ATTACHMENT_MAX_BYTES) {
                 throw new Error(attachmentTooLargeLabel(field.label || "Attachment", ENCRYPTED_INLINE_ATTACHMENT_MAX_BYTES));
               }
-              const inlineAttachment = await createInlinePrivateAttachment(
+              const uploadRuntime = await loadPublicSubmissionUploadRuntime();
+              const inlineAttachment = await uploadRuntime.createPublicInlineAttachment(
                 attachment.file,
                 ENCRYPTED_INLINE_ATTACHMENT_MAX_BYTES,
               );
@@ -1330,7 +1312,8 @@ export function usePublicSubmission({
               if (voiceFile.size > ENCRYPTED_INLINE_ATTACHMENT_MAX_BYTES) {
                 throw new Error(attachmentTooLargeLabel(field.label || "Voice answer", ENCRYPTED_INLINE_ATTACHMENT_MAX_BYTES));
               }
-              const inlineAttachment = await createInlinePrivateAttachment(voiceFile, ENCRYPTED_INLINE_ATTACHMENT_MAX_BYTES);
+              const uploadRuntime = await loadPublicSubmissionUploadRuntime();
+              const inlineAttachment = await uploadRuntime.createPublicInlineAttachment(voiceFile, ENCRYPTED_INLINE_ATTACHMENT_MAX_BYTES);
               const audioBlobId = inlineAttachment.blobId;
               attachments.push({
                 ...inlineAttachment,
@@ -1349,7 +1332,8 @@ export function usePublicSubmission({
               continue;
             }
 
-            const uploadedVoice = await storageAdapter.uploadFile(voiceFile);
+            const uploadRuntime = await loadPublicSubmissionUploadRuntime();
+            const uploadedVoice = await uploadRuntime.uploadPublicFile(voiceFile);
             attachments.push({
               fieldId: field.id,
               type: "audio",
@@ -1453,24 +1437,22 @@ export function usePublicSubmission({
         updatedAt: signedAt,
       };
       historySubmission = submission;
-      upsertMyResponseHistoryEntry(
-        buildMyResponseHistoryEntry({
-          form,
-          submission,
-          status: "pending",
-          storageMode: getMyResponseStorageMode({
-            runtimeMode: getStorageRuntimeStatus().mode,
-            walrusStorageMode: walrusRuntime.storageMode,
-          }),
+      const persistenceRuntime = await loadPublicSubmissionPersistenceRuntime();
+      await persistenceRuntime.upsertPublicHistoryEntry({
+        form,
+        submission,
+        status: "pending",
+        storageMode: getMyResponseStorageMode({
+          runtimeMode: (await statusRuntime.getPublicStorageRuntimeStatus()).mode,
+          walrusStorageMode: walrusRuntime.storageMode,
         }),
-      );
+      });
 
       activatePipeline(
         "preparing",
         form.encryptSubmissions ? "Encrypting response..." : "Preparing secure upload...",
       );
-      const { enqueuePendingSubmission, removePendingSubmission } = await import("../../../storage/submissionDelivery");
-      enqueuePendingSubmission({
+      await persistenceRuntime.enqueuePublicPendingSubmission({
         ...submission,
         remoteIndexUpdated: false,
         remoteIndexReadBack: false,
@@ -1479,9 +1461,10 @@ export function usePublicSubmission({
         deliveryStatus: "stored_local",
         deliveryStatuses: ["stored_local"],
       });
-      const result = await saveSubmissionWithEncryption(form, submission, undefined, storageAdapter, {
+      const uploadRuntime = await loadPublicSubmissionUploadRuntime();
+      const result = await uploadRuntime.savePublicSubmissionWithEncryption(form, submission, {
         responseDeadlinePassed: responseDeadlinePassedLabel,
-        onPipelineStage(stage) {
+        onPipelineStage(stage: string) {
           activatePipeline(
             stage === "encrypting" ? "preparing" : "walrus_uploading",
             stage === "encrypting"
@@ -1538,7 +1521,7 @@ export function usePublicSubmission({
             : ["stored_local", "stored_walrus", "inbox_pending"],
         walrusProof: result.walrusProof,
       } satisfies Submission;
-      const latestStorageRuntime = getStorageRuntimeStatus();
+      const latestStorageRuntime = await statusRuntime.getPublicStorageRuntimeStatus();
       setStorageRuntime(latestStorageRuntime);
       historySubmission = savedSubmission;
       const responseStorageMode = getMyResponseStorageMode({
@@ -1590,15 +1573,13 @@ export function usePublicSubmission({
         setSubmitNotice(notices.join(" "));
         setSubmitError(message);
         setSignalFailureState(isLocalFallbackBlob(savedSubmission.encryptedBlobId ?? savedSubmission.blobId) ? "offline_preserved" : "sync_failed");
-        upsertMyResponseHistoryEntry(
-          buildMyResponseHistoryEntry({
-            form,
-            submission: savedSubmission,
-            status: isLocalFallbackBlob(savedSubmission.encryptedBlobId ?? savedSubmission.blobId) ? "local-only" : "pending",
-            storageMode: responseStorageMode,
-            errorMessage: message,
-          }),
-        );
+        await persistenceRuntime.upsertPublicHistoryEntry({
+          form,
+          submission: savedSubmission,
+          status: isLocalFallbackBlob(savedSubmission.encryptedBlobId ?? savedSubmission.blobId) ? "local-only" : "pending",
+          storageMode: responseStorageMode,
+          errorMessage: message,
+        });
         failPipeline(message);
         setFailure(
           createCriticalFailure({
@@ -1642,25 +1623,27 @@ export function usePublicSubmission({
         setSubmitNotice([message, ...notices].join(" "));
         setSubmitError("");
         setSignalFailureState(null);
-        upsertMyResponseHistoryEntry(
-          buildMyResponseHistoryEntry({
-            form,
-            submission: pendingSubmission,
-            status: "pending",
-            storageMode: responseStorageMode,
-          }),
-        );
-        saveSubmittedHistoryEntry({
+        void persistenceRuntime.retryPublicPendingSubmissionSync({ allowWalletPrompt: false })
+          .catch((error) => {
+            console.warn("[public submission] pending remote sync retry failed to start", error);
+          });
+        await persistenceRuntime.upsertPublicHistoryEntry({
           form,
           submission: pendingSubmission,
-          storageMode: getStorageRuntimeStatus().mode,
+          status: "pending",
+          storageMode: responseStorageMode,
+        });
+        await persistenceRuntime.savePublicSubmittedHistoryEntry({
+          form,
+          submission: pendingSubmission,
+          storageMode: (await statusRuntime.getPublicStorageRuntimeStatus()).mode,
           walletAddress: effectiveIdentityMode === "wallet" ? accountAddress : undefined,
         });
         clearDraft();
         clearRecoveryRetryState();
         setFailure(null);
         pendingPipeline(message);
-        enqueuePendingSubmission(pendingSubmission);
+        await persistenceRuntime.enqueuePublicPendingSubmission(pendingSubmission);
         return;
       }
       const syncedSubmission = {
@@ -1668,20 +1651,22 @@ export function usePublicSubmission({
         deliveryStatus: "inbox_synced" as const,
         deliveryStatuses: ["stored_local" as const, "stored_walrus" as const, "inbox_synced" as const],
       };
-      removePendingSubmission(syncedSubmission.id);
+      await persistenceRuntime.removePublicPendingSubmission(syncedSubmission.id);
       setSubmitted(syncedSubmission);
-      upsertMyResponseHistoryEntry(
-        buildMyResponseHistoryEntry({
-          form,
-          submission: syncedSubmission,
-          status: "submitted",
-          storageMode: responseStorageMode,
-        }),
-      );
-      saveSubmittedHistoryEntry({
+      void persistenceRuntime.retryPublicPendingSubmissionSync({ allowWalletPrompt: false })
+        .catch((error) => {
+          console.warn("[public submission] pending remote sync retry failed to start", error);
+        });
+      await persistenceRuntime.upsertPublicHistoryEntry({
         form,
         submission: syncedSubmission,
-        storageMode: getStorageRuntimeStatus().mode,
+        status: "submitted",
+        storageMode: responseStorageMode,
+      });
+      await persistenceRuntime.savePublicSubmittedHistoryEntry({
+        form,
+        submission: syncedSubmission,
+        storageMode: (await statusRuntime.getPublicStorageRuntimeStatus()).mode,
         walletAddress: effectiveIdentityMode === "wallet" ? accountAddress : undefined,
       });
       setSubmitNotice(notices.join(" "));
@@ -1690,14 +1675,10 @@ export function usePublicSubmission({
       setFailure(null);
       setSubmitPipeline({ stage: "completed", status: "complete", message: "Signal sent." });
     } catch (error) {
-      const {
-        buildFailedMyResponseDraft,
-        buildMyResponseHistoryEntry,
-        upsertMyResponseHistoryEntry,
-      } = await import("../../../storage/myResponseHistory");
-      const latestWalrusRuntime = (await import("../../../lib/walrus")
-        .then(({ getWalrusMutationRuntimeStatus }) => getWalrusMutationRuntimeStatus())
-        .catch(() => walrusRuntime)) ?? walrusRuntime ?? DEFAULT_WALRUS_RUNTIME_STATUS;
+      const statusRuntime = await loadPublicSubmissionStatusRuntime();
+      const persistenceRuntime = await loadPublicSubmissionPersistenceRuntime();
+      const latestWalrusRuntime =
+        (await statusRuntime.getLatestWalrusMutationRuntimeStatus()) ?? walrusRuntime ?? DEFAULT_WALRUS_RUNTIME_STATUS;
       if (isWalrusRuntimePreparingError(error)) {
         console.warn("[public submission] Walrus runtime was not ready for submission.", {
           error,
@@ -1716,27 +1697,23 @@ export function usePublicSubmission({
         blobId: historySubmission?.answerBlobId ?? historySubmission?.blobId,
       });
       if (historySubmission) {
-        upsertMyResponseHistoryEntry(
-          buildMyResponseHistoryEntry({
-            form,
-            submission: historySubmission,
-            status: "failed",
-            storageMode: failedStorageMode,
-            errorMessage: message,
-          }),
-        );
+        await persistenceRuntime.upsertPublicHistoryEntry({
+          form,
+          submission: historySubmission,
+          status: "failed",
+          storageMode: failedStorageMode,
+          errorMessage: message,
+        });
       } else {
-        upsertMyResponseHistoryEntry(
-          buildFailedMyResponseDraft({
-            form,
-            submissionId: makeId("submission_failed"),
-            answers,
-            submittedAt: historyStartedAt,
-            status: "failed",
-            storageMode: failedStorageMode,
-            errorMessage: message,
-          }),
-        );
+        await persistenceRuntime.upsertFailedPublicDraft({
+          form,
+          submissionId: makeId("submission_failed"),
+          answers,
+          submittedAt: historyStartedAt,
+          status: "failed",
+          storageMode: failedStorageMode,
+          errorMessage: message,
+        });
       }
       const recoveryFailure = recordRecoveryFailure(error, message);
       const displayMessage = recoveryFailure.corrupted ? RECOVERY_CORRUPTED_MESSAGE : message;

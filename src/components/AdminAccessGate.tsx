@@ -1,6 +1,16 @@
-import type { PropsWithChildren } from "react";
+import { lazy, Suspense, type PropsWithChildren } from "react";
 import { useI18n } from "../i18n";
-import { WalletConnectSurface } from "./WalletConnectSurface";
+import { retryLazyImport } from "../lib/lazyRetry";
+
+const LazyWalletConnectSurface = lazy(() =>
+  retryLazyImport(() => import("./WalletConnectSurface"), "admin-gate-wallet-connect-surface").then((module) => ({
+    default: module.WalletConnectSurface,
+  })),
+);
+
+function AdminGateWalletConnectFallback() {
+  return <div className="wallet-connect-shell wallet-connect-shell-compact" aria-hidden="true" />;
+}
 
 interface AdminAccessGateProps extends PropsWithChildren {
   hasWallet: boolean;
@@ -27,7 +37,9 @@ export function AdminAccessGate({
         <h1>{t("connectWalletTitle")}</h1>
         <p>{t("walletVerifiedAccessRequired")}</p>
         <div className="inline-actions">
-          <WalletConnectSurface />
+          <Suspense fallback={<AdminGateWalletConnectFallback />}>
+            <LazyWalletConnectSurface context="adminGate" />
+          </Suspense>
         </div>
       </section>
     );

@@ -31,7 +31,7 @@ export function WalletStatus({
   const statusCopy =
     status === "connected"
       ? connectedLabel
-      : status === "connecting"
+      : status === "connecting" || status === "provider_pending" || status === "booting"
         ? connectingLabel
         : status === "error"
           ? errorLabel
@@ -41,14 +41,18 @@ export function WalletStatus({
     <span className={`wallet-status ${className}`.trim()}>
       <span
         className={`wallet-sync-indicator ${
-          status === "connected" ? "is-live" : status === "connecting" ? "is-pending" : "is-idle"
+          status === "connected"
+            ? "is-live"
+            : status === "connecting" || status === "provider_pending" || status === "booting"
+              ? "is-pending"
+              : "is-idle"
         }`}
       />
       <span className="wallet-sync-copy">
         <strong>
           {status === "connected"
             ? "Secure Session"
-            : status === "connecting"
+            : status === "connecting" || status === "provider_pending" || status === "booting"
               ? "Opening Session..."
               : "Activate Session"}
         </strong>

@@ -5,12 +5,12 @@ import {
 } from "@mysten/dapp-kit";
 import { walrus } from "@mysten/walrus";
 import walrusWasmUrl from "@mysten/walrus-wasm/web/walrus_wasm_bg.wasm?url";
-import { useEffect, useMemo, type PropsWithChildren } from "react";
+import { useEffect, useMemo, useRef, type PropsWithChildren } from "react";
 import { WALRUS_AGGREGATOR_URL, WALRUS_UPLOAD_RELAY_URL } from "./lib/sui";
-import { logRouteLifecycle } from "./lib/routeDiagnostics";
+import { getCurrentRoutePath, logRouteLifecycle } from "./lib/routeDiagnostics";
 import { endPerf, markPerfMilestone, startPerf } from "./lib/perf";
 import { WalrusDiagnosticError, getWalrusErrorMessage } from "./storage/walrusDiagnostics";
-import { setWalrusRuntimeContext } from "./storage/walrusAdapter";
+import { setWalrusRuntimeContext } from "./storage/walrusRuntime";
 import { setSuiRuntimeContext } from "./suiRuntime";
 import { reportSystemError } from "./services/systemSignalReporterClient";
 
@@ -26,6 +26,15 @@ const WALRUS_UPLOAD_RELAY_TIP_MAX =
     ? Number(WALRUS_UPLOAD_RELAY_TIP_MAX_RAW)
     : null;
 const AGGREGATOR_DIAGNOSTIC_TIMEOUT_MS = 3500;
+
+function isWalletOptionalPublicRoute(routePath: string) {
+  return (
+    routePath === "/troubleshooting" ||
+    routePath.startsWith("/f/") ||
+    routePath.startsWith("/roadmap/") ||
+    routePath.startsWith("/m/")
+  );
+}
 
 function isAbortLikeError(error: unknown) {
   return error instanceof Error && error.name === "AbortError";
@@ -58,9 +67,16 @@ function WalrusRuntimeBridgeInner() {
   const account = useCurrentAccount();
   const { currentWallet, supportedIntents } = useCurrentWallet();
   const { client, config, network } = useSuiClientContext();
+  const routePath = getCurrentRoutePath();
+  const emitWalrusDiagnostics = !isWalletOptionalPublicRoute(routePath);
   const rpcUrl = config?.url ?? null;
   const currentNetwork = network ?? null;
+  const previousWalrusClientRef = useRef<null | object>(null);
+  const previousSuiClientRef = useRef<null | object>(null);
   useEffect(() => {
+    if (!emitWalrusDiagnostics) {
+      return;
+    }
     markPerfMilestone("walrus-runtime:bridge-mounted", currentNetwork ?? "network-pending");
     logRouteLifecycle("walrus-runtime:bridge-mounted", {
       hasClient: Boolean(client),
@@ -68,13 +84,15 @@ function WalrusRuntimeBridgeInner() {
       network: currentNetwork,
       aggregatorConfigured: Boolean(WALRUS_AGGREGATOR_URL),
     });
-  }, [client, currentNetwork, rpcUrl]);
+  }, [client, currentNetwork, emitWalrusDiagnostics, rpcUrl]);
 
   useEffect(() => {
     const aggregatorUrl = WALRUS_AGGREGATOR_URL?.replace(/\/$/, "");
     if (!aggregatorUrl) {
-      markPerfMilestone("walrus:aggregator:unconfigured");
-      logRouteLifecycle("walrus:aggregator-unconfigured");
+      if (emitWalrusDiagnostics) {
+        markPerfMilestone("walrus:aggregator:unconfigured");
+        logRouteLifecycle("walrus:aggregator-unconfigured");
+      }
       return;
     }
 
@@ -85,9 +103,11 @@ function WalrusRuntimeBridgeInner() {
       timedOut = true;
       controller.abort(new DOMException("Walrus aggregator readiness timed out.", "TimeoutError"));
     }, AGGREGATOR_DIAGNOSTIC_TIMEOUT_MS);
-    startPerf("walrus:aggregator-readiness", aggregatorUrl);
-    markPerfMilestone("walrus:aggregator-readiness:start", aggregatorUrl);
-    logRouteLifecycle("walrus:aggregator-readiness-start", { aggregatorUrl });
+    if (emitWalrusDiagnostics) {
+      startPerf("walrus:aggregator-readiness", aggregatorUrl);
+      markPerfMilestone("walrus:aggregator-readiness:start", aggregatorUrl);
+      logRouteLifecycle("walrus:aggregator-readiness-start", { aggregatorUrl });
+    }
 
     void fetch(aggregatorUrl, {
       method: "HEAD",
@@ -95,30 +115,36 @@ function WalrusRuntimeBridgeInner() {
       signal: controller.signal,
     })
       .then((response) => {
-        endPerf("walrus:aggregator-readiness", response.ok ? "ok" : "failed", String(response.status));
-        markPerfMilestone("walrus:aggregator-readiness:end", String(response.status));
-        logRouteLifecycle("walrus:aggregator-readiness-end", {
-          aggregatorUrl,
-          ok: response.ok,
-          status: response.status,
-        });
+        if (emitWalrusDiagnostics) {
+          endPerf("walrus:aggregator-readiness", response.ok ? "ok" : "failed", String(response.status));
+          markPerfMilestone("walrus:aggregator-readiness:end", String(response.status));
+          logRouteLifecycle("walrus:aggregator-readiness-end", {
+            aggregatorUrl,
+            ok: response.ok,
+            status: response.status,
+          });
+        }
       })
       .catch((error) => {
         if (disposed && isAbortLikeError(error)) {
-          endPerf("walrus:aggregator-readiness", "ok", "component-unmounted");
-          markPerfMilestone("walrus:aggregator-readiness:end", "canceled");
-          logRouteLifecycle("walrus:aggregator-readiness-canceled", {
-            aggregatorUrl,
-          });
+          if (emitWalrusDiagnostics) {
+            endPerf("walrus:aggregator-readiness", "ok", "component-unmounted");
+            markPerfMilestone("walrus:aggregator-readiness:end", "canceled");
+            logRouteLifecycle("walrus:aggregator-readiness-canceled", {
+              aggregatorUrl,
+            });
+          }
           return;
         }
         if (timedOut && (isTimeoutLikeError(error) || isAbortLikeError(error))) {
-          endPerf("walrus:aggregator-readiness", "failed", "timed-out");
-          markPerfMilestone("walrus:aggregator-readiness:end", "timed-out");
-          logRouteLifecycle("walrus:aggregator-readiness-timeout", {
-            aggregatorUrl,
-            timeoutMs: AGGREGATOR_DIAGNOSTIC_TIMEOUT_MS,
-          });
+          if (emitWalrusDiagnostics) {
+            endPerf("walrus:aggregator-readiness", "failed", "timed-out");
+            markPerfMilestone("walrus:aggregator-readiness:end", "timed-out");
+            logRouteLifecycle("walrus:aggregator-readiness-timeout", {
+              aggregatorUrl,
+              timeoutMs: AGGREGATOR_DIAGNOSTIC_TIMEOUT_MS,
+            });
+          }
           return;
         }
         reportSystemError({
@@ -131,14 +157,16 @@ function WalrusRuntimeBridgeInner() {
             timedOut,
           },
         });
-        endPerf("walrus:aggregator-readiness", "failed", error instanceof Error ? error.message : String(error));
-        markPerfMilestone("walrus:aggregator-readiness:end", "failed");
-        logRouteLifecycle("walrus:aggregator-readiness-failed", {
-          aggregatorUrl,
-          timeoutMs: AGGREGATOR_DIAGNOSTIC_TIMEOUT_MS,
-          errorName: error instanceof Error ? error.name : typeof error,
-          errorMessage: error instanceof Error ? error.message : String(error),
-        });
+        if (emitWalrusDiagnostics) {
+          endPerf("walrus:aggregator-readiness", "failed", error instanceof Error ? error.message : String(error));
+          markPerfMilestone("walrus:aggregator-readiness:end", "failed");
+          logRouteLifecycle("walrus:aggregator-readiness-failed", {
+            aggregatorUrl,
+            timeoutMs: AGGREGATOR_DIAGNOSTIC_TIMEOUT_MS,
+            errorName: error instanceof Error ? error.name : typeof error,
+            errorMessage: error instanceof Error ? error.message : String(error),
+          });
+        }
       })
       .finally(() => window.clearTimeout(timeout));
 
@@ -147,24 +175,28 @@ function WalrusRuntimeBridgeInner() {
       window.clearTimeout(timeout);
       controller.abort(new DOMException("Walrus aggregator readiness probe canceled.", "AbortError"));
     };
-  }, []);
+  }, [emitWalrusDiagnostics]);
 
   useEffect(() => {
     if (!client) {
-      startPerf("sui-rpc:readiness", rpcUrl ?? "rpc-pending");
-      logRouteLifecycle("sui-rpc:readiness-pending", {
+      if (emitWalrusDiagnostics) {
+        startPerf("sui-rpc:readiness", rpcUrl ?? "rpc-pending");
+        logRouteLifecycle("sui-rpc:readiness-pending", {
+          rpcUrl,
+          network: currentNetwork,
+        });
+      }
+      return;
+    }
+    if (emitWalrusDiagnostics) {
+      endPerf("sui-rpc:readiness", "ok", rpcUrl ?? "rpc-ready");
+      markPerfMilestone("sui-rpc:ready", rpcUrl ?? "rpc-ready");
+      logRouteLifecycle("sui-rpc:ready", {
         rpcUrl,
         network: currentNetwork,
       });
-      return;
     }
-    endPerf("sui-rpc:readiness", "ok", rpcUrl ?? "rpc-ready");
-    markPerfMilestone("sui-rpc:ready", rpcUrl ?? "rpc-ready");
-    logRouteLifecycle("sui-rpc:ready", {
-      rpcUrl,
-      network: currentNetwork,
-    });
-  }, [client, currentNetwork, rpcUrl]);
+  }, [client, currentNetwork, emitWalrusDiagnostics, rpcUrl]);
 
   const stableSupportedIntents = useMemo(
     () => (Array.isArray(supportedIntents) ? [...supportedIntents] : []),
@@ -173,15 +205,8 @@ function WalrusRuntimeBridgeInner() {
   const walrusClient = useMemo(
     () => {
       if (!client) {
-        startPerf("walrus:client-create", rpcUrl ?? "client-pending");
-        logRouteLifecycle("walrus-runtime:client-pending", {
-          rpcUrl,
-          network: currentNetwork,
-        });
         return null;
       }
-      startPerf("walrus:client-create", rpcUrl ?? "client-ready");
-      markPerfMilestone("walrus:client-create:start", rpcUrl ?? "rpc-ready");
       const walrusEnabledClient = client.$extend(
         walrus({
           wasmUrl: walrusWasmUrl,
@@ -202,14 +227,6 @@ function WalrusRuntimeBridgeInner() {
             : {}),
           }),
       );
-      endPerf("walrus:client-create", "ok", currentNetwork ?? "network-ready");
-      markPerfMilestone("walrus:client-create:end", currentNetwork ?? "network-ready");
-      logRouteLifecycle("walrus-runtime:client-created", {
-        rpcUrl,
-        network: currentNetwork,
-        uploadRelayConfigured: Boolean(WALRUS_UPLOAD_RELAY_URL),
-        wasmUrl: walrusWasmUrl,
-      });
       (walrusEnabledClient.core as typeof walrusEnabledClient.core & {
         waitForTransaction: typeof walrusEnabledClient.core.waitForTransaction;
       }).waitForTransaction = async (input) => {
@@ -272,8 +289,40 @@ function WalrusRuntimeBridgeInner() {
       };
       return walrusEnabledClient;
     },
-    [client, currentNetwork, rpcUrl],
+    [client, currentNetwork, emitWalrusDiagnostics, rpcUrl],
   );
+
+  useEffect(() => {
+    const hadWalrusClient = Boolean(previousWalrusClientRef.current);
+    const hasWalrusClient = Boolean(walrusClient);
+    const hadSuiClient = Boolean(previousSuiClientRef.current);
+    const hasSuiClient = Boolean(client);
+
+    if (emitWalrusDiagnostics && !hasWalrusClient) {
+      startPerf("walrus:client-create", rpcUrl ?? "client-pending");
+      if (!hasSuiClient && hadSuiClient !== hasSuiClient) {
+        logRouteLifecycle("walrus-runtime:client-pending", {
+          rpcUrl,
+          network: currentNetwork,
+        });
+      }
+    }
+
+    if (emitWalrusDiagnostics && hasWalrusClient && previousWalrusClientRef.current !== walrusClient) {
+      markPerfMilestone("walrus:client-create:start", rpcUrl ?? "rpc-ready");
+      endPerf("walrus:client-create", "ok", currentNetwork ?? "network-ready");
+      markPerfMilestone("walrus:client-create:end", currentNetwork ?? "network-ready");
+      logRouteLifecycle("walrus-runtime:client-created", {
+        rpcUrl,
+        network: currentNetwork,
+        uploadRelayConfigured: Boolean(WALRUS_UPLOAD_RELAY_URL),
+        wasmUrl: walrusWasmUrl,
+      });
+    }
+
+    previousWalrusClientRef.current = walrusClient;
+    previousSuiClientRef.current = client;
+  }, [client, currentNetwork, emitWalrusDiagnostics, rpcUrl, walrusClient]);
   const runtimeContext = useMemo(
     () => ({
       account,
@@ -293,14 +342,16 @@ function WalrusRuntimeBridgeInner() {
       rpcUrl,
       network: currentNetwork,
     });
-    markPerfMilestone("walrus-runtime:context-set", runtimeContext.client ? "client-ready" : "client-null");
-    logRouteLifecycle("walrus-runtime:context-set", {
-      hasClient: Boolean(runtimeContext.client),
-      hasAccount: Boolean(runtimeContext.account),
-      hasWallet: Boolean(runtimeContext.wallet),
-      rpcUrl,
-      network: currentNetwork,
-    });
+    if (emitWalrusDiagnostics) {
+      markPerfMilestone("walrus-runtime:context-set", runtimeContext.client ? "client-ready" : "client-null");
+      logRouteLifecycle("walrus-runtime:context-set", {
+        hasClient: Boolean(runtimeContext.client),
+        hasAccount: Boolean(runtimeContext.account),
+        hasWallet: Boolean(runtimeContext.wallet),
+        rpcUrl,
+        network: currentNetwork,
+      });
+    }
 
     return () => {
       setWalrusRuntimeContext({
@@ -317,7 +368,7 @@ function WalrusRuntimeBridgeInner() {
         network: null,
       });
     };
-  }, [client, currentNetwork, rpcUrl, runtimeContext]);
+  }, [client, currentNetwork, emitWalrusDiagnostics, rpcUrl, runtimeContext]);
 
   return null;
 }

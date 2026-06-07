@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   getDashboardProjectRestoreSnapshot,
+  isDashboardBootPending,
   isDashboardWalletRuntimeSettled,
   initializeDashboardProjectRestore,
   markDashboardWalletImportReady,
@@ -62,5 +63,28 @@ describe("dashboardProjectRestore", () => {
     expect(isDashboardWalletRuntimeSettled("failed")).toBe(true);
     expect(isDashboardWalletRuntimeSettled("skipped_no_wallet")).toBe(true);
     expect(isDashboardWalletRuntimeSettled("timeout_fallback")).toBe(true);
+  });
+
+  it("keeps dashboard boot pending while provider or restore settling is still in flight", () => {
+    initializeDashboardProjectRestore("/dashboard");
+
+    expect(
+      isDashboardBootPending(getDashboardProjectRestoreSnapshot(), {
+        walletProviderMounted: false,
+        walletProviderPending: true,
+        walletSessionPhase: "provider_deferred",
+      }),
+    ).toBe(true);
+
+    markDashboardWalletImportReady("/dashboard");
+    vi.advanceTimersByTime(100);
+
+    expect(
+      isDashboardBootPending(getDashboardProjectRestoreSnapshot(), {
+        walletProviderMounted: true,
+        walletProviderPending: false,
+        walletSessionPhase: "disconnected",
+      }),
+    ).toBe(false);
   });
 });

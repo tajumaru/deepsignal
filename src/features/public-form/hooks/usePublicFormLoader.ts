@@ -185,22 +185,6 @@ async function enrichLoadErrorDetail(
   error: unknown,
 ): Promise<PublicFormLoadErrorDetail> {
   const enrichedDetail = { ...detail };
-  if (enrichedDetail.manifestBlobId) {
-    try {
-      const { verifyWalrusBlob } = await import("../../../lib/walrusProof");
-      enrichedDetail.manifestStatus = await verifyWalrusBlob(enrichedDetail.manifestBlobId);
-    } catch {
-      // Best effort only for the public failure screen.
-    }
-  }
-  if (enrichedDetail.formBlobId) {
-    try {
-      const { verifyWalrusBlob } = await import("../../../lib/walrusProof");
-      enrichedDetail.formBlobStatus = await verifyWalrusBlob(enrichedDetail.formBlobId);
-    } catch {
-      // Best effort only for the public failure screen.
-    }
-  }
   if (isChunkLoadFailure(error)) {
     try {
       const assetVerification = await measurePerf(
@@ -274,20 +258,8 @@ export function usePublicFormLoader({
         if (manifestBlobId) {
           try {
             nextForm = await measurePerf("public-form:manifest-restore", async () => {
-              const [{ getWalrusMutationRuntimeStatus }, { readJsonBlobOrThrow, readManifestWithForm }] =
-                await Promise.all([
-                  import("../../../storage/walrusAdapter"),
-                  import("../../../lib/walrus/read"),
-                ]);
-              const walrusRuntime = getWalrusMutationRuntimeStatus();
-              if (!walrusRuntime.aggregatorConfigured) {
-                throw new SharedFormRestoreError(
-                  "aggregator_unconfigured",
-                  "Walrus aggregator URL is not configured in this build.",
-                  { blobId: manifestBlobId, stage: "manifest" },
-                );
-              }
-              const carrier = await readManifestWithForm(manifestBlobId).catch((error) => {
+              const { readPublicJsonBlobOrThrow, readPublicManifestWithForm } = await import("../../../lib/walrus/publicRead");
+              const carrier = await readPublicManifestWithForm(manifestBlobId).catch((error) => {
                 throw toSharedFormRestoreError("manifest", error, manifestBlobId);
               });
               const manifest = carrier.manifest;
@@ -322,7 +294,7 @@ export function usePublicFormLoader({
                 restoredForm = carrier.form;
                 restoredFormBlobId = manifestBlobId;
               } else if (manifest.formBlobId && manifest.formBlobId !== "__bundled_form__") {
-                restoredForm = await readJsonBlobOrThrow<FormSchema>(manifest.formBlobId).catch((error) => {
+                restoredForm = await readPublicJsonBlobOrThrow<FormSchema>(manifest.formBlobId).catch((error) => {
                   throw toSharedFormRestoreError("form", error, manifest.formBlobId);
                 });
                 restoredFormBlobId = manifest.formBlobId;

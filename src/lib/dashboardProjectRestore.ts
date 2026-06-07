@@ -30,6 +30,12 @@ export type DashboardProjectRestoreSnapshot = {
   errorMessage: string | null;
 };
 
+type DashboardBootPendingOptions = {
+  walletProviderMounted?: boolean;
+  walletProviderPending?: boolean;
+  walletSessionPhase?: "provider_deferred" | "restoring" | "disconnected" | "connected";
+};
+
 type ProjectSelectionSnapshot = {
   currentProjectId: string;
   source: ProjectRestoreSource;
@@ -400,4 +406,23 @@ export function isDashboardWalletRuntimeSettled(walletRuntime: DashboardWalletRu
 
 export function isDashboardWorkspaceReady(restoreSnapshot: DashboardProjectRestoreSnapshot) {
   return restoreSnapshot.state === "ready_with_project" || restoreSnapshot.state === "ready_without_project";
+}
+
+export function isDashboardBootPending(
+  restoreSnapshot: DashboardProjectRestoreSnapshot,
+  options: DashboardBootPendingOptions = {},
+) {
+  const walletProviderPending = options.walletProviderPending ?? !(options.walletProviderMounted ?? true);
+
+  return (
+    walletProviderPending ||
+    options.walletProviderMounted === false ||
+    restoreSnapshot.walletRuntime === "deferred" ||
+    restoreSnapshot.walletRuntime === "pending" ||
+    options.walletSessionPhase === "provider_deferred" ||
+    restoreSnapshot.state === "unknown" ||
+    restoreSnapshot.state === "restoring" ||
+    !restoreSnapshot.storageSettled ||
+    !restoreSnapshot.walletSettled
+  );
 }

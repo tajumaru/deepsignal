@@ -8,5 +8,13 @@
     "noEmit": true,
     "allowSyntheticDefaultImports": true
   },
-  "include": ["vite.config.ts", "src/lib/nftOwnership.ts", "src/lib/nftOwnershipApi.ts", "src/lib/rpcErrors.ts", "api/**/*.ts"]
+  "include": [
+    "vite.config.ts",
+    "src/lib/nftOwnership.ts",
+    "src/lib/nftOwnershipApi.ts",
+    "src/lib/nftOwnershipShared.ts",
+    "src/lib/rpcErrors.ts",
+    "src/lib/suiAddress.ts",
+    "api/**/*.ts"
+  ]
 }

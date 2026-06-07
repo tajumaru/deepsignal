@@ -1,5 +1,4 @@
 import { useSignAndExecuteTransaction } from "@mysten/dapp-kit";
-import { isValidSuiAddress } from "@mysten/sui/utils";
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { Link, useParams } from "react-router-dom";
 import { AdminAccessGate } from "../components/AdminAccessGate";
@@ -57,7 +56,6 @@ import {
 } from "../lib/reviewCollaboration";
 import {
   triageStatusToOnchainStatus,
-  updateSignalStatusOnChain,
 } from "../lib/projectRegistry";
 import {
   getSignalPreview,
@@ -68,6 +66,7 @@ import {
 import { getTriageStatusLabel, TRIAGE_STATUS_OPTIONS } from "../lib/signalOps";
 import { normalizeForm } from "../lib/formSchema";
 import { normalizeSubmission } from "../lib/submissionSchema";
+import { isValidSuiAddress } from "../lib/suiAddress";
 import { storageAdapter } from "../lib/storageAdapter";
 import {
   lifecycleStatusFromSubmissionState,
@@ -199,6 +198,10 @@ export function FormSubmissionsPage() {
     daysLeft: (days) => t("responseDeadlineDaysLeft", { count: days }),
   };
   const sealRuntimeLabel = sealRuntime.activeMode.toUpperCase();
+
+  async function loadProjectRegistryWriteModule() {
+    return import("../lib/projectRegistryWrite");
+  }
 
   async function handleClearDebugPolicyCache() {
     await clearDeepSignalPolicyCapabilityCache();
@@ -716,6 +719,7 @@ export function FormSubmissionsPage() {
             if (!projectId || typeof signalId !== "number") {
               throw new Error("Project registry ids are missing for this signal.");
             }
+            const { updateSignalStatusOnChain } = await loadProjectRegistryWriteModule();
             const tx = updateSignalStatusOnChain({
               projectId,
               signalId,

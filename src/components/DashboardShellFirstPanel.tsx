@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { buildInfo } from "../lib/buildInfo";
-import { useDashboardProjectRestoreSnapshot } from "../lib/dashboardProjectRestore";
+import { isDashboardBootPending, useDashboardProjectRestoreSnapshot } from "../lib/dashboardProjectRestore";
 import { formatRouteLifecycleDiagnostics, logRouteLifecycle } from "../lib/routeDiagnostics";
+import { useWalletSessionState } from "../walletSessionState";
 
 export function DashboardShellFirstPanel({
   onRetryWalletRuntime,
@@ -14,9 +15,14 @@ export function DashboardShellFirstPanel({
   walletStatusMessage?: string;
 }) {
   const restoreSnapshot = useDashboardProjectRestoreSnapshot();
+  const walletSession = useWalletSessionState();
   const [copiedDiagnostics, setCopiedDiagnostics] = useState(false);
   const currentProjectId = restoreSnapshot.currentProjectId;
-  const restorePending = restoreSnapshot.state === "unknown" || restoreSnapshot.state === "restoring";
+  const restorePending = isDashboardBootPending(restoreSnapshot, {
+    walletProviderMounted: walletSession.providerMounted,
+    walletProviderPending: walletSession.providerLoading || !walletSession.providerMounted,
+    walletSessionPhase: walletSession.phase,
+  });
 
   useEffect(() => {
     const eventName = restorePending
@@ -43,6 +49,8 @@ export function DashboardShellFirstPanel({
       setCopiedDiagnostics(false);
     }
   }
+
+  const showEmptyProjectState = !restorePending && !currentProjectId;
 
   return (
     <main className="dashboard-degraded-shell" role="main" aria-label="Signal Intelligence Workspace">
@@ -79,12 +87,28 @@ export function DashboardShellFirstPanel({
           </div>
         </dl>
         <div className="inline-actions">
-          <Link className="primary-button" to="/create">
-            Compose Signal
-          </Link>
-          <Link className="ghost-button" to="/explore">
-            Explore Signals
-          </Link>
+          {showEmptyProjectState ? (
+            <>
+              <Link className="primary-button" to="/admin">
+                Select Project
+              </Link>
+              <Link className="ghost-button" to="/create">
+                Create Project
+              </Link>
+              <Link className="ghost-button" to="/explore">
+                Explore Signals
+              </Link>
+            </>
+          ) : (
+            <>
+              <Link className="primary-button" to="/create">
+                Compose Signal
+              </Link>
+              <Link className="ghost-button" to="/explore">
+                Explore Signals
+              </Link>
+            </>
+          )}
           <button type="button" className="ghost-button" onClick={onRetryWalletRuntime}>
             Retry wallet runtime
           </button>

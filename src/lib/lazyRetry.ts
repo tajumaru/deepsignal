@@ -1,5 +1,5 @@
 import type { ComponentType } from "react";
-import { isChunkLoadFailure, recoverFromChunkLoadFailure } from "./chunkLoadRecovery";
+import { getChunkFailureUrl, isChunkLoadFailure, recoverFromChunkLoadFailure } from "./chunkLoadRecovery";
 import { buildInfo, type BuildInfo } from "./buildInfo";
 import { recordBuildAsset } from "./buildAssetDiagnostics";
 import { endPerf, startPerf } from "./perf";
@@ -14,6 +14,7 @@ import {
   type ChunkDependencyProbe,
   type ChunkProbe,
 } from "./routeDiagnostics";
+import { markRouteImportFailure, markRouteImportSettled, markRouteImportStart } from "./routeRecoveryState";
 import { lazyChunkExportSpecs } from "./lazyRouteRegistry";
 import type { RouteAssetKey, RouteChunkSpec } from "./lazyRouteRegistry";
 import { reportSystemError } from "../services/systemSignalReporterClient";
@@ -522,23 +523,28 @@ function getModuleKeys(module: unknown) {
 
 function readModuleExport(module: unknown, exportName: string) {
   const moduleRecord = module && typeof module === "object" ? (module as Record<string, unknown>) : {};
+  const preferNamedExport = exportName !== "default";
+
+  if (preferNamedExport) {
+    let namedExport: unknown;
+    try {
+      namedExport = moduleRecord[exportName];
+    } catch {
+      namedExport = undefined;
+    }
+    if (namedExport) {
+      return { value: namedExport, resolvedExport: exportName };
+    }
+  }
+
   let defaultExport: unknown;
   try {
     defaultExport = moduleRecord.default;
   } catch {
     defaultExport = undefined;
   }
-  if (defaultExport) {
+  if (!preferNamedExport && defaultExport) {
     return { value: defaultExport, resolvedExport: "default" as const };
-  }
-  let namedExport: unknown;
-  try {
-    namedExport = moduleRecord[exportName];
-  } catch {
-    namedExport = undefined;
-  }
-  if (namedExport) {
-    return { value: namedExport, resolvedExport: exportName };
   }
   for (const value of Object.values(moduleRecord)) {
     if (!value || typeof value !== "object") {
@@ -554,6 +560,9 @@ function readModuleExport(module: unknown, exportName: string) {
     if (nestedExport) {
       return { value: nestedExport, resolvedExport: `nested:${exportName}` as const };
     }
+  }
+  if (preferNamedExport && defaultExport) {
+    return { value: defaultExport, resolvedExport: "default" as const };
   }
   return { value: null, resolvedExport: "missing" as const };
 }
@@ -809,6 +818,7 @@ export async function retryLazyImport<T>(loader: () => Promise<T>, label = "anon
   for (let attempt = 1; attempt <= lazyImportAttempts; attempt += 1) {
     try {
       const chunkUrlForAttempt = attempt > 1 ? await resolveExpectedChunkUrl() : expectedChunkUrl ?? null;
+      markRouteImportStart(label);
       logRouteLifecycle("lazy-import-start", {
         label,
         attempt,
@@ -862,10 +872,12 @@ export async function retryLazyImport<T>(loader: () => Promise<T>, label = "anon
         routePath: getCurrentRoutePath(),
       });
       endPerf(perfName, "ok", `attempt ${attempt}`);
+      markRouteImportSettled(label);
       return result;
     } catch (error) {
       const chunkUrlForDiagnostics = expectedChunkUrl ?? (await resolveExpectedChunkUrl());
       lastError = error;
+      markRouteImportFailure(chunkUrlForDiagnostics ?? null);
       recordFailedImport(label, error, chunkUrlForDiagnostics, {
         category: error instanceof LazyImportTimeoutError ? "timeout" : isChunkLoadFailure(error) ? "chunkLoad" : "runtime",
         attempt,
@@ -891,6 +903,16 @@ export async function retryLazyImport<T>(loader: () => Promise<T>, label = "anon
         reason: error instanceof LazyImportTimeoutError ? "timeout" : "rejected",
       });
       if (chunkUrlForDiagnostics) {
+        const failedChunkUrl = getChunkFailureUrl(error);
+        if (failedChunkUrl && failedChunkUrl !== chunkUrlForDiagnostics) {
+          logRouteLifecycle("build-asset-mismatch-detected", {
+            label,
+            attempt,
+            failedChunkUrl,
+            expectedChunkUrl: chunkUrlForDiagnostics,
+            routePath: getCurrentRoutePath(),
+          });
+        }
         probeLazyImportDependenciesOnStart(label, chunkUrlForDiagnostics, attempt);
         const probe = await probeChunk(chunkUrlForDiagnostics);
         recordFailedImportProbe(label, probe);
@@ -954,6 +976,7 @@ export async function retryLazyImport<T>(loader: () => Promise<T>, label = "anon
     }
   }
 
+  markRouteImportSettled(label);
   if (!(lastError instanceof LazyImportTimeoutError)) {
     recoverFromChunkLoadFailure(lastError);
   }

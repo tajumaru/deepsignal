@@ -11,7 +11,7 @@ import { buildInfo } from "../lib/buildInfo";
 import { retryLazyImport } from "../lib/lazyRetry";
 import { endPerf, markPerfMilestone, startPerf } from "../lib/perf";
 import { getBrowserCapabilitiesSnapshot, logRouteLifecycle } from "../lib/routeDiagnostics";
-import { WalletSurfaceContext, type WalletProviderRuntime } from "./WalletSurfaceRuntime";
+import { setWalletProviderRuntimeSnapshot, WalletSurfaceContext, type WalletProviderRuntime } from "./WalletSurfaceRuntime";
 
 type WalletProvidersModule = { default: (props: PropsWithChildren) => JSX.Element };
 
@@ -176,6 +176,9 @@ export function WalletSurface({
   const [providersModule, setProvidersModule] = useState<null | { WalletProviders: (props: PropsWithChildren) => JSX.Element }>(null);
   const [loading, setLoading] = useState(requestOnMount && !parentRuntime.loaded);
   const [loadFailed, setLoadFailed] = useState(false);
+  const [treeMounted, setTreeMounted] = useState(false);
+  const [contextAvailable, setContextAvailable] = useState(false);
+  const [hasCommittedOnce, setHasCommittedOnce] = useState(false);
   const requestStartedRef = useRef(false);
 
   useEffect(() => {
@@ -189,6 +192,8 @@ export function WalletSurface({
     requestStartedRef.current = false;
     setLoading(false);
     setLoadFailed(false);
+    setTreeMounted(false);
+    setContextAvailable(false);
   }, [parentRuntime.loaded, providersModule, retryKey]);
 
   useEffect(() => {
@@ -211,13 +216,48 @@ export function WalletSurface({
     if (!providersModule) {
       return;
     }
-    logRouteLifecycle("provider-mounted", {
+    logRouteLifecycle("wallet-provider-chunk-loaded", {
+      providerLoading: false,
+      providerChunkLoaded: true,
+      providerContextAvailable: false,
+      parentRuntimeLoaded: parentRuntime.loaded,
+      requestOnMount,
+      retryKey,
+      routePath: getCurrentRoutePath(),
+    });
+    logRouteLifecycle("provider:wallet-chunk-loaded", {
       parentRuntimeLoaded: parentRuntime.loaded,
       requestOnMount,
       retryKey,
       routePath: getCurrentRoutePath(),
     });
   }, [parentRuntime.loaded, providersModule, requestOnMount, retryKey]);
+
+  const markTreeMounted = useMemo(
+    () => () => {
+      setTreeMounted(true);
+      setHasCommittedOnce(true);
+    },
+    [],
+  );
+
+  const markContextAvailable = useMemo(
+    () => () => {
+      setTreeMounted(true);
+      setContextAvailable(true);
+      setHasCommittedOnce(true);
+      setLoading(false);
+    },
+    [],
+  );
+
+  const resetReadiness = useMemo(
+    () => () => {
+      setTreeMounted(false);
+      setContextAvailable(false);
+    },
+    [],
+  );
 
   const requestLoad = useMemo(
     () => () => {
@@ -238,15 +278,27 @@ export function WalletSurface({
     [loadWalletProviders, parentRuntime.loaded],
   );
 
+  const runtime = {
+    chunkLoaded: Boolean(providersModule),
+    contextAvailable,
+    failed: loadFailed,
+    hasCommittedOnce,
+    loaded: contextAvailable,
+    loading: loading || (Boolean(providersModule) && !contextAvailable),
+    markContextAvailable,
+    markTreeMounted,
+    requestLoad,
+    resetReadiness,
+    treeMounted,
+  } satisfies WalletProviderRuntime;
+
+  useEffect(() => {
+    setWalletProviderRuntimeSnapshot(runtime);
+  }, [runtime]);
+
   if (parentRuntime.loaded) {
     return <>{children}</>;
   }
-
-  const runtime = {
-    loaded: Boolean(providersModule),
-    loading,
-    requestLoad,
-  } satisfies WalletProviderRuntime;
 
   if (providersModule) {
     const WalletProviders = providersModule.WalletProviders;

@@ -4,6 +4,7 @@ import {
   useMemo,
   useEffect,
   useRef,
+  useState,
   type PropsWithChildren,
 } from "react";
 import {
@@ -13,26 +14,51 @@ import {
   useCurrentWallet,
   useDisconnectWallet,
   useSignAndExecuteTransaction,
+  useSuiClientContext,
+  useWallets,
   WalletProvider,
 } from "@mysten/dapp-kit";
 import type { WalletWithRequiredFeatures } from "@mysten/wallet-standard";
 import { REQUIRE_GLOBAL_WALRUS_RUNTIME } from "./lib/runtimeFlags";
+import { clearWalletSessionStorage } from "./lib/walletSessionReset";
 import {
   SUI_NETWORK,
 } from "./lib/sui";
 import { getBrowserCapabilitiesSnapshot, getCurrentRoutePath, logRouteLifecycle, setDeepSignalDebugReadiness } from "./lib/routeDiagnostics";
+import { hadPriorWalletConnectChunkFailure } from "./lib/walletConnectRuntimeRecovery";
 import { endPerf, markPerfMilestone, startPerf } from "./lib/perf";
 import { createBrowserSafeSuiTransport } from "./lib/suiRpcTransport";
 import { useRpcInfrastructure } from "./rpcInfrastructure";
 import { OptionalWalrusRuntimeBoundary } from "./WalrusRuntimeProvider";
 import WalrusRuntimeBridge from "./walrusRuntimeBridge";
 import type { CreateFormTransaction } from "./features/createForm/types";
-import { WalletActionContext, WalletConnectionContext, type WalletConnectionState } from "./walletStatus";
+import {
+  WalletActionContext,
+  WalletConnectionContext,
+  WalletRuntimeControlContext,
+  type WalletConnectFailureState,
+  type WalletConnectFailureSource,
+  type WalletConnectionState,
+} from "./walletStatus";
 import { deriveWalletConnectionState } from "./walletConnectionState";
 import { setQueryClientMutationErrorHandler, setQueryClientMutationLifecycleHandler } from "./queryClient";
+import { getRouteRecoverySnapshot } from "./lib/routeRecoveryState";
+import { useWalletProviderRuntime } from "./components/WalletSurfaceRuntime";
 
 const PREFERRED_WALLETS = ["Sui Wallet", "Slush", "Phantom", "OKX Wallet"];
-const DAPP_KIT_WALLET_STORAGE_KEY = "sui-dapp-kit:wallet-connection-info";
+const SLUSH_WALLET_CONFIG = {
+  name: "DeepSignal",
+  origin: "https://deepsignal.wal.app",
+};
+
+function isWalletOptionalPublicRoute(routePath: string) {
+  return (
+    routePath === "/troubleshooting" ||
+    routePath.startsWith("/f/") ||
+    routePath.startsWith("/roadmap/") ||
+    routePath.startsWith("/m/")
+  );
+}
 
 function isSilentWalletRestore(variables: unknown): variables is { silent: true } {
   return Boolean(
@@ -48,7 +74,7 @@ function clearStaleWalletRestoreState() {
     return;
   }
   try {
-    window.localStorage.removeItem(DAPP_KIT_WALLET_STORAGE_KEY);
+    clearWalletSessionStorage();
     console.warn("[DeepSignal wallet] Cleared stale dApp Kit auto-connect state after restore failure.");
   } catch (error) {
     console.warn("[DeepSignal wallet] Failed to clear stale dApp Kit auto-connect state.", error);
@@ -87,80 +113,51 @@ function getWalletConnectTimeoutMs() {
   return getBrowserCapabilitiesSnapshot().mobileSafari ? 15_000 : 10_000;
 }
 
-function WalletStatusBridge({ children }: PropsWithChildren) {
-  const account = useCurrentAccount();
-  const { currentWallet, connectionStatus, isConnected } = useCurrentWallet();
-  const disconnectWallet = useDisconnectWallet();
-  const signAndExecuteTransaction = useSignAndExecuteTransaction();
-  const restoreInFlightRef = useRef(false);
-  const value = useMemo<WalletConnectionState>(
-    () =>
-      deriveWalletConnectionState({
-        accountAddress: account?.address,
-        connectionStatus,
-        currentWalletName: currentWallet?.name,
-        fallbackAccounts: currentWallet?.accounts ?? null,
-        isConnected,
-      }),
-    [account?.address, connectionStatus, currentWallet?.accounts, currentWallet?.name, isConnected],
-  );
-
-  useEffect(() => {
-    if (value.isRestoringConnection && !restoreInFlightRef.current) {
-      restoreInFlightRef.current = true;
-      startPerf("wallet:restoration", value.walletName ?? "wallet-auto-connect");
-      markPerfMilestone("wallet:restoration:start", value.walletName ?? "wallet-auto-connect");
-      logRouteLifecycle("wallet:restoration-start", {
-        walletName: value.walletName,
-        accountAddress: value.accountAddress ? "present" : "absent",
-      });
-    }
-    if (!value.isRestoringConnection && restoreInFlightRef.current) {
-      restoreInFlightRef.current = false;
-      endPerf("wallet:restoration", value.status === "connected" ? "ok" : "failed", value.status);
-      markPerfMilestone("wallet:restoration:end", value.status);
-      logRouteLifecycle("wallet:restoration-end", {
-        status: value.status,
-        walletName: value.walletName,
-        accountAddress: value.accountAddress ? "present" : "absent",
-      });
-    }
-    logRouteLifecycle("wallet-provider:status", { ...value });
-    setDeepSignalDebugReadiness({
-      walletProvider: value.status,
-      walletAccountAddress: value.accountAddress ? "present" : "absent",
-      walletName: value.walletName,
-      walletRestoringConnection: value.isRestoringConnection,
-    });
-  }, [value]);
-
-  const actions = useMemo(
-    () => ({
-      disconnect: async () => {
-        await disconnectWallet.mutateAsync();
-      },
-      signAndExecuteTransaction: async (transaction: CreateFormTransaction) => {
-        return signAndExecuteTransaction.mutateAsync({
-          transaction,
-        });
-      },
-    }),
-    [disconnectWallet, signAndExecuteTransaction],
-  );
-
-  return (
-    <WalletActionContext.Provider value={actions}>
-      <WalletConnectionContext.Provider value={value}>{children}</WalletConnectionContext.Provider>
-    </WalletActionContext.Provider>
-  );
+function classifyWalletConnectFailureSource(error: unknown): WalletConnectFailureSource {
+  const text = error instanceof Error ? `${error.name} ${error.message} ${error.stack ?? ""}` : String(error ?? "");
+  if (/TRPCClientError|Failed to add dApp connection/i.test(text)) {
+    return "slush_injected_provider";
+  }
+  if (/standard:connect|wallet adapter|wallet not found|WalletAccount/i.test(text)) {
+    return "wallet_adapter";
+  }
+  if (/dapp-kit|connect-wallet/i.test(text)) {
+    return "dapp_kit";
+  }
+  if (/deepsignal|wallet-connect-manual-open/i.test(text)) {
+    return "wrapper";
+  }
+  return "unknown";
 }
 
-export function WalletProviders({ children }: PropsWithChildren) {
-  const rpcInfrastructure = useRpcInfrastructure();
-  const currentRpcUrl = rpcInfrastructure.currentRpcUrl;
+function WalletStatusBridge({ children }: PropsWithChildren) {
+  const walletRuntime = useWalletProviderRuntime();
+  const { chunkLoaded, markContextAvailable, markTreeMounted } = walletRuntime;
+  const routePath = getCurrentRoutePath();
+  const emitProviderDiagnostics = !isWalletOptionalPublicRoute(routePath);
+  const account = useCurrentAccount();
+  const { currentWallet, connectionStatus, isConnected } = useCurrentWallet();
+  useSuiClientContext();
+  const wallets = useWallets();
+  const disconnectWallet = useDisconnectWallet();
+  const signAndExecuteTransaction = useSignAndExecuteTransaction();
+  const [manualConnectActive, setManualConnectActive] = useState(false);
+  const [suppressRestoringConnection, setSuppressRestoringConnection] = useState(false);
+  const [lastConnectFailure, setLastConnectFailure] = useState<WalletConnectFailureState | null>(null);
+  const restoreInFlightRef = useRef(false);
   const connectAttemptIdRef = useRef(0);
   const activeConnectAttemptIdRef = useRef<number | null>(null);
   const connectTimeoutRef = useRef<number | null>(null);
+  const manualConnectActiveRef = useRef(false);
+
+  const setManualConnect = useCallback((active: boolean) => {
+    manualConnectActiveRef.current = active;
+    setManualConnectActive(active);
+  }, []);
+
+  const setSuppressRestore = useCallback((suppressed: boolean) => {
+    setSuppressRestoringConnection(suppressed);
+  }, []);
 
   const clearWalletConnectTimeout = useCallback(() => {
     if (connectTimeoutRef.current !== null) {
@@ -169,14 +166,104 @@ export function WalletProviders({ children }: PropsWithChildren) {
     }
   }, []);
 
+  const value = useMemo<WalletConnectionState>(
+    () => ({
+      ...deriveWalletConnectionState({
+        accountAddress: account?.address,
+        connectionStatus,
+        currentWalletName: currentWallet?.name,
+        fallbackAccounts: currentWallet?.accounts ?? null,
+        isConnected,
+        manualConnectActive,
+        suppressRestoringConnection,
+      }),
+      lastConnectFailure,
+    }),
+    [
+      account?.address,
+      connectionStatus,
+      currentWallet?.accounts,
+      currentWallet?.name,
+      isConnected,
+      lastConnectFailure,
+      manualConnectActive,
+      suppressRestoringConnection,
+    ],
+  );
+
+  useEffect(() => {
+    markTreeMounted();
+    markContextAvailable();
+    if (emitProviderDiagnostics) {
+      logRouteLifecycle("wallet-provider-context-ready", {
+        providerChunkLoaded: chunkLoaded,
+        providerContextAvailable: true,
+        providerTreeMounted: true,
+      });
+    }
+    setDeepSignalDebugReadiness({
+      suiClientContextAvailable: true,
+      walletProviderChunkLoaded: chunkLoaded,
+      walletProviderCommittedOnce: true,
+      walletProviderMounted: true,
+      walletProviderPending: false,
+    });
+  }, [chunkLoaded, emitProviderDiagnostics, markContextAvailable, markTreeMounted]);
+
+  useEffect(() => {
+    if (value.connectMode === "autoRestore" && !restoreInFlightRef.current) {
+      restoreInFlightRef.current = true;
+      startPerf("wallet:restoration", value.walletName ?? "wallet-auto-connect");
+      markPerfMilestone("wallet:restoration:start", value.walletName ?? "wallet-auto-connect");
+      logRouteLifecycle("wallet:restoration-start", {
+        connectLockState: value.connectLockState,
+        connectMode: value.connectMode,
+        walletName: value.walletName,
+        accountAddress: value.accountAddress ? "present" : "absent",
+      });
+    }
+    if (value.connectMode !== "autoRestore" && restoreInFlightRef.current) {
+      restoreInFlightRef.current = false;
+      endPerf("wallet:restoration", value.status === "connected" ? "ok" : "failed", value.status);
+      markPerfMilestone("wallet:restoration:end", value.status);
+      logRouteLifecycle("wallet:restoration-end", {
+        connectLockState: value.connectLockState,
+        connectMode: value.connectMode,
+        status: value.status,
+        walletName: value.walletName,
+        accountAddress: value.accountAddress ? "present" : "absent",
+      });
+    }
+    if (emitProviderDiagnostics) {
+      logRouteLifecycle("wallet-provider:status", { ...value });
+    }
+    setDeepSignalDebugReadiness({
+      walletConnectLockState: value.connectLockState,
+      walletConnectMode: value.connectMode,
+      walletProvider: value.status,
+      walletAccountAddress: value.accountAddress ? "present" : "absent",
+      walletName: value.walletName,
+      walletRestoringConnection: value.isRestoringConnection,
+    });
+  }, [emitProviderDiagnostics, value]);
+
+  useEffect(() => {
+    if (value.status === "connected") {
+      setManualConnect(false);
+      setSuppressRestore(false);
+      setLastConnectFailure(null);
+    }
+  }, [setManualConnect, setSuppressRestore, value.status]);
+
   useEffect(() => {
     setQueryClientMutationErrorHandler((_error, variables) => {
       if (isSilentWalletRestore(variables)) {
         clearStaleWalletRestoreState();
+        setSuppressRestore(true);
       }
     });
     return () => setQueryClientMutationErrorHandler(null);
-  }, []);
+  }, [setSuppressRestore]);
 
   useEffect(() => {
     setQueryClientMutationLifecycleHandler((event) => {
@@ -192,24 +279,56 @@ export function WalletProviders({ children }: PropsWithChildren) {
       const walletName = variables.wallet?.name ?? "unknown";
       const walletId = variables.wallet?.id ?? walletName;
       const routePath = getCurrentRoutePath();
+      const connectMode = variables.silent === true ? "autoRestore" : "manual";
+      const hadChunkPreloadFailure = hadPriorWalletConnectChunkFailure();
 
       if (event.stage === "mutate") {
         const attemptId = connectAttemptIdRef.current + 1;
         connectAttemptIdRef.current = attemptId;
         activeConnectAttemptIdRef.current = attemptId;
         clearWalletConnectTimeout();
+
+        if (connectMode === "manual") {
+          setManualConnect(true);
+          setSuppressRestore(false);
+          setLastConnectFailure(null);
+        } else if (manualConnectActiveRef.current) {
+          logRouteLifecycle("wallet-connect-auto-restore-blocked", {
+            attemptId,
+            connectLockState: "manual_connecting",
+            connectMode,
+            routePath,
+            walletId,
+            walletName,
+          });
+        }
+
         logRouteLifecycle("wallet-connect-click", {
           accountAddressRequested: variables.accountAddress ?? null,
+          adaptersLength: wallets.length,
           attemptId,
+          connectLockState: connectMode === "manual" ? "manual_connecting" : "auto_restoring",
+          connectMode,
+          hadChunkPreloadFailure,
           routePath,
+          selectedWalletId: walletId,
+          selectedWalletName: walletName,
           silent: variables.silent === true,
           walletId,
           walletName,
         });
         logRouteLifecycle("wallet-connect-start", {
+          adaptersLength: wallets.length,
           accountAddressRequested: variables.accountAddress ?? null,
           attemptId,
+          connectLockState: connectMode === "manual" ? "manual_connecting" : "auto_restoring",
+          connectMode,
+          hadChunkPreloadFailure,
           routePath,
+          selectedWalletId: walletId,
+          selectedWalletName: walletName,
+          walletSessionPhase: connectMode === "manual" ? "manual_connect" : "restoring",
+          walletStatus: "connecting",
           silent: variables.silent === true,
           walletId,
           walletName,
@@ -219,8 +338,15 @@ export function WalletProviders({ children }: PropsWithChildren) {
             return;
           }
           logRouteLifecycle("wallet-connect-timeout", {
+            adaptersLength: wallets.length,
             attemptId,
+            buildVersion: undefined,
+            connectLockState: connectMode === "manual" ? "manual_connecting" : "auto_restoring",
+            connectMode,
+            hadChunkPreloadFailure,
             routePath: getCurrentRoutePath(),
+            selectedWalletId: walletId,
+            selectedWalletName: walletName,
             silent: variables.silent === true,
             timeoutMs: getWalletConnectTimeoutMs(),
             walletId,
@@ -239,6 +365,8 @@ export function WalletProviders({ children }: PropsWithChildren) {
       activeConnectAttemptIdRef.current = null;
 
       if (event.stage === "success") {
+        setManualConnect(false);
+        setSuppressRestore(false);
         logRouteLifecycle("wallet-connect-success", {
           accountCount:
             event.data &&
@@ -247,8 +375,15 @@ export function WalletProviders({ children }: PropsWithChildren) {
             Array.isArray((event.data as { accounts?: unknown[] }).accounts)
               ? (event.data as { accounts: unknown[] }).accounts.length
               : null,
+          adaptersLength: wallets.length,
           attemptId,
+          connectLockState: "idle",
+          connectMode,
+          hadChunkPreloadFailure,
           routePath,
+          selectedWalletId: walletId,
+          selectedWalletName: walletName,
+          walletStatus: "connected",
           silent: variables.silent === true,
           walletId,
           walletName,
@@ -256,10 +391,46 @@ export function WalletProviders({ children }: PropsWithChildren) {
         return;
       }
 
+      const errorMessage = event.error instanceof Error ? event.error.message : String(event.error ?? "Unknown wallet error");
+      const failureSource = classifyWalletConnectFailureSource(event.error);
+      const shouldResetFailedSession = connectMode === "manual" && /Failed to add dApp connection/i.test(errorMessage);
+      setManualConnect(false);
+      if (shouldResetFailedSession) {
+        void disconnectWallet.mutateAsync().catch(() => undefined);
+        clearStaleWalletRestoreState();
+        setSuppressRestore(true);
+      }
+      setLastConnectFailure({
+        message: errorMessage,
+        source: failureSource,
+        requiresSlushRecovery: shouldResetFailedSession,
+        userMessage: shouldResetFailedSession
+          ? "Slush rejected or could not add this dApp connection. Open Slush, remove old DeepSignal connection if present, then try again."
+          : null,
+      });
+      const routeRecovery = getRouteRecoverySnapshot();
+
       logRouteLifecycle("wallet-connect-error", {
+        adaptersLength: wallets.length,
         attemptId,
+        connectLockState: shouldResetFailedSession ? "idle" : value.connectLockState,
+        connectMode,
+        cssAssetError: routeRecovery.cssAssetError,
+        documentVisibilityState: routeRecovery.visibilityState,
         error: event.error,
+        errorSource: failureSource,
+        failedChunkUrl: routeRecovery.failedChunkUrl,
+        hadChunkPreloadFailure,
+        pagehideCount: routeRecovery.pagehideCount,
+        pageshowCount: routeRecovery.pageshowCount,
+        pendingLabels: routeRecovery.pendingLabels,
+        providerMounted: true,
         routePath,
+        routeImportState: routeRecovery.phase,
+        selectedWalletId: walletId,
+        selectedWalletName: walletName,
+        slushConnectionErrorCause: errorMessage,
+        walletStatus: "disconnected",
         silent: variables.silent === true,
         walletId,
         walletName,
@@ -269,21 +440,85 @@ export function WalletProviders({ children }: PropsWithChildren) {
       clearWalletConnectTimeout();
       setQueryClientMutationLifecycleHandler(null);
     };
-  }, [clearWalletConnectTimeout]);
+  }, [clearWalletConnectTimeout, disconnectWallet, setManualConnect, setSuppressRestore, value.connectLockState, wallets.length]);
+
+  const actions = useMemo(
+    () => ({
+      disconnect: async () => {
+        await disconnectWallet.mutateAsync();
+      },
+      signAndExecuteTransaction: async (transaction: CreateFormTransaction) => {
+        return signAndExecuteTransaction.mutateAsync({
+          transaction,
+        });
+      },
+    }),
+    [disconnectWallet, signAndExecuteTransaction],
+  );
+
+  const runtimeControls = useMemo(
+    () => ({
+      beginManualConnect: () => {
+        setManualConnect(true);
+        setSuppressRestore(false);
+      },
+      cancelManualConnect: () => {
+        setManualConnect(false);
+      },
+      clearConnectFailure: () => {
+        setLastConnectFailure(null);
+      },
+      suppressAutoRestore: () => {
+        setSuppressRestore(true);
+      },
+    }),
+    [setManualConnect, setSuppressRestore],
+  );
+
+  return (
+    <WalletRuntimeControlContext.Provider value={runtimeControls}>
+      <WalletActionContext.Provider value={actions}>
+        <WalletConnectionContext.Provider value={value}>{children}</WalletConnectionContext.Provider>
+      </WalletActionContext.Provider>
+    </WalletRuntimeControlContext.Provider>
+  );
+}
+
+export function WalletProviders({ children }: PropsWithChildren) {
+  const rpcInfrastructure = useRpcInfrastructure();
+  const currentRpcUrl = rpcInfrastructure.currentRpcUrl;
+  const routePath = getCurrentRoutePath();
+  const emitProviderDiagnostics = !isWalletOptionalPublicRoute(routePath);
 
   useEffect(() => {
-    logRouteLifecycle("provider-ready", {
-      currentRpcUrl,
-      hasRpcInfrastructure: Boolean(rpcInfrastructure),
-      providerLabel: rpcInfrastructure.providerLabel,
-      providerMode: rpcInfrastructure.mode,
-    });
-    logRouteLifecycle("wallet-provider:ready", {
-      currentRpcUrl,
-      hasRpcInfrastructure: Boolean(rpcInfrastructure),
-    });
+    if (emitProviderDiagnostics) {
+      logRouteLifecycle("provider-ready", {
+        currentRpcUrl,
+        hasRpcInfrastructure: Boolean(rpcInfrastructure),
+        providerLoading: false,
+        providerChunkLoaded: true,
+        providerMounted: false,
+        providerLabel: rpcInfrastructure.providerLabel,
+        providerMode: rpcInfrastructure.mode,
+      });
+      logRouteLifecycle("wallet-provider-shell-ready", {
+        currentRpcUrl,
+        hasRpcInfrastructure: Boolean(rpcInfrastructure),
+        providerLoading: false,
+        providerChunkLoaded: true,
+        providerMounted: false,
+        providerLabel: rpcInfrastructure.providerLabel,
+        providerMode: rpcInfrastructure.mode,
+      });
+      logRouteLifecycle("wallet-provider:ready", {
+        currentRpcUrl,
+        hasRpcInfrastructure: Boolean(rpcInfrastructure),
+      });
+    }
     setDeepSignalDebugReadiness({
       queryClientProvider: "ready",
+      suiClientContextAvailable: false,
+      walletProviderChunkLoaded: true,
       walletProviderShell: "ready",
       walletRpcProvider: rpcInfrastructure.providerLabel,
       walletRpcMode: rpcInfrastructure.mode,
@@ -291,7 +526,7 @@ export function WalletProviders({ children }: PropsWithChildren) {
     endPerf("provider:wallet", "ok");
     markPerfMilestone("sui_client_ready", rpcInfrastructure.providerLabel);
     markPerfMilestone("provider:wallet:ready");
-  }, [currentRpcUrl, rpcInfrastructure]);
+  }, [currentRpcUrl, emitProviderDiagnostics, rpcInfrastructure]);
   const { networkConfig } = useMemo(
     () =>
       createNetworkConfig({
@@ -335,7 +570,8 @@ export function WalletProviders({ children }: PropsWithChildren) {
       <WalletProvider
         preferredWallets={PREFERRED_WALLETS}
         walletFilter={walletFilter}
-        autoConnect
+        autoConnect={false}
+        slushWallet={SLUSH_WALLET_CONFIG}
       >
         <WalletStatusBridge>
           {REQUIRE_GLOBAL_WALRUS_RUNTIME ? (

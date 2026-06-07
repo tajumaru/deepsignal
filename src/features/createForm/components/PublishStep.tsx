@@ -14,7 +14,7 @@ import {
   TALLY_PRESET_ID,
 } from "../../../lib/formAccess";
 import { resolveNftCollectionArt } from "../../../lib/nftCollectionArt";
-import { matchesOwnedObjectType } from "../../../lib/nftOwnership";
+import { matchesOwnedObjectType } from "../../../lib/nftOwnershipShared";
 import { LivePreview } from "../../../components/formBuilder/LivePreview";
 import { useOwnedSuiObjects } from "../../../hooks/useOwnedSuiObjects";
 import { isLocalFallbackBlob } from "../../../lib/proof";

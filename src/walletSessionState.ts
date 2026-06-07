@@ -1,9 +1,11 @@
 import { useSyncExternalStore } from "react";
+import type { CanonicalWalletStatus } from "./walletCanonicalState";
 
 export type WalletSessionPhase = "provider_deferred" | "restoring" | "disconnected" | "connected";
 
 export interface WalletSessionState {
   accountAddress: string | null;
+  canonicalStatus: CanonicalWalletStatus;
   isRestoringConnection: boolean;
   phase: WalletSessionPhase;
   providerLoading: boolean;
@@ -14,6 +16,7 @@ export interface WalletSessionState {
 
 export const defaultWalletSessionState: WalletSessionState = {
   accountAddress: null,
+  canonicalStatus: "booting",
   isRestoringConnection: false,
   phase: "provider_deferred",
   providerLoading: false,
@@ -28,6 +31,7 @@ const walletSessionListeners = new Set<() => void>();
 function walletSessionStatesEqual(left: WalletSessionState, right: WalletSessionState) {
   return (
     left.accountAddress === right.accountAddress &&
+    left.canonicalStatus === right.canonicalStatus &&
     left.isRestoringConnection === right.isRestoringConnection &&
     left.phase === right.phase &&
     left.providerLoading === right.providerLoading &&

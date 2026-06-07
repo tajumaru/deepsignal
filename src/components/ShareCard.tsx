@@ -1,3 +1,4 @@
+import QRCode from "qrcode";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useI18n } from "../i18n";
 import { getAbsolutePublicFormUrl } from "../lib/publicLinks";
@@ -139,21 +140,24 @@ export function ShareCard({ formId, blobId, createdAt, manifestBlobId }: ShareCa
       return;
     }
     let cancelled = false;
-    void import("qrcode")
-      .then(({ default: QRCode }) =>
-        QRCode.toString(absoluteUrl, {
-          type: "svg",
-          margin: 1,
-          width: 256,
-          color: {
-            dark: "#04131e",
-            light: "#ffffff",
-          },
-        }),
-      )
+    void QRCode.toString(absoluteUrl, {
+      type: "svg",
+      margin: 1,
+      width: 256,
+      color: {
+        dark: "#04131e",
+        light: "#ffffff",
+      },
+    })
       .then((svg: string) => {
         if (!cancelled) {
           setQrMarkup(svg);
+        }
+      })
+      .catch((error: unknown) => {
+        console.error("[ShareCard] failed to render QR code", error);
+        if (!cancelled) {
+          setQrMarkup("");
         }
       });
     return () => {

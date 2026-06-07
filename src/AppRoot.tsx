@@ -1,13 +1,16 @@
-import { useEffect, type ReactNode } from "react";
 import { QueryClientProvider } from "@tanstack/react-query";
-import { HashRouter } from "react-router-dom";
+import { lazy, Suspense, useEffect, type ReactNode } from "react";
+import { HashRouter, useLocation } from "react-router-dom";
 import App from "./App";
-import { WalletSurface } from "./components/WalletSurface";
 import { I18nProvider } from "./i18n";
 import { setDeepSignalDebugReadiness } from "./lib/routeDiagnostics";
 import { queryClient } from "./queryClient";
-import { RpcInfrastructureProvider } from "./RpcInfrastructureProvider";
-import { WalletSessionBootstrap } from "./walletSession";
+
+const PrivateAppProviders = lazy(() =>
+  import("./PrivateAppProviders").then((module) => ({
+    default: module.PrivateAppProviders,
+  })),
+);
 
 function redirectDirectWorkspacePathToHashRoute() {
   if (typeof window === "undefined" || window.location.hash) {
@@ -20,24 +23,32 @@ function redirectDirectWorkspacePathToHashRoute() {
     pathname === "/dashboard" ||
     pathname.startsWith("/dashboard/") ||
     pathname === "/create" ||
-    pathname === "/compose"
+    pathname === "/compose" ||
+    pathname === "/troubleshooting"
   ) {
     window.history.replaceState(null, "", `/#${pathname}${search}`);
   }
 }
 
-function shouldRequestWalletProvidersOnMount() {
-  if (typeof window === "undefined") {
-    return true;
-  }
-  const routePath = window.location.hash?.replace(/^#/, "") || window.location.pathname;
+function shouldUsePrivateProviders(routePath: string) {
   if (routePath === "/") {
     return false;
   }
-  return !(routePath === "/dashboard" || routePath.startsWith("/dashboard/"));
+  if (routePath === "/troubleshooting") {
+    return false;
+  }
+  return !(
+    routePath.startsWith("/f/") ||
+    routePath.startsWith("/roadmap/") ||
+    routePath.startsWith("/m/") ||
+    routePath.startsWith("/auth/zklogin/")
+  );
 }
 
-export function AppProviders({ children }: { children: ReactNode }) {
+function RouteAwareProviders({ children }: { children: ReactNode }) {
+  const location = useLocation();
+  const routePath = `${location.pathname}${location.search}${location.hash}`;
+
   useEffect(() => {
     setDeepSignalDebugReadiness({
       queryClientProvider: "ready",
@@ -45,19 +56,14 @@ export function AppProviders({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  if (!shouldUsePrivateProviders(routePath)) {
+    return <>{children}</>;
+  }
+
   return (
-    <QueryClientProvider client={queryClient}>
-      <I18nProvider>
-        <RpcInfrastructureProvider>
-          <WalletSurface blockUntilLoaded={false} requestOnMount={shouldRequestWalletProvidersOnMount()}>
-            <>
-              <WalletSessionBootstrap />
-              {children}
-            </>
-          </WalletSurface>
-        </RpcInfrastructureProvider>
-      </I18nProvider>
-    </QueryClientProvider>
+    <Suspense fallback={null}>
+      <PrivateAppProviders routePath={routePath}>{children}</PrivateAppProviders>
+    </Suspense>
   );
 }
 
@@ -65,10 +71,14 @@ export function AppRoot() {
   redirectDirectWorkspacePathToHashRoute();
 
   return (
-    <AppProviders>
+    <QueryClientProvider client={queryClient}>
+      <I18nProvider>
       <HashRouter>
-        <App />
+        <RouteAwareProviders>
+          <App />
+        </RouteAwareProviders>
       </HashRouter>
-    </AppProviders>
+      </I18nProvider>
+    </QueryClientProvider>
   );
 }

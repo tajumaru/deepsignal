@@ -1,5 +1,4 @@
 import { useMemo, useState } from "react";
-import { useDisconnectWallet } from "@mysten/dapp-kit";
 import {
   clearIndexedDb,
   clearLocalCache,
@@ -38,7 +37,6 @@ function statusLabel(status: ResetOperationResult["status"], t: (key: string) =>
 
 export function ResetEnvironmentPanel() {
   const { t } = useI18n();
-  const disconnectWallet = useDisconnectWallet();
   const [results, setResults] = useState<ResetOperationResult[]>([]);
   const [runningAction, setRunningAction] = useState<string | null>(null);
   const [toast, setToast] = useState<ResetToast | null>(null);
@@ -227,8 +225,6 @@ export function ResetEnvironmentPanel() {
               "resetAll",
               () =>
                 resetLocalEnvironment({
-                  includeWalletDisconnect: true,
-                  disconnectWallet: () => disconnectWallet.mutateAsync(),
                   messages: resetMessages,
                 }),
               { reloadAfterSuccess: true },

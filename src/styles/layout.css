@@ -77,6 +77,45 @@
   font-size: 1.8rem;
 }
 
+.route-status-panel .eyebrow {
+  margin-bottom: 0.28rem;
+}
+
+.route-status-panel .muted {
+  margin-top: 0.32rem;
+  margin-bottom: 0;
+}
+
+.route-status-metadata {
+  display: grid;
+  gap: 0.62rem;
+  margin: 0.95rem 0 0;
+}
+
+.route-status-metadata > div {
+  display: grid;
+  gap: 0.14rem;
+}
+
+.route-status-metadata dt,
+.route-status-metadata dd {
+  margin: 0;
+}
+
+.route-status-metadata dt {
+  color: var(--text-soft);
+  font-size: 0.76rem;
+  line-height: 1.15;
+}
+
+.route-status-metadata dd {
+  min-width: 0;
+  color: var(--text);
+  font-size: 0.95rem;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
 .route-status-panel-compact {
   width: min(100%, 39rem);
   margin: clamp(1.1rem, 8vh, 3rem) auto;
@@ -107,6 +146,214 @@
 .route-status-panel-compact .inline-actions .ghost-button {
   min-height: 2.5rem;
   padding: 0.68rem 1rem;
+}
+
+.walrus-runtime-card {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.85rem;
+  width: min(100%, 30rem);
+  min-height: 64px;
+  margin: 0 auto;
+  padding: 0.9rem 1rem;
+  overflow: hidden;
+  border-color: rgba(126, 236, 255, 0.18);
+  border-radius: 22px;
+  background:
+    linear-gradient(135deg, rgba(7, 24, 40, 0.9), rgba(5, 16, 28, 0.76)),
+    radial-gradient(circle at top left, rgba(102, 227, 255, 0.16), transparent 38%),
+    radial-gradient(circle at 85% 20%, rgba(53, 194, 184, 0.12), transparent 28%);
+  box-shadow:
+    inset 0 1px 0 rgba(201, 251, 255, 0.08),
+    0 0 0 1px rgba(90, 214, 228, 0.05),
+    0 16px 38px rgba(0, 0, 0, 0.26),
+    0 0 34px rgba(71, 212, 226, 0.1);
+}
+
+.walrus-runtime-card::after {
+  content: "";
+  position: absolute;
+  inset: 1px;
+  border-radius: inherit;
+  background: linear-gradient(90deg, rgba(130, 235, 255, 0.05), transparent 22%, transparent 74%, rgba(80, 211, 201, 0.06));
+  pointer-events: none;
+}
+
+.walrus-runtime-card.is-slow {
+  border-color: rgba(111, 226, 240, 0.26);
+  box-shadow:
+    inset 0 1px 0 rgba(201, 251, 255, 0.1),
+    0 0 0 1px rgba(90, 214, 228, 0.08),
+    0 16px 38px rgba(0, 0, 0, 0.28),
+    0 0 40px rgba(76, 211, 225, 0.16);
+}
+
+.walrus-runtime-card__pulse {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 2.1rem;
+  height: 2.1rem;
+  flex-shrink: 0;
+}
+
+.walrus-runtime-card__ring,
+.walrus-runtime-card__core {
+  position: absolute;
+  border-radius: 999px;
+}
+
+.walrus-runtime-card__ring {
+  inset: 0;
+  border: 1px solid rgba(121, 237, 255, 0.42);
+  box-shadow:
+    0 0 16px rgba(91, 226, 255, 0.24),
+    inset 0 0 14px rgba(49, 197, 189, 0.12);
+  animation: walrus-runtime-ring 1.85s ease-out infinite;
+}
+
+.walrus-runtime-card__core {
+  width: 0.56rem;
+  height: 0.56rem;
+  background: linear-gradient(180deg, rgba(177, 247, 255, 0.98), rgba(91, 226, 255, 0.62));
+  box-shadow: 0 0 14px rgba(110, 233, 255, 0.44);
+}
+
+.walrus-runtime-card__copy {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: 0.22rem;
+  min-width: 0;
+}
+
+.walrus-runtime-card__copy strong,
+.walrus-runtime-card__copy span {
+  display: block;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.walrus-runtime-card__copy strong {
+  color: rgba(238, 253, 255, 0.96);
+  font-size: 0.95rem;
+  line-height: 1.15;
+  letter-spacing: 0.01em;
+}
+
+.walrus-runtime-card__copy span {
+  color: rgba(155, 198, 214, 0.88);
+  font-size: 0.75rem;
+  line-height: 1.35;
+}
+
+.walrus-runtime-card__signal {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  justify-items: end;
+  gap: 0.45rem;
+  min-width: 4.25rem;
+}
+
+.walrus-runtime-card__progress {
+  position: relative;
+  display: block;
+  width: 4.1rem;
+  height: 0.22rem;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(106, 201, 219, 0.18);
+}
+
+.walrus-runtime-card__progress::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  width: 42%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, rgba(110, 233, 255, 0), rgba(120, 239, 255, 0.96), rgba(91, 223, 210, 0.16));
+  box-shadow: 0 0 12px rgba(106, 230, 255, 0.24);
+  animation: walrus-runtime-progress 1.3s ease-in-out infinite;
+}
+
+.walrus-runtime-card__wave {
+  display: inline-grid;
+  grid-auto-flow: column;
+  align-items: end;
+  gap: 0.16rem;
+  height: 1rem;
+}
+
+.walrus-runtime-card__wave i {
+  display: block;
+  width: 0.16rem;
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(150, 244, 255, 0.95), rgba(53, 194, 184, 0.28));
+  box-shadow: 0 0 10px rgba(106, 230, 255, 0.16);
+  animation: walrus-runtime-wave 1.1s ease-in-out infinite;
+}
+
+.walrus-runtime-card__wave i:nth-child(1) {
+  height: 0.42rem;
+  animation-delay: -0.4s;
+}
+
+.walrus-runtime-card__wave i:nth-child(2) {
+  height: 0.76rem;
+  animation-delay: -0.2s;
+}
+
+.walrus-runtime-card__wave i:nth-child(3) {
+  height: 0.98rem;
+}
+
+.walrus-runtime-card__wave i:nth-child(4) {
+  height: 0.68rem;
+  animation-delay: -0.28s;
+}
+
+.walrus-runtime-card__wave i:nth-child(5) {
+  height: 0.48rem;
+  animation-delay: -0.46s;
+}
+
+@keyframes walrus-runtime-ring {
+  0% {
+    transform: scale(0.9);
+    opacity: 0.54;
+  }
+  70% {
+    transform: scale(1.08);
+    opacity: 0.16;
+  }
+  100% {
+    transform: scale(1.14);
+    opacity: 0;
+  }
+}
+
+@keyframes walrus-runtime-progress {
+  0% {
+    transform: translateX(-110%);
+  }
+  100% {
+    transform: translateX(235%);
+  }
+}
+
+@keyframes walrus-runtime-wave {
+  0%,
+  100% {
+    transform: scaleY(0.72);
+    opacity: 0.52;
+  }
+  50% {
+    transform: scaleY(1.08);
+    opacity: 1;
+  }
 }
 
 .route-status-panel p:last-child {
@@ -1350,6 +1597,53 @@ fieldset {
 }
 
 @media (max-width: 720px) {
+  .route-status-panel {
+    width: 100%;
+    margin: 0.8rem auto;
+  }
+
+  .route-status-panel.panel {
+    padding: 0.88rem 0.84rem;
+  }
+
+  .route-status-panel h1 {
+    font-size: clamp(1.16rem, 6.2vw, 1.52rem);
+    line-height: 1.02;
+  }
+
+  .route-status-panel .eyebrow {
+    margin-bottom: 0.18rem;
+    font-size: 0.63rem;
+    letter-spacing: 0.18em;
+  }
+
+  .route-status-panel .muted {
+    margin-top: 0.16rem;
+    font-size: 0.82rem;
+    line-height: 1.34;
+  }
+
+  .route-status-metadata {
+    gap: 0.34rem;
+    margin-top: 0.58rem;
+  }
+
+  .route-status-metadata > div {
+    grid-template-columns: minmax(4.9rem, 5.6rem) minmax(0, 1fr);
+    align-items: start;
+    gap: 0.18rem 0.42rem;
+  }
+
+  .route-status-metadata dt {
+    font-size: 0.68rem;
+    line-height: 1.18;
+  }
+
+  .route-status-metadata dd {
+    font-size: 0.8rem;
+    line-height: 1.26;
+  }
+
   .route-status-panel-compact {
     width: min(100%, 100%);
     margin: 0.75rem auto;
@@ -1370,6 +1664,47 @@ fieldset {
     padding: 0.62rem 0.9rem;
   }
 
+  .walrus-runtime-card {
+    width: min(100%, 28rem);
+    min-height: 64px;
+    padding: 14px 16px;
+    border-radius: 22px;
+    gap: 0.72rem;
+  }
+
+  .walrus-runtime-card__pulse {
+    width: 1.9rem;
+    height: 1.9rem;
+  }
+
+  .walrus-runtime-card__copy strong {
+    font-size: 0.9rem;
+  }
+
+  .walrus-runtime-card__copy span {
+    font-size: 0.74rem;
+  }
+
+  .walrus-runtime-card__signal {
+    min-width: 3.5rem;
+  }
+
+  .walrus-runtime-card__progress {
+    width: 3.45rem;
+  }
+
+  .route-status-panel .inline-actions {
+    gap: 0.4rem;
+    margin-top: 0.68rem;
+  }
+
+  .route-status-panel .inline-actions .primary-button,
+  .route-status-panel .inline-actions .ghost-button {
+    min-height: 2.22rem;
+    padding: 0.54rem 0.78rem;
+    font-size: 0.88rem;
+  }
+
   .route-diagnostics-panel-compact .route-status-diagnostics {
     max-height: 8rem;
   }
@@ -1382,5 +1717,122 @@ fieldset {
   .recoverable-draft-banner .inline-actions {
     padding-left: 0.55rem;
     justify-content: stretch;
+  }
+}
+
+.runtime-diagnostics-toggle {
+  position: fixed;
+  right: 18px;
+  bottom: calc(92px + env(safe-area-inset-bottom, 0px));
+  z-index: 70;
+  border: 1px solid rgba(130, 169, 214, 0.3);
+  border-radius: 999px;
+  background: rgba(6, 16, 27, 0.92);
+  color: #ecfdff;
+  padding: 10px 14px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.28);
+}
+
+.runtime-diagnostics-panel {
+  position: fixed;
+  right: 12px;
+  left: 12px;
+  bottom: calc(148px + env(safe-area-inset-bottom, 0px));
+  z-index: 75;
+  display: grid;
+  gap: 12px;
+  max-height: min(58vh, 520px);
+  padding: 16px;
+  overflow: hidden;
+}
+
+.runtime-diagnostics-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.runtime-diagnostics-header strong {
+  display: block;
+}
+
+.runtime-diagnostics-header p {
+  margin: 4px 0 0;
+  color: rgba(222, 232, 244, 0.68);
+  font-size: 0.82rem;
+}
+
+.runtime-diagnostics-close {
+  border: 1px solid rgba(130, 169, 214, 0.22);
+  border-radius: 999px;
+  background: rgba(8, 15, 24, 0.82);
+  color: inherit;
+  padding: 8px 12px;
+}
+
+.runtime-diagnostics-actions {
+  margin: 0;
+}
+
+.runtime-diagnostics-log {
+  display: grid;
+  gap: 10px;
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.runtime-diagnostics-entry {
+  display: grid;
+  gap: 6px;
+  padding: 12px;
+  border: 1px solid rgba(130, 169, 214, 0.16);
+  border-radius: 16px;
+  background: rgba(8, 15, 24, 0.68);
+}
+
+.runtime-diagnostics-entry-topline {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.runtime-diagnostics-entry-topline span,
+.runtime-diagnostics-entry p {
+  color: rgba(222, 232, 244, 0.68);
+  font-size: 0.78rem;
+}
+
+.runtime-diagnostics-entry p {
+  margin: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.runtime-diagnostics-entry pre {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 0.75rem;
+  line-height: 1.45;
+}
+
+@media (min-width: 901px) {
+  .runtime-diagnostics-toggle,
+  .runtime-diagnostics-panel {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .walrus-runtime-card__ring,
+  .walrus-runtime-card__progress::after,
+  .walrus-runtime-card__wave i {
+    animation: none;
   }
 }

@@ -458,7 +458,11 @@ interface SourceSegmentedControlProps {
 
 function SourceSegmentedControl({ t, label, value, onChange, options = ["upload", "url"] }: SourceSegmentedControlProps) {
   return (
-    <div className="signal-source-control" role="group" aria-label={label}>
+    <div
+      className={`signal-source-control ${options.length === 3 ? "is-three-option" : ""}`}
+      role="group"
+      aria-label={label}
+    >
       {options.map((source) => (
         <button
           key={source}

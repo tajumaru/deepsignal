@@ -1,14 +1,11 @@
 import { useSignAndExecuteTransaction, useSuiClient } from "@mysten/dapp-kit";
-import { isValidSuiAddress, normalizeSuiAddress } from "@mysten/sui/utils";
 import { useState } from "react";
 import { SignalMetaChip } from "../../../components/SignalMetaChip";
 import {
-  addProjectMember,
-  removeProjectMember,
-  updateProjectMemberRole,
   type ProjectMemberRole,
   type ProjectSummary,
 } from "../../../lib/projectRegistry";
+import { isValidSuiAddress, normalizeSuiAddress } from "../../../lib/suiAddress";
 
 interface ProjectMemberManagementSectionProps {
   selectedProject: ProjectSummary | null;
@@ -37,6 +34,10 @@ export function ProjectMemberManagementSection({
   const [memberRole, setMemberRole] = useState<Exclude<ProjectMemberRole, "owner">>("co_admin");
   const [status, setStatus] = useState("");
 
+  async function loadProjectRegistryWriteModule() {
+    return import("../../../lib/projectRegistryWrite");
+  }
+
   const ownerCapId = selectedProject?.ownedOwnerCapId ?? "";
   const busy = addMemberTx.isPending || removeMemberTx.isPending || updateRoleTx.isPending;
 
@@ -61,6 +62,7 @@ export function ProjectMemberManagementSection({
 
     try {
       setStatus("Awaiting wallet approval...");
+      const { addProjectMember } = await loadProjectRegistryWriteModule();
       const tx = addProjectMember({
         projectId: selectedProject.objectId,
         ownerCapId,
@@ -87,6 +89,7 @@ export function ProjectMemberManagementSection({
 
     try {
       setStatus("Awaiting wallet approval...");
+      const { removeProjectMember } = await loadProjectRegistryWriteModule();
       const tx = removeProjectMember({
         projectId: selectedProject.objectId,
         ownerCapId,
@@ -109,6 +112,7 @@ export function ProjectMemberManagementSection({
 
     try {
       setStatus("Awaiting wallet approval...");
+      const { updateProjectMemberRole } = await loadProjectRegistryWriteModule();
       const tx = updateProjectMemberRole({
         projectId: selectedProject.objectId,
         ownerCapId,

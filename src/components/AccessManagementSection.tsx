@@ -1,14 +1,12 @@
 import { useSignAndExecuteTransaction } from "@mysten/dapp-kit";
-import { Transaction } from "@mysten/sui/transactions";
-import { isValidSuiAddress, normalizeSuiAddress } from "@mysten/sui/utils";
 import { useState } from "react";
 import type { CapabilityProfile } from "../hooks/useAccessControl";
 import { useAccessRegistry } from "../hooks/useAccessRegistry";
 import { useI18n } from "../i18n";
 import { canIssueAdmin } from "../lib/adminAccess";
 import type { RegistryRoleEntry } from "../lib/accessRegistry";
+import { isValidSuiAddress, normalizeSuiAddress } from "../lib/suiAddress";
 import {
-  ACCESS_CONTROL_MODULE,
   ACCESS_CONTROL_PACKAGE_ID,
   ACCESS_CONTROL_REGISTRY_ID,
 } from "../lib/sui";
@@ -60,6 +58,10 @@ export function AccessManagementSection({
   const removeAdminTx = useSignAndExecuteTransaction();
   const canManageAdmins = canIssueAdmin(capabilityProfile);
 
+  async function loadProjectRegistryWriteModule() {
+    return import("../lib/projectRegistryWrite");
+  }
+
   const rows = buildRegistryRows(registry);
 
   async function refreshAll() {
@@ -92,18 +94,15 @@ export function AccessManagementSection({
       return;
     }
 
-    const tx = new Transaction();
-    tx.moveCall({
-      target: `${ACCESS_CONTROL_PACKAGE_ID}::${ACCESS_CONTROL_MODULE}::add_admin`,
-      arguments: [
-        tx.object(capabilityProfile.ownerCapIds[0]),
-        tx.object(ACCESS_CONTROL_REGISTRY_ID),
-        tx.pure.address(normalizeSuiAddress(adminAddress)),
-      ],
-    });
-
     try {
       setAdminIssueState(t("waitingForWalletApproval"));
+      const { addAdminAccess } = await loadProjectRegistryWriteModule();
+      const tx = addAdminAccess({
+        ownerCapId: capabilityProfile.ownerCapIds[0],
+        registryId: ACCESS_CONTROL_REGISTRY_ID,
+        packageId: ACCESS_CONTROL_PACKAGE_ID,
+        adminAddress: normalizeSuiAddress(adminAddress),
+      });
       await addAdminTx.mutateAsync({ transaction: tx });
       setAdminAddress("");
       setAdminIssueState(t("adminAccessGranted"));
@@ -137,18 +136,15 @@ export function AccessManagementSection({
       return;
     }
 
-    const tx = new Transaction();
-    tx.moveCall({
-      target: `${ACCESS_CONTROL_PACKAGE_ID}::${ACCESS_CONTROL_MODULE}::remove_admin`,
-      arguments: [
-        tx.object(capabilityProfile.ownerCapIds[0]),
-        tx.object(ACCESS_CONTROL_REGISTRY_ID),
-        tx.pure.address(entry.address),
-      ],
-    });
-
     try {
       setRemoveState(t("waitingForWalletApproval"));
+      const { removeAdminAccess } = await loadProjectRegistryWriteModule();
+      const tx = removeAdminAccess({
+        ownerCapId: capabilityProfile.ownerCapIds[0],
+        registryId: ACCESS_CONTROL_REGISTRY_ID,
+        packageId: ACCESS_CONTROL_PACKAGE_ID,
+        adminAddress: entry.address,
+      });
       await removeAdminTx.mutateAsync({ transaction: tx });
       setRemoveState(t("adminAccessRemoved", { address: entry.address }));
       onToast({ tone: "success", message: t("adminAccessRemoved", { address: entry.address }) });

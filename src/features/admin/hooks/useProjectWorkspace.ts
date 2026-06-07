@@ -5,9 +5,6 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { canAdmin } from "../../../lib/adminAccess";
 import {
-  createProject,
-  deleteFormOnChain,
-  deleteProject,
   fetchProjectSummaryWithCache,
   getSelectedProjectId,
   isProjectObjectType,
@@ -106,6 +103,10 @@ export function useProjectWorkspace({
             ? `This workspace still has ${localProjectFormsCount} local form${localProjectFormsCount === 1 ? "" : "s"} linked to the project.`
             : "";
   const visibleOnchainForms = selectedProject?.onchainForms ?? [];
+
+  async function loadProjectRegistryWriteModule() {
+    return import("../../../lib/projectRegistryWrite");
+  }
 
   useEffect(() => {
     if (mockProject) {
@@ -268,6 +269,7 @@ export function useProjectWorkspace({
 
     try {
       setProjectState("Awaiting wallet approval...");
+      const { createProject } = await loadProjectRegistryWriteModule();
       const tx = createProject({
         name: projectCreateName.trim(),
         capId,
@@ -344,6 +346,7 @@ export function useProjectWorkspace({
     try {
       setDeletingProject(true);
       setProjectState("Awaiting wallet approval...");
+      const { deleteProject } = await loadProjectRegistryWriteModule();
       const tx = deleteProject({
         projectId: selectedProject.objectId,
         ownerCapId: selectedProject.ownedOwnerCapId,
@@ -378,6 +381,7 @@ export function useProjectWorkspace({
     try {
       setDeletingOnchainFormIds((current) => [...current, formId]);
       setProjectState("Awaiting wallet approval...");
+      const { deleteFormOnChain } = await loadProjectRegistryWriteModule();
       const tx = deleteFormOnChain({
         projectId: selectedProject.objectId,
         formId,
