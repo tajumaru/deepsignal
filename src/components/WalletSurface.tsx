@@ -197,7 +197,7 @@ export function WalletSurface({
   }, [parentRuntime.loaded, providersModule, retryKey]);
 
   useEffect(() => {
-    if (!requestOnMount || requestStartedRef.current) {
+    if (!requestOnMount || requestStartedRef.current || parentRuntime.loaded) {
       return;
     }
     requestStartedRef.current = true;

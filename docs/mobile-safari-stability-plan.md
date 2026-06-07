@@ -35,6 +35,39 @@ These files form the app boot and route recovery spine. Treat them as frozen for
   - Why the bug could not be solved in a lower-risk layer.
   - Which guardrail or test was added to prevent recurrence.
 
+## AppShell Import Restrictions
+
+[src/components/AppShell.tsx](/D:/game/deepsignal/src/components/AppShell.tsx) must remain a thin shell component. It must not become a transitive entry point for wallet, Walrus, dashboard, or public-form runtime logic.
+
+### `AppShell.tsx` must not directly import
+
+- `WalletRuntimePanel`
+- `WalletConnectSurface`
+- `NetworkMenu`
+- Walrus runtime provider
+- Sui client logic
+- `@mysten/dapp-kit`
+- `@mysten/sui`
+- `AdminDashboardPage`
+- `ExploreSignalsPage`
+- `PublicFormPage`
+- `useSignalInboxData`
+- `dashboardProjectRestore`
+- storage adapters
+- NFT gate logic
+
+### `AppShell.tsx` may only import
+
+- layout components
+- lightweight header shell
+- `Outlet`
+- route chrome helpers
+- optional slot wrappers
+
+### Review rule
+
+If a new `AppShell` change needs data loading, wallet state orchestration, route-page knowledge, storage access, or blockchain runtime access, that logic belongs in another layer. `AppShell` should consume thin props and optional slot wrappers, not own the heavy dependency.
+
 ## Current Runtime Boundaries
 
 These are the boundaries the code already implies and that the refactor should make explicit.
@@ -102,6 +135,7 @@ Preferred additions:
 
 - A small wrapper component or helper for optional chrome widgets.
 - Reuse for wallet and network header widgets.
+- Route all optional header widgets through `OptionalHeaderWidget` only.
 
 ### C. Dashboard must render local data without wallet
 
@@ -445,3 +479,9 @@ This plan is complete when all of the following are true:
 - Disconnected wallet no longer blocks project restore.
 - Smoke mode can reproduce import rejection, slow import, disconnected provider, and local-only data paths.
 - Regression tests fail immediately if Safari-style boot coupling returns.
+
+## Acceptance Criteria
+
+- [src/components/AppShell.tsx](/D:/game/deepsignal/src/components/AppShell.tsx) stays thin and has no heavy wallet, Walrus, or dashboard imports.
+- Optional header widgets are loaded through `OptionalHeaderWidget` only.
+- Failure of `wallet-runtime-connect-surface` never reaches `RouteErrorBoundary`.

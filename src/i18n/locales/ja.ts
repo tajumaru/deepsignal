@@ -225,6 +225,9 @@ export const jaMessages: LocaleMessages = {
     composerHomeDraftMeta: (params) =>
       `\u7de8\u96c6\u4e2d / ${params?.count ?? 0} \u4ef6\u306e\u30b7\u30b0\u30ca\u30eb\u30d6\u30ed\u30c3\u30af / \u6700\u5f8c\u306e\u4f5c\u6210\u30b9\u30c6\u30c3\u30d7: ${params?.step ?? "\u8cea\u554f"}`,
     composerHomeResumeEditing: "\u7de8\u96c6\u3092\u518d\u958b",
+    composerHomeDiscardDraft: "\u7834\u68c4",
+    composerHomeDiscardDraftConfirm: (params) =>
+      `${params?.title ?? "\u3053\u306e\u4e0b\u66f8\u304d"}\u3092\u7834\u68c4\u3057\u307e\u3059\u304b\uff1f \u3053\u306e\u30d6\u30e9\u30a6\u30b6\u306b\u4fdd\u5b58\u3055\u308c\u3066\u3044\u308b\u672a\u516c\u958b\u306e\u30ed\u30fc\u30ab\u30eb\u4e0b\u66f8\u304d\u304c\u524a\u9664\u3055\u308c\u307e\u3059\u3002`,
     composerHomeResponses: "\u56de\u7b54",
     composerHomeLastActivity: "\u6700\u7d42\u30a2\u30af\u30c6\u30a3\u30d3\u30c6\u30a3",
     languageLabel: "\u8a00\u8a9e",

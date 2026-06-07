@@ -79,6 +79,7 @@ declare global {
         label: string;
         message: string;
         chunkUrl?: string | null;
+        resolvedChunkUrl?: string | null;
         buildVersion?: string;
         buildTime?: string;
         gitHash?: string;
@@ -96,6 +97,10 @@ declare global {
         availableExports?: string[];
         moduleKeys?: string[];
         resolvedExport?: "default" | string | "missing";
+        contained?: boolean;
+        fatal?: boolean;
+        fetchStatus?: number;
+        fetchContentType?: string | null;
         dependencyProbe?: ChunkDependencyProbe;
         probe?: ChunkProbe;
       }>;
@@ -403,6 +408,11 @@ export function recordFailedImport(
     availableExports?: string[];
     moduleKeys?: string[];
     resolvedExport?: "default" | string | "missing";
+    resolvedChunkUrl?: string | null;
+    contained?: boolean;
+    fatal?: boolean;
+    fetchStatus?: number;
+    fetchContentType?: string | null;
   },
 ) {
   if (typeof window === "undefined") {
@@ -437,6 +447,9 @@ export function recordFailedImportProbe(
   for (let index = state.failedImports.length - 1; index >= 0; index -= 1) {
     if (state.failedImports[index].label === label) {
       state.failedImports[index].probe = probe;
+      state.failedImports[index].fetchStatus = probe.status;
+      state.failedImports[index].fetchContentType = probe.contentType ?? null;
+      state.failedImports[index].resolvedChunkUrl = probe.url;
       break;
     }
   }

@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useRef, type ReactNode } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useLocation } from "react-router-dom";
 import { useWalletProviderRuntime } from "./WalletSurfaceRuntime";
 import { WalletNav } from "./WalletNav";
@@ -6,12 +6,7 @@ import { useDashboardProjectRestoreSnapshot } from "../lib/dashboardProjectResto
 import { retryLazyImport } from "../lib/lazyRetry";
 import { logRouteLifecycle } from "../lib/routeDiagnostics";
 import { useOptionalWalletConnection } from "../walletStatus";
-
-const LazyWalletConnectSurface = lazy(() =>
-  retryLazyImport(() => import("./WalletConnectSurface"), "wallet-runtime-connect-surface").then((module) => ({
-    default: module.WalletConnectSurface,
-  })),
-);
+import { SafeLazyBoundary } from "./SafeLazyBoundary";
 
 type WalletRuntimePanelProps =
   | {
@@ -43,11 +38,34 @@ function WalletRuntimePanelConnectFallback({ fallback }: { fallback?: ReactNode 
   return <div className="wallet-connect-shell wallet-connect-shell-compact" aria-hidden="true" />;
 }
 
+function WalletRuntimePanelImportFallback({
+  onRetry,
+}: {
+  onRetry: () => void;
+}) {
+  return (
+    <div className="wallet-connect-shell wallet-connect-shell-compact">
+      <div className="wallet-connect-direct panel">
+        <div className="wallet-connect-direct-copy">
+          <strong>Wallet panel could not load</strong>
+          <span>Retry only the wallet panel. Dashboard content stays available.</span>
+        </div>
+        <div className="wallet-connect-actions">
+          <button type="button" className="wallet-connect-trigger" onClick={onRetry}>
+            Retry
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function WalletRuntimePanel(props: WalletRuntimePanelProps) {
   const location = useLocation();
   const walletConnection = useOptionalWalletConnection();
   const walletRuntime = useWalletProviderRuntime();
   const dashboardRestore = useDashboardProjectRestoreSnapshot();
+  const [walletSurfaceRetryNonce, setWalletSurfaceRetryNonce] = useState(0);
   const connectInteraction = props.mode === "connect" ? props.interaction : "default";
   const isEmptyDashboardState =
     location.pathname === "/dashboard" &&
@@ -80,6 +98,15 @@ export default function WalletRuntimePanel(props: WalletRuntimePanelProps) {
     ],
   );
   const previousRuntimeStatusRef = useRef<WalletConnectRuntimeStatus | null>(null);
+  const LazyWalletConnectSurface = useMemo(
+    () =>
+      lazy(() =>
+        retryLazyImport(() => import("./WalletConnectSurface"), "wallet-runtime-connect-surface").then((module) => ({
+          default: module.WalletConnectSurface,
+        })),
+      ),
+    [walletSurfaceRetryNonce],
+  );
 
   useEffect(() => {
     const previous = previousRuntimeStatusRef.current;
@@ -108,15 +135,35 @@ export default function WalletRuntimePanel(props: WalletRuntimePanelProps) {
   }
 
   return (
-    <Suspense fallback={<WalletRuntimePanelConnectFallback fallback={props.fallback} />}>
-      <LazyWalletConnectSurface
-        compact
-        surface={props.surface}
-        fallback={props.fallback}
-        passiveUntilRequested={connectInteraction === "passive" && isEmptyDashboardState}
-        runtimeStatus={runtimeStatus}
-      />
-    </Suspense>
+    <SafeLazyBoundary
+      fallback={
+        <WalletRuntimePanelImportFallback
+          onRetry={() => {
+            setWalletSurfaceRetryNonce((value) => value + 1);
+          }}
+        />
+      }
+      onError={(error, errorInfo) => {
+        logRouteLifecycle("wallet-ui-lazy-failure-contained", {
+          label: "wallet-runtime-connect-surface",
+          componentStack: errorInfo.componentStack,
+          error,
+          fatal: false,
+          routePath: location.pathname,
+        });
+      }}
+      resetKey={`wallet-surface:${walletSurfaceRetryNonce}`}
+    >
+      <Suspense fallback={<WalletRuntimePanelConnectFallback fallback={props.fallback} />}>
+        <LazyWalletConnectSurface
+          compact
+          surface={props.surface}
+          fallback={props.fallback}
+          passiveUntilRequested={connectInteraction === "passive" && isEmptyDashboardState}
+          runtimeStatus={runtimeStatus}
+        />
+      </Suspense>
+    </SafeLazyBoundary>
   );
 }
 

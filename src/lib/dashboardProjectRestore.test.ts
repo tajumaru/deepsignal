@@ -5,6 +5,7 @@ import {
   isDashboardWalletRuntimeSettled,
   initializeDashboardProjectRestore,
   markDashboardWalletImportReady,
+  markDashboardWalletImportSkipped,
   markDashboardWalletImportStarted,
   resetDashboardProjectRestore,
 } from "./dashboardProjectRestore";
@@ -86,5 +87,29 @@ describe("dashboardProjectRestore", () => {
         walletSessionPhase: "disconnected",
       }),
     ).toBe(false);
+  });
+
+  it("resolves ready_without_project quickly when the wallet is disconnected", () => {
+    initializeDashboardProjectRestore("/dashboard");
+    markDashboardWalletImportSkipped("/dashboard");
+
+    vi.advanceTimersByTime(250);
+
+    expect(getDashboardProjectRestoreSnapshot().state).toBe("ready_without_project");
+    expect(getDashboardProjectRestoreSnapshot().walletRuntime).toBe("skipped_no_wallet");
+    expect(getDashboardProjectRestoreSnapshot().walletSettled).toBe(true);
+  });
+
+  it("treats a stored literal null project id as no selected project", () => {
+    window.localStorage.setItem("deepsignal.projectRegistry.selectedProjectId:test", "null");
+
+    initializeDashboardProjectRestore("/dashboard");
+    markDashboardWalletImportSkipped("/dashboard");
+
+    vi.advanceTimersByTime(250);
+
+    expect(getDashboardProjectRestoreSnapshot().state).toBe("ready_without_project");
+    expect(getDashboardProjectRestoreSnapshot().currentProjectId).toBe("");
+    expect(getDashboardProjectRestoreSnapshot().source).toBe("none-confirmed");
   });
 });

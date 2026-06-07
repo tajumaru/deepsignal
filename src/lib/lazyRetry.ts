@@ -19,8 +19,12 @@ import { lazyChunkExportSpecs } from "./lazyRouteRegistry";
 import type { RouteAssetKey, RouteChunkSpec } from "./lazyRouteRegistry";
 import { reportSystemError } from "../services/systemSignalReporterClient";
 
-const lazyImportAttempts = 3;
-const lazyImportBaseDelayMs = 450;
+// Some remote asset hosts briefly serve a new route chunk before every
+// transitive asset is reachable. A fourth attempt keeps the route in suspense
+// long enough to absorb that short propagation window without forcing a full
+// app refresh.
+const lazyImportAttempts = 4;
+const lazyImportRetryDelayMs = [300, 1_000, 2_500] as const;
 const proactiveDependencyProbeLabels = new Set(["app-shell"]);
 const recordedLazyImportTimeouts = new Set<string>();
 const mobileSafariLazyImportMaxConcurrency = 1;
@@ -38,6 +42,10 @@ class LazyImportTimeoutError extends Error {
 
 function wait(ms: number) {
   return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
+function clearTimeoutSafe(handle: number) {
+  globalThis.clearTimeout(handle);
 }
 
 async function runWithMobileSafariLazyImportQueue<T>(task: () => Promise<T>) {
@@ -317,11 +325,11 @@ async function withLazyImportTimeout<T>(
   void task.then(
     () => {
       settled = true;
-      watchdogHandles.forEach((handle) => window.clearTimeout(handle));
+      watchdogHandles.forEach(clearTimeoutSafe);
     },
     () => {
       settled = true;
-      watchdogHandles.forEach((handle) => window.clearTimeout(handle));
+      watchdogHandles.forEach(clearTimeoutSafe);
     },
   );
   const timeoutPromise = new Promise<never>((_, reject) => {
@@ -336,7 +344,7 @@ async function withLazyImportTimeout<T>(
   try {
     return await Promise.race([task, timeoutPromise]);
   } finally {
-    window.clearTimeout(timeoutHandle);
+    clearTimeoutSafe(timeoutHandle);
   }
 }
 
@@ -883,6 +891,7 @@ export async function retryLazyImport<T>(loader: () => Promise<T>, label = "anon
         attempt,
         routePath: getCurrentRoutePath(),
         elapsedMs: timeoutMs,
+        resolvedChunkUrl: chunkUrlForDiagnostics ?? null,
         userAgent: typeof navigator === "undefined" ? "" : navigator.userAgent,
       });
       logRouteLifecycle(error instanceof LazyImportTimeoutError ? "lazy-import-timeout-recorded" : "lazy-import-rejected", {
@@ -972,7 +981,7 @@ export async function retryLazyImport<T>(loader: () => Promise<T>, label = "anon
       if (attempt === lazyImportAttempts) {
         break;
       }
-      await wait(lazyImportBaseDelayMs * attempt);
+      await wait(lazyImportRetryDelayMs[Math.min(attempt - 1, lazyImportRetryDelayMs.length - 1)]);
     }
   }
 

@@ -215,6 +215,9 @@ export const enMessages: LocaleMessages = {
     composerHomeDraftMeta: (params) =>
       `Editing / ${params?.count ?? 0} signal blocks / last composer step: ${params?.step ?? "fields"}`,
     composerHomeResumeEditing: "Resume editing",
+    composerHomeDiscardDraft: "Discard",
+    composerHomeDiscardDraftConfirm: (params) =>
+      `Discard ${params?.title ?? "this draft"}? This removes the unpublished local draft from this browser.`,
     composerHomeResponses: "Responses",
     composerHomeLastActivity: "Last activity",
     languageLabel: "Language",

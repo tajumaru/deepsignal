@@ -74,6 +74,9 @@ DeepSignal is a realtime signal intelligence workspace and signal intelligence p
 - Always preserve the `localStorage` fallback path. Walrus and Seal are progressive capabilities; the app must still function in local/demo mode when env vars are missing or remote writes fail.
 - Maintain the storage/crypto adapter pattern. Prefer extending adapters and factories over scattering Walrus or Seal conditionals across unrelated UI code.
 - DeepSignal build updates must be user-initiated. Do not add automatic reload loops for version, chunk, MIME, mixed-build, service worker, or cache recovery. Surface `Update DeepSignal`, guard the attempt with sessionStorage, update/wake waiting service workers when present, prune only DeepSignal Cache Storage entries and temporary diagnostics, and never delete local fallback data, drafts, submitted answers, or inbox cache during update recovery.
+- Do not recreate `React.lazy()` route components on ordinary rerenders. Memoize route component factories such as `createAppRouteComponents(...)` and `createPublicRouteComponents(...)`, and only regenerate them when an explicit retry key changes.
+- Do not add tap-time route prefetch to bottom navigation or primary route buttons. If route prefetch is needed, prefer idle-time or post-navigation effects after the route is stable.
+- If route transitions become very slow and console shows repeated `lazy-import-start` / `lazy-import-resolved`, treat it as a rerender or initialization-order bug first, not just a bundle-size problem.
 
 ## Implementation guidance
 
@@ -95,6 +98,7 @@ DeepSignal is a realtime signal intelligence workspace and signal intelligence p
 - Always run `npm run typecheck` after TypeScript changes.
 - Run `npm run build` before finishing larger changes.
 - After build changes that affect routing, bundling, or public routes, inspect `dist/index.html` and the generated public route chunks.
+- After routing or prefetch changes, hard-reload and sanity-check `/create`, `/explore`, `/my-responses`, and `/admin`, and confirm lazy route imports do not loop.
 - Public form initial static imports must not include `WalletNav`, `WalletConnectSurface`, `AdminDashboardPage`, `FormBuilderPage`, `TipTap`, or Mysten/Sui/Walrus/Seal runtime chunks.
 - Vite dynamic import map string references to those chunks are acceptable when they are not initial static imports and only point to on-demand paths.
 - If behavior changes affect storage, crypto, wallet gating, or public routes, sanity-check both the admin flow and the wallet-optional public flow.

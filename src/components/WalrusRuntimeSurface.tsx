@@ -1,7 +1,8 @@
-import { lazy, Suspense, type PropsWithChildren, type ReactNode } from "react";
+import { lazy, Suspense, useEffect, useState, type PropsWithChildren, type ReactNode } from "react";
 import { markPerfMilestone, startPerf } from "../lib/perf";
 import { retryLazyImport } from "../lib/lazyRetry";
-import { logRouteLifecycle } from "../lib/routeDiagnostics";
+import { getBrowserCapabilitiesSnapshot, logRouteLifecycle } from "../lib/routeDiagnostics";
+import { scheduleIdleTask } from "../lib/scheduleIdleTask";
 
 const WalrusRuntimeProvider = lazy(() => {
   startPerf("provider:walrus-runtime");
@@ -20,11 +21,20 @@ interface WalrusRuntimeSurfaceProps extends PropsWithChildren {
 }
 
 export function WalrusRuntimeSurface({ children, fallback }: WalrusRuntimeSurfaceProps) {
+  const [ready, setReady] = useState(false);
+
+  useEffect(
+    () => scheduleIdleTask(() => setReady(true), getBrowserCapabilitiesSnapshot().mobileSafari ? 2600 : 1200),
+    [],
+  );
+
   return (
     <>
-      <Suspense fallback={fallback ?? null}>
-        <WalrusRuntimeProvider />
-      </Suspense>
+      {ready ? (
+        <Suspense fallback={fallback ?? null}>
+          <WalrusRuntimeProvider />
+        </Suspense>
+      ) : null}
       {children}
     </>
   );

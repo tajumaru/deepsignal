@@ -1,12 +1,9 @@
 import {
-  lazy,
-  Suspense,
   useEffect,
   useRef,
   useState,
   type CSSProperties,
   type PropsWithChildren,
-  type ReactNode,
   type TouchEvent as ReactTouchEvent,
 } from "react";
 import { Link, NavLink, useLocation } from "react-router-dom";
@@ -15,15 +12,14 @@ import { CreateFormLink } from "./CreateFormLink";
 import { NavItemLabel } from "./NavIcons";
 import { RuntimeDiagnosticsOverlay } from "./RuntimeDiagnosticsOverlay";
 import { BuildIndicator } from "./system/BuildIndicator";
+import { DeferredNetworkMenu, WalletConnectSlot, WalletNavSlot } from "./optionalChrome/AppShellOptionalSlots";
 import { useI18n } from "../i18n";
 import { buildInfo } from "../lib/buildInfo";
-import { retryLazyImport } from "../lib/lazyRetry";
 import { isSignalInboxPath } from "../lib/navigation";
-import { logRouteLifecycle, setDeepSignalDebugReadiness } from "../lib/routeDiagnostics";
+import { getBrowserCapabilitiesSnapshot, logRouteLifecycle, setDeepSignalDebugReadiness } from "../lib/routeDiagnostics";
 import { scheduleIdleTask } from "../lib/scheduleIdleTask";
 import { useOptionalRpcInfrastructure } from "../rpcInfrastructure";
 import type { WalletSessionPhase } from "../walletSessionState";
-import { useDashboardProjectRestoreSnapshot } from "../lib/dashboardProjectRestore";
 
 const MOBILE_DRAWER_SWIPE_THRESHOLD_PX = 60;
 const MOBILE_DRAWER_EDGE_START_PX = 24;
@@ -31,13 +27,9 @@ const MOBILE_DRAWER_HORIZONTAL_RATIO = 1.5;
 const MOBILE_DRAWER_INTENT_PX = 8;
 const MOBILE_VIEWPORT_QUERY = "(max-width: 900px)";
 
-const WalletRuntimePanel = lazy(() => retryLazyImport(() => import("./WalletRuntimePanel"), "wallet-runtime-panel"));
-const NetworkMenu = lazy(() =>
-  retryLazyImport(() => import("./NetworkMenu"), "network-menu").then((module) => ({ default: module.NetworkMenu })),
-);
-
 interface AppShellProps extends PropsWithChildren {
   chrome?: "full" | "public";
+  passiveHeaderWallet?: boolean;
   walletProviderMounted?: boolean;
   walletProviderPending?: boolean;
   walletSessionPhase?: WalletSessionPhase;
@@ -81,95 +73,6 @@ function isComposerRoute(pathname: string) {
   return pathname === "/create" || pathname === "/compose" || pathname === "/admin/forms/new";
 }
 
-function WalletNavSlot({
-  navLabLabel,
-  onNavigate,
-  section,
-  walletUiEnabled,
-  walletUiRequested,
-}: {
-  navLabLabel: string;
-  onNavigate?: () => void;
-  section: "access" | "inbox";
-  walletUiEnabled: boolean;
-  walletUiRequested: boolean;
-}) {
-  if (!walletUiRequested || !walletUiEnabled) {
-    return section === "inbox" ? (
-      <Link to="/admin" onClick={onNavigate}>
-        {navLabLabel}
-      </Link>
-    ) : null;
-  }
-
-  return (
-    <Suspense fallback={null}>
-      <WalletRuntimePanel mode="nav" section={section} onNavigate={onNavigate} />
-    </Suspense>
-  );
-}
-
-function WalletConnectSlot({
-  fallback,
-  interaction = "default",
-  surface,
-  walletProviderMounted,
-  walletProviderPending,
-  walletSessionPhase,
-  walletUiEnabled,
-  walletUiRequested,
-}: {
-  fallback?: ReactNode;
-  interaction?: "default" | "passive";
-  surface?: "mobileDrawer";
-  walletProviderMounted: boolean;
-  walletProviderPending: boolean;
-  walletSessionPhase: WalletSessionPhase;
-  walletUiEnabled: boolean;
-  walletUiRequested: boolean;
-}) {
-  if (!walletUiRequested) {
-    return null;
-  }
-
-  if (!walletUiEnabled || !walletProviderMounted || walletProviderPending || walletSessionPhase === "provider_deferred") {
-    return <SafeWalletPlaceholder surface={surface} />;
-  }
-
-  return (
-    <Suspense fallback={fallback ?? null}>
-      <WalletRuntimePanel mode="connect" surface={surface} fallback={fallback} interaction={interaction} />
-    </Suspense>
-  );
-}
-
-function SafeWalletPlaceholder({ surface }: { surface?: "mobileDrawer" }) {
-  const isMobileDrawer = surface === "mobileDrawer";
-
-  if (isMobileDrawer) {
-    return (
-      <div className="mobile-drawer-status-line" aria-live="polite">
-        <span className="mobile-drawer-status-dot" aria-hidden="true" />
-        <span>Preparing secure session</span>
-      </div>
-    );
-  }
-
-  return (
-    <div className="wallet-connect-shell wallet-connect-shell-compact">
-      <div className="wallet-connect-direct panel">
-        <div className="wallet-connect-direct-copy">
-          <strong>Preparing secure session</strong>
-          <span>Wallet runtime is still mounting.</span>
-        </div>
-        <button type="button" className="wallet-connect-trigger" disabled aria-disabled="true">
-          Wallet loading...
-        </button>
-      </div>
-    </div>
-  );
-}
-
 interface MobileAppBottomNavProps {
   showComposeShortcut: boolean;
 }
@@ -209,30 +112,6 @@ function MobileAppBottomNav({ showComposeShortcut }: MobileAppBottomNavProps) {
   );
 }
 
-function DeferredNetworkMenu({ drawerFallback = false }: { drawerFallback?: boolean }) {
-  const [ready, setReady] = useState(false);
-  const rpcInfrastructure = useOptionalRpcInfrastructure();
-
-  useEffect(() => scheduleIdleTask(() => setReady(true), 2200), []);
-
-  if (!ready || !rpcInfrastructure) {
-    if (drawerFallback) {
-      return (
-        <div className="mobile-drawer-status-line" aria-live="polite">
-          <span className="mobile-drawer-status-dot" aria-hidden="true" />
-          <span>{ready ? "Local signal mode" : "Loading network controls"}</span>
-        </div>
-      );
-    }
-    return <div className="network-select-shell network-select-shell-placeholder" aria-hidden="true" />;
-  }
-
-  return (
-    <Suspense fallback={<div className="network-select-shell network-select-shell-placeholder" aria-hidden="true" />}>
-      <NetworkMenu />
-    </Suspense>
-  );
-}
 
 function MobileDrawerNetworkStatus() {
   const rpcInfrastructure = useOptionalRpcInfrastructure();
@@ -261,6 +140,7 @@ function MobileDrawerWalletStandbyStatus() {
 export function AppShell({
   children,
   chrome = "full",
+  passiveHeaderWallet = false,
   walletProviderMounted = false,
   walletProviderPending = true,
   walletSessionPhase = "provider_deferred",
@@ -269,12 +149,12 @@ export function AppShell({
 }: AppShellProps) {
   const { language, setLanguage, t } = useI18n();
   const location = useLocation();
-  const dashboardRestoreSnapshot = useDashboardProjectRestoreSnapshot();
   const publicChrome = chrome === "public";
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
   const [mobileDrawerDragOffset, setMobileDrawerDragOffset] = useState(0);
   const [mobileDrawerDragging, setMobileDrawerDragging] = useState(false);
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
+  const [walletHydrationReady, setWalletHydrationReady] = useState(false);
   const moreMenuRef = useRef<HTMLDivElement | null>(null);
   const mobileMenuToggleRef = useRef<HTMLButtonElement | null>(null);
   const mobileDrawerRef = useRef<HTMLElement | null>(null);
@@ -292,10 +172,15 @@ export function AppShell({
   );
   const showComposeShortcut = !isComposerRoute(location.pathname);
   const showMobileBottomNav = !publicChrome;
-  const passiveHeaderWallet =
-    location.pathname === "/dashboard" &&
-    dashboardRestoreSnapshot.state === "ready_without_project" &&
-    dashboardRestoreSnapshot.currentProjectId === "";
+
+  useEffect(() => {
+    if (!walletUiRequested || !walletUiEnabled) {
+      setWalletHydrationReady(false);
+      return undefined;
+    }
+    setWalletHydrationReady(false);
+    return scheduleIdleTask(() => setWalletHydrationReady(true), getBrowserCapabilitiesSnapshot().mobileSafari ? 1800 : 900);
+  }, [location.pathname, walletUiEnabled, walletUiRequested]);
 
   useEffect(() => {
     logRouteLifecycle("app-shell:mount", {
@@ -686,6 +571,7 @@ export function AppShell({
                 walletProviderMounted={walletProviderMounted}
                 walletProviderPending={walletProviderPending}
                 walletSessionPhase={walletSessionPhase}
+                walletHydrationReady={walletHydrationReady}
                 walletUiEnabled={walletUiEnabled}
                 walletUiRequested={walletUiRequested}
               />
@@ -792,6 +678,7 @@ export function AppShell({
                         walletProviderMounted={walletProviderMounted}
                         walletProviderPending={walletProviderPending}
                         walletSessionPhase={walletSessionPhase}
+                        walletHydrationReady={walletHydrationReady}
                         walletUiEnabled={walletUiEnabled}
                         walletUiRequested={walletUiRequested}
                       />

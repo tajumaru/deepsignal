@@ -67,10 +67,24 @@ function emit() {
 }
 
 function updateSnapshot(next: Partial<DashboardProjectRestoreSnapshot>) {
-  snapshot = {
+  const nextSnapshot = {
     ...snapshot,
     ...next,
   };
+  if (
+    nextSnapshot.routePath === snapshot.routePath &&
+    nextSnapshot.state === snapshot.state &&
+    nextSnapshot.currentProjectId === snapshot.currentProjectId &&
+    nextSnapshot.source === snapshot.source &&
+    nextSnapshot.walletRuntime === snapshot.walletRuntime &&
+    nextSnapshot.storageSettled === snapshot.storageSettled &&
+    nextSnapshot.walletSettled === snapshot.walletSettled &&
+    nextSnapshot.mobileSafari === snapshot.mobileSafari &&
+    nextSnapshot.errorMessage === snapshot.errorMessage
+  ) {
+    return;
+  }
+  snapshot = nextSnapshot;
   setDeepSignalDebugReadiness({
     projectRestoreState: snapshot.state,
     projectRestoreSource: snapshot.source,
@@ -89,6 +103,9 @@ function normalizeObjectId(value?: string | null) {
   }
   const trimmed = value.trim().toLowerCase();
   if (!trimmed) {
+    return "";
+  }
+  if (trimmed === "null" || trimmed === "undefined") {
     return "";
   }
   return trimmed.startsWith("0x") ? trimmed : `0x${trimmed}`;
@@ -164,6 +181,14 @@ function resolveRestoreState(selection: ProjectSelectionSnapshot) {
   }
 
   if (selection.currentProjectId) {
+    if (
+      snapshot.state === "ready_with_project" &&
+      snapshot.currentProjectId === selection.currentProjectId &&
+      snapshot.source === selection.source &&
+      snapshot.errorMessage === null
+    ) {
+      return;
+    }
     logProjectRestoreSource(selection);
     updateSnapshot({
       currentProjectId: selection.currentProjectId,
@@ -188,17 +213,26 @@ function resolveRestoreState(selection: ProjectSelectionSnapshot) {
     return;
   }
 
+  const resolvedSource = selection.source === "unknown" ? "none-confirmed" : selection.source;
+  if (
+    snapshot.state === "ready_without_project" &&
+    snapshot.currentProjectId === "" &&
+    snapshot.source === resolvedSource &&
+    snapshot.errorMessage === null
+  ) {
+    return;
+  }
   logProjectRestoreSource(selection);
   updateSnapshot({
     currentProjectId: "",
     errorMessage: null,
-    source: selection.source === "unknown" ? "none-confirmed" : selection.source,
+    source: resolvedSource,
     state: "ready_without_project",
   });
   logRouteLifecycle("project-restore-complete", {
     currentProjectId: "",
     routePath: snapshot.routePath,
-    source: selection.source === "unknown" ? "none-confirmed" : selection.source,
+    source: resolvedSource,
     state: "ready_without_project",
     walletRuntime: snapshot.walletRuntime,
   });
@@ -209,7 +243,7 @@ function resolveRestoreState(selection: ProjectSelectionSnapshot) {
   });
   logRouteLifecycle("project-restore:resolved", {
     routePath: snapshot.routePath,
-    source: selection.source === "unknown" ? "none-confirmed" : selection.source,
+    source: resolvedSource,
     currentProjectId: "",
     state: "ready_without_project",
     walletRuntime: snapshot.walletRuntime,
@@ -289,6 +323,9 @@ export function initializeDashboardProjectRestore(routePath: string) {
   }, mobileSafari ? 220 : 80);
 
   walletTimeoutTimer = window.setTimeout(() => {
+    if (snapshot.walletSettled) {
+      return;
+    }
     updateSnapshot({
       walletRuntime: snapshot.walletRuntime === "mounted" ? "mounted" : "timeout_fallback",
       walletSettled: true,

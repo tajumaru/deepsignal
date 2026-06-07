@@ -3,25 +3,55 @@ import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 import { AppShell } from "./AppShell";
 
-vi.mock("../lib/dashboardProjectRestore", () => ({
-  useDashboardProjectRestoreSnapshot: () => ({
-    currentProjectId: "",
-    errorMessage: null,
-    mobileSafari: false,
-    routePath: "/dashboard",
-    source: "none-confirmed",
-    state: "ready_without_project",
-    storageSettled: true,
-    walletRuntime: "mounted",
-    walletSettled: true,
-  }),
-}));
+vi.mock("./optionalChrome/AppShellOptionalSlots", () => ({
+  DeferredNetworkMenu: () => <div aria-hidden="true" data-testid="network-menu-placeholder" />,
+  WalletNavSlot: ({ navLabLabel, section }: { navLabLabel: string; section: "access" | "inbox" }) =>
+    section === "inbox" ? <a href="/admin">{navLabLabel}</a> : null,
+  WalletConnectSlot: ({
+    interaction,
+    walletHydrationReady,
+    walletProviderMounted,
+    walletProviderPending,
+    walletSessionPhase,
+    walletUiEnabled,
+    walletUiRequested,
+  }: {
+    interaction?: string;
+    walletHydrationReady: boolean;
+    walletProviderMounted: boolean;
+    walletProviderPending: boolean;
+    walletSessionPhase: string;
+    walletUiEnabled: boolean;
+    walletUiRequested: boolean;
+  }) => {
+    if (!walletUiRequested) {
+      return null;
+    }
 
-vi.mock("./WalletRuntimePanel", () => ({
-  __esModule: true,
-  default: ({ interaction, mode }: { interaction?: string; mode: string }) => (
-    <div data-interaction={interaction ?? "default"} data-mode={mode} data-testid="wallet-runtime-panel" />
-  ),
+    if (
+      !walletUiEnabled ||
+      !walletProviderMounted ||
+      walletProviderPending ||
+      walletSessionPhase === "provider_deferred" ||
+      !walletHydrationReady
+    ) {
+      return (
+        <div className="wallet-connect-shell wallet-connect-shell-compact">
+          <div className="wallet-connect-direct panel">
+            <div className="wallet-connect-direct-copy">
+              <strong>Preparing secure session</strong>
+              <span>Wallet runtime is still mounting.</span>
+            </div>
+            <button type="button" className="wallet-connect-trigger" disabled aria-disabled="true">
+              Wallet loading...
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    return <div data-interaction={interaction ?? "default"} data-mode="connect" data-testid="wallet-runtime-panel" />;
+  },
 }));
 
 vi.mock("../i18n", () => ({
@@ -30,6 +60,13 @@ vi.mock("../i18n", () => ({
     setLanguage: vi.fn(),
     t: (key: string) => key,
   }),
+}));
+
+vi.mock("../lib/scheduleIdleTask", () => ({
+  scheduleIdleTask: (callback: () => void) => {
+    callback();
+    return () => undefined;
+  },
 }));
 
 function renderShell(initialPath: string) {
@@ -66,6 +103,7 @@ describe("AppShell", () => {
     render(
       <MemoryRouter initialEntries={["/dashboard"]}>
         <AppShell
+          passiveHeaderWallet
           walletProviderMounted
           walletProviderPending={false}
           walletSessionPhase="disconnected"
@@ -78,7 +116,7 @@ describe("AppShell", () => {
     );
 
     const panels = await screen.findAllByTestId("wallet-runtime-panel");
-    expect(panels.length).toBeGreaterThanOrEqual(2);
+    expect(panels.length).toBeGreaterThanOrEqual(1);
     expect(
       panels.some(
         (panel) =>

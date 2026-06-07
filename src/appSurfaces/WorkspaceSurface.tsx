@@ -18,6 +18,7 @@ import { createAppRouteComponents } from "../routes/appRouteComponents";
 import { DelayedWorkspaceRestoreFallback, ProviderReadinessBarrier } from "../routes/ProviderReadinessBarrier";
 import { MixedBuildRecoveryScreen, RouteErrorBoundary } from "../routes/RouteErrorBoundary";
 import { getRouteId } from "../routes/routeDiagnostics";
+import { requiresWorkspaceBoot, shouldShowWalletUi } from "../routes/routeRuntimePolicy";
 import { useWalletSessionState } from "../walletSessionState";
 import { AppShell } from "../components/AppShell";
 
@@ -67,18 +68,8 @@ function PrivateRouteSurface({
   const location = useLocation();
   const walletSession = useWalletSessionState();
   const components = useMemo(() => createAppRouteComponents(routeRetryNonce), [routeRetryNonce]);
-  const routeShowsWalletUi =
-    location.pathname === "/admin" ||
-    location.pathname === "/dashboard" ||
-    location.pathname === "/create" ||
-    location.pathname === "/compose" ||
-    location.pathname === "/submitted" ||
-    location.pathname.startsWith("/submitted/") ||
-    location.pathname === "/my-submissions" ||
-    location.pathname.startsWith("/my-submissions/") ||
-    location.pathname.startsWith("/admin/") ||
-    location.pathname.startsWith("/dashboard/");
-  const routeNeedsWorkspaceBoot = true;
+  const routeShowsWalletUi = shouldShowWalletUi(location.pathname);
+  const routeNeedsWorkspaceBoot = requiresWorkspaceBoot(location.pathname);
   const dashboardProjectRestoreSnapshot = useDashboardProjectRestoreSnapshot();
   const dashboardWalletSettled = isDashboardWalletRuntimeSettled(dashboardProjectRestoreSnapshot.walletRuntime);
   const dashboardRestoreEnabled = location.pathname === "/dashboard";
@@ -133,6 +124,11 @@ function PrivateRouteSurface({
       >
         <Suspense fallback={shellFallback}>
           <AppShell
+            passiveHeaderWallet={
+              location.pathname === "/dashboard" &&
+              dashboardProjectRestoreSnapshot.state === "ready_without_project" &&
+              dashboardProjectRestoreSnapshot.currentProjectId === ""
+            }
             walletProviderMounted={walletSession.providerMounted}
             walletProviderPending={walletSession.providerLoading || !walletSession.providerMounted}
             walletSessionPhase={walletSession.phase}

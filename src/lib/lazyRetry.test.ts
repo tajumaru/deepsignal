@@ -77,4 +77,18 @@ describe("resolveLazyRouteModule", () => {
     expect(loaded).toEqual({ ok: true });
     expect(fetchSpy).not.toHaveBeenCalled();
   });
+
+  it("keeps retrying long enough for a briefly delayed chunk host to recover", async () => {
+    let attempts = 0;
+
+    const loaded = await retryLazyImport(async () => {
+      attempts += 1;
+      if (attempts < 4) {
+        throw new TypeError("Failed to fetch dynamically imported module: https://example.test/assets/FormBuilderPage.js");
+      }
+      return { ok: true, attempts };
+    }, "anonymous");
+
+    expect(loaded).toEqual({ ok: true, attempts: 4 });
+  });
 });

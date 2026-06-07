@@ -55,17 +55,48 @@
     grid-template-columns: 1fr;
   }
 
+  .composer-home-hero {
+    gap: 0.8rem;
+  }
+
+  .composer-home-hero-copy {
+    gap: 0.34rem;
+  }
+
+  .composer-home-hero-copy .eyebrow {
+    margin-bottom: 0.06rem;
+    font-size: 0.7rem;
+    line-height: 1;
+  }
+
+  .composer-home-hero-copy h1 {
+    max-width: none;
+    font-size: clamp(1.55rem, 7vw, 2.1rem);
+    line-height: 1.08;
+  }
+
+  .composer-home-hero-copy .muted {
+    max-width: none;
+    font-size: 0.88rem;
+    line-height: 1.45;
+  }
+
   .composer-home-create-card {
     grid-template-columns: auto minmax(0, 1fr) auto;
     min-width: 0;
   }
 
-  .composer-home-draft-card {
+  .composer-home-draft-card-link {
     grid-template-columns: auto minmax(0, 1fr);
   }
 
-  .composer-home-draft-action {
-    grid-column: 1 / -1;
+  .composer-home-draft-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .composer-home-draft-action,
+  .composer-home-draft-discard {
     width: 100%;
     text-align: center;
   }

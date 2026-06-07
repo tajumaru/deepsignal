@@ -245,11 +245,7 @@
 
 .composer-home-draft-card,
 .composer-home-signal-card {
-  display: grid;
-  gap: 1rem;
-  align-items: center;
   min-width: 0;
-  padding: clamp(0.95rem, 2vw, 1.25rem);
   color: inherit;
   text-decoration: none;
   transition:
@@ -259,7 +255,30 @@
 }
 
 .composer-home-draft-card {
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  display: grid;
+  gap: 1rem;
+  padding: clamp(0.95rem, 2vw, 1.25rem);
+}
+
+.composer-home-draft-card-link,
+.composer-home-signal-card {
+  display: grid;
+  gap: 1rem;
+  align-items: center;
+}
+
+.composer-home-draft-card-link {
+  grid-template-columns: auto minmax(0, 1fr);
+  color: inherit;
+  text-decoration: none;
+}
+
+.composer-home-draft-actions {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
 }
 
 .composer-home-signal-card {
@@ -284,7 +303,7 @@
 }
 
 .composer-home-draft-card:hover,
-.composer-home-draft-card:focus-visible,
+.composer-home-draft-card:focus-within,
 .composer-home-signal-card:hover,
 .composer-home-signal-card:focus-visible {
   border-color: rgba(125, 211, 252, 0.48);
@@ -340,6 +359,9 @@
 }
 
 .composer-home-draft-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   border: 1px solid rgba(116, 226, 255, 0.26);
   border-radius: var(--radius-pill);
   padding: 0.65rem 1.3rem;
@@ -347,7 +369,31 @@
   background: rgba(8, 48, 72, 0.58);
   font-size: 0.9rem;
   font-weight: 800;
+  text-decoration: none;
   white-space: nowrap;
+}
+
+.composer-home-draft-discard {
+  border: 1px solid rgba(248, 113, 113, 0.28);
+  border-radius: var(--radius-pill);
+  padding: 0.65rem 1.3rem;
+  color: #ffd2d2;
+  background: rgba(86, 14, 18, 0.52);
+  font-size: 0.9rem;
+  font-weight: 800;
+  white-space: nowrap;
+  transition:
+    border-color var(--transition-ui),
+    background var(--transition-ui),
+    color var(--transition-ui);
+}
+
+.composer-home-draft-discard:hover,
+.composer-home-draft-discard:focus-visible {
+  border-color: rgba(252, 165, 165, 0.56);
+  background: rgba(120, 18, 24, 0.68);
+  color: #fff1f1;
+  outline: none;
 }
 
 .composer-home-card-arrow {
@@ -6851,6 +6897,29 @@ body.composer-mode .bg-orb {
     justify-content: flex-start;
   }
 
+  .composer-builder-grid,
+  .composer-builder-grid-composer,
+  .composer-builder-grid-preview,
+  .signal-composition-studio {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.85rem;
+  }
+
+  .composer-builder-column,
+  .composer-library-panel,
+  .composer-canvas-panel,
+  .composer-publish-panel {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .composer-library-column,
+  .composer-preview-column {
+    position: static;
+    top: auto;
+  }
+
   .publish-signal-lens-card {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -7040,7 +7109,7 @@ body.composer-mode .bg-orb {
   }
 
   .composer-flow-step {
-    flex-basis: min(9.6rem, 54vw);
+    flex-basis: min(8.7rem, 48vw);
     min-height: 3.5rem;
     gap: 0.42rem;
     padding: 0.48rem 0.56rem;
@@ -7104,7 +7173,7 @@ body.composer-mode .bg-orb {
   }
 
   .composer-flow-step-copy strong {
-    font-size: 0.84rem;
+    font-size: 0.8rem;
   }
 
   .composer-flow-step-state {

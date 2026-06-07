@@ -113,72 +113,20 @@ vi.mock("./pages/FormBuilderPage", () => ({
   default: () => <h1>Create Signal Route</h1>,
 }));
 
-vi.mock("./pages/PublicFormPage", async () => {
-  const { PublicWalletAccountPanel } = await vi.importActual<
-    typeof import("./features/public-form/components/PublicWalletAccountPanel")
-  >("./features/public-form/components/PublicWalletAccountPanel");
-  const { WalletActionContext, WalletConnectionContext } = await vi.importActual<
-    typeof import("./walletStatus")
-  >("./walletStatus");
-  return {
-    PublicFormPage: () => (
-      <div>
-        <h1>Public Form Route</h1>
-        <WalletConnectionContext.Provider
-          value={{
-            status: "connected",
-            accountAddress: "0xabc0000000000000000000000000000000000000",
-            walletName: "Slush",
-            isRestoringConnection: false,
-            connectMode: null,
-            connectLockState: "idle",
-            lastConnectFailure: null,
-          }}
-        >
-          <WalletActionContext.Provider
-            value={{
-              disconnect: async () => undefined,
-              signAndExecuteTransaction: vi.fn(async () => ({ digest: "0xmock-digest" })),
-            }}
-          >
-            <PublicWalletAccountPanel
-              onAccountAddressChange={() => undefined}
-              onWalletProviderChange={() => undefined}
-            />
-          </WalletActionContext.Provider>
-        </WalletConnectionContext.Provider>
-      </div>
-    ),
-    default: () => (
-      <div>
-        <h1>Public Form Route</h1>
-        <WalletConnectionContext.Provider
-          value={{
-            status: "connected",
-            accountAddress: "0xabc0000000000000000000000000000000000000",
-            walletName: "Slush",
-            isRestoringConnection: false,
-            connectMode: null,
-            connectLockState: "idle",
-            lastConnectFailure: null,
-          }}
-        >
-          <WalletActionContext.Provider
-            value={{
-              disconnect: async () => undefined,
-              signAndExecuteTransaction: vi.fn(async () => ({ digest: "0xmock-digest" })),
-            }}
-          >
-            <PublicWalletAccountPanel
-              onAccountAddressChange={() => undefined}
-              onWalletProviderChange={() => undefined}
-            />
-          </WalletActionContext.Provider>
-        </WalletConnectionContext.Provider>
-      </div>
-    ),
-  };
-});
+vi.mock("./pages/PublicFormPage", () => ({
+  PublicFormPage: () => (
+    <div>
+      <h1>Public Form Route</h1>
+      <p>Wallet-optional public route</p>
+    </div>
+  ),
+  default: () => (
+    <div>
+      <h1>Public Form Route</h1>
+      <p>Wallet-optional public route</p>
+    </div>
+  ),
+}));
 
 function openHashRoute(route: string) {
   window.history.pushState(null, "", `/#${route}`);
@@ -233,13 +181,13 @@ describe("AppRoot query client regression", () => {
     expect(consoleError.mock.calls.flat().map(String).join("\n")).not.toContain("No QueryClient set");
   });
 
-  it("renders the public form wallet account panel without a missing QueryClient error", async () => {
+  it("renders the public form route without mounting wallet-heavy providers", async () => {
     openHashRoute("/f/form-123?manifest=blob-abc");
 
     render(<AppRoot />);
 
     await screen.findByRole("heading", { name: "Public Form Route" });
-    await waitFor(() => expect(screen.getByRole("button")).toBeInTheDocument());
+    expect(screen.getByText("Wallet-optional public route")).toBeInTheDocument();
     expect(consoleError.mock.calls.flat().map(String).join("\n")).not.toContain("No QueryClient set");
   });
 });

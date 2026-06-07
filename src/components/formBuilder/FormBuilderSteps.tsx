@@ -38,14 +38,22 @@ export function FormBuilderSteps({
       return;
     }
 
-    const targetLeft = Math.max(
-      0,
-      currentButton.offsetLeft - (nav.clientWidth - currentButton.offsetWidth) / 2,
-    );
-    nav.scrollTo({
-      left: targetLeft,
-      behavior: "smooth",
-    });
+    const buttonLeft = currentButton.offsetLeft;
+    const buttonRight = buttonLeft + currentButton.offsetWidth;
+    const viewportLeft = nav.scrollLeft;
+    const viewportRight = viewportLeft + nav.clientWidth;
+    const edgePadding = 8;
+
+    if (buttonLeft >= viewportLeft + edgePadding && buttonRight <= viewportRight - edgePadding) {
+      return;
+    }
+
+    const targetLeft =
+      buttonLeft < viewportLeft + edgePadding
+        ? Math.max(0, buttonLeft - edgePadding)
+        : Math.max(0, buttonRight - nav.clientWidth + edgePadding);
+
+    nav.scrollTo({ left: targetLeft, behavior: "smooth" });
   }, [currentStep]);
 
   return (

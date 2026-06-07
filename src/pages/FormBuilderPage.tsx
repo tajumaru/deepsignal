@@ -93,6 +93,10 @@ interface ComposerHomeDraft {
   mode: "admin" | "guestDraft";
   fieldCount: number;
   step: string;
+  href: {
+    pathname: string;
+    search: string;
+  };
 }
 
 interface ComposerHomeState {
@@ -168,6 +172,10 @@ function readComposerHomeDrafts(t: ReturnType<typeof useI18n>["t"]): ComposerHom
           title,
           fieldCount: parsed.draft.fields?.length ?? 0,
           step: parsed.draft.currentStep ?? "fields",
+          href: {
+            pathname: "/create",
+            search: mode === "guestDraft" ? "?composer=1&mode=guestDraft" : "?composer=1",
+          },
         },
       ];
     } catch {
@@ -297,25 +305,30 @@ function ComposerHomeSignalCard({ signal }: { signal: ComposerHomeSignal }) {
   );
 }
 
-function ComposerHomeDraftCard({ draft }: { draft: ComposerHomeDraft }) {
+function ComposerHomeDraftCard({ draft, onDiscard }: { draft: ComposerHomeDraft; onDiscard: (draft: ComposerHomeDraft) => void }) {
   const { t } = useI18n();
 
   return (
-    <Link
-      className="composer-home-draft-card"
-      to={{ pathname: "/create", search: draft.mode === "guestDraft" ? "?composer=1&mode=guestDraft" : "?composer=1" }}
-      aria-label={t("composerHomeResumeDraftAria", { title: draft.title })}
-    >
-      <span className="composer-home-draft-icon">
-        <ComposerHomeDocumentIcon />
-      </span>
-      <div className="composer-home-card-main">
-        <span className="composer-home-status is-draft">{t("composerHomeStatusUnpublished")}</span>
-        <h3>{draft.title}</h3>
-        <p className="muted">{t("composerHomeDraftMeta", { count: draft.fieldCount, step: draft.step })}</p>
+    <article className="composer-home-draft-card">
+      <Link className="composer-home-draft-card-link" to={draft.href} aria-label={t("composerHomeResumeDraftAria", { title: draft.title })}>
+        <span className="composer-home-draft-icon">
+          <ComposerHomeDocumentIcon />
+        </span>
+        <div className="composer-home-card-main">
+          <span className="composer-home-status is-draft">{t("composerHomeStatusUnpublished")}</span>
+          <h3>{draft.title}</h3>
+          <p className="muted">{t("composerHomeDraftMeta", { count: draft.fieldCount, step: draft.step })}</p>
+        </div>
+      </Link>
+      <div className="composer-home-draft-actions">
+        <Link className="composer-home-draft-action" to={draft.href}>
+          {t("composerHomeResumeEditing")}
+        </Link>
+        <button type="button" className="composer-home-draft-discard" onClick={() => onDiscard(draft)}>
+          {t("composerHomeDiscardDraft")}
+        </button>
       </div>
-      <span className="composer-home-draft-action">{t("composerHomeResumeEditing")}</span>
-    </Link>
+    </article>
   );
 }
 
@@ -325,6 +338,20 @@ function ComposerHomePage() {
   const [state, setState] = useState<ComposerHomeState>({ drafts: [], signals: [], error: "" });
   const [loading, setLoading] = useState(true);
   const [signalViewMode, setSignalViewMode] = useState<"list" | "cards">("cards");
+
+  function handleDiscardDraft(draft: ComposerHomeDraft) {
+    if (typeof window === "undefined") {
+      return;
+    }
+    if (!window.confirm(t("composerHomeDiscardDraftConfirm", { title: draft.title }))) {
+      return;
+    }
+    window.localStorage.removeItem(draft.key);
+    setState((current) => ({
+      ...current,
+      drafts: current.drafts.filter((item) => item.key !== draft.key),
+    }));
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -425,7 +452,7 @@ function ComposerHomePage() {
           {!loading && hasDrafts ? (
             <div className="composer-home-draft-list">
               {state.drafts.map((draft) => (
-                <ComposerHomeDraftCard key={draft.key} draft={draft} />
+                <ComposerHomeDraftCard key={draft.key} draft={draft} onDiscard={handleDiscardDraft} />
               ))}
             </div>
           ) : null}

@@ -1,21 +1,7 @@
+import { shouldMountWalletProviders } from "./routes/routeRuntimePolicy";
+
 export function shouldRequestWalletProvidersOnMountForRoute(routePath: string) {
-  if (routePath === "/") {
-    return false;
-  }
-  if (routePath === "/troubleshooting") {
-    return false;
-  }
-  if (
-    routePath.startsWith("/f/") ||
-    routePath.startsWith("/roadmap/") ||
-    routePath.startsWith("/m/")
-  ) {
-    return false;
-  }
-  if (routePath === "/create" || routePath === "/compose" || routePath.startsWith("/admin/forms/new")) {
-    return false;
-  }
-  return true;
+  return shouldMountWalletProviders(routePath);
 }
 
 export function shouldRequestWalletProvidersOnMount() {
