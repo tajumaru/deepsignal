@@ -45,22 +45,24 @@ describe("AppShell header wallet failure containment", () => {
     expect((window as Window & { __DEEPSIGNAL_SMOKE__?: { rejectWalletUiImport?: boolean } }).__DEEPSIGNAL_SMOKE__)
       .toEqual({ rejectWalletUiImport: true });
 
-    render(
-      <MemoryRouter initialEntries={["/dashboard"]}>
-        <AppShell
-          walletProviderMounted
-          walletProviderPending={false}
-          walletSessionPhase="disconnected"
-          walletUiEnabled
-          walletUiRequested
-        >
-          <h1>Dashboard content survives</h1>
-        </AppShell>
-      </MemoryRouter>,
-    );
+    expect(() =>
+      render(
+        <MemoryRouter initialEntries={["/dashboard"]}>
+          <AppShell
+            walletProviderMounted
+            walletProviderPending={false}
+            walletSessionPhase="disconnected"
+            walletUiEnabled
+            walletUiRequested
+          >
+            <h1>Dashboard content survives</h1>
+          </AppShell>
+        </MemoryRouter>,
+      ),
+    ).not.toThrow();
 
     expect(await screen.findByText("Wallet panel could not load")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Dashboard content survives" })).toBeInTheDocument();
+    expect(screen.getByRole("main")).toHaveTextContent("Dashboard content survives");
     expect(screen.queryByText("DeepSignal route failed to render.")).not.toBeInTheDocument();
   });
 });

@@ -36,4 +36,10 @@ describe("mobileSafariSmoke", () => {
     expect(shouldRejectWalletUiImport("network-menu")).toBe(false);
     expect(shouldRejectWalletUiImport("public-form-route")).toBe(false);
   });
+
+  it("returns false when no smoke flag is enabled", () => {
+    expect(shouldRejectWalletUiImport("wallet-runtime-panel")).toBe(false);
+    expect(shouldRejectWalletUiImport("wallet-runtime-connect-surface")).toBe(false);
+    expect(shouldRejectWalletUiImport("network-menu")).toBe(false);
+  });
 });

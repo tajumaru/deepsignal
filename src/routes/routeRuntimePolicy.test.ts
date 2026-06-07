@@ -15,8 +15,11 @@ describe("routeRuntimePolicy", () => {
     expect(shouldMountWalletProviders("/f/form_xxx")).toBe(false);
   });
 
+  it("/roadmap/form_xxx does not mount wallet providers", () => {
+    expect(shouldMountWalletProviders("/roadmap/form_xxx")).toBe(false);
+  });
+
   it("keeps wallet providers off for other wallet-optional public routes", () => {
-    expect(shouldMountWalletProviders("/roadmap/form-123")).toBe(false);
     expect(shouldMountWalletProviders("/m/blob-123")).toBe(false);
   });
 
@@ -49,9 +52,12 @@ describe("routeRuntimePolicy", () => {
     expect(requiresWorkspaceBoot("/dashboard")).toBe(true);
   });
 
+  it("/explore does not require workspace boot", () => {
+    expect(requiresWorkspaceBoot("/explore")).toBe(false);
+  });
+
   it("requires workspace boot only for private workspace routes", () => {
     expect(requiresWorkspaceBoot("/admin")).toBe(true);
-    expect(requiresWorkspaceBoot("/explore")).toBe(false);
     expect(requiresWorkspaceBoot("/f/form_xxx")).toBe(false);
   });
 });
