@@ -210,7 +210,7 @@ export function WalletSurface({
         setLoadFailed(true);
       })
       .finally(() => setLoading(false));
-  }, [loadWalletProviders, requestOnMount]);
+  }, [loadWalletProviders, parentRuntime.loaded, requestOnMount]);
 
   useEffect(() => {
     if (!providersModule) {

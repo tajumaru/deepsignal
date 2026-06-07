@@ -51,7 +51,7 @@ export function AdminAccessGate({
           default: module.WalletConnectSurface,
         })),
       ),
-    [retryNonce],
+    [],
   );
 
   if (!hasWallet) {

@@ -5,7 +5,6 @@ import { DashboardShellFirstPanel } from "../components/DashboardShellFirstPanel
 import { WalrusRuntimeSurface } from "../components/WalrusRuntimeSurface";
 import { WalletSurface } from "../components/WalletSurface";
 import { useWalletProviderRuntime } from "../components/WalletSurfaceRuntime";
-import { buildInfo } from "../lib/buildInfo";
 import { getChunkFailureUrl } from "../lib/chunkLoadRecovery";
 import {
   isDashboardBootPending,
@@ -15,7 +14,7 @@ import {
   markDashboardWalletImportStarted,
   useDashboardProjectRestoreSnapshot,
 } from "../lib/dashboardProjectRestore";
-import { getBrowserCapabilitiesSnapshot, logRouteLifecycle } from "../lib/routeDiagnostics";
+import { logRouteLifecycle } from "../lib/routeDiagnostics";
 import { REQUIRE_GLOBAL_WALRUS_RUNTIME } from "../lib/runtimeFlags";
 import { useRouteRecoveryState } from "../lib/routeRecoveryState";
 import { useWalletSessionState } from "../walletSessionState";
@@ -124,14 +123,6 @@ function getLatestDashboardFailedImport() {
     }
   }
   return null;
-}
-
-function isDashboardRouteImportFailure(error: unknown) {
-  if (error instanceof Error && error.name === "MissingLazyRouteExportError") {
-    return true;
-  }
-  const latestFailedImport = getLatestDashboardFailedImport();
-  return latestFailedImport?.label === "route-admin-dashboard";
 }
 
 class DashboardRouteBoundary extends Component<DashboardRouteBoundaryProps, DashboardRouteBoundaryState> {

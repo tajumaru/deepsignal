@@ -2,11 +2,13 @@ import { lazy, Suspense, useMemo, type ComponentType, type ErrorInfo, type React
 import { shouldRejectWalletUiImport } from "../../lib/mobileSafariSmoke";
 import { SafeLazyBoundary } from "../SafeLazyBoundary";
 
+type OptionalHeaderWidgetComponent = ComponentType<Record<string, unknown>>;
+
 type OptionalHeaderWidgetProps = {
   componentProps?: Record<string, unknown>;
   fallback: ReactNode;
   label: string;
-  loader: () => Promise<{ default: ComponentType<any> }>;
+  loader: () => Promise<{ default: OptionalHeaderWidgetComponent }>;
   onError?: (error: unknown, errorInfo: ErrorInfo) => void;
   resetKey: string;
 };
@@ -27,7 +29,7 @@ export function OptionalHeaderWidget({
         }
         return loader();
       }),
-    [label, loader, resetKey],
+    [label, loader],
   );
 
   return (

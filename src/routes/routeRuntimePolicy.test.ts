@@ -7,9 +7,15 @@ import {
 } from "./routeRuntimePolicy";
 
 describe("routeRuntimePolicy", () => {
-  it("keeps wallet providers off for public and signal discovery routes by default", () => {
+  it("/explore does not mount wallet providers", () => {
     expect(shouldMountWalletProviders("/explore")).toBe(false);
+  });
+
+  it("/f/:formId does not mount wallet providers", () => {
     expect(shouldMountWalletProviders("/f/form-123")).toBe(false);
+  });
+
+  it("keeps wallet providers off for other wallet-optional public routes", () => {
     expect(shouldMountWalletProviders("/roadmap/form-123")).toBe(false);
     expect(shouldMountWalletProviders("/m/blob-123")).toBe(false);
   });
@@ -20,23 +26,30 @@ describe("routeRuntimePolicy", () => {
     expect(shouldMountWalletProviders("/auth/zklogin/callback")).toBe(true);
   });
 
-  it("shows wallet UI only on wallet-aware private routes", () => {
+  it("/dashboard shows wallet UI", () => {
     expect(shouldShowWalletUi("/dashboard")).toBe(true);
+  });
+
+  it("shows wallet UI only on wallet-aware private routes", () => {
     expect(shouldShowWalletUi("/admin")).toBe(true);
     expect(shouldShowWalletUi("/explore")).toBe(false);
     expect(shouldShowWalletUi("/f/form-123")).toBe(false);
   });
 
-  it("uses public chrome only for wallet-optional public routes", () => {
+  it("public chrome routes are detected correctly", () => {
     expect(usesPublicChrome("/f/form-123")).toBe(true);
     expect(usesPublicChrome("/roadmap/form-123")).toBe(true);
     expect(usesPublicChrome("/m/blob-123")).toBe(true);
+    expect(usesPublicChrome("/auth/zklogin/callback")).toBe(true);
     expect(usesPublicChrome("/explore")).toBe(false);
     expect(usesPublicChrome("/dashboard")).toBe(false);
   });
 
-  it("requires workspace boot only for private workspace routes", () => {
+  it("/dashboard requires workspace boot", () => {
     expect(requiresWorkspaceBoot("/dashboard")).toBe(true);
+  });
+
+  it("requires workspace boot only for private workspace routes", () => {
     expect(requiresWorkspaceBoot("/admin")).toBe(true);
     expect(requiresWorkspaceBoot("/explore")).toBe(false);
     expect(requiresWorkspaceBoot("/f/form-123")).toBe(false);

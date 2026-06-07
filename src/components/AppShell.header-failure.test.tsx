@@ -1,21 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { AppShell } from "./AppShell";
-
-vi.mock("../lib/dashboardProjectRestore", () => ({
-  useDashboardProjectRestoreSnapshot: () => ({
-    currentProjectId: "",
-    errorMessage: null,
-    mobileSafari: false,
-    routePath: "/dashboard",
-    source: "none-confirmed",
-    state: "ready_without_project",
-    storageSettled: true,
-    walletRuntime: "mounted",
-    walletSettled: true,
-  }),
-}));
 
 vi.mock("../i18n", () => ({
   useI18n: () => ({
@@ -32,15 +18,31 @@ vi.mock("../lib/scheduleIdleTask", () => ({
   },
 }));
 
-vi.mock("./WalletRuntimePanel", () => ({
-  __esModule: true,
-  default: () => {
-    throw new Error("wallet panel render failed");
-  },
-}));
+function setWalletUiSmokeRejection(enabled: boolean) {
+  const windowWithSmoke = window as Window & {
+    __DEEPSIGNAL_SMOKE__?: {
+      rejectWalletUiImport?: boolean;
+    };
+  };
+
+  if (enabled) {
+    windowWithSmoke.__DEEPSIGNAL_SMOKE__ = {
+      rejectWalletUiImport: true,
+    };
+    return;
+  }
+
+  delete windowWithSmoke.__DEEPSIGNAL_SMOKE__;
+}
+
+afterEach(() => {
+  setWalletUiSmokeRejection(false);
+});
 
 describe("AppShell header wallet failure containment", () => {
   it("contains wallet header failures without bubbling to the route boundary", async () => {
+    setWalletUiSmokeRejection(true);
+
     render(
       <MemoryRouter initialEntries={["/dashboard"]}>
         <AppShell

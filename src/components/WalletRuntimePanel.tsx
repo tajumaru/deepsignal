@@ -105,7 +105,7 @@ export default function WalletRuntimePanel(props: WalletRuntimePanelProps) {
           default: module.WalletConnectSurface,
         })),
       ),
-    [walletSurfaceRetryNonce],
+    [],
   );
 
   useEffect(() => {

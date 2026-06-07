@@ -1,11 +1,15 @@
 import { Link, useLocation } from "react-router-dom";
-import { useEffect, useState, type ErrorInfo, type ReactNode } from "react";
+import { useEffect, useState, type ComponentType, type ErrorInfo, type ReactNode } from "react";
 import type { WalletSessionPhase } from "../../walletSessionState";
 import { retryLazyImport } from "../../lib/lazyRetry";
 import { getBrowserCapabilitiesSnapshot, logRouteLifecycle } from "../../lib/routeDiagnostics";
 import { scheduleIdleTask } from "../../lib/scheduleIdleTask";
 import { useOptionalRpcInfrastructure } from "../../rpcInfrastructure";
 import { OptionalHeaderWidget } from "./OptionalHeaderWidget";
+
+type OptionalHeaderComponentModule = {
+  default: ComponentType<Record<string, unknown>>;
+};
 
 function SafeWalletPlaceholder({ surface }: { surface?: "mobileDrawer" }) {
   if (surface === "mobileDrawer") {
@@ -112,7 +116,11 @@ export function WalletNavSlot({
       componentProps={{ mode: "nav", onNavigate, section }}
       fallback={<WalletNavFallback navLabLabel={navLabLabel} onNavigate={onNavigate} section={section} />}
       label="wallet-runtime-panel"
-      loader={() => retryLazyImport(() => import("../WalletRuntimePanel"), "wallet-runtime-panel")}
+      loader={() =>
+        retryLazyImport(() => import("../WalletRuntimePanel"), "wallet-runtime-panel").then((module) => ({
+          default: module.default as ComponentType<Record<string, unknown>>,
+        }) satisfies OptionalHeaderComponentModule)
+      }
       onError={(error: unknown, errorInfo: ErrorInfo) => {
         logRouteLifecycle("wallet-ui-lazy-failure-contained", {
           label: "wallet-runtime-panel",
@@ -170,7 +178,11 @@ export function WalletConnectSlot({
       componentProps={{ mode: "connect", surface, fallback, interaction }}
       fallback={<WalletUiUnavailableFallback onRetry={() => setRetryNonce((value) => value + 1)} surface={surface} />}
       label="wallet-runtime-panel"
-      loader={() => retryLazyImport(() => import("../WalletRuntimePanel"), "wallet-runtime-panel")}
+      loader={() =>
+        retryLazyImport(() => import("../WalletRuntimePanel"), "wallet-runtime-panel").then((module) => ({
+          default: module.default as ComponentType<Record<string, unknown>>,
+        }) satisfies OptionalHeaderComponentModule)
+      }
       onError={(error: unknown, errorInfo: ErrorInfo) => {
         logRouteLifecycle("wallet-ui-lazy-failure-contained", {
           label: "wallet-runtime-panel",
@@ -224,8 +236,8 @@ export function DeferredNetworkMenu({ drawerFallback = false }: { drawerFallback
       label="network-menu"
       loader={() =>
         retryLazyImport(() => import("../NetworkMenu"), "network-menu").then((module) => ({
-          default: module.NetworkMenu,
-        }))
+          default: module.NetworkMenu as ComponentType<Record<string, unknown>>,
+        }) satisfies OptionalHeaderComponentModule)
       }
       onError={(error: unknown, errorInfo: ErrorInfo) => {
         logRouteLifecycle("wallet-ui-lazy-failure-contained", {
