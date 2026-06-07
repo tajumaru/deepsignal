@@ -11,8 +11,8 @@ describe("routeRuntimePolicy", () => {
     expect(shouldMountWalletProviders("/explore")).toBe(false);
   });
 
-  it("/f/:formId does not mount wallet providers", () => {
-    expect(shouldMountWalletProviders("/f/form-123")).toBe(false);
+  it("/f/form_xxx does not mount wallet providers", () => {
+    expect(shouldMountWalletProviders("/f/form_xxx")).toBe(false);
   });
 
   it("keeps wallet providers off for other wallet-optional public routes", () => {
@@ -33,11 +33,11 @@ describe("routeRuntimePolicy", () => {
   it("shows wallet UI only on wallet-aware private routes", () => {
     expect(shouldShowWalletUi("/admin")).toBe(true);
     expect(shouldShowWalletUi("/explore")).toBe(false);
-    expect(shouldShowWalletUi("/f/form-123")).toBe(false);
+    expect(shouldShowWalletUi("/f/form_xxx")).toBe(false);
   });
 
   it("public chrome routes are detected correctly", () => {
-    expect(usesPublicChrome("/f/form-123")).toBe(true);
+    expect(usesPublicChrome("/f/form_xxx")).toBe(true);
     expect(usesPublicChrome("/roadmap/form-123")).toBe(true);
     expect(usesPublicChrome("/m/blob-123")).toBe(true);
     expect(usesPublicChrome("/auth/zklogin/callback")).toBe(true);
@@ -52,6 +52,6 @@ describe("routeRuntimePolicy", () => {
   it("requires workspace boot only for private workspace routes", () => {
     expect(requiresWorkspaceBoot("/admin")).toBe(true);
     expect(requiresWorkspaceBoot("/explore")).toBe(false);
-    expect(requiresWorkspaceBoot("/f/form-123")).toBe(false);
+    expect(requiresWorkspaceBoot("/f/form_xxx")).toBe(false);
   });
 });

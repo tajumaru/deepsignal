@@ -42,6 +42,8 @@ afterEach(() => {
 describe("AppShell header wallet failure containment", () => {
   it("contains wallet header failures without bubbling to the route boundary", async () => {
     setWalletUiSmokeRejection(true);
+    expect((window as Window & { __DEEPSIGNAL_SMOKE__?: { rejectWalletUiImport?: boolean } }).__DEEPSIGNAL_SMOKE__)
+      .toEqual({ rejectWalletUiImport: true });
 
     render(
       <MemoryRouter initialEntries={["/dashboard"]}>
