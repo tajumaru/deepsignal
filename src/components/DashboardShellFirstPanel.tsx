@@ -3,26 +3,20 @@ import { Link } from "react-router-dom";
 import { buildInfo } from "../lib/buildInfo";
 import { isDashboardBootPending, useDashboardProjectRestoreSnapshot } from "../lib/dashboardProjectRestore";
 import { formatRouteLifecycleDiagnostics, logRouteLifecycle } from "../lib/routeDiagnostics";
-import { useWalletSessionState } from "../walletSessionState";
 
 export function DashboardShellFirstPanel({
   onRetryWalletRuntime,
   routePath,
-  walletStatusMessage = "Preparing wallet session...",
+  walletStatusMessage = "Wallet tools can connect after the dashboard shell loads.",
 }: {
   onRetryWalletRuntime: () => void;
   routePath: string;
   walletStatusMessage?: string;
 }) {
   const restoreSnapshot = useDashboardProjectRestoreSnapshot();
-  const walletSession = useWalletSessionState();
   const [copiedDiagnostics, setCopiedDiagnostics] = useState(false);
   const currentProjectId = restoreSnapshot.currentProjectId;
-  const restorePending = isDashboardBootPending(restoreSnapshot, {
-    walletProviderMounted: walletSession.providerMounted,
-    walletProviderPending: walletSession.providerLoading || !walletSession.providerMounted,
-    walletSessionPhase: walletSession.phase,
-  });
+  const restorePending = isDashboardBootPending(restoreSnapshot);
 
   useEffect(() => {
     const eventName = restorePending
@@ -57,12 +51,12 @@ export function DashboardShellFirstPanel({
       <section className="panel glow-panel route-status-panel" role="status">
         <p className="eyebrow">Signal Intelligence Workspace</p>
         <h1>
-          {restorePending ? "Preparing wallet session..." : currentProjectId ? "Dashboard shell ready" : "Choose or create a signal project"}
+          {restorePending ? "Preparing dashboard shell..." : currentProjectId ? "Dashboard shell ready" : "Choose or create a signal project"}
         </h1>
         <p className="muted">
           {restorePending
-            ? "DeepSignal is keeping this private workspace mounted while the wallet session settles. Project restore has not started yet, and local fallback data is preserved."
-            : "The dashboard shell is usable while protected wallet-only controls finish loading. Local fallback data is preserved."}
+            ? "DeepSignal is restoring your local project context first so the workspace can render immediately. Local fallback data is preserved."
+            : "The dashboard shell is usable while wallet-only controls finish hydrating in the background. Local fallback data is preserved."}
         </p>
         <dl className="route-status-metadata">
           <div>
@@ -83,7 +77,7 @@ export function DashboardShellFirstPanel({
           </div>
           <div>
             <dt>Wallet runtime</dt>
-            <dd>{restorePending ? `${walletStatusMessage} (${restoreSnapshot.walletRuntime})` : walletStatusMessage}</dd>
+            <dd>{`${walletStatusMessage} (${restoreSnapshot.walletRuntime})`}</dd>
           </div>
         </dl>
         <div className="inline-actions">

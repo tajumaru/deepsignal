@@ -79,4 +79,34 @@ describe("OptionalHeaderWidget", () => {
     expect(await screen.findByText("Boundary recovered")).toBeInTheDocument();
     expect(screen.queryByText("Boundary fallback")).not.toBeInTheDocument();
   });
+
+  it("reuses the same lazy import for the same label and resetKey", async () => {
+    const loadModule = vi.fn(async () => ({ default: HeaderWidgetBody }));
+
+    const { rerender } = render(
+      <OptionalHeaderWidget
+        componentProps={{ label: "Wallet widget runtime" }}
+        fallback={<div>Wallet widget unavailable</div>}
+        label="wallet-runtime-panel"
+        loader={() => loadModule()}
+        resetKey="wallet-runtime-panel:connect:0:/dashboard"
+      />,
+    );
+
+    expect(await screen.findByText("Wallet widget runtime")).toBeInTheDocument();
+    expect(loadModule).toHaveBeenCalledTimes(1);
+
+    rerender(
+      <OptionalHeaderWidget
+        componentProps={{ label: "Wallet widget runtime" }}
+        fallback={<div>Wallet widget unavailable</div>}
+        label="wallet-runtime-panel"
+        loader={() => loadModule()}
+        resetKey="wallet-runtime-panel:connect:0:/dashboard"
+      />,
+    );
+
+    expect(await screen.findByText("Wallet widget runtime")).toBeInTheDocument();
+    expect(loadModule).toHaveBeenCalledTimes(1);
+  });
 });

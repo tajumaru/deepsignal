@@ -1,7 +1,13 @@
 import { useEffect, useSyncExternalStore } from "react";
 import { getBrowserCapabilitiesSnapshot, logRouteLifecycle, setDeepSignalDebugReadiness } from "./routeDiagnostics";
 
-export type ProjectRestoreState = "unknown" | "restoring" | "ready_with_project" | "ready_without_project" | "error";
+export type ProjectRestoreState =
+  | "unknown"
+  | "restoring"
+  | "ready_with_project"
+  | "ready_without_project"
+  | "blocked_wallet_required"
+  | "error";
 export type DashboardWalletRuntimeState =
   | "deferred"
   | "pending"
@@ -125,6 +131,37 @@ function readNamespacedStorageValue(prefix: string) {
   return "";
 }
 
+function readRecentProjectSelection(): ProjectSelectionSnapshot {
+  const rawRecentProjects = readNamespacedStorageValue(`${RECENT_PROJECTS_KEY}:`);
+  if (!rawRecentProjects) {
+    return {
+      currentProjectId: "",
+      source: "unknown",
+    };
+  }
+
+  try {
+    const parsed = JSON.parse(rawRecentProjects) as Array<{ objectId?: unknown }> | null;
+    const currentProjectId = Array.isArray(parsed)
+      ? normalizeObjectId(
+          parsed.find((project) => project && typeof project === "object" && "objectId" in project)?.objectId as
+            | string
+            | null
+            | undefined,
+        )
+      : "";
+    return {
+      currentProjectId,
+      source: "recent-projects",
+    };
+  } catch {
+    return {
+      currentProjectId: "",
+      source: "recent-projects",
+    };
+  }
+}
+
 function readProjectSelectionSnapshot(): ProjectSelectionSnapshot {
   const legacy = normalizeObjectId(window.localStorage.getItem(SELECTED_PROJECT_ID_KEY));
   if (legacy) {
@@ -142,18 +179,7 @@ function readProjectSelectionSnapshot(): ProjectSelectionSnapshot {
     };
   }
 
-  const recentProjects = readNamespacedStorageValue(`${RECENT_PROJECTS_KEY}:`);
-  if (recentProjects) {
-    return {
-      currentProjectId: "",
-      source: "recent-projects",
-    };
-  }
-
-  return {
-    currentProjectId: "",
-    source: "unknown",
-  };
+  return readRecentProjectSelection();
 }
 
 function logProjectRestoreSource(selection: ProjectSelectionSnapshot) {
@@ -171,7 +197,7 @@ function logProjectRestoreSource(selection: ProjectSelectionSnapshot) {
 }
 
 function resolveRestoreState(selection: ProjectSelectionSnapshot) {
-  if (!snapshot.storageSettled || !snapshot.walletSettled) {
+  if (!snapshot.storageSettled) {
     updateSnapshot({
       currentProjectId: "",
       source: selection.source,
@@ -272,6 +298,11 @@ function clearRestoreTimers() {
   walletTimeoutTimer = 0;
 }
 
+function clearWalletTimeoutTimer() {
+  window.clearTimeout(walletTimeoutTimer);
+  walletTimeoutTimer = 0;
+}
+
 function getWalletSettleTimeoutMs(mobileSafari: boolean) {
   return mobileSafari ? 12_000 : 8_000;
 }
@@ -290,7 +321,7 @@ export function initializeDashboardProjectRestore(routePath: string) {
     currentProjectId: "",
     source: "unknown",
     walletRuntime,
-    storageSettled: false,
+    storageSettled: true,
     walletSettled,
     mobileSafari,
     errorMessage: null,
@@ -316,11 +347,6 @@ export function initializeDashboardProjectRestore(routePath: string) {
 
   window.addEventListener("storage", handleStorageChange);
   window.addEventListener(PROJECT_REGISTRY_STORAGE_EVENT, handleStorageChange);
-
-  storageSettledTimer = window.setTimeout(() => {
-    updateSnapshot({ storageSettled: true });
-    refreshProjectRestore();
-  }, mobileSafari ? 220 : 80);
 
   walletTimeoutTimer = window.setTimeout(() => {
     if (snapshot.walletSettled) {
@@ -368,7 +394,31 @@ export function resetDashboardProjectRestore() {
   emit();
 }
 
+export function markDashboardProjectRestoreBlockedWalletRequired(routePath: string) {
+  cleanupActiveRestore?.();
+  cleanupActiveRestore = null;
+  clearRestoreTimers();
+  loggedSourceKey = "";
+  updateSnapshot({
+    routePath,
+    state: "blocked_wallet_required",
+    currentProjectId: "",
+    source: "unknown",
+    walletRuntime: "skipped_no_wallet",
+    storageSettled: false,
+    walletSettled: true,
+    errorMessage: null,
+  });
+}
+
 export function markDashboardWalletImportStarted(routePath: string) {
+  if (
+    snapshot.routePath === routePath &&
+    snapshot.walletSettled &&
+    (snapshot.state === "ready_without_project" || snapshot.state === "ready_with_project")
+  ) {
+    return;
+  }
   updateSnapshot({
     routePath,
     state: snapshot.state === "unknown" ? "restoring" : snapshot.state,
@@ -379,6 +429,7 @@ export function markDashboardWalletImportStarted(routePath: string) {
 }
 
 export function markDashboardWalletImportReady(routePath: string) {
+  clearWalletTimeoutTimer();
   updateSnapshot({
     routePath,
     walletRuntime: "mounted",
@@ -388,6 +439,7 @@ export function markDashboardWalletImportReady(routePath: string) {
 }
 
 export function markDashboardWalletImportFailed(routePath: string, errorMessage?: string) {
+  clearWalletTimeoutTimer();
   updateSnapshot({
     routePath,
     errorMessage: errorMessage ?? snapshot.errorMessage,
@@ -398,6 +450,7 @@ export function markDashboardWalletImportFailed(routePath: string, errorMessage?
 }
 
 export function markDashboardWalletImportSkipped(routePath: string) {
+  clearWalletTimeoutTimer();
   updateSnapshot({
     routePath,
     walletRuntime: "skipped_no_wallet",
@@ -417,13 +470,21 @@ export function subscribeDashboardProjectRestore(listener: () => void) {
   };
 }
 
-export function useDashboardProjectRestore(routePath: string, enabled: boolean) {
+export function useDashboardProjectRestore(routePath: string, enabled: boolean, blockedWalletRequired = false) {
   useEffect(() => {
-    if (!enabled || typeof window === "undefined") {
+    if (typeof window === "undefined") {
+      return undefined;
+    }
+    if (!enabled) {
+      if (blockedWalletRequired && (routePath === "/dashboard" || routePath.startsWith("/dashboard?"))) {
+        markDashboardProjectRestoreBlockedWalletRequired(routePath);
+      } else {
+        resetDashboardProjectRestore();
+      }
       return undefined;
     }
     return initializeDashboardProjectRestore(routePath);
-  }, [enabled, routePath]);
+  }, [blockedWalletRequired, enabled, routePath]);
 
   return useSyncExternalStore(subscribeDashboardProjectRestore, getDashboardProjectRestoreSnapshot, getDashboardProjectRestoreSnapshot);
 }
@@ -447,19 +508,12 @@ export function isDashboardWorkspaceReady(restoreSnapshot: DashboardProjectResto
 
 export function isDashboardBootPending(
   restoreSnapshot: DashboardProjectRestoreSnapshot,
-  options: DashboardBootPendingOptions = {},
+  _options?: DashboardBootPendingOptions,
 ) {
-  const walletProviderPending = options.walletProviderPending ?? !(options.walletProviderMounted ?? true);
-
+  void _options;
   return (
-    walletProviderPending ||
-    options.walletProviderMounted === false ||
-    restoreSnapshot.walletRuntime === "deferred" ||
-    restoreSnapshot.walletRuntime === "pending" ||
-    options.walletSessionPhase === "provider_deferred" ||
     restoreSnapshot.state === "unknown" ||
     restoreSnapshot.state === "restoring" ||
-    !restoreSnapshot.storageSettled ||
-    !restoreSnapshot.walletSettled
+    !restoreSnapshot.storageSettled
   );
 }

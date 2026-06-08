@@ -19,10 +19,17 @@ const dashboardRestoreSnapshot = {
   errorMessage: null,
 };
 
-const walletSessionState = {
+const walletSessionState: {
+  accountAddress?: string;
+  phase: string;
+  providerLoading: boolean;
+  providerMounted: boolean;
+  status: string;
+} = {
   phase: "connected",
   providerMounted: true,
   providerLoading: false,
+  accountAddress: "0xabc",
   status: "connected",
 };
 
@@ -95,6 +102,13 @@ describe("AppRoutes dashboard isolation", () => {
       mobileSafari: true,
       errorMessage: null,
     });
+    Object.assign(walletSessionState, {
+      phase: "connected",
+      providerMounted: true,
+      providerLoading: false,
+      accountAddress: "0xabc",
+      status: "connected",
+    });
   });
 
   it("keeps dashboard route lazy failures out of wallet-import-failed recovery", async () => {
@@ -157,5 +171,41 @@ describe("AppRoutes dashboard isolation", () => {
     expect(screen.getByText("Wallet session ready. No signal project is selected yet.")).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Admin Route" })).not.toBeInTheDocument();
     expect(adminDashboardPageSpy).not.toHaveBeenCalled();
+  });
+
+  it("renders the dashboard route even while wallet provider hydration is still pending", async () => {
+    Object.assign(dashboardRestoreSnapshot, {
+      state: "ready_with_project",
+      currentProjectId: "0xabc",
+      source: "legacy-selected-project",
+      walletRuntime: "pending",
+      walletSettled: false,
+    });
+    Object.assign(walletSessionState, {
+      phase: "provider_deferred",
+      providerMounted: false,
+      providerLoading: true,
+      accountAddress: undefined,
+      status: "restoring",
+    });
+    const components = {
+      AccessManagementPage: () => <h1>Access</h1>,
+      AdminDashboardPage: () => <h1>Admin Route</h1>,
+      ExploreSignalsPage: () => <h1>Explore</h1>,
+      FormBuilderPage: () => <h1>Create</h1>,
+      InsightsFixturePage: () => <h1>Fixture</h1>,
+      MyResponsesPage: () => <h1>Responses</h1>,
+      SubmissionDetailPage: () => <h1>Submission</h1>,
+      SubmittedHistoryPage: () => <h1>Submitted</h1>,
+      TroubleshootingPage: () => <h1>Troubleshooting</h1>,
+    };
+
+    render(
+      <MemoryRouter initialEntries={["/dashboard"]}>
+        <AppRoutes components={components as never} routeRetryNonce={0} />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByRole("heading", { name: "Admin Route" })).toBeInTheDocument();
   });
 });

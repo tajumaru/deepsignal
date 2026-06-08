@@ -1,4 +1,4 @@
-import { Suspense, useEffect, useMemo, useState, type ReactNode } from "react";
+import { Suspense, useEffect, useState, type ReactNode } from "react";
 import { useLocation } from "react-router-dom";
 import { AppBootRuntime, WorkspaceRouteRuntimeEffects } from "../AppBootRuntime";
 import { InitialBootReady, useBootOverlay } from "../bootstrap/useBootOverlay";
@@ -14,11 +14,14 @@ import {
 } from "../lib/dashboardProjectRestore";
 import { logRouteLifecycle } from "../lib/routeDiagnostics";
 import { AppRoutes } from "../routes/AppRoutes";
-import { createAppRouteComponents } from "../routes/appRouteComponents";
+import { appRouteComponents } from "../routes/appRouteComponents";
 import { DelayedWorkspaceRestoreFallback, ProviderReadinessBarrier } from "../routes/ProviderReadinessBarrier";
 import { MixedBuildRecoveryScreen, RouteErrorBoundary } from "../routes/RouteErrorBoundary";
+import { ensureCurrentRouteEpoch, useCurrentRouteEpoch } from "../routes/routeEpoch";
 import { getRouteId } from "../routes/routeDiagnostics";
-import { requiresWorkspaceBoot, shouldShowWalletUi } from "../routes/routeRuntimePolicy";
+import { WalletRequiredGate } from "../routes/WalletRequiredGate";
+import { getRouteRuntimeMetadata, requiresWorkspaceBoot, shouldShowWalletUi } from "../routes/routeRuntimePolicy";
+import { getWalletRouteGateStatus } from "../routes/walletRouteGateStatus";
 import { useWalletSessionState } from "../walletSessionState";
 import { AppShell } from "../components/AppShell";
 
@@ -67,21 +70,26 @@ function PrivateRouteSurface({
 }) {
   const location = useLocation();
   const walletSession = useWalletSessionState();
-  const components = useMemo(() => createAppRouteComponents(routeRetryNonce), [routeRetryNonce]);
+  const routeMetadata = getRouteRuntimeMetadata(location.pathname);
   const routeShowsWalletUi = shouldShowWalletUi(location.pathname);
   const routeNeedsWorkspaceBoot = requiresWorkspaceBoot(location.pathname);
+  const routeIsDashboardShell = location.pathname === "/dashboard";
+  const routeEpoch = useCurrentRouteEpoch(routePath);
+  const walletGateStatus = getWalletRouteGateStatus(routeMetadata.walletRequired, walletSession);
+  const routeWalletGateStatus = routeIsDashboardShell ? "allowed" : walletGateStatus;
+  const routeReady = routeWalletGateStatus === "allowed";
   const dashboardProjectRestoreSnapshot = useDashboardProjectRestoreSnapshot();
   const dashboardWalletSettled = isDashboardWalletRuntimeSettled(dashboardProjectRestoreSnapshot.walletRuntime);
-  const dashboardRestoreEnabled = location.pathname === "/dashboard";
-  const dashboardProjectRestore = useDashboardProjectRestore(routePath, dashboardRestoreEnabled);
+  const dashboardRestoreEnabled = routeIsDashboardShell;
+  const dashboardProjectRestore = useDashboardProjectRestore(routePath, dashboardRestoreEnabled, false);
   const dashboardBootPending = isDashboardBootPending(dashboardProjectRestore, {
     walletProviderMounted: walletSession.providerMounted,
     walletProviderPending: walletSession.providerLoading || !walletSession.providerMounted,
     walletSessionPhase: walletSession.phase,
   });
-  const workspaceReady =
-    location.pathname === "/dashboard" ? !dashboardBootPending && isDashboardWorkspaceReady(dashboardProjectRestore) : true;
-  const routeIsDashboardShell = location.pathname === "/dashboard";
+  const workspaceReady = routeIsDashboardShell
+    ? !dashboardBootPending && isDashboardWorkspaceReady(dashboardProjectRestore)
+    : routeReady;
   const shellFallback =
     routeIsDashboardShell ? (
       <RouteReady
@@ -113,6 +121,7 @@ function PrivateRouteSurface({
           routeUsesPublicChrome={false}
           walletProviderLoading={walletSession.providerLoading}
           walletProviderMounted={walletSession.providerMounted}
+          walletRequiredGateStatus={routeWalletGateStatus}
           walletSessionPhase={walletSession.phase}
           workspaceReadyForRoute={workspaceReady}
         />
@@ -132,7 +141,9 @@ function PrivateRouteSurface({
             walletProviderMounted={walletSession.providerMounted}
             walletProviderPending={walletSession.providerLoading || !walletSession.providerMounted}
             walletSessionPhase={walletSession.phase}
+            routeReady={routeReady}
             walletUiEnabled={
+              routeReady &&
               routeShowsWalletUi &&
               walletSession.providerMounted &&
               !(walletSession.providerLoading || !walletSession.providerMounted) &&
@@ -143,7 +154,11 @@ function PrivateRouteSurface({
           >
             <BuildUpdateBanner />
             <Suspense fallback={null}>
-              <WorkspaceRouteRuntimeEffects enabled={routeNeedsWorkspaceBoot} routePath={routePath} />
+              <WorkspaceRouteRuntimeEffects
+                blockedWalletRequired={!routeIsDashboardShell && routeMetadata.walletRequired && walletGateStatus === "disconnected"}
+                enabled={routeNeedsWorkspaceBoot && (!routeMetadata.walletRequired || routeReady || routeIsDashboardShell)}
+                routePath={routePath}
+              />
             </Suspense>
             {mixedBuildStatus.detected ? (
               <RouteReady routePath={routePath} onReady={onRouteReady}>
@@ -152,9 +167,19 @@ function PrivateRouteSurface({
             ) : (
               <Suspense fallback={<DelayedWorkspaceRestoreFallback />}>
                 <RouteReady routePath={routePath} onReady={onRouteReady} workspaceReady={workspaceReady}>
-                  <ProviderReadinessBarrier routePath={routePath} enabled={routeNeedsWorkspaceBoot}>
-                    <AppRoutes components={components} onRetryRoute={onRetryRoute} routeRetryNonce={routeRetryNonce} />
-                  </ProviderReadinessBarrier>
+                  <WalletRequiredGate
+                    walletRequired={routeIsDashboardShell ? false : routeMetadata.walletRequired}
+                    walletSession={walletSession}
+                  >
+                    <ProviderReadinessBarrier routePath={routePath} enabled={routeNeedsWorkspaceBoot}>
+                      <AppRoutes
+                        components={appRouteComponents}
+                        onRetryRoute={onRetryRoute}
+                        routeEpoch={routeEpoch.routeEpoch}
+                        routeRetryNonce={routeRetryNonce}
+                      />
+                    </ProviderReadinessBarrier>
+                  </WalletRequiredGate>
                 </RouteReady>
               </Suspense>
             )}
@@ -168,6 +193,7 @@ function PrivateRouteSurface({
 export function WorkspaceSurface() {
   const location = useLocation();
   const routePath = `${location.pathname}${location.search}${location.hash}`;
+  ensureCurrentRouteEpoch(routePath);
   const [initialRouteReady, setInitialRouteReady] = useState(false);
   const [bootDismissed, setBootDismissed] = useState(false);
   const [mixedBuildStatus, setMixedBuildStatus] = useState(() => getMixedBuildStatus());

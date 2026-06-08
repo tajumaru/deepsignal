@@ -1,10 +1,9 @@
 import { Link, useLocation } from "react-router-dom";
-import { useEffect, useState, type ComponentType, type ErrorInfo, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type ComponentType, type ErrorInfo, type ReactNode } from "react";
 import type { WalletSessionPhase } from "../../walletSessionState";
 import { retryLazyImport } from "../../lib/lazyRetry";
 import { getBrowserCapabilitiesSnapshot, logRouteLifecycle } from "../../lib/routeDiagnostics";
 import { scheduleIdleTask } from "../../lib/scheduleIdleTask";
-import { useOptionalRpcInfrastructure } from "../../rpcInfrastructure";
 import { OptionalHeaderWidget } from "./OptionalHeaderWidget";
 
 type OptionalHeaderComponentModule = {
@@ -92,6 +91,55 @@ function WalletNavFallback({
   );
 }
 
+function useOptionalHeaderStateLog(
+  event: "optional-header-widget:deferred" | "optional-header-widget:skipped",
+  enabled: boolean,
+  details: {
+    label: string;
+    reason: string;
+    routePath: string;
+    surface?: "mobileDrawer";
+    walletProviderMounted?: boolean;
+    walletProviderPending?: boolean;
+    walletSessionPhase?: WalletSessionPhase;
+  },
+) {
+  const {
+    label,
+    reason,
+    routePath,
+    surface,
+    walletProviderMounted,
+    walletProviderPending,
+    walletSessionPhase,
+  } = details;
+
+  useEffect(() => {
+    if (!enabled) {
+      return;
+    }
+    logRouteLifecycle(event, {
+      label,
+      reason,
+      routePath,
+      surface,
+      walletProviderMounted,
+      walletProviderPending,
+      walletSessionPhase,
+    });
+  }, [
+    enabled,
+    event,
+    label,
+    reason,
+    routePath,
+    surface,
+    walletProviderMounted,
+    walletProviderPending,
+    walletSessionPhase,
+  ]);
+}
+
 export function WalletNavSlot({
   navLabLabel,
   onNavigate,
@@ -106,38 +154,21 @@ export function WalletNavSlot({
   walletUiRequested: boolean;
 }) {
   const location = useLocation();
+  const staticFallback = <WalletNavFallback navLabLabel={navLabLabel} onNavigate={onNavigate} section={section} />;
 
-  if (!walletUiRequested || !walletUiEnabled) {
-    return <WalletNavFallback navLabLabel={navLabLabel} onNavigate={onNavigate} section={section} />;
-  }
+  useOptionalHeaderStateLog("optional-header-widget:skipped", true, {
+    label: "wallet-runtime-nav",
+    reason: !walletUiRequested ? "wallet-ui-not-requested" : walletUiEnabled ? "static-nav" : "wallet-ui-disabled",
+    routePath: location.pathname,
+  });
 
-  return (
-    <OptionalHeaderWidget
-      componentProps={{ mode: "nav", onNavigate, section }}
-      fallback={<WalletNavFallback navLabLabel={navLabLabel} onNavigate={onNavigate} section={section} />}
-      label="wallet-runtime-panel"
-      loader={() =>
-        retryLazyImport(() => import("../WalletRuntimePanel"), "wallet-runtime-panel").then((module) => ({
-          default: module.default as ComponentType<Record<string, unknown>>,
-        }) satisfies OptionalHeaderComponentModule)
-      }
-      onError={(error: unknown, errorInfo: ErrorInfo) => {
-        logRouteLifecycle("wallet-ui-lazy-failure-contained", {
-          label: "wallet-runtime-panel",
-          componentStack: errorInfo.componentStack,
-          error,
-          fatal: false,
-          routePath: location.pathname,
-        });
-      }}
-      resetKey={`wallet-runtime-panel:nav:${section}:${location.pathname}`}
-    />
-  );
+  return staticFallback;
 }
 
 export function WalletConnectSlot({
   fallback,
   interaction = "default",
+  routeReady,
   surface,
   walletProviderMounted,
   walletProviderPending,
@@ -148,6 +179,7 @@ export function WalletConnectSlot({
 }: {
   fallback?: ReactNode;
   interaction?: "default" | "passive";
+  routeReady: boolean;
   surface?: "mobileDrawer";
   walletProviderMounted: boolean;
   walletProviderPending: boolean;
@@ -158,31 +190,70 @@ export function WalletConnectSlot({
 }) {
   const location = useLocation();
   const [retryNonce, setRetryNonce] = useState(0);
+  const walletUiSkipped = !walletUiRequested;
+  const walletUiDeferred =
+    !walletUiSkipped &&
+    (
+      !routeReady ||
+      !walletUiEnabled ||
+      !walletProviderMounted ||
+      walletProviderPending ||
+      walletSessionPhase === "provider_deferred" ||
+      !walletHydrationReady
+    );
+  const deferredReason =
+    !routeReady
+      ? "route-not-ready"
+      : !walletUiEnabled
+      ? "wallet-ui-disabled"
+      : !walletProviderMounted
+        ? "wallet-provider-not-mounted"
+        : walletProviderPending
+          ? "wallet-provider-pending"
+          : walletSessionPhase === "provider_deferred"
+            ? "wallet-provider-deferred"
+            : "wallet-hydration-pending";
+  const walletRuntimePanelLoader = useCallback(
+    () =>
+      retryLazyImport(() => import("../WalletRuntimePanel"), "wallet-runtime-panel").then((module) => ({
+        default: module.default as ComponentType<Record<string, unknown>>,
+      }) satisfies OptionalHeaderComponentModule),
+    [],
+  );
+  const fallbackNode = useMemo(
+    () => <WalletUiUnavailableFallback onRetry={() => setRetryNonce((value) => value + 1)} surface={surface} />,
+    [surface],
+  );
+  useOptionalHeaderStateLog("optional-header-widget:skipped", walletUiSkipped, {
+    label: "wallet-runtime-panel",
+    reason: "wallet-ui-not-requested",
+    routePath: location.pathname,
+    surface,
+  });
+  useOptionalHeaderStateLog("optional-header-widget:deferred", walletUiDeferred, {
+    label: "wallet-runtime-panel",
+    reason: deferredReason,
+    routePath: location.pathname,
+    surface,
+    walletProviderMounted,
+    walletProviderPending,
+    walletSessionPhase,
+  });
 
-  if (!walletUiRequested) {
+  if (walletUiSkipped) {
     return null;
   }
 
-  if (
-    !walletUiEnabled ||
-    !walletProviderMounted ||
-    walletProviderPending ||
-    walletSessionPhase === "provider_deferred" ||
-    !walletHydrationReady
-  ) {
+  if (walletUiDeferred) {
     return <SafeWalletPlaceholder surface={surface} />;
   }
 
   return (
     <OptionalHeaderWidget
       componentProps={{ mode: "connect", surface, fallback, interaction }}
-      fallback={<WalletUiUnavailableFallback onRetry={() => setRetryNonce((value) => value + 1)} surface={surface} />}
+      fallback={fallbackNode}
       label="wallet-runtime-panel"
-      loader={() =>
-        retryLazyImport(() => import("../WalletRuntimePanel"), "wallet-runtime-panel").then((module) => ({
-          default: module.default as ComponentType<Record<string, unknown>>,
-        }) satisfies OptionalHeaderComponentModule)
-      }
+      loader={walletRuntimePanelLoader}
       onError={(error: unknown, errorInfo: ErrorInfo) => {
         logRouteLifecycle("wallet-ui-lazy-failure-contained", {
           label: "wallet-runtime-panel",
@@ -197,15 +268,27 @@ export function WalletConnectSlot({
   );
 }
 
-export function DeferredNetworkMenu({ drawerFallback = false }: { drawerFallback?: boolean }) {
+export function DeferredNetworkMenu({ drawerFallback = false, routeReady }: { drawerFallback?: boolean; routeReady: boolean }) {
   const [ready, setReady] = useState(false);
   const [retryNonce, setRetryNonce] = useState(0);
-  const rpcInfrastructure = useOptionalRpcInfrastructure();
   const location = useLocation();
+  const networkMenuDeferred = !routeReady || !ready;
+  const networkMenuLoader = useCallback(
+    () =>
+      retryLazyImport(() => import("../NetworkMenu"), "network-menu").then((module) => ({
+        default: module.NetworkMenu as ComponentType<Record<string, unknown>>,
+      }) satisfies OptionalHeaderComponentModule),
+    [],
+  );
 
   useEffect(() => scheduleIdleTask(() => setReady(true), getBrowserCapabilitiesSnapshot().mobileSafari ? 3200 : 2200), []);
+  useOptionalHeaderStateLog("optional-header-widget:deferred", networkMenuDeferred, {
+    label: "network-menu",
+    reason: !routeReady ? "route-not-ready" : "idle-deferred",
+    routePath: location.pathname,
+  });
 
-  if (!ready || !rpcInfrastructure) {
+  if (networkMenuDeferred) {
     if (drawerFallback) {
       return (
         <div className="mobile-drawer-status-line" aria-live="polite">
@@ -234,11 +317,7 @@ export function DeferredNetworkMenu({ drawerFallback = false }: { drawerFallback
     <OptionalHeaderWidget
       fallback={fallback}
       label="network-menu"
-      loader={() =>
-        retryLazyImport(() => import("../NetworkMenu"), "network-menu").then((module) => ({
-          default: module.NetworkMenu as ComponentType<Record<string, unknown>>,
-        }) satisfies OptionalHeaderComponentModule)
-      }
+      loader={networkMenuLoader}
       onError={(error: unknown, errorInfo: ErrorInfo) => {
         logRouteLifecycle("wallet-ui-lazy-failure-contained", {
           label: "network-menu",

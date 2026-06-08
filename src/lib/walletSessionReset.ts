@@ -4,21 +4,33 @@ const DEEPSIGNAL_WALLET_STORAGE_KEYS = [
   "deepsignal:selected-wallet",
   "deepsignal:wallet-session",
   "deepsignal:wallet-reset",
+  "deepsignal:wallet-connect-lock",
+  "deepsignal:last-wallet-connect-failure",
 ];
 const WALLET_RESET_RELOAD_SESSION_KEY = "deepsignal:wallet-session-reset-reload";
 
-function getLocalStorageKeys() {
-  if (typeof window === "undefined") {
-    return [];
-  }
-
+function getStorageKeys(storage: Storage) {
   try {
-    return Array.from({ length: window.localStorage.length }, (_value, index) => window.localStorage.key(index)).filter(
+    return Array.from({ length: storage.length }, (_value, index) => storage.key(index)).filter(
       (key): key is string => Boolean(key),
     );
   } catch {
     return [];
   }
+}
+
+function getLocalStorageKeys() {
+  if (typeof window === "undefined") {
+    return [];
+  }
+  return getStorageKeys(window.localStorage);
+}
+
+function getSessionStorageKeys() {
+  if (typeof window === "undefined") {
+    return [];
+  }
+  return getStorageKeys(window.sessionStorage);
 }
 
 function isDeepSignalWalletStorageKey(key: string) {
@@ -46,6 +58,13 @@ export function clearWalletSessionStorage() {
         return;
       }
       window.localStorage.removeItem(key);
+      removedKeys.push(key);
+    });
+    getSessionStorageKeys().forEach((key) => {
+      if (!isDeepSignalWalletStorageKey(key) && key !== WALLET_RESET_RELOAD_SESSION_KEY) {
+        return;
+      }
+      window.sessionStorage.removeItem(key);
       removedKeys.push(key);
     });
   } catch (error) {
@@ -106,4 +125,3 @@ export function reloadPageOnceForWalletReset() {
   window.location.reload();
   return true;
 }
-

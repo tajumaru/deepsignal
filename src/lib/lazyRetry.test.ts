@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { MissingLazyRouteExportError, resolveLazyRouteModule, retryLazyImport } from "./lazyRetry";
+import { MissingLazyRouteExportError, StaleLazyImportEpochError, resolveLazyRouteModule, retryLazyImport } from "./lazyRetry";
+import { setCurrentRouteEpoch } from "../routes/routeEpoch";
 
 function NamedPublicFormPage() {
   return null;
@@ -90,5 +91,45 @@ describe("resolveLazyRouteModule", () => {
     }, "anonymous");
 
     expect(loaded).toEqual({ ok: true, attempts: 4 });
+  });
+
+  it("dedupes repeated lazy import calls while the first request is still pending", async () => {
+    let resolveImport: ((value: { ok: true }) => void) | null = null;
+    const loader = vi.fn(
+      () =>
+        new Promise<{ ok: true }>((resolve) => {
+          resolveImport = resolve;
+        }),
+    );
+
+    const firstPromise = retryLazyImport(loader, "route-dedupe-test");
+    const secondPromise = retryLazyImport(loader, "route-dedupe-test");
+
+    expect(loader).toHaveBeenCalledTimes(1);
+
+    expect(resolveImport).not.toBeNull();
+    resolveImport!({ ok: true });
+
+    await expect(firstPromise).resolves.toEqual({ ok: true });
+    await expect(secondPromise).resolves.toEqual({ ok: true });
+  });
+
+  it("stops retrying a timed-out lazy import after the route epoch changes", async () => {
+    vi.useFakeTimers();
+    try {
+      setCurrentRouteEpoch("/my-responses");
+      const loader = vi.fn(() => new Promise<never>(() => undefined));
+
+      const importPromise = retryLazyImport(loader, "route-timeout-test");
+      void importPromise.catch(() => undefined);
+
+      setCurrentRouteEpoch("/explore");
+      await vi.advanceTimersByTimeAsync(12_500);
+
+      await expect(importPromise).rejects.toBeInstanceOf(StaleLazyImportEpochError);
+      expect(loader).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

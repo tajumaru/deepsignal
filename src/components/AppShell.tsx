@@ -18,7 +18,6 @@ import { buildInfo } from "../lib/buildInfo";
 import { isSignalInboxPath } from "../lib/navigation";
 import { getBrowserCapabilitiesSnapshot, logRouteLifecycle, setDeepSignalDebugReadiness } from "../lib/routeDiagnostics";
 import { scheduleIdleTask } from "../lib/scheduleIdleTask";
-import { useOptionalRpcInfrastructure } from "../rpcInfrastructure";
 import type { WalletSessionPhase } from "../walletSessionState";
 
 const MOBILE_DRAWER_SWIPE_THRESHOLD_PX = 60;
@@ -30,6 +29,7 @@ const MOBILE_VIEWPORT_QUERY = "(max-width: 900px)";
 interface AppShellProps extends PropsWithChildren {
   chrome?: "full" | "public";
   passiveHeaderWallet?: boolean;
+  routeReady?: boolean;
   walletProviderMounted?: boolean;
   walletProviderPending?: boolean;
   walletSessionPhase?: WalletSessionPhase;
@@ -113,19 +113,6 @@ function MobileAppBottomNav({ showComposeShortcut }: MobileAppBottomNavProps) {
 }
 
 
-function MobileDrawerNetworkStatus() {
-  const rpcInfrastructure = useOptionalRpcInfrastructure();
-  const providerLabel = rpcInfrastructure?.usingTatum ? rpcInfrastructure.providerLabel : "Sui Fullnode";
-  const networkLabel = rpcInfrastructure?.network ?? "mainnet";
-
-  return (
-    <div className="mobile-drawer-status-line" aria-live="polite">
-      <span className="mobile-drawer-status-dot" aria-hidden="true" />
-      <span>{providerLabel} / {networkLabel}</span>
-    </div>
-  );
-}
-
 function MobileDrawerWalletStandbyStatus() {
   const { t } = useI18n();
 
@@ -141,6 +128,7 @@ export function AppShell({
   children,
   chrome = "full",
   passiveHeaderWallet = false,
+  routeReady = false,
   walletProviderMounted = false,
   walletProviderPending = true,
   walletSessionPhase = "provider_deferred",
@@ -564,10 +552,11 @@ export function AppShell({
         <div className="topbar-actions desktop-topbar-actions">
           {publicChrome ? null : (
             <div className="topbar-infra">
-              <DeferredNetworkMenu />
+              <DeferredNetworkMenu routeReady={routeReady} />
               <WalletConnectSlot
                 fallback={walletConnectFallback}
                 interaction={passiveHeaderWallet ? "passive" : "default"}
+                routeReady={routeReady}
                 walletProviderMounted={walletProviderMounted}
                 walletProviderPending={walletProviderPending}
                 walletSessionPhase={walletSessionPhase}
@@ -666,14 +655,14 @@ export function AppShell({
                   <div className="mobile-drawer-utility-group">
                     <div className="mobile-drawer-utility-card mobile-drawer-status-card">
                       <span className="mobile-drawer-utility-label">Network</span>
-                      <MobileDrawerNetworkStatus />
-                      <DeferredNetworkMenu drawerFallback />
+                      <DeferredNetworkMenu drawerFallback routeReady={routeReady} />
                     </div>
                     <div className="mobile-drawer-utility-card mobile-drawer-status-card">
                       <span className="mobile-drawer-utility-label">Wallet</span>
                       <WalletConnectSlot
                         fallback={mobileWalletFallback}
                         interaction={passiveHeaderWallet ? "passive" : "default"}
+                        routeReady={routeReady}
                         surface="mobileDrawer"
                         walletProviderMounted={walletProviderMounted}
                         walletProviderPending={walletProviderPending}

@@ -3,12 +3,14 @@ import "../styles/components/wallet-network.css";
 import { useSuiWallet } from "../hooks/useSuiWallet";
 import { useI18n } from "../i18n";
 import { retryLazyImport } from "../lib/lazyRetry";
-import { getBrowserCapabilitiesSnapshot, logRouteLifecycle } from "../lib/routeDiagnostics";
+import { copyRouteLifecycleDiagnosticsToClipboard, getBrowserCapabilitiesSnapshot, logRouteLifecycle } from "../lib/routeDiagnostics";
 import { shortAddress } from "../lib/sui";
 import { hadPriorWalletConnectChunkFailure, reloadWalletConnectRuntimeForRetry } from "../lib/walletConnectRuntimeRecovery";
 import { resetWalletSession } from "../lib/walletSessionReset";
 import { useRouteRecoveryState } from "../lib/routeRecoveryState";
 import { useWalletRuntimeControls } from "../walletStatus";
+import type { WalletConnectFailureState } from "../walletStatus";
+import { useWalletProviderReset } from "../walletProviderReset";
 import { useWalletProviderRuntime } from "./WalletSurfaceRuntime";
 import type { WalletConnectRuntimeStatus } from "./WalletRuntimePanel";
 import { WalletStatus } from "./wallet/WalletStatus";
@@ -110,6 +112,7 @@ export function WalletConnectSurface({
   const { t } = useI18n();
   const wallet = useSuiWallet();
   const { beginManualConnect, cancelManualConnect, clearConnectFailure, suppressAutoRestore } = useWalletRuntimeControls();
+  const { remountWalletProvider } = useWalletProviderReset();
   const walletRuntime = useWalletProviderRuntime();
   const routeRecovery = useRouteRecoveryState();
   const [connectRequested, setConnectRequested] = useState(false);
@@ -120,6 +123,7 @@ export function WalletConnectSurface({
   const [resetPending, setResetPending] = useState(false);
   const [walletConnectImportFailed, setWalletConnectImportFailed] = useState(false);
   const [walletConnectImportResetNonce, setWalletConnectImportResetNonce] = useState(0);
+  const [connectFailureOverride, setConnectFailureOverride] = useState<WalletConnectFailureState | null>(null);
   const manualConnectLockRef = useRef(false);
   const shellRef = useRef<HTMLDivElement | null>(null);
   const previousDiagnosticsRef = useRef<{
@@ -146,6 +150,8 @@ export function WalletConnectSurface({
   const waitingForProviderOpen = !walletRuntime.loaded && walletRuntime.loading && hasPendingConnectRequest;
   const hadChunkPreloadFailure = hadPriorWalletConnectChunkFailure();
   const routeRecoveryActive = routeRecovery.phase !== "idle";
+  const displayedConnectFailure = connectFailureOverride ?? wallet.lastConnectFailure;
+  const showInlineSlushRecovery = Boolean(displayedConnectFailure?.requiresSlushRecovery && !connectModalOpen);
   const showStandbyState =
     waitingForProviderOpen ||
     wallet.status === "booting" ||
@@ -171,8 +177,30 @@ export function WalletConnectSurface({
           cancelManualConnect();
           suppressAutoRestore();
           clearConnectFailure();
+          setConnectFailureOverride(null);
         },
       });
+    } finally {
+      setResetPending(false);
+    }
+  }
+
+  async function handleHardResetWalletSession() {
+    setResetPending(true);
+    try {
+      await resetWalletSession({
+        onBeforeReload: () => {
+          resetConnectRequest();
+          cancelManualConnect();
+          suppressAutoRestore();
+          clearConnectFailure();
+          setConnectFailureOverride(null);
+          setWalletConnectImportFailed(false);
+          setWalletConnectImportResetNonce((value) => value + 1);
+        },
+        disconnectWallet: wallet.disconnect,
+      });
+      remountWalletProvider();
     } finally {
       setResetPending(false);
     }
@@ -199,6 +227,7 @@ export function WalletConnectSurface({
 
     beginManualConnect();
     clearConnectFailure();
+    setConnectFailureOverride(null);
 
     if (wallet.isRestoringConnection) {
       suppressAutoRestore();
@@ -231,7 +260,18 @@ export function WalletConnectSurface({
     setConnectModalOpen(true);
   }
 
+  function handleConnectFailureRetry() {
+    resetConnectRequest();
+    cancelManualConnect();
+    clearConnectFailure();
+    setConnectFailureOverride(null);
+    void handleManualConnectRequest();
+  }
+
   function handleConnectModalOpenChange(open: boolean) {
+    if (!open && !accountAddress) {
+      return;
+    }
     if (connectModalOpen !== open) {
       setConnectModalOpen(open);
     }
@@ -299,12 +339,12 @@ export function WalletConnectSurface({
     };
 
     if (wallet.status === "connected") {
+      setConnectFailureOverride(null);
       resetConnectRequest();
       return;
     }
 
-    if (wallet.lastConnectFailure) {
-      resetConnectRequest();
+    if (displayedConnectFailure) {
       cancelManualConnect();
       return;
     }
@@ -328,7 +368,7 @@ export function WalletConnectSurface({
     pendingConnectOpen,
     resetConnectRequest,
     runtimeStatus?.walletProviderState,
-    wallet.lastConnectFailure,
+    displayedConnectFailure,
     wallet.status,
     walletConnectedState,
     walletRuntime.loaded,
@@ -447,6 +487,47 @@ export function WalletConnectSurface({
     );
   }
 
+  if (showInlineSlushRecovery) {
+    return (
+      <div className={shellClassName}>
+        <div className="wallet-connect-direct panel">
+          <div className="wallet-connect-direct-copy">
+            <strong>Slush connection needs reset</strong>
+            <span>
+              Slush could not register this dApp connection. Open Slush, remove the old DeepSignal connection, then try again.
+            </span>
+          </div>
+          <div className="wallet-connect-actions">
+            <button
+              type="button"
+              className="wallet-connect-trigger"
+              onClick={handleConnectFailureRetry}
+              disabled={wallet.isConnecting || routeRecoveryActive || resetPending}
+            >
+              Retry
+            </button>
+            <button
+              type="button"
+              className="wallet-connect-dismiss"
+              onClick={() => void handleHardResetWalletSession()}
+              disabled={resetPending}
+            >
+              {resetPending ? "Resetting..." : "Reset wallet session"}
+            </button>
+            <button
+              type="button"
+              className="wallet-connect-dismiss"
+              onClick={() => void copyRouteLifecycleDiagnosticsToClipboard().catch(() => undefined)}
+              disabled={resetPending}
+            >
+              Copy diagnostics
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (!walletRuntime.loaded) {
     return (
       <div className={shellClassName}>
@@ -525,9 +606,9 @@ export function WalletConnectSurface({
               </button>
             ) : null}
           </div>
-          {wallet.lastConnectFailure?.userMessage ? (
+          {displayedConnectFailure?.userMessage ? (
             <p className="wallet-connect-error-copy" role="alert">
-              {wallet.lastConnectFailure.userMessage}
+              {displayedConnectFailure.userMessage}
             </p>
           ) : null}
           {routeRecovery.phase === "css_failed" ? (
@@ -593,7 +674,18 @@ export function WalletConnectSurface({
             surface={surface}
             connectModalOpen={connectModalOpen}
             onConnectModalOpenChange={handleConnectModalOpenChange}
+            onConnectModalCancel={() => {
+              resetConnectRequest();
+              cancelManualConnect();
+            }}
+            onConnectAttemptFailure={(failure) => {
+              setConnectFailureOverride(failure);
+            }}
+            onConnectAttemptSuccess={() => {
+              setConnectFailureOverride(null);
+            }}
             onManualConnectRequest={handleManualConnectRequest}
+            connectFailure={displayedConnectFailure}
           />
         )}
       </Suspense>

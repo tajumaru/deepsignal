@@ -80,11 +80,17 @@ declare global {
         message: string;
         chunkUrl?: string | null;
         resolvedChunkUrl?: string | null;
+        importTargetUrl?: string | null;
+        expectedRouteChunkUrl?: string | null;
+        evaluationErrorUrl?: string | null;
+        transitiveStackUrl?: string | null;
         buildVersion?: string;
         buildTime?: string;
         gitHash?: string;
         attempt?: number;
+        navigationId?: number;
         routePath?: string;
+        routeEpoch?: string;
         routeId?: string;
         elapsedMs?: number;
         userAgent?: string;
@@ -396,7 +402,9 @@ export function recordFailedImport(
   details?: {
     category?: "chunkLoad" | "missingExport" | "runtime" | "timeout";
     attempt?: number;
+    navigationId?: number;
     routePath?: string;
+    routeEpoch?: string;
     routeId?: string;
     elapsedMs?: number;
     userAgent?: string;
@@ -409,6 +417,10 @@ export function recordFailedImport(
     moduleKeys?: string[];
     resolvedExport?: "default" | string | "missing";
     resolvedChunkUrl?: string | null;
+    importTargetUrl?: string | null;
+    expectedRouteChunkUrl?: string | null;
+    evaluationErrorUrl?: string | null;
+    transitiveStackUrl?: string | null;
     contained?: boolean;
     fatal?: boolean;
     fetchStatus?: number;

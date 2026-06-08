@@ -1,13 +1,22 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { WalletConnectSurface } from "./WalletConnectSurface";
 
 const {
+  copyRouteLifecycleDiagnosticsToClipboardSpy,
+  remountWalletProviderSpy,
+  resetWalletSessionSpy,
   walletRuntimeControls,
   routeDiagnosticsState,
   routeRecoveryState,
   walletRuntimeRecoveryState,
 } = vi.hoisted(() => ({
+  copyRouteLifecycleDiagnosticsToClipboardSpy: vi.fn(async () => true),
+  remountWalletProviderSpy: vi.fn(),
+  resetWalletSessionSpy: vi.fn(async (options?: { onBeforeReload?: () => void }) => {
+    options?.onBeforeReload?.();
+    return { disconnectError: null, removedKeys: [] };
+  }),
   walletRuntimeControls: {
     beginManualConnect: vi.fn(),
     cancelManualConnect: vi.fn(),
@@ -44,7 +53,13 @@ const walletState = {
   isRestoringConnection: false,
   connectLockState: "idle" as "idle" | "manual_connecting" | "auto_restoring",
   connectMode: null as null | "manual" | "autoRestore",
-  lastConnectFailure: null as null | { message: string; source: string; requiresSlushRecovery: boolean; userMessage: string | null },
+  lastConnectFailure: null as null | {
+    classification: string;
+    message: string;
+    source: string;
+    requiresSlushRecovery: boolean;
+    userMessage: string | null;
+  },
   disconnect: async () => undefined,
 };
 
@@ -77,6 +92,7 @@ vi.mock("./WalletSurfaceRuntime", () => ({
 }));
 
 vi.mock("../lib/routeDiagnostics", () => ({
+  copyRouteLifecycleDiagnosticsToClipboard: copyRouteLifecycleDiagnosticsToClipboardSpy,
   getBrowserCapabilitiesSnapshot: () => routeDiagnosticsState,
   logRouteLifecycle: vi.fn(),
 }));
@@ -90,6 +106,16 @@ vi.mock("../lib/walletConnectRuntimeRecovery", () => ({
   reloadWalletConnectRuntimeForRetry: walletRuntimeRecoveryState.reloadWalletConnectRuntimeForRetry,
 }));
 
+vi.mock("../lib/walletSessionReset", () => ({
+  resetWalletSession: resetWalletSessionSpy,
+}));
+
+vi.mock("../walletProviderReset", () => ({
+  useWalletProviderReset: () => ({
+    remountWalletProvider: remountWalletProviderSpy,
+  }),
+}));
+
 afterEach(() => {
   walletState.status = "disconnected";
   walletState.isConnecting = false;
@@ -101,6 +127,9 @@ afterEach(() => {
   walletRuntimeState.failed = false;
   walletRuntimeState.loading = false;
   walletRuntimeState.requestLoad.mockClear();
+  copyRouteLifecycleDiagnosticsToClipboardSpy.mockClear();
+  remountWalletProviderSpy.mockClear();
+  resetWalletSessionSpy.mockClear();
   walletRuntimeControls.beginManualConnect.mockClear();
   walletRuntimeControls.cancelManualConnect.mockClear();
   walletRuntimeControls.clearConnectFailure.mockClear();
@@ -256,5 +285,35 @@ describe("WalletConnectSurface", () => {
     expect(walletRuntimeControls.cancelManualConnect).toHaveBeenCalledTimes(0);
     expect(walletRuntimeControls.clearConnectFailure).toHaveBeenCalledTimes(0);
     expect(walletRuntimeControls.suppressAutoRestore).toHaveBeenCalledTimes(0);
+  });
+
+  it("shows the Slush hard recovery controls and remounts the wallet provider only on explicit reset", async () => {
+    walletState.lastConnectFailure = {
+      classification: "slush_dapp_registration_failed",
+      message: "Failed to add dApp connection.",
+      source: "slush_injected_provider",
+      requiresSlushRecovery: true,
+      userMessage: "Slush could not register this dApp connection. Open Slush, remove the old DeepSignal connection, then try again.",
+    };
+
+    render(<WalletConnectSurface compact context="adminGate" />);
+
+    expect(
+      screen.getByText("Slush could not register this dApp connection. Open Slush, remove the old DeepSignal connection, then try again."),
+    ).toBeInTheDocument();
+    walletRuntimeControls.cancelManualConnect.mockClear();
+    walletRuntimeControls.clearConnectFailure.mockClear();
+    walletRuntimeControls.suppressAutoRestore.mockClear();
+    fireEvent.click(screen.getByRole("button", { name: "Copy diagnostics" }));
+    expect(copyRouteLifecycleDiagnosticsToClipboardSpy).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole("button", { name: "Reset wallet session" }));
+
+    await waitFor(() => expect(resetWalletSessionSpy).toHaveBeenCalledTimes(1));
+    expect(walletRuntimeControls.cancelManualConnect).toHaveBeenCalledTimes(1);
+    expect(walletRuntimeControls.clearConnectFailure).toHaveBeenCalledTimes(1);
+    expect(walletRuntimeControls.suppressAutoRestore).toHaveBeenCalledTimes(1);
+    expect(remountWalletProviderSpy).toHaveBeenCalledTimes(1);
+    expect(walletRuntimeState.requestLoad).toHaveBeenCalledTimes(0);
   });
 });

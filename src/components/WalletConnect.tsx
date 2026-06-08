@@ -9,7 +9,11 @@ interface WalletConnectProps {
   surface?: "default" | "mobileDrawer";
   connectModalOpen?: boolean;
   onConnectModalOpenChange?: (open: boolean) => void;
+  onConnectModalCancel?: () => void;
+  onConnectAttemptFailure?: (failure: import("../walletStatus").WalletConnectFailureState) => void;
+  onConnectAttemptSuccess?: () => void;
   onManualConnectRequest?: () => Promise<void> | void;
+  connectFailure?: import("../walletStatus").WalletConnectFailureState | null;
 }
 
 export function WalletConnect({
@@ -17,7 +21,11 @@ export function WalletConnect({
   surface = "default",
   connectModalOpen = false,
   onConnectModalOpenChange,
+  onConnectModalCancel,
+  onConnectAttemptFailure,
+  onConnectAttemptSuccess,
   onManualConnectRequest,
+  connectFailure = null,
 }: WalletConnectProps) {
   const { t } = useI18n();
   const wallet = useSuiWallet();
@@ -92,7 +100,11 @@ export function WalletConnect({
             compact={compact}
             connectModalOpen={connectModalOpen}
             onConnectModalOpenChange={onConnectModalOpenChange}
+            onConnectModalCancel={onConnectModalCancel}
+            onConnectAttemptFailure={onConnectAttemptFailure}
+            onConnectAttemptSuccess={onConnectAttemptSuccess}
             onManualConnectRequest={onManualConnectRequest}
+            connectFailure={connectFailure}
           />
         </div>
       </div>

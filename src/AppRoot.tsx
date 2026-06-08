@@ -5,6 +5,7 @@ import App from "./App";
 import { I18nProvider } from "./i18n";
 import { setDeepSignalDebugReadiness } from "./lib/routeDiagnostics";
 import { queryClient } from "./queryClient";
+import { getRouteRuntimeMetadata } from "./routes/routeRuntimePolicy";
 
 const PrivateAppProviders = lazy(() =>
   import("./PrivateAppProviders").then((module) => ({
@@ -34,15 +35,7 @@ function shouldUsePrivateProviders(routePath: string) {
   if (routePath === "/") {
     return false;
   }
-  if (routePath === "/troubleshooting") {
-    return false;
-  }
-  return !(
-    routePath.startsWith("/f/") ||
-    routePath.startsWith("/roadmap/") ||
-    routePath.startsWith("/m/") ||
-    routePath.startsWith("/auth/zklogin/")
-  );
+  return !getRouteRuntimeMetadata(routePath).publicRoute;
 }
 
 function RouteAwareProviders({ children }: { children: ReactNode }) {

@@ -1,4 +1,4 @@
-import { Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Suspense, useEffect, useRef, useState, type ReactNode } from "react";
 import { useLocation } from "react-router-dom";
 import { BuildUpdateBanner } from "../components/system/BuildUpdateBanner";
 import { AppBootRuntime } from "../AppBootRuntime";
@@ -6,7 +6,8 @@ import { useBootOverlay, InitialBootReady } from "../bootstrap/useBootOverlay";
 import { getMixedBuildStatus, recordBuildAsset, recoverFromMixedBuildAssets } from "../lib/buildAssetDiagnostics";
 import { logRouteLifecycle } from "../lib/routeDiagnostics";
 import { PublicAppRoutes } from "../routes/PublicAppRoutes";
-import { createPublicRouteComponents } from "../routes/publicRouteComponents";
+import { publicRouteComponents } from "../routes/publicRouteComponents";
+import { ensureCurrentRouteEpoch } from "../routes/routeEpoch";
 import { DelayedWorkspaceRestoreFallback } from "../routes/ProviderReadinessBarrier";
 import { MixedBuildRecoveryScreen, RouteErrorBoundary } from "../routes/RouteErrorBoundary";
 import { getRouteId } from "../routes/routeDiagnostics";
@@ -58,7 +59,6 @@ function PublicRouteSurface({
   routeRetryNonce: number;
   walletSession: WalletSessionState;
 }) {
-  const components = useMemo(() => createPublicRouteComponents(routeRetryNonce), [routeRetryNonce]);
   const mountIdRef = useRef(`public-route-${Math.round(performance.now())}`);
   const renderCountRef = useRef(0);
   const initialRouteLifecycleRef = useRef({
@@ -113,7 +113,7 @@ function PublicRouteSurface({
         ) : (
           <Suspense fallback={<DelayedWorkspaceRestoreFallback />}>
             <RouteReady routePath={routePath} onReady={onRouteReady}>
-              <PublicAppRoutes components={components} />
+              <PublicAppRoutes components={publicRouteComponents} />
             </RouteReady>
           </Suspense>
         )}
@@ -126,6 +126,7 @@ export function PublicChromeSurface() {
   const location = useLocation();
   const walletSession = useWalletSessionState();
   const routePath = `${location.pathname}${location.search}${location.hash}`;
+  ensureCurrentRouteEpoch(routePath);
   const [initialRouteReady, setInitialRouteReady] = useState(false);
   const [bootDismissed, setBootDismissed] = useState(false);
   const [mixedBuildStatus, setMixedBuildStatus] = useState(() => getMixedBuildStatus());
@@ -168,6 +169,7 @@ export function PublicChromeSurface() {
           routeUsesPublicChrome={true}
           walletProviderLoading={walletSession.providerLoading}
           walletProviderMounted={walletSession.providerMounted}
+          walletRequiredGateStatus="allowed"
           walletSessionPhase={walletSession.phase}
           workspaceReadyForRoute={true}
         />

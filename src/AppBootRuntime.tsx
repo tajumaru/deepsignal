@@ -36,7 +36,15 @@ function shouldPrefetchAdminWorkspace(pathname: string) {
   return isDesktopViewport && document.visibilityState === "visible";
 }
 
-export function WorkspaceRouteRuntimeEffects({ enabled, routePath }: { enabled: boolean; routePath: string }) {
+export function WorkspaceRouteRuntimeEffects({
+  blockedWalletRequired = false,
+  enabled,
+  routePath,
+}: {
+  blockedWalletRequired?: boolean;
+  enabled: boolean;
+  routePath: string;
+}) {
   const dashboardProjectRestore = useDashboardProjectRestoreSnapshot();
   const dashboardShellRoute = routePath === "/dashboard" || routePath.startsWith("/dashboard?");
   const dashboardBootPending = isDashboardBootPending(dashboardProjectRestore);
@@ -45,7 +53,8 @@ export function WorkspaceRouteRuntimeEffects({ enabled, routePath }: { enabled: 
     if (!enabled) {
       setDeepSignalDebugReadiness({
         routeProviderGuard: "deferred",
-        workspaceProjectProvider: "deferred",
+        workspaceProjectProvider: blockedWalletRequired ? "blocked_wallet_required" : "deferred",
+        projectRestoreState: blockedWalletRequired ? "blocked_wallet_required" : undefined,
         storageProvider: "deferred",
         storageNotice: null,
       });
@@ -84,6 +93,7 @@ export function WorkspaceRouteRuntimeEffects({ enabled, routePath }: { enabled: 
     dashboardProjectRestore.state,
     dashboardShellRoute,
     enabled,
+    blockedWalletRequired,
   ]);
 
   useEffect(() => {
@@ -120,6 +130,7 @@ export function AppBootRuntime({
   routeUsesPublicChrome,
   walletProviderLoading,
   walletProviderMounted,
+  walletRequiredGateStatus,
   walletSessionPhase,
   workspaceReadyForRoute,
 }: {
@@ -135,6 +146,7 @@ export function AppBootRuntime({
   routeUsesPublicChrome: boolean;
   walletProviderLoading: boolean;
   walletProviderMounted: boolean;
+  walletRequiredGateStatus: "allowed" | "disconnected" | "provider_pending";
   walletSessionPhase: string;
   workspaceReadyForRoute: boolean;
 }) {
@@ -162,6 +174,18 @@ export function AppBootRuntime({
   }, [workspaceReadyForRoute]);
 
   useEffect(() => {
+    if (pathname !== "/dashboard") {
+      return;
+    }
+    setDeepSignalDebugReadiness({
+      projectRestoreState: walletRequiredGateStatus === "disconnected" ? "blocked_wallet_required" : undefined,
+    });
+  }, [pathname, walletRequiredGateStatus]);
+
+  useEffect(() => {
+    if (pathname !== "/dashboard" || walletRequiredGateStatus !== "allowed") {
+      return;
+    }
     if (pathname !== "/dashboard" || dashboardWalletSettled) {
       return;
     }
@@ -187,11 +211,12 @@ export function AppBootRuntime({
     routePath,
     walletProviderLoading,
     walletProviderMounted,
+    walletRequiredGateStatus,
     walletSessionPhase,
   ]);
 
   useEffect(() => {
-    if (pathname !== "/dashboard" || workspaceReadyForRoute) {
+    if (pathname !== "/dashboard" || walletRequiredGateStatus !== "allowed" || workspaceReadyForRoute) {
       return;
     }
     logRouteLifecycle("dashboard-gate-blocked", {
@@ -213,6 +238,7 @@ export function AppBootRuntime({
     routePath,
     walletProviderLoading,
     walletProviderMounted,
+    walletRequiredGateStatus,
     walletSessionPhase,
     workspaceReadyForRoute,
   ]);

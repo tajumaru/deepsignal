@@ -1,14 +1,12 @@
-import { Component, useCallback, useEffect, useRef, useState, type ErrorInfo, type ReactNode } from "react";
+import { Component, useEffect, type ErrorInfo, type ReactNode } from "react";
 import { Navigate, Route, Routes, useLocation, useParams } from "react-router-dom";
 import { DashboardRecoveryPanel } from "../components/DashboardRecoveryPanel";
 import { DashboardShellFirstPanel } from "../components/DashboardShellFirstPanel";
 import { WalrusRuntimeSurface } from "../components/WalrusRuntimeSurface";
-import { WalletSurface } from "../components/WalletSurface";
 import { useWalletProviderRuntime } from "../components/WalletSurfaceRuntime";
 import { getChunkFailureUrl } from "../lib/chunkLoadRecovery";
 import {
   isDashboardBootPending,
-  markDashboardWalletImportFailed,
   markDashboardWalletImportReady,
   markDashboardWalletImportSkipped,
   markDashboardWalletImportStarted,
@@ -41,63 +39,6 @@ function WithWalrusRuntime({ children }: { children: ReactNode }) {
     return <>{children}</>;
   }
   return <WalrusRuntimeSurface>{children}</WalrusRuntimeSurface>;
-}
-
-function WithDeferredWalletRuntime({ children, onRetry }: { children: ReactNode; onRetry?: () => void }) {
-  const [walletRetryNonce, setWalletRetryNonce] = useState(0);
-  const silentRetryScheduledRef = useRef(false);
-  const routePath = typeof window === "undefined" ? "/dashboard" : window.location.hash?.replace(/^#/, "") || "/dashboard";
-
-  const handleRetry = useCallback(() => {
-    setWalletRetryNonce((value) => value + 1);
-    onRetry?.();
-  }, [onRetry]);
-
-  const handleWalletImportSlow = useCallback(() => {
-    if (silentRetryScheduledRef.current) {
-      return;
-    }
-    silentRetryScheduledRef.current = true;
-    logRouteLifecycle("provider:wallet-import-silent-retry-scheduled", {
-      reason: "dashboard-wallet-runtime-slow",
-      routePath,
-      retryKey: walletRetryNonce,
-    });
-    window.setTimeout(() => {
-      logRouteLifecycle("provider:wallet-import-silent-retry", {
-        reason: "dashboard-wallet-runtime-slow",
-        routePath,
-        retryKey: walletRetryNonce + 1,
-      });
-      setWalletRetryNonce((value) => value + 1);
-    }, 750);
-  }, [routePath, walletRetryNonce]);
-
-  const handleWalletImportFailure = useCallback(
-    (details: { buildVersion: string; mobileSafari: boolean; retryCount: number; retryKey: string | number; routePath: string }) => {
-      markDashboardWalletImportFailed(routePath);
-      logRouteLifecycle("dashboard:wallet-runtime-fallback-render", {
-        ...details,
-        routePath,
-        recoveryScope: "wallet-only",
-      });
-    },
-    [routePath],
-  );
-
-  return (
-    <WalletSurface
-      fallback={<DashboardShellFirstPanel onRetryWalletRuntime={handleRetry} routePath={routePath} />}
-      onImportFailure={handleWalletImportFailure}
-      onImportSlow={handleWalletImportSlow}
-      onImportStart={() => markDashboardWalletImportStarted(routePath)}
-      onImportSuccess={() => markDashboardWalletImportReady(routePath)}
-      requestOnMount
-      retryKey={walletRetryNonce}
-    >
-      {children}
-    </WalletSurface>
-  );
 }
 
 type DashboardRouteBoundaryProps = {
@@ -172,24 +113,9 @@ class DashboardRouteBoundary extends Component<DashboardRouteBoundaryProps, Dash
   }
 }
 
-function DashboardRouteElement({
-  AdminDashboardPage,
-  onRetryRoute,
-  routeRetryNonce,
-  routePath,
-}: {
-  AdminDashboardPage: AppRouteComponents["AdminDashboardPage"];
-  onRetryRoute?: () => void;
-  routeRetryNonce?: number;
-  routePath: string;
-}) {
-  const restoreSnapshot = useDashboardProjectRestoreSnapshot();
+function DashboardWalletRuntimeObserver({ routePath }: { routePath: string }) {
   const walletSession = useWalletSessionState();
-  const restorePending = isDashboardBootPending(restoreSnapshot, {
-    walletProviderMounted: walletSession.providerMounted,
-    walletProviderPending: walletSession.providerLoading || !walletSession.providerMounted,
-    walletSessionPhase: walletSession.phase,
-  });
+
   useEffect(() => {
     if (walletSession.phase === "disconnected" && !walletSession.accountAddress) {
       markDashboardWalletImportSkipped(routePath);
@@ -209,13 +135,28 @@ function DashboardRouteElement({
     walletSession.providerLoading,
     walletSession.providerMounted,
   ]);
-  const showEmptyProjectState =
-    !restorePending &&
-    restoreSnapshot.state === "ready_without_project" &&
-    restoreSnapshot.currentProjectId === "";
+
+  return null;
+}
+
+function DashboardRouteElement({
+  AdminDashboardPage,
+  onRetryRoute,
+  routeRetryNonce,
+  routePath,
+}: {
+  AdminDashboardPage: AppRouteComponents["AdminDashboardPage"];
+  onRetryRoute?: () => void;
+  routeRetryNonce?: number;
+  routePath: string;
+}) {
+  const restoreSnapshot = useDashboardProjectRestoreSnapshot();
+  const restorePending = isDashboardBootPending(restoreSnapshot);
+  const showEmptyProjectState = !restorePending && restoreSnapshot.state === "ready_without_project" && restoreSnapshot.currentProjectId === "";
 
   return (
-    <WithDeferredWalletRuntime onRetry={onRetryRoute}>
+    <>
+      <DashboardWalletRuntimeObserver routePath={routePath} />
       {showEmptyProjectState ? (
         <DashboardShellFirstPanel
           onRetryWalletRuntime={onRetryRoute ?? (() => undefined)}
@@ -233,7 +174,7 @@ function DashboardRouteElement({
           </WithWalrusRuntime>
         </DashboardRouteBoundary>
       )}
-    </WithDeferredWalletRuntime>
+    </>
   );
 }
 
@@ -268,12 +209,15 @@ function CreateRouteElement({
 export function AppRoutes({
   components,
   onRetryRoute,
+  routeEpoch,
   routeRetryNonce = 0,
 }: {
   components: AppRouteComponents;
   onRetryRoute?: () => void;
+  routeEpoch?: string;
   routeRetryNonce?: number;
 }) {
+  void routeEpoch;
   const location = useLocation();
   const routePath = `${location.pathname}${location.search}${location.hash}`;
   const {

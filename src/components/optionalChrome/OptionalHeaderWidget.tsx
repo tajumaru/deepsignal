@@ -1,4 +1,5 @@
-import { lazy, Suspense, useMemo, type ComponentType, type ErrorInfo, type ReactNode } from "react";
+import { lazy, Suspense, type ComponentType, type ErrorInfo, type LazyExoticComponent, type ReactNode } from "react";
+import { logRouteLifecycle } from "../../lib/routeDiagnostics";
 import { shouldRejectWalletUiImport } from "../../lib/mobileSafariSmoke";
 import { SafeLazyBoundary } from "../SafeLazyBoundary";
 
@@ -13,6 +14,60 @@ type OptionalHeaderWidgetProps = {
   resetKey: string;
 };
 
+const optionalHeaderWidgetImports = new Map<string, Promise<{ default: OptionalHeaderWidgetComponent }>>();
+const optionalHeaderWidgetComponents = new Map<string, LazyExoticComponent<OptionalHeaderWidgetComponent>>();
+
+function getOptionalHeaderWidgetCacheKey(label: string, resetKey: string) {
+  return `${label}:${resetKey}`;
+}
+
+function loadOptionalHeaderWidget(
+  cacheKey: string,
+  label: string,
+  resetKey: string,
+  loader: () => Promise<{ default: OptionalHeaderWidgetComponent }>,
+) {
+  const existingImport = optionalHeaderWidgetImports.get(cacheKey);
+  if (existingImport) {
+    logRouteLifecycle("optional-header-widget:import-deduped", {
+      label,
+      resetKey,
+    });
+    return existingImport;
+  }
+
+  logRouteLifecycle("optional-header-widget:import-start", {
+    label,
+    resetKey,
+  });
+
+  const importPromise = (async () => {
+    if (shouldRejectWalletUiImport(label)) {
+      throw new Error(`DeepSignal smoke rejected optional widget import: ${label}`);
+    }
+    return loader();
+  })();
+
+  optionalHeaderWidgetImports.set(cacheKey, importPromise);
+  return importPromise;
+}
+
+function getOptionalHeaderWidgetComponent(
+  cacheKey: string,
+  label: string,
+  resetKey: string,
+  loader: () => Promise<{ default: OptionalHeaderWidgetComponent }>,
+) {
+  const existingComponent = optionalHeaderWidgetComponents.get(cacheKey);
+  if (existingComponent) {
+    return existingComponent;
+  }
+
+  const lazyComponent = lazy(() => loadOptionalHeaderWidget(cacheKey, label, resetKey, loader));
+  optionalHeaderWidgetComponents.set(cacheKey, lazyComponent);
+  return lazyComponent;
+}
+
 export function OptionalHeaderWidget({
   componentProps,
   fallback,
@@ -21,16 +76,8 @@ export function OptionalHeaderWidget({
   onError,
   resetKey,
 }: OptionalHeaderWidgetProps) {
-  const LazyComponent = useMemo(
-    () =>
-      lazy(async () => {
-        if (shouldRejectWalletUiImport(label)) {
-          throw new Error(`DeepSignal smoke rejected optional widget import: ${label}`);
-        }
-        return loader();
-      }),
-    [label, loader],
-  );
+  const cacheKey = getOptionalHeaderWidgetCacheKey(label, resetKey);
+  const LazyComponent = getOptionalHeaderWidgetComponent(cacheKey, label, resetKey, loader);
 
   return (
     <SafeLazyBoundary fallback={fallback} onError={onError} resetKey={resetKey}>

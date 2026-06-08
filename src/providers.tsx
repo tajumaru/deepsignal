@@ -36,6 +36,7 @@ import {
   WalletActionContext,
   WalletConnectionContext,
   WalletRuntimeControlContext,
+  type WalletConnectFailureClassification,
   type WalletConnectFailureState,
   type WalletConnectFailureSource,
   type WalletConnectionState,
@@ -128,6 +129,13 @@ function classifyWalletConnectFailureSource(error: unknown): WalletConnectFailur
     return "wrapper";
   }
   return "unknown";
+}
+
+function classifyWalletConnectFailure(errorMessage: string, failureSource: WalletConnectFailureSource): WalletConnectFailureClassification {
+  if (failureSource === "slush_injected_provider" && /Failed to add dApp connection/i.test(errorMessage)) {
+    return "slush_dapp_registration_failed";
+  }
+  return "generic";
 }
 
 function WalletStatusBridge({ children }: PropsWithChildren) {
@@ -393,7 +401,8 @@ function WalletStatusBridge({ children }: PropsWithChildren) {
 
       const errorMessage = event.error instanceof Error ? event.error.message : String(event.error ?? "Unknown wallet error");
       const failureSource = classifyWalletConnectFailureSource(event.error);
-      const shouldResetFailedSession = connectMode === "manual" && /Failed to add dApp connection/i.test(errorMessage);
+      const failureClassification = classifyWalletConnectFailure(errorMessage, failureSource);
+      const shouldResetFailedSession = connectMode === "manual" && failureClassification === "slush_dapp_registration_failed";
       setManualConnect(false);
       if (shouldResetFailedSession) {
         void disconnectWallet.mutateAsync().catch(() => undefined);
@@ -401,23 +410,28 @@ function WalletStatusBridge({ children }: PropsWithChildren) {
         setSuppressRestore(true);
       }
       setLastConnectFailure({
+        classification: failureClassification,
         message: errorMessage,
         source: failureSource,
         requiresSlushRecovery: shouldResetFailedSession,
         userMessage: shouldResetFailedSession
-          ? "Slush rejected or could not add this dApp connection. Open Slush, remove old DeepSignal connection if present, then try again."
+          ? "Slush could not register this dApp connection. Open Slush, remove the old DeepSignal connection, then try again."
           : null,
+        selectedWalletId: walletId,
+        selectedWalletName: walletName,
       });
       const routeRecovery = getRouteRecoverySnapshot();
 
       logRouteLifecycle("wallet-connect-error", {
         adaptersLength: wallets.length,
         attemptId,
+        classification: failureClassification,
         connectLockState: shouldResetFailedSession ? "idle" : value.connectLockState,
         connectMode,
         cssAssetError: routeRecovery.cssAssetError,
         documentVisibilityState: routeRecovery.visibilityState,
         error: event.error,
+        errorClassification: failureClassification,
         errorSource: failureSource,
         failedChunkUrl: routeRecovery.failedChunkUrl,
         hadChunkPreloadFailure,
@@ -425,6 +439,7 @@ function WalletStatusBridge({ children }: PropsWithChildren) {
         pageshowCount: routeRecovery.pageshowCount,
         pendingLabels: routeRecovery.pendingLabels,
         providerMounted: true,
+        requiresSlushRecovery: shouldResetFailedSession,
         routePath,
         routeImportState: routeRecovery.phase,
         selectedWalletId: walletId,

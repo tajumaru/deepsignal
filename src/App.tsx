@@ -4,6 +4,7 @@ import { InitialBootReady, useBootOverlay } from "./bootstrap/useBootOverlay";
 import { BuildUpdateBanner } from "./components/system/BuildUpdateBanner";
 import { LandingPage } from "./pages/LandingPage";
 import { RouteErrorBoundary } from "./routes/RouteErrorBoundary";
+import { usesPublicChrome } from "./routes/routeRuntimePolicy";
 const PublicChromeSurface = lazy(() =>
   import("./appSurfaces/PublicChromeSurface").then((module) => ({
     default: module.PublicChromeSurface,
@@ -18,12 +19,7 @@ const WorkspaceSurface = lazy(() =>
 export default function App() {
   const location = useLocation();
   const routeIsLanding = location.pathname === "/";
-  const routeUsesPublicChrome =
-    location.pathname === "/troubleshooting" ||
-    location.pathname.startsWith("/f/") ||
-    location.pathname.startsWith("/roadmap/") ||
-    location.pathname.startsWith("/m/") ||
-    location.pathname.startsWith("/auth/zklogin/");
+  const routeUsesPublicChrome = usesPublicChrome(location.pathname);
   const [initialRouteReady, setInitialRouteReady] = useState(false);
   const [bootDismissed, setBootDismissed] = useState(false);
   const routePath = `${location.pathname}${location.search}${location.hash}`;

@@ -4,6 +4,7 @@ import {
   isDashboardBootPending,
   isDashboardWalletRuntimeSettled,
   initializeDashboardProjectRestore,
+  markDashboardProjectRestoreBlockedWalletRequired,
   markDashboardWalletImportReady,
   markDashboardWalletImportSkipped,
   markDashboardWalletImportStarted,
@@ -15,6 +16,7 @@ describe("dashboardProjectRestore", () => {
     vi.useFakeTimers();
     window.localStorage.clear();
     window.__DEEPSIGNAL_DEBUG__ = undefined;
+    window.__DEEPSIGNAL_ROUTE_EVENTS__ = [];
   });
 
   afterEach(() => {
@@ -22,35 +24,32 @@ describe("dashboardProjectRestore", () => {
     vi.useRealTimers();
     window.localStorage.clear();
     window.__DEEPSIGNAL_DEBUG__ = undefined;
+    window.__DEEPSIGNAL_ROUTE_EVENTS__ = [];
   });
 
-  it("keeps restore pending until wallet restore settles when no project is confirmed", () => {
+  it("resolves ready_without_project immediately from local state before wallet restore settles", () => {
     initializeDashboardProjectRestore("/dashboard");
     markDashboardWalletImportStarted("/dashboard");
 
-    vi.advanceTimersByTime(500);
-
-    expect(getDashboardProjectRestoreSnapshot().state).toBe("restoring");
+    expect(getDashboardProjectRestoreSnapshot().state).toBe("ready_without_project");
+    expect(isDashboardBootPending(getDashboardProjectRestoreSnapshot())).toBe(false);
 
     markDashboardWalletImportReady("/dashboard");
-    vi.advanceTimersByTime(100);
 
     expect(getDashboardProjectRestoreSnapshot().state).toBe("ready_without_project");
     expect(getDashboardProjectRestoreSnapshot().walletRuntime).toBe("mounted");
   });
 
-  it("does not resolve a stored project before wallet restore settles", () => {
+  it("resolves a stored project immediately from local storage before wallet restore settles", () => {
     window.localStorage.setItem("deepsignal.projectRegistry.selectedProjectId:test", "0xabc123");
 
     initializeDashboardProjectRestore("/dashboard");
     markDashboardWalletImportStarted("/dashboard");
-    vi.advanceTimersByTime(250);
 
-    expect(getDashboardProjectRestoreSnapshot().state).toBe("restoring");
-    expect(getDashboardProjectRestoreSnapshot().currentProjectId).toBe("");
+    expect(getDashboardProjectRestoreSnapshot().state).toBe("ready_with_project");
+    expect(getDashboardProjectRestoreSnapshot().currentProjectId).toBe("0xabc123");
 
     markDashboardWalletImportReady("/dashboard");
-    vi.advanceTimersByTime(50);
 
     expect(getDashboardProjectRestoreSnapshot().state).toBe("ready_with_project");
     expect(getDashboardProjectRestoreSnapshot().currentProjectId).toBe("0xabc123");
@@ -66,7 +65,7 @@ describe("dashboardProjectRestore", () => {
     expect(isDashboardWalletRuntimeSettled("timeout_fallback")).toBe(true);
   });
 
-  it("keeps dashboard boot pending while provider or restore settling is still in flight", () => {
+  it("ignores provider and wallet phase while local restore is ready", () => {
     initializeDashboardProjectRestore("/dashboard");
 
     expect(
@@ -75,17 +74,6 @@ describe("dashboardProjectRestore", () => {
         walletProviderPending: true,
         walletSessionPhase: "provider_deferred",
       }),
-    ).toBe(true);
-
-    markDashboardWalletImportReady("/dashboard");
-    vi.advanceTimersByTime(100);
-
-    expect(
-      isDashboardBootPending(getDashboardProjectRestoreSnapshot(), {
-        walletProviderMounted: true,
-        walletProviderPending: false,
-        walletSessionPhase: "disconnected",
-      }),
     ).toBe(false);
   });
 
@@ -93,11 +81,30 @@ describe("dashboardProjectRestore", () => {
     initializeDashboardProjectRestore("/dashboard");
     markDashboardWalletImportSkipped("/dashboard");
 
-    vi.advanceTimersByTime(250);
-
     expect(getDashboardProjectRestoreSnapshot().state).toBe("ready_without_project");
     expect(getDashboardProjectRestoreSnapshot().walletRuntime).toBe("skipped_no_wallet");
     expect(getDashboardProjectRestoreSnapshot().walletSettled).toBe(true);
+  });
+
+  it("does not regress to wallet-timeout after disconnected restore is already ready", () => {
+    initializeDashboardProjectRestore("/dashboard");
+    markDashboardWalletImportSkipped("/dashboard");
+
+    markDashboardWalletImportStarted("/dashboard");
+    vi.advanceTimersByTime(12_500);
+
+    expect(getDashboardProjectRestoreSnapshot().state).toBe("ready_without_project");
+    expect(getDashboardProjectRestoreSnapshot().walletRuntime).toBe("skipped_no_wallet");
+
+    const routeEvents = window.__DEEPSIGNAL_ROUTE_EVENTS__ ?? [];
+    expect(routeEvents.filter((entry) => entry.event === "project-restore:resolved")).toHaveLength(1);
+    expect(
+      routeEvents.some(
+        (entry) =>
+          entry.event === "project-restore:source" &&
+          (entry.details?.source === "wallet-timeout" || entry.details?.walletRuntime === "timeout_fallback"),
+      ),
+    ).toBe(false);
   });
 
   it("treats a stored literal null project id as no selected project", () => {
@@ -106,10 +113,34 @@ describe("dashboardProjectRestore", () => {
     initializeDashboardProjectRestore("/dashboard");
     markDashboardWalletImportSkipped("/dashboard");
 
-    vi.advanceTimersByTime(250);
-
     expect(getDashboardProjectRestoreSnapshot().state).toBe("ready_without_project");
     expect(getDashboardProjectRestoreSnapshot().currentProjectId).toBe("");
     expect(getDashboardProjectRestoreSnapshot().source).toBe("none-confirmed");
+  });
+
+  it("falls back to the most recent project when no selected project id is stored", () => {
+    window.localStorage.setItem(
+      "deepsignal.projectRegistry.recentProjects:test",
+      JSON.stringify([
+        { objectId: "0xbeef", name: "Latest project" },
+        { objectId: "0xabc123", name: "Older project" },
+      ]),
+    );
+
+    initializeDashboardProjectRestore("/dashboard");
+
+    expect(getDashboardProjectRestoreSnapshot().state).toBe("ready_with_project");
+    expect(getDashboardProjectRestoreSnapshot().currentProjectId).toBe("0xbeef");
+    expect(getDashboardProjectRestoreSnapshot().source).toBe("recent-projects");
+  });
+
+  it("can block dashboard restore without reading a selected project while the wallet is disconnected", () => {
+    window.localStorage.setItem("deepsignal.projectRegistry.selectedProjectId:test", "0xabc123");
+
+    markDashboardProjectRestoreBlockedWalletRequired("/dashboard");
+
+    expect(getDashboardProjectRestoreSnapshot().state).toBe("blocked_wallet_required");
+    expect(getDashboardProjectRestoreSnapshot().currentProjectId).toBe("");
+    expect(getDashboardProjectRestoreSnapshot().walletRuntime).toBe("skipped_no_wallet");
   });
 });

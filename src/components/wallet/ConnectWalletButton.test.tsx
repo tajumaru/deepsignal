@@ -1,30 +1,33 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ConnectWalletButton } from "./ConnectWalletButton";
 import type { SuiWalletState } from "../../hooks/useSuiWallet";
 
-const { connectModalPropsSpy } = vi.hoisted(() => ({
-  connectModalPropsSpy: vi.fn(),
+const {
+  connectWalletMutateAsyncSpy,
+  logRouteLifecycleSpy,
+} = vi.hoisted(() => ({
+  connectWalletMutateAsyncSpy: vi.fn(async () => ({ accounts: [{ address: "0xabc", chains: ["sui:mainnet"] }] })),
+  logRouteLifecycleSpy: vi.fn(),
 }));
 
 vi.mock("@mysten/dapp-kit", () => ({
-  ConnectModal: ({
-    open,
-    onOpenChange,
-    trigger,
-  }: {
-    open: boolean;
-    onOpenChange: (open: boolean) => void;
-    trigger: React.ReactNode;
-  }) => {
-    connectModalPropsSpy({ open, onOpenChange });
-    return (
-      <div>
-        {trigger}
-        <div data-testid="connect-modal-state">{open ? "open" : "closed"}</div>
-      </div>
-    );
-  },
+  useConnectWallet: () => ({
+    isPending: false,
+    mutateAsync: connectWalletMutateAsyncSpy,
+  }),
+  useWallets: () => [
+    {
+      name: "Slush",
+    },
+    {
+      name: "Phantom",
+    },
+  ],
+}));
+
+vi.mock("../../lib/routeDiagnostics", () => ({
+  logRouteLifecycle: logRouteLifecycleSpy,
 }));
 
 function createWalletState(overrides: Partial<SuiWalletState> = {}): SuiWalletState {
@@ -53,35 +56,34 @@ function createWalletState(overrides: Partial<SuiWalletState> = {}): SuiWalletSt
 
 afterEach(() => {
   cleanup();
-  connectModalPropsSpy.mockClear();
+  connectWalletMutateAsyncSpy.mockClear();
+  logRouteLifecycleSpy.mockClear();
 });
 
 describe("ConnectWalletButton", () => {
-  it("passes the controlled open state to ConnectModal for disconnected wallets", () => {
-    const handleOpenChange = vi.fn();
+  it("renders the controlled chooser when open for disconnected wallets", () => {
+    const handleCancel = vi.fn();
 
     render(
       <ConnectWalletButton
         wallet={createWalletState()}
         connectModalOpen
-        onConnectModalOpenChange={handleOpenChange}
+        onConnectModalCancel={handleCancel}
+        onConnectModalOpenChange={() => undefined}
       />,
     );
 
-    expect(screen.getByTestId("connect-modal-state")).toHaveTextContent("open");
-    expect(connectModalPropsSpy).toHaveBeenCalled();
-    expect(connectModalPropsSpy.mock.calls[connectModalPropsSpy.mock.calls.length - 1]?.[0]).toEqual(
-      expect.objectContaining({
-        open: true,
-      }),
-    );
+    expect(screen.getByRole("dialog", { name: "Choose wallet" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Slush" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Phantom" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(handleCancel).toHaveBeenCalledTimes(1);
   });
 
-  it("renders the trigger button without mounting ConnectModal while closed", () => {
+  it("renders the trigger button without mounting the chooser while closed", () => {
     render(<ConnectWalletButton wallet={createWalletState()} connectModalOpen={false} onConnectModalOpenChange={() => undefined} />);
     expect(screen.getByRole("button", { name: "Connect Wallet" })).toBeInTheDocument();
-    expect(screen.queryByTestId("connect-modal-state")).not.toBeInTheDocument();
-    expect(connectModalPropsSpy).not.toHaveBeenCalled();
+    expect(screen.queryByRole("dialog", { name: "Choose wallet" })).not.toBeInTheDocument();
   });
 
   it("runs manual connect preflight before opening the controlled modal", () => {
@@ -99,5 +101,35 @@ describe("ConnectWalletButton", () => {
     fireEvent.click(screen.getByRole("button", { name: "Connect Wallet" }));
 
     expect(handleManualConnectRequest).toHaveBeenCalledTimes(1);
+  });
+
+  it("logs and executes the adapter connect flow for the selected wallet", async () => {
+    const handleConnectAttemptSuccess = vi.fn();
+
+    render(
+      <ConnectWalletButton
+        wallet={createWalletState()}
+        connectModalOpen
+        onConnectAttemptSuccess={handleConnectAttemptSuccess}
+        onConnectModalOpenChange={() => undefined}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Slush" }));
+
+    expect(connectWalletMutateAsyncSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        wallet: expect.objectContaining({
+          name: "Slush",
+        }),
+      }),
+    );
+    expect(logRouteLifecycleSpy).toHaveBeenCalledWith("wallet-connect-adapter-call", expect.anything());
+    expect(logRouteLifecycleSpy).toHaveBeenCalledWith("wallet-connect-slush-modal-open", expect.anything());
+    await waitFor(() => {
+      expect(logRouteLifecycleSpy).toHaveBeenCalledWith("wallet-connect-adapter-resolved", expect.anything());
+      expect(logRouteLifecycleSpy).toHaveBeenCalledWith("wallet-connect-final-state", expect.anything());
+      expect(handleConnectAttemptSuccess).toHaveBeenCalledTimes(1);
+    });
   });
 });

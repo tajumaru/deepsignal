@@ -5,12 +5,16 @@ export type WalletConnectionStatus = "connecting" | "disconnected" | "connected"
 export type WalletConnectMode = "manual" | "autoRestore" | null;
 export type WalletConnectLockState = "idle" | "manual_connecting" | "auto_restoring";
 export type WalletConnectFailureSource = "wallet_adapter" | "slush_injected_provider" | "dapp_kit" | "wrapper" | "unknown";
+export type WalletConnectFailureClassification = "slush_dapp_registration_failed" | "slush_connect_no_result" | "generic";
 
 export interface WalletConnectFailureState {
+  classification: WalletConnectFailureClassification;
   message: string;
   source: WalletConnectFailureSource;
   requiresSlushRecovery: boolean;
   userMessage: string | null;
+  selectedWalletId?: string | null;
+  selectedWalletName?: string | null;
 }
 
 export interface WalletConnectionState {

@@ -122,6 +122,11 @@ export const lazyChunkExportSpecs: Record<string, RouteChunkSpec> = {
     filePrefix: "WalletConnectSurface",
     routeKey: "admin",
   },
+  "dashboard-workspace": {
+    exportName: "AdminDashboardWorkspace",
+    filePrefix: "AdminDashboardWorkspace",
+    routeKey: "admin",
+  },
   "admin-gate-wallet-connect-surface": {
     exportName: "WalletConnectSurface",
     filePrefix: "WalletConnectSurface",

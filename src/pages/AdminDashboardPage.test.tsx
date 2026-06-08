@@ -12,7 +12,7 @@ import {
   setSignalMemoryMemWalClientFactoryForTests,
   type SignalPatternMemory,
 } from "../memory";
-import { AdminDashboardPage } from "./AdminDashboardPage";
+import { AdminDashboardWorkspace as AdminDashboardPage } from "./AdminDashboardWorkspace";
 
 const { defaultCapabilityProfile, mockCapabilityProfile, mockWalletState, mockProjectState, signalIndex, mockInboxState } = vi.hoisted(() => {
   const defaultCapabilityProfile = {

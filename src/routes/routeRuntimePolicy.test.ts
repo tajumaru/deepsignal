@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  getRouteRuntimeMetadata,
   requiresWorkspaceBoot,
   shouldMountWalletProviders,
   shouldShowWalletUi,
@@ -19,6 +20,10 @@ describe("routeRuntimePolicy", () => {
     expect(shouldMountWalletProviders("/roadmap/form_xxx")).toBe(false);
   });
 
+  it("/troubleshooting does not mount wallet providers", () => {
+    expect(shouldMountWalletProviders("/troubleshooting")).toBe(false);
+  });
+
   it("keeps wallet providers off for other wallet-optional public routes", () => {
     expect(shouldMountWalletProviders("/m/blob-123")).toBe(false);
   });
@@ -26,7 +31,7 @@ describe("routeRuntimePolicy", () => {
   it("keeps wallet provider eager boot on private workspace routes", () => {
     expect(shouldMountWalletProviders("/admin")).toBe(true);
     expect(shouldMountWalletProviders("/dashboard")).toBe(true);
-    expect(shouldMountWalletProviders("/auth/zklogin/callback")).toBe(true);
+    expect(shouldMountWalletProviders("/auth/zklogin/callback")).toBe(false);
   });
 
   it("/dashboard shows wallet UI", () => {
@@ -37,6 +42,7 @@ describe("routeRuntimePolicy", () => {
     expect(shouldShowWalletUi("/admin")).toBe(true);
     expect(shouldShowWalletUi("/explore")).toBe(false);
     expect(shouldShowWalletUi("/f/form_xxx")).toBe(false);
+    expect(shouldShowWalletUi("/troubleshooting")).toBe(false);
   });
 
   it("public chrome routes are detected correctly", () => {
@@ -59,5 +65,11 @@ describe("routeRuntimePolicy", () => {
   it("requires workspace boot only for private workspace routes", () => {
     expect(requiresWorkspaceBoot("/admin")).toBe(true);
     expect(requiresWorkspaceBoot("/f/form_xxx")).toBe(false);
+  });
+
+  it("treats private workspace routes as wallet-aware without content-gating them", () => {
+    expect(getRouteRuntimeMetadata("/dashboard")).toMatchObject({ walletRequired: false, publicRoute: false, optionalWallet: true });
+    expect(getRouteRuntimeMetadata("/admin")).toMatchObject({ walletRequired: false, publicRoute: false, optionalWallet: true });
+    expect(getRouteRuntimeMetadata("/create")).toMatchObject({ walletRequired: false, publicRoute: false, optionalWallet: true });
   });
 });
