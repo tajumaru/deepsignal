@@ -28,9 +28,12 @@ describe("routeRuntimePolicy", () => {
     expect(shouldMountWalletProviders("/m/blob-123")).toBe(false);
   });
 
-  it("keeps wallet provider eager boot on private workspace routes", () => {
+  it("keeps wallet provider eager boot only on wallet-hydrated private workspace routes", () => {
     expect(shouldMountWalletProviders("/admin")).toBe(true);
     expect(shouldMountWalletProviders("/dashboard")).toBe(true);
+    expect(shouldMountWalletProviders("/create")).toBe(false);
+    expect(shouldMountWalletProviders("/compose")).toBe(false);
+    expect(shouldMountWalletProviders("/admin/forms/new")).toBe(false);
     expect(shouldMountWalletProviders("/auth/zklogin/callback")).toBe(false);
   });
 

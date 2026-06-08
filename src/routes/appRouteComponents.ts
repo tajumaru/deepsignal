@@ -1,46 +1,64 @@
 import { lazy } from "react";
-import { resolveLazyRouteModuleWithSafariRetry, retryLazyImport } from "../lib/lazyRetry";
+import {
+  StaleLazyImportEpochError,
+  resolveLazyRouteModuleWithSafariRetry,
+  retryLazyImport,
+} from "../lib/lazyRetry";
+import { logRouteLifecycle } from "../lib/routeDiagnostics";
+
+function suppressStaleLazyImport<T>(promise: Promise<T>, label: string) {
+  return promise.catch((error) => {
+    if (error instanceof StaleLazyImportEpochError) {
+      logRouteLifecycle("lazy-import-stale-suppressed", {
+        label,
+        message: error.message,
+      });
+      return new Promise<T>(() => undefined);
+    }
+    throw error;
+  });
+}
 
 export const appRouteComponents = {
   AccessManagementPage: lazy(() =>
-    retryLazyImport(() => import("../pages/AccessManagementPage"), "route-access-management").then((module) =>
+    suppressStaleLazyImport(retryLazyImport(() => import("../pages/AccessManagementPage"), "route-access-management").then((module) =>
       resolveLazyRouteModuleWithSafariRetry(module, "route-access-management"),
-    ),
+    ), "route-access-management"),
   ),
   AdminDashboardPage: lazy(() =>
-    retryLazyImport(() => import("../pages/AdminDashboardPage"), "route-admin-dashboard").then((module) =>
+    suppressStaleLazyImport(retryLazyImport(() => import("../pages/AdminDashboardPage"), "route-admin-dashboard").then((module) =>
       resolveLazyRouteModuleWithSafariRetry(module, "route-admin-dashboard"),
-    ),
+    ), "route-admin-dashboard"),
   ),
   FormBuilderPage: lazy(() =>
-    retryLazyImport(() => import("../pages/FormBuilderPage"), "route-form-builder").then((module) =>
+    suppressStaleLazyImport(retryLazyImport(() => import("../pages/FormBuilderPage"), "route-form-builder").then((module) =>
       resolveLazyRouteModuleWithSafariRetry<{ initialSurface?: "home" | "composer" }>(module, "route-form-builder"),
-    ),
+    ), "route-form-builder"),
   ),
   SubmissionDetailPage: lazy(() =>
-    retryLazyImport(() => import("../pages/SubmissionDetailPage"), "route-submission-detail").then((module) =>
+    suppressStaleLazyImport(retryLazyImport(() => import("../pages/SubmissionDetailPage"), "route-submission-detail").then((module) =>
       resolveLazyRouteModuleWithSafariRetry(module, "route-submission-detail"),
-    ),
+    ), "route-submission-detail"),
   ),
   SubmittedHistoryPage: lazy(() =>
-    retryLazyImport(() => import("../pages/SubmittedHistoryPage"), "route-submitted-history").then((module) =>
+    suppressStaleLazyImport(retryLazyImport(() => import("../pages/SubmittedHistoryPage"), "route-submitted-history").then((module) =>
       resolveLazyRouteModuleWithSafariRetry(module, "route-submitted-history", "SubmittedHistoryPage"),
-    ),
+    ), "route-submitted-history"),
   ),
   MyResponsesPage: lazy(() =>
-    retryLazyImport(() => import("../pages/MyResponsesPage"), "route-my-responses").then((module) =>
+    suppressStaleLazyImport(retryLazyImport(() => import("../pages/MyResponsesPage"), "route-my-responses").then((module) =>
       resolveLazyRouteModuleWithSafariRetry(module, "route-my-responses", "MyResponsesPage"),
-    ),
+    ), "route-my-responses"),
   ),
   ExploreSignalsPage: lazy(() =>
-    retryLazyImport(() => import("../pages/ExploreSignalsPage"), "route-explore").then((module) =>
+    suppressStaleLazyImport(retryLazyImport(() => import("../pages/ExploreSignalsPage"), "route-explore").then((module) =>
       resolveLazyRouteModuleWithSafariRetry(module, "route-explore"),
-    ),
+    ), "route-explore"),
   ),
   InsightsFixturePage: lazy(() =>
-    retryLazyImport(() => import("../pages/InsightsFixturePage"), "route-insights-fixture").then((module) =>
+    suppressStaleLazyImport(retryLazyImport(() => import("../pages/InsightsFixturePage"), "route-insights-fixture").then((module) =>
       resolveLazyRouteModuleWithSafariRetry(module, "route-insights-fixture"),
-    ),
+    ), "route-insights-fixture"),
   ),
 };
 

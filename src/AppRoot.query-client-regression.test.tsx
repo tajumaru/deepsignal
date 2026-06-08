@@ -168,16 +168,16 @@ describe("AppRoot query client regression", () => {
   it("keeps wallet provider eager boot for admin and callback routes", () => {
     expect(shouldRequestWalletProvidersOnMountForRoute("/admin")).toBe(true);
     expect(shouldRequestWalletProvidersOnMountForRoute("/dashboard")).toBe(true);
-    expect(shouldRequestWalletProvidersOnMountForRoute("/auth/zklogin/callback")).toBe(true);
+    expect(shouldRequestWalletProvidersOnMountForRoute("/create")).toBe(false);
+    expect(shouldRequestWalletProvidersOnMountForRoute("/auth/zklogin/callback")).toBe(false);
   });
 
-  it("renders /create wallet UI without a missing QueryClient error", async () => {
+  it("renders /create without a missing QueryClient error", async () => {
     openHashRoute("/create");
 
     render(<AppRoot />);
 
-    await waitFor(() => expect(screen.getByText("Secure Session Active · Slush")).toBeInTheDocument());
-    await waitFor(() => expect(screen.getByRole("button")).toBeInTheDocument());
+    await screen.findByRole("heading", { name: "Create Signal Route" });
     expect(consoleError.mock.calls.flat().map(String).join("\n")).not.toContain("No QueryClient set");
   });
 

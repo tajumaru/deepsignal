@@ -3,7 +3,7 @@ import { useLocation } from "react-router-dom";
 import { useWalletProviderRuntime } from "./WalletSurfaceRuntime";
 import { WalletNav } from "./WalletNav";
 import { useDashboardProjectRestoreSnapshot } from "../lib/dashboardProjectRestore";
-import { retryLazyImport } from "../lib/lazyRetry";
+import { retryLazyImport, suppressStaleLazyImport } from "../lib/lazyRetry";
 import { logRouteLifecycle } from "../lib/routeDiagnostics";
 import { useOptionalWalletConnection } from "../walletStatus";
 import { SafeLazyBoundary } from "./SafeLazyBoundary";
@@ -101,9 +101,12 @@ export default function WalletRuntimePanel(props: WalletRuntimePanelProps) {
   const LazyWalletConnectSurface = useMemo(
     () =>
       lazy(() =>
-        retryLazyImport(() => import("./WalletConnectSurface"), "wallet-runtime-connect-surface").then((module) => ({
-          default: module.WalletConnectSurface,
-        })),
+        suppressStaleLazyImport(
+          retryLazyImport(() => import("./WalletConnectSurface"), "wallet-runtime-connect-surface").then((module) => ({
+            default: module.WalletConnectSurface,
+          })),
+          "wallet-runtime-connect-surface",
+        ),
       ),
     [],
   );

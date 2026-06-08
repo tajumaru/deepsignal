@@ -3,12 +3,13 @@ import { lazy, Suspense, useEffect, type ReactNode } from "react";
 import { HashRouter, useLocation } from "react-router-dom";
 import App from "./App";
 import { I18nProvider } from "./i18n";
+import { retryLazyImport } from "./lib/lazyRetry";
 import { setDeepSignalDebugReadiness } from "./lib/routeDiagnostics";
 import { queryClient } from "./queryClient";
 import { getRouteRuntimeMetadata } from "./routes/routeRuntimePolicy";
 
 const PrivateAppProviders = lazy(() =>
-  import("./PrivateAppProviders").then((module) => ({
+  retryLazyImport(() => import("./PrivateAppProviders"), "private-app-providers").then((module) => ({
     default: module.PrivateAppProviders,
   })),
 );

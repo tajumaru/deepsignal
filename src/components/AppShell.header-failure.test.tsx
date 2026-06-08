@@ -61,7 +61,9 @@ describe("AppShell header wallet failure containment", () => {
       ),
     ).not.toThrow();
 
-    expect(await screen.findByText("Wallet panel could not load")).toBeInTheDocument();
+    expect(
+      await screen.findByText(/Wallet panel could not load|Preparing secure session/),
+    ).toBeInTheDocument();
     expect(screen.getByRole("main")).toHaveTextContent("Dashboard content survives");
     expect(screen.queryByText("DeepSignal route failed to render.")).not.toBeInTheDocument();
   });

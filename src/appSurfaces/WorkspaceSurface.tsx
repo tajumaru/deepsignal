@@ -17,7 +17,7 @@ import { AppRoutes } from "../routes/AppRoutes";
 import { appRouteComponents } from "../routes/appRouteComponents";
 import { DelayedWorkspaceRestoreFallback, ProviderReadinessBarrier } from "../routes/ProviderReadinessBarrier";
 import { MixedBuildRecoveryScreen, RouteErrorBoundary } from "../routes/RouteErrorBoundary";
-import { ensureCurrentRouteEpoch, useCurrentRouteEpoch } from "../routes/routeEpoch";
+import { useCurrentRouteEpoch } from "../routes/routeEpoch";
 import { getRouteId } from "../routes/routeDiagnostics";
 import { WalletRequiredGate } from "../routes/WalletRequiredGate";
 import { getRouteRuntimeMetadata, requiresWorkspaceBoot, shouldShowWalletUi } from "../routes/routeRuntimePolicy";
@@ -144,10 +144,7 @@ function PrivateRouteSurface({
             routeReady={routeReady}
             walletUiEnabled={
               routeReady &&
-              routeShowsWalletUi &&
-              walletSession.providerMounted &&
-              !(walletSession.providerLoading || !walletSession.providerMounted) &&
-              walletSession.phase !== "provider_deferred"
+              routeShowsWalletUi
             }
             walletUiRequested={routeShowsWalletUi}
             chrome="full"
@@ -193,7 +190,6 @@ function PrivateRouteSurface({
 export function WorkspaceSurface() {
   const location = useLocation();
   const routePath = `${location.pathname}${location.search}${location.hash}`;
-  ensureCurrentRouteEpoch(routePath);
   const [initialRouteReady, setInitialRouteReady] = useState(false);
   const [bootDismissed, setBootDismissed] = useState(false);
   const [mixedBuildStatus, setMixedBuildStatus] = useState(() => getMixedBuildStatus());

@@ -1,4 +1,5 @@
 import { lazy, Suspense, type ComponentType, type ErrorInfo, type LazyExoticComponent, type ReactNode } from "react";
+import { suppressStaleLazyImport } from "../../lib/lazyRetry";
 import { logRouteLifecycle } from "../../lib/routeDiagnostics";
 import { shouldRejectWalletUiImport } from "../../lib/mobileSafariSmoke";
 import { SafeLazyBoundary } from "../SafeLazyBoundary";
@@ -45,7 +46,7 @@ function loadOptionalHeaderWidget(
     if (shouldRejectWalletUiImport(label)) {
       throw new Error(`DeepSignal smoke rejected optional widget import: ${label}`);
     }
-    return loader();
+    return suppressStaleLazyImport(loader(), label);
   })();
 
   optionalHeaderWidgetImports.set(cacheKey, importPromise);

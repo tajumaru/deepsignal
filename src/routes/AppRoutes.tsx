@@ -237,19 +237,11 @@ export function AppRoutes({
       <Route path="/signals" element={<Navigate to="/explore" replace />} />
       <Route
         path="/create"
-        element={
-          <WithWalrusRuntime>
-            <CreateRouteElement FormBuilderPage={FormBuilderPage} />
-          </WithWalrusRuntime>
-        }
+        element={<CreateRouteElement FormBuilderPage={FormBuilderPage} />}
       />
       <Route
         path="/compose"
-        element={
-          <WithWalrusRuntime>
-            <CreateRouteElement FormBuilderPage={FormBuilderPage} />
-          </WithWalrusRuntime>
-        }
+        element={<CreateRouteElement FormBuilderPage={FormBuilderPage} />}
       />
       <Route
         path="/admin"
@@ -275,11 +267,7 @@ export function AppRoutes({
       <Route path="/dev/insights-fixture" element={<InsightsFixturePage />} />
       <Route
         path="/admin/forms/new"
-        element={
-          <WithWalrusRuntime>
-            <CreateRouteElement FormBuilderPage={FormBuilderPage} initialSurface="composer" />
-          </WithWalrusRuntime>
-        }
+        element={<CreateRouteElement FormBuilderPage={FormBuilderPage} initialSurface="composer" />}
       />
       <Route path="/admin/forms/:formId" element={<LegacyFormInboxRedirect basePath="/admin" />} />
       <Route path="/dashboard/forms/:formId" element={<LegacyFormInboxRedirect basePath="/dashboard" />} />

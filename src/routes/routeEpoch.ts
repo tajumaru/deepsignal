@@ -43,27 +43,25 @@ function normalizeCanonicalRoutePath(routePath: string) {
   return `/${pathname.replace(/^\/+/, "")}`;
 }
 
-export function setCurrentRouteEpoch(routePath: string) {
+function createNextSnapshot(routePath: string, baseSnapshot: RouteEpochSnapshot = currentSnapshot): RouteEpochSnapshot {
   const canonicalRoutePath = normalizeCanonicalRoutePath(routePath);
-  if (currentSnapshot.canonicalRoutePath === canonicalRoutePath) {
-    const nextSnapshot = {
-      ...currentSnapshot,
+  if (baseSnapshot.canonicalRoutePath === canonicalRoutePath) {
+    return {
+      ...baseSnapshot,
       routePath,
     };
-    if (snapshotsEqual(currentSnapshot, nextSnapshot)) {
-      return currentSnapshot;
-    }
-    currentSnapshot = nextSnapshot;
-    emit();
-    return currentSnapshot;
   }
 
-  const nextSnapshot: RouteEpochSnapshot = {
+  return {
     canonicalRoutePath,
-    navigationId: currentSnapshot.navigationId + 1,
-    routeEpoch: `nav-${currentSnapshot.navigationId + 1}:${canonicalRoutePath}`,
+    navigationId: baseSnapshot.navigationId + 1,
+    routeEpoch: `nav-${baseSnapshot.navigationId + 1}:${canonicalRoutePath}`,
     routePath,
   };
+}
+
+export function setCurrentRouteEpoch(routePath: string) {
+  const nextSnapshot = createNextSnapshot(routePath);
   if (snapshotsEqual(currentSnapshot, nextSnapshot)) {
     return currentSnapshot;
   }
@@ -115,16 +113,15 @@ export function useCurrentRouteEpoch(routePath: string) {
     setCurrentRouteEpoch(routePath);
   }, [routePath]);
 
-  ensureCurrentRouteEpoch(routePath);
   const snapshot = useSyncExternalStore(subscribe, getCurrentRouteEpochSnapshot, getCurrentRouteEpochSnapshot);
 
   return useMemo(() => {
-    if (snapshot.routePath === routePath) {
+    if (
+      snapshot.routePath === routePath ||
+      snapshot.canonicalRoutePath === normalizeCanonicalRoutePath(routePath)
+    ) {
       return snapshot;
     }
-    return {
-      ...snapshot,
-      routePath,
-    };
+    return createNextSnapshot(routePath, snapshot);
   }, [routePath, snapshot]);
 }

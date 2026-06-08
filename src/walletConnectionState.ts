@@ -11,9 +11,19 @@ export function deriveWalletConnectionState(input: {
 }): WalletConnectionState {
   const accountAddress = input.accountAddress ?? input.fallbackAccounts?.[0]?.address ?? null;
   const hasConnectedAccount = Boolean(input.isConnected && accountAddress);
-  const hasPendingConnection = input.connectionStatus === "connecting" && !hasConnectedAccount;
-  const isManualConnection = hasPendingConnection && input.manualConnectActive === true;
-  const isRestoringConnection = hasPendingConnection && !isManualConnection && input.suppressRestoringConnection !== true;
+  const manualConnectLocked = input.manualConnectActive === true && !hasConnectedAccount;
+  const hasWalletSelection = Boolean(
+    (input.currentWalletName && input.currentWalletName.trim()) ||
+      (input.fallbackAccounts?.length ?? 0) > 0,
+  );
+  const adapterConnecting =
+    input.connectionStatus === "connecting" &&
+    !hasConnectedAccount &&
+    hasWalletSelection;
+  const hasPendingConnection = (manualConnectLocked || adapterConnecting) && !hasConnectedAccount;
+  const isManualConnection = hasPendingConnection && manualConnectLocked;
+  const isRestoringConnection =
+    hasPendingConnection && !isManualConnection && input.suppressRestoringConnection !== true;
 
   return {
     status: hasConnectedAccount ? "connected" : isManualConnection || isRestoringConnection ? "connecting" : "disconnected",

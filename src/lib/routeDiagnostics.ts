@@ -140,6 +140,7 @@ declare global {
 }
 
 const runtimeEventListeners = new Set<() => void>();
+let runtimeEventUpdateScheduled = false;
 
 function sanitizeDetails(details?: DiagnosticDetails) {
   if (!details) {
@@ -333,8 +334,17 @@ function persistRecentRuntimeEvents(entries: RecentRuntimeEvent[]) {
   }
 }
 
-function emitRuntimeEventUpdate() {
+function flushRuntimeEventUpdate() {
+  runtimeEventUpdateScheduled = false;
   runtimeEventListeners.forEach((listener) => listener());
+}
+
+function emitRuntimeEventUpdate() {
+  if (runtimeEventUpdateScheduled) {
+    return;
+  }
+  runtimeEventUpdateScheduled = true;
+  window.setTimeout(flushRuntimeEventUpdate, 0);
 }
 
 function pushRecentRuntimeEvent(entry: RecentRuntimeEvent) {

@@ -31,7 +31,9 @@ export function selectCanonicalWalletSessionState(
       ? "provider_pending"
       : "booting"
     : hasConnectedAccount
-        ? "connected"
+      ? "connected"
+      : input.connectionStatus === "connecting" || input.connectLockState !== "idle"
+        ? "connecting"
         : "disconnected";
 
   return {

@@ -1,6 +1,6 @@
 import { lazy, Suspense, useMemo, useState, type PropsWithChildren } from "react";
 import { useI18n } from "../i18n";
-import { retryLazyImport } from "../lib/lazyRetry";
+import { retryLazyImport, suppressStaleLazyImport } from "../lib/lazyRetry";
 import { logRouteLifecycle } from "../lib/routeDiagnostics";
 import { SafeLazyBoundary } from "./SafeLazyBoundary";
 
@@ -47,14 +47,17 @@ export function AdminAccessGate({
   const LazyWalletConnectSurface = useMemo(
     () =>
       lazy(() =>
-        retryLazyImport(() => import("./WalletConnectSurface"), "admin-gate-wallet-connect-surface").then((module) => ({
-          default: module.WalletConnectSurface,
-        })),
+        suppressStaleLazyImport(
+          retryLazyImport(() => import("./WalletConnectSurface"), "admin-gate-wallet-connect-surface").then((module) => ({
+            default: module.WalletConnectSurface,
+          })),
+          "admin-gate-wallet-connect-surface",
+        ),
       ),
     [],
   );
 
-  if (!hasWallet) {
+  if (!hasWallet && access === "denied") {
     return (
       <section className="panel glow-panel access-panel">
         <p className="eyebrow">{t("creatorOnlyInbox")}</p>

@@ -3,15 +3,16 @@ import { useLocation } from "react-router-dom";
 import { InitialBootReady, useBootOverlay } from "./bootstrap/useBootOverlay";
 import { BuildUpdateBanner } from "./components/system/BuildUpdateBanner";
 import { LandingPage } from "./pages/LandingPage";
+import { retryLazyImport } from "./lib/lazyRetry";
 import { RouteErrorBoundary } from "./routes/RouteErrorBoundary";
 import { usesPublicChrome } from "./routes/routeRuntimePolicy";
 const PublicChromeSurface = lazy(() =>
-  import("./appSurfaces/PublicChromeSurface").then((module) => ({
+  retryLazyImport(() => import("./appSurfaces/PublicChromeSurface"), "public-chrome-surface").then((module) => ({
     default: module.PublicChromeSurface,
   })),
 );
 const WorkspaceSurface = lazy(() =>
-  import("./appSurfaces/WorkspaceSurface").then((module) => ({
+  retryLazyImport(() => import("./appSurfaces/WorkspaceSurface"), "workspace-surface").then((module) => ({
     default: module.WorkspaceSurface,
   })),
 );

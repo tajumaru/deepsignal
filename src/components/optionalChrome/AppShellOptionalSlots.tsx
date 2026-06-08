@@ -196,9 +196,6 @@ export function WalletConnectSlot({
     (
       !routeReady ||
       !walletUiEnabled ||
-      !walletProviderMounted ||
-      walletProviderPending ||
-      walletSessionPhase === "provider_deferred" ||
       !walletHydrationReady
     );
   const deferredReason =
@@ -206,13 +203,7 @@ export function WalletConnectSlot({
       ? "route-not-ready"
       : !walletUiEnabled
       ? "wallet-ui-disabled"
-      : !walletProviderMounted
-        ? "wallet-provider-not-mounted"
-        : walletProviderPending
-          ? "wallet-provider-pending"
-          : walletSessionPhase === "provider_deferred"
-            ? "wallet-provider-deferred"
-            : "wallet-hydration-pending";
+      : "wallet-hydration-pending";
   const walletRuntimePanelLoader = useCallback(
     () =>
       retryLazyImport(() => import("../WalletRuntimePanel"), "wallet-runtime-panel").then((module) => ({

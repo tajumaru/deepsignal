@@ -58,6 +58,24 @@ export class StaleLazyImportEpochError extends Error {
   }
 }
 
+export function isStaleLazyImportEpochError(error: unknown): error is StaleLazyImportEpochError {
+  return error instanceof StaleLazyImportEpochError;
+}
+
+export function suppressStaleLazyImport<T>(promise: Promise<T>, label: string) {
+  return promise.catch((error) => {
+    if (error instanceof StaleLazyImportEpochError) {
+      logRouteLifecycle("lazy-import-stale-suppressed", {
+        diagnosticOnly: true,
+        label,
+        message: error.message,
+      });
+      return new Promise<T>(() => undefined);
+    }
+    throw error;
+  });
+}
+
 function wait(ms: number) {
   return new Promise((resolve) => window.setTimeout(resolve, ms));
 }
@@ -191,6 +209,16 @@ function isMobileBrowser() {
     return false;
   }
   return /Android|iP(?:hone|ad|od)|Mobile/i.test(navigator.userAgent);
+}
+
+function isViteDevServerRuntime() {
+  if (!import.meta.env.DEV || typeof window === "undefined") {
+    return false;
+  }
+  const viteWindow = window as typeof window & {
+    __vite_plugin_react_preamble_installed__?: boolean;
+  };
+  return Boolean(viteWindow.__vite_plugin_react_preamble_installed__ || window.location.port === "5173");
 }
 
 function getLazyImportTimeoutMs() {
@@ -858,6 +886,8 @@ export async function retryLazyImport<T>(loader: () => Promise<T>, label = "anon
 
   let lastError: unknown;
   const perfName = `lazy:${label}`;
+  const singleAttemptRuntime = isViteDevServerRuntime();
+  const maxAttempts = singleAttemptRuntime ? 1 : lazyImportAttempts;
   let expectedChunkUrl: string | null | undefined;
   const resolveExpectedChunkUrl = async () => {
     if (expectedChunkUrl !== undefined) {
@@ -870,7 +900,7 @@ export async function retryLazyImport<T>(loader: () => Promise<T>, label = "anon
   startPerf(perfName);
   markRouteImportStart(label);
   const importPromise = (async () => {
-    for (let attempt = 1; attempt <= lazyImportAttempts; attempt += 1) {
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
       try {
         const chunkUrlForAttempt = attempt > 1 ? await resolveExpectedChunkUrl() : expectedChunkUrl ?? null;
         if (!isCurrentEpoch()) {
@@ -880,6 +910,7 @@ export async function retryLazyImport<T>(loader: () => Promise<T>, label = "anon
           label,
           attempt,
           chunkUrl: chunkUrlForAttempt,
+          devSingleAttempt: singleAttemptRuntime,
           navigationId: routeEpochSnapshot.navigationId,
           routeEpoch: routeEpochSnapshot.routeEpoch,
           routePath: getCurrentRoutePath(),
@@ -889,6 +920,7 @@ export async function retryLazyImport<T>(loader: () => Promise<T>, label = "anon
           label,
           attempt,
           chunkUrl: chunkUrlForAttempt,
+          devSingleAttempt: singleAttemptRuntime,
           navigationId: routeEpochSnapshot.navigationId,
           routeEpoch: routeEpochSnapshot.routeEpoch,
           routePath: getCurrentRoutePath(),
@@ -972,6 +1004,7 @@ export async function retryLazyImport<T>(loader: () => Promise<T>, label = "anon
           label,
           attempt,
           chunkUrl: chunkUrlForDiagnostics ?? null,
+          devSingleAttempt: singleAttemptRuntime,
           evaluationErrorUrl,
           expectedRouteChunkUrl: chunkUrlForDiagnostics ?? null,
           importTargetUrl: chunkUrlForDiagnostics ?? null,
@@ -986,6 +1019,7 @@ export async function retryLazyImport<T>(loader: () => Promise<T>, label = "anon
           label,
           attempt,
           chunkUrl: chunkUrlForDiagnostics ?? null,
+          devSingleAttempt: singleAttemptRuntime,
           message: error instanceof Error ? error.message : String(error),
           navigationId: routeEpochSnapshot.navigationId,
           routePath: getCurrentRoutePath(),
@@ -1046,13 +1080,14 @@ export async function retryLazyImport<T>(loader: () => Promise<T>, label = "anon
           reportLazyImportSystemError({
             error,
             chunkUrl: chunkUrlForDiagnostics,
-            severity: attempt === lazyImportAttempts ? "critical" : "warning",
+            severity: attempt === maxAttempts ? "critical" : "warning",
             sourceContext: "lazy-route-import",
             diagnostics: {
               label,
               attempt,
               probe,
               dependencyProbe,
+              devSingleAttempt: singleAttemptRuntime,
             },
           });
           console.warn("[DeepSignal route chunk probe]", {
@@ -1065,7 +1100,7 @@ export async function retryLazyImport<T>(loader: () => Promise<T>, label = "anon
             ...probe,
           });
         }
-        if (attempt === lazyImportAttempts) {
+        if (attempt === maxAttempts) {
           break;
         }
         await wait(lazyImportRetryDelayMs[Math.min(attempt - 1, lazyImportRetryDelayMs.length - 1)]);

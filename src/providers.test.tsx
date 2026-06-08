@@ -62,6 +62,26 @@ describe("deriveWalletConnectionState", () => {
     });
   });
 
+  it("keeps a manual connect locked as connecting even if the adapter briefly reports disconnected", () => {
+    expect(
+      deriveWalletConnectionState({
+        accountAddress: null,
+        connectionStatus: "disconnected",
+        currentWalletName: "Slush",
+        isConnected: false,
+        manualConnectActive: true,
+      }),
+    ).toEqual({
+      status: "connecting",
+      accountAddress: null,
+      walletName: "Slush",
+      isRestoringConnection: false,
+      connectMode: "manual",
+      connectLockState: "manual_connecting",
+      lastConnectFailure: null,
+    });
+  });
+
   it("suppresses stale auto restore after a failed manual connect reset", () => {
     expect(
       deriveWalletConnectionState({
@@ -75,6 +95,26 @@ describe("deriveWalletConnectionState", () => {
       status: "disconnected",
       accountAddress: null,
       walletName: "Slush",
+      isRestoringConnection: false,
+      connectMode: null,
+      connectLockState: "idle",
+      lastConnectFailure: null,
+    });
+  });
+
+  it("does not classify an empty connecting state as auto restore when no wallet is selected yet", () => {
+    expect(
+      deriveWalletConnectionState({
+        accountAddress: null,
+        connectionStatus: "connecting",
+        currentWalletName: null,
+        fallbackAccounts: [],
+        isConnected: false,
+      }),
+    ).toEqual({
+      status: "disconnected",
+      accountAddress: null,
+      walletName: null,
       isRestoringConnection: false,
       connectMode: null,
       connectLockState: "idle",

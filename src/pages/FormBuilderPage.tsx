@@ -1370,10 +1370,6 @@ function FormBuilderRouteContent({
   });
   const hasAdminAccess = canAdmin(capabilityProfile);
 
-  if (!requestedGuestDraftMode && !wallet.accountAddress) {
-    return <AdminAccessGate hasWallet={false} access="allowed" />;
-  }
-
   if (!requestedGuestDraftMode && wallet.accountAddress && isLoadingAccess) {
     return <div className="panel">{t("checkingWalletCapabilities")}</div>;
   }

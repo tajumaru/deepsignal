@@ -44,6 +44,26 @@ function createConnectFailure(
   };
 }
 
+function openSlushConnectionGuide() {
+  if (typeof window === "undefined") {
+    return;
+  }
+  window.alert(
+    "Open Slush, remove the old DeepSignal connection, then return to DeepSignal and try again.",
+  );
+}
+
+function tryOpenSlushApp() {
+  if (typeof window === "undefined") {
+    return;
+  }
+  try {
+    window.location.assign("slush://");
+  } catch {
+    openSlushConnectionGuide();
+  }
+}
+
 export function ConnectWalletButton({
   wallet,
   compact = false,
@@ -229,10 +249,20 @@ export function ConnectWalletButton({
             <span>Select a wallet, then finish account approval in the wallet app.</span>
           </div>
           {connectFailure?.requiresSlushRecovery ? (
-            <p className="wallet-connect-error-copy" role="alert">
-              {connectFailure.userMessage ??
-                "Slush could not register this dApp connection. Open Slush, remove the old DeepSignal connection, then try again."}
-            </p>
+            <>
+              <p className="wallet-connect-error-copy" role="alert">
+                {connectFailure.userMessage ??
+                  "Slush could not register this dApp connection. Open Slush, remove the old DeepSignal connection, then try again."}
+              </p>
+              <div className="wallet-connect-actions">
+                <button type="button" className="wallet-connect-dismiss" onClick={() => tryOpenSlushApp()}>
+                  Open Slush
+                </button>
+                <button type="button" className="wallet-connect-dismiss" onClick={() => openSlushConnectionGuide()}>
+                  Reset connection guide
+                </button>
+              </div>
+            </>
           ) : null}
           <div className="wallet-connect-actions">
             {wallets.map((walletOption) => (

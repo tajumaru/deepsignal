@@ -114,6 +114,10 @@ function getWalletConnectTimeoutMs() {
   return getBrowserCapabilitiesSnapshot().mobileSafari ? 15_000 : 10_000;
 }
 
+function getWalletRestoreTimeoutMs() {
+  return getWalletConnectTimeoutMs();
+}
+
 function classifyWalletConnectFailureSource(error: unknown): WalletConnectFailureSource {
   const text = error instanceof Error ? `${error.name} ${error.message} ${error.stack ?? ""}` : String(error ?? "");
   if (/TRPCClientError|Failed to add dApp connection/i.test(text)) {
@@ -153,6 +157,7 @@ function WalletStatusBridge({ children }: PropsWithChildren) {
   const [suppressRestoringConnection, setSuppressRestoringConnection] = useState(false);
   const [lastConnectFailure, setLastConnectFailure] = useState<WalletConnectFailureState | null>(null);
   const restoreInFlightRef = useRef(false);
+  const restoreTimeoutRef = useRef<number | null>(null);
   const connectAttemptIdRef = useRef(0);
   const activeConnectAttemptIdRef = useRef<number | null>(null);
   const connectTimeoutRef = useRef<number | null>(null);
@@ -171,6 +176,13 @@ function WalletStatusBridge({ children }: PropsWithChildren) {
     if (connectTimeoutRef.current !== null) {
       window.clearTimeout(connectTimeoutRef.current);
       connectTimeoutRef.current = null;
+    }
+  }, []);
+
+  const clearWalletRestoreTimeout = useCallback(() => {
+    if (restoreTimeoutRef.current !== null) {
+      window.clearTimeout(restoreTimeoutRef.current);
+      restoreTimeoutRef.current = null;
     }
   }, []);
 
@@ -230,6 +242,20 @@ function WalletStatusBridge({ children }: PropsWithChildren) {
         accountAddress: value.accountAddress ? "present" : "absent",
       });
     }
+    if (value.connectMode === "autoRestore" && !value.accountAddress && restoreTimeoutRef.current === null) {
+      const timeoutMs = getWalletRestoreTimeoutMs();
+      restoreTimeoutRef.current = window.setTimeout(() => {
+        restoreTimeoutRef.current = null;
+        clearStaleWalletRestoreState();
+        setSuppressRestore(true);
+        logRouteLifecycle("wallet-restoration-timeout-reset", {
+          connectLockState: value.connectLockState,
+          connectMode: value.connectMode,
+          timeoutMs,
+          walletName: value.walletName,
+        });
+      }, timeoutMs);
+    }
     if (value.connectMode !== "autoRestore" && restoreInFlightRef.current) {
       restoreInFlightRef.current = false;
       endPerf("wallet:restoration", value.status === "connected" ? "ok" : "failed", value.status);
@@ -242,6 +268,9 @@ function WalletStatusBridge({ children }: PropsWithChildren) {
         accountAddress: value.accountAddress ? "present" : "absent",
       });
     }
+    if (value.connectMode !== "autoRestore" || value.accountAddress) {
+      clearWalletRestoreTimeout();
+    }
     if (emitProviderDiagnostics) {
       logRouteLifecycle("wallet-provider:status", { ...value });
     }
@@ -253,7 +282,7 @@ function WalletStatusBridge({ children }: PropsWithChildren) {
       walletName: value.walletName,
       walletRestoringConnection: value.isRestoringConnection,
     });
-  }, [emitProviderDiagnostics, value]);
+  }, [clearWalletRestoreTimeout, emitProviderDiagnostics, setSuppressRestore, value]);
 
   useEffect(() => {
     if (value.status === "connected") {
@@ -272,6 +301,12 @@ function WalletStatusBridge({ children }: PropsWithChildren) {
     });
     return () => setQueryClientMutationErrorHandler(null);
   }, [setSuppressRestore]);
+
+  useEffect(() => {
+    return () => {
+      clearWalletRestoreTimeout();
+    };
+  }, [clearWalletRestoreTimeout]);
 
   useEffect(() => {
     setQueryClientMutationLifecycleHandler((event) => {
@@ -452,10 +487,11 @@ function WalletStatusBridge({ children }: PropsWithChildren) {
       });
     });
     return () => {
+      clearWalletRestoreTimeout();
       clearWalletConnectTimeout();
       setQueryClientMutationLifecycleHandler(null);
     };
-  }, [clearWalletConnectTimeout, disconnectWallet, setManualConnect, setSuppressRestore, value.connectLockState, wallets.length]);
+  }, [clearWalletConnectTimeout, clearWalletRestoreTimeout, disconnectWallet, setManualConnect, setSuppressRestore, value.connectLockState, wallets.length]);
 
   const actions = useMemo(
     () => ({

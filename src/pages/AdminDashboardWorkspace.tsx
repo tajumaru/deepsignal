@@ -5638,7 +5638,7 @@ export function AdminDashboardWorkspace() {
     });
   }, [detailAnswers, selectedSignalId]);
   const activityActorRole = getActivityActorRole(capabilityProfile);
-  const accessState = activeAccountAddress ? "allowed" : "denied";
+  const accessState = activeAccountAddress || !capabilityProfile.isConfigured ? "allowed" : "denied";
   const privateReviewLabel = t("privateReviewEnabled");
   const workspaceSecurityStateLabel = activeAccountAddress ? "Secure" : "Encrypted";
 

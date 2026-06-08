@@ -2,7 +2,7 @@ import { Component, lazy, Suspense, useCallback, useEffect, useRef, useState, ty
 import "../styles/components/wallet-network.css";
 import { useSuiWallet } from "../hooks/useSuiWallet";
 import { useI18n } from "../i18n";
-import { retryLazyImport } from "../lib/lazyRetry";
+import { retryLazyImport, suppressStaleLazyImport } from "../lib/lazyRetry";
 import { copyRouteLifecycleDiagnosticsToClipboard, getBrowserCapabilitiesSnapshot, logRouteLifecycle } from "../lib/routeDiagnostics";
 import { shortAddress } from "../lib/sui";
 import { hadPriorWalletConnectChunkFailure, reloadWalletConnectRuntimeForRetry } from "../lib/walletConnectRuntimeRecovery";
@@ -15,18 +15,47 @@ import { useWalletProviderRuntime } from "./WalletSurfaceRuntime";
 import type { WalletConnectRuntimeStatus } from "./WalletRuntimePanel";
 import { WalletStatus } from "./wallet/WalletStatus";
 
+function openSlushConnectionGuide() {
+  if (typeof window === "undefined") {
+    return;
+  }
+  window.alert(
+    "Open Slush, remove the old DeepSignal connection, then return here and try again.",
+  );
+}
+
+function tryOpenSlushApp() {
+  if (typeof window === "undefined") {
+    return;
+  }
+  try {
+    window.location.assign("slush://");
+  } catch {
+    openSlushConnectionGuide();
+  }
+}
+
 const WalletConnect = lazy(() =>
-  retryLazyImport(() => import("./WalletConnect"), "wallet-connect").then((module) => ({ default: module.WalletConnect })),
+  suppressStaleLazyImport(
+    retryLazyImport(() => import("./WalletConnect"), "wallet-connect").then((module) => ({ default: module.WalletConnect })),
+    "wallet-connect",
+  ),
 );
 const LazySuiAddressDisplay = lazy(() =>
-  retryLazyImport(() => import("./SuiAddressDisplay"), "wallet-connect-address-display").then((module) => ({
-    default: module.SuiAddressDisplay,
-  })),
+  suppressStaleLazyImport(
+    retryLazyImport(() => import("./SuiAddressDisplay"), "wallet-connect-address-display").then((module) => ({
+      default: module.SuiAddressDisplay,
+    })),
+    "wallet-connect-address-display",
+  ),
 );
 const LazyConnectedWalletMenu = lazy(() =>
-  retryLazyImport(() => import("./wallet/ConnectedWalletMenu"), "wallet-connect-menu").then((module) => ({
-    default: module.ConnectedWalletMenu,
-  })),
+  suppressStaleLazyImport(
+    retryLazyImport(() => import("./wallet/ConnectedWalletMenu"), "wallet-connect-menu").then((module) => ({
+      default: module.ConnectedWalletMenu,
+    })),
+    "wallet-connect-menu",
+  ),
 );
 
 interface WalletConnectSurfaceProps {
@@ -152,8 +181,13 @@ export function WalletConnectSurface({
   const routeRecoveryActive = routeRecovery.phase !== "idle";
   const displayedConnectFailure = connectFailureOverride ?? wallet.lastConnectFailure;
   const showInlineSlushRecovery = Boolean(displayedConnectFailure?.requiresSlushRecovery && !connectModalOpen);
+  const manualConnectPendingUi =
+    !displayedConnectFailure &&
+    !accountAddress &&
+    (hasPendingConnectRequest || wallet.connectLockState === "manual_connecting" || wallet.connectMode === "manual");
   const showStandbyState =
     waitingForProviderOpen ||
+    manualConnectPendingUi ||
     wallet.status === "booting" ||
     wallet.status === "provider_pending" ||
     wallet.status === "connecting";
@@ -509,6 +543,22 @@ export function WalletConnectSurface({
             <button
               type="button"
               className="wallet-connect-dismiss"
+              onClick={() => tryOpenSlushApp()}
+              disabled={resetPending}
+            >
+              Open Slush
+            </button>
+            <button
+              type="button"
+              className="wallet-connect-dismiss"
+              onClick={() => openSlushConnectionGuide()}
+              disabled={resetPending}
+            >
+              Reset connection guide
+            </button>
+            <button
+              type="button"
+              className="wallet-connect-dismiss"
               onClick={() => void handleHardResetWalletSession()}
               disabled={resetPending}
             >
@@ -560,7 +610,7 @@ export function WalletConnectSurface({
                   : isAdminGate
                   ? "Choose the wallet and approved address for this workspace."
                   : showStandbyState
-                  ? waitingForProviderOpen || wallet.status === "booting" || wallet.status === "provider_pending" || wallet.connectMode === "manual"
+                  ? waitingForProviderOpen || manualConnectPendingUi || wallet.status === "booting" || wallet.status === "provider_pending" || wallet.connectMode === "manual"
                     ? "Preparing secure session"
                     : "Restoring secure session"
                   : "Wallet-optional public mode"}
@@ -573,10 +623,10 @@ export function WalletConnectSurface({
               onClick={() => void handleManualConnectRequest()}
               disabled={wallet.isConnecting || connectModalOpen || routeRecoveryActive}
             >
-              {waitingForProviderOpen || wallet.isConnecting
-                ? "Opening..."
-                : routeRecoveryActive
-                  ? "Route recovering..."
+                {waitingForProviderOpen || wallet.isConnecting || manualConnectPendingUi
+                  ? "Opening..."
+                  : routeRecoveryActive
+                    ? "Route recovering..."
                 : providerLoadFailed
                   ? "Retry"
                 : wallet.status === "booting" || wallet.status === "provider_pending"
