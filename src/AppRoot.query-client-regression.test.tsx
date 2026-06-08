@@ -167,7 +167,7 @@ describe("AppRoot query client regression", () => {
 
   it("keeps wallet provider eager boot for admin and callback routes", () => {
     expect(shouldRequestWalletProvidersOnMountForRoute("/admin")).toBe(true);
-    expect(shouldRequestWalletProvidersOnMountForRoute("/dashboard")).toBe(true);
+    expect(shouldRequestWalletProvidersOnMountForRoute("/dashboard")).toBe(false);
     expect(shouldRequestWalletProvidersOnMountForRoute("/create")).toBe(false);
     expect(shouldRequestWalletProvidersOnMountForRoute("/auth/zklogin/callback")).toBe(false);
   });

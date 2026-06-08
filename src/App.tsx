@@ -23,7 +23,6 @@ import { PublicAppRoutes } from "./routes/PublicAppRoutes";
 import { createPublicRouteComponents, type PublicRouteComponents } from "./routes/publicRouteComponents";
 import { MixedBuildRecoveryScreen, RouteErrorBoundary } from "./routes/RouteErrorBoundary";
 import { getRouteId } from "./routes/routeDiagnostics";
-import { useWalletSessionState } from "./walletSessionState";
 
 const AppShell = lazy(() =>
   retryLazyImport(() => import("./components/AppShell"), "app-shell").then((module) => ({
@@ -204,9 +203,6 @@ function PrivateRouteSurface({
   routeIsDashboardShell,
   routePath,
   routeRetryNonce,
-  walletProviderMounted,
-  walletProviderPending,
-  walletSessionPhase,
   workspaceReady,
 }: {
   components: AppRouteComponents;
@@ -219,9 +215,6 @@ function PrivateRouteSurface({
   routeIsDashboardShell: boolean;
   routePath: string;
   routeRetryNonce: number;
-  walletProviderMounted: boolean;
-  walletProviderPending: boolean;
-  walletSessionPhase: "provider_deferred" | "restoring" | "disconnected" | "connected";
   workspaceReady: boolean;
 }) {
   const shellFallback =
@@ -241,12 +234,8 @@ function PrivateRouteSurface({
     >
       <Suspense fallback={shellFallback}>
         <AppShell
-          routeReady={true}
-          walletProviderMounted={walletProviderMounted}
-          walletProviderPending={walletProviderPending}
-          walletSessionPhase={walletSessionPhase}
           walletUiEnabled={routeShowsWalletUi}
-          walletUiRequested={routeShowsWalletUi}
+          walletUiRequested={routeShowsWalletUi && !routeIsDashboardShell}
           chrome="full"
         >
           <BuildUpdateBanner />
@@ -272,7 +261,6 @@ function PrivateRouteSurface({
 
 export default function App() {
   const location = useLocation();
-  const walletSession = useWalletSessionState();
   const routeIsLanding = location.pathname === "/";
   const routeUsesPublicChrome =
     location.pathname.startsWith("/f/") ||
@@ -408,9 +396,6 @@ export default function App() {
       routeIsDashboardShell={location.pathname === "/dashboard"}
       routePath={routePath}
       routeRetryNonce={routeRetryNonce}
-      walletProviderMounted={walletSession.providerMounted}
-      walletProviderPending={walletSession.providerLoading || !walletSession.providerMounted}
-      walletSessionPhase={walletSession.phase}
       workspaceReady={workspaceReadyForRoute}
     />
   );

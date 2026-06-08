@@ -1,8 +1,15 @@
 import type { ComponentType } from "react";
-import { getChunkFailureUrl, isChunkLoadFailure, recoverFromChunkLoadFailure } from "./chunkLoadRecovery";
+import {
+  getChunkFailureUrl,
+  isChunkLoadFailure,
+  isCssPreloadFailure,
+  isSafariPreloadOnlyFailure,
+  recoverFromChunkLoadFailure,
+} from "./chunkLoadRecovery";
 import { buildInfo, type BuildInfo } from "./buildInfo";
 import { recordBuildAsset } from "./buildAssetDiagnostics";
 import { endPerf, startPerf } from "./perf";
+import { recoverRouteCssAsset } from "./routeCssRecovery";
 import {
   getBrowserCapabilitiesSnapshot,
   isMobileSafariLike,
@@ -221,17 +228,67 @@ function isViteDevServerRuntime() {
   return Boolean(viteWindow.__vite_plugin_react_preamble_installed__ || window.location.port === "5173");
 }
 
-function getLazyImportTimeoutMs() {
+type LazyImportTimeoutPolicy = {
+  hardTimeout: boolean;
+  slowThresholdsMs: number[];
+  timeoutMs: number;
+};
+
+type LazyImportTimeoutResult<T> = {
+  softTimedOut: boolean;
+  softTimedOutAtMs: number | null;
+  value: T;
+};
+
+function getLazyImportTimeoutPolicy(label: string): LazyImportTimeoutPolicy {
   if (typeof window === "undefined") {
-    return 8_000;
+    return {
+      hardTimeout: true,
+      slowThresholdsMs: [5_000, 8_000],
+      timeoutMs: 8_000,
+    };
   }
+
   if (getBrowserCapabilitiesSnapshot().mobileSafari) {
-    return 12_000;
+    if (label === "dashboard-workspace") {
+      return {
+        hardTimeout: false,
+        slowThresholdsMs: [5_000, 10_000, 20_000],
+        timeoutMs: 30_000,
+      };
+    }
+    if (label === "wallet-providers") {
+      return {
+        hardTimeout: false,
+        slowThresholdsMs: [5_000, 10_000, 15_000],
+        timeoutMs: 18_000,
+      };
+    }
+    if (label === "app-shell" || label === "public-app-shell") {
+      return {
+        hardTimeout: true,
+        slowThresholdsMs: [5_000, 10_000],
+        timeoutMs: 12_000,
+      };
+    }
+    return {
+      hardTimeout: false,
+      slowThresholdsMs: [5_000, 10_000],
+      timeoutMs: 12_000,
+    };
   }
   if (isMobileBrowser()) {
-    return 12_000;
+    return {
+      hardTimeout: false,
+      slowThresholdsMs: [5_000, 10_000],
+      timeoutMs: 12_000,
+    };
   }
-  return 8_000;
+  return {
+    hardTimeout: false,
+    slowThresholdsMs: [5_000],
+    timeoutMs: 8_000,
+  };
 }
 
 function getCurrentRoutePath() {
@@ -313,57 +370,103 @@ function logLazyImportTimeoutOnce({
 async function withLazyImportTimeout<T>(
   task: Promise<T>,
   label: string,
-  timeoutMs: number,
+  timeoutPolicy: LazyImportTimeoutPolicy,
   chunkUrl: string | null | undefined,
   attempt: number,
-) {
+): Promise<LazyImportTimeoutResult<T>> {
   if (typeof window === "undefined") {
-    return task;
+    return {
+      softTimedOut: false,
+      softTimedOutAtMs: null,
+      value: await task,
+    };
   }
   const routeEpochSnapshot = getCurrentRouteEpochSnapshot();
   const isCurrentEpoch = () => getCurrentRouteEpochSnapshot().routeEpoch === routeEpochSnapshot.routeEpoch;
   let timeoutHandle = 0;
   const startedAt = performance.now();
   let settled = false;
+  let softTimedOut = false;
+  let softTimedOutAtMs: number | null = null;
   const routePath = getCurrentRoutePath();
   const userAgent = navigator.userAgent;
-  const watchdogMs = Array.from(new Set([5_000, 10_000, timeoutMs, 20_000])).sort((left, right) => left - right);
+  const timeoutMs = timeoutPolicy.timeoutMs;
+  const watchdogMs = Array.from(new Set([...timeoutPolicy.slowThresholdsMs, timeoutMs])).sort((left, right) => left - right);
   const watchdogHandles = watchdogMs.map((elapsedMs) =>
     window.setTimeout(() => {
       if (settled || !isCurrentEpoch()) {
         return;
       }
       if (elapsedMs === timeoutMs) {
-        logLazyImportTimeoutOnce({ attempt, chunkUrl, elapsedMs, label, routePath, timeoutMs, userAgent });
+        const actualElapsedMs = Math.round(performance.now() - startedAt);
+        if (timeoutPolicy.hardTimeout) {
+          logLazyImportTimeoutOnce({ attempt, chunkUrl, elapsedMs: actualElapsedMs, label, routePath, timeoutMs, userAgent });
+          logRouteLifecycle("lazy-import-timed-out", {
+            label,
+            attempt,
+            chunkUrl: chunkUrl ?? null,
+            routePath,
+            elapsedMs: actualElapsedMs,
+            timeoutMs,
+            userAgent,
+            timeoutMode: "hard",
+            buildVersion: buildInfo.appVersion,
+          });
+        } else {
+          softTimedOut = true;
+          softTimedOutAtMs = actualElapsedMs;
+          logRouteLifecycle("lazy-import-timed-out", {
+            label,
+            attempt,
+            chunkUrl: chunkUrl ?? null,
+            routePath,
+            elapsedMs: actualElapsedMs,
+            timeoutMs,
+            userAgent,
+            timeoutMode: "soft",
+            buildVersion: buildInfo.appVersion,
+          });
+        }
         logPublicAppShellTrace("public-app-shell:blocker", {
           label,
           attempt,
           chunkUrl: chunkUrl ?? null,
-          elapsedMs,
+          elapsedMs: actualElapsedMs,
           routePath,
           timeoutMs,
-          reason: "timeout-threshold",
+          reason: timeoutPolicy.hardTimeout ? "timeout-threshold" : "soft-timeout-threshold",
         });
         return;
       }
+      const actualElapsedMs = Math.round(performance.now() - startedAt);
+      logRouteLifecycle("lazy-import-slow", {
+        label,
+        attempt,
+        chunkUrl: chunkUrl ?? null,
+        routePath,
+        elapsedMs: actualElapsedMs,
+        timeoutMs,
+        userAgent,
+        buildVersion: buildInfo.appVersion,
+      });
       logRouteLifecycle("lazy-import-still-pending", {
         label,
         attempt,
         chunkUrl: chunkUrl ?? null,
         routePath,
-        elapsedMs,
+        elapsedMs: actualElapsedMs,
         timeoutMs,
         userAgent,
         buildVersion: buildInfo.appVersion,
       });
       logPublicAppShellTrace("public-app-shell:blocker", {
-        label,
-        attempt,
-        chunkUrl: chunkUrl ?? null,
-        elapsedMs,
-        routePath,
-        timeoutMs,
-        reason: "still-pending",
+          label,
+          attempt,
+          chunkUrl: chunkUrl ?? null,
+          elapsedMs: actualElapsedMs,
+          routePath,
+          timeoutMs,
+          reason: "still-pending",
       });
     }, elapsedMs),
   );
@@ -379,6 +482,9 @@ async function withLazyImportTimeout<T>(
   );
   const timeoutPromise = new Promise<never>((_, reject) => {
     timeoutHandle = window.setTimeout(() => {
+      if (!timeoutPolicy.hardTimeout) {
+        return;
+      }
       if (!isCurrentEpoch()) {
         reject(new StaleLazyImportEpochError(label, routeEpochSnapshot.routeEpoch, getCurrentRouteEpochSnapshot().routeEpoch));
         return;
@@ -391,7 +497,12 @@ async function withLazyImportTimeout<T>(
   });
 
   try {
-    return await Promise.race([task, timeoutPromise]);
+    const value = timeoutPolicy.hardTimeout ? await Promise.race([task, timeoutPromise]) : await task;
+    return {
+      softTimedOut,
+      softTimedOutAtMs,
+      value,
+    };
   } finally {
     clearTimeoutSafe(timeoutHandle);
   }
@@ -453,11 +564,56 @@ async function getExpectedChunkUrl(label: string) {
   return chunkPath ? resolveAssetUrl(chunkPath) : null;
 }
 
+export async function getExpectedRouteChunkUrl(label: string) {
+  return getExpectedChunkUrl(label);
+}
+
 function appendCacheBust(url: string, attempt: number) {
   const nextUrl = new URL(url, window.location.href);
   nextUrl.searchParams.set("route-chunk-cache-bust", `${Date.now()}-${attempt}`);
   nextUrl.searchParams.set("build", buildInfo.appVersion);
   return nextUrl.toString();
+}
+
+function getCssPreloadFailureUrl(error: unknown) {
+  const source = error instanceof Error ? `${error.message}\n${error.stack ?? ""}` : String(error ?? "");
+  return source.match(/https?:\/\/[^\s)'"]+\.css(?:\?[^)\s'"]*)?/i)?.[0] ?? null;
+}
+
+async function attemptCssPreloadRecovery(label: string, attempt: number, error: unknown) {
+  const resourceUrl = getCssPreloadFailureUrl(error);
+  if (!resourceUrl) {
+    return null;
+  }
+  const result = await recoverRouteCssAsset(resourceUrl);
+  logRouteLifecycle("lazy-import-css-recovery", {
+    label,
+    attempt,
+    cssAssetUrl: result.resourceUrl,
+    cssRetryUrl: result.retryHref,
+    cssRetryStatus: result.status,
+    recovered: result.recovered,
+    routePath: getCurrentRoutePath(),
+  });
+  return result;
+}
+
+type LazyImportFailureKind = "chunkLoad" | "css_preload" | "modulepreload" | "runtime" | "timeout";
+
+function getLazyImportFailureKind(error: unknown): LazyImportFailureKind {
+  if (error instanceof LazyImportTimeoutError) {
+    return "timeout";
+  }
+  if (isCssPreloadFailure(error)) {
+    return "css_preload";
+  }
+  if (isSafariPreloadOnlyFailure(error)) {
+    return "modulepreload";
+  }
+  if (isChunkLoadFailure(error)) {
+    return "chunkLoad";
+  }
+  return "runtime";
 }
 
 function hashSnippet(value: string) {
@@ -843,10 +999,10 @@ function probeLazyImportDependenciesOnStart(label: string, chunkUrl: string | nu
     });
 }
 
-async function importCacheBustedRouteChunk<T>(label: string, chunkUrl: string, attempt: number): Promise<T | null> {
+async function importCacheBustedRouteChunk<T>(label: string, chunkUrl: string, attempt: number): Promise<T> {
   const spec = routeChunkByLabel[label];
   if (!spec) {
-    return null;
+    throw new Error(`Route chunk spec for ${label} was missing.`);
   }
   const cacheBustedUrl = appendCacheBust(chunkUrl, attempt);
   const module = (await import(/* @vite-ignore */ cacheBustedUrl)) as Record<string, unknown>;
@@ -871,6 +1027,7 @@ export async function retryLazyImport<T>(loader: () => Promise<T>, label = "anon
   }
   if (registryEntry?.status === "pending" && registryEntry.promise) {
     logRouteLifecycle("lazy-import-join", {
+      callerStack: new Error().stack?.split("\n").slice(1, 5).join("\n"),
       label,
       navigationId: getCurrentRouteEpochSnapshot().navigationId,
       routeEpoch: getCurrentRouteEpochSnapshot().routeEpoch,
@@ -896,7 +1053,8 @@ export async function retryLazyImport<T>(loader: () => Promise<T>, label = "anon
     expectedChunkUrl = await getExpectedChunkUrl(label);
     return expectedChunkUrl;
   };
-  const timeoutMs = getLazyImportTimeoutMs();
+  const timeoutPolicy = getLazyImportTimeoutPolicy(label);
+  const timeoutMs = timeoutPolicy.timeoutMs;
   startPerf(perfName);
   markRouteImportStart(label);
   const importPromise = (async () => {
@@ -911,6 +1069,7 @@ export async function retryLazyImport<T>(loader: () => Promise<T>, label = "anon
           attempt,
           chunkUrl: chunkUrlForAttempt,
           devSingleAttempt: singleAttemptRuntime,
+          hardTimeout: timeoutPolicy.hardTimeout,
           navigationId: routeEpochSnapshot.navigationId,
           routeEpoch: routeEpochSnapshot.routeEpoch,
           routePath: getCurrentRoutePath(),
@@ -929,24 +1088,24 @@ export async function retryLazyImport<T>(loader: () => Promise<T>, label = "anon
         const result =
           attempt === 1 || !chunkUrlForAttempt
             ? await runWithMobileSafariLazyImportQueue(() =>
-                withLazyImportTimeout(loader(), label, timeoutMs, chunkUrlForAttempt, attempt),
+                withLazyImportTimeout(loader(), label, timeoutPolicy, chunkUrlForAttempt, attempt),
               )
             : (await runWithMobileSafariLazyImportQueue(() =>
                 withLazyImportTimeout(
                   importCacheBustedRouteChunk<T>(label, chunkUrlForAttempt, attempt),
                   label,
-                  timeoutMs,
+                  timeoutPolicy,
                   chunkUrlForAttempt,
                   attempt,
                 ),
               )) ??
               (await runWithMobileSafariLazyImportQueue(() =>
-                withLazyImportTimeout(loader(), label, timeoutMs, chunkUrlForAttempt, attempt),
+                withLazyImportTimeout(loader(), label, timeoutPolicy, chunkUrlForAttempt, attempt),
               ));
         if (!isCurrentEpoch()) {
           throw createStaleEpochError();
         }
-        const moduleBuildInfo = getModuleBuildInfo(result) ?? buildInfo;
+        const moduleBuildInfo = getModuleBuildInfo(result.value) ?? buildInfo;
         recordBuildAsset(`lazy:${label}`, moduleBuildInfo);
         console.info("[DeepSignal route chunk]", {
           label,
@@ -962,7 +1121,20 @@ export async function retryLazyImport<T>(loader: () => Promise<T>, label = "anon
           navigationId: routeEpochSnapshot.navigationId,
           routeEpoch: routeEpochSnapshot.routeEpoch,
           routePath: getCurrentRoutePath(),
+          timeoutMode: timeoutPolicy.hardTimeout ? "hard" : "soft",
         });
+        if (result.softTimedOut) {
+          logRouteLifecycle("lazy-import-recovered", {
+            label,
+            attempt,
+            chunkUrl: chunkUrlForAttempt,
+            recoveredAtMs: Math.round(performance.now()),
+            routePath: getCurrentRoutePath(),
+            timedOutAtMs: result.softTimedOutAtMs,
+            timeoutMs,
+            userAgent: typeof navigator === "undefined" ? "" : navigator.userAgent,
+          });
+        }
         logPublicAppShellTrace("public-app-shell:resolve", {
           label,
           attempt,
@@ -972,22 +1144,42 @@ export async function retryLazyImport<T>(loader: () => Promise<T>, label = "anon
           routePath: getCurrentRoutePath(),
         });
         endPerf(perfName, "ok", `attempt ${attempt}`);
-        lazyImportRegistry.set(label, { result, status: "resolved" });
-        return result;
+        lazyImportRegistry.set(label, { result: result.value, status: "resolved" });
+        return result.value;
       } catch (error) {
         if (error instanceof StaleLazyImportEpochError || !isCurrentEpoch()) {
           lazyImportRegistry.delete(label);
           throw error instanceof StaleLazyImportEpochError ? error : createStaleEpochError();
         }
+        const failureKind = getLazyImportFailureKind(error);
+        const cssRecovery = await attemptCssPreloadRecovery(label, attempt, error);
+        const preloadOnlyFailure = failureKind === "css_preload" || failureKind === "modulepreload";
         const chunkUrlForDiagnostics = expectedChunkUrl ?? (await resolveExpectedChunkUrl());
         const failureUrl = getChunkFailureUrl(error);
         const targetChunkFailure = Boolean(failureUrl && chunkUrlForDiagnostics && failureUrl === chunkUrlForDiagnostics);
         const evaluationErrorUrl = targetChunkFailure ? failureUrl : null;
         const transitiveStackUrl = failureUrl && !targetChunkFailure ? failureUrl : null;
         lastError = error;
-        markRouteImportFailure(chunkUrlForDiagnostics ?? null);
+        if (!preloadOnlyFailure) {
+          markRouteImportFailure(chunkUrlForDiagnostics ?? null);
+        }
+        if (preloadOnlyFailure) {
+          logRouteLifecycle("lazy-import-preload-warning", {
+            label,
+            attempt,
+            chunkUrl: chunkUrlForDiagnostics ?? null,
+            failureKind,
+            message: error instanceof Error ? error.message : String(error),
+            navigationId: routeEpochSnapshot.navigationId,
+            routePath: getCurrentRoutePath(),
+            routeEpoch: routeEpochSnapshot.routeEpoch,
+            cssAssetUrl: cssRecovery?.resourceUrl ?? null,
+            cssRetryRecovered: cssRecovery?.recovered ?? false,
+            cssRetryStatus: cssRecovery?.status ?? null,
+          });
+        }
         recordFailedImport(label, error, chunkUrlForDiagnostics, {
-          category: error instanceof LazyImportTimeoutError ? "timeout" : isChunkLoadFailure(error) ? "chunkLoad" : "runtime",
+          category: failureKind === "timeout" ? "timeout" : failureKind === "chunkLoad" ? "chunkLoad" : "runtime",
           attempt,
           evaluationErrorUrl,
           expectedRouteChunkUrl: chunkUrlForDiagnostics ?? null,
@@ -999,13 +1191,15 @@ export async function retryLazyImport<T>(loader: () => Promise<T>, label = "anon
           resolvedChunkUrl: chunkUrlForDiagnostics ?? null,
           transitiveStackUrl,
           userAgent: typeof navigator === "undefined" ? "" : navigator.userAgent,
+          fetchStatus: cssRecovery?.status ?? undefined,
         });
-        logRouteLifecycle(error instanceof LazyImportTimeoutError ? "lazy-import-timeout-recorded" : "lazy-import-rejected", {
+        logRouteLifecycle(failureKind === "timeout" ? "lazy-import-timeout-recorded" : "lazy-import-rejected", {
           label,
           attempt,
           chunkUrl: chunkUrlForDiagnostics ?? null,
           devSingleAttempt: singleAttemptRuntime,
           evaluationErrorUrl,
+          failureKind,
           expectedRouteChunkUrl: chunkUrlForDiagnostics ?? null,
           importTargetUrl: chunkUrlForDiagnostics ?? null,
           message: error instanceof Error ? error.message : String(error),
@@ -1014,18 +1208,22 @@ export async function retryLazyImport<T>(loader: () => Promise<T>, label = "anon
           routeEpoch: routeEpochSnapshot.routeEpoch,
           transitiveStackUrl,
           userAgent: typeof navigator === "undefined" ? "" : navigator.userAgent,
+          cssAssetUrl: cssRecovery?.resourceUrl ?? null,
+          cssRetryRecovered: cssRecovery?.recovered ?? false,
+          cssRetryStatus: cssRecovery?.status ?? null,
         });
         logPublicAppShellTrace("public-app-shell:blocker", {
           label,
           attempt,
           chunkUrl: chunkUrlForDiagnostics ?? null,
           devSingleAttempt: singleAttemptRuntime,
+          failureKind,
           message: error instanceof Error ? error.message : String(error),
           navigationId: routeEpochSnapshot.navigationId,
           routePath: getCurrentRoutePath(),
           routeEpoch: routeEpochSnapshot.routeEpoch,
           timeoutMs,
-          reason: error instanceof LazyImportTimeoutError ? "timeout" : "rejected",
+          reason: failureKind === "timeout" ? "timeout" : preloadOnlyFailure ? "preload-retry" : "rejected",
         });
         if (chunkUrlForDiagnostics) {
           if (transitiveStackUrl) {
@@ -1048,8 +1246,9 @@ export async function retryLazyImport<T>(loader: () => Promise<T>, label = "anon
           logRouteLifecycle("lazy-import-diagnostics", {
             label,
             attempt,
-            category: error instanceof LazyImportTimeoutError ? "timeout" : isChunkLoadFailure(error) ? "chunkLoad" : "runtime",
+            category: failureKind === "timeout" ? "timeout" : failureKind === "chunkLoad" ? "chunkLoad" : "runtime",
             failureStage,
+            failureKind,
             chunkUrl: chunkUrlForDiagnostics,
             evaluationErrorUrl,
             expectedRouteChunkUrl: chunkUrlForDiagnostics,
@@ -1100,6 +1299,13 @@ export async function retryLazyImport<T>(loader: () => Promise<T>, label = "anon
             ...probe,
           });
         }
+        if (preloadOnlyFailure) {
+          if (attempt === maxAttempts) {
+            break;
+          }
+          await wait(lazyImportRetryDelayMs[Math.min(attempt - 1, lazyImportRetryDelayMs.length - 1)]);
+          continue;
+        }
         if (attempt === maxAttempts) {
           break;
         }
@@ -1107,7 +1313,7 @@ export async function retryLazyImport<T>(loader: () => Promise<T>, label = "anon
       }
     }
     lazyImportRegistry.set(label, { error: lastError, status: "rejected" });
-    if (!(lastError instanceof LazyImportTimeoutError)) {
+    if (!(lastError instanceof LazyImportTimeoutError) && !isCssPreloadFailure(lastError) && !isSafariPreloadOnlyFailure(lastError)) {
       recoverFromChunkLoadFailure(lastError);
     }
     endPerf(perfName, "failed", lastError instanceof Error ? lastError.message : String(lastError));

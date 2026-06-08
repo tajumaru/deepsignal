@@ -52,6 +52,9 @@ export function getRouteRuntimeMetadata(routePath: string): RouteRuntimeMetadata
 
 export function shouldMountWalletProviders(routePath: string) {
   const pathname = getPathname(routePath);
+  if (pathname === "/dashboard") {
+    return false;
+  }
   if (pathname === "/create" || pathname === "/compose" || pathname === "/admin/forms/new") {
     return false;
   }

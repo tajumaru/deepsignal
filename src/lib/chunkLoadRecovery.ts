@@ -77,6 +77,11 @@ function errorText(error: unknown) {
   return String(error ?? "").toLowerCase();
 }
 
+export function isCssPreloadFailure(error: unknown) {
+  const text = errorText(error);
+  return text.includes("unable to preload css") || text.includes("preload css");
+}
+
 function isMobileSafariUserAgent() {
   if (typeof navigator === "undefined") {
     return false;
@@ -93,9 +98,7 @@ export function isChunkLoadFailure(error: unknown) {
     text.includes("error loading dynamically imported module") ||
     text.includes("failed to load module script") ||
     text.includes("mime type") ||
-    text.includes("disallowed mime type") ||
-    text.includes("unable to preload css") ||
-    text.includes("vite:preloaderror")
+    text.includes("disallowed mime type")
   );
 }
 
@@ -193,7 +196,13 @@ export async function clearRuntimeCaches() {
 }
 
 export function recoverFromChunkLoadFailure(error: unknown) {
-  if (typeof window === "undefined" || reloadScheduled || !isChunkLoadFailure(error)) {
+  if (
+    typeof window === "undefined" ||
+    reloadScheduled ||
+    isSafariPreloadOnlyFailure(error) ||
+    isCssPreloadFailure(error) ||
+    !isChunkLoadFailure(error)
+  ) {
     return false;
   }
 

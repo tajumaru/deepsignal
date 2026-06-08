@@ -1,17 +1,9 @@
-import { Component, useCallback, useRef, useState, type ErrorInfo, type ReactNode } from "react";
+import { Component, type ErrorInfo, type ReactNode } from "react";
 import { Navigate, Route, Routes, useLocation, useParams } from "react-router-dom";
 import { DashboardRecoveryPanel } from "../components/DashboardRecoveryPanel";
-import { DashboardShellFirstPanel } from "../components/DashboardShellFirstPanel";
 import { WalrusRuntimeSurface } from "../components/WalrusRuntimeSurface";
-import { WalletSurface } from "../components/WalletSurface";
-import { buildInfo } from "../lib/buildInfo";
 import { getChunkFailureUrl } from "../lib/chunkLoadRecovery";
-import {
-  markDashboardWalletImportFailed,
-  markDashboardWalletImportReady,
-  markDashboardWalletImportStarted,
-} from "../lib/dashboardProjectRestore";
-import { getBrowserCapabilitiesSnapshot, logRouteLifecycle } from "../lib/routeDiagnostics";
+import { logRouteLifecycle } from "../lib/routeDiagnostics";
 import { REQUIRE_GLOBAL_WALRUS_RUNTIME } from "../lib/runtimeFlags";
 import type { AppRouteComponents } from "./appRouteComponents";
 
@@ -32,124 +24,6 @@ function WithWalrusRuntime({ children }: { children: ReactNode }) {
     return <>{children}</>;
   }
   return <WalrusRuntimeSurface>{children}</WalrusRuntimeSurface>;
-}
-
-function WithDeferredWalletRuntime({ children, onRetry }: { children: ReactNode; onRetry?: () => void }) {
-  const [walletRetryNonce, setWalletRetryNonce] = useState(0);
-  const silentRetryScheduledRef = useRef(false);
-  const routePath = typeof window === "undefined" ? "/dashboard" : window.location.hash?.replace(/^#/, "") || "/dashboard";
-
-  const handleRetry = useCallback(() => {
-    setWalletRetryNonce((value) => value + 1);
-    onRetry?.();
-  }, [onRetry]);
-
-  const handleWalletImportSlow = useCallback(() => {
-    if (silentRetryScheduledRef.current) {
-      return;
-    }
-    silentRetryScheduledRef.current = true;
-    logRouteLifecycle("provider:wallet-import-silent-retry-scheduled", {
-      reason: "dashboard-wallet-runtime-slow",
-      routePath,
-      retryKey: walletRetryNonce,
-    });
-    window.setTimeout(() => {
-      logRouteLifecycle("provider:wallet-import-silent-retry", {
-        reason: "dashboard-wallet-runtime-slow",
-        routePath,
-        retryKey: walletRetryNonce + 1,
-      });
-      setWalletRetryNonce((value) => value + 1);
-    }, 750);
-  }, [routePath, walletRetryNonce]);
-
-  const handleWalletImportFailure = useCallback(
-    (details: { buildVersion: string; mobileSafari: boolean; retryCount: number; retryKey: string | number; routePath: string }) => {
-      markDashboardWalletImportFailed(routePath);
-      logRouteLifecycle("dashboard:wallet-runtime-fallback-render", {
-        ...details,
-        routePath,
-        recoveryScope: "wallet-only",
-      });
-    },
-    [routePath],
-  );
-
-  return (
-    <WalletRuntimeBoundary onRetry={handleRetry} resetKey={`wallet:${routePath}:${walletRetryNonce}`} routePath={routePath}>
-      <WalletSurface
-        fallback={<DashboardShellFirstPanel onRetryWalletRuntime={handleRetry} routePath={routePath} />}
-        onImportFailure={handleWalletImportFailure}
-        onImportSlow={handleWalletImportSlow}
-        onImportStart={() => markDashboardWalletImportStarted(routePath)}
-        onImportSuccess={() => markDashboardWalletImportReady(routePath)}
-        requestOnMount
-        retryKey={walletRetryNonce}
-      >
-        {children}
-      </WalletSurface>
-    </WalletRuntimeBoundary>
-  );
-}
-
-type WalletRuntimeBoundaryProps = {
-  children: ReactNode;
-  onRetry: () => void;
-  resetKey: string;
-  routePath: string;
-};
-
-type WalletRuntimeBoundaryState = {
-  error: unknown;
-};
-
-class WalletRuntimeBoundary extends Component<WalletRuntimeBoundaryProps, WalletRuntimeBoundaryState> {
-  state: WalletRuntimeBoundaryState = { error: null };
-
-  static getDerivedStateFromError(error: unknown): WalletRuntimeBoundaryState {
-    return { error };
-  }
-
-  componentDidCatch(error: unknown, errorInfo: ErrorInfo) {
-    logRouteLifecycle("provider:wallet-import-failed", {
-      buildVersion: buildInfo.appVersion,
-      chunkUrl: null,
-      errorName: error instanceof Error ? error.name : "Error",
-      errorMessage: error instanceof Error ? error.message : String(error ?? "Unknown wallet runtime failure"),
-      mobileSafari: Boolean(getBrowserCapabilitiesSnapshot().mobileSafari),
-      recoveryScope: "wallet-only",
-      routePath: this.props.routePath,
-      componentStack: errorInfo.componentStack,
-    });
-    markDashboardWalletImportFailed(
-      this.props.routePath,
-      error instanceof Error ? error.message : String(error ?? "Unknown wallet runtime failure"),
-    );
-  }
-
-  componentDidUpdate(previousProps: WalletRuntimeBoundaryProps) {
-    if (previousProps.resetKey !== this.props.resetKey && this.state.error) {
-      this.setState({ error: null });
-      logRouteLifecycle("provider:wallet-runtime-boundary-reset", {
-        routePath: this.props.routePath,
-        resetKey: this.props.resetKey,
-      });
-    }
-  }
-
-  render() {
-    if (this.state.error) {
-      return (
-        <DashboardShellFirstPanel
-          onRetryWalletRuntime={this.props.onRetry}
-          routePath={this.props.routePath}
-          walletStatusMessage="Wallet runtime failed. Dashboard shell remains available."
-        />
-      );
-    }
-    return this.props.children;
-  }
 }
 
 type DashboardRouteBoundaryProps = {
@@ -282,9 +156,7 @@ export function AppRoutes({
             resetKey={`dashboard:${routePath}:${routeRetryNonce}`}
             routePath={routePath}
           >
-            <WithDeferredWalletRuntime onRetry={onRetryRoute}>
-              <AdminDashboardPage />
-            </WithDeferredWalletRuntime>
+            <AdminDashboardPage />
           </DashboardRouteBoundary>
         }
       />

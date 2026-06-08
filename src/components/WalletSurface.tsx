@@ -105,6 +105,9 @@ function createWalletProviders(
     }, importTimeoutMs);
     walletProvidersInFlightPromise = retryLazyImport(() => import("../providers"), "wallet-providers")
       .then((module) => {
+        if (typeof module.WalletProviders !== "function") {
+          throw new Error("WalletProviders export was missing from providers runtime.");
+        }
         markPerfMilestone("provider:wallet:import-resolved", `retry ${retryKey}`);
         logRouteLifecycle("provider:wallet-import-resolved", eventDetails);
         optionsRef.current.onSuccess?.(eventDetails);

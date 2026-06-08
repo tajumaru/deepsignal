@@ -35,6 +35,67 @@ import { useWalletProviderRuntime } from "./components/WalletSurfaceRuntime";
 
 const PREFERRED_WALLETS = ["Sui Wallet", "Slush", "Phantom", "OKX Wallet"];
 const DAPP_KIT_WALLET_STORAGE_KEY = "sui-dapp-kit:wallet-connection-info";
+const AUTO_RESTORE_ATTEMPTED_KEY = "deepsignal.wallet.autoRestoreAttempted";
+const AUTO_RESTORE_DISABLED_KEY = "deepsignal.wallet.autoRestoreDisabled";
+
+let autoRestoreAttemptedThisBoot = false;
+let autoRestoreDisabledThisBoot = false;
+
+function readSessionBoolean(key: string) {
+  if (typeof window === "undefined") {
+    return false;
+  }
+  try {
+    return window.sessionStorage.getItem(key) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function writeSessionBoolean(key: string, value: boolean) {
+  if (typeof window === "undefined") {
+    return;
+  }
+  try {
+    window.sessionStorage.setItem(key, value ? "1" : "0");
+  } catch {
+    // Best effort only.
+  }
+}
+
+function isAutoRestoreSuppressed() {
+  return autoRestoreDisabledThisBoot || readSessionBoolean(AUTO_RESTORE_DISABLED_KEY);
+}
+
+function shouldEnableAutoRestore() {
+  if (isAutoRestoreSuppressed()) {
+    return false;
+  }
+  if (autoRestoreAttemptedThisBoot || readSessionBoolean(AUTO_RESTORE_ATTEMPTED_KEY)) {
+    return false;
+  }
+  return true;
+}
+
+function markAutoRestoreAttempted(reason: string) {
+  autoRestoreAttemptedThisBoot = true;
+  writeSessionBoolean(AUTO_RESTORE_ATTEMPTED_KEY, true);
+  logRouteLifecycle("wallet:auto-restore-lock", {
+    autoRestoreCallerReason: reason,
+    attempted: true,
+    suppressed: isAutoRestoreSuppressed(),
+  });
+}
+
+function suppressAutoRestore(reason: string) {
+  autoRestoreDisabledThisBoot = true;
+  writeSessionBoolean(AUTO_RESTORE_DISABLED_KEY, true);
+  logRouteLifecycle("wallet:auto-restore-suppressed", {
+    autoRestoreCallerReason: reason,
+    attempted: autoRestoreAttemptedThisBoot || readSessionBoolean(AUTO_RESTORE_ATTEMPTED_KEY),
+    suppressed: true,
+  });
+}
 
 function isSilentWalletRestore(variables: unknown): variables is { silent: true } {
   return Boolean(
@@ -106,6 +167,7 @@ function WalletStatusBridge({ children }: PropsWithChildren) {
       logRouteLifecycle("wallet:restoration-start", {
         walletName: value.walletName,
         accountAddress: value.accountAddress ? "present" : "absent",
+        autoRestoreCallerReason: "wallet-provider-auto-connect",
       });
     }
     if (!value.isRestoringConnection && restoreInFlightRef.current) {
@@ -116,7 +178,11 @@ function WalletStatusBridge({ children }: PropsWithChildren) {
         status: value.status,
         walletName: value.walletName,
         accountAddress: value.accountAddress ? "present" : "absent",
+        autoRestoreCallerReason: "wallet-provider-auto-connect",
       });
+      if (value.status !== "connected") {
+        suppressAutoRestore("restore-ended-disconnected");
+      }
     }
     logRouteLifecycle("wallet-provider:status", { ...value });
     setDeepSignalDebugReadiness({
@@ -165,6 +231,7 @@ function WalletStatusBridge({ children }: PropsWithChildren) {
 export function WalletProviders({ children }: PropsWithChildren) {
   const rpcInfrastructure = useRpcInfrastructure();
   const currentRpcUrl = rpcInfrastructure.currentRpcUrl;
+  const autoConnectEnabled = shouldEnableAutoRestore();
 
   useEffect(() => {
     setQueryClientMutationErrorHandler((_error, variables) => {
@@ -177,6 +244,8 @@ export function WalletProviders({ children }: PropsWithChildren) {
 
   useEffect(() => {
     logRouteLifecycle("wallet-provider:ready", {
+      autoRestoreCallerReason: autoConnectEnabled ? "provider-mount-auto-connect-enabled" : "provider-mount-auto-connect-skipped",
+      autoRestoreEnabled: autoConnectEnabled,
       currentRpcUrl,
       hasRpcInfrastructure: Boolean(rpcInfrastructure),
     });
@@ -189,7 +258,18 @@ export function WalletProviders({ children }: PropsWithChildren) {
     endPerf("provider:wallet", "ok");
     markPerfMilestone("sui_client_ready", rpcInfrastructure.providerLabel);
     markPerfMilestone("provider:wallet:ready");
-  }, [currentRpcUrl, rpcInfrastructure]);
+  }, [autoConnectEnabled, currentRpcUrl, rpcInfrastructure]);
+
+  useEffect(() => {
+    if (autoConnectEnabled) {
+      markAutoRestoreAttempted("wallet-provider-mounted");
+      return;
+    }
+    logRouteLifecycle("wallet:auto-restore-skipped", {
+      autoRestoreCallerReason: isAutoRestoreSuppressed() ? "suppressed" : "already-attempted",
+      currentRpcUrl,
+    });
+  }, [autoConnectEnabled, currentRpcUrl]);
 
   const { networkConfig } = useMemo(
     () =>
@@ -235,7 +315,7 @@ export function WalletProviders({ children }: PropsWithChildren) {
       network={SUI_NETWORK}
       createClient={createClient}
     >
-      <WalletProvider preferredWallets={PREFERRED_WALLETS} walletFilter={walletFilter} autoConnect>
+      <WalletProvider preferredWallets={PREFERRED_WALLETS} walletFilter={walletFilter} autoConnect={autoConnectEnabled}>
         <WalletStatusBridge>
           {REQUIRE_GLOBAL_WALRUS_RUNTIME ? (
             <OptionalWalrusRuntimeBoundary>

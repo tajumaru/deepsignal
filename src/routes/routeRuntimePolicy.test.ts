@@ -30,7 +30,7 @@ describe("routeRuntimePolicy", () => {
 
   it("keeps wallet provider eager boot only on wallet-hydrated private workspace routes", () => {
     expect(shouldMountWalletProviders("/admin")).toBe(true);
-    expect(shouldMountWalletProviders("/dashboard")).toBe(true);
+    expect(shouldMountWalletProviders("/dashboard")).toBe(false);
     expect(shouldMountWalletProviders("/create")).toBe(false);
     expect(shouldMountWalletProviders("/compose")).toBe(false);
     expect(shouldMountWalletProviders("/admin/forms/new")).toBe(false);
