@@ -147,6 +147,7 @@ export interface FormHeaderLogo {
 export interface FormNftGate {
   network: "sui-mainnet" | "sui-testnet";
   structType: string;
+  objectId?: string;
   requiredCount: number;
   gateViewing: boolean;
   gateSubmission: boolean;

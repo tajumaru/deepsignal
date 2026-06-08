@@ -2,11 +2,10 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import type { PublicRouteComponents } from "./publicRouteComponents";
 
 export function PublicAppRoutes({ components }: { components: PublicRouteComponents }) {
-  const { TroubleshootingPage, PublicFormPage, PublicRoadmapPage, ManifestRestorePage, ZkLoginCallbackPage } = components;
+  const { PublicFormPage, PublicRoadmapPage, ManifestRestorePage, ZkLoginCallbackPage } = components;
 
   return (
     <Routes>
-      <Route path="/troubleshooting" element={<TroubleshootingPage />} />
       <Route path="/f/:formId" element={<PublicFormPage />} />
       <Route path="/roadmap/:formId" element={<PublicRoadmapPage />} />
       <Route path="/m/:manifestBlobId" element={<ManifestRestorePage />} />

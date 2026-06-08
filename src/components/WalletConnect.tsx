@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useSuiWallet } from "../hooks/useSuiWallet";
 import { useI18n } from "../i18n";
+import type { WalletConnectFailureState } from "../walletStatus";
 import { ConnectedWalletMenu, ConnectWalletButton } from "./wallet";
 import { SuiAddressDisplay } from "./SuiAddressDisplay";
 
@@ -10,10 +11,10 @@ interface WalletConnectProps {
   connectModalOpen?: boolean;
   onConnectModalOpenChange?: (open: boolean) => void;
   onConnectModalCancel?: () => void;
-  onConnectAttemptFailure?: (failure: import("../walletStatus").WalletConnectFailureState) => void;
+  onConnectAttemptFailure?: (failure: WalletConnectFailureState) => void;
   onConnectAttemptSuccess?: () => void;
   onManualConnectRequest?: () => Promise<void> | void;
-  connectFailure?: import("../walletStatus").WalletConnectFailureState | null;
+  connectFailure?: WalletConnectFailureState | null;
 }
 
 export function WalletConnect({
@@ -22,10 +23,7 @@ export function WalletConnect({
   connectModalOpen = false,
   onConnectModalOpenChange,
   onConnectModalCancel,
-  onConnectAttemptFailure,
-  onConnectAttemptSuccess,
   onManualConnectRequest,
-  connectFailure = null,
 }: WalletConnectProps) {
   const { t } = useI18n();
   const wallet = useSuiWallet();
@@ -89,9 +87,7 @@ export function WalletConnect({
                   ? t("secureSessionStandby")
                   : t("connectWalletToReview")
                 : wallet.isConnecting
-                  ? wallet.connectMode === "manual"
-                    ? "Preparing secure session"
-                    : "Restoring secure session"
+                  ? "Restoring secure session"
                   : "Wallet-optional public mode"}
             </span>
           </div>
@@ -101,10 +97,7 @@ export function WalletConnect({
             connectModalOpen={connectModalOpen}
             onConnectModalOpenChange={onConnectModalOpenChange}
             onConnectModalCancel={onConnectModalCancel}
-            onConnectAttemptFailure={onConnectAttemptFailure}
-            onConnectAttemptSuccess={onConnectAttemptSuccess}
             onManualConnectRequest={onManualConnectRequest}
-            connectFailure={connectFailure}
           />
         </div>
       </div>
@@ -119,9 +112,9 @@ export function WalletConnect({
       }`.trim()}
     >
       <div
-        className={`wallet-sync-button ${wallet.status === "connected" ? "is-synced" : ""} ${
+        className={`wallet-sync-button ${wallet.isConnected ? "is-synced" : ""} ${
           wallet.isConnecting ? "is-syncing" : ""
-        }`}
+        }`.trim()}
       >
         <ConnectWalletButton
           wallet={wallet}
@@ -144,7 +137,11 @@ export function WalletConnect({
       </div>
 
       {menuOpen ? (
-        <ConnectedWalletMenu accountAddress={wallet.accountAddress} onClose={() => setMenuOpen(false)} walletName={wallet.walletName} />
+        <ConnectedWalletMenu
+          accountAddress={wallet.accountAddress}
+          onClose={() => setMenuOpen(false)}
+          walletName={wallet.walletName}
+        />
       ) : null}
     </div>
   );

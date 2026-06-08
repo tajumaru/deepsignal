@@ -11,7 +11,6 @@ import type { FormSchema, FormNftGate } from "../../../types";
 import type { NftOwnershipDiagnostic } from "../../../lib/nftOwnership";
 
 const ROUTE_LEVEL_SUCCESS_CACHE_MS = 30_000;
-const ROUTE_LEVEL_FAILURE_COOLDOWN_MS = 15_000;
 let publicNftOwnershipLoaderPromise: Promise<{
   checkOwnedNftsForClient: typeof import("../../../lib/nftOwnership").checkOwnedNftsForClient;
   createBrowserSafeSuiTransport: typeof import("../../../lib/suiRpcTransport").createBrowserSafeSuiTransport;
@@ -33,10 +32,12 @@ type PublicNftGateDebugInfo = NftOwnershipDiagnostic & {
 
 export interface PublicNftAccessCheckResult {
   checkedAt: string;
+  status: "not_required" | "wallet_missing" | "checking" | "network_mismatch" | "rpc_error" | "no_match" | "passed";
   passed: boolean;
   reason?: "not_required" | "wallet_missing" | "network_mismatch" | "ownership_missing" | "rpc_error";
   walletAddress?: string;
   structType?: string;
+  objectId?: string;
   requiredCount?: number;
   ownedCount: number;
   network?: FormNftGate["network"];
@@ -50,15 +51,18 @@ function buildAccessCheckResult(
   walletAddress: string | undefined,
   ownedCount: number,
   passed: boolean,
+  status: PublicNftAccessCheckResult["status"],
   reason?: PublicNftAccessCheckResult["reason"],
   debug?: PublicNftGateDebugInfo,
 ): PublicNftAccessCheckResult {
   return {
     checkedAt: new Date().toISOString(),
+    status,
     passed,
     reason,
     walletAddress,
     structType: nftGate?.structType,
+    objectId: nftGate?.objectId,
     requiredCount: nftGate?.requiredCount,
     ownedCount,
     network: nftGate?.network,
@@ -71,9 +75,9 @@ function buildAccessCheckResult(
 function buildOwnershipCacheKey(
   network: FormNftGate["network"] | undefined,
   walletAddress: string,
-  structType: string,
+  selector: string,
 ) {
-  return `${network ?? "sui-mainnet"}::${walletAddress}::${structType}`;
+  return `${network ?? "sui-mainnet"}::${walletAddress}::${selector}`;
 }
 
 function clearOwnershipCacheForAddress(network: FormNftGate["network"] | undefined, walletAddress?: string) {
@@ -99,6 +103,7 @@ function createBaseDebugInfo(
     network: nftGate?.network ?? getCurrentFormNftNetwork(),
     rpcEndpoint,
     targetTypes: nftGate?.structType ? [nftGate.structType] : [],
+    targetObjectIds: nftGate?.objectId ? [nftGate.objectId] : [],
     directOwnedCount: 0,
     kioskCount: 0,
     kioskItemCount: 0,
@@ -112,6 +117,7 @@ function createBaseDebugInfo(
     matchedDirectObjects: [],
     matchedKioskItems: [],
     sampleObjectTypes: [],
+    ownershipChecks: [],
     zeroCountReason,
   };
 }
@@ -156,6 +162,7 @@ export function usePublicNftGate(form: FormSchema | null, walletAddress?: string
   );
   const nftRequired = Boolean(form && isNftGatedForm(form) && nftGate);
   const networkMatches = !nftGate || nftGate.network === getCurrentFormNftNetwork();
+  const gateSelector = nftGate?.objectId?.trim() || nftGate?.structType?.trim() || "";
   const [ownedCount, setOwnedCount] = useState(0);
   const [isChecking, setIsChecking] = useState(false);
   const [gateError, setGateError] = useState("");
@@ -165,22 +172,25 @@ export function usePublicNftGate(form: FormSchema | null, walletAddress?: string
   const [lastResolvedCheckKey, setLastResolvedCheckKey] = useState<string | null>(null);
   const previousWalletAddressRef = useRef<string | undefined>(undefined);
   const previousCacheKeyRef = useRef<string | null>(null);
-  const activeCheckKey = nftRequired && walletAddress && nftGate?.structType
-    ? buildOwnershipCacheKey(nftGate.network, walletAddress, nftGate.structType)
+  const activeCheckKey = nftRequired && walletAddress && gateSelector
+    ? buildOwnershipCacheKey(nftGate?.network, walletAddress, gateSelector)
     : null;
 
   const logDebugInfo = useCallback((nextDebugInfo: PublicNftGateDebugInfo) => {
     console.info("[nft-gate]", nextDebugInfo);
     console.info("[nft-gate:type-compare]", {
       requiredStructType: nftGate?.structType ?? "",
+      requiredObjectId: nftGate?.objectId ?? "",
       sampleObjectTypes: nextDebugInfo.sampleObjectTypes,
       matchedDirectObjects: nextDebugInfo.matchedDirectObjects,
       matchedKioskItems: nextDebugInfo.matchedKioskItems,
+      ownershipChecks: nextDebugInfo.ownershipChecks,
     });
-  }, [nftGate?.structType]);
+  }, [nftGate?.objectId, nftGate?.structType]);
 
   const checkOwnership = useCallback(async (options: { forceFresh?: boolean } = {}) => {
-    if (!nftRequired || !walletAddress || !nftGate?.structType || !networkMatches) {
+    const resolvedNftGate = nftGate;
+    if (!nftRequired || !walletAddress || !gateSelector || !networkMatches || !resolvedNftGate) {
       setOwnedCount(0);
       setGateError("");
       setIsChecking(false);
@@ -189,25 +199,20 @@ export function usePublicNftGate(form: FormSchema | null, walletAddress?: string
       return 0;
     }
 
-    const cacheKey = buildOwnershipCacheKey(nftGate.network, walletAddress, nftGate.structType);
+    const cacheKey = buildOwnershipCacheKey(resolvedNftGate.network, walletAddress, gateSelector);
     const forceFresh = options.forceFresh === true;
     const now = Date.now();
     const cached = publicNftOwnershipCache.get(cacheKey);
+    const requiredCount = Math.max(1, resolvedNftGate.requiredCount || 1);
 
     if (!forceFresh) {
       if (cached?.inFlight) {
         setIsChecking(true);
         return cached.inFlight;
       }
-      if (cached && !cached.error && now - cached.checkedAt < ROUTE_LEVEL_SUCCESS_CACHE_MS) {
+      if (cached && !cached.error && now - cached.checkedAt < ROUTE_LEVEL_SUCCESS_CACHE_MS && cached.ownedCount >= requiredCount) {
         setOwnedCount(cached.ownedCount);
         setGateError("");
-        setIsChecking(false);
-        return cached.ownedCount;
-      }
-      if (cached && cached.error && now - cached.checkedAt < ROUTE_LEVEL_FAILURE_COOLDOWN_MS) {
-        setOwnedCount(cached.ownedCount);
-        setGateError(cached.error);
         setIsChecking(false);
         return cached.ownedCount;
       }
@@ -224,9 +229,10 @@ export function usePublicNftGate(form: FormSchema | null, walletAddress?: string
       const ownership = await checkOwnedNftsForClient(
         suiClient,
         walletAddress,
-        [nftGate.structType],
-        nftGate.network,
+        resolvedNftGate.structType ? [resolvedNftGate.structType] : [],
+        resolvedNftGate.network,
         nftRpcUrl,
+        resolvedNftGate.objectId ? [resolvedNftGate.objectId] : [],
       );
       const nextDebugInfo: PublicNftGateDebugInfo = {
         ...ownership.diagnostic,
@@ -245,10 +251,14 @@ export function usePublicNftGate(form: FormSchema | null, walletAddress?: string
 
     try {
       const nextOwnedCount = await requestPromise;
-      publicNftOwnershipCache.set(cacheKey, {
-        checkedAt: Date.now(),
-        ownedCount: nextOwnedCount,
-      });
+      if (nextOwnedCount >= requiredCount) {
+        publicNftOwnershipCache.set(cacheKey, {
+          checkedAt: Date.now(),
+          ownedCount: nextOwnedCount,
+        });
+      } else {
+        publicNftOwnershipCache.delete(cacheKey);
+      }
       setOwnedCount(nextOwnedCount);
       setGateError("");
       setLastResolvedCheckKey(cacheKey);
@@ -257,11 +267,7 @@ export function usePublicNftGate(form: FormSchema | null, walletAddress?: string
       const nextError = error instanceof Error ? error.message : "NFT check failed. Retry or switch RPC.";
       const publicError = "NFT check failed. Retry or switch RPC.";
       const nextDebugInfo = createErrorDebugInfo(walletAddress, nftGate, nftRpcUrl, nextError);
-      publicNftOwnershipCache.set(cacheKey, {
-        checkedAt: Date.now(),
-        error: publicError,
-        ownedCount: cached?.ownedCount ?? 0,
-      });
+      publicNftOwnershipCache.delete(cacheKey);
       setGateError(publicError);
       setDebugInfo(nextDebugInfo);
       setLastResolvedCheckKey(cacheKey);
@@ -270,17 +276,17 @@ export function usePublicNftGate(form: FormSchema | null, walletAddress?: string
     } finally {
       setIsChecking(false);
     }
-  }, [logDebugInfo, networkMatches, nftGate, nftRequired, nftRpcUrl, rpc.network, walletAddress]);
+  }, [gateSelector, logDebugInfo, networkMatches, nftGate, nftRequired, nftRpcUrl, rpc.network, walletAddress]);
 
   useEffect(() => {
-    if (!nftRequired || !walletAddress || !nftGate?.structType || !networkMatches) {
+    if (!nftRequired || !walletAddress || !gateSelector || !networkMatches) {
       setOwnedCount(0);
       setGateError("");
       setIsChecking(false);
       setLastResolvedCheckKey(null);
       return;
     }
-  }, [networkMatches, nftGate?.structType, nftRequired, walletAddress]);
+  }, [gateSelector, networkMatches, nftRequired, walletAddress]);
 
   useEffect(() => {
     const previousWalletAddress = previousWalletAddressRef.current;
@@ -307,11 +313,11 @@ export function usePublicNftGate(form: FormSchema | null, walletAddress?: string
   }, [activeCheckKey, walletAddress, nftGate, nftRpcUrl]);
 
   useEffect(() => {
-    if (!nftRequired || !walletAddress || !nftGate?.structType || !networkMatches) {
+    if (!nftRequired || !walletAddress || !gateSelector || !networkMatches) {
       return;
     }
     void checkOwnership().catch(() => undefined);
-  }, [checkOwnership, networkMatches, nftGate?.structType, nftRequired, walletAddress]);
+  }, [checkOwnership, gateSelector, networkMatches, nftRequired, walletAddress]);
 
   const meetsRequirement = Boolean(
     nftGate &&
@@ -325,13 +331,13 @@ export function usePublicNftGate(form: FormSchema | null, walletAddress?: string
 
   const recheckAccess = useCallback(async (): Promise<PublicNftAccessCheckResult> => {
     if (!nftRequired) {
-      return buildAccessCheckResult(nftGate, walletAddress, 0, true, "not_required", debugInfo);
+      return buildAccessCheckResult(nftGate, walletAddress, 0, true, "not_required", "not_required", debugInfo);
     }
     if (!walletAddress) {
-      return buildAccessCheckResult(nftGate, walletAddress, 0, false, "wallet_missing", debugInfo);
+      return buildAccessCheckResult(nftGate, walletAddress, 0, false, "wallet_missing", "wallet_missing", debugInfo);
     }
     if (!networkMatches) {
-      return buildAccessCheckResult(nftGate, walletAddress, ownedCount, false, "network_mismatch", debugInfo);
+      return buildAccessCheckResult(nftGate, walletAddress, ownedCount, false, "network_mismatch", "network_mismatch", debugInfo);
     }
     try {
       const nextOwnedCount = await checkOwnership({ forceFresh: true });
@@ -341,13 +347,30 @@ export function usePublicNftGate(form: FormSchema | null, walletAddress?: string
         walletAddress,
         nextOwnedCount,
         passed,
+        passed ? "passed" : "no_match",
         passed ? undefined : "ownership_missing",
         debugInfo,
       );
     } catch {
-      return buildAccessCheckResult(nftGate, walletAddress, ownedCount, false, "rpc_error", debugInfo);
+      return buildAccessCheckResult(nftGate, walletAddress, ownedCount, false, "rpc_error", "rpc_error", debugInfo);
     }
   }, [checkOwnership, debugInfo, networkMatches, nftGate, nftRequired, ownedCount, walletAddress]);
+
+  const hasResolvedOwnership = activeCheckKey !== null && lastResolvedCheckKey === activeCheckKey;
+  const accessStatus: PublicNftAccessCheckResult["status"] =
+    !nftRequired
+      ? "not_required"
+      : !walletAddress
+        ? "wallet_missing"
+        : !networkMatches
+          ? "network_mismatch"
+          : isChecking || !hasResolvedOwnership
+            ? "checking"
+            : gateError
+              ? "rpc_error"
+              : meetsRequirement
+                ? "passed"
+                : "no_match";
 
   return {
     accessMode,
@@ -359,7 +382,8 @@ export function usePublicNftGate(form: FormSchema | null, walletAddress?: string
     ownedCount,
     meetsRequirement,
     canViewForm,
-    hasResolvedOwnership: activeCheckKey !== null && lastResolvedCheckKey === activeCheckKey,
+    hasResolvedOwnership,
+    accessStatus,
     debugInfo,
     gateError: !networkMatches ? "This NFT-gated signal is configured for a different Sui network." : gateError,
     recheckAccess,

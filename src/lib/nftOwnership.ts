@@ -1,8 +1,8 @@
 import type { SuiJsonRpcClient } from "@mysten/sui/jsonRpc";
 import { isSuiRateLimitError } from "./rpcErrors";
+import { normalizeSuiAddress } from "./suiAddress";
 import {
   breakdownStructType,
-  filterOwnedObjectsByType,
   matchesOwnedObjectType,
   normalizeStructType,
   type OwnedObjectEntry,
@@ -77,11 +77,27 @@ export type KioskItemDiagnostic = {
   itemTypes: string[];
 };
 
+export type OwnershipCheckDiagnostic = {
+  source: "direct" | "kiosk";
+  matchKind: "objectId" | "structType";
+  expectedType: string;
+  expectedObjectId: string;
+  returnedType: string;
+  objectId: string;
+  kioskId: string | null;
+  cursor: string | null;
+  hasNextPage: boolean;
+  network: string;
+  rpcUrl: string;
+  matched: boolean;
+};
+
 export type NftOwnershipDiagnostic = {
   connectedAddress: string;
   network: string;
   rpcEndpoint: string;
   targetTypes: string[];
+  targetObjectIds: string[];
   directOwnedCount: number;
   kioskCount: number;
   kioskItemCount: number;
@@ -95,6 +111,7 @@ export type NftOwnershipDiagnostic = {
   matchedDirectObjects: MatchedOwnedObject[];
   matchedKioskItems: MatchedKioskItem[];
   sampleObjectTypes: string[];
+  ownershipChecks: OwnershipCheckDiagnostic[];
   zeroCountReason: string;
 };
 
@@ -148,6 +165,8 @@ type OwnedKioskItem = {
   kioskId: string;
   type: string;
   isLocked: boolean;
+  cursor: string | null;
+  hasNextPage: boolean;
 };
 
 const RPC_RETRY_ATTEMPTS = 4;
@@ -194,6 +213,24 @@ function uniqueObjectEntries(entries: OwnedObjectEntry[]) {
       return unique;
     }
     unique.push(entry);
+    return unique;
+  }, []);
+}
+
+function normalizeObjectId(value: string | undefined | null) {
+  return normalizeSuiAddress(value ?? "");
+}
+
+function uniqueOwnedKioskItems(items: OwnedKioskItem[]) {
+  return items.reduce<OwnedKioskItem[]>((unique, item) => {
+    const objectId = normalizeObjectId(item.objectId);
+    if (!objectId || unique.some((candidate) => normalizeObjectId(candidate.objectId) === objectId)) {
+      return unique;
+    }
+    unique.push({
+      ...item,
+      objectId,
+    });
     return unique;
   }, []);
 }
@@ -340,6 +377,8 @@ async function fetchOwnedKioskItemsForClient(suiClient: OwnedObjectsClient, owne
       kioskId: item.kioskId,
       type: item.data?.type?.trim() || item.type?.trim() || "",
       isLocked: item.isLocked,
+      cursor: null,
+      hasNextPage: false,
     })),
   );
   const kioskItemsByKiosk = kioskIdList.map((kioskId) => {
@@ -357,7 +396,7 @@ async function fetchOwnedKioskItemsForClient(suiClient: OwnedObjectsClient, owne
 
   return {
     kioskIds: [...kioskIds],
-    items,
+    items: uniqueOwnedKioskItems(items),
     pageDiagnostics,
     kioskItemsByKiosk,
   };
@@ -418,8 +457,169 @@ function buildTypeComparisons(args: {
   return comparisons;
 }
 
+function buildOwnershipChecks(args: {
+  directOwnedObjects: OwnedObjectEntry[];
+  kioskItems: OwnedKioskItem[];
+  requiredTypes: string[];
+  requiredObjectIds: string[];
+  network: string;
+  rpcEndpoint: string;
+}) {
+  const checks: OwnershipCheckDiagnostic[] = [];
+  const expectedTypes = uniqueStrings(args.requiredTypes.map((value) => value.trim()));
+  const expectedObjectIds = uniqueStrings(args.requiredObjectIds.map((value) => normalizeObjectId(value)).filter(Boolean));
+
+  for (const entry of args.directOwnedObjects) {
+    const returnedType = entry.data?.type?.trim() ?? "";
+    const objectId = normalizeObjectId(entry.data?.objectId);
+    if (!objectId) {
+      continue;
+    }
+    for (const expectedObjectId of expectedObjectIds) {
+      checks.push({
+        source: "direct",
+        matchKind: "objectId",
+        expectedType: "",
+        expectedObjectId,
+        returnedType,
+        objectId,
+        kioskId: null,
+        cursor: null,
+        hasNextPage: false,
+        network: args.network,
+        rpcUrl: args.rpcEndpoint,
+        matched: objectId === expectedObjectId,
+      });
+    }
+    for (const expectedType of expectedTypes) {
+      checks.push({
+        source: "direct",
+        matchKind: "structType",
+        expectedType,
+        expectedObjectId: "",
+        returnedType,
+        objectId,
+        kioskId: null,
+        cursor: null,
+        hasNextPage: false,
+        network: args.network,
+        rpcUrl: args.rpcEndpoint,
+        matched: matchesOwnedObjectType(returnedType, expectedType),
+      });
+    }
+  }
+
+  for (const item of args.kioskItems) {
+    const objectId = normalizeObjectId(item.objectId);
+    if (!objectId) {
+      continue;
+    }
+    for (const expectedObjectId of expectedObjectIds) {
+      checks.push({
+        source: "kiosk",
+        matchKind: "objectId",
+        expectedType: "",
+        expectedObjectId,
+        returnedType: item.type,
+        objectId,
+        kioskId: item.kioskId,
+        cursor: item.cursor,
+        hasNextPage: item.hasNextPage,
+        network: args.network,
+        rpcUrl: args.rpcEndpoint,
+        matched: objectId === expectedObjectId,
+      });
+    }
+    for (const expectedType of expectedTypes) {
+      checks.push({
+        source: "kiosk",
+        matchKind: "structType",
+        expectedType,
+        expectedObjectId: "",
+        returnedType: item.type,
+        objectId,
+        kioskId: item.kioskId,
+        cursor: item.cursor,
+        hasNextPage: item.hasNextPage,
+        network: args.network,
+        rpcUrl: args.rpcEndpoint,
+        matched: matchesOwnedObjectType(item.type, expectedType),
+      });
+    }
+  }
+
+  return checks.slice(0, MAX_DEBUG_COMPARISONS * 4);
+}
+
+function selectMatchedObjects(args: {
+  directOwnedObjects: OwnedObjectEntry[];
+  kioskItems: OwnedKioskItem[];
+  requiredTypes: string[];
+  requiredObjectIds: string[];
+}) {
+  const matchedDirectObjects: MatchedOwnedObject[] = [];
+  const matchedKioskItems: MatchedKioskItem[] = [];
+  const seenDirectObjectIds = new Set<string>();
+  const seenKioskObjectIds = new Set<string>();
+  const normalizedRequiredObjectIds = new Set(
+    uniqueStrings(args.requiredObjectIds.map((value) => normalizeObjectId(value)).filter(Boolean)),
+  );
+  const normalizedRequiredTypes = uniqueStrings(args.requiredTypes.map((value) => value.trim())).filter(Boolean);
+
+  const pushDirect = (entry: OwnedObjectEntry) => {
+    const objectId = normalizeObjectId(entry.data?.objectId);
+    const type = entry.data?.type?.trim() ?? "";
+    if (!objectId || seenDirectObjectIds.has(objectId)) {
+      return;
+    }
+    seenDirectObjectIds.add(objectId);
+    matchedDirectObjects.push({ objectId, type });
+  };
+
+  const pushKiosk = (item: OwnedKioskItem) => {
+    const objectId = normalizeObjectId(item.objectId);
+    if (!objectId || seenKioskObjectIds.has(objectId)) {
+      return;
+    }
+    seenKioskObjectIds.add(objectId);
+    matchedKioskItems.push({
+      objectId,
+      kioskId: item.kioskId,
+      type: item.type,
+      isLocked: item.isLocked,
+    });
+  };
+
+  for (const entry of args.directOwnedObjects) {
+    if (normalizedRequiredObjectIds.has(normalizeObjectId(entry.data?.objectId))) {
+      pushDirect(entry);
+    }
+  }
+  for (const entry of args.directOwnedObjects) {
+    if (normalizedRequiredTypes.some((requiredType) => matchesOwnedObjectType(entry.data?.type, requiredType))) {
+      pushDirect(entry);
+    }
+  }
+  for (const item of args.kioskItems) {
+    if (normalizedRequiredObjectIds.has(normalizeObjectId(item.objectId))) {
+      pushKiosk(item);
+    }
+  }
+  for (const item of args.kioskItems) {
+    if (normalizedRequiredTypes.some((requiredType) => matchesOwnedObjectType(item.type, requiredType))) {
+      pushKiosk(item);
+    }
+  }
+
+  return {
+    matchedDirectObjects,
+    matchedKioskItems,
+  };
+}
+
 function determineZeroCountReason(args: {
   requiredTypes: string[];
+  requiredObjectIds: string[];
   directOwnedCount: number;
   kioskCount: number;
   kioskItemCount: number;
@@ -430,8 +630,8 @@ function determineZeroCountReason(args: {
   if (args.matchedDirectObjects.length > 0 || args.matchedKioskItems.length > 0) {
     return "matched_required_type";
   }
-  if (args.requiredTypes.length === 0) {
-    return "required_type_missing";
+  if (args.requiredTypes.length === 0 && args.requiredObjectIds.length === 0) {
+    return "required_selector_missing";
   }
   if (args.directOwnedCount === 0 && args.kioskCount === 0) {
     return "no_direct_objects_and_no_kiosks_detected";
@@ -454,21 +654,19 @@ export async function checkOwnedNftsForClient(
   requiredTypes: string[],
   network: string,
   rpcEndpoint = "",
+  requiredObjectIds: string[] = [],
 ): Promise<NftOwnershipCheckResult> {
   const [directOwnedResult, kioskResult] = await Promise.all([
     fetchAllOwnedSuiObjectsForClient(suiClient, owner),
     fetchOwnedKioskItemsForClient(suiClient, owner),
   ]);
   const directOwnedObjects = directOwnedResult.entries;
-  const matchedDirectObjects = filterOwnedObjectsByType(directOwnedObjects, requiredTypes)
-    .map((entry) => ({
-      objectId: entry.data?.objectId?.trim() ?? "",
-      type: entry.data?.type?.trim() ?? "",
-    }))
-    .filter((entry) => entry.objectId && entry.type);
-  const matchedKioskItems = kioskResult.items.filter((item) =>
-    requiredTypes.some((requiredType) => matchesOwnedObjectType(item.type, requiredType)),
-  );
+  const { matchedDirectObjects, matchedKioskItems } = selectMatchedObjects({
+    directOwnedObjects,
+    kioskItems: kioskResult.items,
+    requiredTypes,
+    requiredObjectIds,
+  });
   const directOwnedTypes = uniqueStrings(
     directOwnedObjects.map((entry) => entry.data?.type?.trim() ?? ""),
   ).slice(0, MAX_DEBUG_TYPES);
@@ -482,8 +680,17 @@ export async function checkOwnedNftsForClient(
     kioskItems: kioskResult.items,
     requiredTypes,
   });
+  const ownershipChecks = buildOwnershipChecks({
+    directOwnedObjects,
+    kioskItems: kioskResult.items,
+    requiredTypes,
+    requiredObjectIds,
+    network,
+    rpcEndpoint,
+  });
   const zeroCountReason = determineZeroCountReason({
     requiredTypes,
+    requiredObjectIds,
     directOwnedCount: directOwnedObjects.length,
     kioskCount: kioskResult.kioskIds.length,
     kioskItemCount: kioskResult.items.length,
@@ -497,6 +704,7 @@ export async function checkOwnedNftsForClient(
     network,
     rpcEndpoint,
     targetTypes: uniqueStrings(requiredTypes.map((value) => value.trim())),
+    targetObjectIds: uniqueStrings(requiredObjectIds.map((value) => normalizeObjectId(value)).filter(Boolean)),
     directOwnedCount: directOwnedObjects.length,
     kioskCount: kioskResult.kioskIds.length,
     kioskItemCount: kioskResult.items.length,
@@ -513,6 +721,7 @@ export async function checkOwnedNftsForClient(
       ...directOwnedTypes,
       ...kioskItemTypes,
     ]).slice(0, MAX_DEBUG_TYPES),
+    ownershipChecks,
     zeroCountReason,
   };
 
@@ -534,8 +743,9 @@ export async function hasRequiredNft(
   requiredTypes: string[],
   network: string,
   rpcEndpoint = "",
+  requiredObjectIds: string[] = [],
 ) {
-  return checkOwnedNftsForClient(suiClient, owner, requiredTypes, network, rpcEndpoint);
+  return checkOwnedNftsForClient(suiClient, owner, requiredTypes, network, rpcEndpoint, requiredObjectIds);
 }
 
 export {

@@ -1,9 +1,12 @@
 import {
+  lazy,
+  Suspense,
   useEffect,
   useRef,
   useState,
   type CSSProperties,
   type PropsWithChildren,
+  type ReactNode,
   type TouchEvent as ReactTouchEvent,
 } from "react";
 import { Link, NavLink, useLocation } from "react-router-dom";
@@ -12,12 +15,13 @@ import { CreateFormLink } from "./CreateFormLink";
 import { NavItemLabel } from "./NavIcons";
 import { RuntimeDiagnosticsOverlay } from "./RuntimeDiagnosticsOverlay";
 import { BuildIndicator } from "./system/BuildIndicator";
-import { DeferredNetworkMenu, WalletConnectSlot, WalletNavSlot } from "./optionalChrome/AppShellOptionalSlots";
 import { useI18n } from "../i18n";
 import { buildInfo } from "../lib/buildInfo";
+import { retryLazyImport } from "../lib/lazyRetry";
 import { isSignalInboxPath } from "../lib/navigation";
-import { getBrowserCapabilitiesSnapshot, logRouteLifecycle, setDeepSignalDebugReadiness } from "../lib/routeDiagnostics";
+import { getBrowserCapabilitiesSnapshot, logRouteLifecycle } from "../lib/routeDiagnostics";
 import { scheduleIdleTask } from "../lib/scheduleIdleTask";
+import { useOptionalRpcInfrastructure } from "../rpcInfrastructure";
 import type { WalletSessionPhase } from "../walletSessionState";
 
 const MOBILE_DRAWER_SWIPE_THRESHOLD_PX = 60;
@@ -25,6 +29,15 @@ const MOBILE_DRAWER_EDGE_START_PX = 24;
 const MOBILE_DRAWER_HORIZONTAL_RATIO = 1.5;
 const MOBILE_DRAWER_INTENT_PX = 8;
 const MOBILE_VIEWPORT_QUERY = "(max-width: 900px)";
+
+const WalletRuntimePanel = lazy(() =>
+  retryLazyImport(() => import("./WalletRuntimePanel"), "wallet-runtime-panel").then((module) => ({
+    default: module.default,
+  })),
+);
+const NetworkMenu = lazy(() =>
+  retryLazyImport(() => import("./NetworkMenu"), "network-menu").then((module) => ({ default: module.NetworkMenu })),
+);
 
 interface AppShellProps extends PropsWithChildren {
   chrome?: "full" | "public";
@@ -73,6 +86,58 @@ function isComposerRoute(pathname: string) {
   return pathname === "/create" || pathname === "/compose" || pathname === "/admin/forms/new";
 }
 
+function WalletNavSlot({
+  navLabLabel,
+  onNavigate,
+  section,
+  walletUiEnabled,
+}: {
+  navLabLabel: string;
+  onNavigate?: () => void;
+  section: "access" | "inbox";
+  walletUiEnabled: boolean;
+}) {
+  if (!walletUiEnabled) {
+    return section === "inbox" ? (
+      <Link to="/admin" onClick={onNavigate}>
+        {navLabLabel}
+      </Link>
+    ) : null;
+  }
+
+  return (
+    <Suspense fallback={null}>
+      <WalletRuntimePanel mode="nav" section={section} onNavigate={onNavigate} />
+    </Suspense>
+  );
+}
+
+function WalletConnectSlot({
+  fallback,
+  surface,
+  walletSessionPhase,
+  walletUiEnabled,
+}: {
+  fallback?: ReactNode;
+  surface?: "mobileDrawer";
+  walletSessionPhase: WalletSessionPhase;
+  walletUiEnabled: boolean;
+}) {
+  if (!walletUiEnabled) {
+    return null;
+  }
+
+  if (walletSessionPhase === "provider_deferred") {
+    return fallback ? <>{fallback}</> : null;
+  }
+
+  return (
+    <Suspense fallback={fallback ?? null}>
+      <WalletRuntimePanel mode="connect" surface={surface} fallback={fallback} />
+    </Suspense>
+  );
+}
+
 interface MobileAppBottomNavProps {
   showComposeShortcut: boolean;
 }
@@ -86,10 +151,7 @@ function MobileAppBottomNav({ showComposeShortcut }: MobileAppBottomNavProps) {
   return (
     <>
       {showComposeShortcut ? (
-        <CreateFormLink
-          fresh={false}
-          className="mobile-compose-fab"
-        >
+        <CreateFormLink fresh={false} className="mobile-compose-fab">
           <TransmissionIcon />
           <span className="sr-only">{t("composeSignalCta")}</span>
         </CreateFormLink>
@@ -112,6 +174,56 @@ function MobileAppBottomNav({ showComposeShortcut }: MobileAppBottomNavProps) {
   );
 }
 
+function DeferredNetworkMenu({ drawerFallback = false }: { drawerFallback?: boolean }) {
+  const [ready, setReady] = useState(false);
+  const rpcInfrastructure = useOptionalRpcInfrastructure();
+  const mobileSafari = getBrowserCapabilitiesSnapshot().mobileSafari;
+
+  useEffect(() => scheduleIdleTask(() => setReady(true), 2200), []);
+
+  if (mobileSafari) {
+    if (drawerFallback) {
+      return (
+        <div className="mobile-drawer-status-line" aria-live="polite">
+          <span className="mobile-drawer-status-dot" aria-hidden="true" />
+          <span>Network controls stay deferred on mobile.</span>
+        </div>
+      );
+    }
+    return <div className="network-select-shell network-select-shell-placeholder" aria-hidden="true" />;
+  }
+
+  if (!ready || !rpcInfrastructure) {
+    if (drawerFallback) {
+      return (
+        <div className="mobile-drawer-status-line" aria-live="polite">
+          <span className="mobile-drawer-status-dot" aria-hidden="true" />
+          <span>{ready ? "Local signal mode" : "Loading network controls"}</span>
+        </div>
+      );
+    }
+    return <div className="network-select-shell network-select-shell-placeholder" aria-hidden="true" />;
+  }
+
+  return (
+    <Suspense fallback={<div className="network-select-shell network-select-shell-placeholder" aria-hidden="true" />}>
+      <NetworkMenu />
+    </Suspense>
+  );
+}
+
+function MobileDrawerNetworkStatus() {
+  const rpcInfrastructure = useOptionalRpcInfrastructure();
+  const providerLabel = rpcInfrastructure?.usingTatum ? rpcInfrastructure.providerLabel : "Sui Fullnode";
+  const networkLabel = rpcInfrastructure?.network ?? "mainnet";
+
+  return (
+    <div className="mobile-drawer-status-line" aria-live="polite">
+      <span className="mobile-drawer-status-dot" aria-hidden="true" />
+      <span>{providerLabel} / {networkLabel}</span>
+    </div>
+  );
+}
 
 function MobileDrawerWalletStandbyStatus() {
   const { t } = useI18n();
@@ -127,13 +239,8 @@ function MobileDrawerWalletStandbyStatus() {
 export function AppShell({
   children,
   chrome = "full",
-  passiveHeaderWallet = false,
-  routeReady = false,
-  walletProviderMounted = false,
-  walletProviderPending = true,
   walletSessionPhase = "provider_deferred",
   walletUiEnabled = false,
-  walletUiRequested = false,
 }: AppShellProps) {
   const { language, setLanguage, t } = useI18n();
   const location = useLocation();
@@ -142,7 +249,6 @@ export function AppShell({
   const [mobileDrawerDragOffset, setMobileDrawerDragOffset] = useState(0);
   const [mobileDrawerDragging, setMobileDrawerDragging] = useState(false);
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
-  const [walletHydrationReady, setWalletHydrationReady] = useState(false);
   const moreMenuRef = useRef<HTMLDivElement | null>(null);
   const mobileMenuToggleRef = useRef<HTMLButtonElement | null>(null);
   const mobileDrawerRef = useRef<HTMLElement | null>(null);
@@ -162,15 +268,6 @@ export function AppShell({
   const showMobileBottomNav = !publicChrome;
 
   useEffect(() => {
-    if (!walletUiRequested || !walletUiEnabled) {
-      setWalletHydrationReady(false);
-      return undefined;
-    }
-    setWalletHydrationReady(false);
-    return scheduleIdleTask(() => setWalletHydrationReady(true), getBrowserCapabilitiesSnapshot().mobileSafari ? 1800 : 900);
-  }, [location.pathname, walletUiEnabled, walletUiRequested]);
-
-  useEffect(() => {
     logRouteLifecycle("app-shell:mount", {
       chrome,
       pathname: mountPathRef.current,
@@ -187,26 +284,10 @@ export function AppShell({
     logRouteLifecycle("app-shell:route-change", {
       chrome,
       pathname: location.pathname,
-      walletProviderMounted,
-      walletProviderPending,
       walletSessionPhase,
       walletUiEnabled,
-      walletUiRequested,
     });
-    logRouteLifecycle("app-shell:wallet-header-state", {
-      headerRenderedWalletRuntimePanel: walletUiRequested && walletUiEnabled,
-      passiveHeaderWallet,
-      routeWalletSurface: walletUiRequested,
-      walletProviderMounted,
-      walletProviderPending,
-      walletSessionPhase,
-    });
-    setDeepSignalDebugReadiness({
-      appShellHeaderWalletPanel: !walletUiRequested ? "hidden" : walletUiEnabled ? "runtime" : "placeholder",
-      appShellHeaderWalletMode: passiveHeaderWallet ? "passive" : "interactive",
-      routeWalletSurface: walletUiRequested,
-    });
-  }, [chrome, location.pathname, passiveHeaderWallet, walletProviderMounted, walletProviderPending, walletSessionPhase, walletUiEnabled, walletUiRequested]);
+  }, [chrome, location.pathname, walletSessionPhase, walletUiEnabled]);
 
   useEffect(() => {
     setMoreMenuOpen(false);
@@ -515,7 +596,6 @@ export function AppShell({
                 onNavigate={() => setMobileDrawerOpen(false)}
                 section="inbox"
                 walletUiEnabled={walletUiEnabled}
-                walletUiRequested={walletUiRequested}
               />
             </div>
             <div className="topnav-row topnav-row-secondary">
@@ -526,7 +606,6 @@ export function AppShell({
                 onNavigate={() => setMobileDrawerOpen(false)}
                 section="access"
                 walletUiEnabled={walletUiEnabled}
-                walletUiRequested={walletUiRequested}
               />
               <div ref={moreMenuRef} className={`topnav-more ${moreMenuOpen ? "is-open" : ""}`}>
                 <button
@@ -552,154 +631,130 @@ export function AppShell({
         <div className="topbar-actions desktop-topbar-actions">
           {publicChrome ? null : (
             <div className="topbar-infra">
-              <DeferredNetworkMenu routeReady={routeReady} />
+              <DeferredNetworkMenu />
               <WalletConnectSlot
                 fallback={walletConnectFallback}
-                interaction={passiveHeaderWallet ? "passive" : "default"}
-                routeReady={routeReady}
-                walletProviderMounted={walletProviderMounted}
-                walletProviderPending={walletProviderPending}
                 walletSessionPhase={walletSessionPhase}
-                walletHydrationReady={walletHydrationReady}
                 walletUiEnabled={walletUiEnabled}
-                walletUiRequested={walletUiRequested}
               />
             </div>
           )}
           <label className="language-switch">
             <span>{t("languageLabel")}</span>
-            <select
-              value={language}
-              onChange={(event) => setLanguage(event.target.value as "en" | "ja")}
-            >
+            <select value={language} onChange={(event) => setLanguage(event.target.value as "en" | "ja")}>
               <option value="en">{t("languageEnglish")}</option>
               <option value="ja">{t("languageJapanese")}</option>
             </select>
           </label>
         </div>
       </header>
-      {publicChrome ? null : (
+      {publicChrome ? null : mobileDrawerOpen ? (
         <>
-          {mobileDrawerOpen ? (
-            <>
+          <button
+            type="button"
+            className="mobile-drawer-backdrop is-open"
+            onClick={closeMobileDrawer}
+            aria-hidden="true"
+            tabIndex={-1}
+          />
+          <aside
+            ref={mobileDrawerRef}
+            id="mobile-command-drawer"
+            className={`mobile-nav-drawer panel is-open ${mobileDrawerDragging ? "is-dragging" : ""}`}
+            role="dialog"
+            aria-modal="true"
+            aria-label="DeepSignal mobile command menu"
+            style={{ "--mobile-drawer-drag-x": `${mobileDrawerDragOffset}px` } as CSSProperties}
+            onTouchStart={handleMobileDrawerTouchStart}
+            onTouchMove={handleMobileDrawerTouchMove}
+            onTouchEnd={finishMobileDrawerTouch}
+            onTouchCancel={finishMobileDrawerTouch}
+          >
+            <div className="mobile-drawer-header">
+              <div className="mobile-drawer-brand">
+                <span className="brand-mark" aria-hidden="true">
+                  <img src="/deepsignal-mark.svg" alt="" />
+                </span>
+                <div>
+                  <strong>DeepSignal</strong>
+                </div>
+              </div>
               <button
+                ref={mobileDrawerCloseRef}
                 type="button"
-                className="mobile-drawer-backdrop is-open"
+                className="mobile-drawer-close-button"
                 onClick={closeMobileDrawer}
-                aria-hidden="true"
-                tabIndex={-1}
-              />
-              <aside
-                ref={mobileDrawerRef}
-                id="mobile-command-drawer"
-                className={`mobile-nav-drawer panel is-open ${mobileDrawerDragging ? "is-dragging" : ""}`}
-                role="dialog"
-                aria-modal="true"
-                aria-label="DeepSignal mobile command menu"
-                style={{ "--mobile-drawer-drag-x": `${mobileDrawerDragOffset}px` } as CSSProperties}
-                onTouchStart={handleMobileDrawerTouchStart}
-                onTouchMove={handleMobileDrawerTouchMove}
-                onTouchEnd={finishMobileDrawerTouch}
-                onTouchCancel={finishMobileDrawerTouch}
+                aria-label="Close mobile command menu"
               >
-                <div className="mobile-drawer-header">
-                  <div className="mobile-drawer-brand">
-                    <span className="brand-mark" aria-hidden="true">
-                      <img src="/deepsignal-mark.svg" alt="" />
-                    </span>
-                    <div>
-                      <strong>DeepSignal</strong>
-                    </div>
-                  </div>
-                  <button
-                    ref={mobileDrawerCloseRef}
-                    type="button"
-                    className="mobile-drawer-close-button"
-                    onClick={closeMobileDrawer}
-                    aria-label="Close mobile command menu"
-                  >
-                    <span aria-hidden="true" />
-                    <span aria-hidden="true" />
-                  </button>
-                </div>
+                <span aria-hidden="true" />
+                <span aria-hidden="true" />
+              </button>
+            </div>
 
-                <div className="mobile-drawer-section">
-                  <span className="mobile-drawer-section-label">SIGNALS</span>
-                  <nav className="mobile-drawer-nav mobile-drawer-primary-nav" aria-label="Mobile navigation">
-                    <NavLink to="/explore" onClick={closeMobileDrawer}>
-                      {t("navExplore")}
-                    </NavLink>
-                    <NavLink to="/dashboard" onClick={closeMobileDrawer}>
-                      {t("navMobileInbox")}
-                    </NavLink>
-                    <NavLink to="/my-responses" onClick={closeMobileDrawer}>
-                      {t("navMobileMyResponses")}
-                    </NavLink>
-                  </nav>
-                </div>
+            <div className="mobile-drawer-section">
+              <span className="mobile-drawer-section-label">SIGNALS</span>
+              <nav className="mobile-drawer-nav mobile-drawer-primary-nav" aria-label="Mobile navigation">
+                <NavLink to="/explore" onClick={closeMobileDrawer}>
+                  {t("navExplore")}
+                </NavLink>
+                <NavLink to="/dashboard" onClick={closeMobileDrawer}>
+                  {t("navMobileInbox")}
+                </NavLink>
+                <NavLink to="/my-responses" onClick={closeMobileDrawer}>
+                  {t("navMobileMyResponses")}
+                </NavLink>
+              </nav>
+            </div>
 
-                <div className="mobile-drawer-section">
-                  <span className="mobile-drawer-section-label">{t("navMobileSettings")}</span>
-                  <nav className="mobile-drawer-nav mobile-drawer-settings-nav" aria-label="Mobile settings navigation">
-                    <WalletNavSlot
-                      navLabLabel={t("navLab")}
-                      onNavigate={closeMobileDrawer}
-                      section="access"
-                      walletUiEnabled={walletUiEnabled}
-                      walletUiRequested={walletUiRequested}
-                    />
-                    <NavLink className="mobile-drawer-command-link" to="/troubleshooting" onClick={closeMobileDrawer}>
-                      {t("navTroubleshooting")}
-                    </NavLink>
-                  </nav>
-                  <div className="mobile-drawer-utility-group">
-                    <div className="mobile-drawer-utility-card mobile-drawer-status-card">
-                      <span className="mobile-drawer-utility-label">Network</span>
-                      <DeferredNetworkMenu drawerFallback routeReady={routeReady} />
-                    </div>
-                    <div className="mobile-drawer-utility-card mobile-drawer-status-card">
-                      <span className="mobile-drawer-utility-label">Wallet</span>
-                      <WalletConnectSlot
-                        fallback={mobileWalletFallback}
-                        interaction={passiveHeaderWallet ? "passive" : "default"}
-                        routeReady={routeReady}
-                        surface="mobileDrawer"
-                        walletProviderMounted={walletProviderMounted}
-                        walletProviderPending={walletProviderPending}
-                        walletSessionPhase={walletSessionPhase}
-                        walletHydrationReady={walletHydrationReady}
-                        walletUiEnabled={walletUiEnabled}
-                        walletUiRequested={walletUiRequested}
-                      />
-                      {walletUiRequested ? null : <MobileDrawerWalletStandbyStatus />}
-                    </div>
-                    <div className="mobile-drawer-utility-card">
-                      <label className="language-switch mobile-drawer-language-switch">
-                        <span>{t("languageLabel")}</span>
-                        <select
-                          value={language}
-                          onChange={(event) => setLanguage(event.target.value as "en" | "ja")}
-                        >
-                          <option value="en">{t("languageEnglish")}</option>
-                          <option value="ja">{t("languageJapanese")}</option>
-                        </select>
-                      </label>
-                    </div>
-                    <div className="mobile-drawer-about-row" aria-label="About DeepSignal">
-                      <span>About</span>
-                      <span>{buildInfo.label}</span>
-                    </div>
-                  </div>
+            <div className="mobile-drawer-section">
+              <span className="mobile-drawer-section-label">{t("navMobileSettings")}</span>
+              <nav className="mobile-drawer-nav mobile-drawer-settings-nav" aria-label="Mobile settings navigation">
+                <WalletNavSlot
+                  navLabLabel={t("navLab")}
+                  onNavigate={closeMobileDrawer}
+                  section="access"
+                  walletUiEnabled={walletUiEnabled}
+                />
+                <NavLink className="mobile-drawer-command-link" to="/troubleshooting" onClick={closeMobileDrawer}>
+                  {t("navTroubleshooting")}
+                </NavLink>
+              </nav>
+              <div className="mobile-drawer-utility-group">
+                <div className="mobile-drawer-utility-card mobile-drawer-status-card">
+                  <span className="mobile-drawer-utility-label">Network</span>
+                  <MobileDrawerNetworkStatus />
+                  <DeferredNetworkMenu drawerFallback />
                 </div>
-              </aside>
-            </>
-          ) : null}
+                <div className="mobile-drawer-utility-card mobile-drawer-status-card">
+                  <span className="mobile-drawer-utility-label">Wallet</span>
+                  <WalletConnectSlot
+                    fallback={mobileWalletFallback}
+                    surface="mobileDrawer"
+                    walletSessionPhase={walletSessionPhase}
+                    walletUiEnabled={walletUiEnabled}
+                  />
+                  {walletUiEnabled ? null : <MobileDrawerWalletStandbyStatus />}
+                </div>
+                <div className="mobile-drawer-utility-card">
+                  <label className="language-switch mobile-drawer-language-switch">
+                    <span>{t("languageLabel")}</span>
+                    <select value={language} onChange={(event) => setLanguage(event.target.value as "en" | "ja")}>
+                      <option value="en">{t("languageEnglish")}</option>
+                      <option value="ja">{t("languageJapanese")}</option>
+                    </select>
+                  </label>
+                </div>
+                <div className="mobile-drawer-about-row" aria-label="About DeepSignal">
+                  <span>About</span>
+                  <span>{buildInfo.label}</span>
+                </div>
+              </div>
+            </div>
+          </aside>
         </>
-      )}
-      <main className="page-wrap">{children}</main>
-      {showMobileBottomNav ? (
-        <MobileAppBottomNav showComposeShortcut={showComposeShortcut} />
       ) : null}
+      <main className="page-wrap">{children}</main>
+      {showMobileBottomNav ? <MobileAppBottomNav showComposeShortcut={showComposeShortcut} /> : null}
       <RuntimeDiagnosticsOverlay />
       <BuildIndicator />
     </div>

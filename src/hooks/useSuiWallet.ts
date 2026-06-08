@@ -4,13 +4,15 @@ import { useSuiName } from "./useSuiName";
 import {
   useOptionalWalletActions,
   useOptionalWalletConnection,
-  type WalletConnectFailureState,
-  type WalletConnectLockState,
-  type WalletConnectMode,
 } from "../walletStatus";
-import { useCanonicalWalletSessionState, type CanonicalWalletStatus } from "../walletCanonicalState";
 
-export type SuiWalletConnectionStatus = CanonicalWalletStatus;
+export type SuiWalletConnectionStatus =
+  | "connecting"
+  | "disconnected"
+  | "connected"
+  | "error"
+  | "booting"
+  | "provider_pending";
 
 export interface SuiWalletState {
   account: { address: string } | null;
@@ -22,9 +24,9 @@ export interface SuiWalletState {
   isDisconnecting: boolean;
   isProviderPending: boolean;
   isRestoringConnection: boolean;
-  connectLockState: WalletConnectLockState;
-  connectMode: WalletConnectMode;
-  lastConnectFailure: WalletConnectFailureState | null;
+  connectLockState: "idle" | "manual_connecting" | "auto_restoring";
+  connectMode: "manual" | "autoRestore" | null;
+  lastConnectFailure: import("../walletStatus").WalletConnectFailureState | null;
   displayName: string;
   suinsName: string | null;
   shortAddressLabel: string;
@@ -34,12 +36,11 @@ export interface SuiWalletState {
 }
 
 export function useSuiWallet(options: { resolveName?: boolean } = {}): SuiWalletState {
-  const session = useCanonicalWalletSessionState();
-  const actions = useOptionalWalletActions();
   const connection = useOptionalWalletConnection();
+  const actions = useOptionalWalletActions();
   const account = useMemo(
-    () => (session.accountAddress ? { address: session.accountAddress } : null),
-    [session.accountAddress],
+    () => (connection.accountAddress ? { address: connection.accountAddress } : null),
+    [connection.accountAddress],
   );
   const { data: suinsName = null } = useSuiName(account?.address, {
     enabled: options.resolveName ?? true,
@@ -47,15 +48,18 @@ export function useSuiWallet(options: { resolveName?: boolean } = {}): SuiWallet
   const [error, setError] = useState<Error | null>(null);
 
   const accountAddress = account?.address;
-  const isRestoringConnection = session.isRestoringConnection;
-  const connectMode = session.connectMode;
-  const connectLockState = session.connectLockState;
+  const isRestoringConnection = connection.isRestoringConnection;
   const shortAddressLabel = accountAddress ? shortAddress(accountAddress) : "";
-  const displayName = (suinsName ?? shortAddressLabel) || session.walletName || "";
-  const status: SuiWalletConnectionStatus = error ? "error" : session.canonicalStatus;
-  const hasConnectedAccount = status === "connected" && Boolean(accountAddress);
-  const isProviderPending = status === "booting" || status === "provider_pending";
-  const isConnecting = isProviderPending || status === "connecting";
+  const displayName = (suinsName ?? shortAddressLabel) || connection.walletName || "";
+  const status: SuiWalletConnectionStatus = error
+    ? "error"
+    : isRestoringConnection
+      ? "connecting"
+      : accountAddress
+        ? "connected"
+        : "disconnected";
+  const hasConnectedAccount = status === "connected";
+  const isConnecting = connection.status === "connecting";
 
   const disconnect = useCallback(async () => {
     try {
@@ -89,15 +93,15 @@ export function useSuiWallet(options: { resolveName?: boolean } = {}): SuiWallet
     () => ({
       account,
       accountAddress,
-      walletName: session.walletName ?? undefined,
+      walletName: connection.walletName ?? undefined,
       status,
       isConnected: hasConnectedAccount,
       isConnecting,
       isDisconnecting: false,
-      isProviderPending,
+      isProviderPending: false,
       isRestoringConnection,
-      connectLockState,
-      connectMode,
+      connectLockState: connection.connectLockState,
+      connectMode: connection.connectMode,
       lastConnectFailure: connection.lastConnectFailure,
       displayName,
       suinsName,
@@ -109,14 +113,13 @@ export function useSuiWallet(options: { resolveName?: boolean } = {}): SuiWallet
     [
       account,
       accountAddress,
-      session.walletName,
+      connection.walletName,
       status,
       hasConnectedAccount,
       isConnecting,
-      isProviderPending,
       isRestoringConnection,
-      connectLockState,
-      connectMode,
+      connection.connectLockState,
+      connection.connectMode,
       connection.lastConnectFailure,
       displayName,
       suinsName,

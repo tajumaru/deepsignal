@@ -54,6 +54,7 @@ export function normalizeFormNftGate(
   const normalized: FormNftGate = {
     network: gate.network === "sui-mainnet" || gate.network === "sui-testnet" ? gate.network : getCurrentFormNftNetwork(),
     structType: typeof gate.structType === "string" ? gate.structType.trim() : "",
+    objectId: typeof gate.objectId === "string" ? gate.objectId.trim() || undefined : undefined,
     requiredCount,
     gateViewing: gate.gateViewing !== false,
     gateSubmission: gate.gateSubmission !== false,
@@ -72,7 +73,7 @@ export function normalizeFormNftGate(
           }
         : undefined,
   };
-  if (accessMode !== "nft_required" && !normalized.structType) {
+  if (accessMode !== "nft_required" && !normalized.structType && !normalized.objectId) {
     return undefined;
   }
   return normalized;
@@ -100,6 +101,7 @@ export function createDefaultNftGate(presetId: FormNftGate["presetId"] = CUSTOM_
     return {
       network: getCurrentFormNftNetwork(),
       structType: PRIME_MACHIN_STRUCT_TYPE,
+      objectId: undefined,
       requiredCount: 1,
       gateViewing: true,
       gateSubmission: true,
@@ -115,6 +117,7 @@ export function createDefaultNftGate(presetId: FormNftGate["presetId"] = CUSTOM_
     return {
       network: getCurrentFormNftNetwork(),
       structType: TALLY_STRUCT_TYPE,
+      objectId: undefined,
       requiredCount: 1,
       gateViewing: true,
       gateSubmission: true,
@@ -129,6 +132,7 @@ export function createDefaultNftGate(presetId: FormNftGate["presetId"] = CUSTOM_
   return {
     network: getCurrentFormNftNetwork(),
     structType: "",
+    objectId: undefined,
     requiredCount: 1,
     gateViewing: true,
     gateSubmission: true,

@@ -24,6 +24,7 @@ export type NftOwnershipCheckApiRequest = {
   address: string;
   network: "sui-mainnet" | "sui-testnet";
   requiredTypes: string[];
+  requiredObjectIds?: string[];
 };
 
 export type NftOwnershipCheckApiSuccess = {
@@ -61,18 +62,22 @@ export function normalizeOwnershipApiRequest(raw: unknown): NftOwnershipCheckApi
   const requiredTypes = Array.isArray(input.requiredTypes)
     ? input.requiredTypes.filter((value): value is string => typeof value === "string").map((value) => value.trim()).filter(Boolean)
     : [];
+  const requiredObjectIds = Array.isArray(input.requiredObjectIds)
+    ? input.requiredObjectIds.filter((value): value is string => typeof value === "string").map((value) => normalizeSuiAddress(value)).filter(Boolean)
+    : [];
 
   if (!address || !isValidSuiAddress(normalizeSuiAddress(address))) {
     throw new Error("A valid Sui address is required.");
   }
-  if (requiredTypes.length === 0) {
-    throw new Error("At least one target type is required.");
+  if (requiredTypes.length === 0 && requiredObjectIds.length === 0) {
+    throw new Error("At least one target type or object id is required.");
   }
 
   return {
     address: normalizeSuiAddress(address),
     network,
     requiredTypes,
+    requiredObjectIds,
   };
 }
 
@@ -91,6 +96,7 @@ export async function runNftOwnershipCheckApi(
         network: request.network,
         rpcEndpoint: "",
         targetTypes: request.requiredTypes,
+        targetObjectIds: request.requiredObjectIds ?? [],
         directOwnedCount: 0,
         kioskCount: 0,
         kioskItemCount: 0,
@@ -104,12 +110,13 @@ export async function runNftOwnershipCheckApi(
         matchedDirectObjects: [],
         matchedKioskItems: [],
         sampleObjectTypes: [],
+        ownershipChecks: [],
         zeroCountReason: "server_rpc_url_missing",
       },
     };
   }
 
-  const cacheKey = `${rpcUrls.join("|")}::${request.network}::${request.address}::${request.requiredTypes.join("||")}`;
+  const cacheKey = `${rpcUrls.join("|")}::${request.network}::${request.address}::${request.requiredTypes.join("||")}::${(request.requiredObjectIds ?? []).join("||")}`;
   const now = Date.now();
   const cached = ownershipApiCache.get(cacheKey);
   if (cached && cached.expiresAt > now) {
@@ -126,7 +133,17 @@ export async function runNftOwnershipCheckApi(
       });
 
       try {
-        const result = await checkOwnedNftsForClient(client, request.address, request.requiredTypes, request.network, rpcUrl);
+        const result = await checkOwnedNftsForClient(
+          client,
+          request.address,
+          request.requiredTypes,
+          request.network,
+          rpcUrl,
+          request.requiredObjectIds ?? [],
+        );
+        if (!result.hasRequiredNft) {
+          ownershipApiCache.delete(cacheKey);
+        }
         return {
           ok: true,
           hasRequiredNft: result.hasRequiredNft,
@@ -152,6 +169,7 @@ export async function runNftOwnershipCheckApi(
         network: request.network,
         rpcEndpoint: rpcUrls.join(" -> "),
         targetTypes: request.requiredTypes,
+        targetObjectIds: request.requiredObjectIds ?? [],
         directOwnedCount: 0,
         kioskCount: 0,
         kioskItemCount: 0,
@@ -165,6 +183,7 @@ export async function runNftOwnershipCheckApi(
         matchedDirectObjects: [],
         matchedKioskItems: [],
         sampleObjectTypes: [],
+        ownershipChecks: [],
         zeroCountReason: "rpc_error_before_ownership_match",
       },
     };
