@@ -1,7 +1,7 @@
 ﻿import {
   useSignAndExecuteTransaction,
   useSuiClient,
-} from "@mysten/dapp-kit";
+} from "../lib/mystenDappKitCompat";
 import "../styles/components/forms-content.css";
 import "../styles/components/metadata-proof.css";
 import "../styles/components/signal-review.css";

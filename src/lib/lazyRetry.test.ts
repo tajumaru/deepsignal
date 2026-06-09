@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { MissingLazyRouteExportError, StaleLazyImportEpochError, resolveLazyRouteModule, retryLazyImport } from "./lazyRetry";
-import { setCurrentRouteEpoch } from "../routes/routeEpoch";
+import { MissingLazyRouteExportError, StaleLazyImportEpochError, clearLazyImportState, resolveLazyRouteModule, retryLazyImport } from "./lazyRetry";
+import { resetCurrentRouteEpochForTests, setCurrentRouteEpoch } from "../routes/routeEpoch";
 
 function NamedPublicFormPage() {
   return null;
@@ -10,10 +10,17 @@ function DefaultPublicFormPage() {
   return null;
 }
 
+function setBrowserRoute(routePath: string) {
+  window.history.replaceState({}, "", routePath);
+}
+
 describe("resolveLazyRouteModule", () => {
   afterEach(() => {
     window.__DEEPSIGNAL_DEBUG__ = undefined;
     window.sessionStorage.clear();
+    setBrowserRoute("/");
+    clearLazyImportState();
+    resetCurrentRouteEpochForTests();
     vi.restoreAllMocks();
   });
 
@@ -117,17 +124,106 @@ describe("resolveLazyRouteModule", () => {
   it("stops retrying a timed-out lazy import after the route epoch changes", async () => {
     vi.useFakeTimers();
     try {
+      setBrowserRoute("/my-responses");
       setCurrentRouteEpoch("/my-responses");
-      const loader = vi.fn(() => new Promise<never>(() => undefined));
+      const loader = vi.fn(
+        () =>
+          new Promise<never>((_, reject) => {
+            window.setTimeout(() => reject(new Error("late lazy import failure")), 50);
+          }),
+      );
 
       const importPromise = retryLazyImport(loader, "route-timeout-test");
       void importPromise.catch(() => undefined);
 
+      setBrowserRoute("/explore");
       setCurrentRouteEpoch("/explore");
-      await vi.advanceTimersByTimeAsync(12_500);
+      await vi.advanceTimersByTimeAsync(60);
 
       await expect(importPromise).rejects.toBeInstanceOf(StaleLazyImportEpochError);
       expect(loader).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("returns a compatibility fallback module for route-form-builder css preload failures", async () => {
+    vi.useFakeTimers();
+    vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("offline"));
+
+    try {
+      setBrowserRoute("/create");
+      setCurrentRouteEpoch("/create");
+      const importPromise = retryLazyImport(async () => {
+        throw new Error("Unable to preload CSS for https://cdn.example.test/assets/FormBuilderPage.css");
+      }, "route-form-builder");
+
+      await vi.runAllTimersAsync();
+      const loaded = await importPromise;
+
+      expect(loaded).toMatchObject({
+        FormBuilderPage: expect.any(Function),
+        default: expect.any(Function),
+      });
+      expect(window.sessionStorage.getItem("deepsignal.lazyImportCompatibilityRecovery")).toContain("route-form-builder");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("returns a compatibility fallback module for route-form-builder modulepreload failures", async () => {
+    vi.useFakeTimers();
+    vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("offline"));
+
+    try {
+      setBrowserRoute("/create");
+      setCurrentRouteEpoch("/create");
+      const importPromise = retryLazyImport(async () => {
+        throw new Error("vite:preloadError modulepreload failed for https://cdn.example.test/assets/workspace.js");
+      }, "route-form-builder");
+
+      await vi.runAllTimersAsync();
+      await expect(importPromise).resolves.toMatchObject({
+        default: expect.any(Function),
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("keeps chunk load failures fatal for route-form-builder", async () => {
+    vi.useFakeTimers();
+    vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("offline"));
+
+    try {
+      setBrowserRoute("/create");
+      setCurrentRouteEpoch("/create");
+      const importPromise = retryLazyImport(async () => {
+        throw new Error("Importing a module script failed.");
+      }, "route-form-builder");
+      void importPromise.catch(() => undefined);
+
+      await vi.runAllTimersAsync();
+      await expect(importPromise).rejects.toThrow("Importing a module script failed.");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("keeps preload failures fatal for non-create routes", async () => {
+    vi.useFakeTimers();
+    vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("offline"));
+
+    try {
+      setBrowserRoute("/explore");
+      setCurrentRouteEpoch("/explore");
+      const importPromise = retryLazyImport(async () => {
+        throw new Error("Unable to preload CSS for https://cdn.example.test/assets/ExploreSignalsPage.css");
+      }, "route-explore");
+      void importPromise.catch(() => undefined);
+
+      await vi.runAllTimersAsync();
+      await expect(importPromise).rejects.toThrow("Unable to preload CSS");
     } finally {
       vi.useRealTimers();
     }

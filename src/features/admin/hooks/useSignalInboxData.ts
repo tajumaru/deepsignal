@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useSuiClient } from "@mysten/dapp-kit";
+import { useSuiClient } from "../../../lib/mystenDappKitCompat";
 import { canReviewForm } from "../../../lib/adminAccess";
 import { isVerifiedSignal } from "../../../lib/respondentMeta";
 import { getSubmissionRespondentMeta } from "../../../lib/respondentMeta";

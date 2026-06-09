@@ -4,10 +4,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AppRoot } from "./AppRoot";
 import { shouldRequestWalletProvidersOnMountForRoute } from "./walletProviderMountPolicy";
 
-vi.mock("@mysten/dapp-kit", () => ({
-  createNetworkConfig: (config: unknown) => ({ networkConfig: config }),
-  SuiClientProvider: ({ children }: { children: ReactNode }) => <>{children}</>,
-  WalletProvider: ({ children }: { children: ReactNode }) => <>{children}</>,
+vi.mock("@mysten/dapp-kit-react", () => ({
+  DAppKitProvider: ({ children }: { children: ReactNode }) => <>{children}</>,
+  createDAppKit: () => ({}),
+}));
+
+vi.mock("./lib/mystenDappKitCompat", () => ({
   useCurrentAccount: () => ({
     address: "0xabc0000000000000000000000000000000000000",
   }),

@@ -10,7 +10,7 @@ import { usePrivateSignalDecrypt } from "./usePrivateSignalDecrypt";
 
 type ToastSetter = (toast: { tone: "success" | "error"; message: string } | null) => void;
 
-vi.mock("@mysten/dapp-kit", () => ({
+vi.mock("../../../lib/mystenDappKitCompat", () => ({
   useSuiClient: () => ({ name: "sui-client" }),
   useSignPersonalMessage: () => ({
     mutateAsync: vi.fn(async () => ({ signature: "signature" })),

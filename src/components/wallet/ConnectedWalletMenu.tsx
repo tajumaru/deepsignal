@@ -1,5 +1,4 @@
-import { useDisconnectWallet, useAccounts, useSwitchAccount } from "@mysten/dapp-kit";
-import type { WalletAccount } from "@mysten/wallet-standard";
+import { useDisconnectWallet, useAccounts, useSwitchAccount } from "../../lib/mystenDappKitCompat";
 import { SuiAddressDisplay } from "../SuiAddressDisplay";
 
 interface ConnectedWalletMenuProps {
@@ -18,7 +17,7 @@ export function ConnectedWalletMenu({ accountAddress, onClose, walletName }: Con
     onClose?.();
   }
 
-  async function handleSwitchAccount(account: WalletAccount) {
+  async function handleSwitchAccount(account: (typeof accounts)[number]) {
     await switchAccount({ account });
     onClose?.();
   }

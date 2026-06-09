@@ -400,9 +400,6 @@ const hybridWalrusStorage: StorageAdapter = {
       });
       return { ...saved, encryptedBlobId: encryptedPayload.blobId };
     };
-    if (isProductionRuntime) {
-      return withProtectedWriteFallback(() => walrusAdapter.saveEncryptedSubmission?.(submission) ?? walrusAdapter.saveSubmission(submission));
-    }
     return withWriteFallback(
       () => walrusAdapter.saveEncryptedSubmission?.(submission) ?? walrusAdapter.saveSubmission(submission),
       saveLocalEncryptedSubmission,
@@ -437,9 +434,6 @@ const hybridWalrusStorage: StorageAdapter = {
     );
   },
   async saveEncryptedPayload(payload) {
-    if (isProductionRuntime) {
-      return withProtectedWriteFallback(() => walrusAdapter.saveEncryptedPayload(payload));
-    }
     return withWriteFallback(
       () => walrusAdapter.saveEncryptedPayload(payload),
       () => localStorageAdapter.saveEncryptedPayload(payload),

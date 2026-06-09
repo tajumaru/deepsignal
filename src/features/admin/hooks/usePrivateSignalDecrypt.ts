@@ -1,7 +1,7 @@
 import {
   useSignPersonalMessage,
   useSuiClient,
-} from "@mysten/dapp-kit";
+} from "../../../lib/mystenDappKitCompat";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   REAL_SEAL_SESSION_TTL_MIN,

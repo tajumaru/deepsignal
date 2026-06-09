@@ -1,5 +1,6 @@
 import type { ComponentType } from "react";
 import {
+  clearChunkLoadRecoveryState,
   getChunkFailureUrl,
   isChunkLoadFailure,
   isCssPreloadFailure,
@@ -24,8 +25,10 @@ import {
 import { markRouteImportFailure, markRouteImportSettled, markRouteImportStart } from "./routeRecoveryState";
 import { lazyChunkExportSpecs } from "./lazyRouteRegistry";
 import type { RouteAssetKey, RouteChunkSpec } from "./lazyRouteRegistry";
+import { markLazyImportCompatibilityFallback } from "./lazyImportCompatibility";
+import { CreateRouteCompatibilityFallback } from "../pages/CreateRouteCompatibilityFallback";
 import { reportSystemError } from "../services/systemSignalReporterClient";
-import { getCurrentRouteEpochSnapshot } from "../routes/routeEpoch";
+import { ensureCurrentRouteEpoch, getCurrentRouteEpochSnapshot } from "../routes/routeEpoch";
 
 // Some remote asset hosts briefly serve a new route chunk before every
 // transitive asset is reachable. A fourth attempt keeps the route in suspense
@@ -293,6 +296,17 @@ function getLazyImportTimeoutPolicy(label: string): LazyImportTimeoutPolicy {
 
 function getCurrentRoutePath() {
   return getCurrentRouteEpochSnapshot().routePath;
+}
+
+function getWindowRoutePath() {
+  if (typeof window === "undefined") {
+    return getCurrentRouteEpochSnapshot().routePath;
+  }
+  return `${window.location.pathname}${window.location.search}${window.location.hash}`;
+}
+
+function getLazyImportRouteEpochSnapshot() {
+  return ensureCurrentRouteEpoch(getWindowRoutePath());
 }
 
 function getCurrentRouteId(label: string) {
@@ -614,6 +628,33 @@ function getLazyImportFailureKind(error: unknown): LazyImportFailureKind {
     return "chunkLoad";
   }
   return "runtime";
+}
+
+function isPreloadOnlyFailureKind(failureKind: LazyImportFailureKind) {
+  return failureKind === "css_preload" || failureKind === "modulepreload";
+}
+
+function canUseLazyFallbackModule(label: string, failureKind: LazyImportFailureKind, attempt: number, maxAttempts: number) {
+  return label === "route-form-builder" && isPreloadOnlyFailureKind(failureKind) && attempt >= maxAttempts;
+}
+
+function createLazyFallbackModule<T>(label: string): T {
+  if (label === "route-form-builder") {
+    return {
+      default: CreateRouteCompatibilityFallback,
+      FormBuilderPage: CreateRouteCompatibilityFallback,
+    } as T;
+  }
+  throw new Error(`Lazy fallback module for ${label} is not available.`);
+}
+
+export function clearLazyImportState(label?: string) {
+  if (label) {
+    lazyImportRegistry.delete(label);
+  } else {
+    lazyImportRegistry.clear();
+  }
+  clearChunkLoadRecoveryState();
 }
 
 function hashSnippet(value: string) {
@@ -1036,7 +1077,7 @@ export async function retryLazyImport<T>(loader: () => Promise<T>, label = "anon
     return registryEntry.promise;
   }
 
-  const routeEpochSnapshot = getCurrentRouteEpochSnapshot();
+  const routeEpochSnapshot = getLazyImportRouteEpochSnapshot();
   const isCurrentEpoch = () => getCurrentRouteEpochSnapshot().routeEpoch === routeEpochSnapshot.routeEpoch;
   const createStaleEpochError = () =>
     new StaleLazyImportEpochError(label, routeEpochSnapshot.routeEpoch, getCurrentRouteEpochSnapshot().routeEpoch);
@@ -1153,7 +1194,7 @@ export async function retryLazyImport<T>(loader: () => Promise<T>, label = "anon
         }
         const failureKind = getLazyImportFailureKind(error);
         const cssRecovery = await attemptCssPreloadRecovery(label, attempt, error);
-        const preloadOnlyFailure = failureKind === "css_preload" || failureKind === "modulepreload";
+        const preloadOnlyFailure = isPreloadOnlyFailureKind(failureKind);
         const chunkUrlForDiagnostics = expectedChunkUrl ?? (await resolveExpectedChunkUrl());
         const failureUrl = getChunkFailureUrl(error);
         const targetChunkFailure = Boolean(failureUrl && chunkUrlForDiagnostics && failureUrl === chunkUrlForDiagnostics);
@@ -1193,7 +1234,14 @@ export async function retryLazyImport<T>(loader: () => Promise<T>, label = "anon
           userAgent: typeof navigator === "undefined" ? "" : navigator.userAgent,
           fetchStatus: cssRecovery?.status ?? undefined,
         });
-        logRouteLifecycle(failureKind === "timeout" ? "lazy-import-timeout-recorded" : "lazy-import-rejected", {
+        const canUseFallback = canUseLazyFallbackModule(label, failureKind, attempt, maxAttempts);
+        logRouteLifecycle(
+          failureKind === "timeout"
+            ? "lazy-import-timeout-recorded"
+            : preloadOnlyFailure && canUseFallback
+              ? "lazy-import-preload-nonfatal"
+              : "lazy-import-rejected",
+          {
           label,
           attempt,
           chunkUrl: chunkUrlForDiagnostics ?? null,
@@ -1211,7 +1259,8 @@ export async function retryLazyImport<T>(loader: () => Promise<T>, label = "anon
           cssAssetUrl: cssRecovery?.resourceUrl ?? null,
           cssRetryRecovered: cssRecovery?.recovered ?? false,
           cssRetryStatus: cssRecovery?.status ?? null,
-        });
+          },
+        );
         logPublicAppShellTrace("public-app-shell:blocker", {
           label,
           attempt,
@@ -1300,6 +1349,17 @@ export async function retryLazyImport<T>(loader: () => Promise<T>, label = "anon
           });
         }
         if (preloadOnlyFailure) {
+          if (canUseFallback) {
+            markLazyImportCompatibilityFallback({
+              failureKind,
+              label,
+              routePath: routeEpochSnapshot.canonicalRoutePath,
+            });
+            const fallbackModule = createLazyFallbackModule<T>(label);
+            endPerf(perfName, "ok", `compatibility fallback attempt ${attempt}`);
+            lazyImportRegistry.set(label, { result: fallbackModule, status: "resolved" });
+            return fallbackModule;
+          }
           if (attempt === maxAttempts) {
             break;
           }

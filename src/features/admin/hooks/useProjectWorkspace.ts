@@ -1,7 +1,7 @@
 import {
   useSignAndExecuteTransaction,
   useSuiClient,
-} from "@mysten/dapp-kit";
+} from "../../../lib/mystenDappKitCompat";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { canAdmin } from "../../../lib/adminAccess";
 import {

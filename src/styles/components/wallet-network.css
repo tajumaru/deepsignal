@@ -1,7 +1,5 @@
 /* Wallet, Sui address, network selector, access, and member/project registry surfaces. */
 
-@import "@mysten/dapp-kit/dist/index.css";
-
 .wallet-connect,
 .wallet-inline-note {
   color: var(--text-soft);

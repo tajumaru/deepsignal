@@ -373,10 +373,16 @@ export async function decryptSensitiveAnswers(
 }
 
 function isProductionProtectedStorageUnavailable(targetStorage: StorageAdapter) {
-  if (!import.meta.env.PROD || targetStorage !== storageAdapter) {
+  if (targetStorage !== storageAdapter) {
     return false;
   }
-  return getStorageRuntimeStatus().mode !== "walrus";
+  const runtime = getStorageRuntimeStatus();
+  return (
+    import.meta.env.PROD &&
+    runtime.mode !== "walrus" &&
+    !targetStorage.saveEncryptedSubmission &&
+    !targetStorage.saveEncryptedPayload
+  );
 }
 
 function createMissingEncryptedPayloadError(

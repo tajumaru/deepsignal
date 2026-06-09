@@ -1,7 +1,21 @@
 import type { ClientWithCoreApi } from "@mysten/sui/client";
 import type { Signer } from "@mysten/sui/cryptography";
 import type { Transaction } from "@mysten/sui/transactions";
-import { signAndExecuteTransaction } from "@mysten/wallet-standard";
+import { fromBase64 } from "@mysten/sui/utils";
+import {
+  SuiSignAndExecuteTransaction,
+  SuiSignAndExecuteTransactionBlock,
+  SuiSignTransaction,
+  SuiSignTransactionBlock,
+} from "@mysten/wallet-standard";
+import type {
+  SuiSignAndExecuteTransactionBlockFeature,
+  SuiSignAndExecuteTransactionFeature,
+  SuiSignTransactionBlockFeature,
+  SuiSignTransactionFeature,
+} from "@mysten/wallet-standard";
+import { getWalletAccountFeature } from "@wallet-standard/ui";
+import { getWalletAccountForUiWalletAccount } from "@wallet-standard/ui-registry";
 import {
   RetryableWalrusClientError,
   StorageNodeAPIError,
@@ -236,20 +250,90 @@ function createWalletSigner(): Signer {
     }) {
       const activeClient = (txClient as WalrusEnabledClient | undefined) ?? client;
       transaction.setSenderIfNotSet(account.address);
-      const execution = await signAndExecuteTransaction(wallet, {
-        transaction: {
-          toJSON: async () =>
-            transaction.toJSON({
-              supportedIntents,
-              client: activeClient,
-            }),
-        },
-        account,
-        chain: `sui:${SUI_NETWORK}`,
-      });
+      const chain: `${string}:${string}` = `sui:${SUI_NETWORK}`;
+      const underlyingAccount = getWalletAccountForUiWalletAccount(account);
+      const walletTransaction = {
+        toJSON: async () =>
+          transaction.toJSON({
+            supportedIntents,
+            client: activeClient,
+          }),
+      };
+      let digest: string | undefined;
 
+      try {
+        const signAndExecuteFeature = tryGetWalletAccountFeature<SuiSignAndExecuteTransactionFeature[typeof SuiSignAndExecuteTransaction]>(
+          account,
+          SuiSignAndExecuteTransaction,
+        );
+        if (signAndExecuteFeature) {
+          const execution = await signAndExecuteFeature.signAndExecuteTransaction({
+            transaction: walletTransaction,
+            account: underlyingAccount,
+            chain,
+          });
+          digest = execution.digest;
+        } else {
+          const signAndExecuteBlockFeature = tryGetWalletAccountFeature<
+            SuiSignAndExecuteTransactionBlockFeature[typeof SuiSignAndExecuteTransactionBlock]
+          >(account, SuiSignAndExecuteTransactionBlock);
+          if (signAndExecuteBlockFeature) {
+            const { Transaction: SuiTransaction } = await loadSuiTransactionsModule();
+            const transactionBlock = SuiTransaction.from(await walletTransaction.toJSON());
+            const execution = await signAndExecuteBlockFeature.signAndExecuteTransactionBlock({
+              account: underlyingAccount,
+              chain,
+              transactionBlock,
+              options: {
+                showRawEffects: true,
+                showRawInput: true,
+              },
+            });
+            digest = execution.digest;
+          } else {
+            console.warn("[walrus wallet] missing sign-and-execute features", {
+              walletName: wallet.name,
+              accountAddress: account.address,
+              accountFeatures: [...account.features],
+              supportedIntents,
+              network: SUI_NETWORK,
+            });
+            throw new Error(
+              `The account ${account.address} does not support signing and executing transactions.`,
+            );
+          }
+        }
+      } catch (error) {
+        if (!isWalletSignAndExecuteUnsupported(error)) {
+          throw error;
+        }
+
+        const signed = await signWalletTransaction({
+          account,
+          underlyingAccount,
+          chain,
+          walletTransaction,
+        });
+        const submitted = await activeClient.core.executeTransaction({
+          transaction: fromBase64(signed.bytes),
+          signatures: [signed.signature],
+          include: {
+            transaction: true,
+            effects: true,
+          },
+        });
+
+        digest =
+          submitted.$kind === "Transaction"
+            ? submitted.Transaction.digest
+            : submitted.FailedTransaction?.digest;
+      }
+
+      if (!digest) {
+        throw new Error("Walrus transaction did not return a digest.");
+      }
       return activeClient.core.waitForTransaction({
-        digest: execution.digest,
+        digest,
         include: {
           transaction: true,
           effects: true,
@@ -258,6 +342,78 @@ function createWalletSigner(): Signer {
       });
     },
   } as unknown as Signer;
+}
+
+async function signWalletTransaction({
+  account,
+  underlyingAccount,
+  chain,
+  walletTransaction,
+}: {
+  account: NonNullable<ReturnType<typeof getWalrusRuntimeContext>["account"]>;
+  underlyingAccount: ReturnType<typeof getWalletAccountForUiWalletAccount>;
+  chain: `${string}:${string}`;
+  walletTransaction: {
+    toJSON: () => Promise<string>;
+  };
+}) {
+  const signTransactionFeature = tryGetWalletAccountFeature<SuiSignTransactionFeature[typeof SuiSignTransaction]>(
+    account,
+    SuiSignTransaction,
+  );
+  if (signTransactionFeature) {
+    return await signTransactionFeature.signTransaction({
+      transaction: walletTransaction,
+      account: underlyingAccount,
+      chain,
+    });
+  }
+
+  const signTransactionBlockFeature = tryGetWalletAccountFeature<
+    SuiSignTransactionBlockFeature[typeof SuiSignTransactionBlock]
+  >(account, SuiSignTransactionBlock);
+  if (signTransactionBlockFeature) {
+    const { Transaction: SuiTransaction } = await loadSuiTransactionsModule();
+    const transactionBlock = SuiTransaction.from(await walletTransaction.toJSON());
+    const signed = await signTransactionBlockFeature.signTransactionBlock({
+      transactionBlock,
+      account: underlyingAccount,
+      chain,
+    });
+    return {
+      bytes: signed.transactionBlockBytes,
+      signature: signed.signature,
+    };
+  }
+
+  console.warn("[walrus wallet] missing sign features", {
+    accountAddress: account.address,
+    accountFeatures: [...account.features],
+    chain,
+  });
+  throw new Error(`The account ${account.address} does not support signing transactions.`);
+}
+
+function isWalletSignAndExecuteUnsupported(error: unknown) {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+
+  return (
+    /does not support the signAndExecuteTransaction feature/i.test(error.message) ||
+    /does not support signing and executing transactions/i.test(error.message)
+  );
+}
+
+function tryGetWalletAccountFeature<TFeature>(
+  account: NonNullable<ReturnType<typeof getWalrusRuntimeContext>["account"]>,
+  featureName: string,
+) {
+  try {
+    return getWalletAccountFeature(account, featureName as never) as TFeature;
+  } catch {
+    return null;
+  }
 }
 
 async function parseResponseBody(response: Response) {

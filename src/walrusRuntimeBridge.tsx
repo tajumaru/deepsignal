@@ -2,9 +2,10 @@ import {
   useCurrentAccount,
   useCurrentWallet,
   useSuiClientContext,
-} from "@mysten/dapp-kit";
+} from "./lib/mystenDappKitCompat";
 import { walrus } from "@mysten/walrus";
 import walrusWasmUrl from "@mysten/walrus-wasm/web/walrus_wasm_bg.wasm?url";
+import type { WalletWithRequiredFeatures } from "@mysten/wallet-standard";
 import { useEffect, useMemo, useRef, type PropsWithChildren } from "react";
 import { WALRUS_AGGREGATOR_URL, WALRUS_UPLOAD_RELAY_URL } from "./lib/sui";
 import { getCurrentRoutePath, logRouteLifecycle } from "./lib/routeDiagnostics";
@@ -13,6 +14,7 @@ import { WalrusDiagnosticError, getWalrusErrorMessage } from "./storage/walrusDi
 import { setWalrusRuntimeContext } from "./storage/walrusRuntime";
 import { setSuiRuntimeContext } from "./suiRuntime";
 import { reportSystemError } from "./services/systemSignalReporterClient";
+import { useRpcInfrastructure } from "./rpcInfrastructure";
 
 const WALRUS_TX_WAIT_TIMEOUT_MS = 3 * 60 * 1000;
 const WALRUS_UPLOAD_RELAY_TIMEOUT_RAW = import.meta.env.VITE_WALRUS_UPLOAD_RELAY_TIMEOUT_MS;
@@ -66,10 +68,11 @@ function buildWaitForTransactionTimeoutError(digest: string, timeoutMs: number, 
 function WalrusRuntimeBridgeInner() {
   const account = useCurrentAccount();
   const { currentWallet, supportedIntents } = useCurrentWallet();
-  const { client, config, network } = useSuiClientContext();
+  const { client, network } = useSuiClientContext();
+  const rpcInfrastructure = useRpcInfrastructure();
   const routePath = getCurrentRoutePath();
   const emitWalrusDiagnostics = !isWalletOptionalPublicRoute(routePath);
-  const rpcUrl = config?.url ?? null;
+  const rpcUrl = rpcInfrastructure.currentRpcUrl ?? null;
   const currentNetwork = network ?? null;
   const previousWalrusClientRef = useRef<null | object>(null);
   const previousSuiClientRef = useRef<null | object>(null);
@@ -325,7 +328,7 @@ function WalrusRuntimeBridgeInner() {
   const runtimeContext = useMemo(
     () => ({
       account,
-      wallet: currentWallet,
+      wallet: currentWallet as WalletWithRequiredFeatures | null,
       supportedIntents: stableSupportedIntents,
       client: walrusClient,
       rpcUrl,

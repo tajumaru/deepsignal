@@ -1,4 +1,4 @@
-import { useSuiClient } from "@mysten/dapp-kit";
+import { useSuiClient } from "../lib/mystenDappKitCompat";
 
 export function useRpcSuiClient() {
   const suiClient = useSuiClient();

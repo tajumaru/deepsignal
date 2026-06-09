@@ -1,4 +1,4 @@
-import { ConnectModal } from "@mysten/dapp-kit";
+import { MystenConnectModal } from "./MystenConnectModal";
 import type { SuiWalletState } from "../../hooks/useSuiWallet";
 import type { WalletConnectFailureState } from "../../walletStatus";
 import { WalletStatus } from "./WalletStatus";
@@ -57,7 +57,7 @@ export function ConnectWalletButton({
   }
 
   return (
-    <ConnectModal
+    <MystenConnectModal
       open={connectModalOpen}
       onOpenChange={(open) => {
         onConnectModalOpenChange?.(open);

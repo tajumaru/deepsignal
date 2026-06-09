@@ -1,5 +1,4 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import type { ReactNode } from "react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { RpcInfrastructureContext, type RpcInfrastructureContextValue } from "../rpcInfrastructure";
@@ -52,12 +51,9 @@ const mockRpcInfrastructure: RpcInfrastructureContextValue = {
   canAutoFallbackFromRateLimit: true,
 };
 
-vi.mock("@mysten/dapp-kit", () => ({
+vi.mock("../lib/mystenDappKitCompat", () => ({
   useCurrentAccount: () => mockUseCurrentAccount(),
   useCurrentWallet: () => mockUseCurrentWallet(),
-  createNetworkConfig: (config: unknown) => ({ networkConfig: config }),
-  SuiClientProvider: ({ children }: { children: ReactNode }) => <>{children}</>,
-  WalletProvider: ({ children }: { children: ReactNode }) => <>{children}</>,
   useDisconnectWallet: () => ({
     mutateAsync: vi.fn(),
     isPending: false,

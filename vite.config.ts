@@ -1121,6 +1121,7 @@ const packageMetadata = JSON.parse(readFileSync(new URL("./package.json", import
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
   const analyzeBundle = String(process.env.ANALYZE || env.ANALYZE || "").toLowerCase() === "true";
+  const webviewSafeCss = /^(1|true)$/i.test(String(process.env.VITE_WEBVIEW_SAFE_CSS || env.VITE_WEBVIEW_SAFE_CSS || ""));
   const appVersion = process.env.VITE_APP_VERSION || env.VITE_APP_VERSION || packageMetadata.version || "0.0.0";
   const buildTime = process.env.VITE_BUILD_TIME || env.VITE_BUILD_TIME || formatBuildTime();
   const gitHash = process.env.VITE_GIT_HASH || env.VITE_GIT_HASH || getGitHash();
@@ -1313,13 +1314,25 @@ export default defineConfig(({ mode }) => {
         : null,
     ].filter(Boolean),
     build: {
+      cssCodeSplit: !webviewSafeCss,
       modulePreload: {
-        resolveDependencies(_, deps) {
+        resolveDependencies(filename, deps) {
+          const normalizedFilename = filename.replace(/\\/g, "/");
           return deps.filter((dependency) => {
             const normalizedDependency = dependency.replace(/\\/g, "/");
-            return !(
+            const excludedForAllRoutes =
               /assets\/mysten-(sui|wallet|walrus|seal)-[^/]+\.(js|css)$/.test(normalizedDependency) ||
-              /assets\/workspace-core-[^/]+\.(js|css)$/.test(normalizedDependency)
+              /assets\/workspace-core-[^/]+\.(js|css)$/.test(normalizedDependency);
+            if (excludedForAllRoutes) {
+              return false;
+            }
+
+            if (!/FormBuilderPage/i.test(normalizedFilename)) {
+              return true;
+            }
+
+            return !/seal|crypto|proof|RichText|storageAdapter|useAccessControl|responseDeadline|publicLinks|wallet|metadata-proof|workspace/i.test(
+              normalizedDependency,
             );
           });
         },

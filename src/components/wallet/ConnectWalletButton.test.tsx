@@ -3,31 +3,29 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { ConnectWalletButton } from "./ConnectWalletButton";
 import type { SuiWalletState } from "../../hooks/useSuiWallet";
 
-const {
-  connectWalletMutateAsyncSpy,
-  logRouteLifecycleSpy,
-} = vi.hoisted(() => ({
-  connectWalletMutateAsyncSpy: vi.fn(async () => ({ accounts: [{ address: "0xabc", chains: ["sui:mainnet"] }] })),
-  logRouteLifecycleSpy: vi.fn(),
-}));
-
-vi.mock("@mysten/dapp-kit", () => ({
-  useConnectWallet: () => ({
-    isPending: false,
-    mutateAsync: connectWalletMutateAsyncSpy,
-  }),
-  useWallets: () => [
-    {
-      name: "Slush",
-    },
-    {
-      name: "Phantom",
-    },
-  ],
-}));
-
-vi.mock("../../lib/routeDiagnostics", () => ({
-  logRouteLifecycle: logRouteLifecycleSpy,
+vi.mock("./MystenConnectModal", () => ({
+  MystenConnectModal: ({
+    open,
+    onOpenChange,
+    trigger,
+  }: {
+    open?: boolean;
+    onOpenChange?: (open: boolean) => void;
+    trigger?: React.ReactNode;
+  }) => (
+    <>
+      {trigger}
+      {open ? (
+        <div role="dialog" aria-label="Choose wallet">
+          <button type="button">Slush</button>
+          <button type="button">Phantom</button>
+          <button type="button" onClick={() => onOpenChange?.(false)}>
+            Cancel
+          </button>
+        </div>
+      ) : null}
+    </>
+  ),
 }));
 
 function createWalletState(overrides: Partial<SuiWalletState> = {}): SuiWalletState {
@@ -56,8 +54,6 @@ function createWalletState(overrides: Partial<SuiWalletState> = {}): SuiWalletSt
 
 afterEach(() => {
   cleanup();
-  connectWalletMutateAsyncSpy.mockClear();
-  logRouteLifecycleSpy.mockClear();
 });
 
 describe("ConnectWalletButton", () => {
@@ -103,33 +99,24 @@ describe("ConnectWalletButton", () => {
     expect(handleManualConnectRequest).toHaveBeenCalledTimes(1);
   });
 
-  it("logs and executes the adapter connect flow for the selected wallet", async () => {
-    const handleConnectAttemptSuccess = vi.fn();
+  it("closes the controlled modal through onOpenChange when cancelled", async () => {
+    const handleOpenChange = vi.fn();
+    const handleCancel = vi.fn();
 
     render(
       <ConnectWalletButton
         wallet={createWalletState()}
         connectModalOpen
-        onConnectAttemptSuccess={handleConnectAttemptSuccess}
-        onConnectModalOpenChange={() => undefined}
+        onConnectModalCancel={handleCancel}
+        onConnectModalOpenChange={handleOpenChange}
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Slush" }));
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
 
-    expect(connectWalletMutateAsyncSpy).toHaveBeenCalledWith(
-      expect.objectContaining({
-        wallet: expect.objectContaining({
-          name: "Slush",
-        }),
-      }),
-    );
-    expect(logRouteLifecycleSpy).toHaveBeenCalledWith("wallet-connect-adapter-call", expect.anything());
-    expect(logRouteLifecycleSpy).toHaveBeenCalledWith("wallet-connect-slush-modal-open", expect.anything());
     await waitFor(() => {
-      expect(logRouteLifecycleSpy).toHaveBeenCalledWith("wallet-connect-adapter-resolved", expect.anything());
-      expect(logRouteLifecycleSpy).toHaveBeenCalledWith("wallet-connect-final-state", expect.anything());
-      expect(handleConnectAttemptSuccess).toHaveBeenCalledTimes(1);
+      expect(handleOpenChange).toHaveBeenCalledWith(false);
+      expect(handleCancel).toHaveBeenCalledTimes(1);
     });
   });
 });

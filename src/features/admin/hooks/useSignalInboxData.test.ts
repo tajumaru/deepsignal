@@ -18,7 +18,7 @@ const mockListSubmissions = vi.fn();
 const mockFetchJsonBlob = vi.fn();
 const mockReadManifestWithForm = vi.fn();
 
-vi.mock("@mysten/dapp-kit", () => ({
+vi.mock("../../../lib/mystenDappKitCompat", () => ({
   useSuiClient: () => ({
     getObject: vi.fn(),
   }),

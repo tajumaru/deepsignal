@@ -15,7 +15,8 @@ const publicRouteEntries = [
 const forbiddenSpecifiers = ["@mysten-incubation/memwal", "memwalSignalMemoryAdapter"];
 const forbiddenSourceSegments = [`${normalize("src/memory")}`];
 const forbiddenStaticPublicSpecifiers = [
-  "@mysten/dapp-kit",
+  "@mysten/dapp-kit-react",
+  "@mysten/dapp-kit-core",
   "@mysten/kiosk",
   "@mysten/seal",
   "@mysten/sui/",

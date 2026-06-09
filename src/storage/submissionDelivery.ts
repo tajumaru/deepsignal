@@ -56,6 +56,7 @@ const PENDING_QUEUE_KEY = "deepsignal.submissionDelivery.pendingQueue";
 export const PENDING_SUBMISSION_QUEUE_CHANGED_EVENT = "deepsignal:pending-submission-queue-changed";
 const REMOTE_SUBMISSION_INDEX_CACHE_TTL_MS = 15000;
 const REMOTE_SUBMISSION_INDEX_TIMEOUT_MS = 10000;
+const REMOTE_SUBMISSION_INDEX_CALLBACK_REGISTRY_KEY = "__deepsignalRemoteIndexCallbacks";
 const submissionRelayUrl = String(import.meta.env.VITE_DEEPSIGNAL_SUBMISSION_RELAY_URL || "").replace(/\/$/, "");
 const submissionRelayIsAppsScript = submissionRelayUrl.includes("script.google.com/macros/");
 const remoteSubmissionIndexRequests = new Map<string, {
@@ -65,6 +66,14 @@ const remoteSubmissionIndexRequests = new Map<string, {
 
 function getWindowCallbackRegistry() {
   return window as unknown as Record<string, unknown>;
+}
+
+function getRemoteSubmissionIndexCallbackRegistry() {
+  const registryOwner = getWindowCallbackRegistry() as Record<string, unknown> & {
+    [REMOTE_SUBMISSION_INDEX_CALLBACK_REGISTRY_KEY]?: Record<string, unknown>;
+  };
+  registryOwner[REMOTE_SUBMISSION_INDEX_CALLBACK_REGISTRY_KEY] ??= {};
+  return registryOwner[REMOTE_SUBMISSION_INDEX_CALLBACK_REGISTRY_KEY] as Record<string, unknown>;
 }
 
 function notifyPendingQueueChanged() {
@@ -239,7 +248,8 @@ function normalizeIndexEntries(payload: { entries?: unknown } | SubmissionIndexE
 }
 
 async function fetchAppsScriptSubmissionIndex(searchParams: URLSearchParams, formId: string) {
-  const callbackName = `__deepsignalRemoteIndex_${Math.random().toString(36).slice(2, 10)}`;
+  const callbackId = Math.random().toString(36).slice(2, 10);
+  const callbackName = `deepsignalRemoteIndexCallbacks.${callbackId}`;
   const requestUrl = new URL(submissionRelayUrl);
   searchParams.forEach((value, key) => requestUrl.searchParams.set(key, value));
   requestUrl.searchParams.set("callback", callbackName);
@@ -253,9 +263,9 @@ async function fetchAppsScriptSubmissionIndex(searchParams: URLSearchParams, for
       timeoutId = 0;
     }
     try {
-      delete getWindowCallbackRegistry()[callbackName];
+      delete getRemoteSubmissionIndexCallbackRegistry()[callbackId];
     } catch {
-      getWindowCallbackRegistry()[callbackName] = undefined;
+      getRemoteSubmissionIndexCallbackRegistry()[callbackId] = undefined;
     }
     script?.remove();
     script = null;
@@ -266,10 +276,12 @@ async function fetchAppsScriptSubmissionIndex(searchParams: URLSearchParams, for
       formId,
       provider: "google-apps-script",
       requestMode: "jsonp",
+      callbackName,
+      requestUrl: requestUrl.toString(),
     });
 
     const payload = await new Promise<{ entries?: unknown } | SubmissionIndexEntry[] | null>((resolve, reject) => {
-      getWindowCallbackRegistry()[callbackName] = (value: { entries?: unknown } | SubmissionIndexEntry[] | null) => {
+      getRemoteSubmissionIndexCallbackRegistry()[callbackId] = (value: { entries?: unknown } | SubmissionIndexEntry[] | null) => {
         if (settled) {
           return;
         }
@@ -304,6 +316,7 @@ async function fetchAppsScriptSubmissionIndex(searchParams: URLSearchParams, for
       formId,
       provider: "google-apps-script",
       entryCount: entries.length,
+      callbackName,
     });
     return entries;
   } catch (error) {
@@ -311,6 +324,7 @@ async function fetchAppsScriptSubmissionIndex(searchParams: URLSearchParams, for
       formId,
       provider: "google-apps-script",
       status: "local_only",
+      callbackName,
       errorName: error instanceof Error ? error.name : typeof error,
       errorMessage: error instanceof Error ? error.message : String(error),
     });

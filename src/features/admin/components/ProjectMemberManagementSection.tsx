@@ -1,4 +1,4 @@
-import { useSignAndExecuteTransaction, useSuiClient } from "@mysten/dapp-kit";
+import { useSignAndExecuteTransaction, useSuiClient } from "../../../lib/mystenDappKitCompat";
 import { useState } from "react";
 import { SignalMetaChip } from "../../../components/SignalMetaChip";
 import {

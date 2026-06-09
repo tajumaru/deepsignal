@@ -107,7 +107,7 @@ const mockRpcInfrastructure: RpcInfrastructureContextValue = {
   canAutoFallbackFromRateLimit: false,
 };
 
-vi.mock("@mysten/dapp-kit", () => ({
+vi.mock("../lib/mystenDappKitCompat", () => ({
   useSignAndExecuteTransaction: () => ({ isPending: false, mutateAsync: vi.fn() }),
   useSuiClient: () => ({
     getObject: vi.fn(),

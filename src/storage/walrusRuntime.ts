@@ -1,5 +1,6 @@
 import type { ClientWithCoreApi } from "@mysten/sui/client";
-import type { WalletAccount, WalletWithRequiredFeatures } from "@mysten/wallet-standard";
+import type { WalletWithRequiredFeatures } from "@mysten/wallet-standard";
+import type { UiWalletAccount } from "@wallet-standard/ui";
 import type { WalrusClient } from "@mysten/walrus";
 import { WALRUS_AGGREGATOR_URL, WALRUS_UPLOAD_RELAY_URL } from "../lib/sui";
 import { getTatumStorageWriteUrl, isTatumStorageEnabled } from "./tatumStorage";
@@ -8,7 +9,7 @@ type WalrusEnabledClient = ClientWithCoreApi & { walrus: WalrusClient };
 type WalrusStorageMode = "publisher" | "uploadRelay" | "tatum";
 
 export type WalrusRuntimeContext = {
-  account: WalletAccount | null;
+  account: UiWalletAccount | null;
   wallet: WalletWithRequiredFeatures | null;
   supportedIntents: string[];
   client: WalrusEnabledClient | null;

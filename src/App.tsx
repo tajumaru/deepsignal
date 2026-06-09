@@ -22,6 +22,7 @@ import {
 import { PublicAppRoutes } from "./routes/PublicAppRoutes";
 import { createPublicRouteComponents, type PublicRouteComponents } from "./routes/publicRouteComponents";
 import { MixedBuildRecoveryScreen, RouteErrorBoundary } from "./routes/RouteErrorBoundary";
+import { ensureCurrentRouteEpoch } from "./routes/routeEpoch";
 import { getRouteId } from "./routes/routeDiagnostics";
 
 const AppShell = lazy(() =>
@@ -235,7 +236,7 @@ function PrivateRouteSurface({
       <Suspense fallback={shellFallback}>
         <AppShell
           walletUiEnabled={routeShowsWalletUi}
-          walletUiRequested={routeShowsWalletUi && !routeIsDashboardShell}
+          walletUiRequested={routeShowsWalletUi}
           chrome="full"
         >
           <BuildUpdateBanner />
@@ -287,6 +288,7 @@ export default function App() {
     location.pathname.startsWith("/dashboard/");
   const routeNeedsWorkspaceBoot = !routeIsLanding && !routeUsesPublicChrome;
   const routePath = `${location.pathname}${location.search}${location.hash}`;
+  ensureCurrentRouteEpoch(routePath);
   const dashboardProjectRestore = useDashboardProjectRestore(routePath, location.pathname === "/dashboard");
   const workspaceReadyForRoute = location.pathname === "/dashboard" ? isDashboardWorkspaceReady(dashboardProjectRestore) : true;
 

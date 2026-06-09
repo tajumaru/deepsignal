@@ -2,7 +2,7 @@ import { useEffect, useState, type Dispatch, type SetStateAction } from "react";
 import {
   useSignAndExecuteTransaction,
   useSuiClient,
-} from "@mysten/dapp-kit";
+} from "../../../lib/mystenDappKitCompat";
 import { getSignalSubject, isLocalFallbackBlob } from "../../../lib/signalInbox";
 import { normalizeSubmission } from "../../../lib/submissionSchema";
 import { storageAdapter } from "../../../lib/storageAdapter";

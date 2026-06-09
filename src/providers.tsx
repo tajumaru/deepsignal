@@ -1,21 +1,17 @@
 import { JsonRpcHTTPTransport, SuiJsonRpcClient } from "@mysten/sui/jsonRpc";
 import {
-  useCallback,
   useMemo,
   useEffect,
   useRef,
   type PropsWithChildren,
 } from "react";
 import {
-  createNetworkConfig,
-  SuiClientProvider,
   useCurrentAccount,
   useCurrentWallet,
   useDisconnectWallet,
   useSignAndExecuteTransaction,
-  WalletProvider,
-} from "@mysten/dapp-kit";
-import type { WalletWithRequiredFeatures } from "@mysten/wallet-standard";
+} from "./lib/mystenDappKitCompat";
+import { DAppKitProvider, createDAppKit } from "@mysten/dapp-kit-react";
 import { REQUIRE_GLOBAL_WALRUS_RUNTIME } from "./lib/runtimeFlags";
 import { SUI_NETWORK } from "./lib/sui";
 import { logRouteLifecycle, setDeepSignalDebugReadiness } from "./lib/routeDiagnostics";
@@ -33,7 +29,6 @@ import {
 import { setQueryClientMutationErrorHandler } from "./queryClient";
 import { useWalletProviderRuntime } from "./components/WalletSurfaceRuntime";
 
-const PREFERRED_WALLETS = ["Sui Wallet", "Slush", "Phantom", "OKX Wallet"];
 const DAPP_KIT_WALLET_STORAGE_KEY = "sui-dapp-kit:wallet-connection-info";
 const AUTO_RESTORE_ATTEMPTED_KEY = "deepsignal.wallet.autoRestoreAttempted";
 const AUTO_RESTORE_DISABLED_KEY = "deepsignal.wallet.autoRestoreDisabled";
@@ -116,13 +111,6 @@ function clearStaleWalletRestoreState() {
   } catch (error) {
     console.warn("[DeepSignal wallet] Failed to clear stale dApp Kit auto-connect state.", error);
   }
-}
-
-function walletFilter(wallet: WalletWithRequiredFeatures) {
-  if (wallet.name.toLowerCase().includes("nightly")) {
-    return false;
-  }
-  return Boolean(wallet.features["sui:signTransaction"] || wallet.features["sui:signTransactionBlock"]);
 }
 
 function WalletStatusBridge({ children }: PropsWithChildren) {
@@ -232,6 +220,23 @@ export function WalletProviders({ children }: PropsWithChildren) {
   const rpcInfrastructure = useRpcInfrastructure();
   const currentRpcUrl = rpcInfrastructure.currentRpcUrl;
   const autoConnectEnabled = shouldEnableAutoRestore();
+  const dAppKit = useMemo(
+    () =>
+      createDAppKit({
+        autoConnect: autoConnectEnabled,
+        createClient: (network) =>
+          new SuiJsonRpcClient({
+            network: network as typeof SUI_NETWORK,
+            transport: new JsonRpcHTTPTransport({
+              url: currentRpcUrl,
+            }),
+          }),
+        networks: [SUI_NETWORK] as const,
+        storage: typeof window === "undefined" ? null : window.localStorage,
+        storageKey: DAPP_KIT_WALLET_STORAGE_KEY,
+      }),
+    [autoConnectEnabled, currentRpcUrl],
+  );
 
   useEffect(() => {
     setQueryClientMutationErrorHandler((_error, variables) => {
@@ -271,51 +276,22 @@ export function WalletProviders({ children }: PropsWithChildren) {
     });
   }, [autoConnectEnabled, currentRpcUrl]);
 
-  const { networkConfig } = useMemo(
-    () =>
-      createNetworkConfig({
-        [SUI_NETWORK]: {
-          url: currentRpcUrl,
-          network: SUI_NETWORK,
-        },
-      }),
-    [currentRpcUrl],
-  );
-
-  const createClient = useCallback(
-    (
-      _name: string | number,
-      config: Readonly<{ url: string; network: "mainnet" | "testnet" }>,
-    ) => {
-      startPerf("sui-rpc:client-create", config.url);
-      logRouteLifecycle("sui-rpc:client-create-start", {
-        url: config.url,
-        network: config.network,
-      });
-      const rpcClient = new SuiJsonRpcClient({
-        network: SUI_NETWORK,
-        transport: new JsonRpcHTTPTransport({
-          url: config.url,
-        }),
-      });
-      endPerf("sui-rpc:client-create", "ok", config.network);
-      markPerfMilestone("sui-rpc:client-created", config.url);
-      logRouteLifecycle("sui-rpc:client-create-end", {
-        url: config.url,
-        network: config.network,
-      });
-      return rpcClient;
-    },
-    [],
-  );
+  useEffect(() => {
+    startPerf("sui-rpc:client-create", currentRpcUrl);
+    logRouteLifecycle("sui-rpc:client-create-start", {
+      url: currentRpcUrl,
+      network: SUI_NETWORK,
+    });
+    endPerf("sui-rpc:client-create", "ok", SUI_NETWORK);
+    markPerfMilestone("sui-rpc:client-created", currentRpcUrl);
+    logRouteLifecycle("sui-rpc:client-create-end", {
+      url: currentRpcUrl,
+      network: SUI_NETWORK,
+    });
+  }, [currentRpcUrl]);
 
   return (
-    <SuiClientProvider
-      networks={networkConfig}
-      network={SUI_NETWORK}
-      createClient={createClient}
-    >
-      <WalletProvider preferredWallets={PREFERRED_WALLETS} walletFilter={walletFilter} autoConnect={autoConnectEnabled}>
+    <DAppKitProvider dAppKit={dAppKit}>
         <WalletStatusBridge>
           {REQUIRE_GLOBAL_WALRUS_RUNTIME ? (
             <OptionalWalrusRuntimeBoundary>
@@ -324,7 +300,6 @@ export function WalletProviders({ children }: PropsWithChildren) {
           ) : null}
           {children}
         </WalletStatusBridge>
-      </WalletProvider>
-    </SuiClientProvider>
+    </DAppKitProvider>
   );
 }
