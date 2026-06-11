@@ -1,18 +1,6 @@
-import { SuiJsonRpcClient } from "@mysten/sui/jsonRpc";
-import { useMemo } from "react";
-import { createBrowserSafeSuiTransport } from "../lib/suiRpcTransport";
-import { useRpcInfrastructure } from "../rpcInfrastructure";
-import { SUI_NETWORK } from "../lib/sui";
+import type { ClientWithCoreApi } from "@mysten/sui/client";
+import { useReadOnlyCoreSuiClient } from "./useReadOnlyCoreSuiClient";
 
-export function useReadOnlySuiClient() {
-  const rpc = useRpcInfrastructure();
-
-  return useMemo(
-    () =>
-      new SuiJsonRpcClient({
-        network: SUI_NETWORK,
-        transport: createBrowserSafeSuiTransport(rpc.currentRpcUrl),
-      }),
-    [rpc.currentRpcUrl],
-  );
+export function useReadOnlySuiClient(): ClientWithCoreApi {
+  return useReadOnlyCoreSuiClient();
 }

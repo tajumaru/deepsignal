@@ -30,6 +30,7 @@ export interface WalletConnectionState {
 export interface WalletActionState {
   disconnect: () => Promise<void>;
   signAndExecuteTransaction: (transaction: CreateFormTransaction) => Promise<{ digest: string }>;
+  signPersonalMessage: (message: Uint8Array) => Promise<string>;
 }
 
 export interface WalletRuntimeControlState {
@@ -52,6 +53,9 @@ const defaultWalletConnectionState: WalletConnectionState = {
 const defaultWalletActionState: WalletActionState = {
   disconnect: async () => undefined,
   signAndExecuteTransaction: async () => {
+    throw new Error("Wallet provider is not loaded.");
+  },
+  signPersonalMessage: async () => {
     throw new Error("Wallet provider is not loaded.");
   },
 };

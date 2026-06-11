@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { Link } from "react-router-dom";
+import { warmDashboardRouteEntry } from "../lib/dashboardRouteWarmup";
 import { CreateFormLink } from "../components/CreateFormLink";
 import { FlowStepIcon, type FlowStepIconName } from "../components/SignalFlowIcons";
 import { clearDemoLocalArtifacts } from "../demo/demoLocalCleanup";
@@ -1178,13 +1179,23 @@ export function LandingPage() {
                   draggable={false}
                 />
               </picture>
-              <Link className="primary-button landing-cta-primary" to="/dashboard">
+              <Link
+                className="primary-button landing-cta-primary"
+                to="/dashboard"
+                onPointerDown={() => warmDashboardRouteEntry("landing-open-inbox-pointerdown")}
+                onTouchStart={() => warmDashboardRouteEntry("landing-open-inbox-touchstart")}
+              >
                 {t("openInboxCta")}
               </Link>
             </div>
 
             <div className="cta-row landing-hero-actions landing-hero-actions-secondary">
-              <Link className="landing-hero-text-link" to="/dashboard?tab=review&scope=all&demo=intelligence&mockAdmin=1">
+              <Link
+                className="landing-hero-text-link"
+                to="/dashboard?tab=review&scope=all&demo=intelligence&mockAdmin=1"
+                onPointerDown={() => warmDashboardRouteEntry("landing-demo-inbox-pointerdown")}
+                onTouchStart={() => warmDashboardRouteEntry("landing-demo-inbox-touchstart")}
+              >
                 {t("landingHeroDemo")}
               </Link>
               <span className="landing-hero-proofline">{t("landingHeroContestProofline")}</span>

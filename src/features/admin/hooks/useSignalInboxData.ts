@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useSuiClient } from "../../../lib/mystenDappKitCompat";
+import { useRpcSuiClient } from "../../../hooks/useRpcSuiClient";
 import { canReviewForm } from "../../../lib/adminAccess";
 import { isVerifiedSignal } from "../../../lib/respondentMeta";
 import { getSubmissionRespondentMeta } from "../../../lib/respondentMeta";
@@ -740,7 +740,7 @@ export function useSignalInboxData({
   viewScope = "all",
   mockAdminData = null,
 }: UseSignalInboxDataArgs) {
-  const suiClient = useSuiClient();
+  const suiClient = useRpcSuiClient();
   const { projects, dataUpdatedAt: projectsUpdatedAt } = useProjectRegistry(accountAddress);
   const [selectedProjectId, setSelectedProjectId] = useState(() => getSelectedProjectId());
   const [hydratedSelectedProject, setHydratedSelectedProject] = useState<ProjectSummary | null>(null);

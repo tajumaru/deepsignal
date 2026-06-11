@@ -1,9 +1,7 @@
-import {
-  useSignAndExecuteTransaction,
-  useSuiClient,
-} from "../../../lib/mystenDappKitCompat";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { canAdmin } from "../../../lib/adminAccess";
+import { useReadOnlyCoreSuiClient } from "../../../hooks/useReadOnlyCoreSuiClient";
+import { useRpcSuiClient } from "../../../hooks/useRpcSuiClient";
 import {
   fetchProjectSummaryWithCache,
   getSelectedProjectId,
@@ -19,6 +17,7 @@ import {
 } from "../../../lib/projectRegistry";
 import { useProjectRegistry } from "../../../hooks/useProjectRegistry";
 import type { CapabilityProfile } from "../../../hooks/useAccessControl";
+import { useOptionalWalletActions } from "../../../walletStatus";
 import type { FormWithCount } from "./useSignalInboxData";
 
 interface UseProjectWorkspaceArgs {
@@ -36,11 +35,10 @@ export function useProjectWorkspace({
   loadConsole,
   mockProject = null,
 }: UseProjectWorkspaceArgs) {
-  const suiClient = useSuiClient();
+  const suiClient = useRpcSuiClient();
+  const coreSuiClient = useReadOnlyCoreSuiClient();
+  const walletActions = useOptionalWalletActions();
   const { projects, refetch: refetchProjects, ownedProjectCaps } = useProjectRegistry(accountAddress);
-  const createProjectTx = useSignAndExecuteTransaction();
-  const deleteProjectTx = useSignAndExecuteTransaction();
-  const deleteOnchainFormTx = useSignAndExecuteTransaction();
   const [selectedProjectId, setSelectedProjectIdState] = useState(() => getSelectedProjectId());
   const [hydratedSelectedProject, setHydratedSelectedProject] = useState<ProjectSummary | null>(null);
   const [manualProjectId, setManualProjectId] = useState("");
@@ -49,6 +47,7 @@ export function useProjectWorkspace({
   const [highlightCreateFormCta, setHighlightCreateFormCta] = useState(false);
   const [deletingProject, setDeletingProject] = useState(false);
   const [deletingOnchainFormIds, setDeletingOnchainFormIds] = useState<number[]>([]);
+  const [creatingProject, setCreatingProject] = useState(false);
   const manualProjectInputRef = useRef<HTMLInputElement | null>(null);
   const projectCreateInputRef = useRef<HTMLInputElement | null>(null);
   const hasAdminAccess = canAdmin(capabilityProfile);
@@ -143,11 +142,10 @@ export function useProjectWorkspace({
       return cachedProject;
     }
 
-    const response = await suiClient.getObject({
-      id: projectId,
-      options: {
-        showType: true,
-        showContent: true,
+    const response = await coreSuiClient.core.getObject({
+      objectId: projectId,
+      include: {
+        json: true,
       },
     });
     const parsed = parseSuiObjectData(response);
@@ -171,13 +169,13 @@ export function useProjectWorkspace({
       throw new Error("That object is not a DeepSignal project or project owner cap.");
     }
 
-    const summary = await fetchProjectSummaryWithCache(suiClient, parsed.objectId);
+    const summary = await fetchProjectSummaryWithCache(coreSuiClient, parsed.objectId);
     if (!summary) {
       throw new Error("Project exists on Sui, but its fields could not be parsed.");
     }
     saveRecentProject(summary);
     return summary;
-  }, [suiClient]);
+  }, [coreSuiClient]);
 
   useEffect(() => {
     if (mockProject) {
@@ -268,6 +266,7 @@ export function useProjectWorkspace({
     }
 
     try {
+      setCreatingProject(true);
       setProjectState("Awaiting wallet approval...");
       const { createProject } = await loadProjectRegistryWriteModule();
       const tx = createProject({
@@ -277,7 +276,7 @@ export function useProjectWorkspace({
         registryId: capabilityProfile.registryId,
         recipientAddress: accountAddress ?? "",
       });
-      const result = await createProjectTx.mutateAsync({ transaction: tx });
+      const result = await walletActions.signAndExecuteTransaction(tx);
       const confirmed = await suiClient.waitForTransaction({
         digest: result.digest,
         options: {
@@ -317,6 +316,8 @@ export function useProjectWorkspace({
     } catch (projectError) {
       setProjectState(projectError instanceof Error ? projectError.message : "Failed to create project.");
       return false;
+    } finally {
+      setCreatingProject(false);
     }
   }
 
@@ -351,7 +352,7 @@ export function useProjectWorkspace({
         projectId: selectedProject.objectId,
         ownerCapId: selectedProject.ownedOwnerCapId,
       });
-      const result = await deleteProjectTx.mutateAsync({ transaction: tx });
+      const result = await walletActions.signAndExecuteTransaction(tx);
       await suiClient.waitForTransaction({ digest: result.digest });
       removeRecentProject(selectedProject.objectId);
       setSelectedProjectIdState("");
@@ -386,7 +387,7 @@ export function useProjectWorkspace({
         projectId: selectedProject.objectId,
         formId,
       });
-      const result = await deleteOnchainFormTx.mutateAsync({ transaction: tx });
+      const result = await walletActions.signAndExecuteTransaction(tx);
       await suiClient.waitForTransaction({ digest: result.digest });
       await refetchProjects();
       await loadConsole();
@@ -411,7 +412,7 @@ export function useProjectWorkspace({
     projectCreateName,
     setProjectCreateName,
     highlightCreateFormCta,
-    isCreatingProject: createProjectTx.isPending,
+    isCreatingProject: creatingProject,
     projectState,
     setProjectState,
     deletingProject,

@@ -1,7 +1,4 @@
-﻿import {
-  useSignAndExecuteTransaction,
-  useSuiClient,
-} from "../lib/mystenDappKitCompat";
+﻿
 import "../styles/components/forms-content.css";
 import "../styles/components/metadata-proof.css";
 import "../styles/components/signal-review.css";
@@ -90,12 +87,21 @@ import {
 import { useAttachmentPreviews } from "../hooks/useAttachmentPreviews";
 import { useAccessControl } from "../hooks/useAccessControl";
 import { useLongPress } from "../hooks/useLongPress";
+import { useRpcSuiClient } from "../hooks/useRpcSuiClient";
 import { useReviewerDisplayLabel } from "../hooks/useReviewerDisplayLabel";
 import { useSuiWallet } from "../hooks/useSuiWallet";
 import { useI18n } from "../i18n";
 import { DEMO_FORM_ID, DEMO_PRIMARY_SIGNAL_ID, seedDemoWorkspace } from "../demo/demoData";
 import { isAttachmentFieldType, isLongTextLikeField } from "../lib/fieldTypes";
+import {
+  CUSTOM_NFT_PRESET_ID,
+  getNftGatePresetLabel,
+  isNftGatedForm,
+  normalizeFormNftGate,
+  resolveFormAccessMode,
+} from "../lib/formAccess";
 import { isDashboardBootPending, useDashboardProjectRestoreSnapshot } from "../lib/dashboardProjectRestore";
+import { useOptionalWalletActions } from "../walletStatus";
 import { useWalletSessionState } from "../walletSessionState";
 import {
   addressesMatch,
@@ -3382,6 +3388,21 @@ function DeleteNodeActionIcon() {
   );
 }
 
+interface NodeDirectoryItem {
+  id: string;
+  title: string;
+  submissionCount: number;
+  unreadCount: number;
+  onchainFormId?: number;
+  isOnchain: boolean;
+  hasNftGate: boolean;
+  nftGateLabel?: string;
+  isLegacyDemo: boolean;
+  canDelete: boolean;
+  canRegisterOnSui: boolean;
+  isAccessible: boolean;
+}
+
 function LongPressNodeDirectoryButton({
   title,
   unreadCount,
@@ -3390,6 +3411,8 @@ function LongPressNodeDirectoryButton({
   isAccessible,
   isOnchain,
   onchainFormId,
+  hasNftGate,
+  nftGateLabel,
   isSelected,
   isLongPressCapable,
   isRegistering,
@@ -3409,6 +3432,8 @@ function LongPressNodeDirectoryButton({
   isAccessible: boolean;
   isOnchain: boolean;
   onchainFormId?: number;
+  hasNftGate: boolean;
+  nftGateLabel?: string;
   isSelected: boolean;
   isLongPressCapable: boolean;
   isRegistering: boolean;
@@ -3584,6 +3609,12 @@ function LongPressNodeDirectoryButton({
               : ""}
         </p>
         <div className="signal-badge-row signal-badge-row-compact">
+          {hasNftGate ? (
+            <>
+              <span className="signal-chip signal-chip-accent">{t("nodeDirectoryNftGateBadge")}</span>
+              {nftGateLabel ? <span className="signal-chip signal-chip-accent">{nftGateLabel}</span> : null}
+            </>
+          ) : null}
           {isOnchain ? (
             <>
               <span className="signal-chip signal-chip-soft">{t("registeredOnSuiLabel")}</span>
@@ -4496,17 +4527,15 @@ export function AdminDashboardWorkspace() {
     });
   const navigate = useNavigate();
   const wallet = useSuiWallet();
+  const walletActions = useOptionalWalletActions();
   const mockAdmin = useMockAdminMode(location.search);
   const mockAdminData = useMemo(
     () => (mockAdmin.enabled ? createMockAdminWorkspaceData() : null),
     [mockAdmin.enabled],
   );
   const activeAccountAddress = mockAdminData?.accountAddress ?? wallet.accountAddress;
-  const suiClient = useSuiClient();
+  const suiClient = useRpcSuiClient();
   const rpc = useRpcInfrastructure();
-  const updateSignalStatusTx = useSignAndExecuteTransaction();
-  const registerFormTx = useSignAndExecuteTransaction();
-  const deleteNodeOnchainTx = useSignAndExecuteTransaction();
   const [loadingRecoveryVisible, setLoadingRecoveryVisible] = useState(false);
   const {
     capabilityProfile: accessCapabilityProfile,
@@ -4515,6 +4544,12 @@ export function AdminDashboardWorkspace() {
   } = useAccessControl(activeAccountAddress, { enabled: !mockAdmin.enabled });
   const capabilityProfile = mockAdminData?.capabilityProfile ?? accessCapabilityProfile;
   const ownedObjects = mockAdminData?.ownedObjects ?? accessOwnedObjects;
+  const walletOnlyUiDeferred =
+    !walletSession.providerMounted ||
+    walletSession.providerLoading ||
+    walletSession.phase === "provider_deferred" ||
+    dashboardProjectRestore.walletRuntime === "deferred" ||
+    dashboardProjectRestore.walletRuntime === "timeout_fallback";
   const storageRuntime = getStorageRuntimeStatus();
   const responseDeadlineLabels: ResponseDeadlineLabels = {
     noLimit: t("responseDeadlineNone"),
@@ -4610,7 +4645,7 @@ export function AdminDashboardWorkspace() {
   const demoUnlockedThresholdsRef = useRef<Set<number>>(new Set());
   const demoEventIdRef = useRef(0);
   const hasAdminAccess = canAdmin(capabilityProfile);
-  const isNodeRegistrationBusy = registerFormTx.isPending || registeringFormId !== null;
+  const isNodeRegistrationBusy = walletOnlyUiDeferred || registeringFormId !== null;
   const setWorkspaceTab = useCallback(
     (tab: WorkspaceTab) => {
       if (tab === activeWorkspaceTab) {
@@ -5742,7 +5777,7 @@ export function AdminDashboardWorkspace() {
               actionLabel: t("deleteFormConfirm"),
               origin: "delete-node-confirmed-button",
               executeTransaction: ({ transaction }) =>
-                deleteNodeOnchainTx.mutateAsync({ transaction }),
+                walletActions.signAndExecuteTransaction(transaction),
               waitForTransaction: ({ digest }) => suiClient.waitForTransaction({ digest }),
             });
             walrusDeleteHandledInBatch = result.walrusDeleteHandledInBatch;
@@ -5927,7 +5962,7 @@ export function AdminDashboardWorkspace() {
       const registration = await registerNodeOnSui({
         form,
         executeTransaction: ({ transaction }) =>
-          registerFormTx.mutateAsync({ transaction }),
+          walletActions.signAndExecuteTransaction(transaction),
         waitForTransaction: ({ digest, options }) =>
           suiClient.waitForTransaction({
             digest,
@@ -6809,7 +6844,7 @@ export function AdminDashboardWorkspace() {
             triageStatus: normalized.triageStatus,
             submissionStatus: normalized.status,
             executeTransaction: ({ transaction }) =>
-              updateSignalStatusTx.mutateAsync({ transaction }),
+              walletActions.signAndExecuteTransaction(transaction),
             waitForTransaction: ({ digest }) => suiClient.waitForTransaction({ digest }),
           });
           const syncedSubmission = normalizeSubmission({
@@ -6855,7 +6890,7 @@ export function AdminDashboardWorkspace() {
     saveQueueRef.current = saveQueueRef.current.then(runSave, runSave);
     await saveQueueRef.current;
     return saved;
-  }, [applySubmissionUpdate, setReviewSaveStatus, setSelectedSignalId, setToast, signalIndex.signalById, suiClient, updateSignalStatusTx]);
+  }, [applySubmissionUpdate, setReviewSaveStatus, setSelectedSignalId, setToast, signalIndex.signalById, suiClient, walletActions]);
 
   const handleQuickAction = useCallback(
     async (record: SignalRecord, action: QuickActionId) => {
@@ -7692,7 +7727,7 @@ export function AdminDashboardWorkspace() {
     });
     return counts;
   }, [accessibleForms, allSignals]);
-  const nodeDirectoryItems = useMemo(() => {
+  const nodeDirectoryItems = useMemo<NodeDirectoryItem[]>(() => {
     const normalizedSearch = nodeSearch.trim().toLowerCase();
     const accessibleFormIdSet = new Set(accessibleForms.map((form) => form.id));
     const allFormsItem = {
@@ -7702,6 +7737,8 @@ export function AdminDashboardWorkspace() {
       unreadCount: signalIndex.counts.unread,
       onchainFormId: undefined,
       isOnchain: false,
+      hasNftGate: false,
+      nftGateLabel: undefined,
       isLegacyDemo: false,
       canDelete: false,
       canRegisterOnSui: false,
@@ -7717,18 +7754,27 @@ export function AdminDashboardWorkspace() {
           form.description.toLowerCase().includes(normalizedSearch)
         );
       })
-      .map((form) => ({
-        id: form.id,
-        title: form.title,
-        submissionCount: signalCountByFormId[form.id] ?? 0,
-        unreadCount: unreadCountByFormId[form.id] ?? 0,
-        onchainFormId: form.onchainFormId,
-        isOnchain: typeof form.onchainFormId === "number",
-        isLegacyDemo: !form.ownerAddress,
-        canDelete: canDeleteForm(form),
-        canRegisterOnSui: canRegisterNodeOnSui(form),
-        isAccessible: accessibleFormIdSet.has(form.id),
-      }));
+      .map((form) => {
+        const accessMode = resolveFormAccessMode(form);
+        const nftGate = normalizeFormNftGate(form.nftGate, accessMode);
+        const hasNftGate = isNftGatedForm(form) && Boolean(nftGate);
+        const presetLabel =
+          nftGate?.presetId && nftGate.presetId !== CUSTOM_NFT_PRESET_ID ? getNftGatePresetLabel(nftGate.presetId) : "";
+        return {
+          id: form.id,
+          title: form.title,
+          submissionCount: signalCountByFormId[form.id] ?? 0,
+          unreadCount: unreadCountByFormId[form.id] ?? 0,
+          onchainFormId: form.onchainFormId,
+          isOnchain: typeof form.onchainFormId === "number",
+          isLegacyDemo: !form.ownerAddress,
+          canDelete: canDeleteForm(form),
+          canRegisterOnSui: canRegisterNodeOnSui(form),
+          isAccessible: accessibleFormIdSet.has(form.id),
+          hasNftGate,
+          nftGateLabel: hasNftGate ? nftGate?.collectionLabel?.trim() || presetLabel || undefined : undefined,
+        };
+      });
     return [allFormsItem, ...formItems];
   }, [
     accessibleForms,
@@ -9968,6 +10014,8 @@ export function AdminDashboardWorkspace() {
                         isAccessible={item.isAccessible}
                         isOnchain={item.isOnchain}
                         onchainFormId={item.onchainFormId}
+                        hasNftGate={item.hasNftGate}
+                        nftGateLabel={item.nftGateLabel}
                         isSelected={isSelected}
                         isLongPressCapable={isLongPressCapable}
                         isRegistering={registeringFormId === item.id}

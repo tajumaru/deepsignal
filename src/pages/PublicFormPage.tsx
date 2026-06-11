@@ -113,9 +113,240 @@ function PublicFormSuccessFallback({
   );
 }
 
+function stringifyDebugValue(value: unknown) {
+  try {
+    return JSON.stringify(value, null, 2);
+  } catch {
+    return String(value);
+  }
+}
+
 function renderDebugJson(value: unknown) {
+  return <pre className="muted nft-debug-pre">{stringifyDebugValue(value)}</pre>;
+}
+
+function shortenDebugValue(value: string, leading = 12, trailing = 10) {
+  const normalized = value.trim();
+  if (normalized.length <= leading + trailing + 3) {
+    return normalized;
+  }
+  return `${normalized.slice(0, leading)}...${normalized.slice(-trailing)}`;
+}
+
+async function copyTextToClipboard(text: string) {
+  if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+
+  if (typeof document === "undefined") {
+    throw new Error("Clipboard unavailable");
+  }
+
+  const textarea = document.createElement("textarea");
+  textarea.value = text;
+  textarea.setAttribute("readonly", "true");
+  textarea.style.position = "fixed";
+  textarea.style.opacity = "0";
+  textarea.style.pointerEvents = "none";
+  document.body.appendChild(textarea);
+  textarea.select();
+  const copied = document.execCommand("copy");
+  document.body.removeChild(textarea);
+  if (!copied) {
+    throw new Error("Clipboard unavailable");
+  }
+}
+
+function CopyableDebugValue({ label, value }: { label: string; value: string }) {
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    if (!copied) {
+      return;
+    }
+    const timer = window.setTimeout(() => setCopied(false), 1600);
+    return () => window.clearTimeout(timer);
+  }, [copied]);
+
+  const handleCopy = useCallback(async () => {
+    try {
+      await copyTextToClipboard(value);
+      setCopied(true);
+    } catch {
+      setCopied(false);
+    }
+  }, [value]);
+
+  if (!value.trim()) {
+    return null;
+  }
+
   return (
-    <pre className="muted">{JSON.stringify(value, null, 2)}</pre>
+    <section className="nft-debug-card">
+      <div className="nft-debug-card-header">
+        <strong>{label}</strong>
+        <button type="button" className="ghost-button nft-debug-copy-button" onClick={handleCopy}>
+          {copied ? "Copied" : "Copy"}
+        </button>
+      </div>
+      <code className="nft-debug-inline-value" title={value}>
+        {shortenDebugValue(value)}
+      </code>
+      <pre className="muted nft-debug-pre nft-debug-pre-compact">{value}</pre>
+    </section>
+  );
+}
+
+function NftGateDebugPanel({
+  debugInfo,
+  gateError,
+  targetStructType,
+  targetObjectId,
+  visible,
+}: {
+  debugInfo: {
+    connectedAddress: string;
+    network: string;
+    rpcEndpoint: string;
+    targetTypes: string[];
+    targetObjectIds: string[];
+    ownedObjectsOwnerAddress: string;
+    ownedObjectsFetchCount: number;
+    sampleObjectTypes: string[];
+    matchedDirectObjects: unknown[];
+    kioskCount: number;
+    matchedKioskItems: unknown[];
+    lastError?: string;
+    checkedAt?: string;
+    fetchErrors?: string[];
+  } & Record<string, unknown>;
+  gateError: string;
+  targetStructType?: string;
+  targetObjectId?: string;
+  visible: boolean;
+}) {
+  const [copyState, setCopyState] = useState<"idle" | "copied" | "failed">("idle");
+  const [manualCopyText, setManualCopyText] = useState("");
+
+  useEffect(() => {
+    if (copyState !== "copied") {
+      return;
+    }
+    const timer = window.setTimeout(() => setCopyState("idle"), 1600);
+    return () => window.clearTimeout(timer);
+  }, [copyState]);
+
+  const debugPayload = useMemo(() => {
+    const fetchErrors = Array.from(
+      new Set(
+        [
+          ...(Array.isArray(debugInfo.fetchErrors) ? debugInfo.fetchErrors : []),
+          gateError,
+          debugInfo.lastError,
+        ].filter((entry): entry is string => typeof entry === "string" && entry.trim().length > 0),
+      ),
+    );
+
+    return {
+      ownerAddress: debugInfo.ownedObjectsOwnerAddress || debugInfo.connectedAddress,
+      configuredStructTypes: debugInfo.targetTypes.length > 0 ? debugInfo.targetTypes : targetStructType ? [targetStructType] : [],
+      ownedObjectCount: debugInfo.ownedObjectsFetchCount,
+      sampleObjectTypes: debugInfo.sampleObjectTypes,
+      matchedDirectObjects: debugInfo.matchedDirectObjects,
+      kioskCount: debugInfo.kioskCount,
+      matchedKioskItems: debugInfo.matchedKioskItems,
+      fetchErrors,
+      checkedAt: debugInfo.checkedAt ?? null,
+      network: debugInfo.network,
+      rpcUrl: debugInfo.rpcEndpoint,
+      targetObjectId: debugInfo.targetObjectIds[0] ?? targetObjectId ?? null,
+      fullDiagnostic: debugInfo,
+    };
+  }, [debugInfo, gateError, targetObjectId, targetStructType]);
+
+  const serializedDebugPayload = useMemo(() => stringifyDebugValue(debugPayload), [debugPayload]);
+
+  const handleCopyDebugLog = useCallback(async () => {
+    try {
+      await copyTextToClipboard(serializedDebugPayload);
+      setCopyState("copied");
+      setManualCopyText("");
+    } catch {
+      setCopyState("failed");
+      setManualCopyText(serializedDebugPayload);
+    }
+  }, [serializedDebugPayload]);
+
+  if (!visible) {
+    return null;
+  }
+
+  return (
+    <details className="answer-card answer-card-plain nft-debug-panel">
+      <summary>NFT gate debug</summary>
+      <div className="nft-debug-panel-body">
+        <div className="nft-debug-header">
+          <p className="muted">
+            Ownership lookup diagnostics for direct owned objects, kiosk items, and configured selectors.
+          </p>
+          <button type="button" className="ghost-button nft-debug-copy-button" onClick={handleCopyDebugLog}>
+            {copyState === "copied" ? "Copied" : "Copy debug log"}
+          </button>
+        </div>
+        {copyState === "failed" ? (
+          <div className="nft-debug-fallback">
+            <strong>Clipboard unavailable</strong>
+            <p className="muted">Select and copy the debug log manually.</p>
+            <textarea className="nft-debug-fallback-textarea" readOnly value={manualCopyText} />
+          </div>
+        ) : null}
+        <div className="nft-debug-grid">
+          <CopyableDebugValue label="Owner Address" value={String(debugPayload.ownerAddress ?? "")} />
+          <CopyableDebugValue label="RPC URL" value={String(debugPayload.rpcUrl ?? "")} />
+          <CopyableDebugValue label="Target Object ID" value={String(debugPayload.targetObjectId ?? "")} />
+          {(debugPayload.configuredStructTypes as string[]).map((structType, index) => (
+            <CopyableDebugValue key={`${structType}-${index}`} label={`Struct Type ${index + 1}`} value={structType} />
+          ))}
+          <section className="nft-debug-card">
+            <strong>Network</strong>
+            <pre className="muted nft-debug-pre nft-debug-pre-compact">{String(debugPayload.network ?? "")}</pre>
+          </section>
+          <section className="nft-debug-card">
+            <strong>Owned Object Count</strong>
+            <pre className="muted nft-debug-pre nft-debug-pre-compact">{String(debugPayload.ownedObjectCount ?? 0)}</pre>
+          </section>
+          <section className="nft-debug-card">
+            <strong>Checked At</strong>
+            <pre className="muted nft-debug-pre nft-debug-pre-compact">{String(debugPayload.checkedAt ?? "")}</pre>
+          </section>
+          <section className="nft-debug-card">
+            <strong>Fetch Errors</strong>
+            {renderDebugJson(debugPayload.fetchErrors)}
+          </section>
+          <section className="nft-debug-card nft-debug-card-wide">
+            <strong>sampleObjectTypes</strong>
+            {renderDebugJson(debugPayload.sampleObjectTypes)}
+          </section>
+          <section className="nft-debug-card nft-debug-card-wide">
+            <strong>matchedDirectObjects</strong>
+            {renderDebugJson(debugPayload.matchedDirectObjects)}
+          </section>
+          <section className="nft-debug-card">
+            <strong>kioskCount</strong>
+            <pre className="muted nft-debug-pre nft-debug-pre-compact">{String(debugPayload.kioskCount ?? 0)}</pre>
+          </section>
+          <section className="nft-debug-card nft-debug-card-wide">
+            <strong>matchedKioskItems</strong>
+            {renderDebugJson(debugPayload.matchedKioskItems)}
+          </section>
+          <section className="nft-debug-card nft-debug-card-wide">
+            <strong>fullDiagnostic</strong>
+            {renderDebugJson(debugInfo)}
+          </section>
+        </div>
+      </div>
+    </details>
   );
 }
 
@@ -205,6 +436,11 @@ export function PublicFormPage() {
     network: nftGate.nftGate?.network ?? "sui-mainnet",
     rpcEndpoint: "",
     targetTypes: nftGate.nftGate?.structType ? [nftGate.nftGate.structType] : [],
+    targetObjectIds: nftGate.nftGate?.objectId ? [nftGate.nftGate.objectId] : [],
+    requiredCount: Math.max(1, nftGate.nftGate?.requiredCount ?? 1),
+    matchedCount: 0,
+    matchedObjectIds: [],
+    matchedSources: [],
     directOwnedCount: 0,
     kioskCount: 0,
     kioskItemCount: 0,
@@ -213,14 +449,66 @@ export function PublicFormPage() {
     directOwnedTypes: [],
     kioskItemTypes: [],
     kioskItemsByKiosk: [],
+    ownedObjectsOwnerAddress: resolvedWalletAddress ?? "",
+    ownedObjectsFetchCount: 0,
+    ownedObjectsShowTypeRequested: true,
+    ownedObjectsStructTypeFilterUsed: false,
+    ownedObjectsFetchStrategy: "full-scan",
+    directOwnedObjectIdsPreview: [],
+    directOwnedObjectTypesPreview: [],
+    debugObjectLookups: [],
+    configuredStructTypeExactMatches: [],
     requiredTypeBreakdown: [],
     typeComparisons: [],
     matchedDirectObjects: [],
     matchedKioskItems: [],
     sampleObjectTypes: [],
+    ownershipChecks: [],
     zeroCountReason: "not_checked_yet",
+    checkedAt: "",
+    fetchErrors: [],
     lastError: undefined,
   };
+  const nftDebugVisible =
+    Boolean(resolvedWalletAddress) &&
+    (nftDebugEnabled || Boolean(nftGate.gateError) || (nftGate.hasResolvedOwnership && !nftGate.meetsRequirement));
+  const nftGateStatusCopy = useMemo(() => {
+    if (!nftRequired) {
+      return "";
+    }
+    if (!resolvedWalletAddress) {
+      return t("publicNftGateStatusWalletMissing");
+    }
+    if (nftGate.gateError) {
+      return t("publicNftGateStatusRpcError");
+    }
+    if (!nftGate.nftGate?.structType?.trim() && !nftGate.nftGate?.objectId?.trim()) {
+      return t("publicNftGateStatusTypeConfig");
+    }
+    if (nftGate.isChecking) {
+      return nftGate.checkingPhase === "kiosks"
+        ? t("publicNftGateStatusCheckingKiosk")
+        : t("publicNftGateStatusCheckingOwned");
+    }
+    if (nftGate.meetsRequirement) {
+      return t("publicNftGateEligible");
+    }
+    if (nftGate.hasResolvedOwnership) {
+      return t("publicNftGateStatusNotDetected");
+    }
+    return t("publicNftGateStatusChecking");
+  }, [
+    nftGate.checkingPhase,
+    nftGate.gateError,
+    nftGate.hasResolvedOwnership,
+    nftGate.isChecking,
+    nftGate.meetsRequirement,
+    nftGate.nftGate?.objectId,
+    nftGate.nftGate?.structType,
+    nftRequired,
+    resolvedWalletAddress,
+    t,
+  ]);
   const nftSubmitGateEnabled = nftRequired && nftGate.submitGateActive;
   const {
     answers,
@@ -899,7 +1187,7 @@ export function PublicFormPage() {
             </div>
           ) : null}
         </div>
-        {nftGate.isChecking ? <p className="muted">{t("publicNftGateChecking")}</p> : null}
+        {nftGateStatusCopy ? <p className={nftGate.gateError ? "error-text" : "muted"}>{nftGateStatusCopy}</p> : null}
         {!resolvedWalletAddress ? (
           <p className="muted">{t("publicNftGateConnectPrompt")}</p>
         ) : null}
@@ -907,33 +1195,13 @@ export function PublicFormPage() {
           className: "public-identity-choice-wallet-shell",
         })}
         {nftGate.gateError ? <p className="error-text">{nftGate.gateError}</p> : null}
-        {nftDebugEnabled && resolvedWalletAddress ? (
-          <details className="answer-card answer-card-plain">
-            <summary>NFT gate debug</summary>
-            <div className="stack">
-              <section>
-                <strong>Configured structType</strong>
-                {renderDebugJson(nftDebugInfo.targetTypes)}
-              </section>
-              <section>
-                <strong>sampleObjectTypes</strong>
-                {renderDebugJson(nftDebugInfo.sampleObjectTypes)}
-              </section>
-              <section>
-                <strong>matchedDirectObjects</strong>
-                {renderDebugJson(nftDebugInfo.matchedDirectObjects)}
-              </section>
-              <section>
-                <strong>matchedKioskItems</strong>
-                {renderDebugJson(nftDebugInfo.matchedKioskItems)}
-              </section>
-              <section>
-                <strong>fullDiagnostic</strong>
-                {renderDebugJson(nftDebugInfo)}
-              </section>
-            </div>
-          </details>
-        ) : null}
+        <NftGateDebugPanel
+          debugInfo={nftDebugInfo}
+          gateError={nftGate.gateError}
+          targetStructType={nftGate.nftGate?.structType}
+          targetObjectId={nftGate.nftGate?.objectId}
+          visible={nftDebugVisible}
+        />
         {resolvedWalletAddress && nftGate.hasResolvedOwnership && !nftGate.isChecking && !nftGate.gateError ? (
           <p className="error-text">{t("publicNftGateNotEligible")}</p>
         ) : null}
@@ -948,13 +1216,7 @@ export function PublicFormPage() {
 
     const collectionLabel = nftGate.nftGate?.collectionLabel ?? t("publishNftCustomPresetLabel");
     const statusCopy = nftGate.submitGateActive
-      ? !resolvedWalletAddress
-        ? t("publicNftGateSubmitConnectPrompt")
-        : nftGate.isChecking
-          ? t("publicNftGateCheckingConnected")
-          : nftGate.meetsRequirement
-            ? t("publicNftGateEligible")
-            : t("publicNftGateVisibleSubmitRestricted")
+      ? nftGateStatusCopy || t("publicNftGateVisibleSubmitRestricted")
       : t("publicNftGateVisibleWithoutVerification");
 
     return (
@@ -990,43 +1252,23 @@ export function PublicFormPage() {
         {nftGate.nftGate?.structType ? (
           <p className="muted">{`${t("publishNftStructTypeLabel")}: ${nftGate.nftGate.structType}`}</p>
         ) : null}
-        {nftGate.isChecking ? <p className="muted">{t("publicNftGateChecking")}</p> : null}
+        {nftGateStatusCopy ? <p className={nftGate.gateError ? "error-text" : "muted"}>{nftGateStatusCopy}</p> : null}
         {renderWalletAccountPanel({
           className: "public-identity-choice-wallet-shell",
         })}
-        {!nftDebugEnabled ? (
+        {!nftDebugEnabled && !nftDebugVisible ? (
           <Link className="ghost-button" to={nftDebugSearch}>
             Open NFT Debug
           </Link>
         ) : null}
         {nftGate.gateError ? <p className="error-text">{nftGate.gateError}</p> : null}
-        {nftDebugEnabled && resolvedWalletAddress ? (
-          <details className="answer-card answer-card-plain">
-            <summary>NFT gate debug</summary>
-            <div className="stack">
-              <section>
-                <strong>Configured structType</strong>
-                {renderDebugJson(nftDebugInfo.targetTypes)}
-              </section>
-              <section>
-                <strong>sampleObjectTypes</strong>
-                {renderDebugJson(nftDebugInfo.sampleObjectTypes)}
-              </section>
-              <section>
-                <strong>matchedDirectObjects</strong>
-                {renderDebugJson(nftDebugInfo.matchedDirectObjects)}
-              </section>
-              <section>
-                <strong>matchedKioskItems</strong>
-                {renderDebugJson(nftDebugInfo.matchedKioskItems)}
-              </section>
-              <section>
-                <strong>fullDiagnostic</strong>
-                {renderDebugJson(nftDebugInfo)}
-              </section>
-            </div>
-          </details>
-        ) : null}
+        <NftGateDebugPanel
+          debugInfo={nftDebugInfo}
+          gateError={nftGate.gateError}
+          targetStructType={nftGate.nftGate?.structType}
+          targetObjectId={nftGate.nftGate?.objectId}
+          visible={nftDebugVisible}
+        />
         {resolvedWalletAddress && nftGate.hasResolvedOwnership && !nftGate.isChecking && !nftGate.gateError && nftGate.submitGateActive && !nftGate.meetsRequirement ? (
           <p className="error-text">{t("publicNftGateNotEligible")}</p>
         ) : null}

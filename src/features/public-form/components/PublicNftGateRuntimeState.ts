@@ -6,6 +6,7 @@ export interface PublicNftGateRuntimeState {
   viewGateActive: boolean;
   submitGateActive: boolean;
   isChecking: boolean;
+  checkingPhase: ReturnType<typeof usePublicNftGate>["checkingPhase"];
   ownedCount: number;
   meetsRequirement: boolean;
   canViewForm: boolean;
@@ -22,6 +23,7 @@ export function createDefaultPublicNftGateRuntimeState(): PublicNftGateRuntimeSt
     viewGateActive: false,
     submitGateActive: false,
     isChecking: false,
+    checkingPhase: null,
     ownedCount: 0,
     meetsRequirement: false,
     canViewForm: true,

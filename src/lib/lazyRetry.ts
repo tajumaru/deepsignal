@@ -27,6 +27,7 @@ import { lazyChunkExportSpecs } from "./lazyRouteRegistry";
 import type { RouteAssetKey, RouteChunkSpec } from "./lazyRouteRegistry";
 import { markLazyImportCompatibilityFallback } from "./lazyImportCompatibility";
 import { CreateRouteCompatibilityFallback } from "../pages/CreateRouteCompatibilityFallback";
+import { DashboardRouteCompatibilityFallback } from "../pages/DashboardRouteCompatibilityFallback";
 import { reportSystemError } from "../services/systemSignalReporterClient";
 import { ensureCurrentRouteEpoch, getCurrentRouteEpochSnapshot } from "../routes/routeEpoch";
 
@@ -36,11 +37,13 @@ import { ensureCurrentRouteEpoch, getCurrentRouteEpochSnapshot } from "../routes
 // app refresh.
 const lazyImportAttempts = 4;
 const lazyImportRetryDelayMs = [300, 1_000, 2_500] as const;
+const dashboardLazyImportRetryDelayMs = [300, 800, 1_500] as const;
 const proactiveDependencyProbeLabels = new Set(["app-shell"]);
 const recordedLazyImportTimeouts = new Set<string>();
 const mobileSafariLazyImportMaxConcurrency = 1;
 let mobileSafariLazyImportActiveCount = 0;
 const mobileSafariLazyImportQueue: Array<() => void> = [];
+const dashboardImportLabels = new Set(["route-admin-dashboard", "dashboard-workspace"]);
 type LazyImportRegistryStatus = "pending" | "resolved" | "rejected";
 type LazyImportRegistryEntry<T = unknown> = {
   error?: unknown;
@@ -578,8 +581,29 @@ async function getExpectedChunkUrl(label: string) {
   return chunkPath ? resolveAssetUrl(chunkPath) : null;
 }
 
+async function getExpectedCssUrls(label: string) {
+  const spec = routeChunkByLabel[label];
+  if (!spec) {
+    return [] as string[];
+  }
+  const manifest = await loadBuildManifest();
+  const routeAssets = manifest?.routeAssets?.[spec.routeKey] ?? [];
+  const candidateAssets = routeAssets.length > 0 ? routeAssets : manifest?.assets ?? [];
+  return candidateAssets
+    .filter((assetPath) => {
+      const fileName = assetPath.split("/").pop() ?? "";
+      return fileName.startsWith(`${spec.filePrefix}-`) && fileName.endsWith(".css");
+    })
+    .map((assetPath) => resolveAssetUrl(assetPath))
+    .filter((assetUrl): assetUrl is string => Boolean(assetUrl));
+}
+
 export async function getExpectedRouteChunkUrl(label: string) {
   return getExpectedChunkUrl(label);
+}
+
+export async function getExpectedRouteCssUrls(label: string) {
+  return getExpectedCssUrls(label);
 }
 
 function appendCacheBust(url: string, attempt: number) {
@@ -634,8 +658,24 @@ function isPreloadOnlyFailureKind(failureKind: LazyImportFailureKind) {
   return failureKind === "css_preload" || failureKind === "modulepreload";
 }
 
+function isDashboardImportLabel(label: string) {
+  return dashboardImportLabels.has(label);
+}
+
+function getRetryDelayForAttempt(label: string, attempt: number) {
+  const delayTable =
+    isDashboardImportLabel(label) && getBrowserCapabilitiesSnapshot().mobileSafari
+      ? dashboardLazyImportRetryDelayMs
+      : lazyImportRetryDelayMs;
+  return delayTable[Math.min(attempt - 1, delayTable.length - 1)];
+}
+
 function canUseLazyFallbackModule(label: string, failureKind: LazyImportFailureKind, attempt: number, maxAttempts: number) {
-  return label === "route-form-builder" && isPreloadOnlyFailureKind(failureKind) && attempt >= maxAttempts;
+  return (
+    (label === "route-form-builder" || label === "route-admin-dashboard") &&
+    isPreloadOnlyFailureKind(failureKind) &&
+    attempt >= maxAttempts
+  );
 }
 
 function createLazyFallbackModule<T>(label: string): T {
@@ -643,6 +683,12 @@ function createLazyFallbackModule<T>(label: string): T {
     return {
       default: CreateRouteCompatibilityFallback,
       FormBuilderPage: CreateRouteCompatibilityFallback,
+    } as T;
+  }
+  if (label === "route-admin-dashboard") {
+    return {
+      AdminDashboardPage: DashboardRouteCompatibilityFallback,
+      default: DashboardRouteCompatibilityFallback,
     } as T;
   }
   throw new Error(`Lazy fallback module for ${label} is not available.`);
@@ -1087,12 +1133,20 @@ export async function retryLazyImport<T>(loader: () => Promise<T>, label = "anon
   const singleAttemptRuntime = isViteDevServerRuntime();
   const maxAttempts = singleAttemptRuntime ? 1 : lazyImportAttempts;
   let expectedChunkUrl: string | null | undefined;
+  let expectedCssUrls: string[] | undefined;
   const resolveExpectedChunkUrl = async () => {
     if (expectedChunkUrl !== undefined) {
       return expectedChunkUrl;
     }
     expectedChunkUrl = await getExpectedChunkUrl(label);
     return expectedChunkUrl;
+  };
+  const resolveExpectedCssUrls = async () => {
+    if (expectedCssUrls !== undefined) {
+      return expectedCssUrls;
+    }
+    expectedCssUrls = await getExpectedCssUrls(label);
+    return expectedCssUrls;
   };
   const timeoutPolicy = getLazyImportTimeoutPolicy(label);
   const timeoutMs = timeoutPolicy.timeoutMs;
@@ -1102,6 +1156,7 @@ export async function retryLazyImport<T>(loader: () => Promise<T>, label = "anon
     for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
       try {
         const chunkUrlForAttempt = attempt > 1 ? await resolveExpectedChunkUrl() : expectedChunkUrl ?? null;
+        const cssUrlsForAttempt = isDashboardImportLabel(label) ? await resolveExpectedCssUrls() : [];
         if (!isCurrentEpoch()) {
           throw createStaleEpochError();
         }
@@ -1116,6 +1171,15 @@ export async function retryLazyImport<T>(loader: () => Promise<T>, label = "anon
           routePath: getCurrentRoutePath(),
           timeoutMs,
         });
+        if (isDashboardImportLabel(label)) {
+          logRouteLifecycle("dashboard-import-start", {
+            attempt,
+            chunkUrl: chunkUrlForAttempt,
+            cssUrl: cssUrlsForAttempt[0] ?? null,
+            label,
+            routePath: "/dashboard",
+          });
+        }
         logPublicAppShellTrace("public-app-shell:waiting", {
           label,
           attempt,
@@ -1164,6 +1228,15 @@ export async function retryLazyImport<T>(loader: () => Promise<T>, label = "anon
           routePath: getCurrentRoutePath(),
           timeoutMode: timeoutPolicy.hardTimeout ? "hard" : "soft",
         });
+        if (isDashboardImportLabel(label)) {
+          logRouteLifecycle("dashboard-import-resolved", {
+            attempt,
+            chunkUrl: chunkUrlForAttempt,
+            cssUrl: cssUrlsForAttempt[0] ?? null,
+            label,
+            routePath: "/dashboard",
+          });
+        }
         if (result.softTimedOut) {
           logRouteLifecycle("lazy-import-recovered", {
             label,
@@ -1196,6 +1269,7 @@ export async function retryLazyImport<T>(loader: () => Promise<T>, label = "anon
         const cssRecovery = await attemptCssPreloadRecovery(label, attempt, error);
         const preloadOnlyFailure = isPreloadOnlyFailureKind(failureKind);
         const chunkUrlForDiagnostics = expectedChunkUrl ?? (await resolveExpectedChunkUrl());
+        const cssUrlsForDiagnostics = isDashboardImportLabel(label) ? await resolveExpectedCssUrls() : [];
         const failureUrl = getChunkFailureUrl(error);
         const targetChunkFailure = Boolean(failureUrl && chunkUrlForDiagnostics && failureUrl === chunkUrlForDiagnostics);
         const evaluationErrorUrl = targetChunkFailure ? failureUrl : null;
@@ -1218,6 +1292,19 @@ export async function retryLazyImport<T>(loader: () => Promise<T>, label = "anon
             cssRetryRecovered: cssRecovery?.recovered ?? false,
             cssRetryStatus: cssRecovery?.status ?? null,
           });
+          if (isDashboardImportLabel(label)) {
+            logRouteLifecycle("dashboard-css-preload-warning", {
+              attempt,
+              chunkUrl: chunkUrlForDiagnostics ?? null,
+              cssUrl: cssRecovery?.resourceUrl ?? cssUrlsForDiagnostics[0] ?? null,
+              cssRetryRecovered: cssRecovery?.recovered ?? false,
+              cssRetryStatus: cssRecovery?.status ?? null,
+              failureKind,
+              label,
+              message: error instanceof Error ? error.message : String(error),
+              routePath: "/dashboard",
+            });
+          }
         }
         recordFailedImport(label, error, chunkUrlForDiagnostics, {
           category: failureKind === "timeout" ? "timeout" : failureKind === "chunkLoad" ? "chunkLoad" : "runtime",
@@ -1356,6 +1443,16 @@ export async function retryLazyImport<T>(loader: () => Promise<T>, label = "anon
               routePath: routeEpochSnapshot.canonicalRoutePath,
             });
             const fallbackModule = createLazyFallbackModule<T>(label);
+            if (isDashboardImportLabel(label)) {
+              logRouteLifecycle("dashboard-import-resolved", {
+                attempt,
+                chunkUrl: chunkUrlForDiagnostics ?? null,
+                cssUrl: cssRecovery?.resourceUrl ?? cssUrlsForDiagnostics[0] ?? null,
+                label,
+                resolvedVia: "compatibility_fallback",
+                routePath: "/dashboard",
+              });
+            }
             endPerf(perfName, "ok", `compatibility fallback attempt ${attempt}`);
             lazyImportRegistry.set(label, { result: fallbackModule, status: "resolved" });
             return fallbackModule;
@@ -1363,16 +1460,53 @@ export async function retryLazyImport<T>(loader: () => Promise<T>, label = "anon
           if (attempt === maxAttempts) {
             break;
           }
-          await wait(lazyImportRetryDelayMs[Math.min(attempt - 1, lazyImportRetryDelayMs.length - 1)]);
+          const retryDelayMs = getRetryDelayForAttempt(label, attempt);
+          if (isDashboardImportLabel(label)) {
+            logRouteLifecycle("dashboard-import-retry", {
+              attempt,
+              chunkUrl: chunkUrlForDiagnostics ?? null,
+              cssUrl: cssRecovery?.resourceUrl ?? cssUrlsForDiagnostics[0] ?? null,
+              delayMs: retryDelayMs,
+              failureKind,
+              label,
+              nextAttempt: attempt + 1,
+              routePath: "/dashboard",
+            });
+          }
+          await wait(retryDelayMs);
           continue;
         }
         if (attempt === maxAttempts) {
           break;
         }
-        await wait(lazyImportRetryDelayMs[Math.min(attempt - 1, lazyImportRetryDelayMs.length - 1)]);
+        const retryDelayMs = getRetryDelayForAttempt(label, attempt);
+        if (isDashboardImportLabel(label)) {
+          logRouteLifecycle("dashboard-import-retry", {
+            attempt,
+            chunkUrl: chunkUrlForDiagnostics ?? null,
+            cssUrl: cssUrlsForDiagnostics[0] ?? null,
+            delayMs: retryDelayMs,
+            failureKind,
+            label,
+            nextAttempt: attempt + 1,
+            routePath: "/dashboard",
+          });
+        }
+        await wait(retryDelayMs);
       }
     }
     lazyImportRegistry.set(label, { error: lastError, status: "rejected" });
+    if (isDashboardImportLabel(label)) {
+      logRouteLifecycle("dashboard-import-failed-final", {
+        attempt: maxAttempts,
+        chunkUrl: expectedChunkUrl ?? null,
+        cssUrl: expectedCssUrls?.[0] ?? null,
+        errorMessage: lastError instanceof Error ? lastError.message : String(lastError),
+        errorName: lastError instanceof Error ? lastError.name : "Error",
+        label,
+        routePath: "/dashboard",
+      });
+    }
     if (!(lastError instanceof LazyImportTimeoutError) && !isCssPreloadFailure(lastError) && !isSafariPreloadOnlyFailure(lastError)) {
       recoverFromChunkLoadFailure(lastError);
     }

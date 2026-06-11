@@ -6,7 +6,7 @@ import {
   type SealCompatibleClient,
 } from "@mysten/seal";
 import type { SealAdapter, SealDecryptContext } from "../types";
-import { SUI_NETWORK } from "../lib/sui";
+import { getPreferredGrpcUrl, SUI_NETWORK } from "../lib/sui";
 import { getSuiRuntimeContext } from "../suiRuntime";
 import { serializeDecryptError } from "./decryptDiagnostics";
 import {
@@ -47,6 +47,7 @@ const serverConfig: KeyServerConfig = {
 
 const sealClientCache = new WeakMap<SealCompatibleClient, SealClient>();
 let suiJsonRpcModulePromise: Promise<typeof import("@mysten/sui/jsonRpc")> | null = null;
+let suiGrpcModulePromise: Promise<typeof import("@mysten/sui/grpc")> | null = null;
 let suiTransactionsModulePromise: Promise<typeof import("@mysten/sui/transactions")> | null = null;
 let suiUtilsModulePromise: Promise<typeof import("@mysten/sui/utils")> | null = null;
 let defaultSuiClientPromise: Promise<SealCompatibleClient> | null = null;
@@ -56,6 +57,13 @@ function loadSuiJsonRpcModule() {
     suiJsonRpcModulePromise = import("@mysten/sui/jsonRpc");
   }
   return suiJsonRpcModulePromise;
+}
+
+function loadSuiGrpcModule() {
+  if (!suiGrpcModulePromise) {
+    suiGrpcModulePromise = import("@mysten/sui/grpc");
+  }
+  return suiGrpcModulePromise;
 }
 
 function loadSuiTransactionsModule() {
@@ -74,12 +82,22 @@ function loadSuiUtilsModule() {
 
 async function getDefaultSealCompatibleClient() {
   if (!defaultSuiClientPromise) {
-    defaultSuiClientPromise = loadSuiJsonRpcModule().then(({ SuiJsonRpcClient, getJsonRpcFullnodeUrl }) =>
-      new SuiJsonRpcClient({
+    defaultSuiClientPromise = (async () => {
+      const jsonRpcModule = await loadSuiJsonRpcModule();
+      const { SuiGrpcClient } = await loadSuiGrpcModule();
+      const { SuiJsonRpcClient, getJsonRpcFullnodeUrl } = jsonRpcModule;
+      const baseUrl = getPreferredGrpcUrl(getJsonRpcFullnodeUrl(requestedNetwork));
+      if (baseUrl) {
+        return new SuiGrpcClient({
+          baseUrl,
+          network: requestedNetwork,
+        }) as unknown as SealCompatibleClient;
+      }
+      return new SuiJsonRpcClient({
         url: getJsonRpcFullnodeUrl(requestedNetwork),
         network: requestedNetwork,
-      }) as unknown as SealCompatibleClient,
-    );
+      }) as unknown as SealCompatibleClient;
+    })();
   }
   return defaultSuiClientPromise;
 }

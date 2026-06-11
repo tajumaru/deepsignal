@@ -1,20 +1,22 @@
 import { lazy, Suspense, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useLocation } from "react-router-dom";
 import { InitialBootReady, useBootOverlay } from "./bootstrap/useBootOverlay";
-import { DashboardDegradedShell } from "./components/DashboardDegradedShell";
 import { BuildUpdateBanner } from "./components/system/BuildUpdateBanner";
 import {
   getMixedBuildStatus,
   recordBuildAsset,
   recoverFromMixedBuildAssets,
 } from "./lib/buildAssetDiagnostics";
+import { warmDashboardRouteEntry } from "./lib/dashboardRouteWarmup";
 import { isDashboardWorkspaceReady, useDashboardProjectRestore, useDashboardProjectRestoreSnapshot } from "./lib/dashboardProjectRestore";
 import { retryLazyImport } from "./lib/lazyRetry";
 import { getBrowserCapabilitiesSnapshot, logRouteLifecycle, setDeepSignalDebugReadiness } from "./lib/routeDiagnostics";
 import { scheduleIdleTask } from "./lib/scheduleIdleTask";
+import { DashboardFallbackShell } from "./components/DashboardFallbackShell";
 import { LandingPage } from "./pages/LandingPage";
 import { AppRoutes } from "./routes/AppRoutes";
 import { createAppRouteComponents, type AppRouteComponents } from "./routes/appRouteComponents";
+import { useWalletProviderRuntime } from "./components/WalletSurfaceRuntime";
 import {
   DelayedWorkspaceRestoreFallback,
   ProviderReadinessBarrier,
@@ -24,6 +26,11 @@ import { createPublicRouteComponents, type PublicRouteComponents } from "./route
 import { MixedBuildRecoveryScreen, RouteErrorBoundary } from "./routes/RouteErrorBoundary";
 import { ensureCurrentRouteEpoch } from "./routes/routeEpoch";
 import { getRouteId } from "./routes/routeDiagnostics";
+import {
+  getRouteRuntimeMetadata,
+  isPublicRoutePath,
+  POLICY_IDS,
+} from "./routes/routeRuntimePolicy";
 
 const AppShell = lazy(() =>
   retryLazyImport(() => import("./components/AppShell"), "app-shell").then((module) => ({
@@ -37,16 +44,12 @@ const PublicAppShell = lazy(() =>
 );
 
 function prefetchExploreRoute() {
-  void retryLazyImport(() => import("./pages/ExploreSignalsPage"), "prefetch-route-explore").catch(() => undefined);
+  // Speculative warming should stay quiet. Real route entry still uses retryLazyImport.
+  void import("./pages/ExploreSignalsPage").catch(() => undefined);
 }
 
 function prefetchInboxWorkspaceRoute() {
-  void Promise.allSettled([
-    retryLazyImport(() => import("./pages/AdminDashboardPage"), "prefetch-route-admin-dashboard"),
-    import("./components/AppShell"),
-    import("./lib/projectRegistry"),
-    import("./storage/storageFactory"),
-  ]);
+  warmDashboardRouteEntry("idle-prefetch");
 }
 
 function shouldPrefetchAdminWorkspace(pathname: string) {
@@ -56,12 +59,12 @@ function shouldPrefetchAdminWorkspace(pathname: string) {
   const capabilities = getBrowserCapabilitiesSnapshot();
   const mobileSafari = Boolean(capabilities.mobileSafari);
   const isDesktopViewport = window.matchMedia?.("(min-width: 901px)").matches ?? true;
+  const routeMetadata = getRouteRuntimeMetadata(pathname);
   const routeBlocksPrefetch =
-    pathname === "/create" ||
-    pathname === "/compose" ||
-    pathname === "/explore" ||
-    pathname === "/signals" ||
-    pathname.startsWith("/f/");
+    routeMetadata.policyId === POLICY_IDS.CREATE ||
+    routeMetadata.policyId === POLICY_IDS.CREATE_COMPOSE ||
+    routeMetadata.policyId === POLICY_IDS.DASHBOARD ||
+    routeMetadata.publicRoute;
   if (mobileSafari || routeBlocksPrefetch) {
     return false;
   }
@@ -86,9 +89,17 @@ function RouteReady({
   );
 }
 
-function AppRouteRuntimeEffects({ enabled, routePath }: { enabled: boolean; routePath: string }) {
+function AppRouteRuntimeEffects({
+  enabled,
+  suppressAutomaticPendingSync = false,
+  isDashboardRoot,
+}: {
+  enabled: boolean;
+  suppressAutomaticPendingSync?: boolean;
+  isDashboardRoot: boolean;
+}) {
   const dashboardProjectRestore = useDashboardProjectRestoreSnapshot();
-  const dashboardShellRoute = routePath === "/dashboard" || routePath.startsWith("/dashboard?");
+  const dashboardShellRoute = isDashboardRoot;
 
   useEffect(() => {
     if (!enabled) {
@@ -132,7 +143,7 @@ function AppRouteRuntimeEffects({ enabled, routePath }: { enabled: boolean; rout
   }, [dashboardProjectRestore.state, dashboardShellRoute, enabled]);
 
   useEffect(() => {
-    if (!enabled) {
+    if (!enabled || suppressAutomaticPendingSync) {
       return undefined;
     }
 
@@ -147,7 +158,7 @@ function AppRouteRuntimeEffects({ enabled, routePath }: { enabled: boolean; rout
     retryPendingInboxSync();
     window.addEventListener("online", retryPendingInboxSync);
     return () => window.removeEventListener("online", retryPendingInboxSync);
-  }, [enabled]);
+  }, [enabled, suppressAutomaticPendingSync]);
 
   return null;
 }
@@ -199,8 +210,9 @@ function PrivateRouteSurface({
   mixedBuildStatus,
   onRetryRoute,
   onRouteReady,
-  routeShowsWalletUi,
   routeNeedsWorkspaceBoot,
+  routeWalletUiEnabled,
+  routeWalletUiRequested,
   routeIsDashboardShell,
   routePath,
   routeRetryNonce,
@@ -211,8 +223,9 @@ function PrivateRouteSurface({
   mixedBuildStatus: ReturnType<typeof getMixedBuildStatus>;
   onRetryRoute: () => void;
   onRouteReady: () => void;
-  routeShowsWalletUi: boolean;
   routeNeedsWorkspaceBoot: boolean;
+  routeWalletUiEnabled: boolean;
+  routeWalletUiRequested: boolean;
   routeIsDashboardShell: boolean;
   routePath: string;
   routeRetryNonce: number;
@@ -221,7 +234,7 @@ function PrivateRouteSurface({
   const shellFallback =
     routeIsDashboardShell ? (
       <RouteReady routePath={routePath} onReady={onRouteReady} workspaceReady={false}>
-        <DashboardDegradedShell onRetryImports={onRetryRoute} routePath={routePath} />
+        <DashboardFallbackShell onRetryImports={onRetryRoute} routePath={routePath} />
       </RouteReady>
     ) : (
       <DelayedWorkspaceRestoreFallback />
@@ -235,12 +248,16 @@ function PrivateRouteSurface({
     >
       <Suspense fallback={shellFallback}>
         <AppShell
-          walletUiEnabled={routeShowsWalletUi}
-          walletUiRequested={routeShowsWalletUi}
+          walletUiEnabled={routeWalletUiEnabled}
+          walletUiRequested={routeWalletUiRequested}
           chrome="full"
         >
           <BuildUpdateBanner />
-          <AppRouteRuntimeEffects enabled={routeNeedsWorkspaceBoot} routePath={routePath} />
+          <AppRouteRuntimeEffects
+            enabled={routeNeedsWorkspaceBoot}
+            suppressAutomaticPendingSync={routeIsDashboardShell}
+            isDashboardRoot={routeIsDashboardShell}
+          />
           {mixedBuildStatus.detected ? (
             <RouteReady routePath={routePath} onReady={onRouteReady}>
               <MixedBuildRecoveryScreen observed={mixedBuildStatus.observed} />
@@ -262,35 +279,26 @@ function PrivateRouteSurface({
 
 export default function App() {
   const location = useLocation();
-  const routeIsLanding = location.pathname === "/";
-  const routeUsesPublicChrome =
-    location.pathname.startsWith("/f/") ||
-    location.pathname.startsWith("/roadmap/") ||
-    location.pathname.startsWith("/m/") ||
-    location.pathname.startsWith("/auth/zklogin/");
+  const walletRuntime = useWalletProviderRuntime();
+  const routePath = `${location.pathname}${location.search}${location.hash}`;
+  const routeMetadata = getRouteRuntimeMetadata(routePath);
+  const routeIsLanding = routeMetadata.policyId === POLICY_IDS.LANDING;
+  const routeUsesPublicChrome = isPublicRoutePath(routePath);
   const [initialRouteReady, setInitialRouteReady] = useState(false);
   const [bootDismissed, setBootDismissed] = useState(false);
   const [mixedBuildStatus, setMixedBuildStatus] = useState(() => getMixedBuildStatus());
   const [routeRetryNonce, setRouteRetryNonce] = useState(0);
   const appRouteComponents = useMemo(() => createAppRouteComponents(routeRetryNonce), [routeRetryNonce]);
   const publicRouteComponents = useMemo(() => createPublicRouteComponents(routeRetryNonce), [routeRetryNonce]);
-  const routeShowsWalletUi =
-    location.pathname === "/admin" ||
-    location.pathname === "/dashboard" ||
-    location.pathname === "/create" ||
-    location.pathname === "/compose" ||
-    location.pathname === "/troubleshooting" ||
-    location.pathname === "/submitted" ||
-    location.pathname.startsWith("/submitted/") ||
-    location.pathname === "/my-submissions" ||
-    location.pathname.startsWith("/my-submissions/") ||
-    location.pathname.startsWith("/admin/") ||
-    location.pathname.startsWith("/dashboard/");
-  const routeNeedsWorkspaceBoot = !routeIsLanding && !routeUsesPublicChrome;
-  const routePath = `${location.pathname}${location.search}${location.hash}`;
+  const routeShowsWalletUi = routeMetadata.showWalletUi;
+  const routeWalletUiEnabled = walletRuntime.contextAvailable;
+  const routeWalletUiRequested = routeShowsWalletUi;
+  const routeRequiresWallet = routeMetadata.requiresWallet;
+  const routeIsDashboardRoot = routeMetadata.isDashboardRoot;
+  const routeNeedsWorkspaceBoot = routeMetadata.initialBlockingMode !== "none";
   ensureCurrentRouteEpoch(routePath);
-  const dashboardProjectRestore = useDashboardProjectRestore(routePath, location.pathname === "/dashboard");
-  const workspaceReadyForRoute = location.pathname === "/dashboard" ? isDashboardWorkspaceReady(dashboardProjectRestore) : true;
+  const dashboardProjectRestore = useDashboardProjectRestore(routePath, routeIsDashboardRoot);
+  const workspaceReadyForRoute = routeIsDashboardRoot ? isDashboardWorkspaceReady(dashboardProjectRestore) : true;
 
   useBootOverlay({
     bootDismissed,
@@ -320,15 +328,30 @@ export default function App() {
       hash: location.hash || "",
       browserPathname: typeof window === "undefined" ? location.pathname : window.location.pathname,
       browserHash: typeof window === "undefined" ? location.hash : window.location.hash,
-      walletSurface: routeShowsWalletUi,
+      walletSurface: routeWalletUiRequested,
       publicChrome: routeUsesPublicChrome,
+      policyId: routeMetadata.policyId,
+      walletContextReady: walletRuntime.contextAvailable,
+      routeRequiresWallet,
+      walletUiRequested: routeWalletUiRequested,
+      walletUiEnabled: routeWalletUiEnabled,
     });
     return () => {
       logRouteLifecycle("route:leave", {
         routePath: `${location.pathname}${location.search}${location.hash}`,
       });
     };
-  }, [location.hash, location.pathname, location.search, routeShowsWalletUi, routeUsesPublicChrome]);
+  }, [
+    location.hash,
+    location.pathname,
+    location.search,
+    routeWalletUiRequested,
+    routeUsesPublicChrome,
+    routeMetadata.policyId,
+    routeRequiresWallet,
+    routeWalletUiEnabled,
+    walletRuntime.contextAvailable,
+  ]);
 
   useEffect(() => {
     setDeepSignalDebugReadiness({
@@ -337,23 +360,19 @@ export default function App() {
   }, [workspaceReadyForRoute]);
 
   useEffect(() => {
-    if (location.pathname !== "/") {
+    if (routeMetadata.policyId !== POLICY_IDS.LANDING) {
       return undefined;
     }
     return scheduleIdleTask(() => prefetchExploreRoute(), 3500);
-  }, [location.pathname]);
+  }, [routeMetadata.policyId]);
 
   useEffect(() => {
-    if (
-      routeUsesPublicChrome ||
-      location.pathname === "/admin" ||
-      location.pathname === "/dashboard" ||
-      !shouldPrefetchAdminWorkspace(location.pathname)
-    ) {
+    if (routeUsesPublicChrome || !shouldPrefetchAdminWorkspace(routePath)) {
       return undefined;
     }
-    return scheduleIdleTask(() => prefetchInboxWorkspaceRoute(), location.pathname === "/" ? 1400 : 900);
-  }, [location.pathname, routeUsesPublicChrome]);
+    const prefetchDelay = routeMetadata.policyId === POLICY_IDS.LANDING ? 1400 : 900;
+    return scheduleIdleTask(() => prefetchInboxWorkspaceRoute(), prefetchDelay);
+  }, [routeMetadata.policyId, routePath, routeUsesPublicChrome]);
 
   if (routeIsLanding) {
     return (
@@ -393,9 +412,10 @@ export default function App() {
       mixedBuildStatus={mixedBuildStatus}
       onRetryRoute={() => setRouteRetryNonce((value) => value + 1)}
       onRouteReady={() => setInitialRouteReady(true)}
-      routeShowsWalletUi={routeShowsWalletUi}
       routeNeedsWorkspaceBoot={routeNeedsWorkspaceBoot}
-      routeIsDashboardShell={location.pathname === "/dashboard"}
+      routeWalletUiEnabled={routeWalletUiEnabled}
+      routeWalletUiRequested={routeWalletUiRequested}
+      routeIsDashboardShell={routeIsDashboardRoot}
       routePath={routePath}
       routeRetryNonce={routeRetryNonce}
       workspaceReady={workspaceReadyForRoute}

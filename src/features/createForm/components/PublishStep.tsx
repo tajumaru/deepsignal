@@ -1159,10 +1159,22 @@ export function PublishStep({
                     <strong>{storageRuntimeDiagnostics.errorName}</strong>
                   </div>
                 ) : null}
+                {storageRuntimeDiagnostics?.errorMessage ? (
+                  <div className="metadata-row">
+                    <span>{t("walrusErrorDetailLabel")}</span>
+                    <strong>{storageRuntimeDiagnostics.errorMessage}</strong>
+                  </div>
+                ) : null}
                 {storageRuntimeDiagnostics?.causeMessage ? (
                   <div className="metadata-row">
                     <span>{t("walrusCauseLabel")}</span>
                     <strong>{storageRuntimeDiagnostics.causeMessage}</strong>
+                  </div>
+                ) : null}
+                {storageRuntimeDiagnostics?.recoveryHint ? (
+                  <div className="metadata-row">
+                    <span>{t("walrusRecoveryHintLabel")}</span>
+                    <strong>{storageRuntimeDiagnostics.recoveryHint}</strong>
                   </div>
                 ) : null}
                 {storageRuntimeDiagnostics?.url ? (

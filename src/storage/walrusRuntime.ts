@@ -1,4 +1,5 @@
 import type { ClientWithCoreApi } from "@mysten/sui/client";
+import type { Transaction } from "@mysten/sui/transactions";
 import type { WalletWithRequiredFeatures } from "@mysten/wallet-standard";
 import type { UiWalletAccount } from "@wallet-standard/ui";
 import type { WalrusClient } from "@mysten/walrus";
@@ -13,6 +14,7 @@ export type WalrusRuntimeContext = {
   wallet: WalletWithRequiredFeatures | null;
   supportedIntents: string[];
   client: WalrusEnabledClient | null;
+  executeTransaction: ((transaction: Transaction) => Promise<{ digest: string }>) | null;
   rpcUrl: string | null;
   network: string | null;
 };
@@ -36,6 +38,7 @@ let runtimeContext: WalrusRuntimeContext = {
   wallet: null,
   supportedIntents: [],
   client: null,
+  executeTransaction: null,
   rpcUrl: null,
   network: null,
 };
@@ -47,6 +50,7 @@ export function setWalrusRuntimeContext(next: WalrusRuntimeContext) {
     runtimeContext.account?.address === next.account?.address &&
     runtimeContext.wallet?.name === next.wallet?.name &&
     runtimeContext.client === next.client &&
+    runtimeContext.executeTransaction === next.executeTransaction &&
     runtimeContext.rpcUrl === next.rpcUrl &&
     runtimeContext.network === next.network &&
     runtimeContext.supportedIntents.length === next.supportedIntents.length &&

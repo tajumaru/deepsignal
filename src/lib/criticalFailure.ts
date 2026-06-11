@@ -112,6 +112,15 @@ function classifyKind(message: string, surface: CriticalFailureSurface): Critica
   ) {
     return "wallet_rejected";
   }
+  if (
+    lower.includes("incorrect password") ||
+    lower.includes("wrong password") ||
+    lower.includes("invalid password") ||
+    lower.includes("password is incorrect") ||
+    lower.includes("authentication failed")
+  ) {
+    return "wallet_rejected";
+  }
   if (lower.includes("network mismatch") || lower.includes("wrong network")) {
     return "network_mismatch";
   }

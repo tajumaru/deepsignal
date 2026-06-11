@@ -86,6 +86,10 @@
   margin-bottom: 0;
 }
 
+.dashboard-lite-wallet-connect {
+  margin-top: 1rem;
+}
+
 .route-status-metadata {
   display: grid;
   gap: 0.62rem;

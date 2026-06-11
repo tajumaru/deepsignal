@@ -1,6 +1,7 @@
 import { Link, NavLink } from "react-router-dom";
 import { useI18n } from "../i18n";
 import { buildInfo } from "../lib/buildInfo";
+import { warmDashboardRouteEntry } from "../lib/dashboardRouteWarmup";
 import { BuildIndicator } from "./system/BuildIndicator";
 import { useEffect, useRef, useState, type CSSProperties, type PropsWithChildren, type TouchEvent as ReactTouchEvent } from "react";
 import "../styles/public-shell-entry.css";
@@ -326,7 +327,14 @@ export function PublicAppShell({ children }: PropsWithChildren) {
               <span className="mobile-drawer-section-label">SIGNALS</span>
               <nav className="mobile-drawer-nav mobile-drawer-primary-nav" aria-label="Mobile navigation">
                 <NavLink to="/explore" onClick={closeDrawer}>{t("navExplore")}</NavLink>
-                <NavLink to="/dashboard" onClick={closeDrawer}>{t("navMobileInbox")}</NavLink>
+                <NavLink
+                  to="/dashboard"
+                  onClick={closeDrawer}
+                  onPointerDown={() => warmDashboardRouteEntry("public-mobile-drawer-pointerdown")}
+                  onTouchStart={() => warmDashboardRouteEntry("public-mobile-drawer-touchstart")}
+                >
+                  {t("navMobileInbox")}
+                </NavLink>
                 <NavLink to="/my-responses" onClick={closeDrawer}>{t("navMobileMyResponses")}</NavLink>
               </nav>
             </div>

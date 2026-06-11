@@ -21,6 +21,8 @@ export type CapabilityProfile = {
   reviewerCapIds: string[];
 };
 
+export type AccessControlMode = "wallet_unavailable" | "wallet_connected";
+
 type OwnedObjectEntry = {
   data?: {
     objectId?: string;
@@ -115,6 +117,7 @@ export function useAccessControl(address?: string | null, options: { enabled?: b
   const packageId = normalizeObjectId(ACCESS_CONTROL_PACKAGE_ID);
   const registryId = normalizeObjectId(ACCESS_CONTROL_REGISTRY_ID);
   const enabled = Boolean(queryEnabled && address && packageId);
+  const walletUnavailable = !enabled;
   const targetTypes = useMemo(
     () =>
       new Set(
@@ -204,10 +207,15 @@ export function useAccessControl(address?: string | null, options: { enabled?: b
     error: ownedObjectsQuery.error ?? null,
     isError: ownedObjectsQuery.isError,
     isPending: ownedObjectsQuery.isPending,
-    isLoadingAccess: (enabled && ownedObjectsQuery.isPending) || isLoadingRegistry,
+    isLoadingAccess: walletUnavailable ? false : (enabled && ownedObjectsQuery.isPending) || isLoadingRegistry,
     accessVerificationBlocked,
     ownedObjects,
     capabilityProfile,
+    mode: walletUnavailable ? ("wallet_unavailable" as const) : ("wallet_connected" as const),
+    canWrite: capabilityProfile.hasOwnerCap || capabilityProfile.hasAdminCap,
+    canAdmin: capabilityProfile.hasOwnerCap || capabilityProfile.hasAdminCap,
+    address: address ?? null,
+    walletContextAvailable: enabled,
     registry,
     registryError: registryError ?? null,
   };

@@ -21,6 +21,9 @@ interface FormFieldEditorProps {
   index: number;
   isDragging: boolean;
   isExpanded: boolean;
+  compactMobileMode?: boolean;
+  canMoveUp?: boolean;
+  canMoveDown?: boolean;
   presentation?: "classic" | "mirror";
   dropIndicator?: "before" | "after" | null;
   sections?: Array<{ id: string; title: string }>;
@@ -37,6 +40,8 @@ interface FormFieldEditorProps {
   onDragEnd: () => void;
   onDragOver: (event: DragEvent<HTMLElement>) => void;
   onDrop: (event: DragEvent<HTMLElement>) => void;
+  onMoveUp?: () => void;
+  onMoveDown?: () => void;
 }
 
 function getDefaultOptions(t: ReturnType<typeof useI18n>["t"]) {
@@ -75,6 +80,9 @@ export function FormFieldEditor({
   index,
   isDragging,
   isExpanded,
+  compactMobileMode = false,
+  canMoveUp = false,
+  canMoveDown = false,
   presentation = "classic",
   dropIndicator,
   sections = [],
@@ -91,6 +99,8 @@ export function FormFieldEditor({
   onDragEnd,
   onDragOver,
   onDrop,
+  onMoveUp,
+  onMoveDown,
 }: FormFieldEditorProps) {
   const { fieldTypeLabel, language, t } = useI18n();
   const isConditionalChild = isConditionalChildField(field);
@@ -104,6 +114,8 @@ export function FormFieldEditor({
   const nodeLabel = isMirrorPresentation ? `B${index + 1}` : t("fieldLabel", { index: index + 1 });
   const addBelowLabel = isMirrorPresentation ? "Add block" : t("addQuestion");
   const addConditionalLabel = isMirrorPresentation ? "Branch signal node" : t("addConditionalQuestion");
+  const mobileSummaryLabel = field.label.trim() || t("askPlaceholder");
+  const showCollapsedMobileSummary = compactMobileMode && !isExpanded;
   function update<K extends keyof FormField>(key: K, value: FormField[K]) {
     onChange({ ...field, [key]: value });
   }
@@ -339,23 +351,34 @@ export function FormFieldEditor({
         isConditionalChild ? "is-conditional-child" : ""
       } ${
         isDragging ? "is-dragging" : ""
-      } ${isExpanded ? "is-expanded" : ""} ${dropIndicator ? `is-drop-${dropIndicator}` : ""}`}
+      } ${isExpanded ? "is-expanded" : ""} ${dropIndicator ? `is-drop-${dropIndicator}` : ""} ${
+        compactMobileMode ? "is-mobile-compact" : ""
+      } ${compactMobileMode && isExpanded ? "is-mobile-sheet" : ""}`}
       onFocusCapture={onFocus}
       onDragOver={onDragOver}
       onDrop={onDrop}
     >
+      {compactMobileMode && isExpanded ? (
+        <button type="button" className="composer-mobile-editor-backdrop" aria-label={t("close")} onClick={onToggleExpand} />
+      ) : null}
       <div className="question-card-summary composer-canvas-card-head">
-        <button
-          type="button"
-          className="ghost-button icon-button question-drag-handle"
-          draggable
-          onDragStart={onDragStart}
-          onDragEnd={onDragEnd}
-          aria-label={t("drag")}
-          title={t("drag")}
-        >
-          ::
-        </button>
+        {compactMobileMode ? (
+          <span className="question-card-mobile-icon" aria-hidden="true">
+            {fieldTypeLabel(field.type).slice(0, 1)}
+          </span>
+        ) : (
+          <button
+            type="button"
+            className="ghost-button icon-button question-drag-handle"
+            draggable
+            onDragStart={onDragStart}
+            onDragEnd={onDragEnd}
+            aria-label={t("drag")}
+            title={t("drag")}
+          >
+            ::
+          </button>
+        )}
 
         <div className="question-card-main">
           <div className="question-card-topline">
@@ -395,39 +418,60 @@ export function FormFieldEditor({
             </div>
           ) : null}
 
-          <input
-            ref={labelRef}
-            className="question-card-inline-input composer-canvas-question-input auto-select-focus-input"
-            value={field.label}
-            onFocus={(event) => {
-              if (!isExpanded) {
-                onToggleExpand();
-              }
-              event.currentTarget.select();
-            }}
-            onChange={(event) => update("label", event.target.value)}
-            onKeyDown={(event) => {
-              handlePromptKeyDown(event);
-              handleMetaEnter(event);
-            }}
-            placeholder={t("askPlaceholder")}
-          />
+          {showCollapsedMobileSummary ? (
+            <>
+              <button type="button" className="question-card-mobile-summary-button" onClick={onToggleExpand}>
+                <strong>{mobileSummaryLabel}</strong>
+                <small className="muted">{field.helpText?.trim() || t("helpTextExample")}</small>
+              </button>
+            </>
+          ) : (
+            <>
+              <input
+                ref={labelRef}
+                className="question-card-inline-input composer-canvas-question-input auto-select-focus-input"
+                value={field.label}
+                onFocus={(event) => {
+                  if (!isExpanded) {
+                    onToggleExpand();
+                  }
+                  event.currentTarget.select();
+                }}
+                onChange={(event) => update("label", event.target.value)}
+                onKeyDown={(event) => {
+                  handlePromptKeyDown(event);
+                  handleMetaEnter(event);
+                }}
+                placeholder={t("askPlaceholder")}
+              />
 
-          {isExpanded ? (
-            <input
-              className="composer-canvas-help-input"
-              value={field.helpText ?? ""}
-              onChange={(event) => update("helpText", event.target.value)}
-              placeholder={t("helpTextExample")}
-            />
-          ) : field.helpText ? (
-            <small className="muted">{field.helpText}</small>
-          ) : null}
+              {isExpanded ? (
+                <input
+                  className="composer-canvas-help-input"
+                  value={field.helpText ?? ""}
+                  onChange={(event) => update("helpText", event.target.value)}
+                  placeholder={t("helpTextExample")}
+                />
+              ) : field.helpText ? (
+                <small className="muted">{field.helpText}</small>
+              ) : null}
 
-          <div className="composer-canvas-preview">{renderPreview()}</div>
+              {compactMobileMode && !isExpanded ? null : <div className="composer-canvas-preview">{renderPreview()}</div>}
+            </>
+          )}
         </div>
 
         <div className="question-card-actions question-card-actions-visible">
+          {compactMobileMode ? (
+            <>
+              <button type="button" className="ghost-button icon-button" onClick={onMoveUp} disabled={!canMoveUp}>
+                ↑
+              </button>
+              <button type="button" className="ghost-button icon-button" onClick={onMoveDown} disabled={!canMoveDown}>
+                ↓
+              </button>
+            </>
+          ) : null}
           <button type="button" className="ghost-button icon-button" onClick={onToggleExpand}>
             {isExpanded ? t("collapse") : t("edit")}
           </button>

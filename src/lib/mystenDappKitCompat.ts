@@ -8,10 +8,10 @@ import {
   useWalletConnection,
 } from "@mysten/dapp-kit-react";
 import type { DAppKit, UiWallet, UiWalletAccount } from "@mysten/dapp-kit-react";
-import type { SuiJsonRpcClient } from "@mysten/sui/jsonRpc";
+import type { ClientWithCoreApi } from "@mysten/sui/client";
 import { SUI_NETWORK } from "./sui";
 
-export type DeepSignalDAppKit = DAppKit<[typeof SUI_NETWORK], SuiJsonRpcClient>;
+export type DeepSignalDAppKit = DAppKit<[typeof SUI_NETWORK], ClientWithCoreApi>;
 
 declare module "@mysten/dapp-kit-react" {
   interface Register {

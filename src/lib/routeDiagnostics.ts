@@ -161,6 +161,20 @@ function sanitizeDetails(details?: DiagnosticDetails) {
   );
 }
 
+function shouldConsoleLogRouteLifecycle() {
+  if (typeof window === "undefined") {
+    return false;
+  }
+  if (import.meta.env.DEV) {
+    return true;
+  }
+  try {
+    return window.localStorage.getItem("deepsignal.debug.routeConsole") === "true";
+  } catch {
+    return false;
+  }
+}
+
 export function logRouteLifecycle(event: string, details?: DiagnosticDetails) {
   if (typeof window === "undefined") {
     return;
@@ -187,7 +201,9 @@ export function logRouteLifecycle(event: string, details?: DiagnosticDetails) {
     ...entry,
     kind: "route",
   });
-  console.info("[DeepSignal route]", entry);
+  if (shouldConsoleLogRouteLifecycle()) {
+    console.info("[DeepSignal route]", entry);
+  }
 }
 
 function getDebugState() {

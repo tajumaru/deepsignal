@@ -185,8 +185,17 @@ export function WalletSurface({
   const requestStartedRef = useRef(false);
 
   useEffect(() => {
-    logRouteLifecycle(parentRuntime.loaded ? "wallet-surface:reuse" : "wallet-surface:mount-requested");
-  }, [parentRuntime.loaded]);
+    if (parentRuntime.loaded) {
+      logRouteLifecycle("wallet-surface:reuse");
+      return;
+    }
+    if (requestOnMount) {
+      logRouteLifecycle("wallet-surface:mount-requested", {
+        reason: "request-on-mount",
+        routePath: getCurrentRoutePath(),
+      });
+    }
+  }, [parentRuntime.loaded, requestOnMount]);
 
   useEffect(() => {
     if (providersModule || parentRuntime.loaded) {
@@ -267,6 +276,10 @@ export function WalletSurface({
       if (parentRuntime.loaded || requestStartedRef.current) {
         return;
       }
+      logRouteLifecycle("wallet-surface:mount-requested", {
+        reason: "explicit-request",
+        routePath: getCurrentRoutePath(),
+      });
       requestStartedRef.current = true;
       setLoading(true);
       setLoadFailed(false);

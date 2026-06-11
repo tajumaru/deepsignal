@@ -1,15 +1,13 @@
 import { useEffect, useState, type Dispatch, type SetStateAction } from "react";
-import {
-  useSignAndExecuteTransaction,
-  useSuiClient,
-} from "../../../lib/mystenDappKitCompat";
 import { getSignalSubject, isLocalFallbackBlob } from "../../../lib/signalInbox";
 import { normalizeSubmission } from "../../../lib/submissionSchema";
 import { storageAdapter } from "../../../lib/storageAdapter";
 import { cleanupRegisteredSubmissionLocalFallback } from "../../../storage/localStorageAdapter";
 import { useI18n } from "../../../i18n";
+import { useRpcSuiClient } from "../../../hooks/useRpcSuiClient";
 import { useRpcInfrastructure } from "../../../rpcInfrastructure";
 import type { Submission } from "../../../types";
+import { useOptionalWalletActions } from "../../../walletStatus";
 import type { AdminToastState } from "./useAdminToast";
 import type { SignalRecord } from "./useSignalInboxData";
 
@@ -31,10 +29,10 @@ export function usePendingSuiRegistration({
   applySubmissionUpdate,
   setToast,
 }: UsePendingSuiRegistrationArgs) {
-  const suiClient = useSuiClient();
+  const suiClient = useRpcSuiClient();
   const rpcInfrastructure = useRpcInfrastructure();
   const { t } = useI18n();
-  const registerSignalReceiptTx = useSignAndExecuteTransaction();
+  const walletActions = useOptionalWalletActions();
   const [selectedPendingSignalIds, setSelectedPendingSignalIds] = useState<string[]>([]);
   const [registeringSignalIds, setRegisteringSignalIds] = useState<string[]>([]);
 
@@ -91,7 +89,7 @@ export function usePendingSuiRegistration({
       actionLabel: options.actionLabel,
       origin: options.origin,
       executeTransaction: ({ transaction }) =>
-        registerSignalReceiptTx.mutateAsync({ transaction }),
+        walletActions.signAndExecuteTransaction(transaction),
       waitForTransaction: ({ digest, options: waitOptions }) =>
         suiClient.waitForTransaction({
           digest,

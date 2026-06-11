@@ -1,33 +1,43 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { Dispatch, SetStateAction } from "react";
 import {
   getCurrentFormNftNetwork,
   isNftGatedForm,
   normalizeFormNftGate,
   resolveFormAccessMode,
 } from "../../../lib/formAccess";
-import { getPreferredBrowserRpcUrl } from "../../../lib/sui";
+import { getPreferredBrowserRpcUrl, getPreferredGrpcUrl } from "../../../lib/sui";
 import { useRpcInfrastructure } from "../../../rpcInfrastructure";
 import type { FormSchema, FormNftGate } from "../../../types";
-import type { NftOwnershipDiagnostic } from "../../../lib/nftOwnership";
+import type { NftGateCheckPhase, NftOwnershipCheckResult, NftOwnershipDiagnostic } from "../../../lib/nftOwnership";
 
 const ROUTE_LEVEL_SUCCESS_CACHE_MS = 30_000;
 let publicNftOwnershipLoaderPromise: Promise<{
   checkOwnedNftsForClient: typeof import("../../../lib/nftOwnership").checkOwnedNftsForClient;
   createBrowserSafeSuiTransport: typeof import("../../../lib/suiRpcTransport").createBrowserSafeSuiTransport;
+  SuiGrpcClient: typeof import("@mysten/sui/grpc").SuiGrpcClient;
   SuiJsonRpcClient: typeof import("@mysten/sui/jsonRpc").SuiJsonRpcClient;
 }> | null = null;
 
 type PublicNftOwnershipCacheEntry = {
   checkedAt: number;
-  error?: string;
-  inFlight?: Promise<number>;
-  ownedCount: number;
+  inFlight?: Promise<NftOwnershipCheckResult>;
+  result?: NftOwnershipCheckResult;
 };
 
 const publicNftOwnershipCache = new Map<string, PublicNftOwnershipCacheEntry>();
 
+export function clearPublicNftOwnershipCacheForTests() {
+  if (import.meta.env.MODE !== "test") {
+    return;
+  }
+  publicNftOwnershipCache.clear();
+}
+
 type PublicNftGateDebugInfo = NftOwnershipDiagnostic & {
   lastError?: string;
+  checkedAt?: string;
+  fetchErrors?: string[];
 };
 
 export interface PublicNftAccessCheckResult {
@@ -76,8 +86,9 @@ function buildOwnershipCacheKey(
   network: FormNftGate["network"] | undefined,
   walletAddress: string,
   selector: string,
+  requiredCount: number,
 ) {
-  return `${network ?? "sui-mainnet"}::${walletAddress}::${selector}`;
+  return `${network ?? "sui-mainnet"}::${walletAddress}::${selector}::${requiredCount}`;
 }
 
 function clearOwnershipCacheForAddress(network: FormNftGate["network"] | undefined, walletAddress?: string) {
@@ -99,11 +110,23 @@ function createBaseDebugInfo(
   zeroCountReason: string,
 ): PublicNftGateDebugInfo {
   return {
+    checkedAt: new Date().toISOString(),
     connectedAddress: walletAddress ?? "",
     network: nftGate?.network ?? getCurrentFormNftNetwork(),
     rpcEndpoint,
+    ownedObjectsOwnerAddress: walletAddress ?? "",
+    ownedObjectsFetchCount: 0,
+    ownedObjectsShowTypeRequested: true,
+    ownedObjectsStructTypeFilterUsed: false,
+    ownedObjectsFetchStrategy: "full-scan",
     targetTypes: nftGate?.structType ? [nftGate.structType] : [],
     targetObjectIds: nftGate?.objectId ? [nftGate.objectId] : [],
+    expectedTypes: nftGate?.structType ? [nftGate.structType] : [],
+    expectedObjectIds: nftGate?.objectId ? [nftGate.objectId] : [],
+    requiredCount: Math.max(1, nftGate?.requiredCount || 1),
+    matchedCount: 0,
+    matchedObjectIds: [],
+    matchedSources: [],
     directOwnedCount: 0,
     kioskCount: 0,
     kioskItemCount: 0,
@@ -113,12 +136,21 @@ function createBaseDebugInfo(
     kioskItemTypes: [],
     kioskItemsByKiosk: [],
     requiredTypeBreakdown: [],
+    expectedTypeBreakdown: [],
+    actualTypeBreakdown: [],
     typeComparisons: [],
     matchedDirectObjects: [],
     matchedKioskItems: [],
     sampleObjectTypes: [],
+    directOwnedObjectIdsPreview: [],
+    directOwnedObjectTypesPreview: [],
     ownershipChecks: [],
+    debugObjectLookups: [],
+    configuredStructTypeExactMatches: [],
+    fetchErrors: [],
     zeroCountReason,
+    rpcTransportUsed: "unknown",
+    kioskTransportUsed: "unknown",
   };
 }
 
@@ -132,8 +164,30 @@ function createErrorDebugInfo(
   return {
     ...createBaseDebugInfo(walletAddress, nftGate, rpcEndpoint, "rpc_error_before_ownership_match"),
     ...(diagnostic ?? {}),
+    checkedAt: new Date().toISOString(),
+    fetchErrors: [error],
     lastError: error,
   };
+}
+
+function setBaseDebugInfoIfChanged(
+  setter: Dispatch<SetStateAction<PublicNftGateDebugInfo>>,
+  walletAddress: string | undefined,
+  nftGate: FormNftGate | undefined,
+  rpcEndpoint: string,
+  zeroCountReason: string,
+) {
+  setter((current) => {
+    const connectedAddress = walletAddress ?? "";
+    if (
+      current.connectedAddress === connectedAddress &&
+      current.zeroCountReason === zeroCountReason &&
+      current.rpcEndpoint === rpcEndpoint
+    ) {
+      return current;
+    }
+    return createBaseDebugInfo(walletAddress, nftGate, rpcEndpoint, zeroCountReason);
+  });
 }
 
 async function loadPublicNftOwnershipModules() {
@@ -141,10 +195,12 @@ async function loadPublicNftOwnershipModules() {
     publicNftOwnershipLoaderPromise = Promise.all([
       import("../../../lib/nftOwnership"),
       import("../../../lib/suiRpcTransport"),
+      import("@mysten/sui/grpc"),
       import("@mysten/sui/jsonRpc"),
-    ]).then(([nftOwnership, suiRpcTransport, suiJsonRpc]) => ({
+    ]).then(([nftOwnership, suiRpcTransport, suiGrpc, suiJsonRpc]) => ({
       checkOwnedNftsForClient: nftOwnership.checkOwnedNftsForClient,
       createBrowserSafeSuiTransport: suiRpcTransport.createBrowserSafeSuiTransport,
+      SuiGrpcClient: suiGrpc.SuiGrpcClient,
       SuiJsonRpcClient: suiJsonRpc.SuiJsonRpcClient,
     }));
   }
@@ -161,10 +217,12 @@ export function usePublicNftGate(form: FormSchema | null, walletAddress?: string
     [accessMode, form?.nftGate],
   );
   const nftRequired = Boolean(form && isNftGatedForm(form) && nftGate);
+  const requiredCount = Math.max(1, nftGate?.requiredCount || 1);
   const networkMatches = !nftGate || nftGate.network === getCurrentFormNftNetwork();
-  const gateSelector = nftGate?.objectId?.trim() || nftGate?.structType?.trim() || "";
+  const gateSelector = nftGate?.structType?.trim() || nftGate?.objectId?.trim() || "";
   const [ownedCount, setOwnedCount] = useState(0);
   const [isChecking, setIsChecking] = useState(false);
+  const [checkingPhase, setCheckingPhase] = useState<NftGateCheckPhase | null>(null);
   const [gateError, setGateError] = useState("");
   const [debugInfo, setDebugInfo] = useState<PublicNftGateDebugInfo>(() =>
     createBaseDebugInfo(walletAddress, nftGate, nftRpcUrl, "not_checked_yet"),
@@ -173,7 +231,7 @@ export function usePublicNftGate(form: FormSchema | null, walletAddress?: string
   const previousWalletAddressRef = useRef<string | undefined>(undefined);
   const previousCacheKeyRef = useRef<string | null>(null);
   const activeCheckKey = nftRequired && walletAddress && gateSelector
-    ? buildOwnershipCacheKey(nftGate?.network, walletAddress, gateSelector)
+    ? buildOwnershipCacheKey(nftGate?.network, walletAddress, gateSelector, requiredCount)
     : null;
 
   const logDebugInfo = useCallback((nextDebugInfo: PublicNftGateDebugInfo) => {
@@ -181,6 +239,10 @@ export function usePublicNftGate(form: FormSchema | null, walletAddress?: string
     console.info("[nft-gate:type-compare]", {
       requiredStructType: nftGate?.structType ?? "",
       requiredObjectId: nftGate?.objectId ?? "",
+      requiredCount: nextDebugInfo.requiredCount,
+      matchedCount: nextDebugInfo.matchedCount,
+      matchedObjectIds: nextDebugInfo.matchedObjectIds,
+      matchedSources: nextDebugInfo.matchedSources,
       sampleObjectTypes: nextDebugInfo.sampleObjectTypes,
       matchedDirectObjects: nextDebugInfo.matchedDirectObjects,
       matchedKioskItems: nextDebugInfo.matchedKioskItems,
@@ -194,75 +256,99 @@ export function usePublicNftGate(form: FormSchema | null, walletAddress?: string
       setOwnedCount(0);
       setGateError("");
       setIsChecking(false);
+      setCheckingPhase(null);
       setLastResolvedCheckKey(null);
-      setDebugInfo(createBaseDebugInfo(walletAddress, nftGate, nftRpcUrl, "wallet_or_gate_not_ready"));
-      return 0;
+      setBaseDebugInfoIfChanged(setDebugInfo, walletAddress, nftGate, nftRpcUrl, "wallet_or_gate_not_ready");
+      return null;
     }
 
-    const cacheKey = buildOwnershipCacheKey(resolvedNftGate.network, walletAddress, gateSelector);
+    const cacheKey = buildOwnershipCacheKey(resolvedNftGate.network, walletAddress, gateSelector, requiredCount);
     const forceFresh = options.forceFresh === true;
     const now = Date.now();
     const cached = publicNftOwnershipCache.get(cacheKey);
-    const requiredCount = Math.max(1, resolvedNftGate.requiredCount || 1);
 
     if (!forceFresh) {
       if (cached?.inFlight) {
         setIsChecking(true);
         return cached.inFlight;
       }
-      if (cached && !cached.error && now - cached.checkedAt < ROUTE_LEVEL_SUCCESS_CACHE_MS && cached.ownedCount >= requiredCount) {
-        setOwnedCount(cached.ownedCount);
+      if (cached?.result && now - cached.checkedAt < ROUTE_LEVEL_SUCCESS_CACHE_MS && cached.result.hasRequiredNft) {
+        setOwnedCount(cached.result.matchedCount);
         setGateError("");
         setIsChecking(false);
-        return cached.ownedCount;
+        setCheckingPhase(null);
+        setDebugInfo({
+          ...cached.result.diagnostic,
+          checkedAt: new Date(cached.checkedAt).toISOString(),
+          fetchErrors: [...cached.result.errors],
+        });
+        return cached.result;
       }
     }
 
     setIsChecking(true);
+    setCheckingPhase("owned-objects");
     const requestPromise = (async () => {
-      const { checkOwnedNftsForClient, createBrowserSafeSuiTransport, SuiJsonRpcClient } =
+      const { checkOwnedNftsForClient, createBrowserSafeSuiTransport, SuiGrpcClient, SuiJsonRpcClient } =
         await loadPublicNftOwnershipModules();
-      const suiClient = new SuiJsonRpcClient({
+      const jsonRpcClient = new SuiJsonRpcClient({
         network: rpc.network,
         transport: createBrowserSafeSuiTransport(nftRpcUrl),
       });
+      const grpcUrl = getPreferredGrpcUrl(nftRpcUrl);
+      const suiClient = grpcUrl
+        ? {
+            core: new SuiGrpcClient({
+              network: rpc.network,
+              baseUrl: grpcUrl,
+            }).core,
+            $extend: jsonRpcClient.$extend.bind(jsonRpcClient),
+          }
+        : jsonRpcClient;
+      const requiredObjectIds = resolvedNftGate.structType
+        ? []
+        : resolvedNftGate.objectId
+          ? [resolvedNftGate.objectId]
+          : [];
       const ownership = await checkOwnedNftsForClient(
         suiClient,
         walletAddress,
         resolvedNftGate.structType ? [resolvedNftGate.structType] : [],
+        requiredCount,
         resolvedNftGate.network,
         nftRpcUrl,
-        resolvedNftGate.objectId ? [resolvedNftGate.objectId] : [],
+        requiredObjectIds,
+        (phase) => setCheckingPhase(phase),
       );
       const nextDebugInfo: PublicNftGateDebugInfo = {
         ...ownership.diagnostic,
+        checkedAt: new Date().toISOString(),
+        fetchErrors: [...ownership.errors],
       };
       setDebugInfo(nextDebugInfo);
       logDebugInfo(nextDebugInfo);
-      return ownership.matchedCount;
+      return ownership;
     })();
 
     publicNftOwnershipCache.set(cacheKey, {
       checkedAt: now,
-      error: cached?.error,
       inFlight: requestPromise,
-      ownedCount: cached?.ownedCount ?? 0,
     });
 
     try {
-      const nextOwnedCount = await requestPromise;
-      if (nextOwnedCount >= requiredCount) {
+      const ownership = await requestPromise;
+      if (ownership.hasRequiredNft) {
         publicNftOwnershipCache.set(cacheKey, {
           checkedAt: Date.now(),
-          ownedCount: nextOwnedCount,
+          result: ownership,
         });
       } else {
         publicNftOwnershipCache.delete(cacheKey);
       }
-      setOwnedCount(nextOwnedCount);
+      setOwnedCount(ownership.matchedCount);
       setGateError("");
       setLastResolvedCheckKey(cacheKey);
-      return nextOwnedCount;
+      return ownership;
     } catch (error) {
       const nextError = error instanceof Error ? error.message : "NFT check failed. Retry or switch RPC.";
       const publicError = "NFT check failed. Retry or switch RPC.";
@@ -275,18 +361,27 @@ export function usePublicNftGate(form: FormSchema | null, walletAddress?: string
       throw error;
     } finally {
       setIsChecking(false);
+      setCheckingPhase(null);
     }
-  }, [gateSelector, logDebugInfo, networkMatches, nftGate, nftRequired, nftRpcUrl, rpc.network, walletAddress]);
+  }, [gateSelector, logDebugInfo, networkMatches, nftGate, nftRequired, nftRpcUrl, requiredCount, rpc.network, walletAddress]);
 
   useEffect(() => {
     if (!nftRequired || !walletAddress || !gateSelector || !networkMatches) {
       setOwnedCount(0);
       setGateError("");
       setIsChecking(false);
+      setCheckingPhase(null);
       setLastResolvedCheckKey(null);
+      setBaseDebugInfoIfChanged(
+        setDebugInfo,
+        walletAddress,
+        nftGate,
+        nftRpcUrl,
+        !networkMatches && nftGate ? "network_mismatch" : "wallet_or_gate_not_ready",
+      );
       return;
     }
-  }, [gateSelector, networkMatches, nftRequired, walletAddress]);
+  }, [gateSelector, networkMatches, nftGate, nftRequired, nftRpcUrl, walletAddress]);
 
   useEffect(() => {
     const previousWalletAddress = previousWalletAddressRef.current;
@@ -304,12 +399,13 @@ export function usePublicNftGate(form: FormSchema | null, walletAddress?: string
     }
 
     setLastResolvedCheckKey(null);
-    setDebugInfo(createBaseDebugInfo(
+    setBaseDebugInfoIfChanged(
+      setDebugInfo,
       walletAddress,
       nftGate,
       nftRpcUrl,
       activeCheckKey ? "awaiting_check_result" : "not_checked_yet",
-    ));
+    );
   }, [activeCheckKey, walletAddress, nftGate, nftRpcUrl]);
 
   useEffect(() => {
@@ -321,9 +417,9 @@ export function usePublicNftGate(form: FormSchema | null, walletAddress?: string
 
   const meetsRequirement = Boolean(
     nftGate &&
-      walletAddress &&
-      networkMatches &&
-      ownedCount >= Math.max(1, nftGate.requiredCount || 1),
+    walletAddress &&
+    networkMatches &&
+    ownedCount >= requiredCount
   );
   const canViewForm = !nftRequired || meetsRequirement;
   const viewGateActive = Boolean(nftRequired && nftGate?.gateViewing !== false);
@@ -340,16 +436,16 @@ export function usePublicNftGate(form: FormSchema | null, walletAddress?: string
       return buildAccessCheckResult(nftGate, walletAddress, ownedCount, false, "network_mismatch", "network_mismatch", debugInfo);
     }
     try {
-      const nextOwnedCount = await checkOwnership({ forceFresh: true });
-      const passed = nextOwnedCount >= Math.max(1, nftGate?.requiredCount || 1);
+      const ownership = await checkOwnership({ forceFresh: true });
+      const passed = Boolean(ownership?.hasRequiredNft);
       return buildAccessCheckResult(
         nftGate,
         walletAddress,
-        nextOwnedCount,
+        ownership?.matchedCount ?? 0,
         passed,
         passed ? "passed" : "no_match",
         passed ? undefined : "ownership_missing",
-        debugInfo,
+        ownership?.diagnostic ?? debugInfo,
       );
     } catch {
       return buildAccessCheckResult(nftGate, walletAddress, ownedCount, false, "rpc_error", "rpc_error", debugInfo);
@@ -364,10 +460,10 @@ export function usePublicNftGate(form: FormSchema | null, walletAddress?: string
         ? "wallet_missing"
         : !networkMatches
           ? "network_mismatch"
-          : isChecking || !hasResolvedOwnership
-            ? "checking"
-            : gateError
-              ? "rpc_error"
+          : gateError
+            ? "rpc_error"
+            : isChecking || !hasResolvedOwnership
+              ? "checking"
               : meetsRequirement
                 ? "passed"
                 : "no_match";
@@ -379,6 +475,7 @@ export function usePublicNftGate(form: FormSchema | null, walletAddress?: string
     viewGateActive,
     submitGateActive,
     isChecking,
+    checkingPhase,
     ownedCount,
     meetsRequirement,
     canViewForm,

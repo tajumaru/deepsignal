@@ -172,60 +172,79 @@
   }
 
   .composer-library-panel .composer-pane-heading {
-    align-items: center;
-  }
-
-  .composer-library-panel .composer-pane-heading .muted {
-    display: none;
+    align-items: flex-start;
   }
 
   .composer-library-list {
-    display: flex;
-    gap: 0.55rem;
-    overflow-x: auto;
-    overscroll-behavior-x: contain;
-    padding: 0.05rem 0 0.2rem;
-    scroll-snap-type: x proximity;
-    scrollbar-width: none;
-    touch-action: pan-x;
-    -webkit-overflow-scrolling: touch;
+    display: grid;
+    gap: 0.9rem;
   }
 
-  .composer-library-list::-webkit-scrollbar {
-    display: none;
+  .composer-library-summary {
+    padding: 0.72rem 0.8rem;
+  }
+
+  .composer-library-category-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.55rem;
   }
 
   .composer-library-card {
-    flex: 0 0 min(10.5rem, calc((100% - 1.1rem) / 3));
-    grid-template-columns: auto minmax(0, 1fr);
-    align-items: center;
-    gap: 0.6rem;
-    padding: 0.58rem 0.65rem;
-    border-radius: 16px;
-    scroll-snap-align: start;
+    min-height: 44px;
+    grid-template-columns: 2.45rem minmax(0, 1fr);
+    gap: 0.58rem;
+    padding: 0.72rem;
+    border-radius: 18px;
   }
 
   .composer-library-card-icon {
-    width: 2.25rem;
-    height: 2.25rem;
-    border-radius: 13px;
-    font-size: 0.9rem;
-  }
-
-  .composer-library-card-topline {
-    display: block;
+    width: 2.45rem;
+    height: 2.45rem;
+    border-radius: 14px;
   }
 
   .composer-library-card-topline strong {
-    display: block;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    white-space: normal;
+    line-height: 1.2;
   }
 
-  .composer-library-chip,
-  .composer-library-footer {
+  .composer-library-card-copy {
+    gap: 0.35rem;
+  }
+
+  .composer-library-card-copy small {
+    font-size: 0.72rem;
+  }
+
+  .composer-library-preview {
+    min-height: 1.7rem;
+    padding: 0.38rem 0.45rem;
+  }
+
+  .composer-library-preview.is-checkbox span:nth-child(2),
+  .composer-library-preview.is-rating span:nth-child(5),
+  .composer-library-preview.is-emotion span:nth-child(3),
+  .composer-library-preview.is-voice span:nth-child(5),
+  .composer-library-preview.is-voice span:nth-child(6) {
     display: none;
+  }
+
+  .composer-library-drag-label {
+    font-size: 0.68rem;
+  }
+
+  .composer-library-footer {
+    gap: 0.6rem;
+  }
+
+  .composer-empty-canvas-quick-add {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+  }
+
+  .composer-empty-canvas-quick-add .ghost-button {
+    min-height: 44px;
   }
 
   .composer-template-grid {
@@ -316,27 +335,11 @@
   }
 
   .composer-library-swipe-cue {
-    position: relative;
-    display: block;
-    width: min(7.5rem, 36vw);
-    height: 0.26rem;
-    margin: 0.3rem 0 0 auto;
-    pointer-events: none;
-    background: linear-gradient(90deg, transparent, rgba(116, 226, 255, 0.24) 30%, rgba(135, 244, 255, 0.9));
-    border-radius: var(--radius-pill);
-    box-shadow: 0 0 16px rgba(102, 227, 255, 0.26);
+    display: none;
   }
 
   .composer-library-swipe-cue::after {
-    position: absolute;
-    top: 50%;
-    right: -0.02rem;
-    width: 0.45rem;
-    height: 0.45rem;
-    content: "";
-    border-top: 2px solid rgba(239, 252, 255, 0.92);
-    border-right: 2px solid rgba(239, 252, 255, 0.92);
-    transform: translateY(-50%) rotate(45deg);
+    display: none;
   }
 
   .composer-template-swipe-cue {

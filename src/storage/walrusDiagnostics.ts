@@ -21,7 +21,9 @@ export interface WalrusFailureDetails {
   source?: "upload-relay" | "rpc" | "walrus-sdk" | "browser-storage" | "tatum" | "wallet" | "unknown";
   status?: number;
   errorName?: string;
+  errorMessage?: string;
   causeMessage?: string;
+  recoveryHint?: string;
   url?: string;
   responseBody?: string;
 }
@@ -53,6 +55,37 @@ export function getWalrusErrorMessage(error: unknown) {
     return error.message.trim() || error.name;
   }
   return String(error);
+}
+
+export function getWalrusRecoveryHint(error: unknown) {
+  const message = getWalrusErrorMessage(error).toLowerCase();
+  if (
+    message.includes("incorrect password") ||
+    message.includes("wrong password") ||
+    message.includes("invalid password") ||
+    message.includes("password is incorrect")
+  ) {
+    return "Unlock the wallet and approve again with the correct password.";
+  }
+  if (
+    message.includes("could not establish connection") ||
+    message.includes("receiving end does not exist") ||
+    message.includes("message channel closed")
+  ) {
+    return "Reconnect or restart the wallet extension, reload DeepSignal, and retry publish.";
+  }
+  if (
+    message.includes("reject") ||
+    message.includes("declin") ||
+    message.includes("denied") ||
+    message.includes("cancel")
+  ) {
+    return "Approve the wallet request to continue the Walrus publish.";
+  }
+  if (message.includes("authentication failed")) {
+    return "Re-authenticate in the wallet extension, then retry the publish.";
+  }
+  return undefined;
 }
 
 export function isQuotaExceededError(error: unknown) {

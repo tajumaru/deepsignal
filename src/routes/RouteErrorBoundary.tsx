@@ -3,6 +3,7 @@ import {
   clearChunkLoadRecoveryState,
   getChunkLoadRecoverySnapshot,
   getChunkFailureUrl,
+  getChunkLoadFailureCategory,
   isChunkLoadFailure,
   recoverFromChunkLoadFailure,
 } from "../lib/chunkLoadRecovery";
@@ -22,6 +23,7 @@ import {
   getRouteId,
   shouldShowRouteDiagnostics,
 } from "./routeDiagnostics";
+import { getRouteRuntimeMetadata } from "./routeRuntimePolicy";
 import { reportSystemError } from "../services/systemSignalReporterClient";
 import type { RouteErrorDiagnostics } from "./routeErrorDiagnosticsRuntime";
 
@@ -77,22 +79,6 @@ function getRecentFailedImportDiagnostics() {
   return window.__DEEPSIGNAL_DEBUG__?.failedImports?.slice(-5) ?? [];
 }
 
-function routePathShowsWalletUi(routePath: string) {
-  const pathname = routePath.split(/[?#]/)[0] || "/";
-  return (
-    pathname === "/admin" ||
-    pathname === "/dashboard" ||
-    pathname === "/create" ||
-    pathname === "/compose" ||
-    pathname === "/submitted" ||
-    pathname.startsWith("/submitted/") ||
-    pathname === "/my-submissions" ||
-    pathname.startsWith("/my-submissions/") ||
-    pathname.startsWith("/admin/") ||
-    pathname.startsWith("/dashboard/")
-  );
-}
-
 let routeErrorDiagnosticsRuntimePromise: Promise<typeof import("./routeErrorDiagnosticsRuntime")> | null = null;
 
 function loadRouteErrorDiagnosticsRuntime() {
@@ -145,6 +131,18 @@ export class RouteErrorBoundary extends Component<
   }
 
   componentDidCatch(error: Error, errorInfo: { componentStack: string }) {
+    const routePolicy = getRouteRuntimeMetadata(this.props.routePath);
+    const routePath = this.props.routePath;
+    const walletRuntime = getWalletProviderRuntimeSnapshot();
+    const walletContextReady = walletRuntime.contextAvailable;
+    const chunkRecovery = recoverFromChunkLoadFailure(error, {
+      routePath,
+      policyId: routePolicy.policyId,
+      walletContextReady,
+    });
+    const chunkFailureCategory = getChunkLoadFailureCategory(error);
+    const recoveryAction = chunkRecovery.fallbackAction;
+    const recoveryRetryCount = chunkRecovery.retryCount;
     const chunkUrl = getChunkFailureUrl(error) ?? getLastFailedImportChunkUrl();
     const userAgent = typeof navigator === "undefined" ? "unknown" : navigator.userAgent;
     const pathname = typeof window === "undefined" ? this.props.routePath.split(/[?#]/)[0] || "/" : window.location.pathname;
@@ -154,11 +152,11 @@ export class RouteErrorBoundary extends Component<
     const routeId = getRouteId(this.props.routePath);
     const failedImportDiagnostics = getRecentFailedImportDiagnostics();
     const walletSession = getWalletSessionStateSnapshot();
-    const walletRuntime = getWalletProviderRuntimeSnapshot();
     const missingSuiClientContext = /Could not find SuiClientContext/i.test(error.message);
+    const missingDAppKitContext = /DAppKitContext|Could not find DAppKit/i.test(error.message);
     const walletProviderDiagnostics = {
       appShellHeaderRenderedWalletRuntimePanel: window.__DEEPSIGNAL_DEBUG__?.providerReadiness?.appShellHeaderWalletPanel === "runtime",
-      routeWalletSurface: routePathShowsWalletUi(this.props.routePath),
+      routeWalletSurface: routePolicy.showWalletUi,
       suiClientContextAvailable: walletRuntime.contextAvailable,
       walletProviderChunkLoaded: walletRuntime.chunkLoaded,
       walletProviderCommittedOnce: walletRuntime.hasCommittedOnce,
@@ -180,7 +178,16 @@ export class RouteErrorBoundary extends Component<
         componentStack: errorInfo.componentStack,
         failedImportDiagnostics,
         mixedBuildAssetsDetected: mixedBuildStatus.detected,
-        ...(missingSuiClientContext ? walletProviderDiagnostics : {}),
+        policyId: routePolicy.policyId,
+        walletContextReady: walletRuntime.contextAvailable,
+        walletRuntimeLoaded: walletRuntime.loaded,
+        walletRuntimeRequestFailed: walletRuntime.failed,
+        walletRuntimeRetryRequestAvailable: typeof walletRuntime.requestLoad === "function",
+        chunkFailureCategory,
+        fallbackAction: recoveryAction,
+        recoveryRetryCount,
+        routeRequiresWallet: routePolicy.requiresWallet,
+        ...(missingSuiClientContext || missingDAppKitContext ? walletProviderDiagnostics : {}),
       },
     });
     console.error("DeepSignal route failed to render.", {
@@ -199,12 +206,23 @@ export class RouteErrorBoundary extends Component<
       mixedBuildAssetsDetected: mixedBuildStatus.detected,
       observedBuildAssets: mixedBuildStatus.observed,
       userAgent,
+      route: this.props.routePath,
+      policyId: routePolicy.policyId,
+      walletContextReady: walletRuntime.contextAvailable,
+      walletRuntimeLoaded: walletRuntime.loaded,
+      routeRequiresWallet: routePolicy.requiresWallet,
+      walletUiEnabled: routePolicy.showWalletUi,
+      walletUiRequested: routePolicy.showWalletUi,
+      recoveryAction,
+      recoveryRetryCount,
+      chunkFailureCategory,
       componentStack: errorInfo.componentStack,
       failedImportDiagnostics,
-      ...(missingSuiClientContext ? walletProviderDiagnostics : {}),
+      ...(missingSuiClientContext || missingDAppKitContext ? walletProviderDiagnostics : {}),
     });
     logRouteLifecycle("route:error-boundary", {
       routePath: this.props.routePath,
+      policyId: routePolicy.policyId,
       error,
       errorName: error.name,
       errorMessage: error.message,
@@ -218,8 +236,29 @@ export class RouteErrorBoundary extends Component<
       mixedBuildAssetsDetected: mixedBuildStatus.detected,
       observedBuildAssets: mixedBuildStatus.observed,
       userAgent,
+      routePolicyId: routePolicy.policyId,
+      walletContextReady: walletRuntime.contextAvailable,
+      walletRuntimeLoaded: walletRuntime.loaded,
+      routeRequiresWallet: routePolicy.requiresWallet,
+      walletUiEnabled: routePolicy.showWalletUi,
+      walletUiRequested: routePolicy.showWalletUi,
+      recoveryAction,
+      recoveryRetryCount,
+      route: this.props.routePath,
       componentStack: errorInfo.componentStack,
-      ...(missingSuiClientContext ? walletProviderDiagnostics : {}),
+      ...(missingSuiClientContext || missingDAppKitContext ? walletProviderDiagnostics : {}),
+    });
+    logRouteLifecycle("route:error", {
+      routePath: this.props.routePath,
+      route: this.props.routePath,
+      policyId: routePolicy.policyId,
+      routeRequiresWallet: routePolicy.requiresWallet,
+      walletContextReady: walletRuntime.contextAvailable,
+      walletUiEnabled: routePolicy.showWalletUi,
+      walletUiRequested: routePolicy.showWalletUi,
+      retryCount: recoveryRetryCount,
+      fallbackAction: recoveryAction,
+      chunkFailureCategory,
     });
     if (mixedBuildStatus.detected) {
       logRouteLifecycle("mixed_build_assets_detected", {
@@ -251,8 +290,16 @@ export class RouteErrorBoundary extends Component<
       .catch(() => {
         this.setState({ diagnostics: null, diagnosticsCopied: false });
       });
-    if (!recoverFromMixedBuildAssets(mixedBuildStatus)) {
-      recoverFromChunkLoadFailure(error);
+    if (!recoverFromMixedBuildAssets(mixedBuildStatus) && chunkRecovery.reachedLimit) {
+      logRouteLifecycle("route:error-boundary", {
+        route: this.props.routePath,
+        policyId: routePolicy.policyId,
+        event: "chunk-recovery-limit-reached",
+        retryLimit: chunkRecovery.retryLimit,
+        retryCount: chunkRecovery.retryCount,
+        fallbackAction: recoveryAction,
+        walletContextReady: walletRuntime.contextAvailable,
+      });
     }
   }
 
@@ -268,10 +315,18 @@ export class RouteErrorBoundary extends Component<
       clearChunkLoadRecoveryState();
       clearBuildAssetRecoveryState();
     }
+    const routePolicy = getRouteRuntimeMetadata(this.props.routePath);
+    const walletRuntime = getWalletProviderRuntimeSnapshot();
 
     logRouteLifecycle("route:error-boundary-retry", {
       routePath: this.props.routePath,
+      policyId: routePolicy.policyId,
+      route: this.props.routePath,
       retryCount: nextRetryCount,
+      fallbackAction: "user-retry",
+      walletContextReady: walletRuntime.contextAvailable,
+      walletUiEnabled: routePolicy.showWalletUi,
+      walletUiRequested: routePolicy.showWalletUi,
       clearedStaleRecoveryState: nextRetryCount >= 2,
       chunkFailure: isChunkLoadFailure(this.state.error),
     });
@@ -400,15 +455,22 @@ export class RouteErrorBoundary extends Component<
       const showDiagnostics = Boolean(diagnostics) || chunkFailure || shouldShowRouteDiagnostics(this.props.routePath);
       const missingExport = latestFailedImport?.category === "missingExport" || this.state.error.name === "MissingLazyRouteExportError";
       const appShellTimeout = routeId === "admin" && latestFailedImport?.label === "app-shell" && latestFailedImport.category === "timeout";
+      const missingWalletContext = /DAppKitContext|Could not find DAppKit|Could not find SuiClientContext/i.test(this.state.error.message);
       const assetMismatch = missingExport || Boolean(diagnostics?.mixedBuildAssetsDetected);
       const headline =
         chunkFailure || assetMismatch
           ? "App assets out of sync."
           : "We couldn't reopen this workspace yet. Your local signals are still preserved.";
 
-      if (appShellTimeout) {
+      if (appShellTimeout || missingWalletContext) {
         return (
-          <Suspense fallback={<div className="panel glow-panel route-status-panel" role="alert"><p className="muted">Preparing dashboard recovery…</p></div>}>
+          <Suspense
+            fallback={
+              <div className="panel glow-panel route-status-panel" role="alert">
+                <p className="muted">Preparing dashboard recovery</p>
+              </div>
+            }
+          >
             <DashboardDegradedShell
               onContinueLiteMode={() => {
                 logRouteLifecycle("dashboard:continue-lite-mode", {
@@ -421,11 +483,19 @@ export class RouteErrorBoundary extends Component<
               primaryActionLabel="Retry AppShell"
               routePath={this.props.routePath}
               statusMessage={
-                this.state.liteModeContinued
+                missingWalletContext
+                  ? "Wallet runtime is still deferred on this device. DeepSignal is keeping the workspace shell active while wallet-only controls stay hidden."
+                  : this.state.liteModeContinued
                   ? "Dashboard is staying in Lite Mode. Local fallback data remains preserved while wallet-heavy chrome stays deferred."
                   : "AppShell failed to load on this device. Dashboard Lite Mode is available while the wallet-heavy shell remains deferred."
               }
-              statusTitle={this.state.liteModeContinued ? "Dashboard Lite Mode active" : "AppShell failed to load on this device"}
+              statusTitle={
+                missingWalletContext
+                  ? "Wallet runtime still loading"
+                  : this.state.liteModeContinued
+                    ? "Dashboard Lite Mode active"
+                    : "AppShell failed to load on this device"
+              }
             />
           </Suspense>
         );

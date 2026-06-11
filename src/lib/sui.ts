@@ -30,6 +30,7 @@ export const SUI_RPC_URL = SUI_FULLNODE_URL || SUI_DEFAULT_RPC_URL;
 export const TATUM_ENABLED = String(import.meta.env.NEXT_PUBLIC_TATUM_ENABLED || "").toLowerCase() === "true";
 export const TATUM_PROXY_ENABLED = import.meta.env.VITE_TATUM_PROXY_ENABLED === "true";
 export const TATUM_PROXY_PATH = import.meta.env.VITE_TATUM_PROXY_PATH || "/api/tatum/sui-rpc";
+export const SUI_CONFIGURED_GRPC_URL = import.meta.env.VITE_SUI_GRPC_URL || "";
 
 export function isTatumRpcUrl(url?: string | null) {
   return Boolean(url && url.toLowerCase().includes("gateway.tatum.io"));
@@ -56,6 +57,30 @@ export function getEffectiveTatumRpcUrl() {
 
 export function getPreferredBrowserRpcUrl(fallbackUrl?: string | null) {
   return getEffectiveTatumRpcUrl() || fallbackUrl || SUI_FALLBACK_RPC_URL;
+}
+
+function isLikelyHttpUrl(value?: string | null) {
+  return Boolean(value && /^https?:\/\//i.test(value.trim()));
+}
+
+export function canUseGrpcUrl(url?: string | null) {
+  if (!isLikelyHttpUrl(url)) {
+    return false;
+  }
+  if (isTatumRpcUrl(url)) {
+    return false;
+  }
+  return true;
+}
+
+export function getPreferredGrpcUrl(fallbackUrl?: string | null) {
+  if (canUseGrpcUrl(SUI_CONFIGURED_GRPC_URL)) {
+    return SUI_CONFIGURED_GRPC_URL;
+  }
+  if (canUseGrpcUrl(fallbackUrl)) {
+    return fallbackUrl ?? null;
+  }
+  return null;
 }
 
 export function getConnectedNetworkLabel(chainIdentifier?: string | null) {

@@ -1,4 +1,3 @@
-import { useSignAndExecuteTransaction } from "../lib/mystenDappKitCompat";
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { Link, useParams } from "react-router-dom";
 import { AdminAccessGate } from "../components/AdminAccessGate";
@@ -77,6 +76,7 @@ import { buildVersionedSurveySummary } from "../lib/surveySummary";
 import { formatDate, flattenAnswer } from "../lib/utils";
 import { useRpcInfrastructure } from "../rpcInfrastructure";
 import type { FormSchema, Submission } from "../types";
+import { useOptionalWalletActions } from "../walletStatus";
 
 type StreamId =
   | "all"
@@ -181,7 +181,7 @@ export function FormSubmissionsPage() {
   const { language, t } = useI18n();
   const wallet = useSuiWallet();
   const rpcInfrastructure = useRpcInfrastructure();
-  const updateSignalStatusTx = useSignAndExecuteTransaction();
+  const walletActions = useOptionalWalletActions();
   const {
     capabilityProfile,
     isLoadingAccess,
@@ -725,7 +725,7 @@ export function FormSubmissionsPage() {
               signalId,
               status: nextOnchainStatus,
             });
-            await updateSignalStatusTx.mutateAsync({ transaction: tx });
+            await walletActions.signAndExecuteTransaction(tx);
             normalized.onchainStatus = nextOnchainStatus;
             applySubmissionUpdate(normalized);
             await storageAdapter.updateSubmission(normalized);

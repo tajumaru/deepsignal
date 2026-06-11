@@ -1,10 +1,12 @@
 import {
   useCurrentAccount,
   useCurrentWallet,
+  useSignAndExecuteTransaction,
   useSuiClientContext,
 } from "./lib/mystenDappKitCompat";
 import { walrus } from "@mysten/walrus";
 import walrusWasmUrl from "@mysten/walrus-wasm/web/walrus_wasm_bg.wasm?url";
+import type { Transaction } from "@mysten/sui/transactions";
 import type { WalletWithRequiredFeatures } from "@mysten/wallet-standard";
 import { useEffect, useMemo, useRef, type PropsWithChildren } from "react";
 import { WALRUS_AGGREGATOR_URL, WALRUS_UPLOAD_RELAY_URL } from "./lib/sui";
@@ -68,6 +70,7 @@ function buildWaitForTransactionTimeoutError(digest: string, timeoutMs: number, 
 function WalrusRuntimeBridgeInner() {
   const account = useCurrentAccount();
   const { currentWallet, supportedIntents } = useCurrentWallet();
+  const signAndExecuteTransaction = useSignAndExecuteTransaction();
   const { client, network } = useSuiClientContext();
   const rpcInfrastructure = useRpcInfrastructure();
   const routePath = getCurrentRoutePath();
@@ -331,10 +334,14 @@ function WalrusRuntimeBridgeInner() {
       wallet: currentWallet as WalletWithRequiredFeatures | null,
       supportedIntents: stableSupportedIntents,
       client: walrusClient,
+      executeTransaction: async (transaction: Transaction) => {
+        const result = await signAndExecuteTransaction.mutateAsync({ transaction });
+        return { digest: result.digest };
+      },
       rpcUrl,
       network: currentNetwork,
     }),
-    [account, currentNetwork, currentWallet, rpcUrl, stableSupportedIntents, walrusClient],
+    [account, currentNetwork, currentWallet, rpcUrl, signAndExecuteTransaction, stableSupportedIntents, walrusClient],
   );
 
   useEffect(() => {
@@ -361,6 +368,7 @@ function WalrusRuntimeBridgeInner() {
         wallet: null,
         supportedIntents: [],
         client: null,
+        executeTransaction: null,
         rpcUrl: null,
         network: null,
       });

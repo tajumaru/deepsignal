@@ -191,6 +191,30 @@ describe("resolveLazyRouteModule", () => {
     }
   });
 
+  it("returns a compatibility fallback module for dashboard css preload failures", async () => {
+    vi.useFakeTimers();
+    vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("offline"));
+
+    try {
+      setBrowserRoute("/dashboard");
+      setCurrentRouteEpoch("/dashboard");
+      const importPromise = retryLazyImport(async () => {
+        throw new Error("Unable to preload CSS for https://cdn.example.test/assets/AdminDashboardPage.css");
+      }, "route-admin-dashboard");
+
+      await vi.runAllTimersAsync();
+      const loaded = await importPromise;
+
+      expect(loaded).toMatchObject({
+        AdminDashboardPage: expect.any(Function),
+        default: expect.any(Function),
+      });
+      expect(window.sessionStorage.getItem("deepsignal.lazyImportCompatibilityRecovery")).toContain("route-admin-dashboard");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("keeps chunk load failures fatal for route-form-builder", async () => {
     vi.useFakeTimers();
     vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("offline"));

@@ -3,10 +3,12 @@ import { useEffect, useMemo, useState } from "react";
 import {
   isProjectOwnerCapType,
   loadRecentProjects,
-  parseProjectOwnerCap,
+  parseProjectIdFromOwnerCapFields,
+  parseSuiObjectData,
   parseProjectSummary,
   saveRecentProject,
   subscribeProjectRegistryStorageChange,
+  type ProjectOwnerCapSummary,
   type ProjectSummary,
 } from "../lib/projectRegistry";
 import { PROJECT_OWNER_CAP_TYPE } from "../lib/sui";
@@ -14,55 +16,46 @@ import { isSuiRateLimitError } from "../lib/sui";
 import { endPerf, markPerfMilestone, startPerf } from "../lib/perf";
 import { handleRateLimitedRpcFallback, useRpcInfrastructure } from "../rpcInfrastructure";
 import { useOwnedSuiObjects } from "./useOwnedSuiObjects";
-import { useRpcSuiClient } from "./useRpcSuiClient";
+import { useReadOnlyCoreSuiClient } from "./useReadOnlyCoreSuiClient";
 
-type SuiObjectResponse = {
-  data?: {
-    objectId?: string;
-    type?: string;
-    content?: {
-      fields?: Record<string, unknown>;
-    } | null;
-  } | null;
-};
+function parseProjectOwnerCapResponse(response: unknown) {
+  const parsed = parseSuiObjectData(response);
+  if (!parsed || !isProjectOwnerCapType(parsed.type)) {
+    return null;
+  }
+  const projectId = parseProjectIdFromOwnerCapFields(parsed.fields);
+  if (!projectId) {
+    return null;
+  }
+  return {
+    objectId: parsed.objectId,
+    projectId,
+  };
+}
 
 function normalizeType(value?: string | null) {
   return value?.trim().toLowerCase() ?? "";
 }
 
 async function fetchProjectObjects(
-  suiClient: ReturnType<typeof useRpcSuiClient>,
+  suiClient: ReturnType<typeof useReadOnlyCoreSuiClient>,
   projectIds: string[],
 ) {
   const projects: ProjectSummary[] = [];
   for (let index = 0; index < projectIds.length; index += 50) {
     const ids = projectIds.slice(index, index + 50);
-    let responses: SuiObjectResponse[];
+    const responses = await suiClient.core.getObjects({
+      objectIds: ids,
+      include: {
+        json: true,
+      },
+    });
 
-    try {
-      responses = (await suiClient.multiGetObjects({
-        ids,
-        options: {
-          showType: true,
-          showContent: true,
-        },
-      })) as SuiObjectResponse[];
-    } catch {
-      responses = await Promise.all(
-        ids.map(async (id) =>
-          (await suiClient.getObject({
-            id,
-            options: {
-              showType: true,
-              showContent: true,
-            },
-          })) as SuiObjectResponse,
-        ),
-      );
-    }
-
-    responses.forEach((response, responseIndex) => {
-      const project = parseProjectSummary(ids[responseIndex], response.data?.content?.fields);
+    responses.objects.forEach((response, responseIndex) => {
+      if (response instanceof Error) {
+        return;
+      }
+      const project = parseProjectSummary(ids[responseIndex], response.json);
       if (project) {
         projects.push(project);
       }
@@ -72,7 +65,7 @@ async function fetchProjectObjects(
 }
 
 export function useProjectRegistry(address?: string | null) {
-  const suiClient = useRpcSuiClient();
+  const suiClient = useReadOnlyCoreSuiClient();
   const rpc = useRpcInfrastructure();
   const enabled = Boolean(address && PROJECT_OWNER_CAP_TYPE && !rpc.isRateLimitedCooldownActive);
   const expectedType = normalizeType(PROJECT_OWNER_CAP_TYPE);
@@ -93,8 +86,16 @@ export function useProjectRegistry(address?: string | null) {
     () =>
       (ownedObjectsQuery.data ?? [])
         .filter((entry) => isProjectOwnerCapType(entry.data?.type) || normalizeType(entry.data?.type) === expectedType)
-        .map((entry) => parseProjectOwnerCap(entry))
-        .filter((entry): entry is NonNullable<ReturnType<typeof parseProjectOwnerCap>> => Boolean(entry)),
+        .map((entry) =>
+          parseProjectOwnerCapResponse({
+            data: {
+              objectId: entry.data?.objectId,
+              type: entry.data?.type,
+              content: entry.data?.content,
+            },
+          }),
+        )
+        .filter((entry): entry is ProjectOwnerCapSummary => Boolean(entry)),
     [expectedType, ownedObjectsQuery.data],
   );
 
@@ -118,35 +119,18 @@ export function useProjectRegistry(address?: string | null) {
 
         let hydratedCaps = parsedCaps;
         if (missingCapIds.length > 0) {
-          let capResponses: SuiObjectResponse[];
-
-          try {
-            capResponses = (await suiClient.multiGetObjects({
-              ids: missingCapIds,
-              options: {
-                showType: true,
-                showContent: true,
-              },
-            })) as SuiObjectResponse[];
-          } catch {
-            capResponses = await Promise.all(
-              missingCapIds.map(async (id) =>
-                (await suiClient.getObject({
-                  id,
-                  options: {
-                    showType: true,
-                    showContent: true,
-                  },
-                })) as SuiObjectResponse,
-              ),
-            );
-          }
+          const capResponses = await suiClient.core.getObjects({
+            objectIds: missingCapIds,
+            include: {
+              json: true,
+            },
+          });
 
           hydratedCaps = [
             ...parsedCaps,
-            ...capResponses
-              .map((response) => parseProjectOwnerCap(response))
-              .filter((entry): entry is NonNullable<ReturnType<typeof parseProjectOwnerCap>> => Boolean(entry)),
+            ...capResponses.objects
+              .map((response) => (response instanceof Error ? null : parseProjectOwnerCapResponse({ object: response })))
+              .filter((entry): entry is ProjectOwnerCapSummary => Boolean(entry)),
           ];
         }
 

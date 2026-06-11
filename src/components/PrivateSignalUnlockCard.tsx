@@ -1,4 +1,3 @@
-import { useDisconnectWallet } from "../lib/mystenDappKitCompat";
 import { useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import type { DecryptDiagnosticContext } from "../crypto/decryptDiagnostics";
@@ -12,6 +11,7 @@ import {
   resetLocalEnvironment,
 } from "../lib/resetEnvironment";
 import { downloadTextFile } from "../lib/utils";
+import { useOptionalWalletActions } from "../walletStatus";
 import { SealedSignalCapsule } from "./SealedSignalCapsule";
 
 type UnlockState =
@@ -274,7 +274,7 @@ export function PrivateSignalUnlockCard({
   supportContent,
 }: PrivateSignalUnlockCardProps) {
   const { t } = useI18n();
-  const disconnectWallet = useDisconnectWallet();
+  const walletActions = useOptionalWalletActions();
   const [recoveryToast, setRecoveryToast] = useState<{ tone: "success" | "error"; message: string } | null>(null);
   const [recoveryAction, setRecoveryAction] = useState<"reset" | "reconnect" | null>(null);
   const state = isUnlocked
@@ -318,7 +318,7 @@ export function PrivateSignalUnlockCard({
     try {
       const results = await resetLocalEnvironment({
         includeWalletDisconnect: true,
-        disconnectWallet: () => disconnectWallet.mutateAsync(),
+        disconnectWallet: () => walletActions.disconnect(),
       });
       const succeeded = didResetFullySucceed(results);
       setRecoveryToast({
@@ -341,7 +341,7 @@ export function PrivateSignalUnlockCard({
     setRecoveryAction("reconnect");
     setRecoveryToast(null);
     try {
-      await disconnectWallet.mutateAsync();
+      await walletActions.disconnect();
       setRecoveryToast({ tone: "success", message: t("walletDisconnectedReconnect") });
     } catch {
       setRecoveryToast({ tone: "error", message: t("walletDisconnectFailedReconnect") });

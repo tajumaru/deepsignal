@@ -1,6 +1,9 @@
 import { buildInfo } from "./buildInfo";
 import { requestBuildUpdateNotice } from "./buildUpdate";
 import { getMixedBuildStatus } from "./buildAssetDiagnostics";
+import { logRouteLifecycle } from "./routeDiagnostics";
+import { getRouteRuntimeMetadata } from "../routes/routeRuntimePolicy";
+import { getWalletProviderRuntimeSnapshot } from "../components/WalletSurfaceRuntime";
 
 const reloadStorageKey = "deepsignal.chunkLoadRecovery";
 const recoveryWindowMs = 2 * 60 * 1000;
@@ -17,6 +20,24 @@ type VitePreloadErrorEvent = Event & {
 };
 
 let reloadScheduled = false;
+
+type ChunkRecoveryContext = {
+  routePath?: string;
+  policyId?: string;
+  walletContextReady?: boolean;
+};
+
+export type ChunkLoadFailureCategory = "chunk-load" | "text-html-mime" | "css-preload" | "vite-preload" | "module-script" | "other";
+
+export type ChunkLoadRecoveryAction = "none" | "reload" | "manual-refresh" | "ignore-css-preload" | "ignore-preload-only" | "ignore";
+
+export type ChunkLoadRecoveryOutcome = {
+  category: ChunkLoadFailureCategory;
+  fallbackAction: ChunkLoadRecoveryAction;
+  reachedLimit: boolean;
+  retryCount: number;
+  retryLimit: number;
+};
 
 export type ChunkLoadFailureDiagnostics = {
   chunkUrl: string | null;
@@ -77,9 +98,55 @@ function errorText(error: unknown) {
   return String(error ?? "").toLowerCase();
 }
 
+function normalizeCategoryText(text: string) {
+  return text.toLowerCase();
+}
+
+function isTextHtmlMimeFailure(text: string) {
+  return (
+    text.includes("text/html") &&
+    (text.includes("mime") ||
+      text.includes("not a valid javascript mime type") ||
+      text.includes("not a valid javascript/type"))
+  );
+}
+
+function isModuleScriptFailure(text: string) {
+  return (
+    text.includes("importing a module script failed") ||
+    text.includes("module script failed") ||
+    text.includes("failed to load module script") ||
+    text.includes("error loading dynamically imported module")
+  );
+}
+
+export function getChunkLoadFailureCategory(error: unknown): ChunkLoadFailureCategory {
+  const text = normalizeCategoryText(errorText(error));
+  if (isCssPreloadFailure(text)) {
+    return "css-preload";
+  }
+  if (isSafariPreloadOnlyFailure(text)) {
+    return "vite-preload";
+  }
+  if (isTextHtmlMimeFailure(text)) {
+    return "text-html-mime";
+  }
+  if (isModuleScriptFailure(text)) {
+    return "module-script";
+  }
+  if (isChunkLoadFailure(text)) {
+    return "chunk-load";
+  }
+  return "other";
+}
+
 export function isCssPreloadFailure(error: unknown) {
   const text = errorText(error);
-  return text.includes("unable to preload css") || text.includes("preload css");
+  return (
+    text.includes("unable to preload css") ||
+    text.includes("preload css") ||
+    text.includes("preload stylesheet")
+  );
 }
 
 function isMobileSafariUserAgent() {
@@ -92,13 +159,22 @@ function isMobileSafariUserAgent() {
 
 export function isChunkLoadFailure(error: unknown) {
   const text = errorText(error);
+  if (isModuleScriptFailure(text)) {
+    return true;
+  }
+  if (isTextHtmlMimeFailure(text)) {
+    return true;
+  }
   return (
     text.includes("failed to fetch dynamically imported module") ||
     text.includes("importing a module script failed") ||
     text.includes("error loading dynamically imported module") ||
     text.includes("failed to load module script") ||
     text.includes("mime type") ||
-    text.includes("disallowed mime type")
+    text.includes("disallowed mime type") ||
+    text.includes("text/html") ||
+    text.includes("not a valid javascript mime type") ||
+    text.includes("vite:preloaderror")
   );
 }
 
@@ -115,6 +191,26 @@ export function isSafariPreloadOnlyFailure(error: unknown) {
     text.includes("linkresourceerror") ||
     text.includes("link resource error")
   );
+}
+
+function getFallbackActionForCategory(category: ChunkLoadFailureCategory): ChunkLoadRecoveryAction {
+  if (category === "css-preload") {
+    return "ignore-css-preload";
+  }
+  if (category === "vite-preload") {
+    return "ignore-preload-only";
+  }
+  if (category === "text-html-mime") {
+    return "manual-refresh";
+  }
+  if (category === "module-script" || category === "chunk-load") {
+    return "reload";
+  }
+  return "none";
+}
+
+export function shouldPreventDefaultForChunkFailure(outcome: ChunkLoadRecoveryOutcome): boolean {
+  return outcome.fallbackAction === "manual-refresh" || outcome.fallbackAction === "reload";
 }
 
 export function clearChunkLoadRecoveryState() {
@@ -165,6 +261,32 @@ function rememberChunkLoadFailureDiagnostics(error: unknown, retryCount: number)
   return diagnostics;
 }
 
+function resolveRecoveryRoutePath(routePath?: string) {
+  if (routePath) {
+    return routePath;
+  }
+  if (typeof window === "undefined") {
+    return "unknown";
+  }
+  if (window.location.hash) {
+    return window.location.hash.replace(/^#/, "") || window.location.pathname;
+  }
+  return window.location.pathname || "/";
+}
+
+function resolveRecoveryPolicyId(routePath: string) {
+  return getRouteRuntimeMetadata(routePath).policyId;
+}
+
+function routeRecoveryLogContext(routePath: string, context: ChunkRecoveryContext, category: ChunkLoadFailureCategory) {
+  return {
+    routePath,
+    policyId: context.policyId ?? resolveRecoveryPolicyId(routePath),
+    walletContextReady: context.walletContextReady,
+    category,
+  };
+}
+
 export async function clearRuntimeCaches() {
   try {
     if ("caches" in window) {
@@ -195,35 +317,80 @@ export async function clearRuntimeCaches() {
   }
 }
 
-export function recoverFromChunkLoadFailure(error: unknown) {
+export function recoverFromChunkLoadFailure(
+  error: unknown,
+  context: ChunkRecoveryContext = {},
+): ChunkLoadRecoveryOutcome {
+  const category = getChunkLoadFailureCategory(error);
+  const fallbackAction = getFallbackActionForCategory(category);
+  const routePath = resolveRecoveryRoutePath(context.routePath);
+  const message = error instanceof Error ? error.message : String(error);
+  const errorName = error instanceof Error ? error.name : "Error";
+
   if (
     typeof window === "undefined" ||
-    reloadScheduled ||
-    isSafariPreloadOnlyFailure(error) ||
-    isCssPreloadFailure(error) ||
+    fallbackAction === "ignore-css-preload" ||
+    fallbackAction === "ignore-preload-only" ||
+    category === "other" ||
     !isChunkLoadFailure(error)
   ) {
-    return false;
+    return {
+      category,
+      fallbackAction,
+      reachedLimit: false,
+      retryCount: 0,
+      retryLimit: maxReloadsPerWindow,
+    };
   }
 
   const now = Date.now();
   const state = readReloadState(now);
   const nextRetryCount = Math.min(state.count + 1, maxReloadsPerWindow);
   const diagnostics = rememberChunkLoadFailureDiagnostics(error, nextRetryCount);
-  if (state.count >= maxReloadsPerWindow) {
+  logRouteLifecycle("chunk-load-recovery-attempt", {
+      ...routeRecoveryLogContext(routePath, context, category),
+      fallbackAction,
+      retryLimit: maxReloadsPerWindow,
+      retryCount: nextRetryCount,
+    mixedBuildAssetsDetected: diagnostics.mixedBuildAssetsDetected,
+    chunkFailure: true,
+    errorName,
+    errorMessage: message,
+    mixedBuildReason: diagnostics.mixedBuildReason,
+    walletContextReady: context.walletContextReady,
+  });
+  if (state.count >= maxReloadsPerWindow || reloadScheduled) {
     console.warn("DeepSignal chunk load recovery limit reached.", diagnostics, error);
-    return false;
+  logRouteLifecycle("chunk-load-recovery-limit-reached", {
+      ...routeRecoveryLogContext(routePath, context, category),
+      retryLimit: maxReloadsPerWindow,
+      retryCount: nextRetryCount,
+      walletContextReady: context.walletContextReady,
+  });
+    return {
+      category,
+      fallbackAction: "manual-refresh",
+      reachedLimit: true,
+      retryCount: nextRetryCount,
+      retryLimit: maxReloadsPerWindow,
+    };
   }
 
   reloadScheduled = true;
   rememberReloadState({ startedAt: state.startedAt, count: nextRetryCount, buildId: currentBuildId() });
-  console.warn("DeepSignal chunk load failed; manual update is required.", diagnostics, error);
+  console.warn("DeepSignal chunk load failed; a controlled refresh recommendation is available.", diagnostics, error);
   requestBuildUpdateNotice("chunk_load_failure", buildInfo, {
     mixedBuildAssetsDetected: diagnostics.mixedBuildAssetsDetected,
     chunkFailure: diagnostics,
   });
 
-  return true;
+  return {
+    category,
+    fallbackAction,
+    reachedLimit: false,
+    retryCount: nextRetryCount,
+    retryLimit: maxReloadsPerWindow,
+  };
 }
 
 export function startChunkLoadRecovery() {
@@ -232,23 +399,40 @@ export function startChunkLoadRecovery() {
   }
 
   const handleVitePreloadError = (event: VitePreloadErrorEvent) => {
+    const walletRuntime = getWalletProviderRuntimeSnapshot();
+    const outcome = recoverFromChunkLoadFailure(event.payload ?? "vite:preloaderror", {
+      routePath: resolveRecoveryRoutePath(window.location.hash),
+      policyId: resolveRecoveryPolicyId(resolveRecoveryRoutePath(window.location.hash)),
+      walletContextReady: walletRuntime.contextAvailable,
+    });
     if (isMobileSafariUserAgent() && isSafariPreloadOnlyFailure(event.payload ?? "vite:preloaderror")) {
       event.preventDefault();
       return;
     }
-    if (recoverFromChunkLoadFailure(event.payload ?? "vite:preloaderror")) {
+    if (shouldPreventDefaultForChunkFailure(outcome)) {
       event.preventDefault();
     }
   };
 
   const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
-    if (recoverFromChunkLoadFailure(event.reason)) {
+    const walletRuntime = getWalletProviderRuntimeSnapshot();
+    const outcome = recoverFromChunkLoadFailure(event.reason, {
+      routePath: resolveRecoveryRoutePath(window.location.hash),
+      policyId: resolveRecoveryPolicyId(resolveRecoveryRoutePath(window.location.hash)),
+      walletContextReady: walletRuntime.contextAvailable,
+    });
+    if (shouldPreventDefaultForChunkFailure(outcome)) {
       event.preventDefault();
     }
   };
 
   const handleError = (event: ErrorEvent) => {
-    recoverFromChunkLoadFailure(event.error ?? event.message);
+    const walletRuntime = getWalletProviderRuntimeSnapshot();
+    recoverFromChunkLoadFailure(event.error ?? event.message, {
+      routePath: resolveRecoveryRoutePath(window.location.hash),
+      policyId: resolveRecoveryPolicyId(resolveRecoveryRoutePath(window.location.hash)),
+      walletContextReady: walletRuntime.contextAvailable,
+    });
   };
 
   window.addEventListener("vite:preloadError", handleVitePreloadError);

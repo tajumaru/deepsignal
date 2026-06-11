@@ -71,13 +71,21 @@ export interface ParsedSuiObjectData {
 }
 
 export type ProjectObjectClient = {
-  getObject: (input: {
+  getObject?: (input: {
     id: string;
     options?: {
       showType?: boolean;
       showContent?: boolean;
     };
   }) => Promise<unknown>;
+  core?: {
+    getObject: (input: {
+      objectId: string;
+      include?: {
+        json?: boolean;
+      };
+    }) => Promise<unknown>;
+  };
 };
 
 export interface ProjectFormMetadataReference {
@@ -477,18 +485,27 @@ export function parseProjectSummary(
 }
 
 export function parseSuiObjectData(response: unknown) {
-  const data =
+  const jsonRpcData =
     response && typeof response === "object" && "data" in (response as Record<string, unknown>)
       ? ((response as { data?: unknown }).data as Record<string, unknown> | null | undefined)
       : null;
+  const coreObject =
+    response && typeof response === "object" && "object" in (response as Record<string, unknown>)
+      ? ((response as { object?: unknown }).object as Record<string, unknown> | null | undefined)
+      : null;
+  const data = jsonRpcData ?? coreObject;
   const content =
-    data && typeof data.content === "object"
-      ? (data.content as Record<string, unknown>)
+    jsonRpcData && typeof jsonRpcData.content === "object"
+      ? (jsonRpcData.content as Record<string, unknown>)
+      : null;
+  const json =
+    coreObject && typeof coreObject.json === "object" && coreObject.json && !Array.isArray(coreObject.json)
+      ? (coreObject.json as Record<string, unknown>)
       : null;
   const fields =
     content && content.fields && typeof content.fields === "object" && !Array.isArray(content.fields)
       ? (content.fields as Record<string, unknown>)
-      : null;
+      : json;
   const objectId = normalizeObjectId(typeof data?.objectId === "string" ? data.objectId : "");
   const type = typeof data?.type === "string" ? data.type : "";
   if (!objectId) {
@@ -534,13 +551,26 @@ export async function fetchProjectSummaryWithCache(
   }
 
   const promise = suiClient
-    .getObject({
+    .core
+    ?.getObject({
+      objectId: normalized,
+      include: {
+        json: true,
+      },
+    })
+    ?? suiClient.getObject?.({
       id: normalized,
       options: {
         showType: true,
         showContent: true,
       },
-    })
+    });
+
+  if (!promise) {
+    return null;
+  }
+
+  const cachedPromise = promise
     .then((response) => {
       const parsed = parseSuiObjectData(response);
       if (!parsed || !isProjectObjectType(parsed.type)) {
@@ -555,9 +585,9 @@ export async function fetchProjectSummaryWithCache(
 
   projectObjectCache.set(normalized, {
     expiresAt: Date.now() + PROJECT_OBJECT_CACHE_TTL_MS,
-    promise,
+    promise: cachedPromise,
   });
-  return promise;
+  return cachedPromise;
 }
 
 export function isProjectOwnerCapType(type?: string | null) {

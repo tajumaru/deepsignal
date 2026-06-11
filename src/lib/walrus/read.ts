@@ -30,6 +30,7 @@ const fallbackAggregatorUrls = String(import.meta.env.VITE_WALRUS_FALLBACK_AGGRE
 const bundledFormPointer = "__bundled_form__";
 const WALRUS_READ_TIMEOUT_MS = 4000;
 const WALRUS_READ_MAX_ATTEMPTS = 3;
+const WALRUS_JSON_READ_MAX_ATTEMPTS = 3;
 
 export class WalrusBlobReadError extends Error {
   code: WalrusBlobReadErrorCode;
@@ -149,34 +150,64 @@ async function fetchBlobTextFromWalrusOrThrow(blobId: string): Promise<string> {
   }
 }
 
+function summarizeWalrusPayloadPreview(text: string) {
+  return text
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 160);
+}
+
 export async function fetchJsonBlob<T>(blobId: string): Promise<T | null> {
   if (!blobId.trim()) {
     return null;
   }
-  const text = await fetchBlobTextFromWalrus(blobId, "Walrus blob read failed");
-  if (!text) {
-    return null;
+  for (let attempt = 1; attempt <= WALRUS_JSON_READ_MAX_ATTEMPTS; attempt += 1) {
+    const text = await fetchBlobTextFromWalrus(blobId, "Walrus blob read failed");
+    if (!text) {
+      return null;
+    }
+    try {
+      return JSON.parse(text) as T;
+    } catch (error) {
+      if (attempt < WALRUS_JSON_READ_MAX_ATTEMPTS) {
+        await new Promise((resolve) => window.setTimeout(resolve, 250 * attempt));
+        continue;
+      }
+      console.warn("Walrus blob parse failed", blobId, {
+        error,
+        preview: summarizeWalrusPayloadPreview(text),
+      });
+      return null;
+    }
   }
-  try {
-    return JSON.parse(text) as T;
-  } catch (error) {
-    console.error("Walrus blob parse failed", blobId, error);
-    return null;
-  }
+  return null;
 }
 
 export async function readJsonBlobOrThrow<T>(blobId: string): Promise<T> {
-  const text = await fetchBlobTextFromWalrusOrThrow(blobId);
-  try {
-    return JSON.parse(text) as T;
-  } catch (error) {
-    console.error("Walrus blob parse failed", blobId, error);
-    throw new WalrusBlobReadError(
-      "json_parse_failed",
-      blobId,
-      `Walrus blob ${blobId} did not contain valid JSON.`,
-    );
+  let lastError: unknown = null;
+  let lastPreview = "";
+  for (let attempt = 1; attempt <= WALRUS_JSON_READ_MAX_ATTEMPTS; attempt += 1) {
+    const text = await fetchBlobTextFromWalrusOrThrow(blobId);
+    try {
+      return JSON.parse(text) as T;
+    } catch (error) {
+      lastError = error;
+      lastPreview = summarizeWalrusPayloadPreview(text);
+      if (attempt < WALRUS_JSON_READ_MAX_ATTEMPTS) {
+        await new Promise((resolve) => window.setTimeout(resolve, 250 * attempt));
+        continue;
+      }
+    }
   }
+  console.warn("Walrus blob parse failed", blobId, {
+    error: lastError,
+    preview: lastPreview,
+  });
+  throw new WalrusBlobReadError(
+    "json_parse_failed",
+    blobId,
+    `Walrus blob ${blobId} did not contain valid JSON.`,
+  );
 }
 
 function normalizeManifest(

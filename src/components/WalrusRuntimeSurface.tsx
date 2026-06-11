@@ -3,6 +3,7 @@ import { markPerfMilestone, startPerf } from "../lib/perf";
 import { retryLazyImport } from "../lib/lazyRetry";
 import { getBrowserCapabilitiesSnapshot, logRouteLifecycle } from "../lib/routeDiagnostics";
 import { scheduleIdleTask } from "../lib/scheduleIdleTask";
+import { useWalletProviderRuntime } from "./WalletSurfaceRuntime";
 
 const WalrusRuntimeProvider = lazy(() => {
   startPerf("provider:walrus-runtime");
@@ -22,15 +23,29 @@ interface WalrusRuntimeSurfaceProps extends PropsWithChildren {
 
 export function WalrusRuntimeSurface({ children, fallback }: WalrusRuntimeSurfaceProps) {
   const [ready, setReady] = useState(false);
+  const walletRuntime = useWalletProviderRuntime();
 
   useEffect(
     () => scheduleIdleTask(() => setReady(true), getBrowserCapabilitiesSnapshot().mobileSafari ? 2600 : 1200),
     [],
   );
 
+  useEffect(() => {
+    if (!ready) {
+      return;
+    }
+    if (!walletRuntime.loaded) {
+      logRouteLifecycle("provider:walrus-runtime-deferred", {
+        walletProviderChunkLoaded: walletRuntime.chunkLoaded,
+        walletProviderLoaded: walletRuntime.loaded,
+        walletProviderLoading: walletRuntime.loading,
+      });
+    }
+  }, [ready, walletRuntime.chunkLoaded, walletRuntime.loaded, walletRuntime.loading]);
+
   return (
     <>
-      {ready ? (
+      {ready && walletRuntime.loaded ? (
         <Suspense fallback={fallback ?? null}>
           <WalrusRuntimeProvider />
         </Suspense>

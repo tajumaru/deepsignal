@@ -1,7 +1,3 @@
-import {
-  useSignPersonalMessage,
-  useSuiClient,
-} from "../../../lib/mystenDappKitCompat";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   REAL_SEAL_SESSION_TTL_MIN,
@@ -12,10 +8,12 @@ import {
 } from "../../../lib/seal";
 import { isDecryptDiagnosticError, type DecryptDiagnosticContext } from "../../../crypto/decryptDiagnostics";
 import type { CapabilityProfile } from "../../../hooks/useAccessControl";
+import { useRpcSuiClient } from "../../../hooks/useRpcSuiClient";
 import { logRouteLifecycle } from "../../../lib/routeDiagnostics";
 import { getPrivateSignalPayloadState } from "../../../lib/signalInbox";
 import { reportSystemError } from "../../../services/systemSignalReporterClient";
 import type { SealDecryptContext, Submission } from "../../../types";
+import { useOptionalWalletActions } from "../../../walletStatus";
 import type { SignalRecord } from "./useSignalInboxData";
 
 type ToastSetter = (toast: { tone: "success" | "error"; message: string } | null) => void;
@@ -190,8 +188,8 @@ export function usePrivateSignalDecrypt({
   decryptMessages,
 }: UsePrivateSignalDecryptArgs) {
   const messages = { ...defaultDecryptMessages, ...decryptMessages };
-  const suiClient = useSuiClient();
-  const signPersonalMessage = useSignPersonalMessage();
+  const suiClient = useRpcSuiClient();
+  const walletActions = useOptionalWalletActions();
   const [detailAnswers, setDetailAnswers] = useState<Record<string, unknown> | null>(null);
   const [detailAttachments, setDetailAttachments] = useState<Submission["attachments"]>([]);
   const [detailLegacyUnencrypted, setDetailLegacyUnencrypted] = useState(false);
@@ -228,12 +226,9 @@ export function usePrivateSignalDecrypt({
       ownedCapabilityObjects,
       suiClient,
       onStatusChange,
-      signPersonalMessage: async (message: Uint8Array) => {
-        const result = await signPersonalMessage.mutateAsync({ message });
-        return result.signature;
-      },
+      signPersonalMessage: async (message: Uint8Array) => walletActions.signPersonalMessage(message),
     }),
-    [accountAddress, capabilityProfile, ownedCapabilityObjects, signPersonalMessage, suiClient],
+    [accountAddress, capabilityProfile, ownedCapabilityObjects, suiClient, walletActions],
   );
 
   const decryptContext = useMemo(
@@ -245,12 +240,9 @@ export function usePrivateSignalDecrypt({
             reviewerCapId: getReviewerCapIdForDecrypt(capabilityProfile),
             ownedCapabilityObjects,
             suiClient,
-            signPersonalMessage: async (message: Uint8Array) => {
-              const result = await signPersonalMessage.mutateAsync({ message });
-              return result.signature;
-            },
+            signPersonalMessage: async (message: Uint8Array) => walletActions.signPersonalMessage(message),
           },
-    [accountAddress, capabilityProfile, createDecryptContextForRecord, ownedCapabilityObjects, selectedRecord, signPersonalMessage, suiClient],
+    [accountAddress, capabilityProfile, createDecryptContextForRecord, ownedCapabilityObjects, selectedRecord, suiClient, walletActions],
   );
 
   useEffect(() => {

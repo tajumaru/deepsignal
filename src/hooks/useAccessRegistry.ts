@@ -7,16 +7,19 @@ import {
   isSuiRateLimitError,
 } from "../lib/sui";
 import { handleRateLimitedRpcFallback, useRpcInfrastructure } from "../rpcInfrastructure";
-import { useRpcSuiClient } from "./useRpcSuiClient";
+import { useReadOnlyCoreSuiClient } from "./useReadOnlyCoreSuiClient";
 
-type RegistryObjectResponse = {
-  data?: {
-    content?: {
-      dataType?: string;
-      fields?: Record<string, unknown>;
-    } | null;
-  } | null;
-};
+function extractRegistryFields(value: unknown) {
+  const object =
+    value && typeof value === "object" && "object" in (value as Record<string, unknown>)
+      ? ((value as { object?: unknown }).object as Record<string, unknown> | null | undefined)
+      : null;
+  const json =
+    object && typeof object.json === "object" && object.json && !Array.isArray(object.json)
+      ? (object.json as Record<string, unknown>)
+      : null;
+  return json;
+}
 
 const ACCESS_REGISTRY_CACHE_PREFIX = "deepsignal.accessRegistry";
 
@@ -32,7 +35,7 @@ function normalizeObjectId(value?: string | null) {
 }
 
 export function useAccessRegistry(options: { enabled?: boolean } = {}) {
-  const suiClient = useRpcSuiClient();
+  const suiClient = useReadOnlyCoreSuiClient();
   const rpc = useRpcInfrastructure();
   const packageId = normalizeObjectId(ACCESS_CONTROL_PACKAGE_ID);
   const registryId = normalizeObjectId(ACCESS_CONTROL_REGISTRY_ID);
@@ -68,14 +71,14 @@ export function useAccessRegistry(options: { enabled?: boolean } = {}) {
     },
     queryFn: async () => {
       try {
-        const response = (await suiClient.getObject({
-          id: registryId,
-          options: {
-            showContent: true,
+        const response = await suiClient.core.getObject({
+          objectId: registryId,
+          include: {
+            json: true,
           },
-        })) as RegistryObjectResponse;
+        });
 
-        const fields = response.data?.content?.fields ?? null;
+        const fields = extractRegistryFields(response);
         if (fields && typeof window !== "undefined") {
           try {
             window.sessionStorage.setItem(cacheKey, JSON.stringify(fields));

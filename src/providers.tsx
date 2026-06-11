@@ -9,11 +9,12 @@ import {
   useCurrentAccount,
   useCurrentWallet,
   useDisconnectWallet,
+  useSignPersonalMessage,
   useSignAndExecuteTransaction,
 } from "./lib/mystenDappKitCompat";
 import { DAppKitProvider, createDAppKit } from "@mysten/dapp-kit-react";
 import { REQUIRE_GLOBAL_WALRUS_RUNTIME } from "./lib/runtimeFlags";
-import { SUI_NETWORK } from "./lib/sui";
+import { getPreferredGrpcUrl, SUI_NETWORK } from "./lib/sui";
 import { logRouteLifecycle, setDeepSignalDebugReadiness } from "./lib/routeDiagnostics";
 import { endPerf, markPerfMilestone, startPerf } from "./lib/perf";
 import { useRpcInfrastructure } from "./rpcInfrastructure";
@@ -119,6 +120,7 @@ function WalletStatusBridge({ children }: PropsWithChildren) {
   const account = useCurrentAccount();
   const { currentWallet, connectionStatus, isConnected } = useCurrentWallet();
   const disconnectWallet = useDisconnectWallet();
+  const signPersonalMessage = useSignPersonalMessage();
   const signAndExecuteTransaction = useSignAndExecuteTransaction();
   const restoreInFlightRef = useRef(false);
 
@@ -193,8 +195,12 @@ function WalletStatusBridge({ children }: PropsWithChildren) {
           transaction,
         });
       },
+      signPersonalMessage: async (message: Uint8Array) => {
+        const result = await signPersonalMessage.mutateAsync({ message });
+        return result.signature;
+      },
     }),
-    [disconnectWallet, signAndExecuteTransaction],
+    [disconnectWallet, signAndExecuteTransaction, signPersonalMessage],
   );
 
   const runtimeControls = useMemo(
@@ -219,6 +225,7 @@ function WalletStatusBridge({ children }: PropsWithChildren) {
 export function WalletProviders({ children }: PropsWithChildren) {
   const rpcInfrastructure = useRpcInfrastructure();
   const currentRpcUrl = rpcInfrastructure.currentRpcUrl;
+  const grpcUrl = getPreferredGrpcUrl(currentRpcUrl);
   const autoConnectEnabled = shouldEnableAutoRestore();
   const dAppKit = useMemo(
     () =>
@@ -252,6 +259,7 @@ export function WalletProviders({ children }: PropsWithChildren) {
       autoRestoreCallerReason: autoConnectEnabled ? "provider-mount-auto-connect-enabled" : "provider-mount-auto-connect-skipped",
       autoRestoreEnabled: autoConnectEnabled,
       currentRpcUrl,
+      currentGrpcUrl: grpcUrl,
       hasRpcInfrastructure: Boolean(rpcInfrastructure),
     });
     setDeepSignalDebugReadiness({
@@ -263,7 +271,7 @@ export function WalletProviders({ children }: PropsWithChildren) {
     endPerf("provider:wallet", "ok");
     markPerfMilestone("sui_client_ready", rpcInfrastructure.providerLabel);
     markPerfMilestone("provider:wallet:ready");
-  }, [autoConnectEnabled, currentRpcUrl, rpcInfrastructure]);
+  }, [autoConnectEnabled, currentRpcUrl, grpcUrl, rpcInfrastructure]);
 
   useEffect(() => {
     if (autoConnectEnabled) {

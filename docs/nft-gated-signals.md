@@ -22,10 +22,12 @@ Purpose:
 Implementation approach:
 
 - wallet connection required
-- a server-side `/api/nft-ownership-check` route verifies NFT ownership
+- the public route lazily loads the NFT ownership runtime and verifies ownership through Sui RPC
 - the ownership check aggregates direct owned objects plus Kiosk items
+- `requiredCount` is enforced against the deduplicated union of direct and Kiosk object ids
+- object-id selectors and struct-type selectors are both supported
 - `PublicFormPage` enforces the viewing gate
-- `usePublicSubmission` re-verifies ownership immediately before submit
+- `usePublicSubmission` re-verifies ownership immediately before submit with a fresh RPC check
 - guest mode is disabled for NFT-gated forms
 - `submission.metadata.accessCheck` stores the verification result
 
@@ -179,6 +181,7 @@ Observed behavior:
 - struct-type filtering, query caching, and rate-limit fallback already exist
 
 This makes `useOwnedSuiObjects` the right Phase 1 ownership-check foundation.
+The public responder gate should still keep Mysten and Kiosk runtime code behind lazy public-route boundaries.
 
 ### Current create/publish flow
 
@@ -376,6 +379,8 @@ This matches:
 - the stated Phase 1 implementation plan
 - the current `useOwnedSuiObjects` capability
 
+Kiosk items must be checked separately with `getOwnedKiosks` plus `getKiosk({ withObjects: true })`.
+
 ### Recommended RPC usage
 
 Always query with:
@@ -388,6 +393,7 @@ If the form network and connected runtime network do not match:
 
 - show a clear mismatch error
 - do not silently proceed
+- do not execute the ownership RPC check
 
 ### Caching strategy
 
@@ -399,7 +405,8 @@ Use the current layered cache for route-level checks:
 
 Recommended rule:
 
-- route-level access check may use cached data
+- route-level access check may use cached data only for recent successful matches
+- failed, no-match, and RPC-error results must not be retained as success cache
 - submit-time check should force a fresh revalidation
 
 ### Optimization

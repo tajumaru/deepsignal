@@ -12,6 +12,7 @@ import { walrusAdapter } from "./walrusAdapter";
 import {
   formatWalrusFailureStage,
   getWalrusErrorMessage,
+  isWalletApprovalError,
   isWalrusDiagnosticError,
 } from "./walrusDiagnostics";
 import {
@@ -219,8 +220,8 @@ async function withWriteFallback<T>(walrusTask: () => Promise<T>, localTask: () 
     setStorageRuntimeStatus({ mode: "walrus", notice: null, diagnostics: null });
     return result;
   } catch (error) {
-    if (isLikelyWalletCancelError(error)) {
-      console.info("Walrus write cancelled in wallet; skipping local fallback.");
+    if (isLikelyWalletCancelError(error) || isWalletApprovalError(error)) {
+      console.info("Walrus write stopped at wallet approval; skipping local fallback.");
       setStorageRuntimeStatus({
         mode: "walrus",
         notice: error instanceof Error ? error.message : "Wallet approval was cancelled.",

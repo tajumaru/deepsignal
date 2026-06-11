@@ -1,11 +1,12 @@
-import { useSignAndExecuteTransaction, useSuiClient } from "../../../lib/mystenDappKitCompat";
 import { useState } from "react";
 import { SignalMetaChip } from "../../../components/SignalMetaChip";
+import { useRpcSuiClient } from "../../../hooks/useRpcSuiClient";
 import {
   type ProjectMemberRole,
   type ProjectSummary,
 } from "../../../lib/projectRegistry";
 import { isValidSuiAddress, normalizeSuiAddress } from "../../../lib/suiAddress";
+import { useOptionalWalletActions } from "../../../walletStatus";
 
 interface ProjectMemberManagementSectionProps {
   selectedProject: ProjectSummary | null;
@@ -26,20 +27,18 @@ export function ProjectMemberManagementSection({
   selectedProject,
   onRefreshProjects,
 }: ProjectMemberManagementSectionProps) {
-  const suiClient = useSuiClient();
-  const addMemberTx = useSignAndExecuteTransaction();
-  const removeMemberTx = useSignAndExecuteTransaction();
-  const updateRoleTx = useSignAndExecuteTransaction();
+  const suiClient = useRpcSuiClient();
+  const walletActions = useOptionalWalletActions();
   const [memberAddress, setMemberAddress] = useState("");
   const [memberRole, setMemberRole] = useState<Exclude<ProjectMemberRole, "owner">>("co_admin");
   const [status, setStatus] = useState("");
+  const [busy, setBusy] = useState(false);
 
   async function loadProjectRegistryWriteModule() {
     return import("../../../lib/projectRegistryWrite");
   }
 
   const ownerCapId = selectedProject?.ownedOwnerCapId ?? "";
-  const busy = addMemberTx.isPending || removeMemberTx.isPending || updateRoleTx.isPending;
 
   async function waitAndRefresh(digest: string) {
     await suiClient.waitForTransaction({ digest });
@@ -61,6 +60,7 @@ export function ProjectMemberManagementSection({
     }
 
     try {
+      setBusy(true);
       setStatus("Awaiting wallet approval...");
       const { addProjectMember } = await loadProjectRegistryWriteModule();
       const tx = addProjectMember({
@@ -69,12 +69,14 @@ export function ProjectMemberManagementSection({
         memberAddress: normalizeSuiAddress(memberAddress),
         role: memberRole,
       });
-      const result = await addMemberTx.mutateAsync({ transaction: tx });
+      const result = await walletActions.signAndExecuteTransaction(tx);
       await waitAndRefresh(result.digest);
       setMemberAddress("");
       setStatus(`${roleLabel(memberRole)} added to ${selectedProject.name}.`);
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Failed to add project member.");
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -88,6 +90,7 @@ export function ProjectMemberManagementSection({
     }
 
     try {
+      setBusy(true);
       setStatus("Awaiting wallet approval...");
       const { removeProjectMember } = await loadProjectRegistryWriteModule();
       const tx = removeProjectMember({
@@ -96,11 +99,13 @@ export function ProjectMemberManagementSection({
         memberAddress: address,
         role: "reviewer",
       });
-      const result = await removeMemberTx.mutateAsync({ transaction: tx });
+      const result = await walletActions.signAndExecuteTransaction(tx);
       await waitAndRefresh(result.digest);
       setStatus("Project member removed.");
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Failed to remove project member.");
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -111,6 +116,7 @@ export function ProjectMemberManagementSection({
     }
 
     try {
+      setBusy(true);
       setStatus("Awaiting wallet approval...");
       const { updateProjectMemberRole } = await loadProjectRegistryWriteModule();
       const tx = updateProjectMemberRole({
@@ -119,11 +125,13 @@ export function ProjectMemberManagementSection({
         memberAddress: address,
         role,
       });
-      const result = await updateRoleTx.mutateAsync({ transaction: tx });
+      const result = await walletActions.signAndExecuteTransaction(tx);
       await waitAndRefresh(result.digest);
       setStatus("Project member role updated.");
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Failed to update project member role.");
+    } finally {
+      setBusy(false);
     }
   }
 

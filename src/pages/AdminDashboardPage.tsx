@@ -6,35 +6,26 @@ import {
   resolveLazyRouteModuleWithSafariRetry,
   retryLazyImport,
 } from "../lib/lazyRetry";
-import { getBrowserCapabilitiesSnapshot, logRouteLifecycle } from "../lib/routeDiagnostics";
-import { scheduleIdleTask } from "../lib/scheduleIdleTask";
+import { logRouteLifecycle } from "../lib/routeDiagnostics";
+import { DelayedWorkspaceRestoreFallback } from "../routes/ProviderReadinessBarrier";
 import { ensureCurrentRouteEpoch, useCurrentRouteEpoch } from "../routes/routeEpoch";
+import { useWalletSessionState } from "../walletSessionState";
+import { shouldAutoLoadAdvancedWorkspace } from "./adminDashboardWorkspaceAutoload";
 
 type WorkspaceComponent = ComponentType<Record<string, never>>;
 
-function shouldAutoLoadAdvancedWorkspace(routePath: string) {
-  if (typeof window === "undefined") {
-    return false;
-  }
-  const pathname = routePath.split(/[?#]/)[0] || "/dashboard";
-  if (pathname !== "/admin") {
-    return false;
-  }
-  if (getBrowserCapabilitiesSnapshot().mobileSafari) {
-    return false;
-  }
-  return window.matchMedia?.("(min-width: 901px)").matches ?? true;
-}
-
 export function AdminDashboardPage() {
-  const [retryNonce, setRetryNonce] = useState(0);
-  const [Workspace, setWorkspace] = useState<WorkspaceComponent | null>(null);
-  const [loadError, setLoadError] = useState<unknown>(null);
-  const [advancedRequested, setAdvancedRequested] = useState(false);
   const routePath =
     typeof window === "undefined" ? "/dashboard" : window.location.hash?.replace(/^#/, "") || window.location.pathname;
   const routeEpoch = useCurrentRouteEpoch(routePath);
-  const requestSourceRef = useRef<"idle" | "manual">("manual");
+  const walletSession = useWalletSessionState();
+  const autoOpenAfterConnect = shouldAutoLoadAdvancedWorkspace(routePath);
+  const autoLoadAdvancedWorkspace = autoOpenAfterConnect && walletSession.phase === "connected";
+  const [retryNonce, setRetryNonce] = useState(0);
+  const [Workspace, setWorkspace] = useState<WorkspaceComponent | null>(null);
+  const [loadError, setLoadError] = useState<unknown>(null);
+  const [advancedRequested, setAdvancedRequested] = useState(autoLoadAdvancedWorkspace);
+  const requestSourceRef = useRef<"idle" | "manual">(autoLoadAdvancedWorkspace ? "idle" : "manual");
 
   const loadWorkspace = useCallback(async () => {
     setLoadError(null);
@@ -119,14 +110,13 @@ export function AdminDashboardPage() {
   }, [advancedRequested, loadWorkspace]);
 
   useEffect(() => {
-    if (!shouldAutoLoadAdvancedWorkspace(routePath)) {
+    if (!autoLoadAdvancedWorkspace || advancedRequested) {
       return undefined;
     }
-    return scheduleIdleTask(() => {
-      requestSourceRef.current = "idle";
-      setAdvancedRequested(true);
-    }, 1400);
-  }, [routePath]);
+    requestSourceRef.current = "idle";
+    setAdvancedRequested(true);
+    return undefined;
+  }, [advancedRequested, autoLoadAdvancedWorkspace]);
 
   const handleOpenAdvancedWorkspace = useCallback(() => {
     requestSourceRef.current = "manual";
@@ -137,10 +127,22 @@ export function AdminDashboardPage() {
     return <Workspace />;
   }
 
+  if (autoLoadAdvancedWorkspace && advancedRequested && !loadError) {
+    return (
+      <DelayedWorkspaceRestoreFallback
+        onRetry={() => {
+          setRetryNonce((value) => value + 1);
+          handleOpenAdvancedWorkspace();
+        }}
+      />
+    );
+  }
+
   return (
     <DashboardLiteWorkspace
       advancedLoadError={loadError}
       advancedLoading={advancedRequested && !loadError && !Workspace}
+      autoOpenAfterConnect={autoOpenAfterConnect}
       onOpenAdvancedWorkspace={() => {
         if (loadError) {
           setRetryNonce((value) => value + 1);
@@ -148,6 +150,7 @@ export function AdminDashboardPage() {
         handleOpenAdvancedWorkspace();
       }}
       routePath={routePath}
+      walletSessionPhase={walletSession.phase}
     />
   );
 }

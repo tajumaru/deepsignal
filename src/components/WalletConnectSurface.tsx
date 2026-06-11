@@ -13,6 +13,8 @@ const WalletConnect = lazy(() =>
   })),
 );
 
+let pendingWalletConnectOpen = false;
+
 interface WalletConnectSurfaceProps {
   compact?: boolean;
   context?: "default" | "adminGate";
@@ -93,9 +95,18 @@ export function WalletConnectSurface({
 
   useEffect(() => {
     if (wallet.status === "connected") {
+      pendingWalletConnectOpen = false;
       setConnectModalOpen(false);
     }
   }, [wallet.status]);
+
+  useEffect(() => {
+    if (!pendingWalletConnectOpen || !walletRuntime.loaded || wallet.status === "connected") {
+      return;
+    }
+    setConnectRequested(true);
+    setConnectModalOpen(true);
+  }, [wallet.status, walletRuntime.loaded]);
 
   if (wallet.status === "connected") {
     return (
@@ -187,8 +198,8 @@ export function WalletConnectSurface({
                   ? t("secureSessionStandby")
                   : t("notConnected")
                 : showStandbyState
-                  ? "Opening Session..."
-                  : "Activate Session"}
+                  ? "Connect Wallet"
+                  : "Connect Wallet"}
             </strong>
             <span>
               {isMobileDrawer
@@ -197,22 +208,23 @@ export function WalletConnectSurface({
                   : t("connectWalletToReview")
                 : showStandbyState
                   ? providerDeferred
-                    ? "Preparing secure session"
+                    ? "Connect your reviewer wallet to open the secure workspace"
                     : "Restoring secure session"
-                  : "Wallet-optional public mode"}
+                  : "Connect your reviewer wallet to open the secure workspace"}
             </span>
           </div>
           <button
             type="button"
             className="wallet-connect-trigger"
             onClick={() => {
+              pendingWalletConnectOpen = true;
               walletRuntime.requestLoad();
               setConnectRequested(true);
               setConnectModalOpen(true);
             }}
             disabled={wallet.isConnecting || walletRuntime.loading}
           >
-            {wallet.isConnecting || walletRuntime.loading ? "Opening..." : providerDeferred ? "Prepare" : "Connect"}
+            {wallet.isConnecting || walletRuntime.loading ? "Opening..." : "Connect"}
           </button>
         </div>
       </div>
@@ -220,7 +232,27 @@ export function WalletConnectSurface({
   }
 
   if (!walletRuntime.loaded) {
-    return fallback ?? <WalletConnectFallback compact={compact} />;
+    if (!connectRequested && !pendingWalletConnectOpen) {
+      return fallback ?? <WalletConnectFallback compact={compact} />;
+    }
+
+    return (
+      <div
+        className={`wallet-connect-shell ${compact ? "wallet-connect-shell-compact" : ""} ${
+          isMobileDrawer ? "wallet-connect-shell-drawer" : ""
+        }`.trim()}
+      >
+        <div className="wallet-connect-direct panel">
+          <div className="wallet-connect-direct-copy">
+            <strong>Opening Session...</strong>
+            <span>Loading the secure wallet connection runtime</span>
+          </div>
+          <button type="button" className="wallet-connect-trigger" disabled>
+            Opening...
+          </button>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -229,8 +261,18 @@ export function WalletConnectSurface({
         compact={compact}
         surface={surface}
         connectModalOpen={connectModalOpen}
-        onConnectModalOpenChange={setConnectModalOpen}
-        onConnectModalCancel={() => setConnectModalOpen(false)}
+        onConnectModalOpenChange={(open) => {
+          setConnectModalOpen(open);
+          if (!open && wallet.status !== "connected") {
+            pendingWalletConnectOpen = false;
+            setConnectRequested(false);
+          }
+        }}
+        onConnectModalCancel={() => {
+          pendingWalletConnectOpen = false;
+          setConnectModalOpen(false);
+          setConnectRequested(false);
+        }}
       />
     </Suspense>
   );

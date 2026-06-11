@@ -1,4 +1,3 @@
-import { useSignAndExecuteTransaction } from "../lib/mystenDappKitCompat";
 import { useState } from "react";
 import type { CapabilityProfile } from "../hooks/useAccessControl";
 import { useAccessRegistry } from "../hooks/useAccessRegistry";
@@ -10,6 +9,7 @@ import {
   ACCESS_CONTROL_PACKAGE_ID,
   ACCESS_CONTROL_REGISTRY_ID,
 } from "../lib/sui";
+import { useOptionalWalletActions } from "../walletStatus";
 import { buildRegistryRows } from "./memberDirectoryRows";
 import { SignalMetaChip } from "./SignalMetaChip";
 
@@ -54,8 +54,8 @@ export function AccessManagementSection({
   const [adminAddress, setAdminAddress] = useState("");
   const [adminIssueState, setAdminIssueState] = useState("");
   const [removeState, setRemoveState] = useState("");
-  const addAdminTx = useSignAndExecuteTransaction();
-  const removeAdminTx = useSignAndExecuteTransaction();
+  const [adminActionPending, setAdminActionPending] = useState(false);
+  const walletActions = useOptionalWalletActions();
   const canManageAdmins = canIssueAdmin(capabilityProfile);
 
   async function loadProjectRegistryWriteModule() {
@@ -95,6 +95,7 @@ export function AccessManagementSection({
     }
 
     try {
+      setAdminActionPending(true);
       setAdminIssueState(t("waitingForWalletApproval"));
       const { addAdminAccess } = await loadProjectRegistryWriteModule();
       const tx = addAdminAccess({
@@ -103,7 +104,7 @@ export function AccessManagementSection({
         packageId: ACCESS_CONTROL_PACKAGE_ID,
         adminAddress: normalizeSuiAddress(adminAddress),
       });
-      await addAdminTx.mutateAsync({ transaction: tx });
+      await walletActions.signAndExecuteTransaction(tx);
       setAdminAddress("");
       setAdminIssueState(t("adminAccessGranted"));
       onToast({ tone: "success", message: t("adminAccessGranted") });
@@ -112,6 +113,8 @@ export function AccessManagementSection({
       const message = error instanceof Error ? error.message : t("addAdminFailed");
       setAdminIssueState(message);
       onToast({ tone: "error", message });
+    } finally {
+      setAdminActionPending(false);
     }
   }
 
@@ -137,6 +140,7 @@ export function AccessManagementSection({
     }
 
     try {
+      setAdminActionPending(true);
       setRemoveState(t("waitingForWalletApproval"));
       const { removeAdminAccess } = await loadProjectRegistryWriteModule();
       const tx = removeAdminAccess({
@@ -145,7 +149,7 @@ export function AccessManagementSection({
         packageId: ACCESS_CONTROL_PACKAGE_ID,
         adminAddress: entry.address,
       });
-      await removeAdminTx.mutateAsync({ transaction: tx });
+      await walletActions.signAndExecuteTransaction(tx);
       setRemoveState(t("adminAccessRemoved", { address: entry.address }));
       onToast({ tone: "success", message: t("adminAccessRemoved", { address: entry.address }) });
       await refreshAll();
@@ -153,6 +157,8 @@ export function AccessManagementSection({
       const message = error instanceof Error ? error.message : t("removeAdminFailed");
       setRemoveState(message);
       onToast({ tone: "error", message });
+    } finally {
+      setAdminActionPending(false);
     }
   }
 
@@ -195,9 +201,9 @@ export function AccessManagementSection({
             type="button"
             className="primary-button"
             onClick={() => void handleAddAdmin()}
-            disabled={addAdminTx.isPending}
+            disabled={adminActionPending}
           >
-            {addAdminTx.isPending ? t("addingLabel") : t("addAdmin")}
+            {adminActionPending ? t("addingLabel") : t("addAdmin")}
           </button>
         </div>
       ) : null}
@@ -246,9 +252,9 @@ export function AccessManagementSection({
                     type="button"
                     className="danger-button"
                     onClick={() => void handleRemoveAdmin(entry)}
-                    disabled={removeAdminTx.isPending}
+                    disabled={adminActionPending}
                   >
-                    {removeAdminTx.isPending ? t("removingLabel") : t("removeAdmin")}
+                    {adminActionPending ? t("removingLabel") : t("removeAdmin")}
                   </button>
                 ) : null}
                 {!canRemoveAdmin ? (

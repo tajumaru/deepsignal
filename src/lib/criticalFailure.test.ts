@@ -24,6 +24,19 @@ describe("createCriticalFailure", () => {
     expect(failure.id).toBe(repeated.id);
   });
 
+  it("classifies wallet password failures as wallet_rejected", () => {
+    const failure = createCriticalFailure({
+      error: new Error("Incorrect password"),
+      surface: "wallet",
+      step: "publish",
+      occurredAt,
+    });
+
+    expect(failure.kind).toBe("wallet_rejected");
+    expect(failure.noDataSubmitted).toBe(true);
+    expect(failure.retryable).toBe(true);
+  });
+
   it("classifies Walrus upload failures", () => {
     const failure = createCriticalFailure({
       error: new Error("Walrus upload failed: relay returned 503"),

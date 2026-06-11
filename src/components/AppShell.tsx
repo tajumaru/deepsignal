@@ -14,14 +14,14 @@ import "../styles/app-shell-entry.css";
 import { CreateFormLink } from "./CreateFormLink";
 import { NavItemLabel } from "./NavIcons";
 import { RuntimeDiagnosticsOverlay } from "./RuntimeDiagnosticsOverlay";
-import { useWalletProviderRuntime } from "./WalletSurfaceRuntime";
 import { BuildIndicator } from "./system/BuildIndicator";
 import { useI18n } from "../i18n";
 import { buildInfo } from "../lib/buildInfo";
-import { retryLazyImport } from "../lib/lazyRetry";
+import { isStaleLazyImportEpochError, retryLazyImport } from "../lib/lazyRetry";
 import { isSignalInboxPath } from "../lib/navigation";
 import { getBrowserCapabilitiesSnapshot, logRouteLifecycle } from "../lib/routeDiagnostics";
 import { scheduleIdleTask } from "../lib/scheduleIdleTask";
+import { warmDashboardRouteEntry } from "../lib/dashboardRouteWarmup";
 import { useOptionalRpcInfrastructure } from "../rpcInfrastructure";
 import { useOptionalWalletConnection } from "../walletStatus";
 import type { WalletSessionPhase } from "../walletSessionState";
@@ -32,13 +32,26 @@ const MOBILE_DRAWER_HORIZONTAL_RATIO = 1.5;
 const MOBILE_DRAWER_INTENT_PX = 8;
 const MOBILE_VIEWPORT_QUERY = "(max-width: 900px)";
 
+function resolveStaleLazyImportToNullModule<T>(promise: Promise<{ default: T }>) {
+  return promise.catch((error) => {
+    if (isStaleLazyImportEpochError(error)) {
+      return { default: (() => null) as T };
+    }
+    throw error;
+  });
+}
+
 const WalletRuntimePanel = lazy(() =>
-  retryLazyImport(() => import("./WalletRuntimePanel"), "wallet-runtime-panel").then((module) => ({
-    default: module.default,
-  })),
+  resolveStaleLazyImportToNullModule(
+    retryLazyImport(() => import("./WalletRuntimePanel"), "wallet-runtime-panel").then((module) => ({
+      default: module.default,
+    })),
+  ),
 );
 const NetworkMenu = lazy(() =>
-  retryLazyImport(() => import("./NetworkMenu"), "network-menu").then((module) => ({ default: module.NetworkMenu })),
+  resolveStaleLazyImportToNullModule(
+    retryLazyImport(() => import("./NetworkMenu"), "network-menu").then((module) => ({ default: module.NetworkMenu })),
+  ),
 );
 
 interface AppShellProps extends PropsWithChildren {
@@ -127,14 +140,13 @@ function WalletConnectSlot({
   walletUiEnabled: boolean;
   walletUiRequested: boolean;
 }) {
-  const walletRuntime = useWalletProviderRuntime();
   const walletConnection = useOptionalWalletConnection();
 
   if (!walletUiEnabled) {
     return null;
   }
 
-  if (!walletUiRequested || !walletRuntime.loaded || walletConnection.isRestoringConnection) {
+  if (!walletUiRequested || walletConnection.isRestoringConnection) {
     return fallback ? <>{fallback}</> : null;
   }
 
@@ -164,7 +176,12 @@ function MobileAppBottomNav({ showComposeShortcut }: MobileAppBottomNavProps) {
         </CreateFormLink>
       ) : null}
       <nav className="mobile-inbox-bottom-nav" aria-label="Mobile workspace navigation">
-        <Link className={inboxActive ? "is-active" : undefined} to="/dashboard">
+        <Link
+          className={inboxActive ? "is-active" : undefined}
+          to="/dashboard"
+          onPointerDown={() => warmDashboardRouteEntry("mobile-bottom-nav-pointerdown")}
+          onTouchStart={() => warmDashboardRouteEntry("mobile-bottom-nav-touchstart")}
+        >
           <span aria-hidden="true">In</span>
           <span>{t("navMobileInbox")}</span>
         </Link>
@@ -705,7 +722,12 @@ export function AppShell({
                 <NavLink to="/explore" onClick={closeMobileDrawer}>
                   {t("navExplore")}
                 </NavLink>
-                <NavLink to="/dashboard" onClick={closeMobileDrawer}>
+                <NavLink
+                  to="/dashboard"
+                  onClick={closeMobileDrawer}
+                  onPointerDown={() => warmDashboardRouteEntry("mobile-drawer-pointerdown")}
+                  onTouchStart={() => warmDashboardRouteEntry("mobile-drawer-touchstart")}
+                >
                   {t("navMobileInbox")}
                 </NavLink>
                 <NavLink to="/my-responses" onClick={closeMobileDrawer}>

@@ -73,6 +73,7 @@ describe("PublicWalletAccountPanel query client regression", () => {
               value={{
                 disconnect: async () => undefined,
                 signAndExecuteTransaction: vi.fn(async () => ({ digest: "0xmock-digest" })),
+                signPersonalMessage: vi.fn(async () => "0xmock-signature"),
               }}
             >
               <PublicWalletAccountPanel

@@ -37,6 +37,7 @@ import {
   getWalrusCauseMessage,
   getWalrusErrorMessage,
   getWalrusErrorResponseBody,
+  getWalrusRecoveryHint,
   getWalrusErrorStatus,
   getWalrusErrorUrl,
   isQuotaExceededError,
@@ -230,7 +231,7 @@ async function withWalrusReadTimeout<T>(blobId: string, task: Promise<T>): Promi
 
 function createWalletSigner(): Signer {
   const runtimeContext = getWalrusRuntimeContext();
-  const { account, wallet, supportedIntents, client } = runtimeContext;
+  const { account, wallet, supportedIntents, client, executeTransaction } = runtimeContext;
   if (!account || !wallet || !client) {
     throw new Error(
       "Walrus mutations require a connected wallet. Connect a wallet or continue in local fallback mode.",
@@ -249,6 +250,18 @@ function createWalletSigner(): Signer {
       client?: ClientWithCoreApi;
     }) {
       const activeClient = (txClient as WalrusEnabledClient | undefined) ?? client;
+      if (executeTransaction) {
+        transaction.setSenderIfNotSet(account.address);
+        const execution = await executeTransaction(transaction);
+        return activeClient.core.waitForTransaction({
+          digest: execution.digest,
+          include: {
+            transaction: true,
+            effects: true,
+            objectTypes: true,
+          },
+        });
+      }
       transaction.setSenderIfNotSet(account.address);
       const chain: `${string}:${string}` = `sui:${SUI_NETWORK}`;
       const underlyingAccount = getWalletAccountForUiWalletAccount(account);
@@ -550,7 +563,9 @@ function normalizeWalrusWriteError(error: unknown) {
           ...error.details,
           source: error.details.source ?? "rpc",
           errorName: error.details.errorName ?? error.name,
+          errorMessage: error.details.errorMessage ?? getWalrusErrorMessage(error),
           causeMessage: error.details.causeMessage ?? getWalrusCauseMessage(error),
+          recoveryHint: error.details.recoveryHint ?? getWalrusRecoveryHint(error),
           responseBody: error.details.responseBody ?? getWalrusErrorResponseBody(error),
         },
         error,
@@ -572,7 +587,9 @@ function normalizeWalrusWriteError(error: unknown) {
           source: "upload-relay",
           status: getWalrusErrorStatus(error),
           errorName: error.name,
+          errorMessage: getWalrusErrorMessage(error),
           causeMessage: getWalrusCauseMessage(error),
+          recoveryHint: getWalrusRecoveryHint(error),
           url: getWalrusErrorUrl(error),
           responseBody: getWalrusErrorResponseBody(error),
         },
@@ -589,7 +606,9 @@ function normalizeWalrusWriteError(error: unknown) {
           source: error instanceof StorageNodeAPIError ? "upload-relay" : "unknown",
           status: getWalrusErrorStatus(error) ?? 429,
           errorName: error.name,
+          errorMessage: getWalrusErrorMessage(error),
           causeMessage: getWalrusCauseMessage(error),
+          recoveryHint: getWalrusRecoveryHint(error),
           url: getWalrusErrorUrl(error),
           responseBody: getWalrusErrorResponseBody(error),
         },
@@ -605,7 +624,9 @@ function normalizeWalrusWriteError(error: unknown) {
           source: "wallet",
           status: getWalrusErrorStatus(error),
           errorName: error.name,
+          errorMessage: getWalrusErrorMessage(error),
           causeMessage: getWalrusCauseMessage(error),
+          recoveryHint: getWalrusRecoveryHint(error),
           url: getWalrusErrorUrl(error),
           responseBody: getWalrusErrorResponseBody(error),
         },

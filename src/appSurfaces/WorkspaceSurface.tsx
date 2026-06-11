@@ -155,6 +155,7 @@ function PrivateRouteSurface({
                 blockedWalletRequired={!routeIsDashboardShell && routeMetadata.walletRequired && walletGateStatus === "disconnected"}
                 enabled={routeNeedsWorkspaceBoot && (!routeMetadata.walletRequired || routeReady || routeIsDashboardShell)}
                 routePath={routePath}
+                suppressAutomaticPendingSync={routeIsDashboardShell}
               />
             </Suspense>
             {mixedBuildStatus.detected ? (

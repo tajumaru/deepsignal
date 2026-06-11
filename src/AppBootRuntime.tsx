@@ -1,20 +1,16 @@
 import { useEffect } from "react";
+import { warmDashboardRouteEntry } from "./lib/dashboardRouteWarmup";
 import { getBrowserCapabilitiesSnapshot, logRouteLifecycle, setDeepSignalDebugReadiness } from "./lib/routeDiagnostics";
 import { scheduleIdleTask } from "./lib/scheduleIdleTask";
-import { retryLazyImport } from "./lib/lazyRetry";
 import { isDashboardBootPending, useDashboardProjectRestoreSnapshot } from "./lib/dashboardProjectRestore";
 
 function prefetchExploreRoute() {
-  void retryLazyImport(() => import("./pages/ExploreSignalsPage"), "prefetch-route-explore").catch(() => undefined);
+  // Speculative warming should stay quiet. Real route entry still uses retryLazyImport.
+  void import("./pages/ExploreSignalsPage").catch(() => undefined);
 }
 
 function prefetchInboxWorkspaceRoute() {
-  void Promise.allSettled([
-    retryLazyImport(() => import("./pages/AdminDashboardPage"), "prefetch-route-admin-dashboard"),
-    import("./components/AppShell"),
-    import("./lib/projectRegistry"),
-    import("./storage/storageFactory"),
-  ]);
+  warmDashboardRouteEntry("idle-prefetch");
 }
 
 function shouldPrefetchAdminWorkspace(pathname: string) {
@@ -40,10 +36,12 @@ export function WorkspaceRouteRuntimeEffects({
   blockedWalletRequired = false,
   enabled,
   routePath,
+  suppressAutomaticPendingSync = false,
 }: {
   blockedWalletRequired?: boolean;
   enabled: boolean;
   routePath: string;
+  suppressAutomaticPendingSync?: boolean;
 }) {
   const dashboardProjectRestore = useDashboardProjectRestoreSnapshot();
   const dashboardShellRoute = routePath === "/dashboard" || routePath.startsWith("/dashboard?");
@@ -97,7 +95,7 @@ export function WorkspaceRouteRuntimeEffects({
   ]);
 
   useEffect(() => {
-    if (!enabled) {
+    if (!enabled || suppressAutomaticPendingSync) {
       return undefined;
     }
 
@@ -112,7 +110,7 @@ export function WorkspaceRouteRuntimeEffects({
     retryPendingInboxSync();
     window.addEventListener("online", retryPendingInboxSync);
     return () => window.removeEventListener("online", retryPendingInboxSync);
-  }, [enabled]);
+  }, [enabled, suppressAutomaticPendingSync]);
 
   return null;
 }

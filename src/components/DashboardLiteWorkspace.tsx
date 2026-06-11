@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { WalletConnectSurface } from "./WalletConnectSurface";
 import { buildInfo } from "../lib/buildInfo";
 import { getBrowserCapabilitiesSnapshot, logRouteLifecycle } from "../lib/routeDiagnostics";
+import type { WalletSessionPhase } from "../walletSessionState";
 
 type ProjectSummaryLite = {
   formsCount?: number;
@@ -127,13 +129,17 @@ function formatSignalDate(value?: string) {
 export function DashboardLiteWorkspace({
   advancedLoadError,
   advancedLoading,
+  autoOpenAfterConnect,
   onOpenAdvancedWorkspace,
   routePath,
+  walletSessionPhase,
 }: {
   advancedLoadError?: unknown;
   advancedLoading: boolean;
+  autoOpenAfterConnect: boolean;
   onOpenAdvancedWorkspace: () => void;
   routePath: string;
+  walletSessionPhase: WalletSessionPhase;
 }) {
   const [snapshot, setSnapshot] = useState<LiteWorkspaceSnapshot>(() =>
     typeof window === "undefined"
@@ -185,14 +191,23 @@ export function DashboardLiteWorkspace({
     : advancedLoadError
       ? String(advancedLoadError)
       : "";
+  const walletConnected = walletSessionPhase === "connected";
+  const walletRestoring = walletSessionPhase === "restoring";
+  const walletDeferred = walletSessionPhase === "provider_deferred";
+  const showWalletConnectCta = !walletConnected;
+  const showAdvancedWorkspaceButton = walletConnected || !autoOpenAfterConnect;
 
   return (
     <main className="dashboard-degraded-shell" role="main" aria-label="Signal Intelligence Workspace">
       <section className="panel glow-panel route-status-panel">
         <p className="eyebrow">Signal Intelligence Workspace</p>
-        <h1>Local inbox ready</h1>
+        <h1>{walletConnected ? "Local inbox ready" : "Connect wallet to continue"}</h1>
         <p className="muted">
-          DeepSignal restored the local inbox first. Heavy reviewer tools stay deferred until you explicitly open the advanced workspace.
+          {walletConnected
+            ? "DeepSignal restored the local inbox first. Heavy reviewer tools stay deferred until you explicitly open the advanced workspace."
+            : autoOpenAfterConnect
+              ? "DeepSignal restored the local inbox first. Connect your reviewer wallet and the secure workspace will open automatically."
+              : "DeepSignal restored the local inbox first. Connect your reviewer wallet, then open the secure workspace."}
         </p>
         <dl className="route-status-metadata">
           <div>
@@ -217,10 +232,22 @@ export function DashboardLiteWorkspace({
           </div>
         </dl>
         {advancedErrorMessage ? <p className="muted">Advanced workspace failed: {advancedErrorMessage}</p> : null}
+        {showWalletConnectCta ? (
+          <div className="dashboard-lite-wallet-connect">
+            <WalletConnectSurface compact />
+            {walletRestoring || walletDeferred ? (
+              <p className="muted">
+                {walletRestoring ? "Restoring secure session..." : "Reviewer wallet stays dormant until you request it."}
+              </p>
+            ) : null}
+          </div>
+        ) : null}
         <div className="inline-actions">
-          <button type="button" className="primary-button" onClick={onOpenAdvancedWorkspace} disabled={advancedLoading}>
-            {advancedLoading ? "Opening advanced workspace..." : "Open advanced workspace"}
-          </button>
+          {showAdvancedWorkspaceButton ? (
+            <button type="button" className="primary-button" onClick={onOpenAdvancedWorkspace} disabled={advancedLoading}>
+              {advancedLoading ? "Opening advanced workspace..." : "Open advanced workspace"}
+            </button>
+          ) : null}
           <Link className="ghost-button" to="/create">
             Compose Signal
           </Link>

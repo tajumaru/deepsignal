@@ -1,8 +1,10 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { act, cleanup, render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AppRoot } from "./AppRoot";
 import { shouldRequestWalletProvidersOnMountForRoute } from "./walletProviderMountPolicy";
+
+const walletSurfaceRenderSpy = vi.fn();
 
 vi.mock("@mysten/dapp-kit-react", () => ({
   DAppKitProvider: ({ children }: { children: ReactNode }) => <>{children}</>,
@@ -21,6 +23,9 @@ vi.mock("./lib/mystenDappKitCompat", () => ({
   useWallets: () => [{ name: "Slush" }],
   useDisconnectWallet: () => ({
     mutateAsync: vi.fn(async () => undefined),
+  }),
+  useSignPersonalMessage: () => ({
+    mutateAsync: vi.fn(async () => ({ signature: "0xmock-signature" })),
   }),
   useSignAndExecuteTransaction: () => ({
     mutateAsync: vi.fn(async () => ({ digest: "0xmock-digest" })),
@@ -66,8 +71,11 @@ vi.mock("./components/WalletSurface", async () => {
   const { WalletSurfaceContext } = await vi.importActual<typeof import("./components/WalletSurfaceRuntime")>(
     "./components/WalletSurfaceRuntime"
   );
-      return {
-        WalletSurface: ({ children }: { children: ReactNode }) => (
+  return {
+    WalletSurface: ({ children }: { children: ReactNode }) => {
+      walletSurfaceRenderSpy();
+      return (
+        <div data-testid="wallet-surface">
           <WalletSurfaceContext.Provider
             value={{
               chunkLoaded: true,
@@ -85,7 +93,9 @@ vi.mock("./components/WalletSurface", async () => {
           >
             <WalletProviders>{children}</WalletProviders>
           </WalletSurfaceContext.Provider>
-    ),
+        </div>
+      );
+    },
   };
 });
 
@@ -115,6 +125,11 @@ vi.mock("./pages/FormBuilderPage", () => ({
   default: () => <h1>Create Signal Route</h1>,
 }));
 
+vi.mock("./pages/AdminDashboardPage", () => ({
+  AdminDashboardPage: () => <h1>Admin Route</h1>,
+  default: () => <h1>Admin Route</h1>,
+}));
+
 vi.mock("./pages/PublicFormPage", () => ({
   PublicFormPage: () => (
     <div>
@@ -131,7 +146,7 @@ vi.mock("./pages/PublicFormPage", () => ({
 }));
 
 function openHashRoute(route: string) {
-  window.history.pushState(null, "", `/#${route}`);
+  window.location.hash = `#${route}`;
 }
 
 describe("AppRoot query client regression", () => {
@@ -140,6 +155,7 @@ describe("AppRoot query client regression", () => {
   beforeEach(() => {
     window.localStorage.clear();
     window.sessionStorage.clear();
+    walletSurfaceRenderSpy.mockClear();
     window.matchMedia ??= ((query: string) => ({
       matches: false,
       media: query,
@@ -180,6 +196,7 @@ describe("AppRoot query client regression", () => {
     render(<AppRoot />);
 
     await screen.findByRole("heading", { name: "Create Signal Route" });
+    expect(walletSurfaceRenderSpy).toHaveBeenCalled();
     expect(consoleError.mock.calls.flat().map(String).join("\n")).not.toContain("No QueryClient set");
   });
 
@@ -190,6 +207,23 @@ describe("AppRoot query client regression", () => {
 
     await screen.findByRole("heading", { name: "Public Form Route" });
     expect(screen.getByText("Wallet-optional public route")).toBeInTheDocument();
+    expect(walletSurfaceRenderSpy).not.toHaveBeenCalled();
+    expect(consoleError.mock.calls.flat().map(String).join("\n")).not.toContain("No QueryClient set");
+  });
+
+  it("keeps wallet providers mounted after returning from admin to a public route", async () => {
+    openHashRoute("/admin");
+
+    render(<AppRoot />);
+
+    await screen.findByTestId("wallet-surface");
+
+    act(() => {
+      openHashRoute("/f/form-123?manifest=blob-abc");
+    });
+
+    await screen.findByRole("heading", { name: "Public Form Route" });
+    expect(screen.getByTestId("wallet-surface")).toBeInTheDocument();
     expect(consoleError.mock.calls.flat().map(String).join("\n")).not.toContain("No QueryClient set");
   });
 });

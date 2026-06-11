@@ -57,6 +57,7 @@ export const PENDING_SUBMISSION_QUEUE_CHANGED_EVENT = "deepsignal:pending-submis
 const REMOTE_SUBMISSION_INDEX_CACHE_TTL_MS = 15000;
 const REMOTE_SUBMISSION_INDEX_TIMEOUT_MS = 10000;
 const REMOTE_SUBMISSION_INDEX_CALLBACK_REGISTRY_KEY = "__deepsignalRemoteIndexCallbacks";
+const REMOTE_SUBMISSION_INDEX_CALLBACK_PUBLIC_KEY = "deepsignalRemoteIndexCallbacks";
 const submissionRelayUrl = String(import.meta.env.VITE_DEEPSIGNAL_SUBMISSION_RELAY_URL || "").replace(/\/$/, "");
 const submissionRelayIsAppsScript = submissionRelayUrl.includes("script.google.com/macros/");
 const remoteSubmissionIndexRequests = new Map<string, {
@@ -71,9 +72,15 @@ function getWindowCallbackRegistry() {
 function getRemoteSubmissionIndexCallbackRegistry() {
   const registryOwner = getWindowCallbackRegistry() as Record<string, unknown> & {
     [REMOTE_SUBMISSION_INDEX_CALLBACK_REGISTRY_KEY]?: Record<string, unknown>;
+    [REMOTE_SUBMISSION_INDEX_CALLBACK_PUBLIC_KEY]?: Record<string, unknown>;
   };
-  registryOwner[REMOTE_SUBMISSION_INDEX_CALLBACK_REGISTRY_KEY] ??= {};
-  return registryOwner[REMOTE_SUBMISSION_INDEX_CALLBACK_REGISTRY_KEY] as Record<string, unknown>;
+  const registry =
+    (registryOwner[REMOTE_SUBMISSION_INDEX_CALLBACK_REGISTRY_KEY] as Record<string, unknown> | undefined) ??
+    (registryOwner[REMOTE_SUBMISSION_INDEX_CALLBACK_PUBLIC_KEY] as Record<string, unknown> | undefined) ??
+    {};
+  registryOwner[REMOTE_SUBMISSION_INDEX_CALLBACK_REGISTRY_KEY] = registry;
+  registryOwner[REMOTE_SUBMISSION_INDEX_CALLBACK_PUBLIC_KEY] = registry;
+  return registry;
 }
 
 function notifyPendingQueueChanged() {

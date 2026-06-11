@@ -93,6 +93,52 @@
     padding: 0.62rem 0.72rem;
   }
 
+  .public-nft-gate-screen,
+  .public-nft-inline-card,
+  .public-nft-inline-card .section-row,
+  .public-nft-inline-card .section-row > div,
+  .public-nft-inline-card .public-identity-choice-wallet-shell,
+  .public-nft-inline-card .signal-chip,
+  .public-nft-inline-card .ghost-button,
+  .public-nft-inline-card .primary-button,
+  .nft-debug-panel,
+  .nft-debug-panel-body,
+  .nft-debug-header,
+  .nft-debug-grid,
+  .nft-debug-card {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .nft-debug-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .nft-debug-grid {
+    grid-template-columns: 1fr;
+    gap: 0.62rem;
+  }
+
+  .nft-debug-card {
+    padding: 0.68rem;
+    border-radius: 0.82rem;
+  }
+
+  .nft-debug-card strong,
+  .nft-debug-card .muted,
+  .nft-debug-inline-value,
+  .nft-debug-pre,
+  .nft-debug-fallback-textarea {
+    font-size: 0.7rem;
+    line-height: 1.38;
+  }
+
+  .nft-debug-copy-button {
+    width: 100%;
+    justify-content: center;
+  }
+
   .public-identity-choice-hero,
   .public-identity-choice-footer,
   .public-identity-choice-footer-copy {

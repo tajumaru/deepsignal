@@ -5,7 +5,7 @@ import { logRouteLifecycle } from "../lib/routeDiagnostics";
 import { isSuiRateLimitError } from "../lib/sui";
 import type { OwnedObjectEntry } from "../lib/nftOwnershipShared";
 import { handleRateLimitedRpcFallback, useRpcInfrastructure } from "../rpcInfrastructure";
-import { useRpcSuiClient } from "./useRpcSuiClient";
+import { useReadOnlyCoreSuiClient } from "./useReadOnlyCoreSuiClient";
 
 const OWNED_OBJECTS_CACHE_PREFIX = "deepsignal.ownedObjects";
 let nftOwnershipModulePromise: Promise<typeof import("../lib/nftOwnership")> | null = null;
@@ -19,7 +19,7 @@ export function useOwnedSuiObjects(
   address?: string | null,
   options: { enabled?: boolean; structTypes?: string[] } = {},
 ) {
-  const suiClient = useRpcSuiClient();
+  const suiClient = useReadOnlyCoreSuiClient();
   const rpc = useRpcInfrastructure();
   const queryEnabled = options.enabled ?? true;
   const structTypes = options.structTypes ?? [];

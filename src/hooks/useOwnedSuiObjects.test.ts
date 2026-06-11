@@ -108,6 +108,9 @@ describe("fetchOwnedSuiObjectsForClient", () => {
       }),
     );
     expect(result).toHaveLength(2);
-    expect(result.map((entry) => entry.data?.objectId)).toEqual(["0x1", "0x2"]);
+    expect(result.map((entry) => entry.data?.objectId)).toEqual([
+      "0x0000000000000000000000000000000000000000000000000000000000000001",
+      "0x0000000000000000000000000000000000000000000000000000000000000002",
+    ]);
   });
 });

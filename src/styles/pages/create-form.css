@@ -3499,7 +3499,7 @@
 
 .composer-library-list {
   display: grid;
-  gap: 0.7rem;
+  gap: 1rem;
 }
 
 .composer-library-scroll {
@@ -3511,36 +3511,102 @@
   display: none;
 }
 
+.composer-library-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.8rem 0.95rem;
+  border-radius: 18px;
+  border: 1px solid rgba(109, 232, 255, 0.12);
+  background:
+    radial-gradient(circle at top left, rgba(86, 255, 192, 0.14), transparent 42%),
+    rgba(4, 18, 31, 0.58);
+}
+
+.composer-library-summary strong {
+  font-size: 0.95rem;
+}
+
+.composer-library-summary span {
+  color: rgba(216, 247, 255, 0.74);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.composer-library-category {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.composer-library-category-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.composer-library-category-header strong {
+  font-size: 0.82rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(215, 246, 255, 0.78);
+}
+
+.composer-library-category-grid {
+  display: grid;
+  gap: 0.7rem;
+}
+
 .composer-library-card {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-columns: 3rem minmax(0, 1fr);
   gap: 0.8rem;
   align-items: start;
   width: 100%;
   text-align: left;
-  padding: 0.95rem 1rem;
-  border-radius: 20px;
-  border: 1px solid rgba(116, 226, 255, 0.14);
+  min-height: 88px;
+  padding: 1rem;
+  border-radius: 22px;
+  border: 1px solid rgba(116, 226, 255, 0.12);
   background: rgba(5, 18, 29, 0.82);
   color: inherit;
-  transition: border-color var(--transition-fast), transform var(--transition-fast), box-shadow var(--transition-fast);
+  transition:
+    border-color var(--transition-fast),
+    transform var(--transition-fast),
+    box-shadow var(--transition-fast),
+    background var(--transition-fast);
 }
 
 .composer-library-card:hover:not(:disabled),
 .composer-library-card:focus-visible:not(:disabled) {
-  transform: translateY(-1px);
-  border-color: rgba(135, 244, 255, 0.34);
-  box-shadow: 0 18px 28px rgba(0, 0, 0, 0.16);
+  transform: translateY(-2px);
+  border-color: rgba(96, 255, 210, 0.35);
+  box-shadow: 0 0 24px rgba(64, 255, 190, 0.12);
 }
 
-.composer-library-card:disabled {
-  cursor: default;
-  opacity: 0.78;
+.composer-library-card.is-selected {
+  border-color: rgba(96, 255, 210, 0.38);
+  box-shadow:
+    0 0 0 1px rgba(96, 255, 210, 0.12),
+    0 0 30px rgba(64, 255, 190, 0.1);
+}
+
+.composer-library-card.is-dragging {
+  transform: scale(0.985);
+  border-color: rgba(96, 255, 210, 0.42);
+  box-shadow: 0 0 34px rgba(64, 255, 190, 0.18);
+}
+
+.composer-library-card.is-featured {
+  background:
+    radial-gradient(circle at top right, rgba(82, 240, 174, 0.12), transparent 40%),
+    rgba(5, 18, 29, 0.86);
 }
 
 .composer-library-card-topline {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr);
   gap: 0.6rem;
   align-items: center;
   justify-content: space-between;
@@ -3548,85 +3614,253 @@
 
 .composer-library-card-topline strong {
   min-width: 0;
+  font-size: 0.97rem;
 }
 
 .composer-library-card-icon {
   display: inline-grid;
   place-items: center;
-  width: 2.75rem;
-  height: 2.75rem;
-  border-radius: 16px;
+  width: 3rem;
+  height: 3rem;
+  border-radius: 18px;
   border: 1px solid rgba(116, 226, 255, 0.16);
   background:
     radial-gradient(circle at top left, rgba(102, 227, 255, 0.18), transparent 48%),
     rgba(8, 24, 37, 0.9);
   color: #c9f8ff;
-  font-size: 1.05rem;
-  font-weight: 700;
-  letter-spacing: 0.02em;
   box-shadow: inset 0 1px 0 rgba(204, 248, 255, 0.06);
 }
 
-.composer-library-card-icon.is-drop,
-.composer-field-type-icon.is-drop {
-  color: #7fffd0;
+.composer-library-card-icon svg {
+  width: 1.3rem;
+  height: 1.3rem;
 }
 
 .composer-library-card-copy {
   display: grid;
-  gap: 0.32rem;
+  gap: 0.45rem;
   min-width: 0;
 }
 
-.composer-library-legend {
+.composer-library-card-copy small {
+  line-height: 1.35;
+}
+
+.composer-library-card-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.composer-library-drag-label {
   display: inline-flex;
   align-items: center;
-  gap: 0.4rem;
-  width: fit-content;
-  color: rgba(214, 248, 255, 0.74);
-  font-size: 0.76rem;
+  min-height: 1.55rem;
+  padding: 0.18rem 0.55rem;
+  border-radius: var(--radius-pill);
+  background: rgba(91, 228, 255, 0.08);
+  color: rgba(205, 245, 255, 0.84);
+  font-size: 0.73rem;
   font-weight: 700;
-}
-
-.composer-library-chip {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 1.5rem;
-  padding: 0.12rem 0.55rem;
-  border-radius: var(--radius-pill);
-  font-size: 0.78rem;
-}
-
-.composer-library-chip.is-ready {
-  width: 1.5rem;
-  min-width: 1.5rem;
-  padding: 0;
-  color: #89f2d2;
-  background: rgba(82, 240, 174, 0.08);
-  border: 1px solid rgba(108, 255, 207, 0.16);
-  box-shadow: inset 0 0 12px rgba(82, 240, 174, 0.08);
-}
-
-.composer-library-status-dot {
-  display: inline-block;
-  width: 0.48rem;
-  height: 0.48rem;
-  flex: 0 0 auto;
-  border-radius: var(--radius-pill);
-  background: #52f0ae;
-  box-shadow: 0 0 0 3px rgba(82, 240, 174, 0.12), 0 0 14px rgba(82, 240, 174, 0.42);
-}
-
-.composer-library-chip.is-soon {
-  color: #ffd9a0;
-  background: rgba(66, 44, 13, 0.72);
-  border: 1px solid rgba(255, 194, 92, 0.16);
 }
 
 .composer-library-footer {
   display: grid;
   gap: 0.75rem;
+}
+
+.composer-library-preview {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: 2rem;
+  padding: 0.45rem 0.6rem;
+  border-radius: 14px;
+  border: 1px solid rgba(109, 232, 255, 0.1);
+  background: rgba(3, 15, 25, 0.72);
+  overflow: hidden;
+}
+
+.composer-library-preview span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.composer-library-preview.is-short-text::before {
+  content: "";
+  width: 100%;
+  height: 0.85rem;
+  border-radius: 999px;
+  border: 1px solid rgba(109, 232, 255, 0.18);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.composer-library-preview.is-long-text {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.composer-library-preview.is-long-text span {
+  width: 100%;
+  height: 0.35rem;
+  border-radius: 999px;
+  background: rgba(219, 247, 255, 0.16);
+}
+
+.composer-library-preview.is-long-text span:last-child {
+  width: 65%;
+}
+
+.composer-library-preview.is-markdown span,
+.composer-library-preview.is-date span,
+.composer-library-preview.is-emotion span {
+  min-height: 1.35rem;
+  padding: 0 0.45rem;
+  border-radius: 999px;
+  border: 1px solid rgba(109, 232, 255, 0.12);
+  background: rgba(255, 255, 255, 0.03);
+  font-size: 0.68rem;
+  font-weight: 700;
+}
+
+.composer-library-preview.is-dropdown {
+  justify-content: space-between;
+  width: 100%;
+  color: rgba(219, 247, 255, 0.72);
+  font-size: 0.73rem;
+}
+
+.composer-library-preview.is-checkbox {
+  display: grid;
+  gap: 0.16rem;
+  color: rgba(219, 247, 255, 0.72);
+  font-size: 0.73rem;
+}
+
+.composer-library-preview.is-matrix {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.22rem;
+  width: 100%;
+}
+
+.composer-library-preview.is-matrix span {
+  min-height: 0.7rem;
+  border-radius: 8px;
+  background: rgba(219, 247, 255, 0.14);
+}
+
+.composer-library-preview.is-location {
+  position: relative;
+}
+
+.composer-library-preview-pin {
+  width: 0.8rem;
+  height: 0.8rem;
+  border-radius: 999px 999px 999px 0;
+  transform: rotate(-45deg);
+  background: linear-gradient(135deg, #76f0ff, #4ef0af);
+  box-shadow: 0 0 14px rgba(78, 240, 175, 0.22);
+}
+
+.composer-library-preview-path {
+  flex: 1 1 auto;
+  height: 2px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(118, 240, 255, 0.3), rgba(78, 240, 175, 0.85));
+}
+
+.composer-library-preview.is-confirmation {
+  justify-content: flex-start;
+  color: rgba(205, 245, 255, 0.82);
+  font-size: 0.74rem;
+  font-weight: 700;
+}
+
+.composer-library-preview.is-confirmation span:first-child {
+  width: 1.15rem;
+  height: 1.15rem;
+  border-radius: 7px;
+  background: rgba(82, 240, 174, 0.12);
+  color: #8dffd6;
+}
+
+.composer-library-preview.is-upload {
+  justify-content: center;
+  border-style: dashed;
+  color: rgba(205, 245, 255, 0.72);
+  font-size: 0.72rem;
+}
+
+.composer-library-preview.is-video {
+  justify-content: center;
+}
+
+.composer-library-preview-play {
+  width: 1.8rem;
+  height: 1.2rem;
+  border-radius: 8px;
+  background: rgba(109, 232, 255, 0.12);
+  position: relative;
+}
+
+.composer-library-preview-play::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-40%, -50%);
+  width: 0;
+  height: 0;
+  border-top: 0.28rem solid transparent;
+  border-bottom: 0.28rem solid transparent;
+  border-left: 0.42rem solid rgba(205, 245, 255, 0.85);
+}
+
+.composer-library-preview.is-voice {
+  justify-content: center;
+  gap: 0.18rem;
+}
+
+.composer-library-preview.is-voice span {
+  width: 0.18rem;
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(118, 240, 255, 0.9), rgba(78, 240, 175, 0.35));
+}
+
+.composer-library-preview.is-voice span:nth-child(1),
+.composer-library-preview.is-voice span:nth-child(6) {
+  height: 0.65rem;
+}
+
+.composer-library-preview.is-voice span:nth-child(2),
+.composer-library-preview.is-voice span:nth-child(5) {
+  height: 1rem;
+}
+
+.composer-library-preview.is-voice span:nth-child(3),
+.composer-library-preview.is-voice span:nth-child(4) {
+  height: 1.3rem;
+}
+
+.composer-library-preview.is-url,
+.composer-library-preview.is-wallet {
+  color: rgba(205, 245, 255, 0.72);
+  font-size: 0.72rem;
+}
+
+.composer-library-preview.is-rating {
+  color: #ffd98d;
+  font-size: 0.82rem;
+}
+
+.composer-question-stack.is-library-drag-over,
+.composer-empty-canvas.is-library-drag-over,
+.composer-inline-section.is-library-drop-target {
+  border-color: rgba(96, 255, 210, 0.32);
+  box-shadow: 0 0 0 1px rgba(96, 255, 210, 0.12), 0 0 28px rgba(64, 255, 190, 0.08);
 }
 
 .composer-canvas-intro {
@@ -3652,6 +3886,21 @@
   display: grid;
   gap: 0.8rem;
   justify-items: start;
+}
+
+.composer-empty-canvas {
+  padding: 1.2rem;
+  border-radius: 22px;
+  border: 1px dashed rgba(109, 232, 255, 0.18);
+  background:
+    radial-gradient(circle at top right, rgba(82, 240, 174, 0.1), transparent 40%),
+    rgba(4, 18, 31, 0.42);
+}
+
+.composer-empty-canvas-quick-add {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
 }
 
 .signal-composition-studio .composer-library-panel,
@@ -7207,5 +7456,348 @@ body.composer-mode .bg-orb {
     min-height: 2.15rem;
     padding: 0.28rem 0.56rem;
     font-size: 0.88rem;
+  }
+}
+
+@media (max-width: 430px) {
+  body,
+  main,
+  .composer-shell,
+  .composer-builder-grid,
+  .composer-builder-grid-composer,
+  .composer-builder-column,
+  .composer-library-panel,
+  .composer-canvas-panel {
+    overflow-x: hidden;
+  }
+
+  .composer-shell.is-mobile-builder-mode {
+    gap: 0.85rem;
+    padding-bottom: calc(110px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .composer-shell.is-mobile-builder-mode .composer-builder-grid,
+  .composer-shell.is-mobile-builder-mode .composer-builder-grid-composer {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.8rem;
+  }
+
+  .composer-shell.is-mobile-builder-mode .composer-pane-heading {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .composer-shell.is-mobile-builder-mode .composer-pane-heading-action {
+    min-width: 0;
+    margin-left: auto;
+  }
+
+  .composer-mobile-builder-intro {
+    margin-top: 0.2rem;
+  }
+
+  .composer-mobile-builder-intro summary {
+    color: rgba(216, 247, 255, 0.74);
+    font-size: 0.76rem;
+    cursor: pointer;
+    list-style: none;
+  }
+
+  .composer-mobile-builder-intro summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .composer-mobile-builder-intro[open] .muted {
+    margin-top: 0.45rem;
+  }
+
+  .is-mobile-hidden {
+    display: none !important;
+  }
+
+  .composer-shell.is-mobile-builder-mode .composer-library-scroll,
+  .composer-shell.is-mobile-builder-mode .composer-library-list,
+  .composer-shell.is-mobile-builder-mode .composer-library-category-grid,
+  .composer-shell.is-mobile-builder-mode .composer-question-stack,
+  .composer-shell.is-mobile-builder-mode .composer-question-node {
+    gap: 0.65rem;
+  }
+
+  .composer-shell.is-mobile-builder-mode .composer-library-card {
+    align-items: center;
+    min-width: 0;
+    max-width: 100%;
+    min-height: 0;
+    padding: 0.78rem 0.82rem;
+    border-radius: 18px;
+  }
+
+  .composer-shell.is-mobile-builder-mode .composer-library-card.is-mobile-compact {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+
+  .composer-shell.is-mobile-builder-mode .composer-library-card-copy {
+    gap: 0.22rem;
+    min-width: 0;
+  }
+
+  .composer-shell.is-mobile-builder-mode .composer-library-card-topline strong {
+    display: -webkit-box;
+    overflow: hidden;
+    font-size: 0.92rem;
+    line-height: 1.18;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 1;
+  }
+
+  .composer-shell.is-mobile-builder-mode .composer-library-card-copy small {
+    display: -webkit-box;
+    overflow: hidden;
+    font-size: 0.75rem;
+    line-height: 1.3;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 1;
+  }
+
+  .composer-shell.is-mobile-builder-mode .composer-library-preview,
+  .composer-shell.is-mobile-builder-mode .composer-library-drag-label {
+    display: none;
+  }
+
+  .composer-library-add-button {
+    min-height: 2.35rem;
+    padding-inline: 0.82rem;
+    white-space: nowrap;
+  }
+
+  .composer-library-add-pill {
+    display: inline-flex;
+    align-items: center;
+    min-height: 1.45rem;
+    padding: 0.14rem 0.52rem;
+    border-radius: 999px;
+    background: rgba(91, 228, 255, 0.08);
+    color: rgba(205, 245, 255, 0.84);
+    font-size: 0.71rem;
+    font-weight: 700;
+  }
+
+  .composer-shell.is-mobile-builder-mode .composer-library-card-icon {
+    width: 2.45rem;
+    height: 2.45rem;
+    border-radius: 14px;
+  }
+
+  .composer-shell.is-mobile-builder-mode .composer-library-card-icon svg {
+    width: 1.08rem;
+    height: 1.08rem;
+  }
+
+  .composer-shell.is-mobile-builder-mode .composer-library-footer .muted {
+    display: none;
+  }
+
+  .composer-shell.is-mobile-builder-mode .composer-canvas-panel {
+    gap: 0.8rem;
+    padding-bottom: calc(0.4rem + env(safe-area-inset-bottom, 0px));
+  }
+
+  .composer-shell.is-mobile-builder-mode .composer-canvas-header-actions {
+    width: 100%;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 0.55rem;
+  }
+
+  .composer-shell.is-mobile-builder-mode .composer-canvas-header-actions .ghost-button,
+  .composer-shell.is-mobile-builder-mode .composer-canvas-header-actions .primary-button {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .composer-shell.is-mobile-builder-mode .composer-canvas-intro .muted {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+
+  .composer-shell.is-mobile-builder-mode .composer-inline-section,
+  .composer-shell.is-mobile-builder-mode .composer-empty-canvas,
+  .composer-shell.is-mobile-builder-mode .question-card {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  .composer-shell.is-mobile-builder-mode .composer-inline-section-header {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.55rem;
+    align-items: start;
+  }
+
+  .composer-shell.is-mobile-builder-mode .composer-inline-section-main {
+    display: grid;
+    gap: 0.4rem;
+  }
+
+  .composer-shell.is-mobile-builder-mode .composer-inline-section-title,
+  .composer-shell.is-mobile-builder-mode .composer-inline-section-description,
+  .composer-shell.is-mobile-builder-mode .question-card-inline-input,
+  .composer-shell.is-mobile-builder-mode .composer-canvas-help-input,
+  .composer-shell.is-mobile-builder-mode .question-card-details input,
+  .composer-shell.is-mobile-builder-mode .question-card-details textarea,
+  .composer-shell.is-mobile-builder-mode .question-card-details select,
+  .composer-modal-panel input,
+  .composer-modal-panel textarea,
+  .composer-modal-panel select {
+    font-size: 16px;
+  }
+
+  .composer-shell.is-mobile-builder-mode .question-card {
+    padding: 0.82rem 0.88rem;
+    border-radius: 18px;
+  }
+
+  .composer-shell.is-mobile-builder-mode .question-card.is-mobile-compact .question-card-summary {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: 0.62rem;
+    align-items: center;
+  }
+
+  .question-card-mobile-icon {
+    display: inline-grid;
+    place-items: center;
+    width: 2rem;
+    height: 2rem;
+    border-radius: 12px;
+    background: rgba(102, 227, 255, 0.1);
+    color: var(--accent-strong);
+    font-size: 0.82rem;
+    font-weight: 800;
+  }
+
+  .question-card-mobile-summary-button {
+    display: grid;
+    gap: 0.18rem;
+    padding: 0;
+    border: 0;
+    color: inherit;
+    text-align: left;
+    background: transparent;
+  }
+
+  .question-card-mobile-summary-button strong,
+  .question-card-mobile-summary-button small {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .composer-shell.is-mobile-builder-mode .question-card-topline {
+    gap: 0.42rem;
+  }
+
+  .composer-shell.is-mobile-builder-mode .question-card-index,
+  .composer-shell.is-mobile-builder-mode .question-card-type,
+  .composer-shell.is-mobile-builder-mode .question-card-badge {
+    min-height: 1.55rem;
+    padding: 0.14rem 0.52rem;
+    font-size: 0.72rem;
+  }
+
+  .composer-shell.is-mobile-builder-mode .question-card-actions {
+    gap: 0.35rem;
+  }
+
+  .composer-shell.is-mobile-builder-mode .question-card-actions .icon-button {
+    min-width: 2.1rem;
+    min-height: 2.1rem;
+    padding: 0.35rem 0.45rem;
+  }
+
+  .composer-shell.is-mobile-builder-mode .question-card-menu-panel {
+    right: 0;
+    left: auto;
+    min-width: 150px;
+  }
+
+  .composer-shell.is-mobile-builder-mode .composer-conditional-branch {
+    margin-left: 0.85rem;
+    padding-left: 0.85rem;
+  }
+
+  .composer-shell.is-mobile-builder-mode .composer-canvas-card.is-mobile-sheet {
+    position: relative;
+    z-index: 20;
+  }
+
+  .composer-mobile-editor-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 19;
+    border: 0;
+    background: rgba(2, 11, 18, 0.68);
+  }
+
+  .composer-shell.is-mobile-builder-mode .composer-canvas-card.is-mobile-sheet .composer-canvas-card-head,
+  .composer-shell.is-mobile-builder-mode .composer-canvas-card.is-mobile-sheet .composer-canvas-card-body {
+    position: fixed;
+    left: max(0.6rem, env(safe-area-inset-left, 0px));
+    right: max(0.6rem, env(safe-area-inset-right, 0px));
+    background: rgba(6, 18, 29, 0.98);
+    z-index: 20;
+  }
+
+  .composer-shell.is-mobile-builder-mode .composer-canvas-card.is-mobile-sheet .composer-canvas-card-head {
+    bottom: calc(28rem + env(safe-area-inset-bottom, 0px));
+    padding: 0.82rem 0.88rem 0.64rem;
+    border-radius: 22px 22px 0 0;
+    border: 1px solid rgba(116, 226, 255, 0.18);
+    border-bottom: 0;
+  }
+
+  .composer-shell.is-mobile-builder-mode .composer-canvas-card.is-mobile-sheet .composer-canvas-card-body {
+    bottom: calc(4.6rem + env(safe-area-inset-bottom, 0px));
+    max-height: 28rem;
+    padding: 0.92rem 0.88rem calc(1rem + env(safe-area-inset-bottom, 0px));
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    border-radius: 0 0 22px 22px;
+    border: 1px solid rgba(116, 226, 255, 0.18);
+    box-shadow: 0 -20px 48px rgba(0, 0, 0, 0.36);
+  }
+
+  .composer-shell.is-mobile-builder-mode .composer-canvas-card.is-mobile-sheet .composer-canvas-preview {
+    display: none;
+  }
+
+  .composer-shell.is-mobile-builder-mode .composer-canvas-card.is-mobile-sheet .composer-question-row,
+  .composer-shell.is-mobile-builder-mode .composer-canvas-card.is-mobile-sheet .composer-conditional-rule-row,
+  .composer-shell.is-mobile-builder-mode .composer-canvas-card.is-mobile-sheet .composer-option-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .composer-shell.is-mobile-builder-mode .builder-bottom-actions,
+  .composer-shell.is-mobile-builder-mode .composer-step-actions {
+    padding-bottom: calc(0.3rem + env(safe-area-inset-bottom, 0px));
+  }
+
+  .composer-modal {
+    padding: 0;
+    align-items: end;
+  }
+
+  .composer-modal-panel {
+    width: 100%;
+    max-width: 100%;
+    max-height: min(82svh, 82dvh);
+    margin-top: auto;
+    padding:
+      1rem
+      max(1rem, env(safe-area-inset-right, 0px))
+      calc(1rem + env(safe-area-inset-bottom, 0px))
+      max(1rem, env(safe-area-inset-left, 0px));
+    border-radius: 22px 22px 0 0;
   }
 }

@@ -91,6 +91,10 @@ export function normalizeSuiTypeName(value?: string | null) {
   return normalizeStructTagLightweight(trimmed);
 }
 
+export function normalizeSuiType(value?: string | null) {
+  return normalizeSuiTypeName(value);
+}
+
 export function normalizeStructType(value?: string | null) {
   return normalizeSuiTypeName(value);
 }

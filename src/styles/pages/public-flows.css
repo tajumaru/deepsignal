@@ -682,6 +682,125 @@ img.public-identity-choice-hero-art {
   overflow: auto;
 }
 
+.nft-debug-panel {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.nft-debug-panel > :not(summary),
+.nft-debug-panel-body,
+.nft-debug-header,
+.nft-debug-grid,
+.nft-debug-card,
+.nft-debug-card-header {
+  min-width: 0;
+}
+
+.nft-debug-panel-body {
+  display: grid;
+  gap: 0.85rem;
+  max-width: 100%;
+}
+
+.nft-debug-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.nft-debug-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.nft-debug-card {
+  display: grid;
+  gap: 0.45rem;
+  padding: 0.8rem;
+  border-radius: 0.95rem;
+  border: 1px solid rgba(116, 226, 255, 0.12);
+  background: rgba(7, 19, 31, 0.68);
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.nft-debug-card-wide {
+  grid-column: 1 / -1;
+}
+
+.nft-debug-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.55rem;
+}
+
+.nft-debug-copy-button {
+  flex-shrink: 0;
+}
+
+.nft-debug-inline-value,
+.nft-debug-pre,
+.nft-debug-fallback-textarea {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  box-sizing: border-box;
+}
+
+.nft-debug-inline-value {
+  padding: 0.55rem 0.65rem;
+  border-radius: 0.7rem;
+  border: 1px solid rgba(116, 226, 255, 0.12);
+  background: rgba(4, 12, 21, 0.78);
+  color: rgba(219, 247, 255, 0.92);
+  font-size: 0.76rem;
+  line-height: 1.45;
+}
+
+.nft-debug-pre {
+  margin: 0;
+  padding: 0.65rem 0.75rem;
+  border-radius: 0.78rem;
+  border: 1px solid rgba(116, 226, 255, 0.1);
+  background: rgba(3, 10, 18, 0.78);
+  font-size: 0.72rem;
+  line-height: 1.42;
+}
+
+.nft-debug-pre-compact {
+  padding-top: 0.55rem;
+}
+
+.nft-debug-fallback {
+  display: grid;
+  gap: 0.45rem;
+  padding: 0.8rem;
+  border-radius: 0.9rem;
+  border: 1px solid rgba(255, 189, 107, 0.2);
+  background: rgba(61, 35, 10, 0.34);
+}
+
+.nft-debug-fallback-textarea {
+  min-height: 10rem;
+  resize: vertical;
+  border-radius: 0.8rem;
+  border: 1px solid rgba(116, 226, 255, 0.12);
+  background: rgba(2, 9, 18, 0.9);
+  color: rgba(222, 246, 255, 0.94);
+  padding: 0.75rem;
+  font: inherit;
+}
+
 .public-identity-choice-help {
   min-height: 2.6rem;
   padding: 0.7rem 1rem;

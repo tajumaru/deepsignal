@@ -79,4 +79,14 @@ describe("useAccessControl", () => {
     expect(result.current.capabilityProfile.ownerCapIds).toEqual(["0xowner-cap"]);
     expect(result.current.isLoadingAccess).toBe(false);
   });
+
+  it("returns a safe wallet-unavailable fallback when no address is available", () => {
+    const { result } = renderHook(() => useAccessControl(undefined));
+
+    expect(result.current.mode).toBe("wallet_unavailable");
+    expect(result.current.canWrite).toBe(false);
+    expect(result.current.canAdmin).toBe(false);
+    expect(result.current.address).toBe(null);
+    expect(result.current.isLoadingAccess).toBe(false);
+  });
 });

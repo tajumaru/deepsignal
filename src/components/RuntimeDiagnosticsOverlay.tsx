@@ -1,4 +1,5 @@
 import { useMemo, useState, useSyncExternalStore } from "react";
+import { useLocation } from "react-router-dom";
 import {
   copyRouteLifecycleDiagnosticsToClipboard,
   downloadRouteLifecycleDiagnostics,
@@ -7,6 +8,7 @@ import {
 } from "../lib/routeDiagnostics";
 
 export function RuntimeDiagnosticsOverlay() {
+  const location = useLocation();
   const recentEvents = useSyncExternalStore(
     subscribeRecentRuntimeEvents,
     getRecentRuntimeEventsSnapshot,
@@ -15,6 +17,14 @@ export function RuntimeDiagnosticsOverlay() {
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const latestEvents = useMemo(() => [...recentEvents].reverse().slice(0, 40), [recentEvents]);
+  const compactCreateBuilderRoute =
+    typeof window !== "undefined" &&
+    window.matchMedia?.("(max-width: 430px)").matches &&
+    (location.pathname === "/create" || location.pathname === "/compose");
+
+  if (compactCreateBuilderRoute) {
+    return null;
+  }
 
   async function handleCopyDiagnostics() {
     try {

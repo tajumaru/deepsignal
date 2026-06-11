@@ -38,6 +38,7 @@ import {
 } from "../features/createForm/utils";
 import type { FormSchema, Submission } from "../types";
 import { useOptionalWalletActions } from "../walletStatus";
+import { useWalletSessionState } from "../walletSessionState";
 
 const BuilderToolbar = lazy(() =>
   retryLazyImport(() => import("../features/createForm/components/BuilderToolbar"), "form-builder-toolbar").then((module) => ({
@@ -103,6 +104,16 @@ interface ComposerHomeState {
   drafts: ComposerHomeDraft[];
   signals: ComposerHomeSignal[];
   error: string;
+}
+
+function WalletRequiredCta({ body }: { body: string }) {
+  return (
+    <section className="panel composer-version-panel" aria-live="polite">
+      <p className="eyebrow">Wallet required</p>
+      <strong>Connect wallet to publish</strong>
+      <span className="muted">{body}</span>
+    </section>
+  );
 }
 
 function formatRelativeSignalTime(value: string | undefined, t: ReturnType<typeof useI18n>["t"]) {
@@ -560,11 +571,17 @@ function FormBuilderComposer({
 }: FormBuilderComposerProps) {
   const { t, language } = useI18n();
   const wallet = useSuiWallet();
+  const walletSession = useWalletSessionState();
   const walletActions = useOptionalWalletActions();
   const suiClient = useRpcSuiClient();
-  const { capabilityProfile, isLoadingAccess } = useAccessControl(wallet.accountAddress);
+  const walletOnlyUiDeferred =
+    !walletSession.providerMounted || walletSession.providerLoading || walletSession.phase === "provider_deferred";
+  const { capabilityProfile, isLoadingAccess } = useAccessControl(wallet.accountAddress, {
+    enabled: !walletOnlyUiDeferred,
+  });
   const { projects } = useProjectRegistry(wallet.accountAddress);
   const composerShellRef = useRef<HTMLElement | null>(null);
+  const [isMobileBuilderMode, setIsMobileBuilderMode] = useState(false);
   const pendingTemplateScrollRef = useRef(false);
   const [isScrolled, setIsScrolled] = useState(false);
   const [storageRuntime, setStorageRuntime] = useState(() => getStorageRuntimeStatus());
@@ -836,6 +853,24 @@ function FormBuilderComposer({
   }, [freshStartToken]);
 
   useEffect(() => {
+    if (typeof window === "undefined" || !window.matchMedia) {
+      return undefined;
+    }
+
+    const mediaQuery = window.matchMedia("(max-width: 430px)");
+    const syncViewport = () => setIsMobileBuilderMode(mediaQuery.matches);
+    syncViewport();
+
+    if (typeof mediaQuery.addEventListener === "function") {
+      mediaQuery.addEventListener("change", syncViewport);
+      return () => mediaQuery.removeEventListener("change", syncViewport);
+    }
+
+    mediaQuery.addListener(syncViewport);
+    return () => mediaQuery.removeListener(syncViewport);
+  }, []);
+
+  useEffect(() => {
     if (builder.values.currentStep !== "template" || !pendingTemplateScrollRef.current) {
       return;
     }
@@ -994,6 +1029,7 @@ function FormBuilderComposer({
             fields={builder.values.fields}
             sections={builder.values.sections}
             encryptSubmissions={builder.values.encryptSubmissions}
+            activeFieldId={builder.values.activeFieldId}
             draggedFieldId={builder.values.draggedFieldId}
             dragOverFieldId={builder.values.dragOverFieldId}
             dragOverPlacement={builder.values.dragOverPlacement}
@@ -1021,82 +1057,91 @@ function FormBuilderComposer({
 
       {builder.values.currentStep === "publish" ? (
         <Suspense fallback={<div className="panel">Loading publish controls...</div>}>
-          <PublishStep
-            t={t}
-            language={language}
-            saving={publish.saving}
-            registeringOnSui={publish.registeringOnSui}
-            error={publish.error}
-            failure={publish.failure}
-            diagnosticsCopied={publish.diagnosticsCopied}
-            savedForm={publish.savedForm}
-            title={builder.values.title}
-            description={builder.values.description}
-            headerImage={builder.values.headerImage}
-            headerLogo={builder.values.headerLogo}
-            fields={builder.values.fields}
-            sections={builder.values.sections}
-            analysisProfileId={builder.values.analysisProfileId}
-            signalType={builder.values.signalType}
-            analystType={builder.values.analystType}
-            analysisType={builder.values.analysisType}
-            visibility={builder.values.visibility}
-            identityPolicy={builder.values.identityPolicy}
-            accessMode={builder.values.accessMode}
-            nftGate={builder.values.nftGate}
-            locationRequirement={builder.values.locationRequirement}
-            encryptSubmissions={builder.values.encryptSubmissions}
-            responseOpenAtCustom={builder.values.responseOpenAtCustom}
-            responseDeadlinePreset={builder.values.responseDeadlinePreset}
-            responseDeadlineCustomAt={builder.values.responseDeadlineCustomAt}
-            mobilePane={builder.values.mobilePane}
-            isReadyToPublish={builder.isReadyToPublish}
-            publicPath={publish.publicPath}
-            publicUrl={publish.publicUrl}
-            publishChecks={publish.publishChecks}
-            encryptionWarnings={encryptionWarnings}
-            showPublishSuccessView={showPublishSuccessView}
-            showWalrusDiagnostics={showWalrusDiagnostics}
-            isGuestDraftMode={isGuestDraftMode}
-            isConnected={wallet.isConnected}
-            currentWalletName={wallet.walletName}
-            accountAddress={wallet.accountAddress}
-            storageMode={import.meta.env.VITE_WALRUS_STORAGE_MODE || "uploadRelay"}
-            uploadRelayUrl={WALRUS_UPLOAD_RELAY_URL || t("notConfigured")}
-            storageRuntimeMode={storageRuntime.mode}
-            storageRuntimeNotice={storageRuntime.notice ?? undefined}
-            storageRuntimeDiagnostics={storageRuntime.diagnostics}
-            walrusCostEstimate={publish.walrusCostEstimate}
-            displayMode={displayMode}
-            canManageProjects={hasAdminAccess}
-            selectedProjectId={builder.values.selectedProjectId}
-            selectedProject={hasAdminAccess ? builder.selectedProject : null}
-            projects={hasAdminAccess ? projects : []}
-            projectState={builder.values.projectState}
-            selectedTemplateKey={builder.values.selectedTemplateKey}
-            onSetMobilePane={builder.setMobilePane}
-            onSelectProject={handleSelectProject}
-            onChangeVisibility={builder.setVisibility}
-            onChangeIdentityPolicy={builder.setIdentityPolicy}
-            onChangeAccessMode={builder.setAccessModeState}
-            onChangeNftGatePreset={builder.setNftGatePresetState}
-            onChangeNftGate={builder.updateNftGateState}
-            onChangeLocationRequirement={builder.setLocationRequirement}
-            onToggleEncryptSubmissions={builder.setEncryptSubmissions}
-            onChangeResponseOpenAtCustom={builder.setResponseOpenAtCustom}
-            onChangeResponseDeadlinePreset={builder.setResponseDeadlinePreset}
-            onChangeResponseDeadlineCustomAt={builder.setResponseDeadlineCustomAt}
-            onRegisterOnSui={() => void publish.handleRegisterOnSui()}
-            onCopyDiagnostics={() => void publish.copyDiagnostics()}
-            onBack={() => builder.moveStep(-1)}
-          />
+          {walletOnlyUiDeferred ? (
+            <WalletRequiredCta body="Connect wallet to publish or manage on-chain permissions. Drafting and local editing stay available." />
+          ) : (
+            <PublishStep
+              t={t}
+              language={language}
+              saving={publish.saving}
+              registeringOnSui={publish.registeringOnSui}
+              error={publish.error}
+              failure={publish.failure}
+              diagnosticsCopied={publish.diagnosticsCopied}
+              savedForm={publish.savedForm}
+              title={builder.values.title}
+              description={builder.values.description}
+              headerImage={builder.values.headerImage}
+              headerLogo={builder.values.headerLogo}
+              fields={builder.values.fields}
+              sections={builder.values.sections}
+              analysisProfileId={builder.values.analysisProfileId}
+              signalType={builder.values.signalType}
+              analystType={builder.values.analystType}
+              analysisType={builder.values.analysisType}
+              visibility={builder.values.visibility}
+              identityPolicy={builder.values.identityPolicy}
+              accessMode={builder.values.accessMode}
+              nftGate={builder.values.nftGate}
+              locationRequirement={builder.values.locationRequirement}
+              encryptSubmissions={builder.values.encryptSubmissions}
+              responseOpenAtCustom={builder.values.responseOpenAtCustom}
+              responseDeadlinePreset={builder.values.responseDeadlinePreset}
+              responseDeadlineCustomAt={builder.values.responseDeadlineCustomAt}
+              mobilePane={builder.values.mobilePane}
+              isReadyToPublish={builder.isReadyToPublish}
+              publicPath={publish.publicPath}
+              publicUrl={publish.publicUrl}
+              publishChecks={publish.publishChecks}
+              encryptionWarnings={encryptionWarnings}
+              showPublishSuccessView={showPublishSuccessView}
+              showWalrusDiagnostics={showWalrusDiagnostics}
+              isGuestDraftMode={isGuestDraftMode}
+              isConnected={wallet.isConnected}
+              currentWalletName={wallet.walletName}
+              accountAddress={wallet.accountAddress}
+              storageMode={import.meta.env.VITE_WALRUS_STORAGE_MODE || "uploadRelay"}
+              uploadRelayUrl={WALRUS_UPLOAD_RELAY_URL || t("notConfigured")}
+              storageRuntimeMode={storageRuntime.mode}
+              storageRuntimeNotice={storageRuntime.notice ?? undefined}
+              storageRuntimeDiagnostics={storageRuntime.diagnostics}
+              walrusCostEstimate={publish.walrusCostEstimate}
+              displayMode={displayMode}
+              canManageProjects={hasAdminAccess}
+              selectedProjectId={builder.values.selectedProjectId}
+              selectedProject={hasAdminAccess ? builder.selectedProject : null}
+              projects={hasAdminAccess ? projects : []}
+              projectState={builder.values.projectState}
+              selectedTemplateKey={builder.values.selectedTemplateKey}
+              onSetMobilePane={builder.setMobilePane}
+              onSelectProject={handleSelectProject}
+              onChangeVisibility={builder.setVisibility}
+              onChangeIdentityPolicy={builder.setIdentityPolicy}
+              onChangeAccessMode={builder.setAccessModeState}
+              onChangeNftGatePreset={builder.setNftGatePresetState}
+              onChangeNftGate={builder.updateNftGateState}
+              onChangeLocationRequirement={builder.setLocationRequirement}
+              onToggleEncryptSubmissions={builder.setEncryptSubmissions}
+              onChangeResponseOpenAtCustom={builder.setResponseOpenAtCustom}
+              onChangeResponseDeadlinePreset={builder.setResponseDeadlinePreset}
+              onChangeResponseDeadlineCustomAt={builder.setResponseDeadlineCustomAt}
+              onRegisterOnSui={() => void publish.handleRegisterOnSui()}
+              onCopyDiagnostics={() => void publish.copyDiagnostics()}
+              onBack={() => builder.moveStep(-1)}
+            />
+          )}
         </Suspense>
       ) : null}
     </form>
   );
 
   const composer = (
-      <section ref={composerShellRef} className="composer-shell">
+      <section
+        ref={composerShellRef}
+        className={`composer-shell ${
+          isMobileBuilderMode && builder.values.currentStep === "fields" ? "is-mobile-builder-mode" : ""
+        }`}
+      >
         <PublishOverlay
           t={t}
           open={publish.overlay.open}
@@ -1364,9 +1409,12 @@ function FormBuilderRouteContent({
   requestedGuestDraftMode,
 }: FormBuilderRouteContentProps) {
   const wallet = useSuiWallet();
+  const walletSession = useWalletSessionState();
   const { t } = useI18n();
+  const walletOnlyUiDeferred =
+    !walletSession.providerMounted || walletSession.providerLoading || walletSession.phase === "provider_deferred";
   const { capabilityProfile, isLoadingAccess } = useAccessControl(wallet.accountAddress, {
-    enabled: !requestedGuestDraftMode,
+    enabled: !requestedGuestDraftMode && !walletOnlyUiDeferred,
   });
   const hasAdminAccess = canAdmin(capabilityProfile);
 
