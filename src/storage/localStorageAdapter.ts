@@ -2,6 +2,7 @@ import type { FormSchema, StorageAdapter, Submission } from "../types";
 import { assertEncryptedSubmissionLeakGuard, sanitizeSubmissionForStorage } from "./submissionSanitizer";
 import { LEGACY_SCHEMA_HASH, computeSchemaHash, resolveFormVersion } from "../lib/formVersioning";
 import { endPerf, startPerf } from "../lib/perf";
+import { recordDashboardAdvancedTiming } from "../lib/dashboardAdvancedInstrumentation";
 import { logRouteLifecycle } from "../lib/routeDiagnostics";
 import { removeLocalFormVersionSchemas, upsertLocalFormVersionSchema } from "./localFormVersions";
 
@@ -261,7 +262,20 @@ export const localStorageAdapter: StorageAdapter = {
 
   async listSubmissions(formId) {
     startPerf(`inbox:local-storage-list-submissions:${formId}`, SUBMISSIONS_KEY);
+    const parseStartedAt = performance.now();
+    recordDashboardAdvancedTiming("dashboard:local-submissions-parse-start", {
+      durationMs: 0,
+      formId,
+      key: SUBMISSIONS_KEY,
+    });
     const submissions = readJson<Submission[]>(SUBMISSIONS_KEY, []);
+    recordDashboardAdvancedTiming("dashboard:local-submissions-parse-end", {
+      count: submissions.length,
+      durationMs: Math.round(performance.now() - parseStartedAt),
+      formId,
+      key: SUBMISSIONS_KEY,
+      totalCount: submissions.length,
+    });
     const filteredSubmissions = submissions
       .filter((submission) => submission.formId === formId)
       .sort((left, right) => right.createdAt.localeCompare(left.createdAt));

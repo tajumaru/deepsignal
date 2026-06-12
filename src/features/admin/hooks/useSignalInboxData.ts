@@ -32,6 +32,7 @@ import { normalizeSubmission } from "../../../lib/submissionSchema";
 import { storageAdapter } from "../../../lib/storageAdapter";
 import { flattenAnswer } from "../../../lib/utils";
 import { endPerf, markPerfMilestone, measurePerf, startPerf } from "../../../lib/perf";
+import { recordDashboardAdvancedTiming } from "../../../lib/dashboardAdvancedInstrumentation";
 import { logRouteLifecycle } from "../../../lib/routeDiagnostics";
 import type { CapabilityProfile } from "../../../hooks/useAccessControl";
 import type { FormSchema, Submission } from "../../../types";
@@ -1153,7 +1154,20 @@ export function useSignalInboxData({
     setSubmissionsLoading(false);
     setLoadError("");
     try {
+      const listFormsStartedAt = performance.now();
+      recordDashboardAdvancedTiming("dashboard:list-forms-start", {
+        durationMs: 0,
+        runId,
+        selectedProjectId: selectedProjectId || null,
+      });
       const initialForms = await measurePerf("admin:local-forms", () => storageAdapter.listForms());
+      recordDashboardAdvancedTiming("dashboard:list-forms-end", {
+        count: initialForms.length,
+        durationMs: Math.round(performance.now() - listFormsStartedAt),
+        formCount: initialForms.length,
+        runId,
+        selectedProjectId: selectedProjectId || null,
+      });
       logRouteLifecycle("inbox:local-forms-loaded", {
         runId,
         formCount: initialForms.length,
@@ -1329,6 +1343,17 @@ export function useSignalInboxData({
 
       for (let index = 0; index < nextAccessibleForms.length; index += ADMIN_SUBMISSION_BATCH_SIZE) {
         const formBatch = nextAccessibleForms.slice(index, index + ADMIN_SUBMISSION_BATCH_SIZE);
+        const batchStartedAt = performance.now();
+        const formIds = formBatch.map((form) => form.id);
+        recordDashboardAdvancedTiming("dashboard:list-submissions-batch-start", {
+          batchIndex: Math.floor(index / ADMIN_SUBMISSION_BATCH_SIZE),
+          batchSize: formBatch.length,
+          count: formBatch.length,
+          durationMs: 0,
+          formId: formIds.join(","),
+          formIds,
+          runId,
+        });
         const batchResults = await Promise.all(
           formBatch.map(async (form) => {
             try {
@@ -1343,6 +1368,15 @@ export function useSignalInboxData({
             }
           }),
         );
+        recordDashboardAdvancedTiming("dashboard:list-submissions-batch-end", {
+          batchIndex: Math.floor(index / ADMIN_SUBMISSION_BATCH_SIZE),
+          batchSize: formBatch.length,
+          count: batchResults.reduce((total, result) => total + result.submissions.length, 0),
+          durationMs: Math.round(performance.now() - batchStartedAt),
+          formId: formIds.join(","),
+          formIds,
+          runId,
+        });
 
         if (runId !== loadConsoleRunRef.current) {
           return;

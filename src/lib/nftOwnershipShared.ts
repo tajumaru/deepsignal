@@ -129,13 +129,61 @@ export function breakdownStructType(value?: string | null): StructTypeBreakdown 
   };
 }
 
+const PRIMEMACHIN_MACHINE_NAME_COMPATIBILITY_PAIRS: Array<[string, string]> = [["PrimeMachin", "PrimeMachine"]];
+
+function getCompatibleStructNameVariants(structName: string) {
+  const variants = new Set<string>([structName]);
+  for (const [a, b] of PRIMEMACHIN_MACHINE_NAME_COMPATIBILITY_PAIRS) {
+    if (a === structName) {
+      variants.add(b);
+    }
+    if (b === structName) {
+      variants.add(a);
+    }
+  }
+  return variants;
+}
+
+function hasCompatibleStructType(
+  actualType: StructTypeBreakdown,
+  requiredType: StructTypeBreakdown,
+) {
+  if (
+    !actualType.packageId ||
+    !actualType.module ||
+    !requiredType.packageId ||
+    !requiredType.module
+  ) {
+    return false;
+  }
+
+  if (actualType.packageId !== requiredType.packageId) {
+    return false;
+  }
+  if (actualType.module !== requiredType.module) {
+    return false;
+  }
+  if (actualType.generics.join("|") !== requiredType.generics.join("|")) {
+    return false;
+  }
+  const compatibleActualStructs = getCompatibleStructNameVariants(actualType.struct);
+  const compatibleRequiredStructs = getCompatibleStructNameVariants(requiredType.struct);
+  return compatibleActualStructs.has(requiredType.struct) && compatibleRequiredStructs.has(actualType.struct);
+}
+
 export function matchesOwnedObjectType(actualType: string | undefined, requiredType: string) {
   const normalizedActualType = normalizeStructType(actualType);
   const normalizedRequiredType = normalizeStructType(requiredType);
   if (!normalizedActualType || !normalizedRequiredType) {
     return false;
   }
-  return normalizedActualType === normalizedRequiredType;
+  if (normalizedActualType === normalizedRequiredType) {
+    return true;
+  }
+
+  const actualBreakdown = breakdownStructType(normalizedActualType);
+  const requiredBreakdown = breakdownStructType(normalizedRequiredType);
+  return hasCompatibleStructType(actualBreakdown, requiredBreakdown);
 }
 
 export function filterOwnedObjectsByType(entries: OwnedObjectEntry[], requiredTypes: string[]) {

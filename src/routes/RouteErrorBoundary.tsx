@@ -572,6 +572,18 @@ export class RouteErrorBoundary extends Component<
                 <dd>{latestFailedImport?.expectedExport ?? "n/a"}</dd>
                 <dt>available exports</dt>
                 <dd>{latestFailedImport?.availableExports?.join(", ") || latestFailedImport?.moduleKeys?.join(", ") || "n/a"}</dd>
+                <dt>module type</dt>
+                <dd>{latestFailedImport?.moduleType ?? "n/a"}</dd>
+                <dt>has default export</dt>
+                <dd>{latestFailedImport?.hasDefaultExport === undefined ? "n/a" : latestFailedImport.hasDefaultExport ? "yes" : "no"}</dd>
+                <dt>route label</dt>
+                <dd>{latestFailedImport?.routeLabel ?? "n/a"}</dd>
+                <dt>route key</dt>
+                <dd>{latestFailedImport?.routeKey ?? "n/a"}</dd>
+                <dt>import URL</dt>
+                <dd>{latestFailedImport?.importTargetUrl ?? "n/a"}</dd>
+                <dt>retry import URL</dt>
+                <dd>{latestFailedImport?.retryImportUrl ?? "n/a"}</dd>
                 <dt>mobile Safari</dt>
                 <dd>{latestFailedImport?.mobileSafari === undefined ? "n/a" : latestFailedImport.mobileSafari ? "yes" : "no"}</dd>
                 <dt>current URL</dt>

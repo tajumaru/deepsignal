@@ -43,7 +43,14 @@ export type RouteErrorDiagnostics = {
     message: string;
     chunkUrl?: string | null;
     category?: "chunkLoad" | "missingExport" | "runtime" | "timeout";
+    buildOutOfSync?: boolean;
     expectedExport?: string;
+    hasDefaultExport?: boolean;
+    importTargetUrl?: string | null;
+    routeLabel?: string;
+    routeKey?: string;
+    retryImportUrl?: string | null;
+    moduleType?: "default" | "named" | "nested" | "missing" | "unknown";
     availableExports?: string[];
     moduleKeys?: string[];
     routeId?: string;

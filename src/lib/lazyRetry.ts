@@ -40,6 +40,7 @@ const lazyImportRetryDelayMs = [300, 1_000, 2_500] as const;
 const dashboardLazyImportRetryDelayMs = [300, 800, 1_500] as const;
 const proactiveDependencyProbeLabels = new Set(["app-shell"]);
 const recordedLazyImportTimeouts = new Set<string>();
+const routeExportRetryByLabel = new Set<string>();
 const mobileSafariLazyImportMaxConcurrency = 1;
 let mobileSafariLazyImportActiveCount = 0;
 const mobileSafariLazyImportQueue: Array<() => void> = [];
@@ -117,6 +118,9 @@ async function runWithMobileSafariLazyImportQueue<T>(task: () => Promise<T>) {
 }
 
 type BuildManifest = {
+  appVersion?: string;
+  buildTime?: string;
+  gitHash?: string;
   assets?: string[];
   routeAssets?: Partial<Record<RouteAssetKey, string[]>>;
 };
@@ -124,9 +128,15 @@ type BuildManifest = {
 export class MissingLazyRouteExportError extends Error {
   readonly category = "missingExport";
   readonly label: string;
+  readonly routeLabel: string;
+  readonly routeKey: string;
   readonly routeId: string;
   readonly routePath: string;
   readonly chunkUrl: string | null;
+  readonly importUrl: string | null;
+  readonly retryImportUrl: string | null;
+  readonly moduleType: "default" | "named" | "nested" | "missing" | "unknown";
+  readonly hasDefaultExport: boolean;
   readonly expectedExport: string;
   readonly availableExports: string[];
   readonly moduleKeys: string[];
@@ -136,27 +146,48 @@ export class MissingLazyRouteExportError extends Error {
   readonly gitHash: string;
   readonly userAgent: string;
   readonly mobileSafari: boolean;
+  readonly buildOutOfSync: boolean;
   readonly currentUrl: string;
   readonly pathname: string;
   readonly hash: string;
 
   constructor({
     availableExports,
+    hasDefaultExport,
+    importUrl,
     chunkUrl,
+    moduleType,
     expectedExport,
     label,
+    routeKey,
+    routeLabel,
+    retryImportUrl,
+    buildOutOfSync = false,
   }: {
     availableExports: string[];
+    hasDefaultExport: boolean;
+    importUrl: string | null;
     chunkUrl?: string | null;
+    moduleType: MissingLazyRouteExportError["moduleType"];
     expectedExport: string;
     label: string;
+    routeKey: string;
+    routeLabel: string;
+    retryImportUrl: string | null;
+    buildOutOfSync?: boolean;
   }) {
     super(`Route lazy module ${label} loaded but export ${expectedExport} was missing.`);
     this.name = "MissingLazyRouteExportError";
     this.label = label;
+    this.routeLabel = routeLabel;
+    this.routeKey = routeKey;
     this.routeId = getCurrentRouteId(label);
     this.routePath = getCurrentRoutePath();
     this.chunkUrl = chunkUrl ?? null;
+    this.importUrl = importUrl;
+    this.retryImportUrl = retryImportUrl;
+    this.moduleType = moduleType;
+    this.hasDefaultExport = hasDefaultExport;
     this.expectedExport = expectedExport;
     this.availableExports = availableExports;
     this.moduleKeys = availableExports;
@@ -169,6 +200,7 @@ export class MissingLazyRouteExportError extends Error {
       typeof navigator !== "undefined"
         ? isMobileSafariLike(navigator.userAgent || "", navigator.platform || "", navigator.maxTouchPoints ?? 0)
         : false;
+    this.buildOutOfSync = buildOutOfSync;
     this.currentUrl = typeof window === "undefined" ? "" : window.location.href;
     this.pathname = typeof window === "undefined" ? "" : window.location.pathname;
     this.hash = typeof window === "undefined" ? "" : window.location.hash;
@@ -216,6 +248,7 @@ function getModuleBuildInfo(module: unknown): Pick<BuildInfo, "appVersion" | "bu
   }
   return null;
 }
+
 
 function isMobileBrowser() {
   if (typeof navigator === "undefined") {
@@ -563,6 +596,26 @@ async function loadBuildManifest() {
   return buildManifestPromise;
 }
 
+async function getBuildManifestInfo() {
+  const manifest = await loadBuildManifest();
+  return {
+    appVersion: manifest?.appVersion ?? null,
+    buildTime: manifest?.buildTime ?? null,
+    gitHash: manifest?.gitHash ?? null,
+  };
+}
+
+function isRuntimeBuildMismatchWithManifest(manifestAppVersion: string | null, manifestBuildTime: string | null, manifestGitHash: string | null) {
+  if (manifestAppVersion === null && manifestBuildTime === null && manifestGitHash === null) {
+    return false;
+  }
+  return (
+    (typeof manifestAppVersion === "string" && manifestAppVersion !== buildInfo.appVersion) ||
+    (typeof manifestBuildTime === "string" && manifestBuildTime !== buildInfo.buildTime) ||
+    (typeof manifestGitHash === "string" && manifestGitHash !== buildInfo.gitHash)
+  );
+}
+
 async function getExpectedChunkUrl(label: string) {
   const spec = routeChunkByLabel[label];
   if (!spec) {
@@ -697,8 +750,14 @@ function createLazyFallbackModule<T>(label: string): T {
 export function clearLazyImportState(label?: string) {
   if (label) {
     lazyImportRegistry.delete(label);
+    for (const retryKey of routeExportRetryByLabel) {
+      if (retryKey.startsWith(`${label}:`)) {
+        routeExportRetryByLabel.delete(retryKey);
+      }
+    }
   } else {
     lazyImportRegistry.clear();
+    routeExportRetryByLabel.clear();
   }
   clearChunkLoadRecoveryState();
 }
@@ -823,6 +882,7 @@ function getModuleKeys(module: unknown) {
 
 function readModuleExport(module: unknown, exportName: string) {
   const moduleRecord = module && typeof module === "object" ? (module as Record<string, unknown>) : {};
+  const hasDefaultExport = Boolean(moduleRecord.default);
   const preferNamedExport = exportName !== "default";
 
   if (preferNamedExport) {
@@ -833,7 +893,12 @@ function readModuleExport(module: unknown, exportName: string) {
       namedExport = undefined;
     }
     if (namedExport) {
-      return { value: namedExport, resolvedExport: exportName };
+      return {
+        value: namedExport,
+        resolvedExport: exportName,
+        moduleType: "named" as const,
+        hasDefaultExport,
+      };
     }
   }
 
@@ -844,7 +909,12 @@ function readModuleExport(module: unknown, exportName: string) {
     defaultExport = undefined;
   }
   if (!preferNamedExport && defaultExport) {
-    return { value: defaultExport, resolvedExport: "default" as const };
+    return {
+      value: defaultExport,
+      resolvedExport: "default" as const,
+      moduleType: "default" as const,
+      hasDefaultExport,
+    };
   }
   for (const value of Object.values(moduleRecord)) {
     if (!value || typeof value !== "object") {
@@ -858,25 +928,42 @@ function readModuleExport(module: unknown, exportName: string) {
       nestedExport = undefined;
     }
     if (nestedExport) {
-      return { value: nestedExport, resolvedExport: `nested:${exportName}` as const };
+      return {
+        value: nestedExport,
+        resolvedExport: `nested:${exportName}` as const,
+        moduleType: "nested" as const,
+        hasDefaultExport,
+      };
     }
   }
   if (preferNamedExport && defaultExport) {
-    return { value: defaultExport, resolvedExport: "default" as const };
+    return { value: defaultExport, resolvedExport: "default" as const, moduleType: "default" as const, hasDefaultExport };
   }
-  return { value: null, resolvedExport: "missing" as const };
+  return {
+    value: null,
+    resolvedExport: "missing" as const,
+    moduleType: Object.prototype.hasOwnProperty.call(moduleRecord, "default") ? "default" : "missing",
+    hasDefaultExport,
+  };
 }
 
 function recordMissingRouteExport(label: string, error: MissingLazyRouteExportError, chunkUrl?: string | null) {
+  const mixedBuildOutOfSync = error.buildOutOfSync;
   recordFailedImport(label, error, chunkUrl ?? error.chunkUrl, {
     availableExports: error.availableExports,
+    hasDefaultExport: error.hasDefaultExport,
     category: "missingExport",
+    buildOutOfSync: mixedBuildOutOfSync,
     currentUrl: error.currentUrl,
     expectedExport: error.expectedExport,
+    importTargetUrl: error.importUrl,
     hash: error.hash,
+    moduleType: error.moduleType,
+    retryImportUrl: error.retryImportUrl,
     mobileSafari: error.mobileSafari,
     moduleKeys: error.moduleKeys,
-    importTargetUrl: chunkUrl ?? error.chunkUrl,
+    routeLabel: error.routeLabel,
+    routeKey: error.routeKey,
     expectedRouteChunkUrl: chunkUrl ?? error.chunkUrl,
     pathname: error.pathname,
     resolvedExport: "missing",
@@ -886,15 +973,21 @@ function recordMissingRouteExport(label: string, error: MissingLazyRouteExportEr
   });
   logRouteLifecycle("lazy-route-export-missing", {
     availableExports: error.availableExports,
+    buildOutOfSync: mixedBuildOutOfSync,
     buildTime: error.buildTime,
     buildVersion: error.buildVersion,
     chunkUrl: chunkUrl ?? error.chunkUrl,
     currentUrl: error.currentUrl,
+    hasDefaultExport: error.hasDefaultExport,
     expectedExport: error.expectedExport,
+    importTargetUrl: error.importUrl,
+    moduleType: error.moduleType,
     gitHash: error.gitHash,
     hash: error.hash,
-    importTargetUrl: chunkUrl ?? error.chunkUrl,
+    routeLabel: error.routeLabel,
+    routeKey: error.routeKey,
     label,
+    retryImportUrl: error.retryImportUrl,
     mobileSafari: error.mobileSafari,
     moduleKeys: error.moduleKeys,
     pathname: error.pathname,
@@ -907,27 +1000,51 @@ function recordMissingRouteExport(label: string, error: MissingLazyRouteExportEr
     routeId: error.routeId,
     routePath: error.routePath,
     chunkUrl: chunkUrl ?? error.chunkUrl,
-    importTargetUrl: chunkUrl ?? error.chunkUrl,
+    importTargetUrl: error.importUrl,
     expectedExport: error.expectedExport,
     availableExports: error.availableExports,
     moduleKeys: error.moduleKeys,
+    buildOutOfSync: mixedBuildOutOfSync,
     buildVersion: error.buildVersion,
     buildTime: error.buildTime,
     gitHash: error.gitHash,
     userAgent: error.userAgent,
     mobileSafari: error.mobileSafari,
     currentUrl: error.currentUrl,
+    hasDefaultExport: error.hasDefaultExport,
     pathname: error.pathname,
+    routeLabel: error.routeLabel,
+    routeKey: error.routeKey,
+    moduleType: error.moduleType,
+    retryImportUrl: error.retryImportUrl,
     hash: error.hash,
   });
 }
 
-function createMissingRouteExportError(label: string, module: unknown, expectedExport: string, chunkUrl?: string | null) {
+function createMissingRouteExportError(
+  label: string,
+  module: unknown,
+  expectedExport: string,
+  importUrl: string | null,
+  retryImportUrl: string | null,
+  buildOutOfSync = false,
+) {
+  const moduleRecord = module && typeof module === "object" ? (module as Record<string, unknown>) : {};
+  const spec = routeChunkByLabel[label];
+  const detected = readModuleExport(module, expectedExport);
+
   return new MissingLazyRouteExportError({
     availableExports: getModuleKeys(module),
-    chunkUrl,
+    chunkUrl: importUrl,
     expectedExport,
+    hasDefaultExport: Boolean(moduleRecord.default),
+    importUrl,
+    moduleType: detected.moduleType as MissingLazyRouteExportError["moduleType"],
     label,
+    routeKey: spec?.routeKey ?? "unknown",
+    routeLabel: label,
+    retryImportUrl,
+    buildOutOfSync,
   });
 }
 
@@ -938,7 +1055,7 @@ export function resolveLazyRouteModule<TProps extends object = Record<string, ne
 ): { default: ComponentType<TProps> } {
   const resolved = readModuleExport(module, exportName);
   if (!resolved.value) {
-    const error = createMissingRouteExportError(label, module, exportName);
+    const error = createMissingRouteExportError(label, module, exportName, null, null);
     recordMissingRouteExport(label, error);
     throw error;
   }
@@ -956,45 +1073,61 @@ export async function resolveLazyRouteModuleWithSafariRetry<TProps extends objec
   }
 
   const expectedChunkUrl = await getExpectedChunkUrl(label);
-  if (getBrowserCapabilitiesSnapshot().mobileSafari && expectedChunkUrl) {
-    logRouteLifecycle("lazy-route-export-cache-bust-retry", {
-      label,
-      routeId: getCurrentRouteId(label),
-      routePath: getCurrentRoutePath(),
-      chunkUrl: expectedChunkUrl,
-      expectedExport: exportName,
-      availableExports: getModuleKeys(module),
-      buildVersion: buildInfo.appVersion,
-      buildTime: buildInfo.buildTime,
-      gitHash: buildInfo.gitHash,
-      userAgent: navigator.userAgent,
-    });
-    const retriedModule = await importRawCacheBustedRouteChunk(label, expectedChunkUrl, 1_001).catch((error) => {
-      logRouteLifecycle("lazy-route-export-cache-bust-retry-failed", {
+  const manifestInfo = await getBuildManifestInfo();
+  const isBuildOutOfSync = isRuntimeBuildMismatchWithManifest(
+    manifestInfo.appVersion,
+    manifestInfo.buildTime,
+    manifestInfo.gitHash,
+  );
+  let retryImportUrl: string | null = null;
+  if (expectedChunkUrl) {
+    const retryKey = `${label}:export-cache-bust`;
+    if (!routeExportRetryByLabel.has(retryKey)) {
+      routeExportRetryByLabel.add(retryKey);
+      retryImportUrl = appendCacheBust(expectedChunkUrl, 1);
+      logRouteLifecycle("lazy-route-export-cache-bust-retry", {
         label,
         routeId: getCurrentRouteId(label),
         routePath: getCurrentRoutePath(),
         chunkUrl: expectedChunkUrl,
         expectedExport: exportName,
-        message: error instanceof Error ? error.message : String(error),
+        availableExports: getModuleKeys(module),
+        buildOutOfSync: isBuildOutOfSync,
+        buildVersion: buildInfo.appVersion,
+        buildTime: buildInfo.buildTime,
+        gitHash: buildInfo.gitHash,
+        retryImportUrl,
+        userAgent: navigator.userAgent,
       });
-      return null;
-    });
-    const retriedResolved = readModuleExport(retriedModule, exportName);
-    if (retriedResolved.value) {
-      logRouteLifecycle("lazy-route-export-cache-bust-retry-resolved", {
-        label,
-        routeId: getCurrentRouteId(label),
-        routePath: getCurrentRoutePath(),
-        chunkUrl: expectedChunkUrl,
-        expectedExport: exportName,
-        resolvedExport: retriedResolved.resolvedExport,
+      const retriedModule = await importRawCacheBustedRouteChunk(label, expectedChunkUrl, 1).catch((error) => {
+        logRouteLifecycle("lazy-route-export-cache-bust-retry-failed", {
+          label,
+          routeId: getCurrentRouteId(label),
+          routePath: getCurrentRoutePath(),
+          chunkUrl: expectedChunkUrl,
+          expectedExport: exportName,
+          message: error instanceof Error ? error.message : String(error),
+          retryImportUrl,
+        });
+        return null;
       });
-      return { default: retriedResolved.value as ComponentType<TProps> };
+      const retriedResolved = readModuleExport(retriedModule, exportName);
+      if (retriedResolved.value) {
+        logRouteLifecycle("lazy-route-export-cache-bust-retry-resolved", {
+          label,
+          routeId: getCurrentRouteId(label),
+          routePath: getCurrentRoutePath(),
+          chunkUrl: expectedChunkUrl,
+          expectedExport: exportName,
+          resolvedExport: retriedResolved.resolvedExport,
+          retryImportUrl,
+        });
+        return { default: retriedResolved.value as ComponentType<TProps> };
+      }
     }
   }
 
-  const error = createMissingRouteExportError(label, module, exportName, expectedChunkUrl);
+  const error = createMissingRouteExportError(label, module, exportName, expectedChunkUrl, retryImportUrl, isBuildOutOfSync);
   recordMissingRouteExport(label, error, expectedChunkUrl);
   throw error;
 }

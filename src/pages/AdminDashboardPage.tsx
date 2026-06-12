@@ -6,6 +6,10 @@ import {
   resolveLazyRouteModuleWithSafariRetry,
   retryLazyImport,
 } from "../lib/lazyRetry";
+import {
+  markDashboardAdvancedTimingStart,
+  recordDashboardAdvancedTiming,
+} from "../lib/dashboardAdvancedInstrumentation";
 import { logRouteLifecycle } from "../lib/routeDiagnostics";
 import { DelayedWorkspaceRestoreFallback } from "../routes/ProviderReadinessBarrier";
 import { ensureCurrentRouteEpoch, useCurrentRouteEpoch } from "../routes/routeEpoch";
@@ -30,6 +34,7 @@ export function AdminDashboardPage() {
   const loadWorkspace = useCallback(async () => {
     setLoadError(null);
     ensureCurrentRouteEpoch(routePath);
+    let importStartedAt = 0;
     try {
       const expectedChunkUrl = await getExpectedRouteChunkUrl("dashboard-workspace");
       logRouteLifecycle("dashboard:workspace-import-requested", {
@@ -38,6 +43,15 @@ export function AdminDashboardPage() {
         retryNonce,
         requestSource: requestSourceRef.current,
         importTargetUrl: expectedChunkUrl,
+      });
+      importStartedAt = performance.now();
+      recordDashboardAdvancedTiming("dashboard:workspace-import-start", {
+        durationMs: 0,
+        importTargetUrl: expectedChunkUrl,
+        requestSource: requestSourceRef.current,
+        retryNonce,
+        routeEpoch: routeEpoch.routeEpoch,
+        routePath,
       });
       const module = await retryLazyImport(
         () => import("./AdminDashboardWorkspace"),
@@ -68,6 +82,16 @@ export function AdminDashboardPage() {
         chunkDecodedBodySize: resourceTiming?.decodedBodySize ?? null,
         chunkTransferSize: resourceTiming?.transferSize ?? null,
       });
+      recordDashboardAdvancedTiming("dashboard:workspace-import-resolved", {
+        chunkDecodedBodySize: resourceTiming?.decodedBodySize ?? null,
+        chunkTransferSize: resourceTiming?.transferSize ?? null,
+        durationMs: Math.round(performance.now() - importStartedAt),
+        importTargetUrl: expectedChunkUrl,
+        requestSource: requestSourceRef.current,
+        retryNonce,
+        routeEpoch: routeEpoch.routeEpoch,
+        routePath,
+      });
     } catch (error) {
       if (error instanceof StaleLazyImportEpochError) {
         logRouteLifecycle("dashboard:workspace-deferred-import-stale-suppressed", {
@@ -87,6 +111,15 @@ export function AdminDashboardPage() {
         requestSource: requestSourceRef.current,
         errorName: error instanceof Error ? error.name : "Error",
         errorMessage: error instanceof Error ? error.message : String(error),
+      });
+      recordDashboardAdvancedTiming("dashboard:workspace-import-failed", {
+        durationMs: importStartedAt ? Math.round(performance.now() - importStartedAt) : 0,
+        errorName: error instanceof Error ? error.name : "Error",
+        errorMessage: error instanceof Error ? error.message : String(error),
+        requestSource: requestSourceRef.current,
+        retryNonce,
+        routeEpoch: routeEpoch.routeEpoch,
+        routePath,
       });
     }
   }, [retryNonce, routeEpoch.routeEpoch, routePath]);
@@ -120,8 +153,12 @@ export function AdminDashboardPage() {
 
   const handleOpenAdvancedWorkspace = useCallback(() => {
     requestSourceRef.current = "manual";
+    markDashboardAdvancedTimingStart(routePath, {
+      retryNonce,
+      requestSource: "manual",
+    });
     setAdvancedRequested(true);
-  }, []);
+  }, [retryNonce, routePath]);
 
   if (Workspace) {
     return <Workspace />;

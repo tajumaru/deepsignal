@@ -148,6 +148,7 @@ import {
   type SubmissionVersionFilter,
 } from "../lib/submissionVersioning";
 import { endPerf, startPerf } from "../lib/perf";
+import { recordDashboardAdvancedTiming } from "../lib/dashboardAdvancedInstrumentation";
 import {
   inferSignalCategory,
   getSignalPreview,
@@ -4515,6 +4516,28 @@ function PatternMemoryDraftReviewModal({
 export function AdminDashboardWorkspace() {
   const { language, t } = useI18n();
   const location = useLocation();
+  useEffect(() => {
+    const routePath = `${location.pathname}${location.search}${location.hash}`;
+    recordDashboardAdvancedTiming("dashboard:workspace-mounted", {
+      durationMs: 0,
+      routePath,
+    });
+    const paintStartedAt = performance.now();
+    let firstFrame = 0;
+    let secondFrame = 0;
+    firstFrame = window.requestAnimationFrame(() => {
+      secondFrame = window.requestAnimationFrame(() => {
+        recordDashboardAdvancedTiming("dashboard:advanced-first-paint", {
+          durationMs: Math.round(performance.now() - paintStartedAt),
+          routePath,
+        });
+      });
+    });
+    return () => {
+      window.cancelAnimationFrame(firstFrame);
+      window.cancelAnimationFrame(secondFrame);
+    };
+  }, [location.hash, location.pathname, location.search]);
   const walletSession = useWalletSessionState();
   const dashboardProjectRestore = useDashboardProjectRestoreSnapshot();
   const dashboardShellRoute = location.pathname === "/dashboard";

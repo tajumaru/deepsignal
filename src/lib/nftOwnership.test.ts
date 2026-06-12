@@ -514,7 +514,7 @@ describe("checkOwnedNftsForClient", () => {
 
   it("surfaces a normalized type mismatch in diagnostics", async () => {
     const wrongType =
-      "0x034c162f6b594cb5a1805264dd01ca5d80ce3eca6522e6ee37fd9ebfb9d3ddca::factory::PrimeMachine";
+      "0x034c162f6b594cb5a1805264dd01ca5d80ce3eca6522e6ee37fd9ebfb9d3ddca::factory::PrimeMachinee";
     const result = await checkOwnedNftsForClient(
       {
         getOwnedObjects: vi.fn().mockResolvedValue({
@@ -531,7 +531,30 @@ describe("checkOwnedNftsForClient", () => {
     );
 
     expect(result.hasRequiredNft).toBe(false);
-    expect(result.diagnostic.actualTypeBreakdown[0]?.breakdown.struct).toBe("PrimeMachine");
+    expect(result.diagnostic.actualTypeBreakdown[0]?.breakdown.struct).toBe("PrimeMachinee");
     expect(result.diagnostic.expectedTypeBreakdown[0]?.struct).toBe("PrimeMachin");
+  });
+
+  it("supports PrimeMachin/PrimeMachine compatibility after package upgrade", async () => {
+    const upgradedType =
+      "0x034c162f6b594cb5a1805264dd01ca5d80ce3eca6522e6ee37fd9ebfb9d3ddca::factory::PrimeMachine";
+    const getOwnedObjects = vi.fn().mockResolvedValue({
+      data: [createDirectEntry("0x2", upgradedType)],
+      hasNextPage: false,
+      nextCursor: null,
+    });
+
+    const result = await checkOwnedNftsForClient(
+      { getOwnedObjects, $extend: () => ({ kiosk: createEmptyKioskApi() }) },
+      "0xwallet",
+      [PRIME_TYPE],
+      1,
+      "sui-mainnet",
+      "https://rpc.example",
+    );
+
+    expect(result.hasRequiredNft).toBe(true);
+    expect(result.matchedBy).toBe("owned-object");
+    expect(result.matchedDirectObjects[0]?.type).toBe(upgradedType);
   });
 });
